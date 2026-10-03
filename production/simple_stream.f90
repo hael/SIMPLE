@@ -17,7 +17,6 @@ use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
 use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
 use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
 use simple_stream_p07_solve3D_multistate,  only: stream_p07_solve3D_multistate
-use simple_ui_legacy_names,                only: canonical_prg_name, report_legacy_prg_name
 
 implicit none
 #include "simple_local_flags.inc"
@@ -48,8 +47,6 @@ call get_command(entire_line)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
-call report_legacy_prg_name(prg)
-prg = canonical_prg_name(prg)
 ! make UI
 call make_ui
 if( str_has_substr(entire_line, 'prg=list') )then

@@ -110,7 +110,7 @@ Both get the backend switch; the gridding paths stay as they are.
 `rec_backend` is already a validated global parameter
 (`parameters_phases.f90:779-782`), `pcg_mskfile` already requires it to be
 `pcg` (line 897), and the PCG strategy's preconditions apply unchanged
-(`pcgop=kernel`, `mskdiam` set, `projrec=no`;
+(the kernel operator, `mskdiam` set;
 `simple_rec3D_pcg_strategy.f90:613-632`). `flex_pca` has its own
 master/worker stage protocol (`simple_flex_pca_distr.f90`,
 `PCA_STAGE_STATES`), so the selector lives in the flex layer rather than in

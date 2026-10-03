@@ -27,7 +27,8 @@ subroutine new_cavgseoproc_nano( prgtab )
         &'Analysis of even and odd class averages along nanocrystal time-series',& ! summary
         &'is a program to analyze the core/surface dynamics of nanocrystals using even and odd class averages',& ! help
         &'single_exec',&                                                ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                  ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Even/Odd Nanoparticle Class Analysis')                                  ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cavgseoproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '', &
@@ -62,7 +63,8 @@ subroutine new_cavgseoproc_nano( prgtab )
         &'Analysis of class averages along nanocrystal time-series',& ! summary
         &'is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections',& ! help
         &'single_exec',&                                              ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Nanoparticle Class Average Analysis')                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cavgsproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '', &
@@ -97,7 +99,8 @@ subroutine new_cavgseoproc_nano( prgtab )
         &'Analyze radial core and surface changes in nanoparticle class images',& ! summary
         &'is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class',& ! help
         &'single_exec',&                                              ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Nanoparticle Core and Surface Analysis')                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -130,7 +133,8 @@ subroutine new_cavgseoproc_nano( prgtab )
         &'Validation of class averages against model projections',&                                        ! summary
         &'is a program to validate the class averages against model projections using cross-correlation',& ! help
         &'single_exec',&                                                                                   ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                                                     ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Validate Class Averages Against a Model') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call validate_cavgs_vs_model%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '', &

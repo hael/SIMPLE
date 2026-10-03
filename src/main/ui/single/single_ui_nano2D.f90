@@ -61,7 +61,8 @@ subroutine new_analysis2D_nano( prgtab )
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! help
         &'single_exec',&                                                        ! executable
-        &.true., visibility=UI_VIS_ADVANCED)                                          ! requires sp_project
+        &.true., visibility=UI_VIS_ADVANCED, &
+        &display_name='Center Nanoparticle Images')                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -156,7 +157,8 @@ subroutine new_analysis2D_nano( prgtab )
         &'Estimation of a suitable mask diameter for nanoparticle time-series',&                                        ! summary
         &'is a program for estimation of a suitable mask diameter for spherical masking of nanoparticle time-series ',& ! help
         &'single_exec',&                                                                                                ! executable
-        &.false., visibility=UI_VIS_ADVANCED)                                                                                 ! requires sp_project
+        &.false., visibility=UI_VIS_ADVANCED, &
+        &display_name='Estimate Nanoparticle Diameter') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call estimate_diam%add_input(UI_IMG, stk, required_override=.true., &

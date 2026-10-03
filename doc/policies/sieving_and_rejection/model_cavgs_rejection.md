@@ -4,7 +4,7 @@
 
 `model_cavgs_rejection` is the SIMPLE class-average rejection-model program. It evaluates `cls2D` class averages, applies hard validity rejects, extracts a fixed scalar feature bank, normalizes those features within the dataset, and applies a named model to partition class averages into accepted and rejected sets. The model can also abstain from additional soft rejection and report that the final decision was hard preselection only.
 
-This is a learned feature-vector model. It should be read alongside the streaming microchunk rejector, which is a cumulative rule engine. The two systems share several image-processing primitives, but they use them differently: microchunking applies fixed sequential criteria and rejects a class as soon as any criterion fires; `model_cavgs_rejection` uses hard rejects only for validity failures, then learns a weighted scalar quality score and dataset-specific thresholding behavior for the remaining class averages.
+This is a learned feature-vector model. It replaced the streaming microchunk rejector, a cumulative rule engine that has been retired. The two shared several image-processing primitives but used them differently: microchunking applied fixed sequential criteria and rejected a class as soon as any criterion fired; `model_cavgs_rejection` uses hard rejects only for validity failures, then scores the remaining class averages with a learned probability model.
 
 The implementation lives in `src/main/cavg_quality`. The command entry point is `exec_model_cavgs_rejection` in `src/main/commanders/simple/simple_commanders_cavgs.f90`.
 
@@ -12,23 +12,23 @@ The implementation lives in `src/main/cavg_quality`. The command entry point is 
 
 - `simple_cavg_quality_types.f90`: shared constants and derived types.
 - `simple_cavg_quality_feats.f90`: feature definitions, feature extraction, hard rejects, and robust normalization.
-- `simple_cavg_quality_stats.f90`: binary metrics, AUC, distance-matrix normalization, and statistical helpers.
-- `simple_cavg_quality_model.f90`: built-in presets, model file I/O, scoring, clustering, thresholding, and promotion snippets.
+- `simple_cavg_quality_stats.f90`: binary metrics, AUC, and statistical helpers.
+- `simple_cavg_quality_model.f90`: built-in presets, model file I/O, pairwise-logistic scoring, and promotion snippets.
 - `simple_cavg_quality_analysis.f90`: evaluation, analysis reports, and feature tables.
 - `simple_cavg_quality_learn.f90`: analysis-table reader, feature-policy search, model search, and learn reports.
 
-## Microchunk Comparison
+## Comparison with the Retired Microchunk Rejector
 
-The stream path in `simple_microchunked2D` currently calls `cluster2D_rejector`. That engine is deliberately deterministic and rule based. `model_cavgs_rejection` is a separate backend that uses a learned feature vector over class averages.
+The sieve and stream paths now call this backend directly: particle sieving evaluates it in the `sieve` context (`simple_ptcl_sieve`), stream initial analysis in the `chunk` context (`simple_stream_p03_initial_analysis`), and the multistate stream stage runs `model_cavgs_rejection`. The rule engine it replaced (`simple_cluster2D_rejector`, called from `simple_microchunked2D`; both removed) was deterministic and rule based. The comparison below is kept because its thresholds explain several of the hard gates the model retains.
 
-| Aspect | Microchunk rejection | `model_cavgs_rejection` |
+| Aspect | Retired microchunk rejection | `model_cavgs_rejection` |
 | --- | --- | --- |
 | Decision type | Cumulative rule engine. | Learned feature-vector model with hard validity gates. |
-| Primary owner | `simple_cluster2D_rejector` called from `simple_microchunked2D`. | `src/main/cavg_quality` called by `model_cavgs_rejection`. |
-| Unit of evidence | Individual scalar rules applied one after another. | Normalized feature vector plus model weights, clustering, and score thresholding. |
+| Primary owner | `simple_cluster2D_rejector` called from `simple_microchunked2D` (both removed). | `src/main/cavg_quality`, called by `model_cavgs_rejection`, particle sieving and the stream. |
+| Unit of evidence | Individual scalar rules applied one after another. | Normalized feature vector scored by the pairwise-logistic model and its probability threshold. |
 | Rejection semantics | A class rejected by any rule remains rejected. | Hard rejects are final; remaining classes are scored and partitioned by the model. |
 | Threshold source | Fixed constants, with tier-specific population and local-variance overrides. | Built-in or learned model specification; learn mode chooses feature policy, weights, and threshold controls from analysis datasets. |
-| Adaptation to dataset | Robust local-variance z-scores are dataset-relative, but thresholds are fixed. | Robust feature normalization, k-medoids distances, Otsu thresholds, and selected model controls are dataset-relative. |
+| Adaptation to dataset | Robust local-variance z-scores are dataset-relative, but thresholds are fixed. | Robust feature normalization is dataset-relative; the learned coefficients and probability threshold are fixed per model. |
 | Training data | None. | Manual selections from `quality_mode=analyze` files. |
 | Output role | Online stream cleanup and particle deselection. | Batch/chunk/pool class-average selection, analysis, training, and model promotion. |
 
@@ -36,7 +36,7 @@ The stream path in `simple_microchunked2D` currently calls `cluster2D_rejector`.
 
 The model feature bank keeps the microchunk-style image-processing evidence, optional stored-score and signal evidence, and the local-variance/support evidence needed to detect fuzzy-ball overfitting in learned models. The overfit local-variance features are part of the learned model feature vector and are included in every learn-mode feature policy. Texture descriptors were removed after they failed to justify the extra feature and extraction complexity. The current `chunk100mics` preset uses the `microchunk_plus_score_signal` policy: microchunk plus stored-score, overfit-family, center/edge signal, presence, and fuzzy-ball signal evidence.
 
-| Evidence | Microchunk rule engine | `model_cavgs_rejection` feature-vector model | Current chunk role |
+| Evidence | Retired microchunk rule engine | `model_cavgs_rejection` feature-vector model | Current chunk role |
 | --- | --- | --- | --- |
 | Class population | Hard rule: reject below a tier-specific fraction of total population. | `log_pop` feature plus context-specific population hard gates. | Active feature and hard gate. |
 | Resolution | Hard rule: reject when `res > 40.0`. | `neg_log_res` feature plus hard reject when `res > 40.0`. | Active feature and hard gate. |
@@ -65,7 +65,7 @@ The contexts represent three workflow phases:
 
 Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming cleanup gates for undersupported and fuzzy-ball-like class averages. Pool adds its own final pre-3D cleanup gates for low population, low band-pass localization, and poor nominal resolution. Sieve has its own pre-model gate policy and deliberately does not inherit the shared chunk/pool validity gates.
 
-| Criterion | Microchunk rule engine | `model_cavgs_rejection` |
+| Criterion | Retired microchunk rule engine | `model_cavgs_rejection` |
 | --- | --- | --- |
 | Population | Rejects `pop < ceiling(sum(pop) * fraction)`. Fractions are tier-specific. | Shared: reject `pop <= 0`. Chunk/sieve: reject `pop < ceiling(sum(pop) * 0.0035)`. Pool: reject `pop < ceiling(sum(pop) * 5.0e-4)`. |
 | Resolution | Rejects `res > 40.0`. | Chunk/pool shared validity rejects `res > 40.0`; pool additionally rejects `res > 25.0`. |
@@ -78,7 +78,7 @@ Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming c
 | Local variance low but not degenerate | Rejected by fixed robust-z thresholds. | Chunk only: reject an extreme absolute foreground local-variance floor; otherwise encoded as learned evidence. Pool does not apply this extra gate. |
 | Band-pass center/edge variance extremely low | Not used by the rule engine. | Chunk hard rejects when raw `bp_center_edge_var < 1.5`; pool hard rejects when raw `bp_center_edge_var < 10.0`; sieve leaves this value as learned evidence. |
 
-Microchunk tier thresholds:
+Retired microchunk tier thresholds:
 
 | Tier | Population fraction | Local-variance strong threshold | Local-variance weak threshold |
 | --- | ---: | ---: | ---: |
@@ -93,17 +93,16 @@ Microchunk tier thresholds:
 
 The rejection model is a low-dimensional, monotone feature-vector classifier with explicit hard constraints. In learning-theory terms, the hard rejects are prior validity constraints: they remove classes the model is not asked to rescue or fit. The remaining rows form a supervised training set from manual selections.
 
-The legacy linear apply-only artifact has three parts:
+Linear score-and-cluster artifacts (a linear quality score whose per-dataset
+boundary came from k-medoids clustering and Otsu thresholding) are not
+supported: `read_model` accepts only `model_version=11` pairwise-logistic files,
+and the clustering apply path was removed for release 4.
 
-- a feature policy, which selects a cumulative family set;
-- non-negative feature weights, which define a linear scalar quality score;
-- thresholding controls, which govern how the per-dataset score boundary is chosen after k-medoids clustering and optional Otsu thresholding.
+Training fits a relational pairwise-logistic artifact. Its fitted parameters are an intercept, linear feature coefficients, pairwise base-feature interaction coefficients, the required relational coefficient, a probability threshold, and a regularization strength. The coefficients are fit from the canonical training files only. On two-class trainable datasets, the logistic loss gives manually selected classes moderately higher total weight than manually deselected classes so the probability surface learns rejection evidence without becoming an overly aggressive rejector. Manually deselected examples with the overfit/support-poor or band-pass-localization signature get an additional training-time loss multiplier, so fuzzy-ball examples influence the fit without becoming an apply-time hard reject. Learn reports also expose an internal overfit-focus loss scale for experiments; it is currently neutral.
 
-New training fits a relational pairwise-logistic artifact. Its fitted parameters are an intercept, linear feature coefficients, pairwise base-feature interaction coefficients, the required relational coefficient, a probability threshold, and a regularization strength. The coefficients are fit from the canonical training files only. On two-class trainable datasets, the logistic loss gives manually selected classes moderately higher total weight than manually deselected classes so the probability surface learns rejection evidence without becoming an overly aggressive rejector. Manually deselected examples with the overfit/support-poor or band-pass-localization signature get an additional training-time loss multiplier, so fuzzy-ball examples influence the fit without becoming an apply-time hard reject. Learn reports also expose an internal overfit-focus loss scale for experiments; it is currently neutral.
-
-All features are robustly normalized inside the current dataset. Legacy linear
-artifacts retain their k-medoids/Otsu apply path. Relational logistic artifacts
-apply their learned probability surface and fixed probability threshold.
+All features are robustly normalized inside the current dataset. Relational
+logistic artifacts apply their learned probability surface and fixed probability
+threshold.
 
 The learning objective is empirical risk minimization over manually annotated `quality_mode=analyze` runs. Feature-weight candidates are learned only from datasets where both manual states remain present after hard rejects, because those are the datasets with a learnable soft boundary. Candidate models are scored over all scoreable datasets using only non-hard-rejected rows. Two-class trainable datasets contribute specificity with a small false-negative-rate tolerance over the trainable manually good rows. Datasets where at least 20% of the trainable class averages are manually bad rows matching the fuzzy-ball signature get an additional hinge/quadratic objective penalty when the accepted fuzzy-ball-signature rate is above the tolerated rate. The signature is poor support plus either low local-variance evidence or low 100 to 40 A band-pass center/edge localization. This keeps selected-class protection global while making the objective care specifically about fuzzy-ball leakage in small-specimen chunks. The final macro score is a fixed robust score: half the mean dataset score and half the mean score over the lower tail of datasets. During pairwise-logistic fitting, manually bad rows with the same fuzzy-ball signature get extra loss weight. Datasets where only manually good rows remain after hard rejects contribute recall, so they teach the model not to reject good classes that passed the hard gates. Datasets where only manually bad rows remain contribute specificity only when no manually good classes were removed by hard rejects. If manually good classes were entirely removed by hard rejects, the dataset is reported as hard-gate blocked and skipped for soft-model scoring. Hard-rejected rows remain visible in diagnostics, including counts of manually good classes lost to hard gates, but they do not participate in fitting the learned boundary.
 
@@ -129,7 +128,7 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=analyze` requires `quality_context`, applies that context's hard gates, computes model output, and treats the existing `cls2D` state as the manual reference. It writes the single canonical learner input `cavgs_quality_training.txt`, including the gate context that produced its hard-reject mask, plus the selected/rejected stacks, `hard_gate_rejections.mrc`, and the score-ranked class-average stack and rank table. The project selection is left unchanged.
 
-`quality_mode=learn` reads a training file table of `cavgs_quality_training.txt` files from `filetab=` and fits the relational logistic model from the neutral `neutral_learn_base` foundation. Every input must declare `relational_feature_schema=corr_knn_signal_v1`, contain the normalized CC-neighbour signal-statistics feature, and record the same chunk, pool, or sieve context. Missing or mixed relational schemas, missing or mixed contexts, and a combined input set in which the hard gates rejected every class average are fatal before fitting. The shared input-table context becomes the learned version-10 model context. Learn mode does not accept `quality_context`, `quality_model`, or `infile`. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
+`quality_mode=learn` reads a training file table of `cavgs_quality_training.txt` files from `filetab=` and fits the relational logistic model from the neutral `neutral_learn_base` foundation. Every input must declare `cavg_quality_training_version=1` and `relational_feature_schema=corr_knn_signal_v1`, contain the normalized CC-neighbour signal-statistics feature and every `z_*` feature column (including the overfit family), and record the same chunk, pool, or sieve context in `quality_context`. A missing training version or feature column, missing or mixed relational schemas, missing or mixed contexts, and a combined input set in which the hard gates rejected every class average are fatal before fitting. The shared input-table context becomes the learned version-11 model context. Learn mode does not accept `quality_context`, `quality_model`, or `infile`. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
 
 `quality_mode=evaluate` applies the selected fixed model without refitting. With `filetab=`, it evaluates one or more saved `cavgs_quality_training.txt` files and preserves the model artifact context because the saved hard gates are not recomputed. Without `filetab=`, it evaluates a single project directly using the existing `cls2D` state as the manual reference, like analyze mode. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
 
@@ -155,30 +154,33 @@ For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk10
 
 `quality_model` selects a built-in preset outside learn mode. The promoted built-ins are:
 
-- `chunk100mics`: default chunk/stream-style version-10 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`; it includes `corr_knn_signal_v1` relational evidence.
-- `sieve`: version-10 pairwise logistic model for small-chunk sieve class averages.
-- `pool`: version-10 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/pool_training4` for pooled class averages before 3D refinement.
+- `chunk100mics`: default chunk/stream-style version-11 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`; it includes `corr_knn_signal_v1` relational evidence.
+- `sieve`: version-11 pairwise logistic model for small-chunk sieve class averages.
+- `pool`: version-11 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/pool_training4` for pooled class averages before 3D refinement.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
-Relational logistic model files use `model_version=10` and explicit key-value fields:
+Relational logistic model files use `model_version=11` and explicit key-value fields:
 
 - `name`
 - `context`
 - `feature_policy`
 - `feature_weights`
-- `boundary_margin`
-- `min_score_separation`
-- `otsu_min_offset`
-- `otsu_max_offset`
-- `cluster_rescue_margin`
-- `min_accept_frac`
-- `use_lowsep_otsu`
-- `use_otsu_window`
-- `use_cluster_rescue`
-- `enforce_min_accept_frac`
+- `intercept`
+- `linear_coefficients`
+- `interaction_terms`
+- `interaction_coefficients`
+- `prob_threshold`
+- `regularization_lambda`
+- `calibration_temperature`
+- `relational_feature_schema`
+- `relational_knn`
+- `relational_corr_hp`
+- `relational_corr_lp`
+- `relational_corr_trs`
+- `relational_coefficient`
 
-Unknown model-file keys are rejected.
+A model file may also name a built-in `preset`; its values are loaded first and the explicit keys override them. Files with any other `model_version` are refused, and unknown model-file keys are rejected. Version 11 dropped the unused cluster-threshold fields of version 10 (`boundary_margin`, `min_score_separation`, the Otsu offsets and switches, cluster rescue and the minimum-accept fraction).
 
 ## Feature Bank
 
@@ -290,19 +292,6 @@ regularization      1.000000E-03
 feature_weights     uniform over all 14 microchunk_plus_score_signal features
 ```
 
-```text
-boundary_margin         0.00
-min_score_separation    0.05
-otsu_min_offset         0.00
-otsu_max_offset         0.00
-cluster_rescue_margin   0.20
-min_accept_frac         0.00
-use_lowsep_otsu         false
-use_otsu_window         false
-use_cluster_rescue      false
-enforce_min_accept_frac false
-```
-
 On the refreshed v4 chunk-training table, this promoted preset scored `macro_evaluate_score=0.50847`, improving over the previous built-in chunk preset (`-0.80859`). The main gain was selected-class protection: soft-classification totals moved from `tp=297, fp=95, tn=151, fn=33` to `tp=324, fp=83, tn=163, fn=6`.
 
 ## Classification
@@ -318,16 +307,12 @@ prob_accept = sigmoid(intercept + sum(linear_coefficients * features)
 Every supported artifact declares the relational schema. Non-hard-rejected rows are accepted when `prob_accept >= prob_threshold`.
 Standard hard gates still run before the logistic model.
 
-If there are fewer than four trainable rows, the distance matrix is degenerate, clustering fails, or the low-separation branch has no acceptable Otsu threshold, all non-hard-rejected rows are accepted as a single cluster.
-
-`threshold_offset` is reported as `raw_threshold - threshold`. A positive value means the effective threshold is lower than the cluster midpoint.
-
 The classifier reports its soft decision explicitly:
 
-- `soft_decision=soft_threshold`: a learned score threshold was used to reject at least one non-hard-rejected class average.
-- `soft_decision=hard_only`: no additional soft rejection was made after hard preselection.
+- `soft_decision=probability_threshold`, with `soft_reason=pairwise_logistic_relational` (or `pairwise_logistic` for a model without relational evidence): the logistic model scored every non-hard-rejected class average against `prob_threshold`.
+- `soft_decision=hard_only`, with `soft_reason=standard_hard_gates_only`: only the standard hard gates ran.
 
-Common hard-only reasons are `too_few_trainable`, `flat_feature_distances`, `invalid_two_cluster_result`, `low_score_separation`, `soft_threshold_accepts_all`, and `no_trainable_after_hard`. This is the real-world abstention path: if the post-hard feature distribution does not contain a credible low-quality partition, the model stops after hard preselection.
+`threshold` and `raw_threshold` both report `prob_threshold`; `threshold_offset` is always zero.
 
 ## Analysis Output
 
@@ -390,8 +375,8 @@ expanded into another interaction bank. Learn mode searches:
 The fit is ab initio with respect to the rejection model. Chunk, pool, and
 stage-specific behaviour is represented by the learned artifact context and
 coefficients, not by separate fitting procedures. A relational pool-context
-fit therefore produces a version-10 artifact even though the existing built-in
-pool preset remains a version-9-compatible base-only model.
+fit therefore produces a version-11 artifact with the same relational schema as
+the built-in pool preset.
 
 Each candidate is evaluated on every scoreable training dataset using the
 role-specific learn score. Objective value breaks score ties.
@@ -400,7 +385,7 @@ The learn report includes the search grid, `macro_learn_score`, fitted base and
 relational coefficients, dataset-role diagnostics, and per-dataset confusion
 metrics.
 
-`quality_mode=evaluate` uses the same trainable-row scoring semantics as learn mode, but it does not derive weights, search thresholds, or write a model file. This is intended for held-out validation. It can score saved analysis tables through `filetab`, or a single manually selected project directly through `projfile` and `mskdiam`. The evaluate report includes the fixed model settings, `macro_evaluate_score`, dataset-role diagnostics, Otsu ablation diagnostics, and per-dataset confusion metrics.
+`quality_mode=evaluate` uses the same trainable-row scoring semantics as learn mode, but it does not derive weights, search thresholds, or write a model file. This is intended for held-out validation. It can score saved analysis tables through `filetab`, or a single manually selected project directly through `projfile` and `mskdiam`. The evaluate report includes the fixed model settings, `macro_evaluate_score`, dataset-role diagnostics, and per-dataset confusion metrics.
 
 ## Promotion
 

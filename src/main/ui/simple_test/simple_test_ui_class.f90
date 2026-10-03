@@ -60,7 +60,7 @@ contains
         &'every fast-gate unit suite in sequence',&
         &'runs all unit_<area> suites in one process; a developer convenience, the build gate runs the area suites separately',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='All Unit Suites')
         call add_ui_program('units', units, tsttab, UI_CATEGORY)
     end subroutine new_units
 
@@ -71,7 +71,7 @@ contains
         &'unit tests: core containers, strings, file I/O and the command line',&
         &'is the fast-gate unit suite for core containers, strings, file I/O and the command line',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Core')
         call unit_core%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (ansi_formatting, string, syslib, fileio, stack_io, class_sample_io, character_hash, hash, value_reference_hash, linked_list, record_list, command_line)', '', .false., '')
         call add_ui_program('unit_core', unit_core, tsttab, UI_CATEGORY)
@@ -84,7 +84,7 @@ contains
         &'unit tests: orientations',&
         &'is the fast-gate unit suite for orientations',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Orientations')
         call unit_ori%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (orientation, orientation_collection, symmetry, euler_shift)', '', .false., '')
         call add_ui_program('unit_ori', unit_ori, tsttab, UI_CATEGORY)
@@ -97,7 +97,7 @@ contains
         &'unit tests: images, Fourier transforms and B-spline smoothing',&
         &'is the fast-gate unit suite for images, Fourier transforms and B-spline smoothing',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Images')
         call unit_image%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (image, mrc2jpeg, mrc_validate, image_header, fourier_iterator, b_spline_smoother, masks, nano_mask, volume_shape, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
         call add_ui_program('unit_image', unit_image, tsttab, UI_CATEGORY)
@@ -110,7 +110,7 @@ contains
         &'unit tests: numerics: variance, random draws, fitting, clustering',&
         &'is the fast-gate unit suite for numerics: variance, random draws, fitting, clustering',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Numerics')
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, average_linkage, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
@@ -123,7 +123,7 @@ contains
         &'unit tests: projects, STAR files, class compatibility, sieving, motion gain, motion model',&
         &'is the fast-gate unit suite for projects, STAR files, class compatibility, sieving, motion gain, motion model',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Projects')
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
@@ -136,7 +136,7 @@ contains
         &'unit tests: the UI registry and GUI metadata',&
         &'is the fast-gate unit suite for the UI registry and GUI metadata',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: UI')
         call unit_ui%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (ui_json, gui_metadata, gui_assembler, ui_hash, ui_visibility)', '', .false., '')
         call add_ui_program('unit_ui', unit_ui, tsttab, UI_CATEGORY)
@@ -149,7 +149,7 @@ contains
         &'unit tests: localhost IPC: sockets, HTTP POST and persistent-worker messaging',&
         &'is the fast-gate unit suite for localhost IPC: sockets, HTTP POST and persistent-worker messaging',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: IPC')
         call unit_ipc%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (ipc_tcp_socket, http_post, persistent_worker_message, persistent_worker_server)', '', .false., '')
         call add_ui_program('unit_ipc', unit_ipc, tsttab, UI_CATEGORY)
@@ -162,9 +162,9 @@ contains
         &'unit tests: 3D reconstruction backends and observation noise',&
         &'is the fast-gate unit suite for 3D reconstruction: the rec3D backend selector and the Gaussian observation-noise contracts',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Reconstruction')
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_accumulator, class_average_carry_over, trailing_chain_identity, frozen_accumulator, volume_pair_metrics)', '', .false., '')
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, trailing_chain_identity, frozen_accumulator, volume_pair_metrics)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
 
@@ -175,7 +175,7 @@ contains
         &'library tests: half-set PCG reconstruction against gridding, map docking',&
         &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; the solve3D_addon report docking a moved map',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this suite to run alone (pcg_half_set, addon_report_docking)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
@@ -188,7 +188,7 @@ contains
         &'unit tests: registration on the polar Fourier transform (2D and 3D)',&
         &'is the fast-gate unit suite for polar Fourier registration: the continuous in-plane evaluators and joint route, and the refine3D in-plane search state and policy',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Polar Alignment')
         call unit_pftc_align2D3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (polar_correlation, continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_io, sigma2_state, sigma2_bootstrap, cavg_registration)', '', .false., '')
         call add_ui_program('unit_pftc_align2D3D', unit_pftc_align2D3D, tsttab, UI_CATEGORY)
@@ -202,7 +202,7 @@ contains
         &'is the fast-gate unit suite for Cartesian 3D registration: Fourier operations, pose refinement, '//&
         &'refine3D integration and reporting',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Cartesian Alignment')
         call unit_cart_align3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (cartesian_fourier, cart_calculator, pose_optimizer, pose_strategy, pose_statistics)', '', .false., '')
         call add_ui_program('unit_cart_align3D', unit_cart_align3D, tsttab, UI_CATEGORY)
@@ -215,7 +215,7 @@ contains
         &'library tests: Cartesian pose refinement on simulated 1JYX particles',&
         &'is the nightly library suite for Cartesian 3D registration: 1000 simulated 1JYX particles refined by the Cartesian 3D strategy from perturbed poses under objfun cc and euclid at lp 8 and 4 A, and reconstructed',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Library Tests: Cartesian Alignment')
         call lib_cart_align3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this suite to run alone (pose_1jyx_recovery)', '', .false., '')
         call add_ui_program('lib_cart_align3D', lib_cart_align3D, tsttab, UI_CATEGORY)
@@ -228,7 +228,7 @@ contains
         &'unit tests: SINGLE (nanoparticles, atomic models)',&
         &'is the fast-gate unit suite for SINGLE: the atoms module and the C-alpha candidate search on a synthetic three-residue map',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: SINGLE')
         call unit_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (atoms, cif2mrc, c_alpha_finder)', '', .false., '')
         call add_ui_program('unit_single', unit_single, tsttab, UI_CATEGORY)
@@ -241,7 +241,7 @@ contains
         &'library tests: SINGLE molecular models',&
         &'is the nightly library suite for pdb2mrc coverage of the built-in 6VXX and 1JYX models',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Library Tests: SINGLE')
         call lib_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this suite to run alone (pdb2mrc)', '', .false., '')
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
@@ -254,7 +254,7 @@ contains
         &'library tests: in-process stream stages',&
         &'is the nightly library suite for the stream stages that run in-process: optics assignment on two beam-shift clusters, picking-reference generation and reference picking with extraction on a synthetic micrograph',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Library Tests: Stream')
         call lib_stream%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract)', '', .false., '')
         call add_ui_program('lib_stream', lib_stream, tsttab, UI_CATEGORY)
@@ -267,7 +267,7 @@ contains
         &'unit tests: distributed execution',&
         &'is the fast-gate unit suite for distributed execution: the job controller on the local backend (scripts only, nothing submitted) and the installation-path policy of the queue-system environment',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Distributed Execution')
         call unit_parallel%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (qsys_control, qsys_environment)', '', .false., '')
         call add_ui_program('unit_parallel', unit_parallel, tsttab, UI_CATEGORY)
@@ -280,7 +280,7 @@ contains
         &'unit tests: heterogeneity analysis (flex_pca)',&
         &'is the fast-gate unit suite for flex_pca: latent model, state weights, deconvolution of 4000 particles and the PCG M-step operator at box 32 with the baseline solve',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Unit Tests: Heterogeneity')
         call unit_heterogeneity%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (flex_pca, flex_pcg_operator)', '', .false., '')
         call add_ui_program('unit_heterogeneity', unit_heterogeneity, tsttab, UI_CATEGORY)
@@ -293,7 +293,7 @@ contains
         &'library tests: flex_pca deconvolution and PCG operator',&
         &'is the nightly library suite for flex_pca: deconvolution of 20000 particles at realistic noise, the PCG M-step operator at box 64 against the exact Gram and the PCG solve sweep at box 32',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Library Tests: Heterogeneity')
         call lib_heterogeneity%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this suite to run alone (flex_pca_deconvolution_20k, flex_pcg_operator_64, flex_pcg_solve_sweep)', '', .false., '')
         call add_ui_program('lib_heterogeneity', lib_heterogeneity, tsttab, UI_CATEGORY)
@@ -306,7 +306,7 @@ contains
         &'OpenMP target offload on a device',&
         &'checks OpenMP target offload, data persistence and asynchronous execution, cuFFT against FFTW, cuBLAS and the KB device forms on device device= with nthr= host threads; needs a USE_OPENMP_OFFLOAD build and a device, platform label',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='OpenMP Offload Test')
         call add_ui_program('openmp_offload', openmp_offload, tsttab, UI_CATEGORY)
     end subroutine new_openmp_offload
 
@@ -317,7 +317,7 @@ contains
         &'unit tests of forked child processes',&
         &'exercises real child processes with clock-based polling (the forked-process lifecycle and the stream heartbeat); not part of the build gate, run under the platform label',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='Forked Process Test')
         call forked_process%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this suite to run alone (forked_process, stream_heartbeat)', '', .false., '')
         call add_ui_program('forked_process', forked_process, tsttab, UI_CATEGORY)

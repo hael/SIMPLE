@@ -1456,7 +1456,6 @@ contains
         logical :: l_check_solver
         l_check_solver = .true.
         if( present(check_solver) ) l_check_solver = check_solver
-        if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
         if( l_check_solver )then
             if( params%maxits_pcg < 1 .or. params%maxits_pcg > 100 ) &
                 &THROW_HARD('PCG requires 1<=maxits_pcg<=100')
@@ -1466,7 +1465,6 @@ contains
                 THROW_WARN('maxits_pcg exceeds the production refinement budget (8); appropriate for offline converged solves only')
             endif
         endif
-        if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
         if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &
             &1.0e-5*real(params%box)*params%smpd )then
             THROW_HARD('PCG crop must preserve the native physical box extent')

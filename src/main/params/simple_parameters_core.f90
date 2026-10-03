@@ -59,7 +59,6 @@ contains
         self%pdbfile=''           !< PDB file
         self%pdbfiles=''          !< list of PDB files
         self%pdbout=''            !< PDB output file
-        self%pdfile='pdfile.bin'
         self%pickrefs=''          !< picking references
         self%plaintexttab=''      !< plain text file of input parameters
         self%prg=''               !< SIMPLE program being executed

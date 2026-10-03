@@ -13,7 +13,6 @@ use simple_ui_simple_group, only: add_simple_programs
 use simple_ui_stream_group, only: add_stream_programs
 use simple_ui_single_group, only: add_single_programs
 use simple_ui_test_group,   only: add_test_programs
-use simple_ui_legacy_names, only: canonical_prg_name
 implicit none
 
 public :: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr, count_prgs_in_category
@@ -65,7 +64,7 @@ contains
         class(string),             intent(in)    :: which_program
         type(ui_program), pointer, intent(inout) :: ptr2prg
         ptr2prg => null()
-        call prgtab%get_ui_program(string(canonical_prg_name(which_program%to_char())), ptr2prg)
+        call prgtab%get_ui_program(which_program, ptr2prg)
     end subroutine get_prg_ptr
 
     integer function count_prgs_in_category( category ) result( nprograms )
@@ -164,7 +163,7 @@ contains
         class(string),             intent(in)    :: which_program
         type(ui_program), pointer, intent(inout) :: ptr2prg
         ptr2prg => null()
-        call tsttab%get_ui_program(string(canonical_prg_name(which_program%to_char())), ptr2prg)
+        call tsttab%get_ui_program(which_program, ptr2prg)
     end subroutine get_test_prg_ptr
 
     subroutine list_simple_prgs_in_ui

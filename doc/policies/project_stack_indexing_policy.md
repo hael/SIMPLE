@@ -2,8 +2,8 @@
 
 This policy defines the indexing contract between SIMPLE project metadata,
 particle rows, and physical particle stack files. It is intended to remove
-ambiguity around `merge_projects`, `prune_project`, and downstream stack readers
-such as 2D and 3D analysis.
+ambiguity around `merge_projects`, `prune_project`, `fix_projfile`, and
+downstream stack readers such as 2D and 3D analysis.
 
 ## Core Rule
 
@@ -83,36 +83,21 @@ when projects are merged or stack rows are renumbered.
 `indstk` identifies the particle's physical image number inside the stack file
 referenced by its `stkind`.
 
-Modern project outputs should write positive `indstk` values for particle rows.
-Missing or non-positive `indstk` values are legacy compatibility cases.
-For old stream projects, even a positive `indstk` may be unreliable when the
-stack row does not carry `nptcls_stk`.
-
-When a legacy fallback is needed, or when a project-rewriting operation cannot
-trust the input `indstk`, `fromp/top` define the project rows belonging to the
-stack row, while the stack file itself is 1-based. Therefore the fallback
-physical stack index is:
-
-```text
-indstk = particle_project_row - fromp + 1
-```
-
-The fallback must never use the raw project particle row as the stack image
-index unless `fromp == 1`. If `state = 0` rows exist, they still occupy project
-rows and therefore still occupy positions in this fallback mapping.
-
-Required invariant:
+Every particle row must carry a positive `indstk`, and every stack row with
+particle rows must carry `nptcls_stk`. Both are required from release 4 on:
 
 ```text
 1 <= indstk <= nptcls_stk
 ```
 
-When `nptcls_stk` is absent in a legacy project and no physical stack inspection
-has been done, the fallback physical stack count is:
-
-```text
-nptcls_stk = top - fromp + 1
-```
+There is no run-time fallback. Earlier releases derived a missing `indstk` from
+the project rows (`particle_project_row - fromp + 1`) and a missing
+`nptcls_stk` from the range count. That mapping is only correct while the stack
+file holds exactly one image per project row, and old stream projects carried
+`indstk` values that were wrong even when present; the fallback hid that bug. A
+project that lacks these fields stops with an error in mapping, pruning,
+merging and STAR export. `fix_projfile` (see the Validation Policy) converts
+such a project once, where the physical indices can be proven.
 
 ## Selection State
 
@@ -129,24 +114,17 @@ has explicitly removed all inactive rows.
 ## Merge Policy
 
 `merge_projects` concatenates project metadata. It must preserve physical stack
-indices when they are credible and repair legacy old-stream indexing when they
-are not.
+indices.
 
 When merging particle projects:
 
 - Remap `stkind`, because stack rows are renumbered in the merged project.
 - Remap `fromp` and `top`, because project particle rows are concatenated.
 - Preserve `nptcls` for each stack row.
-- Treat input `indstk` as a candidate, not as automatically correct.
-- If the source stack row has `nptcls_stk`, preserve positive `indstk` values
-  that are within `1..nptcls_stk`.
-- If the source stack row lacks `nptcls_stk`, treat the source as legacy and
-  derive `indstk` from `source_particle_project_row - source_fromp + 1`, even
-  when an `indstk` value is present.
-- If `indstk` is missing, non-positive, or out of range, derive it from
-  `source_particle_project_row - source_fromp + 1`.
-- Preserve `nptcls_stk` when present, because the physical stack files are not
-  rewritten.
+- Preserve `indstk`. A source stack row without `nptcls_stk`, or a particle
+  whose `indstk` is missing or outside `1..nptcls_stk`, stops the merge; run
+  `fix_projfile` on that source first.
+- Preserve `nptcls_stk`, because the physical stack files are not rewritten.
 - Preserve stack paths and row-level stack metadata, including CTF-model fields.
 - Remap row-level `ogid` values as project metadata.
 - Drop analysis products such as `cls2D`, `cls3D`, and `out` unless a future
@@ -160,9 +138,8 @@ stack row indices may change
 physical image indices must not change
 ```
 
-The fallback formula is applied in the source project's project-row domain
-before the output `fromp/top` remapping. This prevents the merged global
-particle row from being used as a stack index.
+Because `indstk` is carried over unchanged, the merged global particle row is
+never used as a stack index.
 
 ## Prune Policy
 
@@ -178,17 +155,10 @@ files:
 - Update `os_stk%fromp`, `os_stk%top`, and `os_stk%nptcls` to describe the
   post-prune project.
 - Remap `stkind` if stack rows are renumbered.
-- Treat input `indstk` as a candidate, not as automatically correct.
-- If the source stack row has `nptcls_stk`, preserve positive `indstk` values
-  that are within `1..nptcls_stk`, because the physical image positions in the
-  original stack files have not changed.
-- If the source stack row lacks `nptcls_stk`, treat the source as legacy and
-  derive `indstk` from `old_particle_project_row - old_fromp + 1`, even when an
-  `indstk` value is present.
-- If `indstk` is missing, non-positive, or out of range, derive it from the
-  legacy fallback `old_particle_project_row - old_fromp + 1`.
-- Preserve `nptcls_stk` when present, because the physical stack files have not
-  changed.
+- Preserve `indstk`, because the physical image positions in the original
+  stack files have not changed. A retained particle without a valid `indstk`
+  stops the prune before any row is moved.
+- Preserve `nptcls_stk`, because the physical stack files have not changed.
 - Preserve stack paths.
 
 This is the common case that protects downstream readers from using project row
@@ -224,21 +194,11 @@ workers request image indices that do not correspond to the intended particles.
 
 ## Reader Policy
 
-Any code that reads particle images from a stack file must use `indstk` as the
-physical image index when the stack row has `nptcls_stk` and `indstk` is
-present, positive, and within range.
-
-If `nptcls_stk` is absent, or if `indstk` is missing, non-positive, or out of
-range, readers may use the legacy fallback:
-
-```text
-indstk = particle_project_row - fromp + 1
-```
-
-The reader must first resolve the particle's `stkind`, read `fromp/top` from
-that stack row, and verify that the particle row lies inside that range. Readers
-must not use the raw particle row index as the physical stack-file image index
-except in the special case where `fromp == 1`.
+Any code that reads particle images from a stack file must resolve the
+particle's `stkind` and use `indstk` as the physical image index
+(`map_ptcl_ind2stk_ind`). A missing `nptcls_stk`, or an `indstk` that is
+missing or outside `1..nptcls_stk`, is an error. Readers must never use a
+project particle row as the physical stack-file image index.
 
 ## Validation Policy
 
@@ -247,26 +207,32 @@ Project validation should check:
 - Stack project ranges are contiguous and cover the particle rows.
 - `top - fromp + 1 == nptcls`.
 - Particle `stkind` values identify valid stack rows.
-- New project-writing code should write `nptcls_stk` on stack rows when
-  particle rows are present.
-- When `nptcls_stk` is missing in a legacy project, validation may inspect the
-  physical stack file or use `top - fromp + 1` as the fallback stack count.
-- New project-writing code should write positive particle `indstk` values.
-- Missing, non-positive, or untrusted particle `indstk` values may be accepted
-  through the `particle_project_row - fromp + 1` fallback.
-- Particle `indstk` values are not larger than `nptcls_stk` when
-  `nptcls_stk` is present.
-- If `nptcls_stk` is absent, validation must not assume existing `indstk`
-  values are correct; merge/prune-style repair should derive them from
-  `fromp/top`.
+- Every stack row with particle rows has `nptcls_stk`.
+- Every particle row has `1 <= indstk <= nptcls_stk`.
 
-Validation must not silently convert physical `indstk` values into project-row
-indices.
+Project-writing code must write both. Validation must not silently convert
+physical `indstk` values into project-row indices.
 
-The `validate_projfile` program applies this policy to an input project and
-writes `input_name_validated.simple`. It reports warnings, errors, and repairs
-encountered during validation, but writes a best-effort repaired project so that
-legacy stream outputs can be normalized before downstream 2D or 3D analysis.
+The `fix_projfile` program brings a project from an earlier release to this
+contract and writes `input_name_fixed.simple`:
+
+- It repairs stack ranges from the reference particle segment (`ptcl2D` when
+  present), then gives every row of both segments the `stkind` of the stack
+  whose range owns it; a stored `stkind` naming another stack is replaced, and a
+  row no stack owns is an error.
+- A project with particle rows but no stack rows is an error: its particles
+  cannot be mapped to images.
+- A stack row without `nptcls_stk` gets the image count from its file header.
+  Such a row predates the stack-index fix, so its stored `indstk` values are not
+  trusted: when the stack holds exactly one image per project row, every
+  particle gets `indstk = particle_project_row - fromp + 1`, checked against
+  `1..nptcls_stk`; otherwise the physical images cannot be recovered and the
+  stack is reported.
+- A stack row that already has `nptcls_stk` keeps its `indstk` values; a
+  missing or out-of-range one is reported.
+- It reports every repair and error, and writes the fixed project only when no
+  error remains. Reading and rewriting the project also brings the particle
+  records to the current width.
 
 ## Test Policy
 
@@ -294,10 +260,8 @@ After merging this project with another, the second project's `fromp/top` and
 indices into its original stack file unless new physical stack files are
 written.
 
-Tests should also include old-stream-style projects where `nptcls_stk` is
-absent and `indstk` is missing, zero, or wrong. Merge and prune should repair
-those rows with:
-
-```text
-indstk = source_particle_project_row - source_fromp + 1
-```
+Tests should also include an earlier-release project where `nptcls_stk` is
+absent and `indstk` is missing, zero, or wrong, on a stack that holds one image
+per project row: `fix_projfile` must take `nptcls_stk` from the stack header and
+set `indstk = particle_project_row - fromp + 1`, after which the project maps
+cleanly.

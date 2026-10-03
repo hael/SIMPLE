@@ -42,7 +42,7 @@ association order and completeness check do not depend on particle balance.
 
 Box cropping is supported under the constant-field-of-view contract
 (`box*smpd == box_crop*smpd_crop`, enforced at entry). The shared-memory path
-deliberately rejects `projrec=yes` and fractional/trailing reconstruction;
+deliberately rejects fractional/trailing reconstruction;
 those cases must not silently fall back to
 gridding or matrix-free PCG. The distributed master integrates the
 fractional/trailing algebra — raw `(B,D)` chains blended under the population
@@ -119,7 +119,7 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 | `src/main/commanders/simple/simple_commanders_rec.f90` | `reconstruct3D` commander and backend default |
 | `src/main/ui/simple/simple_ui_refine3D.f90` | `reconstruct3D` UI and backend selector |
 | `src/main/strategies/parallelization/simple_rec3D_strategy.f90` | backend dispatch |
-| `src/main/params/simple_parameters*.f90` | `pcgop`, `rtol` parameters |
+| `src/main/params/simple_parameters*.f90` | `rtol` and the other PCG parameters |
 | `src/fileio/simple_sigma2_files.f90` | shared, builder-free sigma2 discovery/loading |
 | `src/main/commanders/test/simple_commanders_test_highlevel.f90` | operator/solver tests |
 
@@ -387,7 +387,8 @@ space out of the null space. The envelope belongs in `M` too: the operator being
 solved is `E^{-1} T E^{-1}`, so `M^{-1}` brackets its Fourier divide with `E`,
 not `E^{-1}`.
 
-**Kernelized (Toeplitz/Gram) operator.** `pcgop=kernel`, the default. Replaces
+**Kernelized (Toeplitz/Gram) operator.** The production operator (there is no
+`pcgop` key since release 4; tests select the operator with `set_op_mode`). Replaces
 the per-iteration particle loop with one padded FFT, a pointwise multiply by a
 precomputed real `Khat`, and an inverse FFT — per-iteration cost independent of
 particle count (~7x faster per iteration). `Khat` uses the standard NUFFT Gram
@@ -412,7 +413,7 @@ after the useful map has already saturated. Production therefore defaults to
 two iterations and rejects `maxits>8`. Low-level tests may use more iterations
 when diagnosing the approximation boundary.
 
-`pcgop=kernel` is therefore the only candidate for production workflows. It
+The kernel operator is therefore the only candidate for production workflows. It
 must be validated against matrix-free on deterministic, small enough fixtures
 where both can run. Agreement of a residual trace alone is insufficient: a
 uniform operator-scale error cancels from the CG recurrence while changing map
@@ -692,7 +693,7 @@ time, compute cost and memory:
   start; a copied final gridding map could be masked a second time by a
   standalone postprocess;
 - **cost records.** Every partition writes `REFINE3D_BENCH_ITERnnn_PARTppp.txt`
-  (partition 1 also the legacy file) with nparts, worker threads, box,
+  with nparts, worker threads, box,
   box_crop, backend, `maxits_pcg`, `rtol`, peak and phase RSS, the phase
   timings and their thread-seconds; the master logs one
   `RECONSTRUCTION MASTER PHASE (<backend>): s on n threads = thread-s;

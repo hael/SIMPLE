@@ -19,7 +19,6 @@ integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: NSPACE_SUB_BASE         = 2500
 
 ! Stage transition policy
-integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for stage-based policies to indicate "turned off" 
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
 integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
 integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
@@ -32,7 +31,6 @@ integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on
 integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8
 integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE - 1
-integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-standard doesn't work for solve3D 
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: ENVFSC_STAGE            = NSTAGES     ! when to activate enveloppe masking & FSC phase randomized resolution estimation
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
@@ -408,10 +406,9 @@ contains
         if( l_nonuniform .and. &
             &(istage >= NU_FILTER_STAGE .or. (l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
             cfg%filt_mode = trim(params%filt_mode)
-            if( cfg%filt_mode.eq.'nonuniform' .and. &
-                &(istage < GOLD_STD_STAGE .or. params%nstates > 1) ) cfg%filt_mode = 'nonuniform_lpset'
-            if( cfg%filt_mode.eq.'nonuniform_lpset' .and. &
-                &params%nstates == 1 .and. istage >= GOLD_STD_STAGE ) cfg%filt_mode = 'nonuniform'
+            ! no gold-standard stage in solve3D: NU filtering keeps the scheduled lp
+            ! (gold-standard refinement belongs to refine3D_auto)
+            if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
         endif
     end subroutine set_refine3D_filtering_policy
 
@@ -624,13 +621,7 @@ contains
         call cline_refine3D%set('automsk',                cfg%automsk)
         call cline_refine3D%set('envfsc',                 cfg%envfsc)
         call cline_refine3D%set('envmsklp',               params%envmsklp)
-        if( params%nstates == 1 .and. istage >= GOLD_STD_STAGE )then
-            ! Past this point, NU filtering promotes the selected matching
-            ! bandwidth; the schedule remains only as the lpstop ceiling.
-            call cline_refine3D%delete('lp')
-        else
-            call cline_refine3D%set('lp',                 lp_eff)
-        endif
+        call cline_refine3D%set('lp',                     lp_eff)
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then
             call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)

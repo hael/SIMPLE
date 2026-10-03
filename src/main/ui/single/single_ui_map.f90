@@ -23,7 +23,8 @@ subroutine new_conv_atom_denoise( prgtab )
         &'Denoise atomic-resolution nanoparticle map through atom convolution',& ! summary
         &'is a program for denoising atomic-resolution nanoparticle maps exactly as in detect_atoms',& ! descr long
         &'single_exec',&                                                         ! executable
-        &.false., visibility=UI_VIS_DEVELOPER)                                          ! requires sp_project
+        &.false., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Denoise by Atom Convolution')                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call conv_atom_denoise%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -59,7 +60,8 @@ subroutine new_conv_atom_denoise( prgtab )
         &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! summary
         &'is a program that analyses docked time-series density maps',&                   ! descr long
         &'single_exec',&                                                                  ! executable
-        &.false., visibility=UI_VIS_DEVELOPER)                                                   ! requires sp_project
+        &.false., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Time-Segment Map Core Finder')                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tsegmaps_core_finder%add_input(UI_FILE, 'filetab', 'file', 'Volumes list',&

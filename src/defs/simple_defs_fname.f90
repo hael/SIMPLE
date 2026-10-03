@@ -76,7 +76,6 @@ character(len=*), parameter :: ALGN_FBODY                    = 'algndoc_'
 character(len=*), parameter :: ARRAY_SCRIPT                  = 'simple_script_array'
 character(len=*), parameter :: POLARIZED_PTCLS               = 'polar_ptcls'
 character(len=*), parameter :: POLARIZED_CTFS                = 'polar_ctfs'
-character(len=*), parameter :: POLAR_REFS_FBODY              = 'polar_refs'
 character(len=*), parameter :: SHAPE_RANKED_CAVGS_MRCNAME    = 'shaped_ranked_cavgs.mrcs'
 character(len=*), parameter :: SHAPE_RANKED_CAVGS_JPGNAME    = 'shaped_ranked_cavgs.jpg'
 ! STATS
@@ -92,9 +91,8 @@ character(len=*), parameter :: EXTRACT_STK_FBODY             = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY          = 'extract_params_'
 character(len=*), parameter :: PTCLS_FRACTIONS_FBODY         = 'ptcls_fractions_'
 character(len=*), parameter :: GAIN_THUMBNAIL                = 'gain_thumb'//trim(JPG_EXT)
-! OLD DIRECTORIES
+! DIRECTORIES
 character(len=*), parameter :: STDERROUT_DIR                 = 'stderrout/'
-! NEW DIRECTORIES
 character(len=*), parameter :: DIR_CTF_ESTIMATE              = 'ctf_estimate/'
 character(len=*), parameter :: DIR_MOTION_CORRECT            = 'motion_correct/'
 character(len=*), parameter :: DIR_INIPICK_PREPROC           = 'pick_preprocessing/'

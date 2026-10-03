@@ -4,11 +4,11 @@ use warnings;
 use File::Basename qw(basename);
 use File::Glob qw(bsd_glob);
 use File::Path qw(make_path);
+use File::Temp qw(tempdir);
 
 # Parse benchmark text files (*_BENCH_ITER*.txt) and emit matrix CSVs.
 #
 # Benchmark files may contain:
-#   REFINE3D_STAGE_BENCH_ITER*.txt (stage-entry initialization diagnostics)
 #   *** BENCHMARK CONTEXT ***
 #   *** TIMINGS (s) ***
 #   *** RELATIVE TIMINGS (%) ***
@@ -17,8 +17,15 @@ use File::Path qw(make_path);
 # metrics in that section, such as "% accounted for", are kept in the percent
 # matrix. Missing percentages are derived from the parsed total-time entry.
 #
+# A matrix row is one benchmark family at one iteration (columns "benchmark" and
+# "iteration"), so families matched by one glob never overwrite each other.
+# Per-partition reports (*_PARTppp.txt, e.g. REFINE3D_BENCH_ITERnnn_PARTppp.txt)
+# are represented by partition 1, as in plot_refine3d_bench.py; the other
+# partitions are skipped and counted in the summary.
+#
 # Usage:
 #   perl parse_bench.pl [glob] [outdir]
+#   perl parse_bench.pl --self-test
 #
 # Examples:
 #   perl parse_bench.pl "REFINE3D*_BENCH_ITER*.txt"
@@ -28,65 +35,137 @@ use File::Path qw(make_path);
 #   outdir/matrix_seconds.csv
 #   outdir/matrix_percent.csv
 #   outdir/matrix_context.csv
+#
+# --self-test writes fixture files for two partitions of one iteration plus a
+# volassemble report into a temporary directory, parses them and checks that
+# the matrices hold partition 1 and keep the families apart. Exit status 0 on
+# success, 1 on failure.
+
+if (@ARGV && $ARGV[0] eq '--self-test') {
+    exit(self_test());
+}
 
 my $pattern = shift(@ARGV) // '*_BENCH_ITER*.txt';
 my $outdir  = shift(@ARGV) // '.';
-
-my @files = bsd_glob($pattern);
-die "No files matched pattern: $pattern\n" unless @files;
-
-make_path($outdir) unless -d $outdir;
-
-my (%sec, %pct);
-my (%sec_metrics, %pct_metrics);
-my @context_rows;
-my %context_keys;
-my %iters;
-
-for my $file (@files) {
-    my ($iter) = ($file =~ /ITER(\d+)/i);
-    next unless defined $iter;
-    $iter = int($iter);
-    $iters{$iter} = 1;
-
-    my ($context, $file_sec, $file_pct) = parse_bench_file($file);
-
-    for my $metric (keys %{$file_sec}) {
-        $sec{$iter}{$metric} = $file_sec->{$metric};
-        $sec_metrics{$metric} = 1;
-    }
-    for my $metric (keys %{$file_pct}) {
-        $pct{$iter}{$metric} = $file_pct->{$metric};
-        $pct_metrics{$metric} = 1;
-    }
-
-    my %context_row = (
-        file      => basename($file),
-        benchmark => benchmark_name($file),
-        iteration => $iter,
-        %{$context},
-    );
-    push @context_rows, \%context_row;
-    $context_keys{$_} = 1 for keys %context_row;
-}
-
-my @iter_list = sort { $a <=> $b } keys %iters;
-my @sec_metric_list = sort {
-    metric_rank($a) <=> metric_rank($b) || lc($a) cmp lc($b)
-} keys %sec_metrics;
-my @pct_metric_list = sort {
-    metric_rank($a) <=> metric_rank($b) || lc($a) cmp lc($b)
-} keys %pct_metrics;
-
-write_matrix("$outdir/matrix_seconds.csv", \@iter_list, \@sec_metric_list, \%sec);
-write_matrix("$outdir/matrix_percent.csv", \@iter_list, \@pct_metric_list, \%pct);
-write_context("$outdir/matrix_context.csv", \@context_rows, \%context_keys);
-
-print "Matched " . scalar(@files) . " files from pattern: $pattern\n";
+my ($nused, $nskipped) = run_parse($pattern, $outdir);
+print "Matched " . ($nused + $nskipped) . " files from pattern: $pattern";
+print " ($nskipped partition reports other than partition 1 skipped)" if $nskipped;
+print "\n";
 print "Wrote:\n";
 print "  $outdir/matrix_seconds.csv\n";
 print "  $outdir/matrix_percent.csv\n";
 print "  $outdir/matrix_context.csv\n";
+exit 0;
+
+sub run_parse {
+    my ($pattern, $outdir) = @_;
+    my @files = bsd_glob($pattern);
+    die "No files matched pattern: $pattern\n" unless @files;
+
+    make_path($outdir) unless -d $outdir;
+
+    my (%sec, %pct);
+    my (%sec_metrics, %pct_metrics);
+    my @context_rows;
+    my %context_keys;
+    my %rows;
+    my ($nused, $nskipped) = (0, 0);
+
+    for my $file (@files) {
+        my ($iter) = ($file =~ /ITER(\d+)/i);
+        next unless defined $iter;
+        $iter = int($iter);
+        my ($part) = (basename($file) =~ /_PART(\d+)/i);
+        if (defined $part && int($part) != 1) {
+            $nskipped++;
+            next;
+        }
+        $nused++;
+        my $bench = benchmark_name($file);
+        my $row   = "$bench\t$iter";
+        $rows{$row} = [$bench, $iter];
+
+        my ($context, $file_sec, $file_pct) = parse_bench_file($file);
+
+        for my $metric (keys %{$file_sec}) {
+            $sec{$row}{$metric} = $file_sec->{$metric};
+            $sec_metrics{$metric} = 1;
+        }
+        for my $metric (keys %{$file_pct}) {
+            $pct{$row}{$metric} = $file_pct->{$metric};
+            $pct_metrics{$metric} = 1;
+        }
+
+        my %context_row = (
+            file      => basename($file),
+            benchmark => $bench,
+            iteration => $iter,
+            partition => (defined $part ? int($part) : ''),
+            %{$context},
+        );
+        push @context_rows, \%context_row;
+        $context_keys{$_} = 1 for keys %context_row;
+    }
+
+    my @row_list = sort {
+        $rows{$a}[0] cmp $rows{$b}[0] || $rows{$a}[1] <=> $rows{$b}[1]
+    } keys %rows;
+    my @sec_metric_list = sort {
+        metric_rank($a) <=> metric_rank($b) || lc($a) cmp lc($b)
+    } keys %sec_metrics;
+    my @pct_metric_list = sort {
+        metric_rank($a) <=> metric_rank($b) || lc($a) cmp lc($b)
+    } keys %pct_metrics;
+
+    write_matrix("$outdir/matrix_seconds.csv", \@row_list, \%rows, \@sec_metric_list, \%sec);
+    write_matrix("$outdir/matrix_percent.csv", \@row_list, \%rows, \@pct_metric_list, \%pct);
+    write_context("$outdir/matrix_context.csv", \@context_rows, \%context_keys);
+    return ($nused, $nskipped);
+}
+
+sub self_test {
+    my $dir = tempdir(CLEANUP => 1);
+    my %fixtures = (
+        'REFINE3D_BENCH_ITER001_PART001.txt' => 11.0,
+        'REFINE3D_BENCH_ITER001_PART002.txt' => 99.0,
+        'VOLASSEMBLE_BENCH_ITER001.txt'      => 5.0,
+    );
+    for my $name (keys %fixtures) {
+        open my $fh, '>', "$dir/$name" or die "Cannot write fixture $name: $!\n";
+        print $fh "*** TIMINGS (s) ***\n";
+        print $fh "matching : $fixtures{$name}\n";
+        print $fh "total time : " . ($fixtures{$name} * 2) . "\n";
+        close $fh;
+    }
+    my ($nused, $nskipped) = run_parse("$dir/*_BENCH_ITER*.txt", $dir);
+    my @fail;
+    push @fail, "expected 2 files used and 1 skipped, got $nused and $nskipped"
+        unless $nused == 2 && $nskipped == 1;
+    open my $fh, '<', "$dir/matrix_seconds.csv" or die "Cannot read matrix: $!\n";
+    my @lines = <$fh>;
+    close $fh;
+    chomp @lines;
+    my @header = split /,/, shift @lines;
+    my ($imatch) = grep { $header[$_] eq 'matching' } 0..$#header;
+    push @fail, 'no matching column' unless defined $imatch;
+    my %got;
+    for my $line (@lines) {
+        my @f = split /,/, $line;
+        $got{"$f[0] $f[1]"} = $f[$imatch] if defined $imatch;
+    }
+    push @fail, 'REFINE3D_BENCH iteration 1 must hold partition 1 (11)'
+        unless defined $got{'REFINE3D_BENCH 1'} && $got{'REFINE3D_BENCH 1'} == 11;
+    push @fail, 'VOLASSEMBLE_BENCH iteration 1 must be its own row (5)'
+        unless defined $got{'VOLASSEMBLE_BENCH 1'} && $got{'VOLASSEMBLE_BENCH 1'} == 5;
+    push @fail, 'expected exactly two matrix rows' unless scalar(@lines) == 2;
+    if (@fail) {
+        print "parse_bench self-test FAILED:\n";
+        print "  $_\n" for @fail;
+        return 1;
+    }
+    print "parse_bench self-test passed\n";
+    return 0;
+}
 
 sub parse_bench_file {
     my ($file) = @_;
@@ -222,21 +301,21 @@ sub benchmark_name {
 }
 
 sub write_matrix {
-    my ($out, $iters_ref, $metrics_ref, $data_ref) = @_;
+    my ($out, $rows_ref, $ids_ref, $metrics_ref, $data_ref) = @_;
 
     open my $ofh, '>', $out or die "Cannot write $out: $!\n";
-    print $ofh join(',', map { csv_escape($_) } ('iteration', @{$metrics_ref})), "\n";
+    print $ofh join(',', map { csv_escape($_) } ('benchmark', 'iteration', @{$metrics_ref})), "\n";
 
-    for my $iter (@{$iters_ref}) {
-        my @row = ($iter);
+    for my $row (@{$rows_ref}) {
+        my @out = @{$ids_ref->{$row}};
         for my $metric (@{$metrics_ref}) {
             my $value = '';
-            if (exists $data_ref->{$iter} && exists $data_ref->{$iter}{$metric}) {
-                $value = $data_ref->{$iter}{$metric};
+            if (exists $data_ref->{$row} && exists $data_ref->{$row}{$metric}) {
+                $value = $data_ref->{$row}{$metric};
             }
-            push @row, $value;
+            push @out, $value;
         }
-        print $ofh join(',', map { csv_escape($_) } @row), "\n";
+        print $ofh join(',', map { csv_escape($_) } @out), "\n";
     }
 
     close $ofh;
@@ -245,7 +324,7 @@ sub write_matrix {
 sub write_context {
     my ($out, $rows_ref, $keys_ref) = @_;
 
-    my @prefix = qw(file benchmark iteration);
+    my @prefix = qw(file benchmark iteration partition);
     my %is_prefix = map { $_ => 1 } @prefix;
     my @keys = (
         @prefix,

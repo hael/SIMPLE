@@ -66,13 +66,6 @@ contains
         endif
     end subroutine qsys_declare_part_finished
 
-    !> Backward-compatible spelling for partition completion declaration.
-    subroutine qsys_job_finished( params, source )
-        class(parameters), intent(in) :: params
-        class(string),     intent(in) :: source
-        call qsys_declare_part_finished(params, source)
-    end subroutine qsys_job_finished
-
     !>  returns when the inputted file exists in cwd
     subroutine qsys_watcher_1( fname, wtime )
         class(string),     intent(in) :: fname

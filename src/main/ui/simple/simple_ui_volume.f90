@@ -27,7 +27,7 @@ subroutine new_center( prgtab )
         &'Center a volume and propagate shifts to particle images',& ! summary
         &'is a program for centering a volume and mapping the shift parameters back to the particle images',& ! help
         &'simple_exec',&               ! executable
-        &.false.)                      ! requires sp_project
+        &.false., display_name='Center a Volume')                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call center%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to center', &
@@ -112,7 +112,7 @@ subroutine new_center( prgtab )
         &neg inverts the contrast of the projections',&
         &'simple_exec',&                       ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                              ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Reproject a Volume')                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call reproject%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume for creating 2D central &
@@ -155,7 +155,8 @@ subroutine new_center( prgtab )
         &'is a program that provides standard single-particle image processing routines for MRC or SPIDER volumes',& ! help
         &'simple_exec',&                                                                          ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                                 ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Edit a Volume') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volops%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to mask', &

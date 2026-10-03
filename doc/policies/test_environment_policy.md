@@ -86,7 +86,7 @@ tester module (section 4.1).
 | `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model, solve3D manifest, project superset, solve3D addon report |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
-| `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator, class-average carry-over, trailing chain identity, frozen accumulator, volume pair metrics |
+| `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, volume pair metrics |
 | `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, sigma2 bootstrap, cavg registration |
 | `unit_cart_align3D` | Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator |
@@ -776,7 +776,7 @@ written as `sub-suite` (entry).
 | `pose_cont_refinement` | `cart calculator` and `pose optimizer` (`unit_cart_align3D`); the pose refiner was split into them |
 | `preproc` | the high-level workflow entry `stream_preproc` |
 | `project_merge` | `project merge` (`unit_project`) |
-| `projdir_accumulator` | `class-average accumulator` (`unit_reconstruction`) |
+| `projdir_accumulator` | retired with `projrec` (release 4) |
 | `qsys_ctrl`, `qsys_env` | `qsys control`, `qsys environment` (`unit_parallel`) |
 | `rec3D_backend` | `rec3D backend` (`unit_reconstruction`) |
 | `reproject` | the workflow entry `simulate_particles` |

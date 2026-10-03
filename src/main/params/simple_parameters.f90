@@ -79,7 +79,6 @@ type :: parameters
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
     character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter
-    character(len=3)          :: linethres='no'       !< whether to consider angular threshold in common lines (yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=STDLEN)     :: filt_mode='none'     !< filtering mode(none|uniform|fsc|nonuniform|nonuniform_lpset){none}
     character(len=3)          :: fit_phshift='no'     !< fit additive CTF phase shift(yes|no){no}
@@ -98,7 +97,6 @@ type :: parameters
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
-    character(len=3)          :: nu_msk_rel='no'      !< nu_filt3D only: scale-free NU evidence margin(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations(yes|no){yes}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -113,13 +111,10 @@ type :: parameters
     character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
-    character(len=3)          :: projrec='no'         !< reconstruct from projection-direction Fourier sums(yes|no){no}
-    character(len=3)          :: euclid_diag='no'     !< per-iteration euclid reference/particle scale diagnostics(yes|no){no}
     character(len=3)          :: addon_diag='no'      !< solve3D_addon cohort-only diagnostic reconstruction(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
-    character(len=3)          :: randomise='no'       !< whether to randomise particle order
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
@@ -153,7 +148,6 @@ type :: parameters
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_model='yes'      !< use model for class-average rejection in sieve(yes|no){yes}
-    character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
@@ -218,7 +212,6 @@ type :: parameters
     type(string)              :: pdbfile2             !< PDB file, another one
     type(string)              :: pdbfiles             !< list of PDB files
     type(string)              :: pdbout               !< PDB output file
-    type(string)              :: pdfile
     type(string)              :: pickrefs             !< picking references
     type(string)              :: plaintexttab         !< plain text file of input parameters
     type(string)              :: prg                  !< SIMPLE program being executed
@@ -266,16 +259,13 @@ type :: parameters
     ! other character variables in ascending alphabetical order
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
-    character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|nu|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev){ptcl}; prev: solve2D seeded restart from the previous 2D clustering
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: clust_crit='hybrid'  !< clustering criterion (fm|pow|hist|hybrid){hybrid}
-    character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: ctf_correct_mode='phaseflip' !< CTF correction operation(phaseflip|wiener)
-    character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=5)          :: element ='     '     !< atom kind
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
@@ -289,13 +279,12 @@ type :: parameters
     character(len=STDLEN)     :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
-    character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement(yes|no){yes}
+    character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement; internal, not a command-line key (no only under refine=cont)
     character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose refinement(no|yes|only){no}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
-    character(len=STDLEN)     :: pcgop='kernel'       !< PCG operator; production reconstruct3D requires kernel
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
     character(len=STDLEN)     :: rec_states_backend='gridding' !< flex_pca final state-map backend; independent of rec_backend, which governs the M-step(gridding|pcg){gridding}
     character(len=STDLEN)     :: state_placement='kcenter' !< flex_pca state targets at state_axis=0: diffusion k-center or equal-occupancy path(kcenter|equal_occ){kcenter}
@@ -305,12 +294,10 @@ type :: parameters
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
-    character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
+    character(len=STDLEN)     :: picker='new'         !< which picker to use (new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: pose_policy='global' !< state-refinement pose policy(fixed|local|global){global}
-    character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc){state}
-    character(len=STDLEN)     :: column_sampling='snr' !< flex_pca column selection(lowfreq|snr){snr}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
@@ -320,17 +307,15 @@ type :: parameters
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|shc_smpl|snhc_smpl|neigh|greedy|prob|prob_state|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
-    character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='global'   !< sigma estimation kind (global|group){global}
-    character(len=STDLEN)     :: sigma_action='' !< explicit sigma conversion(star_import|parts_import|star_export)
+    character(len=STDLEN)     :: sigma_action='' !< explicit sigma conversion(star_import|star_export)
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=STDLEN)     :: states=''             !< comma-separated list of states
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
-    character(len=STDLEN)     :: system=''            !< embedded molecular system for simulated workflow tests(6vxx|1jxy)
     character(len=STDLEN)     :: suite=''             !< one sub-suite of a unit-test area to run alone (simple_test_exec test=unit_<area> suite=<name>)
     character(len=STDLEN)     :: tag=''               !< just a tag
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|uniformno){sum}
@@ -356,7 +341,6 @@ type :: parameters
     integer :: cn_max=12           !< max std coord number for atoms in nanos
     integer :: cn_min=4            !< min std coord number for atoms in nanos
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
-    integer :: cs_thres=2          !< contact score threshold for discarding atoms during autorefine3D_nano
     integer :: device=-1           !< Device id for OpenMP offloading
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: eer_fraction=20     !< # of EER raw frames to sum into a movie fraction
@@ -364,13 +348,11 @@ type :: parameters
     integer :: extr_iter=1
     integer :: extr_lim=MAX_EXTRLIM2D
     integer :: find=1              !< Fourier index
-    integer :: gauref_last_stage=0 !< When to switch off gaussian filtering{0}
     integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
     integer :: fromp=1             !< start ptcl index
     integer :: fromf=1             !< frame start index
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
-    integer :: icm_stage=0
     integer :: iptcl=1
     integer :: istart=0
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
@@ -392,7 +374,6 @@ type :: parameters
     integer :: nchunksperset=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
-    integer :: ncls_sub=10         !< # sub-clusters
     integer :: ncls_coarse=0       !< # coarse clusters
     integer :: ncls_fine=0         !< # fine clusters
     integer :: nclust=20           !< # view clusters of the class averages for partition=yes sampling{20}
@@ -406,20 +387,17 @@ type :: parameters
     integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
     integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
     integer :: k_nn=5               !< local nearest-neighbor count for graph-based diffusion splitting
-    integer :: nang_nbrs=100        !< angularly gated candidate-particle cap for flex diffusion maps
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: niceprocid=0        !< # id of process in nice database
     integer :: nicedispid=0        !< # display id of process in nice database
     integer :: ninipick=0          !< # of micrographs to run inipick preprocessing on in preprocess
-    integer :: ninit=3             !< # of micrographs to use during diameter estimation global search
     integer :: nits_per_stage=5    !< # of iterations per stage
     integer :: nmics=0             !< # micrographs
     integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed execution
-    integer :: nparts_per_part=1   !< # partitions in distributed execution of balanced parts
     integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
     integer :: nparts_pool =1      !< # partitions for pool distributed execution
     integer :: npeaks=NPEAKS_DEFAULT !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
@@ -428,14 +406,12 @@ type :: parameters
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_base=0       !< # particles in the initial solve3D snapshot
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
-    integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
     integer :: npreimages=0        !< # state volumes; 0 = DISCOVER it (over-provision, then two-gate merge)
     integer :: niter=5             !< # alternating low-rank covariance fitting iterations
     integer :: min_neff=2000       !< minimum effective particle count for covariance state kernels
     integer :: state_axis=0        !< covariance latent coordinate for state targets; 0=diffusion k-center over all comps
     integer :: nkern=0             !< # leading latent components used for state placement/kernel; 0=all (neigs)
-    real    :: pcrot=0.            !< Gaussian low-pass (A) for the smoothness basis rotation; 0=off
     integer :: nbins=1             !< # kernel bandwidth bins for cross-validated state selection (1=off)
     integer :: column_separation=2 !< minimum grid separation between selected covariance columns
     integer :: n_probe_iters=0     !< EM/probe subspace-iteration refinements of the flex_pca column basis (0=off; commander sets 5)
@@ -451,11 +427,9 @@ type :: parameters
     integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound
     integer :: nsample_coarse=0    !< # particles to sample in refinement with fractional update, coarse search
     integer :: nsample_fine=0      !< # particles to sample in refinement with fractional update, fine search
-    integer :: nsearch=40          !< # search grid points{40}
     integer :: nsnapshots=0        !< # cumulative project snapshots
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
-    integer :: nspace_max=1500     !< Maximum # of projection directions
     integer :: nstages=8           !< # low-pass limit stages
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
@@ -478,7 +452,6 @@ type :: parameters
     integer :: ptcl=1
     integer :: ref_ind=0           !> reference index
     integer :: reliongroups=0
-    integer :: shift_stage=0
     integer :: split_stage=6       !< splitting stage when multivol_mode==docked
     integer :: startit=1           !< start iterating from here
     integer :: stage=0
@@ -515,14 +488,11 @@ type :: parameters
     real    :: dm_alpha=0.0        !< diffusion-map Coifman-Lafon density normalization exponent(0=graph Laplacian|0.5=Fokker-Planck|1=Laplace-Beltrami){0.0}
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
-    real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfresthreshold=CTFRES_THRESHOLD !< ctf resolution threshold{30A}
-    real    :: wiener_const=-1.    !< Wiener N/S regularizer; negative selects the Grigorieff default
     real    :: defocus=2.          !< defocus(in microns){2.}
     real    :: dferr=1.            !< defocus error(in microns){1.0}
     real    :: dfmax=DFMAX_DEFAULT !< maximum expected defocus(in microns)
     real    :: dfmin=DFMIN_DEFAULT !< minimum expected defocus(in microns)
-    real    :: dfsdev=0.1
     real    :: dstep=0.
     real    :: dsteppd=0.
     real    :: e1=0.               !< 1st Euler(in degrees){0}
@@ -542,7 +512,6 @@ type :: parameters
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
     real    :: fraction_dose_target=FRACTION_DOSE_TARGET_DEFAULT !< dose (in e/A2)
     real    :: frac_outliers=0.
-    real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: gaufreq=-1.0         ! Full width at half maximum frequency for the gaussian filter
     real    :: hp=100.             !< high-pass limit(in A)
@@ -557,7 +526,6 @@ type :: parameters
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
-    real    :: lp_discrete=20.     !< low-pass for discrete search used for peak detection (in A)
     real    :: lp_ctf_estimate=LP_CTF_ESTIMATE !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=PICK_LP_DEFAULT !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< FSC criterion low-pass limit assignment(0.143-0.5){0.143}
@@ -590,15 +558,9 @@ type :: parameters
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
-    ! nu_msk_beta/dens/rel are tuning knobs exposed by nu_filt3D only; refinement
-    ! always uses the NU_ENVMASK_* constants in simple_nu_filter. Declaration
-    ! defaults mirror those constants and must be kept in step with them.
-    real    :: nu_msk_beta=1.0     !< nu_filt3D only: NU envelope boundary smoothness{1.0}
-    real    :: nu_msk_dens=0.0     !< nu_filt3D only: weight of the local density term in the NU envelope{0.0}
     real    :: nu_msk_sig=3.0      !< NU evidence envelope mask threshold, in MADs above the solvent null{3.0}
     real    :: osmpd=0.            !< target output pixel size
     real    :: overlap=0.9         !< required parameters overlap for convergence
-    real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: phshift_max=180.    !< maximum fitted phase shift(in degrees){180}
     real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
@@ -615,7 +577,6 @@ type :: parameters
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted
-    real    :: smpd_pickrefs       !< sampling distance of pickrefs
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
     real    :: smpd_rec=0.         !< sampling distance of the flex state-map reconstruction box (box_rec)
@@ -625,8 +586,6 @@ type :: parameters
     real    :: tau=TAU_DEFAULT     !< fudge factor controlling ML regularization strength
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
-    real    :: thres_low=0.        !< lower threshold for canny edge detection
-    real    :: thres_up=1.         !< upper threshold for canny edge detection
     real    :: tiltgroupmax=0
     real    :: total_dose
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
@@ -642,7 +601,6 @@ type :: parameters
     logical :: l_bfac            = .false.
     logical :: l_cache           = .false.
     logical :: l_umap            = .false.
-    logical :: l_corrw           = .false.
     logical :: l_distr_worker    = .false.
     logical :: l_dose_weight     = .false.
     logical :: l_doshift         = .false.
@@ -654,20 +612,16 @@ type :: parameters
     logical :: l_fillin          = .false.
     logical :: l_greedy_smpl     = .true.
     logical :: l_frac_best       = .false.
-    logical :: l_frac_worst      = .false.
     logical :: l_update_frac     = .false.
     logical :: l_gauref          = .false.
-    logical :: l_graphene        = .false.
     logical :: l_icm             = .false.
     logical :: l_preimage_auto   = .false.
-    logical :: l_rec_states      = .true.
     logical :: l_incrreslim      = .false.
     logical :: l_lam_anneal      = .false.
     logical :: l_lpauto          = .false.
     logical :: l_lpset           = .false.
     logical :: l_ml_reg          = .true.
     logical :: l_noise_reg       = .false.
-    logical :: l_euclid_diag     = .false.
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.

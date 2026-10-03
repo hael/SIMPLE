@@ -78,7 +78,7 @@ contains
         &standard postprocess program (global B-factor), which is unchanged',& ! help
         &'simple_exec',&                                       ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                           ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Nonuniform Postprocessing')                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess_nu%add_input(UI_IMG, outvol, required_override=.false., &

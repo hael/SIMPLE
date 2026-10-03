@@ -28,7 +28,8 @@ subroutine new_filter( prgtab )
         &'is a program for filtering stack/volume',&  ! help
         &'simple_exec',&                              ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                     ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Filter Images or Volumes')                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%add_input(UI_IMG, outstk, &
@@ -95,7 +96,7 @@ subroutine new_filter( prgtab )
         &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! help
         &'simple_exec',&                 ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                        ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Cross-Validated 2D Filter')                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call uniform_filter2D%add_input(UI_IMG, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '', &
@@ -133,7 +134,8 @@ subroutine new_filter( prgtab )
         &'is a program for 3D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! help
         &'simple_exec',&                                        ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                               ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Uniform 3D Filter')                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call uniform_filter3D%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
@@ -175,7 +177,8 @@ subroutine new_filter( prgtab )
         &'is a program for 3D nonuniform local low-pass filtering of even/odd volumes',& ! help
         &'simple_exec',&                                       ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                              ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Nonuniform 3D Filter')                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call nu_filt3D%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
@@ -198,14 +201,6 @@ subroutine new_filter( prgtab )
         call nu_filt3D%add_input(UI_MASK, nu_envmsk, &
         &visibility=UI_VIS_ADVANCED)
         call nu_filt3D%add_input(UI_MASK, nu_msk_sig, &
-        &visibility=UI_VIS_ADVANCED)
-        ! nu_filt3D is the envelope-tuning program: these three are deliberately
-        ! not offered anywhere else, where the NU_ENVMASK_* constants govern.
-        call nu_filt3D%add_input(UI_MASK, nu_msk_beta, &
-        &visibility=UI_VIS_ADVANCED)
-        call nu_filt3D%add_input(UI_MASK, nu_msk_dens, &
-        &visibility=UI_VIS_ADVANCED)
-        call nu_filt3D%add_input(UI_MASK, nu_msk_rel, &
         &visibility=UI_VIS_ADVANCED)
         call nu_filt3D%add_input(UI_FILT, 'amsklp', 'num', 'NU envelope evidence scale',&
         &'Physical scale for smoothing the NU evidence margin, in Angstroms{8}', &

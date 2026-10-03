@@ -42,7 +42,7 @@ RESULT_FIELDS = (
     "mskdiam_angstrom", "nthr", "nthr_ini3d", "nparts", "ncunits",
     "nstates", "multivol_mode", "nsample_requested", "nsample_effective",
     "sample_fraction", "pgrp", "pgrp_start", "symmetry_search",
-    "lpstart_angstrom", "lpstop_angstrom", "projrec", "initialization",
+    "lpstart_angstrom", "lpstop_angstrom", "initialization",
     "iteration_budget", "iterations_observed", "nstages", "filt_mode",
     "automsk", "ctf", "synthetic_snr", "start_parent_rss_bytes",
     "peak_parent_rss_bytes", "peak_children_rss_bytes", "peak_tree_rss_bytes",
@@ -67,7 +67,6 @@ class Case:
     pgrp_start: str = "c1"
     lpstart: float = 20.0
     lpstop: float = 8.0
-    projrec: bool = False
     initialization: str = "external_volume"
     iteration_budget: int = BUILTIN_STAGE1_MAXITS
     group: str = "screening"
@@ -77,7 +76,7 @@ class Case:
         return tuple(getattr(self, name) for name in (
             "nptcls", "box", "smpd", "mskdiam", "nthr", "nparts",
             "nstates", "multivol_mode", "nsample", "pgrp", "pgrp_start",
-            "lpstart", "lpstop", "projrec", "initialization", "iteration_budget",
+            "lpstart", "lpstop", "initialization", "iteration_budget",
         ))
 
     def case_id(self, repeat: int) -> str:
@@ -86,7 +85,7 @@ class Case:
             f"n{self.nptcls:05d}_b{self.box:03d}_a{self.smpd:.1f}_m{self.mskdiam:.0f}_"
             f"t{self.nthr:02d}_p{self.nparts:02d}_s{self.nstates}_{self.multivol_mode[:3]}_"
             f"q{sample}_{self.pgrp}-{self.pgrp_start}_lp{self.lpstop:g}_"
-            f"r{'y' if self.projrec else 'n'}_{self.initialization[:3]}_"
+            f"{self.initialization[:3]}_"
             f"i{self.iteration_budget:02d}_x{repeat:02d}"
         ).replace(".", "p")
 
@@ -124,7 +123,6 @@ def screening_design() -> list[Case]:
         replace(base, pgrp="c2", pgrp_start="c1", group="symmetry_search"),
     ]
     cases += [replace(base, nthr=2, nparts=v, group="job_partitions") for v in (1, 2, 4)]
-    cases += [replace(base, projrec=True, group="projection_reconstruction")]
     cases += [replace(base, initialization="random_volume", group="initialization")]
     cases += [
         replace(base, nptcls=1000, box=128, nthr=8, nsample=250, group="interaction"),
@@ -275,7 +273,7 @@ def measure_case(case_dir: Path, case: Case, repeat: int, volume: Path, project_
         "nstages=1", f"nsample={nsample}", f"nparts={case.nparts}", f"ncunits={case.nparts}",
         f"nthr={case.nthr}", f"nthr_ini3D={case.nthr}", "force_lp_range=yes",
         f"lpstart={case.lpstart:.8g}", f"lpstop={case.lpstop:.8g}",
-        f"projrec={'yes' if case.projrec else 'no'}", "memreport=yes", "memreport_interval=1",
+        "memreport=yes", "memreport_interval=1",
     ]
     if case.initialization == "external_volume":
         for state in range(1, case.nstates + 1):
@@ -298,7 +296,7 @@ def measure_case(case_dir: Path, case: Case, repeat: int, volume: Path, project_
         "sample_fraction": f"{nsample / case.nptcls:.6f}", "pgrp": case.pgrp,
         "pgrp_start": case.pgrp_start, "symmetry_search": "yes" if case.pgrp != case.pgrp_start else "no",
         "lpstart_angstrom": f"{case.lpstart:.6f}", "lpstop_angstrom": f"{case.lpstop:.6f}",
-        "projrec": "yes" if case.projrec else "no", "initialization": case.initialization,
+        "initialization": case.initialization,
         "iteration_budget": case.iteration_budget, "iterations_observed": iterations, "nstages": 1,
         "filt_mode": "none", "automsk": "no", "ctf": "no", "synthetic_snr": "0.100000",
         "start_parent_rss_bytes": start, "peak_parent_rss_bytes": parent,
@@ -367,11 +365,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         writer = csv.writer(sys.stdout)
         writer.writerow(("case", "group", "nptcls", "box", "smpd", "mskdiam", "nthr", "nparts",
                          "nstates", "multivol_mode", "nsample", "pgrp", "pgrp_start", "lpstart",
-                         "lpstop", "projrec", "initialization", "iteration_budget"))
+                         "lpstop", "initialization", "iteration_budget"))
         for i, c in enumerate(cases, 1):
             writer.writerow((i, c.group, c.nptcls, c.box, c.smpd, c.mskdiam, c.nthr, c.nparts,
                              c.nstates, c.multivol_mode, c.nsample, c.pgrp, c.pgrp_start, c.lpstart,
-                             c.lpstop, c.projrec, c.initialization, c.iteration_budget))
+                             c.lpstop, c.initialization, c.iteration_budget))
         return 0
 
     simple_exec = locate_executable(args.simple_exec, "simple_exec", Path(__file__))

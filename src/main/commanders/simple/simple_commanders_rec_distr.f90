@@ -7,8 +7,7 @@ use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolutio
     &refine3D_trail_rho_fname, refine3D_trail_manifest_fname
 use simple_frozen_accum,    only: frozen_accum
 use simple_oris,            only: population_blend_weights
-use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, &
-    &TRAIL_MANIFEST_OLD_FORMAT
+use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING
 implicit none
 private
 public :: commander_volassemble, filter_pcg_nonuniform_maps
@@ -314,10 +313,6 @@ contains
                 case(TRAIL_MANIFEST_OK)
                 case(TRAIL_MANIFEST_MISSING)
                     call discard_trail_chain_set() ! remove orphaned components quietly
-                    return
-                case(TRAIL_MANIFEST_OLD_FORMAT)
-                    ! an older build's chain records no represented population
-                    call discard_trail_chain_set('older-format manifest without represented population')
                     return
                 case DEFAULT
                     call discard_trail_chain_set('unreadable or corrupt manifest')

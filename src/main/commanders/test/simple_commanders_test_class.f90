@@ -52,7 +52,6 @@ use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relation
 use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
 use simple_sigma2_bootstrap_tester,          only: run_all_sigma2_bootstrap_tests
 use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
-use simple_classaverager_tester,             only: run_all_classaverager_tests
 use simple_cavg_sums_tester,                 only: run_all_cavg_sums_tests
 use simple_trail_chain_manifest_tester,      only: run_all_trail_chain_manifest_tests
 use simple_gauran_tester,                    only: run_all_gauran_tests
@@ -345,7 +344,6 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'rec3D backend',             run_all_rec3D_strategy_tests)
         call add_suite(s, n, 'observation noise',         run_all_gauran_tests)
-        call add_suite(s, n, 'class-average accumulator', run_all_classaverager_tests)
         call add_suite(s, n, 'class-average carry-over',  run_all_cavg_sums_tests)
         call add_suite(s, n, 'trailing chain identity',   run_all_trail_chain_manifest_tests)
         call add_suite(s, n, 'frozen accumulator',        run_all_frozen_accum_tests)

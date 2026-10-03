@@ -13,7 +13,6 @@ public :: auc_for_values
 public :: median_by_state
 public :: mad_by_state
 public :: safe_div
-public :: normalize_quality_dmat
 
 contains
 
@@ -106,15 +105,5 @@ contains
             safe_div = num / den
         end if
     end function safe_div
-
-    subroutine normalize_quality_dmat( dmat, ok )
-        real,    intent(inout) :: dmat(:,:)
-        logical, intent(out)   :: ok
-        real :: dmin, dmax
-        dmin = minval(dmat)
-        dmax = maxval(dmat)
-        ok   = dmax - dmin > EPS
-        if( ok ) dmat = (dmat - dmin) / (dmax - dmin)
-    end subroutine normalize_quality_dmat
 
 end module simple_cavg_quality_stats

@@ -7,7 +7,7 @@ use simple_progress,                 only: progressfile_update
 use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, &
                                            s2D, set_strategy2D_stoch_bound, is_fresh_2D_start
 use simple_builder,                  only: builder
-use simple_qsys_funs,                only: qsys_job_finished
+use simple_qsys_funs,                only: qsys_declare_part_finished
 use simple_syslib,                   only: get_peak_rss_bytes
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
@@ -193,7 +193,7 @@ contains
         call finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
         call b_ptr%esig%kill
         call b_ptr%pftc%kill
-        call qsys_job_finished(p_ptr, string('simple_strategy2D_matcher :: refine2D_exec'))
+        call qsys_declare_part_finished(p_ptr, string('simple_strategy2D_matcher :: refine2D_exec'))
         call maybe_write_bench(which_iter)
 
 contains

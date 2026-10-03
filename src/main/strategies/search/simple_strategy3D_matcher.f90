@@ -8,10 +8,10 @@ use simple_strategy3D_alloc,           only: clean_strategy3D, prep_strategy3D
 use simple_binoris_io,                 only: binwrite_oritab
 use simple_builder,                    only: builder
 use simple_eul_prob_tab,               only: eul_prob_tab
-use simple_matcher_3Drec,              only: calc_3Drec, calc_projdir3Drec
+use simple_matcher_3Drec,              only: calc_3Drec
 use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
 use simple_matcher_smpl_and_lplims,    only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
-use simple_qsys_funs,                  only: qsys_job_finished
+use simple_qsys_funs,                  only: qsys_declare_part_finished
 use simple_refine3D_fnames,            only: refine3D_bench_fname
 use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes
 use simple_strategy3D_eval,            only: strategy3D_eval
@@ -38,7 +38,6 @@ type :: refine3D_ctrl
     character(len=:), allocatable :: oritype
     logical :: do_write_partial_recs
     logical :: do_prob_align
-    logical :: do_projrec
     logical :: do_sigma_mode
     logical :: do_emit_sigma
     logical :: do_write_oris
@@ -129,7 +128,7 @@ contains
                 &call execute_rec3D_pcg_worker(params, build, cline, pinds)
             converged = .true.
             call b_ptr%cftc%kill
-            call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
+            call qsys_declare_part_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
             return
         endif
         call prepare_particles_batches( nptcls2update )
@@ -205,7 +204,6 @@ contains
         ! a polish pass leaves the greedy fraction of the discrete search it follows
         if( .not. p_ptr%l_cont_polish ) call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
         if( ctrl%do_emit_sigma ) call b_ptr%esig%write_sigma2
-        if( ctrl%do_projrec ) call b_ptr%spproj_field%set_projs(b_ptr%eulspace)
         call maybe_write_orientations()
         do iptcl_batch = 1, batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
@@ -229,16 +227,14 @@ contains
             if( ctrl%do_bench ) t_rec = tic()
             if( trim(params%rec_backend) == 'pcg' )then
                 call execute_rec3D_pcg_worker(params, build, cline, pinds)
-            else if( ctrl%do_projrec )then
-                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
             else
-                call calc_3Drec(params, build, cline, nptcls2update, pinds)
+                call calc_3Drec(params, build, nptcls2update, pinds)
             endif
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
         call b_ptr%esig%kill
         if( ctrl%do_bench ) rss_after_reconstruction = get_current_rss_bytes()
-        call qsys_job_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
+        call qsys_declare_part_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
         if( ctrl%do_bench )then
             rt_rec = rt_rec_accum + rt_rec_write
             rt_tot = toc(t_tot)
@@ -254,10 +250,8 @@ contains
                 rss_after_reconstruction_gib = real(rss_after_reconstruction,real64) / real(1024_int64**3,real64)
             endif
             ! every partition writes its own collision-free record so worker time,
-            ! load imbalance and memory can be aggregated; partition 1 also keeps
-            ! the legacy per-iteration file the existing parsers read
+            ! load imbalance and memory can be aggregated
             call write_bench_file(refine3D_bench_fname(which_iter, p_ptr%part, p_ptr%numlen))
-            if( p_ptr%part == 1 ) call write_bench_file(refine3D_bench_fname(which_iter))
         endif
 
     contains
@@ -309,7 +303,6 @@ contains
             ctrl%refine_mode   = trim(p_ptr%refine)
             ctrl%oritype       = trim(p_ptr%oritype)
             ctrl%do_prob_align = p_ptr%l_prob_align_mode
-            ctrl%do_projrec    = trim(p_ptr%projrec) == 'yes'
             ctrl%do_bench      = L_BENCH_GLOB
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
             ctrl%do_emit_sigma = p_ptr%cc_objfun == OBJFUN_EUCLID .or. trim(p_ptr%cc_emit_sigma) == 'yes'
@@ -496,7 +489,6 @@ contains
         write(logfhandle,*) 'oritype               : ', ctrl%oritype
         write(logfhandle,*) 'do_write_partial_recs : ', ctrl%do_write_partial_recs
         write(logfhandle,*) 'do_prob_align         : ', ctrl%do_prob_align
-        write(logfhandle,*) 'do_projrec            : ', ctrl%do_projrec
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench

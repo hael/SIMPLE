@@ -9,11 +9,6 @@ type, extends(commander_base) :: commander_binarize
     procedure :: execute      => exec_binarize
 end type commander_binarize
 
-type, extends(commander_base) :: commander_edge_detect
-  contains
-    procedure :: execute      => exec_edge_detect
-end type commander_edge_detect
-
 type, extends(commander_base) :: commander_filter
   contains
     procedure :: execute      => exec_filter
@@ -119,123 +114,6 @@ contains
             end subroutine doit
 
     end subroutine exec_binarize
-
-    !> for edge detection of stacks
-    subroutine exec_edge_detect( self, cline )
-        class(commander_edge_detect), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer          :: iptcl
-        ! error check
-        if( .not. cline%defined('stk') )then
-            THROW_HARD('ERROR! stk needs to be present; exec_edge_detect')
-        endif
-        if( .not. cline%defined('detector') )then
-            THROW_HARD('ERROR! detector needs to be present; exec_edge_detect')
-        endif
-        if( .not. cline%defined('automatic') )then
-            THROW_HARD('ERROR! automatic needs to be present; exec_edge_detect')
-        endif
-        if(.not. cline%defined('outstk') )then
-            params%outstk = 'outstk.mrc'
-        endif
-        if( cline%defined('thres') .and. cline%defined('npix') )then
-            THROW_HARD('either thres-based or npix-based edge detection; both keys cannot be present; exec_edge_detect')
-        endif
-        if( cline%defined('thres') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres in automatic mode; exec_edge_detect')
-        endif
-        if( cline%defined('npix') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose npix in automatic mode; exec_edge_detect')
-        endif
-        if( cline%defined('thres_low') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres_low in automatic mode; exec_edge_detect')
-        endif
-        if( cline%defined('thres_up') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres_up in automatic mode; exec_edge_detect')
-        endif
-        if( cline%defined('thres') .and. params%detector .eq. 'canny') then
-            THROW_HARD('canny needs double thresholding; exec_edge_detect')
-        endif
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        do iptcl=1,params%nptcls
-            call build%img%new([params%box,params%box,1],params%smpd,wthreads=.false.)
-            call build%img%read(params%stk, iptcl)
-            call doit(build%img)
-            call build%img%write(params%outstk, iptcl)
-            call build%img%kill
-        end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_EDGE_DETECT NORMAL STOP ****')
-
-    contains
-
-            subroutine doit( img )
-                use simple_segmentation
-                class(image), intent(inout) :: img
-                type (image)      :: img_grad
-                real, allocatable :: grad(:,:,:)
-                real    :: thresh(1), ave, sdev, maxv, minv, lp(1)
-                real    :: smpd
-                integer :: ldim(3)
-                thresh = 0. !initialise
-                ldim = img%get_ldim()
-                smpd = img%get_smpd()
-                allocate(grad(ldim(1), ldim(2), ldim(3)), source = 0.)
-                if(cline%defined('lp')) lp(1) = params%lp
-                select case ( params%detector )
-                case ('sobel')
-                    if( cline%defined('thres') )then
-                        thresh(1) = params%thres
-                        call sobel(img,thresh)
-                    else if( cline%defined('npix') )then
-                        call automatic_thresh_sobel(img,real(params%npix)/(real(ldim(1)*ldim(2))))
-                    elseif( params%automatic .eq. 'yes') then
-                        call img%scale_pixels([0.,255.])
-                        call img%calc_gradient(grad)
-                        call img_grad%new(ldim, smpd)
-                        call img_grad%set_rmat(grad,.false.)
-                        call img_grad%stats( ave, sdev, maxv, minv )
-                        call img_grad%kill
-                        thresh(1) = ave + 0.7*sdev
-                        write(logfhandle,*) 'Selected threshold: ', thresh
-                        call sobel(img,thresh)
-                        deallocate(grad)
-                    else
-                        THROW_HARD('If not automatic threshold needed; exec_edge_detect')
-                    endif
-                case('canny')
-                    if(ldim(3) .ne. 1) THROW_HARD('Canny for vol is not implemented; exec_edge_detect')
-                    if( params%automatic .eq. 'no' ) then
-                        if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
-                            THROW_HARD('both upper and lower threshold needed; exec_edge_detect')
-                        else
-                            if( cline%defined('lp')) then
-                                call canny(img,img,thresh=[params%thres_low, params%thres_up],lp=lp(1)) !inout/output image coincide
-                            else
-                                call canny(img,img,thresh=[params%thres_low, params%thres_up])
-                            endif
-                        endif
-                    elseif( params%automatic .eq. 'yes') then
-                        if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
-                            THROW_HARD('cannot define thresholds in automatic mode; exec_edge_detect')
-                        else
-                            if( .not. cline%defined('lp')) then
-                              THROW_HARD('Canny automatic requires lp in input; exec_edge_detect')
-                            else
-                                call canny(img,lp = lp(1))
-                            endif
-                        endif
-                    else
-                      THROW_HARD('Wrong input for automatic parameter!; exec_edge_detect')
-                    endif
-                case DEFAULT
-                    THROW_HARD('Unknown detector argument; exec_edge_detect')
-               end select
-            end subroutine
-
-    end subroutine exec_edge_detect
 
     subroutine exec_filter( self, cline )
         use simple_procimgstk
@@ -943,7 +821,7 @@ contains
         call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
-        call qsys_job_finished(params, string('simple_commanders_imgops :: exec_scale'))
+        call qsys_declare_part_finished(params, string('simple_commanders_imgops :: exec_scale'))
         contains
 
             subroutine parse_smpd_target()

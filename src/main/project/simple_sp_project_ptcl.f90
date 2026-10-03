@@ -14,7 +14,6 @@ contains
         class(oris), pointer                     :: ptcl_field
         real    :: smpd
         integer :: nptcls, nptcls_stk, box, nstks
-        logical :: l_has_nptcls_stk
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -55,26 +54,27 @@ contains
             write(logfhandle,*) 'nstks : ', nstks
             THROW_HARD('stkind index out of range; map_ptcl_ind2stk_ind')
         endif
-        ! Physical number of images in stack, when explicitly recorded.
-        nptcls_stk       = 0
-        l_has_nptcls_stk = self%os_stk%isthere(stkind, 'nptcls_stk')
-        if( l_has_nptcls_stk )then
-            nptcls_stk = self%os_stk%get_int(stkind, 'nptcls_stk')
-            if( nptcls_stk < 1 )then
-                write(logfhandle,*) 'iptcl : ', iptcl
-                write(logfhandle,*) 'stkind: ', stkind
-                write(logfhandle,*) 'nptcls_stk: ', nptcls_stk
-                THROW_HARD('nptcls_stk should be positive; map_ptcl_ind2stk_ind')
-            endif
+        ! Physical number of images in the stack and the particle's index in it.
+        ! Both are required: projects without them carried the stack-index bug
+        ! that release 4 fixed, and are not supported.
+        if( .not. self%os_stk%isthere(stkind, 'nptcls_stk') )then
+            write(logfhandle,*) 'iptcl : ', iptcl
+            write(logfhandle,*) 'stkind: ', stkind
+            THROW_HARD('nptcls_stk not present in stack field; map_ptcl_ind2stk_ind')
         endif
-        ind_in_stk = 0
-        if( ptcl_field%isthere(iptcl, 'indstk') )then
-            ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
+        nptcls_stk = self%os_stk%get_int(stkind, 'nptcls_stk')
+        if( nptcls_stk < 1 )then
+            write(logfhandle,*) 'iptcl : ', iptcl
+            write(logfhandle,*) 'stkind: ', stkind
+            write(logfhandle,*) 'nptcls_stk: ', nptcls_stk
+            THROW_HARD('nptcls_stk should be positive; map_ptcl_ind2stk_ind')
         endif
-        if( ind_in_stk < 1 )then
-            call set_indstk_from_range
+        if( .not. ptcl_field%isthere(iptcl, 'indstk') )then
+            write(logfhandle,*) 'iptcl: ', iptcl
+            THROW_HARD('indstk not present in field: '//trim(oritype)//'; map_ptcl_ind2stk_ind')
         endif
-        if( l_has_nptcls_stk .and. ind_in_stk > nptcls_stk )then
+        ind_in_stk = ptcl_field%get_int(iptcl, 'indstk')
+        if( ind_in_stk < 1 .or. ind_in_stk > nptcls_stk )then
             call self%os_stk%print(stkind)
             write(logfhandle,*) 'iptcl             : ', iptcl
             write(logfhandle,*) 'stkind            : ', stkind
@@ -83,33 +83,6 @@ contains
         endif
         ! cleanup
         nullify(ptcl_field)
-
-        contains
-
-            subroutine set_indstk_from_range
-                integer :: fromp, top
-                logical :: l_has_range
-                fromp = 0
-                top   = -1
-                l_has_range = self%os_stk%isthere(stkind, 'fromp') .and. &
-                    self%os_stk%isthere(stkind, 'top')
-                if( l_has_range )then
-                    fromp = self%os_stk%get_fromp(stkind)
-                    top   = self%os_stk%get_top(stkind)
-                else
-                    write(logfhandle,*) 'iptcl : ', iptcl
-                    write(logfhandle,*) 'stkind: ', stkind
-                    THROW_HARD('missing indstk and stack range; map_ptcl_ind2stk_ind')
-                endif
-                if( iptcl < fromp .or. iptcl > top )then
-                    write(logfhandle,*) 'iptcl            : ', iptcl
-                    write(logfhandle,*) 'stkind           : ', stkind
-                    write(logfhandle,*) 'prange for micstk: ', fromp, top
-                    THROW_HARD('iptcl index out of micstk range; map_ptcl_ind2stk_ind')
-                endif
-                ind_in_stk = iptcl - fromp + 1
-            end subroutine set_indstk_from_range
-
     end subroutine map_ptcl_ind2stk_ind
 
     module subroutine map_cavgs_selection( self, states )
@@ -437,8 +410,7 @@ contains
         integer,      allocatable :: stk_new_ind(:), stk_offset(:)
         integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
         integer                   :: nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
-        integer                   :: stkind, ptcl_glob, nptcls_eff, indstk, nptcls_stk
-        logical                   :: l_has_nptcls_stk
+        integer                   :: stkind, ptcl_glob, nptcls_eff, indstk
         nstks_tot  = self%get_nstks()
         if( nstks_tot == 0 ) THROW_HARD('No particles to operate on!')
         ! particles reverse indexing
@@ -488,8 +460,17 @@ contains
             stk_offset(istk)  = top_glob
             top_glob          = top_glob + stk_pop(istk)
         enddo
+        ! every surviving particle must carry a valid physical index into its stack;
+        ! checked serially so that a bad project stops outside the parallel region
+        do istk = 1,nstks_tot
+            if( .not.stks_mask(istk) ) cycle
+            do iptcl = self%os_stk%get_fromp(istk),self%os_stk%get_top(istk)
+                if( .not.ptcls_mask(iptcl) )cycle
+                call self%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
+            enddo
+        enddo
         !$omp parallel do proc_bind(close) default(shared) schedule(dynamic) &
-        !$omp private(istk,iptcl,stkind,fromp,top,fromp_glob,ptcl_glob,ptcl_cnt,indstk,l_has_nptcls_stk,nptcls_stk)
+        !$omp private(istk,iptcl,stkind,fromp,top,fromp_glob,ptcl_glob,ptcl_cnt,indstk)
         do istk = 1,nstks_tot
             if( .not.stks_mask(istk) ) cycle
             stkind     = stk_new_ind(istk)
@@ -497,23 +478,11 @@ contains
             top        = self%os_stk%get_top(istk)
             fromp_glob = stk_offset(istk) + 1
             ptcl_cnt   = 0
-            ! hoisted out of the per-particle loop below, depends only on istk
-            l_has_nptcls_stk = self%os_stk%isthere(istk, 'nptcls_stk')
-            if( l_has_nptcls_stk ) nptcls_stk = self%os_stk%get_int(istk, 'nptcls_stk')
             do iptcl = fromp,top
                 if( .not.ptcls_mask(iptcl) )cycle
                 ptcl_cnt  = ptcl_cnt+1
                 ptcl_glob = fromp_glob + ptcl_cnt - 1
-                indstk = iptcl - fromp + 1
-                if( l_has_nptcls_stk )then
-                    if( self%os_ptcl2D%isthere(iptcl, 'indstk') )then
-                        indstk = self%os_ptcl2D%get_int(iptcl, 'indstk')
-                    endif
-                    if( indstk < 1 .and. self%os_ptcl3D%isthere(iptcl, 'indstk') )then
-                        indstk = self%os_ptcl3D%get_int(iptcl, 'indstk')
-                    endif
-                    if( indstk < 1 .or. indstk > nptcls_stk ) indstk = iptcl - fromp + 1
-                endif
+                indstk    = self%os_ptcl2D%get_int(iptcl, 'indstk')
                 ! update orientations
                 call os_ptcl2D%transfer_ori(ptcl_glob, self%os_ptcl2D, iptcl)
                 call os_ptcl3D%transfer_ori(ptcl_glob, self%os_ptcl3D, iptcl)
@@ -527,17 +496,6 @@ contains
             call os_stk%set(stkind, 'fromp',  fromp_glob)
             call os_stk%set(stkind, 'top',    fromp_glob + ptcl_cnt - 1)
             call os_stk%set(stkind, 'nptcls', ptcl_cnt)
-            if( .not.os_stk%isthere(stkind, 'nptcls_stk') )then
-                block
-                    ! backwards compatibility, local to keep block private across threads
-                    type(string) :: stkname_local
-                    integer      :: ldim_local(3), nptcls_stk_local
-                    stkname_local = os_stk%get_str(stkind, 'stk')
-                    call find_ldim_nptcls(stkname_local, ldim_local, nptcls_stk_local)
-                    call os_stk%set(stkind, 'nptcls_stk', nptcls_stk_local)
-                    call stkname_local%kill
-                end block
-            endif
             ! update micrograph
             if( nmics_tot > 0 ) then
                 call os_mic%transfer_ori(stkind, self%os_mic, stk2mic_inds(istk))

@@ -16,7 +16,7 @@ use simple_parameters,             only: parameters
 use simple_progress,               only: progressfile_init, progressfile_update, progress_estimate_preprocess_stream
 use simple_projfile_utils,         only: merge_chunk_projfiles
 use simple_qsys_env,               only: qsys_env
-use simple_qsys_funs,              only: qsys_watcher, qsys_cleanup, qsys_job_finished
+use simple_qsys_funs,              only: qsys_watcher, qsys_cleanup, qsys_declare_part_finished
 use simple_rec_list,               only: rec, project_rec, process_rec, chunk_rec, rec_list, rec_iterator
 use simple_sp_project,             only: sp_project
 use simple_stack_io,               only: stack_io

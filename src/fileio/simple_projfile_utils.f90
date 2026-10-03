@@ -124,7 +124,7 @@ contains
         enddo
         l_merge_canonical = all(chunks_have_canonical)
         if( any(chunks_have_canonical) .and. .not. l_merge_canonical ) &
-            &THROW_HARD('cannot merge a mixture of canonical and legacy sigma2 chunk projects')
+            &THROW_HARD('cannot merge chunk projects with and without canonical sigma2 state')
         call img%kill
         if( .not. l_merge_evenodd ) THROW_WARN('merge_chunk_projfiles: missing even/odd class-average stacks; skipping even/odd merge')
         if( .not. l_merge_frcs )    THROW_WARN('merge_chunk_projfiles: missing frc2D data; skipping FRC merge')
@@ -1185,7 +1185,7 @@ contains
             integer function resolved_particle_indstk( os_stk_src, os_src, i_src )
                 class(oris), intent(in) :: os_stk_src, os_src
                 integer,     intent(in) :: i_src
-                integer :: stkind, fromp, top, indstk, nptcls_stk
+                integer :: stkind, nptcls_stk
                 if( .not.os_src%isthere(i_src, 'stkind') )then
                     write(logfhandle,*) 'particle row: ', i_src
                     THROW_HARD('missing particle stkind while resolving indstk during project merge')
@@ -1195,23 +1195,20 @@ contains
                     write(logfhandle,*) 'particle row/stkind/nstks: ', i_src, stkind, os_stk_src%get_noris()
                     THROW_HARD('particle stkind out of range while resolving indstk during project merge')
                 endif
-                if( .not.(os_stk_src%isthere(stkind, 'fromp') .and. os_stk_src%isthere(stkind, 'top')) )then
+                if( .not.os_stk_src%isthere(stkind, 'nptcls_stk') )then
                     write(logfhandle,*) 'particle row/stkind: ', i_src, stkind
-                    THROW_HARD('missing stack fromp/top while resolving indstk during project merge')
+                    THROW_HARD('missing stack nptcls_stk while resolving indstk during project merge')
                 endif
-                fromp = os_stk_src%get_fromp(stkind)
-                top   = os_stk_src%get_top(stkind)
-                if( i_src < fromp .or. i_src > top )then
-                    write(logfhandle,*) 'particle row/stkind/fromp/top: ', i_src, stkind, fromp, top
-                    THROW_HARD('particle outside stack range while resolving indstk during project merge')
+                if( .not.os_src%isthere(i_src, 'indstk') )then
+                    write(logfhandle,*) 'particle row/stkind: ', i_src, stkind
+                    THROW_HARD('missing particle indstk while resolving indstk during project merge')
                 endif
-                resolved_particle_indstk = i_src - fromp + 1
-                if( os_stk_src%isthere(stkind, 'nptcls_stk') )then
-                    nptcls_stk = os_stk_src%get_int(stkind, 'nptcls_stk')
-                    if( os_src%isthere(i_src, 'indstk') )then
-                        indstk = os_src%get_int(i_src, 'indstk')
-                        if( indstk > 0 .and. indstk <= nptcls_stk ) resolved_particle_indstk = indstk
-                    endif
+                nptcls_stk = os_stk_src%get_int(stkind, 'nptcls_stk')
+                resolved_particle_indstk = os_src%get_int(i_src, 'indstk')
+                if( resolved_particle_indstk < 1 .or. resolved_particle_indstk > nptcls_stk )then
+                    write(logfhandle,*) 'particle row/stkind/indstk/nptcls_stk: ', i_src, stkind, &
+                        resolved_particle_indstk, nptcls_stk
+                    THROW_HARD('particle indstk out of stack range while resolving indstk during project merge')
                 endif
             end function resolved_particle_indstk
 
@@ -1304,37 +1301,51 @@ contains
         call projdir%kill
     end subroutine absolutize_project_stack_paths
 
-    subroutine validate_and_repair_project_file( projfile_in, projfile_out )
-        class(string), intent(in)  :: projfile_in
-        type(string),  intent(out) :: projfile_out
+    !> fix_projfile: bring a project written before release 4 to the current
+    !! stack-index contract (doc/policies/project_stack_indexing_policy.md). Stack
+    !! ranges and particle stkind are repaired from the project rows. The physical
+    !! indices (nptcls_stk, indstk) are only repaired where they can be proven: a
+    !! stack row without nptcls_stk gets the image count from its file header, and
+    !! its particles get indstk = row - fromp + 1 only when the stack holds exactly
+    !! one image per project row. Anything else is reported, and the fixed project is
+    !! written only when no errors remain. Reading and rewriting also brings the
+    !! particle records to the current width. With nerrors_out present, an
+    !! unfixable project returns its error count instead of stopping.
+    subroutine fix_project_file( projfile_in, projfile_out, nerrors_out )
+        class(string),     intent(in)  :: projfile_in
+        type(string),      intent(out) :: projfile_out
+        integer, optional, intent(out) :: nerrors_out
         type(sp_project) :: proj
+        character(len=:), allocatable :: errmsg
         integer, allocatable :: stack_counts(:)
-        logical, allocatable :: trusted_nptcls_stk(:)
+        logical, allocatable :: derive_indstk(:)
         integer :: nstks, nptcls_ref, nptcls2D, nptcls3D
         integer :: nwarns, nerrors, nrepairs
         if( fname2format(projfile_in) /= 'O' )then
-            THROW_HARD('validate_projfile requires a SIMPLE project file (*.simple)')
+            THROW_HARD('fix_projfile requires a SIMPLE project file (*.simple)')
         endif
-        projfile_out = swap_suffix(projfile_in, string(METADATA_EXT), string('_validated')//METADATA_EXT)
+        projfile_out = swap_suffix(projfile_in, string(METADATA_EXT), string('_fixed')//METADATA_EXT)
         nwarns   = 0
         nerrors  = 0
         nrepairs = 0
-        write(logfhandle,'(A)') '>>> VALIDATING PROJECT FILE: '//projfile_in%to_char()
-        write(logfhandle,'(A)') '>>> VALIDATED OUTPUT FILE:  '//projfile_out%to_char()
+        write(logfhandle,'(A)') '>>> FIXING PROJECT FILE: '//projfile_in%to_char()
         call proj%read(projfile_in)
         nstks    = proj%os_stk%get_noris()
         nptcls2D = proj%os_ptcl2D%get_noris()
         nptcls3D = proj%os_ptcl3D%get_noris()
         if( nstks == 0 )then
-            call warn('project has no stack rows; stack-index policy checks skipped')
+            if( nptcls2D > 0 .or. nptcls3D > 0 )then
+                call err('project has particle rows but no stack rows; its particles cannot be mapped to images')
+            else
+                call warn('project has no stack rows; stack-index checks skipped')
+            endif
         endif
         if( nptcls2D == 0 .and. nptcls3D == 0 )then
-            call warn('project has no particle rows; particle-index policy checks skipped')
+            call warn('project has no particle rows; particle-index checks skipped')
         endif
         if( nstks > 0 )then
-            allocate(stack_counts(nstks), trusted_nptcls_stk(nstks))
-            stack_counts = 0
-            trusted_nptcls_stk = .false.
+            allocate(stack_counts(nstks), source=0)
+            allocate(derive_indstk(nstks), source=.false.)
             if( nptcls2D > 0 )then
                 nptcls_ref = nptcls2D
                 call repair_stack_ranges(proj%os_ptcl2D, 'ptcl2D', nptcls_ref)
@@ -1345,42 +1356,54 @@ contains
                 nptcls_ref = 0
                 call repair_stack_counts_without_particles
             endif
-            call repair_stack_nptcls_stk
-            if( nptcls2D > 0 ) call repair_particle_segment(proj%os_ptcl2D, 'ptcl2D')
-            if( nptcls3D > 0 ) call repair_particle_segment(proj%os_ptcl3D, 'ptcl3D')
+            call fix_stack_nptcls_stk
+            if( nptcls2D > 0 ) call fix_particle_indstk(proj%os_ptcl2D, 'ptcl2D')
+            if( nptcls3D > 0 ) call fix_particle_indstk(proj%os_ptcl3D, 'ptcl3D')
             if( nptcls2D > 0 .and. nptcls3D > 0 .and. nptcls2D /= nptcls3D )then
                 call err('ptcl2D/ptcl3D row-count mismatch: '//int2str(nptcls2D)//' / '//int2str(nptcls3D))
             endif
         endif
-        call proj%update_projinfo(projfile_out)
-        call proj%write(projfile_out)
-        write(logfhandle,'(A)') '>>> VALIDATE_PROJFILE SUMMARY'
+        write(logfhandle,'(A)') '>>> FIX_PROJFILE SUMMARY'
         write(logfhandle,'(A,I0)') '    repairs : ', nrepairs
         write(logfhandle,'(A,I0)') '    warnings: ', nwarns
         write(logfhandle,'(A,I0)') '    errors  : ', nerrors
-        write(logfhandle,'(A)') '>>> WROTE VALIDATED PROJECT FILE: '//projfile_out%to_char()
+        if( present(nerrors_out) ) nerrors_out = nerrors
+        if( nerrors > 0 )then
+            errmsg = 'fix_projfile: '//int2str(nerrors)//' error(s) cannot be fixed; no project file written'
+            if( present(nerrors_out) )then
+                write(logfhandle,'(A)') errmsg
+                call proj%kill
+                if( allocated(stack_counts)  ) deallocate(stack_counts)
+                if( allocated(derive_indstk) ) deallocate(derive_indstk)
+                return
+            endif
+            THROW_HARD(errmsg)
+        endif
+        call proj%update_projinfo(projfile_out)
+        call proj%write(projfile_out)
+        write(logfhandle,'(A)') '>>> WROTE FIXED PROJECT FILE: '//projfile_out%to_char()
         call proj%kill
-        if( allocated(stack_counts) ) deallocate(stack_counts)
-        if( allocated(trusted_nptcls_stk) ) deallocate(trusted_nptcls_stk)
+        if( allocated(stack_counts)  ) deallocate(stack_counts)
+        if( allocated(derive_indstk) ) deallocate(derive_indstk)
 
         contains
 
             subroutine warn( msg )
                 character(len=*), intent(in) :: msg
                 nwarns = nwarns + 1
-                write(logfhandle,'(A)') 'WARNING validate_projfile: '//trim(msg)
+                write(logfhandle,'(A)') 'WARNING fix_projfile: '//trim(msg)
             end subroutine warn
 
             subroutine err( msg )
                 character(len=*), intent(in) :: msg
                 nerrors = nerrors + 1
-                write(logfhandle,'(A)') 'ERROR validate_projfile: '//trim(msg)
+                write(logfhandle,'(A)') 'ERROR fix_projfile: '//trim(msg)
             end subroutine err
 
             subroutine repair( msg )
                 character(len=*), intent(in) :: msg
                 nrepairs = nrepairs + 1
-                write(logfhandle,'(A)') 'REPAIR validate_projfile: '//trim(msg)
+                write(logfhandle,'(A)') 'REPAIR fix_projfile: '//trim(msg)
             end subroutine repair
 
             subroutine repair_stack_counts_without_particles
@@ -1430,7 +1453,8 @@ contains
                             count_from_range = 0
                             call warn('stack '//int2str(istk)//' has empty or reversed fromp/top range')
                         else
-                            call err('stack '//int2str(istk)//' has out-of-bounds fromp/top range')
+                            ! repaired below from nptcls or the stkind counts; the total is checked
+                            call warn('stack '//int2str(istk)//' has an out-of-bounds fromp/top range; ignored')
                         endif
                     endif
                     if( proj%os_stk%isthere(istk, 'nptcls') )then
@@ -1503,86 +1527,118 @@ contains
                 deallocate(stkind_counts)
             end subroutine repair_stack_ranges
 
-            subroutine repair_stack_nptcls_stk
-                integer :: istk, nptcls_stk
+            !> nptcls_stk is the physical image count. A stack row without it (a
+            !! project from before the stack-index fix) gets it from the file header;
+            !! its stored indstk values are not trusted, and they are re-derived from
+            !! the project rows only when the stack holds one image per row.
+            subroutine fix_stack_nptcls_stk
+                type(string) :: stkname
+                integer :: istk, nptcls_stk, ldim(3)
                 do istk = 1,nstks
-                    trusted_nptcls_stk(istk) = .false.
+                    if( stack_counts(istk) == 0 ) cycle
                     if( proj%os_stk%isthere(istk, 'nptcls_stk') )then
                         nptcls_stk = proj%os_stk%get_int(istk, 'nptcls_stk')
-                        if( nptcls_stk >= stack_counts(istk) .and. nptcls_stk >= 0 )then
-                            trusted_nptcls_stk(istk) = .true.
-                        else
-                            call warn('stack '//int2str(istk)//' has invalid nptcls_stk; using project range count')
-                            call proj%os_stk%set(istk, 'nptcls_stk', stack_counts(istk))
-                            call repair('stack '//int2str(istk)//' nptcls_stk set to '//int2str(stack_counts(istk)))
+                        if( nptcls_stk < stack_counts(istk) )then
+                            call err('stack '//int2str(istk)//' nptcls_stk '//int2str(nptcls_stk)//&
+                                &' is smaller than its project range count '//int2str(stack_counts(istk)))
                         endif
+                        cycle
+                    endif
+                    if( .not.proj%os_stk%isthere(istk, 'stk') )then
+                        call err('stack '//int2str(istk)//' has neither nptcls_stk nor a stack file path')
+                        cycle
+                    endif
+                    stkname = proj%os_stk%get_str(istk, 'stk')
+                    if( .not.file_exists(stkname) )then
+                        call err('stack '//int2str(istk)//' has no nptcls_stk and its file is missing: '//stkname%to_char())
+                        cycle
+                    endif
+                    call find_ldim_nptcls(stkname, ldim, nptcls_stk)
+                    call proj%os_stk%set(istk, 'nptcls_stk', nptcls_stk)
+                    call repair('stack '//int2str(istk)//' nptcls_stk set to '//int2str(nptcls_stk)//' from the file header')
+                    if( nptcls_stk == stack_counts(istk) )then
+                        derive_indstk(istk) = .true.
                     else
-                        call proj%os_stk%set(istk, 'nptcls_stk', stack_counts(istk))
-                        call repair('stack '//int2str(istk)//' missing nptcls_stk; set to project range count')
+                        call err('stack '//int2str(istk)//' has '//int2str(stack_counts(istk))//' project rows for '//&
+                            &int2str(nptcls_stk)//' images and no recorded indstk contract; the physical image of each '//&
+                            &'particle cannot be recovered (re-extract or re-import these particles)')
                     endif
                 enddo
-            end subroutine repair_stack_nptcls_stk
+                call stkname%kill
+            end subroutine fix_stack_nptcls_stk
 
-            subroutine repair_particle_segment( os, segment )
+            !> indstk is the physical image index. Rows of a stack flagged by
+            !! fix_stack_nptcls_stk get row - fromp + 1; every other row must
+            !! already carry a valid index. Repairs and failures are reported per
+            !! segment, with the first offending row.
+            subroutine fix_particle_indstk( os, segment )
                 class(oris),      intent(inout) :: os
                 character(len=*), intent(in)    :: segment
-                integer :: iptcl, nptcls, stkind, fallback_indstk, indstk, nptcls_stk
-                logical :: use_existing
-                nptcls = os%get_noris()
+                integer :: iptcl, nptcls, stkind, indstk, nset, nbad, first_bad
+                nptcls    = os%get_noris()
+                nset      = 0
+                nbad      = 0
+                first_bad = 0
                 do iptcl = 1,nptcls
                     stkind = stkind_for_project_row(os, segment, iptcl)
                     if( stkind < 1 .or. stkind > nstks ) cycle
-                    fallback_indstk = iptcl - proj%os_stk%get_fromp(stkind) + 1
-                    if( fallback_indstk < 1 )then
-                        call err(trim(segment)//' row '//int2str(iptcl)//' cannot be mapped into stack range')
+                    if( derive_indstk(stkind) )then
+                        indstk = iptcl - proj%os_stk%get_fromp(stkind) + 1
+                        if( indstk < 1 .or. indstk > proj%os_stk%get_int(stkind, 'nptcls_stk') )then
+                            nbad = nbad + 1
+                            if( first_bad == 0 ) first_bad = iptcl
+                            cycle
+                        endif
+                        if( .not.os%isthere(iptcl, 'indstk') )then
+                            call os%set(iptcl, 'indstk', indstk)
+                            nset = nset + 1
+                        else if( os%get_int(iptcl, 'indstk') /= indstk )then
+                            call os%set(iptcl, 'indstk', indstk)
+                            nset = nset + 1
+                        endif
                         cycle
                     endif
-                    nptcls_stk = proj%os_stk%get_int(stkind, 'nptcls_stk')
-                    if( fallback_indstk > nptcls_stk )then
-                        call proj%os_stk%set(stkind, 'nptcls_stk', fallback_indstk)
-                        nptcls_stk = fallback_indstk
-                        trusted_nptcls_stk(stkind) = .false.
-                        call repair('stack '//int2str(stkind)//' nptcls_stk expanded to cover fallback indstk')
-                    endif
-                    use_existing = .false.
-                    if( trusted_nptcls_stk(stkind) .and. os%isthere(iptcl, 'indstk') )then
-                        indstk = os%get_int(iptcl, 'indstk')
-                        use_existing = indstk > 0 .and. indstk <= nptcls_stk
-                    endif
-                    if( .not.use_existing )then
-                        if( os%isthere(iptcl, 'indstk') )then
-                            indstk = os%get_int(iptcl, 'indstk')
-                        else
-                            indstk = 0
-                        endif
-                        if( indstk /= fallback_indstk )then
-                            call os%set(iptcl, 'indstk', fallback_indstk)
-                            call repair(trim(segment)//' row '//int2str(iptcl)//' indstk set from fromp/top fallback')
-                        else if( .not.os%isthere(iptcl, 'indstk') )then
-                            call os%set(iptcl, 'indstk', fallback_indstk)
-                            call repair(trim(segment)//' row '//int2str(iptcl)//' missing indstk set from fromp/top fallback')
-                        endif
+                    if( .not.proj%os_stk%isthere(stkind, 'nptcls_stk') ) cycle ! reported per stack
+                    indstk = 0
+                    if( os%isthere(iptcl, 'indstk') ) indstk = os%get_int(iptcl, 'indstk')
+                    if( indstk < 1 .or. indstk > proj%os_stk%get_int(stkind, 'nptcls_stk') )then
+                        nbad = nbad + 1
+                        if( first_bad == 0 ) first_bad = iptcl
                     endif
                 enddo
-            end subroutine repair_particle_segment
+                if( nset > 0 ) call repair(trim(segment)//': indstk set from the project rows for '//&
+                    &int2str(nset)//' particles of single-image-per-row stacks')
+                if( nbad > 0 ) call err(trim(segment)//': '//int2str(nbad)//' particles have a missing or '//&
+                    &'out-of-range indstk (first: row '//int2str(first_bad)//')')
+            end subroutine fix_particle_indstk
 
+            !> The stack that owns a project row is the one whose fromp..top range
+            !! contains it (the ranges were repaired from the reference segment). A
+            !! stored stkind is kept only when that stack owns the row; otherwise the
+            !! owner replaces it, and a row no stack owns is an error.
             integer function stkind_for_project_row( os, segment, iptcl ) result(stkind)
                 class(oris),      intent(inout) :: os
                 character(len=*), intent(in)    :: segment
                 integer,          intent(in)    :: iptcl
-                integer :: istk
+                integer :: istk, stored
+                stored = 0
+                if( os%isthere(iptcl, 'stkind') ) stored = os%get_int(iptcl, 'stkind')
                 stkind = 0
-                if( os%isthere(iptcl, 'stkind') ) stkind = os%get_int(iptcl, 'stkind')
-                if( stkind >= 1 .and. stkind <= nstks ) return
                 do istk = 1,nstks
                     if( iptcl >= proj%os_stk%get_fromp(istk) .and. iptcl <= proj%os_stk%get_top(istk) )then
                         stkind = istk
-                        call os%set_stkind(iptcl, stkind)
-                        call repair(trim(segment)//' row '//int2str(iptcl)//' stkind repaired from stack range')
-                        return
+                        exit
                     endif
                 enddo
-                call err(trim(segment)//' row '//int2str(iptcl)//' has no valid stack range')
+                if( stkind == 0 )then
+                    call err(trim(segment)//' row '//int2str(iptcl)//' has no valid stack range')
+                    return
+                endif
+                if( stored /= stkind )then
+                    call os%set_stkind(iptcl, stkind)
+                    call repair(trim(segment)//' row '//int2str(iptcl)//' stkind '//int2str(stored)//&
+                        &' replaced by its owning stack '//int2str(stkind))
+                endif
             end function stkind_for_project_row
 
             subroutine set_stack_int_if_changed( istk, key, val )
@@ -1597,7 +1653,7 @@ contains
                 endif
             end subroutine set_stack_int_if_changed
 
-    end subroutine validate_and_repair_project_file
+    end subroutine fix_project_file
 
     !> Remap supported dataset paths from one root directory to another.
     !>

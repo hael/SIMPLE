@@ -293,27 +293,13 @@ this metadata. JSON serializes the same identifier, heading, and order for
 each program. There are no handwritten program-list headings; changing a
 category descriptor changes CLI listings and JSON together.
 
-### Retired program names
+### Renamed programs
 
-A renamed program keeps its old name as a retired name in
-`simple_ui_legacy_names`, a fixed table from old to current name. Its
-entries are the renames of 2026-10-03: the `abinitio*` programs became
-`solve*` (the stream 2D program `abinitio2D_stream` became `pool2D`) and the
-`cluster2D*` programs became `refine2D*`.
-Retired names are not registered: `prg=list`, `test=list` and the JSON
-interface show current names only. They are resolved at the three points
-where a program name enters: the executables (`simple_exec`, `single_exec`,
-`simple_stream`, `simple_test_exec`) map `prg` to the current name before
-routing and log one line saying so; `cmdline%parse` stores the current name
-in the command line, so workers, job descriptions and project records carry
-it; and `get_prg_ptr`/`get_test_prg_ptr` resolve a retired name to the
-current program. `simple_private_exec` maps `prg` the same way, and
-`cmdline%parse_private`/`parse_private_line` store the current name, for the
-retired private programs (`cluster2D`, `cluster2D_distr`) that old job
-scripts call. Exec routers, commanders and output directories therefore see
-only current names. NICE stores program names in its database; its migration
-`0006_rename_programs` carries the same table.
-`test_legacy_program_names` (UI visibility suite) checks every entry.
+Programs are renamed without aliases: release 4 (2026-10-03) keeps no retired
+program names. When `abinitio*` became `solve*` (the stream 2D program
+`abinitio2D_stream` became `pool2D`) and `cluster2D*` became `refine2D*`, old
+command lines stopped working. NICE migration `0006_rename_programs` rewrites
+the program names stored in its database.
 
 ## Visibility
 
@@ -392,15 +378,11 @@ the exact CLI identifier and must never be changed to improve presentation.
   trailing full stop. Do not make the title a sentence-length explanation;
   that belongs in `summary` and `help`.
 - The title and summary serve different reading situations: the title answers
-  “which tool?”, while the summary answers “what will it do?”. They may share
-  wording during migration, but category reviews must replace the fallback
-  with an explicit title when a shorter or clearer one is available.
+  “which tool?”, while the summary answers “what will it do?”.
 
-Every `ui_program` has a populated `display_name`. To preserve current UI
-coverage while titles are reviewed category by category, `ui_program%new`
-copies the existing plain-English `summary` when no explicit `display_name`
-is supplied. Callers can supply `display_name=` now; the fallback is a
-compatibility path, not another source of metadata.
+`display_name` is a required argument of `ui_program%new`; there is no
+fallback to the summary. The stream programs keep their summary wording as the
+title because `production/stream_ui_contract.json` fixes the stream GUI.
 
 ### Input placeholder
 
@@ -548,9 +530,8 @@ The UI-layer refactor is complete for the current scope:
 - Routed defaults have been audited against execution setup. The optional
   `audit_ui_defaults` report currently contains no errors or warnings, and
   numeric JSON defaults are rendered without binary floating-point residue.
-- Standard programs have concise display names and informative summaries.
-  Advanced and Developer programs may continue to use the documented summary
-  fallback until their text is worth reviewing.
+- Every program has an explicit display name; Standard programs have concise
+  display names and informative summaries.
 - Every registered file and directory input has a format-appropriate example.
   The complete JSON validator prevents generic path examples and checks known
   artifact extensions.
@@ -565,7 +546,7 @@ The UI-layer refactor is complete for the current scope:
 
 These are maintenance opportunities, not blockers for this refactor:
 
-- Give Advanced and Developer programs distinct display names and summaries
-  when those programs are promoted or otherwise exposed to users.
+- Review the Advanced and Developer display names and summaries when those
+  programs are promoted or otherwise exposed to users.
 - Extend requirement expressions, activation validation, or semantic JSON
   checks only when a concrete shared CLI/GUI execution rule requires them.

@@ -38,12 +38,6 @@ contains
         call refine3D%add_input(UI_PARM, 'box_crop', 'num', 'Refinement box', &
         &'Even Fourier-cropped refinement box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, group="search", visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
-        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call refine3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction',&
-        &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -75,16 +69,10 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, objfun, group="search", &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'inpl_cont', 'binary', &
-        &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
-        &.false., 'yes', group="search", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
-        &'Refinement mode; cont refines the stored poses continuously(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|cont){shc}','',&
+        &'Refinement mode; cont refines the stored poses continuously(shc|neigh|prob|prob_state|prob_neigh|cont){shc}','',&
         &.false., 'shc', group="search", &
-        &choices=ui_choices([character(len=10) :: 'snhc', 'shc', 'neigh', 'shc_neigh', &
+        &choices=ui_choices([character(len=10) :: 'shc', 'neigh', &
         &'prob', 'prob_state', 'prob_neigh', 'cont']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
@@ -217,12 +205,6 @@ contains
         &'in degrees{10}', .false., 10., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_SRCH, sigma_est, group="search", &
-        &visibility=UI_VIS_ADVANCED)
-        call refine3D_auto%add_input(UI_SRCH, 'inpl_cont', 'binary', &
-        &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
-        &.false., 'yes', group="search", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &

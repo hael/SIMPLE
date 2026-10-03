@@ -26,7 +26,7 @@ subroutine new_dock_volpair( prgtab )
         &'is a program for docking a pair of volumes',& ! descr long
         &'simple_exec',&                                ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                       ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Dock Two Volumes')                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call dock_volpair%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Reference volume', &
@@ -71,7 +71,8 @@ subroutine new_dock_volpair( prgtab )
         &'is a program for statistical analysis an ensemble of ab initio volumes',& ! help
         &'simple_exec',&                                                            ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                   ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Analyze a Volume Ensemble') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volanalyze%add_input(UI_FILE, 'filetab', 'file', 'Volumes list',&
@@ -111,7 +112,8 @@ subroutine new_dock_volpair( prgtab )
         &'is a program for affinity-propagation clustering of pre-docked volumes',& ! help
         &'simple_exec',&                                                            ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                   ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Cluster Docked Volumes') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volcluster%add_input(UI_FILE, 'filetab', 'file', 'Volumes list',&

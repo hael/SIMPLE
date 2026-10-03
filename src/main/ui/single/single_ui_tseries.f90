@@ -231,7 +231,8 @@ subroutine new_track_particles( prgtab )
         &'Prepare time-series for particle tracking',&                                    ! summary
         &'is a program for preparing time-series for preparing particle tracking',&       ! help
         &'single_exec',&                                                                  ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Prepare Time Series for Tracking')                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -260,7 +261,8 @@ subroutine new_track_particles( prgtab )
         &'Extract particle trajectories from time-series',&                              ! summary
         &'is a program for extracting particle trajectories from time-series (movies) of nanoparticles.',& ! help
         &'single_exec',&                                                                  ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Extract Particle Trajectories')                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

@@ -8,7 +8,7 @@
 # rounded up. The long `highlevel` label is intentionally excluded and must be
 # requested explicitly. Tees
 # the output to BUILD_DIR/test_runs/ctest_fast.log and hands it to
-# scripts/ctest_budget.py. What is printed is ctest's own report, as in X;
+# scripts/ctest_budget.py. What is printed is ctest's own report;
 # the budget checker is silent when the gate passes within budget and speaks
 # only when an entry failed or the run went over 30 s (Phase 2 of
 # doc/refactoring_notes/completed/uniform_test_environment_refactoring.md, 2026-09-22).

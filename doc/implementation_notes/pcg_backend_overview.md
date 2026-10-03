@@ -19,8 +19,9 @@ conjugate gradients, on a real-space support, with the optional ML prior
 inside the operator. The particle pass is done once per iteration into
 raw accumulators; the operator is then applied in kernelized (Toeplitz)
 form, so the cost of a CG iteration is a handful of FFTs and independent
-of the particle count. `pcgop=kernel` is required in production; the
-matrix-free operator is the exact reference and exists for tests.
+of the particle count. Production always uses the kernel operator (there is
+no `pcgop` key since release 4); the matrix-free operator is the exact
+reference and exists for tests.
 
 Both backends produce the same kinds of products (even/odd/merged state
 volumes, an `_unfil` base pair under `ml_reg=yes`, FSC/cFAR and the

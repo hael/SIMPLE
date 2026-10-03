@@ -596,9 +596,9 @@ UI/CLI definitions.
 
 Staged `solve3D` defaults to `filt_mode=nonuniform` at the public interface,
 but the controller only enables NU filtering from `NU_FILTER_STAGE`; the
-bank is the static ladder of section 8. Because solve3D is not currently a
-gold-standard workflow, staged `nonuniform` is promoted to
-`nonuniform_lpset` before the disabled `GOLD_STD_STAGE`. The controller forces
+bank is the static ladder of section 8. solve3D has no gold-standard stage
+(gold-standard refinement belongs to `refine3D_auto`), so staged `nonuniform`
+is always promoted to `nonuniform_lpset`. The controller forces
 `envfsc=no` before `ENVFSC_STAGE` and forwards the requested value at that stage;
 scheduled stage `lp` remains on the refine3D command line.
 The default `multivol_mode=independent` policy stops at stage 5, before this

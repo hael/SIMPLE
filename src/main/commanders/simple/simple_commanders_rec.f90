@@ -2,7 +2,7 @@
 module simple_commanders_rec
 use simple_commanders_api
 use simple_matcher_2Dprep
-use simple_matcher_3Drec, only: calc_3Drec, calc_projdir3Drec
+use simple_matcher_3Drec, only: calc_3Drec
 use simple_sigma2_files, only: load_sigma2_groups
 implicit none
 #include "simple_local_flags.inc"
@@ -78,17 +78,13 @@ contains
                     &l_sigma_loaded)
                 if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
             endif
-            if( trim(params%projrec) == 'yes' )then
-                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
-            else
-                call calc_3Drec(params, build, cline, nptcls2update, pinds)
-            endif
+            call calc_3Drec(params, build, nptcls2update, pinds)
         endif
         ! cleanup
         call build%esig%kill
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_rec :: exec_rec3D'))
+        call qsys_declare_part_finished(params, string('simple_commanders_rec :: exec_rec3D'))
     end subroutine exec_rec3D_distr_worker
 
     subroutine exec_random_rec( self, cline )

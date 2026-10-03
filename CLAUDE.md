@@ -39,9 +39,9 @@ Do not guess ownership from filenames. Follow the flow:
 with initial 3D refinement); `solve2D` is its 2D equivalent. Before 2026-10-03
 they and their variants were named `abinitio*` (`src/main/abinitio/` is now
 `src/main/solve/`), and `refine2D`, the 2D counterpart of `refine3D` whose
-stages `solve2D` runs, was named `cluster2D`. Old program names still run through
-`src/main/ui/simple_ui_legacy_names.f90`; use the new names in code and living
-docs and leave the old ones in dated history docs.
+stages `solve2D` runs, was named `cluster2D`. The old names are not aliased
+(release 4 keeps no backwards compatibility); use the new names in code and
+living docs and leave the old ones in dated history docs.
 
 ## Structure
 

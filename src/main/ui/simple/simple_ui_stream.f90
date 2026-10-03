@@ -37,7 +37,7 @@ subroutine new_pool2D( prgtab )
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                       ! executable
         &.true.,&                                                                ! requires sp_project
-        &visibility=UI_VIS_DEVELOPER)
+        &visibility=UI_VIS_DEVELOPER, display_name='Run streaming 2D analysis as new data arrive')
         ! image input/output
         ! <empty>
         ! parameter input/output
@@ -81,7 +81,7 @@ subroutine new_pool2D( prgtab )
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                       ! executable
         &.true.,&                                                                ! requires sp_project
-        &visibility=UI_VIS_DEVELOPER)
+        &visibility=UI_VIS_DEVELOPER, display_name='Run streaming 3D analysis as new data arrive')
         ! image input/output
         ! <empty>
         ! parameter input/output
@@ -112,7 +112,7 @@ subroutine new_pool2D( prgtab )
         &'is a program to assign optics groups during streaming',&       ! descr long
         &'simple_stream',&                                               ! executable
         &.true., &
-        &visibility=UI_VIS_DEVELOPER)                                                         ! requires sp_project
+        &visibility=UI_VIS_DEVELOPER, display_name='Assign optics groups from microscope metadata')                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -142,7 +142,8 @@ subroutine new_pool2D( prgtab )
         &'is a program to do a mini stream to create the opening 2D',&   ! descr long
         &'simple_stream',&                                               ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Do a mini stream to create the opening 2D for generation of picking references')                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -191,7 +192,7 @@ subroutine new_pool2D( prgtab )
         &'master process that forks streaming programs, collates metadata,'//&       ! help
         &'communicates with Nice and provides job control',&
         &'simple_stream',&                                                           ! executable
-        &.false.)                                                                     ! requires sp_project
+        &.false., display_name='Coordinate streaming jobs, metadata, and NICE communication')                                                                     ! requires sp_project
         ! please note: globally declared inputs not used as allows custom descriptions for GUI
         ! image input/output
         call master%add_input(UI_FILE, 'dir_movies', 'dir',  'Input movies directory',   'Input movies directory',   '', .true.,  '', &
@@ -311,7 +312,7 @@ subroutine new_pool2D( prgtab )
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! help
         &' in sequence',&
         &'simple_stream',&                                                                    ! executable
-        &.true.)                                                                            ! requires sp_project
+        &.true., display_name='Run streaming preprocessing as new data arrive') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preproc%add_input(UI_FILE, dir_movies, group="data", visibility=UI_VIS_STANDARD)

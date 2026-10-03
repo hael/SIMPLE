@@ -41,10 +41,10 @@ integer          :: nstages_refine3D = 0
 integer, parameter :: FINAL_PCG_MAXITS_FLOOR = 5
 
 !> Immutable solve3D_addon context for the stage controller. Absent (or
-!! inactive) means the legacy path; present and active it gives the add-on's
+!! inactive) means the standard solve3D path; present and active it gives the add-on's
 !! stage 3 an overlap early stop (no symmetry search keeps it at full budget)
 !! and puts the frozen_rec handshake on the stage command line. The stage
-!! limits follow the legacy rule (planned ladder, FSC=0.5 promotion).
+!! limits follow the standard rule (planned ladder, FSC=0.5 promotion).
 type :: solve3D_addon_ctx
     logical      :: active  = .false.
     real         :: overlap = 0.95   !< stage-3 early-stopping overlap target
@@ -269,7 +269,6 @@ contains
     subroutine strip_pcg_backend_keys( child_cline )
         class(cmdline), intent(inout) :: child_cline
         call child_cline%delete('rec_backend')
-        call child_cline%delete('pcgop')
         call child_cline%delete('maxits_pcg')
         call child_cline%delete('maxits_ml')
         call child_cline%delete('rtol')

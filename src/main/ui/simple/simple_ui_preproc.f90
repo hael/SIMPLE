@@ -41,7 +41,8 @@ contains
         &'Assign optics groups from microscope metadata',& ! summary
         &'is a program to assign optics groups',&                               ! descr long
         &'simple_exec',&                                                        ! executable
-        &.true.)                                                                ! requires sp_project
+        &.true., &
+        &display_name='Assign Optics Groups')                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -220,7 +221,8 @@ contains
         &'is a distributed workflow for generating power spectra and thumbnails&
         & for imported integrated movies',&                                      ! help
         &'simple_exec',&                                                         ! executable
-        &.true.)                                                                 ! requires sp_project
+        &.true., &
+        &display_name='Power Spectra and Thumbnails') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -370,9 +372,6 @@ contains
         &'Number of particle-subset (chunk) solve2D jobs run concurrently on the local machine. Each chunk job &
         &itself runs shared-memory with nthr threads (per-chunk MPI partitioning is not used in offline sieving){1}', &
         &'# of concurrent chunks{1}', .false., 1., group="compute", visibility=UI_VIS_STANDARD)
-        call particle_sieving%add_input(UI_COMP, 'nchunks', 'num', 'Legacy concurrent-chunk alias', &
-        &'Backward-compatible alias for nparts: number of chunk jobs run concurrently', '# concurrent chunks{1}', .false., 1., group="compute", &
-        &visibility=UI_VIS_DEVELOPER)
         call particle_sieving%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., group="compute", &
         &visibility=UI_VIS_ADVANCED)
@@ -585,7 +584,7 @@ contains
         &'is a distributed program for re-generating micrographs from a subset of movie frames',&
         &'simple_exec',&
         &.true., &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_ADVANCED, display_name='Regenerate Micrographs from Frames')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

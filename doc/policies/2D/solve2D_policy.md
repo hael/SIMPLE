@@ -8,7 +8,7 @@ This document defines the current architectural policy for `solve2D` and the `re
 `solve3D` (see `doc/policies/3D/solve3D_policy.md`), and mirrors its
 methodology: one staged schedule couples ab initio 2D classification from
 random references with initial 2D refinement of the resulting classes. It was
-called `abinitio2D` before 2026-10-03; the old name still runs. Its stages are
+called `abinitio2D` before 2026-10-03 (no alias is kept). Its stages are
 `refine2D` runs (named `cluster2D` before 2026-10-03), the 2D counterpart of
 `refine3D`, as the stages of `solve3D` are `refine3D` runs.
 
@@ -229,11 +229,11 @@ The restoration model is class-local: each class carries forward its previous su
 
 ### Continuous in-plane policy
 
-`inpl_cont=no|yes` is propagated by the `solve2D` controller to every
-`refine2D` child, including probabilistic staged calls, the final staged
-invocation, and the terminal dense all-particle refresh. `no` preserves the
-historical alternating shift/discrete-angle callback route. `yes` is the
-default and replaces every callback-based angle/shift optimization with the
+`inpl_cont` is internal since release 4 (2026-10-03): it is not a
+command-line key, and every `refine2D` child (probabilistic staged calls, the
+final staged invocation, and the terminal dense all-particle refresh) runs
+with the default `yes`. The historical alternating shift/discrete-angle
+callback route (`no`) is no longer selectable in 2D. `yes` replaces every callback-based angle/shift optimization with the
 joint raw-Euclidean `(sx,sy,rotind_frac)` optimizer.
 
 During candidate profiling, each joint invocation keeps the selected class

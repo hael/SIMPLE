@@ -93,7 +93,8 @@ subroutine new_cif2mrc( prgtab )
         &Movie frames are then generated related by randomly shifting the base image and applying noise',& ! help
         &'simple_exec',&                                    ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                           ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Simulate a Movie')                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_movie%add_input(UI_IMG, stk, &
@@ -146,7 +147,7 @@ subroutine new_cif2mrc( prgtab )
         &'is a program for generating pure noise images',& ! help
         &'simple_exec',&                                   ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                          ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Simulate Noise')                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -184,7 +185,8 @@ subroutine new_cif2mrc( prgtab )
         & before the remaining 80% of the noise (white noise) is added',& ! help
         &'simple_exec',&                                                  ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Simulate Particles')                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_particles%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .true., '', &

@@ -89,7 +89,6 @@ contains
         p%oritype          = 'ptcl3D'
         p%cc_objfun        = objfun
         p%inpl_cont        = 'no'
-        p%projrec          = 'no'
         p%box              = BOX
         p%box_crop         = BOX
         p%trs              = 5.

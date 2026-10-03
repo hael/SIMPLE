@@ -4,8 +4,8 @@ This document records the current policy for `solve3D`, the staged
 particle-based de novo map determination workflow: it couples ab initio 3D
 reconstruction from random orientations with initial 3D refinement of the
 resulting map in one stage schedule. `solve2D` is its 2D equivalent. The
-programs were called `abinitio3D` and `abinitio2D` before 2026-10-03; the old
-names still run (`simple_ui_legacy_names`). The base `refine3D` contracts are in
+programs were called `abinitio3D` and `abinitio2D` before 2026-10-03 (release
+4 keeps no aliases for the old names). The base `refine3D` contracts are in
 [refine3D_policy.md](refine3D_policy.md); this document describes how
 `solve3D` configures and chains those stages.
 
@@ -22,17 +22,6 @@ original-sampling maps.
 
 It owns stage scheduling. It does not own a separate particle matcher or volume
 assembly implementation.
-
-### Projection-direction reconstruction
-
-`projrec=yes` enables an experimental compact reconstruction path for the
-particle refinement stages. It first assembles raw Fourier numerator and
-CTF-squared sums for each discrete projection direction, state, and even/odd
-half using the same native-grid 2D Kaiser-Bessel interpolation machinery as
-class averaging. Those un-restored sums are inserted directly into the 3D
-partial reconstructions with the 3D Kaiser-Bessel kernel. They are never
-CTF-density corrected and never transformed through real space between the 2D
-and 3D assembly steps. The default is `projrec=no`.
 
 ## 2. Defaults
 
@@ -438,8 +427,8 @@ density envelope and masks `_nu_filt` references with it. `automsk=nu` uses a
 valid current NU-evidence envelope for those roles and density as fallback;
 early FSC/PCG consumers use the previous iteration's evidence artifact.
 
-Because `solve3D` currently keeps gold-standard refinement disabled,
-`GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. `automsk=yes` implies
+`solve3D` has no gold-standard stage; gold-standard refinement belongs to
+`refine3D_auto`. `envfsc` defaults to `no`. `automsk=yes` implies
 `envfsc=yes` (policy 2026-09-09), so the two engage together at
 `AUTOMSK_STAGE`/`ENVFSC_STAGE`; the controller forces `envfsc=no` before
 `ENVFSC_STAGE`, forces it off for the cavgs route, and forwards the requested

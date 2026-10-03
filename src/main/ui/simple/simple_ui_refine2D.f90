@@ -36,16 +36,14 @@ contains
             &'De novo 2D class-average determination from particle images', &
             &'is a distributed workflow, the 2D equivalent of solve3D, that couples ab initio 2D '//&
             &'classification with initial 2D refinement of the class averages', &
-            &UI_VIS_STANDARD, 'De Novo 2D Class Averages', 'yes')
+            &UI_VIS_STANDARD, 'De Novo 2D Class Averages')
         call add_ui_program('solve2D', solve2D, prgtab, UI_CATEGORY)
     end subroutine new_solve2D
 
-    subroutine new_solve2D_descriptor( program, name, summary, help, visibility, display_name, &
-        &inpl_cont_default )
+    subroutine new_solve2D_descriptor( program, name, summary, help, visibility, display_name )
         type(ui_program), intent(inout) :: program
         character(len=*), intent(in) :: name, summary, help, display_name
         integer, intent(in) :: visibility
-        character(len=*), intent(in) :: inpl_cont_default
         ! PROGRAM SPECIFICATION
         call program%new(&
         &name,&                                                                         ! name
@@ -82,12 +80,6 @@ contains
         call program%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="search", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
-        &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, 'inpl_cont', 'binary', &
-        &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){'//trim(inpl_cont_default)//'}', '', &
-        &.false., trim(inpl_cont_default), group="search", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}','', .false., 'global', group="search", &
@@ -143,7 +135,7 @@ contains
         &'splits a project into particle-balanced subsets and runs independent solve2D jobs',& ! help
         &'simple_exec',&                                                                          ! executable
         &.true.,&                                                                                 ! requires sp_project
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_ADVANCED, display_name='Solve 2D in Particle Chunks')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -205,7 +197,7 @@ contains
         & for refine2D execution',&               ! help
         &'simple_exec',&                           ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                   ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Create Class Averages')                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%add_input(UI_IMG, 'refs', 'file', 'Output 2D references',&
@@ -246,7 +238,8 @@ contains
         &'creates an oversampled class-average stack by stochastic expansion &
         &of existing 2D class memberships and then runs make_cavgs',&           ! help
         &'simple_exec',&                                                        ! executable
-        &.true.)                                                               ! requires sp_project
+        &.true., &
+        &display_name='Bootstrap Class Averages') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -287,7 +280,8 @@ contains
         &'Map bootstrap cls3D back to original project',&                      ! summary
         &'transfers cls3D alignment from bootstrap originals (child=0) to their bootstrap_parent class indices in the original project and maps to particles',& ! help
         &'simple_exec',&                                                        ! executable
-        &.true.)                                                                ! requires sp_project
+        &.true., &
+        &display_name='Map Bootstrap Classes Back') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -321,7 +315,8 @@ contains
         &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! help
         &'simple_exec',&                                                 ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Map Class Selection to Particles') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call  map_cavgs_selection%add_input(UI_IMG, 'stk', 'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '', &
@@ -354,7 +349,8 @@ contains
         &'is a program for probabilistic sampling of particles based on class statistics',& ! help
         &'simple_exec',&                                                                    ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                                            ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Sample Particles by Class') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -397,7 +393,8 @@ contains
         &'Writes the class averages and the individual (rotated and shifted) particles part of the class',& ! summary
         &'is a program for the class averages and the individual (rotated and shifted) particles part of the classto to individual stacks',& ! help
         &'simple_exec',&                                                                                    ! executable
-        &.true.)                                                                                            ! requires sp_project
+        &.true., &
+        &display_name='Write Class Members') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -425,7 +422,7 @@ contains
         &'splits 2D/3D particle classes into subclasses using diffusion-map or kPCA embeddings and k-medoids clustering',&
         &'simple_exec',&
         &.true., &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_ADVANCED, display_name='Split Classes')
         call cls_split%add_input(UI_PARM, 'class', 'num', &
             'Optional class index to split', &
             'Optional 2D class index or 3D projection/class index to split; omit to process all classes', &

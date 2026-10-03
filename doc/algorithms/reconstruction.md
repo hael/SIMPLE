@@ -97,8 +97,8 @@ unfiltered halves, whose FSC remains the resolution authority, and an ML
 replay that adds the FSC-derived `1/tau2` shell prior and warm-starts from the
 previous same-half solution. PCG maps receive no gridding correction and no
 second density division. The backend currently excludes trailing
-reconstruction, projection-direction reconstruction, and conical
-regularization; those requests are rejected rather than silently rerouted.
+reconstruction and conical regularization; those requests are rejected rather
+than silently rerouted.
 
 ## Weighted and sparse variants
 

@@ -17,7 +17,7 @@ contains
         select type(self)
             type is(parameters)
                 self = parameters(box_extract=0, hpind_fsc=0, kfromto=[0,0], lplims2D=[0.,0.,0.], &
-                    &smpd_downscale=0., smpd_pickrefs=0., smpd_targets2D=[0.,0.], total_dose=0.)
+                    &smpd_downscale=0., smpd_targets2D=[0.,0.], total_dose=0.)
             class default
                 THROW_HARD('Unsupported parameters dynamic type; simple_parameters_ctor')
         end select
@@ -516,7 +516,6 @@ contains
         endif
         self%l_update_missing = trim(self%update_missing).eq.'yes'
         self%l_frac_best   = self%frac_best  <= 0.99
-        self%l_frac_worst  = self%frac_worst <= 0.99
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
         self%l_sticky_class_sampling = trim(self%sticky_class_sampling).eq.'yes'
     end subroutine derive_sampling_settings
@@ -607,10 +606,8 @@ contains
         self%l_envfsc = self%envfsc .ne. 'no'
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('preimage_auto') ) self%l_preimage_auto = (trim(self%preimage_auto).eq.'yes')
-        self%l_rec_states = trim(self%rec_states) .ne. 'no'
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
-        self%l_corrw = self%wcrit .ne. 'no'
-        if( self%l_corrw )then
+        if( self%wcrit .ne. 'no' )then
             select case(trim(self%wcrit))
                 case('softmax')
                     self%wcrit_enum = CORRW_CRIT
@@ -630,7 +627,6 @@ contains
                     THROW_HARD('unsupported correlation weighting method')
             end select
         endif
-        self%l_graphene       = self%graphene_filt .ne. 'no'
         select case(trim(self%regpass))
             case('yes','no')
             case DEFAULT
@@ -715,9 +711,9 @@ contains
                 THROW_HARD('internal sigma_commit_deferred must be yes or no')
         end select
         select case(trim(self%sigma_action))
-            case('','star_import','parts_import','star_export')
+            case('','star_import','star_export')
             case DEFAULT
-                THROW_HARD('sigma_action must be star_import, parts_import, or star_export')
+                THROW_HARD('sigma_action must be star_import or star_export')
         end select
         if( self%memreport_interval < 1 ) THROW_HARD('memreport_interval must be at least 1 second')
         if( self%walltime <= 0 )then
@@ -752,9 +748,6 @@ contains
         if( cline%defined('msk') )then
             THROW_HARD('msk (mask radius in pixels) is deprecated! Use mskdiam (mask diameter in A)')
         endif
-        if( cline%defined('mskfile') )then
-            THROW_HARD('mskfile is no longer supported on command line; masks are internal and per-state')
-        endif
         select case(trim(self%automsk))
             case('yes','nu','tight','no')
             case DEFAULT
@@ -765,12 +758,6 @@ contains
             case DEFAULT
                 THROW_HARD('nu_envmsk must be yes or no')
         end select
-        select case(trim(self%nu_msk_rel))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('nu_msk_rel must be yes or no')
-        end select
-        if( self%nu_msk_beta < 0. ) THROW_HARD('nu_msk_beta must be non-negative')
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
@@ -843,11 +830,6 @@ contains
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
         endif
-        select case(trim(self%inpl_cont))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('inpl_cont must be yes or no')
-        end select
         ! pose_cont: no|yes on refine3D (yes, the scheduled polish, from Phase 9 of the pose_cont
         ! refactoring); only is the continuation switch of refine3D_auto (O7), which derives refine
         select case(trim(self%pose_cont))
@@ -927,7 +909,6 @@ contains
         endif
         self%l_lam_anneal = trim(self%lam_anneal).eq.'yes'
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
-        self%l_euclid_diag = trim(self%euclid_diag).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
         if( cline%defined('pcg_mskfile') )then
             ! accepted on both backends: the solve support under pcg, the envelope window under gridding
@@ -979,7 +960,7 @@ contains
         self%l_cont_polish = .false.
         if( self%l_cart_refine )then
             ! a Cartesian pass refines the stored ptcl3D poses: the polar in-plane polish is
-            ! part of its five-parameter solve (inpl_cont=yes, the default, is overridden)
+            ! part of its five-parameter solve (the internal inpl_cont=yes default is overridden)
             ! (children of a refine3D run, assembly and postprocessing on other segments, inherit
             ! refine with the command line; the matcher's strategy checks its segment as well)
             if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%oritype) /= 'ptcl3D' ) &

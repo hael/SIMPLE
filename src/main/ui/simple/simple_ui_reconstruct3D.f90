@@ -27,7 +27,8 @@ contains
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_exec',&                                                 ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Reconstruct a 3D Map')                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -40,13 +41,6 @@ contains
         call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, visibility=UI_VIS_ADVANCED)
-        call reconstruct3D%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
-        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call reconstruct3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction',&
-        &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -119,7 +113,8 @@ contains
         & iteration and reconstructs the shipped ML-regularized map on them with the requested backend (PCG gets the cold-solve&
         & iteration budget); standalone test entry point for the final reconstruction stage of solve3D and refine3D_auto',&
         &'simple_exec',&                                                 ! executable
-        &.true.)                                                         ! requires sp_project
+        &.true., &
+        &display_name='Bootstrap 3D Reconstruction')                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

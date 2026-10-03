@@ -8,7 +8,7 @@ use simple_classaverager, only: cavger_new, cavger_transf_oridat, cavger_read_eu
                               cavger_restore_cavgs, cavger_gen2Dclassdoc, cavger_write_all, cavger_kill, &
                               cavger_write_contribution
 use simple_qsys_env,   only: qsys_env
-use simple_qsys_funs,  only: qsys_job_finished, qsys_cleanup
+use simple_qsys_funs,  only: qsys_declare_part_finished, qsys_cleanup
 use simple_exec_helpers, only: set_shmem_flag, set_master_num_threads
 implicit none
 
@@ -371,7 +371,7 @@ contains
         class(make_cavgs_worker_strategy), intent(inout) :: self
         type(parameters),                  intent(in)    :: params
         class(cmdline),                    intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_refine2D :: exec_make_cavgs'))
+        call qsys_declare_part_finished(params, string('simple_commanders_refine2D :: exec_make_cavgs'))
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params, cline)

@@ -562,14 +562,6 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ------------------------------------------------------------------------------
-# librt - only available on unix
-# ------------------------------------------------------------------------------
-if(UNIX AND NOT APPLE)
-    find_package(LibRt REQUIRED)
-    list(APPEND SIMPLE_LIBRARIES LIBRT::LIBRT)
-endif()
-
-# ------------------------------------------------------------------------------
 # libCurl (REQUIRED)
 # ------------------------------------------------------------------------------
 find_package(CURL)

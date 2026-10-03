@@ -101,6 +101,7 @@ contains
             call spproj%os_stk%set(istk, 'stk',   'stack_'//char(48+istk)//'.mrcs')
             call spproj%os_stk%set(istk, 'fromp', (istk-1)*NPTCLS/2 + 1)
             call spproj%os_stk%set(istk, 'top',   istk*NPTCLS/2)
+            call spproj%os_stk%set(istk, 'nptcls_stk', NPTCLS/2)
             call spproj%os_stk%set(istk, 'box',   64)
             call spproj%os_stk%set(istk, 'smpd',  1.3)
             call spproj%os_stk%set(istk, 'ctf',   'yes')
@@ -321,21 +322,11 @@ contains
         call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
         call back%read(string(MAN_FNAME), status, msg)
         call assert_true(status /= 0 .and. index(msg, 'input key') > 0, 'an unknown input key is refused')
-        ! a manifest written before the denoised particle source was retired: its
-        ! input keys are ignored and never replayed, and a raw-source field reads
-        tampered(1:iend+3) = [lines(1:iend-2), [character(len=1024) :: 'ptcl_src raw', 'input objfun_den yes', &
-            &'input ptcl_src raw'], lines(iend-1:iend)]
-        call write_with_checksum(MAN_FNAME, tampered(1:iend+3))
-        call back%read(string(MAN_FNAME), status, msg)
-        call assert_int(0, status, 'a manifest with retired particle-source keys reads back: '//trim(msg))
-        call back%replay(cl)
-        call assert_false(cl%defined('ptcl_src') .or. cl%defined('objfun_den'), 'retired keys are not replayed')
-        call cl%kill
-        ! ... but a solution reconstructed from denoised particles is refused
-        tampered(1:iend+1) = [lines(1:iend-2), [character(len=1024) :: 'ptcl_src den'], lines(iend-1:iend)]
+        ! a field of a removed feature is unknown: no backwards compatibility (release 4)
+        tampered(1:iend+1) = [lines(1:iend-2), [character(len=1024) :: 'ptcl_src raw'], lines(iend-1:iend)]
         call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
         call back%read(string(MAN_FNAME), status, msg)
-        call assert_true(status /= 0 .and. index(msg, 'denoised') > 0, 'a denoised-source solution is refused')
+        call assert_true(status /= 0 .and. index(msg, 'unknown') > 0, 'a field of a removed feature is refused')
         ! records after the end marker
         tampered(1:n+1) = [lines(1:iend), [character(len=1024) :: 'nrows 12'], lines(iend+1:n)]
         call write_lines(MAN_FNAME, tampered(1:n+1))

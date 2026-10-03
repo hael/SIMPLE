@@ -202,7 +202,7 @@ contains
         call img%kill
         call o%kill
         call spproj%kill
-        call qsys_job_finished(params, string('single_commanders_tseries :: exec_tseries_motion_correct'))
+        call qsys_declare_part_finished(params, string('single_commanders_tseries :: exec_tseries_motion_correct'))
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct
 
@@ -293,7 +293,7 @@ contains
         call global_avgimg%kill
         call framenames(:)%kill
         deallocate(framenames)
-        call qsys_job_finished(params, string('single_commanders_tseries :: exec_tseries_prep4tracking'))
+        call qsys_declare_part_finished(params, string('single_commanders_tseries :: exec_tseries_prep4tracking'))
         call simple_end('**** SIMPLE_TSERIES_PREP4TRACKING NORMAL STOP ****')
         contains
 

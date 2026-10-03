@@ -17,22 +17,22 @@ public :: sigma2_state_digest_begin, sigma2_state_digest_text, sigma2_state_dige
 public :: sigma2_state_digest_file
 public :: SIGMA2_STATE_FNAME, SIGMA2_STATE_NEXT_FNAME
 public :: SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK
-public :: SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_LEGACY_PARTS, SIGMA2_PROV_STAR_SEED
+public :: SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_STAR_SEED
 public :: SIGMA2_RANGE_LOCAL, SIGMA2_RANGE_DIRECT
 public :: SIGMA2_STATE_CANDIDATE, SIGMA2_STATE_COMMITTED
 
 character(len=*), parameter :: SIGMA2_STATE_FNAME      = 'sigma2_state.bin'
 character(len=*), parameter :: SIGMA2_STATE_NEXT_FNAME = 'sigma2_state.next'
-character(len=16), parameter :: STATE_MAGIC = 'SIMPLE_SIGMA2_V1'
-character(len=16), parameter :: RANGE_MAGIC = 'SIMPLE_S2_RANGE1'
+character(len=16), parameter :: STATE_MAGIC = 'SIMPLE_SIGMA2_V2'
+character(len=16), parameter :: RANGE_MAGIC = 'SIMPLE_S2_RANGE2'
 
-integer(int32), parameter :: SIGMA2_STATE_VERSION = 1_int32
+! version 2 (release 4): no reserved particle-integrity section; version 1 files are refused
+integer(int32), parameter :: SIGMA2_STATE_VERSION = 2_int32
 integer(int32), parameter :: SIGMA2_GROUP_GLOBAL  = 1_int32
 integer(int32), parameter :: SIGMA2_GROUP_STACK   = 2_int32
-integer(int32), parameter :: SIGMA2_PROV_PSPEC        = 1_int32
-integer(int32), parameter :: SIGMA2_PROV_RESIDUAL     = 2_int32
-integer(int32), parameter :: SIGMA2_PROV_LEGACY_PARTS = 3_int32
-integer(int32), parameter :: SIGMA2_PROV_STAR_SEED    = 4_int32
+integer(int32), parameter :: SIGMA2_PROV_PSPEC     = 1_int32
+integer(int32), parameter :: SIGMA2_PROV_RESIDUAL  = 2_int32
+integer(int32), parameter :: SIGMA2_PROV_STAR_SEED = 3_int32
 integer(int32), parameter :: SIGMA2_RANGE_LOCAL  = 1_int32
 integer(int32), parameter :: SIGMA2_RANGE_DIRECT = 2_int32
 integer(int32), parameter :: SIGMA2_STATE_CANDIDATE = 1_int32
@@ -48,13 +48,12 @@ integer(int64), parameter :: FNV_PRIME  = int(z'00000100000001B3', int64)
 integer, parameter :: W_VERSION=1, W_HEADER_BYTES=2, W_REAL_BYTES=3, W_KFROM=4, W_KTO=5
 integer, parameter :: W_NPTCLS=6, W_BOX=7, W_NGROUPS=8, W_GROUPING=9, W_GENERATION=10
 integer, parameter :: W_PROVENANCE=11, W_STATE=12, W_RANGE_IO=13, W_LAYOUT_DIGEST=14
-integer, parameter :: W_GROUPED_OFFSET=15, W_PARTICLE_OFFSET=16, W_INTEGRITY_OFFSET=17
-integer, parameter :: W_FILE_BYTES=18, W_GROUP_CHECKSUM=19, W_PARTICLE_CHECKSUM=20
-integer, parameter :: W_SMPD_BITS=21, W_HEADER_CHECKSUM=32
+integer, parameter :: W_GROUPED_OFFSET=15, W_PARTICLE_OFFSET=16, W_FILE_BYTES=17
+integer, parameter :: W_GROUP_CHECKSUM=18, W_SMPD_BITS=19, W_HEADER_CHECKSUM=32
 
 integer, parameter :: RW_VERSION=1, RW_HEADER_BYTES=2, RW_REAL_BYTES=3, RW_KFROM=4, RW_KTO=5
 integer, parameter :: RW_FIRST=6, RW_LAST=7, RW_GENERATION=8, RW_LAYOUT_DIGEST=9
-integer, parameter :: RW_DATA_OFFSET=10, RW_INTEGRITY_OFFSET=11, RW_FILE_BYTES=12
+integer, parameter :: RW_DATA_OFFSET=10, RW_FILE_BYTES=11
 integer, parameter :: RW_HEADER_CHECKSUM=16
 
 type :: sigma2_state_header
@@ -73,11 +72,8 @@ type :: sigma2_state_header
     integer(int64) :: layout_digest = 0_int64
     integer(int64) :: grouped_offset   = 0_int64
     integer(int64) :: particle_offset  = 0_int64
-    integer(int64) :: integrity_offset = 0_int64
     integer(int64) :: file_bytes       = 0_int64
-    integer(int64) :: group_checksum    = 0_int64
-    ! Reserved for on-disk compatibility. Particle checksums are no longer generated or validated.
-    integer(int64) :: particle_checksum = 0_int64
+    integer(int64) :: group_checksum   = 0_int64
     real(real64)   :: smpd = 0.0_real64
 end type sigma2_state_header
 
@@ -115,8 +111,7 @@ contains
         particle_bytes = nshell * int(header%nptcls, int64) * int(header%real_bytes, int64)
         header%grouped_offset   = STATE_HEADER_BYTES + 1_int64
         header%particle_offset  = header%grouped_offset + grouped_bytes
-        header%integrity_offset = header%particle_offset + particle_bytes
-        header%file_bytes       = header%integrity_offset + int(header%nptcls, int64)*8_int64 - 1_int64
+        header%file_bytes       = header%particle_offset + particle_bytes - 1_int64
     end subroutine set_state_layout
 
     subroutine sigma2_state_read_header(path, header, status, message)
@@ -177,10 +172,8 @@ contains
         words(W_LAYOUT_DIGEST) = header%layout_digest
         words(W_GROUPED_OFFSET)   = header%grouped_offset
         words(W_PARTICLE_OFFSET)  = header%particle_offset
-        words(W_INTEGRITY_OFFSET) = header%integrity_offset
         words(W_FILE_BYTES)       = header%file_bytes
-        words(W_GROUP_CHECKSUM)    = header%group_checksum
-        words(W_PARTICLE_CHECKSUM) = header%particle_checksum
+        words(W_GROUP_CHECKSUM)   = header%group_checksum
         words(W_SMPD_BITS) = transfer(header%smpd, words(W_SMPD_BITS))
         words(W_HEADER_CHECKSUM) = checksum_words(words(:W_HEADER_CHECKSUM-1))
     end subroutine pack_state_header
@@ -203,10 +196,8 @@ contains
         header%layout_digest = words(W_LAYOUT_DIGEST)
         header%grouped_offset   = words(W_GROUPED_OFFSET)
         header%particle_offset  = words(W_PARTICLE_OFFSET)
-        header%integrity_offset = words(W_INTEGRITY_OFFSET)
         header%file_bytes       = words(W_FILE_BYTES)
-        header%group_checksum    = words(W_GROUP_CHECKSUM)
-        header%particle_checksum = words(W_PARTICLE_CHECKSUM)
+        header%group_checksum   = words(W_GROUP_CHECKSUM)
         header%smpd = transfer(words(W_SMPD_BITS), header%smpd)
     end subroutine unpack_state_header
 
@@ -236,7 +227,7 @@ contains
             status = 1; message = 'invalid sigma2 state grouping policy'; return
         endif
         select case(header%provenance)
-            case(SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_LEGACY_PARTS, SIGMA2_PROV_STAR_SEED)
+            case(SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_STAR_SEED)
             case default
                 status = 1; message = 'invalid sigma2 state provenance'; return
         end select
@@ -253,7 +244,6 @@ contains
         call set_state_layout(expected)
         if( header%grouped_offset /= expected%grouped_offset .or. &
             &header%particle_offset /= expected%particle_offset .or. &
-            &header%integrity_offset /= expected%integrity_offset .or. &
             &header%file_bytes /= expected%file_bytes )then
             status = 1; message = 'invalid sigma2 state section layout'; return
         endif
@@ -315,7 +305,6 @@ contains
                     status = io_stat; message = 'cannot copy committed sigma2 state'; return
                 endif
                 header%group_checksum    = source_header%group_checksum
-                header%particle_checksum = 0_int64
                 call write_header_unit(dst_unit, header, io_stat)
                 flush(dst_unit)
                 close(dst_unit)
@@ -330,7 +319,6 @@ contains
             endif
         endif
         header%group_checksum    = 0_int64
-        header%particle_checksum = 0_int64
         open(newunit=dst_unit, file=trim(path), access='stream', form='unformatted', &
             &status='replace', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
@@ -414,13 +402,12 @@ contains
         if( status /= 0 ) message = 'cannot sync sigma2 particle range'
     end subroutine sigma2_state_write_particles
 
-    subroutine sigma2_state_read_particles(path, first_row, last_row, spectra, status, message, checksums)
+    subroutine sigma2_state_read_particles(path, first_row, last_row, spectra, status, message)
         character(len=*), intent(in) :: path
         integer,          intent(in) :: first_row, last_row
         real(real32), allocatable, intent(out) :: spectra(:,:)
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
-        integer(int64), allocatable, optional, intent(out) :: checksums(:)
         type(sigma2_state_header) :: header
         integer(int64) :: data_pos
         integer :: funit, io_stat, nrows, nshell
@@ -443,8 +430,6 @@ contains
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot read sigma2 particle range'; return
         endif
-        ! Preserve the optional legacy result without reading the reserved integrity section.
-        if( present(checksums) ) allocate(checksums(nrows), source=0_int64)
         status = 0
         message = ''
     end subroutine sigma2_state_read_particles
@@ -587,8 +572,7 @@ contains
         real(real32),     intent(in) :: spectra(:,:)
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
-        integer(int64) :: words(RANGE_NWORDS), data_offset, integrity_offset, file_bytes
-        integer(int8) :: zero
+        integer(int64) :: words(RANGE_NWORDS), data_offset, file_bytes
         integer :: funit, io_stat, last_row
         status = 0
         message = ''
@@ -601,8 +585,7 @@ contains
             status = 1; message = 'local sigma2 range file already exists'; return
         endif
         data_offset = RANGE_HEADER_BYTES + 1_int64
-        integrity_offset = data_offset + int(size(spectra),int64)*4_int64
-        file_bytes = integrity_offset + int(size(spectra,2),int64)*8_int64 - 1_int64
+        file_bytes  = data_offset + int(size(spectra),int64)*4_int64 - 1_int64
         words = 0_int64
         words(RW_VERSION)       = int(SIGMA2_STATE_VERSION,int64)
         words(RW_HEADER_BYTES)  = RANGE_HEADER_BYTES
@@ -613,10 +596,9 @@ contains
         words(RW_LAST)          = int(last_row,int64)
         words(RW_GENERATION)    = generation
         words(RW_LAYOUT_DIGEST) = layout_digest
-        words(RW_DATA_OFFSET)      = data_offset
-        words(RW_INTEGRITY_OFFSET) = integrity_offset
-        words(RW_FILE_BYTES)       = file_bytes
-        words(RW_HEADER_CHECKSUM)  = checksum_words(words(:RW_HEADER_CHECKSUM-1))
+        words(RW_DATA_OFFSET)     = data_offset
+        words(RW_FILE_BYTES)      = file_bytes
+        words(RW_HEADER_CHECKSUM) = checksum_words(words(:RW_HEADER_CHECKSUM-1))
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='new', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
@@ -625,9 +607,6 @@ contains
         write(funit, pos=1, iostat=io_stat) RANGE_MAGIC
         if( io_stat == 0 ) write(funit, pos=17, iostat=io_stat) words
         if( io_stat == 0 ) write(funit, pos=data_offset, iostat=io_stat) spectra
-        ! Keep the legacy integrity span in the file layout, but do not populate checksums.
-        zero = 0_int8
-        if( io_stat == 0 ) write(funit, pos=file_bytes, iostat=io_stat) zero
         flush(funit)
         close(funit)
         if( io_stat /= 0 )then
@@ -648,7 +627,7 @@ contains
         character(len=*), intent(out) :: message
         character(len=16) :: magic
         integer(int64) :: words(RANGE_NWORDS), actual_bytes
-        integer(int64) :: expected_integrity_offset, expected_file_bytes
+        integer(int64) :: expected_file_bytes
         integer :: funit, io_stat, nshell, nrows
         status = 0
         message = ''
@@ -680,12 +659,9 @@ contains
         generation = words(RW_GENERATION); layout_digest = words(RW_LAYOUT_DIGEST)
         nshell = kto-kfrom+1; nrows = last_row-first_row+1
         inquire(file=trim(path), size=actual_bytes, iostat=io_stat)
-        expected_integrity_offset = RANGE_HEADER_BYTES + 1_int64 + &
-            &int(nshell,int64)*int(nrows,int64)*4_int64
-        expected_file_bytes = expected_integrity_offset + int(nrows,int64)*8_int64 - 1_int64
+        expected_file_bytes = RANGE_HEADER_BYTES + int(nshell,int64)*int(nrows,int64)*4_int64
         if( io_stat /= 0 .or. actual_bytes /= words(RW_FILE_BYTES) .or. nshell < 1 .or. nrows < 1 .or. &
             &words(RW_DATA_OFFSET) /= RANGE_HEADER_BYTES+1_int64 .or. &
-            &words(RW_INTEGRITY_OFFSET) /= expected_integrity_offset .or. &
             &words(RW_FILE_BYTES) /= expected_file_bytes .or. generation < 1_int64 .or. &
             &layout_digest == 0_int64 )then
             close(funit); status = 1; message = 'invalid local sigma2 range layout'; return

@@ -32,15 +32,15 @@ contains
         !   the ptcl_sieve engine calls this concurrency knob nchunks (shared
         !   with the streaming sieve). Remap nparts -> nchunks and force the
         !   per-chunk solve2D nparts to 1 (offline sieving does not set up
-        !   a distributed queue for the child jobs). Keep nchunks= as a
-        !   backwards-compatible alias.
-        if( cline%defined('nparts') .and. .not. cline%defined('nchunks') )then
+        !   a distributed queue for the child jobs).
+        if( cline%defined('nparts') )then
             call cline%set('nchunks', cline%get_iarg('nparts'))
+        else
+            call cline%set('nchunks', 1)
         endif
         call cline%set('nparts', 1)
         ! set defaults
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',                                 'yes')
-        if( .not. cline%defined('nchunks')        ) call cline%set('nchunks',                                  1)
         if( .not. cline%defined('nmics')          ) call cline%set('nmics',                                    50)
         if( .not. cline%defined('nptcls_coarse')  ) call cline%set('nptcls_coarse',  DEFAULT_COARSE_POP_THRESHOLD)
         if( .not. cline%defined('nptcls_fine')    ) call cline%set('nptcls_fine',      DEFAULT_FINE_POP_THRESHOLD)

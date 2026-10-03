@@ -6,13 +6,12 @@ Usage:
 
 The input directory is expected to contain the text reports written with
 L_BENCH_GLOB: REFINE3D_STRATEGY_BENCH_ITER*.txt,
-REFINE3D_STAGE_BENCH_ITER*.txt, REFINE3D_BENCH_ITER*.txt, and
-VOLASSEMBLE_BENCH_ITER*.txt.  The script uses only the Python standard
-library and writes:
+REFINE3D_BENCH_ITERnnn_PARTppp.txt (one per partition; the worker columns
+use partition 1) and VOLASSEMBLE_BENCH_ITER*.txt.  The script uses only the
+Python standard library and writes:
 
     refine3d_benchmark_summary.csv  one row per iteration
     refine3d_benchmark.svg          vector figure suitable for publication
-    refine3d_stage_entry.svg        stage-entry figure, when stage reports exist
 
 The SVG intentionally distinguishes the strategy-level wall-clock phases from
 worker and volassemble totals.  A strategy ``setup/init`` sample is not a
@@ -35,7 +34,6 @@ from typing import Dict, Iterable, List, Tuple
 
 FAMILIES = {
     "REFINE3D_STRATEGY_BENCH_ITER": "strategy",
-    "REFINE3D_STAGE_BENCH_ITER": "stage",
     "REFINE3D_BENCH_ITER": "worker",
     "VOLASSEMBLE_BENCH_ITER": "assembly",
 }
@@ -49,6 +47,7 @@ STRATEGY_COMPONENTS = (
 
 NUMBER = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?"
 ITER_RE = re.compile(r"ITER(\d+)", re.IGNORECASE)
+PART_RE = re.compile(r"_PART(\d+)", re.IGNORECASE)
 HEADER_RE = re.compile(r"^\s*\*{3}\s*(.*?)\s*\*{3}\s*$")
 VALUE_RE = re.compile(rf"^\s*(.+?)\s*:\s*({NUMBER})\s*$")
 
@@ -84,6 +83,9 @@ def load_reports(indir: Path) -> Dict[int, Dict[str, object]]:
         match = ITER_RE.search(path.name)
         if match is None:
             continue
+        part = PART_RE.search(path.name)
+        if family == "worker" and (part is None or int(part.group(1)) != 1):
+            continue  # worker reports are per partition; partition 1 represents the iteration
         iteration = int(match.group(1))
         context, seconds = parse_file(path)
         row = rows[iteration]
@@ -112,7 +114,6 @@ def write_summary(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
         "reprojection_model_s", "group_sigma_consolidation_s", "probabilistic_prestep_s",
         "matcher_scheduler_s", "assembly_postprocess_s", "assembly_nu_evidence_s",
         "worker_total_s", "volassemble_total_s", "volassemble_nonuniform_filter_s",
-        "stage_initialization_total_s", "stage_entry_calc_pspec_s",
     ]
     with outpath.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns)
@@ -121,10 +122,8 @@ def write_summary(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
             row = rows[iteration]
             writer.writerow({
                 "iteration": iteration,
-                "nspace": context_value(row, "strategy", "refine3D nspace") or
-                          context_value(row, "stage", "refine3D nspace"),
-                "kto": context_value(row, "strategy", "refine3D kto") or
-                       context_value(row, "stage", "refine3D kto"),
+                "nspace": context_value(row, "strategy", "refine3D nspace"),
+                "kto": context_value(row, "strategy", "refine3D kto"),
                 "strategy_total_s": as_float(row, "refine3D total time"),
                 "strategy_setup_init_s": as_float(row, "refine3D strategy setup/init"),
                 "reprojection_model_s": as_float(row, "refine3D reprojection model"),
@@ -138,8 +137,6 @@ def write_summary(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
                 "worker_total_s": as_float(row, "match3D total time"),
                 "volassemble_total_s": as_float(row, "volassemble total time"),
                 "volassemble_nonuniform_filter_s": as_float(row, "volassemble nonuniform_filter"),
-                "stage_initialization_total_s": as_float(row, "refine3D stage initialization total"),
-                "stage_entry_calc_pspec_s": as_float(row, "refine3D stage-entry calc_pspec"),
             })
 
 
@@ -303,54 +300,6 @@ def write_figure(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
     outpath.write_text("\n".join(out) + "\n")
 
 
-def write_stage_figure(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
-    """Draw stage initialization separately so calc_pspec remains legible."""
-    samples = [(iteration, row) for iteration, row in sorted(rows.items())
-               if "refine3D stage initialization total" in row]
-    if not samples:
-        return
-    width, height = 1200, 680
-    left, right, top, bottom = 120, 70, 115, 550
-    values = [as_float(row, "refine3D stage initialization total") for _, row in samples]
-    values += [as_float(row, "refine3D stage-entry calc_pspec") for _, row in samples]
-    ymax = nice_limit(values)
-    plot_w = width - left - right
-    out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        '<title>refine3D stage-entry benchmark</title>',
-        '<desc>Stage initialization wall time and the independently measured calc_pspec wall time.</desc>',
-        f'<rect x="0" y="0" width="{width}" height="{height}" fill="#ffffff"/>',
-        '<style>text{font-family:Arial,Helvetica,sans-serif;fill:#17202a}.axis{stroke:#4a5568;stroke-width:2.667}.grid{stroke:#cbd5e0;stroke-width:1}</style>',
-        svg_text(left, 45, "refine3D stage-entry benchmark", 28, weight=500),
-        svg_text(left, 72, "Power-spectrum estimation is measured independently from the total strategy initialization path.", 16),
-    ]
-    for tick in range(0, int(ymax) + 1, max(1, int(math.ceil(ymax / 5)))):
-        y = linear(tick, 0, ymax, bottom, top)
-        out += [f'<line class="grid" x1="{left}" y1="{y:.1f}" x2="{width-right}" y2="{y:.1f}"/>',
-                svg_text(left - 13, y + 5, f"{tick:g}", 13, "end")]
-    out += [
-        f'<line class="axis" x1="{left}" y1="{top}" x2="{left}" y2="{bottom}"/>',
-        f'<line class="axis" x1="{left}" y1="{bottom}" x2="{width-right}" y2="{bottom}"/>',
-        svg_vertical_text(38, (top + bottom) / 2, "wall time (s)", 15),
-    ]
-    step = plot_w / max(1, len(samples))
-    bar_w = min(70.0, step * 0.32)
-    for index, (iteration, row) in enumerate(samples):
-        center = left + step * (index + 0.5)
-        total = as_float(row, "refine3D stage initialization total")
-        pspec = as_float(row, "refine3D stage-entry calc_pspec")
-        for offset, value, color in ((-bar_w * 0.6, total, "#6f7d8c"), (bar_w * 0.6, pspec, "#2b6cb0")):
-            y = linear(value, 0, ymax, bottom, top)
-            out.append(f'<rect x="{center+offset-bar_w/2:.1f}" y="{y:.1f}" width="{bar_w:.1f}" height="{bottom-y:.1f}" fill="{color}"/>')
-        nspace = context_value(row, "stage", "refine3D nspace")
-        out.append(svg_text(center, bottom + 25, f"iter {iteration}", 13, "middle"))
-        if nspace:
-            out.append(svg_text(center, bottom + 44, f"nspace {nspace}", 12, "middle"))
-    out += draw_legend((("stage initialization total", "#6f7d8c"), ("stage-entry calc_pspec", "#2b6cb0")), left, bottom + 83)
-    out += [svg_text((left + width - right) / 2, height - 25, "stage first iteration", 15, "middle"), '</svg>']
-    outpath.write_text("\n".join(out) + "\n")
-
-
 def main(argv: List[str]) -> int:
     if not 2 <= len(argv) <= 3:
         print(__doc__.strip(), file=sys.stderr)
@@ -364,15 +313,11 @@ def main(argv: List[str]) -> int:
     rows = load_reports(indir)
     summary = outdir / "refine3d_benchmark_summary.csv"
     figure = outdir / "refine3d_benchmark.svg"
-    stage_figure = outdir / "refine3d_stage_entry.svg"
     write_summary(rows, summary)
     write_figure(rows, figure)
-    write_stage_figure(rows, stage_figure)
     print(f"Parsed {len(rows)} benchmark iterations from {indir}")
     print(f"Wrote {summary}")
     print(f"Wrote {figure}")
-    if stage_figure.exists():
-        print(f"Wrote {stage_figure}")
     return 0
 
 

@@ -29,7 +29,7 @@ contains
         type(ui_program), intent(inout) :: prg
         character(len=*), intent(in)    :: name
         call prg%new(name, 'summary text long enough to pass the length check', &
-            &'help text', 'simple_exec', .false.)
+            &'help text', 'simple_exec', .false., display_name='Test Program')
     end subroutine make_prg
 
     subroutine test_set_get_by_key()

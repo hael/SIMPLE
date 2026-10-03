@@ -2,18 +2,14 @@
 module simple_cavg_quality_model
 use simple_defs,               only: LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
-use simple_string_utils,       only: str_is_true, lowercase, uppercase, &
-    fortran_symbol_from_string, fortran_quote, fortran_logical
-use simple_clustering_utils,   only: cluster_dmat
-use simple_srch_sort_loc,      only: hpsort
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CLIP_Z, &
+use simple_string_utils,       only: lowercase, uppercase, fortran_symbol_from_string, fortran_quote
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, &
     CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_RELATIONAL_SCHEMA_NONE, &
     CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
     CAVG_RELATIONAL_DEFAULT_CORR_TRS, &
     cavg_quality_model_spec, cavg_quality_result, CAVG_REJECT_REASON_MODEL
 use simple_cavg_quality_feats, only: cavg_quality_feature_name
-use simple_cavg_quality_stats, only: normalize_quality_dmat
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -24,39 +20,8 @@ public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
 public :: CAVG_QUALITY_BUILTIN_MODELS
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
-! Internal compatibility cache for the retired score-and-cluster code path.
-! It is no longer reachable from the model or learner interfaces.
-public :: cavg_quality_classify_cache
-public :: build_classify_cache
-public :: apply_cached_decision_to_quality
-public :: cached_decision_confusion
-public :: kill_classify_cache
 public :: write_cavg_quality_model_builtin_code
 
-integer, parameter :: CACHE_DECISION_EMPTY     = 1
-integer, parameter :: CACHE_DECISION_FORCED    = 2
-integer, parameter :: CACHE_DECISION_CLUSTERED = 3
-integer, parameter :: CACHE_FORCED_TOO_FEW             = 1
-integer, parameter :: CACHE_FORCED_FLAT_DMAT           = 2
-integer, parameter :: CACHE_FORCED_INVALID_TWO_CLUSTER = 3
-
-type :: cavg_quality_classify_cache
-    integer              :: ncls = 0, nfit = 0, decision_mode = 0, forced_reason = 0
-    integer, allocatable :: inds(:), labels_fit(:), medoids_fit(:)
-    real,    allocatable :: scores(:), score_fit(:), score_fit_sorted(:)
-    logical, allocatable :: hard_reject(:)
-    integer              :: good_fit_label = 0, bad_fit_label = 0
-    real                 :: separation = 0.0, raw_threshold = 0.0, otsu_threshold = 0.0, otsu_separation = 0.0
-    logical              :: otsu_ok = .false.
-end type cavg_quality_classify_cache
-
-type :: cavg_quality_cached_decision
-    real              :: threshold = 0.0, raw_threshold = 0.0, threshold_offset = 0.0
-    real              :: rescue_threshold = 0.0, floor_threshold = 0.0
-    logical           :: use_rescue = .false., floor_active = .false., single_cluster = .false., used_threshold = .false.
-    character(len=32) :: soft_decision = 'hard_only'
-    character(len=64) :: soft_reason = 'initial'
-end type cavg_quality_cached_decision
 
 ! Built-in presets are complete model specifications. To promote a learned
 ! model into the code, add a named preset and include it in both public and
@@ -69,7 +34,6 @@ character(len=64), parameter :: CAVG_QUALITY_BUILTIN_MODELS(3) = [character(len=
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT // '|' // &
     CAVG_QUALITY_MODEL_SIEVE_DEFAULT // '|' // CAVG_QUALITY_MODEL_POOL_DEFAULT
 
-real, parameter :: CLUSTER_RESCUE_MARGIN = 0.20
 
 ! Default chunk class-average quality model, promoted from the pairwise
 ! logistic artifact learned from
@@ -80,11 +44,6 @@ real, parameter :: CAVG_QUALITY_LOGISTIC_WEIGHTS(CAVG_QUALITY_NFEATS) = [ &
     7.142857E-02, 7.142857E-02, 7.142857E-02, 7.142857E-02, &
     7.142857E-02, 7.142857E-02, 7.142857E-02, 7.142857E-02, &
     7.142857E-02, 7.142857E-02 ]
-real, parameter :: CHUNK100MICS_BOUNDARY_MARGIN      = 0.00
-real, parameter :: CHUNK100MICS_MIN_SCORE_SEPARATION = 0.05
-real, parameter :: CHUNK100MICS_OTSU_MIN_OFFSET      = 0.00
-real, parameter :: CHUNK100MICS_OTSU_MAX_OFFSET      = 0.00
-real, parameter :: CHUNK100MICS_MIN_ACCEPT_FRAC      = 0.00
 
 type :: cavg_quality_model
     character(len=64) :: name                    = CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -105,16 +64,6 @@ type :: cavg_quality_model
     real              :: relational_corr_lp        = 0.0
     real              :: relational_corr_trs       = 0.0
     real              :: relational_coefficient    = 0.0
-    real              :: boundary_margin         = CHUNK100MICS_BOUNDARY_MARGIN
-    real              :: min_score_separation    = CHUNK100MICS_MIN_SCORE_SEPARATION
-    real              :: otsu_min_offset         = CHUNK100MICS_OTSU_MIN_OFFSET
-    real              :: otsu_max_offset         = CHUNK100MICS_OTSU_MAX_OFFSET
-    real              :: cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-    real              :: min_accept_frac         = CHUNK100MICS_MIN_ACCEPT_FRAC
-    logical           :: use_lowsep_otsu         = .false.
-    logical           :: use_otsu_window         = .false.
-    logical           :: use_cluster_rescue      = .false.
-    logical           :: enforce_min_accept_frac = .false.
 contains
     procedure :: init_preset
     procedure :: init_spec
@@ -183,16 +132,6 @@ contains
         self%relational_corr_lp      = spec%relational_corr_lp
         self%relational_corr_trs     = spec%relational_corr_trs
         self%relational_coefficient  = spec%relational_coefficient
-        self%boundary_margin         = spec%boundary_margin
-        self%min_score_separation    = spec%min_score_separation
-        self%otsu_min_offset         = spec%otsu_min_offset
-        self%otsu_max_offset         = spec%otsu_max_offset
-        self%cluster_rescue_margin   = spec%cluster_rescue_margin
-        self%min_accept_frac         = spec%min_accept_frac
-        self%use_lowsep_otsu         = spec%use_lowsep_otsu
-        self%use_otsu_window         = spec%use_otsu_window
-        self%use_cluster_rescue      = spec%use_cluster_rescue
-        self%enforce_min_accept_frac = spec%enforce_min_accept_frac
         call self%normalize()
     end subroutine init_spec
 
@@ -217,16 +156,6 @@ contains
         spec%relational_corr_lp      = self%relational_corr_lp
         spec%relational_corr_trs     = self%relational_corr_trs
         spec%relational_coefficient  = self%relational_coefficient
-        spec%boundary_margin         = self%boundary_margin
-        spec%min_score_separation    = self%min_score_separation
-        spec%otsu_min_offset         = self%otsu_min_offset
-        spec%otsu_max_offset         = self%otsu_max_offset
-        spec%cluster_rescue_margin   = self%cluster_rescue_margin
-        spec%min_accept_frac         = self%min_accept_frac
-        spec%use_lowsep_otsu         = self%use_lowsep_otsu
-        spec%use_otsu_window         = self%use_otsu_window
-        spec%use_cluster_rescue      = self%use_cluster_rescue
-        spec%enforce_min_accept_frac = self%enforce_min_accept_frac
     end function get_spec
 
     function chunk100mics_model_spec() result( spec )
@@ -274,16 +203,6 @@ contains
         spec%relational_corr_lp      = CAVG_RELATIONAL_DEFAULT_CORR_LP
         spec%relational_corr_trs     = CAVG_RELATIONAL_DEFAULT_CORR_TRS
         spec%relational_coefficient  = -3.941003E-01
-        spec%boundary_margin         = CHUNK100MICS_BOUNDARY_MARGIN
-        spec%min_score_separation    = CHUNK100MICS_MIN_SCORE_SEPARATION
-        spec%otsu_min_offset         = CHUNK100MICS_OTSU_MIN_OFFSET
-        spec%otsu_max_offset         = CHUNK100MICS_OTSU_MAX_OFFSET
-        spec%cluster_rescue_margin   = CLUSTER_RESCUE_MARGIN
-        spec%min_accept_frac         = CHUNK100MICS_MIN_ACCEPT_FRAC
-        spec%use_lowsep_otsu         = .false.
-        spec%use_otsu_window         = .false.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
     end function chunk100mics_model_spec
 
     function pool_model_spec() result( spec )
@@ -470,16 +389,6 @@ contains
         spec%relational_corr_lp      =   1.500000E+01
         spec%relational_corr_trs     =   1.000000E+01
         spec%relational_coefficient  =   2.449666E-02
-        spec%boundary_margin         =   0.000000E+00
-        spec%min_score_separation    =   5.000000E-02
-        spec%otsu_min_offset         =   0.000000E+00
-        spec%otsu_max_offset         =   0.000000E+00
-        spec%cluster_rescue_margin   =   2.000000E-01
-        spec%min_accept_frac         =   0.000000E+00
-        spec%use_lowsep_otsu         = .false.
-        spec%use_otsu_window         = .false.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
     end function pool_model_spec
 
     function sieve_model_spec() result( spec )
@@ -695,16 +604,6 @@ contains
         ! the learner propagates that value, so the shift range is the shared default.
         spec%relational_corr_trs     = CAVG_RELATIONAL_DEFAULT_CORR_TRS
         spec%relational_coefficient  =  -3.960855E-01
-        spec%boundary_margin         =   0.000000E+00
-        spec%min_score_separation    =   5.000000E-02
-        spec%otsu_min_offset         =   0.000000E+00
-        spec%otsu_max_offset         =   0.000000E+00
-        spec%cluster_rescue_margin   =   2.000000E-01
-        spec%min_accept_frac         =   0.000000E+00
-        spec%use_lowsep_otsu         = .false.
-        spec%use_otsu_window         = .false.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
     end function sieve_model_spec
 
     subroutine set_pairwise_interactions_for_feature_count( spec, nfeatures, coefficients )
@@ -776,7 +675,7 @@ contains
         integer :: funit, i
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection model'
-        write(funit,'(A)') 'model_version=10'
+        write(funit,'(A)') 'model_version=11'
         write(funit,'(A,A)') 'name=', trim(self%name)
         write(funit,'(A,A)') 'context=', trim(self%context)
         write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
@@ -786,16 +685,6 @@ contains
             write(funit,'(ES14.6)', advance='no') self%weights(i)
         end do
         write(funit,*)
-        write(funit,'(A,ES14.6)') 'boundary_margin=', self%boundary_margin
-        write(funit,'(A,ES14.6)') 'min_score_separation=', self%min_score_separation
-        write(funit,'(A,ES14.6)') 'otsu_min_offset=', self%otsu_min_offset
-        write(funit,'(A,ES14.6)') 'otsu_max_offset=', self%otsu_max_offset
-        write(funit,'(A,ES14.6)') 'cluster_rescue_margin=', self%cluster_rescue_margin
-        write(funit,'(A,ES14.6)') 'min_accept_frac=', self%min_accept_frac
-        write(funit,'(A,L1)') 'use_lowsep_otsu=', self%use_lowsep_otsu
-        write(funit,'(A,L1)') 'use_otsu_window=', self%use_otsu_window
-        write(funit,'(A,L1)') 'use_cluster_rescue=', self%use_cluster_rescue
-        write(funit,'(A,L1)') 'enforce_min_accept_frac=', self%enforce_min_accept_frac
         write(funit,'(A,ES14.6)') 'intercept=', self%intercept
         call write_model_real_list(funit, 'linear_coefficients=', self%linear_coefficients)
         call write_interaction_terms(funit, self)
@@ -859,16 +748,6 @@ contains
         write(funit,'(A,A)') '        spec%feature_policy          = ', trim(fortran_quote(model%feature_policy))
         call write_weights_assignment(funit, model%weights)
         call write_logistic_spec_assignments(funit, model)
-        write(funit,'(A,ES14.6)') '        spec%boundary_margin         = ', model%boundary_margin
-        write(funit,'(A,ES14.6)') '        spec%min_score_separation    = ', model%min_score_separation
-        write(funit,'(A,ES14.6)') '        spec%otsu_min_offset         = ', model%otsu_min_offset
-        write(funit,'(A,ES14.6)') '        spec%otsu_max_offset         = ', model%otsu_max_offset
-        write(funit,'(A,ES14.6)') '        spec%cluster_rescue_margin   = ', model%cluster_rescue_margin
-        write(funit,'(A,ES14.6)') '        spec%min_accept_frac         = ', model%min_accept_frac
-        write(funit,'(A,A)') '        spec%use_lowsep_otsu         = ', trim(fortran_logical(model%use_lowsep_otsu))
-        write(funit,'(A,A)') '        spec%use_otsu_window         = ', trim(fortran_logical(model%use_otsu_window))
-        write(funit,'(A,A)') '        spec%use_cluster_rescue      = ', trim(fortran_logical(model%use_cluster_rescue))
-        write(funit,'(A,A)') '        spec%enforce_min_accept_frac = ', trim(fortran_logical(model%enforce_min_accept_frac))
         write(funit,'(A,A,A)') '    end function ', trim(func_name), ''
     end subroutine write_model_spec_function
 
@@ -1005,8 +884,8 @@ contains
             end select
         end do
         if( have_preset ) call self%init_preset(trim(preset_name))
-        if( model_version < 10 .or. .not. have_relational_schema ) &
-            THROW_HARD('read_model: relational logistic model_version=10 is required')
+        if( model_version /= 11 .or. .not. have_relational_schema ) &
+            THROW_HARD('read_model: relational logistic model_version=11 is required')
         rewind(funit)
         n_interaction_coefficients = 0
         do
@@ -1016,10 +895,6 @@ contains
             if( .not. ok_line ) cycle
             select case(trim(key))
                 case('model_version')
-                    cycle
-                case('model_family')
-                    if( trim(val) /= 'pairwise_logistic' ) &
-                        THROW_HARD('read_model: legacy linear models are unsupported')
                     cycle
                 case('preset')
                     cycle
@@ -1032,7 +907,7 @@ contains
                         case DEFAULT
                             THROW_HARD('read_model: context must be chunk, pool, or sieve')
                     end select
-                case('feature_policy', 'feature_family_set')
+                case('feature_policy')
                     self%feature_policy = trim(val)
                 case('feature_weights')
                     call read_feature_weights(val, self%weights)
@@ -1073,32 +948,6 @@ contains
                 case('relational_coefficient')
                     read(val,*,iostat=parse_ios) self%relational_coefficient
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse relational_coefficient')
-                case('boundary_margin')
-                    read(val,*,iostat=parse_ios) self%boundary_margin
-                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse boundary_margin')
-                case('min_score_separation')
-                    read(val,*,iostat=parse_ios) self%min_score_separation
-                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse min_score_separation')
-                case('otsu_min_offset')
-                    read(val,*,iostat=parse_ios) self%otsu_min_offset
-                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse otsu_min_offset')
-                case('otsu_max_offset')
-                    read(val,*,iostat=parse_ios) self%otsu_max_offset
-                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse otsu_max_offset')
-                case('cluster_rescue_margin')
-                    read(val,*,iostat=parse_ios) self%cluster_rescue_margin
-                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse cluster_rescue_margin')
-                case('min_accept_frac')
-                    read(val,*,iostat=parse_ios) self%min_accept_frac
-                    if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse min_accept_frac')
-                case('use_lowsep_otsu')
-                    self%use_lowsep_otsu = str_is_true(val)
-                case('use_otsu_window')
-                    self%use_otsu_window = str_is_true(val)
-                case('use_cluster_rescue')
-                    self%use_cluster_rescue = str_is_true(val)
-                case('enforce_min_accept_frac')
-                    self%enforce_min_accept_frac = str_is_true(val)
                 case default
                     THROW_HARD('read_model: unknown key in model file: '//trim(key))
             end select
@@ -1302,16 +1151,6 @@ contains
         self%relational_corr_lp      = 0.0
         self%relational_corr_trs     = 0.0
         self%relational_coefficient  = 0.0
-        self%boundary_margin         = 0.0
-        self%min_score_separation    = 0.0
-        self%otsu_min_offset         = 0.0
-        self%otsu_max_offset         = 0.0
-        self%cluster_rescue_margin   = 0.0
-        self%min_accept_frac         = 0.0
-        self%use_lowsep_otsu         = .false.
-        self%use_otsu_window         = .false.
-        self%use_cluster_rescue      = .false.
-        self%enforce_min_accept_frac = .false.
     end subroutine kill_model
 
     subroutine apply_pairwise_logistic( quality, model, relational_feature )
@@ -1412,506 +1251,5 @@ contains
         eta = max(-80.0, min(80.0, eta))
         pairwise_logistic_probability = 1.0 / (1.0 + exp(-eta))
     end function pairwise_logistic_probability
-
-    ! Heavy spec-independent portion of the classification pipeline:
-    ! scores, feature-masked pairwise distances, k-medoids labels, raw
-    ! threshold, and Otsu threshold. Within a fixed feature policy (and
-    ! therefore fixed weights) the cache is reusable across an arbitrary
-    ! number of candidate model specs.
-    subroutine build_classify_cache( features, hard_reject, weights, cache )
-        real,                              intent(in)    :: features(:,:)
-        logical,                           intent(in)    :: hard_reject(:)
-        real,                              intent(in)    :: weights(:)
-        type(cavg_quality_classify_cache), intent(inout) :: cache
-        real,    allocatable :: dmat(:,:)
-        real,    allocatable :: feats_fit(:,:)
-        integer              :: ncls, nfit, i, j, nclust
-        real                 :: d, score1, score2
-        logical              :: dmat_ok
-        call kill_classify_cache(cache)
-        ncls = size(features, dim=1)
-        if( size(features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('build_classify_cache: invalid feature count')
-        if( size(hard_reject)     /= ncls                ) THROW_HARD('build_classify_cache: invalid mask size')
-        if( size(weights)         /= CAVG_QUALITY_NFEATS ) THROW_HARD('build_classify_cache: invalid weight size')
-        cache%ncls = ncls
-        allocate(cache%hard_reject(ncls), source=hard_reject)
-        allocate(cache%scores(ncls))
-        cache%scores = matmul(features, weights)
-        where( hard_reject ) cache%scores = -CLIP_Z
-        nfit = count(.not. hard_reject)
-        cache%nfit = nfit
-        if( nfit == 0 )then
-            cache%decision_mode = CACHE_DECISION_EMPTY
-            return
-        endif
-        allocate(cache%inds(nfit))
-        cache%inds = pack([(i, i=1,ncls)], .not. hard_reject)
-        allocate(cache%score_fit(nfit))
-        do i = 1, nfit
-            cache%score_fit(i) = cache%scores(cache%inds(i))
-        end do
-        allocate(cache%score_fit_sorted(nfit), source=cache%score_fit)
-        call hpsort(cache%score_fit_sorted)
-        if( nfit < 4 )then
-            cache%decision_mode = CACHE_DECISION_FORCED
-            cache%forced_reason = CACHE_FORCED_TOO_FEW
-            return
-        endif
-        allocate(feats_fit(nfit, CAVG_QUALITY_NFEATS))
-        do i = 1, nfit
-            feats_fit(i,:) = features(cache%inds(i),:)
-        end do
-        allocate(dmat(nfit, nfit), source=0.0)
-        !$omp parallel do default(shared) private(i,j,d) schedule(static) proc_bind(close)
-        do i = 1, nfit - 1
-            do j = i + 1, nfit
-                d = feature_vector_distance(feats_fit(i,:), feats_fit(j,:), weights)
-                dmat(i,j) = d
-                dmat(j,i) = d
-            end do
-        end do
-        !$omp end parallel do
-        call normalize_quality_dmat(dmat, dmat_ok)
-        if( .not. dmat_ok )then
-            cache%decision_mode = CACHE_DECISION_FORCED
-            cache%forced_reason = CACHE_FORCED_FLAT_DMAT
-            deallocate(dmat, feats_fit)
-            return
-        endif
-        nclust = 2
-        call cluster_dmat(dmat, 'kmed', nclust, cache%medoids_fit, cache%labels_fit)
-        if( .not. two_cluster_result_is_valid(nclust, cache%labels_fit, cache%medoids_fit, nfit) )then
-            cache%decision_mode = CACHE_DECISION_FORCED
-            cache%forced_reason = CACHE_FORCED_INVALID_TWO_CLUSTER
-            if( allocated(cache%labels_fit)  ) deallocate(cache%labels_fit)
-            if( allocated(cache%medoids_fit) ) deallocate(cache%medoids_fit)
-            deallocate(dmat, feats_fit)
-            return
-        endif
-        cache%decision_mode = CACHE_DECISION_CLUSTERED
-        score1 = mean_score_for_label(cache%score_fit, cache%labels_fit, 1)
-        score2 = mean_score_for_label(cache%score_fit, cache%labels_fit, 2)
-        if( score1 > score2 + EPS )then
-            cache%good_fit_label = 1
-            cache%bad_fit_label  = 2
-        else if( score2 > score1 + EPS )then
-            cache%good_fit_label = 2
-            cache%bad_fit_label  = 1
-        else
-            call choose_tied_good_label(cache%score_fit, cache%labels_fit, cache%medoids_fit, &
-                cache%good_fit_label, cache%bad_fit_label)
-        endif
-        cache%separation    = abs(score1 - score2)
-        cache%raw_threshold = 0.5 * (mean_score_for_label(cache%score_fit, cache%labels_fit, cache%good_fit_label) + &
-                                     mean_score_for_label(cache%score_fit, cache%labels_fit, cache%bad_fit_label))
-        call otsu_score_threshold(cache%score_fit, cache%otsu_threshold, cache%otsu_separation, cache%otsu_ok)
-        deallocate(dmat, feats_fit)
-    end subroutine build_classify_cache
-
-    subroutine kill_classify_cache( cache )
-        type(cavg_quality_classify_cache), intent(inout) :: cache
-        if( allocated(cache%inds)        ) deallocate(cache%inds)
-        if( allocated(cache%scores)      ) deallocate(cache%scores)
-        if( allocated(cache%score_fit)   ) deallocate(cache%score_fit)
-        if( allocated(cache%hard_reject) ) deallocate(cache%hard_reject)
-        if( allocated(cache%labels_fit)  ) deallocate(cache%labels_fit)
-        if( allocated(cache%medoids_fit) ) deallocate(cache%medoids_fit)
-        if( allocated(cache%score_fit_sorted) ) deallocate(cache%score_fit_sorted)
-        cache%ncls            = 0
-        cache%nfit            = 0
-        cache%decision_mode   = 0
-        cache%forced_reason   = 0
-        cache%good_fit_label  = 0
-        cache%bad_fit_label   = 0
-        cache%separation      = 0.0
-        cache%raw_threshold   = 0.0
-        cache%otsu_threshold  = 0.0
-        cache%otsu_separation = 0.0
-        cache%otsu_ok         = .false.
-    end subroutine kill_classify_cache
-
-    ! Spec-dependent portion of the classification pipeline. Operates on
-    ! a populated cache and a fully configured model and produces the
-    ! same quality result that apply_linear_boundary used to produce.
-    subroutine apply_cached_decision_to_quality( cache, model, quality )
-        type(cavg_quality_classify_cache), intent(in)    :: cache
-        class(cavg_quality_model),         intent(in)    :: model
-        type(cavg_quality_result),         intent(inout) :: quality
-        integer :: ncls, nfit, i, k
-        type(cavg_quality_cached_decision) :: decision
-        ncls = cache%ncls
-        nfit = cache%nfit
-        if( .not. allocated(cache%hard_reject) ) THROW_HARD('apply_cached_decision_to_quality: missing cache hard-reject mask')
-        if( allocated(quality%hard_reject) )then
-            if( size(quality%hard_reject) /= ncls ) &
-                THROW_HARD('apply_cached_decision_to_quality: quality/cache mask size mismatch')
-            if( any(quality%hard_reject .neqv. cache%hard_reject) ) &
-                THROW_HARD('apply_cached_decision_to_quality: quality/cache mask mismatch')
-        else
-            allocate(quality%hard_reject(ncls), source=cache%hard_reject)
-        endif
-        if( allocated(quality%states)  ) deallocate(quality%states)
-        if( allocated(quality%labels)  ) deallocate(quality%labels)
-        if( allocated(quality%medoids) ) deallocate(quality%medoids)
-        if( allocated(quality%scores)  ) deallocate(quality%scores)
-        allocate(quality%states(ncls), quality%labels(ncls), source=0)
-        allocate(quality%scores(ncls), source=0.0)
-        quality%scores = cache%scores
-        quality%threshold        = 0.0
-        quality%raw_threshold    = 0.0
-        quality%threshold_offset = 0.0
-        quality%separation       = 0.0
-        quality%nclust           = 0
-        quality%good_label       = 0
-        quality%used_threshold   = .false.
-        quality%model_name       = model%name
-        quality%soft_decision    = 'hard_only'
-        quality%soft_reason      = 'initial'
-        call prepare_cached_decision(cache, model, decision)
-        select case(cache%decision_mode)
-        case(CACHE_DECISION_EMPTY)
-            quality%soft_reason = decision%soft_reason
-            return
-        case(CACHE_DECISION_FORCED)
-            call accept_fit_as_single_cluster(quality, cache%inds, decision%soft_reason)
-            return
-        case(CACHE_DECISION_CLUSTERED)
-            continue
-        case default
-            THROW_HARD('apply_cached_decision_to_quality: invalid cache decision mode')
-        end select
-        quality%nclust        = 2
-        quality%separation    = cache%separation
-        quality%raw_threshold = cache%raw_threshold
-        quality%labels(cache%inds) = cache%labels_fit
-        allocate(quality%medoids(size(cache%medoids_fit)))
-        do k = 1, size(cache%medoids_fit)
-            quality%medoids(k) = cache%inds(cache%medoids_fit(k))
-        end do
-        if( decision%single_cluster )then
-            call accept_fit_as_single_cluster(quality, cache%inds, decision%soft_reason)
-            return
-        endif
-        quality%threshold        = decision%threshold
-        quality%raw_threshold    = decision%raw_threshold
-        quality%threshold_offset = decision%threshold_offset
-        quality%good_label       = cache%good_fit_label
-        quality%used_threshold   = decision%used_threshold
-        quality%soft_decision    = decision%soft_decision
-        quality%soft_reason      = decision%soft_reason
-        do i = 1, nfit
-            if( cached_score_fit_is_good(cache, i, decision) ) quality%states(cache%inds(i)) = 1
-        end do
-    end subroutine apply_cached_decision_to_quality
-
-    subroutine cached_decision_confusion( cache, model, manual_states, tp, fp, tn, fn )
-        type(cavg_quality_classify_cache), intent(in) :: cache
-        class(cavg_quality_model),         intent(in) :: model
-        integer,                           intent(in) :: manual_states(:)
-        integer,                           intent(out):: tp, fp, tn, fn
-        integer :: i, idx
-        logical :: pred
-        type(cavg_quality_cached_decision) :: decision
-        if( size(manual_states) /= cache%ncls ) &
-            THROW_HARD('cached_decision_confusion: manual-state/cache size mismatch')
-        tp = 0; fp = 0; tn = 0; fn = 0
-        select case(cache%decision_mode)
-        case(CACHE_DECISION_EMPTY)
-            return
-        case(CACHE_DECISION_FORCED)
-            call accumulate_accept_all_confusion(cache, manual_states, tp, fp, tn, fn)
-            return
-        case(CACHE_DECISION_CLUSTERED)
-            continue
-        case default
-            THROW_HARD('cached_decision_confusion: invalid cache decision mode')
-        end select
-        call prepare_cached_decision(cache, model, decision)
-        if( decision%single_cluster )then
-            call accumulate_accept_all_confusion(cache, manual_states, tp, fp, tn, fn)
-            return
-        endif
-        do i = 1, cache%nfit
-            idx = cache%inds(i)
-            pred = cached_score_fit_is_good(cache, i, decision)
-            if( pred )then
-                if( manual_states(idx) > 0 )then
-                    tp = tp + 1
-                else
-                    fp = fp + 1
-                endif
-            else
-                if( manual_states(idx) > 0 )then
-                    fn = fn + 1
-                else
-                    tn = tn + 1
-                endif
-            endif
-        end do
-    end subroutine cached_decision_confusion
-
-    subroutine prepare_cached_decision( cache, model, decision )
-        type(cavg_quality_classify_cache), intent(in)  :: cache
-        class(cavg_quality_model),         intent(in)  :: model
-        type(cavg_quality_cached_decision), intent(out) :: decision
-        integer :: i, min_accept, naccepted
-        real    :: candidate_threshold
-        decision = cavg_quality_cached_decision()
-        select case(cache%decision_mode)
-        case(CACHE_DECISION_EMPTY)
-            decision%soft_reason = 'no_trainable_after_hard'
-            return
-        case(CACHE_DECISION_FORCED)
-            decision%single_cluster = .true.
-            decision%soft_reason    = forced_reason_name(cache%forced_reason)
-            return
-        case(CACHE_DECISION_CLUSTERED)
-            continue
-        case default
-            THROW_HARD('prepare_cached_decision: invalid cache decision mode')
-        end select
-        if( cache%separation < model%min_score_separation )then
-            if( model%use_lowsep_otsu .and. cache%otsu_ok .and. &
-                cache%otsu_separation >= model%min_score_separation )then
-                decision%threshold        = cache%otsu_threshold
-                decision%raw_threshold    = cache%otsu_threshold
-                decision%threshold_offset = 0.0
-                decision%used_threshold   = .true.
-                decision%soft_decision    = 'soft_threshold'
-                decision%soft_reason      = 'lowsep_otsu'
-                call mark_threshold_accepts_all(cache, decision)
-            else
-                decision%single_cluster = .true.
-                decision%soft_reason    = 'low_score_separation'
-            endif
-        else
-            candidate_threshold = cache%raw_threshold - model%boundary_margin
-            decision%threshold  = candidate_threshold
-            decision%raw_threshold = cache%raw_threshold
-            if( model%use_otsu_window .and. cache%otsu_ok .and. &
-                cache%otsu_separation >= model%min_score_separation .and. &
-                cache%otsu_threshold >= cache%raw_threshold + model%otsu_min_offset .and. &
-                cache%otsu_threshold <= cache%raw_threshold + model%otsu_max_offset ) decision%threshold = cache%otsu_threshold
-            decision%use_rescue       = model%use_cluster_rescue
-            decision%rescue_threshold = decision%threshold - model%cluster_rescue_margin
-            if( model%enforce_min_accept_frac )then
-                if( .not. allocated(cache%score_fit_sorted) ) &
-                    THROW_HARD('prepare_cached_decision: missing sorted scores')
-                min_accept = min(cache%nfit, max(1, ceiling(model%min_accept_frac * real(cache%nfit))))
-                naccepted  = 0
-                do i = 1, cache%nfit
-                    if( cached_score_fit_is_good(cache, i, decision) ) naccepted = naccepted + 1
-                end do
-                if( naccepted < min_accept )then
-                    decision%floor_active    = .true.
-                    decision%floor_threshold = cache%score_fit_sorted(cache%nfit - min_accept + 1)
-                    decision%threshold       = min(decision%threshold, decision%floor_threshold)
-                endif
-            endif
-            decision%threshold_offset = decision%raw_threshold - decision%threshold
-            decision%used_threshold   = .true.
-            decision%soft_decision    = 'soft_threshold'
-            if( abs(decision%threshold - cache%otsu_threshold) <= EPS .and. &
-                abs(decision%threshold - candidate_threshold) > EPS )then
-                decision%soft_reason = 'otsu_window'
-            else
-                decision%soft_reason = 'cluster_boundary'
-            endif
-            call mark_threshold_accepts_all(cache, decision)
-        endif
-    end subroutine prepare_cached_decision
-
-    subroutine mark_threshold_accepts_all( cache, decision )
-        type(cavg_quality_classify_cache), intent(in)    :: cache
-        type(cavg_quality_cached_decision), intent(inout) :: decision
-        integer :: i
-        if( .not. decision%used_threshold ) return
-        do i = 1, cache%nfit
-            if( .not. cached_score_fit_is_good(cache, i, decision) ) return
-        end do
-        decision%soft_decision = 'hard_only'
-        decision%soft_reason   = 'soft_threshold_accepts_all'
-    end subroutine mark_threshold_accepts_all
-
-    logical function cached_score_fit_is_good( cache, ifit, decision )
-        type(cavg_quality_classify_cache), intent(in) :: cache
-        integer,                           intent(in) :: ifit
-        type(cavg_quality_cached_decision), intent(in) :: decision
-        cached_score_fit_is_good = cache%score_fit(ifit) >= decision%threshold
-        if( decision%use_rescue .and. cache%labels_fit(ifit) == cache%good_fit_label .and. &
-            cache%score_fit(ifit) >= decision%rescue_threshold ) cached_score_fit_is_good = .true.
-        if( decision%floor_active .and. cache%score_fit(ifit) >= decision%floor_threshold ) &
-            cached_score_fit_is_good = .true.
-    end function cached_score_fit_is_good
-
-    subroutine accumulate_accept_all_confusion( cache, manual_states, tp, fp, tn, fn )
-        type(cavg_quality_classify_cache), intent(in)    :: cache
-        integer,                           intent(in)    :: manual_states(:)
-        integer,                           intent(inout) :: tp, fp, tn, fn
-        integer :: i, idx
-        do i = 1, cache%nfit
-            idx = cache%inds(i)
-            if( manual_states(idx) > 0 )then
-                tp = tp + 1
-            else
-                fp = fp + 1
-            endif
-        end do
-    end subroutine accumulate_accept_all_confusion
-
-    function forced_reason_name( reason ) result( name )
-        integer, intent(in) :: reason
-        character(len=32)   :: name
-        select case(reason)
-        case(CACHE_FORCED_TOO_FEW)
-            name = 'too_few_trainable'
-        case(CACHE_FORCED_FLAT_DMAT)
-            name = 'flat_feature_distances'
-        case(CACHE_FORCED_INVALID_TWO_CLUSTER)
-            name = 'invalid_two_cluster_result'
-        case default
-            name = 'single_cluster'
-        end select
-    end function forced_reason_name
-
-    real function feature_vector_distance( feat1, feat2, weights )
-        real, intent(in) :: feat1(:), feat2(:), weights(:)
-        integer :: ifeat
-        real    :: delta
-        feature_vector_distance = 0.0
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            ! Nonzero weights define both the linear score and the feature set
-            ! allowed to shape k-medoids. Distances are intentionally masked,
-            ! not weight-scaled: sqrt(sum_{w_i>EPS} (a_i - b_i)^2).
-            ! Hard rejections are applied before clustering.
-            if( weights(ifeat) <= EPS ) cycle
-            delta = feat1(ifeat) - feat2(ifeat)
-            feature_vector_distance = feature_vector_distance + delta**2
-        end do
-        feature_vector_distance = sqrt(feature_vector_distance)
-    end function feature_vector_distance
-
-    subroutine accept_fit_as_single_cluster( quality, inds, reason )
-        type(cavg_quality_result), intent(inout) :: quality
-        integer,                   intent(in)    :: inds(:)
-        character(len=*), optional,intent(in)    :: reason
-        if( size(inds) == 0 )then
-            if( allocated(quality%medoids) ) deallocate(quality%medoids)
-            quality%threshold        = 0.0
-            quality%raw_threshold    = 0.0
-            quality%threshold_offset = 0.0
-            quality%nclust           = 0
-            quality%good_label       = 0
-            quality%used_threshold   = .false.
-            quality%soft_decision    = 'hard_only'
-            quality%soft_reason      = 'no_trainable_after_hard'
-            return
-        endif
-        quality%states(inds) = 1
-        quality%labels(inds) = 1
-        if( allocated(quality%medoids) ) deallocate(quality%medoids)
-        allocate(quality%medoids(1), source=inds(1))
-        quality%threshold        = minval(quality%scores(inds)) - EPS
-        quality%raw_threshold    = quality%threshold
-        quality%threshold_offset = 0.0
-        quality%nclust           = 1
-        quality%good_label       = 1
-        quality%used_threshold   = .false.
-        quality%soft_decision    = 'hard_only'
-        if( present(reason) )then
-            quality%soft_reason = reason
-        else
-            quality%soft_reason = 'single_cluster'
-        endif
-    end subroutine accept_fit_as_single_cluster
-
-    logical function two_cluster_result_is_valid( nclust, labels, medoids, nfit )
-        integer,              intent(in) :: nclust, nfit
-        integer, allocatable, intent(in) :: labels(:), medoids(:)
-        two_cluster_result_is_valid = .false.
-        if( nclust /= 2 ) return
-        if( .not. allocated(labels)  ) return
-        if( .not. allocated(medoids) ) return
-        if( size(labels) /= nfit ) return
-        if( size(medoids) < 2 ) return
-        if( count(labels == 1) == 0 .or. count(labels == 2) == 0 ) return
-        two_cluster_result_is_valid = .true.
-    end function two_cluster_result_is_valid
-
-    subroutine choose_tied_good_label( scores, labels, medoids, good_label, bad_label )
-        real,    intent(in)  :: scores(:)
-        integer, intent(in)  :: labels(:), medoids(:)
-        integer, intent(out) :: good_label, bad_label
-        integer :: n1, n2
-        n1 = count(labels == 1)
-        n2 = count(labels == 2)
-        if( n1 > n2 )then
-            good_label = 1
-            bad_label  = 2
-        else if( n2 > n1 )then
-            good_label = 2
-            bad_label  = 1
-        else if( scores(medoids(1)) >= scores(medoids(2)) )then
-            good_label = 1
-            bad_label  = 2
-        else
-            good_label = 2
-            bad_label  = 1
-        endif
-    end subroutine choose_tied_good_label
-
-    subroutine otsu_score_threshold( scores, threshold, separation, ok )
-        real,    intent(in)  :: scores(:)
-        real,    intent(out) :: threshold, separation
-        logical, intent(out) :: ok
-        real, allocatable :: sorted(:), prefix(:)
-        integer :: i, n, nlo, nhi
-        real    :: candidate, mean_lo, mean_hi, between, best_between, total
-        n = size(scores)
-        threshold  = minval(scores) - EPS
-        separation = 0.0
-        ok         = .false.
-        if( n < 4 ) return
-        allocate(sorted(n), prefix(n))
-        sorted = scores
-        call hpsort(sorted)
-        if( sorted(n) - sorted(1) <= EPS )then
-            deallocate(sorted, prefix)
-            return
-        endif
-        prefix(1) = sorted(1)
-        do i = 2, n
-            prefix(i) = prefix(i-1) + sorted(i)
-        end do
-        total = prefix(n)
-        best_between = -huge(1.0)
-        do i = 1, n - 1
-            if( sorted(i+1) - sorted(i) <= EPS ) cycle
-            nlo = i
-            nhi = n - i
-            mean_lo = prefix(i) / real(nlo)
-            mean_hi = (total - prefix(i)) / real(nhi)
-            between = real(nlo) * real(nhi) * (mean_hi - mean_lo)**2
-            if( between > best_between )then
-                best_between = between
-                candidate    = 0.5 * (sorted(i) + sorted(i+1))
-                threshold    = candidate
-                separation   = mean_hi - mean_lo
-                ok           = .true.
-            endif
-        end do
-        deallocate(sorted, prefix)
-    end subroutine otsu_score_threshold
-
-    real function mean_score_for_label( scores, labels, label )
-        real,    intent(in) :: scores(:)
-        integer, intent(in) :: labels(:), label
-        integer             :: n
-        n = count(labels == label)
-        ! Callers validate the two-cluster result before asking for label
-        ! means; the guard keeps this helper safe for future direct use.
-        if( n == 0 ) THROW_HARD('mean_score_for_label: empty cluster')
-        mean_score_for_label = sum(scores, mask=labels == label) / real(n)
-    end function mean_score_for_label
 
 end module simple_cavg_quality_model

@@ -44,7 +44,7 @@ enum, bind(c)
     enumerator :: I_NPEAKS      = 39
     enumerator :: I_LP_EST      = 40
     enumerator :: I_PIND_PREV   = 41
-    enumerator :: I_CC_NONPEAK  = 42 ! unused
+    ! slot 42 is spare (see N_PTCL_ORIPARAMS)
     enumerator :: I_FRAC_GREEDY = 43
     enumerator :: I_BETTER_L    = 44
     enumerator :: I_SAMPLED     = 45
@@ -58,7 +58,16 @@ enum, bind(c)
     enumerator :: I_CFAR                = 53 ! conical FSC area ratio of the state's latest half-map pair
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 53
+! A particle carries the named slots 1-53 in memory (ori%pparms; slot 42 is spare).
+! On disk its record is N_PTCL_RECORD_REALS wide: slots 54-64 are zero padding reserved
+! for later fields, so adding a field does not change the project file's record width,
+! while resident particles pay only for the named slots. Projects written by earlier
+! releases (narrower records) still read, with zeros in the missing slots
+! (simple_binoris). A spare slot has no flag and is never "there".
+integer, parameter :: N_PTCL_ORIPARAMS      = 53
+integer, parameter :: N_PTCL_RECORD_REALS   = 64
+integer, parameter :: I_LAST_NAMED_ORIPARAM = I_CFAR
+integer, parameter :: I_SPARE_ORIPARAM42    = 42
 
 contains
 
@@ -152,8 +161,6 @@ contains
                 get_oriparam_ind = I_LP_EST
             case('pind_prev')
                 get_oriparam_ind = I_PIND_PREV
-            case('cc_nonpeak')
-                get_oriparam_ind = I_CC_NONPEAK ! unused
             case('frac_greedy')
                 get_oriparam_ind = I_FRAC_GREEDY
             case('better_l')
@@ -261,8 +268,6 @@ contains
                 flag = 'lp_est'
             case(I_PIND_PREV)
                 flag = 'pind_prev'
-            case(I_CC_NONPEAK)
-                flag = 'cc_nonpeak' ! unused
             case(I_FRAC_GREEDY)
                 flag = 'frac_greedy'
             case(I_BETTER_L)
@@ -296,6 +301,7 @@ contains
         real, parameter :: TINY = 1e-10
         oriparam_isthere = .false.
         if( ind < 1 .or. ind > N_PTCL_ORIPARAMS ) return
+        if( oriparam_is_spare(ind) ) return
         select case(ind)
             ! these variables cannot be zero if defined
             case(I_CLASS)
@@ -336,8 +342,6 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_PIND_PREV)
                 oriparam_isthere = abs(val) > TINY
-            case(I_CC_NONPEAK)
-                oriparam_isthere = abs(val) > TINY
             case(I_CLUSTER)
                 oriparam_isthere = abs(val) > TINY
             case(I_CLASS_MATCH)
@@ -355,5 +359,11 @@ contains
                 oriparam_isthere = .true.
         end select
     end function oriparam_isthere
+
+    !> a spare slot of the particle record (no field yet)
+    pure logical function oriparam_is_spare( ind )
+        integer, intent(in) :: ind
+        oriparam_is_spare = ind == I_SPARE_ORIPARAM42 .or. ind > I_LAST_NAMED_ORIPARAM
+    end function oriparam_is_spare
 
 end module simple_defs_ori

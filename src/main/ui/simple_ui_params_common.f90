@@ -108,9 +108,6 @@ type(ui_param) :: outside
 type(ui_param) :: outstk
 type(ui_param) :: outvol
 type(ui_param) :: nu_envmsk
-type(ui_param) :: nu_msk_beta
-type(ui_param) :: nu_msk_dens
-type(ui_param) :: nu_msk_rel
 type(ui_param) :: nu_msk_sig
 type(ui_param) :: particle_density
 type(ui_param) :: pcontrast
@@ -586,20 +583,6 @@ subroutine set_ui_params
                                    'Derive an envelope mask from the nonuniform-filter evidence margin(yes|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
-    ! Tuning knobs for nu_filt3D only. Defaults mirror the NU_ENVMASK_* constants
-    ! in simple_nu_filter, which remain authoritative for the refinement path.
-    call nu_msk_beta%set_param(    'nu_msk_beta',     'num',    'NU envelope boundary smoothness', &
-                                   'Binary MRF smoothness of the NU evidence envelope; higher gives smoother boundaries{1.0}', &
-                                   'smoothness{1.0}', .false., 1.0)
-
-    call nu_msk_dens%set_param(    'nu_msk_dens',     'num',    'NU envelope density weight', &
-                                   'Weight of the local density term, which retains strong but poorly ordered density such as a detergent belt{0.0}', &
-                                   'density weight{0.0}', .false., 0.0)
-
-    call nu_msk_rel%set_param(     'nu_msk_rel',      'binary', 'Scale-free NU evidence margin', &
-                                   'Score the cost-improvement ratio rather than the absolute margin, so weak but well-ordered density is not outvoted by a high-contrast core(yes|no){no}','', .false., 'no', &
-    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-
     call nu_msk_sig%set_param(     'nu_msk_sig',      'num',    'NU envelope mask threshold', &
                                    'Evidence threshold in MADs above the solvent null; higher gives a tighter mask{3.0}', &
                                    'in MADs{3.0}', .false., 3.0)
@@ -647,8 +630,8 @@ subroutine set_ui_params
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call picker%set_param(         'picker',          'multi',  'Which picker to use', &
-                                   'Which picker to use(old|new|segdiam){new}','', .false., 'new', &
-    &choices=ui_choices([character(len=7) :: 'old', 'new', 'segdiam']))
+                                   'Which picker to use(new|segdiam){new}','', .false., 'new', &
+    &choices=ui_choices([character(len=7) :: 'new', 'segdiam']))
 
     call pickrefs%set_param(       'pickrefs',        'file',   'Stack of class-averages/reprojections for picking', &
                                    'Stack of class-averages/reprojections for picking', &

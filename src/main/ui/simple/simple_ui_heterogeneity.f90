@@ -258,9 +258,6 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         call refine3D_states%add_input(UI_SRCH, 'local_shift_bound', 'num', 'Local shift bound', &
         &'Advanced override for the automatically derived local translational half-width in pixels', &
         &'pixels (-1=automatic)', .false., -1., group='search', visibility=UI_VIS_DEVELOPER)
-        call refine3D_states%add_input(UI_SRCH, 'inpl_cont', 'binary', 'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', .false., 'yes', group='search', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, pgrp, group='search', visibility=UI_VIS_STANDARD)
         call refine3D_states%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', &
@@ -313,9 +310,6 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         call classify3D_refs%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target per state', &
         &'Particles sampled per iteration per state', 'particles{10000}', .false., 10000., group='search', &
         &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
-        call classify3D_refs%add_input(UI_SRCH, 'inpl_cont', 'binary', 'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', .false., 'yes', group='search', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call classify3D_refs%add_input(UI_SRCH, pgrp, group='search', visibility=UI_VIS_STANDARD)
         call classify3D_refs%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) and map shifts back to particles(yes|no){no}', '', .false., 'no', group='search', &
@@ -352,7 +346,8 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         &'is a program that builds a consensus particle state assignment from a file table of SIMPLE projects &
         &and writes it to the target project ptcl3D field', &           ! help
         &'simple_exec',&                                                ! executable
-        &.true.)                                                        ! requires sp_project
+        &.true., &
+        &display_name='Particle State Consensus')                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ptcl3D_state_consensus%add_input(UI_FILE, projtab,&

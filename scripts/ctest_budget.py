@@ -11,7 +11,7 @@ Writes every entry sorted by time next to the log as <log>.timing.txt, so the
 numbers are kept from build to build and a suite that grows is visible, and
 prints the same table unless --quiet is given. With --quiet (the compile
 scripts) a passing run within budget prints nothing, so what the developer
-sees is ctest's own report, as in X; the table and the problems are printed
+sees is ctest's own report; the table and the problems are printed
 only when there is something to fix. Exits 1 on a failed entry or a run over
 budget, 2 if the log holds no ctest results.
 

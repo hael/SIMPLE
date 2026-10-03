@@ -1,7 +1,6 @@
 !@descr: unit tests for the queue-system environment's installation-path policy and particle partitions (simple_qsys_env, simple_map_reduce, sp_project%update_compenv)
-! A stored simple_path is runtime-local: update_compenv drops it, and a distributed run takes the
-! environment's SIMPLE_PATH (set by CTest) for its queue description and executable, never the
-! project's; an empty project gets the minimum job time. Partitions given an active-particle mask
+! The installation path is runtime-local: a distributed run takes the environment's SIMPLE_PATH
+! (set by CTest) for its queue description and executable, never a simple_path a project carries; an empty project gets the minimum job time. Partitions given an active-particle mask
 ! stay contiguous and balance the active particles (split_nobjs_active).
 module simple_qsys_env_tester
 use simple_core_module_api
@@ -14,7 +13,7 @@ implicit none
 private
 public :: run_all_qsys_env_tests
 
-character(len=*), parameter :: LEGACY_SIMPLE_PATH = '/remote/install/that/is/not/local'
+character(len=*), parameter :: FOREIGN_SIMPLE_PATH = '/remote/install/that/is/not/local'
 
 contains
 
@@ -35,16 +34,13 @@ contains
         write(*,'(A)') 'test_installation_path_policy'
         projfile = 'test_qsys_env_path_policy.simple'
         call del_file(projfile)
-        ! updating project metadata strips the installation path left by an older project
+        ! a project carrying a foreign installation path: distributed execution must ignore it
         call project%projinfo%new(1, is_ptcl=.false.)
         call project%projinfo%set(1, 'projname', 'test_qsys_env_path_policy')
         call project%compenv%new(1, is_ptcl=.false.)
-        call project%compenv%set(1, 'simple_path', LEGACY_SIMPLE_PATH)
         call cline%set('qsys_name', 'local')
         call project%update_compenv(cline)
-        call assert_false(project%compenv%isthere('simple_path'), 'update_compenv drops the runtime-local simple_path')
-        ! a legacy project: distributed execution must ignore its stored path
-        call project%compenv%set(1, 'simple_path', LEGACY_SIMPLE_PATH)
+        call project%compenv%set(1, 'simple_path', FOREIGN_SIMPLE_PATH)
         call project%write(projfile)
         local_simple_path = simple_getenv('SIMPLE_PATH', iostat)
         call assert_int(0, iostat, 'SIMPLE_PATH is set in the test environment')

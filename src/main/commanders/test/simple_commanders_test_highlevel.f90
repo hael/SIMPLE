@@ -2,16 +2,15 @@
 module simple_commanders_test_highlevel
 use simple_commanders_api
 use simple_stream_api
-use simple_commanders_project_core, only: commander_new_project, commander_selection
+use simple_commanders_project_core, only: commander_new_project
 use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_reproject,    only: commander_reproject
 use simple_commanders_pick,         only: commander_pick, commander_extract
 use simple_commanders_sim,          only: commander_simulate_particles, commander_simulate_movie
-use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct, commander_preprocess
+use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct
 use simple_commanders_solve2D,      only: commander_solve2D
 use simple_commanders_solve3D,      only: commander_solve3D
 use simple_test_utils,              only: set_fixed_seed
-use simple_micproc,                 only: sample_filetab
 use simple_commanders_validate,     only: commander_mini_stream
 implicit none
 #include "simple_local_flags.inc"
@@ -80,149 +79,6 @@ type backends_run_summary
 end type backends_run_summary
 
 contains
-
-subroutine exec_test_mini_stream_legacy( self, cline )
-    class(commander_test_mini_stream),  intent(inout) :: self
-    class(cmdline),                     intent(inout) :: cline
-    real,         parameter       :: CTFRES_THRES = 8.0, ICE_THRES = 1.0, OVERSHOOT = 1.2
-    type(string), allocatable     :: dataset_cmds(:)
-    type(string), allocatable     :: micstab(:), filetab(:), movfnames(:)
-    type(string)                  :: output_dir, imgkind
-    integer,      allocatable     :: orimap(:)
-    type(cmdline)                 :: cline_dataset, cline_new_project, cline_import_movies, cline_preprocess
-    type(cmdline)                 :: cline_select, cline_mini_stream
-    type(parameters)              :: params
-    type(commander_new_project)   :: xnew_project
-    type(commander_preprocess)    :: xpreprocess
-    type(commander_import_movies) :: ximport_movies
-    type(commander_mini_stream)   :: xmini_stream
-    type(commander_selection)     :: xsel
-    type(sp_project)              :: spproj
-    type(stream_watcher)          :: movie_buff
-    integer                       :: i, ndata_sets, n_nonzero, nmovf
-    type(string)                  :: abspath, projfile
-    character(len=*), parameter   :: filetab_file='filetab.txt'
-    call cline%checkvar('fname',        1)
-    call cline%check()
-    call params%new(cline)
-    call read_filetable(params%fname, dataset_cmds)
-    ndata_sets=size(dataset_cmds)
-    ! projname=system_name smpd=1.3 cs=2.7 kv=300 fraca=0.1 total_dose=53 dir_movies=/usr/local/data/movies gainref=gainref.mrc nparts=4 nthr=16 moldiam_max=200 nram=100
-    call simple_getcwd(abspath)
-    output_dir=abspath
-    do i = 1, ndata_sets
-        call cline_dataset%read(dataset_cmds(i)%to_char())
-        call cline_dataset%checkvar('projname',        1)
-        call cline_dataset%checkvar('smpd',            2)
-        call cline_dataset%checkvar('cs',              3)
-        call cline_dataset%checkvar('kv',              4)
-        call cline_dataset%checkvar('fraca',           5)
-        call cline_dataset%checkvar('total_dose',      6)
-        call cline_dataset%checkvar('dir_movies',      7)
-        call cline_dataset%checkvar('gainref',         8)
-        call cline_dataset%checkvar('nparts',          9)
-        call cline_dataset%checkvar('nthr',           10)
-        call cline_dataset%checkvar('moldiam_max',    11)
-        call cline_dataset%checkvar('nran',           12)
-        call cline_dataset%check()
-        call params%new(cline_dataset)
-        call cline_dataset%kill()
-        ! project creation
-        call cline_new_project%set('projname',  params%projname)
-        call xnew_project%execute(cline_new_project)
-        call cline_new_project%kill()
-        projfile = params%projname//'.simple'
-        ! create filetab with a subset of overshoot randomly selected movies
-        movie_buff = stream_watcher(1,params%dir_movies)
-        call movie_buff%watch(nmovf, movfnames)
-        call movie_buff%kill
-        filetab = sample_filetab(movfnames, ceiling(real(params%nran)*OVERSHOOT))
-        call write_filetable(string(filetab_file), filetab)
-        ! movie import
-        call cline_import_movies%set('prg',                'import_movies')
-        call cline_import_movies%set('mkdir',                        'yes')
-        call cline_import_movies%set('cs',                       params%cs)
-        call cline_import_movies%set('fraca',                 params%fraca)
-        call cline_import_movies%set('kv',                       params%kv)
-        call cline_import_movies%set('smpd',                   params%smpd)
-        call cline_import_movies%set('filetab',               filetab_file)
-        call cline_import_movies%set('ctf',                          'yes')
-        call ximport_movies%execute(cline_import_movies)
-        call cline_import_movies%kill()
-        ! check either movies or micrographs
-        call spproj%read(projfile)
-        imgkind = spproj%get_mic_kind(1)
-        if( imgkind.eq.'intg' )then
-            ! nothing to do
-        else
-            ! preprocess
-            call simple_chdir(output_dir//'/'//params%projname%to_char())
-            call cline_preprocess%set('prg',                  'preprocess')
-            call cline_preprocess%set('mkdir',                       'yes')
-            call cline_preprocess%set('gainref',            params%gainref)
-            call cline_preprocess%set('total_dose',      params%total_dose)
-            call cline_preprocess%set('dfmin',               DFMIN_DEFAULT)
-            call cline_preprocess%set('dfmax',               DFMAX_DEFAULT)
-            call cline_preprocess%set('hp',                            30.)
-            call cline_preprocess%set('lp',                             2.)
-            call cline_preprocess%set('mcpatch',                      'no')
-            call cline_preprocess%set('nparts',              params%nparts)
-            call cline_preprocess%set('nthr',                  params%nthr)
-            call cline_preprocess%check()
-            call xpreprocess%execute(cline_preprocess)
-            call cline_preprocess%kill()
-        endif
-        ! reject based on CTF resolution and ice score
-        call simple_chdir(output_dir//'/'//params%projname%to_char())
-        call cline_select%set('prg',                           'selection')
-        call cline_select%set('mkdir',                               'yes')
-        call cline_select%set('oritype',                             'mic')
-        call cline_select%set('ctfresthreshold',              CTFRES_THRES)
-        call cline_select%set('icefracthreshold',                ICE_THRES)
-        call xsel%execute(cline_select)
-        call cline_select%kill()
-        ! state=0/1 should now be in project file on disk
-        ! re-run for random selection
-        call spproj%read(projfile)
-        n_nonzero = spproj%get_n_insegment_state('mic', 1)
-        if( n_nonzero > params%nran )then
-            ! make random selection
-            call simple_chdir(output_dir//'/'//params%projname%to_char())
-            call cline_select%delete('ctfresthreshold')
-            call cline_select%delete('icefracthreshold')
-            call cline_select%set('prg',                       'selection')
-            call cline_select%set('mkdir',                           'yes') 
-            call cline_select%set('oritype',                         'mic')
-            call cline_select%set('nran',                      params%nran)
-            call xsel%execute(cline_select)
-            call cline_select%kill()
-        endif
-        call spproj%read(projfile)
-        call spproj%get_mics_table(micstab, orimap)
-        call simple_chdir(output_dir//'/'//params%projname%to_char())
-        call write_filetable(string('intgs.txt'),micstab)
-        ! mini stream 
-        call cline_mini_stream%set('prg',                    'mini_stream')
-        call cline_mini_stream%set('mkdir',                          'yes')
-        call cline_mini_stream%set('filetab',                  'intgs.txt')
-        call cline_mini_stream%set('smpd',                     params%smpd)
-        call cline_mini_stream%set('fraca',                   params%fraca)
-        call cline_mini_stream%set('kv',                         params%kv)
-        call cline_mini_stream%set('cs',                         params%cs)
-        call cline_mini_stream%set('moldiam_max',       params%moldiam_max)
-        call cline_mini_stream%set('nparts',                 params%nparts)
-        call cline_mini_stream%set('nthr',                     params%nthr)
-        call xmini_stream%execute(cline_mini_stream)
-        call cline_dataset%kill()
-        call cline_new_project%kill()
-        call cline_import_movies%kill()
-        call cline_preprocess%kill()
-        call cline_mini_stream%kill()
-        call cline_dataset%kill()
-        call simple_chdir(output_dir)
-    enddo
-    call simple_end('**** SIMPLE_TEST_MINI_STREAM_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_mini_stream_legacy
 
 subroutine exec_test_mini_stream_quantitative( self, cline )
     use simple_atoms,         only: atoms
@@ -1684,7 +1540,7 @@ subroutine exec_test_pcg_recon( self, cline )
                 write(logfhandle,'(a)') '    PASS: streaming accumulation reproduces the monolithic solve'
             endif
         end do
-        ! The command's DEFAULT is pcgop=kernel, which reaches the kernel through
+        ! Production always uses the kernel operator, which reaches it through
         ! end_accum(.true.) -- a branch the runs above never touch, since they
         ! pass .false. Deriving Khat from a streamed accumulator must match
         ! deriving it from a monolithic one, or the default path is untested.
@@ -2791,7 +2647,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     use simple_sp_project,      only: sp_project
     use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_state_vol_fbody, &
         &refine3D_state_halfvol_fname
-    use simple_gridding,        only: kb_stencil_envelope_1d
     class(cmdline),              intent(inout) :: cline
     type(backends_run_summary),  intent(out)   :: summary
     logical,                     intent(in)    :: l_abort_on_fail
@@ -2803,15 +2658,14 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     type(image)           :: vols(2)
     type(string)          :: projfile, vol_fname, out_fnames(2)
     real,    allocatable  :: spec(:,:), spec_tmp(:), corrs(:), radprof(:,:), ratios(:)
-    real,    allocatable  :: env_nat(:), env_leg(:), tprof(:,:), fscs(:)
+    real,    allocatable  :: tprof(:,:), fscs(:)
     integer               :: nfail, nfsc, kgate
     real                  :: med_fsc, tg
     integer, allocatable  :: radcnt(:)
     real,    pointer      :: rmat(:,:,:) => null()
-    type(image)           :: truth, tvols(3)
-    type(kbinterpol)      :: kbwin
+    type(image)           :: truth, tvols(2)
     type(string)          :: truth_fname, exec_dir, dirbody
-    real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, e0, bg, hp_here
+    real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, bg, hp_here
     real    :: r05_tmp, r0143_tmp
     real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
     type(string)          :: cwd_orig
@@ -2935,8 +2789,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     mskrad  = 0.5 * cline%get_rarg('mskdiam') / smpd_out
     nrb_msk = max(1, min(NRBINS, int(mskrad / rbin_width) + 1))
     ! ground-truth mode: radial |rho| profiles against a known volume (synthetic data),
-    ! all maps low-passed identically; includes the gridding map re-deapodized with the
-    ! legacy padded-period instrument function so before/after is visible in one run
+    ! all maps low-passed identically
     l_truth = cline%defined('vol1')
     if( l_truth )then
         truth_fname = cline%get_carg('vol1')
@@ -2948,24 +2801,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         if( cline%defined('hp') ) hp_here = cline%get_rarg('hp')
         call tvols(1)%copy(vols(1))
         call tvols(2)%copy(vols(2))
-        call tvols(3)%copy(vols(1))
-        ! legacy correction: continuous KB instrument function at 1/(2*box); native: discrete stencil, period box
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        call kb_stencil_envelope_1d(kbwin, ldim(1), env_nat)
-        allocate(env_leg(ldim(1)))
-        e0 = kbwin%instr(0.)
-        do i = 1, ldim(1)
-            env_leg(i) = kbwin%instr(real(i - c(1)) / real(2*ldim(1))) / e0
-        enddo
-        call tvols(3)%get_rmat_ptr(rmat)
-        do l = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
-                    rmat(i,j,l) = rmat(i,j,l) * (env_nat(i)*env_nat(j)*env_nat(l)) / (env_leg(i)*env_leg(j)*env_leg(l))
-                enddo
-            enddo
-        enddo
-        nullify(rmat)
         ! Fourier-shell comparison against the truth: background (mean outside the mask)
         ! removed, then soft-masked, unfiltered. Without the background removal a map
         ! with a non-zero solvent level (gridding; PCG's support-masked map has none)
@@ -3001,7 +2836,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         call tvols(2)%copy(vols(2))
         if( lp_here > 0. .or. hp_here > 0. )then
             call truth%bp(hp_here, lp_here)
-            do it = 1, 3
+            do it = 1, 2
                 call tvols(it)%bp(hp_here, lp_here)
             enddo
         endif
@@ -3010,28 +2845,28 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         call truth%get_rmat_ptr(rmat)
         bg = background_mean(rmat)
         rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = rmat(1:ldim(1),1:ldim(2),1:ldim(3)) - bg
-        allocate(tprof(NRBINS,4), source=0.)
-        do it = 1, 3
+        allocate(tprof(NRBINS,2), source=0.)
+        do it = 1, 2
             call tvols(it)%get_rmat_ptr(rmat)
             bg   = background_mean(rmat)
             rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = rmat(1:ldim(1),1:ldim(2),1:ldim(3)) - bg
             nullify(rmat)
         enddo
         call truth%get_rmat_ptr(rmat)
-        do it = 1, 3
+        do it = 1, 2
             call ls_scale_profile(tvols(it), rmat, tprof(:,it))
         enddo
         nullify(rmat)
         write(logfhandle,'(A)') '>>> REC3D BACKENDS: TRUTH TABLE (per-shell LS scale recon/truth after background removal, normalised to bin 2; hp '//&
-            &real2str_trim(hp_here)//' lp '//real2str_trim(lp_here)//' A)  bin  r_lo-r_hi(px)  gridding  gridding_legacy_deapod  pcg'
+            &real2str_trim(hp_here)//' lp '//real2str_trim(lp_here)//' A)  bin  r_lo-r_hi(px)  gridding  pcg'
         do irb = 1, NRBINS
-            write(logfhandle,'(A,I4,F7.1,A,F6.1,3F12.4,A)') '>>> REC3D BACKENDS: TRUTH ', irb, &
+            write(logfhandle,'(A,I4,F7.1,A,F6.1,2F12.4,A)') '>>> REC3D BACKENDS: TRUTH ', irb, &
                 &real(irb-1)*rbin_width, ' -', real(irb)*rbin_width, &
-                &safe_ratio(tprof(irb,1), tprof(2,1)), safe_ratio(tprof(irb,3), tprof(2,3)), &
+                &safe_ratio(tprof(irb,1), tprof(2,1)), &
                 &safe_ratio(tprof(irb,2), tprof(2,2)), merge('  (inside mask)', '               ', irb <= nrb_msk)
         enddo
         call truth%kill
-        do it = 1, 3
+        do it = 1, 2
             call tvols(it)%kill
         enddo
     endif

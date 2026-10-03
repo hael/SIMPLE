@@ -25,7 +25,8 @@ subroutine new_check_refpick( prgtab )
         &'validation of reference-based picking',&                   ! summary
         &'is a program for validation of reference-based picking',&  ! help
         &'simple_exec',&                                             ! executable
-        &.false.)                                                    ! requires sp_project
+        &.false., &
+        &display_name='Validate Reference-Based Picking')                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call check_refpick%add_input(UI_FILE, 'filetab', 'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '', &
@@ -93,7 +94,8 @@ subroutine new_check_refpick( prgtab )
         &'is a program for doing a standalone mini_stream for a quick look',&  ! help
         &'simple_exec',&                                ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                       ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Mini Stream Quick Look')                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call mini_stream%add_input(UI_FILE, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '', &
@@ -158,7 +160,8 @@ subroutine new_check_refpick( prgtab )
         &'Validate an atomic model against an experimental density map',& ! summary
         &'is a program to validate the PDB atomic model given a 3D experimental density map in MRC',& ! descr long
         &'simple_exec',&                                                                              ! executable
-        &.false.)                                                                                     ! requires sp_project
+        &.false., &
+        &display_name='Validate an Atomic Model') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call model_validate%add_input(UI_IMG, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '', &

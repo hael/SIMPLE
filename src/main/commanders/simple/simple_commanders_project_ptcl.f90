@@ -333,7 +333,6 @@ contains
                 write(logfhandle,'(A)') '>>> reimport_particles: pruning state=0 particles to match input stack size'
                 call spproj%prune_particles
                 call spproj%map_ptcls_state_to_cls
-                nstks = spproj%os_stk%get_noris()
             else
                 THROW_HARD('Incompatible nptcls between input stack and project ptcl2D (total/active); reimport_particles')
             endif
@@ -366,10 +365,15 @@ contains
         spproj%os_ptcl3D = os_ptcl3D_tmp
         call os_ptcl2D_tmp%kill
         call os_ptcl3D_tmp%kill
-        if( nstks > 1 )then
-            if( spproj%os_ptcl2D%get_noris() > 0 ) call spproj%os_ptcl2D%set_all2single('stkind', 1)
-            if( spproj%os_ptcl3D%get_noris() > 0 ) call spproj%os_ptcl3D%set_all2single('stkind', 1)
-        endif
+        ! the new stack holds one image per particle, in project order
+        do iptcl = 1,spproj%os_ptcl2D%get_noris()
+            call spproj%os_ptcl2D%set_stkind(iptcl, 1)
+            call spproj%os_ptcl2D%set(iptcl, 'indstk', iptcl)
+        enddo
+        do iptcl = 1,spproj%os_ptcl3D%get_noris()
+            call spproj%os_ptcl3D%set_stkind(iptcl, 1)
+            call spproj%os_ptcl3D%set(iptcl, 'indstk', iptcl)
+        enddo
         call spproj%write(params%projfile)
         call simple_end('**** REIMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_reimport_particles
@@ -516,10 +520,8 @@ contains
         call qenv%new(params, nparts)
         ! prepare job description
         call cline_distr%gen_job_descr(job_descr)
-        ! Remove legacy unpadded part documents as well as current padded names.
-        ! qsys_cleanup only knows about padded names once nparts >= 10.
+        ! remove part documents left by an earlier attempt
         do ipart = 1,nparts
-            call del_file(ALGN_FBODY//int2str(ipart)//METADATA_EXT)
             call del_file(ALGN_FBODY//int2str_pad(ipart,numlen)//METADATA_EXT)
         enddo
         ! schedule & clean
@@ -703,7 +705,7 @@ contains
         nstks = count(stks_mask)
         nstks_part = count(stks_mask(params%fromp:params%top))
         if( nstks_part == 0 )then
-            call qsys_job_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
+            call qsys_declare_part_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
             return
         endif
         call spproj_out%os_stk%new(nstks_part, is_ptcl=.false.)
@@ -797,7 +799,7 @@ contains
         call img%kill
         call o_stk%kill
         ! end gracefully
-        call qsys_job_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
+        call qsys_declare_part_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
     end subroutine exec_prune_project
 
     subroutine exec_scale_project( self, cline )

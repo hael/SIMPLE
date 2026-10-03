@@ -28,7 +28,8 @@ contains
         &'is a program for 2D ICM denoising of even/odd image stacks',&             ! help
         &'simple_exec',&                                                            ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                   ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Denoise 2D Images with ICM') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call icm2D%add_input(UI_IMG, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '', &
@@ -63,7 +64,8 @@ contains
         &'is a program for 3D nonuniform filtering by Iterated Conditional Modes',& ! help
         &'simple_exec',&                                                            ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                   ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Denoise a Volume with ICM') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call icm3D%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
@@ -99,7 +101,8 @@ contains
         &'is a program for ppca-based denoising of an image stack',&  ! help
         &'simple_exec',&                              ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                     ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Denoise Images with PPCA')                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ppca_denoise%add_input(UI_IMG, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '', &
@@ -173,7 +176,8 @@ contains
         &'is a program for ppca-based denoising of image classes',&  ! help
         &'simple_exec',&                              ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                      ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Denoise Class Averages with PPCA')                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

@@ -1,12 +1,12 @@
 !@descr: unit tests for the identity of the 3D trailing chains: gridding manifest and PCG chain header
 ! Both chains record the population they represent, M(s): the gridding manifest in a versioned
-! field, the PCG chain in the particle count of each half's raw header. A chain written by an
-! older build, without it, is refused and re-seeded.
+! field, the PCG chain in the particle count of each half's raw header. A chain of any other
+! version is refused and re-seeded.
 module simple_trail_chain_manifest_tester
 use simple_core_module_api
 use simple_test_utils
 use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, &
-                                      &TRAIL_MANIFEST_UNREADABLE, TRAIL_MANIFEST_OLD_FORMAT
+                                      &TRAIL_MANIFEST_UNREADABLE
 use simple_reconstructor_pcg,    only: reconstructor_pcg, pcg_raw_accum_compatible, read_pcg_raw_accum_header
 implicit none
 private
@@ -41,12 +41,12 @@ contains
         call assert_int(7,     back%get_gen(),     'manifest round trip: generation')
         call assert_true(back%get_size(3) == 1025_8, 'manifest round trip: component size')
         call assert_real(10815., back%get_mrep(), 1.e-3, 'manifest round trip: represented population M(s)')
-        ! the version-1 manifest of an older build (no represented population)
+        ! a manifest of another version (here the version-1 layout) is unreadable
         open(newunit=funit, file=fname%to_char(), status='replace', action='write')
         write(funit,*) 88, 2.9464285, 33016, 3, 2, 7, sizes
         close(funit)
         call back%read(fname, status)
-        call assert_int(TRAIL_MANIFEST_OLD_FORMAT, status, 'manifest: an older-format chain is refused (re-seeded)')
+        call assert_int(TRAIL_MANIFEST_UNREADABLE, status, 'manifest: another version is refused (re-seeded)')
         ! garbage and absence
         open(newunit=funit, file=fname%to_char(), status='replace', action='write')
         write(funit,'(A)') 'not a manifest'

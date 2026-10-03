@@ -6,7 +6,7 @@ use simple_builder,              only: builder
 use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
-use simple_matcher_3Drec,        only: calc_3Drec, calc_projdir3Drec
+use simple_matcher_3Drec,        only: calc_3Drec
 use simple_commanders_rec_distr, only: commander_volassemble, filter_pcg_nonuniform_maps
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, &
     &refine3D_pcg_raw_accum_fname
@@ -210,14 +210,7 @@ contains
                 &l_sigma_loaded)
             if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
         endif
-        ! Legacy handshake for rec-writing helpers that still inspect this key.
-        ! The strategy owns the actual assembly dispatch decision.
-        call cline%set('force_volassemble', 'yes')
-        if( trim(params%projrec) == 'yes' )then
-            call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
-        else
-            call calc_3Drec(params, build, cline, nptcls2update, pinds)
-        endif
+        call calc_3Drec(params, build, nptcls2update, pinds)
         cline_volassemble = cline
         call cline_volassemble%set('prg',  'volassemble')
         call cline_volassemble%set('nthr', params%nthr)
@@ -236,7 +229,6 @@ contains
             params%vols(state) = volname
             call cline%set('vol'//int2str(state), volname)
         end do
-        call cline%delete('force_volassemble')
         call cline_volassemble%kill
         if( allocated(pinds) ) deallocate(pinds)
     end subroutine inmem_execute
@@ -277,7 +269,7 @@ contains
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, build, cline)
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs, only: qsys_declare_part_finished
         class(rec3D_inmem_strategy), intent(inout) :: self
         type(parameters),            intent(in)    :: params
         type(builder),               intent(inout) :: build
@@ -285,7 +277,7 @@ contains
         call build%esig%kill
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_rec3D_strategy :: exec_rec3D'))
+        call qsys_declare_part_finished(params, string('simple_rec3D_strategy :: exec_rec3D'))
     end subroutine inmem_cleanup
 
     ! =====================================================================

@@ -347,8 +347,8 @@ contains
     ! -------------------------------------------------------------------------
     ! write_ptcl2D_table: write the 'particles' STAR block to ftmp (serial).
     ! Particles with state == 0 or invalid stkind are skipped.
-    ! indstk is taken from ptcl2d_oris when present, otherwise computed from
-    ! the stack's [fromp, top] range stored in stk_oris.
+    ! indstk (the physical index in the stack) is taken from ptcl2d_oris;
+    ! the caller guarantees it is present.
     ! When mics_oris is present and size matches stk_oris, the micrograph name
     ! is written for each particle.
     ! -------------------------------------------------------------------------
@@ -357,7 +357,7 @@ contains
         class(oris),           intent(in)    :: ptcl2d_oris, stk_oris
         class(oris), optional, intent(in)    :: mics_oris
         type(starfile_table_type)            :: ptcl_table
-        integer                              :: iptcl, pathtrim, half_boxsize, stkind, indstk, fromp, top
+        integer                              :: iptcl, pathtrim, half_boxsize, stkind, indstk
         character(len=XLONGSTRLEN)           :: stkname, micname
         integer(timer_int_kind)              :: ms0 = 0_timer_int_kind
         real(timer_int_kind)                 :: ms_complete
@@ -370,15 +370,7 @@ contains
             if( ptcl2d_oris%get_state(iptcl) == 0 ) cycle
             stkind = ptcl2d_oris%get_int(iptcl, 'stkind')
             if( stkind <= 0 ) cycle
-            ! Resolve within-stack index
-            if( ptcl2d_oris%isthere(iptcl, 'indstk') ) then
-                indstk = ptcl2d_oris%get_int(iptcl, 'indstk')
-            else
-                fromp = stk_oris%get_fromp(stkind)
-                top   = stk_oris%get_top(stkind)
-                if( iptcl < fromp .or. iptcl > top ) cycle
-                indstk = iptcl - fromp + 1
-            end if
+            indstk = ptcl2d_oris%get_int(iptcl, 'indstk')   ! physical index in the stack
             call starfile_table__addObject(ptcl_table)
             half_boxsize = floor(stk_oris%get(stkind, 'box') / 2.0)
             ! ints
@@ -457,7 +449,7 @@ contains
         type(starfile_table_type)            :: part_table
         integer, allocatable                 :: part_boundaries(:,:)
         character(len=XLONGSTRLEN)           :: micname, str_stk
-        integer                              :: ipart, iptcl, pathtrim, half_boxsize, stkind, indstk, fromp, top, nobj
+        integer                              :: ipart, iptcl, pathtrim, half_boxsize, stkind, indstk, nobj
         integer(timer_int_kind)              :: ms0 = 0_timer_int_kind
         real(timer_int_kind)                 :: ms_complete
         logical                              :: header_written
@@ -483,7 +475,7 @@ contains
         ! --- Parallel ordered write -------------------------------------------
         header_written = .false.
         !$omp parallel do ordered default(shared) &
-        !$omp   private(ipart, iptcl, part_table, half_boxsize, stkind, indstk, fromp, top, pathtrim, nobj, str_stk, micname) &
+        !$omp   private(ipart, iptcl, part_table, half_boxsize, stkind, indstk, pathtrim, nobj, str_stk, micname) &
         !$omp   proc_bind(close)
         do ipart = 1, size(part_boundaries, 1)
             if( part_boundaries(ipart,1) > part_boundaries(ipart,2) ) cycle
@@ -496,15 +488,7 @@ contains
                 if( ptcl2d_oris%get_state(iptcl) == 0 ) cycle
                 stkind = ptcl2d_oris%get_int(iptcl, 'stkind')
                 if( stkind <= 0 ) cycle
-                ! Resolve within-stack index
-                if( ptcl2d_oris%isthere(iptcl, 'indstk') ) then
-                    indstk = ptcl2d_oris%get_int(iptcl, 'indstk')
-                else
-                    fromp = stk_oris%get_fromp(stkind)
-                    top   = stk_oris%get_top(stkind)
-                    if( iptcl < fromp .or. iptcl > top ) cycle
-                    indstk = iptcl - fromp + 1
-                end if
+                indstk = ptcl2d_oris%get_int(iptcl, 'indstk')   ! physical index in the stack
                 call starfile_table__addObject(part_table)
                 nobj = nobj + 1
                 half_boxsize = floor(stk_oris%get(stkind, 'box') / 2.0)

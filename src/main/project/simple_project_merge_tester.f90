@@ -1,6 +1,6 @@
 !@descr: unit tests for SIMPLE project merging
 module simple_project_merge_tester
-use simple_projfile_utils, only: merge_selected_project_files, validate_and_repair_project_file, remap_project_paths
+use simple_projfile_utils, only: merge_selected_project_files, fix_project_file, remap_project_paths
 use simple_sp_project,     only: sp_project
 use simple_fileio,         only: filepath
 use simple_string,         only: string
@@ -16,7 +16,9 @@ contains
     subroutine run_all_project_merge_tests()
         write(*,'(A)') '**** running all project merge tests ****'
         call test_merge_pruned_stack_indexing_heterogeneous_ctf()
-        call test_validate_projfile_normalizes_legacy_stack_indices()
+        call test_fix_projfile_repairs_unpruned_legacy_stack()
+        call test_fix_projfile_repairs_wrong_segment_stkind()
+        call test_fix_projfile_refuses_particles_without_stacks()
         call test_remap_project_paths()
         call test_remap_project_paths_allows_unmatched_scope()
         call test_remap_project_paths_scoped_roots()
@@ -28,10 +30,9 @@ contains
         type(string), allocatable :: project_files(:)
         type(string) :: projfile1, projfile2, merged_file
         integer, parameter :: NPTCLS1 = 3, NPTCLS2 = 2, NCLS = 2
-        integer, parameter :: NPTCLS_STK1 = 6, NPTCLS_STK2 = 0
+        integer, parameter :: NPTCLS_STK1 = 6, NPTCLS_STK2 = 4
         integer, parameter :: INDSTKS1(NPTCLS1) = [1, 4, 6]
-        integer, parameter :: INDSTKS2(NPTCLS2) = [99, 2]
-        integer, parameter :: MAPPED_INDSTKS2(NPTCLS2) = [1, 2]
+        integer, parameter :: INDSTKS2(NPTCLS2) = [4, 2]
         integer :: i, stkind, ind_in_stk
         write(*,'(A)') 'test_merge_pruned_stack_indexing_heterogeneous_ctf'
         projfile1   = 'merge_project_src1.simple'
@@ -42,7 +43,6 @@ contains
             [1, 1, 1], [1, 2, 1], INDSTKS1, 1)
         call make_project(proj2, projfile2, NPTCLS2, NPTCLS_STK2, NCLS, 300.0, 2.7, 0.10, &
             [1, 1], [1, 2], INDSTKS2, 1)
-        call assert_false(proj2%os_stk%isthere(1, 'nptcls_stk'), 'project 2 source lacks nptcls_stk')
         allocate(project_files(2))
         project_files(1) = projfile1
         project_files(2) = projfile2
@@ -68,6 +68,7 @@ contains
         call assert_int(NPTCLS1, reread%os_stk%get_int(1, 'nptcls'), 'project 1 project particle count')
         call assert_int(NPTCLS_STK1, reread%os_stk%get_int(1, 'nptcls_stk'), 'project 1 physical stack count')
         call assert_int(NPTCLS2, reread%os_stk%get_int(2, 'nptcls'), 'project 2 project particle count')
+        call assert_int(NPTCLS_STK2, reread%os_stk%get_int(2, 'nptcls_stk'), 'project 2 physical stack count')
         call assert_int(1, reread%os_stk%get_fromp(1), 'project 1 stack fromp')
         call assert_int(NPTCLS1, reread%os_stk%get_top(1), 'project 1 stack top')
         call assert_int(NPTCLS1 + 1, reread%os_stk%get_fromp(2), 'project 2 stack fromp remapped')
@@ -85,14 +86,14 @@ contains
         do i = 1,NPTCLS2
             call assert_int(2, reread%os_ptcl2D%get_int(NPTCLS1 + i, 'stkind'), &
                 &'project 2 particle stkind range remapped')
-            call assert_int(MAPPED_INDSTKS2(i), reread%os_ptcl2D%get_int(NPTCLS1 + i, 'indstk'), &
-                &'project 2 legacy indstk normalized')
+            call assert_int(INDSTKS2(i), reread%os_ptcl2D%get_int(NPTCLS1 + i, 'indstk'), &
+                &'project 2 physical indstk preserved')
             call reread%map_ptcl_ind2stk_ind('ptcl2D', NPTCLS1 + i, stkind, ind_in_stk)
             call assert_int(2, stkind, 'project 2 mapped stkind')
-            call assert_int(MAPPED_INDSTKS2(i), ind_in_stk, 'project 2 mapped physical indstk')
+            call assert_int(INDSTKS2(i), ind_in_stk, 'project 2 mapped physical indstk')
             call reread%map_ptcl_ind2stk_ind('ptcl3D', NPTCLS1 + i, stkind, ind_in_stk)
             call assert_int(2, stkind, 'project 2 ptcl3D mapped stkind')
-            call assert_int(MAPPED_INDSTKS2(i), ind_in_stk, 'project 2 ptcl3D mapped physical indstk')
+            call assert_int(INDSTKS2(i), ind_in_stk, 'project 2 ptcl3D mapped physical indstk')
         enddo
         call assert_int(0, reread%os_ptcl2D%get_class(1), 'project 1 particle class reset')
         call assert_int(0, reread%os_ptcl2D%get_class(NPTCLS1 + 1), 'project 2 particle class reset')
@@ -114,51 +115,165 @@ contains
         if( allocated(project_files) ) deallocate(project_files)
     end subroutine test_merge_pruned_stack_indexing_heterogeneous_ctf
 
-    subroutine test_validate_projfile_normalizes_legacy_stack_indices()
-        type(sp_project) :: proj, validated
-        type(string) :: projfile, validated_file
+    subroutine test_fix_projfile_repairs_unpruned_legacy_stack()
+        ! A project written before the stack-index fix: the stack row has no
+        ! nptcls_stk, one particle has no indstk and one an out-of-range value,
+        ! and the stack range is wrong. The stack file holds one image per project
+        ! row, so fix_projfile can prove the physical indices: nptcls_stk comes from
+        ! the header and indstk from the project rows.
+        use simple_image, only: image
+        type(sp_project) :: proj, fixed
+        type(image)      :: img
+        type(string)     :: projfile, fixed_file, stkfile
         integer, parameter :: NPTCLS = 3, NCLS = 2
-        integer, parameter :: BAD_INDSTKS(NPTCLS) = [99, 0, 3]
+        integer, parameter :: LEGACY_INDSTKS(NPTCLS) = [99, 0, 3]
         integer :: i, stkind, ind_in_stk
-        write(*,'(A)') 'test_validate_projfile_normalizes_legacy_stack_indices'
-        projfile       = 'validate_project_src.simple'
-        validated_file = 'validate_project_src_validated.simple'
+        write(*,'(A)') 'test_fix_projfile_repairs_unpruned_legacy_stack'
+        projfile   = 'fix_project_src.simple'
+        fixed_file = 'fix_project_src_fixed.simple'
+        stkfile    = 'fix_project_src_stack.mrc'
         call del_file(projfile)
-        call del_file(validated_file)
+        call del_file(fixed_file)
+        call del_file(stkfile)
+        call img%new([8,8,1], 1.25)
+        do i = 1,NPTCLS
+            call img%write(stkfile, i)
+        enddo
+        call img%kill
         call make_project(proj, projfile, NPTCLS, 0, NCLS, 200.0, 1.0, 0.07, &
-            [1, 0, 1], [1, 2, 1], BAD_INDSTKS, 1)
+            [1, 0, 1], [1, 2, 1], LEGACY_INDSTKS, 1)
+        call proj%os_stk%set(1, 'stk', stkfile)
         call proj%os_ptcl2D%delete_entry(2, 'indstk')
         call proj%os_ptcl3D%delete_entry(2, 'indstk')
+        call proj%os_stk%set(1, 'top', NPTCLS + 5)   ! a stack range the tool repairs
         call proj%write(projfile)
         call assert_false(proj%os_stk%isthere(1, 'nptcls_stk'), 'legacy source lacks nptcls_stk')
-        call validate_and_repair_project_file(projfile, validated_file)
-        call assert_true(file_exists(validated_file), 'validate_projfile creates validated project')
-        call validated%read(validated_file)
-        call assert_int(1, validated%os_stk%get_noris(), 'validated stack count')
-        call assert_int(NPTCLS, validated%os_ptcl2D%get_noris(), 'validated ptcl2D count includes state 0')
-        call assert_int(NPTCLS, validated%os_ptcl3D%get_noris(), 'validated ptcl3D count includes state 0')
-        call assert_int(1, validated%os_stk%get_fromp(1), 'validated fromp')
-        call assert_int(NPTCLS, validated%os_stk%get_top(1), 'validated top')
-        call assert_int(NPTCLS, validated%os_stk%get_int(1, 'nptcls'), 'validated project nptcls')
-        call assert_int(NPTCLS, validated%os_stk%get_int(1, 'nptcls_stk'), 'validated fallback nptcls_stk')
+        call fix_project_file(projfile, fixed_file)
+        call assert_true(file_exists(fixed_file), 'fix_projfile writes the fixed project')
+        call fixed%read(fixed_file)
+        call assert_int(1, fixed%os_stk%get_noris(), 'fixed stack count')
+        call assert_int(NPTCLS, fixed%os_ptcl2D%get_noris(), 'fixed ptcl2D count includes state 0')
+        call assert_int(NPTCLS, fixed%os_ptcl3D%get_noris(), 'fixed ptcl3D count includes state 0')
+        call assert_int(1, fixed%os_stk%get_fromp(1), 'fixed fromp')
+        call assert_int(NPTCLS, fixed%os_stk%get_top(1), 'fixed top repaired')
+        call assert_int(NPTCLS, fixed%os_stk%get_int(1, 'nptcls'), 'fixed project nptcls')
+        call assert_int(NPTCLS, fixed%os_stk%get_int(1, 'nptcls_stk'), 'nptcls_stk taken from the stack header')
         do i = 1,NPTCLS
-            call assert_int(1, validated%os_ptcl2D%get_int(i, 'stkind'), 'validated ptcl2D stkind')
-            call assert_int(i, validated%os_ptcl2D%get_int(i, 'indstk'), 'validated ptcl2D legacy indstk')
-            call validated%map_ptcl_ind2stk_ind('ptcl2D', i, stkind, ind_in_stk)
-            call assert_int(1, stkind, 'validated ptcl2D mapped stkind')
-            call assert_int(i, ind_in_stk, 'validated ptcl2D mapped indstk')
-            call assert_int(1, validated%os_ptcl3D%get_int(i, 'stkind'), 'validated ptcl3D stkind')
-            call assert_int(i, validated%os_ptcl3D%get_int(i, 'indstk'), 'validated ptcl3D legacy indstk')
-            call validated%map_ptcl_ind2stk_ind('ptcl3D', i, stkind, ind_in_stk)
-            call assert_int(1, stkind, 'validated ptcl3D mapped stkind')
-            call assert_int(i, ind_in_stk, 'validated ptcl3D mapped indstk')
+            call assert_int(1, fixed%os_ptcl2D%get_int(i, 'stkind'), 'fixed ptcl2D stkind')
+            call assert_int(i, fixed%os_ptcl2D%get_int(i, 'indstk'), 'fixed ptcl2D indstk from the project row')
+            call assert_int(i, fixed%os_ptcl3D%get_int(i, 'indstk'), 'fixed ptcl3D indstk from the project row')
+            call fixed%map_ptcl_ind2stk_ind('ptcl2D', i, stkind, ind_in_stk)
+            call assert_int(1, stkind, 'fixed project maps stkind')
+            call assert_int(i, ind_in_stk, 'fixed project maps the physical index')
         enddo
-        call assert_int(0, validated%os_ptcl2D%get_state(2), 'state 0 row remains present after validation')
+        call assert_int(0, fixed%os_ptcl2D%get_state(2), 'state 0 row remains present after the fix')
         call del_file(projfile)
-        call del_file(validated_file)
+        call del_file(fixed_file)
+        call del_file(stkfile)
         call proj%kill
-        call validated%kill
-    end subroutine test_validate_projfile_normalizes_legacy_stack_indices
+        call fixed%kill
+    end subroutine test_fix_projfile_repairs_unpruned_legacy_stack
+
+    subroutine test_fix_projfile_repairs_wrong_segment_stkind()
+        ! Two unpruned legacy stacks of two images each. ptcl2D is consistent, but
+        ! ptcl3D row 1 claims stack 2: a valid stack index that does not own the
+        ! row. fix_projfile must replace it by the owning stack before deriving
+        ! indstk, so that both segments agree and both map.
+        use simple_image, only: image
+        type(sp_project) :: proj, fixed
+        type(image)      :: img
+        type(string)     :: projfile, fixed_file, stkfiles(2)
+        integer, parameter :: NSTK = 2, NPER = 2, NPTCLS = NSTK*NPER
+        integer :: i, istk, stkind, ind_in_stk, nerrors
+        write(*,'(A)') 'test_fix_projfile_repairs_wrong_segment_stkind'
+        projfile    = 'fix_project_two_stacks.simple'
+        fixed_file  = 'fix_project_two_stacks_fixed.simple'
+        stkfiles(1) = 'fix_project_two_stacks_1.mrc'
+        stkfiles(2) = 'fix_project_two_stacks_2.mrc'
+        call del_file(projfile)
+        call del_file(fixed_file)
+        call img%new([8,8,1], 1.25)
+        do istk = 1,NSTK
+            call del_file(stkfiles(istk))
+            do i = 1,NPER
+                call img%write(stkfiles(istk), i)
+            enddo
+        enddo
+        call img%kill
+        call proj%os_stk%new(NSTK, is_ptcl=.false.)
+        do istk = 1,NSTK
+            call proj%os_stk%set(istk, 'stk',    stkfiles(istk))
+            call proj%os_stk%set(istk, 'ctf',    'no')
+            call proj%os_stk%set(istk, 'smpd',   1.25)
+            call proj%os_stk%set(istk, 'box',    8)
+            call proj%os_stk%set(istk, 'nptcls', NPER)
+            call proj%os_stk%set(istk, 'fromp',  (istk-1)*NPER + 1)
+            call proj%os_stk%set(istk, 'top',    istk*NPER)
+        enddo
+        call proj%os_ptcl2D%new(NPTCLS, is_ptcl=.true.)
+        call proj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
+        do i = 1,NPTCLS
+            istk = (i-1)/NPER + 1
+            call proj%os_ptcl2D%set_stkind(i, istk)
+            call proj%os_ptcl3D%set_stkind(i, istk)
+            call proj%os_ptcl2D%set_state(i, 1)
+            call proj%os_ptcl3D%set_state(i, 1)
+        enddo
+        call proj%os_ptcl3D%set_stkind(1, 2)   ! in range, but stack 2 does not own row 1
+        call proj%update_projinfo(projfile)
+        call proj%write(projfile)
+        call fix_project_file(projfile, fixed_file, nerrors)
+        call assert_int(0, nerrors, 'two-stack legacy project is fixable')
+        call assert_true(file_exists(fixed_file), 'fix_projfile writes the fixed two-stack project')
+        call fixed%read(fixed_file)
+        do i = 1,NPTCLS
+            istk = (i-1)/NPER + 1
+            call assert_int(istk, fixed%os_ptcl2D%get_int(i, 'stkind'), 'fixed ptcl2D stkind')
+            call assert_int(istk, fixed%os_ptcl3D%get_int(i, 'stkind'), 'fixed ptcl3D stkind is the owning stack')
+            call assert_int(fixed%os_ptcl2D%get_int(i, 'indstk'), fixed%os_ptcl3D%get_int(i, 'indstk'), &
+                &'fixed segments agree on indstk')
+            call fixed%map_ptcl_ind2stk_ind('ptcl2D', i, stkind, ind_in_stk)
+            call assert_int(istk, stkind, 'fixed ptcl2D maps its stack')
+            call assert_int(i - (istk-1)*NPER, ind_in_stk, 'fixed ptcl2D maps its physical index')
+            call fixed%map_ptcl_ind2stk_ind('ptcl3D', i, stkind, ind_in_stk)
+            call assert_int(istk, stkind, 'fixed ptcl3D maps its stack')
+            call assert_int(i - (istk-1)*NPER, ind_in_stk, 'fixed ptcl3D maps its physical index')
+        enddo
+        call del_file(projfile)
+        call del_file(fixed_file)
+        do istk = 1,NSTK
+            call del_file(stkfiles(istk))
+        enddo
+        call proj%kill
+        call fixed%kill
+    end subroutine test_fix_projfile_repairs_wrong_segment_stkind
+
+    subroutine test_fix_projfile_refuses_particles_without_stacks()
+        ! Particle rows without any stack row cannot be mapped to images:
+        ! fix_projfile reports the error and writes nothing.
+        type(sp_project) :: proj
+        type(string)     :: projfile, fixed_file
+        integer :: i, nerrors
+        write(*,'(A)') 'test_fix_projfile_refuses_particles_without_stacks'
+        projfile   = 'fix_project_no_stacks.simple'
+        fixed_file = 'fix_project_no_stacks_fixed.simple'
+        call del_file(projfile)
+        call del_file(fixed_file)
+        call proj%os_ptcl2D%new(3, is_ptcl=.true.)
+        call proj%os_ptcl3D%new(3, is_ptcl=.true.)
+        do i = 1,3
+            call proj%os_ptcl2D%set_state(i, 1)
+            call proj%os_ptcl3D%set_state(i, 1)
+        enddo
+        call proj%update_projinfo(projfile)
+        call proj%write(projfile)
+        call fix_project_file(projfile, fixed_file, nerrors)
+        call assert_true(nerrors > 0, 'particles without stack rows are an error')
+        call assert_false(file_exists(fixed_file), 'no fixed project is written for particles without stacks')
+        call del_file(projfile)
+        call del_file(fixed_file)
+        call proj%kill
+    end subroutine test_fix_projfile_refuses_particles_without_stacks
 
     subroutine test_remap_project_paths()
         type(sp_project) :: proj

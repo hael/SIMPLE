@@ -160,7 +160,7 @@ contains
             if( trim(params%inpl_cont) == 'yes' )then
                 call grad_shsrch_obj(ithr)%new_joint(build, joint_lims, MAXITS_SH)
             else
-                call grad_shsrch_obj(ithr)%new_legacy(build, lims, lims_init=lims_init, &
+                call grad_shsrch_obj(ithr)%new_alternating(build, lims, lims_init=lims_init, &
                     &maxits=MAXITS_SH)
             endif
         end do

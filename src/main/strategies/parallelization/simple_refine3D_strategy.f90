@@ -169,7 +169,6 @@ contains
     !! The parent and distributed matcher workers retain these options.
     subroutine strip_refine3D_search_only_args( cline )
         type(cmdline), intent(inout) :: cline
-        call cline%delete('inpl_cont')
         call cline%delete('pose_cont')
     end subroutine strip_refine3D_search_only_args
 
@@ -750,9 +749,6 @@ contains
         ! main refinement step
         l_write_partial_recs = trim(params%volrec) .eq. 'yes'
         if( l_write_partial_recs )then
-            ! Legacy handshake for rec-writing helpers that still inspect this key.
-            ! The strategy owns the actual assembly dispatch decision.
-            call cline%set('force_volassemble', 'yes')
             call remove_partial_rec_files(params)
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
@@ -808,7 +804,6 @@ contains
                     call cline%set('vol'//int2str(state), volname)
                 end do
             endif
-            call cline%delete('force_volassemble')
         endif
         if( l_write_partial_recs ) call refresh_matching_lp_from_project(params, build, cline)
         if( l_write_partial_recs ) call refresh_resolution_fields_from_fsc(params, build)

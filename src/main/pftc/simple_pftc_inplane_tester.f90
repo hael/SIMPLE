@@ -327,7 +327,7 @@ contains
             &'continuous evaluator equals the discrete reference (loss and x/y gradient) at grid angles')
         ! (c) analytic gradient against central differences
         call gradient_probe_set(b, OBJ_EUCLID, igrid, 'euclid')
-        ! (d) seed parity: the joint route's discrete selection is one legacy callback at the seed
+        ! (d) seed parity: the joint route's discrete selection is one alternating-search callback at the seed
         seed = [0.5, -0.25]
         call b%pftc%gen_objfun_vals(1, 1, seed, scores)
         expected_irot = maxloc(scores, dim=1)
@@ -336,7 +336,7 @@ contains
         call joint_search%new_joint(b, joint_limits, 100)
         call joint_search%set_indices(1, 1)
         call joint_search%select_best_discrete_angle(seed, selected, corr)
-        call assert_false(joint_search%does_opt_angle(), 'joint seed selector does not attach the legacy callback')
+        call assert_false(joint_search%does_opt_angle(), 'joint seed selector does not attach the alternating-search callback')
         call assert_int(expected_irot, selected, 'joint seed selector reproduces the callback index at the x/y seed')
         call assert_true(abs(corr - scores(expected_irot)) <= 5.e-6, 'joint seed selector reproduces the callback score')
         call joint_search%kill
@@ -485,19 +485,19 @@ contains
     end subroutine test_cc_evaluator
 
     !> strategy2D_srch constructs the joint optimiser only under inpl_cont=yes and always
-    !! keeps the legacy seed-search angle update (selection parity)
+    !! keeps the alternating seed-search angle update (selection parity)
     subroutine test_strategy2D_route_flags()
         type(builder),    target :: b
         type(parameters), target :: p
         type(strategy2D_srch) :: srch
         type(strategy2D_spec) :: spec
-        type(pftc_shsrch_grad) :: legacy
+        type(pftc_shsrch_grad) :: alternating
         real :: limits(2,2)
         write(*,'(A)') 'test_strategy2D_route_flags'
         call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
         limits(:,1) = -1.; limits(:,2) = 1.
-        call legacy%new_legacy(b, limits)
-        call legacy%kill
+        call alternating%new_alternating(b, limits)
+        call alternating%kill
         spec%iptcl       = 1
         spec%iptcl_batch = 1
         spec%iptcl_map   = 1
@@ -506,14 +506,14 @@ contains
         call srch%new(p, spec, b)
         call assert_false(srch%uses_continuous_refinement(), 'inpl_cont=no: no continuous polish')
         call assert_false(srch%joint_inpl_optimizer%uses_joint_inplane(), 'inpl_cont=no: no joint optimiser')
-        call assert_true(srch%grad_shsrch_first_obj%does_opt_angle(), 'inpl_cont=no: legacy seed search updates the angle')
+        call assert_true(srch%grad_shsrch_first_obj%does_opt_angle(), 'inpl_cont=no: alternating seed search updates the angle')
         call srch%kill
         p%inpl_cont = 'yes'
         call srch%new(p, spec, b)
         call assert_true(srch%uses_continuous_refinement(), 'inpl_cont=yes: continuous polish')
         call assert_true(srch%joint_inpl_optimizer%uses_joint_inplane(), 'inpl_cont=yes: joint optimiser constructed')
         call assert_true(srch%grad_shsrch_first_obj%does_opt_angle(), &
-            &'inpl_cont=yes: legacy seed search still updates the angle (selection parity)')
+            &'inpl_cont=yes: alternating seed search still updates the angle (selection parity)')
         call srch%kill
         p%l_prob_align_mode = .true.
         call srch%new(p, spec, b)

@@ -28,7 +28,8 @@ subroutine new_symaxis_search( prgtab )
         &file is updated. If you are unsure about the point-group, use the symmetry_test program instead',& ! help
         &'simple_exec',&                                                                                    ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                                           ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Find a Symmetry Axis') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symaxis_search%add_input(UI_IMG, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &

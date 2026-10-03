@@ -109,10 +109,8 @@ contains
         ! without one the PCG solve runs on the spherical mskdiam support
         if( .not.cline%defined('pcg_mskfile') ) write(logfhandle,'(A)') '>>> FLEX_PCA rec_backend=pcg without pcg_mskfile: &
             &the basis is solved on the spherical mskdiam support (pass pcg_mskfile=<solvent mask> for the envelope)'
-        if( .not.cline%defined('pcgop') )      call cline%set('pcgop','kernel')
         if( .not.cline%defined('maxits_pcg') ) call cline%set('maxits_pcg', FLEX_PCG_MAXITS_DEFAULT)
         if( .not.cline%defined('rtol') )       call cline%set('rtol', FLEX_PCG_RTOL_DEFAULT)
-        if( .not.cline%defined('projrec') )    call cline%set('projrec','no')
     end subroutine apply_flex_pca_pcg_defaults
 
 

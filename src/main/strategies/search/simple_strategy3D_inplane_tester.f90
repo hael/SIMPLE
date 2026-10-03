@@ -3,9 +3,9 @@
 ! of a continuous candidate, candidate storage with and without the continuous arrays
 ! (a rejected candidate leaves an accepted continuous result alone, an improving grid
 ! candidate resets it), the joint and the discrete-seed storage routes, the invalid
-! joint-evaluation predicate, resolve_inplane_e3, and the inpl_cont policy: default
-! yes, exposed with that default on the three refine3D programs, stripped from the
-! child command line. Phase 5 of the pose_cont refactoring: the search object's previous
+! joint-evaluation predicate, resolve_inplane_e3, and the inpl_cont policy: internal,
+! default yes, not a command-line key (no refine program exposes it), and pose_cont
+! stripped from the child command line. Phase 5 of the pose_cont refactoring: the search object's previous
 ! shift is the shift stored in the project before the search, the origin the matcher now
 ! takes the shift increment from (N10; a small phantom written to the run directory and
 ! removed).
@@ -166,30 +166,34 @@ contains
             &'the first grid angle maps to e3 = 0 in continuous mode')
     end subroutine test_resolve_inplane_e3
 
-    !> inpl_cont: default yes, exposed with that default on the refine3D programs,
-    !! stripped from a child command line as a matcher-only option
+    !> inpl_cont: internal, default yes (refine=cont turns it off), not a command-line key
+    !! since release 4, so no refine program exposes it; pose_cont is stripped from a
+    !! child command line as a matcher-only option
     subroutine test_inpl_cont_policy()
         type(cmdline)    :: cline, child_cline
         type(parameters) :: defaults
         write(*,'(A)') 'test_inpl_cont_policy'
         call assert_char('yes', trim(defaults%inpl_cont), 'inpl_cont defaults to yes')
         call make_ui
-        call assert_true(has_search_input('refine3D',        'inpl_cont', 'yes'), 'refine3D exposes inpl_cont=yes')
-        call assert_true(has_search_input('refine3D_auto',   'inpl_cont', 'yes'), 'refine3D_auto exposes inpl_cont=yes')
-        call assert_true(has_search_input('refine3D_states', 'inpl_cont', 'yes'), 'refine3D_states exposes inpl_cont=yes')
+        call assert_false(has_search_input('refine3D',        'inpl_cont'), 'refine3D does not expose inpl_cont')
+        call assert_false(has_search_input('refine3D_auto',   'inpl_cont'), 'refine3D_auto does not expose inpl_cont')
+        call assert_false(has_search_input('refine3D_states', 'inpl_cont'), 'refine3D_states does not expose inpl_cont')
+        call assert_false(has_search_input('solve3D',         'inpl_cont'), 'solve3D does not expose inpl_cont')
+        call assert_false(has_search_input('solve2D',         'inpl_cont'), 'solve2D does not expose inpl_cont')
         call cline%set('prg', 'refine3D')
-        call cline%set('inpl_cont', 'yes')
+        call cline%set('pose_cont', 'yes')
         child_cline = cline
         call strip_refine3D_search_only_args(child_cline)
-        call assert_false(child_cline%defined('inpl_cont'), 'inpl_cont is stripped from the child command line')
-        call assert_true(cline%defined('inpl_cont'), 'the parent command line keeps inpl_cont')
+        call assert_false(child_cline%defined('pose_cont'), 'pose_cont is stripped from the child command line')
+        call assert_true(cline%defined('pose_cont'), 'the parent command line keeps pose_cont')
         call child_cline%kill
         call cline%kill
     end subroutine test_inpl_cont_policy
 
-    !> a search control of the named UI program with the given default
+    !> a search control of the named UI program; with expected_default, one with that default
     logical function has_search_input( program_name, key, expected_default ) result( found )
-        character(len=*), intent(in) :: program_name, key, expected_default
+        character(len=*),           intent(in) :: program_name, key
+        character(len=*), optional, intent(in) :: expected_default
         type(ui_program), pointer :: program => null()
         type(list_iterator) :: iterator
         type(string) :: name
@@ -205,7 +209,9 @@ contains
             select type(input => value)
                 type is(ui_program_input)
                     if( input%param%key%to_char() == key )then
-                        found = input%param%has_default .and. input%param%cval_default%to_char() == expected_default
+                        found = .true.
+                        if( present(expected_default) ) found = input%param%has_default .and. &
+                            &input%param%cval_default%to_char() == expected_default
                         if( allocated(value) ) deallocate(value)
                         return
                     endif

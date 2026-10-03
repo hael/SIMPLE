@@ -182,7 +182,7 @@ contains
         ! clean tracker
         call kill_tracker
         ! end gracefully
-        call qsys_job_finished(params, string('single_commanders_trajectory :: exec_track_particles'))
+        call qsys_declare_part_finished(params, string('single_commanders_trajectory :: exec_track_particles'))
         call spproj%kill
         call simple_end('**** single_tseries_tracker NORMAL STOP ****')
     end subroutine exec_track_particles
@@ -389,7 +389,7 @@ contains
         type(sp_project) :: spproj, spproj_tmp
         type(parameters) :: params
         type(ctfparams)  :: ctfparms
-        integer :: ldim(3), nimgs, nstks
+        integer :: ldim(3), nimgs, nstks, iptcl
         call cline%set('oritype','stk')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -411,10 +411,15 @@ contains
         spproj%os_ptcl2D = spproj_tmp%os_ptcl2D
         spproj%os_ptcl3D = spproj_tmp%os_ptcl3D
         call spproj_tmp%kill
-        if( nstks > 1 )then
-            call spproj%os_ptcl2D%set_all2single('stkind',1)
-            call spproj%os_ptcl3D%set_all2single('stkind',1)
-        endif
+        ! the new stack holds one image per particle, in project order
+        do iptcl = 1,spproj%os_ptcl2D%get_noris()
+            call spproj%os_ptcl2D%set_stkind(iptcl, 1)
+            call spproj%os_ptcl2D%set(iptcl, 'indstk', iptcl)
+        enddo
+        do iptcl = 1,spproj%os_ptcl3D%get_noris()
+            call spproj%os_ptcl3D%set_stkind(iptcl, 1)
+            call spproj%os_ptcl3D%set(iptcl, 'indstk', iptcl)
+        enddo
         call spproj%write(params%projfile)
         call simple_end('**** SINGLE_trajectory_swap_stack NORMAL STOP ****')
     end subroutine exec_trajectory_swap_stack
@@ -432,30 +437,27 @@ contains
         ! read the project file
         call spproj%read(params%projfile)
         call spproj%write_segment_inside('projinfo')
-        if( params%state < 0 )then
+        if( params%state < 0 ) THROW_HARD('state must be >= 0')
+        nptcls = spproj%get_nptcls()
+        fromto(1) = params%fromp
+        fromto(2) = params%top
+        if( fromto(1) < 1 ) fromto(1) = 1
+        if( fromto(2) < 1 ) fromto(2) = nptcls
+        if( fromto(1) > fromto(2) )then
+            THROW_HARD('Invalid extraction range: fromp > top')
+        endif
+        if( .not. spproj%os_ptcl2D%isthere('state') )then
             call spproj%write_substk(params%fromp, params%top, params%outstk)
         else
-            nptcls = spproj%get_nptcls()
-            fromto(1) = params%fromp
-            fromto(2) = params%top
-            if( fromto(1) < 1 ) fromto(1) = 1
-            if( fromto(2) < 1 ) fromto(2) = nptcls
-            if( fromto(1) > fromto(2) )then
-                THROW_HARD('Invalid extraction range: fromp > top')
+            call spproj%os_ptcl2D%get_pinds(params%state, 'state', pinds)
+            if( size(pinds) == 0 )then
+                THROW_HARD('No particles with state='//int2str(params%state)//' found in project')
             endif
-            if( .not. spproj%os_ptcl2D%isthere('state') )then
-                call spproj%write_substk(params%fromp, params%top, params%outstk)
-            else
-                call spproj%os_ptcl2D%get_pinds(params%state, 'state', pinds)
-                if( size(pinds) == 0 )then
-                    THROW_HARD('No particles with state='//int2str(params%state)//' found in project')
-                endif
-                pinds = pack(pinds, mask=pinds >= fromto(1) .and. pinds <= fromto(2))
-                if( size(pinds) == 0 )then
-                    THROW_HARD('No particles with state='//int2str(params%state)//' in the requested range')
-                endif
-                call spproj%write_substk(pinds, params%outstk)
+            pinds = pack(pinds, mask=pinds >= fromto(1) .and. pinds <= fromto(2))
+            if( size(pinds) == 0 )then
+                THROW_HARD('No particles with state='//int2str(params%state)//' in the requested range')
             endif
+            call spproj%write_substk(pinds, params%outstk)
         endif
         ! end gracefully
         call simple_end('**** SINGLE_EXTRACT_SUBSTK NORMAL STOP ****')

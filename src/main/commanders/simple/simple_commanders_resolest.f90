@@ -206,7 +206,7 @@ contains
         class(commander_nu_filt3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)     :: params
-        type(image)          :: even, odd, even_nu, odd_nu, vol_dens
+        type(image)          :: even, odd, even_nu, odd_nu
         type(image_msk)      :: nu_envelope
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
@@ -239,25 +239,11 @@ contains
             ! which is the precondition for the mask being meaningful.
             envp%nsigma      = params%nu_msk_sig
             envp%lp_smooth   = params%amsklp
-            ! beta, dens_weight and l_relative default to the NU_ENVMASK_* constants
-            ! through the type definition, so the tuning knobs this program exposes
-            ! deviate from the refinement policy only when explicitly supplied.
-            if( cline%defined('nu_msk_beta') ) envp%beta        = params%nu_msk_beta
-            if( cline%defined('nu_msk_dens') ) envp%dens_weight = params%nu_msk_dens
-            if( cline%defined('nu_msk_rel')  ) envp%l_relative  = params%nu_msk_rel .eq. 'yes'
+            ! beta, dens_weight and l_relative stay at the NU_ENVMASK_* constants of
+            ! the type definition, as in refinement.
             evid_out = add2fbody(avg_out, params%ext, NUEVIDENCE_SUFFIX)
             call write_nu_evidence_map(evid_out, envp%lp_smooth, envp%l_relative)
-            if( abs(envp%dens_weight) > TINY )then
-                ! The density term needs the low-passed e/o average; without it the
-                ! weight would be accepted and silently ignored.
-                call vol_dens%copy(even)
-                call vol_dens%add(odd)
-                call vol_dens%mul(0.5)
-                call vol_dens%bp(0., params%amsklp)
-                call nu_evidence_envelope(envp, l_env, envstats, vol_dens)
-            else
-                call nu_evidence_envelope(envp, l_env, envstats)
-            endif
+            call nu_evidence_envelope(envp, l_env, envstats)
             call print_nu_envmask_stats(envstats)
             grow_px = max(1, nint(NU_ENVMASK_GROW_A / even%get_smpd()))
             edge_px = max(1, nint(NU_ENVMASK_EDGE_A / even%get_smpd()))
@@ -266,7 +252,7 @@ contains
             ! an empty evidence field returns without constructing the mask
             ! image; writing it would abort on invalid MRC dimensions
             if( n_ccs_kept < 1 )then
-                THROW_WARN('NU evidence envelope is empty at these settings; no envelope mask written. Feed the _unfil half pair when the inputs come from an ml_reg run (regularized maps flatten the evidence margin), or loosen nu_msk_sig / set nu_msk_rel=yes')
+                THROW_WARN('NU evidence envelope is empty at these settings; no envelope mask written. Feed the _unfil half pair when the inputs come from an ml_reg run (regularized maps flatten the evidence margin), or loosen nu_msk_sig / amsklp')
             else
                 envmsk_out = add2fbody(avg_out, params%ext, NUENVMSK_SUFFIX)
                 call nu_envelope%write(envmsk_out, del_if_exists=.true.)
@@ -289,7 +275,6 @@ contains
         call even_nu%kill
         call odd%kill
         call even%kill
-        call vol_dens%kill
         call nu_envelope%kill_bimg
         call locres_out%kill
         call evid_out%kill

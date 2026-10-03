@@ -6,9 +6,9 @@ use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
 use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_feature_family, &
     I_NEG_LOCVAR_FG, I_CC_AREA_FRAC, I_BP40_100_CENTER_EDGE_VAR
-use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_cache, apply_cached_decision_to_quality
+use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, &
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, CAVG_QUALITY_TRAINING_VERSION, EPS, &
     CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, &
     CAVG_RELATIONAL_SCHEMA_NONE, CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
@@ -46,7 +46,6 @@ real,    parameter :: LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC = 0.20
 real,    parameter :: LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET = 0.20
 real,    parameter :: LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY = 8.0
 real,    parameter :: LEARN_OVERFIT_FP_BP_Z_MAX       = 0.0
-real,    parameter :: LEARN_MINSEPS(7)              = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50]
 real,    parameter :: LOGISTIC_LAMBDAS(7)           = [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, &
                                                        1.0e-2, 3.0e-2, 1.0e-1]
 real,    parameter :: LOGISTIC_THRESHOLDS(20)       = [0.02, 0.05, 0.075, 0.10, 0.15, 0.20, &
@@ -155,13 +154,13 @@ contains
         integer :: ids
         quality_context = trim(dsets(1)%quality_context)
         if( trim(quality_context) == '' )then
-            errmsg = 'quality training file has no quality_context or model_context metadata: '//trim(dsets(1)%fname)
+            errmsg = 'quality training file has no quality_context metadata: '//trim(dsets(1)%fname)
             THROW_HARD(trim(errmsg))
         endif
         call validate_quality_context(quality_context, 'infer_training_context')
         do ids = 1, size(dsets)
             if( trim(dsets(ids)%quality_context) == '' )then
-                errmsg = 'quality training file has no quality_context or model_context metadata: '//&
+                errmsg = 'quality training file has no quality_context metadata: '//&
                     trim(dsets(ids)%fname)
                 THROW_HARD(trim(errmsg))
             endif
@@ -540,15 +539,6 @@ contains
         spec%name                    = 'neutral_learn_base'
         spec%feature_policy          = 'microchunk_plus_score_signal'
         spec%weights                 = 0.0
-        spec%boundary_margin         = 0.0
-        spec%min_score_separation    = minval(LEARN_MINSEPS)
-        spec%otsu_min_offset         = 0.0
-        spec%otsu_max_offset         = 0.0
-        spec%min_accept_frac         = 0.0
-        spec%use_lowsep_otsu         = .false.
-        spec%use_otsu_window         = .false.
-        spec%use_cluster_rescue      = .false.
-        spec%enforce_min_accept_frac = .false.
     end function neutral_learn_base_spec
 
     subroutine load_quality_training_datasets( analysis_files, dsets )
@@ -681,6 +671,8 @@ contains
             call parse_training_metadata_line(line, dset)
             if( is_analysis_data_line(line) ) nrows = nrows + 1
         end do
+        if( dset%training_version /= CAVG_QUALITY_TRAINING_VERSION ) &
+            THROW_HARD('read_quality_training_dataset: cavg_quality_training_version=1 is required in '//trim(fname))
         if( nrows == 0 ) THROW_HARD('read_quality_training_dataset: no class rows in '//trim(fname))
         allocate(dset%features(nrows, CAVG_QUALITY_NFEATS), source=0.0)
         allocate(dset%manual_states(nrows), source=0)
@@ -716,7 +708,6 @@ contains
             field = csv_field(line, manual_state_col)
             dset%manual_states(irow) = str2int(trim(field))
             do ifeat = 1, CAVG_QUALITY_NFEATS
-                if( feat_col(ifeat) == 0 ) cycle
                 field = csv_field(line, feat_col(ifeat))
                 if( len_trim(field) > 0 ) dset%features(irow, ifeat) = str2real(trim(field))
             end do
@@ -742,10 +733,11 @@ contains
         key   = trim(adjustl(tmp(3:ieq-1)))
         value = trim(adjustl(tmp(ieq+1:)))
         select case(trim(key))
+        case('cavg_quality_training_version')
+            read(value,*,iostat=ios) dset%training_version
+            if( ios /= 0 ) THROW_HARD('invalid cavg_quality_training_version training metadata')
         case('quality_context')
             dset%quality_context = trim(value)
-        case('model_context')
-            if( trim(dset%quality_context) == '' ) dset%quality_context = trim(value)
         case('relational_feature_schema')
             dset%relational_feature_schema = trim(value)
         case('relational_knn')
@@ -833,7 +825,6 @@ contains
             THROW_HARD('read_quality_training_dataset: missing promoted relational feature in '//trim(fname))
         do ifeat = 1, CAVG_QUALITY_NFEATS
             if( feat_col(ifeat) == 0 )then
-                if( trim(cavg_quality_feature_family(ifeat)) == 'overfit' ) cycle
                 errmsg = 'read_quality_training_dataset: missing z_'//trim(cavg_quality_feature_name(ifeat))//&
                     ' column in '//trim(fname)
                 THROW_HARD(trim(errmsg))
@@ -895,27 +886,19 @@ contains
         end select
     end function dataset_learn_role_name
 
-    real function macro_balacc_for_model( dsets, model, caches )
+    real function macro_balacc_for_model( dsets, model )
         type(cavg_quality_training_dataset), intent(in) :: dsets(:)
         type(cavg_quality_model),            intent(in) :: model
-        type(cavg_quality_classify_cache), optional, intent(in) :: caches(:)
         type(cavg_quality_result) :: quality
         integer :: ids, tp, fp, tn, fn, nused, role
         integer :: tail_n
         real :: balacc, mean_score, tail_score, role_scores(size(dsets))
         macro_balacc_for_model = 0.0
-        if( present(caches) )then
-            if( size(caches) /= size(dsets) ) THROW_HARD('macro_balacc_for_model: cache/dataset size mismatch')
-        endif
         nused = 0
         do ids = 1, size(dsets)
             role = dataset_learn_role(dsets(ids))
             if( role == LEARN_ROLE_SKIP ) cycle
-            if( present(caches) )then
-                call classify_training_dataset_cached_detail(dsets(ids), caches(ids), model, quality, tp, fp, tn, fn)
-            else
-                call classify_training_dataset_detail(dsets(ids), model, quality, tp, fp, tn, fn)
-            endif
+            call classify_training_dataset_detail(dsets(ids), model, quality, tp, fp, tn, fn)
             balacc = learn_balacc_from_confusion(tp, fp, tn, fn, role)
             balacc = balacc - overfit_false_positive_penalty(dsets(ids), quality, role)
             nused = nused + 1
@@ -1057,44 +1040,6 @@ contains
             end do
         end do
     end subroutine sort_real_prefix_ascending
-
-
-    subroutine classify_training_dataset( dset, model, tp, fp, tn, fn )
-        type(cavg_quality_training_dataset), intent(in) :: dset
-        type(cavg_quality_model),            intent(in) :: model
-        integer,                             intent(out):: tp, fp, tn, fn
-        type(cavg_quality_result) :: quality
-        call classify_training_dataset_detail(dset, model, quality, tp, fp, tn, fn)
-        call quality%kill()
-    end subroutine classify_training_dataset
-
-    subroutine classify_training_dataset_cached_detail( dset, cache, model, quality, tp, fp, tn, fn )
-        type(cavg_quality_training_dataset), intent(in)    :: dset
-        type(cavg_quality_classify_cache),   intent(in)    :: cache
-        type(cavg_quality_model),            intent(in)    :: model
-        type(cavg_quality_result),           intent(inout) :: quality
-        integer,                             intent(out)   :: tp, fp, tn, fn
-        logical, allocatable :: pred(:), ref(:)
-        integer :: nfit
-        call classify_training_dataset_detail(dset, model, quality, tp, fp, tn, fn)
-        return
-        call quality%kill()
-        quality%hard_reject = dset%hard_reject
-        call apply_cached_decision_to_quality(cache, model, quality)
-        nfit = count_trainable_classes(dset)
-        if( nfit == 0 )then
-            tp = 0
-            fp = 0
-            tn = 0
-            fn = 0
-            return
-        endif
-        allocate(pred(nfit), ref(nfit))
-        pred = pack(quality%states > 0, .not. dset%hard_reject)
-        ref  = pack(dset%manual_states > 0, .not. dset%hard_reject)
-        call calc_confusion(pred, ref, tp, fp, tn, fn)
-        deallocate(pred, ref)
-    end subroutine classify_training_dataset_cached_detail
 
     subroutine classify_training_dataset_detail( dset, model, quality, tp, fp, tn, fn )
         type(cavg_quality_training_dataset), intent(in)    :: dset
@@ -1243,7 +1188,6 @@ contains
         call write_fixed_model_summary(funit, model)
         write(funit,'(A)') ''
         call write_evaluate_diagnostics(funit, model, diag)
-        call write_otsu_ablation_diagnostics(funit, dsets, model)
         call write_dataset_metric_table(funit, dsets, model, 'evaluate_score')
         close(funit)
         write(logfhandle,'(A,A)') '>>> WROTE ', trim(fname)
@@ -1260,16 +1204,6 @@ contains
             write(funit,'(ES14.6)', advance='no') model%weights(i)
         end do
         write(funit,*)
-        write(funit,'(A,ES14.6)') 'model_boundary_margin=', model%boundary_margin
-        write(funit,'(A,ES14.6)') 'model_min_score_separation=', model%min_score_separation
-        write(funit,'(A,ES14.6)') 'model_otsu_min_offset=', model%otsu_min_offset
-        write(funit,'(A,ES14.6)') 'model_otsu_max_offset=', model%otsu_max_offset
-        write(funit,'(A,ES14.6)') 'model_cluster_rescue_margin=', model%cluster_rescue_margin
-        write(funit,'(A,ES14.6)') 'model_min_accept_frac=', model%min_accept_frac
-        write(funit,'(A,L1)') 'model_use_lowsep_otsu=', model%use_lowsep_otsu
-        write(funit,'(A,L1)') 'model_use_otsu_window=', model%use_otsu_window
-        write(funit,'(A,L1)') 'model_use_cluster_rescue=', model%use_cluster_rescue
-        write(funit,'(A,L1)') 'model_enforce_min_accept_frac=', model%enforce_min_accept_frac
         write(funit,'(A,ES14.6)') 'model_intercept=', model%intercept
             write(funit,'(A)', advance='no') 'model_linear_coefficients='
             do i = 1, CAVG_QUALITY_NFEATS
@@ -1334,37 +1268,6 @@ contains
         end do
     end subroutine write_dataset_metric_table
 
-    subroutine write_otsu_ablation_diagnostics( funit, dsets, learned_model )
-        integer,                             intent(in) :: funit
-        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
-        type(cavg_quality_model),            intent(in) :: learned_model
-        type(cavg_quality_model)      :: no_otsu_model
-        type(cavg_quality_model_spec) :: no_otsu_spec
-        integer :: ids, tp1, fp1, tn1, fn1, tp0, fp0, tn0, fn0, role
-        real :: precision, recall, specificity, f1, balacc1, balacc0, accuracy
-        no_otsu_spec = learned_model%get_spec()
-        no_otsu_spec%use_lowsep_otsu = .false.
-        no_otsu_spec%use_otsu_window = .false.
-        call no_otsu_model%init_spec(no_otsu_spec)
-        write(funit,'(A)') ''
-        write(funit,'(A)') '# otsu-ablation diagnostics'
-        write(funit,'(A)') 'otsu_ablation_header=dataset,learn_role,with_otsu_score,no_otsu_score,delta_vs_no_otsu,'//&
-            'with_otsu_fp,with_otsu_fn,no_otsu_fp,no_otsu_fn'
-        do ids = 1, size(dsets)
-            role = dataset_learn_role(dsets(ids))
-            call classify_training_dataset(dsets(ids), learned_model, tp1, fp1, tn1, fn1)
-            call calc_binary_metrics(tp1, fp1, tn1, fn1, precision, recall, specificity, f1, balacc1, accuracy)
-            balacc1 = learn_balacc_from_confusion(tp1, fp1, tn1, fn1, role)
-            call classify_training_dataset(dsets(ids), no_otsu_model, tp0, fp0, tn0, fn0)
-            call calc_binary_metrics(tp0, fp0, tn0, fn0, precision, recall, specificity, f1, balacc0, accuracy)
-            balacc0 = learn_balacc_from_confusion(tp0, fp0, tn0, fn0, role)
-            write(funit,'(A,A,A,A,A,F10.5,A,F10.5,A,F10.5,A,I0,A,I0,A,I0,A,I0)') 'otsu_ablation,', &
-                trim(dataset_short_name(dsets(ids))), ',', trim(dataset_learn_role_name(role)), ',', &
-                balacc1, ',', balacc0, ',', balacc1 - balacc0, ',', fp1, ',', fn1, ',', fp0, ',', fn0
-        end do
-    end subroutine write_otsu_ablation_diagnostics
-
-
     function dataset_short_name( dset ) result( name )
         type(cavg_quality_training_dataset), intent(in) :: dset
         character(len=LONGSTRLEN) :: name
@@ -1388,7 +1291,6 @@ contains
         type(cavg_quality_learn_diagnostics),intent(out) :: diag
         type(cavg_quality_result) :: quality
         integer :: ids, tp, fp, tn, fn, role
-        logical :: lowsep, single_cluster, otsu_like, rescue_like, min_accept_like
         diag = cavg_quality_learn_diagnostics()
         diag%n_datasets = size(dsets)
         do ids = 1, size(dsets)
@@ -1417,76 +1319,9 @@ contains
                 diag%overfit_focus_fp  = diag%overfit_focus_fp + &
                     count_accepted_bad_overfit_signature(dsets(ids), quality)
             endif
-            lowsep = quality%separation < model%min_score_separation
-            single_cluster = trim(quality%soft_decision) == 'hard_only' .or. &
-                quality%nclust <= 1 .or. .not. quality%used_threshold
-            otsu_like = threshold_policy_looks_otsu(quality, model)
-            rescue_like = cluster_rescue_looks_active(quality, model)
-            min_accept_like = min_accept_fraction_looks_active(quality, model)
-            if( lowsep )then
-                diag%n_lowsep  = diag%n_lowsep + 1
-                diag%lowsep_fp = diag%lowsep_fp + fp
-                diag%lowsep_fn = diag%lowsep_fn + fn
-            endif
-            if( single_cluster )then
-                diag%n_single_cluster  = diag%n_single_cluster + 1
-                diag%single_cluster_fp = diag%single_cluster_fp + fp
-                diag%single_cluster_fn = diag%single_cluster_fn + fn
-            endif
-            if( otsu_like )then
-                diag%n_otsu_like  = diag%n_otsu_like + 1
-                diag%otsu_like_fp = diag%otsu_like_fp + fp
-                diag%otsu_like_fn = diag%otsu_like_fn + fn
-            endif
-            if( rescue_like )then
-                diag%n_rescue_like  = diag%n_rescue_like + 1
-                diag%rescue_like_fp = diag%rescue_like_fp + fp
-                diag%rescue_like_fn = diag%rescue_like_fn + fn
-            endif
-            if( min_accept_like )then
-                diag%n_min_accept_like  = diag%n_min_accept_like + 1
-                diag%min_accept_like_fp = diag%min_accept_like_fp + fp
-                diag%min_accept_like_fn = diag%min_accept_like_fn + fn
-            endif
             call quality%kill()
         end do
     end subroutine collect_learn_diagnostics
-
-    logical function threshold_policy_looks_otsu( quality, model )
-        type(cavg_quality_result), intent(in) :: quality
-        type(cavg_quality_model),  intent(in) :: model
-        threshold_policy_looks_otsu = .false.
-        if( .not. quality%used_threshold ) return
-        if( quality%nclust /= 2 ) return
-        if( quality%separation < model%min_score_separation )then
-            threshold_policy_looks_otsu = model%use_lowsep_otsu
-        else if( model%use_otsu_window )then
-            threshold_policy_looks_otsu = abs(quality%threshold_offset - model%boundary_margin) > 1.0e-4
-        endif
-    end function threshold_policy_looks_otsu
-
-    logical function cluster_rescue_looks_active( quality, model )
-        type(cavg_quality_result), intent(in) :: quality
-        type(cavg_quality_model),  intent(in) :: model
-        cluster_rescue_looks_active = .false.
-        if( .not. model%use_cluster_rescue ) return
-        if( .not. allocated(quality%states) ) return
-        if( .not. allocated(quality%scores) ) return
-        if( .not. allocated(quality%labels) ) return
-        if( quality%good_label <= 0 ) return
-        cluster_rescue_looks_active = any(quality%states > 0 .and. &
-            quality%scores < quality%threshold - EPS .and. quality%labels == quality%good_label)
-    end function cluster_rescue_looks_active
-
-    logical function min_accept_fraction_looks_active( quality, model )
-        type(cavg_quality_result), intent(in) :: quality
-        type(cavg_quality_model),  intent(in) :: model
-        min_accept_fraction_looks_active = .false.
-        if( .not. model%enforce_min_accept_frac ) return
-        if( .not. quality%used_threshold ) return
-        min_accept_fraction_looks_active = quality%threshold_offset > model%boundary_margin + 1.0e-4
-    end function min_accept_fraction_looks_active
-
 
     subroutine write_evaluate_diagnostics( funit, model, diag )
         integer,                              intent(in) :: funit
@@ -1516,27 +1351,8 @@ contains
             LEARN_RECALL_ONLY_PENALTY
         call write_evaluate_diagnostic(funit, 'note', 'trainable_good_only_score', 'guarded_recall', trim(detail))
         call write_evaluate_diagnostic(funit, 'note', 'feature_policy', trim(model%feature_policy), 'fixed_model')
-        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_lowsep_otsu, ';active_datasets=', &
-            diag%n_lowsep, ';fp=', diag%lowsep_fp, ';fn=', diag%lowsep_fn
-        call write_evaluate_diagnostic(funit, policy_level(diag%n_lowsep, diag%lowsep_fp, diag%lowsep_fn), &
-            'use_lowsep_otsu_effect', 'fixed_model', trim(detail))
-        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_otsu_window, ';otsu_like_datasets=', &
-            diag%n_otsu_like, ';fp=', diag%otsu_like_fp, ';fn=', diag%otsu_like_fn
-        call write_evaluate_diagnostic(funit, policy_level(diag%n_otsu_like, diag%otsu_like_fp, diag%otsu_like_fn), &
-            'use_otsu_window_effect', 'fixed_model', trim(detail))
-        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%use_cluster_rescue, ';rescue_like_datasets=', &
-            diag%n_rescue_like, ';fp=', diag%rescue_like_fp, ';fn=', diag%rescue_like_fn
-        call write_evaluate_diagnostic(funit, rescue_policy_level(model, diag), 'use_cluster_rescue', 'fixed_model', &
-            trim(detail))
-        write(detail,'(A,L1,A,I0,A,I0,A,I0)') 'selected=', model%enforce_min_accept_frac, ';min_accept_datasets=', &
-            diag%n_min_accept_like, ';fp=', diag%min_accept_like_fp, ';fn=', diag%min_accept_like_fn
-        call write_evaluate_diagnostic(funit, min_accept_policy_level(model, diag), 'enforce_min_accept_frac', &
-            'fixed_model', trim(detail))
-        write(detail,'(A,I0,A,I0,A,I0,A,I0,A,I0)') 'single_cluster_datasets=', diag%n_single_cluster, &
-            ';fp=', diag%single_cluster_fp, ';fn=', diag%single_cluster_fn, ';total_fp=', diag%total_fp, &
-            ';total_fn=', diag%total_fn
-        call write_evaluate_diagnostic(funit, policy_level(diag%n_single_cluster, diag%single_cluster_fp, &
-            diag%single_cluster_fn), 'accept_all_fallback', 'fixed_model', trim(detail))
+        write(detail,'(A,I0,A,I0)') 'total_fp=', diag%total_fp, ';total_fn=', diag%total_fn
+        call write_evaluate_diagnostic(funit, 'note', 'errors', 'fixed_model', trim(detail))
     end subroutine write_evaluate_diagnostics
 
 
@@ -1549,29 +1365,6 @@ contains
             level = 'note'
         endif
     end function policy_level
-
-    function rescue_policy_level( model, diag ) result( level )
-        type(cavg_quality_model),             intent(in) :: model
-        type(cavg_quality_learn_diagnostics), intent(in) :: diag
-        character(len=8) :: level
-        if( model%use_cluster_rescue )then
-            level = policy_level(diag%n_rescue_like, diag%rescue_like_fp, diag%rescue_like_fn)
-        else
-            level = 'note'
-        endif
-    end function rescue_policy_level
-
-    function min_accept_policy_level( model, diag ) result( level )
-        type(cavg_quality_model),             intent(in) :: model
-        type(cavg_quality_learn_diagnostics), intent(in) :: diag
-        character(len=8) :: level
-        if( model%enforce_min_accept_frac )then
-            level = policy_level(diag%n_min_accept_like, diag%min_accept_like_fp, diag%min_accept_like_fn)
-        else
-            level = 'note'
-        endif
-    end function min_accept_policy_level
-
 
     subroutine write_evaluate_diagnostic( funit, level, param, status, detail )
         integer,          intent(in) :: funit

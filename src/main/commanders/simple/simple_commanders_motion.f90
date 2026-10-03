@@ -200,7 +200,7 @@ contains
         call generator%kill
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)
         call spproj%kill
-        call qsys_job_finished(params, string('simple_commanders_motion :: exec_fractionate_movies'))
+        call qsys_declare_part_finished(params, string('simple_commanders_motion :: exec_fractionate_movies'))
         call simple_end('**** SIMPLE_FRACTIONATE_MOVIES NORMAL STOP ****')
     end subroutine exec_fractionate_movies
 

@@ -11,7 +11,7 @@ use simple_flex_pca_records, only: flex_selection, flex_fit_model, flex_latent, 
 use simple_parameters,           only: parameters
 use simple_srch_sort_loc,        only: hpsort
 use simple_flex_pca_deconv,      only: calibrate_noise_scale, deconvolve_latent
-use simple_flex_pca_embedding_io, only: read_embedding_cache, read_deconv_block, append_deconv_block
+use simple_flex_pca_embedding_io, only: read_deconv_block, append_deconv_block
 use simple_flex_pca_weights,     only: build_covariance_state_weights
 implicit none
 private
@@ -45,14 +45,10 @@ contains
     !> Calibrate the per-particle noise (from the even/odd half solutions when the run has them,
     !! else from the scale file the original run wrote) and replace z / precision by the posterior
     !! means / precisions under the deconvolved mixture prior.
-    subroutine apply_latent_deconvolution( latent, model, sel, box_crop, smpd_crop, applied, labels, resume, adopted, srcdir, srcfile )
+    subroutine apply_latent_deconvolution( latent, model, sel, applied, labels, resume, adopted, srcdir, srcfile )
         type(flex_latent),    intent(inout) :: latent  !< z and precision deconvolved in place; zhalf consumed
         type(flex_fit_model), intent(in)    :: model
         type(flex_selection), intent(in)    :: sel
-        type(flex_fit_model) :: model_c
-        type(flex_latent)    :: lat_c
-        integer,  intent(in)    :: box_crop          !< the run's working lattice (a legacy deconvolved cache must match it)
-        real,     intent(in)    :: smpd_crop
         integer, allocatable, intent(inout) :: labels(:)   !< mixture component per particle
         logical,  intent(in)    :: resume
         logical,  intent(out)   :: adopted
@@ -63,10 +59,9 @@ contains
         character(len=*), intent(in) :: srcfile   !< the infile itself: its trailing deconvolved block is adopted first
         logical,  intent(out)   :: applied
         real(dp) :: prior(model%ncomp), a_comp(model%ncomp), noise_scale
-        integer :: q, k_deconv, u_ns, io_ns, i, pind_c, comp_c
-        real(dp) :: resp_c
+        integer :: q, k_deconv, u_ns, io_ns
         logical  :: l_resume
-        character(len=:), allocatable :: cache_fname, labels_fname, ns_fname
+        character(len=:), allocatable :: ns_fname
         applied = .false.
         adopted = .false.
         l_resume = resume
@@ -97,50 +92,6 @@ contains
                     end block
                 endif
             endif
-        endif
-        ! ---- legacy: the separate deconvolved cache older runs wrote (here, or next to infile) ----
-        cache_fname  = 'flex_pca_embedding_deconv.bin'
-        labels_fname = 'flex_pca_deconv_labels.txt'
-        if( l_resume .and. .not. file_exists(cache_fname) )then
-            if( len_trim(srcdir) > 0 )then
-                if( file_exists(trim(srcdir)//'/flex_pca_embedding_deconv.bin') )then
-                    cache_fname  = trim(srcdir)//'/flex_pca_embedding_deconv.bin'
-                    labels_fname = trim(srcdir)//'/flex_pca_deconv_labels.txt'
-                    write(logfhandle,'(A)') '>>> FLEX_PCA resumed embedding: deconvolved cache found next to infile: '//cache_fname
-                endif
-            endif
-        endif
-        if( l_resume .and. file_exists(cache_fname) )then
-            call read_embedding_cache(cache_fname, box_crop, smpd_crop, sel, model_c, lat_c)
-            if( model_c%ncomp == model%ncomp .and. size(lat_c%z,1) == sel%nptcls )then
-                latent%z(1:sel%nptcls,1:model%ncomp) = lat_c%z
-                latent%precision(1:model%ncomp,1:model%ncomp,1:sel%nptcls) = lat_c%precision
-                if( allocated(labels) ) deallocate(labels)
-                allocate(labels(sel%nptcls), source=0)
-                open(newunit=u_ns, file=labels_fname, status='old', action='read', iostat=io_ns)
-                if( io_ns == 0 )then
-                    read(u_ns,*,iostat=io_ns)      ! header
-                    do i = 1, sel%nptcls
-                        read(u_ns,*,iostat=io_ns) pind_c, comp_c, resp_c
-                        if( io_ns /= 0 .or. pind_c /= sel%pinds(i) ) exit
-                        labels(i) = comp_c
-                    end do
-                    close(u_ns)
-                endif
-                if( io_ns /= 0 .or. any(labels < 1) )then
-                    write(logfhandle,'(A)') '>>> FLEX_PCA resumed deconvolution: labels file missing or &
-                        &inconsistent; the state stage will rediscover its clusters'
-                    deallocate(labels)
-                endif
-                write(logfhandle,'(A)') '>>> FLEX_PCA resumed embedding: deconvolved coordinates adopted from '//&
-                    &cache_fname//' (no re-deconvolution)'
-                call flush(logfhandle)
-                applied = .true.
-                adopted = .true.
-                call lat_c%kill; call model_c%kill
-                return
-            endif
-            call lat_c%kill; call model_c%kill
         endif
         do q = 1, model%ncomp
             prior(q) = 1.d0 / max(model%eigvals(q), DTINY)

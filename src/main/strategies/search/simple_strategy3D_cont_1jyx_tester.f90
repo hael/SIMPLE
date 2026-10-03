@@ -474,7 +474,6 @@ contains
         p%oritype = 'ptcl3D'
         p%cc_objfun = objfun
         p%inpl_cont = 'no'
-        p%projrec = 'no'
         p%box = TEST_BOX
         p%box_crop = TEST_BOX
         p%trs = TEST_TRS

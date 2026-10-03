@@ -33,7 +33,7 @@ subroutine new_make_oris( prgtab )
         & to yes, then all nptcls orientations are assigned quasi-even projection directions and  random in-plane parameters.&
         & If nstates is set to some integer number > 0, then states are assigned randomly',&
         &'simple_exec',&                     ! executable
-        &.false.)                            ! requires sp_project
+        &.false., display_name='Create Orientation Files')                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -91,7 +91,7 @@ subroutine new_make_oris( prgtab )
         & only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul.&
         & If zero=yes, then the shifts are zeroed',&
         &'simple_exec',&                  ! executable
-        &.false.)                         ! requires sp_project
+        &.false., display_name='Edit Orientations')                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -162,7 +162,7 @@ subroutine new_make_oris( prgtab )
         & tables (oritab and oritab2) are inputted, statistics of the distances between the orientations&
         & in the two documents are provided',&
         &'simple_exec',&                          ! executable
-        &.false.)                                 ! requires sp_project
+        &.false., display_name='Orientation Statistics')                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -213,7 +213,8 @@ subroutine new_make_oris( prgtab )
         &'is a program for extracting projection directions from orientations for visualization in UCSF Chimera',& ! help
         &'simple_exec',&                                                                                           ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                                                  ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Visualize Orientation Distribution') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -256,7 +257,7 @@ subroutine new_make_oris( prgtab )
         & even; the cost grows as nspace squared times the point-group order',&
         &'simple_exec',&                                                                     ! executable
         &.false., &                                                                          ! requires sp_project
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_ADVANCED, display_name='Projection-Direction Angular Resolution')
         ! INPUT PARAMETER SPECIFICATIONS
         ! parameter input/output
         call measure_projspace_angres%add_input(UI_PARM, nspace, required_override=.true., &

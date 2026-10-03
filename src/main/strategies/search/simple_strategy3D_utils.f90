@@ -115,15 +115,9 @@ contains
         neff_states = 1
         if( l_multistates ) neff_states = count(s3D%state_exists)
         if( s%l_neigh )then
-            select case(trim(s%refine))
-                case('shc_neigh')
-                    nrefs_tot  = s%nprojs_sub * neff_states
-                    nrefs_eval = s%nrefs_eval
-                case DEFAULT
-                    ! Deterministic neighborhood refinement is local refinement, not stochastic coverage.
-                    nrefs_tot  = 1
-                    nrefs_eval = 1
-            end select
+            ! Deterministic neighborhood refinement is local refinement, not stochastic coverage.
+            nrefs_tot  = 1
+            nrefs_eval = 1
         else if( s%l_greedy )then
             nrefs_tot  = s%nprojs * neff_states
             nrefs_eval = nrefs_tot

@@ -27,14 +27,4 @@ int kill(pid_t pid, int sig) { errno = ENOSYS; return -1; }
 // poll (POSIX I/O multiplexing - not available in Windows UCRT)
 int poll(void *fds, unsigned long nfds, int timeout) { errno = ENOSYS; return -1; }
 
-// POSIX message queues
-int mq_timedreceive(int mqdes, char *msg_ptr, size_t msg_len, unsigned *msg_prio, const void *abs_timeout) { errno = ENOSYS; return -1; }
-int mq_timedsend(int mqdes, const char *msg_ptr, size_t msg_len, unsigned msg_prio, const void *abs_timeout) { errno = ENOSYS; return -1; }
-int mq_getattr(int mqdes, void *mqstat) { errno = ENOSYS; return -1; }
-int mq_open(const char *name, int oflag, ...) { errno = ENOSYS; return -1; }
-int mq_receive(int mqdes, char *msg_ptr, size_t msg_len, unsigned *msg_prio) { errno = ENOSYS; return -1; }
-int mq_send(int mqdes, const char *msg_ptr, size_t msg_len, unsigned msg_prio) { errno = ENOSYS; return -1; }
-int mq_close(int mqdes) { errno = ENOSYS; return -1; }
-int mq_unlink(const char *name) { errno = ENOSYS; return -1; }
-
 #endif // _WIN32

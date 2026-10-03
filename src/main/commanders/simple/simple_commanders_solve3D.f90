@@ -851,7 +851,7 @@ contains
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
         if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
-            THROW_HARD('nsample_start/nsample_stop are no longer supported for solve3D; set nsample instead')
+            THROW_HARD('solve3D does not take nsample_start/nsample_stop; set nsample instead')
         endif
         if( l_state_continue )then
             if( cline%defined('multivol_mode') )then
@@ -898,7 +898,7 @@ contains
         endif
         select case(trim(params%filt_mode))
             case('uniform','fsc')
-                THROW_HARD('solve3D no longer supports automatic low-pass filt_mode=uniform|fsc; &
+                THROW_HARD('solve3D does not support automatic low-pass filt_mode=uniform|fsc; &
                     &use none|nonuniform')
         end select
         call cline%set('mkdir', 'no')
@@ -1485,7 +1485,7 @@ contains
         end subroutine report_frozen_provenance
 
         !> Per stage: the emitted limits next to the base run's (the add-on
-        !! plans and promotes by the legacy rule, so they may differ); before
+        !! plans and promotes by the standard rule, so they may differ); before
         !! the first trailing stage the boundary reconstruction seeds the
         !! cohort-only chain (trail_seed) with the frozen term added to its maps
         subroutine addon_stage_boundary( istage_here )
@@ -1943,7 +1943,6 @@ contains
                 call cline_ini3D%delete('nthr_ini3D')
             endif
             call cline_ini3D%delete('nstates') ! cavg_ini under the assumption of one state
-            call cline_ini3D%delete('projrec') ! compact projection sums are for particle refinement stages
             call cline_ini3D%delete('oritype')
             call cline_ini3D%delete('imgkind')
             call cline_ini3D%delete('prob_athres')

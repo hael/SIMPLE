@@ -372,9 +372,12 @@ This is intended current behavior, not a full soft-assignment EM update.
 
 ### Continuous in-plane policy
 
-`inpl_cont` has exactly two values. `no` preserves the historical alternating
-search: continuous shift optimization with the discrete in-plane angle
-callback. `yes` is the default and follows the **polish-only
+`inpl_cont` is internal since release 4 (2026-10-03), not a command-line key.
+It is `yes` everywhere except under `refine=cont`, which sets it to `no` (the
+Cartesian pass solves the in-plane angle itself); `no` is the historical
+alternating search: continuous shift optimization with the discrete in-plane
+angle callback. The convergence output keeps reporting the continuous in-plane
+runs. `yes` follows the **polish-only
 principle**: continuous refinement changes pose *precision*, never search
 *behavior*. Selection sees exactly what the legacy route sees -- candidate
 scoring, probability-table profiling, shift-seed estimation, and multi-peak
@@ -390,7 +393,7 @@ Raw `objfun=euclid` and `objfun=cc` provide the analytic joint
 `(sx,sy,rotind_frac)` gradient. The cc route minimizes `-cc` with a
 quotient-rule angular derivative and maps scores as the clamped correlation
 rather than `exp(-loss)`. Parameter validation does not couple `inpl_cont` to
-`objfun`, `projrec`, or a specific program. Objective capability
+`objfun` or a specific program. Objective capability
 is owned by the PFTC/search implementation. The opt-in is not restricted to `refine=shc`:
 deterministic, neighborhood, evaluation, and probabilistic matcher routes use
 the same policy wherever they commit a pose. A mode with no pose search,
@@ -455,9 +458,9 @@ distance uses the equivalent operation with the smallest in-plane change. A
 symmetry-equivalent branch switch must not appear as a spurious 180-degree
 in-plane move.
 
-Shared-memory and distributed probabilistic child commands must retain
-`inpl_cont`; reconstruction, sigma, assembly, and postprocessing children must
-not receive matcher-only search policy.
+Reconstruction, sigma, assembly, and postprocessing children must not receive
+matcher-only search policy (`pose_cont`); `inpl_cont` never appears on a
+command line.
 
 For multi-state alignment (`nstates > 1`), shift-first candidate scoring is
 disabled. The matcher and probability-table paths may still refine shifts after
@@ -657,8 +660,8 @@ records only the refine3D-side integration contract:
   on the constrained pair without post-hoc masking or phase randomization,
   logged as `>>> FSC MODE`. Before either mask source exists, the base
   bootstraps on the sphere and its current pair supplies replay density.
-- **Current exclusions** (hard-errored, not approximated): `projrec=yes` and
-  matrix-free workflow execution. Fractional/trailing
+- **Current exclusions** (hard-errored, not approximated): matrix-free
+  workflow execution. Fractional/trailing
   reconstruction is implemented in the distributed master path.
 - New regularization is research, tracked in
   `doc/implementation_notes/pcg_priors_history.md`; it cannot be used to close
@@ -799,7 +802,7 @@ handoff artifacts for a later `refine3D` execution.
 - Treat assignment maps, partition-local partials, state volumes, even/odd
   volumes, FSC files, automasks, and NU outputs as explicit workflow
   contracts.
-- Preserve the two-mode in-plane boundary: only `new_legacy` may attach the
+- Preserve the two-mode in-plane boundary: only `new_alternating` may attach the
   callback, and no `inpl_cont=yes` path may invoke it.
 - Initialize candidate-profiling joint solves with one callback-equivalent
   all-angle selection at the supplied shift; do not run the 5-by-5 coarse shift
@@ -808,5 +811,5 @@ handoff artifacts for a later `refine3D` execution.
   its rounded in-plane cell and never perform a second global angle selection.
 - Keep probabilistic in-plane artifacts rounded and run durable fractional
   refinement only after final hard assignment.
-- Keep `inpl_cont` on shared-memory and distributed matcher/probability child
-  commands while stripping it from non-matcher children.
+- Keep `inpl_cont` internal: no UI input, no command-line key, `no` only under
+  `refine=cont`.

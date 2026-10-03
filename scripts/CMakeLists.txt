@@ -94,7 +94,6 @@ add_dependencies(generate_test_inventory generate_codebase_map)
 install(DIRECTORY  ${CMAKE_CURRENT_SOURCE_DIR}
   DESTINATION  ${CMAKE_INSTALL_PREFIX}
   CONFIGURATIONS DEBUG|RELEASE
-  PATTERN "backups/*" EXCLUDE
   PATTERN "*.txt"     EXCLUDE
   PATTERN "*.env"     EXCLUDE
   PATTERN "*.pl"

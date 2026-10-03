@@ -1,9 +1,11 @@
 !@descr: unit test routines for the binary orientation file (binoris)
-! Header bookkeeping, segment round trips, in-place segment rewrites, legacy particle records, and the
-! binoris_io / sp_project front doors.
+! Header bookkeeping, segment round trips, in-place segment rewrites, the particle record layout
+! (named slots in memory, zero padding on disk), particle records of earlier releases (narrower; read
+! with zeros in the missing slots), and the binoris_io / sp_project front doors.
 module simple_binoris_tester
 use simple_test_utils    ! assertions etc.
-use simple_defs_ori,     only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR
+use simple_defs_ori,     only: N_PTCL_ORIPARAMS, N_PTCL_RECORD_REALS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR, &
+    &I_LAST_NAMED_ORIPARAM, oriparam_is_spare, oriparam_isthere
 use simple_type_defs,    only: MIC_SEG, STK_SEG, PTCL2D_SEG
 use simple_string,       only: string
 use simple_string_utils, only: int2str
@@ -20,8 +22,9 @@ public :: run_all_binoris_tests
 
 ! the file header: MAX_N_SEGMENTS (20) segment records of five 8-byte integers (simple_binoris)
 integer, parameter :: HEADER_NBYTES     = 20 * 5 * 8
-integer, parameter :: PTCL_REC_NBYTES   = N_PTCL_ORIPARAMS * 4
-integer, parameter :: NLEGACY_VALUES    = 40 ! a particle record width from before the last slot additions
+integer, parameter :: PTCL_REC_NBYTES   = N_PTCL_RECORD_REALS * 4
+integer, parameter :: NRELEASE3_VALUES = 53 ! the particle record width of release 3
+integer, parameter :: NOLDER_VALUES    = 40 ! a narrower record from before the last slot additions
 integer, parameter :: NMICS = 3, NSTKS = 2, NPTCLS = 6
 real,    parameter :: TOL = 1.0e-5
 character(len=*), parameter :: BIN_FILE = 'tmp_binoris_test.simple'
@@ -36,8 +39,8 @@ contains
         call test_open_close_and_empty_header()
         call test_string_segment_roundtrip()
         call test_particle_segment_roundtrip()
-        call test_legacy_narrow_particle_records()
         call test_cartesian_record_slots()
+        call test_earlier_release_particle_records()
         call test_write_segment_inside()
         call test_write_segment_inside_strings()
         call test_project_write_segment_inside()
@@ -150,7 +153,7 @@ contains
         call assert_int(0, bos%get_n_records(MIC_SEG),                          'segment 1 stays empty')
         call assert_int(FROMTO(2)-FROMTO(1)+1, bos%get_n_records(PTCL2D_SEG),   'n_records of the partial particle segment')
         call assert_true(all(bos%get_fromto(PTCL2D_SEG) == FROMTO),             'fromto of the partial particle segment')
-        call assert_int(PTCL_REC_NBYTES, bos%get_n_bytes_per_record(PTCL2D_SEG), 'particle records are N_PTCL_ORIPARAMS reals')
+        call assert_int(PTCL_REC_NBYTES, bos%get_n_bytes_per_record(PTCL2D_SEG), 'particle records are N_PTCL_RECORD_REALS reals')
         call assert_true(bos%get_first_data_byte(PTCL2D_SEG) == int(HEADER_NBYTES+1,kind=8), 'empty segments take no bytes')
         ! whole segment: records land at their absolute indices
         call os2%new(NPTCLS, is_ptcl=.true.)
@@ -174,110 +177,109 @@ contains
         call os3%kill
     end subroutine test_particle_segment_roundtrip
 
-    ! records written by an older build with fewer slots read back with zeros in the new slots
-    subroutine test_legacy_narrow_particle_records()
+    !> A particle holds the named slots 1-53 in memory (42 spare); its record on disk is 64
+    !! reals, slots 54-64 being zero padding. The record round-trips the Cartesian diagnostic
+    !! slots; spare slots are never "there".
+    subroutine test_cartesian_record_slots()
         type(binoris) :: bos
         type(oris)    :: os, os2
-        type(ori)     :: o
-        real    :: prec(N_PTCL_ORIPARAMS)
-        integer :: i, funit, io_stat
-        integer(kind=8) :: pos
-        write(*,'(A)') 'test_legacy_narrow_particle_records'
+        integer :: i
+        write(*,'(A)') 'test_cartesian_record_slots'
+        call assert_int(53, N_PTCL_ORIPARAMS, 'a resident particle holds the 53 named slots')
+        call assert_int(64, N_PTCL_RECORD_REALS, 'the particle record on disk is 64 reals')
+        call assert_int(53, I_LAST_NAMED_ORIPARAM, 'the last named slot is 53')
+        call assert_int(51, I_CORR_CART, 'corr_cart sits in slot 51 (O8)')
+        call assert_int(52, I_POSE_CONT_IMPROVED, 'the improved flag sits in slot 52 (O8)')
+        call assert_int(53, I_CFAR, 'cfar sits in slot 53')
+        call assert_true(oriparam_is_spare(42) .and. oriparam_is_spare(54) .and. oriparam_is_spare(64), &
+            &'slot 42 and the padding slots 54-64 are spare')
+        call assert_false(oriparam_is_spare(41) .or. oriparam_is_spare(43) .or. oriparam_is_spare(53), &
+            &'slots 41, 43 and 53 are named')
+        call assert_false(oriparam_isthere(42, 1.0) .or. oriparam_isthere(60, 1.0), 'a spare slot is never there')
         call make_ptcl_oris(os, NPTCLS)
-        ! header claims NLEGACY_VALUES reals per record; the payload is written by hand
-        call bos%open(string(BIN_FILE), del_if_exists=.true.)
-        call bos%add_segment(PTCL2D_SEG, [1,NPTCLS], NLEGACY_VALUES*4)
-        call bos%update_byte_ranges
-        call bos%write_header
-        pos = bos%get_first_data_byte(PTCL2D_SEG)
-        call bos%close
-        open(newunit=funit, file=BIN_FILE, access='stream', form='unformatted', action='readwrite', status='old', iostat=io_stat)
-        call assert_int(0, io_stat, 'legacy file reopened for the raw payload')
-        if( io_stat /= 0 ) return
         do i = 1,NPTCLS
-            call os%get_ori(i, o)
-            call o%ori2prec(prec)
-            write(unit=funit, pos=pos) prec(1:NLEGACY_VALUES)
-            pos = pos + NLEGACY_VALUES*4
+            call os%set(i, 'corr_cart',          0.25 + 0.1*real(i))
+            call os%set(i, 'pose_cont_improved', real(mod(i,2)))
+            call os%set(i, 'cfar',               0.1*real(i))
         enddo
-        close(funit)
+        call bos%open(string(BIN_FILE), del_if_exists=.true.)
+        call bos%write_segment(PTCL2D_SEG, os)
+        call bos%write_header
+        call bos%close
         call bos%open(string(BIN_FILE))
-        call assert_int(NLEGACY_VALUES*4, bos%get_n_bytes_per_record(PTCL2D_SEG), 'legacy record width read from the header')
+        call assert_int(N_PTCL_RECORD_REALS*4, bos%get_n_bytes_per_record(PTCL2D_SEG), 'particle records are 256 bytes')
         call os2%new(NPTCLS, is_ptcl=.true.)
         call bos%read_segment(PTCL2D_SEG, os2)
         call bos%close
         do i = 1,NPTCLS
-            call assert_real(os%get(i,'corr'),   os2%get(i,'corr'),   TOL, 'legacy record: slot 3 (corr)')
-            call assert_int(os%get_state(i),     os2%get_state(i),         'legacy record: slot 23 (state)')
-            call assert_real(os%get(i,'lp_est'), os2%get(i,'lp_est'), TOL, 'legacy record: slot 40 (lp_est), the last one present')
-            call assert_real(0., os2%get(i,'sampled'), TOL,               'legacy record: slot 45 (sampled) reads as zero')
-            call assert_real(0., os2%get(i,'cluster'), TOL,               'legacy record: slot 46 (cluster) reads as zero')
+            call assert_real(0.25 + 0.1*real(i), os2%get(i,'corr_cart'), TOL, 'slot 51 (corr_cart) round-trips')
+            call assert_real(real(mod(i,2)), os2%get(i,'pose_cont_improved'), TOL, 'slot 52 (improved flag) round-trips')
+            call assert_real(0.1*real(i), os2%get(i,'cfar'), TOL, 'slot 53 (cfar) round-trips')
+            call assert_real(os%get(i,'corr'), os2%get(i,'corr'), TOL, 'corr is untouched by the Cartesian slots')
         enddo
-        call os%kill
         call os2%kill
-        call o%kill
-    end subroutine test_legacy_narrow_particle_records
+        call del_file(BIN_FILE)
+        call os%kill
+    end subroutine test_cartesian_record_slots
 
-    !> A current particle record round-trips the appended diagnostic slots; an older
-    !! 50-real record reads all appended slots as zero.
-    subroutine test_cartesian_record_slots()
-        integer, parameter :: NARROW_VALUES = 50
+    !> Projects outlive releases: a particle record narrower than the current width reads back
+    !! with its own slots intact and zeros in the slots it lacks.
+    subroutine test_earlier_release_particle_records()
         type(binoris) :: bos
         type(oris)    :: os, os2
         type(ori)     :: o
         real    :: prec(N_PTCL_ORIPARAMS)
-        integer :: i, funit, io_stat, width
+        integer :: i, funit, io_stat, width, widths(2)
         integer(kind=8) :: pos
-        write(*,'(A)') 'test_cartesian_record_slots'
-        call assert_int(53, N_PTCL_ORIPARAMS, 'the particle record is 53 reals')
-        call assert_int(51, I_CORR_CART, 'corr_cart sits in slot 51 (O8)')
-        call assert_int(52, I_POSE_CONT_IMPROVED, 'the improved flag sits in slot 52 (O8)')
-        call assert_int(53, I_CFAR, 'cfar sits in slot 53')
+        write(*,'(A)') 'test_earlier_release_particle_records'
         call make_ptcl_oris(os, NPTCLS)
-        do width = N_PTCL_ORIPARAMS, NARROW_VALUES, NARROW_VALUES - N_PTCL_ORIPARAMS
+        do i = 1,NPTCLS
+            call os%set(i, 'cfar', 0.1*real(i))
+        enddo
+        widths = [NRELEASE3_VALUES, NOLDER_VALUES]
+        do width = 1,2
+            ! the header claims widths(width) reals per record; the payload is written by hand
             call bos%open(string(BIN_FILE), del_if_exists=.true.)
-            call bos%add_segment(PTCL2D_SEG, [1,NPTCLS], width*4)
+            call bos%add_segment(PTCL2D_SEG, [1,NPTCLS], widths(width)*4)
             call bos%update_byte_ranges
             call bos%write_header
             pos = bos%get_first_data_byte(PTCL2D_SEG)
             call bos%close
-            open(newunit=funit, file=BIN_FILE, access='stream', form='unformatted', action='readwrite', status='old', &
-                &iostat=io_stat)
-            call assert_int(0, io_stat, 'record-slot file reopened for the raw payload')
+            open(newunit=funit, file=BIN_FILE, access='stream', form='unformatted', action='readwrite', &
+                &status='old', iostat=io_stat)
+            call assert_int(0, io_stat, 'earlier-release file reopened for the raw payload')
             if( io_stat /= 0 ) return
             do i = 1,NPTCLS
                 call os%get_ori(i, o)
                 call o%ori2prec(prec)
-                prec(I_CORR_CART)          = 0.25 + 0.1*real(i)
-                prec(I_POSE_CONT_IMPROVED) = real(mod(i,2))
-                prec(I_CFAR)                = 0.1*real(i)
-                write(unit=funit, pos=pos) prec(1:width)
-                pos = pos + width*4
+                write(unit=funit, pos=pos) prec(1:widths(width))
+                pos = pos + widths(width)*4
             enddo
             close(funit)
             call bos%open(string(BIN_FILE))
+            call assert_int(widths(width)*4, bos%get_n_bytes_per_record(PTCL2D_SEG), &
+                &'earlier-release record width read from the header')
             call os2%new(NPTCLS, is_ptcl=.true.)
             call bos%read_segment(PTCL2D_SEG, os2)
             call bos%close
             do i = 1,NPTCLS
-                if( width == N_PTCL_ORIPARAMS )then
-                    call assert_real(0.25 + 0.1*real(i), os2%get(i,'corr_cart'), TOL, '53-real record: slot 51 (corr_cart)')
-                    call assert_real(real(mod(i,2)), os2%get(i,'pose_cont_improved'), TOL, &
-                        &'53-real record: slot 52 (improved flag)')
-                    call assert_real(0.1*real(i), os2%get(i,'cfar'), TOL, '53-real record: slot 53 (cfar)')
+                call assert_real(os%get(i,'corr'),   os2%get(i,'corr'),   TOL, 'earlier record: slot 3 (corr)')
+                call assert_int(os%get_state(i),     os2%get_state(i),         'earlier record: slot 23 (state)')
+                call assert_real(os%get(i,'lp_est'), os2%get(i,'lp_est'), TOL, 'earlier record: slot 40 (lp_est)')
+                if( widths(width) == NRELEASE3_VALUES )then
+                    call assert_real(0.1*real(i), os2%get(i,'cfar'), TOL, 'release-3 record: slot 53 (cfar) is kept')
                 else
-                    call assert_real(0., os2%get(i,'corr_cart'), TOL, '50-real record: corr_cart reads as zero')
-                    call assert_real(0., os2%get(i,'pose_cont_improved'), TOL, '50-real record: the improved flag reads as zero')
-                    call assert_real(0., os2%get(i,'cfar'), TOL, '50-real record: cfar reads as zero')
+                    call assert_real(0., os2%get(i,'sampled'), TOL, 'narrower record: slot 45 (sampled) reads as zero')
+                    call assert_real(0., os2%get(i,'cfar'),    TOL, 'narrower record: slot 53 (cfar) reads as zero')
                 endif
-                call assert_real(os%get(i,'corr'), os2%get(i,'corr'), TOL, 'record: corr is untouched by the Cartesian slots')
             enddo
             call os2%kill
         enddo
         call del_file(BIN_FILE)
         call os%kill
         call o%kill
-    end subroutine test_cartesian_record_slots
+    end subroutine test_earlier_release_particle_records
+
 
     !---------------- in-place rewrite of one segment ----------------
 

@@ -7,6 +7,7 @@ private
 
 public :: CAVG_QUALITY_NFEATS
 public :: CAVG_QUALITY_MAX_INTERACTIONS
+public :: CAVG_QUALITY_TRAINING_VERSION
 public :: CAVG_RELATIONAL_SCHEMA_NONE
 public :: CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1
 public :: CAVG_RELATIONAL_DEFAULT_KNN
@@ -34,6 +35,7 @@ public :: reset_cavg_quality_result
 
 integer, parameter :: CAVG_QUALITY_NFEATS  = 14
 integer, parameter :: CAVG_QUALITY_MAX_INTERACTIONS = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
+integer, parameter :: CAVG_QUALITY_TRAINING_VERSION = 1
 real,    parameter :: EPS                  = 1.0e-6
 real,    parameter :: CLIP_Z               = 4.0
 character(len=*), parameter :: CAVG_RELATIONAL_SCHEMA_NONE            = 'none'
@@ -88,16 +90,6 @@ type :: cavg_quality_model_spec
     real              :: relational_corr_lp           = 0.0
     real              :: relational_corr_trs          = 0.0
     real              :: relational_coefficient       = 0.0
-    real              :: boundary_margin              = 0.0
-    real              :: min_score_separation         = 0.0
-    real              :: otsu_min_offset              = 0.0
-    real              :: otsu_max_offset              = 0.0
-    real              :: cluster_rescue_margin        = 0.0
-    real              :: min_accept_frac              = 0.0
-    logical           :: use_lowsep_otsu              = .false.
-    logical           :: use_otsu_window              = .false.
-    logical           :: use_cluster_rescue           = .false.
-    logical           :: enforce_min_accept_frac      = .false.
 end type cavg_quality_model_spec
 
 type :: cavg_quality_result
@@ -126,6 +118,7 @@ end type cavg_quality_result
 type :: cavg_quality_training_dataset
     character(len=LONGSTRLEN) :: fname      = ''
     character(len=LONGSTRLEN) :: dataset_id = ''
+    integer                   :: training_version = 0
     character(len=32)         :: quality_context = ''
     character(len=64)         :: relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
     integer                   :: relational_knn = 0
@@ -148,21 +141,6 @@ type :: cavg_quality_learn_diagnostics
     integer :: n_skipped           = 0
     integer :: total_fp            = 0
     integer :: total_fn            = 0
-    integer :: n_lowsep            = 0
-    integer :: lowsep_fp           = 0
-    integer :: lowsep_fn           = 0
-    integer :: n_single_cluster    = 0
-    integer :: single_cluster_fp   = 0
-    integer :: single_cluster_fn   = 0
-    integer :: n_otsu_like         = 0
-    integer :: otsu_like_fp        = 0
-    integer :: otsu_like_fn        = 0
-    integer :: n_rescue_like       = 0
-    integer :: rescue_like_fp      = 0
-    integer :: rescue_like_fn      = 0
-    integer :: n_min_accept_like   = 0
-    integer :: min_accept_like_fp  = 0
-    integer :: min_accept_like_fn  = 0
     integer :: n_overfit_focus     = 0
     integer :: overfit_focus_bad   = 0
     integer :: overfit_focus_fp    = 0

@@ -477,6 +477,7 @@ contains
         call proj%os_stk%new(1, is_ptcl=.false.)
         call proj%os_stk%set_state(1, 1)
         call proj%os_stk%set(1, 'nptcls', nptcls)
+        call proj%os_stk%set(1, 'nptcls_stk', nptcls)
         call proj%os_stk%set(1, 'fromp',  1)
         call proj%os_stk%set(1, 'top',    nptcls)
         call proj%os_stk%set(1, 'stk',    stem%to_char() // '.mrcs')
@@ -485,6 +486,7 @@ contains
         do i = 1, nptcls
             call proj%os_ptcl2D%set_class(i, 1)
             call proj%os_ptcl2D%set_stkind(i, 1)
+            call proj%os_ptcl2D%set(i, 'indstk', i)
             if( i <= nsel ) then
                 call proj%os_ptcl2D%set_state(i, 1)
             else

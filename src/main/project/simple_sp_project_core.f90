@@ -235,8 +235,6 @@ contains
             call self%compenv%new(1, is_ptcl=.false.)
         endif
         ! compenv has to be filled as strings as it is used as a string only dictionary
-        ! Executable locations belong to the runtime environment, not the project.
-        if( self%compenv%isthere('simple_path') ) call self%compenv%delete_entry('simple_path')
         if( cline%defined('qsys_name') )then
             qsnam = cline%get_carg('qsys_name')
             call self%compenv%set(1, 'qsys_name', qsnam%to_char())

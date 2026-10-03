@@ -97,7 +97,7 @@ contains
         ! master parameters
         call params%new(cline)
         call gui_comm%new(params)
-        if( params%l_nonuniform ) THROW_HARD('2D nonuniform filtering has been removed; exec_solve2D')
+        if( params%l_nonuniform ) THROW_HARD('nonuniform filtering is not available in 2D; exec_solve2D')
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
         maxits = params%extr_lim

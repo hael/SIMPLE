@@ -100,7 +100,6 @@ contains
         if( params%cc_objfun /= OBJFUN_EUCLID .and. params%cc_objfun /= OBJFUN_CC ) &
             &THROW_HARD('strategy3D_cont supports only objfun=euclid or objfun=cc')
         if( trim(params%inpl_cont) /= 'no' ) THROW_HARD('strategy3D_cont cannot execute with inpl_cont=yes')
-        if( trim(params%projrec) == 'yes' ) THROW_HARD('strategy3D_cont does not support projrec=yes')
         if( .not. associated(build%spproj_field) ) THROW_HARD('strategy3D_cont requires an active ptcl3D project field')
         if( spec%iptcl < 1 .or. spec%iptcl > build%spproj_field%get_noris() ) &
             &THROW_HARD('strategy3D_cont particle index is outside ptcl3D')

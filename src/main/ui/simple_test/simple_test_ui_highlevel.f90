@@ -62,7 +62,7 @@ contains
         &'runs molecular 6VXX and 1JXY suites and validates CTF recovery, picking, extraction, '//&
         &'solve2D class averages, and shape ranking',&
         &'simple_test_exec',&                       ! executable
-        &.false.)                                   ! requires sp_project
+        &.false., display_name='Mini Stream Validation')                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         call mini_stream%add_input(UI_PARM, 'suite', 'str', 'Run one molecular suite', &
             &'Choose 6vxx or 1jxy for a focused run; use list to print the accepted names', &
@@ -94,7 +94,7 @@ contains
         &'checks volume and stack metadata, every image variance, orientation diversity, shifts, '//&
         &'and CTF parameter bounds against deterministic inputs',&
         &'simple_test_exec',&                       ! executable
-        &.false.)                                   ! requires sp_project
+        &.false., display_name='Particle Simulation Validation')                                   ! requires sp_project
         ! add to ui_hash
         call add_ui_program('simulate_particles', simulate_particles, tsttab, UI_CATEGORY)
     end subroutine new_simulate_particles
@@ -108,7 +108,7 @@ contains
         &'solve3D on a seeded subset of simulated particles of a symmetry-broken 6VXX map, then '//&
         &'solve3D_addon on all of them, checked against the simulation truth (poses, map) and the base run',&
         &'simple_test_exec',&                       ! executable
-        &.false.)                                   ! requires sp_project
+        &.false., display_name='solve3D Add-On Validation')                                   ! requires sp_project
         ! add to ui_hash
         call add_ui_program('solve3D_addon', solve3D_addon, tsttab, UI_CATEGORY)
     end subroutine new_solve3D_addon
@@ -120,7 +120,7 @@ contains
         &'generate cumulative projects for solve3D_addon stream tests',&
         &'splits all input particle images into append-only physical stacks and writes snapshot1.simple through snapshotN.simple',&
         &'simple_test_exec',&
-        &.true.)
+        &.true., display_name='solve3D Add-On Snapshots')
         call solve3D_addon_snapshots%add_input(UI_PARM, 'nptcls_base', 'num', 'Base particle count', &
             &'Particles in snapshot1 and the parent solve3D run', 'particles', .true., 0.)
         call solve3D_addon_snapshots%add_input(UI_PARM, 'nsnapshots', 'num', 'Snapshot count', &
@@ -138,7 +138,7 @@ contains
         &'particles from poses perturbed by 15 degrees and 2 pixels, and as the continuation of a polar refine3D_auto, '//&
         &'checked against the simulation truth',&
         &'simple_test_exec',&                       ! executable
-        &.false.)                                   ! requires sp_project
+        &.false., display_name='Continuous Refinement Validation')                                   ! requires sp_project
         ! add to ui_hash
         call add_ui_program('cont_refine3D_1jxy', cont_refine3D_1jxy, tsttab, UI_CATEGORY)
     end subroutine new_cont_refine3D_1jxy
@@ -151,7 +151,7 @@ contains
         &'validate simulated workflows for embedded 6VXX and 1JXY systems',&
         &'runs one molecular suite through preprocessing and initial-model reconstruction, then validates the final volume',&
         &'simple_test_exec',&                            ! executable
-        &.false.)                                        ! requires sp_project
+        &.false., display_name='Simulated Workflow Validation')                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         !call simulated_workflow%add_input(UI_IO, )
@@ -191,7 +191,7 @@ contains
         &'deapodization against ENVELOPE-FREE observations, the one stage that does not commit '//&
         &'an inverse crime; and C2 coordinate replication equivalence.',&
         &'simple_test_exec',&                        ! executable
-        &.false.)                                    ! requires sp_project
+        &.false., display_name='PCG Reconstruction Validation')                                    ! requires sp_project
         ! add to ui_hash
         call add_ui_program('pcg_recon', pcg_recon, tsttab, UI_CATEGORY)
     end subroutine new_pcg_recon
@@ -205,13 +205,10 @@ contains
         &'deterministic complementary subsets. Validates raw (B,D) additivity, u/f continuation '//&
         &'weighting, full-mass ensemble preservation, and continuation artifact replay.',&
         &'simple_test_exec',&
-        &.true.)
+        &.true., display_name='PCG Fractional Update Validation')
         call pcg_frac_update%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0)
-        call pcg_frac_update%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction', &
-        &'Accepted for reconstruct3D command compatibility; PCG validation requires no', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call pcg_frac_update%add_input(UI_SRCH, trs)
         call pcg_frac_update%add_input(UI_SRCH, pgrp)
         call pcg_frac_update%add_input(UI_SRCH, objfun)
@@ -246,7 +243,7 @@ contains
         &'recvol_stateXX_gridding.mrc and recvol_stateXX_pcg.mrc. Measurement only, no thresholds '//&
         &'(doc/implementation_notes/drop_legacy_box_division.md, plan step 2).',&
         &'simple_test_exec',&
-        &.true.)
+        &.true., display_name='Reconstruction Backend Comparison')
         call rec3D_backends%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0)
@@ -276,7 +273,7 @@ contains
         &'SINGLE nanoparticle atom statistics',&
         &'validates atom detection and statistics against a simulated nanoparticle',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='SINGLE Atom Statistics Test')
         call single_atoms_stats%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
         &'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms{0.358}', .false., 0.358)
         call single_atoms_stats%add_input(UI_FILT, 'element', 'str', 'Atom element name: Au, Pt etc.', &
@@ -291,7 +288,7 @@ contains
         &'validate SINGLE reconstruction for FCC Pt and wurtzite CdSe',&
         &'runs focused Pt and CdSeW nanoparticle suites and validates each final map against its known truth',&
         &'simple_test_exec',&
-        &.false.)
+        &.false., display_name='SINGLE Workflow Validation')
         call single_workflow%add_input(UI_PARM, 'suite', 'str', 'Run one nanoparticle suite', &
         &'Choose fcc (platinum) or wurtzite (CdSe); use list to print the accepted names', &
         &'', .true., '')
@@ -304,7 +301,7 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call stream_preproc%new('stream_preproc', 'stream-preproc', &
             &'generates five synthetic movies and validates streaming motion-correction and CTF outputs', &
-            &'simple_test_exec', .false.)
+            &'simple_test_exec', .false., display_name='Stream Preprocessing Validation')
         call add_ui_program('stream_preproc', stream_preproc, tsttab, UI_CATEGORY)
     end subroutine new_stream_preproc
 

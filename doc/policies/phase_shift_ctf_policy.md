@@ -313,9 +313,8 @@ The implementation was built and the following focused checks passed on
 - `simple_test_project_merge`: project assembly and validation behavior
   (the `project merge` sub-suite of `simple_test_exec test=unit_project`; the
   duplicate executable is gone since 2026-09-23)
-- `simple_test_projdir_accumulator`: unchanged reconstruction accumulation contract
-  (since 2026-09-23 the `class-average accumulator` sub-suite of
-  `simple_test_exec test=unit_reconstruction`; the executable is gone)
+- `simple_test_projdir_accumulator`: retired with `projrec` in release 4 (it was
+  the `class-average accumulator` sub-suite of `unit_reconstruction` from 2026-09-23)
 
 The broad pre-existing `simple_test_starfile` executable was not a clean
 acceptance gate because of unrelated legacy failures and nondeterministic
@@ -353,7 +352,6 @@ build/production/simple_test_exec test=unit_project  (project records sub-suite)
 build/production/simple_test_exec test=unit_project  suite=star_project
 build/production/simple_test_exec test=unit_ui       suite=ui_visibility
 build/production/simple_test_exec test=unit_project  suite=project_merge
-build/production/simple_test_exec test=unit_reconstruction suite=class_average_accumulator
 ```
 
 Before inspecting experimental results, record the quantitative tolerances to

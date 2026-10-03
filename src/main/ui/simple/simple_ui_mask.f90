@@ -27,7 +27,7 @@ subroutine new_auto_spher_mask( prgtab )
         &'spherical masking with automatic diameter estimation',& ! summary
         &'is a program for automated spherical masking',& ! help
         &'simple_exec',&                                  ! executable
-        &.false.)                                         ! requires sp_project
+        &.false., display_name='Automatic Spherical Mask')                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call auto_spher_mask%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
@@ -61,7 +61,8 @@ subroutine new_auto_spher_mask( prgtab )
         &'is a program for automated envelope masking in 2D',& ! help
         &'simple_exec',&                                       ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                              ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Automatic 2D Envelope Mask')                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call automask2D%add_input(UI_IMG, stk, required_override=.true., &
@@ -110,7 +111,8 @@ subroutine new_auto_spher_mask( prgtab )
         & falloff, set mskdiam to the diameter in A',&                   ! help
         &'simple_exec',&                                                 ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                        ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Mask Images or Volumes')                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -167,7 +169,8 @@ subroutine new_auto_spher_mask( prgtab )
         &'is a program for automated envelope masking',& ! help
         &'simple_exec',&                                 ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                        ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Automatic 3D Envelope Mask')                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call automask%add_input(UI_IMG, 'vol1', 'file', 'Volume',  'Volume',  'vol1.mrc file', .true., '', &

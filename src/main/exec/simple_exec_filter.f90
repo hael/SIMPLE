@@ -32,7 +32,7 @@ contains
                 call xuniform_filter2D%execute(cline)
             case( 'uniform_filter3D' )
                 call xuniform_filter3D%execute(cline)
-            case( 'nu_filt3D', 'nonu_filt3D' )
+            case( 'nu_filt3D' )
                 call xnu_filt3D%execute(cline)
             case( 'postprocess_nu' )
                 call xpostprocess_nu%execute(cline)

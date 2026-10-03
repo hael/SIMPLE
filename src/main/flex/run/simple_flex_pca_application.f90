@@ -206,8 +206,8 @@ contains
         endif
         ! Latent deconvolution. Must stay after the cache write: the cache stores raw z, so a
         ! resume never deconvolves twice.
-        call apply_latent_deconvolution(sess%latent, sess%model, sess%sel, params%box_crop, &
-            &params%smpd_crop, sess%l_deconv_applied, sess%deconv_labels, sess%l_resume, sess%l_deconv_adopted, &
+        call apply_latent_deconvolution(sess%latent, sess%model, sess%sel, &
+            &sess%l_deconv_applied, sess%deconv_labels, sess%l_resume, sess%l_deconv_adopted, &
             &infile_dir(params, sess%l_resume), infile_path(params, sess%l_resume))
         if( sess%l_deconv_applied )then
             ! a resume that adopted the cache already has the readouts from the original run
@@ -473,7 +473,7 @@ contains
     !> The distributed worker's one entry: the shared preparation (its particle list, poses, the
     !! pinned sigma decision), then exactly one stage body. Round state (stage, which_iter,
     !! maxits, nfits, pcafit) arrives in params from the master's job_descr. The caller (the
-    !! worker strategy) signals completion with qsys_job_finished.
+    !! worker strategy) signals completion with qsys_declare_part_finished.
     subroutine execute_worker_stage( self, params, build, cline, rounds )
         type(flex_fit_model)  :: model
         type(flex_selection)  :: sel

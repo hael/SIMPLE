@@ -1,5 +1,10 @@
 # Preserving the Legacy In-Plane Path
 
+> **Status (release 4, 2026-10-03):** `inpl_cont` is no longer a command-line
+> key. The joint route (`yes`) is used everywhere; `no` survives only
+> internally under `refine=cont`. This note remains as the design record of the
+> feature boundary that keeps the two routes separable.
+
 ## Purpose
 
 The continuous-angle mathematics was not the critical problem in the original
@@ -171,7 +176,7 @@ The route is resolved before the numerical objects are constructed.
 
 ### `inpl_cont=no`
 
-- Constructs the historical shift optimizer explicitly with `new_legacy`.
+- Constructs the historical shift optimizer explicitly with `new_alternating`.
 - Uses the historical discrete angle update.
 - Does not construct either continuous implementation.
 - Does not create or propagate continuous pose state.
@@ -196,16 +201,16 @@ The route is resolved before the numerical objects are constructed.
   `inpl`, shift, and score. Persisted fractional `e3` is not a restart seed.
 - Commits the freshly selected grid seed on valid non-improving joint work and
   retains the incoming candidate on invalid work; it never invokes
-  `new_legacy` as a fallback.
+  `new_alternating` as a fallback.
 
 The active route additionally requires the raw Euclidean capability.
 Ineligible user requests fail explicitly rather than resolving to effective
 mode `no`. Time-series fixed-angle paths do not use the callback and retain
 their separately documented restrictions.
 
-The low-level API has no ambiguous general constructor. `new_legacy`,
+The low-level API has no ambiguous general constructor. `new_alternating`,
 `new_fixed`, and `new_joint` name their numerical contracts, and only
-`new_legacy` attaches the callback. Continuous behavior therefore cannot be
+`new_alternating` attaches the callback. Continuous behavior therefore cannot be
 inferred from objective type alone.
 
 ## Required regression tests

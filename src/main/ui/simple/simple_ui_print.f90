@@ -98,7 +98,8 @@ subroutine new_info_image( prgtab )
         &'is a program for printing the dose weights used in motion correction',& ! help
         &'simple_exec',&                                                          ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                 ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Print Dose Weights')                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -136,7 +137,8 @@ subroutine new_info_image( prgtab )
         &'is a program for printing the binary FSC files produced by REFINE3D',& ! help
         &'simple_exec',&                                                         ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Print FSC')                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -172,7 +174,7 @@ subroutine new_info_image( prgtab )
         &'List FFT-efficient image sizes for a requested range',& ! summary
         &'is a program for printing magic box sizes (fast FFT)',& ! help
         &'simple_exec',&                                          ! executable
-        &.false.)                                                 ! requires sp_project
+        &.false., display_name='List FFT-Efficient Box Sizes')                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

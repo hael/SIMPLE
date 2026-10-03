@@ -484,7 +484,7 @@ contains
         class(reextract_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         class(cmdline),                  intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_pick :: exec_reextract'))
+        call qsys_declare_part_finished(params, string('simple_commanders_pick :: exec_reextract'))
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, cline)

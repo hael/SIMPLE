@@ -1182,7 +1182,6 @@ contains
             case(JOBPROC_SEG)
                 call self%bos%write_segment(isegment, self%jobproc)
             case(COMPENV_SEG)
-                if( self%compenv%isthere('simple_path') ) call self%compenv%delete_entry('simple_path')
                 call self%bos%write_segment(isegment, self%compenv)
         end select
     end subroutine segwriter
@@ -1213,7 +1212,6 @@ contains
             case(JOBPROC_SEG)
                 call self%bos%write_segment_inside(isegment, self%jobproc)
             case(COMPENV_SEG)
-                if( self%compenv%isthere('simple_path') ) call self%compenv%delete_entry('simple_path')
                 call self%bos%write_segment_inside(isegment, self%compenv)
         end select
     end subroutine segwriter_inside
@@ -1246,11 +1244,17 @@ contains
         integer,       optional, intent(in)    :: optics_offset
         type(starfile) :: star
         type(string)   :: l_fname
-        integer        :: offset_optics
+        integer        :: offset_optics, iptcl, stkind, indstk
         call ensure_phase_shift_fields(self)
         offset_optics = 0
         if( present(optics_offset) ) offset_optics = optics_offset
         if( self%os_mic%get_noris() == 0 ) return
+        ! the STAR writer takes each exported particle's physical stack index as given
+        do iptcl = 1,self%os_ptcl2D%get_noris()
+            if( self%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+            if( self%os_ptcl2D%get_int(iptcl, 'stkind') <= 0 ) cycle
+            call self%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
+        enddo
         if(present(fname)) then 
             l_fname = fname
         else

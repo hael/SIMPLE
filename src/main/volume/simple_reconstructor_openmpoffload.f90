@@ -5,7 +5,7 @@ use simple_builder,          only: builder
 use simple_parameters,       only: parameters
 use simple_matcher_ptcl_io,  only: prepimgbatch, discrete_read_imgbatch
 use simple_matcher_3Drec,    only: calc_3Drec, prep_imgs4rec, init_rec, write_state_half_partial, &
-    &set_state_vol_output, cleanup_rec_buffers
+    &cleanup_rec_buffers
 use simple_reconstructor,    only: reconstructor
 use simple_cmdline,          only: cmdline
 use simple_math,             only: ceil_div, floor_div
@@ -43,7 +43,7 @@ contains
         ! introduced.
         if( params%nstates > 1 )then
             write(logfhandle,'(A)') '>>> OPENMP-OFFLOAD: multi-state reconstruction uses the state/even-odd-homogeneous CPU path'
-            call calc_3Drec(params, build, cline, nptcls, pinds)
+            call calc_3Drec(params, build, nptcls, pinds)
             return
         endif
         if( DEBUG ) t0 = tic()
@@ -89,7 +89,6 @@ contains
         call write_state_half_partial(params, odd_rec, 1, 1)
         call even_rec%kill
         call odd_rec%kill
-        call set_state_vol_output(params, cline, 1)
         call cleanup_rec_buffers(build, fpls)
         ! Timings
         if( DEBUG .and. (params%part==1) )then

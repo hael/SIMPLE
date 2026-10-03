@@ -907,13 +907,13 @@ class JobBuilderBranchTests(SimpleTestCase):
     def test_create_batch_rejects_missing_required_project_before_launch(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",
-            "program": "validate_projfile",
+            "program": "fix_projfile",
         })
         request.user = _AuthUser()
         workspace = Mock()
         launcher = Mock()
         launcher.get_ui.return_value = {
-            "validate_projfile": {
+            "fix_projfile": {
                 "program": {"executable": "simple_exec"},
                 "inputs": [{"key": "projfile", "required": True}],
             },

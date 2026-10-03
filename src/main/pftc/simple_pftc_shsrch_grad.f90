@@ -13,7 +13,7 @@ private
 #include "simple_local_flags.inc"
 
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
-integer,  parameter :: SHSRCH_LEGACY = 1, SHSRCH_JOINT = 2
+integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2
 
 type :: pftc_shsrch_grad
     private
@@ -28,7 +28,7 @@ type :: pftc_shsrch_grad
     real                      :: cur_inpl_rotind = 0.   !< continuous in-plane rotation index
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
     logical                   :: opt_angle    = .true.  !< alternate discrete in-plane and shift optimization
-    integer                   :: search_mode = SHSRCH_LEGACY !< configured numerical algorithm
+    integer                   :: search_mode = SHSRCH_SHIFT !< configured numerical algorithm
     real(dp)                  :: joint_initial_cost = 0.d0 !< first optimizer evaluation for monotonic acceptance
     logical                   :: joint_initial_cost_valid = .false.
     logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc)
@@ -36,7 +36,7 @@ type :: pftc_shsrch_grad
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
 contains
-    procedure          :: new_legacy      => grad_shsrch_new_legacy
+    procedure          :: new_alternating      => grad_shsrch_new_alternating
     procedure          :: new_fixed       => grad_shsrch_new_fixed
     procedure          :: new_joint       => grad_shsrch_new_joint
     procedure          :: set_indices     => grad_shsrch_set_indices
@@ -55,7 +55,7 @@ end type pftc_shsrch_grad
 
 contains
 
-    subroutine grad_shsrch_new_legacy( self, build, lims, lims_init, maxits, coarse_init )
+    subroutine grad_shsrch_new_alternating( self, build, lims, lims_init, maxits, coarse_init )
         class(pftc_shsrch_grad),     intent(inout) :: self
         class(builder),      target, intent(in)    :: build
         real,                        intent(in)    :: lims(:,:)
@@ -63,7 +63,7 @@ contains
         integer,           optional, intent(in)    :: maxits
         logical,           optional, intent(in)    :: coarse_init
         call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .true., coarse_init)
-    end subroutine grad_shsrch_new_legacy
+    end subroutine grad_shsrch_new_alternating
 
     subroutine grad_shsrch_new_fixed( self, build, lims, lims_init, maxits, coarse_init )
         class(pftc_shsrch_grad),     intent(inout) :: self
@@ -94,7 +94,7 @@ contains
         self%opt_angle = opt_angle
         self%coarse_init = .false.
         if( present(coarse_init) ) self%coarse_init = coarse_init
-        self%search_mode = SHSRCH_LEGACY
+        self%search_mode = SHSRCH_SHIFT
         ! make optimizer spec
         call self%ospec%specify('lbfgsb', 2, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
@@ -166,7 +166,7 @@ contains
         endif
     end subroutine joint_grad_at_angle
 
-    ! Map a joint cost to the legacy matcher score: exp(-loss) in [0,1] for
+    ! Map a joint cost to the matcher score: exp(-loss) in [0,1] for
     ! raw Euclidean, or -cost clamped to [-1,1] for cc (benign series
     ! overshoot must not mint an invalid score).
     real function joint_cost_to_score( self, cost )
@@ -313,8 +313,8 @@ contains
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better, l_sh_rot, coarse_init_orig
-        if( self%search_mode /= SHSRCH_LEGACY )then
-            THROW_HARD('legacy minimization requested from a specialized search object')
+        if( self%search_mode /= SHSRCH_SHIFT )then
+            THROW_HARD('shift minimization requested from a joint search object')
         endif
         l_sh_rot = .true.
         if( present(sh_rot)  ) l_sh_rot = sh_rot
@@ -539,7 +539,7 @@ contains
         self%cur_inpl_idx = modulo(nint(self%cur_inpl_rotind)-1,self%nrots)+1
         irot = self%cur_inpl_idx
         ! clamp benign sub-tolerance series artifacts so the score keeps the
-        ! legacy normalization contract ([0,1] Euclidean, [-1,1] cc)
+        ! matcher normalization contract ([0,1] Euclidean, [-1,1] cc)
         cxy(1) = joint_cost_to_score(self, final_cost)
         cxy(2:) = self%ospec%x(1:2)
         rotind_frac = self%cur_inpl_rotind
@@ -625,7 +625,7 @@ contains
         end if
         call self%ospec%kill
         nullify(self%b_ptr)
-        self%search_mode = SHSRCH_LEGACY
+        self%search_mode = SHSRCH_SHIFT
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         self%joint_cc = .false.

@@ -474,7 +474,6 @@ contains
         real         :: smpd
         integer      :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer      :: nptcls, nptcls_part, numlen
-        logical      :: l_set_ind_in_stk
         if( nparts < 2 )return
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
@@ -528,7 +527,6 @@ contains
         else
            call simple_mkdir(STKPARTSDIR)
         endif
-        l_set_ind_in_stk = self%os_ptcl2D%isthere('indstk')
         do istk = 1,nparts
             ! file stuff
             stkpart = filepath(tmp_dir,string('stack_part'//int2str_pad(istk,numlen)//EXT))
@@ -553,11 +551,9 @@ contains
             do iptcl=parts(istk,1),parts(istk,2)
                 call self%os_ptcl2D%set(iptcl,'stkind', istk)
                 call self%os_ptcl3D%set(iptcl,'stkind', istk)
-                if( l_set_ind_in_stk )then
-                    ind_in_stk = ind_in_stk + 1
-                    call self%os_ptcl2D%set(iptcl,'indstk', ind_in_stk)
-                    call self%os_ptcl3D%set(iptcl,'indstk', ind_in_stk)
-                endif
+                ind_in_stk = ind_in_stk + 1
+                call self%os_ptcl2D%set(iptcl,'indstk', ind_in_stk)
+                call self%os_ptcl3D%set(iptcl,'indstk', ind_in_stk)
             enddo
             call stkpart%kill
             call dest_stkpart%kill

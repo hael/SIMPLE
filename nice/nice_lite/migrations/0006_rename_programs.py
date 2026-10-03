@@ -4,7 +4,7 @@
 
 from django.db import migrations
 
-# legacy program name -> current program name (mirrors simple_ui_legacy_names.f90)
+# old program name -> current program name (the 2026-10-03 renames)
 LEGACY_PROGS = {
     'abinitio2D':                 'solve2D',
     'abinitio2D_chunks':          'solve2D_chunks',

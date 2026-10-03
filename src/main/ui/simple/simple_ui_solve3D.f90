@@ -72,12 +72,6 @@ contains
         call solve3D%add_input(UI_PARM, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
             &'Use existing ptcl3D orientations and state assignments from a prior solve3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call solve3D%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
-        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call solve3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction', &
-            &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -125,12 +119,6 @@ contains
         call solve3D%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of particle assignments for solve3D stage convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)
-        call solve3D%add_input(UI_SRCH, 'inpl_cont', 'binary', &
-        &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
-        &.false., 'yes', group="search", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve3D%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -222,9 +210,6 @@ contains
         &'Validation of the automatic solvent-prior strength when the base run used the solvent prior(yes|no){no}', &
         &'', .false., 'no', group="search", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call solve3D_addon%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
-        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}', &
-        &'', .false., 'no', visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! search controls
         call solve3D_addon%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
         call solve3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
@@ -273,12 +258,6 @@ contains
         call solve3D_cavgs%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of class-average assignments for solve3D stage convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)
-        call solve3D_cavgs%add_input(UI_SRCH, 'inpl_cont', 'binary', &
-        &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
-        &.false., 'yes', group="search", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve3D_cavgs%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -309,7 +288,8 @@ contains
         &'Estimation of low-pass limits, shift boundaries, and downscaling parameters for solve3D',&                       ! summary
         &'is a program for estimation of low-pass limits, shift boundaries, and downscaling parameters for solve3D',&      ! help
         &'simple_exec',&                                                                                                   ! executable
-        &.true.)                                                                                                           ! requires sp_project
+        &.true., &
+        &display_name='Estimate solve3D Stages') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -341,7 +321,7 @@ contains
         &'is a program for generating noise volume(s)',&
         &'simple_exec',&                      ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                             ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Generate Noise Volumes')                             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

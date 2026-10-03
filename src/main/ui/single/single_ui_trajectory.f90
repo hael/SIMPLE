@@ -33,7 +33,8 @@ subroutine new_extract_substk( prgtab )
         &'extraction of a substack segment of time-series of metallic nanoparticles',&                                 ! summary
         &'is a shared-memory workflow for extraction of a substack segment of time-series of metallic nanoparticles',& ! help
         &'single_exec',&                                                                                               ! executable
-        &.true., visibility=UI_VIS_ADVANCED)                                                                                 ! requires sp_project
+        &.true., visibility=UI_VIS_ADVANCED, &
+        &display_name='Extract a Time-Series Substack') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -44,7 +45,7 @@ subroutine new_extract_substk( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call extract_substk%add_input(UI_PARM, 'top',   'num', 'To index', 'Stop index for stack copy', 'stop index', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        call extract_substk%add_input(UI_PARM, 'state', 'num', 'State index', 'Only particles with this state are extracted{1}; use state<0 for legacy include-all behavior', 'state index', .false., 1.0, &
+        call extract_substk%add_input(UI_PARM, 'state', 'num', 'State index', 'Only particles with this state are extracted{1}', 'state index', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
@@ -195,7 +196,8 @@ subroutine new_extract_substk( prgtab )
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! help
         &'single_exec',&                                                                 ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                                   ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Average Initial Trajectory Frames')                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -228,7 +230,8 @@ subroutine new_extract_substk( prgtab )
         &'Time windowed 3D reconstruction from oriented particles',&     ! help
         &'Time windowed 3D reconstruction from oriented particles',&
         &'single_exec',&                                                 ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                   ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Time-Windowed 3D Reconstruction')                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -273,7 +276,8 @@ subroutine new_extract_substk( prgtab )
         &'Substitutes stack into an existing project',&                   ! summary
         &'is a program for substituting stack into an existing project',& ! help
         &'single_exec',&                                                  ! executable
-        &.true., visibility=UI_VIS_DEVELOPER)                                    ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Swap a Trajectory Stack')                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_swap_stack%add_input(UI_IMG, stk, required_override=.true., &

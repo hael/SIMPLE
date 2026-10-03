@@ -38,7 +38,7 @@ subroutine new_binarize( prgtab )
         &'Binarization routines for volumes and stacks',& ! help
         &'Binarization routines for volumes and stacks',& ! help
         &'simple_exec',&                                  ! executable
-        &.false.)                                         ! requires sp_project
+        &.false., display_name='Binarize Images or Volumes')                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ctf_correct%add_input(UI_IMG, outstk, &
@@ -120,7 +120,8 @@ subroutine new_binarize( prgtab )
         &'is a program for CTF phase flipping or Wiener correction of particle images in project',& ! descr long
         &'simple_exec',&                                           ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                   ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Correct Particle CTF')                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -157,7 +158,8 @@ subroutine new_binarize( prgtab )
         &'is a program for applying CTF to stacked images',& ! descr long
         &'simple_exec',&                                     ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                            ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Apply a CTF to an Image Stack')                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ctfops%add_input(UI_IMG, stk, &
@@ -201,7 +203,7 @@ subroutine new_binarize( prgtab )
         &'is a program for normalization of MRC or SPIDER stacks and volumes',&
         &'simple_exec',&                       ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                              ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Normalize Images or Volumes')                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -243,7 +245,8 @@ subroutine new_binarize( prgtab )
         &'is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes',&  ! help
         &'simple_exec',&                                                                          ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                                 ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Rescale Stacks and Volumes') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -303,7 +306,7 @@ subroutine new_binarize( prgtab )
         &'is a program for stacking individual images (list) or multiple stacks into one',& ! help
         &'simple_exec',&               ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                      ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Combine Images into a Stack')                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stack%add_input(UI_FILE, 'filetab', 'file', 'Stacks list',&
@@ -346,7 +349,7 @@ subroutine new_binarize( prgtab )
         & which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! help
         &'simple_exec',&                             ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                    ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Edit an Image Stack')                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%add_input(UI_IMG, stk, required_override=.true., &
@@ -422,7 +425,7 @@ subroutine new_binarize( prgtab )
         &'Split a stack into evenly sized substacks',& ! summary
         &'is a program for splitting a stack into evenly partitioned substacks',& ! help
         &'simple_exec',&                             ! executable
-        &.false.)                                    ! requires sp_project
+        &.false., display_name='Split a Stack')                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call split_%add_input(UI_IMG, stk, required_override=.true., &
@@ -453,7 +456,7 @@ subroutine new_binarize( prgtab )
         &'Split a project stack into a chosen number of substacks',& ! summary
         &'is a program for splitting a stack into nparts substacks',& ! help
         &'simple_exec',&                                              ! executable
-        &.true.)                                                      ! requires sp_project
+        &.true., display_name='Split a Project Stack')                                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

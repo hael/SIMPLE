@@ -286,7 +286,7 @@ program simple_persistent_worker
     if( logfhandle /= output_unit )then
         if( is_open(logfhandle) ) call fclose(logfhandle)
     endif
-    call simple_print_git_version('342d1484')
+    call simple_print_git_version(SIMPLE_GIT_VERSION)
     rt_exec = toc(t0)
     call simple_print_timer(rt_exec)
 

@@ -5,12 +5,11 @@ description: Use when working on SIMPLE's solve2D workflow and its refine2D stag
 
 # SIMPLE Solve2D
 
-`solve2D` (named `abinitio2D` before 2026-10-03; the old program name still
-runs) is de novo 2D class-average determination, the 2D equivalent of
+`solve2D` (named `abinitio2D` before 2026-10-03) is de novo 2D class-average determination, the 2D equivalent of
 `solve3D`: one staged schedule couples ab initio 2D classification with
 initial 2D refinement of the classes, mirroring the 3D methodology. Its stages
-are `refine2D` runs (named `cluster2D` before 2026-10-03; the old program
-names still run), the 2D counterpart of `refine3D`.
+are `refine2D` runs (named `cluster2D` before 2026-10-03), the 2D counterpart
+of `refine3D`.
 
 Use this skill for the orchestrating `solve2D` workflow and the `refine2D`
 stages it drives. Treat `refine2D` as the core stage implementation, not as a

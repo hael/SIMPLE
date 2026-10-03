@@ -400,6 +400,7 @@ contains
             end if
             if(isptcl) then
                 call sporis%set(projindex, "stkind", self%starfile%stkmap(lineindex, 1))
+                call sporis%set(projindex, "indstk", self%starfile%stkmap(lineindex, 3))
             end if
             call sporis%set_state(projindex, 1)
         end do
@@ -431,7 +432,7 @@ contains
         allocate(stkoriids(0))
         call self%import_stardata(self%starfile%stacks, stktmp, .false., opticsoris)
         nstks = stktmp%get_noris()
-        allocate(self%starfile%stkmap(nstks, 2), stks(nstks))
+        allocate(self%starfile%stkmap(nstks, 3), stks(nstks))
         do i = 1,nstks
             stks(i) = stktmp%get_str(i, "stk")
         enddo
@@ -444,6 +445,7 @@ contains
                     stkzmax(j) = max(stkzmax(j), stkind)
                     self%starfile%stkmap(i, 1) = j
                     self%starfile%stkmap(i, 2) = stkind
+                    self%starfile%stkmap(i, 3) = stkind
                     exit
                 end if
             end do
@@ -454,6 +456,7 @@ contains
                 stkoriids = [stkoriids, i]
                 self%starfile%stkmap(i, 1) = size(stkoriids)
                 self%starfile%stkmap(i, 2) = stkind
+                self%starfile%stkmap(i, 3) = stkind
             end if
         end do
         call stks(:)%kill

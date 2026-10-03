@@ -20,7 +20,7 @@ type(ui_program), target :: prune_project
 type(ui_program), target :: replace_project_field
 type(ui_program), target :: selection
 type(ui_program), target :: update_project
-type(ui_program), target :: validate_projfile
+type(ui_program), target :: fix_projfile
 type(ui_program), target :: zero_project_shifts
 type(ui_program), target :: write_mic_filetab
 type(ui_program), target :: reimport_particles
@@ -45,7 +45,7 @@ contains
         call new_replace_project_field(prgtab)
         call new_selection(prgtab)
         call new_update_project(prgtab)
-        call new_validate_projfile(prgtab)
+        call new_fix_projfile(prgtab)
         call new_zero_project_shifts(prgtab)
         call new_write_mic_filetab(prgtab)
         call new_reimport_particles(prgtab)
@@ -59,7 +59,7 @@ subroutine new_export_relion( prgtab )
         &'Export a SIMPLE project for use in RELION',& ! summary
         &'is a program to export simple project to relion',&
         &'simple_exec',&                                                ! executable
-        &.true.)                                                        ! requires sp_project
+        &.true., display_name='Export to RELION')                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -127,7 +127,8 @@ subroutine new_export_relion( prgtab )
         &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! summary
         &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! help
         &'simple_exec',&                                                                                         ! executable
-        &.true., visibility=UI_VIS_ADVANCED)                                                                           ! requires sp_project
+        &.true., visibility=UI_VIS_ADVANCED, &
+        &display_name='Extract a Time-Series Subproject') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -361,7 +362,8 @@ subroutine new_export_relion( prgtab )
         &'is a program to merge a file table of SIMPLE projects with matching populated project fields', & ! help
         &'simple_exec',&                                                ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                       ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Merge Projects')                                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call merge_projects%add_input(UI_FILE, projtab,&
@@ -387,20 +389,24 @@ subroutine new_export_relion( prgtab )
         call add_ui_program('merge_projects', merge_projects, prgtab, UI_CATEGORY)
     end subroutine new_merge_projects
 
-    subroutine new_validate_projfile( prgtab )
+    subroutine new_fix_projfile( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call validate_projfile%new(&
-        &'validate_projfile', &                                         ! name
-        &'Check and repair project stack-index metadata',& ! summary
-        &'is a program to validate SIMPLE project stack indexing metadata and write a repaired project', & ! help
+        call fix_projfile%new(&
+        &'fix_projfile', &                                              ! name
+        &'Bring a project from an earlier release to the current stack-index contract',& ! summary
+        &'is a program to fix the stack indexing of a SIMPLE project written by an earlier release. It repairs &
+        &stack ranges and particle stack assignments, takes a missing physical image count (nptcls_stk) from the &
+        &stack file header, and sets the physical image index (indstk) from the project rows where the stack holds &
+        &exactly one image per row. Anything it cannot prove is reported and no project is written; otherwise it &
+        &writes input_name_fixed.simple', & ! help
         &'simple_exec',&                                                ! executable
-        &.true.)                                                        ! requires sp_project
+        &.true., display_name='Fix Project Stack Indices')              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call validate_projfile%add_input(UI_FILE, projfile,&
+        call fix_projfile%add_input(UI_FILE, projfile,&
         &required_override          = .true.,&
         &group="data", visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
@@ -414,8 +420,8 @@ subroutine new_export_relion( prgtab )
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('validate_projfile', validate_projfile, prgtab, UI_CATEGORY)
-    end subroutine new_validate_projfile
+        call add_ui_program('fix_projfile', fix_projfile, prgtab, UI_CATEGORY)
+    end subroutine new_fix_projfile
 
     subroutine new_new_project( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -423,7 +429,7 @@ subroutine new_export_relion( prgtab )
         call new_project%new(&
         &'new_project',&                     ! name
         &'Create a project directory and initialize its SIMPLE metadata file',& ! summary
-        &'is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling &
+        &'is a program for creating a new project. SIMPLE relies on a monolithic project file for controlling &
         &execution on distributed and shared-memory systems and for unified meta-data management. This program &
         &creates a directory named projname and a file projname.simple inside that directory that contains all &
         &information about the project as well as all meta data generated by the different SIMPLE programs. This &
@@ -485,7 +491,8 @@ subroutine new_export_relion( prgtab )
         &'Print a selected orientation field from a SIMPLE project',& ! summary
         &'is a program for printing an orientation field in the project data structure (segment in *.simple project file)',&  ! help
         &'simple_exec',&                                                      ! executable
-        &.true.)                                                              ! requires sp_project
+        &.true., &
+        &display_name='Print a Project Field')                                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -524,7 +531,8 @@ subroutine new_export_relion( prgtab )
         &'Print metadata and contents of a SIMPLE project',& ! summary
         &'is a program prints information about a *.simple project file',& ! help
         &'simple_exec',&                                                   ! executable
-        &.true.)                                                           ! requires sp_project
+        &.true., &
+        &display_name='Print Project Information')                                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -552,7 +560,7 @@ subroutine new_export_relion( prgtab )
         &'discards deselected data from a project',&  ! summary
         &'is a program for discarding deselected data (particles,stacks) from a project',& ! help
         &'simple_exec',&                              ! executable
-        &.true.)                                      ! requires sp_project
+        &.true., display_name='Prune Deselected Data')                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -582,7 +590,7 @@ subroutine new_export_relion( prgtab )
         &'hard substitution of project field',&       ! summary
         &'is a program for hard substitution of project field, for development purposes',& ! help
         &'simple_exec',&                              ! executable
-        &.false.)                                     ! requires sp_project
+        &.false., display_name='Replace a Project Field')                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -616,7 +624,8 @@ subroutine new_export_relion( prgtab )
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! help
         &'simple_exec',&                                                                ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                                        ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Apply an External Selection') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -686,7 +695,7 @@ subroutine new_export_relion( prgtab )
         &'updates project identity/computer settings or writes a new project with relocated dataset paths',& ! help
         &'simple_exec',&                     ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                             ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Update Project Settings')                             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -766,7 +775,7 @@ subroutine new_export_relion( prgtab )
         &'Zero particle shifts in a SIMPLE project',& ! summary
         &'is a program that zeroes the shifts in the ptcl2D/ptcl3D fields in the project',& ! help
         &'simple_exec',&                                                ! executable
-        &.true.)                                                        ! requires sp_project
+        &.true., display_name='Zero Particle Shifts')                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -794,7 +803,8 @@ subroutine new_export_relion( prgtab )
         &'Writes a filetable of state > 0 micrographs',&                  ! summary
         &'is a program for writing a filetable of selected micrographs',& ! help
         &'simple_exec',&                                                  ! executable
-        &.true.)                                                          ! requires sp_project
+        &.true., &
+        &display_name='Write Micrograph File Table')                                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call write_mic_filetab%add_input(UI_FILE, 'fname', 'file', 'Filename micrograph list', 'Filename for list of micrograph files (*.mrc)', 'e.g. mics.txt', .true., '', &
@@ -824,7 +834,7 @@ subroutine new_export_relion( prgtab )
         &'Re-import denoised particle stack',&                     ! summary
         &'is a program for replacing the project particle stack while preserving particle/class metadata',&
         &'simple_exec',&                                           ! executable
-        &.true.)                                                   ! requires sp_project
+        &.true., display_name='Re-Import Particles')                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         call reimport_particles%add_input(UI_IMG, 'stk', 'file', 'Denoised particle stack',&
         &'Denoised particle stack to replace the project stack', 'e.g. denoised.mrcs', .true., '', &

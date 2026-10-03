@@ -230,7 +230,7 @@ contains
     end subroutine worker_initialize
 
     subroutine worker_execute(self, params, build, cline)
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs, only: qsys_declare_part_finished
         class(cls_split_worker_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         type(builder),                    intent(inout) :: build
@@ -238,17 +238,17 @@ contains
         type(sp_project) :: spproj
         call spproj%read(params%projfile)
         call run_local_split(params, build, cline, spproj, part=params%part, l_write_project=.false.)
-        call qsys_job_finished(params, string('simple_cls_split_strategy :: worker_execute'))
+        call qsys_declare_part_finished(params, string('simple_cls_split_strategy :: worker_execute'))
         call spproj%kill
     end subroutine worker_execute
 
     subroutine worker_finalize_run(self, params, build, cline)
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs, only: qsys_declare_part_finished
         class(cls_split_worker_strategy), intent(inout) :: self
         type(parameters),                 intent(in)    :: params
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_refine2D :: exec_cls_split'))
+        call qsys_declare_part_finished(params, string('simple_commanders_refine2D :: exec_cls_split'))
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params)

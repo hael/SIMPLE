@@ -12,7 +12,7 @@ use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_relations, only: CAVG_RELATIONAL_FEATURE_NAME, cavg_quality_relation_analysis
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, &
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_TRAINING_VERSION, EPS, CLIP_Z, &
     CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, cavg_quality_result
 implicit none
 private
@@ -187,7 +187,7 @@ contains
             suggested_weights = model%weights
         end if
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        write(funit,'(A)') '# cavg_quality_training_version=1'
+        write(funit,'(A,I0)') '# cavg_quality_training_version=', CAVG_QUALITY_TRAINING_VERSION
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
         write(funit,'(A,A)') '# quality_context=', trim(quality_context)
@@ -301,16 +301,6 @@ contains
             write(funit,'(ES14.6)', advance='no') model%weights(i)
         end do
         write(funit,*)
-        write(funit,'(A,ES14.6)') '# model_boundary_margin=', model%boundary_margin
-        write(funit,'(A,ES14.6)') '# model_min_score_separation=', model%min_score_separation
-        write(funit,'(A,ES14.6)') '# model_otsu_min_offset=', model%otsu_min_offset
-        write(funit,'(A,ES14.6)') '# model_otsu_max_offset=', model%otsu_max_offset
-        write(funit,'(A,ES14.6)') '# model_cluster_rescue_margin=', model%cluster_rescue_margin
-        write(funit,'(A,ES14.6)') '# model_min_accept_frac=', model%min_accept_frac
-        write(funit,'(A,L1)') '# model_use_lowsep_otsu=', model%use_lowsep_otsu
-        write(funit,'(A,L1)') '# model_use_otsu_window=', model%use_otsu_window
-        write(funit,'(A,L1)') '# model_use_cluster_rescue=', model%use_cluster_rescue
-        write(funit,'(A,L1)') '# model_enforce_min_accept_frac=', model%enforce_min_accept_frac
         write(funit,'(A,ES14.6)') '# model_intercept=', model%intercept
         write(funit,'(A)', advance='no') '# model_linear_coefficients='
         do i = 1, CAVG_QUALITY_NFEATS

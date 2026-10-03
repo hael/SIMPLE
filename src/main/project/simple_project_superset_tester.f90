@@ -39,6 +39,7 @@ contains
             call spproj%os_stk%set(istk, 'stk',   '/data/stacks/stack_'//char(48+istk)//'.mrcs')
             call spproj%os_stk%set(istk, 'fromp', merge(1, NPTCLS_FRZ + 1, istk == 1))
             call spproj%os_stk%set(istk, 'top',   merge(NPTCLS_FRZ, NPTCLS, istk == 1))
+            call spproj%os_stk%set(istk, 'nptcls_stk', merge(NPTCLS_FRZ, NPTCLS - NPTCLS_FRZ, istk == 1))
             call spproj%os_stk%set(istk, 'box',   64)
             call spproj%os_stk%set(istk, 'smpd',  1.3)
             call spproj%os_stk%set(istk, 'ctf',   'yes')

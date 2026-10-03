@@ -204,7 +204,7 @@ is a hard failure of the coarray dispatch run.
 
 For `qsys=coarray`, per-partition filesystem completion sentinels such as
 `JOB_FINISHED_*` are not the completion authority. Worker-side completion
-declaration goes through `qsys_declare_part_finished` / `qsys_job_finished`,
+declaration goes through `qsys_declare_part_finished`,
 but the coarray branch deliberately avoids touching filesystem sentinels.
 
 Inside the coarray run, each image records completion of the partitions it

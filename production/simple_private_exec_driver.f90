@@ -3,7 +3,6 @@ module simple_private_exec_driver
 use simple_private_exec_api
 use simple_syslib, only: redirect_stdout_stderr, restore_stdout_stderr
 use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
-use simple_ui_legacy_names, only: canonical_prg_name, report_legacy_prg_name
 implicit none
 private
 public :: run_private_exec_from_command_line, run_private_exec_line, run_coarray_direct, run_coarray_smoke
@@ -27,8 +26,6 @@ contains
         pos = index(xarg, '=')
         call cmdline_err(cmdstat, cmdlen, xarg, pos)
         prg = xarg(pos+1:)
-        call report_legacy_prg_name(prg)
-        prg = canonical_prg_name(prg)
         call ensure_private_exec_ui
         call cline%parse_private
         call mem_monitor_init(cline, 'simple_private_exec:'//trim(prg))
@@ -190,7 +187,7 @@ contains
         pos = index(first_arg, '=')
         call cmdline_err(0, len_trim(first_arg), first_arg, pos)
         if( trim(first_arg(:pos-1)) /= 'prg' ) THROW_HARD('private command line must start with prg=')
-        prg = canonical_prg_name(first_arg(pos+1:))
+        prg = first_arg(pos+1:)
     end subroutine extract_prg_from_line
 
     subroutine dispatch_private_prg( prg, cline, l_silent )

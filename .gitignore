@@ -15,19 +15,14 @@ fort.*
 .DS_Store
 SIMPLE_UNIT*
 /SIMPLE_TEST*/
-*.hed
-*.spi
-Makefile_macros
 junk*
 *.dSYM
 bin/
 lib/
 build*
-obj/
+/CMakeFiles/
 add2.bashrc
 add2.tcshrc
-simple_user_input.pm
-doc/html/
 # Latex derived
 *.dvi
 *.ps
@@ -40,15 +35,11 @@ doc/html/
 *.synctex.gz
 *.toc
 *.orig
-/node_modules
-/dist
 .eman2log.txt
 # Nice derived
 venv
 db.sqlite3
 __pycache__
-# Docs
-docs/
 /doc/code_overview/code_base_map.md
 /doc/code_overview/test_inventory.md
 /.vscode

@@ -4,21 +4,20 @@
 ! the project row count, the state layout, a generation counter, the byte size of each
 ! component and M, the population the chain represents (population rule:
 ! population_blend_weights in simple_oris).
-! A manifest of an older format (no represented population) is refused, so the chain is
-! discarded and re-seeded. Validation policy stays with the owner (volassemble).
+! A manifest of any other version is unreadable, so the chain is discarded and re-seeded.
+! Validation policy stays with the owner (volassemble).
 module simple_trail_chain_manifest
 use simple_core_module_api
 implicit none
 
 public :: trail_chain_manifest
-public :: TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, TRAIL_MANIFEST_UNREADABLE, TRAIL_MANIFEST_OLD_FORMAT
+public :: TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, TRAIL_MANIFEST_UNREADABLE
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: TRAIL_MANIFEST_OK         = 0
 integer, parameter :: TRAIL_MANIFEST_MISSING    = 1
 integer, parameter :: TRAIL_MANIFEST_UNREADABLE = 2
-integer, parameter :: TRAIL_MANIFEST_OLD_FORMAT = 3
 integer, parameter :: MANIFEST_VERSION          = 2   ! 2: records the represented population
 
 type :: trail_chain_manifest
@@ -81,8 +80,8 @@ contains
         call fclose(funit)
     end subroutine write
 
-    !> read a manifest: TRAIL_MANIFEST_OK, _MISSING, _UNREADABLE or _OLD_FORMAT (a manifest
-    !! of an older build, which records no represented population); empty unless OK
+    !> read a manifest: TRAIL_MANIFEST_OK, _MISSING or _UNREADABLE (corrupt, or a version
+    !! other than MANIFEST_VERSION); empty unless OK
     subroutine read( self, fname, status )
         class(trail_chain_manifest), intent(inout) :: self
         class(string),               intent(in)    :: fname
@@ -100,18 +99,8 @@ contains
         if( io_stat /= 0 ) return
         read(line,*,iostat=io_stat) version, self%box, self%smpd, self%nptcls, self%nstates, &
             &self%state, self%gen, self%sizes, self%mrep
-        if( io_stat /= 0 )then
-            ! version 1 (box, smpd, nptcls, nstates, state, gen, sizes) has two fields fewer
+        if( io_stat /= 0 .or. version /= MANIFEST_VERSION )then
             call self%kill
-            read(line,*,iostat=io_stat) self%box, self%smpd, self%nptcls, self%nstates, self%state, &
-                &self%gen, self%sizes
-            if( io_stat == 0 ) status = TRAIL_MANIFEST_OLD_FORMAT
-            call self%kill
-            return
-        endif
-        if( version /= MANIFEST_VERSION )then
-            call self%kill
-            status = TRAIL_MANIFEST_OLD_FORMAT
             return
         endif
         if( self%mrep < 0. )then

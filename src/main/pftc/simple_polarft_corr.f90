@@ -979,7 +979,7 @@ contains
     end subroutine gen_euclid_grad_for_rot_8
 
     ! Continuous-optimization API: return the finite Gaussian loss L and grad(L).
-    ! The legacy score is exp(-L), which is monotonic but can underflow.
+    ! The matcher score is exp(-L), which is monotonic but can underflow.
     module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot

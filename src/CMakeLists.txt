@@ -153,7 +153,6 @@ set(SIMPLE_INTENTIONAL_HELPER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_pool2D_utils.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/comm/simple_ipc_tcp_socket_tester.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils/persistent_worker/simple_persistent_worker_server_tester.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/ui/simple_private_prgs.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/image_processing/simple_segmentation.f90"
 )
 set_property(SOURCE ${SIMPLE_INTENTIONAL_HELPER_SOURCES} APPEND
@@ -208,7 +207,6 @@ set(SIMPLE_TEST_DESCRIPTOR_SOURCES
 set_property(SOURCE ${SIMPLE_TEST_DESCRIPTOR_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-maybe-uninitialized")
 set(SIMPLE_TEST_INTENT_OUT_DESCRIPTOR_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/class/simple_classaverager_tester.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/ctf/simple_ctf_tester.f90"
 )
 set_property(SOURCE ${SIMPLE_TEST_INTENT_OUT_DESCRIPTOR_SOURCES} APPEND

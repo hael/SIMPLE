@@ -5,7 +5,7 @@ use simple_core_module_api
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
-use simple_qsys_funs,      only: qsys_job_finished
+use simple_qsys_funs,      only: qsys_declare_part_finished
 use simple_image,          only: image, unmemoize_powspec_coords
 use simple_sigma2_binfile, only: sigma2_binfile
 implicit none
@@ -164,7 +164,7 @@ contains
         type(parameters),                 intent(in)    :: params
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_euclid :: exec_calc_pspec'))
+        call qsys_declare_part_finished(params, string('simple_commanders_euclid :: exec_calc_pspec'))
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, build, cline)

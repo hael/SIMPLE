@@ -46,7 +46,7 @@ checked by the wrapper through `ui_program%accepts`
 | Compute | `nparts`, `nthr` |
 | Sampling and convergence | `nsample` (default: the frozen run's effective value), `overlap` (default 0.95 at stage 3) |
 | PCG solve budget and checks | `maxits_pcg`, `maxits_ml`, `pcg_solvent_check` |
-| Diagnostics | `euclid_diag`, `addon_diag` |
+| Diagnostics | `addon_diag` |
 
 The execution environment every program accepts from its launcher passes
 through unchanged (`UI_ENVIRONMENT_KEYS`: the queue system, NICE, and the
@@ -82,12 +82,10 @@ validates against the project that registered it:
 - the current project's native box and sampling equal the frozen solution's;
 - no stage box of the inherited ladder exceeds the native box.
 
-Manifests written before the denoised particle source and conical FSC
-regularization were retired carry a `ptcl_src` field and may record
-`ptcl_src`, `objfun_den`, `objfun_den_w` and `conical_fsc` inputs
-(`MANIFEST_RETIRED_KEYS`). The inputs are ignored and never replayed;
-a `ptcl_src` field other than `raw` is refused, because a solution
-reconstructed from denoised particles cannot be extended with raw ones.
+The manifest reader keeps no backwards compatibility (release 4): a field
+or input key it does not know, such as those of removed features
+(`ptcl_src`, `objfun_den`, `conical_fsc`, `inpl_cont`), makes the manifest
+unreadable, so a solution from an older build cannot be extended.
 
 The frozen project is never written. The add-on works on a copy of it in the
 run directory (`frozen/`, with its sigma2 state), whose sigma2 file must stay

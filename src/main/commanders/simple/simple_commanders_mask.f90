@@ -37,7 +37,6 @@ contains
         type(image_msk)  :: mskvol
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
-        if( cline%defined('mskfile') ) THROW_HARD('mskfile is no longer supported; use automsk or mskdiam')
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)

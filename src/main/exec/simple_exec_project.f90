@@ -6,7 +6,7 @@ use simple_commanders_starproject,  only: commander_import_starproject, commande
 use single_commanders_trajectory,   only: commander_extract_substk
 use simple_commanders_project_core, only: commander_new_project, commander_update_project, commander_print_project_info,&
 commander_print_project_field, commander_replace_project_field, commander_selection, commander_merge_projects,&
-commander_extract_subproj, commander_validate_projfile, commander_ptcl3D_state_consensus
+commander_extract_subproj, commander_fix_projfile, commander_ptcl3D_state_consensus
 use simple_commanders_project_mov,  only: commander_import_movies, commander_write_mic_filetab
 use simple_commanders_project_ptcl, only: commander_zero_project_shifts, commander_import_boxes,&
 commander_import_particles, commander_reimport_particles, commander_prune_project_distr
@@ -35,7 +35,7 @@ type(commander_prune_project_distr)   :: xprune_project
 type(commander_replace_project_field) :: xreplace_project_field
 type(commander_selection)             :: xselection
 type(commander_update_project)        :: xupdate_project
-type(commander_validate_projfile)     :: xvalidate_projfile
+type(commander_fix_projfile)          :: xfix_projfile
 type(commander_zero_project_shifts)   :: xzero_project_shifts
 type(commander_write_mic_filetab)     :: xwrite_mic_filetab
 
@@ -86,12 +86,12 @@ contains
                 call xprune_project%execute(cline)
             case( 'replace_project_field' )
                 call xreplace_project_field%execute(cline)
-            case( 'selection', 'report_selection' )
+            case( 'selection' )
                 call xselection%execute(cline)
             case( 'update_project' )
                 call xupdate_project%execute(cline)
-            case( 'validate_projfile' )
-                call xvalidate_projfile%execute(cline)
+            case( 'fix_projfile' )
+                call xfix_projfile%execute(cline)
             case( 'zero_project_shifts' )
                 call xzero_project_shifts%execute(cline)
             case( 'write_mic_filetab' )

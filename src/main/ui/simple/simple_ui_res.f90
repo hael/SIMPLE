@@ -24,7 +24,8 @@ subroutine new_fsc( prgtab )
         &'is a program for calculating the FSC between the two input volumes',& ! help
         &'simple_exec',&                                                        ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                               ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Calculate FSC')                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call fsc%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
@@ -63,7 +64,7 @@ subroutine new_fsc( prgtab )
         &'is a program for calculating a CryoSPARC-like conical FSC area ratio from two half maps',&
         &'simple_exec',&
         &.false., &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_ADVANCED, display_name='Conical FSC Area Score')
         call fsc_area_score%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
         &visibility=UI_VIS_STANDARD)
         call fsc_area_score%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '', &

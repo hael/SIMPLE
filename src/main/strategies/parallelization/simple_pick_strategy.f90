@@ -203,7 +203,7 @@ contains
         integer :: cnt, norefs, box_for_pick, box_for_extract, ncls_pickrefs, nmedoids, n_pickrefs_source, i
         logical :: do_rescale
         ! error check
-        if( cline%defined('vol1') ) THROW_HARD('vol1 input no longer supported, use prg=reproject to generate 20 2D references')
+        if( cline%defined('vol1') ) THROW_HARD('pick does not take vol1; use prg=reproject to generate 20 2D references')
         if( .not.cline%defined('pickrefs') ) THROW_HARD('PICKREFS must be informed!')
         ! set defaults for automasking etc.
         call set_automask2D_defaults(cline)
@@ -471,7 +471,7 @@ contains
         class(pick_inmem_strategy), intent(inout) :: self
         type(parameters),           intent(in)    :: params
         class(cmdline),             intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_pick :: exec_pick'))
+        call qsys_declare_part_finished(params, string('simple_commanders_pick :: exec_pick'))
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, cline)
@@ -535,7 +535,6 @@ contains
             call cline_make_pickrefs%set('prg',  'make_pickrefs')
             call cline_make_pickrefs%set('smpd', params%smpd)
             call cline_make_pickrefs%set('mkdir','no')
-            if( trim(params%picker).eq.'old' ) call cline_make_pickrefs%set('neg','yes')
             call make_pickrefs_impl(cline_make_pickrefs)
             ! Switch pickrefs to the prepared template stack for the actual picking jobs
             call cline%set('pickrefs', PICKREFS_FBODY//params%ext%to_char())

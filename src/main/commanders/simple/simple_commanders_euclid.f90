@@ -2,7 +2,6 @@
 module simple_commanders_euclid
 use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_commanders_api
-use simple_sigma2_binfile, only: sigma2_binfile
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
     &sigma2_state_merge_local_ranges, sigma2_state_project_layout_digest, &
     &sigma2_state_range_path, sigma2_state_reduce_groups, sigma2_state_validate_identity, &
@@ -10,7 +9,7 @@ use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit,
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
     &sigma2_state_init_header, sigma2_state_read_groups, sigma2_state_read_header, &
     &sigma2_state_validate_file, sigma2_state_write_particles, SIGMA2_GROUP_GLOBAL, &
-    &SIGMA2_GROUP_STACK, SIGMA2_PROV_LEGACY_PARTS, SIGMA2_PROV_STAR_SEED, &
+    &SIGMA2_GROUP_STACK, SIGMA2_PROV_STAR_SEED, &
     &SIGMA2_STATE_COMMITTED
 implicit none
 #include "simple_local_flags.inc"
@@ -120,16 +119,15 @@ contains
         type(parameters) :: params
         type(sp_project) :: project
         class(oris), pointer :: particles
-        type(string) :: state_path, candidate_path, part_path
+        type(string) :: state_path, candidate_path
         type(sigma2_state_header) :: header
-        type(sigma2_binfile) :: part_file
-        real, allocatable :: star_groups(:,:,:), part_values(:,:)
+        real, allocatable :: star_groups(:,:,:)
         real(real32), allocatable :: spectra(:,:), stored_groups(:,:,:)
-        logical, allocatable :: active(:), covered(:)
+        logical, allocatable :: active(:)
         integer, allocatable :: eo_ids(:), group_ids(:)
         integer(int64) :: layout_digest
         integer :: box, kfromto(2), ngroups, grouping, nptcls, project_ngroups
-        integer :: ipart, iptcl, fromp, top, eo, igroup, status
+        integer :: iptcl, eo, igroup, status
         logical :: found
         character(len=STDLEN) :: message
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -173,63 +171,39 @@ contains
                 call write_groups_starfile(params%outfile, star_groups, int(header%ngroups))
                 deallocate(star_groups, stored_groups)
                 write(logfhandle,'(A)') '>>> SIGMA2 CONVERTER EXPORTED GROUPS TO: '//params%outfile%to_char()
-            case('star_import','parts_import')
+            case('star_import')
                 if( .not. cline%defined('infile') ) THROW_HARD('sigma2 import requires infile')
                 state_path = params%outfile
                 if( file_exists(state_path) ) THROW_HARD('sigma2 import refuses to replace an existing output state')
                 kfromto = [1, fdim(box)-1]
                 allocate(spectra(kfromto(1):kfromto(2),nptcls), source=0.0_real32)
-                if( trim(params%sigma_action) == 'star_import' )then
-                    call read_sigma2_groups_file(params%infile, star_groups, kfromto, ngroups)
-                    if( kfromto(1) /= 1 .or. kfromto(2) /= fdim(box)-1 ) &
-                        &THROW_HARD('STAR sigma2 seed does not cover the native project shell range')
-                    if( params%l_sigma_glob .and. ngroups /= 1 ) &
-                        &THROW_HARD('global sigma estimation requires a one-group STAR seed')
-                    if( .not. params%l_sigma_glob )then
-                        if( project_ngroups < 1 ) THROW_HARD('cannot derive sigma2 stack groups from project')
-                        if( ngroups > 1 .and. ngroups /= project_ngroups ) &
-                            &THROW_HARD('STAR sigma2 group count does not match the project')
-                    endif
-                    do iptcl = 1, nptcls
-                        eo = particles%get_eo(iptcl) + 1
-                        if( ngroups == 1 )then
-                            igroup = 1
-                        else if( particles%get_state(iptcl) <= 0 )then
-                            ! Inactive rows are excluded from reduction and consumption.
-                            ! Give them a valid seed without imposing active-group coverage.
-                            igroup = 1
-                        else
-                            igroup = particles%get_int(iptcl, 'stkind')
-                            if( igroup < 1 .or. igroup > ngroups ) &
-                                &THROW_HARD('STAR sigma2 groups do not cover project stack membership')
-                        endif
-                        spectra(:,iptcl) = real(star_groups(eo,igroup,:), real32)
-                    enddo
-                    deallocate(star_groups)
-                else
-                    allocate(covered(nptcls), source=.false.)
-                    do ipart = 1, params%nparts
-                        part_path = params%infile//int2str_pad(ipart,params%numlen)//'.dat'
-                        if( .not. file_exists(part_path) ) THROW_HARD('missing legacy sigma2 part: '//part_path%to_char())
-                        call part_file%new_from_file(part_path)
-                        call part_file%get_resrange(kfromto)
-                        if( kfromto(1) /= 1 .or. kfromto(2) /= fdim(box)-1 ) &
-                            &THROW_HARD('legacy sigma2 part does not cover the native project shell range')
-                        call part_file%read(part_values)
-                        fromp = lbound(part_values,2)
-                        top   = ubound(part_values,2)
-                        if( fromp < 1 .or. top > nptcls .or. any(covered(fromp:top)) ) &
-                            &THROW_HARD('legacy sigma2 parts have invalid or overlapping particle ranges')
-                        spectra(:,fromp:top) = real(part_values,real32)
-                        covered(fromp:top) = .true.
-                        deallocate(part_values)
-                        call part_file%kill
-                        call part_path%kill
-                    enddo
-                    if( .not. all(covered) ) THROW_HARD('legacy sigma2 parts do not exactly cover the project')
-                    deallocate(covered)
+                call read_sigma2_groups_file(params%infile, star_groups, kfromto, ngroups)
+                if( kfromto(1) /= 1 .or. kfromto(2) /= fdim(box)-1 ) &
+                    &THROW_HARD('STAR sigma2 seed does not cover the native project shell range')
+                if( params%l_sigma_glob .and. ngroups /= 1 ) &
+                    &THROW_HARD('global sigma estimation requires a one-group STAR seed')
+                if( .not. params%l_sigma_glob )then
+                    if( project_ngroups < 1 ) THROW_HARD('cannot derive sigma2 stack groups from project')
+                    if( ngroups > 1 .and. ngroups /= project_ngroups ) &
+                        &THROW_HARD('STAR sigma2 group count does not match the project')
                 endif
-                call publish_import(trim(params%sigma_action) == 'star_import')
+                do iptcl = 1, nptcls
+                    eo = particles%get_eo(iptcl) + 1
+                    if( ngroups == 1 )then
+                        igroup = 1
+                    else if( particles%get_state(iptcl) <= 0 )then
+                        ! Inactive rows are excluded from reduction and consumption.
+                        ! Give them a valid seed without imposing active-group coverage.
+                        igroup = 1
+                    else
+                        igroup = particles%get_int(iptcl, 'stkind')
+                        if( igroup < 1 .or. igroup > ngroups ) &
+                            &THROW_HARD('STAR sigma2 groups do not cover project stack membership')
+                    endif
+                    spectra(:,iptcl) = real(star_groups(eo,igroup,:), real32)
+                enddo
+                deallocate(star_groups)
+                call publish_star_import
             case default
                 THROW_HARD('unsupported sigma2 conversion action')
         end select
@@ -241,8 +215,7 @@ contains
 
       contains
 
-        subroutine publish_import( lossy_seed )
-            logical, intent(in) :: lossy_seed
+        subroutine publish_star_import
             real :: smpd
             smpd = project%get_smpd()
             allocate(active(nptcls), eo_ids(nptcls), group_ids(nptcls))
@@ -261,13 +234,8 @@ contains
                 grouping = SIGMA2_GROUP_STACK
                 if( ngroups < 1 ) THROW_HARD('cannot derive sigma2 stack groups from project')
             endif
-            if( lossy_seed )then
-                call sigma2_state_init_header(header, 1, fdim(box)-1, nptcls, box, smpd, ngroups, &
-                    &grouping, 1_int64, layout_digest, SIGMA2_PROV_STAR_SEED)
-            else
-                call sigma2_state_init_header(header, 1, fdim(box)-1, nptcls, box, smpd, ngroups, &
-                    &grouping, 1_int64, layout_digest, SIGMA2_PROV_LEGACY_PARTS)
-            endif
+            call sigma2_state_init_header(header, 1, fdim(box)-1, nptcls, box, smpd, ngroups, &
+                &grouping, 1_int64, layout_digest, SIGMA2_PROV_STAR_SEED)
             candidate_path = sigma2_state_candidate_path(state_path%to_char(), 1_int64)
             call sigma2_state_create_candidate(candidate_path%to_char(), header, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
@@ -281,12 +249,8 @@ contains
             call project%set_sigma2_state_path(state_path)
             call project%write_segment_inside('projinfo', params%projfile)
             deallocate(spectra, active, eo_ids, group_ids)
-            if( lossy_seed )then
-                write(logfhandle,'(A)') '>>> SIGMA2 CONVERTER IMPORTED LOSSY GROUPED STAR SEED: '//state_path%to_char()
-            else
-                write(logfhandle,'(A)') '>>> SIGMA2 CONVERTER IMPORTED EXACT LEGACY PARTICLE PARTS: '//state_path%to_char()
-            endif
-        end subroutine publish_import
+            write(logfhandle,'(A)') '>>> SIGMA2 CONVERTER IMPORTED LOSSY GROUPED STAR SEED: '//state_path%to_char()
+        end subroutine publish_star_import
 
     end subroutine exec_sigma2_convert
 

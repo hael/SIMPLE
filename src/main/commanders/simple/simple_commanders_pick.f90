@@ -231,7 +231,7 @@ contains
             call spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! end gracefully
-        call qsys_job_finished(params, string('simple_commanders_pick :: exec_pick_extract'))
+        call qsys_declare_part_finished(params, string('simple_commanders_pick :: exec_pick_extract'))
         call o_mic%kill
         call piter%kill
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')

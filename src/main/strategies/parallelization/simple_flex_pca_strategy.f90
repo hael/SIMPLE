@@ -367,14 +367,14 @@ contains
     end subroutine worker_initialize
 
     subroutine worker_execute( self, params, build, cline )
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs, only: qsys_declare_part_finished
         class(flex_pca_worker_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         type(flex_pca_application) :: app
         call app%run_worker(params, build, cline, self%rounds)
-        call qsys_job_finished(params, string('simple_flex_pca_strategy :: worker_execute'))
+        call qsys_declare_part_finished(params, string('simple_flex_pca_strategy :: worker_execute'))
     end subroutine worker_execute
 
     subroutine worker_finalize_run( self, params, build, cline )

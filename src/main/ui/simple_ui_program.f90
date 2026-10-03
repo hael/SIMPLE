@@ -125,25 +125,20 @@ contains
         character(len=*),           intent(in)    :: name, summary, help, executable
         logical,                    intent(in)    :: sp_required
         integer,          optional, intent(in)    :: visibility
-        character(len=*), optional, intent(in)    :: display_name
+        character(len=*),           intent(in)    :: display_name
         call self%kill
         self%name        = trim(name)
         if( len_trim(summary) > UI_SUMMARY_MAX_LEN )then
             THROW_HARD('ui_program%new summary exceeds 100 characters: '//trim(name))
         endif
         self%summary     = trim(summary)
-        if( present(display_name) )then
-            if( len_trim(display_name) == 0 )then
-                THROW_HARD('ui_program%new display_name must not be empty: '//trim(name))
-            endif
-            if( len_trim(display_name) > UI_DISPLAY_NAME_MAX_LEN )then
-                THROW_HARD('ui_program%new display_name exceeds 100 characters: '//trim(name))
-            endif
-            self%display_name = trim(display_name)
-        else
-            ! Temporary migration fallback: every existing plain-English summary is a safe GUI title.
-            self%display_name = trim(summary)
+        if( len_trim(display_name) == 0 )then
+            THROW_HARD('ui_program%new display_name must not be empty: '//trim(name))
         endif
+        if( len_trim(display_name) > UI_DISPLAY_NAME_MAX_LEN )then
+            THROW_HARD('ui_program%new display_name exceeds 100 characters: '//trim(name))
+        endif
+        self%display_name = trim(display_name)
         self%help        = trim(help)
         self%executable  = trim(executable)
         self%sp_required = sp_required

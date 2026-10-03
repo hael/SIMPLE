@@ -37,8 +37,6 @@ contains
         write(logfhandle,'(a,1x,a)') '>>> PICKING MICROGRAPH:', moviename_intg%to_char()
         if(params%append == 'yes') l_append = .true.
         select case(trim(params%picker))
-            case('old')
-                THROW_HARD('Old picker no longer supported')
             case('new')
                 if( cline%defined('pickrefs') )then 
                     call self%read_pickrefs(params%pickrefs)
@@ -65,6 +63,8 @@ contains
                 endif
             case('segdiam')
                 call exec_segdiampick(params, moviename_intg, boxfile, smpd, nptcls_out, params%moldiam_max, dir_out=dir_out)
+            case DEFAULT
+                THROW_HARD('unsupported picker: '//trim(params%picker)//'; expected new|segdiam')
         end select
     end subroutine iterate
 

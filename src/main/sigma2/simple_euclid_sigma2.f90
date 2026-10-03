@@ -21,11 +21,6 @@ public :: euclid_sigma2, sigma2_group_iter
 public :: write_groups_starfile, read_sigma2_groups_file
 
 integer, parameter :: LENSTR = 48
-! euclid scale diagnostics (doc/implementation_notes/completed/drop_legacy_box_division.md, plan step 1):
-! the search band is split into NDIAG_BANDS contiguous bands; per particle we keep the
-! reference/particle amplitude ratio per band and the euclid objective value v at the
-! assigned orientation, and report quantiles once per iteration
-integer, parameter :: NDIAG_BANDS = 4
 
 type euclid_sigma2
     private
@@ -35,8 +30,6 @@ type euclid_sigma2
     real,    allocatable          :: sigma2_groups(:,:,:)   !< sigmas for groups
     integer, allocatable          :: pinds(:)
     integer, allocatable          :: micinds(:)
-    real,    allocatable          :: diag_ratio(:,:)       !< ref/ptcl amplitude ratio per band & particle (this part only)
-    real,    allocatable          :: diag_v(:)             !< euclid objective value at assigned orientation (this part only)
     integer                       :: fromp
     integer                       :: top
     integer                       :: kfromto(2) = 0
@@ -64,7 +57,6 @@ contains
     procedure, private :: store_contribution
     procedure          :: get_sigma2_part
     procedure          :: write_sigma2
-    procedure          :: report_euclid_diag
     procedure, private :: read_sigma2_groups
     ! destructor
     procedure          :: kill
@@ -94,8 +86,7 @@ contains
     end subroutine new_pftc
 
     !> The noise table of a pass: a Cartesian pass, which constructs no polar calculator, uses
-    !! it alone; the polar constructor shares it with the calculator. Diagnostics are filled by
-    !! calc_sigma2, reported and reset by write_sigma2 (euclid_diag=yes).
+    !! it alone; the polar constructor shares it with the calculator.
     subroutine new_cart( self, params, binfname, box )
         class(euclid_sigma2), target, intent(inout) :: self
         class(parameters),    target, intent(in)    :: params
@@ -110,10 +101,6 @@ contains
         self%binfname = binfname
         self%fromp = self%p_ptr%fromp
         self%top = self%p_ptr%top
-        if( self%p_ptr%l_euclid_diag )then
-            allocate(self%diag_ratio(NDIAG_BANDS,self%fromp:self%top), &
-                &self%diag_v(self%fromp:self%top), source=-1.)
-        endif
         self%exists = .true.
     end subroutine new_cart
 
@@ -269,9 +256,8 @@ contains
         class(ori),           intent(in)    :: o
         character(len=*),     intent(in)    :: refkind ! 'proj' or 'class'
         integer :: iref, irot, kfromto(2)
-        real, allocatable :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
-        real    :: shvec(2), v
-        v = -1.
+        real, allocatable :: sigma_contrib(:)
+        real    :: shvec(2)
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
@@ -284,16 +270,9 @@ contains
             iref = (o%get_state() - 1) * self%p_ptr%nspace + iref
         endif
         irot  = pftc%get_roind(360. - o%e3get())
-        if( allocated(self%diag_v) )then
-            allocate(ref_pow(kfromto(1):kfromto(2)), ptcl_pow(kfromto(1):kfromto(2)), source=0.)
-            call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
-        else
-            call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
-        endif
-        call self%store_contribution(iptcl, sigma_contrib, ref_pow, ptcl_pow, v)
+        call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+        call self%store_contribution(iptcl, sigma_contrib)
         deallocate(sigma_contrib)
-        if( allocated(ref_pow)  ) deallocate(ref_pow)
-        if( allocated(ptcl_pow) ) deallocate(ptcl_pow)
     end subroutine calc_sigma2_pftc
 
     !> The sigma2 contribution of particle iptcl at the committed Cartesian pose, from particle
@@ -309,16 +288,16 @@ contains
         integer,              intent(in)    :: islot, iptcl, state
         logical,              intent(in)    :: iseven
         real(dp),             intent(in)    :: rotmat(3,3), shift(2)
-        real, allocatable :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
-        real :: v
+        real, allocatable :: sigma_contrib(:)
         if( .not.associated(self%p_ptr) )then
             THROW_HARD('euclid_sigma2: params pointer is not set')
         endif
         if( .not. cftc%ptcl_is_valid(islot) ) return
-        call cftc%sigma_contribution(state, iseven, islot, rotmat, shift, sigma_contrib, ref_pow, ptcl_pow, v)
+        ! residual only: the diagnostic outputs of sigma_contribution are test instruments
+        call cftc%sigma_contribution(state, iseven, islot, rotmat, shift, sigma_contrib)
         if( lbound(sigma_contrib,1) /= self%p_ptr%kfromto(1) .or. ubound(sigma_contrib,1) /= self%p_ptr%kfromto(2) ) &
             &THROW_HARD('Cartesian sigma contribution does not span the band of the pass')
-        call self%store_contribution(iptcl, sigma_contrib, ref_pow, ptcl_pow, v)
+        call self%store_contribution(iptcl, sigma_contrib)
     end subroutine calc_sigma2_cart
 
     !> The particle's sigma2 contribution of this part over the pass's band (as calc_sigma2 stored it).
@@ -332,32 +311,17 @@ contains
         sigma2 = self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl)
     end function get_sigma2_part
 
-    !> Store one particle's per-shell contribution over the pass's band and its scale diagnostics.
-    subroutine store_contribution( self, iptcl, sigma_contrib, ref_pow, ptcl_pow, v )
+    !> Store one particle's per-shell contribution over the pass's band.
+    subroutine store_contribution( self, iptcl, sigma_contrib )
         class(euclid_sigma2), intent(inout) :: self
         integer,              intent(in)    :: iptcl
         real,                 intent(in)    :: sigma_contrib(:)
-        real, allocatable,    intent(in)    :: ref_pow(:), ptcl_pow(:)
-        real,                 intent(in)    :: v
-        integer :: kfromto(2), nk, ib, klo, khi
-        real    :: rsum, psum
+        integer :: kfromto(2)
         if( .not. allocated(self%sigma2_part) ) THROW_HARD('particle sigma2 storage is not allocated')
         if( iptcl < lbound(self%sigma2_part,2) .or. iptcl > ubound(self%sigma2_part,2) ) &
             &THROW_HARD('particle index is outside sigma2 storage')
         kfromto = self%p_ptr%kfromto
         self%sigma2_part(kfromto(1):kfromto(2),iptcl) = sigma_contrib
-        if( allocated(self%diag_v) .and. allocated(ref_pow) .and. allocated(ptcl_pow) )then
-            self%diag_v(iptcl) = v
-            nk = kfromto(2) - kfromto(1) + 1
-            do ib = 1, NDIAG_BANDS
-                klo  = nint(real(ib-1) * real(nk) / real(NDIAG_BANDS)) + 1
-                khi  = min(nint(real(ib) * real(nk) / real(NDIAG_BANDS)), nk)
-                if( khi < klo ) cycle
-                rsum = sum(ref_pow(lbound(ref_pow,1)+klo-1:lbound(ref_pow,1)+khi-1))
-                psum = sum(ptcl_pow(lbound(ptcl_pow,1)+klo-1:lbound(ptcl_pow,1)+khi-1))
-                if( psum > 0. ) self%diag_ratio(ib,iptcl) = sqrt(rsum / psum)
-            enddo
-        endif
     end subroutine store_contribution
 
     subroutine write_sigma2( self )
@@ -393,109 +357,7 @@ contains
         endif
         call candidate_path%kill
         call range_path%kill
-        call self%report_euclid_diag
-        ! reset so that the next iteration's report covers only the particles it updates
-        if( allocated(self%diag_ratio) ) self%diag_ratio = -1.
-        if( allocated(self%diag_v)     ) self%diag_v     = -1.
     end subroutine write_sigma2
-
-    !>  Once-per-iteration report of the reference/particle amplitude ratio per band and
-    !>  the quantiles of the euclid objective value v at the assigned orientations.
-    !>  v = sum_k (k/sigma2_k) sum_p |ptcl - CTF*ref|^2 / sum_k (k/sigma2_k) sum_p |ptcl|^2, so a
-    !>  reference that explains particle variance gives v < 1; v ~ 1.000 throughout means the
-    !>  reference barely enters the residual (refs << ptcls), v > 1 means it adds more power than
-    !>  it explains. Healthy target (drop_legacy_box_division.md S3): ratios ~0.1-0.5 falling
-    !>  with resolution; v clearly below 1, never ~1.000 throughout, never near the threshold.
-    subroutine report_euclid_diag( self )
-        class(euclid_sigma2), intent(in) :: self
-        real, allocatable :: vals(:)
-        real    :: q(NDIAG_BANDS), vq(3), vmax, vthres
-        integer :: kfromto(2), nk, ib, klo, khi, n, ninvalid
-        character(len=:), allocatable :: str
-        if( .not.allocated(self%diag_v) ) return
-        if( self%p_ptr%part /= 1 ) return   ! one report per iteration in distributed execution
-        kfromto = self%p_ptr%kfromto
-        nk      = kfromto(2) - kfromto(1) + 1
-        vthres  = real(-log(real(TINY,dp)), kind=kind(vthres))
-        ! bands
-        str = ''
-        do ib = 1, NDIAG_BANDS
-            klo = kfromto(1) + nint(real(ib-1) * real(nk) / real(NDIAG_BANDS))
-            khi = min(kfromto(1) + nint(real(ib) * real(nk) / real(NDIAG_BANDS)) - 1, kfromto(2))
-            call valid_vals(self%diag_ratio(ib,:), vals, n)
-            q(ib) = quantile(vals, n, 0.5)
-            str = str//' k['//int2str(klo)//'-'//int2str(khi)//']: '//real2str_diag(q(ib))
-        enddo
-        call valid_vals(self%diag_v, vals, n)
-        if( n == 0 ) return
-        vq(1)    = quantile(vals, n, 0.05)
-        vq(2)    = quantile(vals, n, 0.50)
-        vq(3)    = quantile(vals, n, 0.95)
-        vmax     = vals(n)
-        ninvalid = count(vals(1:n) > vthres)
-        if( self%p_ptr%nparts > 1 ) str = str//' [PART 1/'//int2str(self%p_ptr%nparts)//' ONLY]'
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> EUCLID DIAG ITER ', self%p_ptr%which_iter, &
-            &' NPTCLS ', n, ' KFROMTO ', kfromto(1), '-', kfromto(2), ' REF/PTCL AMP (q50)'//str
-        write(logfhandle,'(A,I0,A,F0.4,A,F0.4,A,F0.4,A,F0.4,A,F0.2,A,I0)') '>>> EUCLID DIAG ITER ', &
-            &self%p_ptr%which_iter, ' V q05: ', vq(1), ' q50: ', vq(2), ' q95: ', vq(3), ' max: ', vmax, &
-            &' THRES: ', vthres, ' NINVALID: ', ninvalid
-        ! maps written before 2026-08 carry a 1/box amplitude convention; such a starting
-        ! reference reprojects ~box times below the particle signal (v ~ 1.000 throughout)
-        if( q(1) >= 0. .and. q(1) < 0.02 .and. vq(2) > 0.99 )then
-            str = 'EUCLID DIAG: reference amplitudes ~'//real2str_diag(q(1))//' of the particle signal; '//&
-                &'an old-convention (1/box) or otherwise mis-scaled reference volume escaped the automatic '//&
-                &'rescaling in reference preparation; alignment against it is unreliable -- scale the input '//&
-                &'volume by the box size and restart'
-            THROW_WARN(str)
-        endif
-        if( allocated(vals) ) deallocate(vals)
-
-        contains
-
-            !> copies the non-negative entries into a sorted array
-            subroutine valid_vals( arr, vals, n )
-                real,              intent(in)    :: arr(:)
-                real, allocatable, intent(inout) :: vals(:)
-                integer,           intent(out)   :: n
-                integer :: i
-                if( allocated(vals) ) deallocate(vals)
-                n = count(arr >= 0.)
-                allocate(vals(max(1,n)), source=0.)
-                if( n == 0 ) return
-                n = 0
-                do i = 1, size(arr)
-                    if( arr(i) >= 0. )then
-                        n = n + 1
-                        vals(n) = arr(i)
-                    endif
-                enddo
-                call hpsort(vals(1:n))
-            end subroutine valid_vals
-
-            real function quantile( vals, n, frac )
-                real,    intent(in) :: vals(:)
-                integer, intent(in) :: n
-                real,    intent(in) :: frac
-                if( n == 0 )then
-                    quantile = -1.
-                else
-                    quantile = vals(max(1, min(n, nint(frac * real(n) + 0.5))))
-                endif
-            end function quantile
-
-            function real2str_diag( r ) result( str )
-                real, intent(in) :: r
-                character(len=:), allocatable :: str
-                character(len=32) :: buf
-                if( r < 0. )then
-                    str = 'n/a'
-                else
-                    write(buf,'(ES9.3)') r
-                    str = trim(adjustl(buf))
-                endif
-            end function real2str_diag
-
-    end subroutine report_euclid_diag
 
     subroutine write_groups_starfile( fname, group_pspecs, ngroups )
         class(string),     intent(in) :: fname
@@ -666,8 +528,6 @@ contains
             if(allocated(self%sigma2_groups)) deallocate(self%sigma2_groups)
             if(allocated(self%sigma2_noise))  deallocate(self%sigma2_noise)
             if( allocated(self%sigma2_part) ) deallocate(self%sigma2_part)
-            if( allocated(self%diag_ratio) )  deallocate(self%diag_ratio)
-            if( allocated(self%diag_v) )      deallocate(self%diag_v)
             self%kfromto     = 0
             self%fromp       = -1
             self%top         = -1

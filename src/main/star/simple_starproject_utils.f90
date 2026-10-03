@@ -53,7 +53,7 @@ type star_file
     type(star_data)      :: clusters2D
     type(star_data)      :: class3D
     integer, allocatable :: opticsmap(:)
-    integer, allocatable :: stkmap(:,:) ! (stkid : z)
+    integer, allocatable :: stkmap(:,:) ! per STAR line: (stack id, project particle index, z in stack)
     integer, allocatable :: stkstates(:)
     integer              :: stkptclcount
     integer              :: fd

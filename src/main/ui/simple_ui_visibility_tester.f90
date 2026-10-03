@@ -8,8 +8,7 @@
 ! N21, the continuous-pose surface of section 6.5 of the pose_cont refactoring plan: refine3D
 ! offers refine=cont and pose_cont=yes|no, refine3D_auto offers pose_cont=no|yes|only and no
 ! refine, both offer athres_cont, and pose_cont_route, pose_cont_mode and the program
-! refine3D_pose_cont are gone. The retired abinitio* and cluster2D* program names resolve to
-! the solve*, pool2D and refine2D* programs that replaced them (simple_ui_legacy_names).
+! refine3D_pose_cont are gone.
 module simple_ui_visibility_tester
 use simple_test_utils
 use simple_linked_list,   only: linked_list, list_iterator
@@ -20,8 +19,6 @@ use simple_ui_program,    only: UI_DISPLAY_NAME_MAX_LEN, UI_FILE, UI_PARM, UI_SU
     &category_descriptor, ui_cli_param_choices, ui_cli_param_summary, ui_program, ui_program_input, &
     &ui_activation_equals_any
 use simple_ui_descriptor_types, only: ui_choices
-use simple_ui_legacy_names, only: NLEGACY_PRG_NAMES, LEGACY_PRG_NAMES, CURRENT_PRG_NAMES, LEGACY_PRG_PRIVATE, &
-    &canonical_prg_name
 use simple_ui_visibility, only: UI_VIS_STANDARD, UI_VIS_ADVANCED, UI_VIS_DEVELOPER, &
                                &ui_visibility_is_valid, ui_visibility_name
 implicit none
@@ -43,7 +40,6 @@ contains
         call test_registered_test_programs()
         call test_phshift_contract()
         call test_cont_surface_contract()
-        call test_legacy_program_names()
     end subroutine run_all_ui_visibility_tests
 
     subroutine test_visibility_levels()
@@ -139,11 +135,11 @@ contains
         call param%set_param('binary_param', 'binary', 'Binary parameter', 'Binary parameter help', &
             &'', .true., '', choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call ui_prg%new('test_program', 'Test program', 'Test program help', 'simple_exec', .false., &
-            &visibility=UI_VIS_STANDARD)
+            &visibility=UI_VIS_STANDARD, display_name='Test Program Title')
         call assert_char('Test program', ui_prg%summary%to_char(), 'program short text is the summary')
         call assert_true(len_trim(ui_prg%summary%to_char()) <= UI_SUMMARY_MAX_LEN, &
             &'program summary respects the display limit')
-        call assert_char('Test program', ui_prg%display_name%to_char(), 'program display name falls back to the summary')
+        call assert_char('Test Program Title', ui_prg%display_name%to_char(), 'program display name is the explicit title')
         call assert_true(len_trim(ui_prg%display_name%to_char()) <= UI_DISPLAY_NAME_MAX_LEN, &
             &'program display name respects the display limit')
         call assert_char('Test program help', ui_prg%help%to_char(), 'program long text is help')
@@ -323,35 +319,6 @@ contains
         call assert_program_not_registered('refine3D_pose_cont')
         call choices%kill
     end subroutine test_cont_surface_contract
-
-    !> every retired program name runs the registered program that replaced it; other names pass through
-    subroutine test_legacy_program_names()
-        type(ui_program), pointer :: by_current, by_legacy
-        character(len=:), allocatable :: legacy, current
-        integer :: i
-        write(*,'(A)') 'test_legacy_program_names'
-        call make_ui
-        call make_test_ui
-        do i = 1, NLEGACY_PRG_NAMES
-            legacy  = trim(LEGACY_PRG_NAMES(i))
-            current = trim(CURRENT_PRG_NAMES(i))
-            call assert_char(current, canonical_prg_name(legacy), legacy//' maps to '//current)
-            call assert_char(current, canonical_prg_name(current), current//' is its own current name')
-            if( LEGACY_PRG_PRIVATE(i) ) cycle ! simple_private_exec program, no UI registration
-            call get_prg_ptr(string(current), by_current)
-            if( associated(by_current) )then
-                call get_prg_ptr(string(legacy), by_legacy)
-            else
-                call get_test_prg_ptr(string(current), by_current)
-                call get_test_prg_ptr(string(legacy), by_legacy)
-            endif
-            call assert_true(associated(by_current), current//' is registered')
-            call assert_true(associated(by_legacy, by_current), legacy//' resolves to the '//current//' program')
-            if( associated(by_current) ) call assert_char(current, by_current%name%to_char(), current//' registered name')
-        end do
-        call assert_char('refine3D', canonical_prg_name('refine3D'), 'a current name passes through')
-        call assert_char('refine2D', canonical_prg_name(' cluster2D '), 'names are trimmed')
-    end subroutine test_legacy_program_names
 
     !> whether any input list of the program holds `key`
     logical function program_has_key( prg, key )

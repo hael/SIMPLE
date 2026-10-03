@@ -22,9 +22,9 @@ end interface read_imgbatch
 type(stack_io) :: stkio_r
 
 ! Per-stack dimensions, memoized by stack index and filename.
-! The physical MRC header stays the source of truth -- os_stk's 'box' is never
-! repaired and 'nptcls_stk' may hold a project range count rather than the real
-! image count, so trusting either would risk wrong record offsets. Including the
+! The physical MRC header stays the source of truth -- os_stk's 'box' and
+! 'nptcls_stk' are bookkeeping that nothing re-checks against the file, so
+! trusting either would risk wrong record offsets. Including the
 ! filename prevents cache reuse when successive workflows have the same number
 ! of stack rows but refer to different physical files.
 integer, allocatable :: memo_ldim(:,:), memo_nptcls(:)

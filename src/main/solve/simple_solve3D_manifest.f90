@@ -28,11 +28,11 @@ integer,          parameter :: KLEN = 24
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
 !! search policy plus the entry routes (provenance)
-character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(38) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(36) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'nstates', 'multivol_mode', 'split_stage', 'nstages', 'rec_backend', 'maxits_pcg', &
     &'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', 'filt_mode', 'automsk', 'envfsc', 'envmsklp', &
-    &'projrec', 'objfun', 'sigma_est', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', &
-    &'inpl_cont', 'prob_athres', 'bfac', 'gauref', 'partition', 'nclust', 'clust_crit', &
+    &'objfun', 'sigma_est', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', &
+    &'prob_athres', 'bfac', 'gauref', 'partition', 'nclust', 'clust_crit', &
     &'lpstart_ini3D', 'lpstop_ini3D', 'center', 'cenlp', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'vol1']
 
 !> The subset solve3D_addon replays as given: everything that describes the
@@ -40,19 +40,11 @@ character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(38) = [character(len=KLEN)
 !! layout and mode (derived from the completed solution), the stage range
 !! (from the ladder), centring (forced off) and the compute/convergence keys
 !! the add-on accepts from its own command line are not replayed.
-character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(28) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(26) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'rec_backend', 'maxits_pcg', 'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', &
-    &'filt_mode', 'automsk', 'envfsc', 'envmsklp', 'projrec', 'objfun', 'sigma_est', 'hp', &
-    &'lp', 'lpstart', 'lpstop', 'force_lp_range', 'inpl_cont', &
+    &'filt_mode', 'automsk', 'envfsc', 'envmsklp', 'objfun', 'sigma_est', 'hp', &
+    &'lp', 'lpstart', 'lpstop', 'force_lp_range', &
     &'prob_athres', 'bfac', 'gauref', 'partition', 'nclust', 'clust_crit', 'lpstart_ini3D', 'lpstop_ini3D']
-
-!> Field and input keys of retired features: the denoised particle source
-!! (ptcl_src, objfun_den, objfun_den_w) and conical FSC regularization
-!! (conical_fsc). Manifests written before their removal carry them: the
-!! inputs are ignored, and the ptcl_src field must say raw, because a
-!! solution reconstructed from denoised particles cannot be extended.
-character(len=KLEN), parameter :: MANIFEST_RETIRED_KEYS(4) = [character(len=KLEN) :: &
-    &'ptcl_src', 'objfun_den', 'objfun_den_w', 'conical_fsc']
 
 !> one stage of the ladder: the planned record and the limits actually
 !! emitted (0 = not on the stage line, -1 = a stage the run never ran)
@@ -525,15 +517,6 @@ contains
                 case('layout_digest'); read(rest,*,iostat=io_stat) self%layout_digest
                 case('stack_digest');  read(rest,*,iostat=io_stat) self%stack_digest
                 case('optics_digest'); read(rest,*,iostat=io_stat) self%optics_digest
-                case('ptcl_src')
-                    ! retired field (see MANIFEST_RETIRED_KEYS)
-                    read(rest,*,iostat=io_stat) word
-                    if( io_stat == 0 .and. trim(word) /= 'raw' )then
-                        msg = 'solve3D manifest of a solution reconstructed from denoised particles (no longer supported)'
-                        call fclose(funit)
-                        call self%kill
-                        return
-                    endif
                 case('nstates');       read(rest,*,iostat=io_stat) self%nstates
                 case('pgrp');          read(rest,*,iostat=io_stat) self%pgrp
                 case('box');           read(rest,*,iostat=io_stat) self%box
@@ -580,9 +563,7 @@ contains
                     ! the value is the rest of the record after its key: a
                     ! list-directed read would end a path at its first '/'
                     read(rest,*,iostat=io_stat) word
-                    if( io_stat == 0 .and. any(MANIFEST_RETIRED_KEYS == word) )then
-                        ! a retired input key: read and ignored
-                    else if( io_stat == 0 )then
+                    if( io_stat == 0 )then
                         if( .not. any(MANIFEST_INPUT_KEYS == word) )then
                             msg = 'unknown solve3D manifest input key: '//trim(word)
                             call fclose(funit)

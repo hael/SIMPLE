@@ -71,7 +71,7 @@ contains
             ! frozen rows of solve3D_addon) contributes an empty table
             call write_empty_prob_tab(params, build, pinds, fname)
             call build%kill_general_tbox
-            call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
+            call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
             call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
             return
         endif
@@ -105,7 +105,7 @@ contains
         call build%pftc%kill
         call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
+        call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab
 
@@ -143,7 +143,7 @@ contains
         endif
         call fname%kill
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab_neigh'))
+        call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_tab_neigh'))
         call simple_end('**** SIMPLE_PROB_TAB_NEIGH NORMAL STOP ****', print_simple=.false.)
 
     contains
@@ -268,7 +268,7 @@ contains
         call qenv%kill
         call job_descr%kill
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_align'))
+        call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_align'))
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align
@@ -328,7 +328,7 @@ contains
         call qenv%kill
         call job_descr%kill
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_align_neigh'))
+        call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_align_neigh'))
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN_NEIGH NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align_neigh
@@ -406,7 +406,7 @@ contains
         call cavger_kill
         call build%pftc%kill
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_tab2D'))
+        call qsys_declare_part_finished(params, string('simple_commanders_prob :: exec_prob_tab2D'))
         call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_tab2D
 
@@ -486,7 +486,7 @@ contains
         call qenv%kill
         call job_descr%kill
         call build%kill_general_tbox
-        call qsys_job_finished(params, string('simple_commanders_prob :: exec_prob_align2D'))
+        call qsys_declare_part_finished(params, string('simple_commanders_prob :: exec_prob_align2D'))
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN2D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_prob_align2D

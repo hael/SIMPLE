@@ -1,10 +1,9 @@
 !@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
-use simple_ui,              only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
-use simple_ui_program,      only: ui_program
-use simple_ui_legacy_names, only: canonical_prg_name
-use simple_args,            only: args
+use simple_ui,         only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
+use simple_ui_program, only: ui_program
+use simple_args,       only: args
 use simple_private_prgs 
 implicit none
 private
@@ -37,7 +36,6 @@ type cmdline
     procedure          :: parse
     procedure          :: parse_private
     procedure          :: parse_private_line
-    procedure          :: parse_oldschool
     procedure, private :: parse_command_line_value
     procedure, private :: copy
     procedure, private :: assign
@@ -70,10 +68,10 @@ contains
         type(string), allocatable      :: keys_required(:), defined_keys(:)
         type(args)                     :: allowed_args
         type(ui_program), pointer      :: ptr2prg => null()
-        type(string)                   :: prgname, prgkey, exec_cmd_ui, exec_cmd, executable
+        type(string)                   :: prgname, exec_cmd_ui, exec_cmd, executable
         character(len=XLONGSTRLEN)     :: arg, buffer
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
-        logical :: skip_required_keys, l_legacy_name
+        logical :: skip_required_keys
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
@@ -96,12 +94,8 @@ contains
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
-        ! a retired program name (simple_ui_legacy_names) runs as the current program
-        prgkey        = arg(:pos-1)
-        prgname       = canonical_prg_name(arg(pos+1:))
-        l_legacy_name = prgname%to_char() /= trim(adjustl(arg(pos+1:)))
+        prgname = arg(pos+1:)
         if( DEBUG_HERE ) print *, 'prgname from command-line in cmdline class: ', prgname%to_char()
-        if( prgname%has_substr('report_selection') ) prgname = 'selection' ! FIX4NOW
         ! obtain pointer to the program in the simple_ui specification
         select case(executable%to_char())
             case('simple_exec', 'single_exec', 'simple_stream', 'simple_private_exec')
@@ -195,8 +189,6 @@ contains
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
-        ! workers and job descriptions get the current name of a retired program
-        if( l_legacy_name ) call self%set(prgkey%to_char(), prgname)
         if (.not. skip_required_keys) then
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
@@ -293,10 +285,6 @@ contains
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
-        ! workers get the current name of a retired program (simple_ui_legacy_names)
-        call get_command_argument(1, arg, cmdlen, cmdstat)
-        pos = index(arg, '=')
-        if( canonical_prg_name(arg(pos+1:)) /= trim(adjustl(arg(pos+1:))) ) call self%set('prg', canonical_prg_name(arg(pos+1:)))
         if (associated(ptr2prg) .and. .not. skip_required_keys) then
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
@@ -381,9 +369,6 @@ contains
         do i=1,self%argcnt
             call self%parse_command_line_value(i, arg(i), allowed_args)
         end do
-        ! workers get the current name of a retired program (simple_ui_legacy_names)
-        if( canonical_prg_name(arg(1)(pos+1:)) /= trim(adjustl(arg(1)(pos+1:))) ) &
-            &call self%set('prg', canonical_prg_name(arg(1)(pos+1:)))
         if (associated(ptr2prg) .and. .not. skip_required_keys) then
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
@@ -400,58 +385,6 @@ contains
             (str_has_substr(line, 'quality_mode=learn') .or. str_has_substr(line, 'quality_mode=promote') .or. &
              (str_has_substr(line, 'quality_mode=evaluate') .and. str_has_substr(line, 'filetab=')))
     end function skip_mode_required_keys
-
-    !> \brief for parsing the command line arguments passed as key=val
-    subroutine parse_oldschool( self, keys_required, keys_optional )
-        class(cmdline),             intent(inout) :: self
-        character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
-        character(len=STDLEN)     :: exec_name
-        character(len=XLONGSTRLEN) :: arg
-        type(args)                :: allowed_args
-        integer                   :: i, cmdstat, cmdlen, ikey
-        integer                   :: nreq, cmdargcnt
-        logical                   :: distr_exec
-        call get_command_argument(0,exec_name)
-        distr_exec = str_has_substr(exec_name,'distr')
-        cmdargcnt = command_argument_count()
-        call get_command(self%entire_line)
-        cmdline_glob = trim(self%entire_line)
-        if( present(keys_required) )then
-            if( str_has_substr(self%entire_line,'prg=') )then
-                nreq = size(keys_required) + 1 ! +1 because prg part of command line
-            else
-                nreq = size(keys_required)
-            endif
-            if( cmdargcnt < nreq )then
-                call print_cmdline_oldschool(keys_required, keys_optional, distr=distr_exec)
-                stop
-            else
-                ! indicate which variables are required
-                do ikey=1,size(keys_required)
-                    call self%checkvar(keys_required(ikey), ikey)
-                end do
-            endif
-        else
-            if( cmdargcnt < 1 )then
-                call print_cmdline_oldschool(keys_required, keys_optional, distr=distr_exec)
-                stop
-            endif
-        endif
-        allowed_args = args()
-        self%argcnt  = command_argument_count()
-        do i=1,self%argcnt
-            call get_command_argument(i, arg, cmdlen, cmdstat)
-            if( cmdstat == -1 )then
-                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
-                write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(logfhandle,*) 'which likely exceeds the length limit XLONGSTRLEN'
-                write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                THROW_HARD('command-line argument longer than XLONGSTRLEN')
-            endif
-            call self%parse_command_line_value(i, arg, allowed_args)
-        end do
-        if( present(keys_required) ) call self%check
-    end subroutine parse_oldschool
 
     subroutine parse_command_line_value( self, i, arg, allowed_args )
         class(cmdline),   intent(inout) :: self

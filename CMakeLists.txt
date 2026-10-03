@@ -10,7 +10,7 @@ include(AutoDetectGCC)
 # Project
 # ------------------------------------------------------------------------------
 project(SIMPLE
-    VERSION 3.0.0
+    VERSION 4.0.0
     DESCRIPTION "SIMPLE cryo-EM image processing"
     HOMEPAGE_URL "https://github.com/hael/SIMPLE"
     LANGUAGES Fortran C CXX)
@@ -30,7 +30,6 @@ option(USE_COARRAYS "Use Fortran coarrays for parallelization (experimental)" OF
 option(USE_MPI      "Use MPI for parallelization" OFF)
 option(USE_ARCHOPT  "Use architecture optimization" ON)
 option(BUILD_TESTS  "Build test executables" ON)
-option(BUILD_DOCS   "Build documentation" OFF)
 option(NICE         "Install NICE" OFF)
 
 # Always build static library (faster compilation while developing)
@@ -111,9 +110,6 @@ add_subdirectory(production)  # executables + tests
 add_subdirectory(scripts)
 if(EXISTS "${CMAKE_SOURCE_DIR}/nice" AND NICE)
     add_subdirectory(nice)
-endif()
-if(BUILD_DOCS AND EXISTS "${CMAKE_SOURCE_DIR}/doc")
-    add_subdirectory(doc)
 endif()
 
 # ------------------------------------------------------------------------------

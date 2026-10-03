@@ -232,7 +232,7 @@ contains
         class(ctf_estimate_inmem_strategy), intent(inout) :: self
         type(parameters),                  intent(in)    :: params
         class(cmdline),                    intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_preprocess :: exec_ctf_estimate'))
+        call qsys_declare_part_finished(params, string('simple_commanders_preprocess :: exec_ctf_estimate'))
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, cline)

@@ -7,8 +7,9 @@ shape evidence to SIMPLE class-average rejection. It does not specify an
 immediate code change.
 
 The natural integration point is the existing `model_cavgs_rejection` backend in
-`src/main/cavg_quality`, not the streaming `simple_cluster2D_rejector` path. The
-current model backend already owns class-average feature extraction, robust
+`src/main/cavg_quality`, which the sieve and stream paths now also call (the
+rule-based `simple_cluster2D_rejector` has been retired). The current model
+backend already owns class-average feature extraction, robust
 normalization, learned feature weights, thresholding, analysis output, learning,
 and promotion.
 
@@ -393,13 +394,12 @@ Promotion criteria:
 
 Only after batch/analyze validation should stream integration be considered.
 
-The stream path currently uses `simple_cluster2D_rejector` directly. A future
-stream integration should decide whether to:
+The stream and sieve paths already evaluate the `cavg_quality` backend (sieve,
+chunk and pool contexts). A future stream integration should decide whether to:
 
-- replace the scalar rejector with `model_cavgs_rejection` decisions;
-- call only the shape helper as an extra scalar rule;
-- keep the existing stream rejector unchanged and reserve shape evidence for
-  batch/pool cleanup.
+- add the shape evidence to the stream contexts' feature vectors;
+- call only the shape helper as an extra hard gate in a stream context;
+- reserve shape evidence for batch/pool cleanup.
 
 This decision should account for stream sentinels, chunk lifecycle, selected and
 rejected stack writing, particle-state propagation, and retry behavior.

@@ -22,7 +22,7 @@ integer(kind(ENUM_ORISEG)), parameter :: MAX_N_SEGMENTS     = 20
 integer(kind=8),            parameter :: N_VARS_HEAD_SEG    = 5
 integer(kind=8),            parameter :: N_BYTES_HEADER     = MAX_N_SEGMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
 integer,                    parameter :: THREAD_NSTRINGS    = 2000
-integer,                    parameter :: PTCL_BYTES_PER_REC = N_PTCL_ORIPARAMS * 4
+integer,                    parameter :: PTCL_BYTES_PER_REC = N_PTCL_RECORD_REALS * 4 ! padded on disk
 
 type binoris_seginfo
     integer(kind=8) :: fromto(2)          = 0
@@ -180,7 +180,9 @@ contains
         integer(kind=8)               :: end_part1, start_part3, end_part3
         integer(kind=8)               :: ibytes, first_data_byte
         real                          :: ptcl_record(N_PTCL_ORIPARAMS)
+        real                          :: disk_record(N_PTCL_RECORD_REALS) ! named slots, then zero padding
         character(len=1), allocatable :: bytearr_part3(:)
+        disk_record = 0.
         noris = os%get_noris()
         if( noris == 0 ) return
         if( present(fromto) )then
@@ -204,7 +206,8 @@ contains
         if( is_particle_seg(isegment) )then
              do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
-                write(unit=self%funit,pos=ibytes) ptcl_record
+                disk_record(1:N_PTCL_ORIPARAMS) = ptcl_record
+                write(unit=self%funit,pos=ibytes) disk_record
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
         else
@@ -372,8 +375,10 @@ contains
         integer, optional,          intent(in)    :: fromto(2)
         type(string)    :: str_dyn
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
+        real            :: disk_record(N_PTCL_RECORD_REALS) ! named slots, then zero padding
         integer         :: i, nspaces, noris
         integer(kind=8) :: ibytes
+        disk_record = 0.
         noris = os%get_noris()
         if( noris == 0 ) return
         if( present(fromto) )then
@@ -394,7 +399,8 @@ contains
         if( is_particle_seg(isegment) )then ! is ptcl2D or ptcl3D segment, see simple_sp_project
              do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
-                write(unit=self%funit,pos=ibytes) ptcl_record
+                disk_record(1:N_PTCL_ORIPARAMS) = ptcl_record
+                write(unit=self%funit,pos=ibytes) disk_record
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
         else
@@ -663,22 +669,29 @@ contains
         ibytes = ibytes + self%header(isegment)%n_bytes_per_record
     end subroutine read_record
 
-    !> Read current or older fixed-width particle records without crossing the
-    !! record boundary. Newly appended fields are zero for legacy projects.
+    !> Read one fixed-width particle record. Projects are user data that outlive releases:
+    !! a record narrower than the on-disk width (a project written by an earlier release)
+    !! reads with zeros in the slots it lacks; a wider one (a later release) is refused.
     subroutine read_particle_record(self,isegment,ibytes,ptcl_record)
         class(binoris), intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         integer(kind=8), intent(in) :: ibytes
         real, intent(out) :: ptcl_record(N_PTCL_ORIPARAMS)
+        real :: disk_record(N_PTCL_RECORD_REALS)
+        character(len=:), allocatable :: errmsg
         integer :: nvalues
-
         if( mod(self%header(isegment)%n_bytes_per_record,4_8) /= 0_8 ) &
             &THROW_HARD('particle record byte count is not a multiple of four')
         nvalues = int(self%header(isegment)%n_bytes_per_record/4_8)
-        if( nvalues < 1 .or. nvalues > N_PTCL_ORIPARAMS ) &
-            &THROW_HARD('unsupported particle record width')
-        ptcl_record = 0.
-        read(unit=self%funit,pos=ibytes) ptcl_record(1:nvalues)
+        if( nvalues < 1 .or. nvalues > N_PTCL_RECORD_REALS )then
+            errmsg = 'particle record of '//int2str(nvalues)//' reals; this release reads up to '//&
+                &int2str(N_PTCL_RECORD_REALS)//' (project written by a later release?)'
+            THROW_HARD(errmsg)
+        endif
+        ! the padding slots past the named ones carry no field in this release
+        disk_record = 0.
+        read(unit=self%funit,pos=ibytes) disk_record(1:nvalues)
+        ptcl_record = disk_record(1:N_PTCL_ORIPARAMS)
     end subroutine read_particle_record
 
     ! getters

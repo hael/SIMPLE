@@ -712,17 +712,20 @@ contains
     end subroutine pose_normal_terms
 
     !> Unwhitened per-shell accounting at one terminal pose of an OBJFUN_EUCLID particle slot:
-    !! residual power over two per sample (the sigma2 contribution), reference and particle
-    !! power, over the particle's shells, and v = the normalized loss L (-1 when undefined).
-    !! An invalid slot returns v = -1 and unallocated arrays. THROW_HARD for an OBJFUN_CC slot:
-    !! a correlation pass writes no sigma2 (C5).
+    !! residual power over two per sample (the sigma2 contribution) over the particle's shells.
+    !! The optional diagnostics, used as test instruments, add reference and particle power per
+    !! shell and v = the normalized loss L (-1 when undefined); production omits them and pays
+    !! for neither their storage nor their arithmetic. An invalid slot returns v = -1 and
+    !! unallocated arrays. THROW_HARD for an OBJFUN_CC slot: a correlation pass writes no
+    !! sigma2 (C5).
     subroutine sigma_contribution( self, state, iseven, iptcl, rotmat, shift, sigma_contrib, ref_pow, ptcl_pow, v )
-        class(cartft_calc), intent(in)  :: self
-        integer,            intent(in)  :: state, iptcl
-        logical,            intent(in)  :: iseven
-        real(dp),           intent(in)  :: rotmat(3,3), shift(2)
-        real, allocatable,  intent(out) :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
-        real,               intent(out) :: v
+        class(cartft_calc),          intent(in)  :: self
+        integer,                     intent(in)  :: state, iptcl
+        logical,                     intent(in)  :: iseven
+        real(dp),                    intent(in)  :: rotmat(3,3), shift(2)
+        real, allocatable,           intent(out) :: sigma_contrib(:)
+        real, allocatable, optional, intent(out) :: ref_pow(:), ptcl_pow(:)
+        real,              optional, intent(out) :: v
         complex     :: val, dval(3), phase
         complex(dp) :: model, raw_observed, residual
         real(dp), allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:)
@@ -730,16 +733,18 @@ contains
         real(sp)    :: loc(3)
         integer, allocatable :: counts(:)
         integer     :: h, k, shell, lower_shell, upper_shell, ihalf
-        logical     :: inside
+        logical     :: inside, l_diag
         if( .not. self%ref_exists(state, iseven) ) THROW_HARD('cartft_calc sigma contribution from an absent reference')
         if( iptcl < 1 .or. iptcl > self%nptcls )   THROW_HARD('cartft_calc particle slot out of range')
-        v = -1.
+        l_diag = present(ref_pow) .or. present(ptcl_pow) .or. present(v)
+        if( present(v) ) v = -1.
         if( .not. self%ptcls(iptcl)%valid ) return
         if( self%ptcls(iptcl)%objfun /= OBJFUN_EUCLID ) THROW_HARD('cartft_calc sigma contribution requires a euclid particle slot')
         ihalf = self%ref_index(iseven)
         associate( p => self%ptcls(iptcl), cmat => self%refs(ihalf,state)%cmat )
             lower_shell = p%kfromto(1)
             upper_shell = p%kfromto(2)
+            ! the per-shell sums are tiny; only the diagnostic arithmetic is conditional
             allocate(sigma_sum(lower_shell:upper_shell), source=0._dp)
             allocate(ref_sum(lower_shell:upper_shell),   source=0._dp)
             allocate(ptcl_sum(lower_shell:upper_shell),  source=0._dp)
@@ -760,23 +765,33 @@ contains
                     raw_observed = cmplx(p%observed(h,k), kind=dp)*root_sigma
                     residual     = raw_observed - model
                     sigma_sum(shell) = sigma_sum(shell) + real(conjg(residual)*residual, dp)
-                    ref_sum(shell)   = ref_sum(shell)   + real(conjg(model)*model, dp)
-                    ptcl_sum(shell)  = ptcl_sum(shell)  + real(conjg(raw_observed)*raw_observed, dp)
                     counts(shell)    = counts(shell) + 1
-                    vnum = vnum + real(conjg(residual)*residual, dp)/real(p%sigma2(shell), dp)
-                    vden = vden + real(conjg(raw_observed)*raw_observed, dp)/real(p%sigma2(shell), dp)
+                    if( l_diag )then
+                        ref_sum(shell)  = ref_sum(shell)  + real(conjg(model)*model, dp)
+                        ptcl_sum(shell) = ptcl_sum(shell) + real(conjg(raw_observed)*raw_observed, dp)
+                        vnum = vnum + real(conjg(residual)*residual, dp)/real(p%sigma2(shell), dp)
+                        vden = vden + real(conjg(raw_observed)*raw_observed, dp)/real(p%sigma2(shell), dp)
+                    endif
                 end do
             end do
         end associate
         if( any(counts == 0) ) THROW_HARD('cartft_calc sigma contribution found an empty active shell')
-        allocate(sigma_contrib(lower_shell:upper_shell), ref_pow(lower_shell:upper_shell), ptcl_pow(lower_shell:upper_shell))
+        allocate(sigma_contrib(lower_shell:upper_shell))
         sigma_contrib = real(sigma_sum/(2._dp*real(counts, dp)), sp)
-        ref_pow       = real(ref_sum/real(counts, dp), sp)
-        ptcl_pow      = real(ptcl_sum/real(counts, dp), sp)
-        if( vden > 0._dp )then
-            v = real(vnum/vden, sp)
-        else
-            v = -1.
+        if( present(ref_pow) )then
+            allocate(ref_pow(lower_shell:upper_shell))
+            ref_pow = real(ref_sum/real(counts, dp), sp)
+        endif
+        if( present(ptcl_pow) )then
+            allocate(ptcl_pow(lower_shell:upper_shell))
+            ptcl_pow = real(ptcl_sum/real(counts, dp), sp)
+        endif
+        if( present(v) )then
+            if( vden > 0._dp )then
+                v = real(vnum/vden, sp)
+            else
+                v = -1.
+            endif
         endif
     end subroutine sigma_contribution
 

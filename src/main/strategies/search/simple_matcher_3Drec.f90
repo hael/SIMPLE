@@ -3,29 +3,27 @@ module simple_matcher_3Drec
 use simple_core_module_api
 use simple_timer
 use simple_builder,         only: builder
-use simple_classaverager,  only: fourier_2d_accumulator
-use simple_cmdline,         only: cmdline
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch, prep_rec_observation, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 use simple_reconstructor,   only: reconstructor
-use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
+use simple_refine3D_fnames, only: refine3D_partial_rec_fbody
 implicit none
 
-public :: init_rec, prep_imgs4rec, cleanup_rec_buffers, write_state_half_partial, set_state_vol_output, &
-    &calc_3Drec, calc_projdir3Drec
+public :: init_rec, prep_imgs4rec, cleanup_rec_buffers, write_state_half_partial, calc_3Drec
 private
 #include "simple_local_flags.inc"
 
 contains
 
     !> volumetric 3d reconstruction
-    subroutine calc_3Drec( params, build, cline, nptcls, pinds )
+    !> Writes the even/odd partial accumulators of every state; the caller
+    !! assembles them (volassemble) and names the output volumes.
+    subroutine calc_3Drec( params, build, nptcls, pinds )
         use simple_image,        only: image
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters), target, intent(inout) :: params
         class(builder),    intent(inout) :: build
-        class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable   :: fpls(:)
@@ -84,7 +82,6 @@ contains
                 call write_state_half_partial(params, recvol, state, eo)
                 call kill_state_half_rec(recvol)
             enddo
-            call set_state_vol_output(params, cline, state)
         enddo
         call cleanup_rec_buffers(build, fpls)
         if( allocated(crop_imgs) ) call dealloc_imgarr(crop_imgs)
@@ -98,119 +95,6 @@ contains
             print *,'Total rec time: ', t_tot
         endif
     end subroutine calc_3Drec
-
-    !> Volumetric 3D reconstruction from compact projection-direction sums.
-    !! Particles are first accumulated on the native 2D Fourier grid with the
-    !! exact KB numerator/CTF^2 machinery used for class averages.  Those raw
-    !! sums are then inserted directly into the 3D reconstruction; they are
-    !! never CTF-density corrected and never transformed through real space.
-    subroutine calc_projdir3Drec( params, build, cline, nptcls, pinds )
-        use simple_image,        only: image
-        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters), target, intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls
-        integer,           intent(in)    :: pinds(nptcls)
-        type(fourier_2d_accumulator) :: projdir_sums
-        type(fplane_type), allocatable :: fpls(:)
-        type(fplane_type) :: compact_fpl
-        type(image), allocatable :: crop_imgs(:)
-        type(reconstructor) :: recvol
-        type(ori) :: orientation
-        integer, allocatable :: eopops(:), grouped_pinds(:), state_eo_offsets(:), proj2slice(:)
-        integer :: batchlims(2), batchsz, ibatch, i, iptcl, iproj, eo, state, nproj, group
-        if( nptcls < 1 ) return
-        if( params%nspace /= build%eulspace%get_noris() )then
-            THROW_HARD('nspace/eulspace mismatch; calc_projdir3Drec')
-        endif
-        ! Standalone reconstruct3D callers do not have the matcher phase that
-        ! finalizes these labels before writing orientation metadata.
-        call build%spproj_field%set_projs(build%eulspace)
-        call group_pinds_by_state_eo(params, build, nptcls, pinds, grouped_pinds, state_eo_offsets)
-        ! The projection-direction sums live on the native box_crop grid, whose
-        ! extent the cropped padded fplane covers exactly (see the grid note in
-        ! cavger_init_online).
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls, &
-            &cropped=params%box_crop < params%box)
-        if( params%box_crop < params%box )then
-            call alloc_imgarr(nthr_glob, [params%box_crop,params%box_crop,1], &
-                &params%smpd_crop, crop_imgs)
-        endif
-        call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        allocate(eopops(params%nspace), proj2slice(params%nspace), source=0)
-        do state = 1,params%nstates
-            if( state_eo_offsets(2*state+1) <= state_eo_offsets(2*state-1) )then
-                call mark_empty_state(build, state)
-                cycle
-            endif
-            do eo = 0,1
-                group = state_eo_group(state, eo)
-                eopops = 0
-                !$omp parallel do default(shared) private(i,iptcl,iproj) &
-                !$omp schedule(static) proc_bind(close) reduction(+:eopops)
-                do i = state_eo_offsets(group),state_eo_offsets(group+1)-1
-                    iptcl = grouped_pinds(i)
-                    iproj = build%spproj_field%get_int(iptcl, 'proj')
-                    if( iproj < 1 .or. iproj > params%nspace ) cycle
-                    eopops(iproj) = eopops(iproj) + 1
-                enddo
-                !$omp end parallel do
-                call init_state_half_rec(params, build, recvol)
-                ! Allocate only populated projection directions for this
-                ! state/half, avoiding a dense nspace*box^2 allocation.
-                proj2slice = 0
-                nproj = 0
-                do iproj = 1,params%nspace
-                    if( eopops(iproj) == 0 ) cycle
-                    nproj = nproj + 1
-                    proj2slice(iproj) = nproj
-                enddo
-                call projdir_sums%new([params%box_crop,params%box_crop], max(1,nproj))
-                do ibatch = state_eo_offsets(group),state_eo_offsets(group+1)-1,MAXIMGBATCHSZ
-                    batchlims = [ibatch, min(state_eo_offsets(group+1)-1,ibatch+MAXIMGBATCHSZ-1)]
-                    batchsz   = batchlims(2) - batchlims(1) + 1
-                    call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
-                    call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
-                        &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), &
-                        &crop_imgs=crop_imgs)
-                    ! Each OpenMP iteration owns one projection-direction
-                    ! accumulator, matching the race-free class-average policy.
-                    !$omp parallel do default(shared) private(iproj,i,iptcl) &
-                    !$omp schedule(dynamic) proc_bind(close)
-                    do iproj = 1,params%nspace
-                        if( eopops(iproj) == 0 ) cycle
-                        do i = batchlims(1),batchlims(2)
-                            iptcl = grouped_pinds(i)
-                            if( build%spproj_field%get_int(iptcl,'proj') /= iproj ) cycle
-                            call projdir_sums%add_fplane(build%spproj_field%e3get(iptcl), &
-                                &fpls(i-batchlims(1)+1), proj2slice(iproj))
-                        enddo
-                    enddo
-                    !$omp end parallel do
-                enddo
-                do iproj = 1,params%nspace
-                    if( eopops(iproj) == 0 ) cycle
-                    call build%eulspace%get_ori(iproj, orientation)
-                    call orientation%set_state(state)
-                    call orientation%set('eo',0)
-                    if( eo == 1 ) call orientation%set('eo',1)
-                    call projdir_sums%export_fplane(proj2slice(iproj), compact_fpl)
-                    call recvol%insert_plane_oversamp(build%pgrpsyms, orientation, compact_fpl, compact_source=.true.)
-                enddo
-                call projdir_sums%kill
-                call write_state_half_partial(params, recvol, state, eo)
-                call kill_state_half_rec(recvol)
-            enddo
-            call set_state_vol_output(params, cline, state)
-        enddo
-        if( allocated(compact_fpl%cmplx_plane) ) deallocate(compact_fpl%cmplx_plane)
-        if( allocated(compact_fpl%ctfsq_plane) ) deallocate(compact_fpl%ctfsq_plane)
-        deallocate(eopops, grouped_pinds, state_eo_offsets, proj2slice)
-        call orientation%kill
-        call cleanup_rec_buffers(build, fpls)
-        if( allocated(crop_imgs) ) call dealloc_imgarr(crop_imgs)
-    end subroutine calc_projdir3Drec
 
     pure integer function state_eo_group( state, eo )
         integer, intent(in) :: state, eo
@@ -342,16 +226,6 @@ contains
         call numerator_fname%kill
         call density_fname%kill
     end subroutine write_state_half_partial
-
-    subroutine set_state_vol_output( params, cline, state )
-        class(parameters), intent(inout) :: params
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: state
-        if( .not. cline%defined('force_volassemble') )then
-            params%vols(state) = refine3D_state_vol_fname(state)
-            call cline%set('vol'//int2str(state), params%vols(state))
-        endif
-    end subroutine set_state_vol_output
 
     subroutine mark_empty_state( build, state )
         class(builder),    intent(inout) :: build

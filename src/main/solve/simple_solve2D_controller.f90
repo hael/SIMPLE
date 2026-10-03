@@ -74,8 +74,6 @@ contains
         type(refine2D_stage_cfg) :: cfg
         call build_refine2D_stage_cfg( cfg, cline_refine2D, cline, params, stage_parms, maxits, istage )
         call emit_refine2D_stage_cfg( cline_refine2D, cfg, stage_parms, istage )
-        ! Preserve continuous refinement explicitly on every child stage.
-        call cline_refine2D%set('inpl_cont', params%inpl_cont)
     end subroutine set_cline_refine2D_stage
 
     subroutine set_solve2D_sampling_policy( params, stage_parms, nstages, nptcls_eff, nsample_target_2D )
@@ -163,7 +161,6 @@ contains
         call cline_pass%set('restore_cavgs', 'yes')
         call cline_pass%set('box_crop',      stage_parms(istage)%box_crop)
         call cline_pass%set('smpd_crop',     stage_parms(istage)%smpd_crop)
-        call cline_pass%set('inpl_cont',     params%inpl_cont)
     end subroutine set_cline_refine2D_seed_pass
 
     subroutine build_refine2D_stage_cfg( cfg, cline_refine2D, cline, params, stage_parms, maxits, istage )
@@ -375,8 +372,8 @@ contains
         else
             call cline_refine2D%delete('update_frac')
         endif
-        ! Legacy refine2D fillin=yes currently requests full-assignment coverage;
-        ! particle selection still follows the normal sampled-update path.
+        ! refine2D fillin=yes requests full-assignment coverage; particle
+        ! selection still follows the normal sampled-update path.
         if( l_require_full_assignment )then
             call cline_refine2D%set('fillin', 'yes')
         else

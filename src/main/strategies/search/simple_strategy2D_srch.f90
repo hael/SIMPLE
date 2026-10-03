@@ -121,9 +121,9 @@ contains
             ! selection parity: candidate scoring and shift-seed estimation
             ! always use the legacy objects; the joint optimizer only
             ! polishes the committed assignment
-            call self%grad_shsrch_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
+            call self%grad_shsrch_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init,&
                 &maxits=self%p_ptr%maxits_sh)
-            call self%grad_shsrch_first_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
+            call self%grad_shsrch_first_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init,&
                 &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
         endif
         call self%grad_shsrch_obj2%new_fixed(self%b_ptr, lims, lims_init=lims_init,&

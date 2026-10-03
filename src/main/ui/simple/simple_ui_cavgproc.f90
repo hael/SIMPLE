@@ -34,7 +34,8 @@ subroutine new_cluster_cavgs( prgtab )
         &'is a program for analyzing class averages with affinity propagation',& ! help
         &'simple_exec',&                                                         ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                                ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Cluster Class Averages')                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster_cavgs%add_input(UI_IMG, stk, required_override=.false., &
@@ -77,7 +78,8 @@ subroutine new_cluster_cavgs( prgtab )
         &'is a program for automatic class-average rejection using normalized quality feature vectors',& ! help
         &'simple_exec',&                                                         ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                                 ! requires sp_project except quality_mode=learn|evaluate|promote
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Reject Class Averages by Model') ! requires sp_project except quality_mode=learn|evaluate|promote
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -134,7 +136,8 @@ subroutine new_cluster_cavgs( prgtab )
         &'is a program for analyzing selected class averages with affinity propagation',&             ! help
         &'simple_exec',&                                                                              ! executable
         &.true., &
-        &visibility=UI_VIS_ADVANCED)                                                                                      ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Cluster Selected Class Averages') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -171,7 +174,8 @@ subroutine new_cluster_cavgs( prgtab )
         &'is a program for analyzing class averages with k-medoids',& ! help
         &'simple_exec',&                                              ! executable
         &.false., &
-        &visibility=UI_VIS_ADVANCED)                                                     ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Cluster an Image Stack')                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster_stack%add_input(UI_IMG, stk, required_override=.true., &
@@ -209,7 +213,7 @@ subroutine new_cluster_cavgs( prgtab )
         &'Analysis of class averages with k-medoids',&                ! summary
         &'is a program for analyzing class averages with k-medoids',& ! help
         &'simple_exec',&                                              ! executable
-        &.true.)                                                      ! requires sp_project
+        &.true., display_name='Match Class Averages')                                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -250,7 +254,7 @@ subroutine new_cluster_cavgs( prgtab )
         &'Analysis of class averages with k-medoids',&                ! summary
         &'is a program for analyzing class averages with k-medoids',& ! help
         &'simple_exec',&                                              ! executable
-        &.false.)                                                     ! requires sp_project
+        &.false., display_name='Match Image Stacks')                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call match_stacks%add_input(UI_IMG, stk,  required_override=.true., &
@@ -290,7 +294,7 @@ subroutine new_cluster_cavgs( prgtab )
         &'Select particle clusters from a SIMPLE project',& ! summary
         &'is a program for selecting clusters from a project',& ! help
         &'simple_exec',&                                        ! executable
-        &.true.)                                                ! requires sp_project
+        &.true., display_name='Select Particle Clusters')                                                ! requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output

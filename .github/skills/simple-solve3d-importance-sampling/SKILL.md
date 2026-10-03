@@ -5,8 +5,7 @@ description: Use when working on SIMPLE solve3D sampling policy, update_frac or 
 
 # SIMPLE Solve3D Importance Sampling
 
-`solve3D` (named `abinitio3D` before 2026-10-03; the old program name still
-runs) is de novo map determination: it couples ab initio 3D reconstruction
+`solve3D` (named `abinitio3D` before 2026-10-03) is de novo map determination: it couples ab initio 3D reconstruction
 with initial 3D refinement in one stage schedule.
 
 Use this skill to reason about the full contract between solve3D stage policy

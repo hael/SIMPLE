@@ -28,7 +28,7 @@ public :: cleanup_plane
 !! iterations; only kill_probe_fit or the rank-change resize in fit_iter_begin may free them.
 !> identity, selection, artifact namespaces and the resolved per-fit policy (never mutated by an iteration)
 type :: flex_fit_spec
-    integer :: id = 0  !< 1 = fit A, 2 = fit B, 0 = single-fit (legacy)
+    integer :: id = 0  !< 1 = fit A, 2 = fit B, 0 = single fit
     type(flex_run_settings) :: cfg  !< the run's resolved switches, stamped at construction
     type(string) :: fprefix  !< eigenvolume namespace (default 'flex_pca_pc')
     type(string) :: meta_fname  !< probe-state file (default COV_PROBE_META)

@@ -12,7 +12,7 @@ private
 #include "simple_local_flags.inc"
 
 !> Dense outputs produced while restoring one gridding half. The base image is
-!! deliberately undeapodized because it is the legacy FSC/cFAR representation;
+!! deliberately undeapodized because FSC and cFAR are estimated on it;
 !! final is the deapodized map handed to downstream consumers.
 type :: gridding_half_restore
     type(image) :: base
@@ -313,7 +313,7 @@ contains
         call deapodize3D_inplace(vol, self%invenv1d)
     end subroutine deapodize_volume
 
-    !> Promote the legacy FSC base representation to the deapodized final-map
+    !> Promote the undeapodized FSC base representation to the deapodized final-map
     !! representation without changing the base image.
     subroutine finalize_gridding_half_restore( self, backend )
         class(gridding_half_restore), intent(inout) :: self
@@ -323,8 +323,8 @@ contains
         call backend%deapodize_volume(self%final)
     end subroutine finalize_gridding_half_restore
 
-    !> Restore the dense, undeapodized native-grid map used as the legacy
-    !! gridding FSC oracle. With preserve_numerator=.true., sampling-density
+    !> Restore the dense, undeapodized native-grid map on which the gridding
+    !! FSC is estimated. With preserve_numerator=.true., sampling-density
     !! correction runs on a temporary image and the raw Fourier numerator is
     !! restored for a later FSC-prior replay. Rho is deliberately not copied:
     !! attaching a prior to it remains an in-place backend operation.
@@ -398,13 +398,12 @@ contains
     !! It preserves the original h-strided OpenMP race-avoidance scheme, but
     !! scalarizes rotation, inlines fplane access, and updates the two expanded
     !! matrices in one explicit separable-KB stencil pass.
-    subroutine insert_plane_oversamp( self, se, o, fpl, compact_source )
+    subroutine insert_plane_oversamp( self, se, o, fpl )
         use simple_math, only: ceil_div, floor_div
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl
-        logical, optional,    intent(in)    :: compact_source
         type(ori) :: o_sym
         complex   :: comp, cmplx_raw
         real      :: rotmats(se%get_nsym(),3,3), loc(3), hrow(3), ctfval
@@ -414,7 +413,6 @@ contains
         integer   :: fpllims(3, 2), hp, kp, pf, ix, iy, iz, hx, ky, mz
         integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
         real      :: source_scale, eps_norm, inv_wdim
-        logical   :: l_compact_source
         ! window size
         iwinsz = ceiling(KBWINSZ - 0.5)
         ! After rotation, source h-lines separated by only wdim can still
@@ -432,17 +430,8 @@ contains
         endif
         ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
         fpllims_pd      = fpl%frlims
-        l_compact_source = .false.
-        if( present(compact_source) ) l_compact_source = compact_source
-        if( l_compact_source )then
-            ! The source is already a native-grid 2D KB numerator/CTF^2 sum.
-            ! Its padded-FFT amplitude scaling was applied during 2D assembly.
-            pf           = 1
-            source_scale = 1.0
-        else
-            pf           = OSMPL_PAD_FAC
-            source_scale = real(pf*pf)
-        endif
+        pf           = OSMPL_PAD_FAC
+        source_scale = real(pf*pf)
         fpllims      = fpllims_pd
         fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
         fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
@@ -878,7 +867,7 @@ contains
     !> Project this volume into the same Cartesian Fourier-plane storage used
     !! by gen_fplane4rec.  If apply_ctf_amp is true, the model is multiplied by
     !! the stored forward transfer plane when available, falling back to
-    !! sqrt(ctf^2) only for legacy fplanes that do not carry the transfer.
+    !! sqrt(ctf^2) for planes generated without it (gen_fplane4rec store_transfer=.false.).
     subroutine project_fplane( self, o, fpl_ref, fpl_out, apply_ctf_amp )
         use simple_math, only: ceil_div, floor_div
         class(reconstructor), intent(in)    :: self

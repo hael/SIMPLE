@@ -140,7 +140,8 @@ subroutine new_atoms_register( prgtab )
         &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! summary
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
-        &.false., visibility=UI_VIS_DEVELOPER)                                               ! requires sp_project
+        &.false., visibility=UI_VIS_DEVELOPER, &
+        &display_name='Nanoparticle Core Atom Analysis')                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -242,7 +243,8 @@ subroutine new_atoms_register( prgtab )
         &'Simulate nanoparticle for lattice density',&                          ! summary
         &'is a program for simulation of nanoparticle for lattice density',&    ! help
         &'single_exec',&                                                        ! executable
-        &.false., visibility=UI_VIS_ADVANCED)                                         ! requires sp_project
+        &.false., visibility=UI_VIS_ADVANCED, &
+        &display_name='Simulate a Nanoparticle')                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_nanoparticle%add_input(UI_FILE, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '', &
