@@ -1,8 +1,9 @@
 !@descr: unit tests for the Cartesian Fourier calculator of continuous pose refinement (simple_cartft_calc)
 ! Particle preparation, objectives and gradients, the gather against the PFTC projector, reference
 ! volumes and their files, batch preparation, the sigma owner and its polish fallback, the
-! per-shell sigma2 against the polar calculator (noise-only and signal-bearing) and the canonical
-! sigma2 round trip. Test ids (E*, N*) are those of the pose_cont refactoring plan, section 10.
+! per-shell sigma2 against the polar calculator (noise-only, model power, and the group sigma2 of
+! noisy particles) and the canonical sigma2 round trip. Test ids (E*, N*) are those of the
+! pose_cont refactoring plan, section 10.
 module simple_cartft_calc_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value, ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64, real32
@@ -91,6 +92,8 @@ contains
         call test_polish_sigma_fallback()
         write(*,'(A)') 'test_polar_sigma_signal'
         call test_polar_sigma_signal()
+        write(*,'(A)') 'test_polar_sigma_group'
+        call test_polar_sigma_group()
         write(*,'(A)') 'test_canonical_sigma_round_trip'
         call test_canonical_sigma_round_trip()
     end subroutine run_all_cartft_calc_tests
@@ -1575,20 +1578,18 @@ contains
         call remove_sigma2_files(COMMITTED, 2)
     end subroutine test_polish_sigma_fallback
 
-    ! N31: the sigma2 of a signal-bearing particle, polar against Cartesian. One volume gives both
-    ! references through their production projections; one particle, projected 1.4 grid steps
-    ! in-plane and a fractional shift from a polar grid pose and multiplied by an astigmatic CTF,
-    ! goes through both production preparations (CTFFLAG_YES), and both evaluate the residual at
-    ! that grid pose. A ring at radius k and the pixels with nint(r) = k sample a structured residual
-    ! differently, so single shells differ by up to ~25 %; their pixel-count weighted band totals
-    ! agree. The first CTF zero stays far above the band: the phase flip moves background noise
-    ! above it into the mask. Criterion from a model of this fixture (band total within 2.7 % over
-    ! 200 random poses and gains): band total within 4 %, every shell within [0.6, 1.5].
+    ! N31: model amplitude and CTF handling, polar against Cartesian. One volume gives both
+    ! references through their production projections; a noise-free particle with an astigmatic CTF
+    ! goes through both production preparations; both evaluate at the same grid pose. Gated: the
+    ! per-shell power of the CTF-modulated model, ring at radius k against pixels with nint(r) = k
+    ! (from a model of the fixture over 300 random poses: band total within 3.6 %, shells within
+    ! 0.80-1.25): band total within 5 %, every shell within [0.75, 1.3]. The residual of a noise-free
+    ! particle is all structure, which the two samplings need not agree on; it is printed only (N33).
     subroutine test_polar_sigma_signal()
         integer,  parameter :: BOX = 48, KFROMTO(2) = [3, 10], PLACED_INDEX = 9
         real,     parameter :: SMPD = 2.0, MSKRAD = 14., NOISE_RADIUS = 22., E1 = 37., E2 = 63.
         real,     parameter :: PSI_OFFSET = 1.4, TRUE_SHIFT(2) = [0.43, -0.71], DFX = 0.15, DFY = 0.18, ANGAST = 31.
-        real(dp), parameter :: TOTAL_TOL = 0.04_dp, SHELL_RANGE(2) = [0.6_dp, 1.5_dp]
+        real(dp), parameter :: TOTAL_TOL = 0.05_dp, SHELL_RANGE(2) = [0.75_dp, 1.3_dp]
         type(cartft_calc)  :: calc
         type(polarft_calc) :: pftc
         type(parameters), target :: p
@@ -1738,17 +1739,16 @@ contains
                 if( shell >= KFROMTO(1) .and. shell <= KFROMTO(2) ) n_s(shell) = n_s(shell) + 1._dp
             end do
         end do
-        ratio = real(polar_sigma, dp)/real(contrib, dp)
-        total = sum(n_s*real(polar_sigma, dp))/sum(n_s*real(contrib, dp))
-        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 polar/Cartesian sigma2 per shell:', ratio
-        write(*,'(a,f8.4,a,*(1x,es9.2))') 'CARTFT_N31 band total ratio', total, '; residual/model power per shell:', contrib/ref_pow
-        ! which side differs: the model (reference and CTF) or the observation (preparation)
-        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 polar/Cartesian model power per shell:', polar_ref_pow/ref_pow
-        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 polar/Cartesian observation power per shell:', polar_ptcl_pow/ptcl_pow
+        ratio = real(polar_ref_pow, dp)/real(ref_pow, dp)
+        total = sum(n_s*real(polar_ref_pow, dp))/sum(n_s*real(ref_pow, dp))
+        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 polar/Cartesian model power per shell:', ratio
+        write(*,'(a,f8.4)') 'CARTFT_N31 model power band total ratio', total
+        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 (diagnostic) polar/Cartesian observation power per shell:', polar_ptcl_pow/ptcl_pow
+        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 (diagnostic) polar/Cartesian residual per shell:', polar_sigma/contrib
         call assert_true(abs(total - 1._dp) <= TOTAL_TOL, &
-            &'signal-bearing polar and Cartesian sigma2 differ over the band beyond the tolerance (N31)')
+            &'polar and Cartesian model power differ over the band beyond the sampling difference (N31)')
         call assert_true(all(ratio >= SHELL_RANGE(1) .and. ratio <= SHELL_RANGE(2)), &
-            &'signal-bearing polar and Cartesian sigma2 differ in a shell beyond the sampling difference (N31)')
+            &'polar and Cartesian model power differ in a shell beyond the sampling difference (N31)')
         call pftc%kill
         call calc%kill
         call vol_pad%kill_expanded()
@@ -1764,6 +1764,202 @@ contains
         call spproj%kill
         call cline%kill
     end subroutine test_polar_sigma_signal
+
+    ! N33: the group sigma2 that mixed polar/Cartesian generations reduce agrees between the two
+    ! representations under realistic conditions: NG particles at in-plane angles off the polar grid
+    ! (true shift zero, the shift a search would find) and astigmatic CTFs, white noise over the
+    ! whole image at a signal-to-noise ratio of SNR, a mask clear of the particle; both production
+    ! paths, both evaluated at the nearest-below grid pose. Criterion of N14 for the group mean:
+    ! mean_s |d_s|/SE_s <= 1 and max_s <= 3, d_s relative, SE_s = sqrt(2/(n_s*NG)). Both sides see
+    ! the same noise, so d_s is mostly systematic and the gate bounds it at about SE_s (4-9 %).
+    subroutine test_polar_sigma_group()
+        integer, parameter :: BOX = 48, KFROMTO(2) = [3, 10], PLACED_INDEX = 9, NG = 16
+        real,    parameter :: SMPD = 2.0, MSKRAD = 18., SNR = 0.1
+        type(cartft_calc)  :: calc
+        type(polarft_calc) :: pftc
+        type(parameters), target :: p
+        type(sp_project), target :: spproj
+        type(cmdline)      :: cline
+        type(oris)         :: eulspace
+        type(projector)    :: vol_pad
+        type(image)        :: vol_img, ptcl, noise, masked, polar_work, polar_pad, cart_work
+        type(ctf)          :: tfun
+        type(ctfparams)    :: ctfparms(NG), ctf_out
+        logical, allocatable :: noise_mask(:,:,:)
+        complex, allocatable :: observed(:,:)
+        real,    allocatable :: volume(:,:,:), taper(:), contrib(:), ref_pow(:), ptcl_pow(:), prmat(:,:,:), nrmat(:,:,:)
+        complex  :: plane(-BOX/2:BOX/2,-BOX/2:BOX/2)
+        real     :: polar_sigma(KFROMTO(1):KFROMTO(2)), sigma2(0:BOX/2), v, step, e3, gain, mean_sig, var_sig
+        real     :: e1(NG), e2(NG), psi_off(NG)
+        real(dp) :: polar_sum(KFROMTO(1):KFROMTO(2)), cart_sum(KFROMTO(1):KFROMTO(2)), n_s(KFROMTO(1):KFROMTO(2))
+        real(dp) :: d(KFROMTO(1):KFROMTO(2)), se(KFROMTO(1):KFROMTO(2)), truth(3,3), evaluated(3,3)
+        integer  :: pdim(3), h, k, i, shell
+        call cline%set('box',     real(BOX))
+        call cline%set('smpd',    SMPD)
+        call cline%set('mskdiam', 2.*MSKRAD*SMPD)
+        call cline%set('nptcls',  real(NG))
+        call cline%set('nthr',    1.0)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'euclid')
+        call p%new(cline, silent=.true.)
+        p%nspace = NG
+        call set_fixed_seed(20261003)
+        call pftc%new(p, NG, [1,NG], KFROMTO)
+        call pftc%set_with_ctf(.true.)
+        pdim = pftc%get_pdim_interp()
+        step = 360./real(pftc%get_nrots())
+        e3   = 360. - pftc%get_rot(PLACED_INDEX)
+        ! the group: deterministic, well spread poses, in-plane offsets and defoci
+        do i = 1, NG
+            e1(i)       = 360.*modulo(0.6180340*real(i), 1.)
+            e2(i)       = 20. + 140.*modulo(0.4142136*real(i), 1.)
+            psi_off(i)  = 0.3 + 1.2*modulo(0.7320508*real(i), 1.)
+            ctfparms(i)%smpd    = SMPD
+            ctfparms(i)%kv      = 300.
+            ctfparms(i)%cs      = 2.7
+            ctfparms(i)%fraca   = 0.1
+            ctfparms(i)%dfx     = 0.15 + 0.10*modulo(0.3141593*real(i), 1.)
+            ctfparms(i)%dfy     = 1.2*ctfparms(i)%dfx
+            ctfparms(i)%angast  = 180.*modulo(0.1234567*real(i), 1.)
+            ctfparms(i)%phshift = 0.
+            ctfparms(i)%ctfflag = CTFFLAG_YES
+        end do
+        tfun = ctf(SMPD, 300., 2.7, 0.1)
+        call memoize_ft_maps([BOX, BOX, 1], SMPD)
+        ! the signal scaled once (references and particles alike) to variance SNR over the box
+        call build_test_volume(volume, BOX)
+        call calc%new(1, BOX, NG)
+        call calc%set_ref(1, .true., volume)
+        call make_signal(1)
+        prmat    = ptcl%get_rmat()
+        mean_sig = sum(prmat)/real(BOX*BOX)
+        var_sig  = sum((prmat - mean_sig)**2)/real(BOX*BOX)
+        gain     = sqrt(SNR/var_sig)
+        volume   = gain*volume
+        call forget_ft_maps
+        call calc%new(1, BOX, NG)
+        call calc%set_ref(1, .true., volume)
+        call vol_img%new([BOX, BOX, BOX], SMPD)
+        call vol_img%set_rmat(volume, .false.)
+        call vol_pad%new([OSMPL_PAD_FAC*BOX, OSMPL_PAD_FAC*BOX, OSMPL_PAD_FAC*BOX], SMPD)
+        call vol_img%pad_fft(vol_pad)
+        call vol_pad%expand_cmat()
+        call eulspace%new(NG, is_ptcl=.false.)
+        do i = 1, NG
+            call eulspace%set_euler(i, [e1(i), e2(i), 0.])
+        end do
+        call vol_pad2ref_pfts_opt(pftc, vol_pad, eulspace, 1, .true.)
+        ! every particle through both production preparations
+        call memoize_ft_maps([BOX, BOX, 1], SMPD)
+        call masked%disc([BOX, BOX, 1], SMPD, MSKRAD, noise_mask)
+        call masked%kill
+        call noise%new([BOX, BOX, 1], SMPD)
+        call polar_work%new([BOX, BOX, 1], SMPD)
+        call polar_pad%new([OSMPL_PAD_FAC*BOX, OSMPL_PAD_FAC*BOX, 1], SMPD)
+        call cart_work%new([BOX, BOX, 1], SMPD)
+        call polar_work%memoize_mask_coords
+        call cart_work%memoize_mask_coords
+        call polar_pad%memoize4polarize_oversamp(pdim)
+        taper  = calc%get_ptcl_taper()
+        sigma2 = 1.
+        cart_sum = 0._dp
+        do i = 1, NG
+            call make_signal(i)
+            call noise%gauran(0., 1.)
+            prmat = ptcl%get_rmat()
+            nrmat = noise%get_rmat()
+            call ptcl%set_rmat(prmat + nrmat, .false.)
+            call ptcl%memoize_mask_coords
+            call masked%copy(ptcl)
+            call masked%norm_noise_fft_clip_shift_ctf_flip(noise_mask, polar_work, [0., 0.], tfun, ctfparms(i))
+            call polar_work%ifft_mask_pad_fft(MSKRAD, polar_pad)
+            call pftc%polarize_ptcl_pft(polar_pad, i, pdim=pdim, oversamp=.true.)
+            call masked%copy(ptcl)
+            call prepimg4align_cart(masked, noise_mask, cart_work, MSKRAD, SMPD, [0., 0.], taper, ctfparms(i), observed, ctf_out)
+            call calc%set_ptcl(i, observed, ctf_out, sigma2, KFROMTO)
+            evaluated = real(euler2m([e1(i), e2(i), e3]), dp)
+            call calc%sigma_contribution(1, .true., i, evaluated, [0._dp, 0._dp], contrib, ref_pow, ptcl_pow, v)
+            cart_sum = cart_sum + real(contrib, dp)
+        end do
+        call forget_ft_maps
+        ! the polar residuals, with the CTF matrices of a project of the group
+        call spproj%os_stk%new(1, is_ptcl=.false.)
+        call spproj%os_stk%set(1, 'stk',   'n33_particles.mrcs')
+        call spproj%os_stk%set(1, 'fromp', 1)
+        call spproj%os_stk%set(1, 'top',   NG)
+        call spproj%os_stk%set(1, 'box',   BOX)
+        call spproj%os_stk%set(1, 'smpd',  SMPD)
+        call spproj%os_stk%set(1, 'ctf',   'yes')
+        call spproj%os_stk%set(1, 'kv',    300.)
+        call spproj%os_stk%set(1, 'cs',    2.7)
+        call spproj%os_stk%set(1, 'fraca', 0.1)
+        call spproj%os_ptcl3D%new(NG, is_ptcl=.true.)
+        do i = 1, NG
+            call spproj%os_ptcl3D%set(i, 'stkind', 1)
+            call spproj%os_ptcl3D%set(i, 'indstk', i)
+            call spproj%os_ptcl3D%set(i, 'dfx',    ctfparms(i)%dfx)
+            call spproj%os_ptcl3D%set(i, 'dfy',    ctfparms(i)%dfy)
+            call spproj%os_ptcl3D%set(i, 'angast', ctfparms(i)%angast)
+            call spproj%os_ptcl3D%set_state(i, 1)
+            call pftc%set_eo(i, .true.)
+        end do
+        call pftc%create_polar_absctfmats(spproj, 'ptcl3D')
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        polar_sum = 0._dp
+        do i = 1, NG
+            call pftc%gen_sigma_contrib(i, i, [0., 0.], PLACED_INDEX, sigma_contrib=polar_sigma)
+            polar_sum = polar_sum + real(polar_sigma, dp)
+        end do
+        call assert_true(all(cart_sum > 0._dp) .and. all(polar_sum > 0._dp), 'N33 fixture: a group residual vanishes in a shell')
+        ! the group means against the standard error of a group mean
+        n_s = 0._dp
+        do k = -BOX/2, BOX/2
+            do h = -BOX/2, BOX/2
+                shell = nint(sqrt(real(h*h + k*k)))
+                if( shell >= KFROMTO(1) .and. shell <= KFROMTO(2) ) n_s(shell) = n_s(shell) + 1._dp
+            end do
+        end do
+        se = sqrt(2._dp/(n_s*real(NG, dp)))
+        d  = (polar_sum - cart_sum)/cart_sum
+        write(*,'(a,*(1x,f7.4))') 'CARTFT_N33 group polar/Cartesian sigma2 per shell:', polar_sum/cart_sum
+        write(*,'(a,2(1x,f8.4))') 'CARTFT_N33 mean/max |d|/SE:', sum(abs(d)/se)/real(size(d)), maxval(abs(d)/se)
+        call assert_true(sum(abs(d)/se)/real(size(d)) <= 1._dp .and. maxval(abs(d)/se) <= 3._dp, &
+            &'polar and Cartesian group sigma2 disagree beyond the standard error (N33)')
+        call pftc%kill
+        call calc%kill
+        call vol_pad%kill_expanded()
+        call vol_pad%kill()
+        call vol_img%kill
+        call ptcl%kill
+        call noise%kill
+        call masked%kill
+        call polar_work%kill
+        call polar_pad%kill
+        call cart_work%kill
+        call eulspace%kill
+        call spproj%kill
+        call cline%kill
+
+      contains
+
+        !> ptcl: the signal of particle i, its projection at the true pose times its CTF, real space
+        subroutine make_signal( i )
+            integer, intent(in) :: i
+            truth = real(euler2m([e1(i), e2(i), e3 - psi_off(i)*step]), dp)
+            call calc%predict(1, .true., truth, [0._dp, 0._dp], plane)
+            call ptcl%new([BOX, BOX, 1], SMPD)
+            call ptcl%zero_and_flag_ft()
+            do k = -BOX/2, BOX/2 - 1
+                do h = 0, BOX/2
+                    call ptcl%set_fcomp([h, k, 0], ptcl%comp_addr_phys(h, k, 0), plane(h, k))
+                end do
+            end do
+            call ptcl%apply_ctf(tfun, 'ctf', ctfparms(i))
+            call ptcl%ifft()
+        end subroutine make_signal
+
+    end subroutine test_polar_sigma_group
 
     ! N32: the canonical round trip of a generation a Cartesian pass writes and a polar pass reads:
     ! write (calc_sigma2, write_sigma2), merge, reduce, commit, then reload through the polar sigma

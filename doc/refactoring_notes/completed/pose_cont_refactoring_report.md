@@ -120,15 +120,20 @@ Ruling O6, Ruling C16), sections 4 and 10.3 the rulings and the new tests.
   Cartesian contributions overlay it, and `write_sigma2` replaces the range through a staged
   file and an atomic rename (range files are otherwise created once). Shared memory and
   distributed (`simple_refine3D_strategy.f90`); N30.
-- Polar/Cartesian sigma2 interchangeability (finding P2). N31 compares the two for a
-  signal-bearing particle (nonzero reference, astigmatic CTF, phase flip, pose off the polar
-  grid). A ring at radius k and the pixels with `nint(r) = k` sample a structured residual
-  differently, so single shells differ by up to about 25 %; the gate is the pixel-count
-  weighted band total within 4 % and every shell within [0.6, 1.5], taken from an independent
-  model of the fixture. The first run failed (band total 0.72) on a fixture artifact: the
-  preparation's phase flip moved background noise above the first CTF zero (k 11.3) into the
-  mask; the defocus is now 0.15/0.18 um. N32 is the canonical round trip of a generation a
-  Cartesian pass writes and a polar sigma owner reloads.
+- Polar/Cartesian sigma2 interchangeability (finding P2). The noise variance is a property of
+  the particle, not of the representation, so one noise model serves both; what has to agree is
+  how each path estimates it. N31 checks model amplitude and CTF handling with a noise-free
+  particle: the per-shell power of the CTF-modulated model, band total within 5 %, every shell
+  within [0.75, 1.3] (a ring at radius k and the pixels with `nint(r) = k` sample structure
+  differently). N33 checks the quantity mixed generations reduce, the group sigma2 of 16
+  particles off the polar grid with astigmatic CTFs, unit noise at SNR 0.1 and a mask clear of
+  the particle: per shell, the polar and Cartesian group means within the standard error of a
+  group mean (mean |d|/SE <= 1, max <= 3). History: N31 first gated the residual of the
+  noise-free particle; it failed on a fixture artifact (phase-flipped background noise above
+  the first CTF zero, fixed by defocus 0.15/0.18 um) and then at k 3-4, where the residual of a
+  noise-free particle cut by a 14 px mask is all structure. Separate sigma2 states per
+  representation were considered and withdrawn. N32 is the canonical round trip of a
+  generation a Cartesian pass writes and a polar sigma owner reloads.
 - Exact-zero policy (maintainer): the reducer's rule stands. A record with any non-positive
   or non-finite shell stays in the particle rows and is excluded from the groups; its particle
   reloads its half's group (N32). A numerically exact Cartesian match is zero only up to
@@ -146,8 +151,8 @@ Ruling O6, Ruling C16), sections 4 and 10.3 the rulings and the new tests.
 - Policy text (`refine3D_policy.md`) updated for the polish's sigma2, `athres_cont` and the
   route.
 
-Test status: N30 and N32 passed on the first build. N31 (revised fixture), the athres_cont and
-route changes have not been run yet: `unit_cart_align3D`, `unit_ui`, `lib_cart_align3D` and
+Test status: N30 and N32 passed on the first build. N31 (model-power gate), N33, the athres_cont
+and route changes have not been run yet: `unit_cart_align3D`, `unit_ui`, `lib_cart_align3D` and
 `cont_refine3D_1jxy`. Stages e-h of N20 are the first workflow runs of the joint route.
 
 ## Open for your review
