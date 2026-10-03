@@ -32,7 +32,7 @@ dual-representation project contract:
   consistent flex path.
 
 The 3D mode is not a second refinement engine. It produces a denoised
-particle-representation project. `refine3D` and `abinitio3D` continue to own
+particle-representation project. `refine3D` and `solve3D` continue to own
 orientation search, Bayesian scoring, pose updates, and reconstruction.
 
 ## 1. Scientific model
@@ -818,7 +818,7 @@ image and model tolerances.
 
 ### Phase F: workflow integration
 
-1. Exercise the 3D mode from `abinitio3D` with the existing
+1. Exercise the 3D mode from `solve3D` with the existing
    `objfun_den` controls.
 2. define when the model is frozen and optionally regenerated;
 3. define the denoised-weight annealing schedule; and

@@ -367,7 +367,7 @@ contains
         ! computer controls
         call particle_sieving%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         call particle_sieving%add_input(UI_COMP, 'nparts', 'num', 'Number of chunks classified simultaneously', &
-        &'Number of particle-subset (chunk) abinitio2D jobs run concurrently on the local machine. Each chunk job &
+        &'Number of particle-subset (chunk) solve2D jobs run concurrently on the local machine. Each chunk job &
         &itself runs shared-memory with nthr threads (per-chunk MPI partitioning is not used in offline sieving){1}', &
         &'# of concurrent chunks{1}', .false., 1., group="compute", visibility=UI_VIS_STANDARD)
         call particle_sieving%add_input(UI_COMP, 'nchunks', 'num', 'Legacy concurrent-chunk alias', &

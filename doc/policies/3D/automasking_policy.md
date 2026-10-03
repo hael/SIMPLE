@@ -2,7 +2,7 @@
 
 ## Scope and public modes
 
-This policy covers 3D refinement, staged `abinitio3D`, reconstruction workers,
+This policy covers 3D refinement, staged `solve3D`, reconstruction workers,
 and `volassemble`. The public refinement modes are:
 
 - `automsk=no`: retain spherical reconstruction/reference support

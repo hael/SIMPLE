@@ -143,7 +143,7 @@ bound. The decision belongs in the plan's O2 and the policy once settled.
   are tester seams today, production passes only the bounds.
 - The joint LM route (C16 ruling): measure its beta-gal timing and objective in production
   (`pose_cont=only` and the polish) against the Phase 0 numbers of both routes.
-- Rerun the polar guards (`simulated_workflow_1jxy`, `_6vxx`, `abinitio3D_addon`) on the merged
+- Rerun the polar guards (`simulated_workflow_1jxy`, `_6vxx`, `solve3D_addon`) on the merged
   tree: two commits after `714a15a99` changed the simulated-workflow validation the run used.
 - Pending runs of the review changes: `unit_cart_align3D` (N31 model-power gate, N33 group sigma2, `test_rotation_bound`,
   E16 both routes), `unit_ui` (N21), `lib_cart_align3D` (E25), `cont_refine3D_1jxy` (N20; stages

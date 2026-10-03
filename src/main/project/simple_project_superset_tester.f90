@@ -1,4 +1,4 @@
-!@descr: unit tests of the abinitio3D_addon superset relation (simple_project_superset)
+!@descr: unit tests of the solve3D_addon superset relation (simple_project_superset)
 ! Current project 20 rows / 2 stacks, frozen project 14 rows (its first stack): identity refusals
 ! naming the first offender, membership and floors, mask and restore.
 module simple_project_superset_tester

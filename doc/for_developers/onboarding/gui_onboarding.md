@@ -226,7 +226,7 @@ Day 2:
 3. Open `src/main/ui/simple_ui.f90`.
 4. Open `src/main/ui/simple_ui_program.f90`.
 5. Open one program definition under `src/main/ui/simple/`, for example
-   `simple_ui_cluster2D.f90`.
+   `simple_ui_refine2D.f90`.
 
 Day 3:
 

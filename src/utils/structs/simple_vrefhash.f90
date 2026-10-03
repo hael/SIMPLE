@@ -6,20 +6,20 @@
 ! use simple_ui_program, only: ui_program
 !
 ! type(vrefhash) :: h
-! type(ui_program), target :: abinitio2D
+! type(ui_program), target :: solve2D
 !
 ! class(*), pointer :: p
 ! logical :: ok
 !
 ! call h%init()
 !
-! call h%set_ref("abinitio2D", abinitio2D)
+! call h%set_ref("solve2D", solve2D)
 
-! call h%get_ref("abinitio2D", p, ok)
+! call h%get_ref("solve2D", p, ok)
 ! if (ok) then
 !     select type(u => p)
 !     type is (ui_program)
-!         ! u is the SAME instance as abinitio2D (updates visible)
+!         ! u is the SAME instance as solve2D (updates visible)
 !         ! (call u%whatever ...)
 !     class default
 !         call simple_exception("wrong dynamic type in hash", __FILENAME__, __LINE__)

@@ -69,5 +69,5 @@ The common pattern is:
 ## Cross-Cutting Hotspots
 
 - `refine3D` spans `ui`, `exec`, `commanders`, `strategies`, `volume`, `project`, `pftc`, and `ori`.
-- `cluster2D` spans `ui`, `exec`, `commanders`, `strategies`, `class`, `image`, `project`, and `stream`.
+- `refine2D` spans `ui`, `exec`, `commanders`, `strategies`, `class`, `image`, `project`, and `stream`.
 - Streaming work often crosses `stream`, `project`, `motion`, `pick`, `ctf`, and `nice`.

@@ -38,16 +38,16 @@ contains
         type(ui_program), pointer  :: p
         logical :: found
         write(*,'(A)') 'test_set_get_by_key'
-        call make_prg(prg1, 'abinitio2D')
+        call make_prg(prg1, 'solve2D')
         call make_prg(prg2, 'refine3D')
-        call tab%set_ui_program('abinitio2D', prg1)
+        call tab%set_ui_program('solve2D', prg1)
         call tab%set_ui_program('refine3D',   prg2)
         call assert_int(2, tab%count(), 'two programs stored')
-        call assert_true(tab%has_key('abinitio2D'), 'has_key sees the stored program')
-        call tab%get_ui_program(string('abinitio2D'), p, found)
+        call assert_true(tab%has_key('solve2D'), 'has_key sees the stored program')
+        call tab%get_ui_program(string('solve2D'), p, found)
         call assert_true(found, 'get by string key finds the program')
         call assert_true(associated(p, prg1), 'pointer targets the stored object, not a copy')
-        call assert_string_eq('abinitio2D', p%name, 'the right program comes back')
+        call assert_string_eq('solve2D', p%name, 'the right program comes back')
         call tab%get_ui_program(string('refine3D'), p, found)
         call assert_true(associated(p, prg2), 'second key resolves to its own object')
         ! reference semantics: a change through the pointer is visible in the object
@@ -62,8 +62,8 @@ contains
         type(ui_program), pointer  :: p
         logical :: found
         write(*,'(A)') 'test_missing_key_is_a_typed_miss'
-        call make_prg(prg1, 'abinitio2D')
-        call tab%set_ui_program('abinitio2D', prg1)
+        call make_prg(prg1, 'solve2D')
+        call tab%set_ui_program('solve2D', prg1)
         p => prg1   ! must be reset by the call, intent(out)
         found = .true.
         call tab%get_ui_program(string('nonexistent'), p, found)
@@ -95,13 +95,13 @@ contains
         type(ui_program), pointer  :: p
         logical :: found
         write(*,'(A)') 'test_overwrite_retargets_pointer'
-        call make_prg(old_prg, 'cluster2D')
-        call make_prg(new_prg, 'cluster2D')
+        call make_prg(old_prg, 'refine2D')
+        call make_prg(new_prg, 'refine2D')
         new_prg%visibility = 99
-        call tab%set_ui_program('cluster2D', old_prg)
-        call tab%set_ui_program('cluster2D', new_prg)
+        call tab%set_ui_program('refine2D', old_prg)
+        call tab%set_ui_program('refine2D', new_prg)
         call assert_int(1, tab%count(), 'overwrite keeps one entry')
-        call tab%get_ui_program(string('cluster2D'), p, found)
+        call tab%get_ui_program(string('refine2D'), p, found)
         call assert_true(found, 'overwritten key still found')
         call assert_true(associated(p, new_prg), 'pointer targets the new object')
         call assert_false(associated(p, old_prg), 'pointer no longer targets the old object')

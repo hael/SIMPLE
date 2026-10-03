@@ -8,7 +8,7 @@ several volumes) a state label, and estimate the volumes that best explain the
 images under those poses. As in 2D this is solved by alternation: reproject
 the current volumes and assign poses, then reconstruct new volumes from the
 assigned poses. This chapter is one round of that alternation. Coarse-to-fine
-schedules that wrap it are in [ab initio 3D](abinitio3d.md) and
+schedules that wrap it are in [solve3D](solve3d.md) and
 [heterogeneity analysis](heterogeneity_analysis/README.md).
 
 ## Model
@@ -19,7 +19,7 @@ perpendicular to the viewing axis. A reference for direction `R` is therefore
 obtained by gathering the 3D Fourier transform on the polar grid of that
 plane with a Kaiser-Bessel kernel; no real-space projection is ever formed.
 The observation model and objectives are then exactly those of
-[Cluster2D](cluster2d_class_averaging.md), with the reference index running
+[Refine2D](refine2d_class_averaging.md), with the reference index running
 over `nspace` directions per state instead of `K` classes:
 
 ```text
@@ -74,7 +74,7 @@ One iteration:
      and commit it.
    Shifts are then refined by L-BFGS-B within `trs`, and optionally the
    committed `(sx, sy, theta)` is polished jointly with continuous angle
-   ([continuous in-plane refinement](continuous_inplane_refinement_abinitio2D.md)).
+   ([continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)).
    Multi-state search never reuses a shift seed from one state to rank
    another.
 4. **Noise update.** Accumulate per-shell residual power at the committed

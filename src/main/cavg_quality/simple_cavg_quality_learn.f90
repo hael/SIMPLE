@@ -356,7 +356,7 @@ contains
         type(cavg_quality_model),          intent(inout) :: model
         type(cavg_quality_model_spec) :: spec
         integer :: ilinear, iterm, ifeat
-        spec = abinitio_learn_base_spec()
+        spec = neutral_learn_base_spec()
         spec%name               = 'learned_pairwise_logistic_v1'
         spec%feature_policy     = trim(feature_policy)
         spec%weights            = 0.0
@@ -533,11 +533,11 @@ contains
         deallocate(dsets)
     end subroutine evaluate_cavg_quality_result
 
-    function abinitio_learn_base_spec() result( spec )
+    function neutral_learn_base_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
         type(cavg_quality_model)      :: defaults
         spec = defaults%get_spec()
-        spec%name                    = 'abinitio_learn_base'
+        spec%name                    = 'neutral_learn_base'
         spec%feature_policy          = 'microchunk_plus_score_signal'
         spec%weights                 = 0.0
         spec%boundary_margin         = 0.0
@@ -549,7 +549,7 @@ contains
         spec%use_otsu_window         = .false.
         spec%use_cluster_rescue      = .false.
         spec%enforce_min_accept_frac = .false.
-    end function abinitio_learn_base_spec
+    end function neutral_learn_base_spec
 
     subroutine load_quality_training_datasets( analysis_files, dsets )
         class(string), intent(in) :: analysis_files(:)

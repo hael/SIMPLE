@@ -18,7 +18,7 @@ module simple_stream_state
   integer,      public :: ipc_pipe_sieve_cavgs_out(2)          = [-1, -1]  ! pipe for sieve_cavgs ipc
   integer,      public :: ipc_pipe_pool2D_in(2)                = [-1, -1]  ! pipe for pool2D ipc
   integer,      public :: ipc_pipe_pool2D_out(2)               = [-1, -1]  ! pipe for pool2D ipc
-  integer,      public :: ipc_pipe_abinitio3D_multstate_in(2)  = [-1, -1]  ! pipe for 3D multistate ipc
-  integer,      public :: ipc_pipe_abinitio3D_multstate_out(2) = [-1, -1]  ! pipe for 3D multistate ipc
+  integer,      public :: ipc_pipe_solve3D_multistate_in(2)    = [-1, -1]  ! pipe for 3D multistate ipc
+  integer,      public :: ipc_pipe_solve3D_multistate_out(2) = [-1, -1]    ! pipe for 3D multistate ipc
 
 end module simple_stream_state

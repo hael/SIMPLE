@@ -4,8 +4,8 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('stream', 'Stream Workflows', 10)
-type(ui_program), target :: abinitio2D_stream
-type(ui_program), target :: abinitio3D_stream
+type(ui_program), target :: pool2D
+type(ui_program), target :: solve3D_stream
 type(ui_program), target :: assign_optics
 type(ui_program), target :: gen_pickrefs
 type(ui_program), target :: master
@@ -17,8 +17,8 @@ contains
 
     subroutine construct_stream_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_abinitio2D_stream(prgtab)
-        call new_abinitio3D_stream(prgtab)
+        call new_pool2D(prgtab)
+        call new_solve3D_stream(prgtab)
         call new_assign_optics(prgtab)
         call new_gen_pickrefs(prgtab)
         call new_master(prgtab)
@@ -27,11 +27,11 @@ contains
         call new_sieve_cavgs(prgtab)
     end subroutine construct_stream_programs
 
-subroutine new_abinitio2D_stream( prgtab )
+subroutine new_pool2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call abinitio2D_stream%new(&
-        &'abinitio2D_stream', &                                                  ! name
+        call pool2D%new(&
+        &'pool2D', &                                                             ! name
         &'Run streaming 2D analysis as new data arrive',& ! summary
         &'is a distributed workflow that executes 2D analysis'//&                ! help
         &' in streaming mode as the microscope collects the data',&
@@ -41,41 +41,41 @@ subroutine new_abinitio2D_stream( prgtab )
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call abinitio2D_stream%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
+        call pool2D%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
-        call abinitio2D_stream%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where previous 2D analysis took place', 'e.g. 3_abinitio2D_stream', .false., '', group="data", &
+        call pool2D%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
+        &'Directory where previous 2D analysis took place', 'e.g. 3_pool2D', .false., '', group="data", &
         &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call abinitio2D_stream%add_input(UI_SRCH, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        call pool2D%add_input(UI_SRCH, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., group="cluster 2D",&
         &visibility=UI_VIS_STANDARD)
-        call abinitio2D_stream%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', &
+        call pool2D%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', &
         &'Center class averages by their center of gravity and map shifts back to the particles(yes|no){yes}', '', .false., 'yes', group="cluster 2D", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
         ! <empty>
         ! mask controls
-        call abinitio2D_stream%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
+        call pool2D%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
         &remove background noise', 'mask diameter in A', .false., 0., group="cluster 2D", visibility=UI_VIS_STANDARD)
         ! computer controls
-        call abinitio2D_stream%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
-        call abinitio2D_stream%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
-        call abinitio2D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        call pool2D%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
+        call pool2D%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        call pool2D%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., group="compute", &
         &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
-        call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab, UI_CATEGORY)
-    end subroutine new_abinitio2D_stream
+        call add_ui_program('pool2D', pool2D, prgtab, UI_CATEGORY)
+    end subroutine new_pool2D
     
-    subroutine new_abinitio3D_stream( prgtab )
+    subroutine new_solve3D_stream( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call abinitio3D_stream%new(&
-        &'abinitio3D_stream', &                                                  ! name
+        call solve3D_stream%new(&
+        &'solve3D_stream', &                                                     ! name
         &'Run streaming 3D analysis as new data arrive',& ! summary
         &'is a distributed workflow that executes 3D analysis'//&                ! help
         &' in streaming mode as the microscope collects the data',&
@@ -85,7 +85,7 @@ subroutine new_abinitio2D_stream( prgtab )
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call abinitio3D_stream%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
+        call solve3D_stream%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
@@ -94,14 +94,14 @@ subroutine new_abinitio2D_stream( prgtab )
         ! <empty>
         ! mask controls
         ! computer controls
-        call abinitio3D_stream%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
-        call abinitio3D_stream%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
-        call abinitio3D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        call solve3D_stream%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
+        call solve3D_stream%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        call solve3D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., group="compute", &
         &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
-        call add_ui_program('abinitio3D_stream', abinitio3D_stream, prgtab, UI_CATEGORY)
-    end subroutine new_abinitio3D_stream
+        call add_ui_program('solve3D_stream', solve3D_stream, prgtab, UI_CATEGORY)
+    end subroutine new_solve3D_stream
 
     subroutine new_assign_optics( prgtab )
         class(ui_hash), intent(inout) :: prgtab

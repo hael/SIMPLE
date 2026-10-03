@@ -16,7 +16,8 @@ use simple_stream_p03_initial_analysis,    only: stream_p03_initial_analysis
 use simple_stream_p04_refpick_extract_new, only: stream_p04_refpick_extract
 use simple_stream_p05_sieve_cavgs_new,     only: stream_p05_sieve_cavgs
 use simple_stream_p06_pool2D_new,          only: stream_p06_pool2D
-use simple_stream_p07_abinitio3D_multistate, only: stream_p07_abinitio3D_multistate
+use simple_stream_p07_solve3D_multistate,  only: stream_p07_solve3D_multistate
+use simple_ui_legacy_names,                only: canonical_prg_name, report_legacy_prg_name
 
 implicit none
 #include "simple_local_flags.inc"
@@ -29,7 +30,7 @@ type(stream_p03_initial_analysis) :: xinitial_analysis
 type(stream_p04_refpick_extract)  :: xpick_extract
 type(stream_p05_sieve_cavgs)      :: xsieve_cavgs 
 type(stream_p06_pool2D)           :: xpool2D
-type(stream_p07_abinitio3D_multistate) :: xabinitio3D_multistate
+type(stream_p07_solve3D_multistate) :: xsolve3D_multistate
 
 ! OTHER DECLARATIONS
 character(len=STDLEN)             :: xarg, prg
@@ -47,6 +48,8 @@ call get_command(entire_line)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
+call report_legacy_prg_name(prg)
+prg = canonical_prg_name(prg)
 ! make UI
 call make_ui
 if( str_has_substr(entire_line, 'prg=list') )then
@@ -71,11 +74,11 @@ select case(trim(prg))
         call xpick_extract%execute(cline)
     case( 'sieve_cavgs' )
         call xsieve_cavgs%execute(cline)
-    case( 'abinitio2D_stream','pool2D' )
+    case( 'pool2D' )
         call cline%set('stepwise', 'yes') ! force stepwise mode for pool2D
         call xpool2D%execute(cline)
-    case( 'abinitio3D_stream' )
-        call xabinitio3D_multistate%execute(cline)
+    case( 'solve3D_stream' )
+        call xsolve3D_multistate%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

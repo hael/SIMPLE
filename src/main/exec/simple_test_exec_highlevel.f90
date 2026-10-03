@@ -4,8 +4,8 @@ use simple_cmdline,                   only: cmdline
 use simple_commanders_test_highlevel, only: commander_test_mini_stream, commander_test_simulate_particles, &
                                             commander_test_simulated_workflow, commander_test_pcg_recon, &
                                             commander_test_pcg_frac_update, commander_test_rec3D_backends, &
-                                            commander_test_abinitio3D_addon, commander_test_cont_refine3D_1jxy, &
-                                            commander_generate_abinitio3D_addon_snapshots
+                                            commander_test_solve3D_addon, commander_test_cont_refine3D_1jxy, &
+                                            commander_generate_solve3D_addon_snapshots
 implicit none
 
 public :: exec_test_highlevel_commander
@@ -14,8 +14,8 @@ private
 type(commander_test_mini_stream)                 :: xmini_stream
 type(commander_test_simulated_workflow)          :: xsimulated_workflow
 type(commander_test_simulate_particles)          :: xsimulate_particles
-type(commander_test_abinitio3D_addon)            :: xabinitio3D_addon
-type(commander_generate_abinitio3D_addon_snapshots) :: xaddon_snapshots
+type(commander_test_solve3D_addon)               :: xsolve3D_addon
+type(commander_generate_solve3D_addon_snapshots) :: xaddon_snapshots
 type(commander_test_cont_refine3D_1jxy)          :: xcont_refine3D_1jxy
 type(commander_test_pcg_recon)                   :: xpcg_recon
 type(commander_test_pcg_frac_update)             :: xpcg_frac_update
@@ -36,9 +36,9 @@ contains
                 call xmini_stream%execute(cline)
             case( 'simulate_particles' )
                 call xsimulate_particles%execute(cline)
-            case( 'abinitio3D_addon' )
-                call xabinitio3D_addon%execute(cline)
-            case( 'abinitio3D_addon_snapshots' )
+            case( 'solve3D_addon' )
+                call xsolve3D_addon%execute(cline)
+            case( 'solve3D_addon_snapshots' )
                 call xaddon_snapshots%execute(cline)
             case( 'cont_refine3D_1jxy' )
                 call xcont_refine3D_1jxy%execute(cline)

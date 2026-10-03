@@ -23,7 +23,7 @@ This folder owns orientation types and their operations.
 
 ## Connections
 
-- Central to `project/`, `refine3D`, `cluster2D`, `pick`, and probability/search code
+- Central to `project/`, `refine3D`, `refine2D`, `pick`, and probability/search code
 
 ## Working Rule
 

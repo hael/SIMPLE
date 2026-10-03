@@ -1,4 +1,4 @@
-!@descr: per-state mask artifact compatibility check shared by volume assembly, postprocess and the abinitio final rec
+!@descr: per-state mask artifact compatibility check shared by volume assembly, postprocess and the solve3D final rec
 module simple_vol_pproc_policy
 use simple_core_module_api
 implicit none

@@ -1,11 +1,11 @@
 # Class-Average Bootstrap Policy
 
 This document defines the first implementation policy for stochastic
-class-average expansion before `abinitio3D_cavgs`. It should be read alongside
-[abinitio2D_policy.md](abinitio2D_policy.md) and
-[abinitio3D_cavgs_policy.md](abinitio3D_cavgs_policy.md).
+class-average expansion before `solve3D_cavgs`. It should be read alongside
+[solve2D_policy.md](solve2D_policy.md) and
+[solve3D_cavgs_policy.md](../3D/solve3D_cavgs_policy.md).
 
-The workflow creates one `abinitio3D_cavgs`-compatible bootstrap package from
+The workflow creates one `solve3D_cavgs`-compatible bootstrap package from
 an existing class-average project. It is an offline class-average assembly
 stage, not a new 2D classification, not a particle-realignment step, and not a
 source of final particle orientations.
@@ -129,7 +129,7 @@ This workflow belongs near explicit class-average assembly:
 with the same ownership style.
 
 It must not live in `simple_strategy2D_matcher.f90`,
-`simple_cluster2D_strategy.f90`, `simple_oris_sampling.f90`, or `volassemble`.
+`simple_refine2D_strategy.f90`, `simple_oris_sampling.f90`, or `volassemble`.
 It may perform explicit offline particle-stack reads. The online matcher
 single-read restoration contract is unaffected.
 
@@ -327,9 +327,9 @@ Exact reproduction should use the recorded manifest and membership file.
 
 ## 12. Handoff
 
-The bootstrap package is intended for `abinitio3D_cavgs` seed generation.
+The bootstrap package is intended for `solve3D_cavgs` seed generation.
 Synthetic child orientations remain attached only to the bootstrap package. If
-`abinitio3D_cavgs` needs project mapping internally, the bootstrap route should
+`solve3D_cavgs` needs project mapping internally, the bootstrap route should
 use a temporary bootstrap project and avoid writing synthetic orientation state
 into the original project.
 
@@ -370,4 +370,4 @@ Before implementation, confirm:
 
 Useful validation diagnostics are child-count distributions, even/odd support,
 child-vs-parent cavg correlation, cavg-vs-reprojection correlation after
-`abinitio3D_cavgs`, and sensitivity to `osmpl_fac` and `frac_best`.
+`solve3D_cavgs`, and sensitivity to `osmpl_fac` and `frac_best`.

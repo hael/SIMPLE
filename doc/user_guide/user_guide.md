@@ -58,7 +58,7 @@ filetab_mrc.pl 2_motion_correct/
 simple_exec prg=mini_stream cs=2.8 fraca=0.1 kv=200 smpd=0.885 nthr=36 filetab=filetab.txt
 ```
 
-## mini_stream and abinitio2d are similar workflows the former is 
+## mini_stream and solve2d are similar workflows the former is 
 
 ## Open the file 4_mini_stream/cavgs_iter0*_ranked.mrc (last iteration) using e2display.py from EMAN2
 cd 4_mini_stream
@@ -77,12 +77,12 @@ simple_exec prg=convert stk=4_mini_stream/selected.spi outstk=selected.mrc smpd=
 simple_exec prg=pick pickrefs=selected.mrc nparts=2 nthr=32
 ```
 
-## Run Abinitio2D workflow
+## Run Solve2D workflow
 ```
-simple_exec prg=abinitio2D ncls=100 mskdiam=180 nthr=36
+simple_exec prg=solve2D ncls=100 mskdiam=180 nthr=36
 ```
 
-## Open the file 7_abinitio2D/cavgs_iter0*_ranked.mrc (last iteration) using e2display.py from EMAN2
+## Open the file 7_solve2D/cavgs_iter0*_ranked.mrc (last iteration) using e2display.py from EMAN2
 cd 4_mini_stream
 E2display.py
 
@@ -93,12 +93,12 @@ Next click the middle mouse button to bring up the popup again and click "Save" 
 
 ## Map class average selection
 ```
-simple_exec prg=map_cavgs_selection stk2=./7_abinitio2D/selected.spi prune=yes
+simple_exec prg=map_cavgs_selection stk2=./7_solve2D/selected.spi prune=yes
 ```
 
-## Run Abinitio3D
+## Run Solve3D
 ```
-simple_exec prg=abinitio3D pgrp=c1 mskdiam=180 nthr=40
+simple_exec prg=solve3D pgrp=c1 mskdiam=180 nthr=40
 ```
 
 

@@ -2,7 +2,7 @@
 !@descr: validation of stream functionalities in batch execution mode
 module simple_commanders_validate
 use simple_commanders_api
-use simple_commanders_abinitio2D,   only: commander_abinitio2D
+use simple_commanders_solve2D,      only: commander_solve2D
 use simple_commanders_preprocess,   only: commander_ctf_estimate
 use simple_commanders_project_core, only: commander_new_project
 use simple_commanders_project_mov,  only: commander_import_movies
@@ -37,12 +37,12 @@ contains
         type(parameters)                   :: params
         type(sp_project)                   :: spproj
         type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
-        type(cmdline)                      :: cline_extract, cline_abinitio2D, cline_shape_rank
+        type(cmdline)                      :: cline_extract, cline_solve2D, cline_shape_rank
         type(commander_new_project)        :: xnew_project
         type(commander_import_movies)      :: ximport_movies
         type(commander_ctf_estimate)       :: xctf_estimate
         type(commander_extract)            :: xextract
-        type(commander_abinitio2D)         :: xabinitio2D
+        type(commander_solve2D)            :: xsolve2D
         type(commander_shape_rank_cavgs)   :: xshape_rank
         integer :: ncls, nmics, nptcls, box_in_pix
         real    :: mskdiam_estimate
@@ -110,17 +110,17 @@ contains
         else
             ncls = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
         endif
-        call cline_abinitio2D%set('prg',                'abinitio2D')
-        call cline_abinitio2D%set('mkdir',                      'no')
-        call cline_abinitio2D%set('ncls',                       ncls)
-        call cline_abinitio2D%set('sigma_est',              'global')
-        call cline_abinitio2D%set('center',                    'yes')
-        call cline_abinitio2D%set('autoscale',                 'yes')
-        call cline_abinitio2D%set('lpstop',                   LPSTOP)
-        call cline_abinitio2D%set('mskdiam',        mskdiam_estimate)
-        call cline_abinitio2D%set('nthr',                params%nthr)
-        call cline_abinitio2D%set('projfile',   PROJFILE_MINI_STREAM)
-        call xabinitio2D%execute(cline_abinitio2D)
+        call cline_solve2D%set('prg',                   'solve2D')
+        call cline_solve2D%set('mkdir',                         'no')
+        call cline_solve2D%set('ncls',                          ncls)
+        call cline_solve2D%set('sigma_est',                 'global')
+        call cline_solve2D%set('center',                       'yes')
+        call cline_solve2D%set('autoscale',                    'yes')
+        call cline_solve2D%set('lpstop',                      LPSTOP)
+        call cline_solve2D%set('mskdiam',           mskdiam_estimate)
+        call cline_solve2D%set('nthr',                   params%nthr)
+        call cline_solve2D%set('projfile',      PROJFILE_MINI_STREAM)
+        call xsolve2D%execute(cline_solve2D)
         ! shape rank cavgs
         call cline_shape_rank%set('nthr',                params%nthr)
         call cline_shape_rank%set('projfile',   PROJFILE_MINI_STREAM)
@@ -141,13 +141,13 @@ contains
         type(parameters)                   :: params
         type(sp_project)                   :: spproj
         type(cmdline)                      :: cline_new_proj, cline_import_movies, cline_ctf_estimate
-        type(cmdline)                      :: cline_make_pickrefs, cline_pick_extract, cline_abinitio2D, cline_shape_rank
+        type(cmdline)                      :: cline_make_pickrefs, cline_pick_extract, cline_solve2D, cline_shape_rank
         type(commander_new_project)        :: xnew_project
         type(commander_make_pickrefs)      :: xmake_pickrefs
         type(commander_import_movies)      :: ximport_movies
         type(commander_ctf_estimate) :: xctf_estimate
         type(commander_pick_extract)       :: xpickextract
-        type(commander_abinitio2D)         :: xabinitio2D
+        type(commander_solve2D)            :: xsolve2D
         type(commander_shape_rank_cavgs)   :: xshape_rank
         integer :: ncls, nmics, nptcls 
         real    :: mskdiam_estimate
@@ -218,17 +218,17 @@ contains
         call spproj%read(string(PROJFILE_CHECK_REFPICK))
         nptcls = spproj%os_ptcl2D%get_noris()
         ncls   = min(NCLS_MAX,max(NCLS_MIN,nptcls/params%nptcls_per_cls))
-        call cline_abinitio2D%set('prg',                    'abinitio2D')
-        call cline_abinitio2D%set('mkdir',                          'no')
-        call cline_abinitio2D%set('ncls',                           ncls)
-        call cline_abinitio2D%set('sigma_est',                  'global')
-        call cline_abinitio2D%set('center',                        'yes')
-        call cline_abinitio2D%set('autoscale',                     'yes')
-        call cline_abinitio2D%set('lpstop',                       LPSTOP)
-        call cline_abinitio2D%set('mskdiam',            mskdiam_estimate)
-        call cline_abinitio2D%set('nthr',                    params%nthr)
-        call cline_abinitio2D%set('projfile',     PROJFILE_CHECK_REFPICK)
-        call xabinitio2D%execute(cline_abinitio2D)
+        call cline_solve2D%set('prg',                       'solve2D')
+        call cline_solve2D%set('mkdir',                             'no')
+        call cline_solve2D%set('ncls',                              ncls)
+        call cline_solve2D%set('sigma_est',                     'global')
+        call cline_solve2D%set('center',                           'yes')
+        call cline_solve2D%set('autoscale',                        'yes')
+        call cline_solve2D%set('lpstop',                          LPSTOP)
+        call cline_solve2D%set('mskdiam',               mskdiam_estimate)
+        call cline_solve2D%set('nthr',                       params%nthr)
+        call cline_solve2D%set('projfile',        PROJFILE_CHECK_REFPICK)
+        call xsolve2D%execute(cline_solve2D)
         ! shape rank cavgs
         call cline_shape_rank%set('nthr',                    params%nthr)
         call cline_shape_rank%set('projfile',     PROJFILE_CHECK_REFPICK)

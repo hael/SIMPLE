@@ -139,7 +139,7 @@ population (`M_k = N_k`) this is the familiar `(u/rho_k) A_current + (1 - u)
 A_previous`. The rule keeps the mass right, not the membership.
 
 **2D.** Class accumulators are carried forward with weight `(N_k - n_k)/M_k`
-([Cluster2D](cluster2d_class_averaging.md)).
+([Refine2D](refine2d_class_averaging.md)).
 
 **3D trailing reconstruction.** A persistent chain stores, per state and half,
 the unregularized Fourier numerator and sampling density at the mass of the

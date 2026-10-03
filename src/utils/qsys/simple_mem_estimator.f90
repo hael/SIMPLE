@@ -27,7 +27,7 @@ contains
                     if(present(extra_params) .and. extra_params%box > 0) then
                         call q_descr%set('job_memory_per_task', int2str(estimate_mem_usage_pspec(part, extra_params%box, np, extra_params%nthr)))
                     endif
-                case("cluster2D")
+                case("refine2D")
                     if(present(extra_params) .and. extra_params%box > 0) then
                         call q_descr%set('job_memory_per_task', int2str(estimate_mem_usage_2D(part, extra_params%box, np, extra_params%ncls, extra_params%nthr)))
                     endif

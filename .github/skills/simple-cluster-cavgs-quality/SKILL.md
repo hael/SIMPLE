@@ -9,7 +9,7 @@ Use this skill for the class-average quality application and for analysis of `qu
 
 ## Mental Model
 
-`model_cavgs_rejection` is a `simple_exec` class-average processing program. It is not routed through `simple_exec_cluster2D`.
+`model_cavgs_rejection` is a `simple_exec` class-average processing program. It is not routed through `simple_exec_refine2D`.
 
 Flow:
 

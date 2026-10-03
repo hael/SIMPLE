@@ -14,7 +14,7 @@ use simple_stream_p03_initial_analysis,      only: stream_p03_initial_analysis
 use simple_stream_p04_refpick_extract_new,   only: stream_p04_refpick_extract
 use simple_stream_p05_sieve_cavgs_new,       only: stream_p05_sieve_cavgs
 use simple_stream_p06_pool2D_new,            only: stream_p06_pool2D
-use simple_stream_p07_abinitio3D_multistate, only: stream_p07_abinitio3D_multistate
+use simple_stream_p07_solve3D_multistate, only: stream_p07_solve3D_multistate
 use simple_http_post,                        only: http_post, http_response
 use simple_forked_process,                   only: forked_process, FORK_STATUS_RUNNING
 use simple_gui_metadata_api
@@ -63,10 +63,10 @@ type, extends(forked_process) :: pool2D_fork
     procedure :: execute => xpool2D
 end type pool2D_fork
 
-type, extends(forked_process) :: abinitio3D_multistate_fork
+type, extends(forked_process) :: solve3D_multistate_fork
     contains
-    procedure :: execute => xabinitio3D_multistate
-end type abinitio3D_multistate_fork
+    procedure :: execute => xsolve3D_multistate
+end type solve3D_multistate_fork
 
 !================ STATE TYPES =================
 
@@ -143,13 +143,13 @@ contains
         call commander%execute(cline)
     end subroutine xpool2D   
 
-    subroutine xabinitio3D_multistate( self, cline )
-        class(abinitio3D_multistate_fork), intent(inout) :: self
+    subroutine xsolve3D_multistate( self, cline )
+        class(solve3D_multistate_fork), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        type(stream_p07_abinitio3D_multistate)           :: commander
-        call close_child_pipe_fds(ipc_pipe_abinitio3D_multstate_in(2), ipc_pipe_abinitio3D_multstate_out(1))
+        type(stream_p07_solve3D_multistate)              :: commander
+        call close_child_pipe_fds(ipc_pipe_solve3D_multistate_in(2), ipc_pipe_solve3D_multistate_out(1))
         call commander%execute(cline)
-    end subroutine xabinitio3D_multistate
+    end subroutine xsolve3D_multistate
 
     subroutine close_child_pipe_fds( keep_fd, keep_fd2 )
         integer, intent(in)           :: keep_fd
@@ -166,8 +166,8 @@ contains
         call close_pipe_except_fd(ipc_pipe_sieve_cavgs_out, keep_fd, keep_fd2)
         call close_pipe_except_fd(ipc_pipe_pool2D_in, keep_fd, keep_fd2)
         call close_pipe_except_fd(ipc_pipe_pool2D_out, keep_fd, keep_fd2)
-        call close_pipe_except_fd(ipc_pipe_abinitio3D_multstate_in, keep_fd, keep_fd2)
-        call close_pipe_except_fd(ipc_pipe_abinitio3D_multstate_out, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_solve3D_multistate_in, keep_fd, keep_fd2)
+        call close_pipe_except_fd(ipc_pipe_solve3D_multistate_out, keep_fd, keep_fd2)
     end subroutine close_child_pipe_fds
 
     subroutine close_pipe_except_fd(pipe, keep_fd, keep_fd2)
@@ -200,7 +200,7 @@ contains
         type(cmdline)                              :: cline_preprocess, cline_assign_optics
         type(cmdline)                              :: cline_opening2D, cline_reference_picking
         type(cmdline)                              :: cline_particle_sieving, cline_pool2D
-        type(cmdline)                              :: cline_abinitio3D_multistate
+        type(cmdline)                              :: cline_solve3D_multistate
         type(http_post)                            :: post
         type(http_response)                        :: response
         type(string)                               :: request, cwd
@@ -218,7 +218,7 @@ contains
         type(gui_metadata_stream_particle_sieving)      :: meta_particle_sieving
         type(gui_metadata_stream_pool2D)                :: meta_pool2D
         type(gui_metadata_stream_pool2D_snapshot)       :: meta_pool2D_snapshot
-        type(gui_metadata_stream_abinitio3D_multistate) :: meta_abinitio3D_multistate
+        type(gui_metadata_stream_solve3D_multistate) :: meta_solve3D_multistate
         type(gui_metadata_micrograph),   allocatable :: meta_preprocess_micrographs(:)
         type(gui_metadata_histogram),    allocatable :: meta_preprocess_histograms(:)
         type(gui_metadata_timeplot),     allocatable :: meta_preprocess_timeplots(:)
@@ -231,7 +231,7 @@ contains
         type(gui_metadata_cavg2D),       allocatable :: meta_pool2D_snapshot_cavgs2D(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_particle_sieving_cavgs2D(:), meta_particle_sieving_ref_cavgs2D(:)
         type(gui_metadata_vol3D),        allocatable :: meta_states_vol3D(:)
-        type(gui_metadata_cavg2D),       allocatable :: meta_abinitio3D_multistate_reprojtiles(:)
+        type(gui_metadata_cavg2D),       allocatable :: meta_solve3D_multistate_reprojtiles(:)
         ! forked processes
         type(preprocess_fork)                      :: fork_preprocess
         type(assign_optics_fork)                   :: fork_assign_optics
@@ -239,7 +239,7 @@ contains
         type(reference_picking_fork)               :: fork_reference_picking
         type(particle_sieving_fork)                :: fork_particle_sieving
         type(pool2D_fork)                          :: fork_pool2D
-        type(abinitio3D_multistate_fork)           :: fork_abinitio3D_multistate
+        type(solve3D_multistate_fork)              :: fork_solve3D_multistate
         type(c_pthread_t)                          :: meta_listener_thread
         type(c_ptr)                                :: ptr
         character(len=:),              allocatable :: meta_buffer
@@ -321,8 +321,8 @@ contains
         call init_ipc_pipe(ipc_pipe_sieve_cavgs_out)
         call init_ipc_pipe(ipc_pipe_pool2D_in)
         call init_ipc_pipe(ipc_pipe_pool2D_out)
-        call init_ipc_pipe(ipc_pipe_abinitio3D_multstate_in)
-        call init_ipc_pipe(ipc_pipe_abinitio3D_multstate_out)
+        call init_ipc_pipe(ipc_pipe_solve3D_multistate_in)
+        call init_ipc_pipe(ipc_pipe_solve3D_multistate_out)
         ! spawn metadata listener thread
         stat = c_pthread_create(thread        = meta_listener_thread, &
                                 attr          = c_null_ptr, &
@@ -341,7 +341,7 @@ contains
         call fork_reference_picking%start(name=string(REFPICK_JOB_NAME),   logfile=string(REFPICK_JOB_NAME//'.log'),   cline=cline_reference_picking,restart=.false.)
         call fork_particle_sieving%start( name=string(SIEVING_JOB_NAME),   logfile=string(SIEVING_JOB_NAME//'.log'),   cline=cline_particle_sieving, restart=.false.)
         call fork_pool2D%start(           name=string(CLASS2D_JOB_NAME),   logfile=string(CLASS2D_JOB_NAME//'.log'),   cline=cline_pool2D,           restart=.false.)
-        call fork_abinitio3D_multistate%start(    name=string(MULTISTATE3D_JOB_NAME), logfile=string(MULTISTATE3D_JOB_NAME//'.log'), cline=cline_abinitio3D_multistate, restart=.false.)
+        call fork_solve3D_multistate%start(       name=string(MULTISTATE3D_JOB_NAME), logfile=string(MULTISTATE3D_JOB_NAME//'.log'), cline=cline_solve3D_multistate, restart=.false.)
         if( l_existing_pickrefs ) then
             call fork_initial_analysis%skip()
         else
@@ -355,7 +355,7 @@ contains
         if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork reference picking')
         if( fork_particle_sieving%status()  /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork particle sieving' )
         if( fork_pool2D%status()            /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork pool2D'           )
-        if( fork_abinitio3D_multistate%status()     /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork 3D multistate'    )
+        if( fork_solve3D_multistate%status()        /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork 3D multistate'    )
         if( .not. l_existing_pickrefs ) then
            if( fork_initial_analysis%status() /= FORK_STATUS_RUNNING ) THROW_HARD('failed to fork opening2D')
         endif
@@ -370,7 +370,7 @@ contains
             loop_counter = loop_counter + 1
             ! heartbeat
             call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, &
-                fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate, n_active_persistent_workers=qsys%get_n_active_persistent_workers())
+                fork_particle_sieving, fork_pool2D, fork_solve3D_multistate, n_active_persistent_workers=qsys%get_n_active_persistent_workers())
             ! processes
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
@@ -394,7 +394,7 @@ contains
             call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot, meta_pool2D_snapshot_cavgs2D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
-            call assembler%assemble_stream_abinitio3D_multistate(meta_abinitio3D_multistate, meta_states_vol3D, meta_abinitio3D_multistate_reprojtiles)
+            call assembler%assemble_stream_solve3D_multistate(meta_solve3D_multistate, meta_states_vol3D, meta_solve3D_multistate_reprojtiles)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             request = assembler%to_string()
             ! send
@@ -437,9 +437,9 @@ contains
                         if( l_found .and. l_test ) then
                             if( fork_pool2D%status() == FORK_STATUS_RUNNING ) call fork_pool2D%terminate()
                         endif
-                        call json%get(json_response_ptr, 'terminate_abinitio3D_multistate', l_test, l_found)
+                        call json%get(json_response_ptr, 'terminate_solve3D_multistate', l_test, l_found)
                         if( l_found .and. l_test ) then
-                            if( fork_abinitio3D_multistate%status() == FORK_STATUS_RUNNING ) call fork_abinitio3D_multistate%terminate()
+                            if( fork_solve3D_multistate%status() == FORK_STATUS_RUNNING ) call fork_solve3D_multistate%terminate()
                         endif
                         ! check for forked process restart
                         call json%get(json_response_ptr, 'restart_preprocess', l_test, l_found)
@@ -484,11 +484,11 @@ contains
                                 call fork_pool2D%start(name=string(CLASS2D_JOB_NAME), logfile=string(CLASS2D_JOB_NAME//'.log'),  cline=cline_pool2D, restart=.true.)
                             endif
                         endif
-                        call json%get(json_response_ptr, 'restart_abinitio3D_multistate', l_test, l_found)
+                        call json%get(json_response_ptr, 'restart_solve3D_multistate', l_test, l_found)
                         if( l_found .and. l_test ) then
-                            if( fork_abinitio3D_multistate%status() /= FORK_STATUS_RUNNING ) then
-                                call drain_and_reset_pipe_state(7, ipc_pipe_abinitio3D_multstate_in, ipc_pipe_abinitio3D_multstate_out)
-                                call fork_abinitio3D_multistate%start(name=string(MULTISTATE3D_JOB_NAME), logfile=string(MULTISTATE3D_JOB_NAME//'.log'),  cline=cline_abinitio3D_multistate, restart=.true.)
+                            if( fork_solve3D_multistate%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(7, ipc_pipe_solve3D_multistate_in, ipc_pipe_solve3D_multistate_out)
+                                call fork_solve3D_multistate%start(name=string(MULTISTATE3D_JOB_NAME), logfile=string(MULTISTATE3D_JOB_NAME//'.log'),     cline=cline_solve3D_multistate, restart=.true.)
                             endif
                         endif
                         ! gather update payload from HTTP response
@@ -563,7 +563,7 @@ contains
                 if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call fork_reference_picking%terminate()
                 if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) call fork_particle_sieving%terminate()
                 if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call fork_pool2D%terminate()
-                if( fork_abinitio3D_multistate%status()     == FORK_STATUS_RUNNING ) call fork_abinitio3D_multistate%terminate()
+                if( fork_solve3D_multistate%status()        == FORK_STATUS_RUNNING ) call fork_solve3D_multistate%terminate()
                 l_last_loop = .true.
                 ! if processes are still running set last_loop back to false
                 if( fork_preprocess%status() == FORK_STATUS_RUNNING ) then
@@ -590,8 +590,8 @@ contains
                     write(logfhandle, '(A)') "POOL2D STILL RUNNING. WAITING FOR TERMINATION"
                     l_last_loop = .false.
                 endif
-                if( fork_abinitio3D_multistate%status() == FORK_STATUS_RUNNING ) then
-                    write(logfhandle, '(A)') "ABINITIO3D MULTISTATE STILL RUNNING. WAITING FOR TERMINATION"
+                if( fork_solve3D_multistate%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "SOLVE3D MULTISTATE STILL RUNNING. WAITING FOR TERMINATION"
                     l_last_loop = .false.
                 endif
                 ! set stoptime in assembler
@@ -626,8 +626,8 @@ contains
         call kill_ipc_pipe(ipc_pipe_sieve_cavgs_out)
         call kill_ipc_pipe(ipc_pipe_pool2D_in)
         call kill_ipc_pipe(ipc_pipe_pool2D_out)
-        call kill_ipc_pipe(ipc_pipe_abinitio3D_multstate_in)
-        call kill_ipc_pipe(ipc_pipe_abinitio3D_multstate_out)
+        call kill_ipc_pipe(ipc_pipe_solve3D_multistate_in)
+        call kill_ipc_pipe(ipc_pipe_solve3D_multistate_out)
         ! destroy mutexes
         if( c_pthread_mutex_destroy(meta_mutex)      /= 0) THROW_WARN('failed to destroy metadata mutex' )
         if( c_pthread_mutex_destroy(terminate_mutex) /= 0) THROW_WARN('failed to destroy terminate mutex')
@@ -685,7 +685,7 @@ contains
                 ' sieve_cls=', alloc_size_cavg2D(meta_particle_sieving_cavgs2D), &
                 ' pool2D_cls=', alloc_size_cavg2D(meta_pool2D_cavgs2D), &
                 ' states_vol3D=', alloc_size_vol3D(meta_states_vol3D), &
-                ' abinitio3D_multistate_reprojtiles=', alloc_size_cavg2D(meta_abinitio3D_multistate_reprojtiles)
+                ' solve3D_multistate_reprojtiles=', alloc_size_cavg2D(meta_solve3D_multistate_reprojtiles)
             call flush(logfhandle)
         end subroutine log_master_memory_state
 
@@ -784,8 +784,8 @@ contains
                                     meta_pool2D = transfer(my_buffer, meta_pool2D)  
                                 case( GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE )
                                     meta_pool2D_snapshot = transfer(my_buffer, meta_pool2D_snapshot)
-                                case( GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE )
-                                    meta_abinitio3D_multistate = transfer(my_buffer, meta_abinitio3D_multistate)         
+                                case( GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE )
+                                    meta_solve3D_multistate = transfer(my_buffer, meta_solve3D_multistate)         
                                 case( GUI_METADATA_VOL3D_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of vol3D metadata to read routing fields
@@ -1018,27 +1018,27 @@ contains
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_pool2D_snapshot_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
-                                case( GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_REPROJ_TYPE )
+                                case( GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE )
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of cavg2D metadata to read routing fields
                                     meta_cavg2D_tmp = transfer(my_buffer, meta_cavg2D_tmp)
-                                    ! allocate or resize meta_abinitio3D_multistate_reprojtiles as necessary based on i_max
-                                    if( .not.allocated(meta_abinitio3D_multistate_reprojtiles) ) then
+                                    ! allocate or resize meta_solve3D_multistate_reprojtiles as necessary based on i_max
+                                    if( .not.allocated(meta_solve3D_multistate_reprojtiles) ) then
                                         my_l_reinit = .true.
-                                    else if( size(meta_abinitio3D_multistate_reprojtiles) /= meta_cavg2D_tmp%get_i_max() ) then
-                                        deallocate(meta_abinitio3D_multistate_reprojtiles)
+                                    else if( size(meta_solve3D_multistate_reprojtiles) /= meta_cavg2D_tmp%get_i_max() ) then
+                                        deallocate(meta_solve3D_multistate_reprojtiles)
                                         my_l_reinit = .true.
                                     endif
                                     if( my_l_reinit ) then
-                                        ! allocate and initialise each object in meta_abinitio3D_multistate_reprojtiles
-                                        allocate(meta_abinitio3D_multistate_reprojtiles(meta_cavg2D_tmp%get_i_max()))
-                                        do my_i=1, size(meta_abinitio3D_multistate_reprojtiles)
-                                            call meta_abinitio3D_multistate_reprojtiles(my_i)%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_REPROJ_TYPE)
-                                            if( .not.meta_abinitio3D_multistate_reprojtiles(my_i)%initialized() ) THROW_HARD('failed to initialise abinitio3D multistate reproj cavg2D metadata')
+                                        ! allocate and initialise each object in meta_solve3D_multistate_reprojtiles
+                                        allocate(meta_solve3D_multistate_reprojtiles(meta_cavg2D_tmp%get_i_max()))
+                                        do my_i=1, size(meta_solve3D_multistate_reprojtiles)
+                                            call meta_solve3D_multistate_reprojtiles(my_i)%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE)
+                                            if( .not.meta_solve3D_multistate_reprojtiles(my_i)%initialized() ) THROW_HARD('failed to initialise solve3D multistate reproj cavg2D metadata')
                                         enddo
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
-                                    meta_abinitio3D_multistate_reprojtiles(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
+                                    meta_solve3D_multistate_reprojtiles(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
                             end select
                             deallocate(my_buffer)
                         end if
@@ -1067,7 +1067,7 @@ contains
                         ipc_pipe_refpick_in(1),       &
                         ipc_pipe_sieve_cavgs_in(1),   &
                         ipc_pipe_pool2D_in(1),        &
-                        ipc_pipe_abinitio3D_multstate_in(1)]
+                        ipc_pipe_solve3D_multistate_in(1)]
 
             ! First, emit any fully assembled frame already buffered.
             do ipipe = 1, N_STREAM_PIPES
@@ -1347,7 +1347,7 @@ contains
         subroutine init_cline_pool2D()
             type(string) :: server_address
             server_address = qsys%get_persistent_worker_server_address()
-            call cline_pool2D%set('prg',                       'abinitio2D_stream')
+            call cline_pool2D%set('prg',                       'pool2D')
             call cline_pool2D%set('projfile',       CLASS2D_JOB_NAME//METADATA_EXT)
             call cline_pool2D%set('outdir',                       CLASS2D_JOB_NAME)
             call cline_pool2D%set('dir_target',                   SIEVING_JOB_NAME)
@@ -1376,26 +1376,26 @@ contains
 
         subroutine init_metadata_multistate3D()
             ! multistate 3D
-            call meta_abinitio3D_multistate%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE)
-            if( .not.meta_abinitio3D_multistate%initialized() ) THROW_HARD('failed to initialise multistate 3D metadata')
+            call meta_solve3D_multistate%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
+            if( .not.meta_solve3D_multistate%initialized() ) THROW_HARD('failed to initialise multistate 3D metadata')
         end subroutine init_metadata_multistate3D
 
         subroutine init_cline_multistate3D()
             type(string) :: server_address
             server_address = qsys%get_persistent_worker_server_address()
-            call cline_abinitio3D_multistate%set('prg',                       'abinitio3D_stream')
-            call cline_abinitio3D_multistate%set('projfile',  MULTISTATE3D_JOB_NAME//METADATA_EXT)
-            call cline_abinitio3D_multistate%set('outdir',                  MULTISTATE3D_JOB_NAME)
-            call cline_abinitio3D_multistate%set('dir_target',                   CLASS2D_JOB_NAME)
-            call cline_abinitio3D_multistate%set('nthr',                                        8)
-            call cline_abinitio3D_multistate%set('nparts',                                      1)
-            call cline_abinitio3D_multistate%set('mkdir',                                   'yes')
-            call cline_abinitio3D_multistate%set('nicedispid',                  params%nicedispid)
-            call cline_abinitio3D_multistate%set('worker_priority',                        'high')
-            if( server_address%strlen() > 0 ) call cline_abinitio3D_multistate%set('worker_server', server_address)
+            call cline_solve3D_multistate%set('prg',                          'solve3D_stream')
+            call cline_solve3D_multistate%set('projfile',     MULTISTATE3D_JOB_NAME//METADATA_EXT)
+            call cline_solve3D_multistate%set('outdir',                     MULTISTATE3D_JOB_NAME)
+            call cline_solve3D_multistate%set('dir_target',                      CLASS2D_JOB_NAME)
+            call cline_solve3D_multistate%set('nthr',                                           8)
+            call cline_solve3D_multistate%set('nparts',                                         1)
+            call cline_solve3D_multistate%set('mkdir',                                      'yes')
+            call cline_solve3D_multistate%set('nicedispid',                     params%nicedispid)
+            call cline_solve3D_multistate%set('worker_priority',                           'high')
+            if( server_address%strlen() > 0 ) call cline_solve3D_multistate%set('worker_server', server_address)
             if( params%memreport == 'yes' ) then
-                call cline_abinitio3D_multistate%set('memreport', 'yes')
-                call cline_abinitio3D_multistate%set('memreport_interval', params%memreport_interval)
+                call cline_solve3D_multistate%set('memreport', 'yes')
+                call cline_solve3D_multistate%set('memreport_interval', params%memreport_interval)
             endif
         end subroutine init_cline_multistate3D
 
@@ -1441,7 +1441,7 @@ contains
             if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_pool2D_out(2), buffer, 'pool2D', tx_state(6))
             if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_initial_analysis_out(2), buffer, 'initial_analysis', tx_state(3))
             ! The following are commented out because they dont currently receive update messages
-            ! if( fork_abinitio3D_multistate%status()     == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_abinitio3D_multstate_out(2), buffer, 'abinitio3D_multistate', tx_state(7))
+            ! if( fork_solve3D_multistate%status()        == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_solve3D_multistate_out(2), buffer, 'solve3D_multistate', tx_state(7))
             ! if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_assign_optics_out(2), buffer, 'assign_optics', tx_state(2))
             ! if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_refpick_out(2), buffer, 'reference_picking', tx_state(4))
             ! if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_sieve_cavgs_out(2), buffer, 'particle_sieving', tx_state(5))

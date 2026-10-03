@@ -773,7 +773,7 @@ contains
     end subroutine test_misc_flags
 
     !---------------------------------------------------------------
-    ! 11. reseed_classes (abinitio2D cls_init=prev seed partition)
+    ! 11. reseed_classes (solve2D cls_init=prev seed partition)
     !---------------------------------------------------------------
     subroutine test_reseed_classes()
         type(oris) :: os

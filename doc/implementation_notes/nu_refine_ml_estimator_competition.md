@@ -9,7 +9,7 @@ second, separately solved estimator; since 2026-09-14 it is not, see §1.2).
 
 Decision reached in discussion (Hans, 2026-09-16): retire the `nu_refine=yes`
 shell walk from `refine3D_auto`; run the static-bank competition that every
-`abinitio3D` run has used, with the ladder densified at its fine end, capped
+`solve3D` run has used, with the ladder densified at its fine end, capped
 by the gold-standard FSC, and with the regularized pair as a competitor. This
 note is the record to think against before implementing. Section 8 lists the
 decisions still open.
@@ -27,7 +27,7 @@ references from the selected labels, the `_nu_locres` map, and the handoff of
 the finest selected label (with the 1% signal-voxel floor) as the next
 iteration's matching band (`nonuniform_filtering_policy.md` §8–12).
 
-`nu_refine=no` (static-bank mode, every abinitio3D NU stage): the bank is the
+`nu_refine=no` (static-bank mode, every solve3D NU stage): the bank is the
 ladder `lowpass_limits = [20,15,12,10,8,6,5,4]` Å, truncated at
 `fsc/NU_BANK_FSC_HEADROOM` (1.5× finer than the pair's FSC=0.143, never fewer
 than two rungs), and with `ml_reg=yes` the regularized pair *replaces the
@@ -65,9 +65,9 @@ coordinate (2026-09-13), and the walk depth persisted for restarts.
   predates the walk and the 2026-09-11 diagnosis found neither band nor bank
   to be the limiter. Three corrective changes in one week (majority test,
   ladder-only Potts pricing, FSC-gate removal). The static-bank competition
-  has carried every abinitio3D run.
+  has carried every solve3D run.
 - `refine3D_auto` now has a gold-standard, envelope-corrected FSC
-  (`envfsc=yes`) to anchor a cap on, which abinitio3D does not.
+  (`envfsc=yes`) to anchor a cap on, which solve3D does not.
 
 ### 1.3 What the walk buys, and what a dense ladder reproduces
 
@@ -95,7 +95,7 @@ For `refine3D_auto`:
    unchanged in kind; the Potts coordinate is redefined so dense rungs do not
    change the price of a resolution jump (§3.4).
 
-`abinitio3D` uses the same bank (decided 2026-09-16, one implementation):
+`solve3D` uses the same bank (decided 2026-09-16, one implementation):
 its NU stages get the dense ladder and the finest-member rule. This does
 not change its top end -- the regularized pair already replaces the finest
 rung and already sets the handoff when selected -- and it removes the hard
@@ -103,10 +103,10 @@ rungs finer than the (non-gold-standard, inflated) FSC=0.143 that the
 `fsc/1.5` cap admits today, which is the safer direction there. Note that
 the 4.5 A ladder bound guards only the FSC=0.5 promotion of the planned
 non-NU stage limits; the NU-stage handoff has carried no ceiling since
-2026-09-08 and stays uncapped. Should the unified bank show the abinitio
+2026-09-08 and stays uncapped. Should the unified bank show the solve3D
 band running ahead on an inflated FSC, a ceiling on the regularized
-candidate's content extent in abinitio3D's NU stages is the one-line guard
-to add, on evidence. abinitio3D runs are therefore a regression gate of
+candidate's content extent in solve3D's NU stages is the one-line guard
+to add, on evidence. solve3D runs are therefore a regression gate of
 this change (§6), not a later adoption.
 
 Soft (FSC-shaped, anchored) synthesis in place of the hard cutoff at the
@@ -198,7 +198,7 @@ resolution jump is what it is today whatever the spacing the budget chose.
 ### 3.5 Matching band: the handoff follows the reference content
 
 This is the part of the scheme that must NOT be carried over from
-abinitio3D unchanged (Hans, 2026-09-16). abinitio3D is right to be
+solve3D unchanged (Hans, 2026-09-16). solve3D is right to be
 restrictive: its FSC is not gold-standard, its stage limits are a planned
 ladder with FSC=0.5 promotion only at stage boundaries, and its NU handoff
 is the finest populated rung of a coarse ladder -- all of which protect a
@@ -273,7 +273,7 @@ walk code is removed.
   `NU_HIGHRES_EXTENSION_*` constants, `NU_HIGHRES_EXTENSION_RETAIN_STRIDE`.
 - `nu_refine` as a mode: the key is removed (decided); `l_nu_refine`
   branches in `simple_nu_state_filter`, `simple_commanders_rec_distr`,
-  `simple_final_rec`, the abinitio controller (which already emits `no`),
+  `simple_final_rec`, the solve3D controller (which already emits `no`),
   `refine3D_auto` defaults and UI, and the parameter/parse/UI
   registrations. An unknown key is accepted by the parser, so a stale
   `nu_refine=yes` on a command line is silently ignored; the removal is
@@ -325,7 +325,7 @@ default (`nu_refine=yes`) against the dense static bank, on:
 Pass: FSC=0.143 and FSC=0.5 equal or better; cFAR trajectory not decaying
 faster; inter-iteration pose distance not larger; regularized-candidate
 occupancy spatially coherent and stable across iterations; runtime and
-memory acceptable on both backends. abinitio3D regression gate on the
+memory acceptable on both backends. solve3D regression gate on the
 same targets from the `~/for_claude` restart inputs (bgal, PfCRT,
 streptavidin canonical): stage-by-stage FSC and matching band not worse
 than the current ladder, final maps equal by eye, and the NU-stage band
@@ -353,8 +353,8 @@ Decided:
    pair as finest member).
 6. Bank budget `NU_BANK_MAX_MEMBERS = 16`, met by widening the fine step,
    never by failing (§3.1).
-7. abinitio3D uses the same dense ladder and finest-member rule -- one
-   implementation, abinitio runs as a regression gate (§2, §6).
+7. solve3D uses the same dense ladder and finest-member rule -- one
+   implementation, solve3D runs as a regression gate (§2, §6).
 8. No band headroom beyond the regularized candidate's FSC=0.143 extent.
 9. The shared 1% signal-voxel floor applies to the regularized candidate
    as to every label (§3.5).

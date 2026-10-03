@@ -70,7 +70,7 @@ contains
         self%projfile_out=''      !< output SIMPLE project file for non-destructive updates
         self%projfile_ref=''      !< SIMPLE project containing reference assignments
         self%projfile_target=''   !< another SIMPLE *.simple project file
-        self%projfile_frozen=''   !< abinitio3D_addon: the frozen solution's project file
+        self%projfile_frozen=''   !< solve3D_addon: the frozen solution's project file
         self%projname=''          !< SIMPLE  project name
         self%projtab=''           !< table of SIMPLE *.simple project files
         self%ptcl_new_root=''     !< new root for relocated particle data

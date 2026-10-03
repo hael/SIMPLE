@@ -11,7 +11,7 @@ Scope, as decided:
   program resamples and validates it, nothing more.
 - Before anything else, the fixed `box_crop=64` working box is replaced by a
   sampling-distance parameter that controls down-sampling, in the way
-  `refine3D` and `abinitio3D` do it.
+  `refine3D` and `solve3D` do it.
 - Then `rec_backend=gridding` (the current implementation) and
   `rec_backend=pcg` (new) are supported in the same pattern as those
   workflows, reusing `reconstructor_pcg` wherever it applies, first with the

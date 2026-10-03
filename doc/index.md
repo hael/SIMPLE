@@ -29,7 +29,7 @@ distributed HPC environments.
 - [Installation](installation.md) — covers requirements, standard builds, custom
   install paths, updates, and the NICE GUI build.
 - [Tutorials](simple_tutorials/index.md) — points to the existing workflow guide
-  for moving from raw movies to ab initio 3D reconstruction.
+  for moving from raw movies to a de novo 3D map.
 - [Code Overview](code_overview/code_base_map.md) — maps the main source tree and
   important subsystems.
 - [Developer Docs](for_developers/index.md) — collects onboarding and design notes

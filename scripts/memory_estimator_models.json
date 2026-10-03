@@ -32,7 +32,7 @@
         "notes": "Dimensions above 4096 were measured only at 4 frames and 1 thread. All movies were square and used algorithm=iso, mcpatch=no, downscale=yes."
       }
     },
-    "abinitio2D": {
+    "solve2D": {
       "target": "whole-commander peak RSS",
       "rows": 30,
       "coefficients": {
@@ -55,7 +55,7 @@
         "notes": "One-stage screening model; autoscaled cases are conservatively estimated from the requested box size."
       }
     },
-    "abinitio3D": {
+    "solve3D": {
       "target": "conservative process-tree peak RSS",
       "rows": 36,
       "coefficients": {

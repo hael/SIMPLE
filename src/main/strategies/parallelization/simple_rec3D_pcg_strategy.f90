@@ -375,7 +375,7 @@ contains
             type(pcg_solver_outcome) :: result
             real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
             integer :: state = 0, eo = 0, nptcls = 0, niters = 0
-            integer :: nfrozen = 0     !< frozen particles added to the reduction (abinitio3D_addon)
+            integer :: nfrozen = 0     !< frozen particles added to the reduction (solve3D_addon)
             integer :: band_shell = 0 !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
             integer :: prior_npositive = 0
             character(len=8) :: half = '', solve_kind = ''
@@ -423,7 +423,7 @@ contains
 
         call validate_pcg_common(params)
         solvent_lambda_eff = 0.
-        ! abinitio3D_addon handshakes (in-process only): the master owns every
+        ! solve3D_addon handshakes (in-process only): the master owns every
         ! frozen read and write; workers only ever see their own particles
         l_frozen_rec  = cline%defined('frozen_rec')
         l_frozen_seed = cline%defined('frozen_seed')
@@ -497,7 +497,7 @@ contains
                 l_bootstrap = .not. l_even_chain
                 ! add-on mode never enters the legacy union-volume bootstrap
                 if( l_bootstrap .and. l_frozen_rec ) &
-                    &THROW_HARD('abinitio3D_addon trailing assembly requires a seeded cohort chain')
+                    &THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
                 if( .not. l_bootstrap ) call set_chain_blend_weights(state)
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
@@ -1100,12 +1100,12 @@ contains
             endif
             if( job%nptcls == 0 )then
                 ! an add-on half without a cohort particle follows the trailing
-                ! recurrence (abinitio3D_addon_policy.md, section 6)
+                ! recurrence (solve3D_addon_policy.md, section 6)
                 if( .not. job%l_ml_solve )then
                     fname = refine3D_pcg_trail_accum_fname(state_here, half)
                     if( params%l_trail_rec )then
                         if( .not. file_exists(fname) ) &
-                            &THROW_HARD('abinitio3D_addon trailing assembly requires a seeded cohort chain')
+                            &THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
                         if( realized_fractions(state_here) < 0.001 )then
                             call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
                                 &chain_provenance, 1.0, n_part)
@@ -1155,12 +1155,12 @@ contains
                         &chain_provenance)
                 endif
                 call fname%kill
-                ! abinitio3D_addon producer: the frozen particles' raw pair at this box
+                ! solve3D_addon producer: the frozen particles' raw pair at this box
                 if( l_frozen_seed ) call frozen_ctx%write_pcg_half(state_here, eo_here, params%box_crop, &
                     &job%pcgop, job%nptcls)
             endif
-            ! abinitio3D_addon: the frozen raw pair joins both reductions after the
-            ! chain write, before end_accum (abinitio3D_addon_policy.md, section 7)
+            ! solve3D_addon: the frozen raw pair joins both reductions after the
+            ! chain write, before end_accum (solve3D_addon_policy.md, section 7)
             if( l_frozen_rec )then
                 call frozen_ctx%add_pcg_half(state_here, eo_here, params%box_crop, params%smpd_crop, &
                     &job%pcgop, job%nfrozen)

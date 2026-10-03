@@ -10,7 +10,7 @@ This folder is the execution-policy and search-engine layer.
 ## Read First
 
 - `parallelization/simple_refine3D_strategy.f90`
-- `parallelization/simple_cluster2D_strategy.f90`
+- `parallelization/simple_refine2D_strategy.f90`
 - `parallelization/simple_preprocess_strategy.f90`
 - `search/simple_strategy2D_matcher.f90`
 - `search/simple_strategy3D_matcher.f90`

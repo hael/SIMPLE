@@ -1,8 +1,8 @@
-!@descr: abinitio3D_addon superset relation of a current and a frozen project: identity, frozen/cohort membership, masking and restoration
+!@descr: solve3D_addon superset relation of a current and a frozen project: identity, frozen/cohort membership, masking and restoration
 ! Current and frozen projects share row indices; shared rows must name the same image (and CTF/optics
 ! for frozen rows), appended rows come from new stacks. frozen = frozen ptcl3D state>0 & updatecnt>0;
 ! current-inactive frozen rows are retired. mask zeroes frozen/retired rows; restore keeps retired rows inactive.
-! Contract: doc/policies/3D/abinitio3D_addon_policy.md sec. 4.
+! Contract: doc/policies/3D/solve3D_addon_policy.md sec. 4.
 module simple_project_superset
 use simple_core_module_api
 use simple_sp_project, only: sp_project

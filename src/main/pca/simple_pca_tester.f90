@@ -1,5 +1,5 @@
 !@descr: unit test routines for SVD, probabilistic and kernel PCA (simple_pca_svd, simple_ppca, simple_kpca_svd)
-! The analysers behind ppca_denoise, cluster2D and the class split: SVD PCA on both the D >= N and the
+! The analysers behind ppca_denoise, refine2D and the class split: SVD PCA on both the D >= N and the
 ! transposed D < N branches, probabilistic PCA (EM against the Tipping & Bishop maximum-likelihood solution,
 ! BIC rank suggestion, external reconstruction) and kernel PCA (exact and Nystroem backends, cosine and RBF
 ! kernels: kernel eigenvalues, feature vectors and pre-images pinned on a double-precision emulation of the

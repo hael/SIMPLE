@@ -1,6 +1,6 @@
 ---
 name: simple-main-root
-description: Use when working with the root modules directly under SIMPLE's src/main directory, especially orchestration modules like builder, command-line parsing, convergence, ab initio controllers, probability tables, simulation, symmetry, and other cross-subsystem foundation code.
+description: Use when working with the root modules directly under SIMPLE's src/main directory, especially orchestration modules like builder, command-line parsing, convergence, solve2D/solve3D controllers, probability tables, simulation, symmetry, and other cross-subsystem foundation code.
 ---
 
 # SIMPLE Main Root
@@ -15,9 +15,9 @@ This skill covers files directly in `src/main/`, not the subfolders.
 - `simple_eul_prob_tab.f90`
 - `simple_eul_prob_tab2D.f90`
 - `simple_eul_prob_tab_neigh.f90`
-- `simple_abinitio_controller.f90`
-- `simple_abinitio2D_controller.f90`
-- `simple_abinitio_utils.f90`
+- `simple_solve3D_controller.f90`
+- `simple_solve2D_controller.f90`
+- `simple_solve3D_utils.f90`
 
 ## What Lives Here
 

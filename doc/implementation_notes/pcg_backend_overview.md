@@ -158,7 +158,7 @@ frequencies of a solvent voxel than the scalar shrink. An explicit
 `maxits_ml` stays at its default 0: the replay is the
 Wiener shrink of the prior'd base map (coupled replay iterations, when
 requested, carry the same ridge). The support is untouched. It runs
-under any `automsk` setting; in abinitio3D the key rides with the PCG
+under any `automsk` setting; in solve3D the key rides with the PCG
 stages only. Validation: one `PCG SOLVENT PRIOR` line per half
 (smoothing scale, threshold, width, solvent fraction, mean weight,
 coefficient), the prior-free FSC, the even/odd weight correlation and
@@ -186,13 +186,13 @@ evaluation as `>>> FSC MODE` in the log and in the resolution text:
   so rather than hide it.
 
 The `automask3D_stateNN.mrc` artifact is written on the envfsc path for its
-other consumers (postprocess of non-PCG products, the abinitio final rec).
+other consumers (postprocess of non-PCG products, the solve3D final rec).
 
 ## 5. NU filtering and the evidence envelope
 
 The NU competition is assembly-owned and identical on both backends
 (`simple_nu_state_filter`, 2026-09-16, the `nu_refine` shell walk
-retired; the generated ladder withdrawn 2026-09-18): the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18. The
+retired; the generated ladder withdrawn 2026-09-18): the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c solve3D machinery, the only NU mechanism since 2026-09-18. The
 matching low-pass handoff is the finest member of the bank: the finest rung
 under the `fsc/1.5` cut, or the regularized pair once its FSC=0.143 is at or
 beyond the ladder's finest rung (2026-09-19; the pair joins the bank only
@@ -232,7 +232,7 @@ string records which envelope ran.
   competition, and ships. Trailing reconstruction (`trail_rec`) keeps
   accumulator chains; the bootstrap iteration blends with the previous
   pair at the update weight exactly as the gridding bootstrap.
-- **abinitio3D**: the PCG backend engages from `PCG_REC_START_STAGE = 3`;
+- **solve3D**: the PCG backend engages from `PCG_REC_START_STAGE = 3`;
   stages 1-2 are gridding. Stage policy sets `envfsc`/`automsk` at the
   last stage (`AUTOMSK_STAGE = ENVFSC_STAGE = NSTAGES`). In the NU stages
   the NU handoff sets the matching low-pass, capped at the ladder's hard
@@ -291,7 +291,7 @@ PHASE` (wall time, thread-seconds, peak RSS). Per-half solve diagnostics
 (residual history, data scale, effective lambda, prior statistics) go to
 `reconstruct3D_pcg_stateNN_<half>_<kind>*.txt` sidecars.
 
-The stage-6 take-off is the thing to check on an abinitio3D run: at the
+The stage-6 take-off is the thing to check on a solve3D run: at the
 first NU iteration the base pair should support a few percent of the mask
 at ~8 A, the matching low-pass should be promoted below 6 A, and FSC-0.143
 should drop from ~9 to ~4.5 A within the stage. If the matching low-pass
@@ -303,7 +303,7 @@ evidence.
 At PfCRT scale (16.8k particles, box 140-160, 10 parts x 8 threads) the
 PCG master phase is ~16 s per refinement iteration against gridding's
 ~4 s, and the refine3D worker step is ~12 s against ~8 s because the PCG
-workers write the raw accumulators. On a 133-iteration abinitio3D that is
+workers write the raw accumulators. On a 133-iteration solve3D that is
 7460 s against 4820 s. Iterations of CG themselves are cheap (~1 s per
 half per iteration under the kernel operator); the cost is the
 accumulation and the master's reduction, not the solve.

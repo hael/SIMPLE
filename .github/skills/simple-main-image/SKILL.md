@@ -24,7 +24,7 @@ This is one of the central scientific subsystems.
 
 ## Connections
 
-- Core dependency for `motion`, `ctf`, `cluster2D`, `refine3D`, `volume`, and `pftc`
+- Core dependency for `motion`, `ctf`, `refine2D`, `refine3D`, `volume`, and `pftc`
 
 ## Working Rule
 

@@ -238,14 +238,14 @@ went with the warm starts). The NU evidence built from a density-constrained
 pair designates its null on the density envelope's dilation ring
 (`doc/policies/3D/automasking_policy.md`).
 
-PCG runs the one static NU competition (2026-09-18: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c abinitio3D machinery, the only NU mechanism since 2026-09-18). Integer
+PCG runs the one static NU competition (2026-09-18: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest retained rung, competing with it at zero prior cost (`ml_reg=yes`) -- the ed36eb4c solve3D machinery, the only NU mechanism since 2026-09-18). Integer
 Potts coordinates, unit candidate masses, the four fixed evidence bands.
 The matching handoff is the finest selected label with at least 1% of the
 signal voxels at that label or finer (`nonuniform_filtering_policy.md`
 sections 8 and 12).
 
 Solve support is an `automsk` feature (policy 2026-09-06). With `automsk=no`,
-the default in `abinitio3D`, every PCG solve, base and regularized replay, runs
+the default in `solve3D`, every PCG solve, base and regularized replay, runs
 on the spherical `mskdiam` support and no density envelope is built. With
 `automsk=yes` the conservative density envelope is the support of BOTH the
 base solve and the regularized replay (policy 2026-09-09; the former
@@ -276,7 +276,7 @@ override and constrains every solve regardless of `automsk`; it is reported as
 the state support, so the FSC mode, the support-provenance sidecar and the NU
 evidence null regime all see a constrained pair.
 
-The original-sampling final reconstructions launched by `abinitio3D` and
+The original-sampling final reconstructions launched by `solve3D` and
 `refine3D_auto` are cold solves. They use a PCG iteration budget of at least
 five; a larger user-supplied `maxits_pcg` remains in force. An explicit
 positive `rtol` may still stop a converged solve earlier. Ordinary refinement
@@ -585,7 +585,7 @@ implemented and tested here rather than repurposed from production gridding.
 
 ### Backend comparison protocol (review 2026-09-09)
 
-A `rec_backend=gridding` versus `rec_backend=pcg` comparison in abinitio3D
+A `rec_backend=gridding` versus `rec_backend=pcg` comparison in solve3D
 is meaningful because the two paths share everything but the estimator:
 
 - stages 1-2 are gridding on both (`PCG_REC_START_STAGE=3`); the stage

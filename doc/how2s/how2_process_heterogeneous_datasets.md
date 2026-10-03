@@ -15,19 +15,19 @@ picked particles
       +-- already processed by SIMPLE stream --> skip offline sieving
       |
       v
-one or more abinitio2D runs
+one or more solve2D runs
       |
-      +-- optional: abinitio2D_chunks + learned class-rejection model
+      +-- optional: solve2D_chunks + learned class-rejection model
       |
       v
-initial abinitio3D cleanup, normally with three/four states
+initial solve3D cleanup, normally with three/four states
       |
       v
 choose the state(s) to retain
       |
-      +-- one state --> continue that state with abinitio3D state=N
+      +-- one state --> continue that state with solve3D state=N
       |
-      +-- merged states --> select/merge, then single-state abinitio3D
+      +-- merged states --> select/merge, then single-state solve3D
       |
       v
 refine3D_states
@@ -59,7 +59,7 @@ continuing.
 SIMPLE commands consist of a program name followed by `key=value` arguments:
 
 ```bash
-simple_exec prg=abinitio2D projfile=my_project.simple ncls=100 \
+simple_exec prg=solve2D projfile=my_project.simple ncls=100 \
   mskdiam=180 nparts=4 nthr=16
 ```
 
@@ -117,12 +117,12 @@ settings are used when their advanced parameters are omitted.
 The output should be substantially cleaner without losing convincing,
 well-resolved particle views.
 
-### 2.2 Run ab-initio 2D classification
+### 2.2 Run solve2D (de novo 2D classification)
 
-Run `abinitio2D` on the sieved or stream-cleaned project:
+Run `solve2D` on the sieved or stream-cleaned project:
 
 ```bash
-simple_exec prg=abinitio2D \
+simple_exec prg=solve2D \
   projfile=<SIEVED_OR_STREAM_PROJECT.simple> \
   ncls=<NUMBER_OF_CLASSES> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
@@ -130,13 +130,13 @@ simple_exec prg=abinitio2D \
 
 Inspect the final ranked class-average stack and reject classes that are
 obviously ice, carbon, aggregates, empty boxes, or unrecognizable noise. Run
-ab-initio 2D a second time on the retained particles. More than one run is
+`solve2D` a second time on the retained particles. More than one run is
 useful because genuine views should recur, whereas unstable junk classes tend
 not to.
 
 The easiest manual-selection route is to use `e2display.py` from EMAN2:
 
-1. Open the final `cavgs_iterNNN_ranked.mrcs` stack from the `abinitio2D`
+1. Open the final `cavgs_iterNNN_ranked.mrcs` stack from the `solve2D`
    execution directory.
 2. In the image-stack window, use the middle-mouse menu and `Del` to mark the
    bad classes.
@@ -146,7 +146,7 @@ The easiest manual-selection route is to use `e2display.py` from EMAN2:
 
 ```bash
 simple_exec prg=map_cavgs_selection \
-  projfile=<ABINITIO2D_PROJECT.simple> \
+  projfile=<SOLVE2D_PROJECT.simple> \
   stk2=<SELECTED_CAVGS.mrcs> prune=yes
 ```
 
@@ -161,7 +161,7 @@ and apply it with:
 
 ```bash
 simple_exec prg=selection \
-  projfile=<ABINITIO2D_PROJECT.simple> oritype=cls2D \
+  projfile=<SOLVE2D_PROJECT.simple> oritype=cls2D \
   infile=<CLASS_KEEP_FLAGS.txt> prune=yes
 ```
 
@@ -179,7 +179,7 @@ For a large data set, independent chunk classifications can expose rare junk
 or minority populations that disappear in a single global classification:
 
 ```bash
-simple_exec prg=abinitio2D_chunks \
+simple_exec prg=solve2D_chunks \
   projfile=<CLEANING_PROJECT.simple> \
   mskdiam=<MASK_DIAMETER_A> nptcls_per_cls=500 nchunks=0 \
   nchunks_in_parallel=<PARALLEL_CHUNKS> \
@@ -201,7 +201,7 @@ unreviewed predictions.
 For most heterogeneous data sets, start with three states:
 
 ```bash
-simple_exec prg=abinitio3D \
+simple_exec prg=solve3D \
   projfile=<SELECTED_CLEAN_2D_PROJECT.simple> \
   nstates=3 pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
@@ -220,7 +220,7 @@ For a large, high-contrast complex with an already clean particle set, it can
 be reasonable to use one state and postpone heterogeneity analysis:
 
 ```bash
-simple_exec prg=abinitio3D \
+simple_exec prg=solve3D \
   projfile=<SELECTED_CLEAN_2D_PROJECT.simple> \
   nstates=1 pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
@@ -239,7 +239,7 @@ To merge two or more acceptable states into one retained particle group:
 
 ```bash
 simple_exec prg=selection \
-  projfile=<THREE_STATE_ABINITIO3D_PROJECT.simple> \
+  projfile=<THREE_STATE_SOLVE3D_PROJECT.simple> \
   oritype=ptcl3D states=<COMMA_SEPARATED_STATES> prune=yes
 ```
 
@@ -251,12 +251,12 @@ revisited.
 ## 4. Establish a clean consensus model
 
 If one state was retained from the multi-state cleanup, a complete new
-reference-free `abinitio3D` run is unnecessary. Continue directly from that
+reference-free `solve3D` run is unnecessary. Continue directly from that
 state:
 
 ```bash
-simple_exec prg=abinitio3D \
-  projfile=<MULTISTATE_ABINITIO3D_PROJECT.simple> \
+simple_exec prg=solve3D \
+  projfile=<MULTISTATE_SOLVE3D_PROJECT.simple> \
   state=<STATE_NUMBER> pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
 ```
@@ -265,7 +265,7 @@ This mode internally selects and prunes the requested state, preserves its
 particle poses, reconstructs a same-lineage starting map, and resumes the
 single-state search at stage 5 with nonuniform filtering. It is therefore a
 gentle continuation of the selected solution rather than another full
-ab-initio search. Do not supply `vol1` or `nstates`: the state-continuation
+de novo search. Do not supply `vol1` or `nstates`: the state-continuation
 path owns preparation of the starting reference.
 
 If two or more states were merged in section 3, there is no single state map
@@ -273,7 +273,7 @@ that represents the merged particle group. In that case, establish a new
 single-state consensus with:
 
 ```bash
-simple_exec prg=abinitio3D \
+simple_exec prg=solve3D \
   projfile=<MERGED_STATE_SELECTION_PROJECT.simple> \
   nstates=1 pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
@@ -291,7 +291,7 @@ Run `refine3D_states` from the clean single-state project:
 
 ```bash
 simple_exec prg=refine3D_states \
-  projfile=<SINGLE_STATE_ABINITIO3D_PROJECT.simple> \
+  projfile=<SINGLE_STATE_SOLVE3D_PROJECT.simple> \
   nstates=<NUMBER_OF_STATES> pose_policy=global \
   pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
@@ -392,9 +392,9 @@ nparts:
 nthr:
 
 Accepted sieving project (or STREAM):
-Accepted abinitio2D project, run 1:
-Accepted abinitio2D project, run 2:
-Initial abinitio3D cleanup project:
+Accepted solve2D project, run 1:
+Accepted solve2D project, run 2:
+Initial solve3D cleanup project:
 State retained from cleanup, or states merged:
 Merged-state selection project, if applicable:
 State-continuation or single-state consensus project:
@@ -412,9 +412,9 @@ State | selected project | matching recvol_stateNN.mrc | refine3D_auto project
 - **Running offline sieving after SIMPLE stream:** this repeats a cleanup stage
   unnecessarily and can remove useful particles.
 - **Treating cleanup states as final biology:** the initial three-state
-  `abinitio3D` is primarily for separating useful particles from junk.
-- **Repeating ab initio unnecessarily:** when retaining one cleanup state, use
-  `abinitio3D state=N`; do not start over or also supply `vol1`.
+  `solve3D` is primarily for separating useful particles from junk.
+- **Repeating solve3D unnecessarily:** when retaining one cleanup state, use
+  `solve3D state=N`; do not start over or also supply `vol1`.
 - **Skipping the clean consensus:** whether continued from one state or rebuilt
   after merging states, `refine3D_states` needs a common map and pose scaffold.
 - **Selecting from an already selected project:** make every independent state
@@ -428,7 +428,7 @@ State | selected project | matching recvol_stateNN.mrc | refine3D_auto project
 
 ## Appendix: training a data-set-specific 2D rejection model
 
-This optional route is useful when many comparable `abinitio2D_chunks`
+This optional route is useful when many comparable `solve2D_chunks`
 outputs must be screened consistently.
 
 ### A. Manually label representative projects
@@ -478,7 +478,7 @@ imaging regime should not silently become a universal model.
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=apply infile=<DATASET_QUALITY_MODEL.txt> \
-  projfile=<ABINITIO2D_CHUNK_PROJECT.simple> \
+  projfile=<SOLVE2D_CHUNK_PROJECT.simple> \
   mskdiam=<MASK_DIAMETER_A> prune=yes
 ```
 

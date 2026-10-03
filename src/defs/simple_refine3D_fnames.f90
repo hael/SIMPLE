@@ -222,14 +222,14 @@ contains
         fname = refine3D_trail_rec_fbody(state)//TXT_EXT
     end function refine3D_trail_manifest_fname
 
-    ! abinitio3D_addon frozen contributions. The run-level context ties every
+    ! solve3D_addon frozen contributions. The run-level context ties every
     ! frozen set of one add-on run to its run identifier; the per-state sets
     ! carry their consuming box in the name, so a consumer selects its set by
     ! its own box_crop. None of these contain the VOL_FBODY or trailrec stems,
     ! so partial-reconstruction globs, chain validation and cleanup never
     ! match them.
     type(string) function refine3D_frozen_context_fname() result(fname)
-        fname = string('abinitio3D_addon_frozen_context')//TXT_EXT
+        fname = string('solve3D_addon_frozen_context')//TXT_EXT
     end function refine3D_frozen_context_fname
 
     !> Gridding frozen set: <fbody>_{even,odd}.mrc and rho_<fbody>_{even,odd}.mrc

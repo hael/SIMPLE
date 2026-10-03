@@ -1,8 +1,8 @@
 !@descr: on-disk cache of noise-normalized, Fourier-cropped particles for the 2D matcher workflows
 ! An entry is the iteration-independent prefix of prepimg4align (noise norm vs lmsk, FFT, clip to box_crop),
-! stored in real space (exact round trip). Covers every active particle. Read by prob_tab2D and cluster2D_exec;
+! stored in real space (exact round trip). Covers every active particle. Read by prob_tab2D and refine2D_exec;
 ! restoration then runs at box_crop with no second normalization (cavger_init_online(cropped_ptcls=.true.)).
-! refine3D and abinitio3D reject cache=yes. Contract: doc/policies/2D/particle_cache_policy.md
+! refine3D and solve3D reject cache=yes. Contract: doc/policies/2D/particle_cache_policy.md
 module simple_ptcl_cache
 use simple_pftc_srch_api
 use simple_builder,           only: builder

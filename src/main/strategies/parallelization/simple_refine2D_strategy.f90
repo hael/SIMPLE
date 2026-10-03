@@ -1,0 +1,649 @@
+!@descr: refine2D execution strategies: shared memory and distributed master
+module simple_refine2D_strategy
+use simple_core_module_api
+use simple_builder,     only: builder
+use simple_parameters,  only: parameters
+use simple_cmdline,     only: cmdline
+use simple_qsys_env,    only: qsys_env
+use simple_convergence, only: convergence
+use simple_matcher_smpl_and_lplims, only: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, &
+    &refine2D_blends_carryover
+use simple_cavg_sums,   only: cavg_sums, cavg_contrib_fname, CAVG_SUMS_STATE, CAVG_SUMS_OK
+use simple_ptcl_cache,  only: ptcl_cache_ensure
+use simple_gui_utils,   only: mrc2jpeg_tiled
+use simple_progress,    only: progressfile_update
+use simple_euclid_sigma2, only: sigma2_group_iter
+use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
+    &sigma2_state_range_path, sigma2_state_next_generation
+implicit none
+
+public :: refine2D_strategy, refine2D_inmem_strategy, refine2D_distr_strategy, create_refine2D_strategy
+private
+#include "simple_local_flags.inc"
+
+!> Minimal strategy interface - only divergent operations
+type, abstract :: refine2D_strategy
+contains
+    procedure(init_interface),          deferred :: initialize
+    procedure(exec_iter_interface),     deferred :: execute_iteration
+    procedure(finalize_iter_interface), deferred :: finalize_iteration
+    procedure(finalize_run_interface),  deferred :: finalize_run
+    procedure(cleanup_interface),       deferred :: cleanup
+end type refine2D_strategy
+
+type, extends(refine2D_strategy) :: refine2D_inmem_strategy
+    type(convergence) :: conv
+contains
+    procedure :: initialize         => inmem_initialize
+    procedure :: execute_iteration  => inmem_execute_iteration
+    procedure :: finalize_iteration => inmem_finalize_iteration
+    procedure :: finalize_run       => inmem_finalize_run
+    procedure :: cleanup            => inmem_cleanup
+end type refine2D_inmem_strategy
+
+type, extends(refine2D_strategy) :: refine2D_distr_strategy
+    type(qsys_env)     :: qenv
+    type(chash)        :: job_descr
+    type(convergence)  :: conv
+    integer            :: nthr_master
+contains
+    procedure :: initialize         => distr_initialize
+    procedure :: execute_iteration  => distr_execute_iteration
+    procedure :: finalize_iteration => distr_finalize_iteration
+    procedure :: finalize_run       => distr_finalize_run
+    procedure :: cleanup            => distr_cleanup
+end type refine2D_distr_strategy
+
+abstract interface
+    subroutine init_interface(self, params, build, cline)
+        import :: refine2D_strategy, parameters, builder, cmdline
+        class(refine2D_strategy), intent(inout) :: self
+        type(parameters),          intent(inout) :: params
+        type(builder),             intent(inout) :: build
+        type(cmdline),             intent(inout) :: cline
+    end subroutine init_interface
+
+    subroutine exec_iter_interface(self, params, build, cline, converged)
+        import :: refine2D_strategy, parameters, builder, cmdline
+        class(refine2D_strategy), intent(inout) :: self
+        type(parameters),          intent(inout) :: params
+        type(builder),             intent(inout) :: build
+        type(cmdline),             intent(inout) :: cline
+        logical,                   intent(out)   :: converged
+    end subroutine exec_iter_interface
+
+    subroutine finalize_iter_interface(self, params, build)
+        import :: refine2D_strategy, parameters, builder
+        class(refine2D_strategy), intent(inout) :: self
+        type(parameters),          intent(in)    :: params
+        type(builder),             intent(inout) :: build
+    end subroutine finalize_iter_interface
+
+    subroutine finalize_run_interface(self, params, build, cline)
+        import :: refine2D_strategy, parameters, builder, cmdline
+        class(refine2D_strategy), intent(inout) :: self
+        type(parameters),          intent(in)    :: params
+        type(builder),             intent(inout) :: build
+        type(cmdline),             intent(inout) :: cline
+    end subroutine finalize_run_interface
+
+    subroutine cleanup_interface(self, params)
+        import :: refine2D_strategy, parameters
+        class(refine2D_strategy), intent(inout) :: self
+        type(parameters),          intent(in)    :: params
+    end subroutine cleanup_interface
+end interface
+
+contains
+
+    !> Strategy selection based on command-line shape.
+    function create_refine2D_strategy(cline) result(strategy)
+        class(cmdline),   intent(in) :: cline
+        class(refine2D_strategy), allocatable :: strategy
+        if( cline%defined('nparts') .and. (.not.cline%defined('part')) )then
+            allocate(refine2D_distr_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED EXECUTION'
+        else
+            allocate(refine2D_inmem_strategy :: strategy)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY EXECUTION'
+        endif
+    end function create_refine2D_strategy
+
+    ! ======================================================================
+    ! SHARED-MEMORY STRATEGY METHODS
+    ! ======================================================================
+
+    subroutine inmem_initialize(self, params, build, cline)
+        class(refine2D_inmem_strategy), intent(inout) :: self
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        type(cmdline),                   intent(inout) :: cline
+        integer :: startit
+        call cline%set('outfile', ALGN_FBODY//int2str_pad(params%part,params%numlen)//METADATA_EXT)
+        call params%new(cline)
+        call build%build_spproj(params, cline, wthreads=.true.)
+        call build%build_general_tbox(params, cline, do3d=.false.)
+        call build%build_strategy2D_tbox(params)
+        if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
+        call cline%set('mkdir', 'no')
+        params%which_iter = max(1, params%startit)
+        call init_refine2D_refs(cline, params, build)
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
+        startit = 1
+        if( cline%defined('startit') )startit = params%startit
+        if( startit == 1 )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
+        ! once per refine2D invocation, before any iteration reads particles; may
+        ! fall back to cache=no on cline, which child commands inherit via their copy
+        call ptcl_cache_ensure(params, build, cline)
+    end subroutine inmem_initialize
+
+    subroutine inmem_execute_iteration( self, params, build, cline, converged)
+        use simple_strategy2D_matcher, only: refine2D_exec
+        use simple_starproject,        only: starproject
+        use simple_commanders_euclid,  only: commander_calc_group_sigmas
+        use simple_commanders_prob,    only: commander_prob_align2D
+        class(refine2D_inmem_strategy), intent(inout) :: self
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        type(cmdline),                   intent(inout) :: cline
+        logical,                         intent(out)   :: converged
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_prob_align2D)      :: xprob_align2D
+        type(starproject) :: starproj
+        type(cmdline)     :: cline_prob_align
+        real              :: update_frac_req
+        logical           :: l_full_update, l_update_frac_req
+        call self%conv%print_iteration(params%which_iter)
+        call cline%set('startit',    params%startit)
+        call cline%set('which_iter', params%which_iter)
+        call cline%set('extr_iter',  params%extr_iter)
+        ! without usable carried class sums this iteration updates every particle
+        l_full_update = carryover_needs_full_update(params)
+        if( l_full_update )then
+            update_frac_req     = params%update_frac
+            l_update_frac_req   = params%l_update_frac
+            params%update_frac   = 1.0
+            params%l_update_frac = .false.
+        endif
+        if( params%l_prob_align_mode )then
+            cline_prob_align = cline
+            call cline_prob_align%set('prg', 'prob_align2D')
+            call cline_prob_align%set('which_iter', params%which_iter)
+            call cline_prob_align%set('startit',    params%startit)
+            if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
+            call build%spproj%write_segment_inside(params%oritype)
+            call xprob_align2D%execute(cline_prob_align)
+            call build%spproj%read_segment(params%oritype, params%projfile)
+        endif
+        ! main clustering/alignment step
+        if( params%cc_objfun==OBJFUN_EUCLID )then
+            call prepare_canonical_sigma_update(params, build)
+        endif
+        call refine2D_exec(params, build, cline, params%which_iter, converged)
+        if( l_full_update )then
+            params%update_frac   = update_frac_req
+            params%l_update_frac = l_update_frac_req
+        endif
+        ! Euclid sigma2 consolidation for next iteration
+        if( params%cc_objfun==OBJFUN_EUCLID )then
+            call cline%set('which_iter', sigma2_group_iter(params%which_iter, matcher_completed=.true.))
+            call xcalc_group_sigmas%execute(cline)
+            call cline%set('which_iter', params%which_iter)
+        endif
+        ! Write starfile
+        call starproj%export_cls2D(build%spproj, params%which_iter)
+        ! cleanup
+        call starproj%kill
+        call cline_prob_align%kill
+    end subroutine inmem_execute_iteration
+
+    subroutine inmem_finalize_iteration( self, params, build)
+        class(refine2D_inmem_strategy), intent(inout)   :: self
+        type(parameters),                intent(in)     :: params
+        type(builder),                   intent(inout)  :: build
+        call gen_jpeg(params%which_iter) 
+    end subroutine inmem_finalize_iteration
+
+    subroutine inmem_cleanup( self, params)
+        class(refine2D_inmem_strategy), intent(inout) :: self
+        type(parameters),                intent(in)    :: params
+        ! No cleanup needed for in-memory strategy, but could add here if needed in the future
+    end subroutine inmem_cleanup
+
+    subroutine inmem_finalize_run( self, params, build, cline )
+        class(refine2D_inmem_strategy), intent(inout) :: self
+        type(parameters),                intent(in)    :: params
+        type(builder),                   intent(inout) :: build
+        type(cmdline),                   intent(inout) :: cline
+        type(string) :: finalcavgs
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            if( file_exists(FRCS_FILE) )then
+                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+            endif
+            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+            call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            call finalcavgs%kill
+            call build%spproj%write_segment_inside('out', params%projfile)
+        endif
+        call cline%set('endit', params%which_iter)
+    end subroutine inmem_finalize_run
+
+    ! ======================================================================
+    ! DISTRIBUTED STRATEGY METHODS
+    ! ======================================================================
+
+    subroutine distr_initialize( self, params, build, cline )
+        use simple_exec_helpers, only: set_master_num_threads
+        class(refine2D_distr_strategy), intent(inout) :: self
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        type(cmdline),                   intent(inout) :: cline
+        call params%new(cline)
+        call build%build_spproj(params, cline, wthreads=.true.)
+        call build%build_general_tbox(params, cline, do3d=.false.)
+        call build%build_strategy2D_tbox(params)
+        if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
+        call cline%set('mkdir', 'no')
+        params%which_iter = max(1, params%startit)
+        call init_refine2D_refs(cline, params, build)
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
+        if( params%startit == 1 )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
+        ! master-side, before any job is scheduled, so the workers find it ready;
+        ! must precede gen_job_descr below so a fallback to cache=no reaches the
+        ! worker command lines
+        call ptcl_cache_ensure(params, build, cline)
+        call set_master_num_threads(self%nthr_master, string('REFINE2D'))
+        call self%qenv%new(params, params%nparts)
+        call cline%gen_job_descr(self%job_descr)
+    end subroutine distr_initialize
+
+    subroutine distr_execute_iteration( self, params, build, cline, converged )
+        use simple_stream_utils,         only: terminate_stream
+        use simple_commanders_euclid,    only: commander_calc_group_sigmas
+        use simple_commanders_prob,      only: commander_prob_align2D
+        class(refine2D_distr_strategy), intent(inout) :: self
+        type(parameters),                intent(inout) :: params
+        type(builder),                   intent(inout) :: build
+        type(cmdline),                   intent(inout) :: cline
+        logical,                         intent(out)   :: converged
+        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_prob_align2D)      :: xprob_align2D
+        type(cmdline)                     :: cline_calc_sigma, cline_prob_align
+        type(string)                      :: update_frac_req
+        real                              :: frac_srch_space
+        integer                           :: n_unassigned
+        logical                           :: l_full_assignment, l_full_update, l_update_frac_key
+        call self%conv%print_iteration(params%which_iter)
+        ! Update job description
+        call cline%set('nparts',     params%nparts)
+        call cline%set('startit',    params%startit)
+        call cline%set('which_iter', params%which_iter)
+        call cline%set('extr_iter',  params%extr_iter)
+        call self%job_descr%set('refs',       params%refs)
+        call self%job_descr%set('nparts',     int2str(params%nparts))
+        call self%job_descr%set('startit',    int2str(params%startit))
+        call self%job_descr%set('which_iter', int2str(params%which_iter))
+        call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
+        call self%job_descr%set('frcs',       FRCS_FILE)
+        call cleanup_distributed_iteration_artifacts(params)
+        ! without usable carried class sums this iteration updates every particle
+        l_full_update     = carryover_needs_full_update(params)
+        l_update_frac_key = self%job_descr%isthere('update_frac')
+        if( l_full_update )then
+            if( l_update_frac_key ) update_frac_req = self%job_descr%get('update_frac')
+            call self%job_descr%set('update_frac', '1.0')
+        endif
+        if( params%l_prob_align_mode )then
+            cline_prob_align = cline
+            call cline_prob_align%set('prg', 'prob_align2D')
+            call cline_prob_align%set('which_iter', params%which_iter)
+            call cline_prob_align%set('startit',    params%startit)
+            if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
+            call build%spproj%write_segment_inside(params%oritype)
+            call xprob_align2D%execute(cline_prob_align)
+            call build%spproj%read_segment(params%oritype, params%projfile)
+        endif
+        ! The master creates one generation-scoped candidate after every
+        ! project-state update and before workers read the committed state.
+        ! Each worker emits only its exclusive global particle range; the
+        ! calc_group_sigmas barrier below validates exact coverage and is the
+        ! sole owner of grouped reduction and atomic publication.
+        if( params%cc_objfun==OBJFUN_EUCLID )then
+            call prepare_canonical_sigma_update(params, build)
+        endif
+        ! Schedule distributed jobs
+        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, &
+                                                     algnfbody=string(ALGN_FBODY), &
+                                                     array=L_USE_SLURM_ARR, &
+                                                     extra_params=params)
+        call terminate_stream(params, 'SIMPLE_DISTR_REFINE2D HARD STOP 1')
+        if( l_full_update )then
+            if( l_update_frac_key )then
+                call self%job_descr%set('update_frac', update_frac_req%to_char())
+            else
+                call self%job_descr%delete('update_frac')
+            endif
+        endif
+        ! Merge alignment docs
+        call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY)
+        ! Assemble class averages
+        if( trim(params%restore_cavgs) .eq. 'yes' )then
+            call run_distributed_cavg_assembly(params, cline, self%nthr_master)
+            call build%spproj%read_segment(params%oritype, params%projfile)
+        endif
+        ! Sigma2 consolidation
+        if( params%cc_objfun==OBJFUN_EUCLID )then
+            cline_calc_sigma = cline
+            call cline_calc_sigma%set('prg',        'calc_group_sigmas')
+            call cline_calc_sigma%set('which_iter', sigma2_group_iter(params%which_iter, matcher_completed=.true.))
+            call cline_calc_sigma%set('nthr',       self%nthr_master)
+            call xcalc_group_sigmas%execute(cline_calc_sigma)
+        endif
+        ! Check convergence
+        converged = self%conv%check_conv2D(params, cline, build%spproj_field, &
+                                           build%spproj_field%get_n('class'), params%msk)
+        if( trim(params%stream2d).eq.'no' ) call progressfile_update(self%conv%get('progress'))
+        frac_srch_space = 0.
+        if( params%which_iter > 1 ) frac_srch_space = self%conv%get('frac_srch')
+        ! Activate shift search if needed
+        if( params%which_iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. params%l_doshift) )then
+            if( .not. self%job_descr%isthere('trs') )then
+                call self%job_descr%set('trs', real2str(params%trs))
+            endif
+        endif
+        converged = (params%which_iter >= params%minits) .and. converged
+        converged = converged .or. (params%which_iter >= params%maxits)
+        if( refine2D_requires_full_assignment(params) )then
+            l_full_assignment = all_active_ptcls_2D_assigned(build%spproj_field, [params%fromp,params%top], n_unassigned)
+            if( .not. l_full_assignment )then
+                write(logfhandle,'(A,I8)') &
+                    '>>> REFINE2D FULL-ASSIGNMENT COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
+            endif
+            converged = converged .and. l_full_assignment
+        endif
+    end subroutine distr_execute_iteration
+
+    subroutine distr_finalize_iteration( self, params, build )
+        class(refine2D_distr_strategy), intent(inout) :: self
+        type(parameters),                intent(in)    :: params
+        type(builder),                   intent(inout) :: build
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        call gen_jpeg(params%which_iter)
+    end subroutine distr_finalize_iteration
+
+    subroutine distr_cleanup( self, params )
+        use simple_qsys_funs, only: qsys_cleanup
+        class(refine2D_distr_strategy), intent(inout) :: self
+        type(parameters),                intent(in)    :: params
+        call self%qenv%kill()
+        call qsys_cleanup(params)
+        call self%job_descr%kill
+    end subroutine distr_cleanup
+
+    subroutine distr_finalize_run( self, params, build, cline )
+        class(refine2D_distr_strategy), intent(inout) :: self
+        type(parameters),                intent(in)    :: params
+        type(builder),                   intent(inout) :: build
+        type(cmdline),                   intent(inout) :: cline
+        type(string) :: finalcavgs
+        if( trim(params%restore_cavgs).eq.'yes' )then
+            if( file_exists(FRCS_FILE) )then
+                call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
+            endif
+            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+            call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
+            call finalcavgs%kill
+            call build%spproj%write_segment_inside('out', params%projfile)
+        endif
+        call cline%set('endit', params%which_iter)
+    end subroutine distr_finalize_run
+
+    ! private helpers
+
+    subroutine prepare_canonical_sigma_update( params, build )
+        use, intrinsic :: iso_fortran_env, only: int64
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(string) :: state_path, candidate_path, range_path
+        integer(int64) :: next_gen
+        integer :: ipart, status
+        logical :: found
+        character(len=STDLEN) :: message
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
+        ! transaction-scoped names (see the refine3D strategy)
+        call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
+        do ipart = 1, params%nparts
+            range_path = sigma2_state_range_path(state_path%to_char(), next_gen, ipart, params%numlen)
+            call del_file(range_path)
+        enddo
+        call sigma2_state_prepare_update(state_path%to_char(), candidate_path%to_char(), status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        call state_path%kill
+        call candidate_path%kill
+        call range_path%kill
+    end subroutine prepare_canonical_sigma_update
+
+    !> Initialize references for refine2D (used by inmem and distr modes).
+    subroutine init_refine2D_refs( cline, params, build )
+        use simple_procimgstk,         only: copy_imgfile
+        use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr
+        use simple_commanders_imgops,  only: commander_scale
+        class(cmdline),   intent(inout) :: cline
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        type(commander_scale) :: xscale
+        type(cmdline)         :: cline_make_cavgs, cline_scalerefs
+        type(string)          :: refs_sc
+        logical               :: l_scale_inirefs
+        if( cline%defined('refs') ) return
+        cline_make_cavgs = cline
+        params%refs      = 'start2Drefs'     //MRC_EXT
+        params%refs_even = 'start2Drefs_even'//MRC_EXT
+        params%refs_odd  = 'start2Drefs_odd' //MRC_EXT
+        l_scale_inirefs  = .false.
+        if( build%spproj%is_virgin_field('ptcl2D') .or. params%which_iter <= 1 )then
+            if( params%tseries .eq. 'yes' )then
+                call init_tseries_refs(cline, params, build, cline_make_cavgs, l_scale_inirefs)
+            else
+                call init_standard_refs(cline, params, build, cline_make_cavgs, l_scale_inirefs)
+            endif
+        else
+            call cline_make_cavgs%set('refs', params%refs)
+            call execute_make_cavgs(cline_make_cavgs, cline, params)
+            l_scale_inirefs = .false.
+        endif
+        if( l_scale_inirefs )then
+            refs_sc = 'refs'//SCALE_SUFFIX//MRC_EXT
+            call cline_scalerefs%set('stk',    params%refs)
+            call cline_scalerefs%set('outstk', refs_sc)
+            call cline_scalerefs%set('smpd',   params%smpd)
+            call cline_scalerefs%set('newbox', params%box_crop)
+            call xscale%execute(cline_scalerefs)
+            call simple_rename(refs_sc, params%refs)
+        endif
+        call copy_imgfile(params%refs, params%refs_even, params%smpd_crop, [1,params%ncls])
+        call copy_imgfile(params%refs, params%refs_odd,  params%smpd_crop, [1,params%ncls])
+        call cline%set('refs', params%refs)
+        call cline_make_cavgs%kill
+        call cline_scalerefs%kill
+        call refs_sc%kill
+    end subroutine init_refine2D_refs
+
+    subroutine cleanup_distributed_iteration_artifacts( params )
+        type(parameters), intent(in) :: params
+        integer :: ipart
+        call del_files(DIST_FBODY,      params%nparts, ext='.dat')
+        call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
+        call del_file(DIST_FBODY//'.dat')
+        call del_file(ASSIGNMENT_FBODY//'.dat')
+        ! stale current-iteration class-sum contributions; the carried set stays
+        do ipart = 1, params%nparts
+            call del_file(cavg_contrib_fname(ipart))
+        enddo
+    end subroutine cleanup_distributed_iteration_artifacts
+
+    !> A refine2D iteration that blends carried class sums needs a usable carried set: one
+    !! that exists, reads back whole and matches the run's classes, box and sampling. Without
+    !! one the iteration runs as a full update (every particle, no carry-over), as a fresh start
+    !! does. Owner-side check: workers never read carried state.
+    logical function carryover_needs_full_update( params ) result( l_full )
+        type(parameters), intent(in) :: params
+        type(cavg_sums) :: carried
+        integer         :: status
+        l_full = .false.
+        if( trim(params%restore_cavgs) /= 'yes' ) return
+        if( .not. refine2D_blends_carryover(params, params%which_iter) ) return
+        call carried%read(string(CAVG_STATE_FILE), CAVG_SUMS_STATE, status)
+        if( status == CAVG_SUMS_OK ) l_full = .not. carried%matches(params%ncls, params%box_crop, params%smpd_crop)
+        if( status /= CAVG_SUMS_OK ) l_full = .true.
+        call carried%kill
+        if( l_full ) write(logfhandle,'(A)') '>>> REFINE2D: NO USABLE CARRIED CLASS SUMS; THIS ITERATION IS A FULL UPDATE'
+    end function carryover_needs_full_update
+
+    subroutine run_distributed_cavg_assembly( params, cline, nthr_master )
+        use simple_commanders_mkcavgs, only: commander_cavgassemble
+        use simple_stream_utils,       only: terminate_stream
+        type(parameters), intent(inout) :: params
+        type(cmdline),    intent(inout) :: cline
+        integer,          intent(in)    :: nthr_master
+        type(commander_cavgassemble) :: xcavgassemble
+        type(cmdline)                :: cline_cavgassemble
+        type(string)                 :: str_iter
+        str_iter   = int2str_pad(params%which_iter, 3)
+        params%refs      = CAVGS_ITER_FBODY // str_iter%to_char()            // MRC_EXT
+        params%refs_even = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // MRC_EXT
+        params%refs_odd  = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // MRC_EXT
+        call cline%set('refs', params%refs)
+        cline_cavgassemble = cline
+        call cline_cavgassemble%set('prg',  'cavgassemble')
+        call cline_cavgassemble%delete('which_iter')
+        call cline_cavgassemble%set('refs', params%refs)
+        call cline_cavgassemble%set('nthr', nthr_master)
+        call terminate_stream(params, 'SIMPLE_DISTR_REFINE2D HARD STOP 2')
+        call xcavgassemble%execute(cline_cavgassemble)
+        call cline_cavgassemble%kill
+        call str_iter%kill
+    end subroutine run_distributed_cavg_assembly
+
+    subroutine init_tseries_refs( cline, params, build, cline_make_cavgs, l_scale_inirefs )
+        use simple_procimgstk, only: selection_from_tseries_imgfile
+        class(cmdline),   intent(inout) :: cline
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        type(cmdline),    intent(inout) :: cline_make_cavgs
+        logical,          intent(out)   :: l_scale_inirefs
+        integer :: cnt, iptcl, ptclind
+        if( cline%defined('nptcls_per_cls') )then
+            if( build%spproj%os_ptcl2D%any_state_zero() )then
+                THROW_HARD('refine2D_nano does not allow state=0 particles, prune project before execution')
+            endif
+            cnt = 0
+            do iptcl=1,params%nptcls,params%nptcls_per_cls
+                cnt = cnt + 1
+                params%ncls = cnt
+                do ptclind=iptcl,min(params%nptcls, iptcl + params%nptcls_per_cls - 1)
+                    call build%spproj%os_ptcl2D%set(ptclind, 'class', cnt)
+                end do
+            end do
+            call cline%set('ncls', params%ncls)
+            call cline_make_cavgs%set('ncls', params%ncls)
+            call cline_make_cavgs%set('refs', params%refs)
+            call execute_make_cavgs(cline_make_cavgs, cline, params)
+            l_scale_inirefs = .false.
+        else
+            if( trim(params%refine).eq.'inpl' )then
+                params%ncls = build%spproj%os_ptcl2D%get_n('class')
+                call cline%set('ncls', params%ncls)
+                call cline_make_cavgs%set('ncls', params%ncls)
+                call cline_make_cavgs%delete('tseries')
+                call cline_make_cavgs%set('refs', params%refs)
+                call execute_make_cavgs(cline_make_cavgs, cline, params)
+                l_scale_inirefs = .false.
+            else
+                call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                l_scale_inirefs = .true.
+            endif
+        endif
+    end subroutine init_tseries_refs
+
+    subroutine init_standard_refs( cline, params, build, cline_make_cavgs, l_scale_inirefs )
+        use simple_procimgstk, only: random_selection_from_imgfile, noise_imgfile
+        class(cmdline),   intent(inout) :: cline
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        type(cmdline),    intent(inout) :: cline_make_cavgs
+        logical,          intent(out)   :: l_scale_inirefs
+        integer :: iptcl
+        select case(trim(params%cls_init))
+            case('ptcl')
+                call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                l_scale_inirefs = .true.
+            case('rand')
+                call noise_imgfile(params%refs, params%ncls, params%box_crop, params%smpd_crop)
+                l_scale_inirefs = .false.
+            case('randcls')
+                if(.not.cline%defined('ncls')) THROW_HARD('NCLS must be provide with CLS_INIT=RANDCLS')
+                do iptcl=1,params%nptcls
+                    if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+                    call build%spproj_field%set(iptcl, 'class', irnd_uni(params%ncls))
+                    call build%spproj_field%e3set(iptcl,ran3()*360.0)
+                end do
+                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+                call cline_make_cavgs%set('refs', params%refs)
+                call execute_make_cavgs(cline_make_cavgs, cline, params)
+                l_scale_inirefs = .false.
+            case('prev')
+                THROW_HARD('CLS_INIT=PREV is a solve2D seeded restart; refine2D does not support it')
+            case DEFAULT
+                THROW_HARD('Unsupported mode of initial class generation CLS_INIT='//trim(params%cls_init))
+        end select
+    end subroutine init_standard_refs
+
+    subroutine execute_make_cavgs( cline_make_cavgs, cline, params)
+        use simple_commanders_mkcavgs, only: commander_make_cavgs, commander_make_cavgs_distr
+        type(cmdline),    intent(inout) :: cline_make_cavgs
+        class(cmdline),   intent(in)    :: cline
+        type(parameters), intent(in)    :: params
+        type(commander_make_cavgs)       :: xmake_cavgs
+        type(commander_make_cavgs_distr) :: xmake_cavgs_distr
+        call cline_make_cavgs%set('prg', 'make_cavgs')
+        if( (params%nparts > 1) .and. (.not.cline%defined('part')) )then
+            call xmake_cavgs_distr%execute(cline_make_cavgs)
+        else
+            call xmake_cavgs%execute(cline_make_cavgs)
+        endif
+    end subroutine execute_make_cavgs
+
+    subroutine gen_jpeg( which_iter ) 
+        integer, intent(in) :: which_iter
+        type(string) :: str_iter, fbody, mrc, jpg
+        ! Generate JPEG
+        str_iter = int2str_pad(which_iter, 3)
+        fbody = string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()
+        mrc   = fbody//MRC_EXT
+        jpg   = fbody//JPG_EXT
+        if( file_exists(mrc) )then
+            call mrc2jpeg_tiled(mrc, jpg)
+            write(logfhandle,'(A,A)') '>>> JPEG ', jpg%to_char()
+        endif
+        call str_iter%kill
+        call fbody%kill
+        call mrc%kill
+        call jpg%kill
+    end subroutine gen_jpeg
+
+end module simple_refine2D_strategy

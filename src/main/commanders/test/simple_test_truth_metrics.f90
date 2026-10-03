@@ -1,5 +1,5 @@
 !@descr: workflow-gate metrics against a simulation truth: maps docked in both hands, correlation, masked FSC and frame-free pose error
-! Ab initio maps have an arbitrary orientation and hand, so a map is docked in both hands
+! De novo maps (solve3D) have an arbitrary orientation and hand, so a map is docked in both hands
 ! (dock_both_hands) before compare_to_truth scores it: whole-volume or, with corr_lp, common-mask
 ! correlation, plus masked FSC. pair_pose_error needs no docking: relative rotation angles over
 ! particle pairs are invariant to a global rotation or reflection of the frame.

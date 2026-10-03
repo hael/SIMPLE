@@ -480,7 +480,7 @@ contains
                     end if
                 else
                     ! non-final stages only ever get a per-stage lowpass snapshot,
-                    ! e.g. recvol_state01_stage03_lp.mrc (simple_abinitio_utils exec_refine3D);
+                    ! e.g. recvol_state01_stage03_lp.mrc (simple_solve3D_utils exec_refine3D);
                     ! volpath/pprocpath/pprocmirrpath are final-only products, withheld here
                     volpath_out   = string('')
                     lppath        = add2fbody(volpath, MRC_EXT, '_stage'//int2str_pad(nstage2D,2)//LP_SUFFIX)
@@ -489,7 +489,7 @@ contains
                 end if
                 if( .not. file_exists(lppath) ) lppath = string('')
                 ! orthogonal reprojections + orientation-distribution heatmap jpegs, written
-                ! alongside the volume (mirrors simple_stream_p07_abinitio3D_multistate's locate_state_jpeg)
+                ! alongside the volume (mirrors simple_stream_p07_solve3D_multistate's locate_state_jpeg)
                 reprojpath = get_fpath(volpath) // string('orthogonal_reprojs_state') // int2str_pad(istate3D,2) // JPG_EXT
                 if( .not. file_exists(reprojpath) ) then
                     reprojpath = string('')
@@ -574,7 +574,7 @@ contains
                     call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_reprojtiles(reproj_tiles3D)
                 end if
                 ! bin this state's particle orientations into the azimuth/elevation
-                ! histogram (mirrors simple_stream_p07_abinitio3D_multistate's compute_oridist_for_state)
+                ! histogram (mirrors simple_stream_p07_solve3D_multistate's compute_oridist_for_state)
                 oridist_hist3D = 0
                 do iptcl3D = 1, spproj%os_ptcl3D%get_noris()
                     if( spproj%os_ptcl3D%get_state(iptcl3D) /= istate3D ) cycle

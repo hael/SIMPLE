@@ -116,7 +116,7 @@ def sampled_particles(requested: int, total: int) -> int:
     return total if requested == 0 else min(requested, total)
 
 
-def estimate_abinitio2d(args: argparse.Namespace, model: dict[str, Any]) -> dict[str, Any]:
+def estimate_solve2d(args: argparse.Namespace, model: dict[str, Any]) -> dict[str, Any]:
     c = model["coefficients"]
     nsample = sampled_particles(args.sampled_particles, args.particles)
     raw = (
@@ -130,12 +130,12 @@ def estimate_abinitio2d(args: argparse.Namespace, model: dict[str, Any]) -> dict
         {"particles": args.particles, "box": args.box, "threads": args.threads,
          "references": args.references}, model["calibration"]
     )
-    return result_payload("abinitio2D", model, raw, None, warnings, {
+    return result_payload("solve2D", model, raw, None, warnings, {
         "sampled_particles_effective": nsample,
     })
 
 
-def estimate_abinitio3d(args: argparse.Namespace, model: dict[str, Any]) -> dict[str, Any]:
+def estimate_solve3d(args: argparse.Namespace, model: dict[str, Any]) -> dict[str, Any]:
     c = model["coefficients"]
     nsample = sampled_particles(args.sampled_particles, args.particles)
     mask_mvox = (args.mask_diameter / args.smpd) ** 3 / 1.0e6
@@ -155,7 +155,7 @@ def estimate_abinitio3d(args: argparse.Namespace, model: dict[str, Any]) -> dict
          "partitions": args.partitions, "states": args.states,
          "iterations": 20}, model["calibration"]
     )
-    return result_payload("abinitio3D", model, raw, None, warnings, {
+    return result_payload("solve3D", model, raw, None, warnings, {
         "sampled_particles_effective": nsample,
         "stage1_max_iterations": 20,
     })
@@ -201,14 +201,14 @@ def build_parser() -> argparse.ArgumentParser:
     motion.add_argument("--smpd-downscale", type=positive_float, default=1.3)
     motion.add_argument("--threads", type=positive_int, default=1)
 
-    ab2d = sub.add_parser("abinitio2D")
+    ab2d = sub.add_parser("solve2D")
     ab2d.add_argument("--particles", type=positive_int, required=True)
     ab2d.add_argument("--box", type=positive_int, required=True)
     ab2d.add_argument("--threads", type=positive_int, default=4)
     ab2d.add_argument("--references", type=positive_int, required=True)
     add_common_sample_argument(ab2d)
 
-    ab3d = sub.add_parser("abinitio3D")
+    ab3d = sub.add_parser("solve3D")
     ab3d.add_argument("--particles", type=positive_int, required=True)
     ab3d.add_argument("--box", type=positive_int, required=True)
     ab3d.add_argument("--smpd", type=positive_float, required=True)
@@ -222,8 +222,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 ESTIMATORS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], dict[str, Any]]] = {
     "motion_correct": estimate_motion_correct,
-    "abinitio2D": estimate_abinitio2d,
-    "abinitio3D": estimate_abinitio3d,
+    "solve2D": estimate_solve2d,
+    "solve3D": estimate_solve3d,
 }
 
 

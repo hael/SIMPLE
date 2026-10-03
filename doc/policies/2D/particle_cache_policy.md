@@ -5,7 +5,7 @@
 This document defines the policy for the downscaled particle disk cache
 (`cache=yes`, `cache_dir=<dir>`), implemented in
 `src/main/strategies/search/simple_ptcl_cache.f90` and consumed by the 2D
-matcher workflows only. The 3D workflows (`refine3D` family, `abinitio3D`,
+matcher workflows only. The 3D workflows (`refine3D` family, `solve3D`,
 probabilistic 3D preparation, matcher reconstruction) do not consume the cache
 and reject `cache=yes` with a hard error; caching never worked reliably for 3D
 and was removed from those paths.
@@ -40,7 +40,7 @@ directory).
 
 ## 3. Consumers
 
-- 2D alignment (`prob_tab2D`, `cluster2D_exec` search): exact substitution.
+- 2D alignment (`prob_tab2D`, `refine2D_exec` search): exact substitution.
 - 2D class-average restoration (`cavger_update_sums` with
   `cropped_ptcls=.true.`): deliberate numerics change — edge taper and
   gridding source grid live at `box_crop`, no second noise normalization,
@@ -81,7 +81,7 @@ so a dying worker cannot delete the cache under the other ranks or a
 resubmitted part. Deletion is key-file-first, so a partially completed
 cleanup can never leave a cache that still validates.
 
-`abinitio2D` holds `box_crop` fixed across its stages, so the stable key lets
+`solve2D` holds `box_crop` fixed across its stages, so the stable key lets
 the owner fast path reuse one cache for every stage; there is no per-stage
 invalidation.
 
@@ -143,4 +143,4 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   versus the one-time build, then decline uneconomical caching through the
   existing uniform fallback.
 - **UI promotion**: `cache`/`cache_dir` are `UI_VIS_DEVELOPER`; promote after
-  validation, and consider defaulting `cache=yes` for `abinitio2D`.
+  validation, and consider defaulting `cache=yes` for `solve2D`.

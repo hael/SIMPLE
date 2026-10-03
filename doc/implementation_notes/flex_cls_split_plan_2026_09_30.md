@@ -112,13 +112,13 @@ above the strategy; the new code is one domain module plus one extension of the 
 
 | layer | file | owns | must not |
 |---|---|---|---|
-| ui | `src/main/ui/simple/simple_ui_cluster2D.f90` (`new_cls_split`) | `pca_mode` gains `flex`; help text says `ncls` and `neigs` are required on that path | anything else |
+| ui | `src/main/ui/simple/simple_ui_refine2D.f90` (`new_cls_split`) | `pca_mode` gains `flex`; help text says `ncls` and `neigs` are required on that path | anything else |
 | exec | `src/main/exec/simple_exec_denoise.f90` | unchanged: `cls_split` -> `commander_cls_split` | |
 | commander | `src/main/commanders/simple/simple_commanders_denoise.f90` (`exec_cls_split`) | cmdline normalisation and defaults before `params%new`; the canonical sigma2 state on the master only (workers consume it); the four lifecycle calls; skipping the trailing `make_cavgs` when `pca_mode=flex` | reading part files, numerics |
 | strategy | `src/main/strategies/parallelization/simple_cls_split_strategy.f90` | roles (shmem/master/worker), class partitions, the part-file protocol, the merge, all project writes (`ptcl2D`, `os_cls2D`, out-segment registrations of the cavg stack and the weight files). `split_one_parent_class` becomes a dispatcher: the existing body moves to `split_class_diffmap`, the new `split_class_flex` prepares the inputs (planes, CTFs, sigma2 rows via the class and sigma2 subsystems) and calls the domain | the model, the EM, the averaging |
 | domain | `src/main/flex/simple_flex_cls_split.f90` (new) | `flex_cls_model` and its EM (`fit`), `embed`, `place_states` (k-means + fixed-K GMM through `simple_flex_pca_targets` / `simple_flex_pca_gmm`), `restore_states` (weighted averages). Inputs are arrays: complex planes, CTF planes, sigma2 rows, `ncls`, `neigs`. Outputs: `z`, `weights(ncls,N)`, `labels(N)`, `cavgs(ncls)` as Fourier images | importing `parameters`, `builder`, `sp_project`, `qsys_env`, or any part I/O (the 3D driver `simple_flex_pca_model` does; the 2D module stays pure so the unit test needs no project) |
 | class | `src/main/class/simple_classaverager_restore.f90` (`transform_ptcls`) | the one gridding kernel that puts a member into the class frame; gains an optional Fourier-plane output (unflipped) and the rotated CTF parameters per member. The real-space path is unchanged | knowing about flex |
-| sigma2 | `src/main/sigma2/simple_sigma2_bootstrap.f90` | `ensure_canonical_sigma_state` lifted here from the flex_pca commander. Today three private copies exist (flex_pca commander, rec3D strategy, cluster2D strategy `prepare_canonical_sigma_update`); cls_split calls the lifted one, the other copies can converge later, out of scope | |
+| sigma2 | `src/main/sigma2/simple_sigma2_bootstrap.f90` | `ensure_canonical_sigma_state` lifted here from the flex_pca commander. Today three private copies exist (flex_pca commander, rec3D strategy, refine2D strategy `prepare_canonical_sigma_update`); cls_split calls the lifted one, the other copies can converge later, out of scope | |
 | weights store | `src/main/flex/simple_flex_weights_state.f90` + `sp_project%add_flex_weights2os_out` | reused as is with `os_ptcl2D`; if `flex_weights_consumable` turns out to assume a `vol_flex` sibling, the fix is a `which_imgkind` argument in the flex module, not a project change | a second store |
 | test | `production/tests/simple_test_flex_cls_split.f90` (new) | exercises the domain module alone on synthetic planes (auto-globbed, no CMake edit) | project fixtures |
 | docs | `src/main/flex/README.md`, this note | | |
@@ -166,7 +166,7 @@ against the particle read, so a class is never split across workers.
 3. 10028 8000-particle reference run (`/mnt/beegfs/elmlund/afan/10028/flex2D_tests/ref.simple`):
    `ncls=2 neigs=4` on every class; do the two sub-averages differ visibly, and how do their
    weights split (a 50/50 split on a homogeneous class is the null result to expect).
-4. Synthetic 50/50 mix (EMD-8440 vs 8445, `t4_mix5050`): abinitio2D's 60 classes are all ~50/50;
+4. Synthetic 50/50 mix (EMD-8440 vs 8445, `t4_mix5050`): solve2D's 60 classes are all ~50/50;
    score per-subclass purity after `cls_split pca_mode=flex` against the existing
    `pca_mode=diffusion_maps` on the same run. This is the decision test.
 5. EMPIAR-10076 with the published per-particle labels (`labels/real_recall.py`): purity/NMI per
@@ -189,7 +189,7 @@ against the particle read, so a class is never split across workers.
 
 - `cls_split pca_mode=flex` (recommended: reuses scheduling, merge, and the project contract) versus a
   separate `flex_cls_split` program (cleaner ownership, duplicated master/worker plumbing).
-- Whether the weighted averages should also be re-centred per subclass (cluster2D centres its
+- Whether the weighted averages should also be re-centred per subclass (refine2D centres its
   averages every iteration; cls_split does not).
 - Whether to expose the soft weights to `map2ptcls`/selection downstream, or leave the hard labels
   as the only consumed output for now.

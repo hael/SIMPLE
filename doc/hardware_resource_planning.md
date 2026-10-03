@@ -30,7 +30,7 @@ SIMPLE already contains the following pieces of the resource model:
 - `memreport=yes memreport_interval=<seconds>` writes per-process current and
   peak RSS samples to `memory_usage_<pid>.csv`.
 - `scripts/memory_estimator.py` provides calibrated memory estimates for
-  `motion_correct`, `abinitio2D`, and `abinitio3D`. The calibration data,
+  `motion_correct`, `solve2D`, and `solve3D`. The calibration data,
   targets, safety factors, and limitations are described in
   [memory.md](memory.md).
 - `nparts` is the total number of distributed work partitions.
@@ -75,8 +75,8 @@ The current calibrated targets are:
 | Commander | Estimator target |
 | --- | --- |
 | `motion_correct` | single-worker peak RSS |
-| `abinitio2D` | whole-commander peak RSS |
-| `abinitio3D` | conservative parent plus largest `nparts` worker peaks |
+| `solve2D` | whole-commander peak RSS |
+| `solve3D` | conservative parent plus largest `nparts` worker peaks |
 
 ### 3.3 Total work and active work
 
@@ -337,7 +337,7 @@ policy must guarantee their aggregate memory plus the reserve fits that node.
 Compare the estimator's recommended total directly with the memory allocated
 to the entire command. Do not multiply that value by `nparts` or `ncunits`.
 
-The current `abinitio3D` model takes `partitions` and conservatively sums the
+The current `solve3D` model takes `partitions` and conservatively sums the
 largest `nparts` worker peaks. It does not take `ncunits`; therefore it can
 overestimate a throttled run where `ncunits < nparts`. That limitation should
 be removed in a future calibration before automatic planning is enabled.

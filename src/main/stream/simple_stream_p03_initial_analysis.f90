@@ -1,7 +1,7 @@
 !@descr: stream stage 3: two-cycle opening analysis that generates picking references
-! Cycle 1 (NMICS_PLAN(1) mics): segdiam pick -> extract -> abinitio2D -> cavg quality selection.
-! Cycle 2: pick all mics with cycle-1 bins -> ptcl_sieve -> abinitio2D -> quality -> balance_classes
-!          -> abinitio3D_cavgs -> reproject. Exits when done or on a GUI pickrefs selection.
+! Cycle 1 (NMICS_PLAN(1) mics): segdiam pick -> extract -> solve2D -> cavg quality selection.
+! Cycle 2: pick all mics with cycle-1 bins -> ptcl_sieve -> solve2D -> quality -> balance_classes
+!          -> solve3D_cavgs -> reproject. Exits when done or on a GUI pickrefs selection.
 ! GUI: progress on ipc_pipe_initial_analysis_in, selections on ipc_pipe_initial_analysis_out.
 module simple_stream_p03_initial_analysis
 use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR, c_read
@@ -10,8 +10,8 @@ use simple_stream_api
 use simple_stream_state,          only: ipc_pipe_initial_analysis_in, ipc_pipe_initial_analysis_out
 use simple_commanders_pick,       only: commander_extract, commander_reextract
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
-use simple_commanders_abinitio2D, only: commander_abinitio2D
-use simple_commanders_abinitio,   only: commander_abinitio3D_cavgs
+use simple_commanders_solve2D, only: commander_solve2D
+use simple_commanders_solve3D,    only: commander_solve3D_cavgs
 use simple_commanders_reproject,  only: commander_reproject
 use simple_commanders_denoise,    only: commander_cls_split
 use simple_commanders_mkcavgs,    only: commander_make_cavgs
@@ -30,7 +30,7 @@ use simple_fileio,                only: swap_suffix
 use simple_defs,                  only: MSK_EXP_FAC, BOX_EXP_FAC, COSMSKHALFWIDTH, CWD_GLOB
 use simple_defs_fname,            only: DIR_PICKER, DIR_EXTRACT, STREAM_DESELECTED_REFS
 use simple_defs_stream,           only: DIR_STREAM
-use simple_abinitio_utils,        only: abinitio_rec_fbody
+use simple_solve3D_utils,         only: solve3D_rec_fbody
 use simple_gui_metadata_utils,    only: max_metadata_size
 use simple_ptcl_sieve,            only: ptcl_sieve
 use simple_class_compatibility,   only: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
@@ -56,10 +56,10 @@ contains
         class(cmdline),              intent(inout) :: cline
         integer,                   parameter       :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 8, NTHUMB_MAX = 10
         integer,                   parameter       :: NMICS_PLAN(2) = [100, 500]    ! number of micrographs to import for each cycle of the opening2D plan; must have at least 2 steps and no more than 9 (for IPC routing via single-digit cluster counts)]
-        real,                      parameter       :: LPSTOP2D = 8.                 ! low-pass stop resolution (A) for abinitio2D/3D setup
-        integer,                   parameter       :: NSAMPLE2D = 2000              ! number of particles to sample for abinitio2D setup
-        integer,                   parameter       :: NSTATES3D = 3                 ! number of classes for abinitio3D
-        integer,                   parameter       :: NSTAGES3D = 4                 ! number of stages for abinitio3D
+        real,                      parameter       :: LPSTOP2D = 8.                 ! low-pass stop resolution (A) for solve2D/3D setup
+        integer,                   parameter       :: NSAMPLE2D = 2000              ! number of particles to sample for solve2D setup
+        integer,                   parameter       :: NSTATES3D = 3                 ! number of classes for solve3D
+        integer,                   parameter       :: NSTAGES3D = 4                 ! number of stages for solve3D
         character(len=:),          allocatable     :: meta_buffer                   ! serialised GUI metadata message
         character(len=:),          allocatable     :: update_pending
         integer,                   allocatable     :: cycle_plan(:)                 ! tracks which steps of the opening2D plan have been completed
@@ -72,7 +72,7 @@ contains
         type(string)                               :: cur_projname                  ! projname of the project_list record currently being picked+extracted
         type(qsys_env)                             :: qenv
         type(ptcl_sieve)                           :: sieve
-        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_abinitio3D
+        type(cmdline)                              :: cline_extract, cline_solve2D, cline_solve3D
         type(parameters)                           :: params, params_sieve
         type(sp_project)                           :: spproj, spproj_part, spproj_all
         type(stream_watcher)                       :: project_buff           ! monitors dir_target for new partial projects
@@ -367,18 +367,18 @@ contains
                         end if
                     end if
                 end if
-                ! cycle 1 stage 3: run abinitio 2D to obtain best classes
+                ! cycle 1 stage 3: run solve2D to obtain best classes
                 if( cycle_plan(n_cycles) == 3 ) then
                     if( cycle_plan_status(n_cycles) == 0 ) then
                         ! stage start
                         call send_meta2D(string('classifying particles'), box_in_pix, vis_cycle)
-                        call start_abinitio2D(spproj, cycle_projfile, string('abinitio2D/init'), nint(mskdiam))
+                        call start_solve2D(spproj, cycle_projfile, string('solve2D/init'), nint(mskdiam))
                         cycle_plan_status(n_cycles) = 1
                     else if( cycle_plan_status(n_cycles) == 1 ) then
                         ! stage running: poll for the async job's completion sentinel
-                        if( file_exists(string('abinitio2D/init')//'/'//ABINITIO2D_FINISHED) ) then
+                        if( file_exists(string('solve2D/init')//'/'//SOLVE2D_FINISHED) ) then
                             ! stage complete
-                            call finish_abinitio2D(spproj, cycle_projfile, string('abinitio2D/init'), nint(mskdiam))
+                            call finish_solve2D(spproj, cycle_projfile, string('solve2D/init'), nint(mskdiam))
                             call send_meta(string('complete'))
                             cycle_plan(n_cycles)        = 4
                             cycle_plan_status(n_cycles) = 0
@@ -413,13 +413,13 @@ contains
                     if( cycle_plan_status(n_cycles) == 0 ) then
                         ! stage start
                         call send_meta2D(string('classifying particles'), box_in_pix, vis_cycle)
-                        call start_abinitio2D(spproj_all, cycle_projfile, string('abinitio2D/all'), nint(mskdiam))
+                        call start_solve2D(spproj_all, cycle_projfile, string('solve2D/all'), nint(mskdiam))
                         cycle_plan_status(n_cycles) = 1
                     else if( cycle_plan_status(n_cycles) == 1 ) then
                         ! stage running: poll for the async job's completion sentinel
-                        if( file_exists(string('abinitio2D/all')//'/'//ABINITIO2D_FINISHED) ) then
+                        if( file_exists(string('solve2D/all')//'/'//SOLVE2D_FINISHED) ) then
                             ! stage complete
-                            call finish_abinitio2D(spproj_all, cycle_projfile, string('abinitio2D/all'), nint(mskdiam))
+                            call finish_solve2D(spproj_all, cycle_projfile, string('solve2D/all'), nint(mskdiam))
                             call send_meta(string('complete'))
                             cycle_plan(n_cycles)        = 3
                             cycle_plan_status(n_cycles) = 0
@@ -438,22 +438,22 @@ contains
                 ! cycle 2 stage 4: rebalance classes
                 if( cycle_plan(n_cycles) == 4 ) then
                     call send_meta2D(string('balancing classes'), box_in_pix, vis_cycle)
-                    call balance_classes(spproj_all, cycle_projfile, string('balance_classes/all')) ! balance class populations before final abinitio2D, to improve quality of top classes and thus picking references
+                    call balance_classes(spproj_all, cycle_projfile, string('balance_classes/all')) ! balance class populations before final solve2D, to improve quality of top classes and thus picking references
                     cycle_plan(n_cycles)        = 5
                     cycle_plan_status(n_cycles) = 0
                 end if
-                ! cycle 2 stage 5: abinitio3D and reproject
+                ! cycle 2 stage 5: solve3D and reproject
                 if( cycle_plan(n_cycles) == 5 ) then
                     if( cycle_plan_status(n_cycles) == 0 ) then
                         ! stage start
-                        call send_meta2D(string('abinitio3D and reproject'), box_in_pix, vis_cycle)
-                        call start_abinitio3D(spproj_all, cycle_projfile, string('abinitio3D/all'), nint(mskdiam))
+                        call send_meta2D(string('solve3D and reproject'), box_in_pix, vis_cycle)
+                        call start_solve3D(spproj_all, cycle_projfile, string('solve3D/all'), nint(mskdiam))
                         cycle_plan_status(n_cycles) = 1
                     else if( cycle_plan_status(n_cycles) == 1 ) then
                         ! stage running: poll for the async job's completion sentinel
-                        if( file_exists(string('abinitio3D/all')//'/'//TASK_FINISHED) ) then
+                        if( file_exists(string('solve3D/all')//'/'//TASK_FINISHED) ) then
                             ! stage complete
-                            call finish_abinitio3D(spproj_all, cycle_projfile, string('abinitio3D/all'), nint(mskdiam))
+                            call finish_solve3D(spproj_all, cycle_projfile, string('solve3D/all'), nint(mskdiam))
                             call send_meta(string('complete'))
                             cycle_plan(n_cycles)        = 6
                             cycle_plan_status(n_cycles) = 0
@@ -569,62 +569,62 @@ contains
                 call simple_chdir(cwd)
             end subroutine finish_extract
 
-            subroutine start_abinitio2D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
+            subroutine start_solve2D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
                 type(sp_project), intent(inout) :: spproj_inout
                 type(string),        intent(in) :: cluster_projfile
                 type(string),        intent(in) :: outdir
                 integer,             intent(in) :: mskdiam_in
-                type(string)                    :: cwd, cwd_abinitio2D, server_address
+                type(string)                    :: cwd, cwd_solve2D, server_address
                 integer :: nptcls, ncls_job, nsample_job
                 nptcls = spproj_inout%os_ptcl2D%count_state_gt_zero()
                 ncls_job    = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
                 nsample_job = ((nptcls/5 + 999) / 1000) * 1000 ! round up to nearest 1000
                 call simple_getcwd(cwd)
-                call simple_mkdir('abinitio2D')
+                call simple_mkdir('solve2D')
                 call simple_mkdir(outdir)
                 call simple_chdir(outdir)
-                call simple_getcwd(cwd_abinitio2D)
-                CWD_GLOB       = cwd_abinitio2D%to_char()
+                call simple_getcwd(cwd_solve2D)
+                CWD_GLOB       = cwd_solve2D%to_char()
                 server_address = qenv%get_persistent_worker_server_address()
-                call cline_abinitio2D%kill()
-                call cline_abinitio2D%set('prg',                         'abinitio2D')
-                call cline_abinitio2D%set('mkdir',                               'no')
-                call cline_abinitio2D%set('ncls',                            ncls_job)
-                call cline_abinitio2D%set('sigma_est',                       'global')
-                call cline_abinitio2D%set('center',                             'yes')
-                call cline_abinitio2D%set('autoscale',                          'yes')
-                call cline_abinitio2D%set('nsample',    max( NSAMPLE2D, nsample_job ))
-                call cline_abinitio2D%set('lpstop',                          LPSTOP2D)
-                call cline_abinitio2D%set('mskdiam',                             999.)
-                call cline_abinitio2D%set('nthr',                                  16)
-                call cline_abinitio2D%set('nparts',                                 1)
-                call cline_abinitio2D%set('projfile',                cluster_projfile)
-                call cline_abinitio2D%set('worker_priority',                   'high')
-                call cline_abinitio2D%set('cache',                              'yes')
-                if( server_address%strlen() > 0 ) call cline_abinitio2D%set('worker_server', server_address)
-                call cline_abinitio2D%printline()
-                call qenv%exec_simple_prg_in_queue_async( cline_abinitio2D, string('./distr_abinitio2D'), string('simple_log_abinitio2D'), exec_bin=string('simple_exec') )
+                call cline_solve2D%kill()
+                call cline_solve2D%set('prg',                            'solve2D')
+                call cline_solve2D%set('mkdir',                                  'no')
+                call cline_solve2D%set('ncls',                               ncls_job)
+                call cline_solve2D%set('sigma_est',                          'global')
+                call cline_solve2D%set('center',                                'yes')
+                call cline_solve2D%set('autoscale',                             'yes')
+                call cline_solve2D%set('nsample',       max( NSAMPLE2D, nsample_job ))
+                call cline_solve2D%set('lpstop',                             LPSTOP2D)
+                call cline_solve2D%set('mskdiam',                                999.)
+                call cline_solve2D%set('nthr',                                     16)
+                call cline_solve2D%set('nparts',                                    1)
+                call cline_solve2D%set('projfile',                   cluster_projfile)
+                call cline_solve2D%set('worker_priority',                      'high')
+                call cline_solve2D%set('cache',                                 'yes')
+                if( server_address%strlen() > 0 ) call cline_solve2D%set('worker_server', server_address)
+                call cline_solve2D%printline()
+                call qenv%exec_simple_prg_in_queue_async( cline_solve2D, string('./distr_solve2D'), string('simple_log_solve2D'), exec_bin=string('simple_exec') )
                 call simple_chdir(cwd)
                 CWD_GLOB = cwd%to_char()
-            end subroutine start_abinitio2D
+            end subroutine start_solve2D
 
-            subroutine finish_abinitio2D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
+            subroutine finish_solve2D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
                 type(sp_project), intent(inout) :: spproj_inout
                 type(string),        intent(in) :: cluster_projfile
                 type(string),        intent(in) :: outdir
                 integer,             intent(in) :: mskdiam_in
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
-            end subroutine finish_abinitio2D
+            end subroutine finish_solve2D
 
             ! Locate the highest-numbered restart output directory created under the
-            ! current working directory by mkdir=yes execution of prg=abinitio3D_cavgs
-            ! (e.g. '3_abinitio3D_cavgs'), as produced per-restart by
-            ! commander_abinitio3D_cavgs(_conditional_restarts). Returns an empty
+            ! current working directory by mkdir=yes execution of prg=solve3D_cavgs
+            ! (e.g. '3_solve3D_cavgs'), as produced per-restart by
+            ! commander_solve3D_cavgs(_conditional_restarts). Returns an empty
             ! string when no such directory is present.
-            subroutine find_final_abinitio3D_cavgs_dir( final_dir )
+            subroutine find_final_solve3D_cavgs_dir( final_dir )
                 type(string), intent(out) :: final_dir
-                character(len=*), parameter   :: SUFFIX = '_abinitio3D_cavgs'
+                character(len=*), parameter   :: SUFFIX = '_solve3D_cavgs'
                 type(string),      allocatable :: dirs(:)
                 character(len=:), allocatable :: dname
                 integer :: idir, us, n, best_n, io_stat
@@ -644,59 +644,59 @@ contains
                         final_dir = dirs(idir)
                     endif
                 enddo
-            end subroutine find_final_abinitio3D_cavgs_dir
+            end subroutine find_final_solve3D_cavgs_dir
 
-            ! Run ab-initio 3D classification on the extracted particles.
-            subroutine start_abinitio3D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
+            ! Run solve3D on the extracted particles.
+            subroutine start_solve3D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
                 type(sp_project), intent(inout) :: spproj_inout
                 type(string),        intent(in) :: cluster_projfile
                 type(string),        intent(in) :: outdir
                 integer,             intent(in) :: mskdiam_in
-                type(string)                    :: cwd, cwd_abinitio3D, server_address
+                type(string)                    :: cwd, cwd_solve3D, server_address
                 integer :: nptcls, ncls_job
                 nptcls = spproj_inout%os_ptcl2D%get_noris()
                 ncls_job = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
                 call simple_getcwd(cwd)
-                call simple_mkdir('abinitio3D')
+                call simple_mkdir('solve3D')
                 call simple_mkdir(outdir)
                 call simple_chdir(outdir)
-                call simple_getcwd(cwd_abinitio3D)
-                CWD_GLOB       = cwd_abinitio3D%to_char()
+                call simple_getcwd(cwd_solve3D)
+                CWD_GLOB       = cwd_solve3D%to_char()
                 server_address = qenv%get_persistent_worker_server_address()
-                call cline_abinitio3D%kill()
+                call cline_solve3D%kill()
 
-                call cline_abinitio3D%set('prg',     'abinitio3D_cavgs')
-               ! call cline_abinitio3D%set('mkdir',                 'no')
-                call cline_abinitio3D%set('pgrp',                  'c1')
-                call cline_abinitio3D%set('nstates',          NSTATES3D)
-                call cline_abinitio3D%set('lpstop',                   8)
-                call cline_abinitio3D%set('mskdiam',         mskdiam_in)
-               ! call cline_abinitio3D%set('lpstart',                20)
-                call cline_abinitio3D%set('lpstart_ini3D',          100)
-                call cline_abinitio3D%set('lpstop_ini3D',            20)
-                call cline_abinitio3D%set('prune',                 'no')
-                call cline_abinitio3D%set('nthr',                    16)
-                call cline_abinitio3D%set('nstages',                  3)
-                call cline_abinitio3D%set('nrestarts_collapse',       3)
-                call cline_abinitio3D%set('projfile',  cluster_projfile)
+                call cline_solve3D%set('prg',        'solve3D_cavgs')
+               ! call cline_solve3D%set('mkdir',                    'no')
+                call cline_solve3D%set('pgrp',                     'c1')
+                call cline_solve3D%set('nstates',             NSTATES3D)
+                call cline_solve3D%set('lpstop',                      8)
+                call cline_solve3D%set('mskdiam',            mskdiam_in)
+               ! call cline_solve3D%set('lpstart',                   20)
+                call cline_solve3D%set('lpstart_ini3D',             100)
+                call cline_solve3D%set('lpstop_ini3D',               20)
+                call cline_solve3D%set('prune',                    'no')
+                call cline_solve3D%set('nthr',                       16)
+                call cline_solve3D%set('nstages',                     3)
+                call cline_solve3D%set('nrestarts_collapse',          3)
+                call cline_solve3D%set('projfile',     cluster_projfile)
 
-                call cline_abinitio3D%printline()
-                call qenv%exec_simple_prg_in_queue_async( cline_abinitio3D, string('./distr_abinitio3D'), string('simple_log_abinitio3D'), exec_bin=string('simple_exec') )
+                call cline_solve3D%printline()
+                call qenv%exec_simple_prg_in_queue_async( cline_solve3D, string('./distr_solve3D'), string('simple_log_solve3D'), exec_bin=string('simple_exec') )
                 call simple_chdir(cwd)
                 CWD_GLOB = cwd%to_char()
-            end subroutine start_abinitio3D
+            end subroutine start_solve3D
             
-            ! Run ab-initio 3D classification on the extracted particles.
-            subroutine finish_abinitio3D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
+            ! Run solve3D on the extracted particles.
+            subroutine finish_solve3D( spproj_inout, cluster_projfile, outdir, mskdiam_in )
                 type(sp_project), intent(inout) :: spproj_inout
                 type(string), intent(in) :: cluster_projfile      ! cycle-local project file to process
-                type(string), intent(in) :: outdir                ! output directory for abinitio3D run products
+                type(string), intent(in) :: outdir                ! output directory for solve3D run products
                 integer,      intent(in) :: mskdiam_in            ! mask diameter (A) used by 3D/ref-projection steps
                 integer,     allocatable :: states(:), projs(:), nunique_proj(:), uniqbuf(:)
                 integer,     allocatable :: cavg_inds_local(:)    ! class-average indices for picking-reference metadata
                 type(cmdline)            :: cline_reproject       ! command line builder for the reproject commander
                 type(string)             :: cwd, volpath          ! saved working directory and selected volume path
-                type(string)             :: final_dir             ! most recent abinitio3D_cavgs restart output subdir
+                type(string)             :: final_dir             ! most recent solve3D_cavgs restart output subdir
                 integer                  :: ldim(3)               ! selected volume box dimensions
                 integer                  :: ldim_clip(3)          ! particle-stack box dimensions for clipping/padding
                 integer                  :: ldim_new(3)           ! reprojection box dimensions after Fourier rescaling
@@ -714,17 +714,17 @@ contains
                 call simple_getcwd(cwd)
 
                 call simple_chdir(outdir)
-                call find_final_abinitio3D_cavgs_dir(final_dir)
+                call find_final_solve3D_cavgs_dir(final_dir)
                 call spproj_inout%kill()
                 if( final_dir%strlen() > 0 )then
-                    ! mkdir=yes creates a numbered '<n>_abinitio3D_cavgs' restart directory per
+                    ! mkdir=yes creates a numbered '<n>_solve3D_cavgs' restart directory per
                     ! attempt; the final restart's output (project copy, recvol_state*.mrc) lives
                     ! there rather than directly in outdir
-                    write(logfhandle,'(A,A)') '>>> ABINITIO3D_CAVGS RESTART OUTPUT DIRECTORY: ', final_dir%to_char()
+                    write(logfhandle,'(A,A)') '>>> SOLVE3D_CAVGS RESTART OUTPUT DIRECTORY: ', final_dir%to_char()
                     call simple_chdir(final_dir)
-                    call spproj_inout%read(basename(cluster_projfile)) ! read the project with abinitio3D output
+                    call spproj_inout%read(basename(cluster_projfile)) ! read the project with solve3D output
                 else
-                    call spproj_inout%read(cluster_projfile) ! read the project with abinitio3D output
+                    call spproj_inout%read(cluster_projfile) ! read the project with solve3D output
                 endif
 
                 ! shape-descriptor diagnostics for every reconstructed state volume with nonzero population
@@ -777,7 +777,7 @@ contains
                 endif
                 
                 volpath = string('recvol_state'//int2str_pad(bestvol,2)//MRC_EXT)
-                if( .not. file_exists(volpath) ) THROW_HARD('Expected abinitio3D output volume not found: '//volpath%to_char())
+                if( .not. file_exists(volpath) ) THROW_HARD('Expected solve3D output volume not found: '//volpath%to_char())
                 call find_ldim_nptcls(volpath, ldim, nuniq)
                 vol_smpd = find_img_smpd(volpath)
                 ldim_clip(1) = spproj_inout%os_stk%get_int(1, 'box') ! particle box size
@@ -839,7 +839,7 @@ contains
                 call simple_chdir(cwd)
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
-            end subroutine finish_abinitio3D
+            end subroutine finish_solve3D
 
             ! Not called. Polls project_buff until nmics_target micrographs pass the
             ! ctfres/icefrac/astig thresholds.
@@ -1365,7 +1365,7 @@ contains
                     if( selection(icls) >= 1 .and. selection(icls) <= ncls_pool ) states_sel(selection(icls)) = 1
                 enddo
                 cavg_imgs_sel = read_cavgs_into_imgarr(spproj_tmp)
-                ! use a filename distinct from finish_abinitio3D's own 'selected_references.mrcs/.jpg'
+                ! use a filename distinct from finish_solve3D's own 'selected_references.mrcs/.jpg'
                 ! output, otherwise this overwrites it with a differently-sized sprite sheet and any
                 ! tile coordinates the GUI cached from the original sheet end up pointing at the wrong image
                 call write_quality_stack(string(STREAM_DESELECTED_REFS//MRC_EXT), cavg_imgs_sel, states_sel, ncls_pool, selected=.true.)

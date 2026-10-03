@@ -55,7 +55,7 @@ low-level postprocessing or polar-reference reduction logic.
   matching, even when the scientific output is Cartesian volumes.
 - Polar assembly writes state-major `POLAR_REFS.bin`, `POLAR_REFS_even.bin`,
   and `POLAR_REFS_odd.bin` for `polar=yes|obsfield`.
-- `abinitio3D` stage `_lp` snapshots are FSC-resolution diagnostics. Do not
+- `solve3D` stage `_lp` snapshots are FSC-resolution diagnostics. Do not
   replace their cutoff with the planned stage LP except as the existing fallback
   when no valid FSC resolution is available.
 

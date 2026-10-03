@@ -1,9 +1,9 @@
-!@descr: frozen accumulator store of one abinitio3D_addon run: run context, per-box sets, writers and validated adds into a reduction
+!@descr: frozen accumulator store of one solve3D_addon run: run context, per-box sets, writers and validated adds into a reduction
 ! Raw frozen-particle accumulators (gridding even/odd S/rho, PCG B/D per half), one set per state
 ! and box, added with coefficient one before any restoration or prior; nothing here scales or restores.
 ! Sets are bound to the run context (run id, backend, states, row counts, weighting) and
 ! validated against it and the consumer grid before any payload is read; defects are fatal.
-! Contract: doc/policies/3D/abinitio3D_addon_policy.md sec. 5 and 7.
+! Contract: doc/policies/3D/solve3D_addon_policy.md sec. 5 and 7.
 module simple_frozen_accum
 use simple_core_module_api
 use simple_reconstructor,     only: reconstructor
@@ -16,8 +16,8 @@ public :: frozen_accum
 private
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: FROZEN_CONTEXT_SCHEMA = 'abinitio3D_addon_frozen_context'
-character(len=*), parameter :: FROZEN_SET_SCHEMA     = 'abinitio3D_addon_frozen_set'
+character(len=*), parameter :: FROZEN_CONTEXT_SCHEMA = 'solve3D_addon_frozen_context'
+character(len=*), parameter :: FROZEN_SET_SCHEMA     = 'solve3D_addon_frozen_set'
 integer,          parameter :: FROZEN_SCHEMA_VERSION = 2
 real,             parameter :: SMPD_RELTOL           = 1.e-5
 

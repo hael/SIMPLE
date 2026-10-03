@@ -325,7 +325,7 @@ contains
 
     !> The particles of fromto the previous sampling selected. allow_empty
     !! accepts a range without any (a distributed partition of state-0 rows
-    !! only, e.g. the frozen rows of abinitio3D_addon): nsamples is 0 and inds
+    !! only, e.g. the frozen rows of solve3D_addon): nsamples is 0 and inds
     !! empty, for a caller that emits empty partition outputs
     module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )
         class(oris),          intent(inout) :: self

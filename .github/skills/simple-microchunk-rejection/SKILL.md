@@ -21,7 +21,7 @@ Use this skill for `src/main/stream/simple_microchunked2D.f90`, `src/main/stream
 
 Restart state is reconstructed from sentinel files:
 
-- `ABINITIO2D_FINISHED`: chunk job finished.
+- `SOLVE2D_FINISHED`: chunk job finished.
 - `REJECTION_FINISHED`: rejection and particle cleanup finished.
 - `REJECTION_FAILED`: rejection could not be performed safely.
 - `COMPLETE`: chunk was consumed or finalized.

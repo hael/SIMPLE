@@ -553,7 +553,7 @@ belong to that question and nowhere else: weighted backprojection of top-K
 compact responsibilities from the probability tables into the accumulators
 (never built, never rejected; it changes what `(A_B^* y_B, rho_B)` are, not
 how they are solved), and a per-stage schedule for `u` emitted by the
-abinitio3D controller the way it emits `update_frac` -- on the chain `u` is a
+solve3D controller the way it emits `update_frac` -- on the chain `u` is a
 forgetting factor, so decaying it late in a run is Polyak averaging over
 repeated particle visits. Whether either helps is an empirical question with
 no claim attached; the PfCRT and streptavidin runs recorded in

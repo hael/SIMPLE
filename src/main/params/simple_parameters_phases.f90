@@ -832,7 +832,7 @@ contains
                 ! reported once, by the workflow driver; every subprocess
                 ! applies the same rule silently
                 select case(trim(self%prg%to_char()))
-                    case('refine3D_auto','abinitio3D','abinitio3D_cavgs','refine3D_states','classify3D_refs')
+                    case('refine3D_auto','solve3D','solve3D_cavgs','refine3D_states','classify3D_refs')
                         write(logfhandle,'(A,I0,A,F5.2,A,F6.3,A)') '>>> DENSITY ENVELOPE DILATION: ', binwidth_min, &
                             &' layers (', ENVMSKWIDTH_A_MIN, ' A at ', self%smpd_crop, ' A/pixel)'
                 end select

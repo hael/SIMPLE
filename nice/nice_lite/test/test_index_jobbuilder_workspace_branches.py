@@ -244,7 +244,7 @@ class JobBuilderBranchTests(SimpleTestCase):
 
     def test_collect_programs_prefills_saved_values_and_rerun_lineage(self):
         batchui = {
-            "cluster2D": {
+            "refine2D": {
                 "program": {"executable": "simple_exec"},
                 "compute": [
                     {"key": "nthr", "keytype": "int"},
@@ -256,7 +256,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         _, program_inputs = job_builder_views._collect_programs(
             batchui,
             "simple_exec",
-            prefill_program="cluster2D",
+            prefill_program="refine2D",
             prefill_args={"nthr": "8", "mode": "2"},
             rerun_of=17,
         )
@@ -319,7 +319,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             status="finished",
             args={"nthr": "8", "mode": "fast"},
             pckg="simple",
-            prog="cluster2D",
+            prog="refine2D",
             parent=0,
             master_stats={
                 "source": {"type": "project_file", "filename": "input.simple"},
@@ -333,7 +333,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         simple_batch = Mock()
         simple_batch.loadUIJSON.return_value = True
         simple_batch.get_ui.return_value = {
-            "cluster2D": {
+            "refine2D": {
                 "program": {"executable": "simple_exec"},
                 "compute": [
                     {"key": "nthr", "keytype": "int"},
@@ -367,7 +367,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         self.assertEqual(response._ctx["batch_prefill"], {
             "job_id": 88,
             "package": "simple",
-            "program": "cluster2D",
+            "program": "refine2D",
             "args": jobmodel.args,
         })
         program = response._ctx["simple_program_inputs"][0]
@@ -376,9 +376,9 @@ class JobBuilderBranchTests(SimpleTestCase):
             [entry["value"] for entry in program["sections"][0]["inputs"]],
             ["8", "fast"],
         )
-        resolve_project.assert_called_once_with(workspace, "cluster2D", jobmodel.master_stats, 0)
+        resolve_project.assert_called_once_with(workspace, "refine2D", jobmodel.master_stats, 0)
 
-    def test_abinitio2d_selection_prefills_new_selection_without_rerun_lineage(self):
+    def test_solve2d_selection_prefills_new_selection_without_rerun_lineage(self):
         request = self.factory.get(
             "/newstream",
             {
@@ -396,7 +396,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             status="finished",
             args={},
             pckg="simple",
-            prog="abinitio2D",
+            prog="solve2D",
             master_stats={
             },
         )
@@ -417,8 +417,8 @@ class JobBuilderBranchTests(SimpleTestCase):
             },
         }
         workspace = Mock()
-        project_path = "/workspace/7_abinitio2D/workspace.simple"
-        infile_path = "/workspace/7_abinitio2D/class_selection.txt"
+        project_path = "/workspace/7_solve2D/workspace.simple"
+        infile_path = "/workspace/7_solve2D/class_selection.txt"
 
         with (
             patch.object(job_builder_views, "get_job_id", return_value=88),
@@ -564,7 +564,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             dset=SimpleNamespace(user="tester"),
             status="finished",
             pckg="simple",
-            prog="abinitio2D",
+            prog="solve2D",
             master_stats={
             },
         )
@@ -572,8 +572,8 @@ class JobBuilderBranchTests(SimpleTestCase):
         queryset.first.return_value = source_job
         batchjob = Mock()
         batchjob.new.return_value = True
-        project_path = "/workspace/7_abinitio2D/workspace.simple"
-        infile_path = "/workspace/7_abinitio2D/class_selection.txt"
+        project_path = "/workspace/7_solve2D/workspace.simple"
+        infile_path = "/workspace/7_solve2D/class_selection.txt"
         source = {"type": "batch_job", "batch_job_id": 88}
 
         with (
@@ -617,7 +617,7 @@ class JobBuilderBranchTests(SimpleTestCase):
     def test_create_batch_preserves_rerun_lineage_name_and_description(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",
-            "program": "cluster2D",
+            "program": "refine2D",
             "batch_project_file": "/workspace/input.simple",
             "rerun_of": "12",
             "nthr": "16",
@@ -626,7 +626,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         workspace = Mock()
         launcher = Mock()
         launcher.get_ui.return_value = {
-            "cluster2D": {
+            "refine2D": {
                 "program": {"executable": "simple_exec"},
                 "compute": [{"key": "nthr", "keytype": "int"}],
             },
@@ -638,7 +638,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             name="Create 2D Classes",
             desc="saved description",
             pckg="simple",
-            prog="cluster2D",
+            prog="refine2D",
             master_stats={
             },
         )
@@ -671,7 +671,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         batchjob.new.assert_called_once_with(
             workspace,
             "simple",
-            "cluster2D",
+            "refine2D",
             {"nthr": "16"},
             display_name="Create 2D Classes",
             description="saved description",
@@ -683,13 +683,13 @@ class JobBuilderBranchTests(SimpleTestCase):
     def test_create_batch_rejects_tampered_rerun_lineage(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",
-            "program": "cluster2D",
+            "program": "refine2D",
             "rerun_of": "999",
         })
         request.user = _AuthUser()
         launcher = Mock()
         launcher.get_ui.return_value = {
-            "cluster2D": {
+            "refine2D": {
                 "program": {"executable": "simple_exec"},
                 "compute": [],
             },
@@ -799,14 +799,14 @@ class JobBuilderBranchTests(SimpleTestCase):
     def test_create_batch_applies_nthr_default_but_omits_other_untouched_defaults(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",
-            "program": "cluster2D",
+            "program": "refine2D",
         })
         request.user = _AuthUser()
 
         workspace = Mock()
         launcher = Mock()
         launcher.get_ui.return_value = {
-            "cluster2D": {
+            "refine2D": {
                 "program": {"executable": "simple_exec"},
                 "compute": [
                     {"key": "nthr", "keytype": "int", "has_default": True, "default": 8.0},
@@ -824,7 +824,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         batchjob.new.assert_called_once_with(
             workspace,
             "simple",
-            "cluster2D",
+            "refine2D",
             {"nthr": "8"},
         )
 
@@ -1040,13 +1040,13 @@ class JobBuilderBranchTests(SimpleTestCase):
     def test_create_batch_rejects_nonfinite_numeric_input(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",
-            "program": "cluster2D",
+            "program": "refine2D",
             "nthr": "nan",
         })
         request.user = _AuthUser()
         launcher = Mock()
         launcher.get_ui.return_value = {
-            "cluster2D": {
+            "refine2D": {
                 "program": {"executable": "simple_exec"},
                 "compute": [{"key": "nthr", "keytype": "int", "required": True}],
             },
@@ -1061,14 +1061,14 @@ class JobBuilderBranchTests(SimpleTestCase):
     def test_create_batch_passes_resolved_snapshot_to_batch_job(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",
-            "program": "cluster2D",
+            "program": "refine2D",
             "batch_project_file": "/workspace/snapshot_3.simple",
         })
         request.user = _AuthUser()
         workspace = Mock()
         launcher = Mock()
         launcher.get_ui.return_value = {
-            "cluster2D": {
+            "refine2D": {
                 "program": {"executable": "simple_exec"},
                 "compute": [],
             },
@@ -1102,7 +1102,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         batchjob.new.assert_called_once_with(
             workspace,
             "simple",
-            "cluster2D",
+            "refine2D",
             {},
             parent_proj="/workspace/snapshot_3.simple",
             source=source,

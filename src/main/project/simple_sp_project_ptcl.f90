@@ -156,7 +156,7 @@ contains
         endif
     end subroutine map_cavgs_selection
 
-    ! map shifts obtained by cluster2D to the 3D field for cases where an external
+    ! map shifts obtained by refine2D to the 3D field for cases where an external
     ! starting model is used for initializing 3D refinement (nanoparticles)
     module subroutine map2Dshifts23D( self )
         class(sp_project), intent(inout) :: self

@@ -371,16 +371,16 @@ def _is_batch_job(jobmodel):
 
 
 def _resolve_class_selection_prefill(jobmodel):
-    """Resolve the fixed infile and output project for one ab initio 2D job."""
+    """Resolve the fixed infile and output project for one solve2D job."""
     batch_job = BatchJob(id=jobmodel.id)
     loaded_jobmodel = batch_job.get_jobmodel()
     if loaded_jobmodel is None or loaded_jobmodel.id != jobmodel.id:
-        return None, None, "selected ab initio 2D job is unavailable"
+        return None, None, "selected solve2D job is unavailable"
 
     job_dir = batch_job.get_safe_job_dir()
     result_project = batch_job.get_result_project_path()
     if job_dir is None or result_project is None:
-        return None, None, "selected ab initio 2D output is unavailable"
+        return None, None, "selected solve2D output is unavailable"
 
     infile_path = os.path.abspath(
         os.path.join(job_dir, _BATCH_CLASS_SELECTION_FILENAME)
@@ -400,7 +400,7 @@ def _resolve_class_selection_prefill(jobmodel):
 
 
 def _resolve_class_selection_source(workspace_obj, source_id, username):
-    """Revalidate one ab initio 2D source before launching selection."""
+    """Revalidate one solve2D source before launching selection."""
     if (
         not isinstance(source_id, int)
         or isinstance(source_id, bool)
@@ -417,7 +417,7 @@ def _resolve_class_selection_source(workspace_obj, source_id, username):
         or not _is_batch_job(jobmodel)
         or jobmodel.status != "finished"
         or jobmodel.pckg != "simple"
-        or jobmodel.prog != "abinitio2D"
+        or jobmodel.prog != "solve2D"
     ):
         return None, None, "invalid 2D class selection source"
 
@@ -787,7 +787,7 @@ def view_job_builder(request):
                 if (
                     streamjobmodel.status != "finished"
                     or streamjobmodel.pckg != "simple"
-                    or streamjobmodel.prog != "abinitio2D"
+                    or streamjobmodel.prog != "solve2D"
                 ):
                     messages.add_message(
                         request,

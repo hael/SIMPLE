@@ -83,7 +83,7 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, average linkage, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
-| `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model, abinitio3D manifest, project superset, abinitio3D addon report |
+| `unit_project` | STAR file, STAR project, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model, solve3D manifest, project superset, solve3D addon report |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average accumulator, class-average carry-over, trailing chain identity, frozen accumulator, volume pair metrics |
@@ -100,17 +100,17 @@ convenience and deliberately not a CTest entry.
 
 | entry | label | what it runs |
 |---|---|---|
-| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; addon report docking: the abinitio3D_addon report docks a map rotated by 90 degrees and recovers the rotation |
+| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 15 degrees and 2 pixels, refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
 | `lib_heterogeneity` | library | flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models |
 | `lib_stream` | library | optics assignment, picking references, pick and extract |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
-| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated movies through import, motion correction, CTF, picking, extraction, `abinitio2D`, `abinitio3D` |
+| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated movies through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D` |
 | `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles |
 | `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |
-| `abinitio3D_addon` | highlevel | `abinitio3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `abinitio3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
+| `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_auto pose_cont=only`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
@@ -515,7 +515,7 @@ benchmarks, and anything that cannot fail.
 - **The truth is independent of the code under test.** Compare the final map
   with the map `pdb2mrc` makes from the same coordinates on the same grid,
   not with a map from an earlier stage of the same run.
-- **Maps are compared after docking and hand.** An `abinitio3D` map is
+- **Maps are compared after docking and hand.** A `solve3D` map is
   neither docked to the truth map nor necessarily of the right hand. The gate
   docks it with `dock_vols` at a low-pass of 15 to 20 Å, keeps the hand (the
   map or its `mirror('x')`) that docks with the higher correlation, and takes
@@ -699,7 +699,7 @@ written as `sub-suite` (entry).
 
 | old test | now |
 |---|---|
-| `abinitio2D_stream` | deleted; `abinitio2D` runs nightly in `simulated_workflow_6vxx` and `simulated_workflow_1jxy` |
+| `abinitio2D_stream` | deleted; `solve2D` runs nightly in `simulated_workflow_6vxx` and `simulated_workflow_1jxy` |
 | `angres` | the program `simple_exec prg=measure_projspace_angres nspace=<n>`; the table of values is a comment above `find_angres` |
 | `ansi_colors` | `string` (`unit_core`) |
 | `assign_optics` | `optics assignment` (`lib_stream`) |

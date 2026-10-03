@@ -1,9 +1,10 @@
 !@descr: the class implementing command line parsing
 module simple_cmdline
 use simple_core_module_api
-use simple_ui,         only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
-use simple_ui_program, only: ui_program
-use simple_args,       only: args
+use simple_ui,              only: get_prg_ptr, get_test_prg_ptr, list_simple_prgs_in_ui, list_simple_test_prgs_in_ui,list_stream_prgs_in_ui, list_single_prgs_in_ui
+use simple_ui_program,      only: ui_program
+use simple_ui_legacy_names, only: canonical_prg_name
+use simple_args,            only: args
 use simple_private_prgs 
 implicit none
 private
@@ -69,10 +70,10 @@ contains
         type(string), allocatable      :: keys_required(:), defined_keys(:)
         type(args)                     :: allowed_args
         type(ui_program), pointer      :: ptr2prg => null()
-        type(string)                   :: prgname, exec_cmd_ui, exec_cmd, executable
+        type(string)                   :: prgname, prgkey, exec_cmd_ui, exec_cmd, executable
         character(len=XLONGSTRLEN)     :: arg, buffer
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
-        logical :: skip_required_keys
+        logical :: skip_required_keys, l_legacy_name
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
@@ -95,7 +96,10 @@ contains
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
-        prgname = arg(pos+1:)
+        ! a retired program name (simple_ui_legacy_names) runs as the current program
+        prgkey        = arg(:pos-1)
+        prgname       = canonical_prg_name(arg(pos+1:))
+        l_legacy_name = prgname%to_char() /= trim(adjustl(arg(pos+1:)))
         if( DEBUG_HERE ) print *, 'prgname from command-line in cmdline class: ', prgname%to_char()
         if( prgname%has_substr('report_selection') ) prgname = 'selection' ! FIX4NOW
         ! obtain pointer to the program in the simple_ui specification
@@ -191,6 +195,8 @@ contains
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
+        ! workers and job descriptions get the current name of a retired program
+        if( l_legacy_name ) call self%set(prgkey%to_char(), prgname)
         if (.not. skip_required_keys) then
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
@@ -287,6 +293,10 @@ contains
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
+        ! workers get the current name of a retired program (simple_ui_legacy_names)
+        call get_command_argument(1, arg, cmdlen, cmdstat)
+        pos = index(arg, '=')
+        if( canonical_prg_name(arg(pos+1:)) /= trim(adjustl(arg(pos+1:))) ) call self%set('prg', canonical_prg_name(arg(pos+1:)))
         if (associated(ptr2prg) .and. .not. skip_required_keys) then
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
@@ -371,6 +381,9 @@ contains
         do i=1,self%argcnt
             call self%parse_command_line_value(i, arg(i), allowed_args)
         end do
+        ! workers get the current name of a retired program (simple_ui_legacy_names)
+        if( canonical_prg_name(arg(1)(pos+1:)) /= trim(adjustl(arg(1)(pos+1:))) ) &
+            &call self%set('prg', canonical_prg_name(arg(1)(pos+1:)))
         if (associated(ptr2prg) .and. .not. skip_required_keys) then
             defined_keys = self%get_keys()
             if (.not. ptr2prg%requirements_satisfied(defined_keys)) then

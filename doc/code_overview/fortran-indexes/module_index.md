@@ -444,8 +444,8 @@ Uses:
 ## Module: function
 
 Files:
-- `main/abinitio/simple_abinitio_controller.f90`
-- `main/abinitio/simple_abinitio_utils.f90`
+- `main/solve/simple_solve3D_controller.f90`
+- `main/solve/simple_solve3D_utils.f90`
 - `main/flex/simple_flex_pca_em.f90`
 - `main/flex/simple_flex_pca_em_fit.f90`
 - `main/flex/simple_flex_pca_em_mean.f90`
@@ -1584,7 +1584,7 @@ Files:
 - `extlibs/xml/wxml/m_wxml_core.F90`
 - `extlibs/xml/wxml/m_wxml_overloads.F90`
 - `fileio/simple_fileio.f90`
-- `main/abinitio/simple_abinitio_controller.f90`
+- `main/solve/simple_solve3D_controller.f90`
 - `main/ctf/simple_ctf.f90`
 - `main/image/simple_ftiter.f90`
 - `main/image/simple_image.f90`
@@ -3995,10 +3995,10 @@ Files:
 - `main/image/simple_image_geom.f90`
 
 ---
-## Module: simple_abinitio2D_controller
+## Module: simple_solve2D_controller
 
 Files:
-- `main/abinitio/simple_abinitio2D_controller.f90`
+- `main/solve/simple_solve2D_controller.f90`
 
 Uses:
 - `simple_cmdline`
@@ -4006,34 +4006,34 @@ Uses:
 - `simple_parameters`
 
 Public symbols:
-- `determine_abinitio2D_stages` — subroutine
-- `mskdiam2lplimits_cluster2D` — subroutine
-- `set_abinitio2D_sampling_policy` — subroutine
-- `set_cline_cluster2D_seed_pass` — subroutine
-- `set_cline_cluster2D_stage` — subroutine
+- `determine_solve2D_stages` — subroutine
+- `mskdiam2lplimits_refine2D` — subroutine
+- `set_solve2D_sampling_policy` — subroutine
+- `set_cline_refine2D_seed_pass` — subroutine
+- `set_cline_refine2D_stage` — subroutine
 
 Private symbols:
-- `build_cluster2D_stage_cfg` — subroutine
-- `emit_cluster2D_stage_cfg` — subroutine
-- `set_cluster2D_stage_iteration_policy` — subroutine
-- `set_cluster2D_stage_objfun_policy` — subroutine
-- `set_cluster2D_stage_phase_policy` — subroutine
-- `set_cluster2D_stage_reference_policy` — subroutine
-- `set_cluster2D_stage_regular_refs` — subroutine
-- `set_cluster2D_stage_search_policy` — subroutine
+- `build_refine2D_stage_cfg` — subroutine
+- `emit_refine2D_stage_cfg` — subroutine
+- `set_refine2D_stage_iteration_policy` — subroutine
+- `set_refine2D_stage_objfun_policy` — subroutine
+- `set_refine2D_stage_phase_policy` — subroutine
+- `set_refine2D_stage_reference_policy` — subroutine
+- `set_refine2D_stage_regular_refs` — subroutine
+- `set_refine2D_stage_search_policy` — subroutine
 
 ---
-## Module: simple_abinitio3D_split_checkpoint
+## Module: simple_solve3D_split_checkpoint
 
 Files:
-- `main/abinitio/simple_abinitio3D_split_checkpoint.f90`
+- `main/solve/simple_solve3D_split_checkpoint.f90`
 
 Uses:
-- `simple_abinitio_utils`
+- `simple_solve3D_utils`
 - `simple_commanders_api`
 
 Public symbols:
-- `build_abinitio3D_split_checkpoint` — subroutine
+- `build_solve3D_split_checkpoint` — subroutine
 
 Private symbols:
 - `cleanup_assignment_files` — subroutine
@@ -4042,10 +4042,10 @@ Private symbols:
 - `select_reconstruction_sample` — subroutine
 
 ---
-## Module: simple_abinitio_utils
+## Module: simple_solve3D_utils
 
 Files:
-- `main/abinitio/simple_abinitio_utils.f90`
+- `main/solve/simple_solve3D_utils.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -4576,7 +4576,7 @@ Public symbols:
 - `learn_cavg_quality_model` — subroutine
 
 Private symbols:
-- `abinitio_learn_base_spec` — function
+- `neutral_learn_base_spec` — function
 - `append_feature_family` — subroutine
 - `build_logistic_problem` — subroutine
 - `cavg_quality_logistic_problem` — type
@@ -5022,10 +5022,10 @@ Private symbols:
 - `worker_initialize` — subroutine
 
 ---
-## Module: simple_cluster2D_strategy
+## Module: simple_refine2D_strategy
 
 Files:
-- `main/strategies/parallelization/simple_cluster2D_strategy.f90`
+- `main/strategies/parallelization/simple_refine2D_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -5052,10 +5052,10 @@ Uses:
 - `simple_stream_utils`
 
 Public symbols:
-- `cluster2D_distr_strategy` — type
-- `cluster2D_inmem_strategy` — type
-- `cluster2D_strategy` — type
-- `create_cluster2D_strategy` — function
+- `refine2D_distr_strategy` — type
+- `refine2D_inmem_strategy` — type
+- `refine2D_strategy` — type
+- `create_refine2D_strategy` — function
 
 Private symbols:
 - `cleanup_distributed_iteration_artifacts` — subroutine
@@ -5070,7 +5070,7 @@ Private symbols:
 - `finalize_iter_interface` — subroutine
 - `finalize_run_interface` — subroutine
 - `gen_jpeg` — subroutine
-- `init_cluster2D_refs` — subroutine
+- `init_refine2D_refs` — subroutine
 - `init_interface` — subroutine
 - `init_standard_refs` — subroutine
 - `init_tseries_refs` — subroutine
@@ -5215,14 +5215,14 @@ Private symbols:
 - `generic_execute` — subroutine
 
 ---
-## Module: simple_commanders_abinitio
+## Module: simple_commanders_solve3D
 
 Files:
-- `main/commanders/simple/simple_commanders_abinitio.f90`
+- `main/commanders/simple/simple_commanders_solve3D.f90`
 
 Uses:
-- `simple_abinitio3d_split_checkpoint`
-- `simple_abinitio_utils`
+- `simple_solve3d_split_checkpoint`
+- `simple_solve3D_utils`
 - `simple_cluster_seed`
 - `simple_commanders_api`
 - `simple_commanders_cavgs`
@@ -5237,9 +5237,9 @@ Uses:
 - `simple_refine3d_fnames`
 
 Public symbols:
-- `commander_abinitio3D` — type
-- `commander_abinitio3D_cavgs` — type
-- `commander_abinitio3D_cavgs_conditional_restarts` — type
+- `commander_solve3D` — type
+- `commander_solve3D_cavgs` — type
+- `commander_solve3D_cavgs_conditional_restarts` — type
 
 Private symbols:
 - `clean_ptcl3D_sampling` — subroutine
@@ -5248,9 +5248,9 @@ Private symbols:
 - `conv_eo_states` — subroutine
 - `del_pproc_vols` — subroutine
 - `ensure_multistate_particle_assignments` — subroutine
-- `exec_abinitio3D` — subroutine
-- `exec_abinitio3D_cavgs` — subroutine
-- `exec_abinitio3D_cavgs_conditional_restarts` — subroutine
+- `exec_solve3D` — subroutine
+- `exec_solve3D_cavgs` — subroutine
+- `exec_solve3D_cavgs_conditional_restarts` — subroutine
 - `handoff_split_checkpoint_to_refine3D_states` — subroutine
 - `ini3D_from_cavgs` — subroutine
 - `prepare_state_continue_project` — subroutine
@@ -5264,18 +5264,18 @@ Private symbols:
 - `validate_cavg_ini_ext_states` — subroutine
 
 ---
-## Module: simple_commanders_abinitio2D
+## Module: simple_commanders_solve2D
 
 Files:
-- `main/commanders/simple/simple_commanders_abinitio2D.f90`
+- `main/commanders/simple/simple_commanders_solve2D.f90`
 
 Uses:
-- `simple_abinitio2d_controller`
+- `simple_solve2d_controller`
 - `simple_class_frcs`
 - `simple_classaverager`
 - `simple_commanders_api`
 - `simple_commanders_cavgs`
-- `simple_commanders_cluster2d`
+- `simple_commanders_refine2d`
 - `simple_commanders_imgops`
 - `simple_commanders_volops`
 - `simple_gui_communicator`
@@ -5285,15 +5285,15 @@ Uses:
 - `simple_timer`
 
 Public symbols:
-- `commander_abinitio2D` — type
-- `execute_abinitio2D_staged` — subroutine
+- `commander_solve2D` — type
+- `execute_solve2D_staged` — subroutine
 
 Private symbols:
 - `ensure_resume_sigma_state` — subroutine
 - `ensure_seed_eo` — subroutine
-- `exec_abinitio2D` — subroutine
-- `exec_abinitio2D_workflow` — subroutine
-- `execute_cluster2D` — subroutine
+- `exec_solve2D` — subroutine
+- `exec_solve2D_workflow` — subroutine
+- `execute_refine2D` — subroutine
 - `execute_seed_pass` — subroutine
 - `execute_terminal_pass` — subroutine
 - `gen_final_cavgs` — subroutine
@@ -5305,7 +5305,7 @@ Private symbols:
 - `set_lplims` — subroutine
 - `set_sampling` — subroutine
 - `terminal_cline_policy` — subroutine
-- `write_abinitio_benchmark` — subroutine
+- `write_solve2D_benchmark` — subroutine
 - `write_seed_lineage` — subroutine
 
 ---
@@ -5463,14 +5463,14 @@ Public symbols:
 - `exec_info_stktab` — subroutine
 
 ---
-## Module: simple_commanders_cluster2D
+## Module: simple_commanders_refine2D
 
 Files:
-- `main/commanders/simple/simple_commanders_cluster2D.f90`
+- `main/commanders/simple/simple_commanders_refine2D.f90`
 
 Uses:
 - `simple_classaverager`
-- `simple_cluster2d_strategy`
+- `simple_refine2d_strategy`
 - `simple_commanders_api`
 - `simple_commanders_cavgs`
 - `simple_commanders_euclid`
@@ -5489,11 +5489,11 @@ Uses:
 - `simple_strategy2d_matcher`
 
 Public symbols:
-- `commander_cluster2D` — type
-- `commander_cluster2D_distr_worker` — type
+- `commander_refine2D` — type
+- `commander_refine2D_distr_worker` — type
 - `commander_ppca_denoise_classes` — type
-- `exec_cluster2D` — subroutine
-- `exec_cluster2D_distr_worker` — subroutine
+- `exec_refine2D` — subroutine
+- `exec_refine2D_distr_worker` — subroutine
 - `exec_ppca_denoise_classes` — subroutine
 - `log_ppca_rank_scan` — subroutine
 
@@ -6115,7 +6115,7 @@ Files:
 - `main/commanders/simple/simple_commanders_refine3D.f90`
 
 Uses:
-- `simple_abinitio_utils`
+- `simple_solve3D_utils`
 - `simple_commanders_api`
 - `simple_commanders_euclid`
 - `simple_commanders_flex_pca`
@@ -6483,8 +6483,8 @@ Files:
 Uses:
 - `simple_atoms`
 - `simple_builder`
-- `simple_commanders_abinitio`
-- `simple_commanders_abinitio2d`
+- `simple_commanders_solve3D`
+- `simple_commanders_solve2d`
 - `simple_commanders_api`
 - `simple_commanders_pick`
 - `simple_commanders_preprocess`
@@ -6791,7 +6791,7 @@ Files:
 - `main/commanders/test/simple_commanders_test_stream.f90`
 
 Uses:
-- `simple_commanders_abinitio2d`
+- `simple_commanders_solve2d`
 - `simple_commanders_api`
 - `simple_commanders_pick`
 - `simple_commanders_project_ptcl`
@@ -6875,7 +6875,7 @@ Files:
 - `main/commanders/simple/simple_commanders_validate.f90`
 
 Uses:
-- `simple_commanders_abinitio2d`
+- `simple_commanders_solve2d`
 - `simple_commanders_api`
 - `simple_commanders_cavgs`
 - `simple_commanders_pick`
@@ -7201,7 +7201,7 @@ Uses:
 
 Public symbols:
 - `set_automask2D_defaults` — subroutine
-- `set_cluster2D_defaults` — subroutine
+- `set_refine2D_defaults` — subroutine
 
 ---
 ## Module: simple_defs
@@ -7878,21 +7878,21 @@ Private symbols:
 - `new_from_spaces` — subroutine
 
 ---
-## Module: simple_exec_abinitio3D
+## Module: simple_exec_solve3D
 
 Files:
-- `main/exec/simple_exec_abinitio3D.f90`
+- `main/exec/simple_exec_solve3D.f90`
 
 Uses:
 - `simple_cmdline`
-- `simple_commanders_abinitio`
+- `simple_commanders_solve3D`
 - `simple_commanders_resolest`
 - `simple_commanders_volops`
 - `simple_exec_helpers`
 - `simple_string`
 
 Public symbols:
-- `exec_abinitio3D_commander` — subroutine
+- `exec_solve3D_commander` — subroutine
 
 ---
 ## Module: simple_exec_api
@@ -7904,9 +7904,9 @@ Uses:
 - `iso_fortran_env`
 - `simple_cmdline`
 - `simple_core_module_api`
-- `simple_exec_abinitio3d`
+- `simple_exec_solve3d`
 - `simple_exec_cavgproc`
-- `simple_exec_cluster2d`
+- `simple_exec_refine2d`
 - `simple_exec_denoise`
 - `simple_exec_dock`
 - `simple_exec_filter`
@@ -7944,24 +7944,24 @@ Public symbols:
 - `exec_cavgproc_commander` — subroutine
 
 ---
-## Module: simple_exec_cluster2D
+## Module: simple_exec_refine2D
 
 Files:
-- `main/exec/simple_exec_cluster2D.f90`
+- `main/exec/simple_exec_refine2D.f90`
 
 Uses:
 - `simple_cmdline`
-- `simple_commanders_abinitio2d`
+- `simple_commanders_solve2d`
 - `simple_commanders_cavgs`
-- `simple_commanders_cluster2d`
+- `simple_commanders_refine2d`
 - `simple_commanders_mkcavgs`
 - `simple_commanders_project_cls`
 - `simple_exec_helpers`
-- `simple_stream_abinitio2d_chunks`
+- `simple_stream_solve2d_chunks`
 - `simple_string`
 
 Public symbols:
-- `exec_cluster2D_commander` — subroutine
+- `exec_refine2D_commander` — subroutine
 
 ---
 ## Module: simple_exec_denoise
@@ -7971,7 +7971,7 @@ Files:
 
 Uses:
 - `simple_cmdline`
-- `simple_commanders_cluster2d`
+- `simple_commanders_refine2d`
 - `simple_commanders_denoise`
 - `simple_commanders_flex_pca`
 - `simple_commanders_imgops`
@@ -8410,7 +8410,7 @@ Files:
 - `main/simple_final_rec.f90`
 
 Uses:
-- `simple_abinitio_utils`
+- `simple_solve3D_utils`
 - `simple_commanders_api`
 - `simple_parameters`
 - `simple_refine3d_fnames`
@@ -9523,7 +9523,7 @@ Public symbols:
 Private symbols:
 - `assemble_batch_heartbeat` — subroutine
 - `assemble_batch_metadata` — subroutine
-- `assemble_stream_abinitio3D_multistate` — subroutine
+- `assemble_stream_solve3D_multistate` — subroutine
 - `assemble_stream_heartbeat` — subroutine
 - `assemble_stream_initial_picking` — subroutine
 - `assemble_stream_opening2D` — subroutine
@@ -9617,7 +9617,7 @@ Uses:
 - `simple_gui_metadata_optics_group`
 - `simple_gui_metadata_project`
 - `simple_gui_metadata_ptcl`
-- `simple_gui_metadata_stream_abinitio3d_multistate`
+- `simple_gui_metadata_stream_solve3d_multistate`
 - `simple_gui_metadata_stream_opening2d`
 - `simple_gui_metadata_stream_optics_assignment`
 - `simple_gui_metadata_stream_particle_sieving`
@@ -9812,10 +9812,10 @@ Private symbols:
 - `set` — subroutine
 
 ---
-## Module: simple_gui_metadata_stream_abinitio3D_multistate
+## Module: simple_gui_metadata_stream_solve3D_multistate
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_abinitio3D_multistate.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_solve3D_multistate.f90`
 
 Uses:
 - `json_module`
@@ -9826,7 +9826,7 @@ Uses:
 - `unix`
 
 Public symbols:
-- `gui_metadata_stream_abinitio3D_multistate` — type
+- `gui_metadata_stream_solve3D_multistate` — type
 
 Private symbols:
 - `get` — function
@@ -11219,7 +11219,7 @@ Files:
 - `main/strategies/search/simple_matcher_smpl_and_lplims.f90`
 
 Uses:
-- `simple_abinitio2d_controller`
+- `simple_solve2d_controller`
 - `simple_builder`
 - `simple_pftc_srch_api`
 - `simple_refine3d_fnames`
@@ -13271,7 +13271,7 @@ Uses:
 - `simple_cmdline`
 - `simple_commanders_cavgs`
 - `simple_commanders_checks`
-- `simple_commanders_cluster2d`
+- `simple_commanders_refine2d`
 - `simple_commanders_denoise`
 - `simple_commanders_distr`
 - `simple_commanders_euclid`
@@ -15506,14 +15506,14 @@ Uses:
 - `simple_syslib`
 
 Public symbols:
-- `cluster2D_exec` — subroutine
+- `refine2D_exec` — subroutine
 - `set_b_p_ptrs2D` — subroutine
 
 Private symbols:
 - `allocate_strategy_for_particle` — subroutine
 - `build_batch_particles_local` — subroutine
 - `cleanup_search_state` — subroutine
-- `cluster2D_ctrl` — type
+- `refine2D_ctrl` — type
 - `compute_neigh_frac` — subroutine
 - `display` — subroutine
 - `ensure_even_odd_partition` — subroutine
@@ -16132,21 +16132,21 @@ Uses:
 - `simple_stream_chunk`
 
 ---
-## Module: simple_stream_abinitio2D_chunks
+## Module: simple_stream_solve2D_chunks
 
 Files:
-- `main/stream/simple_stream_abinitio2D_chunks.f90`
+- `main/stream/simple_stream_solve2D_chunks.f90`
 
 Uses:
 - `simple_stream_api`
 
 Public symbols:
 - `analyze_first_available_chunk` — subroutine
-- `exec_stream_abinitio2D_chunks` — subroutine
+- `exec_stream_solve2D_chunks` — subroutine
 - `flag_converged_chunks` — subroutine
 - `generate_chunk_projects` — subroutine
 - `init_one_chunk` — subroutine
-- `stream_abinitio2D_chunks` — type
+- `stream_solve2D_chunks` — type
 
 ---
 ## Module: simple_stream_api
@@ -16178,7 +16178,7 @@ Uses:
 - `simple_stream2d_state`
 - `simple_stream_chunk`
 - `simple_stream_chunk2d_utils`
-- `simple_stream_cluster2d_utils`
+- `simple_stream_refine2d_utils`
 - `simple_stream_communicator`
 - `simple_stream_utils`
 - `simple_stream_watcher`
@@ -16236,7 +16236,7 @@ Uses:
 - `simple_sp_project`
 - `simple_stream2d_state`
 - `simple_stream_chunk`
-- `simple_stream_cluster2d_utils`
+- `simple_stream_refine2d_utils`
 
 Public symbols:
 - `analyze2D_new_chunks` — subroutine
@@ -16248,17 +16248,17 @@ Private symbols:
 - `set_chunk_dimensions` — subroutine
 
 ---
-## Module: simple_stream_cluster2D_utils
+## Module: simple_stream_refine2D_utils
 
 Files:
-- `main/stream/simple_stream_cluster2D_utils.f90`
+- `main/stream/simple_stream_refine2D_utils.f90`
 
 Uses:
 - `json_kinds`
 - `json_module`
 - `simple_class_frcs`
 - `simple_cmdline`
-- `simple_commanders_cluster2d`
+- `simple_commanders_refine2d`
 - `simple_core_module_api`
 - `simple_image`
 - `simple_parameters`
@@ -16358,7 +16358,7 @@ Uses:
 - `simple_stream_p04_refpick_extract_new`
 - `simple_stream_p05_sieve_cavgs_new`
 - `simple_stream_p06_pool2d_new`
-- `simple_stream_p07_abinitio3d_multistate`
+- `simple_stream_p07_solve3d_multistate`
 - `simple_stream_state`
 - `simple_syslib`
 - `unix`
@@ -16367,7 +16367,7 @@ Public symbols:
 - `stream_p00_master` — type
 
 Private symbols:
-- `abinitio3D_multistate_fork` — type
+- `solve3D_multistate_fork` — type
 - `append_pending` — subroutine
 - `assign_optics_fork` — type
 - `close_child_pipe_fds` — subroutine
@@ -16407,7 +16407,7 @@ Private symbols:
 - `try_extract_framed_message` — subroutine
 - `try_read_from_fd` — subroutine
 - `wait_for_fork_termination` — subroutine
-- `xabinitio3D_multistate` — subroutine
+- `xsolve3D_multistate` — subroutine
 - `xassign_optics` — subroutine
 - `xinitial_analysis` — subroutine
 - `xparticle_sieving` — subroutine
@@ -16478,13 +16478,13 @@ Files:
 - `main/stream/simple_stream_p03_initial_analysis.f90`
 
 Uses:
-- `simple_abinitio_utils`
+- `simple_solve3D_utils`
 - `simple_cavg_quality_analysis`
 - `simple_cavg_quality_model`
 - `simple_cavg_quality_types`
 - `simple_class_compatibility`
-- `simple_commanders_abinitio`
-- `simple_commanders_abinitio2d`
+- `simple_commanders_solve3D`
+- `simple_commanders_solve2d`
 - `simple_commanders_cavgs`
 - `simple_commanders_denoise`
 - `simple_commanders_mkcavgs`
@@ -16514,9 +16514,9 @@ Private symbols:
 - `balance_classes` — subroutine
 - `duplicate_balanced_stack` — subroutine
 - `exec_stream_p03_initial_analysis` — subroutine
-- `find_final_abinitio3D_cavgs_dir` — subroutine
-- `finish_abinitio2D` — subroutine
-- `finish_abinitio3D` — subroutine
+- `find_final_solve3D_cavgs_dir` — subroutine
+- `finish_solve2D` — subroutine
+- `finish_solve3D` — subroutine
 - `finish_extract` — subroutine
 - `micimporter` — subroutine
 - `run_cavg_quality_selection` — subroutine
@@ -16532,8 +16532,8 @@ Private symbols:
 - `send_selected_pickrefs` — subroutine
 - `send_to_initial_analysis_in_pipe` — subroutine
 - `sigterm_handler` — subroutine
-- `start_abinitio2D` — subroutine
-- `start_abinitio3D` — subroutine
+- `start_solve2D` — subroutine
+- `start_solve3D` — subroutine
 - `start_extract` — subroutine
 - `update_os_out_stk` — subroutine
 - `write_quality_stack` — subroutine
@@ -16629,10 +16629,10 @@ Private symbols:
 - `unpause_pool` — subroutine
 
 ---
-## Module: simple_stream_p07_abinitio3D_multistate
+## Module: simple_stream_p07_solve3D_multistate
 
 Files:
-- `main/stream/simple_stream_p07_abinitio3D_multistate.f90`
+- `main/stream/simple_stream_p07_solve3D_multistate.f90`
 
 Uses:
 - `simple_commanders_cavgs`
@@ -16642,15 +16642,15 @@ Uses:
 - `unix`
 
 Public symbols:
-- `stream_p07_abinitio3D_multistate` — type
+- `stream_p07_solve3D_multistate` — type
 
 Private symbols:
-- `exec_stream_p07_abinitio3D_multistate` — subroutine
-- `finish_abinitio3D` — subroutine
+- `exec_stream_p07_solve3D_multistate` — subroutine
+- `finish_solve3D` — subroutine
 - `finish_refine3D` — subroutine
 - `import_sets_into_pool` — subroutine
 - `sigterm_handler` — subroutine
-- `start_abinitio3D` — subroutine
+- `start_solve3D` — subroutine
 - `start_refine3D` — subroutine
 
 ---
@@ -17685,18 +17685,18 @@ Private symbols:
 - `validate_input_list` — subroutine
 
 ---
-## Module: simple_ui_abinitio3D
+## Module: simple_ui_solve3D
 
 Files:
-- `main/ui/simple/simple_ui_abinitio3D.f90`
+- `main/ui/simple/simple_ui_solve3D.f90`
 
 Uses:
 - `simple_ui_modules`
 
 Public symbols:
-- `construct_abinitio3D_programs` — subroutine
-- `new_abinitio3D` — subroutine
-- `new_abinitio3D_cavgs` — subroutine
+- `construct_solve3D_programs` — subroutine
+- `new_solve3D` — subroutine
+- `new_solve3D_cavgs` — subroutine
 - `new_estimate_lpstages` — subroutine
 - `new_noisevol` — subroutine
 
@@ -17720,19 +17720,19 @@ Public symbols:
 - `new_select_clusters` — subroutine
 
 ---
-## Module: simple_ui_cluster2D
+## Module: simple_ui_refine2D
 
 Files:
-- `main/ui/simple/simple_ui_cluster2D.f90`
+- `main/ui/simple/simple_ui_refine2D.f90`
 
 Uses:
 - `simple_ui_modules`
 
 Public symbols:
-- `construct_cluster2D_programs` — subroutine
-- `new_abinitio2D` — subroutine
-- `new_abinitio2D_chunks` — subroutine
-- `new_abinitio2D_descriptor` — subroutine
+- `construct_refine2D_programs` — subroutine
+- `new_solve2D` — subroutine
+- `new_solve2D_chunks` — subroutine
+- `new_solve2D_descriptor` — subroutine
 - `new_bootstrap_cavgs` — subroutine
 - `new_cls_split` — subroutine
 - `new_make_cavgs` — subroutine
@@ -18179,9 +18179,9 @@ Files:
 - `main/ui/simple_ui_simple_group.f90`
 
 Uses:
-- `simple_ui_abinitio3d`
+- `simple_ui_solve3d`
 - `simple_ui_cavgproc`
-- `simple_ui_cluster2d`
+- `simple_ui_refine2d`
 - `simple_ui_denoise`
 - `simple_ui_dock`
 - `simple_ui_filter`
@@ -18237,7 +18237,7 @@ Uses:
 Public symbols:
 - `construct_stream_programs` — subroutine
 - `new_abinitio2D_stream` — subroutine
-- `new_abinitio3D_stream` — subroutine
+- `new_solve3D_stream` — subroutine
 - `new_assign_optics` — subroutine
 - `new_gen_pickrefs` — subroutine
 - `new_master` — subroutine
@@ -18583,7 +18583,7 @@ Files:
 
 Uses:
 - `simple_commanders_api`
-- `simple_commanders_cluster2d`
+- `simple_commanders_refine2d`
 - `simple_commanders_imgproc`
 - `simple_commanders_mkcavgs`
 - `simple_commanders_sim`
@@ -18591,10 +18591,10 @@ Uses:
 Public symbols:
 - `commander_analysis2D_nano` — type
 - `commander_center2D_nano` — type
-- `commander_cluster2D_nano` — type
+- `commander_refine2D_nano` — type
 - `exec_analysis2D_nano` — subroutine
 - `exec_center2D_nano` — subroutine
-- `exec_cluster2D_nano` — subroutine
+- `exec_refine2D_nano` — subroutine
 
 ---
 ## Module: single_commanders_nano3D
@@ -18603,11 +18603,11 @@ Files:
 - `main/commanders/single/single_commanders_nano3D.f90`
 
 Uses:
-- `simple_abinitio_utils`
-- `simple_commanders_abinitio`
+- `simple_solve3D_utils`
+- `simple_commanders_solve3D`
 - `simple_commanders_api`
 - `simple_commanders_atoms`
-- `simple_commanders_cluster2d`
+- `simple_commanders_refine2d`
 - `simple_commanders_ori`
 - `simple_commanders_rec`
 - `simple_commanders_refine3d`
@@ -18616,11 +18616,11 @@ Uses:
 - `simple_refine3d_fnames`
 
 Public symbols:
-- `commander_abinitio3D_nano` — type
+- `commander_solve3D_nano` — type
 - `commander_autorefine3D_nano` — type
 - `commander_refine3D_nano` — type
 - `commander_trajectory_reconstruct3D_distr` — type
-- `exec_abinitio3D_nano` — subroutine
+- `exec_solve3D_nano` — subroutine
 - `exec_autorefine3D_nano` — subroutine
 - `exec_commander_trajectory_reconstruct3D_distr` — subroutine
 - `exec_refine3D_nano` — subroutine
@@ -18903,7 +18903,7 @@ Public symbols:
 - `construct_single_nano2D_programs` — subroutine
 - `new_analysis2D_nano` — subroutine
 - `new_center2D_nano` — subroutine
-- `new_cluster2D_nano` — subroutine
+- `new_refine2D_nano` — subroutine
 - `new_estimate_diam` — subroutine
 
 ---
@@ -18917,7 +18917,7 @@ Uses:
 
 Public symbols:
 - `construct_single_nano3D_programs` — subroutine
-- `new_abinitio3D_nano` — subroutine
+- `new_solve3D_nano` — subroutine
 - `new_autorefine3D_nano` — subroutine
 - `new_refine3D_nano` — subroutine
 
@@ -18978,8 +18978,8 @@ Public symbols:
 ## Module: subroutine
 
 Files:
-- `main/abinitio/simple_abinitio_controller.f90`
-- `main/abinitio/simple_abinitio_utils.f90`
+- `main/solve/simple_solve3D_controller.f90`
+- `main/solve/simple_solve3D_utils.f90`
 - `main/class/simple_classaverager.f90`
 - `main/class/simple_classaverager_core.f90`
 - `main/class/simple_classaverager_restore.f90`
@@ -19214,7 +19214,7 @@ Public symbols:
 - `symmetrize` — subroutine
 - `validate_compact_evidence_state` — subroutine
 - `warn_if_invalid` — subroutine
-- `write_abinitio_lowpass_snapshot` — subroutine
+- `write_solve3D_lowpass_snapshot` — subroutine
 - `write_embed_stats_part` — subroutine
 - `write_final_rec_outputs` — subroutine
 - `write_mean_scale` — subroutine

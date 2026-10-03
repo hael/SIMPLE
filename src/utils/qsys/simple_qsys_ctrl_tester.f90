@@ -124,7 +124,7 @@ contains
         write(*,'(A)') 'test_prep_part_jobs'
         call make_ctrl(qsys_obj, parts, ctrl)
         call job_descr%new(20)
-        call job_descr%set('prg',  'cluster2D')
+        call job_descr%set('prg',  'refine2D')
         call job_descr%set('nthr', '1')
         call job_descr%set('ncls', '50')
         call q_descr%new(10)
@@ -136,7 +136,7 @@ contains
         end do
         call assert_int(0, nmissing, 'prep_part_jobs writes one script per partition')
         txt = file_text('distr_simple_script_2')
-        call assert_true(index(txt, 'simple_private_exec') > 0 .and. index(txt, 'prg=cluster2D') > 0, &
+        call assert_true(index(txt, 'simple_private_exec') > 0 .and. index(txt, 'prg=refine2D') > 0, &
             &'a partition script runs the executable with the job description')
         call assert_true(index(txt, 'fromp=26') > 0 .and. index(txt, 'top=50') > 0 .and. index(txt, 'part=2') > 0 &
             &.and. index(txt, 'nparts=4') > 0, 'the second partition script carries particles 26-50 of four parts')
@@ -162,20 +162,20 @@ contains
         write(*,'(A)') 'test_single_job_scripts'
         call make_ctrl(qsys_obj, parts, ctrl)
         call job_descr%new(10)
-        call job_descr%set('prg',  'cluster2D')
+        call job_descr%set('prg',  'refine2D')
         call job_descr%set('nthr', '2')
         call q_descr%new(10)
         call q_descr%set('qsys_name', 'local')
         call ctrl%generate_script(job_descr, q_descr, string('simple_private_exec'), string(SNAME2), &
             &outfile=string('test_single_output_2.log'), exit_code_fname=string('test_exit_code_2'))
         call assert_true(file_exists(SNAME2), 'a single-job script is written from a job description')
-        call assert_true(index(file_text(SNAME2), 'prg=cluster2D') > 0, 'the single-job script carries the job description')
-        call cline%set('prg',  'cluster2D')
+        call assert_true(index(file_text(SNAME2), 'prg=refine2D') > 0, 'the single-job script carries the job description')
+        call cline%set('prg',  'refine2D')
         call cline%set('nthr', 4.)
         call cline%set('ncls', 50.)
         call ctrl%generate_script(cline, q_descr, string(SNAME3), string('test_prg_output_3.log'))
         call assert_true(file_exists(SNAME3), 'a single-job script is written from a command line')
-        call assert_true(index(file_text(SNAME3), 'prg=cluster2D') > 0, 'the command-line script carries the program')
+        call assert_true(index(file_text(SNAME3), 'prg=refine2D') > 0, 'the command-line script carries the program')
         call del_file(SNAME2)
         call del_file(SNAME3)
         call job_descr%kill
@@ -200,7 +200,7 @@ contains
         allocate(jobs(3))
         do ij = 1, 3
             call jobs(ij)%new(10)
-            call jobs(ij)%set('prg',  'cluster2D')
+            call jobs(ij)%set('prg',  'refine2D')
             call jobs(ij)%set('ncls', int2str(ij*50))
         end do
         call q_descr%new(10)
@@ -229,9 +229,9 @@ contains
         integer :: nfail
         write(*,'(A)') 'test_streaming_stack'
         call make_ctrl(qsys_obj, parts, ctrl, stream=.true.)
-        call cline1%set('prg', 'cluster2D'); call cline1%set('fromp',  1.); call cline1%set('top', 25.)
-        call cline2%set('prg', 'cluster2D'); call cline2%set('fromp', 26.); call cline2%set('top', 50.)
-        call cline3%set('prg', 'cluster2D'); call cline3%set('fromp', 51.); call cline3%set('top', 75.)
+        call cline1%set('prg', 'refine2D'); call cline1%set('fromp',   1.); call cline1%set('top', 25.)
+        call cline2%set('prg', 'refine2D'); call cline2%set('fromp', 26.); call cline2%set('top', 50.)
+        call cline3%set('prg', 'refine2D'); call cline3%set('fromp', 51.); call cline3%set('top', 75.)
         call ctrl%add_to_streaming(cline1)
         call ctrl%add_to_streaming(cline2)
         call ctrl%add_to_streaming(cline3)

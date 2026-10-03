@@ -393,7 +393,7 @@ contains
         if( .not.self%converged )then
             if( self%toanalyze2D )then
                 str_prg = self%cline%get_carg('prg')
-                self%converged = file_exists(self%path//ABINITIO2D_FINISHED)
+                self%converged = file_exists(self%path//SOLVE2D_FINISHED)
                 call str_prg%kill
             else
                 self%converged = file_exists(self%path//CALCPSPEC_FINISHED)

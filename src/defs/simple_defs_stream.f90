@@ -6,13 +6,13 @@ character(len=*), parameter :: CLASS2D_JOB_NAME           = 'classification_2D' 
 character(len=*), parameter :: DIR_STREAM                 = './spprojs/'              ! location for projects to be processed
 character(len=*), parameter :: DIR_STREAM_COMPLETED       = './spprojs_completed/'    ! location for projects processed
 character(len=*), parameter :: MICSPPROJ_FNAME            = './streamdata.simple'
-character(len=*), parameter :: MULTISTATE3D_JOB_NAME      = 'abinitio3D_multistate'   ! name of abinitio3D multistate job. also used for folder name
+character(len=*), parameter :: MULTISTATE3D_JOB_NAME      = 'solve3D_multistate'      ! name of solve3D multistate job. also used for folder name
 character(len=*), parameter :: OPENING2D_JOB_NAME         = 'opening_2D'              ! name of opening 2D job. also used for folder name
 character(len=*), parameter :: OPTICS_JOB_NAME            = 'optics_assignment'       ! name of optics assignment job. also used for folder name
 character(len=*), parameter :: POOL_DIR                   = ''                        ! should be './pool/' for tidyness but difficult with gui
-character(len=*), parameter :: POOL_DISTR_EXEC_FNAME      = './distr_cluster2D_pool'
-character(len=*), parameter :: POOL_LOGFILE               = 'simple_log_cluster2D_pool'
-character(len=*), parameter :: POOL_PROJFILE              = 'cluster2D.simple'
+character(len=*), parameter :: POOL_DISTR_EXEC_FNAME      = './distr_refine2D_pool'
+character(len=*), parameter :: POOL_LOGFILE               = 'simple_log_refine2D_pool'
+character(len=*), parameter :: POOL_PROJFILE              = 'refine2D.simple'
 character(len=*), parameter :: PREPROC_JOB_NAME           = 'preprocessing'           ! name of preproc job. also used for folder name
 character(len=*), parameter :: REFPICK_JOB_NAME           = 'reference_based_picking' ! name of reference based picking job. also used for folder name
 character(len=*), parameter :: REJECTED_CLS_STACK         = './rejected_cls.mrc'

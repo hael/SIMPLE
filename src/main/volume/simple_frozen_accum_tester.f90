@@ -1,4 +1,4 @@
-!@descr: unit tests of the abinitio3D_addon frozen accumulator sets (simple_frozen_accum)
+!@descr: unit tests of the solve3D_addon frozen accumulator sets (simple_frozen_accum)
 ! Frozen set F + cohort equals the direct union (gridding sums/rho, PCG B/D, restored and solved
 ! maps); a zero cohort gives F exactly. Plus context round trip and refusals. Box 16, seeded noise.
 module simple_frozen_accum_tester
@@ -171,7 +171,7 @@ contains
         character(len=64)     :: good(10)
         integer :: status
         write(*,'(A)') 'test_context_refusals'
-        good = [character(len=64) :: 'abinitio3D_addon_frozen_context 2', 'run_id r1', 'backend pcg', &
+        good = [character(len=64) :: 'solve3D_addon_frozen_context 2', 'run_id r1', 'backend pcg', &
             &'nstates 2', 'nrows 30', 'nrows_frozen 25', 'nfrozen 7', 'nfrozen_state 1 3', 'nfrozen_state 2 4', 'end']
         call write_text(CTX_FNAME, good)
         call ctx%read(string(CTX_FNAME), status, msg)
@@ -179,10 +179,10 @@ contains
         call del_file(CTX_FNAME)
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'a missing context is refused')
-        call write_text(CTX_FNAME, [character(len=64) :: 'abinitio3D_addon_frozen_context 1', good(2:)])
+        call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_context 1', good(2:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'an unsupported schema version is refused')
-        call write_text(CTX_FNAME, [character(len=64) :: 'abinitio3D_addon_frozen_set 1', good(2:)])
+        call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_set 1', good(2:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'another schema is refused')
         call write_text(CTX_FNAME, good(1:9))

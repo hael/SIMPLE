@@ -68,7 +68,7 @@ contains
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         if( nptcls < 1 )then
             ! a partition without sampled particles (state-0 rows only, e.g. the
-            ! frozen rows of abinitio3D_addon) contributes an empty table
+            ! frozen rows of solve3D_addon) contributes an empty table
             call write_empty_prob_tab(params, build, pinds, fname)
             call build%kill_general_tbox
             call qsys_job_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
@@ -381,7 +381,7 @@ contains
         else
             call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
         endif
-        ! mirror cluster2D_exec reference setup
+        ! mirror refine2D_exec reference setup
         call cavger_new(params, build)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
         call cavger_read_all
@@ -441,7 +441,7 @@ contains
         endif
         ! Mirror the 3D workflow: sampled-update is active from the first stage onward.
         ! In probabilistic mode the sampled subset is reused within the current iteration
-        ! by prob_tab2D/cluster2D_exec, but it is redrawn on later iterations.
+        ! by prob_tab2D/refine2D_exec, but it is redrawn on later iterations.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_ALIGN2D: sampled ', nptcls, ' particles over ', params%nparts, ' part(s)'
         call flush(logfhandle)
@@ -450,7 +450,7 @@ contains
         ! Build the downscaled particle cache before the workers start, so they all
         ! find it ready. A no-op once it exists, so the per-iteration cost is a file
         ! and key check; this is also the first point in the workflow where the same
-        ! particles get read twice per iteration, once here and once in cluster2D.
+        ! particles get read twice per iteration, once here and once in refine2D.
         ! Must precede the cline copy below so a fallback to cache=no reaches the
         ! prob_tab2D worker command lines.
         call ptcl_cache_ensure(params, build, cline)

@@ -1,4 +1,4 @@
-!@descr: high-level search routines for the cluster2D and abinitio2D applications
+!@descr: high-level search routines for the refine2D and solve2D applications
 module simple_strategy2D_matcher
 use simple_pftc_srch_api
 use simple_classaverager
@@ -11,8 +11,8 @@ use simple_qsys_funs,                only: qsys_job_finished
 use simple_syslib,                   only: get_peak_rss_bytes
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
-use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, cluster2D_requires_full_assignment, &
-                                           all_active_ptcls_2D_assigned, cluster2D_blends_carryover
+use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
+                                           all_active_ptcls_2D_assigned, refine2D_blends_carryover
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
 use simple_ptcl_cache,               only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_imgarr_utils,             only: alloc_imgarr
@@ -29,7 +29,7 @@ use simple_strategy2D_tseries,       only: strategy2D_tseries
 use simple_eul_prob_tab2D,           only: eul_prob_tab2D
 implicit none
 
-public :: cluster2D_exec
+public :: refine2D_exec
 public :: set_b_p_ptrs2D
 public :: ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
 private
@@ -45,7 +45,7 @@ integer(timer_int_kind)    :: t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
 integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot
 type(string)               :: benchfname
 
-type :: cluster2D_ctrl
+type :: refine2D_ctrl
     character(len=:), allocatable :: refine_flag
     logical :: l_sample_updates
     logical :: l_frac_restore
@@ -61,7 +61,7 @@ type :: cluster2D_ctrl
     logical :: do_bench
   contains
     procedure :: display
-end type cluster2D_ctrl
+end type refine2D_ctrl
 
 contains
 
@@ -73,7 +73,7 @@ contains
     end subroutine set_b_p_ptrs2D
 
     !>  \brief  is the prime2D algorithm
-    subroutine cluster2D_exec( params, build, cline, which_iter, converged )
+    subroutine refine2D_exec( params, build, cline, which_iter, converged )
         use simple_convergence, only: convergence
         use simple_decay_funs,  only: extremal_decay2D
         class(parameters), target, intent(in)    :: params
@@ -85,7 +85,7 @@ contains
         real,                      allocatable   :: states(:), incr_shifts(:,:)
         integer,                   allocatable   :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),      target        :: eulprob_obj_part
-        type(cluster2D_ctrl)                     :: ctrl
+        type(refine2D_ctrl)                      :: ctrl
         type(ori)             :: orientation
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
@@ -193,7 +193,7 @@ contains
         call finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
         call b_ptr%esig%kill
         call b_ptr%pftc%kill
-        call qsys_job_finished(p_ptr, string('simple_strategy2D_matcher :: cluster2D_exec'))
+        call qsys_job_finished(p_ptr, string('simple_strategy2D_matcher :: refine2D_exec'))
         call maybe_write_bench(which_iter)
 
 contains
@@ -204,10 +204,10 @@ contains
             ctrl%l_greedy          = str_has_substr(ctrl%refine_flag, 'greedy')
             ctrl%l_stream          = (trim(p_ptr%stream2d) == 'yes')
             ctrl%l_sample_updates  = p_ptr%l_update_frac
-            ctrl%l_frac_restore    = cluster2D_blends_carryover(p_ptr, which_iter)
+            ctrl%l_frac_restore    = refine2D_blends_carryover(p_ptr, which_iter)
             ctrl%l_prob_align      = p_ptr%l_prob_align_mode
             ctrl%l_restore_cavgs   = (trim(p_ptr%restore_cavgs) == 'yes')
-            ctrl%l_require_full_assignment = cluster2D_requires_full_assignment(p_ptr)
+            ctrl%l_require_full_assignment = refine2D_requires_full_assignment(p_ptr)
             ctrl%l_np_cls_defined  = cline%defined('nptcls_per_cls')
             ctrl%do_bench          = L_BENCH_GLOB
             if( p_ptr%extr_iter == 1 )then
@@ -236,14 +236,14 @@ contains
             call ptcl_cache_assert_ready(p_ptr, b_ptr)
             ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
             if( ctrl%l_cached .and. p_ptr%part == 1 ) &
-                write(logfhandle,'(A)') '>>> CLUSTER2D: reading particles from the downscaled cache'
+                write(logfhandle,'(A)') '>>> REFINE2D: reading particles from the downscaled cache'
         end subroutine init_ctrl
 
         subroutine sample_particles_for_update()
             if( allocated(pinds) ) deallocate(pinds)
             if( ctrl%l_prob_align )then
                 ! prob_align2D owns the outer subset sampling in probabilistic mode;
-                ! cluster2D only reproduces that same subset for the downstream update.
+                ! refine2D only reproduces that same subset for the downstream update.
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds)
             else
                 call sample_ptcls4update2D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], ctrl%l_sample_updates, nptcls2update, pinds)
@@ -274,7 +274,7 @@ contains
 
         subroutine ensure_even_odd_partition()
             if( b_ptr%spproj_field%get_nevenodd() == 0 )then
-                if( l_distr_worker_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
+                if( l_distr_worker_glob ) THROW_HARD('no eo partitioning available; refine2D_exec')
                 call b_ptr%spproj_field%partition_eo
                 call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
             endif
@@ -283,7 +283,7 @@ contains
         subroutine prepare_class_averages_and_restoration()
             call cavger_new(p_ptr, b_ptr)
             if( .not. cline%defined('refs') )then
-                THROW_HARD('need refs to be part of command line for cluster2D execution')
+                THROW_HARD('need refs to be part of command line for refine2D execution')
             endif
             call cavger_read_all
             call cavger_init_online(batchsz_max, cropped_ptcls=ctrl%l_cached)
@@ -394,7 +394,7 @@ contains
 
         subroutine write_orientations()
             if( p_ptr%top < p_ptr%fromp )then
-                THROW_HARD('invalid output write range in cluster2D_exec: TOP < FROMP')
+                THROW_HARD('invalid output write range in refine2D_exec: TOP < FROMP')
             endif
             call binwrite_oritab(p_ptr%outfile, b_ptr%spproj, b_ptr%spproj_field, &
                 [p_ptr%fromp,p_ptr%top], isegment=PTCL2D_SEG)
@@ -444,7 +444,7 @@ contains
                     l_full_assignment = all_active_ptcls_2D_assigned(b_ptr%spproj_field, [p_ptr%fromp,p_ptr%top], n_unassigned)
                     if( .not. l_full_assignment )then
                         write(logfhandle,'(A,I8)') &
-                            '>>> CLUSTER2D FULL-ASSIGNMENT COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
+                            '>>> REFINE2D FULL-ASSIGNMENT COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
                     endif
                     converged = converged .and. l_full_assignment
                 endif
@@ -463,7 +463,7 @@ contains
             peak_rss = get_peak_rss_bytes()
             peak_rss_gib = -1.0_real64
             if( peak_rss >= 0_int64 ) peak_rss_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
-            benchfname = string('CLUSTER2D_BENCH_ITER')//int2str_pad(which_iter,3)//'.txt'
+            benchfname = string('REFINE2D_BENCH_ITER')//int2str_pad(which_iter,3)//'.txt'
             call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'match2D refine mode                 : ', trim(ctrl%refine_flag)
@@ -495,11 +495,11 @@ contains
             call fclose(fnr)
         end subroutine maybe_write_bench
 
-    end subroutine cluster2D_exec
+    end subroutine refine2D_exec
 
     subroutine display( self )
-        class(cluster2D_ctrl), intent(in) :: self
-        write(logfhandle,'(a)') '>>> CLUSTER2D CONTROL FLAGS:'
+        class(refine2D_ctrl), intent(in) :: self
+        write(logfhandle,'(a)') '>>> REFINE2D CONTROL FLAGS:'
         write(logfhandle,'(a,a)') 'refine_flag           : ', trim(self%refine_flag)
         write(logfhandle,'(a,l1)') 'l_sample_updates     : ', self%l_sample_updates
         write(logfhandle,'(a,l1)') 'l_frac_restore       : ', self%l_frac_restore

@@ -3,6 +3,7 @@ module simple_private_exec_driver
 use simple_private_exec_api
 use simple_syslib, only: redirect_stdout_stderr, restore_stdout_stderr
 use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
+use simple_ui_legacy_names, only: canonical_prg_name, report_legacy_prg_name
 implicit none
 private
 public :: run_private_exec_from_command_line, run_private_exec_line, run_coarray_direct, run_coarray_smoke
@@ -26,6 +27,8 @@ contains
         pos = index(xarg, '=')
         call cmdline_err(cmdstat, cmdlen, xarg, pos)
         prg = xarg(pos+1:)
+        call report_legacy_prg_name(prg)
+        prg = canonical_prg_name(prg)
         call ensure_private_exec_ui
         call cline%parse_private
         call mem_monitor_init(cline, 'simple_private_exec:'//trim(prg))
@@ -187,7 +190,7 @@ contains
         pos = index(first_arg, '=')
         call cmdline_err(0, len_trim(first_arg), first_arg, pos)
         if( trim(first_arg(:pos-1)) /= 'prg' ) THROW_HARD('private command line must start with prg=')
-        prg = first_arg(pos+1:)
+        prg = canonical_prg_name(first_arg(pos+1:))
     end subroutine extract_prg_from_line
 
     subroutine dispatch_private_prg( prg, cline, l_silent )
@@ -206,10 +209,10 @@ contains
         type(commander_pick)                    :: xpick
         type(commander_shape_rank_cavgs)        :: xshape_rank_cavgs
         type(commander_make_pickrefs)           :: xmake_pickrefs
-        ! CLUSTER2D PROGRAMS
+        ! REFINE2D PROGRAMS
         type(commander_make_cavgs)              :: xmake_cavgs
-        type(commander_cluster2D_distr_worker)  :: xcluster2D_worker
-        type(commander_cluster2D)               :: xcluster2D
+        type(commander_refine2D_distr_worker)   :: xrefine2D_worker
+        type(commander_refine2D)                :: xrefine2D
         type(commander_cavgassemble)            :: xcavgassemble
         type(commander_rank_cavgs)              :: xrank_cavgs
         type(commander_export_cavgs)            :: xexport_cavgs
@@ -294,13 +297,13 @@ contains
                 call xshape_rank_cavgs%execute(cline)
             case( 'make_pickrefs' )
                 call xmake_pickrefs%execute(cline)
-            ! CLUSTER2D PROGRAMS
+            ! REFINE2D PROGRAMS
             case( 'make_cavgs' )
                 call xmake_cavgs%execute(cline)
-            case( 'cluster2D' )
-                call xcluster2D_worker%execute(cline)
-            case( 'cluster2D_distr' )
-                call xcluster2D%execute(cline)
+            case( 'refine2D' )
+                call xrefine2D_worker%execute(cline)
+            case( 'refine2D_distr' )
+                call xrefine2D%execute(cline)
             case( 'cavgassemble' )
                 call xcavgassemble%execute(cline)
             case( 'rank_cavgs' )

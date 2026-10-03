@@ -2,7 +2,7 @@
 
 ## Stage Policy
 
-`simple_abinitio_controller.f90` emits the per-stage `refine3D` command line:
+`simple_solve3D_controller.f90` emits the per-stage `refine3D` command line:
 
 - `update_frac` decides the target outer particle subset.
 - `trail_rec` turns on the trailing reconstruction consumer path in later stages.
@@ -90,7 +90,7 @@ trailed_rho_eo  = (u/f) * current_partial_rho_eo  + (1 - u) * chain_rho_eo
   the halfmap inputs are ignored.
 - Full-weight seeding: a stage-boundary full reconstruction writes the chain at
   full-dataset weight when the internal `trail_seed=yes` cline handshake is set
-  (`simple_abinitio_utils.f90::calc_rec`, gated on the consuming stage's
+  (`simple_solve3D_utils.f90::calc_rec`, gated on the consuming stage's
   `trail_rec`), so the consuming trailing stage starts from complete statistics
   instead of warming up.
 - Artifact-set integrity: the manifest is deleted before and rewritten after
@@ -121,7 +121,7 @@ accumulator chain:
 
 - It requires previous MRC and rho files for both even and odd halves.
 - When `l_update_frac` is active and previous dimensions are smaller than current
-  dimensions, it pads with zeros (the abinitio autoscale ramp).
+  dimensions, it pads with zeros (the solve3D autoscale ramp).
 - It rejects previous dimensions larger than the current dimensions. For the
   trailing chain, `trail_chain_available` checks dimensions before the read and
   discards + re-seeds a larger chain instead of failing the run.

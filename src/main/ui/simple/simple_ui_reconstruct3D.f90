@@ -117,7 +117,7 @@ contains
         & given filt_mode/automsk, since the residual sigmas depend on the reference regularization), runs one&
         & residual sigma2 pass (refine=sigma, no search) against that map, consolidates the residual groups as the next&
         & iteration and reconstructs the shipped ML-regularized map on them with the requested backend (PCG gets the cold-solve&
-        & iteration budget); standalone test entry point for the final reconstruction stage of abinitio3D and refine3D_auto',&
+        & iteration budget); standalone test entry point for the final reconstruction stage of solve3D and refine3D_auto',&
         &'simple_exec',&                                                 ! executable
         &.true.)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

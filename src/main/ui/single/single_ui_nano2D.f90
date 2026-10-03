@@ -6,7 +6,7 @@ implicit none
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('nano2d', '2D Analysis', 30)
 type(ui_program), target :: analysis2D_nano
 type(ui_program), target :: center2D_nano
-type(ui_program), target :: cluster2D_nano
+type(ui_program), target :: refine2D_nano
 type(ui_program), target :: estimate_diam
 
 contains
@@ -15,7 +15,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_analysis2D_nano(prgtab)
         call new_center2D_nano(prgtab)
-        call new_cluster2D_nano(prgtab)
+        call new_refine2D_nano(prgtab)
         call new_estimate_diam(prgtab)
     end subroutine construct_single_nano2D_programs
 
@@ -91,11 +91,11 @@ subroutine new_analysis2D_nano( prgtab )
         call add_ui_program('center2D_nano', center2D_nano, prgtab, UI_CATEGORY)
     end subroutine new_center2D_nano
 
-    subroutine new_cluster2D_nano( prgtab )
+    subroutine new_refine2D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call cluster2D_nano%new(&
-        &'cluster2D_nano',&                                                                 ! name
+        call refine2D_nano%new(&
+        &'refine2D_nano',&                                                                  ! name
         &'Align and cluster nanoparticle images across a time series',&                    ! summary
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! help
         &'single_exec',&                                                                    ! executable
@@ -104,49 +104,49 @@ subroutine new_analysis2D_nano( prgtab )
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call cluster2D_nano%add_input(UI_PARM, moldiam, &
+        call refine2D_nano%add_input(UI_PARM, moldiam, &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call cluster2D_nano%add_input(UI_SRCH, nptcls_per_cls, &
+        call refine2D_nano%add_input(UI_SRCH, nptcls_per_cls, &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        call refine2D_nano%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_SRCH, 'winsz', 'num', 'Half-window size', 'Half-window size(frames)', 'winsz in # frames', .false., 3.0, &
+        call refine2D_nano%add_input(UI_SRCH, 'winsz', 'num', 'Half-window size', 'Half-window size(frames)', 'winsz in # frames', .false., 3.0, &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_SRCH, maxits, &
+        call refine2D_nano%add_input(UI_SRCH, maxits, &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_SRCH, trs, &
+        call refine2D_nano%add_input(UI_SRCH, trs, &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call cluster2D_nano%add_input(UI_FILT, hp, &
+        call refine2D_nano%add_input(UI_FILT, hp, &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call refine2D_nano%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{5.0}', .false., 5., &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit{1.0}', 'low-pass limit in Angstroms', .false., 1., &
+        call refine2D_nano%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit{1.0}', 'low-pass limit in Angstroms', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false., 1., &
+        call refine2D_nano%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Final low-pass limit{1.0}', 'final low-pass limit in Angstroms', .false., 1., &
+        call refine2D_nano%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Final low-pass limit{1.0}', 'final low-pass limit in Angstroms', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call cluster2D_nano%add_input(UI_MASK, mskdiam, &
+        call refine2D_nano%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call cluster2D_nano%add_input(UI_COMP, nparts, required_override=.false., &
+        call refine2D_nano%add_input(UI_COMP, nparts, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
-        call cluster2D_nano%add_input(UI_COMP, nthr, &
+        call refine2D_nano%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)
-        call cluster2D_nano%add_input(UI_COMP, script, &
+        call refine2D_nano%add_input(UI_COMP, script, &
         &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
-        call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab, UI_CATEGORY)
-    end subroutine new_cluster2D_nano
+        call add_ui_program('refine2D_nano', refine2D_nano, prgtab, UI_CATEGORY)
+    end subroutine new_refine2D_nano
 
     subroutine new_estimate_diam( prgtab )
         class(ui_hash), intent(inout) :: prgtab

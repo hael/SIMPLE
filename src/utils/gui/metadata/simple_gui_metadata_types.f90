@@ -52,9 +52,9 @@ enum, bind(c)
   enumerator :: GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE         ! 34
   enumerator :: GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE      ! 35
   enumerator :: GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE ! 36
-  ! multistate abinitio3D stage
-  enumerator :: GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE        ! 37
-  enumerator :: GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_REPROJ_TYPE ! 38
+  ! multistate solve3D stage
+  enumerator :: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE           ! 37
+  enumerator :: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE ! 38
 end enum
 
 end module simple_gui_metadata_types

@@ -4,7 +4,7 @@ use simple_commanders_api
 use simple_commanders_ori,       only: commander_vizoris
 use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_reproject, only: commander_reproject
-use simple_commanders_cluster2D
+use simple_commanders_refine2D
 use simple_nanoparticle
 use simple_refine3D_fnames,  only: refine3D_resolution_txt_fbody, refine3D_state_halfvol_fname, &
     &refine3D_state_vol_fbody, refine3D_state_vol_fname
@@ -21,10 +21,10 @@ type, extends(commander_base) :: commander_refine3D_nano
     procedure :: execute      => exec_refine3D_nano
 end type commander_refine3D_nano
 
-type, extends(commander_base) :: commander_abinitio3D_nano
+type, extends(commander_base) :: commander_solve3D_nano
     contains
-        procedure :: execute      => exec_abinitio3D_nano
-end type commander_abinitio3D_nano
+        procedure :: execute      => exec_solve3D_nano
+end type commander_solve3D_nano
 
 type, extends(commander_base) :: commander_trajectory_reconstruct3D_distr
   contains
@@ -33,12 +33,12 @@ end type commander_trajectory_reconstruct3D_distr
 
 contains
 
-    subroutine exec_abinitio3D_nano( self, cline )
-        use simple_commanders_abinitio, only: commander_abinitio3D
-        class(commander_abinitio3D_nano), intent(inout) :: self
+    subroutine exec_solve3D_nano( self, cline )
+        use simple_commanders_solve3D, only: commander_solve3D
+        class(commander_solve3D_nano), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
-        type(commander_abinitio3D) :: xabinitio3D
-        call cline%set('prg',     'abinitio3D')
+        type(commander_solve3D) :: xsolve3D
+        call cline%set('prg',     'solve3D')
         ! call cline%set('objfun',          'cc')
         call cline%set('pgrp',            'c1')
         call cline%set('force_lp_range', 'yes')
@@ -47,12 +47,12 @@ contains
         if( .not. cline%defined('hp')      ) call cline%set('hp',        5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   3.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',    1.)
-        call xabinitio3D%execute(cline)
-    end subroutine exec_abinitio3D_nano
+        call xsolve3D%execute(cline)
+    end subroutine exec_solve3D_nano
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commanders_atoms, only: commander_detect_atoms
-        use simple_abinitio_utils,   only: gen_ortho_reprojs4viz
+        use simple_solve3D_utils,    only: gen_ortho_reprojs4viz
         class(commander_autorefine3D_nano), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)              :: params

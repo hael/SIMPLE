@@ -1,7 +1,7 @@
 !@descr: unregularized 2D class Fourier sums on disk: the partless carry-over set and per-worker contributions
 ! Per class: even/odd numerators and CTF^2 sums, captured before restoration. STATE: carried set, owner-written,
 ! records M(c). CONTRIBUTION: one worker's from-zero sums + centering offsets, e/o pops, l_frac.
-! Written via temp name + rename, closed by a payload byte count. Ownership: doc/policies/2D/abinitio2D_policy.md
+! Written via temp name + rename, closed by a payload byte count. Ownership: doc/policies/2D/solve2D_policy.md
 module simple_cavg_sums
 use simple_core_module_api
 use simple_ftiter, only: ftiter

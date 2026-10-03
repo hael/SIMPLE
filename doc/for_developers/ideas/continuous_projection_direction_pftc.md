@@ -286,7 +286,7 @@ Expected result:
 
 3. **No-regression discrete path**
    - With continuous projection refinement disabled, results must match the current discrete path.
-   - This protects the normal `refine3D` and `abinitio3D` workflows.
+   - This protects the normal `refine3D` and `solve3D` workflows.
 
 4. **Symmetry and mirror checks**
    - Verify behavior with `fproject_polar_batch_mirr`.

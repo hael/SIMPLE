@@ -246,7 +246,7 @@ async function initializeMolstarVolumeViewer(root) {
             await viewer.loadVolumeFromUrl(
                 {url: option.value, format: "ccp4", isBinary: true},
                 [isovalue],
-                {entryId: option.dataset.volumeName || "abinitio3D"},
+                {entryId: option.dataset.volumeName || "solve3D"},
             );
             applyBackground();
             viewer.plugin.canvas3d?.requestCameraReset({

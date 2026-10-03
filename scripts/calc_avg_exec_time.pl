@@ -5,9 +5,9 @@ use warnings;
 use POSIX qw(floor);
 
 # Usage:
-#   perl abinitio_stats.pl ABINITIO3D_OUTPUT_RESTART*
-#   perl abinitio_stats.pl 'ABINITIO3D_OUTPUT_RESTART*'
-#   perl abinitio_stats.pl file1 file2 ...
+#   perl calc_avg_exec_time.pl SOLVE3D_OUTPUT_RESTART*
+#   perl calc_avg_exec_time.pl 'SOLVE3D_OUTPUT_RESTART*'
+#   perl calc_avg_exec_time.pl file1 file2 ...
 
 my @files = @ARGV;
 die "Usage: $0 <files...>\n" if !@files;

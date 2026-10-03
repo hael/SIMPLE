@@ -89,7 +89,7 @@ integer, parameter    :: PICKER_OFFSET             = 3         !< picker offset 
 real,    parameter    :: COSMSKHALFWIDTH           = 6.0       !< spherical soft masking
 real,    parameter    :: ENVMSKLP_DEFAULT          = 20.0      !< envfsc density-mask smoothing low-pass
 ! minimum density-envelope dilation (in A): 7 layers at 1.075 A/pixel, the
-! former abinitio3D default, now shared by every envelope route
+! former solve3D default, now shared by every envelope route
 real,    parameter    :: ENVMSKWIDTH_A_MIN         = 7.5
 real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size
 integer, parameter    :: OSMPL_PAD_FAC             = 2         !< factor by which to pad for oversampled gridding

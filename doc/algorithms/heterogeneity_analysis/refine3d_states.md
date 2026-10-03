@@ -9,7 +9,7 @@ in the [heterogeneity-analysis overview](README.md).
 
 The input may contain an existing label set with project state maps, the
 [`flex_pca`](flex_pca.md) initializer (the default for state-0/1 input), the
-stochastic state initializer (`flex=no`), or an `abinitio3D` docked checkpoint.
+stochastic state initializer (`flex=no`), or a `solve3D` docked checkpoint.
 Supplied reference volumes are not accepted; that input belongs to
 [`classify3D_refs`](classify3d_refs.md).
 

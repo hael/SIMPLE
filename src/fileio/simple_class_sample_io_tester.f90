@@ -1,5 +1,5 @@
 !@descr: unit test routines for the class-sampling checkpoint file (simple_class_sample_io)
-! The ragged class_sample array written by abinitio/refine3D and read back by the matcher and the split
+! The ragged class_sample array written by solve3D/refine3D and read back by the matcher and the split
 ! checkpoint: field-by-field round trip, empty classes, replacement of a previously allocated array.
 module simple_class_sample_io_tester
 use simple_test_utils          ! assertions etc.

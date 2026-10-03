@@ -1,6 +1,6 @@
 ---
 name: simple-main-stream
-description: Use when working in SIMPLE's src/main/stream subsystem, including online/mini-stream orchestration, chunk and microchunk processing, staged pipeline steps, watchers, queue/message definitions, and streaming variants of preprocessing and cluster2D workflows.
+description: Use when working in SIMPLE's src/main/stream subsystem, including online/mini-stream orchestration, chunk and microchunk processing, staged pipeline steps, watchers, queue/message definitions, and streaming variants of preprocessing and refine2D workflows.
 ---
 
 # SIMPLE `src/main/stream`
@@ -21,7 +21,7 @@ This folder owns the streaming pipeline.
 
 - Pipeline stages are explicit and numbered
 - Many `_new` variants exist; compare carefully before changing shared behavior
-- Chunking, watchers, microchunking, and cluster2D-specific helpers are important supporting layers
+- Chunking, watchers, microchunking, and refine2D-specific helpers are important supporting layers
 
 ## Microchunk Rejection
 

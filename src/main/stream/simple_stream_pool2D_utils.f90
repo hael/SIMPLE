@@ -104,36 +104,36 @@ contains
         ! reference generation
         if( l_no_chunks ) ncls_glob = params%ncls
         ! Pool command line
-        call cline_cluster2D_pool%set('prg',       'cluster2D_distr')
-        call cline_cluster2D_pool%set('oritype',   'ptcl2D')
-        call cline_cluster2D_pool%set('trs',       MINSHIFT)
-        call cline_cluster2D_pool%set('projfile',  POOL_PROJFILE)
-        call cline_cluster2D_pool%set('projname',  get_fbody(POOL_PROJFILE,'simple'))
-        call cline_cluster2D_pool%set('sigma_est', params%sigma_est)
+        call cline_refine2D_pool%set('prg',        'refine2D_distr')
+        call cline_refine2D_pool%set('oritype',    'ptcl2D')
+        call cline_refine2D_pool%set('trs',        MINSHIFT)
+        call cline_refine2D_pool%set('projfile',   POOL_PROJFILE)
+        call cline_refine2D_pool%set('projname',   get_fbody(POOL_PROJFILE,'simple'))
+        call cline_refine2D_pool%set('sigma_est', params%sigma_est)
         if( cline%defined('cls_init') )then
-            call cline_cluster2D_pool%set('cls_init', params%cls_init)
+            call cline_refine2D_pool%set('cls_init', params%cls_init)
         else
-            call cline_cluster2D_pool%set('cls_init', 'rand')
+            call cline_refine2D_pool%set('cls_init', 'rand')
         endif
         if( cline%defined('center') )then
             carg = cline%get_carg('center')
-            call cline_cluster2D_pool%set('center',carg)
+            call cline_refine2D_pool%set('center',carg)
             call carg%kill
         else
-            call cline_cluster2D_pool%set('center','yes')
+            call cline_refine2D_pool%set('center','yes')
         endif
         if( .not.cline%defined('center_type') )then
-            call cline_cluster2D_pool%set('center_type', 'seg')
+            call cline_refine2D_pool%set('center_type', 'seg')
         endif
-        call cline_cluster2D_pool%set('extr_iter', 99999)
-        call cline_cluster2D_pool%set('extr_lim',  MAX_EXTRLIM2D)
-        call cline_cluster2D_pool%set('mkdir',     'no')
-        call cline_cluster2D_pool%set('mskdiam',   params%mskdiam)
-        call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
-        call cline_cluster2D_pool%set('stream2d',  'yes') ! the only place this flag should be turned on
-        call cline_cluster2D_pool%set('nparts',    params%nparts)
-        if( cline%defined('worker_server') ) call cline_cluster2D_pool%set('worker_server', cline%get_carg('worker_server'))
-        call cline_cluster2D_pool%delete('autoscale')
+        call cline_refine2D_pool%set('extr_iter', 99999)
+        call cline_refine2D_pool%set('extr_lim',   MAX_EXTRLIM2D)
+        call cline_refine2D_pool%set('mkdir',      'no')
+        call cline_refine2D_pool%set('mskdiam',    params%mskdiam)
+        call cline_refine2D_pool%set('async',      'yes') ! to enable hard termination
+        call cline_refine2D_pool%set('stream2d',   'yes') ! the only place this flag should be turned on
+        call cline_refine2D_pool%set('nparts',     params%nparts)
+        if( cline%defined('worker_server') ) call cline_refine2D_pool%set('worker_server', cline%get_carg('worker_server'))
+        call cline_refine2D_pool%delete('autoscale')
         ! when the 2D analysis is started from raw particles
         ! set # of ptcls beyond which fractional updates will be used
         lim_ufrac_nptcls = STREAM_NPTCLS_MAX
@@ -143,9 +143,9 @@ contains
         if( l_no_chunks )then
             call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
             if(envlen > 0) then
-                call cline_cluster2D_pool%set('nthr', str2int(refgen_nthr_env))
+                call cline_refine2D_pool%set('nthr', str2int(refgen_nthr_env))
             else
-                call cline_cluster2D_pool%set('nthr', params%nthr)
+                call cline_refine2D_pool%set('nthr', params%nthr)
             end if
             call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
             if(envlen > 0) then
@@ -157,10 +157,10 @@ contains
         else
             call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
             if(envlen > 0) then
-                call cline_cluster2D_pool%set('nthr',   str2int(pool_nthr_env))
-                call cline_cluster2D_pool%set('nthr2D', str2int(pool_nthr_env))
+                call cline_refine2D_pool%set('nthr',    str2int(pool_nthr_env))
+                call cline_refine2D_pool%set('nthr2D', str2int(pool_nthr_env))
             else
-                call cline_cluster2D_pool%set('nthr', params%nthr)
+                call cline_refine2D_pool%set('nthr', params%nthr)
             end if
             call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
             if(envlen > 0) then
@@ -171,13 +171,13 @@ contains
             end if
         end if
         ! objective function
-        call cline_cluster2D_pool%set('objfun', 'euclid')
-        call cline_cluster2D_pool%set('ml_reg', params%ml_reg)
-        call cline_cluster2D_pool%set('tau',    params%tau)
+        call cline_refine2D_pool%set('objfun', 'euclid')
+        call cline_refine2D_pool%set('ml_reg', params%ml_reg)
+        call cline_refine2D_pool%set('tau',     params%tau)
         ! refinement
         select case(trim(params%refine))
             case('snhc','snhc_smpl')
-                call cline_cluster2D_pool%set( 'refine', params%refine)
+                call cline_refine2D_pool%set( 'refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
@@ -256,26 +256,26 @@ contains
             call spproj_history%kill
         end if
         pool_iter = pool_iter + 1 ! Global iteration counter update
-        call cline_cluster2D_pool%set('ncls',    ncls_glob)
-        call cline_cluster2D_pool%set('startit', pool_iter)
-        call cline_cluster2D_pool%set('maxits',  pool_iter)
-        call cline_cluster2D_pool%set('frcs',    FRCS_FILE)
-        call cline_cluster2D_pool%set('refs', refs_glob)
+        call cline_refine2D_pool%set('ncls',     ncls_glob)
+        call cline_refine2D_pool%set('startit', pool_iter)
+        call cline_refine2D_pool%set('maxits',   pool_iter)
+        call cline_refine2D_pool%set('frcs',     FRCS_FILE)
+        call cline_refine2D_pool%set('refs', refs_glob)
         if( pool_iter==1 )then
-            if( cline_cluster2D_pool%defined('cls_init') )then
-                ! references taken care of by cluster2D_distr
-                call cline_cluster2D_pool%delete('frcs')
-                call cline_cluster2D_pool%delete('refs')
+            if( cline_refine2D_pool%defined('cls_init') )then
+                ! references taken care of by refine2D_distr
+                call cline_refine2D_pool%delete('frcs')
+                call cline_refine2D_pool%delete('refs')
             endif
         else
-            call cline_cluster2D_pool%delete('cls_init')
+            call cline_refine2D_pool%delete('cls_init')
         endif
         ! Project metadata update
         spproj%projinfo = pool_proj%projinfo
         spproj%compenv  = pool_proj%compenv
         call spproj%projinfo%delete_entry('projname')
         call spproj%projinfo%delete_entry('projfile')
-        call spproj%update_projinfo( cline_cluster2D_pool )
+        call spproj%update_projinfo( cline_refine2D_pool )
         ! Sampling of stacks that will be used for this iteration
         ! counting number of stacks & selected particles
         nstks_tot  = pool_proj%os_stk%get_noris()
@@ -360,7 +360,7 @@ contains
             !$omp end parallel do
         endif
         ! update command line with fractional update parameters
-        call cline_cluster2D_pool%delete('update_frac')
+        call cline_refine2D_pool%delete('update_frac')
         frac_update = 1.0
         if( nptcls_sel > lim_ufrac_nptcls )then
             if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
@@ -370,8 +370,8 @@ contains
         ! User override
         if( frac_update < 0.99999 )then
             if( master_cline%defined('update_frac') ) frac_update = params%update_frac
-            call cline_cluster2D_pool%set('update_frac', frac_update)
-            call cline_cluster2D_pool%set('center',      'no')
+            call cline_refine2D_pool%set('update_frac', frac_update)
+            call cline_refine2D_pool%set('center',       'no')
             do icls = 1,ncls_glob
                 call spproj%os_cls2D%set(icls,'prev_pop_even',prev_eo_pops(icls,1))
                 call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
@@ -389,17 +389,17 @@ contains
             ! clustering in the same queued script so no consumer can observe
             ! a missing or stale state.
             allocate(pool_clines(2))
-            pool_clines(1) = cline_cluster2D_pool
+            pool_clines(1) = cline_refine2D_pool
             call pool_clines(1)%set('prg', 'calc_pspec')
             call pool_clines(1)%set('mkdir', 'no')
             call pool_clines(1)%delete('stream2d')
             call pool_clines(1)%delete('update_frac')
-            pool_clines(2) = cline_cluster2D_pool
+            pool_clines(2) = cline_refine2D_pool
             call pool_qenv%exec_simple_prgs_in_queue_async(pool_clines, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
             call pool_clines(:)%kill
             deallocate(pool_clines)
         else
-            call pool_qenv%exec_simple_prg_in_queue_async(cline_cluster2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
+            call pool_qenv%exec_simple_prg_in_queue_async(cline_refine2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
         endif
         l_pool_available = .false.
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
@@ -556,11 +556,11 @@ contains
         ! chunk & pool have the same dimensions to start with (used for import)
         chunk_dims = pool_dims
         ! Scaling-related command lines update
-        call cline_cluster2D_pool%set('smpd_crop',  pool_dims%smpd)
-        call cline_cluster2D_pool%set('box_crop',   pool_dims%box)
-        call cline_cluster2D_pool%set('msk_crop',   pool_dims%msk)
-        call cline_cluster2D_pool%set('box',        params%box)
-        call cline_cluster2D_pool%set('smpd',       params%smpd)
+        call cline_refine2D_pool%set('smpd_crop',   pool_dims%smpd)
+        call cline_refine2D_pool%set('box_crop',    pool_dims%box)
+        call cline_refine2D_pool%set('msk_crop',    pool_dims%msk)
+        call cline_refine2D_pool%set('box',         params%box)
+        call cline_refine2D_pool%set('smpd',        params%smpd)
     end subroutine set_pool_dimensions
 
     ! private routine for pool resolution-related updates to command-lines
@@ -576,12 +576,12 @@ contains
                 params%lpstop = 2.0*params%smpd_crop
             endif
         endif
-        call cline_cluster2D_pool%set('lpstart',  lpstart)
-        call cline_cluster2D_pool%set('lpstop',   params%lpstop)
+        call cline_refine2D_pool%set('lpstart',   lpstart)
+        call cline_refine2D_pool%set('lpstop',    params%lpstop)
         if( .not.master_cline%defined('cenlp') )then
-            call cline_cluster2D_pool%set( 'cenlp', lpcen)
+            call cline_refine2D_pool%set( 'cenlp', lpcen)
         else
-            call cline_cluster2D_pool%set( 'cenlp', params%cenlp)
+            call cline_refine2D_pool%set( 'cenlp', params%cenlp)
         endif
         write(logfhandle,'(A,F5.1)') '>>> STARTING LOW-PASS LIMIT  (IN A): ', lpstart
         write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT    (IN A): ', params%lpstop
@@ -595,7 +595,7 @@ contains
         integer, intent(in) :: new_mskdiam
         write(*,'(A,I4,A)')'>>> UPDATED MASK DIAMETER TO', new_mskdiam ,'Å'
         params%mskdiam = real(new_mskdiam)
-        call cline_cluster2D_pool%set('mskdiam',   params%mskdiam)
+        call cline_refine2D_pool%set('mskdiam',    params%mskdiam)
     end subroutine update_mskdiam
 
     !> Queues a GUI-driven match-class selection update for the next pool iteration.
@@ -670,7 +670,7 @@ contains
         integer          :: i, it, jptcl, iptcl, istk
         if( .not. l_stream2D_active ) return
         if( .not. l_pool_available  ) return
-        call del_file(POOL_DIR//CLUSTER2D_FINISHED)
+        call del_file(POOL_DIR//REFINE2D_FINISHED)
         ! iteration info
         fname = POOL_DIR//STATS_FILE
         if( file_exists(fname) )then
@@ -764,25 +764,25 @@ contains
             gamma = min(1., max(0., real(ITERLIM-pool_iter)/real(ITERLIM)))
             ! offset
             if( pool_iter < ITERSHIFT )then
-                call cline_cluster2D_pool%set('trs', 0.)
+                call cline_refine2D_pool%set('trs', 0.)
             else
-                call cline_cluster2D_pool%set('trs', MINSHIFT)
+                call cline_refine2D_pool%set('trs', MINSHIFT)
             endif
             ! resolution limit
             lp = lpstop + (lpstart-lpstop) * gamma
-            call cline_cluster2D_pool%set('lp', lp)
+            call cline_refine2D_pool%set('lp', lp)
             ! Extremal iteration
-            call cline_cluster2D_pool%set('extr_iter', pool_iter+1)
-            call cline_cluster2D_pool%set('extr_lim',  ITERLIM)
+            call cline_refine2D_pool%set('extr_iter', pool_iter+1)
+            call cline_refine2D_pool%set('extr_lim',   ITERLIM)
             ! Gaussian filter
-            call cline_cluster2D_pool%set('gauref',  'yes')
-            call cline_cluster2D_pool%set('gaufreq', lp)
+            call cline_refine2D_pool%set('gauref',   'yes')
+            call cline_refine2D_pool%set('gaufreq', lp)
         else
-            call cline_cluster2D_pool%set('trs', MINSHIFT)
-            call cline_cluster2D_pool%set('gauref', 'no')
-            call cline_cluster2D_pool%delete('extr_iter')
-            call cline_cluster2D_pool%delete('gaufreq')
-            call cline_cluster2D_pool%delete('lp')
+            call cline_refine2D_pool%set('trs', MINSHIFT)
+            call cline_refine2D_pool%set('gauref', 'no')
+            call cline_refine2D_pool%delete('extr_iter')
+            call cline_refine2D_pool%delete('gaufreq')
+            call cline_refine2D_pool%delete('lp')
         endif
     end subroutine update_pool_aln_params
 
@@ -832,10 +832,10 @@ contains
         else
             params%lpstop = 2.0*pool_dims%smpd
         endif
-        call cline_cluster2D_pool%set('lpstop',    params%lpstop)
-        call cline_cluster2D_pool%set('smpd_crop', pool_dims%smpd)
-        call cline_cluster2D_pool%set('box_crop',  pool_dims%box)
-        call cline_cluster2D_pool%set('msk_crop',  pool_dims%msk)
+        call cline_refine2D_pool%set('lpstop',     params%lpstop)
+        call cline_refine2D_pool%set('smpd_crop', pool_dims%smpd)
+        call cline_refine2D_pool%set('box_crop',   pool_dims%box)
+        call cline_refine2D_pool%set('msk_crop',   pool_dims%msk)
         write(logfhandle,'(A)')             '>>> UPDATING POOL DIMENSIONS '
         write(logfhandle,'(A,I5,A1,I5)')    '>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',pool_dims%box
         write(logfhandle,'(A,F5.2,A1,F5.2)')'>>> ORIGINAL/CROPPED PIXEL SIZE (Angs)  : ',params%smpd,'/',pool_dims%smpd
@@ -888,7 +888,7 @@ contains
     subroutine update_pool_status
         if( .not. l_stream2D_active ) return
         if( .not. l_pool_available )then
-            l_pool_available = file_exists(POOL_DIR//CLUSTER2D_FINISHED)
+            l_pool_available = file_exists(POOL_DIR//REFINE2D_FINISHED)
             if( l_pool_available .and. (pool_iter >= 1) )then
                 refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//MRC_EXT
             endif

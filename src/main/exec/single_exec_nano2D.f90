@@ -1,7 +1,7 @@
 !@descr: execution of SINGLE 2D nanoparticle analysis commanders
 module single_exec_nano2D
 use simple_cmdline,            only: cmdline
-use single_commanders_nano2D,  only: commander_analysis2D_nano, commander_center2D_nano, commander_cluster2D_nano
+use single_commanders_nano2D,  only: commander_analysis2D_nano, commander_center2D_nano, commander_refine2D_nano
 use simple_commanders_imgproc, only: commander_estimate_diam
 implicit none
 
@@ -10,7 +10,7 @@ private
 
 type(commander_analysis2D_nano) :: xanalysis2D_nano
 type(commander_center2D_nano)   :: xcenter2D
-type(commander_cluster2D_nano)  :: xcluster2D
+type(commander_refine2D_nano)   :: xrefine2D
 type(commander_estimate_diam)   :: xestimate_diam
 
 contains
@@ -28,8 +28,8 @@ contains
                 call xanalysis2D_nano%execute(cline)
             case( 'center2D_nano' )
                 call xcenter2D%execute(cline)
-            case( 'cluster2D_nano' )
-                call xcluster2D%execute(cline)
+            case( 'refine2D_nano' )
+                call xrefine2D%execute(cline)
             case( 'estimate_diam' )
                 call cline%set('mkdir', 'no')
                 call xestimate_diam%execute(cline)

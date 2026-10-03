@@ -306,7 +306,7 @@ pair; the references do, in every voxel. Log: `>>> NU REFERENCES: STATE n,
 LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR`.
 
 The bank is the static ladder `[20, 15, 12, 10, 8, 6, 5, 4]` A (the
-NU machinery of the ed36eb4c build used by abinitio3D, the only NU mechanism since
+NU machinery of the ed36eb4c build used by solve3D, the only NU mechanism since
 2026-09-18; the generated dense ladder of 2026-09-16 and the shell walk of
 section 10 are both gone). Given the pair's FSC=0.143 resolution the bank
 is capped (2026-09-08): only candidates coarser than `fsc/1.5`
@@ -445,11 +445,11 @@ time beyond the finest rung, frontier bookkeeping, majority-z acceptance,
 thinned retention, walked-label cleanup, walk depth persisted for restarts)
 was retired on 2026-09-16 together with the `nu_refine` control, and the
 generated dense ladder that replaced it was withdrawn on 2026-09-18 after
-the PfCRT regressions (`latest3`/`latest4`: abinitio3D climb stalls,
+the PfCRT regressions (`latest3`/`latest4`: solve3D climb stalls,
 refine3D_auto 4.03/4.50 A against 3.93/4.14 A on 2026-09-11 from the same
 particles). The static ladder plus the auxiliary pair of section 8 -- the
-abinitio3D NU machinery of the ed36eb4c build, which produced the best PfCRT
-maps -- is the only NU mechanism, in abinitio3D, refine3D_auto and
+solve3D NU machinery of the ed36eb4c build, which produced the best PfCRT
+maps -- is the only NU mechanism, in solve3D, refine3D_auto and
 postprocess_nu alike. Records: `doc/implementation_notes/pcg_decision_log.md`
 (2026-09-16 to 2026-09-18).
 
@@ -548,7 +548,7 @@ In multi-state runs, the populated state with the finest valid NU-selected
 limit determines the single project-level matching bandwidth, matching the
 classical global-bandwidth policy.
 
-Staged `abinitio3D` passes an `lpstop` ceiling only in its non-NU stages:
+Staged `solve3D` passes an `lpstop` ceiling only in its non-NU stages:
 the per-stage `lpstages` limit, or the FSC=0.5 stage-boundary promotion of it
 (bounded by the ladder's hard fine bound `LPSTOP_BOUNDS(1)`, 4.5 A). In the
 NU stages (`NU_FILTER_STAGE` onwards, `nonuniform_lpset`)
@@ -594,9 +594,9 @@ support.
 `refine3D` exposes `filt_mode`, `automsk`, and `ml_reg` through the ordinary
 UI/CLI definitions.
 
-Staged `abinitio3D` defaults to `filt_mode=nonuniform` at the public interface,
+Staged `solve3D` defaults to `filt_mode=nonuniform` at the public interface,
 but the controller only enables NU filtering from `NU_FILTER_STAGE`; the
-bank is the static ladder of section 8. Because abinitio3D is not currently a
+bank is the static ladder of section 8. Because solve3D is not currently a
 gold-standard workflow, staged `nonuniform` is promoted to
 `nonuniform_lpset` before the disabled `GOLD_STD_STAGE`. The controller forces
 `envfsc=no` before `ENVFSC_STAGE` and forwards the requested value at that stage;
@@ -606,4 +606,4 @@ NU-filtering and envfsc stage boundary, unless the user explicitly requests
 later stages. The separate final original-sampling reconstruction still
 inherits the parent `envfsc` request.
 
-The abinitio3D cavgs route disables NU filtering and automasking.
+The solve3D cavgs route disables NU filtering and automasking.

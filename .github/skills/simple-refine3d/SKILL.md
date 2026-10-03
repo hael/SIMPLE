@@ -1,6 +1,6 @@
 ---
 name: simple-refine3d
-description: Use when working on SIMPLE's refine3D workflow, including CLI/UI entrypoints, commanders, probabilistic pre-alignment, 3D search and matcher strategies, online partial reconstruction, volassemble, automasking, nonuniform filtering, multi-state behavior, distributed execution, and related abinitio3D refinement code paths.
+description: Use when working on SIMPLE's refine3D workflow, including CLI/UI entrypoints, commanders, probabilistic pre-alignment, 3D search and matcher strategies, online partial reconstruction, volassemble, automasking, nonuniform filtering, multi-state behavior, distributed execution, and related solve3D refinement code paths.
 ---
 
 # SIMPLE Refine3D
@@ -68,10 +68,10 @@ Preserve that split when refactoring.
 - Preserve artifact handoffs: assignment maps, partition-local partial
   reconstructions, `POLAR_REFS*`, state volumes, even/odd volumes, FSC outputs,
   and state automasks are workflow contracts.
-- For `abinitio3D` stage outputs, distinguish planned stage LP from saved
+- For `solve3D` stage outputs, distinguish planned stage LP from saved
   low-pass diagnostic volumes. `_stageNN_lp.mrc` snapshots use measured state
   FSC resolution when available, with planned stage LP only as fallback.
-- For multi-state `abinitio3D_cavgs` with `pgrp_start != pgrp`, keep the
+- For multi-state `solve3D_cavgs` with `pgrp_start != pgrp`, keep the
   symmetry-axis search state-local.
 
 ## Adjacent Files Worth Reading
@@ -87,9 +87,9 @@ Preserve that split when refactoring.
 
 ## Focused Companion Skills
 
-- For abinitio3D `update_frac`, `nsample*`, `sampled`/`updatecnt`,
+- For solve3D `update_frac`, `nsample*`, `sampled`/`updatecnt`,
   `prob_align`/`prob_tab` sampling reuse, or trailing-reconstruction weighting,
-  read `.github/skills/simple-abinitio3d-importance-sampling/SKILL.md`.
+  read `.github/skills/simple-solve3d-importance-sampling/SKILL.md`.
 - For fractional-update contracts, current partial reconstruction handoffs,
   previous even/odd/rho compatibility, or obsfield mirrors, read
   `.github/skills/simple-frac-update-trailing/SKILL.md`.

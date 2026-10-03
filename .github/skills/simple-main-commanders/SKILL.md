@@ -11,7 +11,7 @@ This is the command object layer.
 
 - `simple/simple_commander_base.f90`
 - `simple/simple_commanders_refine3D.f90`
-- `simple/simple_commanders_cluster2D.f90`
+- `simple/simple_commanders_refine2D.f90`
 - `simple/simple_commanders_preprocess.f90`
 - `simple/simple_commanders_project_core.f90`
 

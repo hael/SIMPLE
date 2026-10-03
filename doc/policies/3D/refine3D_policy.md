@@ -1,14 +1,14 @@
 # Refine3D Policy
 
 This document records the current policy for the base `refine3D` command. It
-does not describe the staged `abinitio3D` controller, the class-average
-`abinitio3D_cavgs` initializer, or the automated wrapper `refine3D_auto`.
+does not describe the staged `solve3D` controller, the class-average
+`solve3D_cavgs` initializer, or the automated wrapper `refine3D_auto`.
 
 Related workflow policies:
 
-- [abinitio3D_policy.md](abinitio3D_policy.md)
-- [abinitio3D_cavgs_policy.md](abinitio3D_cavgs_policy.md)
-- [abinitio3D_cavgs_reject_policy.md](abinitio3D_cavgs_reject_policy.md)
+- [solve3D_policy.md](solve3D_policy.md)
+- [solve3D_cavgs_policy.md](solve3D_cavgs_policy.md)
+- [solve3D_cavgs_reject_policy.md](solve3D_cavgs_reject_policy.md)
 - [refine3D_auto_policy.md](refine3D_auto_policy.md)
 - [refine3D_states_policy.md](refine3D_states_policy.md)
 - [classify3D_refs_policy.md](classify3D_refs_policy.md)
@@ -171,7 +171,7 @@ that state back to the project.
 ### 5.1 Sigma2 bootstrap contract
 
 Work that has alignments, or nothing at all, but no noise-power estimate is
-one problem: a fresh abinitio3D start, the ini3D routes, external starting
+one problem: a fresh solve3D start, the ini3D routes, external starting
 volumes, the refine3D_auto startup, a refine3D started at a later iteration in
 an empty directory, and every final reconstruction at a new sampling. Since
 2026-09-06 all of them follow one rule, owned by `simple_sigma2_bootstrap`:
@@ -190,7 +190,7 @@ an empty directory, and every final reconstruction at a new sampling. Since
 - Refine3D is self-healing: a missing, invalid, wrong-grid, wrong-layout, or
   wrong-grouping state is rebuilt from particle power before workers launch.
 - Where no refinement iteration follows (final reconstructions at original
-  sampling in abinitio3D and refine3D_auto), the seed is upgraded by one
+  sampling in solve3D and refine3D_auto), the seed is upgraded by one
   residual pass: `refine=sigma` against the seeded map at the final sampling
   (no search, no volume assembly, no orientation output, alignment docs are
   not merged, and the particle field left exactly as it was: shared-memory
@@ -202,7 +202,7 @@ an empty directory, and every final reconstruction at a new sampling. Since
   `bootstrap_rec3D` (module `simple_commanders_refine3D`) owns this whole
   sequence: seed, bootstrap map, residual pass, commit, final map; the shared
   ending `calc_final_rec` (module `simple_final_rec`, 2026-09-12), which
-  closes abinitio3D, refine3D_auto, refine3D_states and classify3D_refs,
+  closes solve3D, refine3D_auto, refine3D_states and classify3D_refs,
   calls it and carries no copy of the sequence. It runs standalone on any project with 3D orientations
   and is the test entry point for the final-reconstruction stage. The
   bootstrap map only serves as the residual reference, so it is always a
@@ -226,7 +226,7 @@ an empty directory, and every final reconstruction at a new sampling. Since
   particles never updated by the refinement entered the shipped map, unlike
   the bootstrap map (`sample4rec` takes `updatecnt > 0` rows), and counted as
   updated for `update_missing` and for the frozen membership of
-  `abinitio3D_addon`; a standalone `bootstrap_rec3D` at `which_iter=1`
+  `solve3D_addon`; a standalone `bootstrap_rec3D` at `which_iter=1`
   (`startit=1`) even reset `updatecnt`/`sampled` for every particle first.
   Nothing reads the bump: the pass only closes final reconstructions, and a
   later refinement starts its own sampling round.
@@ -638,7 +638,7 @@ records only the refine3D-side integration contract:
   with the sigma model committed before the iteration began. It writes new
   residual estimates into a pending transaction, completes assembly, and only
   then publishes them for iteration `n+1`. A stage-owned reconstruction such
-  as abinitio3D symmetry consumes the same lagged model before the final
+  as solve3D symmetry consumes the same lagged model before the final
   transaction is published. `objfun=cc` is unweighted.
 - **Weights versus priors.** Particle/data weights (including `1/sigma2`)
   multiply both `B` and `D`. The zero-mean ML prior adds precision to the
@@ -683,7 +683,7 @@ iteration after convergence or run-length termination. That final iteration:
 - tightens the low-pass criterion to at most 0.143
 
 The combined even/odd iteration is part of base `refine3D`, not a terminal
-`refine3D_auto` or ab initio reconstruction step.
+`refine3D_auto` or `solve3D` reconstruction step.
 
 ## 11. Finalization and Artifacts
 
@@ -729,7 +729,7 @@ On finalization:
 - `JOB_FINISHED` is touched by the shared-memory path
 
 The original-sampling final reconstruction is distinct from an ordinary
-refinement iteration. On the PCG backend, both abinitio3D and refine3D_auto
+refinement iteration. On the PCG backend, both solve3D and refine3D_auto
 apply the shared minimum five-iteration budget to this cold solve. An explicit
 positive residual tolerance may still stop convergence earlier. Final
 automatic sharpening follows the isotropic postprocess protocol

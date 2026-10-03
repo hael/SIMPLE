@@ -2,7 +2,7 @@
 module simple_exec_denoise
 use simple_cmdline,              only: cmdline
 use simple_commanders_resolest,  only: commander_icm2D, commander_icm3D
-use simple_commanders_cluster2D, only: commander_ppca_denoise_classes
+use simple_commanders_refine2D, only: commander_ppca_denoise_classes
 use simple_commanders_denoise,   only: commander_cls_split
 use simple_commanders_flex_pca,  only: commander_flex_pca
 use simple_commanders_imgops,    only: commander_ppca_denoise

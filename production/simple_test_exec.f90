@@ -3,6 +3,7 @@ program simple_test_exec
 use simple_test_exec_api
 use simple_parameters, only: parameters
 use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
+use simple_ui_legacy_names, only: canonical_prg_name, report_legacy_prg_name
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)             :: xarg, prg
@@ -21,6 +22,8 @@ call get_command(entire_line)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err(cmdstat, cmdlen, xarg, pos)
 prg = xarg(pos+1:)     ! this is the program name
+call report_legacy_prg_name(prg)
+prg = canonical_prg_name(prg)
 ! make UI
 call make_test_ui
 if( str_has_substr(entire_line, 'test=list') )then

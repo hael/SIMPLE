@@ -77,7 +77,7 @@ contains
         ! Trailing blends the e/o accumulators (sums + densities) before any restoration; with no chain
         ! yet (bootstrap) the legacy previous-halfmap volume blend runs while the chain is seeded.
         call blend_trailing_accumulators()
-        ! abinitio3D_addon: frozen accumulators join after the cohort chain is written and before any
+        ! solve3D_addon: frozen accumulators join after the cohort chain is written and before any
         ! restoration or prior, so FSC, regularization and NU describe the union, the chain the cohort
         call add_frozen_accumulators()
         call sum_eos_before_density_correction_if_needed()
@@ -129,7 +129,7 @@ contains
             trail_fbody      = refine3D_trail_rec_fbody(state)
             if( .not. params%l_trail_rec )then
                 if( present(frozen_seed) )then
-                    ! abinitio3D_addon producer: the frozen particles' full
+                    ! solve3D_addon producer: the frozen particles' full
                     ! accumulators at this reconstruction's box
                     call frozen_seed%write_gridding_set(state, even_rec, odd_rec)
                     return
@@ -155,7 +155,7 @@ contains
                 ! add-on mode never enters the legacy union-volume bootstrap:
                 ! the stage boundary seeds the cohort chain before the first
                 ! trailing stage
-                if( .not. l_trail_chain ) THROW_HARD('abinitio3D_addon trailing assembly requires a seeded cohort chain')
+                if( .not. l_trail_chain ) THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
                 if( realized_update_frac < 0.001 )then
                     ! no cohort sample for this state: the chain carries
                     ! unchanged (weight zero on the current sample) and the
@@ -828,7 +828,7 @@ contains
     !! update_project_nu_alignment_lowpass in the gridding volassemble: the
     !! _nu_filt products themselves are written by nonuniform_filter_state
     !! inside the PCG master (both backends run the same competition).
-    !> l_frozen_term: an abinitio3D_addon reconstruction, in which every
+    !> l_frozen_term: a solve3D_addon reconstruction, in which every
     !! inherited state holds frozen particles and so has a map even when its
     !! cohort population is zero
     subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, l_frozen_term, nu_align_lps )
@@ -957,7 +957,7 @@ contains
             call sum_rec%new_accumulator(params, build%spproj, expand=.false.)
             numlen_part       = max(1, params%numlen)
             l_nonuniform_mode = params%l_nonuniform
-            ! abinitio3D_addon handshakes (in-process only): consume or
+            ! solve3D_addon handshakes (in-process only): consume or
             ! produce the frozen term named by the run context
             l_frozen_rec  = cline%defined('frozen_rec')
             l_frozen_seed = cline%defined('frozen_seed')

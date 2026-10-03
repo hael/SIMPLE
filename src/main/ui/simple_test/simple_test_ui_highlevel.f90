@@ -7,8 +7,8 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('highl
 type(ui_program), target :: mini_stream
 type(ui_program), target :: simulated_workflow
 type(ui_program), target :: simulate_particles
-type(ui_program), target :: abinitio3D_addon
-type(ui_program), target :: abinitio3D_addon_snapshots
+type(ui_program), target :: solve3D_addon
+type(ui_program), target :: solve3D_addon_snapshots
 type(ui_program), target :: cont_refine3D_1jxy
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
@@ -23,8 +23,8 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call new_mini_stream(tsttab)
         call new_simulate_particles(tsttab)
-        call new_abinitio3D_addon(tsttab)
-        call new_abinitio3D_addon_snapshots(tsttab)
+        call new_solve3D_addon(tsttab)
+        call new_solve3D_addon_snapshots(tsttab)
         call new_cont_refine3D_1jxy(tsttab)
         call new_simulated_workflow(tsttab)
         call new_pcg_recon(tsttab)
@@ -40,8 +40,8 @@ contains
         write(logfhandle,'(A)') format_str('High-level tests:', C_UNDERLINED)
         write(logfhandle,'(A)') mini_stream%name%to_char()
         write(logfhandle,'(A)') simulate_particles%name%to_char()
-        write(logfhandle,'(A)') abinitio3D_addon%name%to_char()
-        write(logfhandle,'(A)') abinitio3D_addon_snapshots%name%to_char()
+        write(logfhandle,'(A)') solve3D_addon%name%to_char()
+        write(logfhandle,'(A)') solve3D_addon_snapshots%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
@@ -60,7 +60,7 @@ contains
         &'mini_stream',&                       ! name
         &'validate mini-stream with the embedded 6VXX and 1JXY systems',&
         &'runs molecular 6VXX and 1JXY suites and validates CTF recovery, picking, extraction, '//&
-        &'abinitio2D class averages, and shape ranking',&
+        &'solve2D class averages, and shape ranking',&
         &'simple_test_exec',&                       ! executable
         &.false.)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -99,34 +99,34 @@ contains
         call add_ui_program('simulate_particles', simulate_particles, tsttab, UI_CATEGORY)
     end subroutine new_simulate_particles
 
-    subroutine new_abinitio3D_addon( tsttab )
+    subroutine new_solve3D_addon( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
-        call abinitio3D_addon%new(&
-        &'abinitio3D_addon',&                       ! name
-        &'validate abinitio3D_addon end to end on simulated particles',&
-        &'abinitio3D on a seeded subset of simulated particles of a symmetry-broken 6VXX map, then '//&
-        &'abinitio3D_addon on all of them, checked against the simulation truth (poses, map) and the base run',&
+        call solve3D_addon%new(&
+        &'solve3D_addon',&                          ! name
+        &'validate solve3D_addon end to end on simulated particles',&
+        &'solve3D on a seeded subset of simulated particles of a symmetry-broken 6VXX map, then '//&
+        &'solve3D_addon on all of them, checked against the simulation truth (poses, map) and the base run',&
         &'simple_test_exec',&                       ! executable
         &.false.)                                   ! requires sp_project
         ! add to ui_hash
-        call add_ui_program('abinitio3D_addon', abinitio3D_addon, tsttab, UI_CATEGORY)
-    end subroutine new_abinitio3D_addon
+        call add_ui_program('solve3D_addon', solve3D_addon, tsttab, UI_CATEGORY)
+    end subroutine new_solve3D_addon
 
-    subroutine new_abinitio3D_addon_snapshots( tsttab )
+    subroutine new_solve3D_addon_snapshots( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call abinitio3D_addon_snapshots%new(&
-        &'abinitio3D_addon_snapshots',&
-        &'generate cumulative projects for abinitio3D_addon stream tests',&
+        call solve3D_addon_snapshots%new(&
+        &'solve3D_addon_snapshots',&
+        &'generate cumulative projects for solve3D_addon stream tests',&
         &'splits all input particle images into append-only physical stacks and writes snapshot1.simple through snapshotN.simple',&
         &'simple_test_exec',&
         &.true.)
-        call abinitio3D_addon_snapshots%add_input(UI_PARM, 'nptcls_base', 'num', 'Base particle count', &
-            &'Particles in snapshot1 and the parent abinitio3D run', 'particles', .true., 0.)
-        call abinitio3D_addon_snapshots%add_input(UI_PARM, 'nsnapshots', 'num', 'Snapshot count', &
+        call solve3D_addon_snapshots%add_input(UI_PARM, 'nptcls_base', 'num', 'Base particle count', &
+            &'Particles in snapshot1 and the parent solve3D run', 'particles', .true., 0.)
+        call solve3D_addon_snapshots%add_input(UI_PARM, 'nsnapshots', 'num', 'Snapshot count', &
             &'Number of cumulative projects, including the base project', 'projects', .true., 0.)
-        call add_ui_program('abinitio3D_addon_snapshots', abinitio3D_addon_snapshots, tsttab, UI_CATEGORY)
-    end subroutine new_abinitio3D_addon_snapshots
+        call add_ui_program('solve3D_addon_snapshots', solve3D_addon_snapshots, tsttab, UI_CATEGORY)
+    end subroutine new_solve3D_addon_snapshots
 
     subroutine new_cont_refine3D_1jxy( tsttab )
         class(ui_hash), intent(inout) :: tsttab

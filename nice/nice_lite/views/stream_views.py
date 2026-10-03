@@ -560,8 +560,8 @@ def view_stream_terminate_stream_process(request):
     term_reference_picking     = string_present(request.POST, "terminate_reference_picking", silent=True)
     term_particle_sieving      = string_present(request.POST, "terminate_particle_sieving", silent=True)
     term_pool2D                = string_present(request.POST, "terminate_pool2D", silent=True)
-    term_abinitio3D_multistate = string_present(request.POST, "terminate_abinitio3D_multistate", silent=True)
-    streamjob.terminate_process(term_preprocess, term_optics_assignment, term_generate_pickrefs, term_reference_picking, term_particle_sieving, term_pool2D, term_abinitio3D_multistate)
+    term_solve3D_multistate = string_present(request.POST, "terminate_solve3D_multistate", silent=True)
+    streamjob.terminate_process(term_preprocess, term_optics_assignment, term_generate_pickrefs, term_reference_picking, term_particle_sieving, term_pool2D, term_solve3D_multistate)
     if term_preprocess:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_preprocess", query={"selected_job_id": jobid}))
     elif term_optics_assignment:
@@ -574,8 +574,8 @@ def view_stream_terminate_stream_process(request):
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_sieve_particles", query={"selected_job_id": jobid}))
     elif term_pool2D:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_classification_2D", query={"selected_job_id": jobid}))
-    elif term_abinitio3D_multistate:
-        response = HttpResponseRedirect(reverse("nice_lite:view_stream_abinitio3D_multistate", query={"selected_job_id": jobid}))
+    elif term_solve3D_multistate:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_solve3D_multistate", query={"selected_job_id": jobid}))
     else:
         print_error(f"terminate_stream_process: no process flag provided for job {jobid}")
         response = redirect("nice_lite:view_stream", jobid=jobid)
@@ -596,8 +596,8 @@ def view_stream_restart_stream_process(request):
     restart_reference_picking     = string_present(request.POST, "restart_reference_picking", silent=True)
     restart_particle_sieving      = string_present(request.POST, "restart_particle_sieving", silent=True)
     restart_pool2D                = string_present(request.POST, "restart_pool2D", silent=True)
-    restart_abinitio3D_multistate = string_present(request.POST, "restart_abinitio3D_multistate", silent=True)
-    streamjob.restart_process(restart_preprocess, restart_optics_assignment, restart_generate_pickrefs, restart_reference_picking, restart_particle_sieving, restart_pool2D, restart_abinitio3D_multistate)
+    restart_solve3D_multistate = string_present(request.POST, "restart_solve3D_multistate", silent=True)
+    streamjob.restart_process(restart_preprocess, restart_optics_assignment, restart_generate_pickrefs, restart_reference_picking, restart_particle_sieving, restart_pool2D, restart_solve3D_multistate)
     if restart_preprocess:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_preprocess", query={"selected_job_id": jobid}))
     elif restart_optics_assignment:
@@ -610,8 +610,8 @@ def view_stream_restart_stream_process(request):
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_sieve_particles", query={"selected_job_id": jobid}))
     elif restart_pool2D:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_classification_2D", query={"selected_job_id": jobid}))
-    elif restart_abinitio3D_multistate:
-        response = HttpResponseRedirect(reverse("nice_lite:view_stream_abinitio3D_multistate", query={"selected_job_id": jobid}))
+    elif restart_solve3D_multistate:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_solve3D_multistate", query={"selected_job_id": jobid}))
     else:
         print_error(f"restart_stream_process: no process flag provided for job {jobid}")
         response = HttpResponseRedirect(reverse("nice_lite:view_stream", query={"selected_job_id": jobid}))
@@ -1202,41 +1202,41 @@ def view_stream_classification_2D_zoom(request):
     return _render_if_changed(request, template, context, checksum_cookie)
 
 @login_required(login_url="/login")
-def view_stream_abinitio3D_multistate(request):
-    """Returns abinitio3D multistate panel in stream view."""
-    template = "nice_stream/panelabinitio3Dmultistate.html"
-    checksum_cookie = "panel_abinitio3D_multistate_checksum"
+def view_stream_solve3D_multistate(request):
+    """Returns solve3D multistate panel in stream view."""
+    template = "nice_stream/panelsolve3Dmultistate.html"
+    checksum_cookie = "panel_solve3D_multistate_checksum"
     jobmodel = _get_jobmodel_from_request(request)
 
     if jobmodel is None:
         return HttpResponseNoContent()
 
     # Remove empty classes (pop == 0), then sort by resolution.
-    if "latest_cls2D" in jobmodel.abinitio3D_multistate_stats:
+    if "latest_cls2D" in jobmodel.solve3D_multistate_stats:
         latest_cls2d = []
-        for cls2d in jobmodel.abinitio3D_multistate_stats["latest_cls2D"]:
+        for cls2d in jobmodel.solve3D_multistate_stats["latest_cls2D"]:
             try:
                 if float(cls2d.get("pop", 0)) == 0.0:
                     continue
             except (TypeError, ValueError, AttributeError):
                 pass
             latest_cls2d.append(cls2d)
-        jobmodel.abinitio3D_multistate_stats["latest_cls2D"] = sorted(latest_cls2d, key=lambda d: d["res"], reverse=False)
+        jobmodel.solve3D_multistate_stats["latest_cls2D"] = sorted(latest_cls2d, key=lambda d: d["res"], reverse=False)
 
     context = {
         "jobid"    : jobmodel.id,
-        "jobstats" : jobmodel.abinitio3D_multistate_stats,
-        "status"   : jobmodel.abinitio3D_multistate_status,
+        "jobstats" : jobmodel.solve3D_multistate_stats,
+        "status"   : jobmodel.solve3D_multistate_status,
     }
     return _render_if_changed(request, template, context, checksum_cookie)
 
 @login_required(login_url="/login")
-def view_stream_abinitio3D_multistate_zoom(request):
-    """Returns abinitio3D multistate zoom panel in stream view."""
-    template = "nice_stream/zoomabinitio3Dmultistate.html"
-    checksum_cookie = "panel_abinitio3D_multistate_checksum"
-    logfile = "abinitio3D_multistate.log"
-    errfile = "abinitio3D_multistate.error"
+def view_stream_solve3D_multistate_zoom(request):
+    """Returns solve3D multistate zoom panel in stream view."""
+    template = "nice_stream/zoomsolve3Dmultistate.html"
+    checksum_cookie = "panel_solve3D_multistate_checksum"
+    logfile = "solve3D_multistate.log"
+    errfile = "solve3D_multistate.error"
     jobmodel, jobdir = _get_jobmodel_and_dir_from_request(request)
 
     if jobmodel is None:
@@ -1246,9 +1246,9 @@ def view_stream_abinitio3D_multistate_zoom(request):
         "jobid"    : jobmodel.id,
         "displayid": jobmodel.disp,
         "desc"     : jobmodel.desc,
-        "jobstats" : jobmodel.abinitio3D_multistate_stats,
-        "status"   : jobmodel.abinitio3D_multistate_status,
-        "volume_outputs": _state_volume_outputs(jobmodel.abinitio3D_multistate_stats),
+        "jobstats" : jobmodel.solve3D_multistate_stats,
+        "status"   : jobmodel.solve3D_multistate_status,
+        "volume_outputs": _state_volume_outputs(jobmodel.solve3D_multistate_stats),
         "log"      : [],
         "error"    : "",
     }
@@ -1419,7 +1419,7 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
         batchjob.linkParticleSet(project, link_workspace, set_proj)
     elif type == "final":
         # Final links the selected/deselected final files from classification_2D outputs.
-        set_proj = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, "classification_2D", "stream_abinitio2D.simple")
+        set_proj = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, "classification_2D", "stream_solve2D.simple")
         set_desel = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, filename)
         batchjob.linkParticleSetFinal(project, link_workspace, set_proj, set_desel)
     batchjob.set_description("from " + workspace.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))

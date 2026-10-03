@@ -11,11 +11,11 @@ Select the narrowest applicable skill before editing code:
 
 - `simple-architecture`: broad repository orientation and cross-cutting workflows.
 - `simple-modern-fortran`: Fortran style, lifecycle, generated-source, and module guidance.
-- `simple-abinitio2d`, `simple-refine3d`, `simple-cluster-cavgs-quality`: workflow-specific behavior.
+- `simple-solve2d`, `simple-refine3d`, `simple-cluster-cavgs-quality`: workflow-specific behavior.
 - `simple-microchunk-rejection`: streaming microchunk class-average rejection, lifecycle sentinels, pass-2 skipping, and model-backend boundaries.
-- `simple-abinitio2d`: abinitio2D orchestration, cluster2D stages, 2D probabilistic sampling, online class-average restoration, and even/odd conventions.
+- `simple-solve2d`: solve2D orchestration, refine2D stages, 2D probabilistic sampling, online class-average restoration, and even/odd conventions.
 - `simple-refine3d`: probabilistic 3D refinement, matcher I/O, assembly handoffs, automasking, nonuniform filtering, and multi-state 3D behavior.
-- `simple-abinitio3d-importance-sampling`: abinitio3D `update_frac`/`nsample*`, `sampled`/`updatecnt`, `prob_align` reuse, and trailing-reconstruction coupling.
+- `simple-solve3d-importance-sampling`: solve3D `update_frac`/`nsample*`, `sampled`/`updatecnt`, `prob_align` reuse, and trailing-reconstruction coupling.
 - `simple-frac-update-trailing`: reference contract for fractional updates, online reconstruction I/O, previous halfmap/rho handoffs, and obsfield mirrors.
 - `simple-nonuniform-regularization`: `filt_mode=nonuniform|nonuniform_lpset`, `nu_refine`, `_nu_filt`/`_nu_locres` products, spherical NU support, independent automask consumers, and `simple_nu_filter` lifecycle.
 - `simple-main-*`: subsystem guidance for `src/main` areas such as `ui`, `root`,
@@ -26,13 +26,21 @@ If a task spans multiple areas, read `simple-architecture` first, then the most 
 subsystem skill. Do not guess ownership from filenames alone; follow the established
 `ui -> exec -> commander -> strategy/domain object` flow.
 
-For refine3D or abinitio3D sampling/reconstruction questions, prefer
+For refine3D or solve3D sampling/reconstruction questions, prefer
 `simple-refine3d` and then the narrower sampling, fractional-update, or
 nonuniform skill when the task touches those contracts.
-For 2D workflow or class-average restoration work, read `simple-abinitio2d`.
+For 2D workflow or class-average restoration work, read `simple-solve2d`.
 For streaming microchunk rejection or `model_cavgs_rejection` integration questions,
 read `simple-microchunk-rejection` before changing stream lifecycle or particle-state
 cleanup behavior.
+
+`solve3D` is de novo map determination (ab initio 3D reconstruction coupled
+with initial 3D refinement); `solve2D` is its 2D equivalent. Before 2026-10-03
+they and their variants were named `abinitio*` (`src/main/abinitio/` is now
+`src/main/solve/`), and `refine2D`, the 2D counterpart of `refine3D` whose
+stages `solve2D` runs, was named `cluster2D`. Old program names still run through
+`src/main/ui/simple_ui_legacy_names.f90`; use the new names in code and living
+docs and leave the old ones in dated history docs.
 
 ## Engineering Defaults
 

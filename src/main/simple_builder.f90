@@ -41,7 +41,7 @@ type :: builder
     integer,                allocatable :: subspace_full2sub_map(:)!< labels of eulspace in eulspace_sub
 
     ! STRATEGY2D TOOLBOX
-    type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
+    type(class_frcs)                    :: clsfrcs                !< projection FRC's used refine2D
     ! STRATEGY3D TOOLBOX
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations

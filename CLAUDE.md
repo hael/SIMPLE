@@ -13,8 +13,8 @@ name + description stay in context; the skill body loads on demand.
 
 - `simple-architecture`: read first when a task spans multiple subsystems.
 - `simple-modern-fortran`: Fortran style, lifecycle, generated sources, modules.
-- Workflow skills: `simple-abinitio2d`, `simple-refine3d`,
-  `simple-abinitio3d-importance-sampling`, `simple-cluster-cavgs-quality`,
+- Workflow skills: `simple-solve2d`, `simple-refine3d`,
+  `simple-solve3d-importance-sampling`, `simple-cluster-cavgs-quality`,
   `simple-microchunk-rejection`, `simple-frac-update-trailing`,
   `simple-nonuniform-regularization`.
 - Subsystem skills: `simple-main-*` for `ui`, `root`, `commanders`,
@@ -24,16 +24,24 @@ name + description stay in context; the skill body loads on demand.
 
 Routing:
 - Multi-area task → `simple-architecture` first, then the most specific skill.
-- refine3D / abinitio3D sampling or reconstruction → `simple-refine3d`, then the
+- refine3D / solve3D sampling or reconstruction → `simple-refine3d`, then the
   narrower sampling / fractional-update / nonuniform skill if the task touches
   those contracts.
-- 2D workflow or class-average restoration → `simple-abinitio2d`.
+- 2D workflow or class-average restoration → `simple-solve2d`.
 - Streaming microchunk rejection / `model_cavgs_rejection` → read
   `simple-microchunk-rejection` before changing stream lifecycle or
   particle-state cleanup.
 
 Do not guess ownership from filenames. Follow the flow:
 `ui -> exec -> commander -> strategy/domain object`.
+
+`solve3D` is de novo map determination (ab initio 3D reconstruction coupled
+with initial 3D refinement); `solve2D` is its 2D equivalent. Before 2026-10-03
+they and their variants were named `abinitio*` (`src/main/abinitio/` is now
+`src/main/solve/`), and `refine2D`, the 2D counterpart of `refine3D` whose
+stages `solve2D` runs, was named `cluster2D`. Old program names still run through
+`src/main/ui/simple_ui_legacy_names.f90`; use the new names in code and living
+docs and leave the old ones in dated history docs.
 
 ## Structure
 

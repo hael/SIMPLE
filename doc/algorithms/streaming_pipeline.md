@@ -39,7 +39,7 @@ and beam-tilt parameters are shared downstream.
 ## Bootstrap: initial 2D analysis
 
 The segmentation picks are classified once with a small
-[ab initio 2D](abinitio2d.md) run, `ncls = clamp(N/100, 10, 100)` classes at a
+[solve2D](solve2d.md) run, `ncls = clamp(N/100, 10, 100)` classes at a
 final low-pass of 8 A. Its selected class averages become the reference bank
 for the reference picker. This is what turns a reference-free opening into a
 reference-guided stream, and it is the only stage whose output is consumed
@@ -68,7 +68,7 @@ reject junk before it reaches the global pool:
 A coarse chunk closes when its unassigned particles exceed the threshold (the
 micrograph that crosses it is included, keeping slices contiguous); fine
 chunks merge the survivors of rejection-complete coarse chunks. Each chunk
-runs the ab initio 2D schedule on a 128-pixel crop.
+runs the solve2D schedule on a 128-pixel crop.
 
 **Class rejection.** For every class average, 14 features are computed:
 log population, log resolution, centering, log foreground and background
@@ -92,7 +92,7 @@ so early low-resolution chunks are not emptied.
 ## Global pooled 2D
 
 Accepted particles are imported into a growing pool and classified with the
-sampled stochastic-neighborhood [Cluster2D](cluster2d_class_averaging.md)
+sampled stochastic-neighborhood [Refine2D](refine2d_class_averaging.md)
 estimator, `ncls = 200` by default. Because the dataset grows, the
 coarse-to-fine schedule is expressed in the pool's own iteration count rather
 than in stages:

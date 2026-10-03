@@ -64,11 +64,11 @@ path.
   is unset, production behaves as before. CTest sets `SIMPLE_SEED=20260923` for every entry. The
   suite runner also reseeds before every sub-suite, so `suite=<name>` draws the same numbers as the
   full run. To reproduce a CTest run by hand, export `SIMPLE_SEED=20260923` first.
-- **`abinitio2D_stream` is retired.** It ran one iteration of `abinitio2D` on 24 noise-free
+- **`abinitio2D_stream` is retired.** It ran one iteration of `solve2D` on 24 noise-free
   particles. Its command line was hand-written and differs from the one the stream's chunk code
   builds (`cls_init` ptcl vs rand, `rank_cavgs` no vs yes, no `chunk=yes`, `objfun` default vs
   euclid, `refine` snhc_smpl vs prob_snhc). It checked counts and files, but never that the two
-  particle families end up in different classes. `abinitio2D` itself runs nightly in both
+  particle families end up in different classes. `solve2D` itself runs nightly in both
   `simulated_workflow` systems. If you want a test of the chunk path, see the last section.
 
 ## What a test has to do here
@@ -181,7 +181,7 @@ test can keep its style. If the checks grow, convert them to assertions like the
 
 ### If you want the chunk path tested (`abinitio2D_stream`, retired)
 
-A useful replacement tests what the stream actually sends to `abinitio2D`:
+A useful replacement tests what the stream actually sends to `solve2D`:
 
 1. Build the chunk command line with the chunk code. The construction is inside
    `simple_stream_chunk2D_utils`; it would have to be factored into a function a test can call

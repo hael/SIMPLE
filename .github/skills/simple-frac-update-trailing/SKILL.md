@@ -5,7 +5,7 @@ description: Use when studying, explaining, or modifying SIMPLE's fractional-upd
 
 # SIMPLE Fractional Update and Trailing Reconstruction
 
-Use this skill for `abinitio3D`, `refine3D`, `update_frac`, `trail_rec`,
+Use this skill for `solve3D`, `refine3D`, `update_frac`, `trail_rec`,
 downsampling changes, previous-reference compatibility, and obsfield mirrors.
 
 ## Core Contract
@@ -32,7 +32,7 @@ Read `references/frac-update-contract.md` first.
 
 Then inspect the current code in this order:
 
-1. `src/main/simple_abinitio_controller.f90`
+1. `src/main/solve/simple_solve3D_controller.f90`
 2. `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`
 3. `src/main/ori/simple_oris_sampling.f90`
 4. `src/main/ori/simple_oris_getters.f90`
@@ -87,7 +87,7 @@ Then inspect the current code in this order:
 - When a stage boundary changes the next consumer's representation size, the
   prior stage must write the previous artifact in the next consumer's
   representation, not merely in its own search representation.
-- Do not confuse abinitio3D's planned stage LP with the saved `_stageNN_lp.mrc`
+- Do not confuse solve3D's planned stage LP with the saved `_stageNN_lp.mrc`
   snapshot cutoff. Stage snapshots are filtered to the measured state FSC
   resolution when available; the planned stage LP is only the fallback.
 - For obsfield work, use obsfield as the current-update accumulation or

@@ -72,7 +72,7 @@ missing-particle sweep during pose initialization.
 service. The value is common to every supplied state and controls the matching
 low-pass, crop, and translation setup for the CC pass. This is a
 workflow-specific override of the service's 15 Å default; callers that omit
-the override, including `abinitio3D` input-volume starts and
+the override, including `solve3D` input-volume starts and
 `refine3D_auto ref_pose_init=cc`, retain that default. A caller-selected common
 bandwidth must never become per-state frequency adaptation.
 
@@ -91,7 +91,7 @@ block uses the grouped cohort result, not the initial image-power groups.
 
 The shared implementation is
 `initialize_poses_against_external_references` in
-`simple_external_reference_pose_initialization`. `abinitio3D` input-volume
+`simple_external_reference_pose_initialization`. `solve3D` input-volume
 starts and `refine3D_auto ref_pose_init=cc` use the same service.
 
 ## 4. Euclidean Classification

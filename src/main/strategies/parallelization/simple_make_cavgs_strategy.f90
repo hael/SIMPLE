@@ -371,7 +371,7 @@ contains
         class(make_cavgs_worker_strategy), intent(inout) :: self
         type(parameters),                  intent(in)    :: params
         class(cmdline),                    intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_make_cavgs'))
+        call qsys_job_finished(params, string('simple_commanders_refine2D :: exec_make_cavgs'))
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params, cline)
@@ -405,7 +405,7 @@ contains
         type(builder) :: build_tmp
         integer       :: ncls_here
         ! Master threads (original intent)
-        call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
+        call set_master_num_threads(self%nthr_master, string('REFINE2D'))
         ! Parse parameters & project-field to set ncls default for ptcl2D
         call build_tmp%init_params_and_build_spproj(cline, params)
         ncls_here = build_tmp%spproj_field%get_n('class')

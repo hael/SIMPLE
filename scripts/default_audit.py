@@ -70,15 +70,15 @@ INTERNAL_CLINE_HELPERS = {
 # them in the audit as explicit informational evidence rather than creating
 # descriptors that could override project- or workflow-derived state.
 INTENTIONAL_NON_UI_DEFAULTS = {
-    ("simple_exec", "abinitio3D_cavgs", "imgkind"):
-        "class-average routing is internal to abinitio3D_cavgs",
-    ("simple_exec", "abinitio3D_cavgs", "noise_norm"):
+    ("simple_exec", "solve3D_cavgs", "imgkind"):
+        "class-average routing is internal to solve3D_cavgs",
+    ("simple_exec", "solve3D_cavgs", "noise_norm"):
         "noise normalization is exposed only by the normalize workflow",
     ("simple_exec", "ctfops", "box"):
         "image geometry is inferred from supplied data; the no-stack fallback is internal setup",
     ("simple_exec", "volcluster", "box"):
         "box is derived from the first input volume",
-    ("simple_stream", "abinitio2D_stream", "projfile_optics"):
+    ("simple_stream", "pool2D", "projfile_optics"):
         "the optics project filename is a stream-generated artifact",
 }
 

@@ -15,7 +15,7 @@ contains
         if( .not. cline%defined('edge')   ) call cline%set('edge',     6)
     end subroutine set_automask2D_defaults
 
-    subroutine set_cluster2D_defaults( cline )
+    subroutine set_refine2D_defaults( cline )
         class(cmdline), intent(inout) :: cline
         real :: mskdiam, lpstart, lpstop, lpcen
         mskdiam = cline%get_rarg('mskdiam')
@@ -36,6 +36,6 @@ contains
         if( .not. cline%defined('objfun')       ) call cline%set('objfun',    'euclid')
         if( .not. cline%defined('ml_reg')       ) call cline%set('ml_reg',       'yes')
         call set_automask2D_defaults( cline )
-    end subroutine set_cluster2D_defaults
+    end subroutine set_refine2D_defaults
 
 end module simple_default_clines

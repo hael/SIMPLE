@@ -581,8 +581,8 @@ contains
                 call thumbimg%tile(clsstk, i - 5, 2)
             endif
         end do
-        call thumbimg%write_jpg(string(CLUSTER2D_ITER_THUMB))
-        call self%set(section, key, cwd%to_char() // '/' // CLUSTER2D_ITER_THUMB, thumbnail = .true.)
+        call thumbimg%write_jpg(string(REFINE2D_ITER_THUMB))
+        call self%set(section, key, cwd%to_char() // '/' // REFINE2D_ITER_THUMB, thumbnail = .true.)
         call thumbimg%kill()
         call clsstk%kill()
         if(allocated(inds)    ) deallocate(inds)

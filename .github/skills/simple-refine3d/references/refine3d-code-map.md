@@ -71,7 +71,7 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 ### Reconstruction/Postprocessing
 
 - `src/main/simple_final_rec.f90`
-  The shared ending of `abinitio3D`, `refine3D_auto`, `refine3D_states`, and
+  The shared ending of `solve3D`, `refine3D_auto`, `refine3D_states`, and
   `classify3D_refs`. `calc_final_rec` runs the final all-particle
   reconstruction at native sampling from the refinement command line it is
   given, reuses committed canonical sigmas or rebuilds them through
@@ -103,7 +103,7 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
   particle assignment has been made.
 - Polar matcher work writes partition-local polar partial sums; polar assembly
   reduces them into state-major polar references.
-- Multi-state `abinitio3D_cavgs` point-group activation is state-local at the
+- Multi-state `solve3D_cavgs` point-group activation is state-local at the
   symmetry-search stage: each current state map supplies its own axis search,
   and the resulting orientation transform applies only to that state.
 - `POLAR_REFS.bin`, `POLAR_REFS_even.bin`, and `POLAR_REFS_odd.bin` are file
@@ -134,4 +134,4 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 - Does a policy doc in `doc/policies/` need to change with the code?
 - Does the change preserve the source-vs-handoff `POLAR_REFS*` contract between assembly, matcher, and probability-table code?
 - Does online Cartesian reconstruction reuse matcher batch images instead of adding a second image-stack read?
-- If multi-state `abinitio3D_cavgs` activates a point group, does the symmetry-axis search remain state-local?
+- If multi-state `solve3D_cavgs` activates a point group, does the symmetry-axis search remain state-local?

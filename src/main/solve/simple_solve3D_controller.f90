@@ -1,0 +1,747 @@
+!@descr: stage schedule and per-stage refine3D configuration of solve3D de novo map determination
+submodule(simple_solve3D_utils) simple_solve3D_controller
+implicit none
+#include "simple_local_flags.inc"
+
+! Output naming
+character(len=*), parameter :: REC_FBODY               = 'rec_final_state'
+
+! Stage schedule and search-space sizes
+integer,          parameter :: NSTAGES                 = 8
+integer,          parameter :: NSTAGES_INI3D           = 4    ! # of ini3D stages used for initialization
+integer,          parameter :: NSTAGES_INI3D_MAX       = 7
+integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
+integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
+integer,          parameter :: NSPACE_CAVGS_EARLY      = 500  ! nspace for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
+integer,          parameter :: MAXITS_CAVGS_EARLY      = 15   ! maxits for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
+integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early solve3D_cavgs stages using NSPACE_CAVGS_EARLY
+integer,          parameter :: NSPACE_SUB              = 126
+integer,          parameter :: NSPACE_SUB_BASE         = 2500
+
+! Stage transition policy
+integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for stage-based policies to indicate "turned off" 
+integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
+integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
+integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
+integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
+integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
+integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
+integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
+integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
+integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on staged NU filtering
+integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
+integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8
+integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE - 1
+integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-standard doesn't work for solve3D 
+integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
+integer,          parameter :: ENVFSC_STAGE            = NSTAGES     ! when to activate enveloppe masking & FSC phase randomized resolution estimation
+integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
+integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
+integer,          parameter :: NSAMPLE_HET_SPLIT_CAP   = 100000
+character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
+character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
+character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
+character(len=*), parameter :: PROB_NEIGH_MODE_DOCKED  = 'geom'
+
+! Filtering and low-pass defaults
+real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
+integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
+real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
+real,             parameter :: CENLP_DEFAULT           = 30.
+real,             parameter :: LPSYMSRCH_LB            = 12.
+real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for solve3D_cavgs/cavgs_ini
+real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop for solve3D_cavgs/cavgs_ini
+real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative default for independent multi-state solve3D
+
+! Sampling and update defaults
+real,             parameter :: UPDATE_FRAC_MAX            = 0.9  ! ensures fractional update remains on
+real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-active sampling once nsample/active reaches this fraction
+integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT = 10000
+
+type :: refine3D_stage_cfg
+    type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, envfsc
+    type(string) :: balance, partition, filt_mode, automsk, greedy_sampling, prob_neigh_mode
+    integer :: iter, inspace, inspace_sub, imaxits
+    real    :: trs, frac_best, overlap, fracsrch
+    real    :: snr_noise_reg, gaufreq, update_frac_dyn
+end type refine3D_stage_cfg
+
+contains
+
+    module function solve3D_rec_fbody() result(fbody)
+        character(len=15) :: fbody
+        fbody = REC_FBODY
+    end function solve3D_rec_fbody
+
+    module function solve3D_lpstop_bounds() result(bounds)
+        real :: bounds(2)
+        bounds = LPSTOP_BOUNDS
+    end function solve3D_lpstop_bounds
+
+    module function solve3D_lpstart_bounds() result(bounds)
+        real :: bounds(2)
+        bounds = LPSTART_BOUNDS
+    end function solve3D_lpstart_bounds
+
+    module function solve3D_cenlp_default() result(cenlp)
+        real :: cenlp
+        cenlp = CENLP_DEFAULT
+    end function solve3D_cenlp_default
+
+    module function solve3D_lpsymsrch_lb() result(lp)
+        real :: lp
+        lp = LPSYMSRCH_LB
+    end function solve3D_lpsymsrch_lb
+
+    module function solve3D_update_frac_max() result(frac)
+        real :: frac
+        frac = UPDATE_FRAC_MAX
+    end function solve3D_update_frac_max
+
+    module function solve3D_full_sample_switch_frac() result(frac)
+        real :: frac
+        frac = FULL_SAMPLE_SWITCH_FRAC
+    end function solve3D_full_sample_switch_frac
+
+    module function solve3D_lpstart_ini3D() result(lp)
+        real :: lp
+        lp = LPSTART_INI3D
+    end function solve3D_lpstart_ini3D
+
+    module function solve3D_lpstop_ini3D() result(lp)
+        real :: lp
+        lp = LPSTOP_INI3D
+    end function solve3D_lpstop_ini3D
+
+    module function solve3D_independent_lpstop_default() result(lp)
+        real :: lp
+        lp = LPSTOP_INDEPENDENT
+    end function solve3D_independent_lpstop_default
+
+    module function solve3D_nstages() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES
+    end function solve3D_nstages
+
+    module function solve3D_independent_nstages_default() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES_INDEPENDENT
+    end function solve3D_independent_nstages_default
+
+    module function solve3D_nstages_ini3D() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES_INI3D
+    end function solve3D_nstages_ini3D
+
+    module function solve3D_nstages_ini3D_max() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = NSTAGES_INI3D_MAX
+    end function solve3D_nstages_ini3D_max
+
+    module function solve3D_cavgs_early_nstages() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = CAVGS_EARLY_NSTAGES
+    end function solve3D_cavgs_early_nstages
+
+    module function solve3D_symsrch_stage() result(istage)
+        integer :: istage
+        istage = SYMSRCH_STAGE
+    end function solve3D_symsrch_stage
+
+    module function solve3D_ml_reg_start_stage() result(istage)
+        integer :: istage
+        istage = ML_REG_START_STAGE
+    end function solve3D_ml_reg_start_stage
+
+    module function solve3D_het_docked_stage() result(istage)
+        integer :: istage
+        istage = HET_DOCKED_STAGE
+    end function solve3D_het_docked_stage
+
+    module function solve3D_docked_cohort_active( params, istage ) result(l_active)
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical :: l_active
+        l_active = trim(params%multivol_mode).eq.'docked' .and. &
+            &params%nstates > 1 .and. istage >= params%split_stage .and. &
+            &.not. force_full_sampling_mode(params)
+    end function solve3D_docked_cohort_active
+
+    module function solve3D_stoch_sampl_stage(params) result(istage)
+        class(parameters), intent(in) :: params
+        integer :: istage
+        istage = STOCH_SAMPL_STAGE
+        if( trim(params%multivol_mode).eq.'independent' ) istage = STOCH_SAMPL_STAGE_INDEP
+    end function solve3D_stoch_sampl_stage
+
+    module function solve3D_nsample_default() result(nsample)
+        integer :: nsample
+        nsample = NSAMPLE_SOLVE3D_DEFAULT
+    end function solve3D_nsample_default
+
+    module function solve3D_remaining_niters(first_stage, last_stage) result(niters)
+        integer, intent(in) :: first_stage, last_stage
+        integer :: niters, first, last
+        first = max(1, first_stage)
+        last  = min(size(MAXITS), last_stage)
+        if( last < first )then
+            niters = 0
+        else
+            niters = sum(MAXITS(first:last))
+        endif
+    end function solve3D_remaining_niters
+
+    integer function active_refine3D_nstages() result(nstages_active)
+        nstages_active = nstages_refine3D
+        if( nstages_active <= 0 ) nstages_active = NSTAGES
+        nstages_active = min(nstages_active, size(NSPACE), size(MAXITS))
+        if( allocated(lpinfo) ) nstages_active = min(nstages_active, size(lpinfo))
+    end function active_refine3D_nstages
+
+    module procedure set_cline_refine3D
+        type(refine3D_stage_cfg) :: cfg
+        logical :: l_sticky_class_sampling_active, l_addon
+        l_sticky_class_sampling_active = .false.
+        if( .not. l_cavgs ) l_sticky_class_sampling_active = solve3D_docked_cohort_active(params, istage)
+        if( l_sticky_class_sampling_active .and. docked_split_stage(params, istage) )then
+            write(logfhandle,'(A)') &
+                '>>> SOLVE3D DOCKED STICKY CLASS SAMPLING ENABLED FOR POST-SPLIT STAGES'
+        endif
+        l_addon = .false.
+        if( present(addon) ) l_addon = addon%active
+        call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
+        if( l_addon )then
+            ! stage 3 keeps its full budget only because of the symmetry search,
+            ! which never runs in an add-on: it early-stops on overlap
+            if( istage <= SYMSRCH_STAGE )then
+                cfg%overlap  = addon%overlap
+                cfg%fracsrch = 90.
+            endif
+        endif
+        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, &
+            &l_refine3D_lp_override, l_sticky_class_sampling_active )
+        if( l_addon )then
+            if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
+            call cline_refine3D%set('frozen_rec', addon%frozen_rec)
+        endif
+    end procedure set_cline_refine3D
+
+    subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        call init_refine3D_iteration( cfg )
+        call set_refine3D_update_policy( cfg, params, istage )
+        call set_refine3D_symmetry_policy( cfg, params, istage )
+        call set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_balance_policy( cfg, params )
+        call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_trailrec_policy( cfg, params, istage )
+        call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
+        call apply_refine3D_search_overrides( cfg, params, istage )
+    end subroutine build_refine3D_stage_cfg
+
+    subroutine init_refine3D_iteration( cfg )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        cfg%iter = 0
+        if( cline_refine3D%defined('endit') )then
+            cfg%iter = cline_refine3D%get_iarg('endit')
+        endif
+        cfg%iter = cfg%iter + 1
+        cfg%inspace_sub = 0
+    end subroutine init_refine3D_iteration
+
+    subroutine set_refine3D_update_policy( cfg, params, istage )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        real :: update_frac_stage
+        if( force_full_sampling_mode(params) )then
+            cfg%fillin          = 'no'
+            cfg%update_frac_dyn = 1.0
+            return
+        endif
+        update_frac_stage = update_frac
+        if( istage == active_refine3D_nstages() )then
+            cfg%fillin = 'yes'
+            if( params%nstates > 1 ) cfg%fillin = 'no'
+            cfg%update_frac_dyn = update_frac_stage
+        else
+            cfg%fillin = 'no'
+            cfg%update_frac_dyn = update_frac_stage
+        endif
+        cfg%update_frac_dyn = min(UPDATE_FRAC_MAX, cfg%update_frac_dyn)
+    end subroutine set_refine3D_update_policy
+
+    subroutine set_refine3D_symmetry_policy( cfg, params, istage )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        cfg%pgrp = trim(params%pgrp)
+        if( l_srch4symaxis )then
+            if( istage <= SYMSRCH_STAGE )then
+                cfg%pgrp = trim(params%pgrp_start)
+            endif
+        endif
+    end subroutine set_refine3D_symmetry_policy
+
+    subroutine set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%prob_neigh_mode = ''
+        if( l_refine3D_mode_override )then
+            cfg%refine = refine3D_mode_override
+            if( cfg%refine.eq.'prob_neigh' )then
+                cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
+            endif
+        else
+            if( trim(params%multivol_mode).eq.'single' )then
+                if( istage < PROB_REFINE_STAGE )then
+                    cfg%refine           = 'prob_neigh'
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
+                else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                    cfg%refine = 'prob'
+                else
+                    cfg%refine           = 'prob_neigh'
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
+                endif
+            else if( trim(params%multivol_mode).eq.'docked' )then
+                if( istage < PROB_REFINE_STAGE )then
+                    cfg%refine           = 'prob_neigh'
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
+                else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                    cfg%refine = 'prob'
+                else
+                    cfg%refine = 'prob_neigh'
+                    if( params%nstates > 1 )then
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_DOCKED
+                    else
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_LATE
+                    endif
+                endif
+            else if( trim(params%multivol_mode).eq.'independent' )then
+                if( istage < PROB_REFINE_STAGE )then
+                    if( l_cavgs )then
+                        cfg%refine           = 'prob_neigh'
+                        cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
+                    else
+                        cfg%refine           = 'shc'
+                        cfg%prob_neigh_mode  = ''
+                    endif
+                else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                    cfg%refine = 'prob'
+                else
+                    cfg%refine           = 'prob_neigh'
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
+                endif
+            endif
+        endif
+        if( docked_split_stage(params, istage) )then
+            cfg%refine = 'prob_state'
+            cfg%prob_neigh_mode  = ''
+        endif
+    end subroutine set_refine3D_mode_policy
+
+    subroutine set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%rec_backend = 'gridding'
+        if( .not. l_cavgs .and. istage >= PCG_REC_START_STAGE )then
+            cfg%rec_backend = trim(params%rec_backend)
+        endif
+    end subroutine set_refine3D_backend_policy
+
+    subroutine set_refine3D_balance_policy( cfg, params )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        cfg%balance   = trim(params%balance)
+        cfg%partition = trim(params%partition)
+    end subroutine set_refine3D_balance_policy
+
+    subroutine set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%gaufreq = -1.
+        if( l_cavgs .or. istage <= GAUREF_LAST_STAGE )then
+            cfg%gaufreq = lpinfo(istage)%lp
+        endif
+    end subroutine set_refine3D_gauref_policy
+
+    subroutine set_refine3D_trailrec_policy( cfg, params, istage )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        cfg%trail_rec = 'no'
+        if( force_full_sampling_mode(params) ) return
+        select case(trim(params%multivol_mode))
+            case('single')
+                if( istage >= TRAILREC_STAGE_SINGLE ) cfg%trail_rec = 'yes'
+            case('independent')
+                if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
+            case('docked')
+                if( istage >= TRAILREC_STAGE_SINGLE )then
+                    cfg%trail_rec = 'yes'
+                endif
+            case default
+                cfg%trail_rec = 'no'
+        end select
+    end subroutine set_refine3D_trailrec_policy
+
+    subroutine set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%filt_mode  = 'none'
+        if( l_cavgs ) return
+        if( l_nonuniform .and. &
+            &(istage >= NU_FILTER_STAGE .or. (l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
+            cfg%filt_mode = trim(params%filt_mode)
+            if( cfg%filt_mode.eq.'nonuniform' .and. &
+                &(istage < GOLD_STD_STAGE .or. params%nstates > 1) ) cfg%filt_mode = 'nonuniform_lpset'
+            if( cfg%filt_mode.eq.'nonuniform_lpset' .and. &
+                &params%nstates == 1 .and. istage >= GOLD_STD_STAGE ) cfg%filt_mode = 'nonuniform'
+        endif
+    end subroutine set_refine3D_filtering_policy
+
+    subroutine set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%automsk = 'no'
+        if( l_cavgs ) return
+        if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
+        ! automasking follows the same explicit user control on both backends
+    end subroutine set_refine3D_automsk_policy
+
+    subroutine set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%envfsc = 'no'
+        if( l_cavgs ) return
+        if( istage >= ENVFSC_STAGE ) cfg%envfsc = trim(params%envfsc)
+        ! Active automasking implies envfsc=yes (PCG: the selected envelope is
+        ! solve support; gridding: it masks the FSC pair with phase correction).
+        ! The child's parameters derive it anyway; this keeps the stage
+        ! config truthful (relies on the automsk policy running first).
+        if( cfg%automsk.ne.'no' ) cfg%envfsc = 'yes'
+    end subroutine set_refine3D_envfsc_policy
+
+    subroutine set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        integer :: stoch_stage
+        stoch_stage = solve3D_stoch_sampl_stage(params)
+        cfg%inspace = NSPACE(istage)
+        if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%inspace = NSPACE_CAVGS_EARLY
+        cfg%greedy_sampling = 'yes'
+        select case(istage)
+            case(1,2)
+                cfg%imaxits       = MAXITS(istage)
+                cfg%trs           = 0.
+                cfg%ml_reg        = 'no'
+                cfg%frac_best     = 1.0
+                cfg%overlap       = 0.99
+                cfg%fracsrch      = 99.
+                cfg%snr_noise_reg = 2.0
+            case(3,4,5,6)
+                cfg%imaxits       = MAXITS(istage)
+                cfg%trs           = lpinfo(istage)%trslim
+                cfg%ml_reg        = 'yes'
+                cfg%frac_best     = 1.0
+                if( trim(params%multivol_mode).eq.'independent' .and. istage >= stoch_stage )then
+                    cfg%greedy_sampling = 'no'
+                else if( istage >= stoch_stage )then
+                    cfg%frac_best = 0.5
+                endif
+                if( istage > SYMSRCH_STAGE )then
+                    cfg%overlap  = 0.9 ! early stopping
+                    cfg%fracsrch = 90. ! early stopping
+                else
+                    cfg%overlap  = 0.99
+                    cfg%fracsrch = 99.
+                endif
+                cfg%snr_noise_reg = 4.0
+            case(7,8)
+                cfg%imaxits       = MAXITS(istage)
+                cfg%trs           = lpinfo(istage)%trslim
+                cfg%ml_reg        = 'yes'
+                if( trim(params%multivol_mode).eq.'independent' )then
+                    cfg%frac_best       = 1.0
+                    cfg%greedy_sampling = 'no'
+                else if( params%nstates > 1 )then
+                    cfg%frac_best = 0.98
+                else
+                    cfg%frac_best = 0.85
+                endif
+                cfg%overlap       = 0.95 ! early stopping
+                cfg%fracsrch      = 90.  ! doesn't affect later stages
+                cfg%snr_noise_reg = 6.0
+            case default
+                THROW_HARD('Invalid istage index in set_refine3D_stage_controls')
+        end select
+        if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%imaxits = MAXITS_CAVGS_EARLY
+    end subroutine set_refine3D_stage_controls
+
+    subroutine apply_refine3D_search_overrides( cfg, params, istage )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        select case(cfg%refine%to_char())
+            case('prob_neigh')
+                select case(cfg%prob_neigh_mode%to_char())
+                    case('shc','snhc')
+                        cfg%inspace_sub = 0
+                    case DEFAULT
+                        ! Keep neighborhood granularity roughly constant when
+                        ! late stages increase nspace (e.g. 2500 -> 5000).
+                        cfg%inspace_sub = max(1, nint(real(NSPACE_SUB) * real(cfg%inspace) / real(NSPACE_SUB_BASE)))
+                end select
+        end select
+    end subroutine apply_refine3D_search_overrides
+
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_sticky_class_sampling )
+        type(refine3D_stage_cfg), intent(in) :: cfg
+        class(parameters),        intent(in) :: params
+        integer,                  intent(in) :: istage
+        logical,                  intent(in) :: l_cavgs
+        logical,                  intent(in) :: l_cmdline_lp_override
+        logical,                  intent(in) :: l_sticky_class_sampling
+        real :: lp_eff, lpstop_eff, lp_cap
+        logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
+        l_full_update_stage = force_full_sampling_mode(params)
+        lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
+        l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
+        ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a coarser command-line lpstop stays a guard
+        ! (doc/policies/3D/solve3D_policy.md sec. 4).
+        lp_cap = LPSTOP_BOUNDS(1)
+        if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
+        if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
+        ! Stage-boundary FSC=0.5 promotion past FSC05_PROMOTE_MIN_STAGE, never finer than lp_cap: once per
+        ! boundary, since without gold-standard halves only an FSC beyond the previous band is clean.
+        ! Add-on promotes from the union FSC (solve3D_policy.md sec. 4; solve3D_addon_policy.md sec. 5).
+        l_fsc05_promoted = .false.
+        if( .not. l_cavgs .and. .not. l_explicit_lp ) &
+            &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
+        ! Matching-band ceiling: the (promoted) stage limit in non-NU stages, none in NU stages unless
+        ! lpstop is given (doc/policies/3D/solve3D_policy.md sec. 4).
+        if( cfg%filt_mode .ne. 'none' )then
+            lpstop_eff = 0.
+            if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = params%lpstop
+        else
+            lpstop_eff = lpinfo(istage)%lp
+            if( l_fsc05_promoted ) lpstop_eff = lp_eff
+            if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = max(lpstop_eff, params%lpstop)
+        endif
+        call cline_refine3D%set('prg',    'refine3D')
+        if( l_full_update_stage )then
+            call cline_refine3D%delete('update_frac')
+            call cline_refine3D%delete('fillin')
+        else if( istage == active_refine3D_nstages() )then
+            call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
+            call cline_refine3D%set('fillin',             cfg%fillin)
+        else
+            call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
+            call cline_refine3D%delete('fillin')
+        endif
+        if( .not. l_cavgs )then
+            if( l_full_update_stage )then
+                call cline_refine3D%delete('nsample')
+            else
+                call cline_refine3D%set('nsample', params%nsample)
+            endif
+        endif
+        if( l_sticky_class_sampling )then
+            call cline_refine3D%set('sticky_class_sampling', 'yes')
+        else
+            call cline_refine3D%delete('sticky_class_sampling')
+        endif
+        call cline_refine3D%set('box_crop',               solve3D_stage_box_crop(params, istage))
+        call cline_refine3D%set('startit',                cfg%iter)
+        call cline_refine3D%set('which_iter',             cfg%iter)
+        if( l_srch4symaxis .and. istage == SYMSRCH_STAGE )then
+            call cline_refine3D%set('sigma_commit_deferred', 'yes')
+        else
+            call cline_refine3D%set('sigma_commit_deferred', 'no')
+        endif
+        call cline_refine3D%set('pgrp',                   cfg%pgrp)
+        call cline_refine3D%set('refine',                 cfg%refine)
+        call cline_refine3D%set('rec_backend',            cfg%rec_backend)
+        ! The soft solvent prior starts only in the final stage, after the NU
+        ! label field it is applied to has settled. The strength is forwarded only when given; an
+        ! unset pcg_solvent_lambda keeps the per-iteration estimate.
+        if( params%l_pcg_solvent .and. istage >= PCG_SOLVENT_START_STAGE .and. &
+            &trim(cfg%rec_backend%to_char()) == 'pcg' )then
+            call cline_refine3D%set('pcg_solvent', 'yes')
+            if( params%l_pcg_solvent_lambda_auto )then
+                call cline_refine3D%delete('pcg_solvent_lambda')
+            else
+                call cline_refine3D%set('pcg_solvent_lambda', params%pcg_solvent_lambda)
+            endif
+            if( params%l_pcg_solvent_check )then
+                call cline_refine3D%set('pcg_solvent_check', 'yes')
+            else
+                call cline_refine3D%delete('pcg_solvent_check')
+            endif
+        else
+            call cline_refine3D%delete('pcg_solvent')
+            call cline_refine3D%delete('pcg_solvent_lambda')
+            call cline_refine3D%delete('pcg_solvent_check')
+        endif
+        if( cfg%refine.eq.'prob_neigh' )then
+            call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)
+        else
+            call cline_refine3D%delete('prob_neigh_mode')
+        endif
+        call cline_refine3D%set('balance',                cfg%balance)
+        call cline_refine3D%set('partition',              cfg%partition)
+        call cline_refine3D%set('trail_rec',              cfg%trail_rec)
+        call cline_refine3D%set('filt_mode',              cfg%filt_mode)
+        call cline_refine3D%delete('lpstart')
+        ! Non-NU stages: the printed stage limit is the highest resolution
+        ! permitted. NU stages: no ceiling unless the user set lpstop.
+        if( lpstop_eff > TINY )then
+            call cline_refine3D%set('lpstop',             lpstop_eff)
+        else
+            call cline_refine3D%delete('lpstop')
+        endif
+        call cline_refine3D%set('automsk',                cfg%automsk)
+        call cline_refine3D%set('envfsc',                 cfg%envfsc)
+        call cline_refine3D%set('envmsklp',               params%envmsklp)
+        if( params%nstates == 1 .and. istage >= GOLD_STD_STAGE )then
+            ! Past this point, NU filtering promotes the selected matching
+            ! bandwidth; the schedule remains only as the lpstop ceiling.
+            call cline_refine3D%delete('lp')
+        else
+            call cline_refine3D%set('lp',                 lp_eff)
+        endif
+        call cline_refine3D%set('nspace',                 cfg%inspace)
+        if( cfg%inspace_sub > 0 )then
+            call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)
+        else
+            call cline_refine3D%delete('nspace_sub')
+        endif
+        call cline_refine3D%set('maxits',                 cfg%imaxits)
+        ! Early stopping applies in every stage (doc/policies/3D/solve3D_policy.md sec. 4).
+        call cline_refine3D%delete('minits')
+        call cline_refine3D%set('trs',                    cfg%trs)
+        call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
+        call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
+        call cline_refine3D%set('frac_best',              cfg%frac_best)
+        call cline_refine3D%set('overlap',                cfg%overlap)
+        call cline_refine3D%set('fracsrch',               cfg%fracsrch)
+        if( l_cavgs )then
+            call cline_refine3D%set('snr_noise_reg',      cfg%snr_noise_reg)
+            call cline_refine3D%delete('update_frac')
+        else
+            call cline_refine3D%delete('snr_noise_reg')
+        endif
+        if( cfg%gaufreq > 0. )then
+            call cline_refine3D%set('gauref',             'yes')
+            call cline_refine3D%set('gaufreq',            cfg%gaufreq)
+        else
+            call cline_refine3D%delete('gauref')
+            call cline_refine3D%delete('gaufreq')
+        endif
+    end subroutine emit_refine3D_stage_cfg
+
+    logical function docked_split_stage( params, istage )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        docked_split_stage = trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage
+    end function docked_split_stage
+
+    module subroutine calc_docked_multistate_max_sampling( params, nptcls, nptcls_cap, ufrac_cap )
+        class(parameters), intent(in)  :: params
+        integer,           intent(in)  :: nptcls
+        integer,           intent(out) :: nptcls_cap
+        real,              intent(out) :: ufrac_cap
+        integer :: nptcls_update
+        nptcls_update = min(nstates_glob * params%nsample, nptcls)
+        nptcls_cap = min(nint(nstates_glob * 2.5 * params%nsample), NSAMPLE_HET_SPLIT_CAP)
+        nptcls_cap = max(nptcls_cap, nptcls_update)
+        nptcls_cap = min(nptcls_cap, nptcls)
+        ufrac_cap  = min(real(nptcls_cap) / real(nptcls), 1.0)
+        ufrac_cap  = min(solve3D_update_frac_max(), ufrac_cap)
+        nptcls_cap = min(nptcls,nint(nptcls*ufrac_cap))
+    end subroutine calc_docked_multistate_max_sampling
+
+    logical function force_full_sampling_mode( params ) result( l_force_full )
+        class(parameters), intent(in) :: params
+        real :: sample_frac
+        l_force_full = .false.
+        if( nptcls_eff <= 0 ) return
+        if( params%nsample <= 0 ) return
+        sample_frac  = real(params%nsample) / real(nptcls_eff)
+        l_force_full = sample_frac > solve3D_full_sample_switch_frac()
+    end function force_full_sampling_mode
+
+    real function stage_matching_lp( cfg, params, istage, l_cmdline_lp_override ) result( lp )
+        type(refine3D_stage_cfg), intent(in) :: cfg
+        class(parameters),        intent(in) :: params
+        integer,                  intent(in) :: istage
+        logical,                  intent(in) :: l_cmdline_lp_override
+        lp = lpinfo(istage)%lp
+        if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
+    end function stage_matching_lp
+
+    !> Replace the planned stage matching limit by the project's FSC=0.5
+    !! resolution when that is finer, bounded by the ladder cap. Applies past
+    !! stage FSC05_PROMOTE_MIN_STAGE on the particle route only.
+    subroutine promote_stage_lp_from_fsc05( params, istage, lp_cap, lp, l_promoted )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: istage
+        real,              intent(in)    :: lp_cap
+        real,              intent(inout) :: lp
+        logical,           intent(out)   :: l_promoted
+        real :: res05, lp_new
+        l_promoted = .false.
+        if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
+        ! silent: the stage banner reports the limit actually used and its
+        ! provenance (no res05 field = nothing to promote from)
+        res05 = project_best_fsc05_resolution(params)
+        if( res05 < TINY ) return
+        lp_new = max(min(lp, res05), lp_cap)
+        if( lp_new < lp - 1.e-3 )then
+            lp         = lp_new
+            l_promoted = .true.
+        endif
+    end subroutine promote_stage_lp_from_fsc05
+
+    !> FSC=0.5 resolution of the best resolved populated state, read from the
+    !! per-particle res05 field the reconstruction writes; 0 when absent
+    real function project_best_fsc05_resolution( params ) result( res05 )
+        class(parameters), intent(in) :: params
+        type(sp_project)     :: spproj
+        real,    allocatable :: res05s(:), states(:)
+        logical, allocatable :: mask(:)
+        res05 = 0.
+        if( .not. file_exists(params%projfile) ) return
+        call spproj%read_segment('ptcl3D', params%projfile)
+        if( spproj%os_ptcl3D%get_noris() > 0 .and. spproj%os_ptcl3D%isthere('res05') )then
+            states = spproj%os_ptcl3D%get_all('state')
+            res05s = spproj%os_ptcl3D%get_all('res05')
+            allocate(mask(size(states)), source=states > 0.5 .and. res05s > TINY)
+            if( any(mask) ) res05 = minval(res05s, mask=mask)
+            deallocate(states, res05s, mask)
+        endif
+        call spproj%kill
+    end function project_best_fsc05_resolution
+
+end submodule simple_solve3D_controller

@@ -11,8 +11,8 @@ native SIMPLE memory telemetry, and write `results.csv` plus metadata and logs.
 
 ```bash
 python3 scripts/memory/benchmark_motion_correct.py --help
-python3 scripts/memory/benchmark_abinitio2d.py --help
-python3 scripts/memory/benchmark_abinitio3d.py --help
+python3 scripts/memory/benchmark_solve2d.py --help
+python3 scripts/memory/benchmark_solve3d.py --help
 ```
 
 Keep completed benchmark output under `output/`. Dataset paths are passed
@@ -24,8 +24,8 @@ stale or partial run.
 ```bash
 python3 scripts/memory/fit_models.py \
   --motion-csv output/motion_grid/results.csv output/motion_followup/results.csv \
-  --abinitio2d-csv output/abinitio2d_grid/results.csv \
-  --abinitio3d-csv output/abinitio3d_grid/results.csv
+  --solve2d-csv output/solve2d_grid/results.csv \
+  --solve3d-csv output/solve3d_grid/results.csv
 ```
 
 This does not change the active model. It writes:
@@ -49,8 +49,8 @@ After review, refit and install the result used by the runtime estimator:
 ```bash
 python3 scripts/memory/fit_models.py \
   --motion-csv output/motion_grid/results.csv output/motion_followup/results.csv \
-  --abinitio2d-csv output/abinitio2d_grid/results.csv \
-  --abinitio3d-csv output/abinitio3d_grid/results.csv \
+  --solve2d-csv output/solve2d_grid/results.csv \
+  --solve3d-csv output/solve3d_grid/results.csv \
   --install
 ```
 
@@ -58,8 +58,8 @@ After installation, smoke-test all three runtime entry points:
 
 ```bash
 python3 scripts/memory_estimator.py motion_correct --help
-python3 scripts/memory_estimator.py abinitio2D --help
-python3 scripts/memory_estimator.py abinitio3D --help
+python3 scripts/memory_estimator.py solve2D --help
+python3 scripts/memory_estimator.py solve3D --help
 ```
 
 Installing a fit changes only the standalone Python estimator. It does not

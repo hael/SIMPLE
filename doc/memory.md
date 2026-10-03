@@ -8,7 +8,7 @@ The user-facing estimator is `scripts/memory_estimator.py`; its active
 coefficients are stored beside it in `scripts/memory_estimator_models.json`.
 Periodic data collection, fitting, and reporting tools live separately under
 `scripts/memory/`. The calibrated estimator covers `motion_correct`,
-`abinitio2D`, and `abinitio3D`. It reports both a fitted peak-RSS value and a
+`solve2D`, and `solve3D`. It reports both a fitted peak-RSS value and a
 larger recommended allocation.
 
 ## Estimate memory from the command line
@@ -19,10 +19,10 @@ Run the estimator from the repository root:
 python3 scripts/memory_estimator.py motion_correct \
   --xdim 4096 --ydim 4096 --frames 16 --smpd 1.3 --threads 4
 
-python3 scripts/memory_estimator.py abinitio2D \
+python3 scripts/memory_estimator.py solve2D \
   --particles 2000 --box 192 --threads 4 --references 32
 
-python3 scripts/memory_estimator.py abinitio3D \
+python3 scripts/memory_estimator.py solve3D \
   --particles 500 --box 128 --smpd 1.3 --mask-diameter 60 \
   --threads 2 --partitions 4 --states 1
 ```
@@ -35,9 +35,9 @@ calibration range are accepted but produce explicit extrapolation warnings.
 
 - `motion_correct` estimates the peak RSS of one distributed worker. This is
   the same boundary used by `job_memory_per_task`.
-- `abinitio2D` estimates the complete commander peak, not one `cluster2D`
+- `solve2D` estimates the complete commander peak, not one `refine2D`
   partition.
-- `abinitio3D` estimates the conservative process-tree bound used by the
+- `solve3D` estimates the conservative process-tree bound used by the
   benchmark: parent peak plus the largest `nparts` child peaks. It is not an
   assertion that all those peaks occurred at exactly the same instant.
 
@@ -51,16 +51,16 @@ The current models use:
 
 - 200 successful motion-correction runs, including the original 1K-10K movie
   grid and a 36-run follow-up varying 4/16 frames and 1/4 threads;
-- 30 successful ab-initio 2D screening runs;
-- 36 successful ab-initio 3D screening runs.
+- 30 successful solve2D screening runs;
+- 36 successful solve3D screening runs.
 
 Run the reproducible fitter with a Python runtime that provides NumPy:
 
 ```bash
 python3 scripts/memory/fit_models.py \
   --motion-csv output/motion_grid/results.csv output/motion_followup/results.csv \
-  --abinitio2d-csv output/abinitio2d_grid/results.csv \
-  --abinitio3d-csv output/abinitio3d_grid/results.csv
+  --solve2d-csv output/solve2d_grid/results.csv \
+  --solve3d-csv output/solve3d_grid/results.csv
 ```
 
 It writes `output/memory_estimator_models_fitted.json` and
@@ -75,8 +75,8 @@ Current raw-model validation:
 | Commander | Rows | R² | Leave-one-out R² | Conservative coverage |
 |---|---:|---:|---:|---:|
 | motion_correct | 200 | 0.970 | 0.965 | 100% |
-| abinitio2D | 30 | 0.946 | 0.908 | 100% |
-| abinitio3D | 36 | 0.976 | 0.922 | 100% |
+| solve2D | 30 | 0.946 | 0.908 | 100% |
+| solve3D | 36 | 0.976 | 0.922 | 100% |
 
 Coverage is in-sample after safety margins and rounding; it is not a guarantee
 for a different SIMPLE build, operating system, allocator, algorithm, or input
@@ -158,10 +158,10 @@ For production estimates, fit peak or delta RSS against
 `effective_pixels_per_frame` while holding frame and thread counts fixed. Both
 counts are recorded so they can also be modeled explicitly.
 
-### `abinitio2D`
+### `solve2D`
 
-`scripts/memory/benchmark_abinitio2d.py` measures peak resident memory for
-isolated `abinitio2D` runs using deterministic synthetic particle stacks.
+`scripts/memory/benchmark_solve2d.py` measures peak resident memory for
+isolated `solve2D` runs using deterministic synthetic particle stacks.
 
 The default screening design varies:
 
@@ -197,10 +197,10 @@ but requires at least three stages when it is selected.
 Run the screening design with:
 
 ```bash
-python3 scripts/memory/benchmark_abinitio2d.py \
+python3 scripts/memory/benchmark_solve2d.py \
   --discard-case-data \
   --discard-inputs \
-  --output-dir /path/to/abinitio2d-memory-results
+  --output-dir /path/to/solve2d-memory-results
 ```
 
 Use `--dry-run` to print the case matrix. Use `--resume` with the same output
@@ -224,9 +224,9 @@ Synthetic data and one repeat are suitable for allocation screening. For
 production capacity planning, repeat selected configurations with real data,
 the intended CTF mode, the full stage schedule, and the deployed thread count.
 
-### `abinitio3D`
+### `solve3D`
 
-`scripts/memory/benchmark_abinitio3d.py` measures memory across a screened set
+`scripts/memory/benchmark_solve3d.py` measures memory across a screened set
 of data and workflow variables:
 
 - particle count, raw box size, pixel size, and mask diameter;
@@ -240,7 +240,7 @@ of data and workflow variables:
 The default design has 33 cases. It is a one-factor screening design with a
 small interaction set, not a full Cartesian product.
 
-`abinitio3D` launches `simple_private_exec` workers. Every measured process uses
+`solve3D` launches `simple_private_exec` workers. Every measured process uses
 SIMPLE native memory telemetry. The harness reports:
 
 - peak RSS of the parent `simple_exec` process;
@@ -252,7 +252,7 @@ The planning bound is suitable for capacity planning but may exceed exact
 simultaneous RSS because the component peaks can occur at different times.
 Parent and worker components are retained separately in the raw data.
 
-Input generation, import, and the required one-iteration `abinitio2D` class
+Input generation, import, and the required one-iteration `solve2D` class
 preparation occur outside the measured interval. Synthetic particles are
 realistic projections of a deterministic asymmetric 3D volume with CTF
 disabled and SNR 0.1.
@@ -264,9 +264,9 @@ the number of iterations actually observed before completion or early stopping.
 Run it from a built SIMPLE checkout:
 
 ```bash
-python3 scripts/memory/benchmark_abinitio3d.py \
+python3 scripts/memory/benchmark_solve3d.py \
   --simple-exec build/production/simple_exec \
-  --output-dir output/abinitio3d_memory_screening_raw \
+  --output-dir output/solve3d_memory_screening_raw \
   --discard-case-data
 ```
 
@@ -277,9 +277,9 @@ Generate reports with a Python runtime that provides the required document
 libraries:
 
 ```bash
-/path/to/python3 scripts/memory/report_abinitio3d.py \
-  output/abinitio3d_memory_screening_raw/results.csv \
-  --metadata output/abinitio3d_memory_screening_raw/metadata.json
+/path/to/python3 scripts/memory/report_solve3d.py \
+  output/solve3d_memory_screening_raw/results.csv \
+  --metadata output/solve3d_memory_screening_raw/metadata.json
 ```
 
 The report generator writes the complete CSV, a tab-separated TXT file for

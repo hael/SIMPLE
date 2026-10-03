@@ -41,7 +41,7 @@ the adjoint *scatter*, a shift is a phase ramp, the CTF is a multiplication,
 and, with references stored in polar coordinates, an in-plane rotation is an
 index shift and all rotations at once are one FFT. The noise is diagonal in
 this basis, so whitening is a per-shell weight. Chapters
-[Cluster2D](cluster2d_class_averaging.md), [refine3D](refine3d.md), and
+[Refine2D](refine2d_class_averaging.md), [refine3D](refine3d.md), and
 [reconstruction](reconstruction.md) are the three faces of this choice.
 
 **2. Alternate.** Poses and maps are estimated by coordinate ascent: fix the
@@ -58,8 +58,8 @@ workflow therefore controls three quantities over time: the admitted
 bandwidth (low-pass limit), the stochasticity of the pose search (random
 visiting order, first-improvement acceptance, sampled rather than argmax
 choices, annealed toward exhaustive search), and the fraction of particles
-updated per iteration. [Ab initio 2D](abinitio2d.md) and
-[ab initio 3D](abinitio3d.md) are those schedules; the stochastic machinery
+updated per iteration. [Solve2D](solve2d.md) and
+[solve3D](solve3d.md) are those schedules; the stochastic machinery
 they share is in [sampling and fractional updates](sampling_and_fractional_updates.md).
 
 **4. Split the data in half.** Every reconstruction is made twice, from
@@ -114,11 +114,13 @@ source pointers confined to the last section.
 
 **2D: classes without a model.**
 
-4. [Cluster2D and class averaging](cluster2d_class_averaging.md). The basic
+4. [Refine2D and class averaging](refine2d_class_averaging.md). The basic
    alternating estimator: stochastic hill climbing over classes and in-plane
    poses, then Wiener-type restoration of CTF-corrected class means.
-5. [Ab initio 2D](abinitio2d.md). The coarse-to-fine schedule that takes
-   Cluster2D from random noise references to a dense all-particle assignment.
+5. [Solve2D](solve2d.md). De novo 2D class-average determination: the
+   coarse-to-fine schedule that couples ab initio 2D classification with
+   initial 2D refinement, taking Refine2D from random noise references to a
+   dense all-particle assignment. The 2D equivalent of solve3D.
 
 **The stochastic machinery.**
 
@@ -129,9 +131,10 @@ source pointers confined to the last section.
 
 **3D: from noise to map.**
 
-7. [Ab initio 3D](abinitio3d.md). Eight stages of bandwidth, angular
-   sampling, search mode, and symmetry, starting from a noise volume and
-   random orientations.
+7. [Solve3D](solve3d.md). De novo 3D map determination: eight stages of
+   bandwidth, angular sampling, search mode, and symmetry that couple ab
+   initio 3D reconstruction from a noise volume and random orientations with
+   initial 3D refinement of the resulting map.
 8. [Refine3D](refine3d.md). One round of 3D alternation: reproject, assign,
    reconstruct, measure the FSC, regularize, filter.
 9. [3D reconstruction](reconstruction.md). The fixed-pose inverse problem by
@@ -170,7 +173,7 @@ explains which workflow fits each source of particle poses and state models.
     stages.
 
 Two cross-cutting chapters stand outside the pipeline order.
-[Continuous in-plane refinement](continuous_inplane_refinement_abinitio2D.md)
+[Continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)
 polishes a committed pose to sub-grid angular precision using the fact that
 the polar correlation is a trigonometric series in the angle, while leaving
 the search that selected the pose untouched.

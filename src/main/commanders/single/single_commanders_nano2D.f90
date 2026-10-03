@@ -1,7 +1,7 @@
 !@descr: 2D analysis commanders used in SINGLE for nanoparticle processing
 module single_commanders_nano2D
 use simple_commanders_api
-use simple_commanders_cluster2D, only: commander_cluster2D
+use simple_commanders_refine2D, only: commander_refine2D
 use simple_commanders_mkcavgs,   only: commander_make_cavgs_distr
 implicit none
 #include "simple_local_flags.inc"
@@ -11,10 +11,10 @@ type, extends(commander_base) :: commander_center2D_nano
     procedure :: execute      => exec_center2D_nano
 end type commander_center2D_nano
 
-type, extends(commander_base) :: commander_cluster2D_nano
+type, extends(commander_base) :: commander_refine2D_nano
   contains
-    procedure :: execute      => exec_cluster2D_nano
-end type commander_cluster2D_nano
+    procedure :: execute      => exec_refine2D_nano
+end type commander_refine2D_nano
 
 type, extends(commander_base) :: commander_analysis2D_nano
   contains
@@ -27,14 +27,14 @@ contains
         class(commander_center2D_nano), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         ! commanders
-        type(commander_cluster2D_nano)   :: xcluster2D_nano ! shared-memory by default
+        type(commander_refine2D_nano)    :: xrefine2D_nano ! shared-memory by default
         type(commander_make_cavgs_distr) :: xmake_cavgs
         ! constants
         integer, parameter               :: NCLS_CEN_NANO = 10
         ! other variables
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
-        type(cmdline)                    :: cline_make_cavgs, cline_cluster2D_nano
+        type(cmdline)                    :: cline_make_cavgs, cline_refine2D_nano
         type(string)                     :: orig_projfile
         type(string)                     :: finalcavgs
         integer :: last_iter_stage2, nptcls
@@ -54,7 +54,7 @@ contains
         endif
         ! delete any previous solution
         if( .not. spproj%is_virgin_field(params%oritype) )then
-            ! removes previous cluster2D solution (states are preserved)
+            ! removes previous refine2D solution (states are preserved)
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
@@ -70,14 +70,14 @@ contains
         call cline_make_cavgs%set('projfile', params%projfile)
         call xmake_cavgs%execute(cline_make_cavgs)
         ! do centering
-        cline_cluster2D_nano = cline
-        call cline_cluster2D_nano%set('prg',     'cluster2D_nano')
-        call cline_cluster2D_nano%set('mskdiam',  0.)
-        call cline_cluster2D_nano%set('refine',  'inpl')
-        call cline_cluster2D_nano%set('mkdir',   'no')
-        call cline_cluster2D_nano%set('projfile', params%projfile)
-        call xcluster2D_nano%execute(cline_cluster2D_nano)        
-        last_iter_stage2 = cline_cluster2D_nano%get_iarg('endit')
+        cline_refine2D_nano = cline
+        call cline_refine2D_nano%set('prg',      'refine2D_nano')
+        call cline_refine2D_nano%set('mskdiam',   0.)
+        call cline_refine2D_nano%set('refine',   'inpl')
+        call cline_refine2D_nano%set('mkdir',    'no')
+        call cline_refine2D_nano%set('projfile', params%projfile)
+        call xrefine2D_nano%execute(cline_refine2D_nano)        
+        last_iter_stage2 = cline_refine2D_nano%get_iarg('endit')
         finalcavgs       = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//params%ext%to_char()
         ! adding cavgs & FRCs to project
         params%projfile = orig_projfile
@@ -94,16 +94,16 @@ contains
         call simple_end('**** SIMPLE_CENTER2D_NANO NORMAL STOP ****')
     end subroutine exec_center2D_nano
 
-    subroutine exec_cluster2D_nano( self, cline )
-        class(commander_cluster2D_nano), intent(inout) :: self
+    subroutine exec_refine2D_nano( self, cline )
+        class(commander_refine2D_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commander
-        type(commander_cluster2D) :: xcluster2D ! shared-memory
+        type(commander_refine2D) :: xrefine2D ! shared-memory
         type(parameters)          :: params
         type(string) :: str_refine, mkdir_flag
         ! static parameters
         call cline%delete('nparts') ! always shared-memory
-        call cline%set('dir_exec', 'cluster2D_nano')
+        call cline%set('dir_exec', 'refine2D_nano')
         call cline%set('autoscale',            'no')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',    'yes')
         mkdir_flag = cline%get_carg('mkdir')
@@ -111,11 +111,11 @@ contains
             ! create execution directory in the single_exec context
             call params%new(cline)
             params%mkdir = 'no'
-            ! avoid nested execution directory creation in inner cluster2D
+            ! avoid nested execution directory creation in inner refine2D
             call cline%set('mkdir', 'no')
             call cline%set('projfile', params%projfile)
         endif
-        call cline%set('prg',           'cluster2D')
+        call cline%set('prg',           'refine2D')
         if( .not. cline%defined('tseries') ) call cline%set('tseries',  'yes')
         if( .not. cline%defined('refine')  ) call cline%set('refine','greedy')
         str_refine = cline%get_carg('refine')
@@ -138,10 +138,10 @@ contains
         if( .not. cline%defined('objfun')         ) call cline%set('objfun',        'cc') ! best objfun
         if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',        'no') ! ml_reg=yes -> too few atoms 
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')       
-        call xcluster2D%execute(cline)
+        call xrefine2D%execute(cline)
         call str_refine%kill
-        call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
-    end subroutine exec_cluster2D_nano
+        call simple_end('**** SIMPLE_REFINE2D_NANO NORMAL STOP ****')
+    end subroutine exec_refine2D_nano
 
     subroutine exec_analysis2D_nano( self, cline )
         use simple_commanders_imgproc, only: commander_estimate_diam
@@ -150,7 +150,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! commanders
         type(commander_center2D_nano)  :: xcenter2D
-        type(commander_cluster2D_nano) :: xcluster2D
+        type(commander_refine2D_nano) :: xrefine2D
         type(commander_estimate_diam)  :: xest_diam
         type(commander_simulate_nanoparticle) :: xsim_np
         ! other variables
@@ -210,7 +210,7 @@ contains
         call exec_cmdline('rm -rf cavgs* clusters2D*star *_FINISHED start2Drefs* frcs*')
         call cline%set('center', 'no')
         call cline%set('mkdir',  'no')
-        call xcluster2D%execute(cline)
+        call xrefine2D%execute(cline)
         ! end gracefully
         call nice_comm%terminate()
         call simple_end('**** SIMPLE_ANALYSIS2D_NANO NORMAL STOP ****')

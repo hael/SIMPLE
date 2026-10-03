@@ -6,7 +6,7 @@ use simple_refine3D_fnames,                        only: refine3D_state_vol_fnam
 use simple_refine3D_stage_plan,                    only: refine3D_stage_plan_entry, plan_refine3D_frequency_stages
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
 use simple_gui_communicator,                       only: gui_communicator
-use simple_abinitio_utils,                         only: gen_ortho_reprojs4viz, write_abinitio_lowpass_snapshot
+use simple_solve3D_utils,                          only: gen_ortho_reprojs4viz, write_solve3D_lowpass_snapshot
 implicit none
 #include "simple_local_flags.inc"
 
@@ -720,7 +720,7 @@ contains
             call flex_arg%kill
         else
             ! flex=yes is the default for state=0/1 input; a project that already
-            ! carries multi-state labels (continuation, abinitio3D handoff)
+            ! carries multi-state labels (continuation, solve3D handoff)
             ! refines those states instead
             l_flex_requested = .not. project_has_multistate_labels()
             if( l_flex_requested )then
@@ -1304,8 +1304,8 @@ contains
                     return
                 endif
                 ! any downscaled sampling of the native grid is acceptable: base
-                ! refine3D rescales references to the stage crop, and the abinitio3D
-                ! split checkpoint registers its maps at the abinitio ladder crop
+                ! refine3D rescales references to the stage crop, and the solve3D
+                ! split checkpoint registers its maps at the solve3D ladder crop
                 if( init_box > params%box .or. &
                     &abs(real(init_box)*init_smpd - real(params%box)*params%smpd) > &
                     &0.01 * real(params%box)*params%smpd )then
@@ -1420,7 +1420,7 @@ contains
                     if( .not. file_exists(gui_vol) ) cycle
                     gui_stage_vol = add2fbody(gui_vol, string(MRC_EXT), gui_stage_suffix)
                     gui_stage_lp  = add2fbody(gui_stage_vol, MRC_EXT, LP_SUFFIX)
-                    call write_abinitio_lowpass_snapshot(gui_vol, gui_lp, gui_stage_lp, gui_smpd, box=gui_box)
+                    call write_solve3D_lowpass_snapshot(gui_vol, gui_lp, gui_stage_lp, gui_smpd, box=gui_box)
                 enddo
                 call gui_proj%read(params%projfile)
                 call gen_ortho_reprojs4viz(params, gui_proj)
@@ -2084,7 +2084,7 @@ contains
         use simple_commanders_rec,    only: commander_rec3D
         use simple_commanders_euclid, only: commander_calc_pspec
         use simple_sigma2_bootstrap,  only: prepare_pspec_cline, prepare_residual_sigma2_pass_cline
-        use simple_abinitio_utils,    only: configure_final_pcg_solve_budget, strip_pcg_backend_keys
+        use simple_solve3D_utils,     only: configure_final_pcg_solve_budget, strip_pcg_backend_keys
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(commander_rec3D)      :: xrec3D

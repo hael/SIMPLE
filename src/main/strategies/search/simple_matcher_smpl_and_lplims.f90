@@ -2,13 +2,13 @@
 module simple_matcher_smpl_and_lplims
 use simple_pftc_srch_api
 use simple_builder, only: builder
-use simple_abinitio2D_controller, only: NSAMPLE_DEFAULT_2D
+use simple_solve2D_controller, only: NSAMPLE_DEFAULT_2D
 use simple_refine3D_fnames, only: refine3D_fsc_fname
 implicit none
 
 public :: set_bp_range3D, set_bp_range2D
 public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update2D
-public :: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned, cluster2D_blends_carryover
+public :: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, refine2D_blends_carryover
 private
 #include "simple_local_flags.inc"
 
@@ -280,7 +280,7 @@ contains
         logical :: l_has_been_sampled
         l_has_been_sampled = build%spproj_field%has_been_sampled()
         if( l_updatefrac )then
-            ! abinitio2D controller policy:
+            ! solve2D controller policy:
             ! startit==1  -> sticky sampled subset stage
             ! startit>1   -> stochastic resampling biased toward low updatecnt
             if( params%startit == 1 )then
@@ -298,11 +298,11 @@ contains
         endif
     end subroutine sample_ptcls4update2D
 
-    !> Whether a cluster2D iteration blends carried class sums (fractional class-average
+    !> Whether a refine2D iteration blends carried class sums (fractional class-average
     !! restoration): a fractional update past a fresh start, or, in streaming, any iteration
     !! after the first with an update fraction below 0.99. Shared by the matcher and by the
     !! masters that check the carried set before the iteration.
-    logical function cluster2D_blends_carryover( params, which_iter ) result( l_blend )
+    logical function refine2D_blends_carryover( params, which_iter ) result( l_blend )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: which_iter
         if( trim(params%stream2d) == 'yes' )then
@@ -310,14 +310,14 @@ contains
         else
             l_blend = params%l_update_frac .and. (params%startit /= 1)
         endif
-    end function cluster2D_blends_carryover
+    end function refine2D_blends_carryover
 
-    logical function cluster2D_requires_full_assignment( params ) result( l_required )
+    logical function refine2D_requires_full_assignment( params ) result( l_required )
         class(parameters), intent(in) :: params
-        ! In cluster2D, fillin is currently a coverage/convergence guard. It does
+        ! In refine2D, fillin is currently a coverage/convergence guard. It does
         ! not change particle sampling to missing-only selection.
         l_required = params%l_fillin
-    end function cluster2D_requires_full_assignment
+    end function refine2D_requires_full_assignment
 
     logical function all_active_ptcls_2D_assigned( os, pfromto, n_missing ) result( l_assigned )
         class(oris),       intent(in)  :: os

@@ -147,7 +147,7 @@ set(SIMPLE_INTENTIONAL_HELPER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_motion_align_hybrid.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori_utils.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_cluster2D_utils.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_refine2D_utils.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_p03_initial_analysis.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_p04_refpick_extract_new.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_pool2D_utils.f90"

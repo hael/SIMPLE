@@ -13,8 +13,8 @@ implicit none
 ! 1. Command-lines & queue
 !===========================
 class(cmdline), pointer :: master_cline => null()
-type(cmdline)           :: cline_cluster2D_chunk
-type(cmdline)           :: cline_cluster2D_pool
+type(cmdline)           :: cline_refine2D_chunk
+type(cmdline)           :: cline_refine2D_pool
 
 !===========================
 ! 2. Projects & dimensions

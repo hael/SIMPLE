@@ -8,8 +8,8 @@ use simple_commanders_reproject,    only: commander_reproject
 use simple_commanders_pick,         only: commander_pick, commander_extract
 use simple_commanders_sim,          only: commander_simulate_particles, commander_simulate_movie
 use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct, commander_preprocess
-use simple_commanders_abinitio2D,   only: commander_abinitio2D
-use simple_commanders_abinitio,     only: commander_abinitio3D
+use simple_commanders_solve2D,      only: commander_solve2D
+use simple_commanders_solve3D,      only: commander_solve3D
 use simple_test_utils,              only: set_fixed_seed
 use simple_micproc,                 only: sample_filetab
 use simple_commanders_validate,     only: commander_mini_stream
@@ -26,15 +26,15 @@ type, extends(commander_base) :: commander_test_simulate_particles
     procedure :: execute      => exec_test_simulate_particles
 end type commander_test_simulate_particles
 
-type, extends(commander_base) :: commander_test_abinitio3D_addon
+type, extends(commander_base) :: commander_test_solve3D_addon
   contains
-    procedure :: execute      => exec_test_abinitio3D_addon
-end type commander_test_abinitio3D_addon
+    procedure :: execute      => exec_test_solve3D_addon
+end type commander_test_solve3D_addon
 
-type, extends(commander_base) :: commander_generate_abinitio3D_addon_snapshots
+type, extends(commander_base) :: commander_generate_solve3D_addon_snapshots
     contains
-        procedure :: execute      => exec_generate_abinitio3D_addon_snapshots
-end type commander_generate_abinitio3D_addon_snapshots
+        procedure :: execute      => exec_generate_solve3D_addon_snapshots
+end type commander_generate_solve3D_addon_snapshots
 
 type, extends(commander_base) :: commander_test_simulated_workflow
   contains
@@ -439,7 +439,7 @@ subroutine exec_test_mini_stream_quantitative( self, cline )
         &THROW_HARD('TEST_MINI_STREAM FAILED: 2D and 3D particle counts differ')
 
     nclasses = result%os_cls2D%get_noris()
-    if( nclasses < 1 ) THROW_HARD('TEST_MINI_STREAM FAILED: abinitio2D produced no classes')
+    if( nclasses < 1 ) THROW_HARD('TEST_MINI_STREAM FAILED: solve2D produced no classes')
     classes = result%os_ptcl2D%get_all_asint('class')
     if( size(classes) /= npicked .or. any(classes < 1) .or. any(classes > nclasses) )&
         &THROW_HARD('TEST_MINI_STREAM FAILED: particle class assignments are incomplete or invalid')
@@ -824,7 +824,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     character(len=*), parameter :: CTF_DIR        = '3_ctf_estimate'
     character(len=*), parameter :: PICK_DIR       = '4_pick'
     character(len=*), parameter :: EXTRACT_DIR    = '5_extract'
-    character(len=*), parameter :: ABINIT2D_DIR   = '6_abinitio2D'
+    character(len=*), parameter :: ABINIT2D_DIR   = '6_solve2D'
     real,             parameter :: SMPD           = 1.3
     real,             parameter :: MSKDIAM        = 180.0
     real,             parameter :: CS             = 2.7
@@ -844,7 +844,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     real,             parameter :: DOCK_LP        = 20.0
     type(cmdline)                       :: cline_projection, cline_sim_mov, cline_new_project
     type(cmdline)                       :: cline_import_movies, cline_mot_corr, cline_ctf_est
-    type(cmdline)                       :: cline_pick, cline_extract, cline_abinitio2D, cline_abinitio3D
+    type(cmdline)                       :: cline_pick, cline_extract, cline_solve2D, cline_solve3D
     type(commander_new_project)         :: xnew_project
     type(commander_reproject)           :: xreproject
     type(commander_simulate_movie)      :: xsimov
@@ -853,8 +853,8 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(commander_import_movies)       :: ximport_movies
     type(commander_pick)                :: xpick
     type(commander_extract)             :: xextract
-    type(commander_abinitio2D)          :: xabinitio2D
-    type(commander_abinitio3D)          :: xabinitio3D
+    type(commander_solve2D)             :: xsolve2D
+    type(commander_solve3D)             :: xsolve3D
     type(molecule_data)                 :: mol
     type(atoms)                         :: molecule
     type(image)                         :: projection
@@ -862,7 +862,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
     type(string)                        :: system_name, workflow_picker, pgrp, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
-    type(string)                        :: truth_volume, abinitio_dir, final_volume
+    type(string)                        :: truth_volume, solve3D_dir, final_volume
     type(string)                        :: movie_files(NMOVIES)
     character(len=XLONGSTRLEN)          :: workflow_root_path
     integer                             :: i, j, proj_inds(NPER_MOVIE), projection_order(NPROJS), ldim(3), nprojs_stk
@@ -1119,34 +1119,34 @@ subroutine exec_test_simulated_workflow( self, cline )
     if( nptcls < 4 ) THROW_HARD('Too few particles were extracted for initial model tests')
     ncls = min(4, max(2, nptcls / 5))
 
-    write(logfhandle,'(a)') '>>> Step 9: ab initio 2D'
-    call cline_abinitio2D%set('prg',                'abinitio2D')
-    call cline_abinitio2D%set('projfile',           project_path)
-    call cline_abinitio2D%set('mkdir',                     'yes')
-    call cline_abinitio2D%set('mskdiam',                 MSKDIAM)
-    call cline_abinitio2D%set('ncls',                       ncls)
-    call cline_abinitio2D%set('nthr',                       NTHR)
-    call xabinitio2D%execute(cline_abinitio2D)
-    call cline_abinitio2D%kill()
+    write(logfhandle,'(a)') '>>> Step 9: solve2D'
+    call cline_solve2D%set('prg',                   'solve2D')
+    call cline_solve2D%set('projfile',              project_path)
+    call cline_solve2D%set('mkdir',                        'yes')
+    call cline_solve2D%set('mskdiam',                    MSKDIAM)
+    call cline_solve2D%set('ncls',                          ncls)
+    call cline_solve2D%set('nthr',                          NTHR)
+    call xsolve2D%execute(cline_solve2D)
+    call cline_solve2D%kill()
     call update_project_path
-    call return_to_stage_root('abinitio2D')
+    call return_to_stage_root('solve2D')
 
     call spproj%read(project_path)
-    if( spproj%os_cls2D%get_noris() < 1 ) THROW_HARD('Ab initio 2D produced no classes')
+    if( spproj%os_cls2D%get_noris() < 1 ) THROW_HARD('solve2D produced no classes')
     call spproj%kill()
 
-    write(logfhandle,'(a)') '>>> Step 10: ab initio 3D'
-    call cline_abinitio3D%set('prg',                'abinitio3D')
-    call cline_abinitio3D%set('projfile',           project_path)
-    call cline_abinitio3D%set('mkdir',                     'yes')
-    call cline_abinitio3D%set('pgrp',                       pgrp)
-    if( system_name == '1jxy' ) call cline_abinitio3D%set('pgrp_start', pgrp)
-    call cline_abinitio3D%set('mskdiam',                 MSKDIAM)
-    call cline_abinitio3D%set('nthr',                       NTHR)
-    call xabinitio3D%execute(cline_abinitio3D)
-    call simple_getcwd(abinitio_dir)
-    call cline_abinitio3D%kill()
-    final_volume = filepath(abinitio_dir, refine3D_state_vol_fname(1))
+    write(logfhandle,'(a)') '>>> Step 10: solve3D'
+    call cline_solve3D%set('prg',                   'solve3D')
+    call cline_solve3D%set('projfile',              project_path)
+    call cline_solve3D%set('mkdir',                        'yes')
+    call cline_solve3D%set('pgrp',                          pgrp)
+    if( system_name == '1jxy' ) call cline_solve3D%set('pgrp_start', pgrp)
+    call cline_solve3D%set('mskdiam',                    MSKDIAM)
+    call cline_solve3D%set('nthr',                          NTHR)
+    call xsolve3D%execute(cline_solve3D)
+    call simple_getcwd(solve3D_dir)
+    call cline_solve3D%kill()
+    final_volume = filepath(solve3D_dir, refine3D_state_vol_fname(1))
     call validate_reconstructed_volume(truth_volume, final_volume, SMPD, EXTRACT_BOX, 0.01, MSKDIAM, &
         &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, &
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok)
@@ -3382,41 +3382,41 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
 end subroutine run_rec3D_backends_single
 
 
-!> abinitio3D_addon end to end: abinitio3D on a seeded selection of a first
+!> solve3D_addon end to end: solve3D on a seeded selection of a first
 !! set of simulated particles, the add-on on a larger project that appends a
 !! second set, checked against the simulation truth and the base run. The
 !! fixture directory (a few hundred MB) is removed on success and kept for
 !! inspection on failure.
-subroutine exec_test_abinitio3D_addon( self, cline )
-    class(commander_test_abinitio3D_addon), intent(inout) :: self
+subroutine exec_test_solve3D_addon( self, cline )
+    class(commander_test_solve3D_addon), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
     type(parameters) :: params
     type(string)     :: cwd_saved, fixture_root
     integer          :: status
     logical          :: all_ok
     call simple_getcwd(cwd_saved)
-    fixture_root = filepath(cwd_saved, 'test_abinitio3D_addon_'//int2str(get_process_id()))
+    fixture_root = filepath(cwd_saved, 'test_solve3D_addon_'//int2str(get_process_id()))
     if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
     call simple_mkdir(fixture_root)
     call simple_chdir(fixture_root, status)
-    if( status /= 0 ) THROW_HARD('TEST_ABINITIO3D_ADDON FAILED: could not enter fixture directory')
+    if( status /= 0 ) THROW_HARD('TEST_SOLVE3D_ADDON FAILED: could not enter fixture directory')
     call params%new(cline)
     all_ok = .true.
-    call run_abinitio3D_addon_gate(params%nthr, all_ok)
+    call run_solve3D_addon_gate(params%nthr, all_ok)
     call simple_chdir(cwd_saved, status)
-    if( status /= 0 ) THROW_HARD('TEST_ABINITIO3D_ADDON FAILED: could not restore original directory')
+    if( status /= 0 ) THROW_HARD('TEST_SOLVE3D_ADDON FAILED: could not restore original directory')
     if( all_ok )then
         call simple_rmdir(fixture_root)
-        write(logfhandle,'(a)') 'PASS: abinitio3D_addon validated against the simulation truth and the base run'
-        call simple_end('**** SIMPLE_TEST_ABINITIO3D_ADDON NORMAL STOP ****')
+        write(logfhandle,'(a)') 'PASS: solve3D_addon validated against the simulation truth and the base run'
+        call simple_end('**** SIMPLE_TEST_SOLVE3D_ADDON NORMAL STOP ****')
     else
-        THROW_HARD('TEST_ABINITIO3D_ADDON FAILED')
+        THROW_HARD('TEST_SOLVE3D_ADDON FAILED')
     endif
-end subroutine exec_test_abinitio3D_addon
+end subroutine exec_test_solve3D_addon
 
 !> Generates append-only cumulative projects for stream/add-on integration tests.
-subroutine exec_generate_abinitio3D_addon_snapshots( self, cline )
-    class(commander_generate_abinitio3D_addon_snapshots), intent(inout) :: self
+subroutine exec_generate_solve3D_addon_snapshots( self, cline )
+    class(commander_generate_solve3D_addon_snapshots), intent(inout) :: self
     class(cmdline),                                        intent(inout) :: cline
     type(parameters) :: params
     type(sp_project) :: source, generated, snapshot
@@ -3475,8 +3475,8 @@ subroutine exec_generate_abinitio3D_addon_snapshots( self, cline )
     call generated%os_out%kill
     call generated%jobproc%kill
     if( generated%projinfo%isthere(1, 'sigma2_state') ) call generated%projinfo%delete_entry('sigma2_state')
-    if( generated%projinfo%isthere(1, 'abinitio3D_manifest') ) call generated%projinfo%delete_entry('abinitio3D_manifest')
-    if( generated%projinfo%isthere(1, 'abinitio3D_run_id') ) call generated%projinfo%delete_entry('abinitio3D_run_id')
+    if( generated%projinfo%isthere(1, 'solve3D_manifest') ) call generated%projinfo%delete_entry('solve3D_manifest')
+    if( generated%projinfo%isthere(1, 'solve3D_run_id') ) call generated%projinfo%delete_entry('solve3D_run_id')
     call generated%os_stk%new(nchunks, is_ptcl=.false.)
     call generated%os_ptcl2D%new(nptcls, is_ptcl=.true.)
     call generated%os_ptcl3D%new(nptcls, is_ptcl=.true.)
@@ -3526,28 +3526,28 @@ subroutine exec_generate_abinitio3D_addon_snapshots( self, cline )
         &'; ADDON PARTICLES: ', naddon_base, ' OR ', naddon_base + min(1, naddon_extra)
     call generated%kill
     call source%kill
-end subroutine exec_generate_abinitio3D_addon_snapshots
+end subroutine exec_generate_solve3D_addon_snapshots
 
-!> abinitio3D_addon gate on symmetry-broken 6VXX particles: abinitio3D on a seeded selection of the
+!> solve3D_addon gate on symmetry-broken 6VXX particles: solve3D on a seeded selection of the
 !  first NBASE rows, then the add-on on all NPTCLS rows (same project basename). Gates frozen-input
 !  integrity, manifests, cohort coverage and poses, union map vs truth and base; metrics.tsv.
-subroutine run_abinitio3D_addon_gate( nthr, all_ok )
+subroutine run_solve3D_addon_gate( nthr, all_ok )
     use simple_atoms,                   only: atoms
     use simple_molecule_data,           only: molecule_data, sars_cov2_spkgp_6vxx
     use simple_ui,                      only: make_ui
-    use simple_commanders_abinitio,     only: commander_abinitio3D_addon
-    use simple_abinitio3D_manifest,     only: abinitio3D_manifest
+    use simple_commanders_solve3D,      only: commander_solve3D_addon
+    use simple_solve3D_manifest,        only: solve3D_manifest
     use simple_sigma2_state_file,       only: sigma2_state_digest_file
     use simple_sigma2_files,            only: canonical_sigma2_consumable
     use simple_refine3D_fnames,         only: refine3D_state_vol_fname
     use simple_test_gate,               only: test_gate
     use simple_test_truth_metrics,      only: dock_both_hands, compare_to_truth, pair_pose_error, add_gaussian_blob
-    use simple_abinitio3D_addon_report, only: abinitio3D_addon_report, ADDON_REPORT_FNAME
+    use simple_solve3D_addon_report, only: solve3D_addon_report, ADDON_REPORT_FNAME
     use simple_image,                   only: image
     use, intrinsic :: iso_fortran_env, only: int64
     integer, intent(in)    :: nthr
     logical, intent(inout) :: all_ok
-    character(len=*), parameter :: GATE_DIR    = 'abinitio3D_addon_gate'
+    character(len=*), parameter :: GATE_DIR    = 'solve3D_addon_gate'
     character(len=*), parameter :: TRUTH_VOL   = 'truth_6VXX_blob.mrc'
     character(len=*), parameter :: PTCL_STK    = 'simulated_particles.mrc'
     character(len=*), parameter :: STK_BASE    = 'particles_base.mrc'   !< the base set: particles 1-NBASE
@@ -3580,9 +3580,9 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     real,    parameter :: MAX_CORR_LOSS       = 0.03  !< union map correlation below the base map's
     real,    parameter :: MAX_FSC_LOSS        = 1.0   !< union FSC=0.143 above the base map's (A)
     real,    parameter :: MIN_REPORT_CORR     = 0.9   !< report: union vs base map up to the base FSC=0.143 resolution
-    type(commander_abinitio3D)        :: xabinitio3D
-    type(commander_abinitio3D_addon)  :: xaddon
-    type(abinitio3D_addon_report)     :: addon_report
+    type(commander_solve3D)           :: xsolve3D
+    type(commander_solve3D_addon)     :: xaddon
+    type(solve3D_addon_report)        :: addon_report
     type(commander_simulate_particles):: xsim
     type(commander_new_project)       :: xnew_project
     type(cmdline)       :: cl
@@ -3591,7 +3591,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     type(sp_project)    :: spproj, strict_proj, out_proj, frz_proj
     type(oris)          :: truth
     type(ctfparams)     :: ctfvars
-    type(abinitio3D_manifest) :: man_base, man_out, man_pub
+    type(solve3D_manifest) :: man_base, man_out, man_pub
     type(sp_project)          :: pub_proj
     type(string)        :: root, stk_abs, stk_base_abs, stk_new_abs, full_proj, strict_proj_fname
     type(string)        :: frozen_run_proj, out_run_proj
@@ -3607,7 +3607,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     real    :: frac_ff, frac_cf
     logical :: found, l_same, l_pub, l_frz_row
     call make_ui
-    write(logfhandle,'(a)') '>>> TEST_ABINITIO3D_ADDON: abinitio3D_addon gate'
+    write(logfhandle,'(a)') '>>> TEST_SOLVE3D_ADDON: solve3D_addon gate'
     call simple_getcwd(root)
     if( file_exists(GATE_DIR) )then
         call simple_rmdir(GATE_DIR, status)
@@ -3711,7 +3711,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     ! ---- the base run on the frozen project ----
     call simple_getcwd(cwd_here)
     call simple_chdir(string(STRICT_DIR), status)
-    call cl%set('prg',            'abinitio3D')
+    call cl%set('prg',            'solve3D')
     call cl%set('projfile',       strict_proj_fname)
     call cl%set('mkdir',          'yes')
     call cl%set('pgrp',           'c1')
@@ -3721,7 +3721,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     call cl%set('force_lp_range', 'yes')
     call cl%set('lpstart',        GATE_LPSTART)
     call cl%set('lpstop',         GATE_LPSTOP)
-    call xabinitio3D%execute(cl)
+    call xsolve3D%execute(cl)
     call cl%kill
     call simple_getcwd(frozen_run_proj)
     frozen_run_proj = frozen_run_proj//'/'//PROJNAME//'.simple'
@@ -3737,7 +3737,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     base_vol   = frozen_vol
     dig_proj0  = sigma2_state_digest_file(frozen_run_proj)
     ! ---- the add-on on the current project ----
-    call cl%set('prg',             'abinitio3D_addon')
+    call cl%set('prg',             'solve3D_addon')
     call cl%set('projfile',        full_proj)
     call cl%set('projfile_frozen', frozen_run_proj)
     call cl%set('nthr',            nthr)
@@ -3754,7 +3754,7 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     ! the frozen term was weighted by the base run's committed residual sigma2
     ! state (its copy in the add-on run is byte-equal after every accumulation)
     call gate%check('frozen_sigma2_consumed_as_committed', &
-        &man_base%matches_artifact('sigma2_state', 0, string('1_abinitio3D_addon/frozen/frozen_sigma2_state.bin')))
+        &man_base%matches_artifact('sigma2_state', 0, string('1_solve3D_addon/frozen/frozen_sigma2_state.bin')))
     call man_base%kill
     call out_proj%read(out_run_proj)
     ! the final reconstruction bootstrapped the union's sigma2 state over
@@ -3783,11 +3783,11 @@ subroutine run_abinitio3D_addon_gate( nthr, all_ok )
     call man_pub%kill
     call pub_proj%kill
     call man_out%kill
-    call gate%check('addon_diag_map_written', file_exists(string('1_abinitio3D_addon/addon_diag/')// &
+    call gate%check('addon_diag_map_written', file_exists(string('1_solve3D_addon/addon_diag/')// &
         &refine3D_state_vol_fname(1)))
     ! ---- the validation report against the base solution ----
-    if( file_exists(string('1_abinitio3D_addon/'//ADDON_REPORT_FNAME)) )then
-        call addon_report%read(string('1_abinitio3D_addon/'//ADDON_REPORT_FNAME))
+    if( file_exists(string('1_solve3D_addon/'//ADDON_REPORT_FNAME)) )then
+        call addon_report%read(string('1_solve3D_addon/'//ADDON_REPORT_FNAME))
         call gate%check('addon_report_no_regression', .not. addon_report%any_regressed())
         call gate%metric('addon_report_union_base_corr', addon_report%get_corr(1), MIN_REPORT_CORR, &
             &addon_report%get_corr(1) >= MIN_REPORT_CORR)
@@ -3867,7 +3867,7 @@ contains
         call compare_to_truth(truth_abs, string('gate_'//tag//'_docked.mrc'), MSKDIAM, corr, fsc05, fsc0143)
     end subroutine dock_and_compare
 
-end subroutine run_abinitio3D_addon_gate
+end subroutine run_solve3D_addon_gate
 
 subroutine exec_test_cont_refine3D_1jxy( self, cline )
     class(commander_test_cont_refine3D_1jxy), intent(inout) :: self

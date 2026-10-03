@@ -9,7 +9,7 @@ use simple_sp_project, only: sp_project
 use simple_image,      only: image
 use simple_rec_list,   only: rec_list
 use simple_string,     only: string
-use simple_defs_fname, only: METADATA_EXT, ABINITIO2D_FINISHED
+use simple_defs_fname, only: METADATA_EXT, SOLVE2D_FINISHED
 implicit none
 private
 public :: run_all_ptcl_sieve_tests
@@ -69,12 +69,12 @@ contains
 
         ! Coarse #1 contributes to pass-1 non-rejected count.
         call make_chunk_project('coarse', 1, 10, 6, 2)
-        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_coarse/chunk_coarse_1/REJECTION_FINISHED'))
 
         ! Coarse #2 is already complete, so excluded from pass-1 non-rejected count.
         call make_chunk_project('coarse', 2, 8, 3, 1)
-        call simple_touch(string('chunks_coarse/chunk_coarse_2/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_coarse/chunk_coarse_2/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_coarse/chunk_coarse_2/REJECTION_FINISHED'))
         call simple_touch(string('chunks_coarse/chunk_coarse_2/COMPLETE'))
 
@@ -84,7 +84,7 @@ contains
 
         ! Fine #1 contributes to pass-2 non-rejected count.
         call make_chunk_project('fine', 1, 9, 5, 2)
-        call simple_touch(string('chunks_fine/chunk_fine_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_fine/chunk_fine_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
 
         call init_test_params(params)
@@ -112,7 +112,7 @@ contains
 
         ! Coarse complete case.
         call make_chunk_project('coarse', 1, 10, 6, 2)
-        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_coarse/chunk_coarse_1/REJECTION_FINISHED'))
         call simple_touch(string('chunks_coarse/chunk_coarse_1/COMPLETE'))
 
@@ -129,7 +129,7 @@ contains
 
         ! Add incomplete fine chunk; now two-tier mode is not finished.
         call make_chunk_project('fine', 1, 9, 4, 1)
-        call simple_touch(string('chunks_fine/chunk_fine_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_fine/chunk_fine_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
 
         call sieve%new(params, string('completed'))
@@ -156,13 +156,13 @@ contains
 
         ! Coarse chunk is complete.
         call make_chunk_project('coarse', 1, 10, 6, 2)
-        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_coarse/chunk_coarse_1/REJECTION_FINISHED'))
         call simple_touch(string('chunks_coarse/chunk_coarse_1/COMPLETE'))
 
         ! Fine chunk exists but is incomplete.
         call make_chunk_project('fine', 1, 9, 4, 1)
-        call simple_touch(string('chunks_fine/chunk_fine_1/' // ABINITIO2D_FINISHED))
+        call simple_touch(string('chunks_fine/chunk_fine_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
 
         ! Baseline (two-tier): incomplete fine chunk prevents finished state.
@@ -270,7 +270,7 @@ contains
         call cavg_good%kill()
         call cavg_bad%kill()
 
-        ! a completed coarse abinitio2D chunk awaiting rejection
+        ! a completed coarse solve2D chunk awaiting rejection
         call chunk_project%os_mic%new(1, is_ptcl=.false.)
         call chunk_project%os_mic%set_state(1, 1)
         call chunk_project%os_mic%set(1, 'imgkind', 'mic')
@@ -322,7 +322,7 @@ contains
         call chunk_project%update_compenv(cline_sieve)
         call chunk_project%write(chunk_projfile)
         call chunk_project%kill()
-        call simple_touch(filepath(chunk_dir, ABINITIO2D_FINISHED))
+        call simple_touch(filepath(chunk_dir, SOLVE2D_FINISHED))
         call params_sieve%new(cline_sieve)
         call sieve%new(params_sieve, completed_path)
         call sieve%collect_and_reject()
@@ -403,7 +403,7 @@ contains
 
         ! a program outside every UI table: with a registered program the
         ! result depended on whether an earlier suite built the UI (then
-        ! abinitio2D requires a project and mkdir=yes enters a run directory;
+        ! solve2D requires a project and mkdir=yes enters a run directory;
         ! the SIMPLE_UNIT_ORDER=reverse run of test=units failed)
         call cline%set('prg',        'ptcl_sieve_tester')
         call cline%set('mkdir',      'yes')

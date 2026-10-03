@@ -32,8 +32,8 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,            &
                                      gui_metadata_cavg2D,                                 &
                                      gui_metadata_vol3D,                                  &
-                                     gui_metadata_stream_abinitio3D_multistate,           &
-                                     GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE,      &
+                                     gui_metadata_stream_solve3D_multistate,              &
+                                     GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE,         &
                                      GUI_METADATA_VOL3D_TYPE,                             &
                                      sprite_sheet_pos
   use simple_gui_metadata_api, only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
@@ -55,7 +55,7 @@ integer,           parameter :: HEARTBEAT_JOB_ID  = 42
 integer,           parameter :: NHEARTBEAT_STAGES = 9
 character(len=24), parameter :: HEARTBEAT_STAGES(NHEARTBEAT_STAGES) = [character(len=24) :: &
   &'preprocessing', 'assign_optics', 'initial_picking', 'opening2D', 'reference_picking', &
-  &'particle_sieving', 'pool2D', 'abinitio3D_multistate', 'master']
+  &'particle_sieving', 'pool2D', 'solve3D_multistate', 'master']
 
 contains
 
@@ -74,7 +74,7 @@ contains
     call test_opening2D()
     call test_particle_sieving()
     call test_pool2D()
-    call test_abinitio3D_multistate()
+    call test_solve3D_multistate()
     call test_project()
   end subroutine run_all_gui_assembler_tests
 
@@ -461,20 +461,20 @@ contains
     deallocate(meta_latest_cavgs2D)
   end subroutine test_pool2D
 
-  !---------------- abinitio3D_multistate assembly ----------------
+  !---------------- solve3D_multistate assembly ----------------
 
-  ! Assemble a multistate abinitio3D JSON payload with a per-state 'state_volumes'
+  ! Assemble a multistate solve3D JSON payload with a per-state 'state_volumes'
   ! vol3D array and verify the section is non-empty.  An exact hash comparison
   ! is not possible because the section embeds a live Unix timestamp (last_import_time).
-  subroutine test_abinitio3D_multistate()
+  subroutine test_solve3D_multistate()
     type(gui_assembler)                                       :: assembler
-    type(gui_metadata_stream_abinitio3D_multistate)           :: meta_abinitio3D_multistate
+    type(gui_metadata_stream_solve3D_multistate)              :: meta_solve3D_multistate
     type(gui_metadata_vol3D),                     allocatable :: meta_states_vol3D(:)
     type(string)                                               :: json_str
     integer                                                    :: i
-    write(*,'(A)') 'test_abinitio3D_multistate'
-    call meta_abinitio3D_multistate%new(GUI_METADATA_STREAM_ABINITIO3D_MULTISTATE_TYPE)
-    call meta_abinitio3D_multistate%set(stage=string('refine3D'), abinitio3D_stage=1, refine_iteration=5, &
+    write(*,'(A)') 'test_solve3D_multistate'
+    call meta_solve3D_multistate%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
+    call meta_solve3D_multistate%set(stage=string('refine3D'), solve3D_stage=1, refine_iteration=5, &
                                         nstates=2, particles_imported=20000, particles_at_last_refine=18000, &
                                         resolution=3.5)
     allocate(meta_states_vol3D(2))
@@ -491,13 +491,13 @@ contains
                                   i=2, i_max=2, res0143=4.5, res05=7.5, pop=9000)
     call assembler%new(0)
     call assert_true(assembler%is_associated(), 'assembler json associated')
-    call assembler%assemble_stream_abinitio3D_multistate(meta_abinitio3D_multistate, meta_states_vol3D)
+    call assembler%assemble_stream_solve3D_multistate(meta_solve3D_multistate, meta_states_vol3D)
     json_str = assembler%to_string()
     call assert_true(json_str%strlen() > 0, 'json length greater than 0')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(meta_states_vol3D)
-  end subroutine test_abinitio3D_multistate
+  end subroutine test_solve3D_multistate
 
   !---------------- project assembly ----------------
 
@@ -546,7 +546,7 @@ contains
   ! 'running' with pid and start time but no stop time; after SIGTERM, 'finished' with a stop time.
   subroutine test_stream_heartbeat_lifecycle()
     type(forked_process) :: fork_preprocess, fork_assign_optics, fork_opening2D
-    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate
+    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate
     type(gui_assembler)  :: assembler
     type(string)         :: running_heartbeat, finished_heartbeat
     integer              :: rc
@@ -561,10 +561,10 @@ contains
     call fork_reference_picking%start(    name=string('TEST_HEARTBEAT_REFERENCE_PICKING'))
     call fork_particle_sieving%start(     name=string('TEST_HEARTBEAT_PARTICLE_SIEVING'))
     call fork_pool2D%start(               name=string('TEST_HEARTBEAT_POOL2D'))
-    call fork_abinitio3D_multistate%start(name=string('TEST_HEARTBEAT_ABINITIO3D_MULTISTATE'))
+    call fork_solve3D_multistate%start(name=string('TEST_HEARTBEAT_SOLVE3D_MULTISTATE'))
     rc = c_usleep(FORK_POLL_TIME * 5)
     call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
-      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate)
+      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate)
     running_heartbeat = assembler%to_string()
     call fork_preprocess%terminate()
     call fork_assign_optics%terminate()
@@ -572,17 +572,17 @@ contains
     call fork_reference_picking%terminate()
     call fork_particle_sieving%terminate()
     call fork_pool2D%terminate()
-    call fork_abinitio3D_multistate%terminate()
+    call fork_solve3D_multistate%terminate()
     call fork_preprocess%await_final_status()
     call fork_assign_optics%await_final_status()
     call fork_opening2D%await_final_status()
     call fork_reference_picking%await_final_status()
     call fork_particle_sieving%await_final_status()
     call fork_pool2D%await_final_status()
-    call fork_abinitio3D_multistate%await_final_status()
+    call fork_solve3D_multistate%await_final_status()
     call assembler%set_stoptime()
     call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
-      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate)
+      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate)
     finished_heartbeat = assembler%to_string()
     call assembler%kill()
     call assert_char('', heartbeat_mismatch(running_heartbeat, 'running'), &

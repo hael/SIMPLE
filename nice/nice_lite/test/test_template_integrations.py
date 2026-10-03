@@ -865,12 +865,12 @@ class TemplateIntegrationTests(SimpleTestCase):
         rendered = render_to_string("jobbuilder.html", {
             "stream_user_inputs": [],
             "simple_programs": [{
-                "prg": "cluster2D",
+                "prg": "refine2D",
                 "disp": "Create 2D Classes",
                 "desc": "",
             }],
             "simple_program_inputs": [{
-                "prg": "cluster2D",
+                "prg": "refine2D",
                 "disp": "Create 2D Classes",
                 "requirements": [],
                 "rerun_of": 17,
@@ -890,19 +890,19 @@ class TemplateIntegrationTests(SimpleTestCase):
             "batch_prefill": {
                 "job_id": 17,
                 "package": "simple",
-                "program": "cluster2D",
+                "program": "refine2D",
             },
         })
 
         self.assertIn('name="rerun_of" value="17"', rendered)
         self.assertIn(
-            'id="batch_cluster2D_nthr" name="nthr" type="number" min="0" step="1"',
+            'id="batch_refine2D_nthr" name="nthr" type="number" min="0" step="1"',
             rendered,
         )
         self.assertIn('value="8"', rendered)
         self.assertIn('value="/workspace/input.simple"', rendered)
         self.assertIn('const batchPrefillPackage = "simple";', rendered)
-        self.assertIn('const batchPrefillProgram = "cluster2D";', rendered)
+        self.assertIn('const batchPrefillProgram = "refine2D";', rendered)
         self.assertIn('selectBuilderTab("simple_batch");', rendered)
 
     def test_batch_card_controls_follow_job_status(self):
@@ -963,7 +963,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('class="viewform hidden"', rendered)
         self.assertNotIn("class_selector", rendered)
 
-        job["prog"] = "abinitio2D"
+        job["prog"] = "solve2D"
         class_average_rendered = render_to_string(
             "nice_batch/includes/_batch_card.html",
             {"job": job},
@@ -976,10 +976,10 @@ class TemplateIntegrationTests(SimpleTestCase):
             "id": 7,
             "disp": 9,
             "name": "Initial 3D Reconstruction",
-            "dirc": "9_abinitio3D",
+            "dirc": "9_solve3D",
             "args": {},
             "pckg": "simple",
-            "prog": "abinitio3D",
+            "prog": "solve3D",
             "master_stats": {},
             "status": "finished",
         }
@@ -1002,7 +1002,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         states_table = render_to_string("jobs_table.html", {"jobs": [job]})
         self.assertIn('/viewbatch/7?volume_viewer=1', states_table)
 
-        job["prog"] = "abinitio2D"
+        job["prog"] = "solve2D"
         other_output = render_to_string(
             "nice_batch/includes/_batch_card.html",
             {"job": job},
@@ -1010,15 +1010,15 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertNotIn('name="volume_viewer"', other_output)
 
     def test_finished_batch_card_defers_drag_state_until_builder_is_open(self):
-        project_path = "/workspace/7_abinitio2D/workspace.simple"
+        project_path = "/workspace/7_solve2D/workspace.simple"
         job = {
             "id": 7,
             "disp": 7,
             "name": "Create 2D Class Averages",
-            "dirc": "7_abinitio2D",
+            "dirc": "7_solve2D",
             "args": {},
             "pckg": "simple",
-            "prog": "abinitio2D",
+            "prog": "solve2D",
             "master_stats": {},
             "status": "finished",
             "batch_project_drag_path": project_path,
@@ -1124,7 +1124,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         state_detail = self._read_template("includes/_cls3D_state_detail.html")
         volume_viewer = self._read_template("includes/_cls3D_volume_viewer.html")
         volume_output = {
-            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+            "path": "/workspace/9_solve3D/recvol_state01.mrc",
             "name": "recvol_state01.mrc",
             "stage": "stage1",
             "state": 1,
@@ -1147,12 +1147,12 @@ class TemplateIntegrationTests(SimpleTestCase):
             "disp": 9,
             "name": "Initial 3D Reconstruction",
             "desc": "",
-            "prog": "abinitio3D",
+            "prog": "solve3D",
             "proj": "project",
             "dset": "workspace",
             "args": {},
             "created": "today",
-            "folder": "/workspace/9_abinitio3D",
+            "folder": "/workspace/9_solve3D",
             "jobstats": {"cls3D": {"stage1": [{"state": 1}]}},
             "cls3d_stages": [stage],
             "log": [],

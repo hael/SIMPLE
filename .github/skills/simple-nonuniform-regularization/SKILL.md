@@ -17,7 +17,7 @@ nonuniform even/odd and merged reference volumes.
    [references/nonuniform-regularization-map.md](./references/nonuniform-regularization-map.md).
 2. Identify which layer the task touches:
    - User option and staging policy: `filt_mode`,
-     `src/main/params`, `simple_abinitio_controller`.
+     `src/main/params`, `simple_solve3D_controller`.
    - Assembly orchestration: `commander_volassemble` in
      `simple_commanders_rec_distr.f90`, the PCG master in
      `simple_rec3D_pcg_strategy.f90`, and the shared per-state

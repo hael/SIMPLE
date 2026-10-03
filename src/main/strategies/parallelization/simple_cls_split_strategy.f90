@@ -248,7 +248,7 @@ contains
         type(parameters),                 intent(in)    :: params
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
-        call qsys_job_finished(params, string('simple_commanders_cluster2D :: exec_cls_split'))
+        call qsys_job_finished(params, string('simple_commanders_refine2D :: exec_cls_split'))
     end subroutine worker_finalize_run
 
     subroutine worker_cleanup(self, params)

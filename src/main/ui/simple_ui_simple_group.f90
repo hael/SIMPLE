@@ -4,9 +4,9 @@ use simple_ui_hash,      only: ui_hash
 ! SIMPLE program constructor interfaces
 use simple_ui_project,   only: construct_project_programs
 use simple_ui_preproc,   only: construct_preproc_programs
-use simple_ui_cluster2D, only: construct_cluster2D_programs
+use simple_ui_refine2D, only: construct_refine2D_programs
 use simple_ui_cavgproc,  only: construct_cavgproc_programs
-use simple_ui_abinitio3D,only: construct_abinitio3D_programs
+use simple_ui_solve3D,only: construct_solve3D_programs
 use simple_ui_refine3D,  only: construct_refine3D_programs
 use simple_ui_heterogeneity, only: construct_heterogeneity_programs
 use simple_ui_reconstruct3D, only: construct_reconstruct3D_programs
@@ -36,9 +36,9 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call construct_project_programs(prgtab)
         call construct_preproc_programs(prgtab)
-        call construct_cluster2D_programs(prgtab)
+        call construct_refine2D_programs(prgtab)
         call construct_cavgproc_programs(prgtab)
-        call construct_abinitio3D_programs(prgtab)
+        call construct_solve3D_programs(prgtab)
         call construct_refine3D_programs(prgtab)
         call construct_heterogeneity_programs(prgtab)
         call construct_reconstruct3D_programs(prgtab)

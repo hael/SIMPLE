@@ -2,7 +2,7 @@
 module simple_final_rec
 use simple_commanders_api
 use simple_parameters,       only: parameters
-use simple_abinitio_utils,   only: configure_final_pcg_solve_budget, write_final_rec_outputs, &
+use simple_solve3D_utils,    only: configure_final_pcg_solve_budget, write_final_rec_outputs, &
     &gen_ortho_reprojs4viz
 use simple_refine3D_fnames,  only: refine3D_fsc_fname, refine3D_state_vol_fname
 use simple_vol_pproc_policy, only: state_mask_is_compatible
@@ -15,7 +15,7 @@ private
 
 contains
 
-    !> The final all-particle reconstruction at native sampling shared by abinitio3D, refine3D_auto,
+    !> The final all-particle reconstruction at native sampling shared by solve3D, refine3D_auto,
     !! refine3D_states and classify3D_refs, driven by the refinement command line it continues from. Sigmas
     !! not consumable at the native box are rebuilt by bootstrap_rec3D; without ML regularization it ships a cc map.
     subroutine calc_final_rec( params, spproj, projfile, cline_refine, xrec3D, xbootstrap_rec3D, &

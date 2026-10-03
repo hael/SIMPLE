@@ -25,7 +25,7 @@ module simple_gui_assembler
                                      gui_metadata_stream_particle_sieving,   &
                                      gui_metadata_stream_pool2D,             &
                                      gui_metadata_stream_pool2D_snapshot,    &
-                                     gui_metadata_stream_abinitio3D_multistate, &
+                                     gui_metadata_stream_solve3D_multistate, &
                                      gui_metadata_vol3D,                     &
                                      gui_metadata_project
   implicit none
@@ -45,7 +45,7 @@ type :: gui_assembler
   type(string)              :: opening2D_hash          ! FNV-1a hash of last sent opening2D section
   type(string)              :: particle_sieving_hash
   type(string)              :: pool2D_hash             ! FNV-1a hash of last sent pool-2D section
-  type(string)              :: abinitio3D_multistate_hash ! FNV-1a hash of last sent multistate abinitio3D section
+  type(string)              :: solve3D_multistate_hash ! FNV-1a hash of last sent multistate solve3D section
   type(string)              :: project_hash            ! FNV-1a hash of last sent project section
   integer                   :: job_id    = 0           ! pipeline job identifier
   integer                   :: starttime = 0           ! Unix timestamp of job start
@@ -69,7 +69,7 @@ contains
   procedure :: assemble_stream_opening2D
   procedure :: assemble_stream_particle_sieving
   procedure :: assemble_stream_pool2D
-  procedure :: assemble_stream_abinitio3D_multistate
+  procedure :: assemble_stream_solve3D_multistate
 end type gui_assembler
 
 contains
@@ -111,16 +111,16 @@ contains
     call self%opening2D_hash%kill()
     call self%particle_sieving_hash%kill()
     call self%pool2D_hash%kill()
-    call self%abinitio3D_multistate_hash%kill()
+    call self%solve3D_multistate_hash%kill()
     call self%project_hash%kill()
   end subroutine clear_hashes
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
   ! aggregate status derived from the union of all child-process states.
   subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, &
-      fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_abinitio3D_multistate, n_active_persistent_workers )
+      fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate, n_active_persistent_workers )
     class(gui_assembler),  intent(inout) :: self
-    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D, fork_particle_sieving, fork_abinitio3D_multistate
+    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D, fork_particle_sieving, fork_solve3D_multistate
     class(forked_process), intent(inout) :: fork_reference_picking, fork_pool2D
     integer, optional,     intent(in)    :: n_active_persistent_workers
     type(json_value),      pointer       :: json_ptr, json_master_ptr
@@ -138,7 +138,7 @@ contains
     call forked_process_status(string('reference_picking'),     fork_reference_picking)
     call forked_process_status(string('particle_sieving'),      fork_particle_sieving)
     call forked_process_status(string('pool2D'),                fork_pool2D)
-    call forked_process_status(string('abinitio3D_multistate'), fork_abinitio3D_multistate)
+    call forked_process_status(string('solve3D_multistate'), fork_solve3D_multistate)
     ! global status
     call self%json%create_object(json_master_ptr, 'master')
     call self%json%add(json_master_ptr, 'timestamp', int(c_time(0_c_long)))
@@ -475,7 +475,7 @@ contains
 
   ! Write the opening2D (2D classification) section, including any cavgs2D.
   ! meta_vol3D, when present and assigned, holds the metadata for the single
-  ! abinitio3D_cavgs volume chosen for reprojection/picking references and is
+  ! solve3D_cavgs volume chosen for reprojection/picking references and is
   ! embedded as a nested 'volume' object (no FSC/postprocessed fields at this stage).
   ! The whole section (header + cavgs2D) is suppressed when its hash matches
   ! the previously sent hash.
@@ -683,18 +683,18 @@ contains
     nullify(json_ptr)
   end subroutine assemble_stream_pool2D
 
-  ! Write the multistate abinitio3D section.
+  ! Write the multistate solve3D section.
   ! meta_states_vol3D, when present, holds the vol3D metadata for the current
   ! per-state reconstructed volumes and is embedded as a 'state_volumes' array,
   ! distinct from the lightweight per-state 'states' array already emitted by
-  ! meta_abinitio3D_multistate%jsonise() to avoid a duplicate JSON key.
+  ! meta_solve3D_multistate%jsonise() to avoid a duplicate JSON key.
   ! meta_reprojtiles, when present, holds the individual orthogonal reprojection
   ! tiles (gui_metadata_cavg2D, idx=state) and is nested per-state as a
   ! 'reprojtiles' array inside the matching state_volumes entry.
   ! The whole section is suppressed when its hash matches the previously sent hash.
-  subroutine assemble_stream_abinitio3D_multistate( self, meta_abinitio3D_multistate, meta_states_vol3D, meta_reprojtiles )
+  subroutine assemble_stream_solve3D_multistate( self, meta_solve3D_multistate, meta_states_vol3D, meta_reprojtiles )
     class(gui_assembler),                            intent(inout) :: self
-    type(gui_metadata_stream_abinitio3D_multistate), intent(inout) :: meta_abinitio3D_multistate
+    type(gui_metadata_stream_solve3D_multistate), intent(inout) :: meta_solve3D_multistate
     type(gui_metadata_vol3D), allocatable, optional, intent(inout) :: meta_states_vol3D(:)
     type(gui_metadata_cavg2D), allocatable, optional, intent(inout) :: meta_reprojtiles(:)
     character(kind=CK,len=:),                        allocatable   :: buffer
@@ -703,10 +703,10 @@ contains
     type(string)                                                   :: str, hash
     logical                                                        :: l_add
     integer                                                        :: i_state, i_tile
-    call self%json%remove_if_present(self%json_root, 'abinitio3D_multistate')
-    json_ptr => meta_abinitio3D_multistate%jsonise()
+    call self%json%remove_if_present(self%json_root, 'solve3D_multistate')
+    json_ptr => meta_solve3D_multistate%jsonise()
     if( .not. associated(json_ptr) ) return
-    call self%json%rename(json_ptr, 'abinitio3D_multistate')
+    call self%json%rename(json_ptr, 'solve3D_multistate')
     if( present(meta_states_vol3D) ) then
       if( allocated(meta_states_vol3D) ) then
         l_add = .false.
@@ -743,16 +743,16 @@ contains
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
-    if( hash /= self%abinitio3D_multistate_hash ) then
+    if( hash /= self%solve3D_multistate_hash ) then
       call self%json%add(self%json_root, json_ptr)
-      call self%abinitio3D_multistate_hash%kill()
-      self%abinitio3D_multistate_hash = hash
+      call self%solve3D_multistate_hash%kill()
+      self%solve3D_multistate_hash = hash
     else
       call self%json%destroy(json_ptr)
     endif
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
-  end subroutine assemble_stream_abinitio3D_multistate
+  end subroutine assemble_stream_solve3D_multistate
 
   ! Record the job stop timestamp (call when the pipeline finishes).
   subroutine set_stoptime( self )

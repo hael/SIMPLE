@@ -217,8 +217,8 @@ class BatchViewTests(SimpleTestCase):
         cases = (
             (
                 {"type": "batch_job", "batch_job_id": 8},
-                SimpleNamespace(dirc="7_abinitio2D", pckg="simple"),
-                "7_abinitio2D/workspace.simple",
+                SimpleNamespace(dirc="7_solve2D", pckg="simple"),
+                "7_solve2D/workspace.simple",
             ),
             (
                 {
@@ -238,7 +238,7 @@ class BatchViewTests(SimpleTestCase):
                 jobmodel = SimpleNamespace(
                     args={},
                     pckg="simple",
-                    prog="cluster2D",
+                    prog="refine2D",
                     dset_id=4,
                     master_stats={"source": source},
                 )
@@ -300,7 +300,7 @@ class BatchViewTests(SimpleTestCase):
             cdat="created",
             args={},
             pckg="simple",
-            prog="abinitio3D",
+            prog="solve3D",
             master_stats={},
             dset=SimpleNamespace(
                 name="workspace",
@@ -309,9 +309,9 @@ class BatchViewTests(SimpleTestCase):
         )
         batch_job = Mock()
         batch_job.get_log_tails.return_value = []
-        batch_job.get_absdir.return_value = "/workspace/9_abinitio3D"
+        batch_job.get_absdir.return_value = "/workspace/9_solve3D"
         batch_job.get_stage_volume_outputs.return_value = [{
-            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+            "path": "/workspace/9_solve3D/recvol_state01.mrc",
             "name": "recvol_state01.mrc",
             "stage": "1",
             "state": 1,
@@ -341,7 +341,7 @@ class BatchViewTests(SimpleTestCase):
                 jobmodel,
                 volume_viewer_requested=True,
             )
-            jobmodel.prog = "abinitio2D"
+            jobmodel.prog = "solve2D"
             wrong_program_context = batch_views._batch_overview_context(
                 batch_job,
                 jobmodel,
@@ -377,7 +377,7 @@ class BatchViewTests(SimpleTestCase):
 
         jobmodel = SimpleNamespace(
             status="finished",
-            prog="abinitio3D",
+            prog="solve3D",
             master_stats={},
         )
         batch_job = Mock()
@@ -458,13 +458,13 @@ class BatchViewTests(SimpleTestCase):
     def test_batch_volume_data_rejects_an_undeclared_filename(self):
         jobmodel = SimpleNamespace(
             status="finished",
-            prog="abinitio3D",
+            prog="solve3D",
             master_stats={},
         )
         batch_job = Mock()
         batch_job.get_volume_outputs.return_value = [{
             "name": "recvol_state01.mrc",
-            "path": "/workspace/9_abinitio3D/recvol_state01.mrc",
+            "path": "/workspace/9_solve3D/recvol_state01.mrc",
         }]
         batch_job.get_stage_volume_outputs.return_value = []
 
@@ -607,7 +607,7 @@ class BatchViewTests(SimpleTestCase):
             id=7,
             status="finished",
             pckg="simple",
-            prog="cluster2D",
+            prog="refine2D",
             master_stats=metadata,
             dset_id=3,
         )

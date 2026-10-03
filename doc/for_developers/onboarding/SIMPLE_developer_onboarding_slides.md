@@ -47,7 +47,7 @@ May 21, 2026
 | --- | --- |
 | `code_overview/` | Code base map in Markdown and Word formats. |
 | `for_developers/` | Developer guide, architecture/design guide, performance refactoring guide, GUI onboarding, probability/projection notes, templates, diagrams, logos. |
-| `policies/` | Scientific and architectural policies: `refine3D`, `abinitio2D`, nonuniform filtering, automasking, interpolation, persistent workers, sigma, picking, fractional updates. |
+| `policies/` | Scientific and architectural policies: `refine3D`, `solve2D`, nonuniform filtering, automasking, interpolation, persistent workers, sigma, picking, fractional updates. |
 | `how2s/` | Short recipes for git, gdb, Fortran debugging, FFTW installation, and SLURM arrays. |
 
 # More `/doc` Resources

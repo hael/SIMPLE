@@ -109,8 +109,8 @@ contains
         call cleanup4restart
         ! generate own project file if projfile isnt set
         if( .not.cline%defined('projfile') )then
-            call cline%set('projname', 'stream_abinitio2D')
-            call cline%set('projfile', 'stream_abinitio2D.simple')
+            call cline%set('projname', 'stream_solve2D')
+            call cline%set('projfile', 'stream_solve2D.simple')
             call spproj_glob%update_projinfo(cline)
             call spproj_glob%update_compenv(cline)
             call spproj_glob%write
@@ -135,7 +135,7 @@ contains
         call wait_for_folder2(params%dir_target//'/spprojs_completed')
         ! master project file
         call spproj_glob%read( params%projfile )
-        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_cluster2D must start from an empty project (eg from root project folder)')
+        if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('stream_refine2D must start from an empty project (eg from root project folder)')
         ! project watcher
         project_buff = stream_watcher(LONGTIME, params%dir_target//'/'//DIR_STREAM_COMPLETED, spproj=.true., nretries=10)
         ! Infinite loop
@@ -347,7 +347,7 @@ contains
         call spproj_glob%kill
         call qsys_cleanup(params)
         ! end gracefully 
-        call simple_end('**** SIMPLE_STREAM_ABINITIO2D NORMAL STOP ****')
+        call simple_end('**** SIMPLE_STREAM_SOLVE2D NORMAL STOP ****')
         contains
 
             ! resumes with new sets or analysis parameters have been updated

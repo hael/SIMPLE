@@ -6,52 +6,52 @@ implicit none
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('nano3d', '3D Reconstruction', 40)
 type(ui_program), target :: autorefine3D_nano
 type(ui_program), target :: refine3D_nano
-type(ui_program), target :: abinitio3D_nano
+type(ui_program), target :: solve3D_nano
 
 contains
 
     subroutine construct_single_nano3D_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_abinitio3D_nano(prgtab)
+        call new_solve3D_nano(prgtab)
         call new_autorefine3D_nano(prgtab)
         call new_refine3D_nano(prgtab)
     end subroutine construct_single_nano3D_programs
 
-subroutine new_abinitio3D_nano( prgtab )
+subroutine new_solve3D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call abinitio3D_nano%new(&
-        &'abinitio3D_nano',&                                                                               ! name
-        &'Generate an initial 3D model for a nanoparticle data set',&    ! summary
-        &'is a wrapper around abinitio3D that applies nanoparticle-oriented defaults while allowing overrides',& ! help
+        call solve3D_nano%new(&
+        &'solve3D_nano',&                                                                                  ! name
+        &'De novo 3D map determination for a nanoparticle data set',&    ! summary
+        &'is a wrapper around solve3D that applies nanoparticle-oriented defaults while allowing overrides',& ! help
         &'single_exec',&                                                                                   ! executable
-        &.true., visibility=UI_VIS_STANDARD, display_name='Create Initial Nanoparticle Model') ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='De Novo Nanoparticle Map') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! search controls
-        call abinitio3D_nano%add_input(UI_SRCH, nsample, required_override=.false., &
+        call solve3D_nano%add_input(UI_SRCH, nsample, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call abinitio3D_nano%add_input(UI_FILT, hp, required_override=.false., &
+        call solve3D_nano%add_input(UI_FILT, hp, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D_nano%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call solve3D_nano%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5., &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D_nano%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', 'Starting low-pass limit', 'low-pass limit in Angstroms{3}', .false., 3., &
+        call solve3D_nano%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', 'Starting low-pass limit', 'low-pass limit in Angstroms{3}', .false., 3., &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D_nano%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit', 'low-pass limit in Angstroms{1}', .false., 1., &
+        call solve3D_nano%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit', 'low-pass limit in Angstroms{1}', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call abinitio3D_nano%add_input(UI_MASK, mskdiam, &
+        call solve3D_nano%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call abinitio3D_nano%add_input(UI_COMP, nparts, required_override=.false., &
+        call solve3D_nano%add_input(UI_COMP, nparts, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D_nano%add_input(UI_COMP, nthr, &
+        call solve3D_nano%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('abinitio3D_nano', abinitio3D_nano, prgtab, UI_CATEGORY)
-    end subroutine new_abinitio3D_nano
+        call add_ui_program('solve3D_nano', solve3D_nano, prgtab, UI_CATEGORY)
+    end subroutine new_solve3D_nano
 
     subroutine new_autorefine3D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab

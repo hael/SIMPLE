@@ -251,10 +251,10 @@ not against the program. A program that holds its command line to its own
 contract asks its `ui_program`: `has_input(key)` is true for a declared input
 in any of the seven lists, and `accepts(key)` also for the execution
 environment a launcher passes to any program, `UI_ENVIRONMENT_KEYS` (the queue
-system, NICE and the stream's persistent workers). `abinitio3D_addon` is the
+system, NICE and the stream's persistent workers). `solve3D_addon` is the
 first such program: its UI entry is its allowlist, and adding an input there
 is all it takes to accept and forward it
-([abinitio3D_addon_policy.md](3D/abinitio3D_addon_policy.md), section 2).
+([solve3D_addon_policy.md](3D/solve3D_addon_policy.md), section 2).
 
 ### Construction and registration
 
@@ -292,6 +292,28 @@ The public `prg=list` paths traverse registered programs and group them by
 this metadata. JSON serializes the same identifier, heading, and order for
 each program. There are no handwritten program-list headings; changing a
 category descriptor changes CLI listings and JSON together.
+
+### Retired program names
+
+A renamed program keeps its old name as a retired name in
+`simple_ui_legacy_names`, a fixed table from old to current name. Its
+entries are the renames of 2026-10-03: the `abinitio*` programs became
+`solve*` (the stream 2D program `abinitio2D_stream` became `pool2D`) and the
+`cluster2D*` programs became `refine2D*`.
+Retired names are not registered: `prg=list`, `test=list` and the JSON
+interface show current names only. They are resolved at the three points
+where a program name enters: the executables (`simple_exec`, `single_exec`,
+`simple_stream`, `simple_test_exec`) map `prg` to the current name before
+routing and log one line saying so; `cmdline%parse` stores the current name
+in the command line, so workers, job descriptions and project records carry
+it; and `get_prg_ptr`/`get_test_prg_ptr` resolve a retired name to the
+current program. `simple_private_exec` maps `prg` the same way, and
+`cmdline%parse_private`/`parse_private_line` store the current name, for the
+retired private programs (`cluster2D`, `cluster2D_distr`) that old job
+scripts call. Exec routers, commanders and output directories therefore see
+only current names. NICE stores program names in its database; its migration
+`0006_rename_programs` carries the same table.
+`test_legacy_program_names` (UI visibility suite) checks every entry.
 
 ## Visibility
 

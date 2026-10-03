@@ -58,11 +58,11 @@ use simple_trail_chain_manifest_tester,      only: run_all_trail_chain_manifest_
 use simple_gauran_tester,                    only: run_all_gauran_tests
 use simple_rec3D_strategy_tester,            only: run_all_rec3D_strategy_tests
 use simple_frozen_accum_tester,              only: run_all_frozen_accum_tests
-use simple_abinitio3D_manifest_tester,       only: run_all_abinitio3D_manifest_tests
+use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_tests
 use simple_project_superset_tester,          only: run_all_project_superset_tests
-use simple_abinitio3D_addon_report_tester,   only: run_all_abinitio3D_addon_report_tests
+use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
-use simple_abinitio3D_addon_dock_tester,     only: run_all_abinitio3D_addon_dock_tests
+use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
@@ -315,9 +315,9 @@ contains
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)
         call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
         call add_suite(s, n, 'motion model',            run_all_motion_model_tests)
-        call add_suite(s, n, 'abinitio3D manifest',     run_all_abinitio3D_manifest_tests)
+        call add_suite(s, n, 'solve3D manifest',        run_all_solve3D_manifest_tests)
         call add_suite(s, n, 'project superset',        run_all_project_superset_tests)
-        call add_suite(s, n, 'abinitio3D addon report', run_all_abinitio3D_addon_report_tests)
+        call add_suite(s, n, 'solve3D addon report', run_all_solve3D_addon_report_tests)
     end subroutine suites_project
 
     subroutine suites_ui( s, n )
@@ -445,7 +445,7 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'PCG half-set',         run_all_pcg_halfset_tests)
-        call add_suite(s, n, 'addon report docking', run_all_abinitio3D_addon_dock_tests)
+        call add_suite(s, n, 'addon report docking', run_all_solve3D_addon_dock_tests)
     end subroutine suites_lib_reconstruction
 
     subroutine add_suite( s, n, name, proc )

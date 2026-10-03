@@ -49,9 +49,9 @@ class JobModel(models.Model):
     classification_2D_status        = models.CharField(max_length=20, default='unknown')
     classification_2D_update        = models.JSONField(default=dict)
     classification_2D_heartbeat     = models.DateTimeField(auto_now_add=True, blank=True)
-    abinitio3D_multistate_stats     = models.JSONField(default=dict)
-    abinitio3D_multistate_status    = models.CharField(max_length=20, default='unknown')
-    abinitio3D_multistate_update    = models.JSONField(default=dict)
-    abinitio3D_multistate_heartbeat = models.DateTimeField(auto_now_add=True, blank=True)
+    solve3D_multistate_stats        = models.JSONField(default=dict)
+    solve3D_multistate_status       = models.CharField(max_length=20, default='unknown')
+    solve3D_multistate_update       = models.JSONField(default=dict)
+    solve3D_multistate_heartbeat    = models.DateTimeField(auto_now_add=True, blank=True)
     
     particle_sets_stats        = models.JSONField(default=dict)

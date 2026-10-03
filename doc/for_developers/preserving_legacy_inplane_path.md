@@ -230,7 +230,7 @@ It should also verify:
   angle/shift/score pose;
 - `no` produces only grid-consistent `e3` values;
 - `yes` can produce continuous `e3` values; and
-- the `abinitio2D` controller propagates the option through every child and
+- the `solve2D` controller propagates the option through every child and
   final stage.
 
 A fixed-seed, full-workflow comparison remains the strongest confirmation of

@@ -46,7 +46,7 @@ workflow may start from:
    under-populated flex cluster enters the volume refinement;
 3. state-0/1 input plus `nstates` and `flex=no`, initialized by the
    distributed stochastic startup reconstruction;
-4. an `abinitio3D` split checkpoint whose state maps are registered in the
+4. a `solve3D` split checkpoint whose state maps are registered in the
    project `out` segment.
 
 `flex` defaults to `yes`. It is skipped automatically when the project already
@@ -113,9 +113,9 @@ competitive evidence state-dependent.
 Every planned frequency block is executed so the workflow reaches `lpstop`;
 state-overlap diagnostics do not terminate the march at an earlier bandwidth.
 
-## 5. `abinitio3D` Handoff
+## 5. `solve3D` Handoff
 
-For docked multi-state ab initio work, `abinitio3D` owns the single-state
+For docked multi-state `solve3D` work, `solve3D` owns the single-state
 scaffold and split-checkpoint construction. The checkpoint preserves state
 labels, maps, sampled/update metadata, the capped cohort, realized update
 fraction, and iteration position. Post-split refinement is dispatched once to
@@ -123,7 +123,7 @@ fraction, and iteration position. Post-split refinement is dispatched once to
 through the project `out` segment, not as `vol1..volN` inputs.
 
 The split checkpoint is constructed by
-`simple_abinitio3D_split_checkpoint`; the old post-split state-refinement loop
+`simple_solve3D_split_checkpoint`; the old post-split state-refinement loop
 is not a second production path.
 
 ## 6. Focus Evidence Boundary
@@ -140,7 +140,7 @@ Before final reconstruction, every active particle must have `updatecnt > 0`.
 A missing-update pass fills remaining assignments without intermediate volume
 reconstruction. Final state maps are then produced by the shared ending
 `calc_final_rec` (module `simple_final_rec`), the same routine that closes
-`abinitio3D`, `refine3D_auto`, and `classify3D_refs`: committed canonical
+`solve3D`, `refine3D_auto`, and `classify3D_refs`: committed canonical
 sigmas are reused when valid at native sampling, otherwise `bootstrap_rec3D`
 rebuilds them, and the shipped maps are Euclidean ML reconstructions from all
 active particles at native project sampling. The workflow writes normal state
@@ -157,7 +157,7 @@ User-side validation must cover:
 - monotonic common frequency marching through `lpstop`;
 - stochastic/full sampling and final update coverage;
 - shared-memory and distributed execution;
-- split-checkpoint handoff from `abinitio3D`;
+- split-checkpoint handoff from `solve3D`;
 - native-sampling final maps and expected artifacts.
 
 Compilation and runtime tests are performed by the user. No Linux or BOX

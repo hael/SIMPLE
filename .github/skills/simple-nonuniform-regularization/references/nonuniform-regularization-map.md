@@ -23,7 +23,7 @@ topology. The public policy is documented in
 set `l_lpauto`/`l_lpset`; filtering is handled when Cartesian state volumes are
 assembled.
 
-For staged `abinitio3D`, `simple_abinitio_controller.f90` enables NU filtering
+For staged `solve3D`, `simple_solve3D_controller.f90` enables NU filtering
 only after the NU stage boundary, emits `nu_refine=no`, promotes staged
 `nonuniform` to `nonuniform_lpset` before the disabled gold-standard stage, and
 does not enable NU on the class-average route.

@@ -7,7 +7,7 @@ use simple_cmdline,                only: cmdline
 use simple_parameters,             only: parameters
 use simple_stream_chunk,           only: stream_chunk
 use simple_sp_project,             only: sp_project
-use simple_stream_cluster2D_utils, only: setup_downscaling
+use simple_stream_refine2D_utils, only: setup_downscaling
 use simple_gui_utils,              only: mrc2jpeg_tiled
 use simple_rec_list,               only: project_rec, rec_list, rec_iterator
 implicit none
@@ -56,78 +56,78 @@ contains
         call pool_proj%projinfo%delete_entry('projfile')
         if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params%walltime)
         ! chunk master command line
-        call cline_cluster2D_chunk%set('prg', 'abinitio2D')
+        call cline_refine2D_chunk%set('prg', 'solve2D')
         if( params%nparts > 1 )then
-            call cline_cluster2D_chunk%set('nparts',       params%nparts)
+            call cline_refine2D_chunk%set('nparts',        params%nparts)
         endif
         if( cline%defined('cls_init') )then
-            call cline_cluster2D_chunk%set('cls_init',     params%cls_init)
+            call cline_refine2D_chunk%set('cls_init',      params%cls_init)
         else
-            call cline_cluster2D_chunk%set('cls_init',     'rand')
+            call cline_refine2D_chunk%set('cls_init',      'rand')
         endif
         if( cline%defined('gaufreq') )then
-            call cline_cluster2D_chunk%set('gaufreq',      params%gaufreq)
+            call cline_refine2D_chunk%set('gaufreq',       params%gaufreq)
         endif
-        call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
-        call cline_cluster2D_chunk%set('center',    'no')
-        call cline_cluster2D_chunk%set('autoscale', 'no')
-        call cline_cluster2D_chunk%set('mkdir',     'no')
-        call cline_cluster2D_chunk%set('mskdiam',   params%mskdiam)
-        call cline_cluster2D_chunk%set('ncls',      params%ncls_start)
-        call cline_cluster2D_chunk%set('sigma_est', params%sigma_est)
-        call cline_cluster2D_chunk%set('rank_cavgs','yes')
-        call cline_cluster2D_chunk%set('chunk',     'yes')
+        call cline_refine2D_chunk%set('oritype',    'ptcl2D')
+        call cline_refine2D_chunk%set('center',     'no')
+        call cline_refine2D_chunk%set('autoscale', 'no')
+        call cline_refine2D_chunk%set('mkdir',      'no')
+        call cline_refine2D_chunk%set('mskdiam',    params%mskdiam)
+        call cline_refine2D_chunk%set('ncls',       params%ncls_start)
+        call cline_refine2D_chunk%set('sigma_est', params%sigma_est)
+        call cline_refine2D_chunk%set('rank_cavgs','yes')
+        call cline_refine2D_chunk%set('chunk',      'yes')
         ! objective function
-        call cline_cluster2D_chunk%set('objfun', 'euclid')
-        call cline_cluster2D_chunk%set('ml_reg', params%ml_reg)
-        call cline_cluster2D_chunk%set('tau',    params%tau)
+        call cline_refine2D_chunk%set('objfun', 'euclid')
+        call cline_refine2D_chunk%set('ml_reg', params%ml_reg)
+        call cline_refine2D_chunk%set('tau',     params%tau)
         ! refinement
         select case(trim(params%refine))
                case('snhc','snhc_smpl','prob','prob_snhc')
-                call cline_cluster2D_chunk%set('refine', params%refine)
+                call cline_refine2D_chunk%set('refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
         ! Determines dimensions for downscaling
         call set_chunk_dimensions( params )
-        ! updates command-line with resolution limits, defaults are handled by abinitio2D
+        ! updates command-line with resolution limits, defaults are handled by solve2D
         if( master_cline%defined('lp') )then
             lp_fixed = max(params%lp, 2.0*params%smpd_crop)
-            call cline_cluster2D_chunk%set('lp', lp_fixed)
+            call cline_refine2D_chunk%set('lp', lp_fixed)
             write(logfhandle,'(A,F5.1)') '>>> FIXED RESOLUTION LIMIT    (IN A): ', lp_fixed
         else
             if( master_cline%defined('lpstart') )then
                 lpstart = max(params%lpstart, 2.0*params%smpd_crop)
-                call cline_cluster2D_chunk%set('lpstart', lpstart)
+                call cline_refine2D_chunk%set('lpstart', lpstart)
                 write(logfhandle,'(A,F5.1)') '>>> STARTING RESOLUTION LIMIT (IN A): ', lpstart
             endif
             if( master_cline%defined('lpstop') )then
                 lpstop = max(params%lpstop, 2.0*params%smpd_crop)
-                call cline_cluster2D_chunk%set('lpstop', lpstop)
+                call cline_refine2D_chunk%set('lpstop', lpstop)
                 write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT     (IN A): ', lpstop
             endif
         endif
         if( master_cline%defined('cenlp') )then
             lpcen = max(params%cenlp, 2.0*params%smpd_crop)
-            call cline_cluster2D_chunk%set('cenlp', lpcen)
+            call cline_refine2D_chunk%set('cenlp', lpcen)
             write(logfhandle,'(A,F5.1)') '>>> CENTERING LOW-PASS LIMIT  (IN A): ', lpcen
         endif
         ! EV override
         call get_environment_variable(SIMPLE_STREAM_CHUNK_NTHR, chunk_nthr_env, envlen)
         if(envlen > 0) then
-            call cline_cluster2D_chunk%set('nthr', str2int(chunk_nthr_env))
+            call cline_refine2D_chunk%set('nthr', str2int(chunk_nthr_env))
         else
-            call cline_cluster2D_chunk%set('nthr', params%nthr) ! cf comment just below about nthr2D
+            call cline_refine2D_chunk%set('nthr', params%nthr) ! cf comment just below about nthr2D
         end if
         ! Initialize subsets
         allocate(chunks(params%nchunks))
         ! deal with nthr2d .ne. nthr
         ! Joe: the whole nthr/2d is confusing. Why not pass the number of threads to chunk%init?
-        params%nthr2D = cline_cluster2D_chunk%get_iarg('nthr') ! only used here  for backwards compatibility
+        params%nthr2D = cline_refine2D_chunk%get_iarg('nthr') ! only used here   for backwards compatibility
         glob_chunk_id      = 0
         do ichunk = 1,params%nchunks
             glob_chunk_id = glob_chunk_id + 1
-            call chunks(ichunk)%init_chunk(params, cline_cluster2D_chunk, ichunk, pool_proj)
+            call chunks(ichunk)%init_chunk(params, cline_refine2D_chunk, ichunk, pool_proj)
         enddo
         ! module variables
         l_stream2D_active = .true.
@@ -276,11 +276,11 @@ contains
         chunk_dims%boxpd = 2 * round2even(KBALPHA * real(params%box_crop/2)) ! logics from parameters
         chunk_dims%msk   = params%msk_crop
         ! Scaling-related command lines update
-        call cline_cluster2D_chunk%set('smpd_crop', chunk_dims%smpd)
-        call cline_cluster2D_chunk%set('box_crop',  chunk_dims%box)
-        call cline_cluster2D_chunk%set('msk_crop',  chunk_dims%msk)
-        call cline_cluster2D_chunk%set('box',       params%box)
-        call cline_cluster2D_chunk%set('smpd',      params%smpd)
+        call cline_refine2D_chunk%set('smpd_crop', chunk_dims%smpd)
+        call cline_refine2D_chunk%set('box_crop',   chunk_dims%box)
+        call cline_refine2D_chunk%set('msk_crop',   chunk_dims%msk)
+        call cline_refine2D_chunk%set('box',        params%box)
+        call cline_refine2D_chunk%set('smpd',       params%smpd)
     end subroutine set_chunk_dimensions
 
     ! UPDATERS
@@ -328,8 +328,8 @@ contains
                 glob_chunk_id = glob_chunk_id + 1
                 ! deal with nthr2d .ne. nthr
                 nthr2D = params%nthr2D
-                params%nthr2D = cline_cluster2D_chunk%get_iarg('nthr')
-                call chunks(ichunk)%init_chunk(params, cline_cluster2D_chunk, glob_chunk_id, pool_proj)
+                params%nthr2D = cline_refine2D_chunk%get_iarg('nthr')
+                call chunks(ichunk)%init_chunk(params, cline_refine2D_chunk, glob_chunk_id, pool_proj)
                 params%nthr2D = nthr2D
             endif
         enddo

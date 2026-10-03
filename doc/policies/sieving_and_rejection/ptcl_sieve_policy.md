@@ -68,15 +68,15 @@ Each chunk tracks:
 - identity and paths: `id`, `folder`, `projfile`
 - counts: `nptcls`, `nptcls_selected`
 - lifecycle flags:
-  - `abinitio2D_running`
-  - `abinitio2D_complete`
+  - `solve2D_running`
+  - `solve2D_complete`
   - `rejection_complete`
   - `complete`
   - `failed`
 
 Sentinel files define state transitions:
 
-- `ABINITIO2D_FINISHED` -> `abinitio2D_complete`
+- `SOLVE2D_FINISHED` -> `solve2D_complete`
 - `REJECTION_FINISHED`  -> `rejection_complete`
 - `COMPLETE`            -> terminalized chunk
 - `REJECTION_FAILED`    -> failed terminal chunk
@@ -162,7 +162,7 @@ Cleanup retention policy (`cleanup_chunk`):
 
 1. cleanup runs after rejection completes;
 2. keep lifecycle sentinels used by restart/import recovery:
-  `ABINITIO2D_FINISHED`, `REJECTION_FINISHED`, `COMPLETE`,
+  `SOLVE2D_FINISHED`, `REJECTION_FINISHED`, `COMPLETE`,
   `REJECTION_FAILED`;
 3. keep chunk project metadata file and `frcs.bin`;
 4. keep selected/rejected JPEG renderings;

@@ -1,0 +1,182 @@
+# Solve3D Cavgs Policy
+
+This document records the current policy for `solve3D_cavgs`, the
+class-average route for de novo map determination (ab initio 3D
+reconstruction coupled with initial 3D refinement). It is separate from
+the particle-based [solve3D_policy.md](solve3D_policy.md) policy and
+from the base [refine3D_policy.md](refine3D_policy.md) policy. The restarted
+consensus rejection wrapper is documented in
+[solve3D_cavgs_reject_policy.md](solve3D_cavgs_reject_policy.md).
+
+## 1. Scope
+
+`solve3D_cavgs` determines a 3D map de novo from selected 2D or 3D class
+averages. It creates a temporary project containing even and odd class-average
+entries, runs staged `refine3D` over that temporary project, maps the selected
+class orientations back to the original project, and optionally writes
+validation artifacts.
+
+Only refinement and reconstruction children are distributed. The
+`solve3D_cavgs` master itself rejects direct worker execution with `part`.
+
+## 2. Defaults
+
+The route sets:
+
+- `sigma_est=global`
+- initial `oritype=out`, then `ptcl3D` for the temporary project
+- `bfac=0`
+- `filt_mode=none`
+- `automsk=no`
+
+Canonical sigma persistence is used for single-state,
+`multivol_mode=independent`, and `multivol_mode=docked`. At the docked split,
+state relabelling does not alter
+the canonical row identity or global/stack grouping. The split reconstruction
+therefore reuses the last committed generation directly; candidate creation and
+publication resume with the subsequent matcher pass.
+
+When unset, it supplies:
+
+- `mkdir=yes`
+- `objfun=euclid`
+- `overlap=0.95`
+- `prob_athres=90`
+- `cenlp` from the solve3D controller default
+- `imgkind=cavg`
+- `noise_norm=no`
+- `lpstart=20`
+- `lpstop=8`
+- `gauref=yes`
+
+NU filtering and automasking are intentionally disabled for this route.
+
+## 3. Temporary Project
+
+The workflow writes a temporary project named
+`solve3D_cavgs_tmpproj.simple`.
+
+The temporary project:
+
+- preserves project info, compute environment, and job-process metadata
+- registers the even and odd class-average stacks as two stacks
+- expands each class average into an even entry and an odd entry
+- copies class/state/orientation metadata into both entries
+- sets even/odd flags and stack indices for the temporary `ptcl3D` segment
+
+The temporary project never inherits the input project's canonical sigma path.
+It registers a workflow-local transient canonical state
+file for the temporary class-average particle lineage. That file is rebuilt at
+startup and removed with the temporary project after successful completion.
+
+The staged matcher and subsequent standalone reconstruction children resolve
+that registered state through the shared sigma-group loader. Canonical loads
+validate the committed state against the temporary project's native grid,
+ordered particle layout, and grouping policy before reconstruction begins.
+The docked split does not run the legacy iteration-STAR consolidation barrier:
+its state-only relabelling leaves the committed per-particle records and grouped
+curves valid.
+
+The temporary project is deleted at the end of the workflow.
+
+## 4. Inputs and Low-Pass Schedule
+
+`imgkind=cavg` reads state labels from `cls2D`. `imgkind=cavg3D` is accepted
+as an input mode, but the current implementation still retrieves the selected
+class-average stack and then uses class state information for the temporary
+entries.
+
+The class-average stack plus `_even` and `_odd` companion stacks must exist.
+If all class-average states are zero, the workflow stops.
+
+The number of particles in the temporary project is twice the number of class
+averages. If distributed execution requested more partitions than temporary
+entries, `nparts` is reduced to the number of even/odd class-average entries.
+
+Stage low-pass limits are derived from class FRCs by default. Explicit
+`lpstart_ini3D` and `lpstop_ini3D` override that schedule together; supplying
+only one is an error.
+
+## 5. Staged Refinement
+
+The number of ini3D stages is capped by `solve3D_nstages_ini3D_max()`. A user
+`nstages` value can shorten the route up to that cap. In
+`multivol_mode=docked`, the shortened route must still reach the configured
+`split_stage`; otherwise the command is rejected instead of completing as an
+accidental single-state initializer.
+
+Supported `multivol_mode` values are:
+
+- `single`
+- `independent`
+- `docked`
+
+`single` requires `nstates=1`. `independent` and `docked` require more than one
+state. When the user gives `nstates > 1` and no `multivol_mode`, the commander
+defaults to `independent`, matching particle `solve3D`.
+
+Before staged refinement, `rndstart` randomizes orientations, zeros shifts,
+randomizes states with balanced uniform labels for ordinary multi-state runs, and reconstructs
+starting volumes. In `multivol_mode=docked`, active class-average entries are
+first collapsed to one active state, so the pre-split stages build a single
+class-average solve3D model. At the configured `split_stage` (default 6), the
+commander restores the requested `nstates`, clears `sampled` and `updatecnt`,
+randomizes active temporary `ptcl3D` entries into balanced uniform state labels,
+requires every randomized state to exceed the probabilistic-table minimum
+population threshold, and reconstructs split state volumes before entering the
+split-stage `refine3D`. Starting volumes and half maps are renamed to the standard
+`refine3D` start-volume names, including `_unfil` copies of the half maps.
+
+Each stage is configured through the shared solve3D stage controller with
+`l_cavgs=.true.`. In this mode:
+
+- `envfsc=no`
+- `filt_mode=none`
+- `automsk=no`
+- `update_frac` is deleted from emitted refine3D child commands
+- `snr_noise_reg` is set from the stage controls
+- early Gaussian reference filtering remains available through stage policy
+
+For `multivol_mode=independent`, class-average stages 1 and 2 retain
+`refine=prob_neigh` with `prob_neigh_mode=shc`. They do not adopt the direct
+`refine=shc` startup used by particle-based independent `solve3D`.
+
+The docked split shares the particle `solve3D` search-mode policy: the split
+stage is emitted as `refine=prob_state`, and later docked multi-state
+neighborhood stages use `prob_neigh_mode=geom`. The class-average route does
+not adopt particle `solve3D`'s fractional split preparation or update epoch.
+Because `l_cavgs=.true.` removes `update_frac`, `refine3D` derives full-update
+mode and disables trailing reconstruction effectively, even when the shared
+stage controller emits `trail_rec=yes`.
+
+At the symmetry-search stage, the workflow runs the shared symmetry handling
+used by the solve3D workflows.
+
+## 6. Mapping Back
+
+After staged refinement, the temporary `ptcl3D` and `out` segments are read
+back. Temporary stack-index and even/odd fields are removed.
+
+For each original class, the even or odd temporary entry with the better
+correlation is selected. Its correlation, projection index, Euler angles,
+2D shift, and state are copied into the original project's `cls3D` segment.
+
+The resulting `cls3D` orientations are mapped back to particles with
+`map2ptcls`.
+
+## 7. Validation and Outputs
+
+When the route runs the maximum ini3D stage count, it produces validation
+artifacts:
+
+- final original-sampling reconstructions without automatic postprocess
+- final raw and low-pass diagnostic volumes
+- `vol_cavg` entries in `os_out` for final class-average volumes
+- `final_oris.txt`
+- reprojections of the final low-pass volumes
+- an alternating `cavgs_reprojs.mrc` stack
+- a shifted class-average stack registered as `cavg_shifted`
+- optional class-average ranking by cavg-vs-reprojection correlation
+
+Even/odd convergence diagnostics report average angular distance. Multi-state
+runs also report even/odd state overlap.

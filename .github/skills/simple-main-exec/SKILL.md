@@ -11,7 +11,7 @@ description: Use when working in SIMPLE's src/main/exec subsystem, including the
 
 - `simple_exec_project.f90`
 - `simple_exec_preproc.f90`
-- `simple_exec_cluster2D.f90`
+- `simple_exec_refine2D.f90`
 - `simple_exec_refine3D.f90`
 - `simple_test_exec_*.f90`
 

@@ -288,13 +288,13 @@ if(BUILD_TESTS)
   # Review verdict 2026-09-23 (plan, section 9.7, highlevel).
   simple_add_test(simulate_particles highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulate_particles nthr=8)
-  # abinitio3D_addon end to end on its own simulated particles of a
-  # symmetry-broken 6VXX map: abinitio3D on a seeded subset (the frozen
+  # solve3D_addon end to end on its own simulated particles of a
+  # symmetry-broken 6VXX map: solve3D on a seeded subset (the frozen
   # solution), then the add-on on all of them, checked against the simulation
   # truth and the base run. Its own entry by owner decision (2026-09-26): an
   # independent workflow, not an extension of simulate_particles.
-  simple_add_test(abinitio3D_addon highlevel 7200 8 RUN_SERIAL
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=abinitio3D_addon nthr=8)
+  simple_add_test(solve3D_addon highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=solve3D_addon nthr=8)
   # continuous Cartesian pose refinement end to end (refine3D refine=cont under both
   # objectives and distributed, refine3D_auto pose_cont=only from perturbed poses and as the
   # continuation of a polar refine3D_auto) on simulated 1JYX particles, gated on the simulation

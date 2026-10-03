@@ -1,184 +1,4 @@
 {
-  "abinitio2D_stream": {
-    "computer controls": [
-      {
-        "default": 1.0,
-        "group": {
-          "id": "compute",
-          "label": "Compute",
-          "order": 3
-        },
-        "has_default": true,
-        "help": "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity",
-        "key": "nparts",
-        "keytype": "num",
-        "label": "Number of computing nodes",
-        "options": [],
-        "placeholder": "e.g. 10",
-        "required": true,
-        "visibility": "standard"
-      },
-      {
-        "default": 1.0,
-        "group": {
-          "id": "compute",
-          "label": "Compute",
-          "order": 3
-        },
-        "has_default": true,
-        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
-        "key": "nthr",
-        "keytype": "num",
-        "label": "Number of threads per computing node, give 0 if unsure",
-        "options": [],
-        "placeholder": "e.g. 10",
-        "required": true,
-        "visibility": "standard"
-      },
-      {
-        "default": 1740.0,
-        "group": {
-          "id": "compute",
-          "label": "Compute",
-          "order": 3
-        },
-        "has_default": true,
-        "help": "Maximum execution time for job scheduling and management in seconds{1740}(29mins)",
-        "key": "walltime",
-        "keytype": "num",
-        "label": "Walltime",
-        "options": [],
-        "placeholder": "e.g. 10",
-        "required": false,
-        "visibility": "developer"
-      }
-    ],
-    "file input/output": [
-      {
-        "group": {
-          "id": "data",
-          "label": "Data",
-          "order": 1
-        },
-        "has_default": false,
-        "help": "Directory where the pick_extract application is running",
-        "key": "dir_target",
-        "keytype": "file",
-        "label": "Target directory",
-        "options": [],
-        "placeholder": "e.g. 2_pick_extract",
-        "required": true,
-        "visibility": "standard"
-      },
-      {
-        "default": "",
-        "group": {
-          "id": "data",
-          "label": "Data",
-          "order": 1
-        },
-        "has_default": true,
-        "help": "Directory where previous 2D analysis took place",
-        "key": "dir_exec",
-        "keytype": "file",
-        "label": "Previous run directory",
-        "options": [],
-        "placeholder": "e.g. 3_abinitio2D_stream",
-        "required": false,
-        "visibility": "developer"
-      }
-    ],
-    "filter controls": [],
-    "image input/output": [],
-    "mask controls": [
-      {
-        "default": 0.0,
-        "group": {
-          "id": "cluster 2D",
-          "label": "2D Clustering",
-          "order": 2
-        },
-        "has_default": true,
-        "help": "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise",
-        "key": "mskdiam",
-        "keytype": "num",
-        "label": "Mask diameter",
-        "options": [],
-        "placeholder": "e.g. 10",
-        "required": false,
-        "visibility": "standard"
-      }
-    ],
-    "parameter input/output": [],
-    "program": {
-      "category": "stream",
-      "category_display_name": "Stream Workflows",
-      "category_order": 10,
-      "display_name": "Run streaming 2D analysis as new data arrive",
-      "executable": "simple_stream",
-      "groups": [
-        {
-          "id": "data",
-          "label": "Data",
-          "order": 1
-        },
-        {
-          "id": "cluster 2D",
-          "label": "2D Clustering",
-          "order": 2
-        },
-        {
-          "id": "compute",
-          "label": "Compute",
-          "order": 3
-        }
-      ],
-      "help": "is a distributed workflow that executes 2D analysis in streaming mode as the microscope collects the data",
-      "name": "abinitio2D_stream",
-      "requirements": [],
-      "summary": "Run streaming 2D analysis as new data arrive",
-      "visibility": "developer"
-    },
-    "search controls": [
-      {
-        "default": 200.0,
-        "group": {
-          "id": "cluster 2D",
-          "label": "2D Clustering",
-          "order": 2
-        },
-        "has_default": true,
-        "help": "Maximum number of 2D class averages for the pooled particles subsets",
-        "key": "ncls",
-        "keytype": "num",
-        "label": "Maximum number of 2D clusters",
-        "options": [],
-        "placeholder": "e.g. 10",
-        "required": true,
-        "visibility": "standard"
-      },
-      {
-        "default": "yes",
-        "group": {
-          "id": "cluster 2D",
-          "label": "2D Clustering",
-          "order": 2
-        },
-        "has_default": true,
-        "help": "Center class averages by their center of gravity and map shifts back to the particles(yes|no){yes}",
-        "key": "center",
-        "keytype": "binary",
-        "label": "Center class averages",
-        "options": [
-          "yes",
-          "no"
-        ],
-        "placeholder": "",
-        "required": false,
-        "visibility": "advanced"
-      }
-    ]
-  },
   "assign_optics": {
     "computer controls": [
       {
@@ -1039,6 +859,186 @@
         "placeholder": "e.g. 10",
         "required": false,
         "visibility": "developer"
+      }
+    ]
+  },
+  "pool2D": {
+    "computer controls": [
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity",
+        "key": "nparts",
+        "keytype": "num",
+        "label": "Number of computing nodes",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
+        "key": "nthr",
+        "keytype": "num",
+        "label": "Number of threads per computing node, give 0 if unsure",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1740.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Maximum execution time for job scheduling and management in seconds{1740}(29mins)",
+        "key": "walltime",
+        "keytype": "num",
+        "label": "Walltime",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "file input/output": [
+      {
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": false,
+        "help": "Directory where the pick_extract application is running",
+        "key": "dir_target",
+        "keytype": "file",
+        "label": "Target directory",
+        "options": [],
+        "placeholder": "e.g. 2_pick_extract",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "",
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Directory where previous 2D analysis took place",
+        "key": "dir_exec",
+        "keytype": "file",
+        "label": "Previous run directory",
+        "options": [],
+        "placeholder": "e.g. 3_pool2D",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "filter controls": [],
+    "image input/output": [],
+    "mask controls": [
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise",
+        "key": "mskdiam",
+        "keytype": "num",
+        "label": "Mask diameter",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "standard"
+      }
+    ],
+    "parameter input/output": [],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Run streaming 2D analysis as new data arrive",
+      "executable": "simple_stream",
+      "groups": [
+        {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        }
+      ],
+      "help": "is a distributed workflow that executes 2D analysis in streaming mode as the microscope collects the data",
+      "name": "pool2D",
+      "requirements": [],
+      "summary": "Run streaming 2D analysis as new data arrive",
+      "visibility": "developer"
+    },
+    "search controls": [
+      {
+        "default": 200.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Maximum number of 2D class averages for the pooled particles subsets",
+        "key": "ncls",
+        "keytype": "num",
+        "label": "Maximum number of 2D clusters",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Center class averages by their center of gravity and map shifts back to the particles(yes|no){yes}",
+        "key": "center",
+        "keytype": "binary",
+        "label": "Center class averages",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "advanced"
       }
     ]
   },

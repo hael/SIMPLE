@@ -4,6 +4,7 @@ use simple_exec_api
 use simple_parameters, only: parameters
 use simple_persistent_worker_server, only: persistent_worker
 use simple_memory_monitor,          only: mem_monitor_init, mem_monitor_finish
+use simple_ui_legacy_names,         only: canonical_prg_name, report_legacy_prg_name
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)      :: xarg, prg
@@ -22,6 +23,8 @@ call get_command(entire_line)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
+call report_legacy_prg_name(prg)
+prg = canonical_prg_name(prg)
 ! make UI
 call make_ui
 if( trim(prg) == 'print_ui_json' )then
@@ -47,9 +50,9 @@ l_silent      = .false.
 l_did_execute = .false. ! will be set to true if one program was executed
 call exec_project_commander(   trim(prg), cline, l_silent, l_did_execute)
 call exec_preproc_commander(   trim(prg), cline, l_silent, l_did_execute)
-call exec_cluster2D_commander( trim(prg), cline, l_silent, l_did_execute)
+call exec_refine2D_commander(  trim(prg), cline, l_silent, l_did_execute)
 call exec_cavgproc_commander(  trim(prg), cline, l_silent, l_did_execute)
-call exec_abinitio3D_commander(trim(prg), cline, l_silent, l_did_execute)
+call exec_solve3D_commander(   trim(prg), cline, l_silent, l_did_execute)
 call exec_refine3D_commander(  trim(prg), cline, l_silent, l_did_execute)
 call exec_denoise_commander(   trim(prg), cline, l_silent, l_did_execute)
 call exec_filter_commander(    trim(prg), cline, l_silent, l_did_execute)

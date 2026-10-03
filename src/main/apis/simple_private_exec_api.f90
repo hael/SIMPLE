@@ -31,8 +31,8 @@ commander_gen_pspecs_and_thumbs, commander_ctf_estimate
 ! shape commanders, for operations on 2D shapes
 use simple_commanders_imgops, only: commander_ppca_denoise
 
-! cluster2D commanders, for simultanous 2D alignment and clustering of single-particle images
-use simple_commanders_cluster2D, only: commander_make_cavgs, commander_cluster2D_distr_worker, commander_cluster2D,&
+! refine2D commanders, for simultanous 2D alignment and clustering of single-particle images
+use simple_commanders_refine2D, only: commander_make_cavgs, commander_refine2D_distr_worker, commander_refine2D,&
 commander_cavgassemble
 use simple_commanders_denoise, only: commander_cls_split
 
@@ -44,7 +44,7 @@ use simple_commanders_project_core, only: commander_print_project_vals
 use simple_commanders_project_cls,  only: commander_export_cavgs
 use simple_commanders_project_ptcl, only: commander_prune_project, commander_scale_project
 
-! refine3D commanders, low-level methods for refine3D for ab initio 3D reconstruction and 3D refinement
+! refine3D commanders, low-level methods for refine3D for solve3D (de novo map determination) and 3D refinement
 use simple_commanders_refine3D, only: commander_refine3D_distr_worker
 use simple_commanders_prob,     only: commander_prob_tab, commander_prob_tab_neigh, commander_prob_align,&
                                       commander_prob_align_neigh, commander_prob_tab2D, commander_prob_align2D

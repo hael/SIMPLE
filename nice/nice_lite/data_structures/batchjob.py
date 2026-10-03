@@ -52,7 +52,7 @@ class BatchJob(Job):
     PICK_INTEGRATED_SUFFIX = "_intg"
     PICK_DENOISED_THUMBNAIL_SUFFIX = "_den.jpg"
     # Programs whose commanders write jobstats["cls3D"] stage volume metadata via add_metadata(oritype='cls3D').
-    VOLUME_VIEWER_PROGRAMS = frozenset(("abinitio3D", "refine3D_auto", "refine3D_states"))
+    VOLUME_VIEWER_PROGRAMS = frozenset(("solve3D", "refine3D_auto", "refine3D_states"))
     # Path field, display label, in the order shown in the volume-kind toggle
     # (mirrors stream_views._VOLUME_KINDS).
     VOLUME_KINDS = (

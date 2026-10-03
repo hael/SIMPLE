@@ -125,7 +125,7 @@ contains
         &'simple_test_exec',&
         &.false.)
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, abinitio3d_manifest, project_superset, abinitio3d_addon_report)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -173,7 +173,7 @@ contains
         call lib_reconstruction%new(&
         &'lib_reconstruction',&
         &'library tests: half-set PCG reconstruction against gridding, map docking',&
-        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; the abinitio3D_addon report docking a moved map',&
+        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; the solve3D_addon report docking a moved map',&
         &'simple_test_exec',&
         &.false.)
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &

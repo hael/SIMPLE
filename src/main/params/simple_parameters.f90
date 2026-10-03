@@ -54,7 +54,7 @@ type :: parameters
     character(len=3)          :: envfsc='no'          !< envelope solvent correction for FSC calculation(yes|no){no}
     character(len=3)          :: pcg_solvent='no'     !< PCG soft solvent prior on the base solve: per-half real-space ridge in solvent identified from a prior-free solve, then the same cold solve again(yes|no){no}
     character(len=3)          :: pcg_solvent_check='no' !< PCG solvent prior: re-solve the strength grid for real and print it beside the closed-form estimate (validation only)(yes|no){no}
-    character(len=3)          :: eo_stage='yes'       !< Whether the last stage of abinitio2D uses a resolution limit determined with e/o pairs(yes|no){yes}
+    character(len=3)          :: eo_stage='yes'       !< Whether the last stage of solve2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
@@ -62,7 +62,7 @@ type :: parameters
     character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: flex='no'            !< initialize refine3D_states states with flex_pca(yes|no){no}
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
-    character(len=3)          :: force_lp_range='no'  !< force abinitio3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
+    character(len=3)          :: force_lp_range='no'  !< force solve3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -115,7 +115,7 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projrec='no'         !< reconstruct from projection-direction Fourier sums(yes|no){no}
     character(len=3)          :: euclid_diag='no'     !< per-iteration euclid reference/particle scale diagnostics(yes|no){no}
-    character(len=3)          :: addon_diag='no'      !< abinitio3D_addon cohort-only diagnostic reconstruction(yes|no){no}
+    character(len=3)          :: addon_diag='no'      !< solve3D_addon cohort-only diagnostic reconstruction(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
@@ -230,7 +230,7 @@ type :: parameters
     type(string)              :: projfile_out         !< output SIMPLE project file for non-destructive updates
     type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
-    type(string)              :: projfile_frozen      !< abinitio3D_addon: the frozen solution's SIMPLE *.simple project file
+    type(string)              :: projfile_frozen      !< solve3D_addon: the frozen solution's SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name
     type(string)              :: projtab              !< table of SIMPLE *.simple project files
     type(string)              :: ptcl_new_root        !< new root for relocated particle data
@@ -269,7 +269,7 @@ type :: parameters
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|nu|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
-    character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev){ptcl}; prev: abinitio2D seeded restart from the previous 2D clustering
+    character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev){ptcl}; prev: solve2D seeded restart from the previous 2D clustering
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: clust_crit='hybrid'  !< clustering criterion (fm|pow|hist|hybrid){hybrid}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
@@ -426,7 +426,7 @@ type :: parameters
     integer :: npeaks_inpl=NPEAKS_INPL_DEFAULT !< # multi-neighborhood search peaks to refine with L-BFGS
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
-    integer :: nptcls_base=0       !< # particles in the initial abinitio3D snapshot
+    integer :: nptcls_base=0       !< # particles in the initial solve3D snapshot
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
@@ -443,7 +443,7 @@ type :: parameters
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1         !< # of restarts for eligible applications
-    integer :: nrestarts_collapse=1   !< # of restarts for abinitio3D_cavgs when states collapse
+    integer :: nrestarts_collapse=1   !< # of restarts for solve3D_cavgs when states collapse
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
     integer :: nsample=0           !< # particles to sample in refinement with fractional update
     integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update

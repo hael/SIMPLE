@@ -1,7 +1,7 @@
 !@descr: multi-tier particle sieve with coarse/fine 2D chunking and rejection
 ! cycle() = collect_and_reject -> generate_chunks_coarse -> generate_chunks_fine (unless single_pass)
 ! -> submit (fine first). Restart state comes from per-chunk sentinels
-! (ABINITIO2D_FINISHED, REJECTION_FINISHED, COMPLETE).
+! (SOLVE2D_FINISHED, REJECTION_FINISHED, COMPLETE).
 ! Contract: doc/policies/sieving_and_rejection/ptcl_sieve_policy.md
 module simple_ptcl_sieve
   use unix,                               only: c_time, c_long
@@ -18,7 +18,7 @@ module simple_ptcl_sieve
   use simple_rec_list,                    only: rec_list
   use simple_image_bin,                   only: image_bin
   use simple_gui_utils,                   only: mrc2jpeg_tiled
-  use simple_defs_fname,                  only: METADATA_EXT, ABINITIO2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
+  use simple_defs_fname,                  only: METADATA_EXT, SOLVE2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
   use simple_parameters,                  only: parameters
   use simple_sp_project,                  only: sp_project
   use simple_imgarr_utils,                only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr
@@ -79,8 +79,8 @@ module simple_ptcl_sieve
     integer       :: id                  = 0
     integer       :: nptcls              = 0
     integer       :: nptcls_selected     = 0
-    logical       :: abinitio2D_running  = .false.
-    logical       :: abinitio2D_complete = .false.
+    logical       :: solve2D_running     = .false.
+    logical       :: solve2D_complete = .false.
     logical       :: rejection_complete  = .false.
     logical       :: complete            = .false.
     logical       :: failed              = .false.
@@ -295,8 +295,8 @@ contains
 
   ! Scans the coarse output directory for existing chunk subdirectories and
   ! populates the coarse array with chunk records whose state is inferred from
-  ! sentinel files (ABINITIO2D_FINISHED, REJECTION_FINISHED, COMPLETE).
-  ! Regenerates the cline for any chunk that has not yet completed abinitio2D,
+  ! sentinel files (SOLVE2D_FINISHED, REJECTION_FINISHED, COMPLETE).
+  ! Regenerates the cline for any chunk that has not yet completed solve2D,
   ! so that interrupted chunks can be resubmitted after a restart.
   subroutine import_existing_chunks_coarse( self )
     class(ptcl_sieve), intent(inout) :: self
@@ -323,13 +323,13 @@ contains
       call chunk_project%read(new_chunk%projfile)
       new_chunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
       new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
-      new_chunk%abinitio2D_running  = .false.
-      new_chunk%abinitio2D_complete = file_exists(new_chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED)
+      new_chunk%solve2D_running     = .false.
+      new_chunk%solve2D_complete = file_exists(new_chunk%folder%to_char() // '/' // SOLVE2D_FINISHED)
       new_chunk%failed              = file_exists(new_chunk%folder%to_char() // '/' // REJECTION_FAILED)
       new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED') .or. new_chunk%failed
       new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE') .or. new_chunk%failed
       call chunk_project%kill()
-      if( .not. new_chunk%abinitio2D_complete .and. .not. new_chunk%failed ) call self%generate_chunk_coarse_cline(new_chunk, new_chunk%nptcls_selected)
+      if( .not. new_chunk%solve2D_complete .and. .not. new_chunk%failed ) call self%generate_chunk_coarse_cline(new_chunk, new_chunk%nptcls_selected)
       call self%append_chunk_coarse(new_chunk)
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> IMPORTED EXISTING COARSE CHUNK # ', chunk_id, ' WITH ', new_chunk%nptcls, ' PARTICLES'
@@ -340,7 +340,7 @@ contains
   ! Scans the fine output directory for existing chunk subdirectories and
   ! populates the fine array with chunk records whose state is inferred from
   ! sentinel files. Regenerates the cline for any chunk that has not yet
-  ! completed abinitio2D, so that interrupted chunks can be resubmitted.
+  ! completed solve2D, so that interrupted chunks can be resubmitted.
   subroutine import_existing_chunks_fine( self )
     class(ptcl_sieve), intent(inout) :: self
     type(sp_project)                 :: chunk_project
@@ -366,13 +366,13 @@ contains
       call chunk_project%read(new_chunk%projfile)
       new_chunk%nptcls              = chunk_project%os_ptcl2D%get_noris()
       new_chunk%nptcls_selected     = chunk_project%os_ptcl2D%count_state_gt_zero()
-      new_chunk%abinitio2D_running  = .false.
-      new_chunk%abinitio2D_complete = file_exists(new_chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED)
+      new_chunk%solve2D_running     = .false.
+      new_chunk%solve2D_complete = file_exists(new_chunk%folder%to_char() // '/' // SOLVE2D_FINISHED)
       new_chunk%failed              = file_exists(new_chunk%folder%to_char() // '/' // REJECTION_FAILED)
       new_chunk%rejection_complete  = file_exists(new_chunk%folder%to_char() // '/REJECTION_FINISHED') .or. new_chunk%failed
       new_chunk%complete            = file_exists(new_chunk%folder%to_char() // '/COMPLETE') .or. new_chunk%failed
       call chunk_project%kill()
-      if( .not. new_chunk%abinitio2D_complete .and. .not. new_chunk%failed ) call self%generate_chunk_fine_cline(new_chunk, new_chunk%nptcls_selected)
+      if( .not. new_chunk%solve2D_complete .and. .not. new_chunk%failed ) call self%generate_chunk_fine_cline(new_chunk, new_chunk%nptcls_selected)
       call self%append_chunk_fine(new_chunk)
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> IMPORTED EXISTING FINE CHUNK # ', chunk_id, ' WITH ', new_chunk%nptcls, ' PARTICLES'
@@ -423,10 +423,10 @@ contains
     integer :: i
     get_n_chunks_running = 0
     do i = 1, self%get_n_chunks_coarse()
-      if( self%chunks_coarse(i)%abinitio2D_running ) get_n_chunks_running = get_n_chunks_running + 1
+      if( self%chunks_coarse(i)%solve2D_running ) get_n_chunks_running = get_n_chunks_running + 1
     end do
     do i = 1, self%get_n_chunks_fine()
-      if( self%chunks_fine(i)%abinitio2D_running ) get_n_chunks_running = get_n_chunks_running + 1
+      if( self%chunks_fine(i)%solve2D_running ) get_n_chunks_running = get_n_chunks_running + 1
     end do
   end function get_n_chunks_running
 
@@ -784,7 +784,7 @@ contains
         call chunk_project%update_compenv(new_chunk%cline)
         call chunk_project%write(new_chunk%projfile)
         call chunk_project%kill()
-        new_chunk%abinitio2D_complete = .true.
+        new_chunk%solve2D_complete = .true.
         new_chunk%rejection_complete  = .true.
         call self%append_chunk_coarse(new_chunk)
         call project_list%set_included_flags([ids(1), ids(size(ids))])
@@ -939,7 +939,7 @@ contains
   ! COMMAND-LINE BUILDERS
   ! --------------------------------------------------------------------------
 
-  ! Populates the abinitio2D command line for a coarse chunk with:
+  ! Populates the solve2D command line for a coarse chunk with:
   ! program name, project file and name, no-mkdir flag, thread count, mask
   ! diameter, class count, low-pass stop cutoff (DEFAULT_MICRO_P1_LP), and
   ! wall-time limit.
@@ -950,7 +950,7 @@ contains
     type(string)                       :: server_address
     server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
-      call cline%set('prg',                               'abinitio2D')
+      call cline%set('prg',                               'solve2D')
       call cline%set('projfile',                    new_chunk%projfile)
       call cline%set('projname',                        'chunk_coarse')
       call cline%set('mkdir',                                     'no')
@@ -968,7 +968,7 @@ contains
     call server_address%kill()
   end subroutine generate_chunk_coarse_cline
 
-  ! Populates the abinitio2D command line for a fine chunk.
+  ! Populates the solve2D command line for a fine chunk.
   subroutine generate_chunk_fine_cline( self, new_chunk, nptcls )
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(inout) :: new_chunk
@@ -976,7 +976,7 @@ contains
     type(string)                       :: server_address
     server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
-      call cline%set('prg',                               'abinitio2D')
+      call cline%set('prg',                               'solve2D')
       call cline%set('projfile',                    new_chunk%projfile)
       call cline%set('projname',                          'chunk_fine')
       call cline%set('mkdir',                                     'no')
@@ -1101,12 +1101,12 @@ contains
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%chunks_fine(i) )
         if( chunk%failed ) cycle
-        if( chunk%abinitio2D_running .or. chunk%abinitio2D_complete ) cycle
+        if( chunk%solve2D_running .or. chunk%solve2D_complete ) cycle
         call simple_chdir(chunk%folder)
         CWD_GLOB = chunk%folder%to_char()
         call self%qenv%exec_simple_prg_in_queue_async( &
           chunk%cline, string('./distr_ptcl_sieve'), string('simple_log_chunk_fine'))
-        chunk%abinitio2D_running = .true.
+        chunk%solve2D_running = .true.
         call chunk%cline%kill()
         write(logfhandle,'(A,I6)') '>>> INITIATED 2D ANALYSIS OF FINE CHUNK # ', chunk%id
       end associate
@@ -1117,12 +1117,12 @@ contains
       if( self%get_n_chunks_running() >= self%nparallel ) exit
       associate( chunk => self%chunks_coarse(i) )
         if( chunk%failed ) cycle
-        if( chunk%abinitio2D_running .or. chunk%abinitio2D_complete ) cycle
+        if( chunk%solve2D_running .or. chunk%solve2D_complete ) cycle
         call simple_chdir(chunk%folder)
         CWD_GLOB = chunk%folder%to_char()
         call self%qenv%exec_simple_prg_in_queue_async( &
           chunk%cline, string('./distr_ptcl_sieve'), string('simple_log_chunk_coarse'))
-        chunk%abinitio2D_running = .true.
+        chunk%solve2D_running = .true.
         call chunk%cline%kill()
         write(logfhandle,'(A,I6)') '>>> INITIATED 2D ANALYSIS OF COARSE CHUNK # ', chunk%id
       end associate
@@ -1133,7 +1133,7 @@ contains
     call timer_stop(t0, string('submit'))
   end subroutine submit
 
-  ! Polls all running coarse and fine chunks for ABINITIO2D_FINISHED,
+  ! Polls all running coarse and fine chunks for SOLVE2D_FINISHED,
   ! sentinel file. For each newly completed chunk: transitions it from running
   ! to complete and immediately runs class-average rejection.
   subroutine collect_and_reject( self )
@@ -1148,10 +1148,10 @@ contains
     do i = 1, self%get_n_chunks_coarse()
       associate( chunk => self%chunks_coarse(i) )
         if( chunk%failed ) cycle
-        if( chunk%abinitio2D_running ) then
-          if( file_exists(chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
-            chunk%abinitio2D_running  = .false.
-            chunk%abinitio2D_complete = .true.
+        if( chunk%solve2D_running ) then
+          if( file_exists(chunk%folder%to_char() // '/' // SOLVE2D_FINISHED) ) then
+            chunk%solve2D_running     = .false.
+            chunk%solve2D_complete = .true.
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF COARSE CHUNK # ', chunk%id
           end if
         end if
@@ -1221,10 +1221,10 @@ contains
     do i = 1, self%get_n_chunks_fine()
       associate( chunk => self%chunks_fine(i) )
         if( chunk%failed ) cycle
-        if( chunk%abinitio2D_running ) then
-          if( file_exists(chunk%folder%to_char() // '/' // ABINITIO2D_FINISHED) ) then
-            chunk%abinitio2D_running  = .false.
-            chunk%abinitio2D_complete = .true.
+        if( chunk%solve2D_running ) then
+          if( file_exists(chunk%folder%to_char() // '/' // SOLVE2D_FINISHED) ) then
+            chunk%solve2D_running     = .false.
+            chunk%solve2D_complete = .true.
             write(logfhandle,'(A,I6)') '>>> COMPLETED 2D ANALYSIS OF FINE CHUNK # ', chunk%id
           end if
         end if
@@ -1287,7 +1287,7 @@ contains
     type(string),        allocatable   :: overlay_reasons(:)
     real, parameter                    :: SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG = log(max(SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN, tiny(1.0)))
 
-    if( .not. chunk%abinitio2D_complete ) return
+    if( .not. chunk%solve2D_complete ) return
     if( chunk%failed )                    return
     if( chunk%rejection_complete )        return
 
@@ -1518,7 +1518,7 @@ contains
     do i = 1, size(files)
       fname = basename(files(i))
       if( fname == fname_keep ) cycle
-      if( fname == string(ABINITIO2D_FINISHED) ) cycle
+      if( fname == string(SOLVE2D_FINISHED) ) cycle
       if( fname == string('REJECTION_FINISHED') ) cycle
       if( fname == string('COMPLETE') ) cycle
       if( fname == string(REJECTION_FAILED) ) cycle

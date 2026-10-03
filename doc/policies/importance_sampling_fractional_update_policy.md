@@ -2,7 +2,7 @@
 
 This document records durable workflow contracts for sampled particle updates,
 probabilistic candidate sampling, fractional class-average restoration, and
-trailing reconstruction in `abinitio2D`, `cluster2D`, `abinitio3D`, and
+trailing reconstruction in `solve2D`, `refine2D`, `solve3D`, and
 `refine3D`. It is policy, not a line-by-line implementation map.
 
 ## 1. Core Model
@@ -24,15 +24,15 @@ matcher reuses it again for the hard particle update.
 
 ## 2. Ownership
 
-`simple_commanders_abinitio2D.f90` owns `abinitio2D` orchestration: defaults,
+`simple_commanders_solve2D.f90` owns `solve2D` orchestration: defaults,
 stage execution, final fill-in, and final class-average generation.
 
-`simple_abinitio2D_controller.f90` owns the 2D stage policy: `NSAMPLE_DEFAULT_2D`,
+`simple_solve2D_controller.f90` owns the 2D stage policy: `NSAMPLE_DEFAULT_2D`,
 `nsample` override handling, stage-local `update_frac`, search-mode transitions,
 and the rule that stage 1 may sample particles without fractionally restoring
 previous class averages.
 
-`simple_commanders_abinitio.f90` and `simple_abinitio_controller.f90` own 3D
+`simple_commanders_solve3D.f90` and `simple_solve3D_controller.f90` own 3D
 stage scheduling: dynamic `update_frac`, `fillin`, `frac_best`, `balance`,
 `trail_rec`, and transitions between early `prob_neigh` modes, `prob`, and
 late `prob_neigh`.
@@ -123,9 +123,9 @@ may enter the legacy callback route. These policies do not alter `sampled`,
 `updatecnt`, top-K support, assignment probabilities, or fractional-update
 weighting.
 
-## 4. Abinitio2D and Cluster2D
+## 4. Solve2D and Refine2D
 
-`abinitio2D` uses a fixed run-local target sample size:
+`solve2D` uses a fixed run-local target sample size:
 
 - default: `NSAMPLE_DEFAULT_2D = 200000`
 - override: `nsample=<integer>`
@@ -149,15 +149,15 @@ Current stage policy:
 - later non-probabilistic iterations use `sample4update_cnt`, which is
   stochastic but biased toward particles with lower `updatecnt`
 - probabilistic stages use `prob_align2D` to sample once, then `prob_tab2D` and
-  `cluster2D_exec` reproduce the same subset
+  `refine2D_exec` reproduce the same subset
 - staged `fillin=yes` currently acts as a full-assignment coverage guard. It
   requires active particles to have assignments before convergence, while
   particle selection still follows the normal sampled-update path
-- staged `abinitio2D` refinement uses sampled SNHC (`refine=snhc_smpl`) for
+- staged `solve2D` refinement uses sampled SNHC (`refine=snhc_smpl`) for
   stages 1-2. From stage 3 onward, `refine=prob` uses dense probabilistic
   assignment; `refine=prob_snhc` uses sparse probabilistic SNHC until the
   final staged invocation, which uses dense `refine=prob`
-- when staged updates were sampled, `abinitio2D` then runs a separate terminal
+- when staged updates were sampled, `solve2D` then runs a separate terminal
   dense greedy all-particle pass with `update_frac` and `fillin`
   disabled, refreshing class, in-plane, and shift parameters before final
   class-average generation
@@ -179,12 +179,12 @@ step only. When an iteration would blend but the carried set is missing,
 unreadable or disagrees with the run (class count, `box_crop`, `smpd_crop`),
 the master runs that iteration as a full update.
 
-## 5. Abinitio3D and Refine3D
+## 5. Solve3D and Refine3D
 
-The 3D controller derives the abinitio3D outer update policy from `nsample`.
+The 3D controller derives the solve3D outer update policy from `nsample`.
 The resulting update fraction is capped by `UPDATE_FRAC_MAX`.
 
-Current high-level ab initio stage policy:
+Current high-level solve3D stage policy:
 
 - stages 1 and 2 use `prob_neigh` with `prob_neigh_mode=shc`
 - stages 3-5 use `prob`
@@ -195,7 +195,7 @@ Current high-level ab initio stage policy:
 - final active stages may switch to `fillin`, except where the multi-state
   policy disables it
 
-For `abinitio3D` `multivol_mode=independent`, the default policy is an
+For `solve3D` `multivol_mode=independent`, the default policy is an
 inspection-first multi-state run: `nstages=5` and `lpstop=6.0 A` unless the
 user overrides them. This stops after the `prob` phase and before
 `prob_neigh`, staged NU filtering, independent-mode trailing reconstruction,
@@ -208,7 +208,7 @@ onward. This keeps class-balanced quotas but draws from the whole class, not a
 top-ranked fraction. The outer particle target remains the fixed
 `nsample`-derived update fraction at every stage.
 
-`abinitio3D` `multivol_mode=docked` has an explicit split/update epoch policy.
+`solve3D` `multivol_mode=docked` has an explicit split/update epoch policy.
 Stages before the split run as one state. The default split stage is 6, so the
 split occurs after stage 5. Docked early stops before the split are rejected.
 
@@ -246,7 +246,7 @@ reproduces the subset.
 
 Throughout ordinary post-split docked refinement, `sample4update_class` applies
 the same `sampled > 0` eligibility restriction when `set_cline_refine3D` calls
-`abinitio_docked_cohort_active` and emits the
+`solve3D_docked_cohort_active` and emits the
 `sticky_class_sampling=yes` child flag. This flag is consumed only by the
 class-balanced `sample4update_class` path, where it enables `sampled_only`; it
 does not change unbalanced or full particle sampling. It is emitted only after
@@ -283,7 +283,7 @@ assignment and may therefore invoke the separate terminal missing-update pass.
 - if fractional update is off, select all active particles
 - if `balance=yes`, use class-balanced sampling over the groups of the class
   sampling file: every group gets the same quota, capped at its population.
-  In `abinitio3D` the groups are the selected 2D classes, or with
+  In `solve3D` the groups are the selected 2D classes, or with
   `partition=yes` view groups of them (see below)
 - otherwise use update-count-biased sampling
 
@@ -291,7 +291,7 @@ assignment and may therefore invoke the separate terminal missing-update pass.
 
 Per-class quotas equalise 2D classes, not views: 2D classification spreads a
 preferred view over many classes, so that view keeps its excess in proportion
-to its class count. With `partition=yes`, `abinitio3D` writes the class
+to its class count. With `partition=yes`, `solve3D` writes the class
 sampling file from view groups instead (`make_view_partition_class_samples`,
 `simple_view_partition_sampling`). The groups are formed once, before the
 first stage, and used by every stage; the stages read only the sampling file
@@ -460,9 +460,9 @@ are separate workflow stages and may perform their own reads.
 - `updatecnt` remains cumulative update history.
 - Downstream restoration uses realized update state, not only nominal
   `update_frac`.
-- Stage 1 of `abinitio2D` may be sampled but must not fractionally carry over
+- Stage 1 of `solve2D` may be sampled but must not fractionally carry over
   previous class-average sums.
-- The `abinitio3D` docked split starts a new multi-state `sampled/updatecnt`
+- The `solve3D` docked split starts a new multi-state `sampled/updatecnt`
   epoch.
 - The docked cohort pass resets sampling history before selecting its persistent
   pre-split cohort; its `sampled > 0` markers survive state relabeling.
@@ -471,7 +471,7 @@ are separate workflow stages and may perform their own reads.
   sampled round exactly.
 - Docked split-stage `prob_state` remains fractional unless the global
   full-sampling switch is active.
-- Independent multi-state `abinitio3D` defaults to a five-stage,
+- Independent multi-state `solve3D` defaults to a five-stage,
   `lpstop=6.0 A` inspection run, starts stochastic balanced sampling at stage
   4, and still writes final reconstruction outputs.
 - In fractional docked mode, trailing starts at `TRAILREC_STAGE_SINGLE`; for the
@@ -479,9 +479,9 @@ are separate workflow stages and may perform their own reads.
   reconstructed state-specific split artifacts plus realized state-local update
   fractions.
 - 2D fractional class-average restoration remains class-local.
-- Staged `abinitio2D` `fillin=yes` remains a full-assignment coverage guard
+- Staged `solve2D` `fillin=yes` remains a full-assignment coverage guard
   unless the implementation is deliberately changed to missing-only assignment.
-- Sampled `abinitio2D` runs a terminal dense greedy all-particle refresh before
+- Sampled `solve2D` runs a terminal dense greedy all-particle refresh before
   final class-average generation.
 - `volassemble` and the classaverager remain consumers of sampled-update state,
   not producers of particle-selection policy.

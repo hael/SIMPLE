@@ -263,8 +263,8 @@ class BatchJobLifecycleTests(TestCase):
 
         self.assertEqual(dimensions, (13, 7))
 
-    def test_abinitio3d_volumes_come_from_owned_project_output_records(self):
-        job_dir = os.path.join(self.workspace_dir, "1_abinitio3D")
+    def test_solve3d_volumes_come_from_owned_project_output_records(self):
+        job_dir = os.path.join(self.workspace_dir, "1_solve3D")
         os.mkdir(job_dir)
         project_path = os.path.join(job_dir, "workspace.simple")
         volume_path = os.path.join(job_dir, "recvol_state01.mrc")
@@ -276,10 +276,10 @@ class BatchJobLifecycleTests(TestCase):
             dset=self.workspace_model,
             cdat=timezone.now(),
             disp=1,
-            dirc="1_abinitio3D",
+            dirc="1_solve3D",
             status="finished",
             pckg="simple",
-            prog="abinitio3D",
+            prog="solve3D",
             master_stats={
             },
         )
@@ -329,7 +329,7 @@ class BatchJobLifecycleTests(TestCase):
             "maximum": 8.0,
         }])
 
-    def test_non_abinitio3d_jobs_do_not_discover_volume_outputs(self):
+    def test_non_solve3d_jobs_do_not_discover_volume_outputs(self):
         jobmodel = JobModel.objects.create(
             dset=self.workspace_model,
             cdat=timezone.now(),
@@ -956,7 +956,7 @@ class BatchJobLifecycleTests(TestCase):
             created = job.new(
                 self.workspace,
                 "simple",
-                "cluster2D",
+                "refine2D",
                 {"nthr": "8"},
                 parent_proj=snapshot_path,
                 source=source,
@@ -965,9 +965,9 @@ class BatchJobLifecycleTests(TestCase):
         self.assertTrue(created)
         start.assert_called_once_with(
             {"nthr": "8"},
-            os.path.join(self.workspace_dir, "2_cluster2D"),
+            os.path.join(self.workspace_dir, "2_refine2D"),
             self.workspace_dir,
-            "cluster2D",
+            "refine2D",
             job.id,
             parent_proj=snapshot_path,
         )
@@ -1102,7 +1102,7 @@ class BatchJobLifecycleTests(TestCase):
         resolved_path, source, error = (
             job_builder_views.resolve_recorded_batch_project(
                 self.workspace,
-                "cluster2D",
+                "refine2D",
                 metadata,
             )
         )
@@ -1113,7 +1113,7 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(
             job_builder_views.resolve_recorded_batch_project(
                 self.workspace,
-                "cluster2D",
+                "refine2D",
                 {**metadata, "source": {"type": "unknown"}},
             ),
             (None, None, "batch project source is invalid"),
@@ -1123,7 +1123,7 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(
             job_builder_views.resolve_recorded_batch_project(
                 self.workspace,
-                "cluster2D",
+                "refine2D",
                 metadata,
             ),
             (None, None, "batch project file is unavailable"),
@@ -1162,7 +1162,7 @@ class BatchJobLifecycleTests(TestCase):
             created = BatchJob().new(
                 self.workspace,
                 "simple",
-                "cluster2D",
+                "refine2D",
                 {},
                 parent_proj=outside_project,
             )

@@ -72,7 +72,7 @@ The rules (plan, section 5.2.2):
   movie in `simulate_movie_params.txt`;
 - import, motion correction, CTF estimation;
 - picking, `segdiam` by default;
-- extraction, `abinitio2D`, `abinitio3D`.
+- extraction, `solve2D`, `solve3D`.
 
 What to add:
 
@@ -83,10 +83,10 @@ What to add:
 3. **Picking.** Recall and precision of the picked coordinates against the positions the
    simulator placed the particles at, within a stated radius. Write the positions out if
    `simulate_movie` doesn't keep them yet.
-4. **Map.** The ab initio map is neither docked onto the truth map nor necessarily of the
+4. **Map.** The solve3D map is neither docked onto the truth map nor necessarily of the
    right hand, so the comparison is: same grid, dock, choose the hand, then FSC. Every step
    exists in SIMPLE; this is how to use them.
-   - **Same grid.** Read the box and sampling of the final `abinitio3D` volume from its header
+   - **Same grid.** Read the box and sampling of the final `solve3D` volume from its header
      (`find_ldim_nptcls`, `find_img_smpd`); it may be downscaled relative to the particles. Make
      the truth map on that grid with `atoms%pdb2mrc(smpd=<that smpd>, vol_dim=[box,box,box],
      mol=<the system's molecule_data>)`; it moves the atomic centre to the box centre when it is
@@ -97,7 +97,7 @@ What to add:
      `get_dock_info(eul, shift, cc)` and `rotate_target(target, docked)`. Search at low
      resolution: `lp` around 15–20 Å and `hp` well below the particle size. Use the workflow's
      `mskdiam`. The rotation search covers the whole sphere in C1, and the shift search a sixth
-     of the (clipped) box, so a symmetry-equivalent or off-centre ab initio map docks too. The
+     of the (clipped) box, so a symmetry-equivalent or off-centre solve3D map docks too. The
      two volumes must have identical dimensions (`dock_vols` stops otherwise).
    - **Hand.** Write the mirror of the target with `image%mirror('x')`, the same flip that
      `volops mirr=x` and `postprocess` apply. Dock both the map and its mirror. Keep the one

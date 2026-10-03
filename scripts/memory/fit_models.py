@@ -189,8 +189,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--motion-csv", nargs="+", type=Path, required=True,
         help="one or more motion_correct benchmark results.csv files",
     )
-    parser.add_argument("--abinitio2d-csv", type=Path, required=True)
-    parser.add_argument("--abinitio3d-csv", type=Path, required=True)
+    parser.add_argument("--solve2d-csv", type=Path, required=True)
+    parser.add_argument("--solve3d-csv", type=Path, required=True)
     parser.add_argument("--template", type=Path, default=DEFAULT_MODELS)
     parser.add_argument(
         "--output-models", type=Path, default=ROOT / "output/memory_estimator_models_fitted.json"
@@ -215,10 +215,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "original_megapixels_x_extra_frames", "effective_megapixels_x_extra_frames",
             "original_megapixels_x_extra_threads",
         ]),
-        ("abinitio2D", read_ok_rows([args.abinitio2d_csv]), ab2d_features, "peak_rss_mib", [
+        ("solve2D", read_ok_rows([args.solve2d_csv]), ab2d_features, "peak_rss_mib", [
             "box_squared_per_10000", "sampled_particle_megapixels", "references", "threads",
         ]),
-        ("abinitio3D", read_ok_rows([args.abinitio3d_csv]), ab3d_features, "peak_tree_rss_mib", [
+        ("solve3D", read_ok_rows([args.solve3d_csv]), ab3d_features, "peak_tree_rss_mib", [
             "box_million_voxels", "sampled_particle_megapixels", "extra_partitions",
             "extra_states", "mask_million_voxels", "threads",
         ]),
