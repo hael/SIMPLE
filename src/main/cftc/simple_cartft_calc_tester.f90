@@ -1604,6 +1604,7 @@ contains
         real,    allocatable :: volume(:,:,:), taper(:), contrib(:), ref_pow(:), ptcl_pow(:), prmat(:,:,:), nrmat(:,:,:)
         complex  :: plane(-BOX/2:BOX/2,-BOX/2:BOX/2)
         real     :: polar_sigma(KFROMTO(1):KFROMTO(2)), sigma2(0:BOX/2), v, step, centre, e3
+        real     :: polar_ref_pow(KFROMTO(1):KFROMTO(2)), polar_ptcl_pow(KFROMTO(1):KFROMTO(2))
         real(dp) :: ratio(KFROMTO(1):KFROMTO(2)), n_s(KFROMTO(1):KFROMTO(2)), truth(3,3), evaluated(3,3), total
         real     :: noise_amp
         integer  :: pdim(3), h, k, i, j, shell, n_noise, n_mask
@@ -1716,7 +1717,8 @@ contains
         call pftc%set_eo(1, .true.)
         call pftc%memoize_refs
         call pftc%memoize_ptcls
-        call pftc%gen_sigma_contrib(1, 1, [0., 0.], PLACED_INDEX, sigma_contrib=polar_sigma)
+        call pftc%gen_sigma_contrib(1, 1, [0., 0.], PLACED_INDEX, sigma_contrib=polar_sigma, &
+            &ref_pow=polar_ref_pow, ptcl_pow=polar_ptcl_pow)
         ! Cartesian: prepimg4align_cart with the taper, the residual at the same pose
         taper = calc%get_ptcl_taper()
         call cart_work%new([BOX, BOX, 1], SMPD)
@@ -1740,6 +1742,9 @@ contains
         total = sum(n_s*real(polar_sigma, dp))/sum(n_s*real(contrib, dp))
         write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 polar/Cartesian sigma2 per shell:', ratio
         write(*,'(a,f8.4,a,*(1x,es9.2))') 'CARTFT_N31 band total ratio', total, '; residual/model power per shell:', contrib/ref_pow
+        ! which side differs: the model (reference and CTF) or the observation (preparation)
+        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 polar/Cartesian model power per shell:', polar_ref_pow/ref_pow
+        write(*,'(a,*(1x,f7.4))') 'CARTFT_N31 polar/Cartesian observation power per shell:', polar_ptcl_pow/ptcl_pow
         call assert_true(abs(total - 1._dp) <= TOTAL_TOL, &
             &'signal-bearing polar and Cartesian sigma2 differ over the band beyond the tolerance (N31)')
         call assert_true(all(ratio >= SHELL_RANGE(1) .and. ratio <= SHELL_RANGE(2)), &
