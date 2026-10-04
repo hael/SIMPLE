@@ -124,16 +124,18 @@ contains
         use simple_image, only: image
         type(sp_project) :: proj, fixed
         type(image)      :: img
-        type(string)     :: projfile, fixed_file, stkfile
+        type(string)     :: projfile, fixed_file, stkfile, staged_file
         integer, parameter :: NPTCLS = 3, NCLS = 2
         integer, parameter :: LEGACY_INDSTKS(NPTCLS) = [99, 0, 3]
         integer :: i, stkind, ind_in_stk
         write(*,'(A)') 'test_fix_projfile_repairs_unpruned_legacy_stack'
         projfile   = 'fix_project_src.simple'
         fixed_file = 'fix_project_src_fixed.simple'
+        staged_file = 'fix_project_src.tmp'
         stkfile    = 'fix_project_src_stack.mrc'
         call del_file(projfile)
         call del_file(fixed_file)
+        call del_file(staged_file)
         call del_file(stkfile)
         call img%new([8,8,1], 1.25)
         do i = 1,NPTCLS
@@ -149,8 +151,10 @@ contains
         call proj%write(projfile)
         call assert_false(proj%os_stk%isthere(1, 'nptcls_stk'), 'legacy source lacks nptcls_stk')
         call fix_project_file(projfile, fixed_file)
-        call assert_true(file_exists(fixed_file), 'fix_projfile writes the fixed project')
-        call fixed%read(fixed_file)
+        call assert_true(fixed_file == projfile, 'fix_projfile returns the replaced project path')
+        call assert_false(file_exists('fix_project_src_fixed.simple'), 'fix_projfile leaves no fixed copy')
+        call assert_false(file_exists(staged_file), 'fix_projfile removes its staged project')
+        call fixed%read(projfile)
         call assert_int(1, fixed%os_stk%get_noris(), 'fixed stack count')
         call assert_int(NPTCLS, fixed%os_ptcl2D%get_noris(), 'fixed ptcl2D count includes state 0')
         call assert_int(NPTCLS, fixed%os_ptcl3D%get_noris(), 'fixed ptcl3D count includes state 0')
@@ -168,7 +172,6 @@ contains
         enddo
         call assert_int(0, fixed%os_ptcl2D%get_state(2), 'state 0 row remains present after the fix')
         call del_file(projfile)
-        call del_file(fixed_file)
         call del_file(stkfile)
         call proj%kill
         call fixed%kill
@@ -182,16 +185,18 @@ contains
         use simple_image, only: image
         type(sp_project) :: proj, fixed
         type(image)      :: img
-        type(string)     :: projfile, fixed_file, stkfiles(2)
+        type(string)     :: projfile, fixed_file, staged_file, stkfiles(2)
         integer, parameter :: NSTK = 2, NPER = 2, NPTCLS = NSTK*NPER
         integer :: i, istk, stkind, ind_in_stk, nerrors
         write(*,'(A)') 'test_fix_projfile_repairs_wrong_segment_stkind'
         projfile    = 'fix_project_two_stacks.simple'
         fixed_file  = 'fix_project_two_stacks_fixed.simple'
+        staged_file = 'fix_project_two_stacks.tmp'
         stkfiles(1) = 'fix_project_two_stacks_1.mrc'
         stkfiles(2) = 'fix_project_two_stacks_2.mrc'
         call del_file(projfile)
         call del_file(fixed_file)
+        call del_file(staged_file)
         call img%new([8,8,1], 1.25)
         do istk = 1,NSTK
             call del_file(stkfiles(istk))
@@ -224,8 +229,10 @@ contains
         call proj%write(projfile)
         call fix_project_file(projfile, fixed_file, nerrors)
         call assert_int(0, nerrors, 'two-stack legacy project is fixable')
-        call assert_true(file_exists(fixed_file), 'fix_projfile writes the fixed two-stack project')
-        call fixed%read(fixed_file)
+        call assert_true(fixed_file == projfile, 'fix_projfile returns the replaced two-stack project path')
+        call assert_false(file_exists('fix_project_two_stacks_fixed.simple'), 'fix_projfile leaves no two-stack copy')
+        call assert_false(file_exists(staged_file), 'fix_projfile removes its two-stack staged project')
+        call fixed%read(projfile)
         do i = 1,NPTCLS
             istk = (i-1)/NPER + 1
             call assert_int(istk, fixed%os_ptcl2D%get_int(i, 'stkind'), 'fixed ptcl2D stkind')
@@ -240,7 +247,6 @@ contains
             call assert_int(i - (istk-1)*NPER, ind_in_stk, 'fixed ptcl3D maps its physical index')
         enddo
         call del_file(projfile)
-        call del_file(fixed_file)
         do istk = 1,NSTK
             call del_file(stkfiles(istk))
         enddo
@@ -250,15 +256,17 @@ contains
 
     subroutine test_fix_projfile_refuses_particles_without_stacks()
         ! Particle rows without any stack row cannot be mapped to images:
-        ! fix_projfile reports the error and writes nothing.
+        ! fix_projfile reports the error and leaves the input unchanged.
         type(sp_project) :: proj
-        type(string)     :: projfile, fixed_file
+        type(string)     :: projfile, fixed_file, staged_file
         integer :: i, nerrors
         write(*,'(A)') 'test_fix_projfile_refuses_particles_without_stacks'
         projfile   = 'fix_project_no_stacks.simple'
         fixed_file = 'fix_project_no_stacks_fixed.simple'
+        staged_file = 'fix_project_no_stacks.tmp'
         call del_file(projfile)
         call del_file(fixed_file)
+        call del_file(staged_file)
         call proj%os_ptcl2D%new(3, is_ptcl=.true.)
         call proj%os_ptcl3D%new(3, is_ptcl=.true.)
         do i = 1,3
@@ -269,9 +277,10 @@ contains
         call proj%write(projfile)
         call fix_project_file(projfile, fixed_file, nerrors)
         call assert_true(nerrors > 0, 'particles without stack rows are an error')
-        call assert_false(file_exists(fixed_file), 'no fixed project is written for particles without stacks')
+        call assert_true(file_exists(projfile), 'unfixable input project remains in place')
+        call assert_false(file_exists('fix_project_no_stacks_fixed.simple'), 'unfixable project leaves no fixed copy')
+        call assert_false(file_exists(staged_file), 'unfixable project leaves no staged project')
         call del_file(projfile)
-        call del_file(fixed_file)
         call proj%kill
     end subroutine test_fix_projfile_refuses_particles_without_stacks
 

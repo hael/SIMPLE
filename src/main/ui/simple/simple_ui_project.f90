@@ -398,8 +398,8 @@ subroutine new_export_relion( prgtab )
         &'is a program to fix the stack indexing of a SIMPLE project written by an earlier release. It repairs &
         &stack ranges and particle stack assignments, takes a missing physical image count (nptcls_stk) from the &
         &stack file header, and sets the physical image index (indstk) from the project rows where the stack holds &
-        &exactly one image per row. Anything it cannot prove is reported and no project is written; otherwise it &
-        &writes input_name_fixed.simple', & ! help
+        &exactly one image per row. Anything it cannot prove is reported and the input is left unchanged; otherwise it &
+        &replaces the input project after writing the repaired project successfully', & ! help
         &'simple_exec',&                                                ! executable
         &.true., display_name='Fix Project Stack Indices')              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

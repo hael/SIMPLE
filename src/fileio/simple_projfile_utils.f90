@@ -1308,8 +1308,8 @@ contains
     !! stack row without nptcls_stk gets the image count from its file header, and
     !! its particles get indstk = row - fromp + 1 only when the stack holds exactly
     !! one image per project row. Anything else is reported, and the fixed project is
-    !! written only when no errors remain. Reading and rewriting also brings the
-    !! particle records to the current width. With nerrors_out present, an
+    !! replaced only when no errors remain. Reading and rewriting also brings
+    !! the particle records to the current width. With nerrors_out present, an
     !! unfixable project returns its error count instead of stopping.
     subroutine fix_project_file( projfile_in, projfile_out, nerrors_out )
         class(string),     intent(in)  :: projfile_in
@@ -1324,7 +1324,7 @@ contains
         if( fname2format(projfile_in) /= 'O' )then
             THROW_HARD('fix_projfile requires a SIMPLE project file (*.simple)')
         endif
-        projfile_out = swap_suffix(projfile_in, string(METADATA_EXT), string('_fixed')//METADATA_EXT)
+        projfile_out = projfile_in
         nwarns   = 0
         nerrors  = 0
         nrepairs = 0
@@ -1369,7 +1369,7 @@ contains
         write(logfhandle,'(A,I0)') '    errors  : ', nerrors
         if( present(nerrors_out) ) nerrors_out = nerrors
         if( nerrors > 0 )then
-            errmsg = 'fix_projfile: '//int2str(nerrors)//' error(s) cannot be fixed; no project file written'
+            errmsg = 'fix_projfile: '//int2str(nerrors)//' error(s) cannot be fixed; input project left unchanged'
             if( present(nerrors_out) )then
                 write(logfhandle,'(A)') errmsg
                 call proj%kill
@@ -1379,9 +1379,9 @@ contains
             endif
             THROW_HARD(errmsg)
         endif
-        call proj%update_projinfo(projfile_out)
-        call proj%write(projfile_out)
-        write(logfhandle,'(A)') '>>> WROTE FIXED PROJECT FILE: '//projfile_out%to_char()
+        call proj%update_projinfo(projfile_in)
+        call proj%write(projfile_in, tempfile=.true.)
+        write(logfhandle,'(A)') '>>> REPLACED PROJECT FILE WITH FIXED PROJECT: '//projfile_in%to_char()
         call proj%kill
         if( allocated(stack_counts)  ) deallocate(stack_counts)
         if( allocated(derive_indstk) ) deallocate(derive_indstk)

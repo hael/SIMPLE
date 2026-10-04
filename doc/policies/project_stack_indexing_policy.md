@@ -214,7 +214,7 @@ Project-writing code must write both. Validation must not silently convert
 physical `indstk` values into project-row indices.
 
 The `fix_projfile` program brings a project from an earlier release to this
-contract and writes `input_name_fixed.simple`:
+contract and replaces the input project after writing the repaired project successfully:
 
 - It repairs stack ranges from the reference particle segment (`ptcl2D` when
   present), then gives every row of both segments the `stkind` of the stack
@@ -230,7 +230,7 @@ contract and writes `input_name_fixed.simple`:
   stack is reported.
 - A stack row that already has `nptcls_stk` keeps its `indstk` values; a
   missing or out-of-range one is reported.
-- It reports every repair and error, and writes the fixed project only when no
+- It reports every repair and error, and replaces the input project only when no
   error remains. Reading and rewriting the project also brings the particle
   records to the current width.
 
