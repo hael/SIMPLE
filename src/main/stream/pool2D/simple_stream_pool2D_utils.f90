@@ -267,7 +267,6 @@ contains
         call spproj%projinfo%set(1,'nptcls_rejected',nptcls_rejected_glob)
         ! Uniformly sample stacks
         call uniform_stack_sampling
-        ! call biased_stack_sampling
         nstks2update = count(pool_stacks_mask)
         ! Transfer stacks and particles
         call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
@@ -407,55 +406,6 @@ contains
             enddo
             call random_generator%kill
         end subroutine uniform_stack_sampling
-
-        ! sampling biased towards older stacks
-        subroutine biased_stack_sampling
-            real, parameter :: B = 0.1
-            real    :: vals(nstks_tot), diff
-            integer :: counts(nstks_tot), inds(nstks_tot)
-            integer :: fromp,top,iptcl,i,j,minc,maxc
-            !$omp parallel do private(i,iptcl,fromp,top) proc_bind(close) default(shared)
-            do i = 1,nstks_tot
-                counts(i) = huge(i)
-                fromp = pool_proj%os_stk%get_fromp(i)
-                top   = pool_proj%os_stk%get_top(i)
-                do iptcl = fromp,top
-                    if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-                    counts(i) = min(counts(i), pool_proj%os_ptcl2D%get_updatecnt(iptcl))
-                enddo
-
-                call pool_proj%os_stk%set(i, 'cnt', counts(i))
-
-            enddo
-            !$omp end parallel do
-            minc = minval(counts)
-            maxc = maxval(counts)
-            if( maxc == minc )then
-                ! all stacks have been sampled uniformly, use uniform sampling
-                call uniform_stack_sampling
-            else
-                if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
-                allocate(pool_stacks_mask(nstks_tot), source=.false.)
-                ! generate biased order
-                diff = real(1+maxc-minc)
-                do i = 1,nstks_tot
-                    inds(i) = i
-                    vals(i) = real(1+counts(i)-minc) / diff
-                    vals(i) = vals(i)**B - ran3()
-                enddo
-                ! draw
-                call hpsort(vals, inds)
-                nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
-                nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
-                do i = 1,nstks_tot
-                    j = inds(i)
-                    if( nptcls_sel > lim_ufrac_nptcls ) cycle
-                    nptcls_sel    = nptcls_sel    + nptcls_per_stk(j)
-                    nptcls2update = nptcls2update + pool_proj%os_stk%get_int(j, 'nptcls')
-                    pool_stacks_mask(j) = .true.
-                enddo
-            endif
-        end subroutine biased_stack_sampling
 
     end subroutine iterate_pool
 

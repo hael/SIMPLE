@@ -19,6 +19,7 @@ use simple_qsys_sge,                 only: qsys_sge
 implicit none
 
 public :: qsys_env
+public :: register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs
 private
 #include "simple_local_flags.inc"
 
@@ -55,6 +56,14 @@ type :: qsys_env
     procedure :: kill
 end type qsys_env
 
+! Persistent-worker warm-up: the live environments that started or reused the worker server,
+! oldest first. The oldest services the callback (active_persistent_worker_env), so a
+! shorter-lived reuser never takes it from a longer-lived one, and killing the owner hands it
+! to the next live registrant instead of leaving the server without one.
+type :: qsys_env_ref
+    type(qsys_env), pointer :: p => null()
+end type qsys_env_ref
+type(qsys_env_ref), allocatable, save :: warmup_envs(:)
 type(qsys_env), pointer, save :: active_persistent_worker_env => null()
 
 contains
@@ -260,13 +269,13 @@ contains
                     if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('cannot reuse existing worker server with lower nthr_per_worker than requested;')
                 !    if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
                     call persistent_worker%server%set_warmup_cooldown_enabled(sstream)
-                    active_persistent_worker_env => self
+                    call register_warmup_env(self)
                 else
                     persistent_worker%launch_backend  = qsnam
                     persistent_worker%nthr_per_worker = nthr_workers
                     persistent_worker%n_workers       = n_workers
                     allocate(persistent_worker%server)
-                    active_persistent_worker_env => self
+                    call register_warmup_env(self, owner=.true.)
                     if( params%worker_server%strlen() > 0 ) then
                         call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, &
                             client_only=params%worker_server, enable_warmup_cooldown=sstream)
@@ -678,8 +687,71 @@ contains
             self%base_qsys => null()
             self%dispatch_qsys => null()
             self%existence = .false.
-            if( associated(active_persistent_worker_env, self) ) nullify(active_persistent_worker_env)
         end if
+        call unregister_warmup_env(self)
     end subroutine kill
+
+    !> Adds @p env to the warm-up registrants (once). It services the callback when it is the
+    !! oldest live registrant, or at once with @p owner (the environment that starts the server).
+    subroutine register_warmup_env( env, owner )
+        class(qsys_env), target, intent(inout) :: env
+        logical,       optional, intent(in)    :: owner
+        type(qsys_env_ref), allocatable :: tmp(:)
+        logical :: l_owner
+        integer :: i, n
+        l_owner = .false.
+        if( present(owner) ) l_owner = owner
+        if( .not. allocated(warmup_envs) ) allocate(warmup_envs(0))
+        n = size(warmup_envs)
+        do i = 1,n
+            if( associated(warmup_envs(i)%p, env) )then
+                if( l_owner ) active_persistent_worker_env => warmup_envs(i)%p
+                return
+            endif
+        enddo
+        allocate(tmp(n+1))
+        tmp(1:n) = warmup_envs
+        tmp(n+1)%p => env
+        call move_alloc(tmp, warmup_envs)
+        if( l_owner .or. .not. associated(active_persistent_worker_env) )then
+            active_persistent_worker_env => warmup_envs(n+1)%p
+        endif
+    end subroutine register_warmup_env
+
+    !> Removes @p env from the warm-up registrants; if it serviced the callback, the oldest
+    !! remaining registrant takes over. Harmless for an environment that is not registered.
+    subroutine unregister_warmup_env( env )
+        class(qsys_env), target, intent(in) :: env
+        type(qsys_env_ref), allocatable :: tmp(:)
+        integer :: i, n
+        if( .not. allocated(warmup_envs) ) return
+        n = 0
+        allocate(tmp(size(warmup_envs)))
+        do i = 1,size(warmup_envs)
+            if( associated(warmup_envs(i)%p, env) ) cycle
+            n = n + 1
+            tmp(n)%p => warmup_envs(i)%p
+        enddo
+        if( n == size(warmup_envs) ) return
+        deallocate(warmup_envs)
+        allocate(warmup_envs(n))
+        warmup_envs = tmp(1:n)
+        if( associated(active_persistent_worker_env, env) )then
+            nullify(active_persistent_worker_env)
+            if( n > 0 ) active_persistent_worker_env => warmup_envs(1)%p
+        endif
+    end subroutine unregister_warmup_env
+
+    !> .true. when @p env services the persistent-worker warm-up callback.
+    logical function is_warmup_owner( env )
+        class(qsys_env), target, intent(in) :: env
+        is_warmup_owner = associated(active_persistent_worker_env, env)
+    end function is_warmup_owner
+
+    !> Number of live warm-up registrants.
+    integer function n_warmup_envs()
+        n_warmup_envs = 0
+        if( allocated(warmup_envs) ) n_warmup_envs = size(warmup_envs)
+    end function n_warmup_envs
 
 end module simple_qsys_env

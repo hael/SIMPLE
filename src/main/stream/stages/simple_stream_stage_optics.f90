@@ -60,7 +60,7 @@ integer, parameter :: NMAPS_KEPT          = 5  ! optics maps left on disk for th
 ! Components and steps are public so simple_stream_stage_optics_tester can assemble a stage
 ! and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_optics
-    type(parameters)                            :: params
+    type(parameters), allocatable               :: params
     type(sp_project)                            :: spproj           ! every imported micrograph and the optics groups
     type(stream_watcher)                        :: project_buff     ! completed preprocessing projects
     type(starproject_stream)                    :: starproj_stream
@@ -112,6 +112,7 @@ contains
             call self%spproj%update_compenv(cline)
             call self%spproj%write
         endif
+        if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         ! params%new has moved into the stage directory, where the maps are written and read
         ! and where finished() looks for the termination file: one left by the previous run
@@ -172,13 +173,17 @@ contains
 
     subroutine kill( self )
         class(stream_stage_optics), intent(inout) :: self
-        if( .not. self%l_exists ) return
+        if( .not. self%l_exists )then
+            if( allocated(self%params) ) deallocate(self%params)
+            return
+        endif
         call self%spproj%kill
         call self%project_buff%kill
         call self%pipe%kill
         call self%meta_status%kill
         call self%meta_group%kill
         call self%map_dir%kill
+        if( allocated(self%params) ) deallocate(self%params)
         self%map_id           = 0
         self%l_attached       = .false.
         self%l_waiting_logged = .false.

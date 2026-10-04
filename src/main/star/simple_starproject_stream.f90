@@ -7,7 +7,6 @@ use simple_parameters, only: parameters
 use simple_histogram,  only: histogram
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
-use FoX_dom
 implicit none
 
 public :: starproject_stream
@@ -15,11 +14,12 @@ private
 #include "simple_local_flags.inc"
 
 type starproject_stream
-    type(parameters)           :: params 
+    type(string)               :: projfile_optics ! params%projfile_optics of the last export
     type(starfile_table_type)  :: starfile
     type(string)               :: starfile_name
     type(string)               :: starfile_tmp
     type(string)               :: rootpath
+    real                       :: tilt_thres      = 0.05 ! params%tilt_thres of the last export
     real                       :: shift_threshold = 0.05
     integer                    :: group_offset = 0
     logical                    :: nicestream   = .false.
@@ -56,14 +56,13 @@ contains
 
     subroutine starfile_init( self, params, fname, outdir, verbose)
         class(starproject_stream), intent(inout) :: self
-        class(parameters), target, intent(in)    :: params
+        class(parameters),         intent(in)    :: params
         class(string),             intent(in)    :: fname
         class(string),             intent(in)    :: outdir
         logical, optional,         intent(in)    :: verbose
-        type(string) :: cwd, stem 
-        ! set pointer to params
-       ! self%p_ptr => params
-        self%params = params
+        type(string) :: cwd, stem
+        self%tilt_thres      = params%tilt_thres
+        self%projfile_optics = params%projfile_optics
         if(present(verbose)) self%verbose = verbose
         self%starfile_name = fname
         self%starfile_tmp  = fname // '.tmp'
@@ -356,8 +355,9 @@ contains
         class(parameters),         intent(in)    :: params
         class(sp_project),         intent(inout) :: spproj
         class(string),             intent(in)    :: outdir
-        self%params = params
-        if(self%params%beamtilt .eq. 'yes') then
+        self%tilt_thres      = params%tilt_thres
+        self%projfile_optics = params%projfile_optics
+        if(params%beamtilt .eq. 'yes') then
             self%use_beamtilt = .true.
         else
             self%use_beamtilt = .false.
@@ -486,8 +486,7 @@ contains
         type(ori)                                 :: template_ori
         real                                      :: grp_info(10000, 3) ! max 10000 optics groups ! 1: centroid x, 2: centroid y, 3: population
         integer                                   :: i, ntilt, nshift
-        !self%shift_threshold = self%p_ptr%tilt_thres
-        self%shift_threshold = self%params%tilt_thres
+        self%shift_threshold = self%tilt_thres
         call assign_tiltgroups()
         call assign_shiftgroups()
         do i=1, spproj%os_mic%get_noris()
@@ -736,13 +735,10 @@ contains
         l_write   = .false.
         if( present(verbose) ) l_verbose = verbose
         if( present(write)   ) l_write   = write
-       ! if( (self%p_ptr%projfile_optics .ne. '') .and.&
-        !   &(file_exists(string('../')//self%p_ptr%projfile_optics)) ) then
-        if( (self%params%projfile_optics .ne. '') .and.&
-           &(file_exists(string('../')//self%params%projfile_optics)) ) then    
+        if( (self%projfile_optics .ne. '') .and.&
+           &(file_exists(string('../')//self%projfile_optics)) ) then
             if( l_verbose ) ms0 = tic()
-         !   call spproj_optics%read(string('../')//self%p_ptr%projfile_optics)
-            call spproj_optics%read(string('../')//self%params%projfile_optics) 
+            call spproj_optics%read(string('../')//self%projfile_optics)
             call self%copy_optics(spproj_dest, spproj_optics)
             call spproj_optics%kill()
             if( l_write ) call spproj_dest%write

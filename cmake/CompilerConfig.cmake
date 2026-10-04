@@ -87,6 +87,9 @@ string(APPEND CMAKE_Fortran_FLAGS
        " -cpp -ffree-form -fimplicit-none -ffree-line-length-none"
        " -fno-second-underscore -Wall -Waliasing -Wampersand"
        " -Wsurprising -Wline-truncation"
+       # GCC's maybe-uninitialized analysis is too speculative for SIMPLE's allocatable and
+       # derived-type code (false positives on hidden descriptor fields); off in every build type.
+       " -Wno-maybe-uninitialized"
        # Passed-object and other interface dummies are intentionally retained
        # across SIMPLE's commander/strategy hierarchy.
        " -Wno-unused-dummy-argument"
@@ -100,15 +103,9 @@ string(APPEND CMAKE_Fortran_FLAGS
 #-O3 -march=native -fopenmp -fopt-info-vec-optimized -fopt-info-vec-missed
 # inspect vectorization reports: -qopt-report, -fopt-info-vec
 # -ffast-math is unsafe, causes bugs
-# Release warnings stay enabled by default; vendored sources keep their own -w.
+# Release shows the same warnings as Debug; vendored sources keep their own -w.
 set(CMAKE_Fortran_FLAGS_RELEASE "-O3 ${ARCH_FLAG} -fPIC"
     CACHE STRING "Release flags for Fortran" FORCE)
-option(SIMPLE_RELEASE_WARN_MAYBE_UNINITIALIZED
-    "Enable maybe-uninitialized warnings in Release Fortran builds" ON)
-if(NOT SIMPLE_RELEASE_WARN_MAYBE_UNINITIALIZED)
-    set(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE} -Wno-maybe-uninitialized"
-        CACHE STRING "Release flags for Fortran" FORCE)
-endif()
 
 # Debug flags for Fortran
 if(APPLE)
@@ -116,8 +113,8 @@ if(APPLE)
     # instrument C-interoperable FFTW-backed pointers (08aa2d5de dropped every check but do,mem).
     # Bounds checking is back (2026-09-25): without it a non-conforming array expression in a
     # tester passed on macOS and failed on Linux. Pointer, recursion and array-temps checks stay
-    # off here; if the macOS debug runtime crashes again, reduce the checks for the FFTW-pointer
-    # sources only (set_source_files_properties) rather than for the whole library.
+    # off here; if the macOS debug runtime crashes again, fix the FFTW-pointer sources rather than
+    # reducing the checks (SIMPLE-owned sources take no per-file compile options).
     set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g -fbacktrace -fcheck=bounds,do,mem -Wuninitialized -Wunused -fPIC"
         CACHE STRING "Debug flags for Fortran" FORCE)
 else()

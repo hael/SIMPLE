@@ -5,7 +5,7 @@ use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use CPlot2D_wrapper_module
 use simple_starfile_wrappers
-use FoX_dom
+use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
 implicit none
 private
 public :: relion_project

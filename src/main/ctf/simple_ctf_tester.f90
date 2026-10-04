@@ -288,10 +288,13 @@ contains
     subroutine test_restoration_contracts()
         type(image)       :: img
         type(ctfparams)   :: ctfparms
-        type(fplane_type) :: fplane
+        ! heap-allocated: GCC flags the hidden descriptor fields of a local fplane_type passed to
+        ! the intent(out) dummy of gen_fplane4rec as uninitialized (a -Wuninitialized false positive)
+        type(fplane_type), allocatable :: fplane
         real              :: actual
         integer           :: hp, kp
         write(*,'(A)') 'test_restoration_contracts'
+        allocate(fplane)
         call img%new(LDIM, SMPD)
         call memoize_ft_maps(LDIM, SMPD)
         call img%set_cmat(cmplx(1.,0.))   ! puts the image in Fourier space with unit components
@@ -316,6 +319,7 @@ contains
         call assert_true(actual >= 0., 'phase-flipped 3D restoration uses nonnegative |H|')
         call assert_real(actual*actual, fplane%ctfsq_plane(hp,kp), 5.e-6, &
             &'phase-flipped 3D restoration stores |H|*y over H^2')
+        deallocate(fplane)
         call img%kill
     end subroutine test_restoration_contracts
 

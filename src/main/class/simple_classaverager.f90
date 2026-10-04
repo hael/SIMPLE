@@ -107,25 +107,11 @@ end type ptcl_record
 integer,               parameter :: READBUFFSZ = 1024
 integer,               parameter :: CAVG_KB_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
 
-! Module variables
-type(ptcl_record),   allocatable :: precs(:)                  !< Particle records
+! Module variables (the restoration state lives in simple_classaverager_restore, its only user)
 type(image), target, allocatable :: cavgs_even(:)             !< Even class averages for reading
 type(image), target, allocatable :: cavgs_odd(:)              !< Odd class averages for reading
 type(image), target, allocatable :: cavgs_merged(:)           !< Merged class averages for reading
-type(image),         allocatable :: tmp_pad_imgs(:)           !< Temporary images for on-the-fly classes update
-type(cavgs_set)                  :: cavgs                     !< Class averages
-type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
 class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
-integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
-real,                allocatable :: center_offsets(:,:)       !< Class-centering offsets of the references (2,ncls)
-integer                          :: ncls       = 0            !< # classes
-integer                          :: ldim(3)        = [0,0,0]  !< logical dimension of image
-integer                          :: ldim_crop(3)   = [0,0,0]  !< logical dimension of cropped image
-integer                          :: ldim_pd(3)     = [0,0,0]  !< logical dimension of image, padded
-integer                          :: ldim_croppd(3) = [0,0,0]  !< logical dimension of cropped image, padded
-real                             :: smpd       = 0.           !< sampling distance
-real                             :: smpd_crop  = 0.           !< cropped sampling distance
-logical                          :: l_cropped_ptcls = .false. !< particles handed to cavger_update_sums are at box_crop
 
 interface
 

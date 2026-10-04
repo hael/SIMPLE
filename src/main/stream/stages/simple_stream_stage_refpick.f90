@@ -83,7 +83,7 @@ integer, parameter :: STAR_STEP_NMICS     = 100  ! ...above it, every this many 
 ! Components and steps are public so simple_stream_stage_refpick_tester can assemble a stage
 ! and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_refpick
-    type(parameters)                  :: params
+    type(parameters), allocatable     :: params
     type(cmdline)                     :: cline_exec       ! command line of the pick_extract worker jobs
     type(cmdline)                     :: cline_pickrefs   ! make_pickrefs, run once the pixel size is known
     type(qsys_env)                    :: qenv
@@ -183,6 +183,7 @@ contains
             self%l_restart = .true.
         endif
         call create_stream_project(self%spproj, cline, string('reference_picking'))
+        if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         ! one queue partition per computing unit; set here because parameter derivation
         ! (derive_parallel_settings) resets split_mode to 'even' whatever the command line says
@@ -308,7 +309,10 @@ contains
 
     subroutine kill( self )
         class(stream_stage_refpick), intent(inout) :: self
-        if( .not. self%l_exists ) return
+        if( .not. self%l_exists )then
+            if( allocated(self%params) ) deallocate(self%params)
+            return
+        endif
         call self%spproj%kill
         call self%sets%kill
         call self%qenv%kill
@@ -322,6 +326,7 @@ contains
         if( allocated(self%set_projects)     ) deallocate(self%set_projects)
         if( allocated(self%restored_sources) ) deallocate(self%restored_sources)
         call self%cwd%kill
+        if( allocated(self%params) ) deallocate(self%params)
         self%n_mics_submitted = 0
         self%nptcls_glob      = 0
         self%n_failed_jobs    = 0

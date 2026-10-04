@@ -48,21 +48,24 @@ contains
     end subroutine run_all_stream_stage_sieve_tests
 
     subroutine test_init_params()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_init_params', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'initialization allocates the owned parameters')
         call assert_int(0, stage%spproj%os_mic%get_noris(),         'the project starts without micrographs')
         call assert_true(dir_exists(string(DIR_STREAM_COMPLETED)),  'the completed folder is made')
         call assert_false(stage%l_sieve_active,                     'no sieve before the first import')
         call assert_false(allocated(stage%sieve), 'initialization leaves the sieve unallocated')
         allocate(stage%sieve)
         call stage%kill
+        call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
         call assert_false(allocated(stage%sieve), 'cleanup releases an inactive sieve')
         call stage%kill
         call assert_false(allocated(stage%sieve), 'inactive-sieve cleanup is idempotent')
@@ -73,10 +76,11 @@ contains
     !> an existing output folder is a restart, and a leftover termination file is removed, so the
     !! restarted stage runs
     subroutine test_restart_removes_term_stream()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_restart_removes_term_stream'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_restart', cwd_saved, root)
@@ -96,10 +100,11 @@ contains
     !> restart: the projects the sieve has already chunked (its imported_projects.txt) go into the
     !! watcher history once the upstream folder is attached
     subroutine test_restore_and_attach()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root, set1, set2
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_restore_and_attach'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_restore', cwd_saved, root)
@@ -127,10 +132,11 @@ contains
 
     !> one record per micrograph of each newly completed set, each set once
     subroutine test_import_projects()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root, set1, set2
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_import_projects'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_import', cwd_saved, root)
@@ -153,10 +159,11 @@ contains
 
     !> the mask diameter is the one make_pickrefs wrote beside the picking references
     subroutine test_read_mask_diameter()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_read_mask_diameter'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_mskdiam', cwd_saved, root)
@@ -174,10 +181,11 @@ contains
     !> the sieve is made on the first import, with the picking references' mask diameter, and runs
     !! its warm-up cycles; too few particles for a chunk, so none is generated
     subroutine test_start_sieve()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root, set1
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_start_sieve'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_start', cwd_saved, root)
@@ -206,7 +214,7 @@ contains
 
     !> one status message per call, with the particle count and the classes the sieve selected
     subroutine test_send_status()
-        type(stream_stage_sieve)                   :: stage
+        class(stream_stage_sieve), allocatable                   :: stage
         type(cmdline)                              :: cline
         type(stream_pipe)                          :: reader
         type(gui_metadata_stream_particle_sieving) :: status
@@ -215,6 +223,7 @@ contains
         integer(c_int)                             :: fds(2)
         integer                                    :: nfail0, meta_type, nimported, naccepted, nrejected, tlast
         logical                                    :: l_assigned, l_user_input
+        allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_status', cwd_saved, root)
@@ -251,10 +260,11 @@ contains
 
     !> the public loop waits for the upstream folder, then attaches; no sieve until a set arrives
     subroutine test_iterate_waits()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_iterate', cwd_saved, root)
@@ -274,10 +284,11 @@ contains
     end subroutine test_iterate_waits
 
     subroutine test_finished()
-        type(stream_stage_sieve) :: stage
+        class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
         type(string)             :: cwd_saved, root
         integer                  :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
         call enter_fixture('sv_stage_finished', cwd_saved, root)
@@ -315,7 +326,7 @@ contains
     ! a stage without its own queue environment or a pipe, with no waits and a settle time that
     ! takes files written in the same second
     subroutine make_test_stage( stage, cline )
-        type(stream_stage_sieve), intent(inout) :: stage
+        class(stream_stage_sieve), intent(inout) :: stage
         type(cmdline),            intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)

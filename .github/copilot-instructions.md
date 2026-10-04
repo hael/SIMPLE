@@ -100,3 +100,17 @@ living docs and leave the old ones in dated history docs.
 - Reuse `parameters`, `cmdline`, `builder`, project, and orientation APIs.
 - In commanders, normalize and validate `cmdline` before `params%new(cline)`.
 - Be aware that argument metadata and git-hash sources may be generated during builds.
+
+## Compile Time
+
+`doc/policies/compile_time_policy.md` is the rule set; follow it in every change.
+
+- No large type (`parameters`, `cmdline`, a stage, a sieve) as a plain component: make it
+  `allocatable`, allocated before its constructor and released in `kill`. Never copy a whole
+  `parameters`; copy the fields you need.
+- In testers, declare large objects `class(T), allocatable` and `allocate` them.
+- Module-level imports only for what the module itself needs, with `only:`; no new umbrella
+  modules or re-exports.
+- No new CMake targets for subsets of sources, no per-file compile options for SIMPLE-owned
+  code (fix warnings in code), no new global optimization flags without a run-time benchmark.
+- Claim a compile-time gain only from a like-for-like `scripts/profile_build.sh` comparison.

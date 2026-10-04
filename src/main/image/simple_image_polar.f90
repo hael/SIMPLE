@@ -5,6 +5,16 @@ implicit none
 
 integer, parameter :: POLMEM_NORMAL = 1, POLMEM_OVERSAMP = 2
 
+! polarization memoization (mem_poldim lives in the parent: it bounds the polarizer interfaces)
+real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
+integer, allocatable :: mem_polph_mat(:,:,:)      !< physical h addresses for the image to polar transformer
+integer, allocatable :: mem_polk_mat(:,:,:)       !< physical k addresses for the image to polar transformer
+logical, allocatable :: mem_polconjg_mat(:,:,:)   !< conjugation flags for the image to polar transformer
+integer              :: mem_polwdim      = 0      !< dimension of K-B window
+integer              :: mem_polwlen      = 0      !< dimension squared of K-B window
+integer              :: mem_polldim(3)   = 0      !< image dimensions used for memoized polarization
+integer              :: mem_polmode      = 0      !< polarization memoization mode
+
 contains
 
     !> \brief  initialises the image polarizer

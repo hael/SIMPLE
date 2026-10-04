@@ -2,8 +2,9 @@
 
 Date: 2026-10-04
 
-Status: implemented in the working tree, measured on Linux, and validated by the
-user-executed fast test gate.
+Status: implemented in commit 93e855ada, measured on Linux, and validated by the
+user-executed fast test gate. The rules derived from this and the follow-up work
+are in `doc/policies/compile_time_policy.md`.
 
 ## Executive Summary
 

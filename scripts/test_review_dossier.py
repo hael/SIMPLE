@@ -46,7 +46,7 @@ RE_USE = re.compile(r'^\s*use\s+(\w+)', re.I | re.M)
 RE_TBP = re.compile(r'\b(\w+)(?:\([^()]*\))?\s*%\s*(\w+)\s*\(', re.I)   # obj%meth( and arr(i)%meth(
 RE_TBP_BARE = re.compile(r'^\s*call\s+(\w+)(?:\([^()]*\))?\s*%\s*(\w+)\s*$', re.I | re.M)   # call obj%meth with no argument list
 RE_CALL = re.compile(r'^\s*call\s+(\w+)\s*(?:\((?![^()]*\)\s*%)|$)', re.I | re.M)   # call proc( or bare call proc; not call arr(i)%meth(
-RE_SUB = re.compile(r'^\s*(?:recursive\s+)?subroutine\s+(\w+)\s*\(.*?^\s*end\s+subroutine\s+\1', re.I | re.M | re.S)
+RE_SUB = re.compile(r'^\s*(?:recursive\s+)?(?:module\s+)?subroutine\s+(\w+)\s*\(.*?^\s*end\s+subroutine\s+\1', re.I | re.M | re.S)
 NOT_PRODUCTION = {'simple_core_module_api', 'simple_commanders_api', 'simple_test_exec_api', 'simple_test_utils',
                   'simple_cmdline', 'simple_parameters', 'simple_defs', 'simple_string', 'simple_syslib',
                   'simple_fileio', 'simple_timer', 'simple_jiffys', 'simple_error', 'simple_defs_environment',
@@ -216,7 +216,11 @@ def collect_exec(tests):
             if b:
                 bindings[m.group(1).lower()] = b.group(1).lower()
         for m in RE_SUB.finditer(s):
-            bodies[m.group(1).lower()] = (os.path.relpath(f, ROOT), m.group(0), head)
+            # a commander split into submodules also declares each body's interface in its
+            # parent module: keep the body, the longer of the two
+            name = m.group(1).lower()
+            if name not in bodies or len(m.group(0)) > len(bodies[name][1]):
+                bodies[name] = (os.path.relpath(f, ROOT), m.group(0), head)
     # routers: case name -> variable -> type
     for f in sorted(glob.glob(os.path.join(ROOT, 'src', 'main', 'exec', 'simple_test_exec_*.f90'))):
         area = os.path.basename(f)[len('simple_test_exec_'):-4]

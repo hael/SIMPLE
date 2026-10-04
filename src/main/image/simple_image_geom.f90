@@ -3,7 +3,54 @@ submodule (simple_image) simple_image_geom
 implicit none
 #include "simple_local_flags.inc"
 
+! per-thread scratch images of calc_shiftcen_serial
+type(image), allocatable :: thread_safe_tmp_imgs(:)
+
 contains
+
+    ! thread-safe scratch images
+
+    module subroutine construct_thread_safe_tmp_imgs( self, nthr )
+        class(image), intent(in) :: self
+        integer,      intent(in) :: nthr
+        integer :: i, sz, ldim(3)
+        logical :: do_allocate
+        if( OMP_IN_PARALLEL() )then
+            THROW_HARD('No memoization inside OpenMP regions')
+        endif
+        if( allocated(thread_safe_tmp_imgs) )then
+            ldim = thread_safe_tmp_imgs(1)%get_ldim()
+            sz   = size(thread_safe_tmp_imgs)
+            if( any(self%ldim /= ldim) .or. sz /= nthr )then
+                do i=1,size(thread_safe_tmp_imgs)
+                    call thread_safe_tmp_imgs(i)%kill
+                end do
+                deallocate(thread_safe_tmp_imgs)
+                do_allocate = .true.
+            else
+                do_allocate = .false.
+            endif
+        else
+            do_allocate = .true.
+        endif
+        if( do_allocate )then
+            allocate( thread_safe_tmp_imgs(nthr) )
+            do i=1,nthr
+                call thread_safe_tmp_imgs(i)%new(self%ldim, self%smpd, .false.)
+            end do
+        endif
+    end subroutine construct_thread_safe_tmp_imgs
+
+    module subroutine kill_thread_safe_tmp_imgs( self )
+        class(image), intent(in) :: self
+        integer :: i
+        if( allocated(thread_safe_tmp_imgs) )then
+            do i=1,size(thread_safe_tmp_imgs)
+                call thread_safe_tmp_imgs(i)%kill
+            end do
+            deallocate(thread_safe_tmp_imgs)
+        endif
+    end subroutine kill_thread_safe_tmp_imgs
 
     ! windowing
 

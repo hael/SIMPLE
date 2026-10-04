@@ -57,16 +57,18 @@ contains
     !> a restart imports every upstream project again: the micrograph segment starts empty even
     !! when the stage's project holds micrographs; no map yet, and maps live in the stage directory
     subroutine test_new_starts_empty()
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root, cwd
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_new_starts_empty'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_new', cwd_saved, root)
         call write_mic_project(string(TEST_PROJFILE), 1, ALL_ACCEPTED)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'initialization allocates the owned parameters')
         call simple_getcwd(cwd)
         call assert_int(0, stage%spproj%os_mic%get_noris(), 'the micrograph segment starts empty')
         call assert_int(0, stage%map_id,                    'no optics map in the stage directory')
@@ -74,6 +76,7 @@ contains
         call assert_false(stage%l_attached,                 'not attached to the upstream before the first pass')
         call assert_false(stage%finished(),                 'a fresh stage is not finished')
         call stage%kill
+        call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_new_starts_empty
@@ -83,10 +86,11 @@ contains
     !! directory (mkdir acts only for programs in the UI tables), so this checks the removal in
     !! the directory finished() reads, not the move into the stage directory itself.
     subroutine test_restart_removes_termination_file()
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_restart_removes_termination_file'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_restart_term', cwd_saved, root)
@@ -104,10 +108,11 @@ contains
 
     !> the stage waits, logging once, until preprocessing has made its completed-projects folder
     subroutine test_attach_upstream_waits()
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_attach_upstream_waits'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_attach', cwd_saved, root)
@@ -128,10 +133,11 @@ contains
     !> every micrograph of a newly completed project is imported, rejected ones included; a
     !! project is imported once, and projects completed later are picked up by a later pass
     subroutine test_import_new_projects()
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0, nimported
+        allocate(stage)
         write(*,'(A)') 'test_import_new_projects'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_import', cwd_saved, root)
@@ -160,11 +166,12 @@ contains
     !> grouping the two shift clusters: two optics groups, the STAR files, the project with the
     !! groups, and the first optics map
     subroutine test_assign_and_publish()
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(sp_project)          :: proj
         type(string)              :: cwd_saved, root
         integer                   :: nfail0, nimported
+        allocate(stage)
         write(*,'(A)') 'test_assign_and_publish'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_assign', cwd_saved, root)
@@ -197,10 +204,11 @@ contains
     !! same beam-image shift form one optics group per tilt group, and one group without it
     subroutine test_beamtilt_from_command_line()
         real, parameter :: NO_SHIFT(STREAM_NMOVS_SET) = 0.
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0, nimported
+        allocate(stage)
         write(*,'(A)') 'test_beamtilt_from_command_line'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_beamtilt', cwd_saved, root)
@@ -239,10 +247,11 @@ contains
     !> a restarted stage continues the map ids from the newest map in its directory, so readers
     !! never take an older map for the newest; the older maps are kept
     subroutine test_map_ids_continue_after_restart()
-        type(stream_stage_optics) :: stage, restarted
+        class(stream_stage_optics), allocatable :: stage, restarted
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0, nimported
+        allocate(stage, restarted)
         write(*,'(A)') 'test_map_ids_continue_after_restart'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_restart', cwd_saved, root)
@@ -275,11 +284,12 @@ contains
     !! and publishes, an idle pass, then finished once nmics micrographs are in; finalize writes
     !! the project
     subroutine test_iterate_passes()
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(sp_project)          :: proj
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_iterate_passes'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_iterate', cwd_saved, root)
@@ -313,7 +323,7 @@ contains
 
     !> one status message per call, counting accepted micrographs and optics groups
     subroutine test_send_status()
-        type(stream_stage_optics)                   :: stage
+        class(stream_stage_optics), allocatable                   :: stage
         type(cmdline)                               :: cline
         type(stream_pipe)                           :: reader
         type(gui_metadata_stream_optics_assignment) :: status
@@ -322,6 +332,7 @@ contains
         integer(c_int)                              :: fds(2)
         integer                                     :: nfail0, imic, meta_type, nassigned, ngroups, nimported, tlast
         logical                                     :: l_assigned
+        allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_status', cwd_saved, root)
@@ -358,7 +369,7 @@ contains
 
     !> one message per optics group, each with the shifts of that group's micrographs
     subroutine test_send_group_shifts()
-        type(stream_stage_optics)       :: stage
+        class(stream_stage_optics), allocatable       :: stage
         type(cmdline)                   :: cline
         type(stream_pipe)               :: reader
         type(gui_metadata_optics_group) :: group
@@ -368,6 +379,7 @@ contains
         integer(c_int)                  :: fds(2)
         integer                         :: nfail0, nimported, iframe, meta_type, i, i_max, n_shifts, npoints(2)
         logical                         :: l_assigned
+        allocate(stage)
         write(*,'(A)') 'test_send_group_shifts'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_shifts', cwd_saved, root)
@@ -407,10 +419,11 @@ contains
 
     !> the stage finishes on the stream's termination file or once enough micrographs are imported
     subroutine test_finished()
-        type(stream_stage_optics) :: stage
+        class(stream_stage_optics), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
         call enter_fixture('optics_stage_finished', cwd_saved, root)
@@ -448,7 +461,7 @@ contains
     ! the same second; the project file is made first, so new() does not build one from the
     ! environment
     subroutine make_test_stage( stage, cline )
-        type(stream_stage_optics), intent(inout) :: stage
+        class(stream_stage_optics), intent(inout) :: stage
         type(cmdline),             intent(inout) :: cline
         type(sp_project) :: proj
         if( .not. file_exists(string(TEST_PROJFILE)) )then

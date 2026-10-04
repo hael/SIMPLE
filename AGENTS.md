@@ -25,6 +25,10 @@ Branch-context files are local development memory and may describe work that is 
 - Keep numerical algorithms in their owning domain modules.
 - Reuse `parameters`, `cmdline`, `builder`, and existing lifecycle methods.
 - Keep workflow changes aligned with the owning UI, execution, commander, strategy, and domain layers.
+- Follow `doc/policies/compile_time_policy.md`: large types are allocatable components, never
+  plain ones; no whole-`parameters` copies; large test locals are `class(T), allocatable`;
+  module-level imports only for what the module needs; no new CMake targets for subsets of
+  sources and no per-file compile options for SIMPLE-owned code.
 
 ## Development Notes
 

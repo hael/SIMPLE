@@ -1,4 +1,4 @@
-!@descr: unit tests for the queue-system environment's installation-path policy and particle partitions (simple_qsys_env, simple_map_reduce, sp_project%update_compenv)
+!@descr: unit tests for the queue-system environment's installation-path policy, persistent-worker warm-up ownership and particle partitions (simple_qsys_env, simple_map_reduce, sp_project%update_compenv)
 ! The installation path is runtime-local: a distributed run takes the environment's SIMPLE_PATH
 ! (set by CTest) for its queue description and executable, never a simple_path a project carries; an empty project gets the minimum job time. Partitions given an active-particle mask
 ! stay contiguous and balance the active particles (split_nobjs_active).
@@ -6,7 +6,7 @@ module simple_qsys_env_tester
 use simple_core_module_api
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
-use simple_qsys_env,   only: qsys_env
+use simple_qsys_env,   only: qsys_env, register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs
 use simple_sp_project, only: sp_project
 use simple_test_utils
 implicit none
@@ -22,7 +22,40 @@ contains
         call test_installation_path_policy()
         call test_active_balanced_split()
         call test_active_balanced_qsys_parts()
+        call test_warmup_owner_lifetime()
     end subroutine run_all_qsys_env_tests
+
+    !> The persistent-worker warm-up callback has one live owner: the oldest registrant. A
+    !! shorter-lived reuser never takes it; killing the owner hands it to the surviving reuser;
+    !! repeated kills and kills of unregistered environments are harmless.
+    subroutine test_warmup_owner_lifetime()
+        type(qsys_env), target :: env_a, env_b
+        write(*,'(A)') 'test_warmup_owner_lifetime'
+        call assert_int(0, n_warmup_envs(), 'no warm-up registrant before the test')
+        ! A starts the server, B reuses it: A keeps the callback, also when B registers twice
+        call register_warmup_env(env_a, owner=.true.)
+        call register_warmup_env(env_b)
+        call register_warmup_env(env_b)
+        call assert_int(2, n_warmup_envs(), 'each environment is registered once')
+        call assert_true(is_warmup_owner(env_a),  'the environment that starts the server owns the callback')
+        call assert_false(is_warmup_owner(env_b), 'a reuser does not take the callback')
+        ! the short-lived reuser ends first: the owner keeps the callback
+        call env_b%kill
+        call assert_true(is_warmup_owner(env_a), 'killing a reuser leaves the owner in place')
+        call assert_int(1, n_warmup_envs(), 'the killed reuser is unregistered')
+        ! the owner ends first: the surviving reuser takes over
+        call register_warmup_env(env_b)
+        call env_a%kill
+        call assert_true(is_warmup_owner(env_b), 'killing the owner hands the callback to the surviving reuser')
+        call env_a%kill
+        call unregister_warmup_env(env_a)
+        call assert_true(is_warmup_owner(env_b), 'repeated kills of the former owner change nothing')
+        call env_b%kill
+        call assert_false(is_warmup_owner(env_b), 'the last kill leaves no owner')
+        call assert_int(0, n_warmup_envs(), 'no registrant is left')
+        call env_b%kill
+        call assert_int(0, n_warmup_envs(), 'a repeated kill is harmless')
+    end subroutine test_warmup_owner_lifetime
 
     subroutine test_installation_path_policy()
         type(cmdline)    :: cline

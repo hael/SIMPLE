@@ -91,7 +91,7 @@ character(len=*), parameter :: GENERATED_GAINREF = 'gainref_generated.mrc'
 ! Components and steps are public so simple_stream_stage_preprocess_tester can assemble a
 ! stage and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_preprocess
-    type(parameters)                     :: params
+    type(parameters), allocatable        :: params
     type(cmdline)                        :: cline_exec            ! command line of the preprocess worker jobs
     type(qsys_env)                       :: qenv
     type(sp_project)                     :: spproj_glob           ! every imported micrograph
@@ -195,6 +195,7 @@ contains
             call self%spproj_glob%update_compenv(cline)
             call self%spproj_glob%write
         endif
+        if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         ! one queue partition per computing unit; set here because parameter derivation
         ! (derive_parallel_settings) resets split_mode to 'even' whatever the command line says
@@ -295,7 +296,10 @@ contains
 
     subroutine kill( self )
         class(stream_stage_preprocess), intent(inout) :: self
-        if( .not. self%l_exists ) return
+        if( .not. self%l_exists )then
+            if( allocated(self%params) ) deallocate(self%params)
+            return
+        endif
         call self%spproj_glob%kill
         call self%qenv%kill
         call self%movie_buff%kill
@@ -311,6 +315,7 @@ contains
         call self%meta_plot_df%kill
         call self%meta_plot_rate%kill
         call self%sets%kill
+        if( allocated(self%params) ) deallocate(self%params)
         self%import_counter     = 0
         self%nmic_star          = 0
         self%n_failed_jobs      = 0

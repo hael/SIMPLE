@@ -31,10 +31,12 @@ contains
     subroutine run_openmp_offload_tests( cline )
         class(cmdline), intent(inout) :: cline
         type(parameters) :: p
+#ifdef USE_OPENMP_OFFLOAD
         integer(dp) :: t
         real(dp)    :: rt_cpu, rt_gpu, rt_cpus
         integer     :: nteams, nthreads, device_id
         logical     :: is_host
+#endif
         call cline%checkvar('nthr',   1)
         call cline%checkvar('device', 2)
         call cline%check

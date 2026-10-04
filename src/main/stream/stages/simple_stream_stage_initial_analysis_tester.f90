@@ -66,11 +66,12 @@ contains
     !> the stage's project is made with a computing environment, and the stage directory is the
     !! working directory
     subroutine test_init_params()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(sp_project)                    :: proj
         type(string)                        :: cwd_saved, root, cwd, qsys
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_init_params', cwd_saved, root)
@@ -105,10 +106,11 @@ contains
     end subroutine test_init_params
 
     subroutine test_paths()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(string)                        :: cwd_saved, root, cwd, fname, expected
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_paths'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_paths', cwd_saved, root)
@@ -131,10 +133,11 @@ contains
 
     !> the stage waits, logging once, until preprocessing has made its completed-projects folder
     subroutine test_attach_upstream_waits()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(string)                        :: cwd_saved, root
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_attach_upstream_waits'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_attach', cwd_saved, root)
@@ -154,10 +157,11 @@ contains
 
     !> one record per accepted micrograph of each newly completed project, each project once
     subroutine test_import_projects()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(string)                        :: cwd_saved, root
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_import_projects'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_import', cwd_saved, root)
@@ -181,10 +185,11 @@ contains
     !> the cycle 1 micrographs are the accepted micrographs of every imported project; rebuilding
     !! replaces them rather than appending
     subroutine test_rebuild_init_mics()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(string)                        :: cwd_saved, root
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_rebuild_init_mics'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_rebuild', cwd_saved, root)
@@ -208,13 +213,14 @@ contains
     !> cycle 1 sets up its project and reports, then waits for enough micrographs without
     !! starting a job or sending anything more
     subroutine test_cycle1_setup_waits()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(stream_pipe)                   :: reader
         character(len=:), allocatable       :: buffer
         type(string)                        :: cwd_saved, root
         integer(c_int)                      :: fds(2)
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_cycle1_setup_waits'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_cycle1', cwd_saved, root)
@@ -246,10 +252,11 @@ contains
     !> the public loop: a pass while preprocessing has no output yet, then a pass that attaches,
     !! imports and sets cycle 1 up
     subroutine test_iterate_passes()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(string)                        :: cwd_saved, root
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_iterate_passes'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_iterate', cwd_saved, root)
@@ -281,7 +288,7 @@ contains
     !! cycle, one for a cycle without class averages, one naming no class, and indices out of
     !! range are ignored
     subroutine test_gui_selection_ends_stage()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(stream_pipe)                   :: writer, reader
         type(gui_metadata_stream_update)    :: update
@@ -291,6 +298,7 @@ contains
         type(string)                        :: cwd_saved, root, cwd, refs
         integer(c_int)                      :: gui_in(2), gui_out(2)
         integer                             :: nfail0, ldim(3), nrefs, imsg
+        allocate(stage)
         write(*,'(A)') 'test_gui_selection_ends_stage'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_selection', cwd_saved, root)
@@ -384,7 +392,7 @@ contains
     !> published picking references are final: a restarted stage sends them to the GUI again and is
     !! finished at once, and nothing publishes over them
     subroutine test_published_pickrefs_are_final()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(stream_pipe)                   :: reader
         type(gui_metadata_cavg2D)           :: cavg
@@ -393,6 +401,7 @@ contains
         integer(c_int)                      :: gui_out(2)
         integer                             :: nfail0, ldim(3), nrefs, imsg
         logical                             :: l_published
+        allocate(stage)
         write(*,'(A)') 'test_published_pickrefs_are_final'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_pickrefs_final', cwd_saved, root)
@@ -436,7 +445,7 @@ contains
 
     !> one message per status call, carrying the stage's counts
     subroutine test_status_messages()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(stream_pipe)                   :: reader
         type(gui_metadata_stream_picking)   :: picking
@@ -445,6 +454,7 @@ contains
         integer(c_int)                      :: fds(2)
         integer                             :: nfail0, nimported, naccepted, nrejected, nptcls, nppm, tlast, box
         logical                             :: l_assigned
+        allocate(stage)
         write(*,'(A)') 'test_status_messages'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_status', cwd_saved, root)
@@ -484,12 +494,13 @@ contains
     subroutine test_balance_classes()
         integer, parameter :: STATES(4) = [1, 0, 1, 1]
         integer, parameter :: POPS(4)   = [1, 5, 3, 6]
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(sp_project)                    :: proj, written
         type(image)                         :: img
         type(string)                        :: cwd_saved, root, cwd, projfile, balanced, stk
         integer                             :: nfail0, ldim(3), n, ncls
         real                                :: smpd_here
+        allocate(stage)
         write(*,'(A)') 'test_balance_classes'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_balance', cwd_saved, root)
@@ -540,9 +551,10 @@ contains
 
     !> the result of solve3D_cavgs is in the highest-numbered '<n>_solve3D_cavgs' directory
     subroutine test_find_final_solve3D_dir()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(string)                        :: cwd_saved, root, final_dir
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_find_final_solve3D_dir'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_final_dir', cwd_saved, root)
@@ -560,10 +572,11 @@ contains
     end subroutine test_find_final_solve3D_dir
 
     subroutine test_finished()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
         type(string)                        :: cwd_saved, root
         integer                             :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
         call enter_fixture('ia_stage_finished', cwd_saved, root)
@@ -612,7 +625,7 @@ contains
     ! a stage from init_params and init_gui (no queue, no pipe), with no waits and a settle time
     ! that takes files written in the same second
     subroutine make_test_stage( stage, cline )
-        type(stream_stage_initial_analysis), intent(inout) :: stage
+        class(stream_stage_initial_analysis), intent(inout) :: stage
         type(cmdline),                       intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)

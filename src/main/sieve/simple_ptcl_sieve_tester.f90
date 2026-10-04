@@ -41,7 +41,7 @@ contains
     end subroutine run_all_ptcl_sieve_tests
 
     subroutine test_new_kill_and_empty_queries()
-        type(ptcl_sieve)          :: sieve
+        class(ptcl_sieve), allocatable          :: sieve
         type(parameters)          :: params
         type(string)              :: ws_dir, cwd_saved, jpeg, stk
         integer, allocatable      :: inds(:), pops(:), sel(:)
@@ -49,6 +49,7 @@ contains
         integer                   :: xtiles, ytiles
         logical                   :: ok
 
+        allocate(sieve)
         write(*,'(A)') 'test_new_kill_and_empty_queries'
 
         call setup_workspace(string('new_kill'), ws_dir, cwd_saved)
@@ -72,10 +73,11 @@ contains
     end subroutine test_new_kill_and_empty_queries
 
     subroutine test_import_existing_chunks_and_counts()
-        type(ptcl_sieve) :: sieve
+        class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params
         type(string)     :: ws_dir, cwd_saved
 
+        allocate(sieve)
         write(*,'(A)') 'test_import_existing_chunks_and_counts'
 
         call setup_workspace(string('import_counts'), ws_dir, cwd_saved)
@@ -118,10 +120,11 @@ contains
     !! classified and rejection-complete, so its particles wait for the fine tier instead of a
     !! coarse 2D run
     subroutine test_import_restores_final_ingestion_chunk()
-        type(ptcl_sieve) :: sieve
+        class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params
         type(string)     :: ws_dir, cwd_saved
 
+        allocate(sieve)
         write(*,'(A)') 'test_import_restores_final_ingestion_chunk'
 
         call setup_workspace(string('final_ingestion'), ws_dir, cwd_saved)
@@ -142,10 +145,11 @@ contains
     end subroutine test_import_restores_final_ingestion_chunk
 
     subroutine test_finished_semantics()
-        type(ptcl_sieve) :: sieve
+        class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params
         type(string)     :: ws_dir, cwd_saved
 
+        allocate(sieve)
         write(*,'(A)') 'test_finished_semantics'
 
         call setup_workspace(string('finished'), ws_dir, cwd_saved)
@@ -186,10 +190,11 @@ contains
     end subroutine test_finished_semantics
 
     subroutine test_single_pass_ignores_incomplete_fine()
-        type(ptcl_sieve) :: sieve
+        class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params
         type(string)     :: ws_dir, cwd_saved
 
+        allocate(sieve)
         write(*,'(A)') 'test_single_pass_ignores_incomplete_fine'
 
         call setup_workspace(string('single_pass'), ws_dir, cwd_saved)
@@ -221,10 +226,11 @@ contains
     end subroutine test_single_pass_ignores_incomplete_fine
 
     subroutine test_new_accepts_tuning_overrides()
-        type(ptcl_sieve) :: sieve
+        class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params
         type(string)     :: ws_dir, cwd_saved
 
+        allocate(sieve)
         write(*,'(A)') 'test_new_accepts_tuning_overrides'
 
         call setup_workspace(string('override_init'), ws_dir, cwd_saved)
@@ -259,11 +265,12 @@ contains
     end subroutine test_lpstart_given_or_derived
 
     subroutine test_cycle_empty_project_list()
-        type(ptcl_sieve) :: sieve
+        class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params
         type(rec_list)   :: project_list
         type(string)     :: ws_dir, cwd_saved
 
+        allocate(sieve)
         write(*,'(A)') 'test_cycle_empty_project_list'
 
         call setup_workspace(string('cycle_empty'), ws_dir, cwd_saved)
@@ -282,7 +289,7 @@ contains
     !! a class average with a strong centred component passes the hard gates, a blank one is
     !! rejected, and the selection reaches particles, sentinels, export, previews and latest product
     subroutine test_collect_and_reject_hard_gates()
-        type(ptcl_sieve)     :: sieve
+        class(ptcl_sieve), allocatable     :: sieve
         type(parameters)     :: params_sieve
         type(cmdline)        :: cline_sieve
         type(sp_project)     :: result
@@ -294,6 +301,7 @@ contains
         integer              :: ldim(3), nimages, xtiles, ytiles
         logical              :: has_latest
 
+        allocate(sieve)
         write(*,'(A)') 'test_collect_and_reject_hard_gates'
 
         call make_completed_coarse_chunk(string('collect_reject'), ws_dir, cwd_saved, chunk_dir, completed_path,&
@@ -373,13 +381,14 @@ contains
     !! the newest optics map (import index 1 in group 2 of two), while the chunk's own project
     !! stays without them
     subroutine test_hand_off_applies_optics_map()
-        type(ptcl_sieve) :: sieve
+        class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params_sieve
         type(cmdline)    :: cline_sieve
         type(sp_project) :: map_proj, exported, chunk_proj
         type(string)     :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile, optics_dir, exported_projfile
         integer          :: igroup
 
+        allocate(sieve)
         write(*,'(A)') 'test_hand_off_applies_optics_map'
 
         call make_completed_coarse_chunk(string('hand_off_optics'), ws_dir, cwd_saved, chunk_dir, completed_path,&

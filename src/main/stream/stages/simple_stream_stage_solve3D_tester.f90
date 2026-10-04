@@ -54,31 +54,35 @@ contains
     end subroutine run_all_stream_stage_solve3D_tests
 
     subroutine test_init_params()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_init_params', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'initialization allocates the owned parameters')
         call assert_int(0, stage%spproj%os_mic%get_noris(), 'the project starts without micrographs')
         call assert_false(stage%l_restart,                  'a fresh run is no restart')
         call assert_int(PHASE_IMPORTING, stage%phase,       'the stage starts importing')
         call assert_int(NSTATES, size(stage%state_res),     'one resolution per state')
         call assert_int(0, size(stage%stk_names),           'no stack yet')
         call stage%kill
+        call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_init_params
 
     !> a restart removes a leftover termination file, which would end the restarted stage at once
     subroutine test_restart_removes_term_stream()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_restart_removes_term_stream'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_restart', cwd_saved, root)
@@ -98,12 +102,13 @@ contains
     !> exports are taken in export order whatever order they are listed in, each once; the first
     !! gives pool 2D's mask diameter
     subroutine test_watch_order_and_mskdiam()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(rec_iterator)            :: it
         type(chunk_rec)               :: crec
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_watch_order_and_mskdiam'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_watch', cwd_saved, root)
@@ -141,11 +146,12 @@ contains
     !! publication's class and selection and keep their 3D parameters; a stack a publication lacks
     !! keeps its rows, deselected; the classes are the newest publication's
     subroutine test_merge_publications()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(sp_project)              :: set
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_merge_publications'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_merge', cwd_saved, root)
@@ -192,7 +198,8 @@ contains
 
     !> which job starts when, and the mask diameter that fits the class averages
     subroutine test_rules()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
+        allocate(stage)
         write(*,'(A)') 'test_rules'
         call assert_int(JOB_NONE,     stage%next_job(PHASE_IMPORTING, 0,   0),   'no particles: no job')
         call assert_int(JOB_SOLVE3D, stage%next_job(PHASE_IMPORTING, 10,  0),   'the first particles start solve3D')
@@ -208,7 +215,7 @@ contains
 
     !> one status message per call, with the stage name, the phase and the particle count
     subroutine test_send_status()
-        type(stream_stage_solve3D)                   :: stage
+        class(stream_stage_solve3D), allocatable                   :: stage
         type(cmdline)                                   :: cline
         type(stream_pipe)                               :: reader
         type(gui_metadata_stream_solve3D_multistate) :: status
@@ -218,6 +225,7 @@ contains
         integer :: nfail0, meta_type, solve3D_stage, refine_it, nstates_got, nimported, nlast, tlast
         logical :: l_assigned, l_user_input
         real    :: res
+        allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_status', cwd_saved, root)
@@ -252,7 +260,7 @@ contains
     !! resolution is kept; a state without a volume is not sent, and a state without an FSC
     !! curve is sent without one (not with the previous state's)
     subroutine test_send_volumes()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(stream_pipe)             :: reader
         type(image)                   :: vol
@@ -263,6 +271,7 @@ contains
         integer(c_int)                :: fds(2)
         integer                       :: nfail0, meta_type, nvols, ntiles, iptcl, k
         logical                       :: l_fsc_state(2)
+        allocate(stage)
         write(*,'(A)') 'test_send_volumes'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_volumes', cwd_saved, root)
@@ -327,10 +336,11 @@ contains
 
     !> the public loop waits for pool 2D's folder, then attaches; no job without particles
     subroutine test_iterate_waits()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_iterate', cwd_saved, root)
@@ -350,10 +360,11 @@ contains
     end subroutine test_iterate_waits
 
     subroutine test_finished()
-        type(stream_stage_solve3D) :: stage
+        class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
         call enter_fixture('a3_stage_finished', cwd_saved, root)
@@ -388,7 +399,7 @@ contains
     ! a stage without a queue environment or a pipe, with no waits and a settle time that takes
     ! files written in the same second
     subroutine make_test_stage( stage, cline )
-        type(stream_stage_solve3D), intent(inout) :: stage
+        class(stream_stage_solve3D), intent(inout) :: stage
         type(cmdline),                 intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1)

@@ -88,7 +88,7 @@ integer, parameter :: NPUBLICATIONS_KEPT    = 2   ! the newest publications kept
 ! Components and steps are public so simple_stream_stage_pool2D_tester can assemble a stage and
 ! run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_pool2D
-    type(parameters)                          :: params
+    type(parameters), allocatable             :: params
     type(cmdline), pointer                    :: cline => null() ! the stage's command line, read by the pool (master_cline)
     type(sp_project)                          :: spproj          ! the stage's project
     type(stream_watcher)                      :: project_buff    ! the sets the sieve hands off
@@ -207,6 +207,7 @@ contains
         self%l_stepwise = .false.
         if( cline%defined('stepwise') ) self%l_stepwise = cline%get_carg('stepwise') == 'yes'
         call create_stream_project(self%spproj, cline, string('pool2D'))
+        if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         allocate(self%cline)
         self%cline = cline
@@ -304,7 +305,10 @@ contains
 
     subroutine kill( self )
         class(stream_stage_pool2D), intent(inout) :: self
-        if( .not. self%l_exists ) return
+        if( .not. self%l_exists )then
+            if( allocated(self%params) ) deallocate(self%params)
+            return
+        endif
         if( associated(self%cline) )then
             if( associated(master_cline, self%cline) ) nullify(master_cline)
             call self%cline%kill
@@ -326,6 +330,7 @@ contains
         if( allocated(self%snapshot_idx) ) deallocate(self%snapshot_idx)
         if( allocated(self%snapshot_pop) ) deallocate(self%snapshot_pop)
         if( allocated(self%snapshot_res) ) deallocate(self%snapshot_res)
+        if( allocated(self%params) ) deallocate(self%params)
         self%snapshot_ntilesx         = 0
         self%snapshot_ntilesy         = 0
         self%snapshot_nptcls          = 0

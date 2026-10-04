@@ -148,9 +148,9 @@ contains
         use simple_cmdline, only: cmdline
         class(cmdline), intent(in)  :: cline
         integer,        intent(out) :: id
+#ifdef USE_OPENMP_OFFLOAD
         integer :: ndevices
         id = -1
-#ifdef USE_OPENMP_OFFLOAD
         ! Project built with GPU offloading
         if( cline%defined('device') )then
             ! device id provided
@@ -171,6 +171,7 @@ contains
         endif
 #else
         ! CPU only branch
+        id = -1
         if( cline%defined('device') )then
             THROW_WARN('Ignoring DEVICE input. Build with USE_OPENMP_OFFLOAD=ON for device offloading')
         endif
@@ -179,9 +180,9 @@ contains
 
     subroutine set_offload_device_2( id )
         integer, intent(in) :: id
+#ifdef USE_OPENMP_OFFLOAD
         integer :: ndevices, host_device
         integer(c_int) :: ierr
-#ifdef USE_OPENMP_OFFLOAD
         ndevices = omp_get_num_devices()
         if( ndevices < 1 ) then
             THROW_WARN('Device could not be set: No device identified')

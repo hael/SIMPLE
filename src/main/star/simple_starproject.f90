@@ -7,7 +7,7 @@ use simple_starproject_utils
 use simple_refine3D_fnames, only: refine3D_iter_vol_fname, refine3D_resolution_txt_fbody
 use CPlot2D_wrapper_module
 use simple_rnd
-use FoX_dom
+use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
 implicit none
 
 public :: starproject
@@ -819,7 +819,7 @@ contains
         write(fhandle, *) ""
         write(fhandle, "(A)")        "_rlnReferenceDimensionality       3"
         write(fhandle, "(A)")        "_rlnDataDimensionality            2"
-        write(fhandle, "(A)")        "_rlnNrClasses                     " // states
+        write(fhandle, "(A)")        "_rlnNrClasses                     " // int2str(states)
         write(fhandle, "(A,F12.4)")  "_rlnEstimatedResolution           ", minval(maxres0128)
         call fclose(fhandle)
         call enable_splflags(classproj%os_cls3D, self%starfile%class3D%flags)
@@ -838,7 +838,7 @@ contains
                 call fscproj%os_cls3D%set(j, "specfsc",  fscs(state, j, 2))
             end do
             call enable_splflags(fscproj%os_cls3D, self%starfile%class3D%flags)
-            call self%export_stardata(fscproj, self%starfile%class3D%flags, fscproj%os_cls3D, "model_class_"//state, mapstks=.false.)
+            call self%export_stardata(fscproj, self%starfile%class3D%flags, fscproj%os_cls3D, "model_class_"//int2str(state), mapstks=.false.)
             call fscproj%kill()
         end do
         10 CONTINUE
@@ -869,8 +869,8 @@ contains
         write(fhandle, *) ""
         write(fhandle, *) "data_model_general"
         write(fhandle, *) ""
-        write(fhandle, "(A)") "_splStreamPtcls                   " // ptcls
-        write(fhandle, "(A)") "_splStreamRejectedPtcls           " // rejected
+        write(fhandle, "(A)") "_splStreamPtcls                   " // int2str(ptcls)
+        write(fhandle, "(A)") "_splStreamRejectedPtcls           " // int2str(rejected)
         call fclose(fhandle)
     end subroutine export_stream2D
 

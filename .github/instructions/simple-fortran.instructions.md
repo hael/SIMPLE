@@ -9,6 +9,8 @@ Use the `.github/skills/simple-modern-fortran/SKILL.md` and the relevant
 
 Prefer small, owner-aligned edits. Follow existing module imports, type-bound methods,
 allocatable state patterns, OpenMP-aware loops, and `new`/`kill` lifecycle conventions.
+Follow `doc/policies/compile_time_policy.md`: no large type as a plain component, no
+whole-`parameters` copies, large test locals `class(T), allocatable`, lean module-level imports.
 
 For command-line or UI-visible behavior, update the owning parameter, parser, UI metadata,
 commander, execution-router, and project/reporting paths consistently. Check for generated

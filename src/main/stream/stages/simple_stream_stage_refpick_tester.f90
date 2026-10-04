@@ -53,15 +53,17 @@ contains
     end subroutine run_all_stream_stage_refpick_tests
 
     subroutine test_init_params()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(string)               :: cwd_saved, root, cwd
         integer                    :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_init_params', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'initialization allocates the owned parameters')
         call simple_getcwd(cwd)
         call assert_char('stream', trim(stage%params%split_mode), 'split_mode is stream after init_params')
         call assert_char(cwd%to_char(), stage%cwd%to_char(),     'the stage directory is the working directory')
@@ -70,6 +72,7 @@ contains
         call assert_true(dir_exists(string(DIR_STREAM)),          'the job folder is made')
         call assert_true(dir_exists(string(DIR_STREAM_COMPLETED)),'the completed folder is made')
         call stage%kill
+        call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_init_params
@@ -77,10 +80,11 @@ contains
     !> the stage waits for preprocessing's completed folder; once attached, a restart's upstream
     !! projects are in the watcher history
     subroutine test_attach_upstream()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(string)               :: cwd_saved, root, upstream1
         integer                    :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_attach_upstream'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_attach', cwd_saved, root)
@@ -106,10 +110,11 @@ contains
 
     !> the stage waits for the input picking references
     subroutine test_pickrefs_available()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(string)               :: cwd_saved, root
         integer                    :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_pickrefs_available'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_pickrefs', cwd_saved, root)
@@ -129,11 +134,12 @@ contains
     !! preprocessing outputs; the pixel size is taken from it; a project with nothing accepted
     !! makes no set
     subroutine test_create_set_project()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(sp_project)           :: set_proj
         type(string)               :: cwd_saved, root, upstream1, upstream2, job_dir, val
         integer                    :: nfail0, nselected
+        allocate(stage)
         write(*,'(A)') 'test_create_set_project'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_set_project', cwd_saved, root)
@@ -169,11 +175,12 @@ contains
     !> finished sets with micrographs move to the completed folder and are imported, unchanged; an
     !! empty one stays
     subroutine test_import_finished_sets()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(sp_project)           :: set_proj, done_proj
         type(string)               :: cwd_saved, root, job_dir, completed_dir, done(2)
         integer                    :: nfail0, n_imported
+        allocate(stage)
         write(*,'(A)') 'test_import_finished_sets'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_import', cwd_saved, root)
@@ -209,13 +216,14 @@ contains
     !> the project gets one stack per micrograph of every imported set, in import order, with the
     !! particle ranges renumbered and each particle pointing at its stack
     subroutine test_write_project()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(sp_project)           :: set_proj, written
         type(string)               :: cwd_saved, root, sets(2)
         integer, parameter         :: STKINDS(9) = [1,1,1,2,2,3,3,3,3]
         integer                    :: nfail0, n_imported, iptcl
         logical                    :: l_ok
+        allocate(stage)
         write(*,'(A)') 'test_write_project'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_write_project', cwd_saved, root)
@@ -263,11 +271,12 @@ contains
     !> with a map published by optics assignment, the micrographs, stacks and particles take its
     !! groups by import index, in the STAR file and in the project
     subroutine test_optics_map_applied()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(sp_project)           :: set_proj, written
         type(string)               :: cwd_saved, root, sets(1)
         integer                    :: nfail0, n_imported
+        allocate(stage)
         write(*,'(A)') 'test_optics_map_applied'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_optics_map', cwd_saved, root)
@@ -310,11 +319,12 @@ contains
 
     !> before optics assignment has published a map, every micrograph is in one optics group
     subroutine test_without_optics_map()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(sp_project)           :: set_proj
         type(string)               :: cwd_saved, root, sets(1)
         integer                    :: nfail0, n_imported, imic
+        allocate(stage)
         write(*,'(A)') 'test_without_optics_map'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_no_optics_map', cwd_saved, root)
@@ -340,10 +350,11 @@ contains
     !> restart: the completed sets are imported again and their upstream projects are put in the
     !! watcher history; an unfinished set is dropped and its upstream project is picked again
     subroutine test_restart_history()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(string)               :: cwd_saved, root, upstream1, upstream2, job_dir, done
         integer                    :: nfail0, nselected
+        allocate(stage)
         write(*,'(A)') 'test_restart_history'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_restart', cwd_saved, root)
@@ -371,10 +382,11 @@ contains
 
     !> a restart with clear=yes discards the completed sets and starts the numbering again
     subroutine test_restart_clear()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(string)               :: cwd_saved, root, upstream1, job_dir, completed_dir, done
         integer                    :: nfail0, nselected
+        allocate(stage)
         write(*,'(A)') 'test_restart_clear'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_restart_clear', cwd_saved, root)
@@ -398,7 +410,7 @@ contains
     end subroutine test_restart_clear
 
     subroutine test_send_status()
-        type(stream_stage_refpick)        :: stage
+        class(stream_stage_refpick), allocatable        :: stage
         type(cmdline)                     :: cline
         type(stream_pipe)                 :: reader
         type(gui_metadata_stream_picking) :: picking
@@ -407,6 +419,7 @@ contains
         integer(c_int)                    :: fds(2)
         integer                           :: nfail0, nimported, naccepted, nrejected, nptcls, nppm, tlast, box, meta_type
         logical                           :: l_assigned
+        allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_status', cwd_saved, root)
@@ -444,10 +457,11 @@ contains
     !> the public loop waits for the upstream folder, then for the picking references, submitting
     !! nothing meanwhile
     subroutine test_iterate_waits()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(string)               :: cwd_saved, root, upstream1
         integer                    :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_iterate', cwd_saved, root)
@@ -469,10 +483,11 @@ contains
     end subroutine test_iterate_waits
 
     subroutine test_finished()
-        type(stream_stage_refpick) :: stage
+        class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
         type(string)               :: cwd_saved, root
         integer                    :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
         call enter_fixture('rp_stage_finished', cwd_saved, root)
@@ -509,7 +524,7 @@ contains
     ! a stage without a queue or a pipe, with no waits and a settle time that takes files written
     ! in the same second
     subroutine make_test_stage( stage, cline )
-        type(stream_stage_refpick), intent(inout) :: stage
+        class(stream_stage_refpick), intent(inout) :: stage
         type(cmdline),              intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_job_dirs()

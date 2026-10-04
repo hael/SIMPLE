@@ -162,7 +162,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, cline)
-        use FoX_dom
+        use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         use simple_binoris_io,          only: binwrite_oritab

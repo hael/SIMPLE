@@ -21,6 +21,7 @@ int setsockopt(int sockfd, int level, int optname, const void *optval, size_t op
 pid_t waitpid(pid_t pid, int *status, int options) { errno = ENOSYS; return -1; }
 int pipe(int pipefd[2]) { errno = ENOSYS; return -1; }
 int fcntl(int fd, int cmd, ...) { errno = ENOSYS; return -1; }
+int c_fcntl(int fd, int cmd, int arg) { errno = ENOSYS; return -1; } /* unix_fcntl's fixed-argument binding; unix_macro.c on POSIX */
 pid_t fork(void) { errno = ENOSYS; return -1; }
 int kill(pid_t pid, int sig) { errno = ENOSYS; return -1; }
 

@@ -245,7 +245,7 @@ contains
             call fclose(funit)
         else
             ! used for proper cavgs output, header updated with stats
-            call ioimg%open(fname, [self%ldim(1),self%ldim(2),1], smpd_crop, formatchar='M', readhead=.false., rwaction='write')
+            call ioimg%open(fname, [self%ldim(1),self%ldim(2),1], p_ptr%smpd_crop, formatchar='M', readhead=.false., rwaction='write')
             call ioimg%wmrcSlices(1, self%nslices, self%rmat(:self%ldim(1),:,:), [self%ldim(1),self%ldim(2),1], .false.)
             call ioimg%setMode(2)
             call self%calc_cavgs_stats(stats)
@@ -264,7 +264,7 @@ contains
             call self%ifft(i)  
         enddo
         ! used for proper cavgs output, header updated with stats
-        call ioimg%open(fname, [self%ldim(1),self%ldim(2),1], smpd_crop, formatchar='M', readhead=.false., rwaction='write')
+        call ioimg%open(fname, [self%ldim(1),self%ldim(2),1], p_ptr%smpd_crop, formatchar='M', readhead=.false., rwaction='write')
         call ioimg%wmrcSlices(1, self%nslices, self%rmat(:self%ldim(1),:,:), [self%ldim(1),self%ldim(2),1], .false.)
         call ioimg%setMode(2)
         call self%calc_cavgs_stats(stats)
@@ -280,7 +280,7 @@ contains
         class(string), intent(in)    :: fname
         type(imgfile) :: ioimg
         ! used for proper cavgs output, header updated with stats
-        call ioimg%open(fname, [self%cshape(1),self%cshape(2),1], smpd_crop, formatchar='M', readhead=.false., rwaction='write')
+        call ioimg%open(fname, [self%cshape(1),self%cshape(2),1], p_ptr%smpd_crop, formatchar='M', readhead=.false., rwaction='write')
         call ioimg%wmrcSlices(1, self%nslices, self%ctfsq(:self%cshape(1),:self%cshape(2),:), [self%cshape(1),self%cshape(2),1], .false.)
         call ioimg%setMode(2)
         call ioimg%close

@@ -1447,6 +1447,7 @@ contains
     module subroutine gen_many_euclids_gpu( self, iptcl )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
+#ifdef USE_OPENMP_OFFLOAD
         complex(sp), allocatable :: pft_ptcl(:,:)
         real(sp),    allocatable :: ref_vals(:,:), absctf(:,:)
         complex(sp) :: crefctf, cdiff
@@ -1454,7 +1455,6 @@ contains
         real        :: sqsumptcl, acc, acc_c
         integer(dp) :: t
         integer     :: i, k, rot, rot_c, ir, jr, ref
-#ifdef USE_OPENMP_OFFLOAD
         ! particle index
         i = self%pinds(iptcl)
         ! particle variance and shell weights
@@ -1524,6 +1524,7 @@ contains
         use, intrinsic :: iso_c_binding, only: c_loc, c_f_pointer
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: pfromto(2)
+#ifdef USE_OPENMP_OFFLOAD
         type(c_ptr) :: p_c
         complex(sp), allocatable, target :: buffer_c(:,:)
         real(sp),                pointer :: buffer_r(:,:)
@@ -1535,7 +1536,6 @@ contains
         integer(c_int) :: plan_cufft, ierr
         integer(c_int) :: n(1), inembed(1), onembed(1), howmany, idist, odist
         nptcls = pfromto(2) - pfromto(1) + 1
-#ifdef USE_OPENMP_OFFLOAD
         ! Planning
         howmany = int(self%nrefs*nptcls, c_int)
         idist   = int(self%pftsz+1, c_int)
@@ -1634,11 +1634,11 @@ contains
         complex(sp),         intent(in)    :: ft_ptcl_ctf( pftsz+1, kfromto(1):kfromto(2), nptcls)
         complex(sp), target, intent(inout) :: buffer_c(pftsz+1,howmany)
         integer(c_int),      intent(out)   :: ierr
+#ifdef USE_OPENMP_OFFLOAD
         type(c_ptr) :: p_c
         complex(sp) :: c, d
         real(dp)    :: A
         integer     :: iptcl, iref, p, k, j
-#ifdef USE_OPENMP_OFFLOAD
         !$omp target teams distribute parallel do collapse(3)&
         !$omp& map(to:kfromto, pftsz, nrefs, nptcls, wks)&
         !$omp& map(present, to:ft_ref2, ft_ref)&

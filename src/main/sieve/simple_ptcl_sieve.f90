@@ -124,7 +124,6 @@ module simple_ptcl_sieve
     type(class_compatibility)         :: fine_compatibility_model
     type(chunk2D_coarse_defaults)     :: coarse_defaults
     type(chunk2D_fine_defaults)       :: fine_defaults
-    type(parameters)                  :: params
     type(qsys_env)                    :: qenv
     type(string)                      :: outdir_chunks_coarse
     type(string)                      :: outdir_chunks_fine
@@ -208,7 +207,6 @@ contains
     t0 = timer_start()
     call self%kill()
     call simple_getcwd(cwd)
-    self%params      = params
     self%completedir = completedir
     self%nparallel   = params%nchunks
     self%mskdiam     = params%mskdiam

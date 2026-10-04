@@ -29,9 +29,10 @@ end type jpg_img
 
 interface
 
-    integer function stbi_write_jpg (file_name, w, h, comp, data, quality ) bind ( c, name="stbi_write_jpg" )
+    function stbi_write_jpg (file_name, w, h, comp, data, quality ) bind ( c, name="stbi_write_jpg" )
         use,intrinsic :: iso_c_binding
         implicit none
+        integer(c_int) :: stbi_write_jpg
         character(c_char),dimension(*),intent(in)    :: file_name
         integer(c_int), intent(in), VALUE            :: w
         integer(c_int), intent(in), VALUE            :: h

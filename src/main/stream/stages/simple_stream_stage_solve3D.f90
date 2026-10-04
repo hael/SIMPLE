@@ -99,7 +99,7 @@ character(len=*), parameter :: REJECTED_CAVGS   = 'quality_rejected_cavgs'
 ! Components and steps are public so simple_stream_stage_solve3D_tester can assemble a stage
 ! and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_solve3D
-    type(parameters)                                :: params
+    type(parameters), allocatable                   :: params
     type(sp_project)                                :: spproj        ! the pool: imported particles, then each run's result
     type(qsys_env)                                  :: qenv
     type(qsys_async_job)                            :: job           ! the running 3D job
@@ -193,6 +193,7 @@ contains
             self%l_restart = .true.
         endif
         call create_stream_project(self%spproj, cline, string('3Dmultistate'))
+        if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         if( self%l_restart )then
             write(logfhandle,'(A)') '>>> RESTARTING EXISTING JOB'
@@ -259,7 +260,10 @@ contains
 
     subroutine kill( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        if( .not. self%l_exists ) return
+        if( .not. self%l_exists )then
+            if( allocated(self%params) ) deallocate(self%params)
+            return
+        endif
         call self%spproj%kill
         call self%qenv%kill
         call self%job%kill
@@ -271,6 +275,7 @@ contains
         call self%frozen_projfile%kill
         if( allocated(self%stk_names) ) deallocate(self%stk_names)
         if( allocated(self%state_res) ) deallocate(self%state_res)
+        if( allocated(self%params) ) deallocate(self%params)
         self%phase              = PHASE_IMPORTING
         self%naddon_runs        = 0
         self%nptcls_at_last_run = 0

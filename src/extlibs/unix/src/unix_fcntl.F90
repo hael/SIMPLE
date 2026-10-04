@@ -56,8 +56,9 @@ module unix_fcntl
     public :: c_open
 
     interface
-        ! int fcntl(int fd, int cmd, ...)
-        function c_fcntl(fd, cmd, arg) bind(c, name='fcntl')
+        ! int fcntl(int fd, int cmd, ...) through the non-variadic wrapper in unix_macro.c: a
+        ! fixed interface to the variadic fcntl passes arg where Apple arm64 does not read it
+        function c_fcntl(fd, cmd, arg) bind(c, name='c_fcntl')
             import :: c_int, c_ptr
             implicit none
             integer(kind=c_int), intent(in), value :: fd

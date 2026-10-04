@@ -16,8 +16,10 @@ public :: calc_3Drec_gpu
 private
 #include "simple_local_flags.inc"
 
+#ifdef USE_OPENMP_OFFLOAD
 logical              :: DEBUG = .true.
 real(timer_int_kind) :: t_init, t_read, t_prep, t_grid, t_h2d, t_launch, t_overlap, t_wait, t_finalize, t_tot
+#endif
 
 contains
 
@@ -28,15 +30,15 @@ contains
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: nptcls
         integer,                 intent(in)    :: pinds(nptcls)
+#ifndef USE_OPENMP_OFFLOAD
+        THROW_HARD('calc_3Drec_gpu is part of the GPU path. Use calc_3Drec instead')
+#else
         type(fplane_type), allocatable :: fpls(:)
         type(reconstructor) :: even_rec, odd_rec
         real,              allocatable, target :: symmats(:,:,:), rotmats(:,:,:)
         integer   :: vollims(3,2)
         integer   :: cdim(3), clb(3), jsym, nsym, h_edge, nyq
         integer(timer_int_kind) :: t, t0
-#ifndef USE_OPENMP_OFFLOAD
-        THROW_HARD('calc_3Drec_gpu is part of the GPU path. Use calc_3Drec instead')
-#else
         ! The offload kernel owns one expanded even/odd pair.  Multi-state
         ! work dispatches before this allocation to the common state/half-
         ! homogeneous CPU path until an equivalent half-local offload loop is

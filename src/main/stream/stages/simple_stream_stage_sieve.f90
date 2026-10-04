@@ -69,7 +69,7 @@ character(len=*), parameter :: IMPORTED_PROJECTS         = 'imported_projects.tx
 ! Components and steps are public so simple_stream_stage_sieve_tester can assemble a stage and
 ! run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_sieve
-    type(parameters)                           :: params
+    type(parameters), allocatable              :: params
     type(qsys_env)                             :: qenv          ! starts the persistent workers the sieve's chunk jobs run on
     type(sp_project)                           :: spproj        ! the stage's project
     type(stream_watcher)                       :: project_buff  ! completed reference-picking sets
@@ -149,6 +149,7 @@ contains
             if( outdir%strlen() > 0 ) self%l_restart = dir_exists(outdir)
         endif
         call create_stream_project(self%spproj, cline, string('sieve_cavgs'))
+        if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         if( self%l_restart )then
             write(logfhandle,'(A)') '>>> RESTARTING EXISTING JOB'
@@ -228,7 +229,10 @@ contains
 
     subroutine kill( self )
         class(stream_stage_sieve), intent(inout) :: self
-        if( .not. self%l_exists ) return
+        if( .not. self%l_exists )then
+            if( allocated(self%params) ) deallocate(self%params)
+            return
+        endif
         if( allocated(self%sieve) )then
             if( self%l_sieve_active ) call self%sieve%kill
             deallocate(self%sieve)
@@ -247,6 +251,7 @@ contains
         if( allocated(self%latest_res)       ) deallocate(self%latest_res)
         call self%latest_jpeg%kill
         call self%latest_stk%kill
+        if( allocated(self%params) ) deallocate(self%params)
         self%latest_xtiles    = 0
         self%latest_ytiles    = 0
         self%n_mics_imported  = 0

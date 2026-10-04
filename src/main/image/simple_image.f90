@@ -25,16 +25,9 @@ real,    allocatable :: mem_pspec_mask(:,:)
 logical, allocatable :: mem_pspec_bg(:,:)
 integer, allocatable :: mem_pspec_shell(:,:), mem_pspec_counts(:)
 
-! polarization memoization
-real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
-integer, allocatable :: mem_polph_mat(:,:,:)      !< physical h addresses for the image to polar transformer
-integer, allocatable :: mem_polk_mat(:,:,:)       !< physical k addresses for the image to polar transformer
-logical, allocatable :: mem_polconjg_mat(:,:,:)   !< conjugation flags for the image to polar transformer
-integer              :: mem_polwdim      = 0      !< dimension of K-B window
-integer              :: mem_polwlen      = 0      !< dimension squared of K-B window
+! polarization memoization: the Polar-FT dimensions bound the polarizer interfaces; the rest of the
+! memoized state is private to simple_image_polar
 integer              :: mem_poldim(3)    = 0      !< Polar-FT matrix dimensions
-integer              :: mem_polldim(3)   = 0      !< image dimensions used for memoized polarization
-integer              :: mem_polmode      = 0      !< polarization memoization mode
 
 type :: image
     private
@@ -2672,9 +2665,6 @@ end interface image
 type :: image_stack
     type(image), allocatable :: stack(:)
 end type image_stack
-
-! CLASS PARAMETERS/VARIABLES
-type(image), allocatable :: thread_safe_tmp_imgs(:)
 
 contains
 

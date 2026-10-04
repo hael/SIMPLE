@@ -1,6 +1,6 @@
 ---
 name: simple-modern-fortran
-description: Use when editing SIMPLE's Fortran code and you need repo-specific guidance on the modern Fortran style used here, including modules, submodules, type-bound procedures, abstract command interfaces, generated sources, OpenMP-aware code, and common patterns for extending the code safely.
+description: Use when editing SIMPLE's Fortran code and you need repo-specific guidance on the modern Fortran style used here, including modules, submodules, type-bound procedures, abstract command interfaces, generated sources, OpenMP-aware code, compile-time rules (allocatable heavy components, lean imports, no per-file flags), and common patterns for extending the code safely.
 ---
 
 # Modern Fortran In SIMPLE
@@ -78,6 +78,33 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
 - Before handing off Fortran edits, scan fatal forms with
   `rg -n "THROW_(HARD|WARN)\\(.*//&" src` and inspect newly added macro lines
   with `git diff -U0 -- '*.f90' | rg '^\\+.*THROW_(HARD|WARN)\\(.*&[[:space:]]*$'`.
+
+## Compile Time
+
+The rule set is `doc/policies/compile_time_policy.md`. gfortran expands the
+initialization, copy and clean-up of every plain (non-allocatable) component tree
+inline, at each declaration and assignment, so large inline types cost compile time
+everywhere they are declared.
+
+- A component of a large type (`parameters`, `cmdline`, a stream stage, `ptcl_sieve`,
+  any aggregate with many allocatable or string fields) is `allocatable`. Allocate
+  it right before its constructor (`if( .not. allocated(self%x) ) allocate(self%x)`)
+  and deallocate it in `kill` on every path, including the early return of a
+  `kill` that checks `l_exists`.
+- Never store a copy of a whole `parameters` (`self%params = params`). Copy the
+  fields the object reads; delete a copy nothing reads.
+- In testers, a local stage, sieve or similar object is
+  `class(T), allocatable :: x` followed by `allocate(x)`; helper dummies are
+  `class(T)`.
+- Module variables used only by one submodule are declared in that submodule;
+  state shared by several submodules goes into a small companion module the parent
+  imports (`simple_nu_filter_vars`), not into the parent.
+- Module-level `use` lines are build-order edges for every importer: import with
+  `only:` and only what the module itself needs; put procedure-only imports in the
+  procedure or its submodule. Do not add umbrella modules or re-exports.
+- With a third-party module, name the entities you use (`use FoX_dom, only: ...`).
+- Fix warnings in code; SIMPLE-owned sources take no per-file compile options and
+  no new CMake targets.
 
 ## Comments
 

@@ -55,10 +55,11 @@ contains
     end subroutine run_all_stream_stage_pool2D_tests
 
     subroutine test_init_params()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root, val
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_init_params'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_init_params', cwd_saved, root)
@@ -67,6 +68,7 @@ contains
         call cline%set('stepwise',   'yes')
         call cline%set('mkdir',      'yes') ! no execution directory: the program is not registered
         call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'initialization allocates the owned parameters')
         call assert_int(0, stage%spproj%os_mic%get_noris(),        'the project starts without micrographs')
         call assert_true(dir_exists(string(DIR_STREAM_COMPLETED)), 'the completed folder is made')
         call assert_false(stage%l_restart,                         'a fresh run is no restart')
@@ -79,6 +81,7 @@ contains
         call assert_char('yes', val%to_char(),                     'the caller''s command line is not changed')
         call assert_false(stage%l_pool_started,                    'no pool before the first import')
         call stage%kill
+        call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
         call assert_false(associated(stage%cline),                 'kill releases the command line')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -86,10 +89,11 @@ contains
 
     !> restart: the previous pool's files go, the stage's project and the snapshots stay
     subroutine test_restart_cleans()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_restart_cleans'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_restart', cwd_saved, root)
@@ -117,10 +121,11 @@ contains
 
     !> exports for 3D continue after the highest one in the completed folder
     subroutine test_export_numbering()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_export_numbering'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_export_ids', cwd_saved, root)
@@ -202,10 +207,11 @@ contains
     !> the stage waits for the sieve's completed folder, then takes each set once; the first gives
     !! the sieve's mask diameter
     subroutine test_attach_and_watch()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root, set1
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_attach_and_watch'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_watch', cwd_saved, root)
@@ -234,11 +240,12 @@ contains
     !> sets are appended to the pool in order, with stacks renumbered and particles as new ones;
     !! each set once, and a later set after the others
     subroutine test_transfer_sets()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(sp_project)          :: pool
         type(string)              :: cwd_saved, root, set_file
         integer                   :: nfail0, nimported
+        allocate(stage)
         write(*,'(A)') 'test_transfer_sets'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_transfer', cwd_saved, root)
@@ -284,11 +291,12 @@ contains
 
     !> stepwise=yes takes only enough sets to reach the threshold; the rest come with the next import
     subroutine test_transfer_stepwise()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(sp_project)          :: pool
         type(string)              :: cwd_saved, root, set_file
         integer                   :: nfail0, nimported
+        allocate(stage)
         write(*,'(A)') 'test_transfer_stepwise'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_stepwise', cwd_saved, root)
@@ -318,11 +326,12 @@ contains
     end subroutine test_transfer_stepwise
 
     subroutine test_sieve_final_set()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(sp_project)          :: pool
         type(string)              :: cwd_saved, root, set_file
         integer                   :: nfail0, nimported
+        allocate(stage)
         write(*,'(A)') 'test_sieve_final_set'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_final', cwd_saved, root)
@@ -346,7 +355,8 @@ contains
 
     !> the pause rule, the particle targets, the final run and the default mask diameter
     subroutine test_pause_rules()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
+        allocate(stage)
         write(*,'(A)') 'test_pause_rules'
         call assert_int(0,   stage%pause_rate_factor(0,  -1), 'no pause before the first iteration')
         call assert_int(0,   stage%pause_rate_factor(1,  -1), 'nor after it')
@@ -366,13 +376,14 @@ contains
     !> a new mask diameter from the GUI is taken, resumes a paused pool and replaces the sieve's;
     !! the same value again changes nothing; a snapshot request waits for the pool
     subroutine test_gui_mskdiam_update()
-        type(stream_stage_pool2D)        :: stage
+        class(stream_stage_pool2D), allocatable        :: stage
         type(cmdline)                    :: cline
         type(stream_pipe)                :: writer
         type(gui_metadata_stream_update) :: update
         type(string)                     :: cwd_saved, root
         integer(c_int)                   :: fds(2)
         integer                          :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_gui_mskdiam_update'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_gui_update', cwd_saved, root)
@@ -410,7 +421,7 @@ contains
 
     !> one status message per call, with the stage name, the particles imported and the mask
     subroutine test_send_status()
-        type(stream_stage_pool2D)        :: stage
+        class(stream_stage_pool2D), allocatable        :: stage
         type(cmdline)                    :: cline
         type(stream_pipe)                :: reader
         type(gui_metadata_stream_pool2D) :: status
@@ -420,6 +431,7 @@ contains
         integer                          :: nfail0, meta_type, iter, nimported, naccepted, nrejected, tlast, mskdiam
         real                             :: mskscale, res
         logical                          :: l_assigned, l_user_input
+        allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_status', cwd_saved, root)
@@ -456,7 +468,7 @@ contains
     !! follow as tiles; a snapshot that could not be written is announced with no particles, no
     !! file and no tiles
     subroutine test_send_snapshot()
-        type(stream_stage_pool2D)                 :: stage
+        class(stream_stage_pool2D), allocatable                 :: stage
         type(cmdline)                             :: cline
         type(stream_pipe)                         :: reader
         type(gui_metadata_stream_pool2D_snapshot) :: snapshot
@@ -465,6 +477,7 @@ contains
         integer(c_int)                            :: fds(2)
         integer                                   :: nfail0, meta_type, id, nptcls, stime, ncavgs
         logical                                   :: l_assigned
+        allocate(stage)
         write(*,'(A)') 'test_send_snapshot'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_snapshot', cwd_saved, root)
@@ -529,10 +542,11 @@ contains
 
     !> the public loop waits for the sieve's folder, then attaches; no pool until a set arrives
     subroutine test_iterate_waits()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_iterate_waits'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_iterate', cwd_saved, root)
@@ -551,10 +565,11 @@ contains
     end subroutine test_iterate_waits
 
     subroutine test_finished()
-        type(stream_stage_pool2D) :: stage
+        class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
         type(string)              :: cwd_saved, root
         integer                   :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_finished', cwd_saved, root)
@@ -589,7 +604,7 @@ contains
     ! a stage without a pipe, with no waits and a settle time that takes files written in the same
     ! second
     subroutine make_test_stage( stage, cline )
-        type(stream_stage_pool2D), intent(inout) :: stage
+        class(stream_stage_pool2D), intent(inout) :: stage
         type(cmdline),             intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)

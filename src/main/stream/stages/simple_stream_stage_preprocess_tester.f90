@@ -52,18 +52,21 @@ contains
     !> parameter derivation resets split_mode to 'even'; the stage must restore 'stream', or the
     !! queue gets one partition for ncunits computing units (out-of-bounds jobs_done)
     subroutine test_init_params_split_mode()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_init_params_split_mode'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_split_mode', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'initialization allocates the owned parameters')
         call assert_char('stream', trim(stage%params%split_mode), 'split_mode is stream after init_params')
         call assert_false(stage%l_restart, 'no output directory given: not a restart')
         call stage%kill
+        call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_init_params_split_mode
@@ -72,11 +75,12 @@ contains
     !! failed, the thresholds are written back to the job project, and only a job with accepted
     !! micrographs moves to the completed folder
     subroutine test_import_completed()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(sp_project)              :: job
         type(string)                  :: cwd_saved, root, job_dir, done(2)
         integer                       :: nfail0, n_imported
+        allocate(stage)
         write(*,'(A)') 'test_import_completed'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_import_completed', cwd_saved, root)
@@ -108,11 +112,12 @@ contains
     !> after an import the thresholds reject micrographs of the global project, and below 1000
     !! micrographs the STAR file is written on every import
     subroutine test_process_imports()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         real,    parameter            :: CTFRES(5) = [4., 15., 4., 4., 4.]
         integer                       :: nfail0, imic
+        allocate(stage)
         write(*,'(A)') 'test_process_imports'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_process_imports', cwd_saved, root)
@@ -136,10 +141,11 @@ contains
     !> restart: the set counter continues after the highest completed set even when that set has
     !! no accepted micrograph; accepted micrographs come back with their movies in the history
     subroutine test_import_previous_projects()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0, imic
+        allocate(stage)
         write(*,'(A)') 'test_import_previous_projects'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_previous_projects', cwd_saved, root)
@@ -166,11 +172,12 @@ contains
     !> one set of movies becomes a project in the job directory: consecutive import indices, the
     !! XML metadata path without the _fractions suffix, and the worker command line pointed at it
     subroutine test_create_movies_set_project()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(sp_project)              :: set_proj
         type(string)                  :: cwd_saved, root, cwd, movies(STREAM_NMOVS_SET), meta, projfile
         integer                       :: nfail0, imov
+        allocate(stage)
         write(*,'(A)') 'test_create_movies_set_project'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_movies_set', cwd_saved, root)
@@ -210,9 +217,10 @@ contains
     !> the worker command line runs preprocess on one set in the job directory, with the gain
     !! reference as resolved and no further flipping
     subroutine test_build_worker_cline()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: val
+        allocate(stage)
         write(*,'(A)') 'test_build_worker_cline'
         call cline%set('prg',      'preprocess_stream')
         call cline%set('flipgain', 'x')
@@ -237,10 +245,11 @@ contains
     !> a static flip is applied once, by the stage: a flipped copy of the gain reference is
     !! written and both the parameters and the command line point to it
     subroutine test_resolve_gain_static_flip()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root, gainref
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_resolve_gain_static_flip'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_gain_flip', cwd_saved, root)
@@ -263,7 +272,7 @@ contains
     !> two threshold updates queued before one drain are both applied, to the parameters and to
     !! the worker command line; a field left at 0 (unset) changes nothing
     subroutine test_apply_gui_updates()
-        type(stream_stage_preprocess)    :: stage
+        class(stream_stage_preprocess), allocatable    :: stage
         type(cmdline)                    :: cline
         type(stream_pipe)                :: writer
         type(gui_metadata_stream_update) :: update
@@ -271,6 +280,7 @@ contains
         type(string)                     :: cwd_saved, root
         integer(c_int)                   :: fds(2)
         integer                          :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_apply_gui_updates'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_gui_updates', cwd_saved, root)
@@ -304,13 +314,14 @@ contains
 
     !> one status message per call, of the preprocessing status type
     subroutine test_send_status()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(stream_pipe)             :: reader
         character(len=:), allocatable :: buffer
         type(string)                  :: cwd_saved, root
         integer(c_int)                :: fds(2)
         integer                       :: nfail0, imic, meta_type
+        allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_status', cwd_saved, root)
@@ -340,10 +351,11 @@ contains
 
     !> the stage finishes on the stream's termination file or once enough micrographs are imported
     subroutine test_finished()
-        type(stream_stage_preprocess) :: stage
+        class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
+        allocate(stage)
         write(*,'(A)') 'test_finished'
         nfail0 = tests_failed
         call enter_fixture('pp_stage_finished', cwd_saved, root)
@@ -385,7 +397,7 @@ contains
 
     ! a stage with parameters, job directories, GUI metadata on no pipe, and no waits
     subroutine make_test_stage( stage, cline )
-        type(stream_stage_preprocess), intent(inout) :: stage
+        class(stream_stage_preprocess), intent(inout) :: stage
         type(cmdline),                 intent(inout) :: cline
         type(sp_project) :: proj
         call simple_mkdir('movies')
