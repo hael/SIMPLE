@@ -1268,23 +1268,6 @@ contains
         end do
     end subroutine write_dataset_metric_table
 
-    function dataset_short_name( dset ) result( name )
-        type(cavg_quality_training_dataset), intent(in) :: dset
-        character(len=LONGSTRLEN) :: name
-        character(len=LONGSTRLEN) :: tmp
-        integer :: i, last_slash, txt_pos
-        tmp = trim(dset%fname)
-        last_slash = 0
-        do i = 1, len_trim(tmp)
-            if( tmp(i:i) == '/' ) last_slash = i
-        end do
-        name = adjustl(tmp(last_slash+1:))
-        if( index(name, 'cavgs_quality_analysis_') == 1 ) &
-            name = adjustl(name(len('cavgs_quality_analysis_')+1:))
-        txt_pos = index(name, '.txt')
-        if( txt_pos > 1 ) name = name(:txt_pos-1)
-    end function dataset_short_name
-
     subroutine collect_learn_diagnostics( dsets, model, diag )
         type(cavg_quality_training_dataset), intent(in)  :: dsets(:)
         type(cavg_quality_model),            intent(in)  :: model
@@ -1355,16 +1338,6 @@ contains
         call write_evaluate_diagnostic(funit, 'note', 'errors', 'fixed_model', trim(detail))
     end subroutine write_evaluate_diagnostics
 
-
-    function policy_level( nactive, fp, fn ) result( level )
-        integer, intent(in) :: nactive, fp, fn
-        character(len=8) :: level
-        if( nactive > 0 .and. fp + fn > 0 )then
-            level = 'warning'
-        else
-            level = 'note'
-        endif
-    end function policy_level
 
     subroutine write_evaluate_diagnostic( funit, level, param, status, detail )
         integer,          intent(in) :: funit
