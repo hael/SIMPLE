@@ -1574,13 +1574,14 @@ contains
             subroutine fix_particle_indstk( os, segment )
                 class(oris),      intent(inout) :: os
                 character(len=*), intent(in)    :: segment
-                integer :: iptcl, nptcls, stkind, indstk, nset, nbad, first_bad
+                integer :: iptcl, nptcls, stkind, stkind_hint, indstk, nset, nbad, first_bad
                 nptcls    = os%get_noris()
                 nset      = 0
                 nbad      = 0
                 first_bad = 0
+                stkind_hint = 1
                 do iptcl = 1,nptcls
-                    stkind = stkind_for_project_row(os, segment, iptcl)
+                    stkind = stkind_for_project_row(os, segment, iptcl, stkind_hint)
                     if( stkind < 1 .or. stkind > nstks ) cycle
                     if( derive_indstk(stkind) )then
                         indstk = iptcl - proj%os_stk%get_fromp(stkind) + 1
@@ -1616,19 +1617,22 @@ contains
             !! contains it (the ranges were repaired from the reference segment). A
             !! stored stkind is kept only when that stack owns the row; otherwise the
             !! owner replaces it, and a row no stack owns is an error.
-            integer function stkind_for_project_row( os, segment, iptcl ) result(stkind)
+            integer function stkind_for_project_row( os, segment, iptcl, istk_hint ) result(stkind)
                 class(oris),      intent(inout) :: os
                 character(len=*), intent(in)    :: segment
                 integer,          intent(in)    :: iptcl
-                integer :: istk, stored
+                integer,          intent(inout) :: istk_hint
+                integer :: stored
                 stored = 0
                 if( os%isthere(iptcl, 'stkind') ) stored = os%get_int(iptcl, 'stkind')
                 stkind = 0
-                do istk = 1,nstks
-                    if( iptcl >= proj%os_stk%get_fromp(istk) .and. iptcl <= proj%os_stk%get_top(istk) )then
-                        stkind = istk
+                do while( istk_hint <= nstks )
+                    if( iptcl < proj%os_stk%get_fromp(istk_hint) ) exit
+                    if( iptcl <= proj%os_stk%get_top(istk_hint) )then
+                        stkind = istk_hint
                         exit
                     endif
+                    istk_hint = istk_hint + 1
                 enddo
                 if( stkind == 0 )then
                     call err(trim(segment)//' row '//int2str(iptcl)//' has no valid stack range')
