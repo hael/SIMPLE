@@ -26,22 +26,6 @@ contains
         r   = matmul(tmp,r1)
     end function euler2m
 
-    !> \brief  calculates the derivatives of the rotation matrices w.r.t. one Euler angle
-    subroutine euler2dm( euls, drmat )
-        real, intent(in)     :: euls(3)
-        real, intent(out)    :: drmat(3,3,3)
-        real, dimension(3,3) :: r1, r2, r3, dr1, dr2, dr3
-        r1  =  rotmat(euls(1),3) ! rotation around z
-        r2  =  rotmat(euls(2),2) ! tilt
-        r3  =  rotmat(euls(3),3) ! rotation around z
-        dr1 = drotmat(euls(1),3) ! derivative of r1 w.r.t. e1
-        dr2 = drotmat(euls(2),2) ! derivative of r2 w.r.t. e2
-        dr3 = drotmat(euls(3),3) ! derivative of r3 w.r.t. e3
-        drmat(:,:,1) = matmul(matmul(r3,r2),dr1)
-        drmat(:,:,2) = matmul(matmul(r3,dr2),r1)
-        drmat(:,:,3) = matmul(matmul(dr3,r2),r1)
-    end subroutine euler2dm
-
     ! Intrinsic zy'z" convention
     ! [r11 r21 r31]   [...         ...         sΘcΦ]
     ! [r12 r22 r32] = [cΘcΨsΦ+cΦsΨ cΦcΨ-cΘsΦsΨ sΘsΦ]
@@ -150,50 +134,6 @@ contains
             ! beware of the signs:z-rot is really negative
         endif
     end function rotmat
-
-    !>  \brief  returns the derivative of the rotation matrix for _ang_ degrees of rotation
-    !! around x,y or z for _choice_ = _1_,_2_ or _3_
-    pure function drotmat( ang, choice ) result( r )
-        real, intent(in)           :: ang
-        integer, intent(in)        :: choice
-        real :: r(3,3)
-        real :: ang_in_rad, cosang, sinang
-        ang_in_rad = deg2rad(ang)
-        cosang = cos( ang_in_rad )
-        sinang = sin( ang_in_rad )
-        if ( choice == 1 ) then
-            r( 1,1 ) = 0.
-            r( 1,2 ) = 0.
-            r( 1,3 ) = 0.
-            r( 2,1 ) = 0.
-            r( 2,2 ) = -sinang
-            r( 2,3 ) = -cosang
-            r( 3,1 ) = 0.
-            r( 3,2 ) =  cosang
-            r( 3,3 ) = -sinang
-        elseif ( choice == 2 ) then
-            r( 1,1 ) = -sinang
-            r( 1,2 ) = 0.
-            r( 1,3 ) = -cosang
-            r( 2,1 ) = 0.
-            r( 2,2 ) = 0.
-            r( 2,3 ) = 0.
-            r( 3,1 ) =  cosang
-            r( 3,2 ) = 0.
-            r( 3,3 ) = -sinang
-        elseif ( choice == 3 ) then
-            r( 1,1 ) = -sinang
-            r( 1,2 ) =  cosang
-            r( 1,3 ) = 0.
-            r( 2,1 ) = -cosang
-            r( 2,2 ) = -sinang
-            r( 2,3 ) = 0.
-            r( 3,1 ) = 0.
-            r( 3,2 ) = 0.
-            r( 3,3 ) = 0.
-            ! beware of the signs:z-rot is really negative
-        endif
-    end function drotmat
 
     !>  \brief  for generating a random rotation matrix
     subroutine rnd_romat( rmat )

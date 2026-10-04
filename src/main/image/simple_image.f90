@@ -2679,20 +2679,6 @@ contains
         call self%new( ldim, smpd, wthreads )
     end function constructor
 
-    subroutine ring_stats( self, stats )
-        class(image),                    intent(inout) :: self
-        type(stats_struct), allocatable, intent(inout) :: stats(:)
-        integer     :: iring, npix, nrings
-        type(image) :: maskimg
-        nrings = fdim(self%ldim(1))-3
-        if( allocated(stats) ) deallocate(stats)
-        allocate(stats(nrings))
-        do iring = 1, nrings
-            call maskimg%ring(self%ldim, self%smpd, real(iring+2), real(iring-2), npix)
-            call self%stats_2(stats(iring)%avg, stats(iring)%sdev, stats(iring)%maxv, stats(iring)%minv, maskimg)
-        end do
-    end subroutine ring_stats
-
     !>  \brief ellipse constructs an ellipse of given axes.
     !    optional parameter 'hole' (yes|no) allows the user to choose
     !    between the full ellipse or just its borders. Default: full.

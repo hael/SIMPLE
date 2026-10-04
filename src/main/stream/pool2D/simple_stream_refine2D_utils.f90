@@ -191,65 +191,6 @@ contains
         call debug_print('end rescale_cavgs')
     end subroutine rescale_cavgs
 
-    subroutine set_dimensions( params )
-        class(parameters), intent(inout) :: params
-        call setup_downscaling( params )
-        pool_dims%smpd  = params%smpd_crop
-        pool_dims%box   = params%box_crop
-        pool_dims%boxpd = 2 * round2even(KBALPHA * real(params%box_crop/2)) ! logics from parameters
-        pool_dims%msk   = params%msk_crop
-        chunk_dims = pool_dims ! chunk & pool have the same dimensions to start with
-        ! Scaling-related command lines update
-        call cline_refine2D_chunk%set('smpd_crop', chunk_dims%smpd)
-        call cline_refine2D_chunk%set('box_crop',   chunk_dims%box)
-        call cline_refine2D_chunk%set('msk_crop',   chunk_dims%msk)
-        call cline_refine2D_chunk%set('box',        params%box)
-        call cline_refine2D_chunk%set('smpd',       params%smpd)
-        call cline_refine2D_pool%set('smpd_crop',   pool_dims%smpd)
-        call cline_refine2D_pool%set('box_crop',    pool_dims%box)
-        call cline_refine2D_pool%set('msk_crop',    pool_dims%msk)
-        call cline_refine2D_pool%set('box',         params%box)
-        call cline_refine2D_pool%set('smpd',        params%smpd)
-    end subroutine set_dimensions
-
-    ! private routine for resolution-related updates to command-lines
-    subroutine set_resolution_limits( params )
-        class(parameters), intent(inout) :: params
-        lpstart = max(lpstart, 2.0*params%smpd_crop)
-        if( l_no_chunks )then
-            params%lpstop = lpstop
-        else
-            if( master_cline%defined('lpstop') )then
-                params%lpstop = max(2.0*params%smpd_crop,params%lpstop)
-            else
-                params%lpstop = 2.0*params%smpd_crop
-            endif
-            call cline_refine2D_chunk%delete('lp')
-            call cline_refine2D_chunk%set('lpstart', lpstart)
-            call cline_refine2D_chunk%set('lpstop',   lpstart)
-        endif
-        call cline_refine2D_pool%set('lpstart',   lpstart)
-        call cline_refine2D_pool%set('lpstop',    params%lpstop)
-        if( .not.master_cline%defined('cenlp') )then
-            call cline_refine2D_chunk%set('cenlp', lpcen)
-            call cline_refine2D_pool%set( 'cenlp', lpcen)
-        else
-            call cline_refine2D_chunk%set('cenlp', params%cenlp)
-            call cline_refine2D_pool%set( 'cenlp', params%cenlp)
-        endif
-        ! Will use resolution update scheme from solve2D
-        if( .not.l_no_chunks )then
-            if( master_cline%defined('lpstop') )then
-                ! already set above
-            else
-                call cline_refine2D_chunk%delete('lpstop')
-            endif
-        endif
-        write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A): ', lpstart
-        write(logfhandle,'(A,F5.1)') '>>> POOL   HARD RESOLUTION LIMIT (IN A): ', params%lpstop
-        write(logfhandle,'(A,F5.1)') '>>> CENTERING     LOW-PASS LIMIT (IN A): ', lpcen
-    end subroutine set_resolution_limits
-
     ! Determines dimensions for downscaling
     subroutine setup_downscaling( params )
         class(parameters), intent(inout) :: params

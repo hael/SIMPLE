@@ -190,7 +190,7 @@ Each of these was built, measured and reverted.
 
 ## Evidence
 
-Clean Release builds with tests, GNU Fortran 16.2.0.
+Clean Release builds with tests; GNU Fortran 16.2.0 unless stated.
 
 | Change | Machine | Measurement |
 | --- | --- | --- |
@@ -199,6 +199,7 @@ Clean Release builds with tests, GNU Fortran 16.2.0.
 | Vendor sources back in the library target, single `-w` | Mac, 11 jobs | First SIMPLE compile at 0 s instead of 14.7 s; about 9 s of wall time |
 | High-level test commander split into seven submodules | Mac, 11 jobs | Its span 18.0 s to 7.2 s; it no longer ends the build |
 | Whole follow-up batch | Mac, 11 jobs | 179.3 s to 159.9 s wall, 1375 s to 1256 s summed, no warnings, fast gate passing |
+| Both batches (commit 8aedefec5) | Linux, 80 jobs, GNU Fortran 15.2.1 | 118.7 s wall, 1358 s summed; the same host took 225.3 s before the first batch (GNU Fortran 16.2.0) |
 
 The 2026-10-04 profiles are kept in `build_profile/` on the machine that made
 them. The first change is reported in full in

@@ -1417,23 +1417,6 @@ contains
         call self%set('y', real(nint(self%get('y'))))
     end subroutine round_shifts
 
-    !>  \brief  corrects the Euler angle bounds
-    subroutine shift( self )
-        class(ori), intent(inout) :: self
-        logical :: doshift
-        real    :: euls(3), rmat(3,3)
-        doshift = .false.
-        euls = self%get_euler()
-        if( euls(1) < 0. .or. euls(1) > 360. ) doshift = .true.
-        if( euls(2) < 0. .or. euls(2) > 180. ) doshift = .true.
-        if( euls(3) < 0. .or. euls(3) > 360. ) doshift = .true.
-        if( doshift )then
-            rmat = euler2m(euls)
-            euls = m2euler(rmat)
-            call self%set_euler(euls)
-        endif
-    end subroutine shift
-
     !>  \brief  is for composing Euler angles
     !! multiplication of two rotation matrices commute (n>2 not)
     !! the composed rotation matrix is constructed

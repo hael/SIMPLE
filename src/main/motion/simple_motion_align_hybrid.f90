@@ -729,13 +729,6 @@ contains
         self%shsrch_tol = shsrch_tol
     end subroutine set_shsrch_tol
 
-    subroutine set_maxits( self, maxits1, maxits2 )
-        class(motion_align_hybrid), intent(inout) :: self
-        integer,                    intent(in)    :: maxits1,maxits2
-        self%maxits_dcorr = maxits1
-        self%maxits_corr  = maxits2
-    end subroutine set_maxits
-
     subroutine set_coords( self, x, y )
         class(motion_align_hybrid), intent(inout) :: self
         integer, intent(in) :: x, y
