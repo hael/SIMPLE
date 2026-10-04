@@ -194,6 +194,7 @@ set(SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_pool2D.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_refpick.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_sieve.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/stages/simple_stream_stage_solve3D.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_pcg.f90"
 )
 set_property(SOURCE ${SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES} APPEND
@@ -213,6 +214,18 @@ set(SIMPLE_TEST_INTENT_OUT_DESCRIPTOR_SOURCES
 )
 set_property(SOURCE ${SIMPLE_TEST_INTENT_OUT_DESCRIPTOR_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-uninitialized;-Wno-maybe-uninitialized")
+
+set(SIMPLE_DERIVED_TYPE_INITIALIZATION_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_stack_io_tester.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_motion_gain_helpers.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/ctf/simple_ctf_estimate_fit.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/image/simple_image_msk_tester.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/search/simple_strategy3D_cont_1jyx_tester.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/cavg_quality/simple_cavg_quality_selection_tester.f90"
+)
+set_property(SOURCE ${SIMPLE_DERIVED_TYPE_INITIALIZATION_SOURCES} APPEND
+    PROPERTY COMPILE_OPTIONS "-Wno-uninitialized")
 
 # Add Windows-only stubs
 if(WIN32)

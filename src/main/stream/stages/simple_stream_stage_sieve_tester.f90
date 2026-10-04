@@ -60,7 +60,12 @@ contains
         call assert_int(0, stage%spproj%os_mic%get_noris(),         'the project starts without micrographs')
         call assert_true(dir_exists(string(DIR_STREAM_COMPLETED)),  'the completed folder is made')
         call assert_false(stage%l_sieve_active,                     'no sieve before the first import')
+        call assert_false(allocated(stage%sieve), 'initialization leaves the sieve unallocated')
+        allocate(stage%sieve)
         call stage%kill
+        call assert_false(allocated(stage%sieve), 'cleanup releases an inactive sieve')
+        call stage%kill
+        call assert_false(allocated(stage%sieve), 'inactive-sieve cleanup is idempotent')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_init_params
@@ -183,12 +188,18 @@ contains
         call make_test_stage(stage, cline)
         call stage%attach_upstream()
         call stage%import_projects()
+        call assert_false(allocated(stage%sieve), 'import alone does not allocate the sieve')
         call stage%start_sieve()
         call assert_true(stage%l_sieve_active, 'the sieve is made')
+        call assert_true(allocated(stage%sieve), 'starting the sieve allocates owned state')
         call assert_real(MSKDIAM_REFS, stage%params%mskdiam, 1.e-4, 'with the picking references'' mask diameter')
         call assert_int(0, stage%sieve%get_n_chunks_coarse(), 'too few particles for a chunk')
         call assert_true(dir_exists(string('chunks_coarse')), 'the sieve''s chunk folders are made')
         call stage%kill
+        call assert_false(allocated(stage%sieve), 'cleanup releases an active sieve')
+        call assert_false(stage%l_sieve_active, 'cleanup resets sieve activity')
+        call stage%kill
+        call assert_false(allocated(stage%sieve), 'active-sieve cleanup is idempotent')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_start_sieve
@@ -216,6 +227,7 @@ contains
         stage%latest_inds      = [3, 5, 7]
         stage%latest_selection = [1, 0, 1]
         call stage%send_status(string('importing and sieving particles'))
+        call assert_false(allocated(stage%sieve), 'sending initial status does not allocate a sieve')
         call assert_true(reader%receive(buffer), 'a status message is sent')
         if( allocated(buffer) )then
             meta_type = transfer(buffer, meta_type)
@@ -224,6 +236,8 @@ contains
                 status     = transfer(buffer, status)
                 l_assigned = status%get(stage_name, nimported, naccepted, nrejected, tlast, l_user_input)
                 call assert_int(50, nimported, 'the particles imported')
+                call assert_int(0, naccepted, 'initial status has no accepted particles')
+                call assert_int(0, nrejected, 'initial status has no rejected particles')
                 call assert_char('importing and sieving particles', stage_name%to_char(), 'the stage name')
             endif
         endif

@@ -100,9 +100,15 @@ string(APPEND CMAKE_Fortran_FLAGS
 #-O3 -march=native -fopenmp -fopt-info-vec-optimized -fopt-info-vec-missed
 # inspect vectorization reports: -qopt-report, -fopt-info-vec
 # -ffast-math is unsafe, causes bugs
-# No -w: Release shows the same warnings as Debug (vendored sources keep their own -w)
-set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -funroll-loops ${ARCH_FLAG} -fPIC"
+# Release warnings stay enabled by default; vendored sources keep their own -w.
+set(CMAKE_Fortran_FLAGS_RELEASE "-O3 ${ARCH_FLAG} -fPIC"
     CACHE STRING "Release flags for Fortran" FORCE)
+option(SIMPLE_RELEASE_WARN_MAYBE_UNINITIALIZED
+    "Enable maybe-uninitialized warnings in Release Fortran builds" ON)
+if(NOT SIMPLE_RELEASE_WARN_MAYBE_UNINITIALIZED)
+    set(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE} -Wno-maybe-uninitialized"
+        CACHE STRING "Release flags for Fortran" FORCE)
+endif()
 
 # Debug flags for Fortran
 if(APPLE)

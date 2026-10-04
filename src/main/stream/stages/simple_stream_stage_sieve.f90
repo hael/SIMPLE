@@ -74,7 +74,7 @@ type :: stream_stage_sieve
     type(sp_project)                           :: spproj        ! the stage's project
     type(stream_watcher)                       :: project_buff  ! completed reference-picking sets
     type(rec_list)                             :: project_list  ! one record per imported micrograph
-    type(ptcl_sieve)                           :: sieve
+    type(ptcl_sieve), allocatable              :: sieve
     type(stream_pipe)                          :: pipe          ! to the master
     type(gui_metadata_stream_particle_sieving) :: meta_status
     type(gui_metadata_cavg2D)                  :: meta_cavgs
@@ -229,7 +229,10 @@ contains
     subroutine kill( self )
         class(stream_stage_sieve), intent(inout) :: self
         if( .not. self%l_exists ) return
-        if( self%l_sieve_active ) call self%sieve%kill
+        if( allocated(self%sieve) )then
+            if( self%l_sieve_active ) call self%sieve%kill
+            deallocate(self%sieve)
+        endif
         call self%project_buff%kill
         call self%project_list%kill
         call self%qenv%kill
@@ -306,6 +309,7 @@ contains
     subroutine start_sieve( self )
         class(stream_stage_sieve), intent(inout) :: self
         call self%read_mask_diameter()
+        if( .not. allocated(self%sieve) ) allocate(self%sieve)
         if( self%params%optics_dir%strlen() > 0 )then
             call self%sieve%new(self%params, string(PATH_HERE//DIR_STREAM_COMPLETED), optics_dir=self%params%optics_dir)
         else
@@ -337,9 +341,15 @@ contains
     subroutine send_status( self, stage )
         class(stream_stage_sieve), intent(inout) :: self
         type(string),              intent(in)    :: stage
-        integer :: i
+        integer :: i, naccepted, nrejected
+        naccepted = 0
+        nrejected = 0
+        if( allocated(self%sieve) )then
+            naccepted = self%sieve%get_n_accepted_ptcls()
+            nrejected = self%sieve%get_n_rejected_ptcls()
+        endif
         call self%meta_status%set(stage=stage, particles_imported=self%n_ptcls_imported,&
-            &particles_accepted=self%sieve%get_n_accepted_ptcls(), particles_rejected=self%sieve%get_n_rejected_ptcls())
+            &particles_accepted=naccepted, particles_rejected=nrejected)
         call self%meta_status%clear_selection()
         if( allocated(self%latest_inds) .and. allocated(self%latest_selection) )then
             do i = 1,size(self%latest_inds)

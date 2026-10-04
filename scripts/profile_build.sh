@@ -44,7 +44,7 @@ BUILD="$ROOT/build"
 LIVELOG="$BUILD/build_profile_compile.tsv"   # fixed path baked into the build tree at configure
 PROFDIR_BASE="$ROOT/build_profile"
 
-now() { perl -MTime::HiRes=time -e 'printf "%.3f", time'; }
+now() { python3 -c 'import time; print("%.3f" % time.monotonic())'; }
 ncpu() {
     if command -v nproc >/dev/null 2>&1; then nproc
     else sysctl -n hw.ncpu
@@ -59,6 +59,8 @@ write_summary() {
     local prof="$1"
     local tsv="$prof/compile.tsv"
     [ -f "$tsv" ] || die "no compile.tsv in $prof"
+    awk -F'\t' 'NF != 4 || $1 !~ /^[0-9]+([.][0-9]+)?$/ || $2 !~ /^[0-9]+([.][0-9]+)?$/ || $3 !~ /^[0-9]+([.][0-9]+)?$/ {exit 1}' "$tsv" \
+        || die "missing or invalid compile timings in $tsv; regenerate the profile"
     awk -F'\t' -v root="$ROOT/" 'BEGIN{OFS="\t"} { s=$4; if (index(s,root)==1) s=substr(s,length(root)+1); print $1,$2,$3,s }' "$tsv" \
         | sort -t"$(printf '\t')" -k3,3gr > "$prof/compile_sorted.tsv"
     local njobs cpu
@@ -69,7 +71,7 @@ write_summary() {
         [ -f "$prof/meta.txt" ] && cat "$prof/meta.txt"
         echo
         echo "compile jobs:            $njobs"
-        echo "compile CPU (sum, s):    $cpu"
+        echo "compile elapsed (sum, s): $cpu"
         if [ -d "$BUILD/modules" ]; then
             echo "modules dir size (KB):   $(du -sk "$BUILD/modules" | awk '{print $1}')"
             echo "modules dir files:       $(find "$BUILD/modules" -type f | wc -l | tr -d ' ')"
@@ -120,10 +122,10 @@ new_profdir() {
 timed_make() {
     local jobs="$1" prof="$2" filter="$3"
     local t0 t1
-    t0=$(now)
+    t0=$(now) || die "timer unavailable; Python 3 is required"
     ( cd "$BUILD" && { make -j"$jobs" 2>&1; echo $? > "$prof/make.rc"; } | tee "$prof/make.log" | grep -E --line-buffered "$filter" )
-    t1=$(now)
-    WALL=$(perl -e "printf '%.1f', $t1 - $t0")
+    t1=$(now) || die "timer unavailable; Python 3 is required"
+    WALL=$(awk -v start="$t0" -v end="$t1" 'BEGIN {printf "%.1f", end - start}')
     RC=$(cat "$prof/make.rc" 2>/dev/null || echo 1)
 }
 
@@ -143,6 +145,7 @@ cmd_clean() {
         esac
     done
     [ -n "$jobs" ] || jobs=$(ncpu)
+    now >/dev/null || die "timer unavailable; Python 3 is required"
     local prof; prof=$(new_profdir "$label")
 
     echo "build_profile: clean build of $ROOT -> $prof (make -j$jobs)"

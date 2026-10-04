@@ -141,7 +141,7 @@ integer, parameter :: ALL_COLLECT = 0, ALL_SIEVE = 1, ALL_CLASSIFY = 2, ALL_SELE
 ! Components and steps are public so simple_stream_stage_initial_analysis_tester can assemble a
 ! stage and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_initial_analysis
-    type(parameters)                    :: params
+    type(parameters),      allocatable :: params
     type(qsys_env)                      :: qenv
     type(sp_project)                    :: spproj                  ! cycle 1 project
     type(sp_project)                    :: spproj_part             ! one project of the "all" set
@@ -150,7 +150,7 @@ type :: stream_stage_initial_analysis
     type(rec_list)                      :: project_list            ! one record per accepted imported micrograph
     type(rec_list)                      :: extracted_project_list  ! one record per extracted micrograph of the "all" set
     type(segdiam_bin_picker)            :: picker
-    type(ptcl_sieve)                    :: sieve
+    type(ptcl_sieve),       allocatable :: sieve
     type(qsys_async_job)                :: job                     ! the current cycle step's extraction, 2D or 3D run
     type(qsys_async_job),   allocatable :: extract_jobs(:)         ! the "all" extractions, one per project
     logical,                allocatable :: extract_collected(:)
@@ -244,6 +244,7 @@ contains
             if( dir_exists(outdir) ) write(logfhandle,'(A)') '>>> RESTARTING EXISTING JOB'
         endif
         call create_stream_project(self%spproj, cline, string('opening_2D'))
+        if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         call simple_getcwd(self%cwd)
     end subroutine init_params
@@ -324,13 +325,19 @@ contains
     subroutine kill( self )
         class(stream_stage_initial_analysis), intent(inout) :: self
         integer :: i
-        if( .not. self%l_exists ) return
+        if( .not. self%l_exists )then
+            if( allocated(self%params) ) deallocate(self%params)
+            return
+        endif
         call self%spproj%kill
         call self%spproj_part%kill
         call self%spproj_all%kill
         call self%project_buff%kill
         call self%picker%kill
-        if( self%l_sieve_active ) call self%sieve%kill
+        if( allocated(self%sieve) )then
+            if( self%l_sieve_active ) call self%sieve%kill
+            deallocate(self%sieve)
+        endif
         call self%job%kill
         if( allocated(self%extract_jobs) )then
             do i = 1,size(self%extract_jobs)
@@ -347,6 +354,7 @@ contains
         call self%meta_cavg2D%kill
         call self%meta_pickrefs%kill
         call self%cwd%kill
+        if( allocated(self%params) ) deallocate(self%params)
         self%icycle            = 1
         self%step1             = INIT_SETUP
         self%step2             = ALL_COLLECT
@@ -528,6 +536,7 @@ contains
         params_sieve%nthr        = 16
         params_sieve%worker_nthr = params_sieve%nthr
         call simple_mkdir(self%cwd//'/spprojs_sieved')
+        if( .not. allocated(self%sieve) ) allocate(self%sieve)
         call self%sieve%new(params_sieve, self%cwd//'/spprojs_sieved')
         call self%sieve%cycle(self%extracted_project_list)
         call self%sieve%cycle(self%extracted_project_list)
@@ -627,6 +636,7 @@ contains
                 write(logfhandle,'(A)') '>>> ALL SIEVE CHUNKS PROCESSED, COMBINING RESULTS...'
                 call self%sieve%combine_completed_chunks(projfile, with_sigma2=.false.)
                 call self%sieve%kill()
+                deallocate(self%sieve)
                 self%l_sieve_active = .false.
                 call self%spproj_all%kill()
                 call self%spproj_all%read(projfile)

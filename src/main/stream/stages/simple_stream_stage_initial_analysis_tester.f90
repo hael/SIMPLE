@@ -75,7 +75,10 @@ contains
         nfail0 = tests_failed
         call enter_fixture('ia_stage_init_params', cwd_saved, root)
         call set_test_cline(cline)
+        call assert_false(allocated(stage%params), 'a fresh stage leaves parameters unallocated')
         call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'parameter initialization allocates owned state')
+        call assert_int(1, stage%params%nthr, 'owned parameters retain the parsed thread count')
         call simple_getcwd(cwd)
         call assert_true(file_exists(string(TEST_PROJFILE)), 'the stage project is written')
         if( file_exists(string(TEST_PROJFILE)) )then
@@ -88,6 +91,15 @@ contains
         call assert_int(ASYNC_JOB_IDLE, stage%job%status(), 'no job is started')
         call assert_int(1, stage%icycle, 'the stage starts in cycle 1')
         call stage%kill
+        call assert_false(allocated(stage%params), 'stage cleanup releases parameters')
+        call stage%kill
+        call assert_false(allocated(stage%params), 'parameter cleanup is idempotent')
+        call stage%init_params(cline)
+        call assert_true(allocated(stage%params), 'partial initialization recreates owned parameters')
+        call stage%kill
+        call assert_false(allocated(stage%params), 'partial-stage cleanup releases parameters')
+        call stage%spproj%kill
+        call stage%cwd%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_init_params
@@ -254,8 +266,12 @@ contains
         call assert_int(STREAM_NMOVS_SET, stage%n_mics_imported, 'pass 2: the micrographs are imported')
         call assert_int(INIT_PICK, stage%step1, 'pass 2: cycle 1 set up and waiting')
         call assert_false(stage%finished(), 'pass 2: not finished')
+        call assert_false(allocated(stage%sieve), 'waiting for extraction does not allocate the sieve')
+        allocate(stage%sieve)
         call stage%kill
+        call assert_false(allocated(stage%sieve), 'stage cleanup releases an inactive sieve')
         call stage%kill ! idempotence
+        call assert_false(allocated(stage%sieve), 'repeated cleanup leaves the sieve unallocated')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_iterate_passes
@@ -554,9 +570,25 @@ contains
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
         call assert_false(stage%finished(), 'a fresh stage is not finished')
+        call assert_false(allocated(stage%sieve), 'a fresh stage does not allocate the sieve')
+        allocate(stage%sieve)
+        stage%l_sieve_active = .true.
         stage%l_done = .true.
         call assert_true(stage%finished(), 'finished once the references are written')
         call stage%kill
+        call assert_false(allocated(stage%sieve), 'stage cleanup releases an active sieve')
+        call assert_false(allocated(stage%params), 'active-sieve cleanup also releases parameters')
+        call assert_false(stage%l_sieve_active, 'stage cleanup resets sieve activity')
+        call stage%kill
+        call assert_false(allocated(stage%sieve), 'active-sieve cleanup remains idempotent')
+        call assert_false(allocated(stage%params), 'repeated active cleanup leaves parameters unallocated')
+        call make_test_stage(stage, cline)
+        call assert_true(allocated(stage%params), 'a cleaned stage can reinitialize parameters')
+        call assert_int(100, stage%params%nptcls_per_cls, 'reinitialization preserves parameter parsing')
+        call assert_false(stage%finished(), 'reinitialization starts unfinished')
+        call assert_false(allocated(stage%sieve), 'reinitialization keeps the sieve lazy')
+        call stage%kill
+        call assert_false(allocated(stage%params), 'reinitialized parameters are released')
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_finished

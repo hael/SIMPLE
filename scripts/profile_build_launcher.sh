@@ -10,10 +10,10 @@ for a in "$@"; do
         *.f90|*.F90|*.f08|*.F08|*.f|*.F|*.c|*.cpp|*.cc|*.cu) src="$a" ;;
     esac
 done
-t0=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+t0=$(python3 -c 'import time; print("%.3f" % time.monotonic())') || exit $?
 "$@"
 rc=$?
-t1=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
-dt=$(perl -e "printf '%.3f', $t1 - $t0")
+t1=$(python3 -c 'import time; print("%.3f" % time.monotonic())') || exit $?
+dt=$(awk -v start="$t0" -v end="$t1" 'BEGIN {printf "%.3f", end - start}')
 printf '%s\t%s\t%s\t%s\n' "$t0" "$t1" "$dt" "$src" >> "$log"
 exit $rc

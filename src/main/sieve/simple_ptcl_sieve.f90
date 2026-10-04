@@ -275,6 +275,7 @@ contains
       end do
       deallocate(self%chunks_fine)
     end if
+    call self%qenv%kill()
     call self%coarse_compatibility_model%kill()
     call self%fine_compatibility_model%kill()
     self%n_coarse_accepted_ptcls = 0

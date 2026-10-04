@@ -227,6 +227,7 @@ contains
         type(fixture_record)  :: fix
         real, allocatable :: volume(:,:,:)
         real(dp) :: shift(2), max_rotation_step, max_shift_step, objective_before, objective_after
+        real(dp) :: gradient_exact(5)
         integer  :: status, niter, nattempted, naccepted, nbound_hits
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
@@ -241,9 +242,15 @@ contains
             &'shift-only LM violated its accepted-step contract')
         call assert_true(niter < 20, 'shift-only LM exhausted its iteration limit after converging')
         shift = fix%truth_shift
+        call calc%objective_gradient(1, .true., 1, fix%truth_rotation, shift, objective_before, gradient_exact)
+        call assert_true(objective_before <= real(epsilon(1.), dp)**2, &
+            &'exact shift fixture exceeds the single-precision residual floor')
         call opt%refine_shift(calc, 1, .true., 1, fix%truth_rotation, shift)
-        call assert_true(opt_stage_status(opt, CARTFT_STAGE_SHIFT) == CARTFT_NO_IMPROVEMENT .and. &
-            &all(shift == fix%truth_shift), 'exact shift was not retained')
+        call get_stage_counts(opt, CARTFT_STAGE_SHIFT, status, niter, nattempted, naccepted, nbound_hits, &
+            &max_rotation_step, max_shift_step, objective_before, objective_after)
+        call assert_true(status == CARTFT_NO_IMPROVEMENT, 'exact shift did not report no improvement')
+        call assert_true(all(shift == fix%truth_shift), 'exact shift was not retained')
+        call assert_true(nattempted == 0 .and. naccepted == 0, 'exact shift attempted a roundoff-level update')
         call opt%kill
         call calc%kill
     end subroutine test_shift_solver

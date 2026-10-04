@@ -53,6 +53,7 @@ integer, parameter :: CARTFT_STAGE_SHIFT = 1, CARTFT_STAGE_JOINT = 2
 
 ! LM numerics
 real(dp), parameter :: NUMERIC_FLOOR                = epsilon(1._dp)**2
+real(dp), parameter :: SHIFT_RESIDUAL_FLOOR         = real(epsilon(1.), dp)**2
 real(dp), parameter :: LM_INITIAL_DAMPING           = 1.e-3_dp
 real(dp), parameter :: LM_INITIAL_REJECTION_MULT    = 4._dp
 real(dp), parameter :: LM_MAX_DAMPING               = 1._dp/epsilon(1._dp)
@@ -326,6 +327,10 @@ contains
             if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
                 &any(.not. ieee_is_finite(hessian)) )then
                 st%status = CARTFT_INVALID_NUMERICS
+                return
+            endif
+            if( objective <= SHIFT_RESIDUAL_FLOOR )then
+                st%status = CARTFT_NO_IMPROVEMENT
                 return
             endif
             mu = LM_INITIAL_DAMPING

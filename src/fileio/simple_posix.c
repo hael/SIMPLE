@@ -11,7 +11,7 @@ struct FTW { int dummy; };
 #endif
 #define  _POSIX_C_SOURCE 200809L
 #define _THREAD_SAFE
-#define _SVID_SOURCE
+#define _DEFAULT_SOURCE
 #define _GNU_SOURCE             /* See feature_test_macros(7) */
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
