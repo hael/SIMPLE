@@ -62,11 +62,18 @@ Then inspect the current code in this order:
 - The chain is written before restoration, because regularization mutates rho
   in place. Its filenames deliberately avoid the `recvol_state` stem so
   partial-reconstruction globs and cleanup never match it.
-- When the chain does not exist yet, volassemble bootstraps: the previous
-  even/odd halfmaps are mandatory, that iteration's outputs use the legacy
-  volume-domain blend, and the chain is seeded with the current partials scaled
-  by `1/f` so it carries full-dataset mass (a fractional-mass seed would make
-  the next update far more aggressive than requested). Stage-boundary full
+- Every blend happens in the accumulator domain; restored (finished) half maps
+  are never blended. When a blend is due but no chain exists, the iteration
+  does not blend: the chain is seeded with the current partials scaled by `1/f`
+  so it carries full-dataset mass (a fractional-mass seed would make the next
+  update far more aggressive than requested), and the iteration restores and
+  ships the current sample alone (partials scaled back by `f`), FSC included.
+  The previous volumes are neither read nor needed, and no extra reconstruction
+  runs. A state whose realized fraction is below 0.001 carries a valid chain
+  unchanged and is restored from it; without a chain it is carried forward like
+  a dropped state when the directory holds its previous volume, half maps and
+  FSC; with neither a chain nor a previous volume the run stops with an error
+  (raise `update_frac`). Both backends follow these rules. Stage-boundary full
   reconstructions seed the chain at full-dataset weight via the internal
   `trail_seed` cline handshake, gated on the consuming stage's `trail_rec` so
   early boundaries cannot park stale alignments in the chain.

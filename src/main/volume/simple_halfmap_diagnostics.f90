@@ -151,8 +151,8 @@ contains
     ! DIAGNOSTIC LIFECYCLE
 
     !> Support-provenance sidecar of a shipped state volume (<vol>_pcg_support.txt, also for gridding):
-    !! the pair's support and solve kind. The PCG trailing bootstrap reads the support; postprocess skips its
-    !! mask for any sidecar and its FSC weighting for the ML-regularized kinds, whose prior already did it.
+    !! the pair's support and solve kind. Postprocess skips its mask for any sidecar and its FSC weighting
+    !! for the ML-regularized kinds, whose prior already did it.
     function support_provenance_fname( volname ) result( fname )
         type(string), intent(in) :: volname
         type(string) :: fname
@@ -169,7 +169,7 @@ contains
         character(len=16) :: support_kind_here
         integer :: funit
         select case( trim(solve_kind) )
-            case( 'base', 'regularized', 'mixed', 'gridding', 'gridding_regularized' )
+            case( 'base', 'regularized', 'gridding', 'gridding_regularized' )
             case default
                 THROW_HARD('invalid solve kind for the support provenance sidecar')
         end select
@@ -177,7 +177,7 @@ contains
         support_kind_here = merge('density', 'sphere ', l_constrained)
         if( present(support_kind) ) support_kind_here = trim(support_kind)
         select case(trim(support_kind_here))
-            case('sphere','density','nu','explicit','mixed')
+            case('sphere','density','nu','explicit')
             case default
                 THROW_HARD('invalid support kind for the support provenance sidecar')
         end select

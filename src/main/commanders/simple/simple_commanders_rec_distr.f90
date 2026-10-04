@@ -24,7 +24,6 @@ type :: restore_timings_t
     real(timer_int_kind) :: restore_eos_and_write_fsc      = 0.
     real(timer_int_kind) :: restore_merged_volume          = 0.
     real(timer_int_kind) :: trail_blend_accums             = 0.
-    real(timer_int_kind) :: trail_restored_halves          = 0.
 end type restore_timings_t
 
 ! trailing-chain counts of one state handed to restore_state_from_parts
@@ -38,10 +37,11 @@ contains
     !> Reduce one state's Cartesian partial reconstructions and restore dense even, odd and merged
     !> volumes. On return build%vol/vol2 hold the restored halves (for automask); under NU, vol_nu_base_*
     !> and (ml_reg + static aux) vol_nu_aux_* hold the NU inputs before even/odd low-resolution insertion.
+    !> l_carry_forward returns true when a trailing state has no sample, no chain and a previous volume in
+    !> the directory: nothing is restored or written, and the caller carries that volume forward.
     subroutine restore_state_from_parts( params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
         &sum_rec, state, numlen_part, &
-        &update_frac_trail_rec, realized_update_frac, trail_counts, &
-        &vol_prev_even, vol_prev_odd, vol_merged, &
+        &update_frac_trail_rec, realized_update_frac, trail_counts, l_carry_forward, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, cfar, timings, frozen_rec, frozen_seed )
         use simple_reconstructor,       only: reconstructor, gridding_half_restore
@@ -55,7 +55,7 @@ contains
         real,                   intent(in)    :: update_frac_trail_rec !< applied map-update weight u (ufrac_trec override or realized)
         real,                   intent(in)    :: realized_update_frac  !< realized fraction f that produced the current partials
         integer,                intent(in)    :: trail_counts(4)       !< TC_NREP, TC_NSMP, TC_NNEW, TC_NSEED of this state
-        type(image),            intent(inout) :: vol_prev_even, vol_prev_odd, vol_merged
+        logical,                intent(out)   :: l_carry_forward       !< no sample and no chain: carry the previous volume
         type(image),            intent(inout) :: vol_nu_base_even, vol_nu_base_odd
         type(image),            intent(inout) :: vol_nu_aux_even, vol_nu_aux_odd
         type(string),           intent(inout) :: volname, eonames(2)
@@ -63,19 +63,25 @@ contains
         type(restore_timings_t), intent(inout) :: timings
         type(frozen_accum), optional, intent(in) :: frozen_rec  !< add-on consumer: frozen term summed into the union
         type(frozen_accum), optional, intent(in) :: frozen_seed !< add-on producer: publish these accumulators as the frozen set
-        type(string) :: volname_prev, volname_prev_even, volname_prev_odd
         type(string) :: fsc_txt_file, trail_fbody
+        character(len=:), allocatable :: errmsg
         type(halfmap_diagnostics_result) :: pair_diagnostics
         real    :: weight_prev, trail_chain_mrep, trail_mrep_new
         integer :: ldim(3), trail_chain_gen
         logical :: l_trail_chain
-        integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos, t_trail
+        integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos
         integer(timer_int_kind) :: t_trail_blend
+        l_carry_forward = .false.
         call reduce_partials()
         call set_state_filenames()
-        ! Trailing blends the e/o accumulators (sums + densities) before any restoration; with no chain
-        ! yet (bootstrap) the legacy previous-halfmap volume blend runs while the chain is seeded.
+        ! Trailing blends the e/o accumulators (sums + densities) before any restoration. With no chain
+        ! yet, the chain is seeded from the current sample at full mass and this iteration restores the
+        ! current sample alone; restored (finished) half maps are never blended.
         call blend_trailing_accumulators()
+        if( l_carry_forward )then
+            call cleanup_restore_state()
+            return
+        endif
         ! solve3D_addon: frozen accumulators join after the cohort chain is written and before any
         ! restoration or prior, so FSC, regularization and NU describe the union, the chain the cohort
         call add_frozen_accumulators()
@@ -84,11 +90,10 @@ contains
         call sum_eos_after_density_correction_if_needed()
         call capture_nonuniform_source_halves()
         call restore_merged_volume()
-        ! build%vol/vol2 hold the restored halves for automasking and trailing; low-resolution e/o
+        ! build%vol/vol2 hold the restored halves for automasking; low-resolution e/o
         ! blending belongs to reprojection-model preparation, never to these on-disk halfmaps.
         call build%vol%read(eonames(1))
         call build%vol2%read(eonames(2))
-        call trail_restored_halves_if_needed()
         ! Record the shipped soft-sphere support (msk_crop) and whether the ML prior shrank the map,
         ! so postprocess neither masks nor FSC-weights it again.
         if( params%l_ml_reg )then
@@ -151,9 +156,9 @@ contains
             endif
             l_trail_chain = validate_trail_chain()
             if( present(frozen_rec) )then
-                ! add-on mode never enters the legacy union-volume bootstrap:
-                ! the stage boundary seeds the cohort chain before the first
-                ! trailing stage
+                ! add-on mode never seeds from its cohort sample: the stage
+                ! boundary seeds the cohort chain before the first trailing
+                ! stage
                 if( .not. l_trail_chain ) THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
                 if( realized_update_frac < 0.001 )then
                     ! no cohort sample for this state: the chain carries
@@ -166,10 +171,25 @@ contains
                 endif
             endif
             if( realized_update_frac < 0.001 )then
-                ! nothing meaningful was sampled for this state; leave the chain
-                ! untouched and let the legacy path govern this iteration
-                THROW_WARN('realized update fraction ~0; trailing chain left untouched')
-                l_trail_chain = .false.
+                ! nothing meaningful was sampled for this state: with a chain, the
+                ! chain carries unchanged (weight zero on the current sample) and
+                ! this iteration is restored from it; without one, the previous
+                ! volume of this directory is carried forward. With neither there
+                ! is nothing to restore or carry: a map of the sample alone would
+                ! be degenerate, and the previous maps are never read for trailing.
+                if( l_trail_chain )then
+                    call read_gridding_pair_accumulators(params, even_rec, odd_rec, trail_fbody, required=.true.)
+                    write(logfhandle,'(A,I0,A)') '>>> VOLASSEMBLE: STATE ', state, &
+                        &' HAS NO SAMPLE; TRAILING CHAIN CARRIED UNCHANGED'
+                else if( previous_state_volume_exists() )then
+                    l_carry_forward = .true.
+                    write(logfhandle,'(A,I0,A)') '>>> VOLASSEMBLE: STATE ', state, &
+                        &' HAS NO SAMPLE AND NO TRAILING CHAIN; CARRYING PREVIOUS VOLUME FORWARD'
+                else
+                    errmsg = 'state '//int2str(state)//': realized update fraction below 0.001, no trailing '// &
+                        &'chain and no previous volume in this directory; nothing to restore (raise update_frac)'
+                    THROW_HARD(errmsg)
+                endif
                 return
             endif
             if( l_trail_chain .and. 1.0 - update_frac_trail_rec > 0.01 )then
@@ -199,7 +219,8 @@ contains
                     timings%trail_blend_accums + toc(t_trail_blend)
             else
                 ! No blend (no chain yet, or u ~ 1): persist the chain at full mass (partials x 1/f, M = N);
-                ! a fractional-mass seed would over-weight the next update.
+                ! a fractional-mass seed would over-weight the next update. This iteration then restores
+                ! the current sample alone (partials scaled back by f).
                 call even_rec%apply_weight_sums(1.0 / realized_update_frac)
                 call odd_rec%apply_weight_sums(1.0 / realized_update_frac)
                 trail_mrep_new = real(trail_counts(TC_NREP))
@@ -209,10 +230,16 @@ contains
                 if( .not. l_trail_chain )then
                     write(logfhandle,'(A,I0,A,I0,A)') &
                         &'>>> VOLASSEMBLE: SEEDED FULL-MASS TRAILING CHAIN, STATE ', state, &
-                        &', REPRESENTED POPULATION ', trail_counts(TC_NREP), '; USING LEGACY PREVIOUS-HALFMAP BLEND THIS ITERATION'
+                        &', REPRESENTED POPULATION ', trail_counts(TC_NREP), '; THIS ITERATION USES THE CURRENT SAMPLE ONLY'
                 endif
             endif
         end subroutine blend_trailing_accumulators
+
+        !> the volume and half maps a carried-forward state keeps (carry_forward_dropped_state)
+        logical function previous_state_volume_exists() result( l_exists )
+            l_exists = file_exists(volname) .and. file_exists(eonames(1)) .and. file_exists(eonames(2)) .and. &
+                &file_exists(refine3D_fsc_fname(state))
+        end function previous_state_volume_exists
 
         subroutine add_frozen_accumulators()
             if( .not. present(frozen_rec) ) return
@@ -363,29 +390,11 @@ contains
         end subroutine sum_pair_into_sum_rec
 
         subroutine restore_eos_and_write_fsc()
-            type(halfmap_diagnostics_result) :: prev_diagnostics
             if( L_BENCH_GLOB ) t_restore_eos = tic()
-            if( params%l_trail_rec .and. .not. l_trail_chain )then
-                ! Bootstrap iteration: the chain has no information yet, so the
-                ! previous halfmaps provide the FSC prior for regularization,
-                ! exactly as the legacy volume-domain trailing did. The
-                ! previous half maps are final deapodized real-space volumes;
-                ! they satisfy the common evaluator's real-space contract
-                ! directly, with no representation adapter.
-                call read_previous_halfmaps()
-                call calc_gridding_pair_diagnostics(params, vol_prev_even, vol_prev_odd, &
-                    &state, prev_diagnostics)
-                call restore_gridding_pair(params, even_rec, odd_rec, state, &
-                    &eonames(1), eonames(2), pair_diagnostics, fsc_in=prev_diagnostics%fsc, &
-                    &cfar_in=prev_diagnostics%cfar)
-                call prev_diagnostics%kill
-            else
-                ! With an accumulator chain the blended sums already contain the
-                ! trailed statistics, so the FSC is estimated post-blend from
-                ! the restored halves and describes the artifact written to disk.
-                call restore_gridding_pair(params, even_rec, odd_rec, state, &
-                    &eonames(1), eonames(2), pair_diagnostics)
-            endif
+            ! The (blended or seeded) sums are the statistics of the map written
+            ! to disk, so the FSC is always estimated from the restored halves.
+            call restore_gridding_pair(params, even_rec, odd_rec, state, &
+                &eonames(1), eonames(2), pair_diagnostics)
             res05      = pair_diagnostics%res_fsc05
             res0143    = pair_diagnostics%res_fsc0143
             cfar       = pair_diagnostics%cfar
@@ -394,23 +403,6 @@ contains
             if( L_BENCH_GLOB ) timings%restore_eos_and_write_fsc = &
                 timings%restore_eos_and_write_fsc + toc(t_restore_eos)
         end subroutine restore_eos_and_write_fsc
-
-        subroutine read_previous_halfmaps()
-            if( .not. cline%defined('vol'//int2str(state)) )then
-                THROW_HARD('vol'//int2str(state)//' required in volassemble cline when trail_rec==yes')
-            endif
-            volname_prev      = cline%get_carg('vol'//int2str(state))
-            volname_prev_even = add2fbody(volname_prev, MRC_EXT, '_even')
-            volname_prev_odd  = add2fbody(volname_prev, MRC_EXT, '_odd')
-            if( .not. file_exists(volname_prev_even) )then
-                THROW_HARD('File: '//volname_prev_even%to_char()//' does not exist!')
-            endif
-            if( .not. file_exists(volname_prev_odd) )then
-                THROW_HARD('File: '//volname_prev_odd%to_char()//' does not exist!')
-            endif
-            call vol_prev_even%read_and_crop(volname_prev_even, params%smpd, params%box_crop, params%smpd_crop)
-            call vol_prev_odd%read_and_crop( volname_prev_odd,  params%smpd, params%box_crop, params%smpd_crop)
-        end subroutine read_previous_halfmaps
 
         function resolve_fsc_txt_fname() result( fname )
             type(string) :: fname
@@ -477,58 +469,13 @@ contains
                 timings%restore_merged_volume + toc(t_restore_merged)
         end subroutine restore_merged_volume
 
-        !> Legacy volume-domain blend, retained ONLY for the bootstrap iteration
-        !! that seeds the accumulator chain: it keeps the output halves anchored
-        !! to the previous model exactly as before. Chain iterations never enter
-        !! here — their halves, merged volume and NU inputs are already trailed.
-        subroutine trail_restored_halves_if_needed()
-            if( .not. params%l_trail_rec ) return
-            if( l_trail_chain ) return
-            if( update_frac_trail_rec >= 0.99 ) return
-            if( L_BENCH_GLOB ) t_trail = tic()
-            weight_prev = 1. - update_frac_trail_rec
-            call vol_prev_even%mul(weight_prev)
-            call vol_prev_odd%mul(weight_prev)
-            call build%vol%mul(update_frac_trail_rec)
-            call build%vol2%mul(update_frac_trail_rec)
-            call build%vol%add(vol_prev_even)
-            call build%vol2%add(vol_prev_odd)
-            if( params%l_nonuniform )then
-                call vol_nu_base_even%mul(update_frac_trail_rec)
-                call vol_nu_base_odd%mul(update_frac_trail_rec)
-                call vol_nu_base_even%add(vol_prev_even)
-                call vol_nu_base_odd%add(vol_prev_odd)
-                if( use_static_nu_aux_replacement() )then
-                    call vol_nu_aux_even%mul(update_frac_trail_rec)
-                    call vol_nu_aux_odd%mul(update_frac_trail_rec)
-                    call vol_nu_aux_even%add(vol_prev_even)
-                    call vol_nu_aux_odd%add(vol_prev_odd)
-                endif
-            endif
-            call build%vol%write(eonames(1))
-            call build%vol2%write(eonames(2))
-            if( params%l_lpset )then
-                call vol_merged%copy(build%vol)
-                call vol_merged%add(build%vol2)
-                call vol_merged%mul(0.5)
-                call vol_merged%write(volname, del_if_exists=.true.)
-                call wait_for_closure(volname)
-            endif
-            if( L_BENCH_GLOB ) timings%trail_restored_halves = timings%trail_restored_halves + toc(t_trail)
-        end subroutine trail_restored_halves_if_needed
-
         logical function use_static_nu_aux_replacement() result(l_use_aux)
             l_use_aux = params%l_ml_reg
         end function use_static_nu_aux_replacement
 
         subroutine cleanup_restore_state()
-            call vol_prev_even%kill
-            call vol_prev_odd%kill
             call fsc_txt_file%kill
             call trail_fbody%kill
-            call volname_prev%kill
-            call volname_prev_even%kill
-            call volname_prev_odd%kill
             call pair_diagnostics%kill
         end subroutine cleanup_restore_state
 
@@ -670,34 +617,22 @@ contains
         !! base/replay mechanics but no composite lifetime, partial reduction, or
         !! trailing-chain policy.
         subroutine restore_gridding_pair( params, even_rec, odd_rec, state, fname_even, fname_odd, &
-            &diagnostics, fsc_in, cfar_in )
+            &diagnostics )
             class(parameters),                intent(in)    :: params
             class(reconstructor),             intent(inout) :: even_rec, odd_rec
             integer,                          intent(in)    :: state
             class(string),                    intent(in)    :: fname_even, fname_odd
             type(halfmap_diagnostics_result), intent(out)   :: diagnostics
-            real, optional,                   intent(in)    :: fsc_in(:)
-            real, optional,                   intent(in)    :: cfar_in
             type(gridding_half_restore) :: even_restore, odd_restore
             real,     allocatable :: res(:)
             real                  :: smpd, fny
             integer               :: box, filtsz
-            logical               :: l_have_fsc
             box    = params%box_crop
             smpd   = params%smpd_crop
             filtsz = fdim(box) - 1
             fny    = 2. * smpd
             res    = get_resarr(box, smpd)
-            if( present(fsc_in) )then
-                if( .not. present(cfar_in) ) THROW_HARD('cfar_in must accompany an input gridding FSC')
-                if( size(fsc_in) /= filtsz ) THROW_HARD('input FSC size does not match gridding reconstruction')
-                allocate(diagnostics%fsc(filtsz), source=fsc_in)
-                diagnostics%cfar = cfar_in
-                l_have_fsc = .true.
-            else
-                allocate(diagnostics%fsc(filtsz), source=0.)
-                l_have_fsc = .false.
-            endif
+            allocate(diagnostics%fsc(filtsz), source=0.)
             call even_restore%new(even_rec)
             call odd_restore%new(odd_rec)
             ! Every gridding product is deapodized, then given the PCG solve's soft sphere (msk_crop), so both
@@ -711,10 +646,8 @@ contains
                 call odd_restore%finalize_from_base(odd_rec)
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
-                if( .not. l_have_fsc )then
-                    call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
-                        &state, diagnostics)
-                endif
+                call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
+                    &state, diagnostics)
                 call even_restore%final%kill
                 call odd_restore%final%kill
                 ! Regularization
@@ -749,10 +682,8 @@ contains
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(fname_odd, del_if_exists=.true.)
                 call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
-                if( .not. l_have_fsc )then
-                    call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
-                        &state, diagnostics)
-                endif
+                call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
+                    &state, diagnostics)
                 call even_restore%final%kill
                 call odd_restore%final%kill
             endif
@@ -826,10 +757,9 @@ contains
     !> l_frozen_term: a solve3D_addon reconstruction, in which every
     !! inherited state holds frozen particles and so has a map even when its
     !! cohort population is zero
-    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, l_frozen_term, nu_align_lps )
+    subroutine filter_pcg_nonuniform_maps( params, build, l_frozen_term, nu_align_lps )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        logical,          intent(in)    :: l_trail_bootstrap(:)
         logical,          intent(in)    :: l_frozen_term
         real, optional,   intent(in)    :: nu_align_lps(:)
         integer, allocatable :: state_pops(:)
@@ -837,8 +767,6 @@ contains
         integer :: state
         real    :: align_lp
         if( .not. params%l_nonuniform ) return
-        if( size(l_trail_bootstrap) /= params%nstates ) &
-            &THROW_HARD('PCG nonuniform trailing-bootstrap state input has invalid size')
         if( .not. present(nu_align_lps) ) &
             &THROW_HARD('NU on the PCG backend requires the matching low-pass handoff from the NU filter')
         if( size(nu_align_lps) /= params%nstates ) &
@@ -870,12 +798,11 @@ contains
         type(parameters), target      :: params
         type(builder)                 :: build
         type(reconstructor)           :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
-        type(image)                   :: vol_prev_even, vol_prev_odd, vol_merged
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
         type(string)                  :: volname, eonames(2)
         type(restore_timings_t)       :: restore_timings
         type(nu_state_filter_timings) :: nu_timings
-        logical                       :: l_nonuniform_mode
+        logical                       :: l_nonuniform_mode, l_state_carried
         integer, allocatable          :: state_pops(:)
         logical, allocatable          :: l_state_dropped(:)
         real, allocatable             :: res0143s(:), res05s(:), cfars(:)
@@ -889,7 +816,7 @@ contains
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_upd_proj, t_cleanup
         real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
         real(timer_int_kind)          :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
-        real(timer_int_kind)          :: rt_trail_blend_accums, rt_trail_restored_halves
+        real(timer_int_kind)          :: rt_trail_blend_accums
         real(timer_int_kind)          :: rt_nu_envmask, rt_nonuniform_filter, rt_tot
         real(timer_int_kind)          :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
         call initialize_bench_timers()
@@ -925,7 +852,6 @@ contains
             rt_restore_eos_and_write_fsc = 0.
             rt_restore_merged_volume     = 0.
             rt_trail_blend_accums        = 0.
-            rt_trail_restored_halves     = 0.
             rt_nu_envmask                = 0.
             rt_nonuniform_filter         = 0.
             rt_init_context              = 0.
@@ -1101,7 +1027,7 @@ contains
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
                     &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
-                    &vol_prev_even, vol_prev_odd, vol_merged, &
+                    &l_state_carried, &
                     &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                     &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings, &
                     &frozen_rec=frozen_ctx)
@@ -1109,7 +1035,7 @@ contains
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
                     &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
-                    &vol_prev_even, vol_prev_odd, vol_merged, &
+                    &l_state_carried, &
                     &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                     &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings, &
                     &frozen_seed=frozen_ctx)
@@ -1117,9 +1043,16 @@ contains
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
                     &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
-                    &vol_prev_even, vol_prev_odd, vol_merged, &
+                    &l_state_carried, &
                     &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                     &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings)
+            endif
+            if( l_state_carried )then
+                ! no sample and no chain: nothing was restored, as for a dropped state
+                l_state_dropped(state) = .true.
+                call carry_forward_dropped_state()
+                call volname%kill
+                return
             endif
             params%vols(state)      = volname
             params%vols_even(state) = eonames(1)
@@ -1151,16 +1084,18 @@ contains
             rt_restore_eos_and_write_fsc = restore_timings%restore_eos_and_write_fsc
             rt_restore_merged_volume     = restore_timings%restore_merged_volume
             rt_trail_blend_accums        = restore_timings%trail_blend_accums
-            rt_trail_restored_halves     = restore_timings%trail_restored_halves
         end subroutine collect_restore_timings
 
         subroutine update_project_resolution_metadata()
             integer :: iptcl, istate
             call refresh_state_populations()
             if( params%nstates == 1 )then
-                call build%spproj_field%set_all2single('res',   res0143s(1))
-                call build%spproj_field%set_all2single('res05', res05s(1))
-                call build%spproj_field%set_all2single('cfar',  cfars(1))
+                ! a carried-forward state keeps the resolution of the map it carries
+                if( .not. l_state_dropped(1) )then
+                    call build%spproj_field%set_all2single('res',   res0143s(1))
+                    call build%spproj_field%set_all2single('res05', res05s(1))
+                    call build%spproj_field%set_all2single('cfar',  cfars(1))
+                endif
             else
                 do iptcl = 1, build%spproj_field%get_noris()
                     istate = build%spproj_field%get_state(iptcl)
@@ -1230,9 +1165,6 @@ contains
             call read_even_rec%kill
             call read_odd_rec%kill
             call sum_rec%kill
-            call vol_prev_even%kill
-            call vol_prev_odd%kill
-            call vol_merged%kill
             call vol_nu_base_even%kill
             call vol_nu_base_odd%kill
             call vol_nu_aux_even%kill
@@ -1275,7 +1207,6 @@ contains
                 rt_restore_eos_and_write_fsc
             write(fnr,'(a,1x,f0.2)') 'volassemble restore_merged_volume     :', rt_restore_merged_volume
             write(fnr,'(a,1x,f0.2)') 'volassemble trail_blend_accums        :', rt_trail_blend_accums
-            write(fnr,'(a,1x,f0.2)') 'volassemble trail_restored_halves     :', rt_trail_restored_halves
             write(fnr,'(a,1x,f0.2)') 'volassemble nu_evidence_envelope      :', rt_nu_envmask
             write(fnr,'(a,1x,f0.2)') 'volassemble nonuniform_filter         :', rt_nonuniform_filter
             write(fnr,'(a,1x,f0.2)') 'volassemble init_context              :', rt_init_context
@@ -1286,7 +1217,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'volassemble total time                :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'volassemble % accounted for           :', &
                 &((rt_reduce_partials + rt_sum_eos + rt_restore_eos_and_write_fsc +               &
-                &  rt_restore_merged_volume + rt_trail_blend_accums + rt_trail_restored_halves +  &
+                &  rt_restore_merged_volume + rt_trail_blend_accums +                             &
                 &  rt_nonuniform_filter +                                                         &
                 &  rt_init_context + rt_trail_frac + rt_gridcorr + rt_upd_proj + rt_cleanup)      &
                 & / rt_tot) * 100.

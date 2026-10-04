@@ -216,13 +216,11 @@ contains
         type(cmdline),    intent(inout) :: cline
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
-        logical          :: l_trail_bootstrap(params%nstates)
         real             :: nu_align_lps(params%nstates)
         ! the PCG master runs the same assembly-owned NU competition as the
         ! gridding volassemble and hands off the matching low-pass
-        call execute_rec3D_pcg_distributed_master(params, build, cline, &
-            &trail_bootstrap_states=l_trail_bootstrap, nu_align_lps=nu_align_lps)
-        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, cline%defined('frozen_rec'), nu_align_lps)
+        call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps)
+        call filter_pcg_nonuniform_maps(params, build, cline%defined('frozen_rec'), nu_align_lps)
     end subroutine assemble_refine3D_pcg
 
     subroutine remove_pcg_raw_files( params )
@@ -356,7 +354,7 @@ contains
     !! directory as complete artifact sets only. PCG requires its paired raw
     !! (B,D) artifacts because a halfmap cannot reconstruct those sufficient
     !! statistics. The gridding path retains its four-file-plus-manifest
-    !! validation and previous-halfmap bootstrap policy.
+    !! validation; a missing chain is seeded from the current sample.
     subroutine carry_over_trail_rec_chains( params, prev_refine_path )
         type(parameters), intent(in) :: params
         class(string),    intent(in) :: prev_refine_path

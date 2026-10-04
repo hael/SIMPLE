@@ -17,8 +17,11 @@ contains
     !! weighting contracts of simple_commanders_rec_distr::blend_trailing_accumulators:
     !!   - a full-mass chain + fractional partials scaled by u/f restores with
     !!     current-map coefficient exactly u (ufrac_trec contract)
-    !!   - a bootstrap seed normalized by 1/f carries full sampling mass, so the
-    !!     next iteration's effective update equals the realized fraction f
+    !!   - a chain start (no chain yet) seeds the chain with the current partials
+    !!     normalized by 1/f, so it carries full sampling mass and the next
+    !!     iteration's effective update equals the realized fraction f
+    !!   - the chain-start iteration itself restores the current sample alone:
+    !!     the previous map has no weight in it
     subroutine run_all_accum_blend_tests()
         write(*,'(A)') '**** running all trailing-reconstruction blend tests ****'
         call test_trail_rec_blend()
@@ -50,12 +53,16 @@ contains
             w_eff = (restored - V_PREV) / (V_CUR - V_PREV)
             call assert_real(u, w_eff, TOL, 'effective current weight equals applied fraction u')
         enddo
-        ! bootstrap: seed = (1/f) * partials must carry full mass, so the next
+        ! chain start: seed = (1/f) * partials must carry full mass, so the next
         ! iteration with no override restores with effective weight f
         f = 0.1
-        call run_bootstrap_then_update(f, restored)
+        call run_chain_start_then_update(f, restored)
         w_eff = (restored - V_PREV) / (V_CUR - V_PREV)
-        call assert_real(f, w_eff, TOL, 'post-bootstrap effective update weight equals realized fraction f')
+        call assert_real(f, w_eff, TOL, 'after a chain start the effective update weight equals realized fraction f')
+        ! the chain-start iteration ships the current sample's map
+        do ipair = 1, size(FU_PAIRS, 2)
+            if( FU_PAIRS(1,ipair) < 0.99 ) call run_chain_start_iteration(FU_PAIRS(1,ipair))
+        enddo
 
     contains
 
@@ -108,8 +115,8 @@ contains
             deallocate(rho_cur, rho_chain)
         end subroutine run_recurrence
 
-        !> bootstrap seeding then one no-override update at realized fraction f
-        subroutine run_bootstrap_then_update( f_in, restored_val )
+        !> chain-start seeding then one no-override update at realized fraction f
+        subroutine run_chain_start_then_update( f_in, restored_val )
             real, intent(in)  :: f_in
             real, intent(out) :: restored_val
             type(image)       :: cur, seed
@@ -117,7 +124,7 @@ contains
             ! iteration 1: fractional partials of the previous map, normalized to full mass
             call make_accum(seed, rho_seed, V_PREV, f_in * D_FULL)
             call seed%scale_mats(rho_seed, 1.0 / f_in)
-            call assert_real(D_FULL, rho_seed(1,1,1), TOL, 'bootstrap seed carries full sampling mass')
+            call assert_real(D_FULL, rho_seed(1,1,1), TOL, 'chain-start seed carries full sampling mass')
             ! iteration 2: current partials at realized f, chain decayed by (1-f)
             call make_accum(cur, rho_cur, V_CUR, f_in * D_FULL)
             call seed%scale_mats(rho_seed, 1.0 - f_in)
@@ -126,7 +133,34 @@ contains
             call cur%kill
             call seed%kill
             deallocate(rho_cur, rho_seed)
-        end subroutine run_bootstrap_then_update
+        end subroutine run_chain_start_then_update
+
+        !> The chain-start iteration as blend_trailing_accumulators runs it: the
+        !! current partials (map V_CUR, mass f*D) are scaled by 1/f and written as
+        !! the chain, then scaled back by f and restored. The written chain has
+        !! full mass and the current map; the restored map and its density are
+        !! those of the current partials alone, so the previous map (V_PREV) has
+        !! no weight in this iteration whatever f is.
+        subroutine run_chain_start_iteration( f_in )
+            real, intent(in)  :: f_in
+            type(image)       :: cur, ref
+            real, allocatable :: rho_cur(:,:,:), rho_ref(:,:,:)
+            call make_accum(cur, rho_cur, V_CUR, f_in * D_FULL)
+            call make_accum(ref, rho_ref, V_CUR, f_in * D_FULL)
+            call cur%scale_mats(rho_cur, 1.0 / f_in)
+            call assert_real(D_FULL, rho_cur(1,1,1), TOL, 'chain start writes a full-mass chain')
+            call assert_real(V_CUR, restored_at_origin(cur, rho_cur), TOL, 'chain start writes the current map as the chain')
+            call cur%scale_mats(rho_cur, f_in)
+            call assert_real(rho_ref(1,1,1), rho_cur(1,1,1), TOL, &
+                &'chain-start iteration restores with the current sample''s own density')
+            call assert_real(real(ref%get_cmat_at(1,1,1)), real(cur%get_cmat_at(1,1,1)), TOL, &
+                &'chain-start iteration restores the current sample''s own sums')
+            call assert_real(1.0, (restored_at_origin(cur, rho_cur) - V_PREV) / (V_CUR - V_PREV), TOL, &
+                &'chain-start iteration ships the current sample''s map (previous map weight 0)')
+            call cur%kill
+            call ref%kill
+            deallocate(rho_cur, rho_ref)
+        end subroutine run_chain_start_iteration
 
     end subroutine test_trail_rec_blend
 

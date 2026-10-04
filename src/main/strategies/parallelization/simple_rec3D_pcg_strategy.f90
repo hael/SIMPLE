@@ -13,7 +13,7 @@ use simple_sigma2_files,        only: load_sigma2_groups
 use simple_math_ft,             only: resample_sigma2
 use simple_image,               only: image
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics, &
-    &write_support_provenance, read_support_provenance
+    &write_support_provenance
 use simple_image_msk,           only: image_msk
 use simple_pcg_solvent_sidecar, only: solvent_prior_cross_half_objective, PCG_SOLVENT_LAMBDA_GRID, &
     &write_pcg_solvent_pair, prepare_solvent_prior_on_pair, solvent_prior_provenance, build_solvent_check_support
@@ -368,8 +368,7 @@ contains
     !! order, then perform all folding, finalization and PCG locally. For each
     !! even/odd pair, construction and teardown stay serial while the two fully
     !! prepared PCG solves execute concurrently with disjoint thread budgets.
-    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states, &
-            &nu_align_lps )
+    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, nu_align_lps )
         type :: distributed_half_job
             type(reconstructor_pcg) :: pcgop
             type(pcg_solver_outcome) :: result
@@ -388,18 +387,16 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        logical, optional, intent(out)  :: trail_bootstrap_states(:)
         real,    optional, intent(out)  :: nu_align_lps(:)
-        type(image), target  :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd
-        type(image), target  :: previous_even, previous_odd, previous_merged
-        type(image), pointer :: fsc_pair_even, fsc_pair_odd, fsc_pair_merged
+        type(image)  :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         type(string) :: fname_restxt, eonames(2)
         type(halfmap_diagnostics_result) :: hm_diag
         real, allocatable :: fsc(:), res0143s(:), res05s(:), cfars(:), align_lps(:)
         real, allocatable :: realized_fractions(:), update_weights(:), chain_weights(:), current_scales(:)
         integer, allocatable :: nrep(:), nsmp(:)
-        logical, allocatable :: state_written(:)
+        logical, allocatable :: state_written(:), state_carried(:)
+        character(len=:), allocatable :: errmsg
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
@@ -408,13 +405,11 @@ contains
         type(image_msk) :: state_support_msk
         type(image)     :: solvent_weight(2)
         logical :: l_state_support, l_base_support_constrained, l_nu_base_constrained
-        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
-        logical :: l_fsc_pair_support_constrained, l_prev_support_constrained, l_prev_provenance_found
+        logical :: l_has_updates, l_sample_seed, l_chain_carry, l_even_chain, l_odd_chain
         logical :: l_shipped_support_constrained, l_solvent_weight
         real    :: res0143_prior_free
         real    :: solvent_lambda_eff !< the solvent ridge in force for the current state
-        character(len=16) :: state_support_kind, base_support_kind, fsc_support_kind
-        character(len=16) :: previous_support_kind, shipped_support_kind
+        character(len=16) :: state_support_kind, base_support_kind, shipped_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
         type(frozen_accum) :: frozen_ctx
@@ -442,11 +437,6 @@ contains
         if( pcg_master_nthreads >= 2 )then
             write(logfhandle,'(A,I0,A,I0,A)') '>>> PCG DISTRIBUTED: EVEN/ODD SOLVES RUN CONCURRENTLY (', &
                 &pcg_half_nthreads, ' THREADS PER HALF; ', pcg_master_nthreads, ' MASTER THREADS AVAILABLE)'
-        endif
-        if( present(trail_bootstrap_states) )then
-            if( size(trail_bootstrap_states) /= params%nstates ) &
-                &THROW_HARD('PCG trailing-bootstrap state output has invalid size')
-            trail_bootstrap_states = .false.
         endif
         if( present(nu_align_lps) )then
             if( size(nu_align_lps) /= params%nstates ) &
@@ -484,8 +474,14 @@ contains
         allocate(res05s(params%nstates),   source=0.0)
         allocate(cfars(params%nstates),    source=0.0)
         allocate(state_written(params%nstates), source=.false.)
+        allocate(state_carried(params%nstates), source=.false.)
         do state = 1, params%nstates
-            l_bootstrap = .false.
+            ! l_sample_seed: no chain yet, so the chain is seeded from the current
+            ! sample at full mass and this iteration ships the current sample's map;
+            ! l_chain_carry: a sample below 0.001 of the state, so the chain carries
+            ! unchanged and this iteration is solved from it (gridding volassemble)
+            l_sample_seed = .false.
+            l_chain_carry = .false.
             if( params%l_trail_rec )then
                 ! a chain pair of another identity is discarded and re-seeded
                 call discard_stale_trail_chain_pair(state)
@@ -494,13 +490,37 @@ contains
                 raw_fname = refine3D_pcg_trail_accum_fname(state, 'odd')
                 l_odd_chain = file_exists(raw_fname)
                 if( l_even_chain .neqv. l_odd_chain ) THROW_HARD('PCG trailing chain pair is incomplete')
-                l_bootstrap = .not. l_even_chain
-                ! add-on mode never enters the legacy union-volume bootstrap
-                if( l_bootstrap .and. l_frozen_rec ) &
+                l_sample_seed = .not. l_even_chain
+                ! add-on mode never seeds from its cohort sample
+                if( l_sample_seed .and. l_frozen_rec ) &
                     &THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
-                if( .not. l_bootstrap ) call set_chain_blend_weights(state)
+                call count_state_sampling(state, n_active_state, n_sampled_state)
+                if( .not. l_frozen_rec .and. n_sampled_state > 0 .and. realized_fractions(state) < 0.001 )then
+                    if( .not. l_sample_seed )then
+                        l_chain_carry = .true.
+                        write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
+                            &' HAS NO SAMPLE; TRAILING CHAIN CARRIED UNCHANGED'
+                    else if( previous_state_maps_exist(state) )then
+                        ! nothing to restore: the previous maps stay as they are on disk
+                        write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
+                            &' HAS NO SAMPLE AND NO TRAILING CHAIN; CARRYING PREVIOUS VOLUME FORWARD'
+                        state_carried(state) = .true.
+                        cycle
+                    else
+                        ! as gridding: a map of the sample alone would be degenerate
+                        errmsg = 'state '//int2str(state)//': realized update fraction below 0.001, no trailing '// &
+                            &'chain and no previous volume in this directory; nothing to restore (raise update_frac)'
+                        THROW_HARD(errmsg)
+                    endif
+                else if( .not. l_sample_seed )then
+                    call set_chain_blend_weights(state)
+                endif
+                if( l_sample_seed .and. n_sampled_state > 0 )then
+                    write(logfhandle,'(A,I0,A,I0,A)') &
+                        &'>>> PCG DISTRIBUTED: SEEDED FULL-MASS TRAILING CHAIN, STATE ', state, &
+                        &', REPRESENTED POPULATION ', nrep(state), '; THIS ITERATION USES THE CURRENT SAMPLE ONLY'
+                endif
             endif
-            if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
             ! one solve support per state (build_pcg_state_support)
             call build_pcg_state_support(params, state, state_support_msk, l_state_support, state_support_kind)
             l_solvent_weight = .false.
@@ -511,8 +531,7 @@ contains
                 &solvent_even=solvent_even, solvent_odd=solvent_odd)
             nfz_even = even_job%nfrozen
             nfz_odd  = odd_job%nfrozen
-            if( params%l_trail_rec )then
-                call count_state_sampling(state, n_active_state, n_sampled_state)
+            if( params%l_trail_rec .and. .not. l_chain_carry )then
                 if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
                 if( n_active_state > 0 )then
                     if( abs(real(n_sampled_state)/real(n_active_state)-realized_fractions(state)) > 1.0e-6 )then
@@ -552,34 +571,9 @@ contains
             endif
             if( l_solvent_weight ) call write_pcg_solvent_pair(params, state, solvent_even, solvent_odd)
             t_state_phase = tic()
-            ! the FSC pair: the current base pair, or the previous shipped pair in
-            ! the trailing bootstrap (lag-one, as gridding); the NU bank is always
-            ! seeded from the current base pair
-            if( l_bootstrap )then
-                call load_previous_state_halves(state, previous_even, previous_odd, previous_merged)
-                fsc_pair_even        => previous_even
-                fsc_pair_odd         => previous_odd
-                fsc_pair_merged      => previous_merged
-                ! the previous pair's own solve support, from its provenance
-                ! sidecar (none: unconstrained)
-                previous_support_kind = 'sphere'
-                call read_support_provenance(params%vols(state), l_prev_support_constrained, &
-                    &l_prev_provenance_found, support_kind=previous_support_kind)
-                l_fsc_pair_support_constrained = l_prev_provenance_found .and. l_prev_support_constrained
-                fsc_support_kind = 'sphere'
-                if( l_fsc_pair_support_constrained ) fsc_support_kind = previous_support_kind
-                if( .not. l_prev_provenance_found ) write(logfhandle,'(A,I0,A)') &
-                    &'>>> PCG DISTRIBUTED: STATE ', state, &
-                    &' previous pair has no solve-support provenance; treated as unconstrained'
-            else
-                fsc_pair_even        => half_even
-                fsc_pair_odd         => half_odd
-                fsc_pair_merged      => merged
-                l_fsc_pair_support_constrained = l_base_support_constrained
-                fsc_support_kind = base_support_kind
-            endif
-            call calculate_pcg_state_diagnostics(params, state, 'DISTRIBUTED', fsc_pair_even, &
-                &fsc_pair_odd, fsc_pair_merged, hm_diag, l_fsc_pair_support_constrained, fsc_support_kind)
+            ! the FSC pair is the current base pair, which also seeds the NU bank
+            call calculate_pcg_state_diagnostics(params, state, 'DISTRIBUTED', half_even, &
+                &half_odd, merged, hm_diag, l_base_support_constrained, base_support_kind)
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             res05s(state)   = hm_diag%res_fsc05
@@ -606,47 +600,10 @@ contains
                 call merged%add(ml_odd)
                 call merged%mul(0.5)
             endif
-            if( l_bootstrap .and. update_weights(state) < 0.99 )then
-                ! bootstrap blend, as gridding's trail_restored_halves_if_needed: the
-                ! previous pair scaled once and added to the base and the ML pair
-                call previous_even%mul(1.0-update_weights(state))
-                call previous_odd%mul( 1.0-update_weights(state))
-                call blend_bootstrap_half(half_even, previous_even, update_weights(state))
-                call blend_bootstrap_half(half_odd,  previous_odd,  update_weights(state))
-                if( params%l_ml_reg )then
-                    call blend_bootstrap_half(ml_even, previous_even, update_weights(state))
-                    call blend_bootstrap_half(ml_odd,  previous_odd,  update_weights(state))
-                endif
-                if( l_solvent_weight )then
-                    call blend_bootstrap_half(solvent_even, previous_even, update_weights(state))
-                    call blend_bootstrap_half(solvent_odd,  previous_odd,  update_weights(state))
-                endif
-                if( params%l_lpset )then
-                    call merged%kill
-                    if( params%l_ml_reg )then
-                        call merged%copy(ml_even)
-                        call merged%add(ml_odd)
-                    else
-                        call merged%copy(half_even)
-                        call merged%add(half_odd)
-                    endif
-                    call merged%mul(0.5)
-                endif
-            endif
             t_state_phase = tic()
             l_shipped_support_constrained = merge(l_state_support, l_base_support_constrained, params%l_ml_reg)
             shipped_support_kind = base_support_kind
             if( params%l_ml_reg ) shipped_support_kind = state_support_kind
-            ! a bootstrap blend carries the previous pair's support into the
-            ! shipped pair: constrained only if both contributions were
-            if( l_bootstrap .and. update_weights(state) < 0.99 )then
-                l_shipped_support_constrained = l_shipped_support_constrained .and. l_fsc_pair_support_constrained
-                if( l_shipped_support_constrained )then
-                    if( trim(shipped_support_kind) /= trim(fsc_support_kind) ) shipped_support_kind = 'mixed'
-                else
-                    shipped_support_kind = 'sphere'
-                endif
-            endif
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
@@ -661,11 +618,6 @@ contains
                     &solvent_prior=solvent_prior_provenance(params, solvent_lambda_eff))
             else if( params%l_ml_reg )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized', shipped_support_kind)
-            else if( l_bootstrap .and. update_weights(state) < 0.99 .and. l_solvent_weight )then
-                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed', shipped_support_kind, &
-                    &solvent_prior=solvent_prior_provenance(params, solvent_lambda_eff))
-            else if( l_bootstrap .and. update_weights(state) < 0.99 )then
-                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed', shipped_support_kind)
             else if( l_solvent_weight )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind, &
                     &solvent_prior=solvent_prior_provenance(params, solvent_lambda_eff))
@@ -680,10 +632,8 @@ contains
                 eonames(1) = fname_even
                 eonames(2) = fname_odd
                 ! a constrained base pair hands its support over (the evidence null
-                ! on the dilation ring); a bootstrap blend only if both parts were
+                ! on the dilation ring)
                 l_nu_base_constrained = l_base_support_constrained
-                if( l_bootstrap .and. update_weights(state) < 0.99 ) &
-                    &l_nu_base_constrained = l_nu_base_constrained .and. l_fsc_pair_support_constrained
                 if( l_solvent_weight )then
                     ! label field from the base pair, applied to the prior'd pair
                     call nonuniform_filter_state(params, state, half_even, half_odd, &
@@ -715,11 +665,6 @@ contains
                 call fname_even_unfil%kill
                 call fname_odd_unfil%kill
             endif
-            if( l_bootstrap )then
-                call previous_even%kill
-                call previous_odd%kill
-                call previous_merged%kill
-            endif
             call merged%kill
             call solvent_weight(1)%kill
             call solvent_weight(2)%kill
@@ -730,7 +675,7 @@ contains
             if( allocated(fsc) ) deallocate(fsc)
         enddo
         if( present(nu_align_lps) ) nu_align_lps = align_lps
-        if( .not. any(state_written) ) THROW_HARD('distributed PCG produced no populated states')
+        if( .not. any(state_written .or. state_carried) ) THROW_HARD('distributed PCG produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res',   res0143s(1))
             call build%spproj_field%set_all2single('res05', res05s(1))
@@ -770,7 +715,7 @@ contains
         call raw_fname%kill
         call state_support_msk%kill_bimg
         call frozen_ctx%kill
-        deallocate(res0143s, res05s, cfars, state_written, realized_fractions, update_weights, align_lps)
+        deallocate(res0143s, res05s, cfars, state_written, state_carried, realized_fractions, update_weights, align_lps)
         deallocate(chain_weights, current_scales)
         if( allocated(nrep) ) deallocate(nrep, nsmp)
         !$ call omp_set_num_threads(params%nthr)
@@ -849,7 +794,7 @@ contains
         !> Discard a chain pair of another identity: provenance, field of view, a
         !! larger crop than the current, or an unreadable or old format; constant-
         !! FOV crop growth is not stale (zero-extension on read). Both halves go
-        !! together; the caller re-enters the bootstrap blend.
+        !! together; the caller re-seeds the chain from the current sample.
         subroutine discard_stale_trail_chain_pair( state_here )
             integer, intent(in) :: state_here
             type(string) :: even_fname, odd_fname
@@ -867,41 +812,20 @@ contains
                 if( l_even_here ) call del_file(even_fname)
                 if( l_odd_here  ) call del_file(odd_fname)
                 write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: DISCARDING STALE TRAILING CHAIN, STATE ', &
-                    &state_here, ' (GEOMETRY/IDENTITY CHANGE); RE-SEEDING VIA BOOTSTRAP'
+                    &state_here, ' (GEOMETRY/IDENTITY CHANGE); RE-SEEDING FROM THE CURRENT SAMPLE'
             endif
             call even_fname%kill
             call odd_fname%kill
         end subroutine discard_stale_trail_chain_pair
 
-        subroutine load_previous_state_halves( state_here, even, odd, avg )
-            integer,     intent(in)    :: state_here
-            type(image), intent(inout) :: even, odd, avg
-            type(string) :: previous_volume, previous_even_fname, previous_odd_fname
-            previous_volume     = params%vols(state_here)
-            previous_even_fname = add2fbody(previous_volume, MRC_EXT, '_even')
-            previous_odd_fname  = add2fbody(previous_volume, MRC_EXT, '_odd')
-            if( .not. file_exists(previous_even_fname) ) THROW_HARD('PCG trailing bootstrap requires the previous even halfmap')
-            if( .not. file_exists(previous_odd_fname) ) THROW_HARD('PCG trailing bootstrap requires the previous odd halfmap')
-            call even%read_and_crop(previous_even_fname, params%smpd, params%box_crop, params%smpd_crop)
-            call odd%read_and_crop(previous_odd_fname, params%smpd, params%box_crop, params%smpd_crop)
-            call avg%copy(even)
-            call avg%add(odd)
-            call avg%mul(0.5)
-            call previous_volume%kill
-            call previous_even_fname%kill
-            call previous_odd_fname%kill
-        end subroutine load_previous_state_halves
-
-        !> current := weight_current * current + previous, where previous has
-        !! already been scaled by (1 - weight_current) exactly once by the
-        !! caller so the same previous pair can anchor several current pairs
-        subroutine blend_bootstrap_half( current, previous, weight_current )
-            type(image), intent(inout) :: current
-            type(image), intent(in)    :: previous
-            real,        intent(in)    :: weight_current
-            call current%mul(weight_current)
-            call current%add(previous)
-        end subroutine blend_bootstrap_half
+        !> the shipped volume and half maps a carried-forward state keeps on disk
+        logical function previous_state_maps_exist( state_here ) result( l_exists )
+            integer, intent(in) :: state_here
+            l_exists = file_exists(refine3D_state_vol_fname(state_here)) .and. &
+                &file_exists(refine3D_state_halfvol_fname(state_here, 'even')) .and. &
+                &file_exists(refine3D_state_halfvol_fname(state_here, 'odd')) .and. &
+                &file_exists(refine3D_fsc_fname(state_here))
+        end function previous_state_maps_exist
 
         integer function count_full_state_half( state_here, eo_here ) result(n)
             integer, intent(in) :: state_here, eo_here
@@ -1076,12 +1000,16 @@ contains
             call set_pcg_solve_support(job%pcgop, params, state_support_msk, l_state_support)
             call job%pcgop%begin_reduction
             t_phase = tic()
-            if( job%l_ml_solve .and. params%l_trail_rec )then
+            if( params%l_trail_rec .and. (job%l_ml_solve .or. l_chain_carry) )then
+                ! the regularized pair replays the chain the base pair wrote; a
+                ! carried chain is the whole of this iteration's data
                 fname = refine3D_pcg_trail_accum_fname(state_here, half)
                 call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
                     &chain_provenance, 1.0, job%nptcls)
                 call fname%kill
-                if( l_bootstrap .or. 1.0-update_weights(state_here) <= 0.01 )then
+                ! a full-mass chain written this iteration (seed or u ~ 1) is scaled
+                ! back by f to the current sample the base pair was solved from
+                if( .not. l_chain_carry .and. (l_sample_seed .or. 1.0-update_weights(state_here) <= 0.01) )then
                     call job%pcgop%scale_raw_accum(realized_fractions(state_here))
                 endif
             else
@@ -1122,7 +1050,7 @@ contains
                     endif
                     call fname%kill
                 endif
-            else if( .not. job%l_ml_solve )then
+            else if( .not. job%l_ml_solve .and. .not. l_chain_carry )then
                 n_full_half = count_full_state_half(state_here, eo_here)
                 if( n_full_half < job%nptcls ) &
                     &THROW_HARD('PCG current half population exceeds its full population')

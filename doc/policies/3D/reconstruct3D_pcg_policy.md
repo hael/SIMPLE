@@ -58,7 +58,7 @@ subset and `add_raw_accum_weighted` embeds it by zero-extension — the PCG
 analogue of the gridding trailing chain's autoscale ramp. The chain
 continuation identity (`pcg_chain_provenance`) therefore excludes the crop
 fields; a field-of-view change, a shrinking box, or any identity change
-discards the chain pair and re-seeds through the trailing bootstrap. The one
+discards the chain pair and re-seeds it from the current sample. The one
 recorded approximation is the old lattice's wrap rim: KB windows that wrapped
 around the old period leave aliased mass in the outermost old shells, at or
 beyond the producing stage's matching band and decaying as `(1-u)^k` — the
@@ -222,19 +222,20 @@ Neither precision nor lambda is ever accumulated into raw `B` or `D`.
 
 Every shipped state volume carries a solve-support provenance sidecar
 (`<vol>_pcg_support.txt`, `solve_support=density|sphere` and
-`solve_kind=base|regularized|mixed`). The trailing bootstrap follows the same
-recipe as the gridding bootstrap, applied to the PCG solver's own maps: the
-FSC prior comes from the lag-one previous shipped pair, and the NU candidate
-bank is seeded from the CURRENT base pair, volume blended with the previous
-pair at the applied update weight together with the regularized pair (the
-gridding `trail_restored_halves_if_needed` blend). The lag-one pair is never
-an NU input (fix 2026-09-06). Same recipe and the same kinds of inputs on both
-backends; the maps differ because the estimators differ. The bootstrap reads the support field for the lag-one FSC pair so the envelope and
-phase-randomization FSC preprocessing is skipped exactly when that pair was
-density-constrained in the estimator; a pair without a sidecar is treated as unconstrained, and a
-bootstrap blend is constrained only if both contributions were. The kind
-field is provenance only (its former consumer, the base warm-start selector,
-went with the warm starts). The NU evidence built from a density-constrained
+`solve_kind=base|regularized`). Trailing never blends solved (finished) half
+maps. When a blend is due and no chain exists, the master seeds the chain from
+the current sample at full mass (raw sums scaled by `1/f`, logged as "SEEDED
+FULL-MASS TRAILING CHAIN ...; THIS ITERATION USES THE CURRENT SAMPLE ONLY"),
+scales the sums back by `f` and solves the current sample alone; as on every
+iteration, the FSC pair is the current base pair, which also seeds the NU
+candidate bank, and the previous shipped pair is not read. A state whose
+realized fraction is below 0.001 (with at least one sampled particle) is
+solved from its chain, carried unchanged, or, without a chain, keeps its
+previous maps when the directory holds them (volume, half maps, FSC); with
+neither, the run stops with an error. A state with no sampled particle is
+skipped. These are the
+gridding volassemble's rules. The support kind field is provenance only (its
+former consumer, the base warm-start selector, went with the warm starts). The NU evidence built from a density-constrained
 pair designates its null on the density envelope's dilation ring
 (`doc/policies/3D/automasking_policy.md`).
 

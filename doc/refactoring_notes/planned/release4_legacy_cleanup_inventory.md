@@ -23,10 +23,6 @@ Statuses:
   `src/main/stream/`, `production/simple_stream.f90`, `src/utils/gui/` and
   `nice/`.
 - **GPU offloading is work in progress and stays as it is.**
-- **On the trailing-reconstruction blend (C6), final:** "Trailing needs to be done consistently across using the
-  newly implemented approach. No trailing should ever happen on finished
-  halfmaps. If the solution to correct weighting and consistent application is
-  one reconstruction, I am ok with it."
 
 ## 1. Before committing this change set
 
@@ -39,9 +35,9 @@ Statuses:
 
 ## 2. Planned
 
-| ID | What | Where | Status |
-| --- | --- | --- | --- |
-| C6 | **Remove the finished-halfmap trailing blend on both backends.** When a blend is due but no accumulator chain exists, the iteration seeds the chain from the current sample at full mass (already done today) and ships the current sample's map; the previous-halfmap blend, the FSC taken from the previous half maps and the requirement for `vol<state>` on the command line go. No extra reconstruction. The design is in [`trailing_reconstruction_without_halfmap_blend.md`](trailing_reconstruction_without_halfmap_blend.md); implementation deferred. | `simple_commanders_rec_distr.f90` (`trail_restored_halves_if_needed`, `read_previous_halfmaps`, the start-without-chain branch of `restore_eos_and_write_fsc`), `simple_rec3D_pcg_strategy.f90` (`l_bootstrap` paths, `trail_bootstrap_states`), `filter_pcg_nonuniform_maps` and its callers, `simple_accum_blend_tester.f90`, trailing skill and policies | open |
+None. The last planned item, C6 (remove the finished-halfmap trailing blend),
+was implemented and validated on 2026-10-04; see
+[`../completed/trailing_reconstruction_without_halfmap_blend_report.md`](../completed/trailing_reconstruction_without_halfmap_blend_report.md).
 
 ## 3. Deferred: GUI and stream (Joe's area)
 

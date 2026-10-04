@@ -412,15 +412,24 @@ and makes `u` the restored current-map coefficient, preserving the historical
   density; the FSC is estimated post-blend and describes the on-disk artifact
 
 The chain is written before restoration (regularization mutates rho in place).
-When the chain does not exist yet, volassemble bootstraps: it uses the legacy
-previous-halfmap volume-domain blend for that iteration's outputs and seeds the
-chain with the current partials scaled by `1/f`, so the stored chain carries
-full-dataset mass and the next iteration's effective update weight is the
-requested fraction (an unnormalized fractional seed would make a 10 percent
-request act like a ~53 percent update). Stage-boundary full reconstructions
+Every blend happens in the accumulator domain; restored (finished) half maps
+are never blended. When a blend is due but the chain does not exist yet, the
+iteration does not blend: volassemble seeds the chain with the current partials
+scaled by `1/f`, so the stored chain carries full-dataset mass and the next
+iteration's effective update weight is the requested fraction (an unnormalized
+fractional seed would make a 10 percent request act like a ~53 percent update),
+and restores and ships the current sample alone (partials scaled back by `f`);
+the FSC describes those halves. The previous volumes are neither read nor
+needed and no extra reconstruction runs; the chain fills over about `1/f`
+iterations. A state whose realized fraction is below 0.001 carries a valid
+chain unchanged and is restored from it, or, without a chain, keeps its
+previous volume like a dropped state (when the directory holds that volume, its
+half maps and FSC; with neither a chain nor such a volume the run stops with an
+error, because a map of the sample alone would be degenerate).
+Stage-boundary full reconstructions
 seed the chain at full-dataset weight through the internal `trail_seed`
 handshake, but only when the consuming stage actually trails. Every seed records
-the population it represents: `N` for the bootstrap seed (`1/f` scaling), and the
+the population it represents: `N` for the chain-start seed (`1/f` scaling), and the
 rows `sample4rec` reconstructs for a stage-boundary seed. The distributed PCG
 chain applies the same weights; its represented population is the particle
 count in the raw header of each half (chain identity `pcgtrail-v3`).

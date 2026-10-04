@@ -411,16 +411,12 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        logical, allocatable :: l_trail_bootstrap(:)
-        real,    allocatable :: nu_align_lps(:)
+        real, allocatable :: nu_align_lps(:)
         if( params%l_nonuniform )then
-            allocate(l_trail_bootstrap(params%nstates), source=.false.)
-            allocate(nu_align_lps(params%nstates),      source=0.0)
-            call execute_rec3D_pcg_distributed_master(params, build, cline, &
-                &trail_bootstrap_states=l_trail_bootstrap, nu_align_lps=nu_align_lps)
-            call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, cline%defined('frozen_rec'), &
-                &nu_align_lps)
-            deallocate(l_trail_bootstrap, nu_align_lps)
+            allocate(nu_align_lps(params%nstates), source=0.0)
+            call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps)
+            call filter_pcg_nonuniform_maps(params, build, cline%defined('frozen_rec'), nu_align_lps)
+            deallocate(nu_align_lps)
         else
             call execute_rec3D_pcg_distributed_master(params, build, cline)
         endif

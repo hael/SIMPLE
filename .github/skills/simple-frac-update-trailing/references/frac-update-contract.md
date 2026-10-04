@@ -79,15 +79,24 @@ trailed_rho_eo  = (u/f) * current_partial_rho_eo  + (1 - u) * chain_rho_eo
   density. The FSC is estimated post-blend from the restored trailed halves and
   describes the artifact written to disk; the merged volume and nonuniform-filter
   inputs are derived from the same blended statistics.
-- Bootstrap (chain absent): previous even/odd halfmaps from the command line are
-  mandatory. That iteration keeps the legacy behavior — FSC prior from the
-  previous halfmaps and a volume-domain blend of the restored halves — while the
-  chain is seeded with the current partials scaled by `1/f`, so the stored chain
-  carries full-dataset mass. Without that normalization a chain seeded at
-  fractional mass `f` would give the next iteration an effective update weight
-  of `f / (f + (1-f)*f)` — for `f=0.1`, a requested 10 percent update would act
-  like ~53 percent. From the next iteration the chain path is authoritative and
-  the halfmap inputs are ignored.
+- Chain start (chain absent, blend due): no blend. The chain is seeded with the
+  current partials scaled by `1/f`, so the stored chain carries full-dataset
+  mass, and the current partials are scaled back by `f` and restored, so this
+  iteration's halves, FSC, merged volume and nonuniform-filter inputs are those
+  of the current sample alone. Finished half maps are never blended and the
+  previous volumes are not read (volassemble needs no `vol<state>` for
+  trailing). Without the `1/f` normalization a chain seeded at fractional mass
+  `f` would give the next iteration an effective update weight of
+  `f / (f + (1-f)*f)` — for `f=0.1`, a requested 10 percent update would act
+  like ~53 percent. From the next iteration every blend uses the chain.
+- No sample (realized fraction below 0.001 with at least one sampled particle):
+  a valid chain carries unchanged and the iteration is restored from it;
+  without a chain the state is carried forward (previous volume kept, nothing
+  written) when the directory holds its previous volume, half maps and FSC
+  file; with neither, the run stops with an error (a map of the sample alone
+  would be degenerate). A state with no sampled particle at all writes no partials and is
+  dropped before any trailing code runs. The PCG master applies the same
+  rules.
 - Full-weight seeding: a stage-boundary full reconstruction writes the chain at
   full-dataset weight when the internal `trail_seed=yes` cline handshake is set
   (`simple_solve3D_utils.f90::calc_rec`, gated on the consuming stage's
@@ -104,7 +113,8 @@ trailed_rho_eo  = (u/f) * current_partial_rho_eo  + (1 - u) * chain_rho_eo
 - Continued runs from another directory carry chains over as complete sets
   only, destination cleaned first and manifest copied last
   (`simple_refine3D_strategy.f90::carry_over_trail_rec_chains`).
-- The recurrence, override weighting, and bootstrap-normalization contracts are
+- The recurrence, override weighting, chain-start normalization and the
+  chain-start iteration's current-sample-only map are
   covered by the deterministic `trailing-reconstruction blend` sub-suite of the
   fast gate (`simple_test_exec test=unit_image suite=trailing_reconstruction_blend`).
 

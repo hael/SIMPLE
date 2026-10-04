@@ -449,15 +449,17 @@ An independent review of the change set found seven issues. All are resolved.
   - a build on the Oracle Linux test machine without librt;
   - when v4.0.0 is tagged, the version strings in `README.md` and
     `doc/installation.md`, which still name v3.0.0.
-- **Trailing reconstruction.** When `trail_rec=yes` starts without an
-  accumulator chain, both backends still blend finished half maps (restored,
-  regularised volumes) with the previous ones for one iteration. The
-  maintainer ruled that this must go: "No trailing should ever happen on
-  finished halfmaps." Instead, that iteration will seed the chain from the
-  current sample at full mass (as the code already does) and ship the
-  current sample's map, with no extra reconstruction. The design is in
-  `doc/refactoring_notes/planned/trailing_reconstruction_without_halfmap_blend.md`;
-  its implementation is deferred.
+- **Trailing reconstruction: done (2026-10-04).** When `trail_rec=yes`
+  starts without an accumulator chain, both backends used to blend finished
+  half maps (restored, regularised volumes) with the previous ones for one
+  iteration. The maintainer ruled that this must go: "No trailing should ever
+  happen on finished halfmaps." That iteration now seeds the chain from the
+  current sample at full mass and ships the current sample's map, with no
+  extra reconstruction and without reading the previous maps. Validated on
+  beta-galactosidase against a baseline of the old code: final resolutions
+  are unchanged within run-to-run spread. Design, record and report:
+  `doc/refactoring_notes/completed/trailing_reconstruction_without_halfmap_blend.md`
+  and `trailing_reconstruction_without_halfmap_blend_report.md` beside it.
 - **Streaming and NICE clean-ups.** Dead routines, stale constants, unused
   NICE fields, a squash of the NICE migrations, old statistics channels,
   compatibility parameters and module renames. These wait for the developer
