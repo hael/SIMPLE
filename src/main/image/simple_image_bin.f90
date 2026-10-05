@@ -556,10 +556,14 @@ contains
         call self%update_img_rmat
     end subroutine cc2bin
 
-    subroutine vol_shape_descr( self, vol, lp, msk )
+    !> Shape descriptors of @p vol, low-passed to @p lp (A) and binarised (Otsu twice): the
+    !! descriptors within the mask radius @p msk (voxels) are logged, and @p nccs is the number
+    !! of connected components of the binarised volume.
+    subroutine vol_shape_descr( self, vol, lp, msk, nccs )
         class(image_bin), intent(inout) :: self
         class(image), intent(in)        :: vol
         real, intent(in)                :: lp, msk
+        integer, intent(out)            :: nccs
         integer, allocatable :: cc_sz(:)
         real, allocatable    :: vals(:)
         real, pointer        :: rmat(:,:,:)
@@ -588,12 +592,13 @@ contains
         call self%calc_3D_shape_descriptors(msk, ecc, aniso, asph, acyl, rg_sq)
         call self%find_ccs(vol_ccs, update_imat=.true.)
         cc_sz = vol_ccs%size_ccs()
+        nccs  = size(cc_sz)
         write(logfhandle,'(A,F7.2)') '>>> Eccentricity          : ', ecc
         write(logfhandle,'(A,F7.2)') '>>> Anisotropy            : ', aniso
         write(logfhandle,'(A,F7.2)') '>>> Asphericity           : ', asph
         write(logfhandle,'(A,F7.2)') '>>> Acylindricity         : ', acyl
         write(logfhandle,'(A,F7.2)') '>>> Radius of gyration^2  : ', rg_sq
-        write(logfhandle,'(A,I7)')   '>>> Connected component(s): ', size(cc_sz)
+        write(logfhandle,'(A,I7)')   '>>> Connected component(s): ', nccs
         call vol_ccs%write_bimg(string('vol_cc.mrc'))
         call vol_ccs%kill_bimg
         if( allocated(cc_sz) ) deallocate(cc_sz)

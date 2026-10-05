@@ -5,14 +5,20 @@ use simple_cmdline,       only: cmdline
 use simple_estimate_ssnr, only: mskdiam2lplimits
 implicit none
 
+! the automask2D defaults, also for callers that set up their masking without a command line
+integer, parameter :: AUTOMASK2D_NGROW  = 3
+real,    parameter :: AUTOMASK2D_WINSZ  = 5.
+real,    parameter :: AUTOMASK2D_AMSKLP = 20.
+integer, parameter :: AUTOMASK2D_EDGE   = 6
+
 contains
 
     subroutine set_automask2D_defaults( cline )
         class(cmdline), intent(inout) :: cline
-        if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',    3)
-        if( .not. cline%defined('winsz')  ) call cline%set('winsz',   5.)
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',     6)
+        if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',  AUTOMASK2D_NGROW)
+        if( .not. cline%defined('winsz')  ) call cline%set('winsz',  AUTOMASK2D_WINSZ)
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', AUTOMASK2D_AMSKLP)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',   AUTOMASK2D_EDGE)
     end subroutine set_automask2D_defaults
 
     subroutine set_refine2D_defaults( cline )

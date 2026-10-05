@@ -397,6 +397,21 @@ named steps. The differences:
     than 1.3 Å the radius was inflated and usually capped at the box, so the signal
     statistics covered the whole box; finer, it cut into the particle. Borderline classes,
     and so the picking references, can change; worth comparing on one dataset.
+14. **The mask diameter of cycle 2 and 3D is estimated** (3 October) from cycle 1's selected
+    class averages, by `make_pickrefs`' measure and rule, and capped at the box's default
+    (`estimate_mskdiam`; `reference_generation_policy.md` section 3.1). Before, every step
+    used the box's default: cycle 1 and cycle 2's `solve2D` through `mskdiam=999`, which fell
+    back to it with a warning, the sieve's chunks through `mskdiam=0`, which did the same,
+    and 3D and the reprojection through the picker's diameter, which is that default. Cycle 1
+    and the sieve now pass the default explicitly. Cycle 2's starting low-pass limit, which
+    `solve2D` derives from the mask diameter (`min(max(mskdiam/12, 15), 20)` Å), can drop, to
+    no less than 15 Å.
+15. **The state of the references is chosen on shape first** (3 October; `choose_state`): the
+    fewest connected components of the binarised volume, then the most distinct projection
+    directions of the state's classes, then the largest population. Before, the directions
+    alone decided (the shape descriptors were only logged), and the choice could fall on a
+    state without a volume. The descriptors' mask radius is now in voxels; it was the mask
+    diameter in Å, so they covered the whole box.
 
 ## Behaviour compared with the old `simple_stream_p04_refpick_extract_new`
 

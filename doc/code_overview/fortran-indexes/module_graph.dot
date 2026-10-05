@@ -4587,6 +4587,7 @@ digraph module_graph {
   "simple_stream_stage_initial_analysis" -> "simple_cmdline";
   "simple_stream_stage_initial_analysis" -> "simple_commanders_reproject";
   "simple_stream_stage_initial_analysis" -> "simple_core_module_api";
+  "simple_stream_stage_initial_analysis" -> "simple_default_clines";
   "simple_stream_stage_initial_analysis" -> "simple_defs_environment";
   "simple_stream_stage_initial_analysis" -> "simple_gui_metadata_cavg2d";
   "simple_stream_stage_initial_analysis" -> "simple_gui_metadata_micrograph";
@@ -4599,6 +4600,7 @@ digraph module_graph {
   "simple_stream_stage_initial_analysis" -> "simple_gui_utils";
   "simple_stream_stage_initial_analysis" -> "simple_image";
   "simple_stream_stage_initial_analysis" -> "simple_image_bin";
+  "simple_stream_stage_initial_analysis" -> "simple_image_msk";
   "simple_stream_stage_initial_analysis" -> "simple_imgarr_utils";
   "simple_stream_stage_initial_analysis" -> "simple_imghead";
   "simple_stream_stage_initial_analysis" -> "simple_mic_import";
@@ -4618,6 +4620,7 @@ digraph module_graph {
   "simple_stream_stage_initial_analysis" -> "simple_stream_utils";
   "simple_stream_stage_initial_analysis" -> "simple_stream_watcher";
   "simple_stream_stage_initial_analysis_tester" -> "simple_cmdline";
+  "simple_stream_stage_initial_analysis_tester" -> "simple_defs";
   "simple_stream_stage_initial_analysis_tester" -> "simple_defs_fname";
   "simple_stream_stage_initial_analysis_tester" -> "simple_defs_stream";
   "simple_stream_stage_initial_analysis_tester" -> "simple_fileio";

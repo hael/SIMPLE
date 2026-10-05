@@ -615,11 +615,18 @@ is the first publication. See M3 and the policy. Proposed:
   manual routes, their precedence, the output contract, and every parameter with its default.
 - Make `nstates`, `nstages`, the low-pass limits and `nspace` inputs of `gen_pickrefs` (advanced
   visibility) instead of literals.
-- Run p03's 2D with the mask diameter the picker estimated, not 999 A.
+- Run p03's 2D with the mask diameter the picker estimated, not 999 A. *Done in the working tree,
+  3 October, differently. The picker's diameter is the box's default, the value 999 fell back to.
+  Cycle 1 and the sieve now pass that default explicitly. Cycle 2 and 3D use a diameter estimated
+  from cycle 1's selected class averages by `make_pickrefs`' rule; see section 3.1 of
+  `reference_generation_policy.md`.*
 - Have `abinitio3D_cavgs` with restarts publish its final result at a fixed path, so callers stop
   scanning for the highest numbered directory.
 - Log coverage and population for every state, and choose the state on view coverage together
-  with the state agreement the cavgs route computes.
+  with the state agreement the cavgs route computes. *Partly done in the working tree, 3 October.
+  Every state's coverage, population and connected components are logged, and the state is
+  chosen on the components first, then coverage, then population (`choose_state`). The state
+  agreement is not used.*
 
 ### R5. Rejection and quality (M5)
 

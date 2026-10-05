@@ -10,12 +10,17 @@
 !   cycle 1 ("init"), on the first NMICS_PLAN(1) accepted micrographs:
 !     set up -> wait for the micrographs and pick them (which decides the
 !     diameter bins and the box) -> extract -> solve2D -> select classes
+!     -> estimate the mask diameter from the selected classes
 !   meanwhile, once the bins are known ("all"): every imported project up to
 !   NMICS_PLAN(2) micrographs is picked and extracted with the same bins and
 !   box, and its particles are fed to a particle sieve
 !   cycle 2 ("all"), once the sieve has every particle:
 !     sieve finished -> solve2D -> select classes -> balance classes
 !     -> solve3D_cavgs -> reprojections of the best state as references
+!
+!   Cycle 1 and the sieve mask with the box's default diameter; cycle 2 and
+!   3D with the one estimated from cycle 1's selected class averages
+!   (estimate_mskdiam), generous and never larger than the default.
 !
 !   The picking references are published once per run, as OPENING2D_PICKREFS
 !   in the stage directory, the file the master points reference picking at:
@@ -63,15 +68,17 @@
 ! TESTS:
 !   simple_stream_stage_initial_analysis_tester (unit_stream, "initial
 !   analysis"). Components and steps are public for it; the waits (settle_s,
-!   wait_s) are components it sets, and balance_classes and
-!   find_final_solve3D_cavgs_dir, which use no stage state, are bound with
-!   nopass so it can call them.
+!   wait_s) are components it sets, and balance_classes,
+!   find_final_solve3D_cavgs_dir, estimate_mskdiam and choose_state, which
+!   use no stage state, are bound with nopass so it can call them.
 !
 ! METHOD:
 !   Unchanged from the stage this replaces. balance_classes replicates class
 !   averages to TARGET_NCLS rows, and the references are reprojections of a
 !   3-state ab initio volume; see stream_area_review_2026-09-30.md, B1/B2 and
-!   E2/E3, for the proposed changes.
+!   E2/E3, for the proposed changes. The state reprojected is the one whose
+!   binarised volume has the fewest connected components, then the widest view
+!   coverage of its classes, then the largest population (choose_state).
 !==============================================================================
 module simple_stream_stage_initial_analysis
 use simple_core_module_api
@@ -81,6 +88,8 @@ use simple_parameters,                    only: parameters
 use simple_sp_project,                    only: sp_project
 use simple_image,                         only: image
 use simple_image_bin,                     only: image_bin
+use simple_image_msk,                     only: automask2D, automask2D_mskdiam
+use simple_default_clines,                only: AUTOMASK2D_NGROW, AUTOMASK2D_WINSZ, AUTOMASK2D_AMSKLP, AUTOMASK2D_EDGE
 use simple_imghead,                       only: get_mrc_minmax
 use simple_procimgstk,                    only: scale_imgfile
 use simple_gui_utils,                     only: mrc2jpeg_tiled
@@ -169,7 +178,8 @@ type :: stream_stage_initial_analysis
     integer :: n_extract_started = 0
     integer :: n_extract_done    = 0
     integer :: box               = 0       ! picking and extraction box (px)
-    real    :: mskdiam           = 0.      ! mask diameter (A) decided with the box
+    real    :: mskdiam_box       = 0.      ! the box's default mask diameter (A): cycle 1 and the sieve
+    real    :: mskdiam           = 0.      ! mask diameter (A) of cycle 2 and 3D, from cycle 1's selection
     integer :: vis_cycle         = 0
     logical :: l_attached        = .false.
     logical :: l_waiting_logged  = .false.
@@ -213,6 +223,8 @@ contains
     ! steps that use no stage state, bound so the tester can reach them
     procedure, nopass :: balance_classes
     procedure, nopass :: find_final_solve3D_cavgs_dir
+    procedure, nopass :: estimate_mskdiam
+    procedure, nopass :: choose_state
 end type stream_stage_initial_analysis
 
 contains
@@ -364,6 +376,7 @@ contains
         self%n_extract_started = 0
         self%n_extract_done    = 0
         self%box               = 0
+        self%mskdiam_box       = 0.
         self%mskdiam           = 0.
         self%vis_cycle         = 0
         self%l_attached        = .false.
@@ -525,9 +538,10 @@ contains
     subroutine start_sieve( self )
         class(stream_stage_initial_analysis), intent(inout) :: self
         type(parameters) :: params_sieve
-        ! the sieve takes a parameters object; this stage's settings for it
+        ! the sieve takes a parameters object; this stage's settings for it. It starts before cycle 1
+        ! has selected classes, so its chunks use the box's default mask diameter.
         params_sieve             = self%params
-        params_sieve%mskdiam     = 0.
+        params_sieve%mskdiam     = self%mskdiam_box
         params_sieve%lpstart     = 0.
         params_sieve%single_pass = 'yes'
         params_sieve%nmics       = 100
@@ -576,8 +590,10 @@ contains
                 call self%picker%new()
                 call self%picker%pick(self%spproj, self%params%pcontrast, self%nmics_target)
                 if( self%picker%get_box() > 0 )then
-                    self%box     = self%picker%get_box()
-                    self%mskdiam = self%picker%get_mskdiam()
+                    self%box         = self%picker%get_box()
+                    ! the picker's mask diameter is the box's default, (box - COSMSKHALFWIDTH) * smpd
+                    self%mskdiam_box = self%picker%get_mskdiam()
+                    self%mskdiam     = self%mskdiam_box ! until cycle 1's selection gives the estimate
                 endif
                 call send_recent_micrographs(self%pipe, self%meta_micrograph, self%spproj%os_mic, NTHUMB_MAX)
                 call simple_chdir(self%cwd)
@@ -606,7 +622,7 @@ contains
                 case( ASYNC_JOB_IDLE )
                     call self%send_opening2D_status(string('classifying particles'), self%box, self%vis_cycle)
                     call start_solve2D(self%qenv, self%job, projfile, string('solve2D/init'),&
-                        &self%spproj%os_ptcl2D%count_state_gt_zero(), self%params%nptcls_per_cls)
+                        &self%spproj%os_ptcl2D%count_state_gt_zero(), self%params%nptcls_per_cls, self%mskdiam_box)
                 case( ASYNC_JOB_DONE )
                     call self%spproj%kill()
                     call self%spproj%read(projfile)
@@ -648,7 +664,7 @@ contains
                 case( ASYNC_JOB_IDLE )
                     call self%send_opening2D_status(string('classifying particles'), self%box, self%vis_cycle)
                     call start_solve2D(self%qenv, self%job, projfile, string('solve2D/all'),&
-                        &self%spproj_all%os_ptcl2D%count_state_gt_zero(), self%params%nptcls_per_cls)
+                        &self%spproj_all%os_ptcl2D%count_state_gt_zero(), self%params%nptcls_per_cls, self%mskdiam)
                 case( ASYNC_JOB_DONE )
                     call self%spproj_all%kill()
                     call self%spproj_all%read(projfile)
@@ -700,6 +716,8 @@ contains
     end subroutine rebuild_init_mics
 
     ! Class-average selection on the project of cycle @p icycle, and the selected classes to the GUI.
+    ! Cycle 1 selects with the box's default mask diameter, and its selected classes give the mask
+    ! diameter of cycle 2 and 3D; cycle 2 selects with that.
     subroutine select_and_send( self, icycle, outdir )
         class(stream_stage_initial_analysis), intent(inout) :: self
         integer,                              intent(in)    :: icycle
@@ -710,7 +728,8 @@ contains
         projfile = self%cycle_projfile(icycle)
         jpg      = self%cwd//'/'//outdir//'/quality_cavgs'//JPG_EXT
         if( icycle == 1 )then
-            call select_project_cavgs(self%spproj, projfile, outdir, self%mskdiam, n_selected, inds, stk, xtiles, ytiles)
+            call select_project_cavgs(self%spproj, projfile, outdir, self%mskdiam_box, n_selected, inds, stk, xtiles, ytiles,&
+                &mskdiam_est=self%mskdiam)
             if( .not. allocated(inds) ) return
             if( size(inds) > 0 ) call send_cavgs(self%pipe, self%meta_cavg2D, jpg, inds, stk, xtiles, ytiles,&
                 &os_cls2D=self%spproj%os_cls2D)
@@ -722,23 +741,23 @@ contains
         endif
     end subroutine select_and_send
 
-    ! Picks the solve3D_cavgs state with the widest view coverage (else the most populated
-    ! one with a volume), reprojects it, and publishes the reprojections, rescaled to the
+    ! Picks the solve3D_cavgs state (choose_state: the fewest connected components, then the
+    ! widest view coverage), reprojects it, and publishes the reprojections, rescaled to the
     ! particle sampling, as the picking references; the volume and the references go to the GUI.
     subroutine finish_solve3D( self, projfile, outdir )
         class(stream_stage_initial_analysis), intent(inout) :: self
         class(string),                        intent(in)    :: projfile, outdir
-        integer, allocatable      :: states(:), projs(:), nunique_proj(:), uniqbuf(:)
+        integer, allocatable      :: states(:), projs(:), state_projs(:)
         type(commander_reproject) :: xreproject
         type(cmdline)             :: cline_reproject
         type(string)              :: cwd, volpath, final_dir, reprojdir, volpath_abs, empty_path
         type(image)               :: vol_shape
         type(image_bin)           :: mskvol_shape
         type(gui_metadata_vol3D)  :: meta_vol3D
-        integer :: ldim(3), ldim_new(3), nvols, nuniq, i_cls3d, proj_here, xtiles, ytiles
-        integer :: ivol, bestvol, pop, bestpop
+        integer :: ldim(3), ldim_new(3), nuniq, xtiles, ytiles, ivol, bestvol, i
+        integer :: nccs(NSTATES3D), nproj(NSTATES3D), pops(NSTATES3D)
         real    :: vol_smpd, minval3D, maxval3D, smpd_part
-        logical :: l_published
+        logical :: l_published, l_cand(NSTATES3D)
         call simple_getcwd(cwd)
         call simple_chdir(outdir)
         call find_final_solve3D_cavgs_dir(final_dir)
@@ -753,66 +772,50 @@ contains
             call self%spproj_all%read(projfile)
             reprojdir = cwd//'/'//outdir
         endif
-        ! shape descriptors of every populated state volume
+        ! the candidates, the populated states with a volume, and the connected components of each
+        l_cand = .false.
+        nccs   = 0
         do ivol = 1, NSTATES3D
-            if( self%spproj_all%os_cls3D%get_pop(ivol, 'state') == 0 ) cycle
+            pops(ivol) = self%spproj_all%os_cls3D%get_pop(ivol, 'state')
+            if( pops(ivol) == 0 ) cycle
             volpath = string('recvol_state'//int2str_pad(ivol,2)//MRC_EXT)
             if( .not. file_exists(volpath) ) cycle
+            l_cand(ivol) = .true.
             call find_ldim_nptcls(volpath, ldim, nuniq)
             call vol_shape%new(ldim, find_img_smpd(volpath))
             call vol_shape%read(volpath)
             write(logfhandle,'(A,I0)') '>>> VOLUME SHAPE DESCRIPTORS FOR STATE=', ivol
-            call mskvol_shape%vol_shape_descr(vol_shape, 20.0, real(nint(self%mskdiam)))
+            ! the mask radius in the volume's voxels
+            call mskvol_shape%vol_shape_descr(vol_shape, 20.0, self%mskdiam / (2. * vol_shape%get_smpd()), nccs(ivol))
             call mskvol_shape%kill_bimg
             call vol_shape%kill
         enddo
-        ! fallback when the cls3D arrays cannot rank the states: the most populated state with a volume
-        bestvol = 0
-        bestpop = 0
-        do ivol = 1, NSTATES3D
-            pop = self%spproj_all%os_cls3D%get_pop(ivol, 'state')
-            if( pop <= bestpop ) cycle
-            volpath = string('recvol_state'//int2str_pad(ivol,2)//MRC_EXT)
-            if( .not. file_exists(volpath) ) cycle
-            bestvol = ivol
-            bestpop = pop
-        enddo
-        ! the state whose classes cover the most distinct projection directions
+        ! the distinct projection directions of each state's classes (os_cls3D proj); all 0 when
+        ! they cannot be counted, and then the population breaks the ties
+        nproj = 0
         if( self%spproj_all%os_cls3D%isthere('state') .and. self%spproj_all%os_cls3D%isthere('proj') )then
             states = self%spproj_all%os_cls3D%get_all_asint('state')
             projs  = self%spproj_all%os_cls3D%get_all_asint('proj')
-            nvols  = 0
-            if( size(states) > 0 ) nvols = maxval(states)
-            if( size(states) == size(projs) .and. nvols >= 1 )then
-                allocate(nunique_proj(nvols), source=0)
-                allocate(uniqbuf(max(1, size(projs))), source=0)
-                do ivol = 1, nvols
-                    nuniq = 0
-                    do i_cls3d = 1, size(states)
-                        if( states(i_cls3d) /= ivol ) cycle
-                        proj_here = projs(i_cls3d)
-                        if( nuniq == 0 )then
-                            nuniq = 1
-                            uniqbuf(1) = proj_here
-                        else if( .not. any(uniqbuf(1:nuniq) == proj_here) )then
-                            nuniq = nuniq + 1
-                            uniqbuf(nuniq) = proj_here
-                        endif
-                    enddo
-                    nunique_proj(ivol) = nuniq
+            if( size(states) == size(projs) .and. size(states) > 0 )then
+                do ivol = 1, NSTATES3D
+                    state_projs = pack(projs, states == ivol)
+                    ! an entry counts when no earlier one has its direction
+                    nproj(ivol) = count([(.not. any(state_projs(:i-1) == state_projs(i)), i = 1, size(state_projs))])
                 enddo
-                bestvol = maxloc(nunique_proj, 1)
-                write(logfhandle,'(A,I0,A,I0,A)') '>>> BEST VOLUME BY UNIQUE PROJ IN CLS3D: STATE=', bestvol, &
-                    ' (NUNIQUE_PROJ=', nunique_proj(bestvol), ')'
             else
-                write(logfhandle,'(A)') '>>> WARNING: cannot rank volumes by unique proj, nonconforming or empty cls3D arrays'
-                write(logfhandle,'(A,I0)') '>>> FALLING BACK TO THE MOST POPULATED VOLUME, STATE=', bestvol
+                write(logfhandle,'(A)') '>>> WARNING: nonconforming or empty cls3D arrays; projection directions not counted'
             endif
         else
-            write(logfhandle,'(A)') '>>> WARNING: missing cls3D state/proj or empty volume set; unique-proj ranking skipped'
-            write(logfhandle,'(A,I0)') '>>> FALLING BACK TO THE MOST POPULATED VOLUME, STATE=', bestvol
+            write(logfhandle,'(A)') '>>> WARNING: no cls3D state/proj; projection directions not counted'
         endif
+        do ivol = 1, NSTATES3D
+            if( .not. l_cand(ivol) ) cycle
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> STATE ', ivol, ': CONNECTED COMPONENTS ', nccs(ivol),&
+                &', DISTINCT PROJECTION DIRECTIONS ', nproj(ivol), ', POPULATION ', pops(ivol)
+        enddo
+        bestvol = choose_state(l_cand, nccs, nproj, pops)
         if( bestvol == 0 ) THROW_HARD('No populated solve3D state with a reconstructed volume')
+        write(logfhandle,'(A,I0)') '>>> BEST VOLUME: STATE=', bestvol
         volpath = string('recvol_state'//int2str_pad(bestvol,2)//MRC_EXT)
         if( .not. file_exists(volpath) ) THROW_HARD('Expected solve3D output volume not found: '//volpath%to_char())
         call find_ldim_nptcls(volpath, ldim, nuniq)
@@ -1044,11 +1047,12 @@ contains
         call simple_chdir(cwd)
     end subroutine finish_extract
 
-    subroutine start_solve2D( qenv, job, projfile, outdir, nptcls, nptcls_per_cls )
+    subroutine start_solve2D( qenv, job, projfile, outdir, nptcls, nptcls_per_cls, mskdiam )
         class(qsys_env),      intent(inout) :: qenv
         type(qsys_async_job), intent(inout) :: job
         class(string),        intent(in)    :: projfile, outdir
         integer,              intent(in)    :: nptcls, nptcls_per_cls
+        real,                 intent(in)    :: mskdiam ! (A)
         type(cmdline) :: cline
         type(string)  :: server_address
         integer       :: ncls_job, nsample_job
@@ -1064,7 +1068,7 @@ contains
         call cline%set('autoscale',       'yes')
         call cline%set('nsample',         max(NSAMPLE2D, nsample_job))
         call cline%set('lpstop',          LPSTOP2D)
-        call cline%set('mskdiam',         999.)
+        call cline%set('mskdiam',         mskdiam)
         call cline%set('nthr',            16)
         call cline%set('nparts',          1)
         call cline%set('projfile',        projfile)
@@ -1105,14 +1109,17 @@ contains
     ! Scores the class averages of @p spproj (chunk model, with their pixel size for the mask
     ! radius of the relational feature), maps the selection to the particles, filters by class
     ! compatibility, and writes the project; returns the selected classes' indices, stack and
-    ! sprite-sheet layout for the GUI.
-    subroutine select_project_cavgs( spproj, projfile, outdir, mskdiam, n_selected, cavg_inds, cavgs_stk, xtiles, ytiles )
+    ! sprite-sheet layout for the GUI. With @p mskdiam_est, also the mask diameter estimated from
+    ! the selected classes (estimate_mskdiam, capped at @p mskdiam); @p mskdiam when there are none.
+    subroutine select_project_cavgs( spproj, projfile, outdir, mskdiam, n_selected, cavg_inds, cavgs_stk, xtiles, ytiles,&
+            &mskdiam_est )
         type(sp_project),     intent(inout) :: spproj
         class(string),        intent(in)    :: projfile, outdir
         real,                 intent(in)    :: mskdiam
         integer,              intent(out)   :: n_selected, xtiles, ytiles
         integer, allocatable, intent(inout) :: cavg_inds(:)
         type(string),         intent(inout) :: cavgs_stk
+        real, optional,       intent(out)   :: mskdiam_est
         type(image), allocatable    :: cavg_imgs(:)
         type(cavg_quality_model)    :: model
         type(cavg_quality_result)   :: quality
@@ -1124,6 +1131,7 @@ contains
         n_selected = 0
         xtiles     = 0
         ytiles     = 0
+        if( present(mskdiam_est) ) mskdiam_est = mskdiam
         if( allocated(cavg_inds) ) deallocate(cavg_inds)
         call simple_getcwd(cwd)
         call simple_mkdir('quality_selection')
@@ -1153,10 +1161,83 @@ contains
         call reject_mics_without_particles(spproj%os_mic, nrejected)
         call spproj%cavgs2jpg(cavg_inds, string('quality_cavgs')//JPG_EXT, xtiles, ytiles, ignore_states=.false.)
         if( allocated(cavg_inds) ) cavg_inds = pack(cavg_inds, cavg_inds > 0) ! unselected classes are 0
+        ! the classes left after the quality model and the compatibility filter
+        if( present(mskdiam_est) ) mskdiam_est = estimate_mskdiam(cavg_imgs, spproj%os_cls2D%get_all_asint('state'), mskdiam)
         call dealloc_imgarr(cavg_imgs)
         call spproj%write(projfile)
         call simple_chdir(cwd)
     end subroutine select_project_cavgs
+
+    ! The mask diameter (A) for the particle of the selected (@p states > 0) class averages
+    ! @p cavg_imgs, generous: measured as make_pickrefs measures its references (automask2D with
+    ! its defaults, on copies; the masks are written to the working directory), the largest
+    ! diameter widened by its rule (automask2D_mskdiam), and capped at @p mskdiam_box, the box's
+    ! default. @p mskdiam_box when no class is selected.
+    real function estimate_mskdiam( cavg_imgs, states, mskdiam_box ) result( mskdiam )
+        class(image), intent(in) :: cavg_imgs(:)
+        integer,      intent(in) :: states(:)
+        real,         intent(in) :: mskdiam_box
+        type(parameters)         :: params_msk
+        type(image), allocatable :: masks(:)
+        real,        allocatable :: diams(:), shifts(:,:)
+        integer :: icls, nsel, box, box_for_pick
+        real    :: smpd, diam_max, moldiam
+        mskdiam = mskdiam_box
+        if( size(states) /= size(cavg_imgs) ) THROW_HARD('# states /= # class averages; estimate_mskdiam')
+        nsel = count(states > 0)
+        if( nsel == 0 )then
+            THROW_WARN('no class average selected; the mask diameter stays the box default')
+            return
+        endif
+        box  = cavg_imgs(1)%get_box()
+        smpd = cavg_imgs(1)%get_smpd()
+        allocate(masks(nsel))
+        nsel = 0
+        do icls = 1, size(cavg_imgs)
+            if( states(icls) <= 0 ) cycle
+            nsel = nsel + 1
+            call masks(nsel)%copy(cavg_imgs(icls))
+        enddo
+        ! make_pickrefs' automasking: its defaults, and a mask radius half the box less the soft edge
+        params_msk%ngrow  = AUTOMASK2D_NGROW
+        params_msk%winsz  = AUTOMASK2D_WINSZ
+        params_msk%amsklp = AUTOMASK2D_AMSKLP
+        params_msk%edge   = AUTOMASK2D_EDGE
+        params_msk%box    = box
+        params_msk%smpd   = smpd
+        params_msk%msk    = real(box / 2) - COSMSKHALFWIDTH
+        call automask2D(params_msk, masks, params_msk%ngrow, nint(params_msk%winsz), params_msk%edge, diams, shifts)
+        diam_max = maxval(diams)
+        call automask2D_mskdiam(diam_max, smpd, box, box_for_pick, moldiam, mskdiam)
+        mskdiam = min(mskdiam, mskdiam_box)
+        write(logfhandle,'(A,F7.1,A,I0,A,F7.1,A)') '>>> MASK DIAMETER FROM THE SELECTED CLASS AVERAGES: ', mskdiam,&
+            &' A (', nsel, ' CLASSES, LARGEST DIAMETER ', diam_max, ' A)'
+        call dealloc_imgarr(masks)
+    end function estimate_mskdiam
+
+    ! The state to make the references from, among the candidates @p l_cand (populated, with a
+    ! volume): the fewest connected components @p nccs (one is a single object; none, an empty
+    ! binarisation, ranks last), then the most distinct projection directions @p nproj, then the
+    ! largest population @p pops, then the lowest state; 0 without a candidate.
+    pure integer function choose_state( l_cand, nccs, nproj, pops ) result( best )
+        logical, intent(in) :: l_cand(:)
+        integer, intent(in) :: nccs(:), nproj(:), pops(:)
+        integer :: ivol, key(size(nccs))
+        key  = merge(nccs, huge(nccs), nccs > 0)
+        best = 0
+        do ivol = 1, size(l_cand)
+            if( .not. l_cand(ivol) ) cycle
+            if( best == 0 )then
+                best = ivol
+            else if( key(ivol) /= key(best) )then
+                if( key(ivol) < key(best) ) best = ivol
+            else if( nproj(ivol) /= nproj(best) )then
+                if( nproj(ivol) > nproj(best) ) best = ivol
+            else if( pops(ivol) > pops(best) )then
+                best = ivol
+            endif
+        enddo
+    end function choose_state
 
     ! Replicates the selected class averages (and their even/odd stacks) in proportion to
     ! their populations, up to TARGET_NCLS rows; see the module header on this method.

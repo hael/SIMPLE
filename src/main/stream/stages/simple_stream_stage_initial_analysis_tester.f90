@@ -10,6 +10,7 @@ module simple_stream_stage_initial_analysis_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
+use simple_defs,                          only: COSMSKHALFWIDTH, MSK_EXP_FAC
 use simple_defs_fname,                    only: MRC_EXT, STK_EXT, JPG_EXT, METADATA_EXT
 use simple_defs_stream,                   only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, OPENING2D_PICKREFS
 use simple_string,                        only: string
@@ -18,7 +19,7 @@ use simple_fileio,                        only: file_exists, simple_getcwd, swap
 use simple_syslib,                        only: simple_mkdir
 use simple_imghead,                       only: find_ldim_nptcls
 use simple_cmdline,                       only: cmdline
-use simple_image,                         only: image
+use simple_image,                         only: image, unmemoize_mask_coords
 use simple_sp_project,                    only: sp_project
 use simple_qsys_async_job,                only: ASYNC_JOB_IDLE
 use simple_gui_metadata_utils,            only: max_metadata_size
@@ -60,6 +61,8 @@ contains
         call test_status_messages()
         call test_balance_classes()
         call test_find_final_solve3D_dir()
+        call test_estimate_mskdiam()
+        call test_choose_state()
         call test_finished()
     end subroutine run_all_stream_stage_initial_analysis_tests
 
@@ -571,6 +574,64 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_find_final_solve3D_dir
 
+    !> the state of the references: the fewest connected components (none ranks last), then the
+    !! most distinct projection directions, then the largest population; only candidates count
+    subroutine test_choose_state()
+        type(stream_stage_initial_analysis) :: stage
+        logical, parameter :: ALL3(3) = .true.
+        write(*,'(A)') 'test_choose_state'
+        call assert_int(2, stage%choose_state(ALL3, [3, 1, 2], [9, 1, 9], [9, 1, 9]),&
+            &'the only single-component volume wins whatever its coverage')
+        call assert_int(3, stage%choose_state(ALL3, [1, 2, 1], [4, 9, 6], [9, 9, 1]),&
+            &'single-component volumes: the most distinct projection directions')
+        call assert_int(1, stage%choose_state(ALL3, [2, 4, 3], [1, 9, 9], [1, 9, 9]),&
+            &'no single-component volume: the fewest components')
+        call assert_int(3, stage%choose_state(ALL3, [3, 2, 2], [9, 5, 6], [9, 9, 1]),&
+            &'equal fewest components: the most distinct projection directions')
+        call assert_int(2, stage%choose_state(ALL3, [1, 1, 1], [5, 5, 5], [3, 7, 7]),&
+            &'equal directions: the largest population, then the lowest state')
+        call assert_int(3, stage%choose_state(ALL3, [0, 0, 5], [9, 9, 1], [9, 9, 1]),&
+            &'no component ranks after any number of them')
+        call assert_int(3, stage%choose_state([.false., .true., .true.], [1, 2, 2], [9, 1, 2], [9, 9, 9]),&
+            &'a state without a volume is not a candidate')
+        call assert_int(0, stage%choose_state([.false., .false., .false.], [1, 1, 1], [1, 1, 1], [1, 1, 1]),&
+            &'no candidate: 0')
+    end subroutine test_choose_state
+
+    !> the mask diameter of cycle 2 and 3D: from the selected class averages only, at least the
+    !! rule applied to the particle's true diameter, never larger than the box's default, and the
+    !! default when no class is selected
+    subroutine test_estimate_mskdiam()
+        integer, parameter :: BOX = 64, RAD_SMALL = 8, RAD_LARGE = 20 ! disc radii (px)
+        real,    parameter :: SMPD_CAVG = 2.0
+        type(stream_stage_initial_analysis) :: stage
+        type(image)                         :: cavgs(3)
+        type(string)                        :: cwd_saved, root
+        real    :: mskdiam_box, mskdiam_small, mskdiam_all, mskdiam_none, rule_small
+        integer :: nfail0, i
+        write(*,'(A)') 'test_estimate_mskdiam'
+        nfail0 = tests_failed
+        call enter_fixture('ia_stage_estimate_mskdiam', cwd_saved, root)
+        call make_disc_cavg(cavgs(1), BOX, SMPD_CAVG, RAD_SMALL)
+        call make_disc_cavg(cavgs(2), BOX, SMPD_CAVG, RAD_SMALL)
+        call make_disc_cavg(cavgs(3), BOX, SMPD_CAVG, RAD_LARGE)
+        mskdiam_box = (real(BOX) - COSMSKHALFWIDTH) * SMPD_CAVG
+        ! the rule on the small disc's true diameter, less one pixel for rounding to an even box
+        rule_small  = MSK_EXP_FAC * (2. * real(RAD_SMALL) + 2. * COSMSKHALFWIDTH) * SMPD_CAVG - SMPD_CAVG
+        mskdiam_small = stage%estimate_mskdiam(cavgs, [1, 1, 0], mskdiam_box)
+        call assert_true(mskdiam_small >= rule_small, 'the estimate is generous')
+        call assert_true(mskdiam_small < mskdiam_box, 'an unselected larger class does not widen the mask')
+        mskdiam_all = stage%estimate_mskdiam(cavgs, [1, 1, 1], mskdiam_box)
+        call assert_real(mskdiam_box, mskdiam_all, 1.e-4, 'the estimate is capped at the box default')
+        mskdiam_none = stage%estimate_mskdiam(cavgs, [0, 0, 0], mskdiam_box)
+        call assert_real(mskdiam_box, mskdiam_none, 1.e-4, 'no class selected: the box default')
+        do i = 1, size(cavgs)
+            call cavgs(i)%kill
+        end do
+        call unmemoize_mask_coords ! leave no module state behind
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_estimate_mskdiam
+
     subroutine test_finished()
         class(stream_stage_initial_analysis), allocatable :: stage
         type(cmdline)                       :: cline
@@ -633,6 +694,22 @@ contains
         stage%wait_s   = 0
         stage%l_exists = .true.
     end subroutine make_test_stage
+
+    ! a class average of a centred disc of radius @p rad (px) on a zero background
+    subroutine make_disc_cavg( img, box, smpd, rad )
+        type(image), intent(inout) :: img
+        integer,     intent(in)    :: box, rad
+        real,        intent(in)    :: smpd
+        integer :: x, y, centre
+        centre = box / 2 + 1
+        call img%new([box, box, 1], smpd, wthreads=.false.)
+        img = 0.
+        do y = 1, box
+            do x = 1, box
+                if( (x - centre)**2 + (y - centre)**2 <= rad**2 ) call img%set([x, y, 1], 1.)
+            end do
+        end do
+    end subroutine make_disc_cavg
 
     ! the folders preprocessing makes, which the stage waits for
     subroutine make_upstream()

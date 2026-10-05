@@ -4,7 +4,7 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! COSMSKHALFWIDTH, GRAPHENE_BAND1/2/3, TINY
 use simple_image,     only: image, unmemoize_mask_coords
 use simple_image_bin, only: image_bin
-use simple_image_msk, only: automask2D
+use simple_image_msk, only: automask2D, automask2D_mskdiam
 use simple_parameters,only: parameters
 use simple_syslib,    only: del_file
 use simple_math,      only: bounds_from_mask3D
@@ -98,6 +98,7 @@ contains
         call test_mask2D_semantics()
         call test_mask3D_semantics()
         call test_masks_parallel_equals_serial()
+        call test_automask2D_mskdiam()
         call unmemoize_mask_coords ! leave no module state behind
     end subroutine run_all_mask_tests
 
@@ -212,6 +213,25 @@ contains
         end subroutine check_3d
 
     end subroutine test_masks_parallel_equals_serial
+
+    !---------------- automask2D_mskdiam ----------------
+
+    ! the particle box is the largest diameter plus two soft edges, rounded to even pixels and
+    ! capped at the images' box; the mask diameter is MSK_EXP_FAC times its size
+    subroutine test_automask2D_mskdiam()
+        integer :: box_for_pick
+        real    :: moldiam, mskdiam
+        write(*,'(A)') 'test_automask2D_mskdiam'
+        ! 150 A at 1.3 A/px: 115.4 + 12 px rounds to 128 px
+        call automask2D_mskdiam(150., 1.3, 256, box_for_pick, moldiam, mskdiam)
+        call assert_int(128, box_for_pick, 'particle box: diameter plus two soft edges, even')
+        call assert_real(1.3 * 128., moldiam, 1.e-3, 'particle size in A')
+        call assert_real(MSK_EXP_FAC * 1.3 * 128., mskdiam, 1.e-3, 'mask diameter: MSK_EXP_FAC x particle size')
+        ! 400 A would need 320 px: capped at the images' 256
+        call automask2D_mskdiam(400., 1.3, 256, box_for_pick, moldiam, mskdiam)
+        call assert_int(256, box_for_pick, 'particle box capped at the images'' box')
+        call assert_real(MSK_EXP_FAC * 1.3 * 256., mskdiam, 1.e-3, 'mask diameter of the capped box')
+    end subroutine test_automask2D_mskdiam
 
     !---------------- bounds_from_mask3D ----------------
 

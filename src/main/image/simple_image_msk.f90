@@ -7,7 +7,7 @@ use simple_parameters, only: parameters
 use simple_segmentation
 implicit none
 
-public :: image_msk, automask2D, automask2D_support_pix, density_inoutside_mask
+public :: image_msk, automask2D, automask2D_support_pix, automask2D_mskdiam, density_inoutside_mask
 private
 #include "simple_local_flags.inc"
 
@@ -368,6 +368,21 @@ contains
         end do
         deallocate(cc_img)
     end subroutine automask2D
+
+    !> The mask diameter for a particle measured on the automasks of its class averages or
+    !! references (make_pickrefs and the stream's initial analysis): the largest automask diameter
+    !! @p diam_max (A), widened by two soft edges and capped at the images' box @p box (pixels of
+    !! @p smpd A), is the particle box @p box_for_pick, of size @p moldiam (A); the mask diameter
+    !! @p mskdiam is MSK_EXP_FAC times that (A).
+    pure subroutine automask2D_mskdiam( diam_max, smpd, box, box_for_pick, moldiam, mskdiam )
+        real,    intent(in)  :: diam_max, smpd
+        integer, intent(in)  :: box
+        integer, intent(out) :: box_for_pick
+        real,    intent(out) :: moldiam, mskdiam
+        box_for_pick = min(round2even(diam_max / smpd + 2. * COSMSKHALFWIDTH), box)
+        moldiam      = smpd * real(box_for_pick)
+        mskdiam      = moldiam * MSK_EXP_FAC
+    end subroutine automask2D_mskdiam
 
     subroutine automask2D_support_pix( params, img, ngrow, winsz, edge, pix, diam, shift )
         class(parameters), intent(in)    :: params

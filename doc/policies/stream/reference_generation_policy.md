@@ -31,8 +31,9 @@ There are three, and exactly one supplies the references of a run.
 p03 runs a fixed plan of two cycles over the first preprocessed micrographs:
 
 1. **Cycle 1** on the first `NMICS_PLAN(1)` (100) accepted micrographs: picking with
-   `segdiam_bin_picker`, which decides the diameter bins, the box and the mask diameter;
-   extraction; `solve2D`; class-average selection. The selected class averages go to the GUI.
+   `segdiam_bin_picker`, which decides the diameter bins and the box; extraction; `solve2D`;
+   class-average selection; the mask diameter estimated from the selected class averages
+   (section 3.1). The selected class averages go to the GUI.
 2. **The "all" set**, as soon as the bins are known: every imported project up to
    `NMICS_PLAN(2)` (500) micrographs is picked and extracted with the same bins and box, and its
    particles are fed to a coarse-only particle sieve.
@@ -45,14 +46,49 @@ The job settings are fixed in the stage:
 
 | Job | Settings |
 |---|---|
-| `solve2D` (both cycles) | `ncls` = particles / `nptcls_per_cls`, clamped to 10..100; `nsample` = max(2000, particles/5 rounded up to 1000); `lpstop=8`; `mskdiam=999`; `center=yes`; `autoscale=yes`; `sigma_est=global`; `nthr=16`, `nparts=1` |
+| `solve2D` (both cycles) | `ncls` = particles / `nptcls_per_cls`, clamped to 10..100; `nsample` = max(2000, particles/5 rounded up to 1000); `lpstop=8`; `mskdiam`: `mskdiam_box` in cycle 1, the estimate in cycle 2 (section 3.1); `center=yes`; `autoscale=yes`; `sigma_est=global`; `nthr=16`, `nparts=1` |
+| sieve of the "all" set | coarse only (`single_pass=yes`); `nchunks=4`, `nmics=100`, `nthr=16`; `mskdiam_box`; no starting low-pass (the chunks' `solve2D` derives it) |
 | class balancing | the selected class averages replicated in proportion to population up to `TARGET_NCLS` (501) rows |
-| `solve3D_cavgs` | `nstates=3`, `nstages=3`, `nrestarts_collapse=3`, `lpstart_ini3D=100`, `lpstop_ini3D=20`, `lpstop=8`, `pgrp=c1`, `prune=no`, the picker's mask diameter, `nthr=16` |
-| state choice | the state whose classes cover the most distinct projection directions (`os_cls3D` `proj`); else the most populated state with a volume |
-| reprojection | `nspace=50`, `pgrp=c1`, the picker's mask diameter |
+| `solve3D_cavgs` | `nstates=3`, `nstages=3`, `nrestarts_collapse=3`, `lpstart_ini3D=100`, `lpstop_ini3D=20`, `lpstop=8`, `pgrp=c1`, `prune=no`, the estimated mask diameter, `nthr=16` |
+| state choice | among the populated states with a volume (`choose_state`): the fewest connected components of the binarised volume (low-passed to 20 Å, Otsu twice; `vol_shape_descr`), so a single object wins; then the most distinct projection directions of its classes (`os_cls3D` `proj`); then the largest population; then the lowest state. A volume with no component ranks last; when the directions cannot be counted, the population breaks the ties |
+| reprojection | `nspace=50`, `pgrp=c1`, the estimated mask diameter |
 
 Class-average selection in both cycles is the chunk quality model (`score_project_cavgs`)
-followed by the class compatibility filter, trained and applied on the same selection.
+followed by the class compatibility filter, trained and applied on the same selection. Its mask
+diameter is the one of the cycle's `solve2D`.
+
+### 3.1 The mask diameter
+
+1. **Cycle 1 masks with the box's default**, `mskdiam_box = (box − COSMSKHALFWIDTH) · smpd` for
+   the picker's box and the micrographs' pixel size: the value `parameters` derives when no mask
+   is given. It is passed explicitly, since `solve2D` requires `mskdiam`.
+2. **Cycle 1's selected class averages give the estimate.** These are the classes that the
+   quality model and the compatibility filter keep. The estimate is generous, and it uses the
+   measure and the rule `make_pickrefs` applies to its references:
+   - each selected class average is automasked (`automask2D` with its defaults: `ngrow=3`,
+     `winsz=5`, `amsklp=20`, `edge=6`), which gives the diameter of its largest connected
+     component;
+   - the largest of these diameters is taken, so that every view fits;
+   - it is widened by two soft edges, rounded to an even box, capped at the class averages' box
+     and multiplied by `MSK_EXP_FAC` (1.2) (`automask2D_mskdiam`);
+   - the result is capped at `mskdiam_box`.
+
+   Example: a largest automask of 150 Å at 1.3 Å/px gives a 128 px particle box (166 Å) and a
+   mask of 200 Å. The box default is usually wider, because the picker makes the box 1.0 to 1.5
+   times the largest diameter of its accepted bins. For large particles, where the factor nears
+   1.0, the cap applies. The estimate is logged and sent to the GUI as the mask diameter.
+3. **When cycle 1 selects no class, the estimate is `mskdiam_box`**, with a warning. A selected
+   class whose automask finds no object counts as a disc nearly the size of the box
+   (`automask2D`'s fallback). That puts the estimate at or near the box default.
+4. **Cycle 2 and 3D use the estimate.** That covers cycle 2's `solve2D` and class-average
+   selection, `solve3D_cavgs`, the volume shape descriptors and the reprojection.
+5. **The sieve of the "all" set masks with `mskdiam_box`.** It starts as soon as the bins are
+   known, before cycle 1 has selected classes.
+6. **A restart estimates again.** A restarted p03 runs its plan from cycle 1 and keeps nothing
+   (`doc/policies/stream/restart_policy.md`).
+7. **Particle sieving (p05) does not use this estimate.** It reads the mask diameter that
+   `make_pickrefs` (p04) writes to `moldiam.txt`, measured on the published references by the
+   same rule.
 
 ## 4. Output contract
 
@@ -96,9 +132,16 @@ followed by the class compatibility filter, trained and applied on the same sele
   for the sets submitted afterwards, and must say how particles picked with the old references
   are treated downstream.
 - A change of the plan or the job settings updates section 3.
-- Tests: `test_gui_selection_ends_stage` and `test_published_pickrefs_are_final` in
-  `src/main/stream/stages/simple_stream_stage_initial_analysis_tester.f90` (`unit_stream`,
-  "initial analysis").
+- Cycle 1 and the sieve mask with `mskdiam_box`. The mask of cycle 2 and 3D comes only from
+  cycle 1's selected class averages and never exceeds `mskdiam_box`.
+- p03 and `make_pickrefs` measure with `automask2D` and its defaults (`simple_default_clines`),
+  and widen with one routine, `automask2D_mskdiam`. A change of the rule changes both and
+  updates section 3.1.
+- Tests: `test_gui_selection_ends_stage`, `test_published_pickrefs_are_final`,
+  `test_estimate_mskdiam` and `test_choose_state` in
+  `src/main/stream/stages/simple_stream_stage_initial_analysis_tester.f90`
+  (`unit_stream`, "initial analysis"); `test_automask2D_mskdiam` in
+  `src/main/image/simple_image_msk_tester.f90` (sub-suite "masks").
 
 ## 7. Known gaps
 
@@ -107,9 +150,18 @@ followed by the class compatibility filter, trained and applied on the same sele
   are aligned and assigned to states independently. The review proposes per-row weights in the
   reconstruction instead (R2).
 - **The references are reprojections of a three-state model** at `nspace=50` (M2). The settings
-  are literals, not inputs. The 2D runs use `mskdiam=999` whatever the particle size. p03 finds
-  the 3D result by taking the highest-numbered `<n>_solve3D_cavgs` directory. The review
-  proposes inputs, the picker's mask diameter and a fixed result path (R4).
+  are literals, not inputs. p03 finds the 3D result by taking the highest-numbered
+  `<n>_solve3D_cavgs` directory. The review proposes inputs and a fixed result path (R4).
+- **The mask estimate rests on cycle 1's micrographs** (about 100). A view that is rare there,
+  or a larger particle that appears only later, can be cut by the mask of cycle 2 and 3D. The
+  generous rule is the only margin, and nothing estimates again.
+- **The "all" sieve masks with the box default**, which is wider than the particle, because it
+  starts before the estimate exists.
+- **Every connected component counts in the state choice.** A speck of noise above the threshold
+  makes a volume two components, and it then loses to a single-object volume with far fewer
+  views. The count is of the whole box, not of the mask. Each state's binarised volume and
+  components are written under one name (`vol_binarized.mrc`, `vol_cc.mrc`), so only the last
+  state's remain to check a choice against.
 - **The quality selection is fitted and applied on the same classes** (M5).
 - **Jobs left running after a user selection** cannot be cancelled (`qsys_async_job` has no
   cancel).

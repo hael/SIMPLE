@@ -11501,6 +11501,7 @@ Uses:
 
 Public symbols:
 - `automask2D` — subroutine
+- `automask2D_mskdiam` — subroutine
 - `automask2D_support_pix` — subroutine
 - `density_inoutside_mask` — subroutine
 - `image_msk` — type
@@ -11546,6 +11547,7 @@ Private symbols:
 - `fill` — subroutine
 - `mask_2d` — subroutine
 - `mask_3d` — subroutine
+- `test_automask2D_mskdiam` — subroutine
 - `test_bounds_from_mask3D` — subroutine
 - `test_cc_bookkeeping` — subroutine
 - `test_ccs_connectivity_2D` — subroutine
@@ -19069,6 +19071,7 @@ Uses:
 - `simple_cmdline`
 - `simple_commanders_reproject`
 - `simple_core_module_api`
+- `simple_default_clines`
 - `simple_defs_environment`
 - `simple_gui_metadata_cavg2d`
 - `simple_gui_metadata_micrograph`
@@ -19081,6 +19084,7 @@ Uses:
 - `simple_gui_utils`
 - `simple_image`
 - `simple_image_bin`
+- `simple_image_msk`
 - `simple_imgarr_utils`
 - `simple_imghead`
 - `simple_mic_import`
@@ -19149,6 +19153,7 @@ Files:
 
 Uses:
 - `simple_cmdline`
+- `simple_defs`
 - `simple_defs_fname`
 - `simple_defs_stream`
 - `simple_fileio`
@@ -19175,6 +19180,7 @@ Public symbols:
 Private symbols:
 - `check_stack_size` — subroutine
 - `close_loopback` — subroutine
+- `make_disc_cavg` — subroutine
 - `make_test_stage` — subroutine
 - `make_upstream` — subroutine
 - `open_loopback` — subroutine
@@ -19182,7 +19188,9 @@ Private symbols:
 - `swap_ext` — function
 - `test_attach_upstream_waits` — subroutine
 - `test_balance_classes` — subroutine
+- `test_choose_state` — subroutine
 - `test_cycle1_setup_waits` — subroutine
+- `test_estimate_mskdiam` — subroutine
 - `test_find_final_solve3D_dir` — subroutine
 - `test_finished` — subroutine
 - `test_gui_selection_ends_stage` — subroutine

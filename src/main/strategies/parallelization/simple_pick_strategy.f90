@@ -177,7 +177,7 @@ contains
     ! Integrated make_pickrefs implementation (NO simple_end inside)
     ! --------------------------------------------------------------------
     subroutine make_pickrefs_impl(cline)
-        use simple_image_msk, only: automask2D
+        use simple_image_msk, only: automask2D, automask2D_mskdiam
         use simple_imghead,   only: find_img_smpd
         use simple_commanders_cavgs, only: commander_cluster_cavgs
         use simple_syslib, only: simple_getcwd
@@ -331,9 +331,7 @@ contains
         ! estimate new box size and clip
         diam_max        = maxval(diams)
         lp              = min(max(LP_LB, MSKDIAM2LP * diam_max), LP_UB)
-        box_for_pick    = min(round2even(diam_max / params%smpd + 2. * COSMSKHALFWIDTH), ldim(1))
-        moldiam         = params%smpd * box_for_pick
-        mskdiam         = moldiam * MSK_EXP_FAC
+        call automask2D_mskdiam(diam_max, params%smpd, ldim(1), box_for_pick, moldiam, mskdiam)
         maxdiam         = moldiam + moldiam * BOX_EXP_FAC
         box_for_extract = find_larger_magic_box(round2even(maxdiam / params%smpd))
         write(logfhandle,'(A,1X,I4)') 'ESTIMATED BOX SIZE: ', box_for_pick
