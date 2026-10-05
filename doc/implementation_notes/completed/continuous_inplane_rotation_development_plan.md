@@ -8,7 +8,7 @@
 > eligible `yes` follows the current polish-only policy by leaving legacy
 > selection and probability-table construction unchanged, then applying one
 > bounded local joint refinement to the committed pose. See
-> `doc/algorithms/continuous_inplane_refinement_abinitio2D.md` and the workflow
+> `doc/algorithms/continuous_inplane_refinement_solve2D.md` and the workflow
 > policy documents for the authoritative design. The experimental continuous
 > callback, three-valued interface, superseded routing decisions, and
 > chronological pending entries below are retained only as development history.

@@ -109,7 +109,7 @@ everywhere they are declared.
 ## Comments
 
 Comments are short, snappy and accurate; long ones have been found to rot.
-See `doc/refactoring_notes/comment_novel_inventory_2026-09-30.md`.
+See `doc/refactoring_notes/completed/comment_novel_inventory_2026-09-30.md`.
 
 - File header: one `!@descr:` line first (`scripts/check_descr.py`), then at
   most 5 lines.
@@ -126,7 +126,7 @@ See `doc/refactoring_notes/comment_novel_inventory_2026-09-30.md`.
 ## Debugging And Build Notes
 
 - Debug build: `cmake .. -DCMAKE_BUILD_TYPE=Debug`
-- Helpful notes: `doc/how2s/how2debug_fortran.txt`
+- Helpful notes: `doc/how2s/how2debug_fortran.md`
 - Many objects expose derived-type state through type-bound methods; prefer following those paths before adding temporary print code.
 
 ## When Extending Code

@@ -7,7 +7,7 @@ and chunk layer in `src/main/stream/pool2D`, and the watcher and utilities in `s
 
 Each policy states the contract the code keeps today and what a change must preserve. Its
 "Known gaps" section names the open defects and the proposals of
-`doc/refactoring_notes/stream_area_review_2026-10-02.md`; a proposal becomes policy only when it is
+`doc/refactoring_notes/completed/stream_area_review_2026-10-02.md`; a proposal becomes policy only when it is
 decided and the policy is updated with the code.
 
 | Policy | Read before changing |

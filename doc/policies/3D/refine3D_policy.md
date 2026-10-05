@@ -8,15 +8,14 @@ Related workflow policies:
 
 - [solve3D_policy.md](solve3D_policy.md)
 - [solve3D_cavgs_policy.md](solve3D_cavgs_policy.md)
-- [solve3D_cavgs_reject_policy.md](solve3D_cavgs_reject_policy.md)
+- [class-average rejection policy](../sieving_and_rejection/model_cavgs_rejection.md)
 - [refine3D_auto_policy.md](refine3D_auto_policy.md)
-- [refine3D_states_policy.md](refine3D_states_policy.md)
+- [refine3D states policy](../heterogeneity/refine3D_states_policy.md)
 - [classify3D_refs_policy.md](classify3D_refs_policy.md)
 - [automasking_policy.md](automasking_policy.md)
-- [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
-- [sigma_calculation_policy.md](sigma_calculation_policy.md)
+- [nonuniform filtering policy](../NU/nonuniform_filtering_policy.md)
 - [reconstruct3D_pcg_policy.md](reconstruct3D_pcg_policy.md)
-- [particle_cache_policy.md](particle_cache_policy.md)
+- [particle cache policy](../2D/particle_cache_policy.md)
 - [separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md](separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md)
 
 ## 1. Scope
@@ -476,7 +475,7 @@ performance contract is explicitly changed.
 
 The downscaled particle cache is a 2D-only feature: `refine3D` rejects
 `cache=yes` and both phases always read the original full-size stacks (see
-`doc/policies/particle_cache_policy.md`).
+`doc/policies/2D/particle_cache_policy.md`).
 
 ### Continuous Cartesian pose policy
 
@@ -664,7 +663,7 @@ records only the refine3D-side integration contract:
   workflow execution. Fractional/trailing
   reconstruction is implemented in the distributed master path.
 - New regularization is research, tracked in
-  `doc/implementation_notes/pcg_priors_history.md`; it cannot be used to close
+  `doc/implementation_notes/completed/pcg_priors_history.md`; it cannot be used to close
   integration gates.
 
 ## 10. Trailing and Combined Even/Odd

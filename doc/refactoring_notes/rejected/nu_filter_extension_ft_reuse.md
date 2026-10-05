@@ -1,5 +1,9 @@
 # NU filter high-resolution extension FT reuse
 
+**Status:** obsolete. The high-resolution shell walk it optimizes
+(`extend_nu_filter_highres_shell_next`, `generate_single_filtered_pair`) was
+removed with `nu_refine` in b9cc8e31b; the NU filter now uses the static bank.
+
 ## Summary
 
 The high-resolution nonuniform filter extension currently regenerates each

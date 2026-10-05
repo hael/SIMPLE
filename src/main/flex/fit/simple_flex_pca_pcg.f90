@@ -1,5 +1,5 @@
 !@descr: flex_pca coupled M-step on the PCG operator (rec_backend=pcg), mirroring reconstructor_pcg
-!  Design: doc/implementation_notes/flex_pca_envelope_support.md, 3.4. CG on the native-lattice basis u:
+!  Design: doc/implementation_notes/completed/flex_pca_envelope_support.md, 3.4. CG on the native-lattice basis u:
 !  b = S^H y and T = S^H S from 2x-lattice KB deposits (scale OSMPL_PAD_FAC**3), Nyquist-ball band limit,
 !  hard support P, floored per-voxel coupled divide as preconditioner. maxits<=0 ships solve_coupled_basis_exp;
 !  otherwise CG warm-starts from the masked, LS-scaled gridding solution. put_back writes E*u.

@@ -241,7 +241,7 @@ contains
         &'ratio and FSC between '//&
         &'backends, and the radial real-space profile ratio that exposes a deapodization mismatch. Writes '//&
         &'recvol_stateXX_gridding.mrc and recvol_stateXX_pcg.mrc. Measurement only, no thresholds '//&
-        &'(doc/implementation_notes/drop_legacy_box_division.md, plan step 2).',&
+        &'(doc/implementation_notes/completed/drop_legacy_box_division.md, plan step 2).',&
         &'simple_test_exec',&
         &.true., display_name='Reconstruction Backend Comparison')
         call rec3D_backends%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &

@@ -1,11 +1,15 @@
 # Stream refactor: the stages as clients of the library
 
+**Status:** planned follow-up. The stage switch-over described below is
+complete, but the note's remaining cleanup, workflow runs, and test-registration
+work are still open; those items keep this record in `planned`.
+
 Stream stages rewritten as clients of the library: p01 (preprocessing), p02 (optics
 assignment), p03 (initial analysis and picking references), p04 (reference-based picking
 and extraction), p05 (particle sieving), p06 (pool 2D), p07 (multistate 3D), and the master
 (p00) that runs them for the GUI. This follows recommendations
 E5 to E8 of
-`doc/refactoring_notes/stream_area_review_2026-09-30.md`. The stream runs on this code:
+`doc/refactoring_notes/completed/stream_area_review_2026-09-30.md`. The stream runs on this code:
 `production/simple_stream.f90` uses these commanders, and the old stage modules of
 `src/main/stream` are deleted. The code was written in `src/main/stream_refactor` and then
 moved into the library layout:

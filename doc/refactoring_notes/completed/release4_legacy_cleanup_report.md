@@ -129,8 +129,8 @@ The maintainer set these rules before and during the work:
   renamed without an alias. A new NICE migration (`0007`) renames stored jobs.
 - **Every program has an explicit title in NICE.** Previously, 131 programs
   had no title of their own and NICE showed their one-line summary instead.
-  Each now has a short title, reviewed and signed off by the maintainer in
-  `doc/refactoring_notes/planned/release4_program_titles_signoff.md`. The six
+  Each now has a short title, reviewed and signed off by the maintainer during
+  the release-4 cleanup. The six
   streaming programs keep their previous wording, because the streaming
   interface fixes it (`production/stream_ui_contract.json`). A title is now a
   required part of every program descriptor.

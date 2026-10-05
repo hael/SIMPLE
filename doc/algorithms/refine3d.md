@@ -177,4 +177,4 @@ tighter band with the halves merged.
   `src/main/commanders/simple/simple_commanders_rec_distr.f90`,
   `src/main/volume/simple_halfmap_diagnostics.f90`, `src/utils/filter/simple_fsc.f90`.
 - Convergence: `src/main/simple_convergence.f90`.
-- Policy: `doc/policies/refine3D_policy.md`.
+- Policy: `doc/policies/3D/refine3D_policy.md`.

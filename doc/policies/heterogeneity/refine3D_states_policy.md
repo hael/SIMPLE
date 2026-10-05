@@ -6,10 +6,10 @@ historical command alias is registered or routed.
 
 Related policies:
 
-- [refine3D_policy.md](refine3D_policy.md)
-- [classify3D_refs_policy.md](classify3D_refs_policy.md)
-- [importance_sampling_fractional_update_policy.md](importance_sampling_fractional_update_policy.md)
-- [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
+- [refine3D policy](../3D/refine3D_policy.md)
+- [classify3D references policy](../3D/classify3D_refs_policy.md)
+- [importance-sampling and fractional-update policy](../importance_sampling_fractional_update_policy.md)
+- [nonuniform filtering policy](../NU/nonuniform_filtering_policy.md)
 
 Primary implementation:
 

@@ -24,7 +24,7 @@ against the other raw half, scan a very small family, take the minimum, and
 flag a flat curve or a minimum on the grid edge.
 
 The envelope is built today as follows (`simple_nu_filter_envmask.f90`,
-[algorithm note](../algorithms/nu_evidence_envelope_mask.md)):
+[algorithm note](../../algorithms/nu_evidence_envelope_mask.md)):
 
 ```text
 margin D = C_coarsest - min_c C_c, smoothed once at amsklp
@@ -37,7 +37,7 @@ margin D = C_coarsest - min_c C_c, smoothed once at amsklp
 The fragile parts are the null model in its two regimes, the validity gates
 that go with it (solvent majority, shell sufficiency), and the fixed MAD
 multiple. Section 6.7 of
-[nu_evidence_envelope_masking.md](nu_evidence_envelope_masking.md) already
+[superseded NU-evidence envelope masking note](../rejected/nu_evidence_envelope_masking.md) already
 suspected that the threshold depends on SNR.
 
 ## 3. Proposal

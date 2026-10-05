@@ -411,4 +411,4 @@ localise.
 > Historical design note. The experimental standalone angular-coefficient API
 > described below was removed with the continuous callback route. Production
 > `inpl_cont=yes` uses the fused joint coefficient evaluator documented in
-> `doc/algorithms/continuous_inplane_refinement_abinitio2D.md`.
+> `doc/algorithms/continuous_inplane_refinement_solve2D.md`.

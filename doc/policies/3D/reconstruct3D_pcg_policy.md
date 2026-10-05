@@ -8,10 +8,10 @@ gridding backend (`simple_nu_state_filter`, policy 2026-09-06). The record of
 the removed prior experiments -- the binary-envelope solvent prior (2026-08-27)
 and the direct NU-evidence replay precision `Q_NU` with its auto-lambda and
 auto-target controllers (2026-09-06) -- lives in
-`doc/implementation_notes/pcg_priors_history.md`. A present-tense four-page
-description of the backend is `doc/implementation_notes/pcg_backend_overview.md`
+`doc/implementation_notes/completed/pcg_priors_history.md`. A present-tense four-page
+description of the backend is `doc/implementation_notes/completed/pcg_backend_overview.md`
 and the dated list of decisions with their evidence is
-`doc/implementation_notes/pcg_decision_log.md`; new decisions are recorded
+`doc/implementation_notes/completed/pcg_decision_log.md`; new decisions are recorded
 there, and this policy is updated when a decision changes a contract.
 
 The production `reconstruct3D` command accepts the selector
@@ -155,7 +155,7 @@ particles and phase shifts even when the CTF itself is real.
 Solved maps are written at the **data-quotient convention** — the plain
 weighted least-squares solution, with no box-size scaling — identical to the
 gridding backend after the legacy division/multiplication pair was retired
-(`doc/implementation_notes/drop_legacy_box_division.md`). Deapodization is
+(`doc/implementation_notes/completed/drop_legacy_box_division.md`). Deapodization is
 applied inside the solver; PCG maps must never receive the gridding
 correction or a second sampling-density correction. Scale continuity is a
 contract: the euclid/sigma2 equilibrium survives any *stable* reference
@@ -217,7 +217,7 @@ rejected on every anisotropically sampled dataset, and its L2 residual above
 filtering active the base (`_unfil`) pair seeds the NU candidate bank and the
 regularized pair joins the competition as the auxiliary member, exactly as on
 gridding. (The `nu_input=gridding|ml` alternatives of 2026-09-08 were retired
-on 2026-09-09; records in `doc/implementation_notes/pcg_priors_history.md`.)
+on 2026-09-09; records in `doc/implementation_notes/completed/pcg_priors_history.md`.)
 Neither precision nor lambda is ever accumulated into raw `B` or `D`.
 
 Every shipped state volume carries a solve-support provenance sidecar

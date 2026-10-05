@@ -36,8 +36,8 @@ replaces `pcg_euclid_crash_investigation.md`,
 `pcg_reconstruction_production_readiness.md`,
 `pcg_refine3D_integration_plan.md`, and
 `pcg_real_space_solvent_flatness_prior_proposal.md`. Current implemented
-contracts live in `doc/policies/reconstruct3D_pcg_policy.md` and the PCG
-section of `doc/policies/refine3D_policy.md`.
+contracts live in `doc/policies/3D/reconstruct3D_pcg_policy.md` and the PCG
+section of `doc/policies/3D/refine3D_policy.md`.
 
 **Decision (2026-08-27): the direct NU-evidence prior is priority 1.** When NU
 regularization is active it replaces the FSC/SSNR `P_tau` replay precision; it
@@ -3948,8 +3948,8 @@ file name unchanged). Uncompiled; user compiles and runs the comparison.
 
 ### Record (2026-09-09c): backend comparison review -- shared observation, transactional sidecar, hard domain + window, cost records
 
-Findings of `doc/refactoring_notes/abinitio3d_reconstruction_backend_comparison_review.md`
-verified against the code and acted on:
+Findings of the backend-comparison source review (not retained as a separate
+document) were verified against the code and acted on as recorded here:
 
 | finding | verified | change |
 |---|---|---|
@@ -3967,7 +3967,7 @@ compiles, runs the test gate and the paired comparison.
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery
-(`doc/policies/nonuniform_filtering_policy.md`, `src/main/nu_filt/`) is the
+(`doc/policies/NU/nonuniform_filtering_policy.md`, `src/main/nu_filt/`) is the
 mature evidence engine the prior now builds on directly. LocScale-2.0 derives
 local confidence from a pseudoatomic reference; NU derives it from
 cross-validated half-map prediction with an explicit noise model. The

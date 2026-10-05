@@ -140,7 +140,7 @@ The `cavg_ini` and `cavg_ini_ext` routes enter the particle stages at a stage
 whose starting reconstruction is ML-regularized (`objfun=euclid`) before any
 refine3D iteration has estimated particle sigmas.
 `calc_rec` applies the single sigma2 bootstrap rule (`simple_sigma2_bootstrap`,
-`doc/policies/refine3D_policy.md` section 5): for a euclid starting
+`doc/policies/3D/refine3D_policy.md` section 5): for a euclid starting
 reconstruction it calls `ensure_sigma2_for_iteration`, which is a no-op when
 the project owns a compatible committed state and otherwise seeds canonical
 particle spectra from image power with `calc_pspec`. The starting reconstruction
@@ -238,7 +238,7 @@ command is rebuilt; the effective ceiling is the coarser of the two limits.
 The workflow logs the acknowledged command-line ceiling before entering the
 stage loop. (Record 2026-09-06: capping the NU stages at the per-stage value
 stalled every NU stage on streptavidin and msp1 on the pcg path; see
-`doc/implementation_notes/pcg_priors_history.md`, dev item 2.)
+`doc/implementation_notes/completed/pcg_priors_history.md`, dev item 2.)
 
 Saved `_stageNN_lp.mrc` diagnostic volumes are filtered to the current state
 FSC resolution when an FSC exists. The planned stage LP is only a fallback.
@@ -465,7 +465,7 @@ this NU-filtering policy is activated. Users who override `nstages` past that
 point re-enter the staged NU policy described here.
 
 Detailed NU behavior belongs to
-[nonuniform_filtering_policy.md](nonuniform_filtering_policy.md); detailed
+[nonuniform filtering policy](../NU/nonuniform_filtering_policy.md); detailed
 automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
 
 ## 9. Final Reconstruction

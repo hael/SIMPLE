@@ -9,7 +9,7 @@ The commanders live in `src/main/commanders/stream`, the stage types they drive 
 
 ## Read First
 
-- `doc/refactoring_notes/stream_refactor.md`: what each module does, how each stage differs from the stage it replaced, and the remaining clean-up
+- `doc/refactoring_notes/planned/stream_refactor.md`: what each module does, how each stage differs from the stage it replaced, and the remaining clean-up
 - the policy for the contract you change, in `doc/policies/stream/` (index in its README):
   - `reference_generation_policy.md`: p03's routes to the picking references, their publication and precedence, p04's use of them
   - `stream_3D_ingestion_policy.md`: p06's publications for 3D and p07's import of them

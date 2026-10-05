@@ -3,7 +3,7 @@
 ! finer than NU_SHARP_BFAC_FINEST_A); per voxel sqrt(2FSC/(1+FSC)) stretched so FSC=0.143 sits at its
 ! evidenced cutoff, then Butterworth there; null/outside-support voxels take the map mean.
 ! One merged display map, never an FSC input. Design and v1 record:
-! doc/implementation_notes/nu_evidence_local_sharpening.md sections 3b-3c.
+! doc/implementation_notes/completed/nu_evidence_local_sharpening.md sections 3b-3c.
 submodule (simple_nu_filter) simple_nu_filter_sharpen
 implicit none
 #include "simple_local_flags.inc"

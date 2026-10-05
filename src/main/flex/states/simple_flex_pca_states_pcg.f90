@@ -1,7 +1,7 @@
 !@descr: flex_pca state maps on the reconstruct3D PCG backend (rec_states_backend=pcg): the kernel weight of a
 !  particle enters through its noise model as sigma2/w, so the right-hand side and the density carry it
 !  identically and the preconditioner, Gram kernel, ridge scale and raw artifacts follow without change
-!  (doc/implementation_notes/flex_pca_envelope_support.md, section 3.3); one cold solve per (state, half)
+!  (doc/implementation_notes/completed/flex_pca_envelope_support.md, section 3.3); one cold solve per (state, half)
 module simple_flex_pca_states_pcg
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

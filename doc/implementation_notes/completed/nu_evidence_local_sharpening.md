@@ -4,20 +4,11 @@
 
 ## Status
 
-Proposal (2026-08-27), **SCHEDULED as PRESSING (2026-08-29, user
-direction)** — item 1 on the active dev list in `pcg_priors_history.md`
-(Stage 6.6 run records). The original precondition is met: the direct
-NU-evidence prior cleared its Gate C/D program and the Stage 6.6
-nu_refine evidence-bank extension validated on 1WCM. The motivation is
-now empirical, not speculative: on real data (PfCRT and others) a single
-isotropic B-factor does not produce acceptable postprocessed maps — only
-bgal- and streptavidin-like specimens tolerate it. This remains a
-postprocessing experiment that consumes Stage 6 infrastructure, not a
-competitor to it. No solver, base-solve, replay, or artifact behavior
-changes are proposed here. Note the Wilson-target variant 2.3(c) is
-DEAD: the Wilson prior was adjudicated against and removed from the
-codebase (2026-08-29, `pcg_priors_history.md` Stage 7 record); variants 2.3(a)
-evidence-derived and 2.3(b) local-B remain the candidates.
+**Completed.** The current NU-filter implementation carries a frozen evidence
+state and `nu_evidence_sharpen_vol`; the `postprocess_nu` commander consumes it
+to produce the local evidence-sharpened result. The proposal and experiment
+discussion below is retained as the implementation record. Its old scheduling
+language and shell-walk assumptions are historical, as noted above.
 
 ## 1. The idea
 

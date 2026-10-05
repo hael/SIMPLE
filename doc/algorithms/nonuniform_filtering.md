@@ -156,4 +156,4 @@ separate estimator: [NU-evidence envelope masking](nu_evidence_envelope_mask.md)
   `src/main/commanders/simple/simple_commanders_rec_distr.f90`.
 - Matching bandwidth handoff:
   `src/main/strategies/search/simple_matcher_refvol_utils.f90`.
-- Policy: `doc/policies/nonuniform_filtering_policy.md`.
+- Policy: `doc/policies/NU/nonuniform_filtering_policy.md`.

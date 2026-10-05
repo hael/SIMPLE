@@ -2,7 +2,12 @@
 
 **Component:** `src/utils/qsys/simple_qsys_ctrl.f90` (with one supporting note in `src/utils/qsys/simple_qsys_funs.f90`)
 **Found while:** investigating a distributed `calc_pspec` run that appeared to hang with idle CPUs
-**Status:** no code change made — the scheduler is heavily used in production, so this is reported rather than patched
+**Status:** planned follow-up after source re-audit on 2026-10-05. Issue 1's
+specific `tee` exit-status defect no longer applies to `generate_script_2`,
+which now redirects directly and writes `$?`. Issue 2 remains for batch jobs:
+`generate_script_1` does not emit an exit-code file and batch `update_queue`
+still treats the success sentinel as the only completion signal. The original
+report is retained below to preserve the reproduction and design discussion.
 **Baseline:** `master` @ `ec5527df0`
 
 There are two independent issues. Issue 1 is a concrete defect with a confirmed

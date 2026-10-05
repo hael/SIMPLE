@@ -245,4 +245,4 @@ independent density automask, and the NU objective keeps the spherical
   retired on 2026-09-23 (test-environment plan, section 9.7, singles II); the
   filter is exercised end to end through `simple_exec prg=nu_filt3D`
 
-Design constraints: [nu_evidence_envelope_masking.md](../implementation_notes/nu_evidence_envelope_masking.md).
+Historical design constraints: [superseded NU-evidence envelope masking note](../implementation_notes/rejected/nu_evidence_envelope_masking.md) (its reference-masking design was retired; the envelope itself is live).

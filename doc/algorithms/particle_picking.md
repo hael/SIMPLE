@@ -106,4 +106,4 @@ the data or a micrograph without particles.
 - Batched Pearson evaluation: `src/main/pick/simple_pickref_corr_batch.f90`.
 - Workflow and extraction: `src/main/pick/simple_picker_utils.f90`,
   `src/main/preprocess/simple_particle_extractor.f90`.
-- Design note: `doc/implementation_notes/reference_picker_flcf_plan.md`.
+- Design note: `doc/implementation_notes/completed/reference_picker_flcf_plan.md`.

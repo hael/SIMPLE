@@ -1,8 +1,8 @@
 # Dropping the legacy box division from reconstruction output
 
-**Status:** in progress on branch `drop_legacy_box_division` (started
-2026-08-22). Steps 1 (instrumentation, §5.1) and 2 (dual-backend test, §5.2)
-are implemented. **The premise of §2 is refuted by the step-1 baseline and by
+**Status:** completed historical investigation and core normalization change.
+Steps 1 (instrumentation, §5.1) and 2 (dual-backend test, §5.2) were
+implemented. **The premise of §2 was refuted by the step-1 baseline and by
 the projector code (§0 below); step 3 is revised. Decision 2026-08-22: do
 the deapodization fix (§5.3) first; retiring the ÷box/×box pair together
 (§5.3a) was then done on 2026-08-22 as well; both verified (§5.3).**

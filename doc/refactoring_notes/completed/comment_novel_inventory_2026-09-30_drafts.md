@@ -382,7 +382,7 @@ The policy repeats the wrong "1.25-1.5x" sentence at :532.
 ! Evidence pair: the state's _even_unfil/_odd_unfil. With _even/_odd present the refinement's competition
 ! is rerun for <vol>_locres_nu. nu_evidence_sharpen_vol then sharpens the _solvent pair if present, else
 ! the unfil pair, to <vol>_pproc_nu (+_mirr). Display maps only, never FSC/resolution inputs.
-! Design: doc/implementation_notes/nu_evidence_local_sharpening.md.
+! Design: doc/implementation_notes/completed/nu_evidence_local_sharpening.md.
 ```
 
 **`commanders/simple/simple_commanders_volops.f90` `postprocess_volume_from_files`** (OK)
@@ -408,7 +408,7 @@ Also, outside the audited blocks, stale NU comments describe:
 !  Per half: w(r) in [0,1] from its own prior-free map (Otsu + logistic on |x| smoothed at 2x FSC=0.143),
 !  then a cold re-solve with ridge lambda_s(1-w). Prior-free pair = base pair (FSC, NU, evidence, _unfil);
 !  prior'd pair = replay base and NU apply target. lambda_rel: closed-form cross-half CV unless given.
-!  Rationale/history: doc/implementation_notes/pcg_decision_log.md (2026-09-18..22).
+!  Rationale/history: doc/implementation_notes/completed/pcg_decision_log.md (2026-09-18..22).
 ```
 
 **`volume/simple_frozen_accum.f90:1-25`** (OK)

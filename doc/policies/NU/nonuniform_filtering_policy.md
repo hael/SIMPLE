@@ -50,7 +50,7 @@ former in-solve `Q_NU` replay precision and its controllers were removed.
 The competition input is the unregularized (base) pair on both backends.
 Two alternatives were tried and retired on 2026-09-09 (`nu_input=gridding|ml`,
 records 2026-09-08b-g and 2026-09-09 in
-`doc/implementation_notes/pcg_priors_history.md`): the gridding half of the PCG
+`doc/implementation_notes/completed/pcg_priors_history.md`): the gridding half of the PCG
 accumulation became moot once the like-for-like selection removed the
 footprint artifact, and the ML-regularized pair cannot seed the competition
 because `P_tau` is a global per-shell shrinkage driven by the global FSC: it
@@ -367,7 +367,7 @@ null with zero band support, and the summary reports `observed_fraction`.
 The spherical NU support itself is unchanged. The compact evidence state's
 only consumer is `postprocess_nu` (local sharpening); the NU-evidence envelope
 is derived from the raw unaries, not from it. The in-solve `Q_NU` consumer was
-removed on 2026-09-06 (`doc/implementation_notes/pcg_priors_history.md`).
+removed on 2026-09-06 (`doc/implementation_notes/completed/pcg_priors_history.md`).
 With `automsk` enabled the NU-evidence envelope is regenerated from the static
 candidate bank while the raw per-voxel evidence margins are live. It remains a
 diagnostic under `automsk=yes`; under `automsk=nu` it is the current
@@ -395,7 +395,7 @@ field, the larger at maxima, an intermediate one almost never. An honest
 gridding pair never exposes this (adjacent fine candidates differ by the
 admitted noise band); a regularized pair does, and the populated fine label
 then follows the radius table (PfCRT record 2026-09-08d in
-`doc/implementation_notes/pcg_priors_history.md`). The selection is therefore
+`doc/implementation_notes/completed/pcg_priors_history.md`). The selection is therefore
 sequential, coarse to fine: at each level the incumbent and the candidate
 are both smoothed at the candidate's radius from the raw unaries kept in
 `raw_dmats_mask`, and the candidate wins only with a strictly lower cost.
@@ -450,7 +450,7 @@ refine3D_auto 4.03/4.50 A against 3.93/4.14 A on 2026-09-11 from the same
 particles). The static ladder plus the auxiliary pair of section 8 -- the
 solve3D NU machinery of the ed36eb4c build, which produced the best PfCRT
 maps -- is the only NU mechanism, in solve3D, refine3D_auto and
-postprocess_nu alike. Records: `doc/implementation_notes/pcg_decision_log.md`
+postprocess_nu alike. Records: `doc/implementation_notes/completed/pcg_decision_log.md`
 (2026-09-16 to 2026-09-18).
 
 ## 11. Matching References

@@ -15,7 +15,7 @@ ordinary half-map matching unless another policy changes the bandwidth.
 `filt_mode=nonuniform_lpset` activates the same NU products and promotes the
 selected NU bandwidth into LP-set matching with merged registration-reference
 topology. The public policy is documented in
-`doc/policies/nonuniform_filtering_policy.md`.
+`doc/policies/NU/nonuniform_filtering_policy.md`.
 
 `src/main/params/simple_parameters.f90` declares the value and
 `simple_parameters_phases.f90` derives `l_nonuniform` and

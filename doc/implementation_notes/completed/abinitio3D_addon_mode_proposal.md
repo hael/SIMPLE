@@ -8,7 +8,7 @@ the revision log (section 10, 2026-09-26).
 
 Status (2026-09-27): completed, including chaining (phase 4) and the streaming
 prerequisites. The current contract is
-[abinitio3D_addon_policy.md](../../policies/3D/abinitio3D_addon_policy.md);
+[solve3D_addon_policy.md](../../policies/3D/solve3D_addon_policy.md);
 this note keeps the design history, the review record and the decisions.
 
 ## 1. Context and goal

@@ -16,7 +16,7 @@ the review found and fixed the production defects recorded in section 9.7
 and removed the dead routines recorded there. What remains is Phase 5, the
 simulation-truth gates of the workflow entries and the nightly runner, and the
 checks nobody has observed yet (section 16, criterion 10); both are carried by
-`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`,
+`doc/refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md`,
 the live document from here on. The policy for day-to-day work (what a test
 is, where it goes, how to write it, what runs when, and where every old test
 went) is `doc/policies/test_environment_policy.md`; the review's verdicts and
@@ -506,7 +506,7 @@ need user data and are manual; the nano workflows are sub-suites of
 `lib_single` (`nanoparticle atoms`, `C-alpha molecules`); the second picker
 of `simulated_workflow` is open. The truth gates and their floors are
 Phase 5, assigned to Ruben
-(`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`).
+(`doc/refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md`).
 Its map gate is specified there: the `abinitio3D` map is neither docked to
 the truth map nor necessarily of the right hand, so the gate makes the truth
 map with `pdb2mrc` on the same grid, docks the map to it with `dock_vols` at
@@ -2052,7 +2052,7 @@ the utils batch.
 
 **single (2026-09-23, Hans: "Ruben's code: transfer it, and instruct him").**
 The six SINGLE cases are Ruben's; they moved as they were and
-`doc/refactoring_notes/single_area_tests_handover.md` tells him, test by
+`doc/refactoring_notes/planned/single_area_tests_handover.md` tells him, test by
 test, what they have to assert. `detect_calpha` (the only one with a
 failure path) is `simple_calpha_finder_tester`, sub-suite `C-alpha finder`
 of the new thirteenth fast suite `unit_single`, which also takes the
@@ -2078,7 +2078,7 @@ THROW_HARD; the review moved each to the area of what it tests and turned
 its checks into assertions (same conditions, same messages; reads that
 depend on a missing file are skipped; the fixture directory, which every
 run used to leave behind, is removed when every check passed).
-`doc/refactoring_notes/stream_area_tests_handover.md` tells Ruben what
+`doc/refactoring_notes/planned/stream_area_tests_handover.md` tells Ruben what
 they should pin beyond counts and files.
 
 `sieve_cavgs` tested `ptcl_sieve%collect_and_reject`: it is
@@ -2291,7 +2291,7 @@ hand-kept map had missed and removes a duplicate entry. No CTest process is
 added or removed (budget 25).
 
 Phase 5 is Ruben's
-(`doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`):
+(`doc/refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md`):
 the truth gates of each workflow entry, with the map gate specified as in
 section 5.2.2 (a same-grid `pdb2mrc` truth map, `dock_vols` at 15 to 20 A,
 the hand chosen by the docking correlation of the map and its mirror, the
@@ -2592,7 +2592,7 @@ CI, scripts, implementation notes and user instructions.
 | 2 | C | **Split `units` into hermetic area suites, then declare the fast gate.** Reconcile the two routes into one implementation (the union of their sub-suites), move the sub-suite lists into the grouped modules of section 6.1, move `forked process` out to its own `platform` entry (decided, section 4.6) and confirm the remaining `unit_ipc` sub-suites are localhost-only and bounded. Register one entry per area suite (section 5.1 table); when every registered suite meets the admission rules, relabel them `fast`, drop the `provisional` entry, set `SIMPLE_CTEST_BUDGET` to the registered count, and turn on the 30 s check in `ctest_budget.py`. Shrink what is over budget. Remove the standalone `simple_test_units` and its CI call. | Every area suite runs in one process and meets the admission rules; the `fast` label is under 30 s with `ctest --parallel`; the budget ratchet is armed; a failure names its suite. **Landed 2026-09-22** (`simple_commanders_test_class` rewritten as area tables over a `unit_suite` type, `suite=` input, `SIMPLE_UNIT_ORDER=reverse`, `forked_process` under `platform`, `SIMPLE_CTEST_BUDGET=19`, `GATE_DECLARED=yes`). **Met 2026-09-22:** the `--compile-tests` build passed 7/7 in 3.3 s real; every suite also passed with `SIMPLE_UNIT_ORDER=reverse`, so no sub-suite leaks state into its neighbours in either direction. |
 | 3 | B | **Review everything else.** The other 149 identities, area by area (section 9): `demote` to a named library suite or the workflow gates, `keep` as manual, `merge`, `delete` or `retire`; the 53 two-route identities and 14 footprint clusters resolved to one implementation each; deletions applied with their retired-tests rows and coverage accounting. | Every identity has a verdict naming its destination; no pair or cluster retains two implementations of the same coverage. **Met 2026-09-24:** all 92 identities of the inventory's area tables have a verdict with reviewer and date, and the retired-tests table has 136 rows (section 9.7, from the geometry batch to the wrap-up). |
 | 4 | B + D | **Build the library suites.** Area by area: the survivors move into the grouped module, gain the assertions their verdicts require, and are registered as one `lib_<area>` entry under `library`; standalone binaries removed as each suite completes. The first suite (`lib_fft` or `lib_geometry`) is the pilot for the fused extensive shape. | Each library suite runs in one process nightly with a recorded time; its members' binaries are gone. **Done within Phase 3, 2026-09-24:** the review built each library suite as it reviewed the area, so Phase 4 had no pass of its own: `lib_reconstruction`, `lib_cart_align3D`, `lib_heterogeneity`, `lib_single`, `lib_stream` (section 5.2.1). The pilot named here never existed: the last members of `lib_fft`, `lib_geometry` and `lib_masks` became fast sub-suites and a program. Every standalone binary is gone. The recorded nightly time of each suite comes with the first night of the runner (Phase 5). |
-| 5 | D | **Simulation-truth gates and the nightly runner.** `simulated_workflow`, `single_workflow` and `mini_stream` compare against the generating model (FSC to the truth map, pose agreement) with declared floors; the nightly `ctest -L "library|workflow"` run and its archive on the dedicated machine. | The nightly run completes unattended and reports per-suite times and per-workflow metrics against floors. **Assigned to Ruben 2026-09-24** (Hans): the truth gates and the design and code of the nightly runner, `doc/refactoring_notes/phase5_workflow_gates_and_nightly_runner_handover.md`. |
+| 5 | D | **Simulation-truth gates and the nightly runner.** `simulated_workflow`, `single_workflow` and `mini_stream` compare against the generating model (FSC to the truth map, pose agreement) with declared floors; the nightly `ctest -L "library|workflow"` run and its archive on the dedicated machine. | The nightly run completes unattended and reports per-suite times and per-workflow metrics against floors. **Assigned to Ruben 2026-09-24** (Hans): the truth gates and the design and code of the nightly runner, `doc/refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md`. |
 | 6 | B | **Mother suites, platform and socket cases** with explicit isolation and launcher policy. | Parent suites launch `simple_test_exec` children with full accounting; platform cases skip or register predictably and cannot hang the fast gate. **Met by the review, 2026-09-24:** no mother suite is left (those that launched child cases were merged into in-process sub-suites or deleted, section 9.7); the platform entries (`forked_process`, and `coarrays`, `flex_gpu` and `openmp_offload` when CMake has the capability) carry their own label and timeout and are outside the fast gate; the socket role programs are deleted and the IPC socket tests in `unit_ipc` are bound to localhost. |
 | 7 | B | **Retire the glob.** Remove the standalone executable glob, switch CI to `ctest -L fast` plus the platform jobs, normalize documentation, delete stranded per-test commander types, routers and UI entries. | A clean `--compile-tests` build produces only `simple_test_exec`; registry consistency passes; CI uses no standalone Fortran test executable. **Met 2026-09-24:** the glob and `production/tests` went with the utils review; the stranded fft and geometry test categories and the dead `nspace_commander` went with the wrap-up; `scripts/check_test_registry.py` passes and runs on every `--compile-tests` build; CI runs `ctest` by label and name (section 9.7). |
 

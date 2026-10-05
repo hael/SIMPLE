@@ -2,7 +2,7 @@
 
 For the draft policy that combines these memory estimates with CPU, GPU,
 scheduler, concurrency, and partition-count limits, see
-[hardware_resource_planning.md](hardware_resource_planning.md).
+[hardware resource planning](../implementation_notes/planned/hardware_resource_planning.md).
 
 The user-facing estimator is `scripts/memory_estimator.py`; its active
 coefficients are stored beside it in `scripts/memory_estimator_models.json`.

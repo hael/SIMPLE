@@ -6,8 +6,8 @@
 
 **Date:** 2026-08-17
 
-**Review incorporated:**
-`doc/refactoring_notes/staged_domain_driven_design_refactor_review.md`
+**Review incorporated:** the review findings were folded into this living note;
+there is no separate review document in the repository.
 
 **Design case study incorporated:** X domain-driven architecture and source
 review, 2026-08-17
@@ -1129,5 +1129,5 @@ keeping storage layout and persistence ownership outside the domain API.
 
 The X command-object, CLI-specification, and distributed-execution
 mechanisms are adopted through a separate, independent program:
-`doc/refactoring_notes/x_execution_layer_adoption.md`. It does not depend on
+`doc/refactoring_notes/planned/next_release/x_execution_layer_adoption.md`. It does not depend on
 any milestone here and should land first.

@@ -24,7 +24,7 @@ Decisions taken in the revision:
 This is a model-building region-of-interest mask. It is not a replacement for
 the NU filter-field envelope (`nu_envmask3D`), the density automask, the
 spherical NU objective support, or the FSC mask. It supports the C-alpha
-detection work in [`calpha_finder.md`](calpha_finder.md).
+detection work in the completed [`calpha_finder.md`](../completed/calpha_finder.md).
 
 ## 1. Problem and contract
 

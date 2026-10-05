@@ -23,11 +23,11 @@ Purpose: single living design and validation record for:
 Related contracts:
 
 - [Canonical Sigma2 State Refactoring](../completed/canonical_sigma2_state_refactoring.md)
-- [Abinitio2D Policy](../../policies/2D/abinitio2D_policy.md)
+- [Solve2D Policy](../../policies/2D/solve2D_policy.md)
 - [Class-Average Bootstrap Policy](../../policies/2D/class_average_bootstrap_policy.md)
 - [Importance Sampling and Fractional Update Policy](../../policies/importance_sampling_fractional_update_policy.md)
 - [Sampling and Fractional Updates](../../algorithms/sampling_and_fractional_updates.md)
-- [Cluster2D Class Averaging](../../algorithms/cluster2d_class_averaging.md)
+- [Refine2D Class Averaging](../../algorithms/refine2d_class_averaging.md)
 - [Refine3D Policy](../../policies/3D/refine3D_policy.md)
 - [Reconstruct3D PCG Policy](../../policies/3D/reconstruct3D_pcg_policy.md)
 
@@ -196,7 +196,7 @@ resamples 10 of them and samples 30 first-time particles, so `N = 130` and
 | Current: `1 - f` | 1 - 40/130 = 0.69 | 40 + 69 = 109 |
 | Population rule (Section 4.1): `(N - n)/M` | 90/100 = 0.9 | 40 + 90 = 130 |
 
-[Cluster2D Class Averaging](../../algorithms/cluster2d_class_averaging.md)
+[Refine2D Class Averaging](../../algorithms/refine2d_class_averaging.md)
 states that the 2D blend keeps the full dataset's sampling mass, and
 [Sampling and Fractional Updates](../../algorithms/sampling_and_fractional_updates.md)
 states it for the 3D chain. Both statements hold only when the represented

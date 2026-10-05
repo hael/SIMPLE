@@ -3,7 +3,7 @@
 ! production stage or commander with the arguments the stream gives it, and removes the directory
 ! only if every check passed (otherwise it is kept and logged). The preprocessing stage submits
 ! worker jobs, so it stays a workflow test (stream_preproc). What these tests should pin beyond
-! counts and files: doc/refactoring_notes/stream_area_tests_handover.md.
+! counts and files: doc/refactoring_notes/planned/stream_area_tests_handover.md.
 module simple_stream_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api

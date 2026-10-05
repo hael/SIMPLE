@@ -2,8 +2,10 @@
 
 ## Status and intent
 
-This is a forward-looking implementation note. It does not describe a mode
-that is currently available in `refine3D`.
+**Rejected/retired.** This proposal depended on the former `flex_analysis`
+diffusion-manifold pipeline. That pipeline was removed after it failed to
+produce usable states, so this is not an active route to implementation. The
+current heterogeneity architecture is `flex_pca`.
 
 The goal is to couple the registered-residual diffusion manifold from
 `flex_analysis` to Bayesian 3D refinement as a robust reconstruction

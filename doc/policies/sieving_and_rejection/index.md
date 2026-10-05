@@ -8,7 +8,7 @@ size-compatibility filtering, and staged particle sieving workflows.
 - [ptcl_sieve_policy.md](ptcl_sieve_policy.md): staged coarse/fine particle-sieve policy, chunk lifecycle, submission/collection order, completion semantics, counters, and change guardrails.
 - [class_compatibility_policy.md](class_compatibility_policy.md): support-model fit/infer policy for class-size compatibility (`a/b/c` axes), convergence semantics, metrics contract, and test requirements.
 - [model_cavgs_rejection.md](model_cavgs_rejection.md): shared class-average quality backend, command modes, feature bank, hard rejects, built-in models, analysis output, and promotion rules.
-- [distance_transform_shape_rejection_plan.md](distance_transform_shape_rejection_plan.md): rotationally invariant distance-transform shape evidence plan for model-backed rejection.
+- [distance-transform shape rejection plan](../../implementation_notes/planned/distance_transform_shape_rejection_plan.md): proposed rotationally invariant distance-transform shape evidence for model-backed rejection.
 
 ## Implementation Pointers
 

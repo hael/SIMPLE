@@ -8,9 +8,8 @@ routed.
 Related policies:
 
 - [refine3D_policy.md](refine3D_policy.md)
-- [refine3D_states_policy.md](refine3D_states_policy.md)
-- [sigma_calculation_policy.md](sigma_calculation_policy.md)
-- [importance_sampling_fractional_update_policy.md](importance_sampling_fractional_update_policy.md)
+- [refine3D states policy](../heterogeneity/refine3D_states_policy.md)
+- [importance-sampling and fractional-update policy](../importance_sampling_fractional_update_policy.md)
 
 Primary implementation:
 

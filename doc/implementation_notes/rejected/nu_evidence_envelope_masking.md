@@ -6,14 +6,15 @@
 > retired: matching references are NEVER multiplied with an envelope
 > (evidence or density) before reprojection — hard-removing density present
 > in the particle images destroys pose discrimination (PfCRT collapse,
-> `pcg_priors_history.md` item 8). Under `automsk=yes` the evidence envelope now
+> `doc/implementation_notes/completed/pcg_priors_history.md` item 8). Under
+> `automsk=yes` the evidence envelope now
 > defines the NU filter-field BACKGROUND (heavy background low-pass,
 > cisTEM-style), and on the PCG backend that field enters reconstruction
 > only through the `Q_NU` precision prior. The `envfsc=yes` density-mask FSC
 > path described as unfinished here is live. See
-> `doc/policies/automasking_policy.md`,
-> `doc/policies/nonuniform_filtering_policy.md`, and
-> `doc/implementation_notes/pcg_nonuniform_code_review.md` for the current
+> `doc/policies/3D/automasking_policy.md`,
+> `doc/policies/NU/nonuniform_filtering_policy.md`, and
+> `doc/policies/3D/reconstruct3D_pcg_policy.md` for the current
 > contract; the remainder of this note is retained as a historical record.
 
 > Implementation note. The standalone routine is reachable through
@@ -52,7 +53,7 @@
 > solvent false-positive rate 0.008 on the same fixture.
 
 The implemented standalone algorithm is described in
-[`NU-Evidence Envelope Mask in nu_filt3D`](../algorithms/nu_evidence_envelope_mask.md).
+[`NU-Evidence Envelope Mask in nu_filt3D`](../../algorithms/nu_evidence_envelope_mask.md).
 
 ## 1. Summary
 

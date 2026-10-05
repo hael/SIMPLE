@@ -440,7 +440,7 @@ contains
 
     !> nightly: the stream stages that run in-process, with the arguments the stream gives them
     !! (Ruben's stream tests; optics assignment waits a minute for the stream watcher);
-    !! doc/refactoring_notes/stream_area_tests_handover.md says what they should pin beyond counts
+    !! doc/refactoring_notes/planned/stream_area_tests_handover.md says what they should pin beyond counts
     subroutine suites_lib_stream( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n

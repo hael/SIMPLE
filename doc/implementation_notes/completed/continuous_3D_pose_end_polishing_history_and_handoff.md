@@ -3,7 +3,7 @@
 **Status:** COMPLETED HISTORICAL RECORD
 **Consolidated:** 2026-08-25
 **Pre-consolidation snapshot:** `95e083817`
-**Current living development record:** [continuous_3D_pose_end_polishing.md](../continuous_3D_pose_end_polishing.md)
+**Retired predecessor record:** [continuous_3D_pose_end_polishing.md](../rejected/continuous_3D_pose_end_polishing.md)
 **Validation evidence:** [continuous_3D_pose_end_polishing_validation_evidence.md](continuous_3D_pose_end_polishing_validation_evidence.md)
 **Scientific review:** [continuous_3D_pose_end_polishing_scientific_review.md](continuous_3D_pose_end_polishing_scientific_review.md)
 
@@ -33,7 +33,7 @@ The isolated derivative and pose-capture experiments are complete. They support 
 
 ### 1. Original reconstruction-coupled proposal
 
-The frozen proposal [continuous_3D_refinement_on_pcg_operator.md](../continuous_3D_refinement_on_pcg_operator.md) began from the Cartesian Fourier workspace developed around `reconstructor_pcg`. It proposed alternating volume reconstruction and local pose updates.
+The frozen proposal [continuous_3D_refinement_on_pcg_operator.md](continuous_3D_refinement_on_pcg_operator.md) began from the Cartesian Fourier workspace developed around `reconstructor_pcg`. It proposed alternating volume reconstruction and local pose updates.
 
 This architectural origin led to the temporary name “PCG pose polishing.” That name is retired. The LM pose solve and the PCG volume solve have different unknowns, equations, and scientific roles.
 

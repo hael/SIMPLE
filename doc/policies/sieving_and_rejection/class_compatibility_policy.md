@@ -2,7 +2,7 @@
 
 This document defines the behavioral policy for class-average size
 compatibility in SIMPLE, implemented by the module
-[../../src/main/class/simple_class_compatibility.f90](../../src/main/class/simple_class_compatibility.f90).
+[simple_class_compatibility.f90](../../../src/main/class/simple_class_compatibility.f90).
 
 The policy governs how support-model fitting, inference, convergence,
 and telemetry behave. It is intended to make rejection decisions stable,
@@ -164,7 +164,7 @@ Policy-level tests must cover:
 7. kill/reset semantics after valid fit
 
 Reference tester module:
-[../../src/main/class/simple_class_compatibility_tester.f90](../../src/main/class/simple_class_compatibility_tester.f90).
+[simple_class_compatibility_tester.f90](../../../src/main/class/simple_class_compatibility_tester.f90).
 
 ## 10. Change Checklist
 

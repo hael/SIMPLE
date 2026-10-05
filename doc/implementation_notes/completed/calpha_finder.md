@@ -1,5 +1,8 @@
 # C-alpha finder
 
+**Status:** completed. The `detect_calpha` UI registration, execution dispatch,
+commander, and C-alpha finder implementation are present on current `master`.
+
 ## Contract
 
 The first model-building slice adds `simple_exec prg=detect_calpha`. It locates

@@ -2,7 +2,7 @@
 ! Optional fields (res0143/res05/pop, cfar when > 0, FSC, 72x36 oridist, oridistpath, per-kind MRC
 ! min/max, reprojtiles) are emitted only when set; i/i_max route IPC batches.
 ! reprojtiles is allocatable: never set it on objects sent via raw serialise().
-! See doc/refactoring_notes/stream_area_review_2026-09-30.md, item A6.
+! See doc/refactoring_notes/completed/stream_area_review_2026-09-30.md, item A6.
 module simple_gui_metadata_vol3D
 use json_module,               only: json_core, json_value
 use simple_defs,               only: LONGSTRLEN

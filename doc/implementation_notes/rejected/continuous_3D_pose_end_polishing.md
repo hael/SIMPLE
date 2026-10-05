@@ -19,9 +19,9 @@
 **Execution status:** NUMERICAL VALIDATION COMPLETE — PHASES 0–11 COMPLETE; NO PRODUCTION CALLER<br>
 **Updated:** 2026-08-31<br>
 **Rebased two-document checkpoint:** `f78d9dff3`<br>
-**Completed history:** [completed/continuous_3D_pose_end_polishing_history_and_handoff.md](completed/continuous_3D_pose_end_polishing_history_and_handoff.md)<br>
-**Completed evidence:** [completed/continuous_3D_pose_end_polishing_validation_evidence.md](completed/continuous_3D_pose_end_polishing_validation_evidence.md)<br>
-**Scientific review:** [completed/continuous_3D_pose_end_polishing_scientific_review.md](completed/continuous_3D_pose_end_polishing_scientific_review.md)
+**Completed history:** [continuous_3D_pose_end_polishing_history_and_handoff.md](../completed/continuous_3D_pose_end_polishing_history_and_handoff.md)<br>
+**Completed evidence:** [continuous_3D_pose_end_polishing_validation_evidence.md](../completed/continuous_3D_pose_end_polishing_validation_evidence.md)<br>
+**Scientific review:** [continuous_3D_pose_end_polishing_scientific_review.md](../completed/continuous_3D_pose_end_polishing_scientific_review.md)
 
 This is the single living development record. The approval-controlled requirements come first. The execution approach and progress record follow the contract approval boundary. After the contract becomes FINAL, the preceding requirements remain frozen unless a requirement review returns the contract to IN REVIEW; implementation discoveries and evidence update only the later execution portion.
 
@@ -34,7 +34,7 @@ cd "$HOME/Projects"
 bash "$HOME/Projects/hael_SIMPLE-rsync-test/production/tests/pose_cont_validation/run_oracle_validation.sh"
 ```
 
-The runner creates one timestamped `continuous_3D_pose_validation_*` directory directly below `~/Projects`, continues through independent cases after an individual failure, and writes the aggregate result to `STATUS.txt` and `analysis/summary.json`. A valid package ends with `STATUS.txt` equal to `PASS`. The retained PCG reconstruction mother suite is expected to return status 1 only for the exact frozen Phase 2 `halfset_fsc` disposition; the analyzer rejects any different PCG result. Python 3 is used only by this validation-package analyzer and is not a SIMPLE runtime dependency. The complete prerequisites, contents, and known-PCG rule are documented in [production/tests/pose_cont_validation/README.md](../../production/tests/pose_cont_validation/README.md).
+The runner created one timestamped `continuous_3D_pose_validation_*` directory directly below `~/Projects`, continued through independent cases after an individual failure, and wrote the aggregate result to `STATUS.txt` and `analysis/summary.json`. The validation package and its README were removed with the retired implementation; the recorded results below are the surviving evidence.
 
 The latest authoritative handoff rerun is `~/Projects/continuous_3D_pose_validation_20260831_121306`. Passing this package establishes the numerical and regression contracts in this record. It does not activate `pose_cont`, add a `refine3D` caller, or establish real-data utility.
 

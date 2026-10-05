@@ -314,9 +314,9 @@ accumulation and the master's reduction, not the solve.
 `simple_test_exec test=pcg_recon` (operator identities, support contract,
 window band regression), `test=pcg_frac_update` (trailing accumulator
 arithmetic), `test=rec3D_backends` (gridding vs PCG on a project with
-poses, with optional truth). `doc/implementation_notes/automsk_yes_code_review.md`
-lists the nine-case validation matrix for the envelope/NU changes of
-2026-09-09.
+poses, with optional truth). The envelope/NU validation history is retained in
+`doc/implementation_notes/completed/pcg_priors_history.md`; the current masking
+contract is `doc/policies/3D/automasking_policy.md`.
 
 ## 10. What is deliberately not there
 

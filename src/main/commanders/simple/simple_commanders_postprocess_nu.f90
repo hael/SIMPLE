@@ -2,7 +2,7 @@
 ! Evidence pair: the state's _even_unfil/_odd_unfil. With _even/_odd present the refinement's competition
 ! is rerun for <vol>_locres_nu. nu_evidence_sharpen_vol then sharpens the _solvent pair if present, else
 ! the unfil pair, to <vol>_pproc_nu (+_mirr). Display maps only, never FSC/resolution inputs.
-! Design: doc/implementation_notes/nu_evidence_local_sharpening.md.
+! Design: doc/implementation_notes/completed/nu_evidence_local_sharpening.md.
 module simple_commanders_postprocess_nu
 use simple_commanders_api
 use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &

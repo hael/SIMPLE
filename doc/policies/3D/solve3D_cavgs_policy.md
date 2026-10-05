@@ -4,9 +4,7 @@ This document records the current policy for `solve3D_cavgs`, the
 class-average route for de novo map determination (ab initio 3D
 reconstruction coupled with initial 3D refinement). It is separate from
 the particle-based [solve3D_policy.md](solve3D_policy.md) policy and
-from the base [refine3D_policy.md](refine3D_policy.md) policy. The restarted
-consensus rejection wrapper is documented in
-[solve3D_cavgs_reject_policy.md](solve3D_cavgs_reject_policy.md).
+from the base [refine3D_policy.md](refine3D_policy.md) policy.
 
 ## 1. Scope
 

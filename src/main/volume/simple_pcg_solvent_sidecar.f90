@@ -2,7 +2,7 @@
 !  Per half: w(r) in [0,1] from its own prior-free map (Otsu + logistic on |x| smoothed at ~2x FSC=0.143),
 !  then a cold re-solve with ridge lambda_s(1-w). Prior-free pair = base pair (FSC, NU, evidence, _unfil);
 !  prior'd pair = replay base and NU apply target. lambda_rel: closed-form cross-half CV unless given.
-!  Rationale: doc/implementation_notes/pcg_decision_log.md (solvent-prior entries).
+!  Rationale: doc/implementation_notes/completed/pcg_decision_log.md (solvent-prior entries).
 module simple_pcg_solvent_sidecar
 use simple_core_module_api
 use simple_parameters,        only: parameters

@@ -704,7 +704,7 @@ These are not comment problems. They surfaced during the audit.
 
 1. Correct the 29 WRONG blocks (table E1). The drafts note has an accurate short replacement for
    each.
-2. Move the lab notebook into decision logs. `doc/implementation_notes/pcg_decision_log.md`
+2. Move the lab notebook into decision logs. `doc/implementation_notes/completed/pcg_decision_log.md`
    already exists. flex_pca and NU need one each, or a section in the existing notes.
 3. Collapse the 51 templated headers to `!@descr:` plus at most 4 lines, dropping the
    DEPENDENCIES, routine and field lists.

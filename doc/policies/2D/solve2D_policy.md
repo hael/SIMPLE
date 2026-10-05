@@ -270,7 +270,7 @@ value; a numerically invalid run retains the incoming assignment untouched.
 Neither outcome falls back to the callback. Joint acceptance guards
 (material-improvement tolerance, bound-pinning demotion) are shared with
 refine3D; see the continuous in-plane section of
-[refine3D_policy.md](refine3D_policy.md).
+[refine3D policy](../3D/refine3D_policy.md).
 
 ## 5. Iteration Semantics
 

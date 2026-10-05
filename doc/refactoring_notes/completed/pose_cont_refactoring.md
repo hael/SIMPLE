@@ -788,7 +788,7 @@ Paths are under `src/main/` unless they start with `src/` or `doc/`.
 | `production/CMakeLists.txt` | The `cont_refine3D_1jxy` entry; `SIMPLE_CTEST_BUDGET` 29 -> 30 (C18). No other change | 8 |
 | `ui/simple_test/simple_test_ui_highlevel.f90`, `exec/simple_test_exec_highlevel.f90` | Register the `cont_refine3D_1jxy` test program and route it to its commander (8; added in Phase 8: `check_test_registry` requires every CTest `test=` to be a test UI program with one router case) | 8 |
 | `doc/policies/3D/refine3D_policy.md`, `doc/policies/test_environment_policy.md`, `doc/code_overview/fortran-indexes/` | Phase 10 | 10 |
-| `doc/implementation_notes/continuous_3D_pose_cont_refine3D.md`, `continuous_3D_pose_end_polishing.md`, `continuous_3D_refinement_on_pcg_operator.md` | A superseded-by note at the top of the two that describe the replaced implementation; the one sentence of the third that names the removed refiner (10; added in Phase 10: the closing stale-symbol scan finds them; they stay as records, not rewritten) | 10 |
+| `doc/implementation_notes/rejected/continuous_3D_pose_cont_refine3D.md`, `doc/implementation_notes/rejected/continuous_3D_pose_end_polishing.md`, `doc/implementation_notes/completed/continuous_3D_refinement_on_pcg_operator.md` | A superseded-by note at the top of the two that describe the replaced implementation; the third is the completed design record for the landed continuous-refinement outcome (10; added in Phase 10) | 10 |
 
 Besides this document, the table is the complete list of files the
 refactoring edits. A phase edits only the files whose row names that phase;

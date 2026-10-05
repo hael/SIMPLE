@@ -135,4 +135,4 @@ accumulators by summation, which is exact.
 - PCG operator and solver: `src/main/volume/simple_reconstructor_pcg.f90`;
   orchestration in `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`.
 - Policies: `doc/policies/KB_Interpolation_Policy.md`,
-  `doc/policies/reconstruct3D_pcg_policy.md`.
+  `doc/policies/3D/reconstruct3D_pcg_policy.md`.

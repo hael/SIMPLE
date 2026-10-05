@@ -42,8 +42,10 @@ The main memory changes are:
 
 This note concerns probabilistic pre-alignment only. It complements:
 
-- [`separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md`](../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md);
-- [`projrec_assignment_ordered_batching.md`](projrec_assignment_ordered_batching.md).
+- [`separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md`](../../policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md).
+
+The earlier assignment-ordered batching companion is not retained separately;
+its relevant contract is consolidated in this living note.
 
 It does not change reconstruction ownership or the alignment/reconstruction
 barrier.

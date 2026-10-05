@@ -2,7 +2,7 @@
 
 > [!success] Project closed — 2026-08-12
 > Phases 3D-0 through 3D-5 and their hardening follow-ups are complete. The
-> authoritative production policy is `doc/policies/refine3D_policy.md`:
+> authoritative production policy is `doc/policies/3D/refine3D_policy.md`:
 > `inpl_cont=no` preserves the legacy discrete-angle callback route, while
 > eligible `inpl_cont=yes` preserves the same legacy candidate selection and
 > applies one bounded local joint `(sx,sy,rotind_frac)` refinement to the

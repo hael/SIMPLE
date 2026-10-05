@@ -32,7 +32,7 @@ SIMPLE already contains the following pieces of the resource model:
 - `scripts/memory_estimator.py` provides calibrated memory estimates for
   `motion_correct`, `solve2D`, and `solve3D`. The calibration data,
   targets, safety factors, and limitations are described in
-  [memory.md](memory.md).
+  [memory estimator and benchmark guide](../../how2s/memory_estimator.md).
 - `nparts` is the total number of distributed work partitions.
 - `ncunits` is the maximum number of partition jobs dispatched concurrently.
 - When `ncunits` is omitted, the parameter layer currently sets

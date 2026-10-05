@@ -21,7 +21,7 @@ type :: flex_state_maps
 end type flex_state_maps
 
 !> what the common delivery applies to a backend's maps. These are the backends' explicit
-!! differences (doc/refactoring_notes/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18.md
+!! differences (doc/refactoring_notes/completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18.md
 !! 6.7): each backend declares its own values, nothing is normalised between them.
 type :: flex_state_delivery_policy
     logical :: l_state_eofilt = .false.   !< per-state eo-FSC optimal filter instead of the low-pass at eo-FSC(0.143)

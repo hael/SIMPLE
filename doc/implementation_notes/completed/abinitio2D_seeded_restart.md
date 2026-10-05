@@ -4,7 +4,7 @@ Implementation note, 2026-09-16, revised the same day after review (§8
 records the decisions). Implemented the same day on top of master
 `6a41a40f0` (uncommitted; §9 lists the files); compilation and the test
 runs of §6 are Hans's. Companion pages:
-`doc/policies/2D/abinitio2D_policy.md`,
+`doc/policies/2D/solve2D_policy.md`,
 `doc/policies/importance_sampling_fractional_update_policy.md`,
 `claude/refine3D_auto_registration_pass.md` (the 3D precedent for the
 full-particle `refine=prob` pass).
@@ -349,7 +349,7 @@ engaged.
   stream checkpointing or `nstages < 3`.
 - `simple_cluster2D_strategy.f90`: `init_standard_refs` names the mode in
   its rejection message.
-- `doc/policies/2D/abinitio2D_policy.md`: §2 (seeded entry), §3 (ownership
+- `doc/policies/2D/solve2D_policy.md`: §2 (seeded entry), §3 (ownership
   of the seed module), §4 (no sticky stage when seeded), §7 checklist item
   "does `cls_init=prev` preserve existing `eo` and never call
   `delete_2Dclustering`?".
@@ -438,6 +438,6 @@ The seed pass is reported by its own `>>> ABINITIO2D SEED PASS` line; the
 `src/main/commanders/simple/simple_commanders_abinitio2D.f90`,
 `src/main/strategies/parallelization/simple_cluster2D_strategy.f90`,
 `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_phases.f90`,
-`src/main/ui/simple_ui_params_common.f90`, `doc/policies/2D/abinitio2D_policy.md`,
+`src/main/ui/simple_ui_params_common.f90`, `doc/policies/2D/solve2D_policy.md`,
 this note. Not compiled; the §7 items are still to be confirmed at the
 first run.

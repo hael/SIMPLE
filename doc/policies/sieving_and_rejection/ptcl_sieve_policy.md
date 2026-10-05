@@ -2,7 +2,7 @@
 
 This document defines the behavioral policy for staged particle sieving in
 SIMPLE, implemented by
-[../../src/main/sieve/simple_ptcl_sieve.f90](../../src/main/sieve/simple_ptcl_sieve.f90).
+[simple_ptcl_sieve.f90](../../../src/main/sieve/simple_ptcl_sieve.f90).
 
 The policy captures lifecycle, tiering, chunk state transitions, rejection,
 completion, and change guardrails for `ptcl_sieve`.
@@ -296,7 +296,7 @@ Policy-level tests for `ptcl_sieve` must cover:
    `optics_dir` is given, and no `.tmp` left behind.
 
 Reference tester module:
-[../../src/main/sieve/simple_ptcl_sieve_tester.f90](../../src/main/sieve/simple_ptcl_sieve_tester.f90).
+[simple_ptcl_sieve_tester.f90](../../../src/main/sieve/simple_ptcl_sieve_tester.f90).
 
 ## 14. Change Checklist
 

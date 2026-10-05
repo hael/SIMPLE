@@ -13,7 +13,7 @@ work.
 
 ## Start Here
 
-1. `doc/policies/refine3D_policy.md`
+1. `doc/policies/3D/refine3D_policy.md`
 2. `src/main/ui/simple/simple_ui_refine3D.f90`
 3. `src/main/exec/simple_exec_refine3D.f90`
 4. `src/main/commanders/simple/simple_commanders_refine3D.f90`
@@ -76,8 +76,8 @@ Preserve that split when refactoring.
 
 ## Adjacent Files Worth Reading
 
-- `doc/policies/automasking_policy.md`
-- `doc/policies/nonuniform_filtering_policy.md`
+- `doc/policies/3D/automasking_policy.md`
+- `doc/policies/NU/nonuniform_filtering_policy.md`
 - `src/main/volume/simple_halfmap_diagnostics.f90`
 - `src/main/volume/simple_vol_pproc_policy.f90`
 - `src/main/nu_filt/*`

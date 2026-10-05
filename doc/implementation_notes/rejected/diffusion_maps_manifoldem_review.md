@@ -1,5 +1,10 @@
 # Diffusion maps: lessons from a ManifoldEM review
 
+**Rejected/retired.** This review covered the former `flex_analysis`
+diffusion-map pipeline. That pipeline and its policy were removed after it did
+not produce usable states; `flex_pca` is the active heterogeneity workflow.
+The review is retained as historical research context.
+
 ## Status
 
 **Implementation note — no code changes are implied by this document.**
@@ -70,7 +75,7 @@ would be applied.
 
 > **Implemented.** The production behavior, parameters, defaults, and safety
 > fallbacks now live in the
-> [`flex_analysis` policy, §3.1](../policies/flex_analysis_policy.md).
+> former `flex_analysis` policy (removed with that pipeline).
 > The review rationale below is retained for historical context.
 
 **ManifoldEM location**: `core.py`, function `fergusonE` (~line 182);
@@ -130,7 +135,7 @@ utility).
 > parameter-free inverse projection-bin occupancy measure through
 > `view_balance=yes|no`. The production behavior and the Ferguson-bandwidth
 > correction history live in the
-> [`flex_analysis` policy, §3.1](../policies/flex_analysis_policy.md).
+> former `flex_analysis` policy (removed with that pipeline).
 > The review rationale below is retained for historical context.
 
 **ManifoldEM location**: `DMembeddingII.py`, function `slaplacian` (~line 97):

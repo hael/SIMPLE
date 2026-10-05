@@ -2,10 +2,20 @@
 
 ## Status
 
-**Planning only. No code is proposed for immediate implementation.**
+**Completed in the current `refine3D` architecture.** The production outcome of
+this design is the Cartesian Fourier calculator and bounded five-parameter pose
+optimizer in `src/main/cftc`, integrated through `simple_strategy3D_cont` as
+`refine=cont` and through the `pose_cont` refinement policy. The optional
+minibatching idea in stage 5 remains conditional research, not unfinished work
+required to classify the continuous-refinement feature as complete.
+
+The staged text below is retained as the design record. The landed implementation
+was reorganized during the later `pose_cont` refactor, so current module names and
+the operational contract in `doc/policies/3D/refine3D_policy.md` take precedence
+over proposed names and intermediate staging in this note.
 
 This note expands the "Longer term" paragraph of section 10 of
-`doc/policies/reconstruct3D_pcg_policy.md` from a statement of intent into an
+`doc/policies/3D/reconstruct3D_pcg_policy.md` from a statement of intent into an
 implementable design. (It previously expanded section 12 of
 `ctf_sigma_weighted_pcg_reconstruction.md`; that note was deleted and superseded
 by the policy document in commit `5858d023f`, so its section numbering no longer
@@ -542,12 +552,14 @@ accumulator-domain trailing chains of
 the realized fraction `f` and the applied weight `u` (`ufrac_trec`) already
 distinct and the chains persisted for `rec_backend=pcg` too. The volume block
 is the PCG solve of this note, from a cold base since the 2026-09-10 warm-start
-retirement. The pose block is `simple_cartesian_pose_refiner` (since the pose_cont refactoring, 2026-10-01: `cartft_calc` and `cartft_pose_opt` in `src/main/cftc`) (the stage-1 to
-stage-3 numerics, validated, no caller), whose objective is the same whitened
-residual as section 3.1 -- so the joint objective in `(V, poses)` of section
+retirement. The pose block is now `cartft_calc` plus `cartft_pose_opt` in
+`src/main/cftc`, called by `strategy3D_cont` through `refine=cont` and the
+`pose_cont` policy. Its objective is the same whitened residual as section
+3.1 -- so the joint objective in `(V, poses)` of section
 3.1 is the one all three blocks minimize. Stage 5 is therefore not "add SGD"
 but "state how the chain's forgetting factor `u`, the cold-base PCG budget, and
-the per-particle LM polish interleave, and measure it". Two items carried over
+the per-particle LM polish interleave, and measure it". Two optional research
+items carried over
 from the retired `doc/refactoring_notes/rejected/abinitio3d_sgd_refinement_plan.md`
 belong to that question and nowhere else: weighted backprojection of top-K
 compact responsibilities from the probability tables into the accumulators
@@ -557,12 +569,21 @@ solve3D controller the way it emits `update_frac` -- on the chain `u` is a
 forgetting factor, so decaying it late in a run is Polyak averaging over
 repeated particle visits. Whether either helps is an empirical question with
 no claim attached; the PfCRT and streptavidin runs recorded in
-`pcg_decision_log.md` are the baseline any such measurement must beat.
+`doc/implementation_notes/completed/pcg_decision_log.md` are the baseline any
+such measurement must beat.
 
 ## 6. Staged implementation with gates
 
 Each stage must pass its gate before the next begins. This mirrors the staging
 that made the reconstruction operator trustworthy.
+
+**Closure note.** Stages 1--4 were not landed literally in this original file
+and module sequence. Their intended continuous shift/rotation optimization and
+workflow integration were delivered by the later `cftc`/`strategy3D_cont`
+implementation and validated in the completed `pose_cont` refactor record.
+The stage descriptions below are therefore design history, not an open
+implementation checklist. Stage 5 remains optional research triggered only by
+a measured minibatching need.
 
 **Stage 0 -- even/odd split and FSC in the `reconstruct3D` PCG backend: complete.**
 The production workflow now reconstructs independent halfsets, reports FSC and
@@ -683,11 +704,11 @@ either way.
 - Punjani, Rubinstein, Fleet, Brubaker. *cryoSPARC.* Nature Methods 14(3),
   290-296 (2017).
 - Scheres. *RELION.* J. Struct. Biol. 180(3), 519-530 (2012).
-- `doc/policies/reconstruct3D_pcg_policy.md` -- contract of the code that runs
+- `doc/policies/3D/reconstruct3D_pcg_policy.md` -- contract of the code that runs
   today; especially section 5 (preconditioner and kernelized operator). It
   supersedes the deleted `ctf_sigma_weighted_pcg_reconstruction.md`.
-- `doc/policies/reconstruct3D_pcg_policy.md` and
-  `doc/implementation_notes/pcg_priors_history.md` -- the production workflow and
+- `doc/policies/3D/reconstruct3D_pcg_policy.md` and
+  `doc/implementation_notes/completed/pcg_priors_history.md` -- the production workflow and
   regularization contracts. Note the production performance rule that the
   kernel PCG *solve* is data-free after `(B,D)` accumulation, which does NOT
   hold for the pose objective specified here.

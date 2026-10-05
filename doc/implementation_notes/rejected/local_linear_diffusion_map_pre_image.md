@@ -1,5 +1,10 @@
 # Local-linear diffusion-map pre-image — validation plan
 
+**Rejected/retired.** This described the former `flex_analysis` diffusion-map
+pipeline. That pipeline was removed after it failed to produce usable states;
+the active heterogeneity workflow is `flex_pca`. The implementation and checks
+below are retained only as historical evidence.
+
 ## Current implementation
 
 `flex_analysis` now defaults to `preimage_mode=linear`.  It retains the

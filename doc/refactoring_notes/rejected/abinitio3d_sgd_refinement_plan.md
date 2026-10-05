@@ -19,9 +19,9 @@ this header.
   `sgd*` parameter exists.
 - First-order volume updates (preconditioned SGD, momentum, Adam; Phases 6-7)
   are rejected, not deferred:
-  `doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md`
+  `doc/implementation_notes/completed/continuous_3D_refinement_on_pcg_operator.md`
   sections 2.3(b) and 8, and the 2026-09-10 retirement of PCG cross-iteration
-  warm starts (`doc/implementation_notes/pcg_decision_log.md`). PCG solves the
+  warm starts (`doc/implementation_notes/completed/pcg_decision_log.md`). PCG solves the
   normal equations from a cold base; it does not step on the volume.
 - Phase 9 ("continuous pose refinement -- do not start here") is the most
   developed part of the picture. Option 1 became `inpl_cont=yes`: the joint
@@ -30,7 +30,7 @@ this header.
   Option 3 became `src/main/volume/simple_cartesian_pose_refiner.f90`: the
   five-parameter tangent-space Levenberg-Marquardt on Cartesian central
   sections, numerically validated
-  (`doc/implementation_notes/continuous_3D_pose_end_polishing.md`), no
+  (`doc/implementation_notes/rejected/continuous_3D_pose_end_polishing.md`), no
   production caller yet. Option 2 was skipped.
 - Stale facts: `simple_reconstructor_eo.f90` is retired
   (`completed/retire_reconstructor_eo_module.md`); `restore_state_from_parts`
@@ -843,4 +843,3 @@ It should not implement:
 That restraint is deliberate. It proves the optimizer contract while preserving
 the mature abinitio3D stochastic sampling, KB reconstruction, and polar matching
 machinery.
-

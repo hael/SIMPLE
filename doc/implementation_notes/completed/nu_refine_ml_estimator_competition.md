@@ -2,17 +2,10 @@
 
 ## Status
 
-Design, 2026-09-16, revised from the 2026-09-06 proposal of the same file.
-**Awaiting Hans's approval; no code is proposed for immediate implementation.**
-The 09-06 text is superseded in full (its §1–2 described the ML pair as a
-second, separately solved estimator; since 2026-09-14 it is not, see §1.2).
-
-Decision reached in discussion (Hans, 2026-09-16): retire the `nu_refine=yes`
-shell walk from `refine3D_auto`; run the static-bank competition that every
-`solve3D` run has used, with the ladder densified at its fine end, capped
-by the gold-standard FSC, and with the regularized pair as a competitor. This
-note is the record to think against before implementing. Section 8 lists the
-decisions still open.
+**Completed.** The NU filter now uses the dense static `lowpass_limits` ladder,
+caps candidates from the gold-standard FSC, and includes the regularized pair
+in the competition; the former `nu_refine=yes` shell walk is retired. This note
+retains the design discussion and the decisions that led to the landed policy.
 
 ## 1. Context
 

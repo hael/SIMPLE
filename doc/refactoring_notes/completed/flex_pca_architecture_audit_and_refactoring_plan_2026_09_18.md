@@ -2,7 +2,10 @@
 
 Date: 2026-09-18. Revised 2026-09-30.
 
-Status: implementation plan; implementation not started.
+Status: implementation completed through phases 0b--11. Phase 0a's cluster
+baseline/replay remains an outstanding validation activity; it does not leave the
+architectural refactor itself unimplemented. The phase table in section 11 is the
+implementation ledger.
 
 Scope: the 3-D `flex_pca` implementation on `master` only. Feature branches that
 carry their own FLEX changes are out of scope and are not reconciled here.
@@ -89,13 +92,13 @@ backend surface is not part of the initial rewrite.
 
 | Current source | Exact LOC | Concentration |
 |---|---:|---|
-| [`simple_commanders_flex_pca`](../../src/main/commanders/simple/simple_commanders_flex_pca.f90#L40-L364) | 366 | 35-line entry; defaults, sigma bootstrap, and project-derived geometry occupy the rest |
-| [`simple_flex_pca_strategy`](../../src/main/strategies/parallelization/simple_flex_pca_strategy.f90#L26-L417) | 419 | Factory, three roles, qsys scheduling, partitions, and worker lifecycle |
-| [`simple_flex_pca_rounds`](../../src/main/flex/simple_flex_pca_rounds.f90#L17-L225) | 227 | Executor contract, stage IDs, half policy, schemas, names, and global part directory |
-| [`simple_flex_pca_model`](../../src/main/flex/simple_flex_pca_model.f90#L82-L1901) | 1,903 | 534-line application driver, worker dispatch, caches, state inference, delivery, tests, and cleanup |
+| [`simple_commanders_flex_pca`](../../../src/main/commanders/simple/simple_commanders_flex_pca.f90) | 366 | 35-line entry; defaults, sigma bootstrap, and project-derived geometry occupy the rest |
+| [`simple_flex_pca_strategy`](../../../src/main/strategies/parallelization/simple_flex_pca_strategy.f90) | 419 | Factory, three roles, qsys scheduling, partitions, and worker lifecycle |
+| `simple_flex_pca_rounds` (pre-refactor path) | 227 | Executor contract, stage IDs, half policy, schemas, names, and global part directory |
+| `simple_flex_pca_model` (pre-refactor path) | 1,903 | 534-line application driver, worker dispatch, caches, state inference, delivery, tests, and cleanup |
 
 The commander entry is already thin. The missing boundary is below the strategy: the
-534-line [`run_flex_pca`](../../src/main/flex/simple_flex_pca_model.f90#L82-L615)
+534-line `run_flex_pca` in the pre-refactor `simple_flex_pca_model`
 is the application service but is named and structured as a scientific model.
 
 `rounds` is a valid distributed port, but it currently combines four concerns:
@@ -109,13 +112,13 @@ The most coupled fit surface is 5,763 lines:
 
 | Current source | Exact LOC | Main issue |
 |---|---:|---|
-| [`simple_flex_pca_em`](../../src/main/flex/simple_flex_pca_em.f90#L145-L1078) | 1,078 | 125-line `probe_fit_t`; 781-line parent interface |
-| [`simple_flex_pca_em_state`](../../src/main/flex/simple_flex_pca_em_state.f90#L12-L186) | 188 | One lifecycle frees every unrelated state family |
-| [`simple_flex_pca_em_iter`](../../src/main/flex/simple_flex_pca_em_iter.f90#L23-L1027) | 1,027 | 412-line single-fit driver, stage config, iteration begin, plus paired/master/worker drivers |
-| [`simple_flex_pca_em_estep`](../../src/main/flex/simple_flex_pca_em_estep.f90#L25-L1408) | 1,408 | E-step work through line 665; 743-line part codec after it |
-| [`simple_flex_pca_em_mstep`](../../src/main/flex/simple_flex_pca_em_mstep.f90#L28-L491) | 491 | One 450-line gridding/PCG finalizer |
-| [`simple_flex_pca_em_solve`](../../src/main/flex/simple_flex_pca_em_solve.f90#L40-L527) | 529 | Shared posterior/MCFA algebra without an owning service |
-| [`simple_flex_pca_em_pairmerge`](../../src/main/flex/simple_flex_pca_em_pairmerge.f90#L56-L1038) | 1,042 | Fit-frame merge, backend snapshot algebra, and delivery |
+| `simple_flex_pca_em` (pre-refactor path) | 1,078 | 125-line `probe_fit_t`; 781-line parent interface |
+| `simple_flex_pca_em_state` (pre-refactor path) | 188 | One lifecycle frees every unrelated state family |
+| `simple_flex_pca_em_iter` (pre-refactor path) | 1,027 | 412-line single-fit driver, stage config, iteration begin, plus paired/master/worker drivers |
+| `simple_flex_pca_em_estep` (pre-refactor path) | 1,408 | E-step work through line 665; 743-line part codec after it |
+| `simple_flex_pca_em_mstep` (pre-refactor path) | 491 | One 450-line gridding/PCG finalizer |
+| `simple_flex_pca_em_solve` (pre-refactor path) | 529 | Shared posterior/MCFA algebra without an owning service |
+| `simple_flex_pca_em_pairmerge` (pre-refactor path) | 1,042 | Fit-frame merge, backend snapshot algebra, and delivery |
 
 `probe_fit_t` currently owns identity, the scientific model, convergence history,
 mixture state, polar banks, per-iteration work, distributed payloads, gridding state,
@@ -124,10 +127,10 @@ created lifetime boundaries because they all mutate the same object.
 
 ### 3.3 State-reconstruction concentration
 
-[`simple_flex_pca_rec3D`](../../src/main/flex/simple_flex_pca_rec3D.f90#L32-L648)
+The pre-refactor `simple_flex_pca_rec3D`
 is 650 lines. Its 371-line main routine selects a backend, starts rounds, performs
 weighted accumulation, reduces worker parts, finalizes maps, filters, and writes output.
-[`simple_flex_pca_rec3D_pcg`](../../src/main/flex/simple_flex_pca_rec3D_pcg.f90#L55-L460)
+The pre-refactor `simple_flex_pca_rec3D_pcg`
 adds 487 lines. Since the original audit its 406-line PCG reconstruction routine has
 been reorganised into contained procedures (`deliver_state`, `new_state_operator`,
 `accumulate_state_half`, `solve_state_half`, `report_state_half`,
@@ -138,13 +141,13 @@ should be extracted as-is, not re-flattened.
 
 The current reference 3-D workflow confirms the desired ownership direction:
 
-- [`simple_strategy3D_matcher`](../../src/main/strategies/search/simple_strategy3D_matcher.f90#L104-L243)
+- [`simple_strategy3D_matcher`](../../../src/main/strategies/search/simple_strategy3D_matcher.f90)
   makes particle-side phase order explicit.
-- [`simple_matcher_3Drec`](../../src/main/strategies/search/simple_matcher_3Drec.f90#L23-L107)
+- [`simple_matcher_3Drec`](../../../src/main/strategies/search/simple_matcher_3Drec.f90)
   produces partition-local reconstruction artifacts.
-- [`simple_rec3D_strategy`](../../src/main/strategies/parallelization/simple_rec3D_strategy.f90#L34-L166)
+- [`simple_rec3D_strategy`](../../../src/main/strategies/parallelization/simple_rec3D_strategy.f90)
   owns lifecycle, topology, and backend selection.
-- [`volassemble`](../../src/main/commanders/simple/simple_commanders_rec_distr.f90#L871-L1235)
+- [`volassemble`](../../../src/main/commanders/simple/simple_commanders_rec_distr.f90)
   owns master assembly, diagnostics, products, and metadata.
 
 FLEX should copy the producer-to-assembler ownership split, not the inheritance shape or

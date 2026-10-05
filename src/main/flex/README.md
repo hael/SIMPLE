@@ -39,7 +39,7 @@ Three subfolders, dependencies pointing downward (`run` -> `states` -> `fit`
 The strategy owns roles, partitions and rounds; each producing module owns its
 part I/O; the commander owns the defaults. The architecture and its phases are
 recorded in
-`doc/refactoring_notes/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18.md`
+`doc/refactoring_notes/completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18.md`
 (there is no `doc/policies/flex_pca_policy.md`).
 
 - `../strategies/parallelization/simple_flex_pca_strategy.f90`: shared-memory,

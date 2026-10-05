@@ -45,7 +45,7 @@ The following compatibility rules are part of the contract:
 1. Input behavior remains unchanged. A legacy stack named `*.mrc` must remain
    readable anywhere it is readable today.
 2. Both `.mrc` and `.mrcs` continue to identify the MRC storage format. The
-   existing [`fname2format`](../../src/fileio/simple_fileio.f90) mapping remains
+   existing [`fname2format`](../../../src/fileio/simple_fileio.f90) mapping remains
    format recognition, not semantic type detection.
 3. The caller and the I/O operation remain authoritative about meaning. Indexed
    image I/O and `stack_io` are stack operations; unindexed 3-D image I/O is a
@@ -67,15 +67,15 @@ self-describing.
 
 The filename definitions already contain both constants:
 
-- [`STK_EXT = '.mrcs'`](../../src/defs/simple_defs_fname.f90)
-- [`MRC_EXT = '.mrc'`](../../src/defs/simple_defs_fname.f90)
+- [`STK_EXT = '.mrcs'`](../../../src/defs/simple_defs_fname.f90)
+- [`MRC_EXT = '.mrc'`](../../../src/defs/simple_defs_fname.f90)
 
-The typed [`parameters`](../../src/main/params/simple_parameters.f90) object,
+The typed [`parameters`](../../../src/main/params/simple_parameters.f90) object,
 however, currently has only one `ext` field. Its initialization and
-[`set_img_format`](../../src/main/params/simple_parameters_core.f90) select
+[`set_img_format`](../../../src/main/params/simple_parameters_core.f90) select
 `.mrc` for the MRC family and `.spi` for SPIDER. The filename derivation phase
 then uses that same field for both `outstk` and `outvol` in
-[`mkfnames`](../../src/main/params/simple_parameters_phases.f90). Consequently,
+[`mkfnames`](../../../src/main/params/simple_parameters_phases.f90). Consequently,
 the default stack and volume outputs are both given the same suffix.
 
 The repository is already partly migrated. Some producers use `STK_EXT` or a
@@ -86,9 +86,9 @@ classified by the product it names; a mechanical replacement would incorrectly
 rename volumes and standalone images.
 
 The underlying I/O path already treats `.mrc` and `.mrcs` as the same storage
-format. [`image%read` and `image%write`](../../src/main/image/simple_image_io.f90)
+format. [`image%read` and `image%write`](../../../src/main/image/simple_image_io.f90)
 use the presence of an image index to address a stack member, while
-[`stack_io`](../../src/fileio/simple_stack_io.f90) provides an explicitly
+[`stack_io`](../../../src/fileio/simple_stack_io.f90) provides an explicitly
 stack-oriented API. Those semantics should remain unchanged.
 
 ## 4. Target parameter model

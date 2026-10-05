@@ -112,4 +112,4 @@ construction.
   `simple_test_exec test=unit_pftc_align2D3D` (`simple_pftc_inplane_tester`,
   `simple_strategy3D_inplane_tester`), which replaced the
   `simple_test_continuous_inplane_rotation2D*` programs in September 2026.
-- Design note: `doc/implementation_notes/continuous_inplane_rotation_polar.md`.
+- Design note: `doc/implementation_notes/completed/continuous_inplane_rotation_polar.md`.

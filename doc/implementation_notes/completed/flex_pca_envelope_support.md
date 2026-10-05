@@ -2,7 +2,12 @@
 
 ## Status
 
-**Planning only (2026-09-10, revised after review). No code is proposed for immediate implementation.**
+**Completed.** The current `flex_pca` commander derives the sampling and Fourier
+band, supports gridding and PCG reconstruction backends, exposes the independent
+`rec_states_backend` choice for delivered state maps, and applies `pcg_mskfile`
+as PCG solve support. The text below is the design record; where it treats one
+`rec_backend` as controlling both basis and state reconstruction, the landed
+`rec_backend`/`rec_states_backend` separation is authoritative.
 
 Scope, as decided:
 

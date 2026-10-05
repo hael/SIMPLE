@@ -2,13 +2,13 @@
 
 ## Status
 
-Implementation in progress, 2026-08-31. Cyril and Hans agreed to the workflow
+Implementation completed (started 2026-08-31). Cyril and Hans agreed to the workflow
 boundary, canonical names, frequency-marching consolidation, three scientific
 pose policies, focus-evidence boundary, and `abinitio3D` handoff described
 here. The canonical commands, pose policies, shared frequency planner,
 external-reference pose initialization path, reusable split-checkpoint builder, and
 `abinitio3D` handoff are implemented in the working tree. Compilation and
-runtime validation remain user-owned. This is the single living design,
+runtime validation remained user-owned. This is the single living design,
 implementation, review, and validation record for the refactor.
 
 Static review fixes applied 2026-08-31:

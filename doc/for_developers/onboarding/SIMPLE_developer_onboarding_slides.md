@@ -4,7 +4,7 @@ Developer orientation: map, docs, wiki, and build environment
 
 May 21, 2026
 
-![](SIMPLE_logo/SIMPLE_logo.png){width=72%}
+![](../SIMPLE_logo/SIMPLE_logo.png){width=72%}
 
 # What SIMPLE Is
 
@@ -32,11 +32,11 @@ May 21, 2026
 
 # Architecture at a Glance
 
-![](layered_arch/old/layered_arch.png){height=82%}
+![](../layered_arch/old/layered_arch.png){height=82%}
 
 # Codebase Map Is Your Index
 
-- Start with `doc/code_overview/code_base_map.md`.
+- Start with `doc/code_overview/fortran-indexes/module_index.md`.
 - Use it to find module ownership before searching manually.
 - It names major directories, executable entry points, commanders, strategies, tests, GUI utilities, and queue-system utilities.
 - Treat its vocabulary as the shared map: `builder`, `parameters`, `commander`, `strategy`, `sp_project`, `image`, `volume`, `ori`, `oris`.
@@ -101,7 +101,7 @@ cmake --install .
 # Suggested First-Day Path
 
 1. Build once with manual CMake or the closest helper script.
-2. Read `README.md`, `doc/code_overview/code_base_map.md`, and the relevant developer guide.
+2. Read `README.md`, `doc/code_overview/fortran-indexes/module_index.md`, and the relevant developer guide.
 3. Trace one command from `src/main/ui` to commander, strategy/domain code, and project output.
 4. Keep `doc/policies/` open when touching scientific behavior.
 5. Use `doc/how2s/` for day-to-day mechanics: git, gdb, Fortran debugging, FFTW, SLURM.

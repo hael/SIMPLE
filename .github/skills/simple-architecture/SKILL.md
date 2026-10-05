@@ -36,7 +36,7 @@ The common pattern is:
 ## Build And Docs
 
 - Build shape: `CMakeLists.txt`, `src/CMakeLists.txt`, `production/CMakeLists.txt`
-- Repo overview: `README.md`, `doc/code_overview/code_base_map.md`
+- Repo overview: `README.md`, `doc/code_overview/fortran-indexes/module_index.md`
 - Policy docs worth checking before refactors: `doc/policies/*.md`, `doc/refactoring_notes/*.md`
 
 ## Tests
