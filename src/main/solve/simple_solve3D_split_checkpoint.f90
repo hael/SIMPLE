@@ -75,7 +75,12 @@ contains
         call cline_assignment%set('prg',               'refine3D')
         call cline_assignment%set('mkdir',                   'no')
         call cline_assignment%set('refine',                'prob')
-        call cline_assignment%set('balance',                'yes')
+        ! the run's sampling units; class units when the run samples without them (balance=none)
+        if( trim(params%balance) == 'none' )then
+            call cline_assignment%set('balance',          'class')
+        else
+            call cline_assignment%set('balance', trim(params%balance))
+        endif
         call cline_assignment%set('nsample',              nsample)
         call cline_assignment%set('frac_best',                1.0)
         call cline_assignment%set('fillin',                  'no')

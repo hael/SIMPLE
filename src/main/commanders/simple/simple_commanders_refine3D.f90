@@ -116,8 +116,8 @@ contains
                 THROW_HARD(WORKFLOW_LABEL//' supports pose_cont=no|yes|only')
         end select
         ! hard defaults
-        call cline%set('balance',         'no') ! no balancing based on 2D clustering
-        call cline%set('greedy_sampling', 'no') ! only active when balance is 'yes'`
+        call cline%set('balance',       'none') ! global lowest-updatecnt sampling, no sampling units
+        call cline%set('greedy_sampling', 'no') ! only active with sampling units (balance=class|cavg)
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
         if( l_cont_only )then
             call cline%set('refine',      'cont') ! continuous Cartesian refinement of the stored poses
@@ -506,7 +506,9 @@ contains
                 endif
             endif
             if( .not. l_maxits_defined )then
-                maxits_auto = ceiling((TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO * real(nptcls_eff)) / real(nptcls_per_iter))
+                ! target updates x the iterations one sweep of the global lowest-updatecnt draw takes
+                maxits_auto = ceiling(TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO * &
+                    &real(ceiling(real(nptcls_eff) / real(nptcls_per_iter))))
                 maxits_auto = max(params%minits, min(MAXITS_REFINE3D_AUTO_CAP, max(2, maxits_auto)))
                 params%maxits = maxits_auto
                 call cline%set('maxits', params%maxits)
@@ -629,6 +631,7 @@ contains
         type(lp_crop_inf)         :: lpinfo_multi(2)
         type(string), allocatable :: init_vols(:)
         type(string)              :: multivol_mode, flex_arg, pose_policy_arg
+        type(class_sample), allocatable :: clssmp_units(:)
         integer, parameter :: NSAMPLE_PER_STATE_REFINE3D_STATES = 10000
         integer, parameter :: NSAMPLE_REFINE3D_STATES_CAP       = 100000
         integer, parameter :: STAGE1_NSPACE               = 2500
@@ -744,8 +747,8 @@ contains
         else
             call set_refine3D_states_nstates()
         endif
-        ! hard defaults
-        call cline%set('balance',        'yes')
+        ! hard defaults (balance falls back to none without selected class averages)
+        call cline%set('balance',        'cavg')
         call cline%set('greedy_sampling', 'no')
         call cline%set('frac_best',       1.0)
         if( trim(multivol_mode%to_char()).eq.'input_oris_fixed' )then
@@ -805,9 +808,9 @@ contains
             endif
         endif
         call set_refine3D_states_sampling()
-        call prepare_refine3D_states_class_sampling()
         call configure_refine3D_states_stages()
         call set_refine3D_states_downscaling()
+        call report_refine3D_states_coverage()
         if( .not. l_flex_requested ) call initialize_state_volumes()
         call cline%set('prg', 'refine3D')
         maxits_glob_multi = 0
@@ -1040,11 +1043,10 @@ contains
                         &nptcls_eff, '/', nsample_target, ' -> FULL UPDATE'
                 endif
             endif
-            ! iterations for one full sweep of the active particles: the balanced
-            ! sampler draws lowest-updatecnt particles first, so this many
-            ! fractional updates visit every active particle about once
+            ! draws for one full sweep of the active particles, from the sampling-unit table: the
+            ! sampler draws lowest-updatecnt particles first inside every unit's quota
             if( params%l_update_frac )then
-                init_sweep_iters = max(1, ceiling(real(nptcls_eff) / real(max(1, nptcls_per_iter))))
+                init_sweep_iters = prepare_refine3D_states_sampling_units()
             else
                 init_sweep_iters = 1
             endif
@@ -1054,92 +1056,46 @@ contains
                 write(logfhandle,'(A,I0)') &
                     &'>>> '//WORKFLOW_LABEL//' STAGE MAXITS COMMAND-LINE OVERRIDE: ', stage_cap
             else
-                maxits_auto = ceiling((TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES * real(nptcls_eff)) / real(nptcls_per_iter))
+                maxits_auto = ceiling(TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES * real(init_sweep_iters))
                 stage_cap   = max(MINITS_REFINE3D_STATES, min(MAXITS_REFINE3D_STATES_CAP, max(STAGE2_MINITS, maxits_auto)))
                 params%maxits = stage_cap
                 call cline%set('maxits', params%maxits)
-                write(logfhandle,'(A,I0,A,F5.1,A)') '>>> '//WORKFLOW_LABEL//' STAGE MAXITS: ', &
-                    &stage_cap, ' FOR ~', TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES, ' UPDATES/PARTICLE'
+                write(logfhandle,'(A,I0,A,F5.1,A,I0,A)') '>>> '//WORKFLOW_LABEL//' STAGE MAXITS: ', &
+                    &stage_cap, ' FOR ~', TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES, ' UPDATES/PARTICLE (SWEEP ', &
+                    &init_sweep_iters, ' DRAWS)'
             endif
         end subroutine set_refine3D_states_sampling
 
-        subroutine prepare_refine3D_states_class_sampling()
-            type(builder)    :: sampling_build
-            type(cmdline)    :: cline_sampling
-            type(parameters) :: params_sampling
-            type(class_sample), allocatable :: clssmp(:)
-            integer :: nproj_bins
-            if( trim(params%balance) /= 'yes' ) return
-            if( .not. params%l_update_frac ) return
-            cline_sampling = cline
-            call cline_sampling%set('prg', 'refine3D')
-            call cline_sampling%set('refine', 'prob')
-            call cline_sampling%set('nspace', STAGE2_NSPACE)
-            call sampling_build%init_params_and_build_general_tbox(cline_sampling, params_sampling, do3d=.true.)
-            if( sampling_build%spproj%is_virgin_field(params_sampling%oritype) )then
-                call sampling_build%kill_general_tbox
-                call cline_sampling%kill
-                THROW_HARD(WORKFLOW_LABEL//' projection-balanced fractional updates require prior 3D orientations')
+        !> The sampling units of balance=cavg (none without selected class averages) on CLASS_SAMPLING_FILE;
+        !! returns the draws one full sweep of the active particles takes
+        integer function prepare_refine3D_states_sampling_units() result( sweep )
+            use simple_view_partition_sampling, only: make_class_samples, has_selected_cavgs
+            use simple_oris,                    only: class_sample_sweep
+            type(sp_project) :: sampling_proj
+            sweep = max(1, ceiling(real(nptcls_eff) / real(max(1, nptcls_per_iter))))
+            call sampling_proj%read(params%projfile)
+            if( trim(params%balance) /= 'none' .and. .not. has_selected_cavgs(sampling_proj) )then
+                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' NO SELECTED CLASS AVERAGES: balance=none'
+                params%balance = 'none'
             endif
-            call make_projdir_class_samples(sampling_build, clssmp, nproj_bins)
-            call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
-            write(logfhandle,'(A,I0,A,F5.2)') &
-                &'>>> '//WORKFLOW_LABEL//' PROJDIR-BALANCED SAMPLING BINS/FRAC_BEST: ', &
-                &nproj_bins, '/', params%frac_best
-            call deallocate_class_samples(clssmp)
-            call sampling_build%kill_general_tbox
-            call cline_sampling%kill
-        end subroutine prepare_refine3D_states_class_sampling
+            call cline%set('balance', params%balance)
+            if( trim(params%balance) /= 'none' )then
+                call make_class_samples(params, sampling_proj, params%balance, params%nthr, .true., clssmp_units)
+                call write_class_samples(clssmp_units, string(CLASS_SAMPLING_FILE))
+                sweep = class_sample_sweep(clssmp_units, nptcls_per_iter)
+            endif
+            call sampling_proj%kill
+        end function prepare_refine3D_states_sampling_units
 
-        subroutine make_projdir_class_samples( sampling_build, clssmp, nproj_bins )
-            type(builder),                    intent(inout) :: sampling_build
-            type(class_sample), allocatable,  intent(inout) :: clssmp(:)
-            integer,                          intent(out)   :: nproj_bins
-            integer, allocatable :: allinds(:), states(:), projs(:), pinds(:), proj_pops(:)
-            real,    allocatable :: corrs(:)
-            integer :: iproj, ibin, nparticles, nprojs
-            if( allocated(clssmp) ) call deallocate_class_samples(clssmp)
-            call sampling_build%spproj_field%set_projs(sampling_build%eulspace)
-            nprojs     = sampling_build%eulspace%get_noris()
-            states     = sampling_build%spproj_field%get_all_asint('state')
-            projs      = sampling_build%spproj_field%get_all_asint('proj')
-            corrs      = sampling_build%spproj_field%get_all('corr')
-            nparticles = size(states)
-            allinds    = (/(iproj, iproj=1,nparticles)/)
-            allocate(proj_pops(nprojs), source=0)
-            do iproj = 1,nprojs
-                proj_pops(iproj) = count(states > 0 .and. projs == iproj)
-            enddo
-            nproj_bins = count(proj_pops > 0)
-            if( nproj_bins < 1 )then
-                if( allocated(allinds)   ) deallocate(allinds)
-                if( allocated(states)    ) deallocate(states)
-                if( allocated(projs)     ) deallocate(projs)
-                if( allocated(corrs)     ) deallocate(corrs)
-                if( allocated(proj_pops) ) deallocate(proj_pops)
-                THROW_HARD(WORKFLOW_LABEL//' projection-balanced sampling found no active projection bins')
-            endif
-            allocate(clssmp(nproj_bins))
-            ibin = 0
-            do iproj = 1,nprojs
-                if( proj_pops(iproj) < 1 ) cycle
-                ibin = ibin + 1
-                pinds = pack(allinds, mask=states > 0 .and. projs == iproj)
-                clssmp(ibin)%clsind = iproj
-                clssmp(ibin)%pop    = size(pinds)
-                allocate(clssmp(ibin)%pinds(clssmp(ibin)%pop), source=pinds)
-                allocate(clssmp(ibin)%ccs(clssmp(ibin)%pop), source=pack(corrs, mask=states > 0 .and. projs == iproj))
-                call hpsort(clssmp(ibin)%ccs, clssmp(ibin)%pinds)
-                call reverse(clssmp(ibin)%ccs)
-                call reverse(clssmp(ibin)%pinds)
-                if( allocated(pinds) ) deallocate(pinds)
-            enddo
-            if( allocated(allinds)   ) deallocate(allinds)
-            if( allocated(states)    ) deallocate(states)
-            if( allocated(projs)     ) deallocate(projs)
-            if( allocated(corrs)     ) deallocate(corrs)
-            if( allocated(proj_pops) ) deallocate(proj_pops)
-        end subroutine make_projdir_class_samples
+        !> the unit table against the draws planned: the frequency blocks of the prob_neigh march, one
+        !! cohort each (the prob_state phase runs at least one sweep by its minimum iterations)
+        subroutine report_refine3D_states_coverage()
+            use simple_view_partition_sampling, only: report_class_sample_coverage
+            if( .not. allocated(clssmp_units) ) return
+            if( l_run_prob_neigh_stage ) call report_class_sample_coverage(clssmp_units, params%balance, &
+                &nptcls_per_iter, ceiling(real(stage_cap) / real(FREQUENCY_BLOCK_NITS)), 'frequency block')
+            call deallocate_class_samples(clssmp_units)
+        end subroutine report_refine3D_states_coverage
 
         subroutine set_refine3D_states_downscaling()
             lpinfo_multi(2)%trslim      = min(8., max(2.0, AHELIX_WIDTH / params%smpd))
@@ -1356,6 +1312,7 @@ contains
                     &block_minits, block_niters, stages(block)%nits, overlap_target)
                 niters = niters + block_niters
             enddo
+            call cline%delete('cohort_sampling')
             deallocate(stages)
         end subroutine run_refine3D_states_frequency_march
 
@@ -1379,6 +1336,13 @@ contains
                 &' OVERLAP_TARGET=', stage_overlap_target
             call cline%set('refine', refine_mode)
             call cline%set('nspace', nspace_stage)
+            ! a prob_neigh frequency block refines one particle cohort, drawn at its first iteration;
+            ! the prob_state phase draws every iteration
+            if( trim(refine_mode).eq.'prob_neigh' .and. params%l_update_frac )then
+                call cline%set('cohort_sampling', 'yes')
+            else
+                call cline%delete('cohort_sampling')
+            endif
             if( nspace_sub_stage > 0 )then
                 call cline%set('nspace_sub', nspace_sub_stage)
             else
@@ -1482,7 +1446,7 @@ contains
             cline_missing = cline
             call cline_missing%set('prg',           'refine3D')
             call cline_missing%set('mkdir',              'no')
-            call cline_missing%set('balance',            'no')
+            call cline_missing%set('balance',          'none')
             call cline_missing%set('frac_best',           1.0)
             call cline_missing%set('fillin',             'no')
             call cline_missing%set('update_frac',         1.0)
@@ -1493,7 +1457,7 @@ contains
             call cline_missing%set('which_iter', iter_missing)
             call cline_missing%set('extr_iter',  iter_missing)
             call cline_missing%delete('endit')
-            call cline_missing%delete('partition')
+            call cline_missing%delete('cohort_sampling')
             select case(trim(params%multivol_mode))
                 case('input_oris_fixed')
                     call cline_missing%set('refine', 'prob_state')
@@ -1588,8 +1552,8 @@ contains
         integer,      allocatable :: state_pops(:)
         integer :: nptcls_eff, iter_glob, state
         call cline%set('prg', 'classify3D_refs')
-        ! hard defaults
-        call cline%set('balance',         'yes')
+        ! hard defaults (balance falls back to none without selected class averages)
+        call cline%set('balance',         'cavg')
         call cline%set('greedy_sampling', 'no')
         call cline%set('frac_best',       1.0)
         call cline%set('trail_rec',       'yes')
@@ -1758,43 +1722,20 @@ contains
         end subroutine set_classify3D_refs_sampling
 
         subroutine prepare_classify3D_refs_class_sampling()
+            use simple_view_partition_sampling, only: make_class_samples, report_class_sample_coverage, has_selected_cavgs
             type(class_sample), allocatable :: clssmp(:)
-            integer, allocatable :: tmpinds(:), clsinds(:), cls_states(:)
-            integer              :: icls
-            if( spproj%is_virgin_field('ptcl2D') )then
-                params%balance = 'no'
-            else
-                if( params%update_frac > 0.99 )then
-                    write(logfhandle,'(A)') '>>> FORCING FULL ACTIVE SAMPLING (NO FRACTIONAL OR TRAILING UPDATE)'
-                    params%balance = 'no'
-                else
-                    ! generate a data structure for class sampling on disk
-                    if( trim(params%balance).eq.'yes' )then
-                        if( trim(params%partition).eq.'yes' )then
-                            if( .not. spproj%os_cls2D%isthere('cluster') )then
-                                THROW_HARD('Missing CLUSTER metadata in CLS2D field needed for PARTITION=YES')
-                            endif
-                            cls_states = nint(spproj%os_cls2D%get_all('state'))
-                            tmpinds    = nint(spproj%os_cls2D%get_all('cluster'))
-                            where( cls_states == 0 ) tmpinds = 0
-                            clsinds = (/(icls,icls=1,maxval(tmpinds))/)
-                            do icls = 1,size(clsinds)
-                                if(count(tmpinds==icls) == 0) clsinds(icls) = 0
-                            enddo
-                            clsinds = pack(clsinds, mask=clsinds>0)
-                            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
-                            deallocate(cls_states,tmpinds)
-                        else
-                            clsinds = spproj%get_selected_clsinds()
-                            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-                        endif
-                        call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
-                        call deallocate_class_samples(clssmp)
-                        deallocate(clsinds)
-                        write(logfhandle,'(A)') '>>> SETUP 2D DERIVED CLASS SAMPLING'
-                    endif
-                endif
+            if( params%update_frac > 0.99 )then
+                write(logfhandle,'(A)') '>>> FORCING FULL ACTIVE SAMPLING (NO FRACTIONAL OR TRAILING UPDATE)'
+                params%balance = 'none'
+            else if( spproj%is_virgin_field('ptcl2D') .or. .not. has_selected_cavgs(spproj) )then
+                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' NO SELECTED CLASS AVERAGES: balance=none'
+                params%balance = 'none'
             endif
+            if( trim(params%balance) == 'none' ) return
+            call make_class_samples(params, spproj, params%balance, params%nthr, .true., clssmp)
+            call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
+            call report_class_sample_coverage(clssmp, params%balance, min(nptcls_eff, params%nsample), params%maxits, 'iteration')
+            call deallocate_class_samples(clssmp)
         end subroutine prepare_classify3D_refs_class_sampling
 
         subroutine set_classify3D_refs_downscaling()
@@ -1957,7 +1898,7 @@ contains
             cline_missing = cline
             call cline_missing%set('prg',           'refine3D')
             call cline_missing%set('mkdir',              'no')
-            call cline_missing%set('balance',            'no')
+            call cline_missing%set('balance',          'none')
             call cline_missing%set('frac_best',           1.0)
             call cline_missing%set('fillin',             'no')
             call cline_missing%set('update_frac',         1.0)
@@ -1971,7 +1912,6 @@ contains
             call cline_missing%set('greedy_sampling',   'yes')
             call cline_missing%set('update_missing',    'yes')
             call cline_missing%delete('endit')
-            call cline_missing%delete('partition')
             call xrefine3D%execute(cline_missing)
             call cline_missing%kill
         end subroutine run_classify3D_refs_missing_update

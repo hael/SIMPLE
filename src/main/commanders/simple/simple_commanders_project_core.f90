@@ -893,6 +893,10 @@ contains
         if( cline%defined('state') .and. cline%defined('states') )then
             THROW_HARD('exec_selection: only one of STATE/STATES can be provided')
         endif
+        if( cline%defined('balance') )then
+            ! balanced selection is over classes; class-average groups are a sampling concept
+            if( cline%get_carg('balance') .eq. 'cavg' ) THROW_HARD('exec_selection: balance must be none or class')
+        endif
         call params%new(cline, silent=.true.)
         call gui_comm%new(params)
         if(params%append .eq. 'yes') l_append = .true.

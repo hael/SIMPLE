@@ -993,27 +993,6 @@ contains
         end do
     end subroutine get_class_sample_stats
 
-    module subroutine get_proj_sample_stats( self, eulspace, clssmp )
-        class(oris),                     intent(inout) :: self
-        class(oris),                     intent(in)    :: eulspace
-        type(class_sample), allocatable, intent(inout) :: clssmp(:)
-        integer, allocatable :: tmpinds(:), clsinds(:), clspops(:)
-        integer              :: ncls, icls
-        type(oris)           :: self_copy
-        ncls = eulspace%get_noris()
-        call self_copy%copy(self)
-        call self_copy%set_projs(eulspace)
-        call self_copy%proj2class
-        allocate(clspops(ncls))
-        do icls=1,ncls
-            clspops(icls) = self_copy%get_pop(icls, 'class')
-        end do
-        tmpinds = (/(icls,icls=1,ncls)/)
-        clsinds = pack(tmpinds, mask= clspops > 0)
-        call self_copy%get_class_sample_stats(clsinds, clssmp)
-        call self_copy%kill
-    end subroutine get_proj_sample_stats
-
     ! f = n/N per group, 0 for an empty group
     subroutine counts2fracs( nrep, nsmp, rho )
         integer,           intent(in)    :: nrep(:), nsmp(:)

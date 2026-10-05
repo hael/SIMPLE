@@ -204,6 +204,9 @@ contains
         call build%spproj_field%set_all2single('lp',lplim)
     end subroutine set_bp_range2D
 
+    !> Fractional-update selection by balance: none takes the global lowest-updatecnt tiers, class and cavg
+    !! the nested quota over the sampling units of CLASS_SAMPLING_FILE. Under cohort_sampling a stage
+    !! draws at its first iteration and rescores that cohort at the others.
     subroutine sample_ptcls4update3D( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
@@ -214,20 +217,27 @@ contains
         logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
         type(class_sample),   allocatable   :: clssmp(:)
         type(string) :: fname
-        fname = CLASS_SAMPLING_FILE
-        if( params%l_update_frac )then
-            if( trim(params%balance).eq.'yes' )then
+        if( .not. params%l_update_frac )then
+            ! we sample all state > 0
+            call build%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
+            return
+        endif
+        if( params%l_cohort_sampling .and. params%which_iter /= params%startit )then
+            call build%spproj_field%sample4update_rescore(pfromto, nptcls2update, pinds, allow_empty=allow_empty)
+            return
+        endif
+        select case(trim(params%balance))
+            case('class', 'cavg')
                 if( params%l_sticky_class_sampling )then
                     if( .not. build%spproj_field%has_been_sampled() )then
                         THROW_HARD('sticky_class_sampling requires a pre-existing sampled particle cohort')
                     endif
                 endif
-                if( file_exists(fname) )then
-                    call read_class_samples(clssmp, fname)
-                else
-                    THROW_HARD('File for class-biased sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exist!')
+                fname = CLASS_SAMPLING_FILE
+                if( .not. file_exists(fname) )then
+                    THROW_HARD('File for class-balanced sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exist!')
                 endif
-                ! balanced class sampling
+                call read_class_samples(clssmp, fname)
                 if( params%l_frac_best )then
                     call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
                         &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best, &
@@ -238,15 +248,11 @@ contains
                         &sampled_only=params%l_sticky_class_sampling, allow_empty=allow_empty)
                 endif
                 call deallocate_class_samples(clssmp)
-            else
+                call fname%kill
+            case DEFAULT
                 call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, &
                     &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty)
-            endif
-        else
-            ! we sample all state > 0
-            call build%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
-        endif
-        call fname%kill
+        end select
     end subroutine sample_ptcls4update3D
 
     subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )

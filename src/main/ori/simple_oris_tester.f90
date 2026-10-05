@@ -2,7 +2,7 @@
 module simple_oris_tester
 use simple_core_module_api
 use simple_test_utils    ! for assert_* utilities and counters
-use simple_oris,        only: population_blend_weights
+use simple_oris,        only: population_blend_weights, class_sample_quotas, class_sample_sweep
 implicit none
 private
 public :: run_all_oris_tests
@@ -17,6 +17,9 @@ contains
         call test_compress_and_masks()
         call test_sampling_and_updatecnt()
         call test_empty_partition_sampling()
+        call test_nested_class_quota()
+        call test_class_sample_sweep()
+        call test_cohort_rescore()
         call test_sample4rec_global_coverage()
         call test_group_update_counts()
         call test_blend_weight_cases()
@@ -342,6 +345,179 @@ contains
         deallocate(clssmp)
         call os%kill
     end subroutine test_empty_partition_sampling
+
+    ! units of consecutive particle indices with the given populations and group labels
+    subroutine make_units( pops, groups, clssmp )
+        integer,                         intent(in)    :: pops(:), groups(:)
+        type(class_sample), allocatable, intent(inout) :: clssmp(:)
+        integer :: i, j, first
+        if( allocated(clssmp) ) call free_units(clssmp)
+        allocate(clssmp(size(pops)))
+        first = 1
+        do i = 1, size(pops)
+            clssmp(i)%clsind = i
+            clssmp(i)%pop    = pops(i)
+            clssmp(i)%group  = groups(i)
+            allocate(clssmp(i)%pinds(pops(i)), source=[(j, j=first,first+pops(i)-1)])
+            allocate(clssmp(i)%ccs(pops(i)),   source=1.)
+            first = first + pops(i)
+        end do
+    end subroutine make_units
+
+    subroutine free_units( clssmp )
+        type(class_sample), allocatable, intent(inout) :: clssmp(:)
+        integer :: i
+        do i = 1, size(clssmp)
+            if( allocated(clssmp(i)%pinds) ) deallocate(clssmp(i)%pinds)
+            if( allocated(clssmp(i)%ccs)   ) deallocate(clssmp(i)%ccs)
+        end do
+        deallocate(clssmp)
+    end subroutine free_units
+
+    ! particles of every unit in a sample
+    function unit_counts( clssmp, inds ) result( cnts )
+        type(class_sample), intent(in) :: clssmp(:)
+        integer,            intent(in) :: inds(:)
+        integer :: cnts(size(clssmp)), i, j
+        cnts = 0
+        do i = 1, size(clssmp)
+            do j = 1, size(inds)
+                if( any(clssmp(i)%pinds == inds(j)) ) cnts(i) = cnts(i) + 1
+            end do
+        end do
+    end function unit_counts
+
+    ! balance=class: every unit the same count capped at its population, lowest updatecnt first.
+    ! balance=cavg: every group the same count capped at its population and, inside a group, every unit
+    ! the same count capped at its population; the remainder of a group's equal split goes to its
+    ! least-updated unit
+    subroutine test_nested_class_quota()
+        type(oris)                      :: os
+        type(class_sample), allocatable :: clssmp(:)
+        integer,            allocatable :: inds(:)
+        integer :: nsamp, i, cnts3(3), cnts5(5)
+        write(*,'(A)') 'test_nested_class_quota'
+        ! class: pops 2, 5, 10; 9 of 17 -> the equal rounds stop at 4 per unit, the first capped at 2
+        call os%new(17, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 0.0)
+        call os%set_all2single('sampled',   0.0)
+        call os%set(8,  'updatecnt', 3.)   ! unit 3 (rows 8-17): rows 8 and 9 were updated before
+        call os%set(9,  'updatecnt', 3.)
+        call make_units([2,5,10], [0,0,0], clssmp)
+        call os%sample4update_class(clssmp, [1, 17], 9./17., nsamp, inds, .true., .false.)
+        cnts3 = unit_counts(clssmp, inds)
+        call assert_int(10, nsamp, 'class: equal rounds overshoot by less than the number of units')
+        call assert_true(all(cnts3 == [2,4,4]), 'class: every unit the same count capped at its population')
+        call assert_true(.not. any(inds == 8) .and. .not. any(inds == 9), 'class: lowest updatecnt first within a unit')
+        call free_units(clssmp)
+        call os%kill
+        ! cavg: group 1 holds units of 2, 6 and 6 particles, group 2 one unit of 3, group 3 one unit of 20.
+        ! 19 of 37: group quotas 8, 3 (capped), 8; inside group 1: 2 (capped), 3, 3
+        call os%new(37, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 0.0)
+        call os%set_all2single('sampled',   0.0)
+        call make_units([2,6,6,3,20], [1,1,1,2,3], clssmp)
+        call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true., .false.)
+        cnts5 = unit_counts(clssmp, inds)
+        call assert_int(19, nsamp, 'cavg: sample size')
+        call assert_true(all(cnts5 == [2,3,3,3,8]), 'cavg: nested equal quota over groups, then units')
+        call assert_int(8, sum(cnts5(1:3)), 'cavg: group 1 gets the equal group count')
+        call free_units(clssmp)
+        call os%kill
+        ! remainder: one group of three units of 4 and 4 draws -> 1 each and the remainder to the unit
+        ! whose particles have the lowest mean updatecnt (unit 2)
+        call os%new(12, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 1.0)
+        call os%set_all2single('sampled',   0.0)
+        do i = 5, 8
+            call os%set(i, 'updatecnt', 0.)
+        end do
+        call make_units([4,4,4], [1,1,1], clssmp)
+        call os%sample4update_class(clssmp, [1, 12], 4./12., nsamp, inds, .true., .false.)
+        cnts3 = unit_counts(clssmp, inds)
+        call assert_true(all(cnts3 == [1,2,1]), 'cavg: the group remainder goes to the least-updated unit')
+        call free_units(clssmp)
+        call os%kill
+        if( allocated(inds) ) deallocate(inds)
+    end subroutine test_nested_class_quota
+
+    ! a fixed skewed population (the cavg layout above) is visited completely in sweep iterations
+    subroutine test_class_sample_sweep()
+        type(oris)                      :: os
+        type(class_sample), allocatable :: clssmp(:)
+        integer,            allocatable :: inds(:)
+        real    :: quotas(5)
+        integer :: nsamp, it, sweep, i
+        write(*,'(A)') 'test_class_sample_sweep'
+        call make_units([2,6,6,3,20], [1,1,1,2,3], clssmp)
+        call class_sample_quotas(clssmp, 19, quotas)
+        call assert_real(2., quotas(1), 1.e-5, 'quota of the capped unit is its population')
+        call assert_real(3., quotas(2), 1.e-5, 'quota of an open unit of group 1')
+        call assert_real(8., quotas(5), 1.e-5, 'quota of the single-unit group 3')
+        sweep = class_sample_sweep(clssmp, 19)
+        call assert_int(3, sweep, 'sweep = max over units of ceil(pop/quota)')
+        call os%new(37, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 0.0)
+        call os%set_all2single('sampled',   0.0)
+        do it = 1, sweep
+            call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true., .false.)
+        end do
+        call assert_true(all([(os%get_updatecnt(i) > 0, i=1,37)]), 'every particle is visited within one sweep')
+        call free_units(clssmp)
+        call os%kill
+        if( allocated(inds) ) deallocate(inds)
+    end subroutine test_class_sample_sweep
+
+    ! sample4update_rescore returns the latest round on every call and advances sampled and updatecnt on
+    ! exactly those rows once per call; a later draw prefers the rows outside the cohort
+    subroutine test_cohort_rescore()
+        type(oris)                      :: os
+        type(class_sample), allocatable :: clssmp(:)
+        integer,            allocatable :: inds(:), inds2(:)
+        integer :: nsamp, i, ucnt_before(10), marker
+        write(*,'(A)') 'test_cohort_rescore'
+        call os%new(10, .true.)
+        call os%set_all2single('state',     1.0)
+        call os%set_all2single('updatecnt', 1.0)
+        call os%set_all2single('sampled',   0.0)
+        do i = 1, 3
+            call os%set(i, 'updatecnt', 0.)
+        end do
+        ! the cohort: rows 1-3 (lowest updatecnt tier)
+        call os%sample4update_cnt([1, 10], 0.3, nsamp, inds, .true.)
+        call assert_true(size(inds) == 3 .and. all(inds == [1,2,3]), 'cohort draw takes the lowest tier')
+        marker = nint(os%get(1, 'sampled'))
+        do i = 1, 10
+            ucnt_before(i) = os%get_updatecnt(i)
+        end do
+        call os%sample4update_rescore([1, 10], nsamp, inds2)
+        call assert_true(size(inds2) == 3, 'rescore returns the cohort size')
+        if( size(inds2) == 3 ) call assert_true(all(inds2 == inds), 'rescore returns the cohort')
+        call assert_true(all([(nint(os%get(i, 'sampled')) == marker + 1, i=1,3)]), 'rescore advances the round marker once')
+        call assert_true(all([(os%get_updatecnt(i) == ucnt_before(i) + 1, i=1,3)]), 'rescore counts one update per cohort row')
+        call assert_true(all([(os%get_updatecnt(i) == ucnt_before(i), i=4,10)]), 'rescore leaves the other rows alone')
+        call os%sample4update_rescore([1, 10], nsamp, inds2)
+        call assert_true(size(inds2) == 3, 'repeated rescore returns the cohort size')
+        if( size(inds2) == 3 ) call assert_true(all(inds2 == inds), 'repeated rescore returns the identical cohort')
+        call assert_true(all([(os%get_updatecnt(i) == ucnt_before(i) + 2, i=1,3)]), 'one update per rescore call')
+        ! a range without cohort rows
+        call os%sample4update_rescore([5, 10], nsamp, inds2, allow_empty=.true.)
+        call assert_int(0, nsamp,       'rescore on a range without cohort rows samples nothing')
+        call assert_int(0, size(inds2), 'rescore on a range without cohort rows: no indices')
+        call assert_true(all([(os%get_updatecnt(i) == 1, i=4,10)]), 'an empty rescore counts no update')
+        ! the next draws avoid the previous cohort while lower-updatecnt rows remain
+        call os%sample4update_cnt([1, 10], 0.3, nsamp, inds2, .true.)
+        call assert_true(.not. any(inds2 <= 3), 'global draw after a cohort takes no cohort row')
+        call make_units([10], [0], clssmp)
+        call os%sample4update_class(clssmp, [1, 10], 0.3, nsamp, inds2, .true., .false.)
+        call assert_true(.not. any(inds2 <= 3), 'unit draw after a cohort takes no cohort row')
+        call free_units(clssmp)
+        call os%kill
+    end subroutine test_cohort_rescore
 
     ! sample4rec decides "nothing updated yet" over the whole project: when only
     ! the range [1,5] holds updated rows, the range [6,10] must return none of its

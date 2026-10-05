@@ -1,6 +1,7 @@
 !@descr: unit test routines for the class-sampling checkpoint file (simple_class_sample_io)
 ! The ragged class_sample array written by solve3D/refine3D and read back by the matcher and the split
-! checkpoint: field-by-field round trip, empty classes, replacement of a previously allocated array.
+! checkpoint: field-by-field round trip (class-average group included), empty classes, replacement of a
+! previously allocated array.
 module simple_class_sample_io_tester
 use simple_test_utils          ! assertions etc.
 use simple_type_defs,          only: class_sample
@@ -39,6 +40,9 @@ contains
         cs(1)%nsample = 1
         cs(2)%nsample = 1
         cs(3)%nsample = 3
+        cs(1)%group   = 3   ! a class-average group of balance=cavg
+        cs(2)%group   = 0   ! its own group
+        cs(3)%group   = 3
         allocate(cs(1)%pinds(1), source=[42])
         allocate(cs(2)%pinds(2), source=[5, 9])
         allocate(cs(3)%pinds(4), source=[100, 3, 77, 12])
@@ -54,6 +58,7 @@ contains
         call assert_int(expected%clsind,  actual%clsind,  label//': clsind')
         call assert_int(expected%pop,     actual%pop,     label//': pop')
         call assert_int(expected%nsample, actual%nsample, label//': nsample')
+        call assert_int(expected%group,   actual%group,   label//': group')
         call assert_true(allocated(actual%pinds) .and. allocated(actual%ccs), label//': pinds and ccs allocated')
         if( .not. (allocated(actual%pinds) .and. allocated(actual%ccs)) ) return
         call assert_int(size(expected%pinds), size(actual%pinds), label//': pinds size')
@@ -86,7 +91,7 @@ contains
     end subroutine test_ragged_roundtrip
 
     ! a class without members (pinds never allocated, as get_class_sample_stats leaves it) is stored as its
-    ! three scalars; it comes back with pop 0 and zero-sized index/correlation arrays, and does not disturb
+    ! four scalars; it comes back with pop 0 and zero-sized index/correlation arrays, and does not disturb
     ! the populated classes around it
     subroutine test_empty_class_roundtrip()
         type(class_sample), allocatable :: cs(:), cs_read(:)
@@ -97,6 +102,7 @@ contains
         allocate(cs(1)%pinds(2), source=[8, 6])
         allocate(cs(1)%ccs(2),   source=[0.3, 0.2])
         cs(2)%clsind = 4   ! empty: no pinds/ccs
+        cs(2)%group  = 2
         cs(3)%clsind = 5
         cs(3)%pop    = 1
         cs(3)%nsample = 1
@@ -111,6 +117,7 @@ contains
         call assert_int(4, cs_read(2)%clsind,  'empty class: clsind survives')
         call assert_int(0, cs_read(2)%pop,     'empty class: pop is 0')
         call assert_int(0, cs_read(2)%nsample, 'empty class: nsample is 0')
+        call assert_int(2, cs_read(2)%group,   'empty class: group survives')
         call assert_true(allocated(cs_read(2)%pinds), 'empty class: pinds allocated on read')
         if( allocated(cs_read(2)%pinds) ) call assert_int(0, size(cs_read(2)%pinds), 'empty class: pinds has zero size')
         call assert_true(allocated(cs_read(2)%ccs), 'empty class: ccs allocated on read')

@@ -11,6 +11,8 @@ public :: write_class_samples, read_class_samples, deallocate_class_samples
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: NHEAD = 4 !< per record: clsind, pop, nsample, group, then pinds and ccs
+
 contains
     
     function serialize_class_sample( cs_entry ) result( rarr )
@@ -19,13 +21,14 @@ contains
         integer :: sz_pinds, sz_rarr, cnt, i
         sz_pinds = 0
         if( allocated(cs_entry%pinds) ) sz_pinds = size(cs_entry%pinds)
-        sz_rarr  = 3 + 2 * sz_pinds
+        sz_rarr  = NHEAD + 2 * sz_pinds
         allocate(rarr(sz_rarr), source=0.)
         rarr(1)  = real(cs_entry%clsind)
         rarr(2)  = real(cs_entry%pop)
         rarr(3)  = real(cs_entry%nsample)
-        if( sz_rarr > 3 )then
-            cnt = 3
+        rarr(4)  = real(cs_entry%group)
+        if( sz_rarr > NHEAD )then
+            cnt = NHEAD
             do i = 1,sz_pinds
                 cnt = cnt + 1
                 rarr(cnt) = real(cs_entry%pinds(i))
@@ -77,9 +80,10 @@ contains
             csarr(i)%clsind  = nint(rmat(i,1))
             csarr(i)%pop     = nint(rmat(i,2))
             csarr(i)%nsample = nint(rmat(i,3))
+            csarr(i)%group   = nint(rmat(i,4))
             allocate(csarr(i)%pinds(csarr(i)%pop), source=0)
             allocate(csarr(i)%ccs(csarr(i)%pop),   source=0.)
-            cnt = 3
+            cnt = NHEAD
             do j = 1,csarr(i)%pop
                 cnt = cnt + 1
                 csarr(i)%pinds(j) = nint(rmat(i,cnt)) 

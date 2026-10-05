@@ -15,8 +15,12 @@
 `simple_matcher_smpl_and_lplims.f90` chooses the active subset for
 non-probabilistic refinement:
 
-- `sample4update_class` for balanced class-aware sampling.
-- `sample4update_cnt` for low-update-count biased sampling.
+- `sample4update_class` for the nested equal quota over the sampling units of
+  `clssmp.bin` (`balance=class|cavg`).
+- `sample4update_rescore` for the cohort schedule (`cohort_sampling=yes`,
+  `refine3D_states` frequency blocks): the same particles at every iteration of
+  a block after its first draw.
+- `sample4update_cnt` for low-update-count biased sampling (`balance=none`).
 - `sample4update_all` when fractional update is inactive.
 - `sample4update_fillin` for late fill-in behavior.
 

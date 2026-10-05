@@ -39,12 +39,19 @@ late `prob_neigh`.
 
 `simple_matcher_smpl_and_lplims.f90` owns the shared outer subset-selection
 helpers for 2D and 3D. This is where full update, random sampling,
-update-count-biased sampling, class-balanced sampling, fill-in sampling, and
-subset reproduction are dispatched.
+update-count-biased sampling, nested-quota sampling over class units
+(`balance=class|cavg`), cohort rescoring, fill-in sampling, and subset
+reproduction are dispatched.
+
+`simple_view_partition_sampling.f90` owns the sampling units: one unit per
+selected 2D class, the class-average groups of `balance=cavg`, and the
+coverage report printed before the first stage.
 
 `simple_oris_sampling.f90` and `simple_oris_getters.f90` own the bookkeeping:
-`sampled`, `updatecnt`, exact subset reproduction, global realized update
-fraction, and class-local realized update fractions.
+`sampled`, `updatecnt`, the nested quota (`sample4update_class`,
+`class_sample_quotas`, `class_sample_sweep`), exact subset reproduction and
+cohort rescoring, global realized update fraction, and class-local realized
+update fractions.
 
 `simple_commanders_prob.f90` owns probabilistic pre-alignment orchestration:
 sampling the outer subset once, writing it to the project, running table
@@ -219,8 +226,8 @@ the split increases that target to
 broadens the one-state pose coverage before state labels are introduced.
 
 Immediately before the cohort-forming assignment pass, the commander clears
-`sampled` and `updatecnt`. It then always runs one class-balanced `refine=prob`
-pass with `frac_best=1.0`, `fillin=no`, `trail_rec=no`, `volrec=no`, and
+`sampled` and `updatecnt`. It then always runs one `refine=prob` pass with the
+run's sampling units (`balance` of the run, `class` when the run uses `none`), `frac_best=1.0`, `fillin=no`, `trail_rec=no`, `volrec=no`, and
 `sticky_class_sampling=no`. In the fractional regime its nominal target is:
 
 ```text
@@ -239,8 +246,8 @@ At the split, the commander restores the requested state count, recomputes the
 fixed post-split target
 `min(UPDATE_FRAC_MAX, nstates * nsample / active_particles)`, and randomizes
 active particles into balanced uniform state labels without clearing the cohort
-markers. It then selects one post-split-sized class-balanced subset restricted
-to `sampled > 0` and reconstructs state-specific starting volumes and halfmaps
+markers. It then selects one post-split-sized subset under the nested quota of
+`clssmp.bin`, restricted to `sampled > 0` and reconstructs state-specific starting volumes and halfmaps
 from exactly that latest sampled round without trailing. The reconstruction
 reproduces the subset.
 
@@ -248,8 +255,8 @@ Throughout ordinary post-split docked refinement, `sample4update_class` applies
 the same `sampled > 0` eligibility restriction when `set_cline_refine3D` calls
 `solve3D_docked_cohort_active` and emits the
 `sticky_class_sampling=yes` child flag. This flag is consumed only by the
-class-balanced `sample4update_class` path, where it enables `sampled_only`; it
-does not change unbalanced or full particle sampling. It is emitted only after
+`sample4update_class` path (`balance=class|cavg`), where it enables
+`sampled_only`; it does not change `balance=none` or full particle sampling. It is emitted only after
 the fractional cohort pass succeeds and the requested state count is restored;
 the matcher does not infer it from `nstates` or `multivol_mode`. The
 cohort-forming reset ensures that eligibility means membership in the pre-split
@@ -278,57 +285,137 @@ at the split stage. Because the cohort pass resets the counters before selecting
 its members, `updatecnt` after the split is cohort-local selection history. Final docked reconstruction still requires every active particle to have a multi-state
 assignment and may therefore invoke the separate terminal missing-update pass.
 
-`sample_ptcls4update3D` applies the normal 3D subset policy:
+`sample_ptcls4update3D` applies the normal 3D subset policy, chosen by
+`balance=none|class|cavg`:
 
 - if fractional update is off, select all active particles
-- if `balance=yes`, use class-balanced sampling over the groups of the class
-  sampling file: every group gets the same quota, capped at its population.
-  In `solve3D` the groups are the selected 2D classes, or with
-  `partition=yes` view groups of them (see below)
-- otherwise use update-count-biased sampling
+- `none`: no sampling units; update-count-biased sampling over the whole range
+  (`sample4update_cnt`, lowest `updatecnt` tiers first)
+- `class` and `cavg`: the nested equal quota of `sample4update_class` over the
+  sampling units of the class sampling file `clssmp.bin` (below)
+- with `cohort_sampling=yes` (an internal flag `refine3D_states` sets on its
+  `prob_neigh` frequency blocks) the stage draws by the rule above at its first
+  iteration (`which_iter == startit`) and calls `sample4update_rescore` at the
+  others (see "Cohort schedule")
 
-### View-balanced sampling (`partition=yes`)
+`cavg` is the default wherever balanced sampling is the workflow default
+(`solve3D`, its docked split checkpoint, `refine3D_states`, `classify3D_refs`);
+`refine3D`, `refine3D_auto` and external-reference pose initialization use
+`none`. `refine3D_states` and `classify3D_refs` fall back to `none` when the
+project carries no selected class averages. `solve3D` with input volumes
+(`vol1`) defaults to `class` over the random classes it assigns and rejects
+`cavg`, since those classes have no averages.
 
-Per-class quotas equalise 2D classes, not views: 2D classification spreads a
-preferred view over many classes, so that view keeps its excess in proportion
-to its class count. With `partition=yes`, `solve3D` writes the class
-sampling file from view groups instead (`make_view_partition_class_samples`,
-`simple_view_partition_sampling`). The groups are formed once, before the
-first stage, and used by every stage; the stages read only the sampling file
-and their command lines are stripped of `partition`, `nclust` and
-`clust_crit`:
+### Sampling units and the nested quota
 
-- the selected class averages (`cls2D` state > 0) are aligned pairwise under
-  their own parameters (`objfun=cc`, no CTF, `lp=6`, `trs=10`, as
-  `cluster_cavgs`) and the distance of `clust_crit` is formed, `cc` by default:
-  the in-plane, shift and mirror invariant correlation (mirror images are
-  opposite projection directions, which carry the same central section)
-- the distance matrix is computed on the master before any stage dispatches,
-  so on local execution it takes the idle workers' cores: `nparts*nthr`
-  threads capped at the cores the process owns (the rec3D master-phase
-  budget); on a cluster it keeps `nthr`
-- they are clustered into `nclust` groups (default 20) by average linkage,
-  which merges the most similar classes first, so a tight preferred view
-  becomes one group however many classes it has; with no more selected classes
-  than `nclust` every class is its own group
-- each group is one sampling group holding the active particles of its
-  classes, ordered by their rank fraction inside their own class (2D `corr`,
-  descending), so the greedy and `frac_best` selections take the same top
-  fraction of every member class rather than the classes with the highest 2D
-  correlations
-- the groups are written as `view_partitionNN_cavgs` stacks and the
-  class-to-group table `view_partition.txt` for inspection, and logged in the
-  NU report layout as `>>> VIEW PARTITION SAMPLING GROUPS`: a table of the
-  active particles per group against the particles each iteration samples
-  from it (each also as a percentage of its total), preceded by the max/min
-  group share of both; the project's `cluster` labels are not used or changed
-- under the full-sampling switch (`nsample` above 90% of the active
-  particles) every particle is updated each iteration, no groups are formed
-  and a `>>> VIEW PARTITION:` line says so; every partition log line carries
-  the `VIEW PARTITION` tag
+A sampling unit is one selected 2D class (`cls2D` state > 0): its active
+particles ordered by their 2D score (`corr`, best first), so the greedy and
+`frac_best` selections take the best of every class. Each unit carries an
+integer `group`:
 
-`classify3D_refs` still reads `partition=yes` groups from the `cls2D` `cluster`
-labels written by `cluster_cavgs`.
+- `class`: `group = 0`, every unit is its own group
+- `cavg`: the selected class averages are aligned pairwise under their own
+  parameters (`objfun=cc`, no CTF, `lp=6`, `trs=10`, as `cluster_cavgs`) and
+  their in-plane, shift and mirror invariant correlation is clustered into
+  `nclust` groups (default 20) by average linkage; with no more selected
+  classes than `nclust` every class is its own group. Average linkage merges
+  the most similar class averages first, so a tight preferred view becomes one
+  group however many classes 2D classification split it into. The groups are
+  written as `view_partitionNN_cavgs` stacks with the class-to-group table
+  `view_partition.txt` for inspection; the project's `cluster` labels are not
+  used or changed. On local execution the clustering in `solve3D` takes the
+  idle workers' cores (`nparts*nthr`, capped at the cores the process owns)
+
+The quota of an iteration, `nint(update_frac * active)`, is nested:
+
+1. equal over groups: every group gets one more particle per round until the
+   target is reached, capped at its population (the total may exceed the
+   target by fewer particles than there are groups);
+2. equal over the units of a group, capped at their populations; the remainder
+   of the equal split goes to the units whose particles have the lowest mean
+   `updatecnt` (ties: larger population, then lower class index), which the
+   project state fixes, so every partition computes the same quotas and the
+   remainder rotates over iterations;
+3. inside a unit, lowest `updatecnt` first, drawn uniformly within a tier.
+
+Under `class` the first level is the whole rule, as before. The nested level
+exists because several conformational states can hide inside one view: 2D
+classification separates them into classes that average linkage merges into
+one group first. The group level keeps the view balance, the unit level keeps
+the hidden classes on an equal footing. The quota applies to single- and
+multi-state runs alike.
+
+Nothing in the sampler uses 3D maps, poses, projection directions or any other
+quantity derived from them to decide which particles are sampled: the maps
+carry bias. The `proj` field and `proj2class` serve search, convergence and 2D
+averaging only.
+
+`clssmp.bin` is the single sampling file. Every record is one unit: class
+index, population, quota, `group`, then the particle indices and their scores.
+The producer (`make_class_samples` in `simple_view_partition_sampling`) runs
+once before the first stage; the stages only read the file. Stage command
+lines carry `balance` and, for `cavg`, `nclust`. `solve3D` writes the file for
+every fractional run: the run's units under `class` or `cavg`, class units
+under `none`, because its initial greedy sample and the split checkpoint draw
+from class units. Continuation, add-on and split handoff rebuild the file from
+the current `ptcl2D` class labels; no particle indices are persisted in the run
+manifest, which records `balance` and `nclust` as given on the entry command
+line and the effective `nsample`. `refine3D_states` and `classify3D_refs` leave
+particles that are inactive in `ptcl3D` out of their units.
+
+### Coverage planning and report
+
+With equal quotas the iterations that visit every particle once are
+`sweep = max over units of ceil(pop / quota)`, not `ceil(1 / update_frac)`:
+a unit larger than its share takes longer. `class_sample_sweep` computes it
+from the unit table with the expected (real-valued) quotas of
+`class_sample_quotas`. The `refine3D_states` `prob_state` initialization phase,
+which must label every active particle before `prob_neigh`, runs at least
+`sweep` iterations; the automatic `maxits` of `refine3D_states` is the target
+updates per particle times `sweep`, and that of `refine3D_auto` (balance
+`none`) the target times `ceil(active / nsample)`. No `solve3D` stage rule
+assumes a sweep length.
+
+Before the first stage the producer's caller prints the unit table
+(`>>> FRACTIONAL-UPDATE SAMPLING UNITS`): per group and unit the population,
+the quota and the expected visits per particle over the planned draws
+(iterations; frequency blocks under the cohort schedule), the draws one sweep
+needs, and the minimum and maximum visits over units. It warns when the
+minimum is below one (some particles would not be reached) or the maximum
+exceeds ten times the target. Nothing is adjusted automatically: neither
+`nsample` nor the frequency march changes, and the terminal missing-update pass
+labels any particle the march did not reach.
+
+### Cohort schedule (`refine3D_states`)
+
+State labelling and pose refinement converge as fixed-point iterations, so in
+`refine3D_states` each `prob_neigh` frequency block refines one particle set.
+`refine3D_states` sets `cohort_sampling=yes` on the command lines of those
+blocks. `sample_ptcls4update3D` then draws with the grouped allocator at the
+block's first iteration, which stamps a new round marker on the cohort; lowest
+`updatecnt` first deprioritizes the previous cohort. At the other iterations
+`sample4update_rescore` returns exactly the rows whose `sampled` equals the
+latest marker, which is what `sample4update_reprod` returns, and advances
+`sampled` and `updatecnt` on those rows once, so the next iteration finds the
+same set under the new marker. Earlier cohorts carry older markers; `fromto`
+and `allow_empty` behave as in `sample4update_reprod`. `prob_tab` and the
+matcher keep reproducing the round with `sample4update_reprod`. The
+first-iteration clean-up of `sampled` and `updatecnt` in `prob_align`
+(`startit == 1`) is unchanged. The `prob_state` initialization phase and the
+terminal missing-update pass do not use cohorts. A full visit takes `sweep`
+blocks; the report states the blocks needed against those planned.
+`solve3D` and `sticky_class_sampling` are not part of the cohort schedule.
+
+Trailing reconstruction is unchanged by the cohort: the current partials are
+scaled by `u/f` and the chain by `(1−u)·N/M`, with current-map coefficient
+`u` (`u = f = n/N` per state unless `ufrac_trec`). Holding one cohort for `k`
+iterations therefore gives it a cumulative coefficient `1 − (1−u)^k` while
+earlier cohorts fade geometrically (covered by the cohort case of the
+`trailing_reconstruction_blend` sub-suite). The equal quota biases the
+composition of the selected partial reconstruction towards about
+`min(pop, quota)` particles per unit per iteration; the state-level blend
+computes no per-unit weight, so the composition moves with `nsample`, `nclust`
+and the class selection.
 
 `sample_ptcls4fillin` is a separate late-stage coverage policy. Its purpose is
 to update particles with insufficient history, not to preserve the normal

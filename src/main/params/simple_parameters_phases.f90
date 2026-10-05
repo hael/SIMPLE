@@ -500,9 +500,6 @@ contains
     module subroutine derive_sampling_settings(self, cline)
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
-        if( (trim(self%balance).eq.'no') .and. (trim(self%partition).eq.'yes') )then
-            THROW_HARD('balance=no and partition=yes are incompatible; derive_sampling_settings')
-        endif
         self%l_ufrac_trec_defined = cline%defined('ufrac_trec')
         if( self%update_frac <= .99 )then
             self%l_update_frac = .true.
@@ -518,6 +515,7 @@ contains
         self%l_frac_best   = self%frac_best  <= 0.99
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
         self%l_sticky_class_sampling = trim(self%sticky_class_sampling).eq.'yes'
+        self%l_cohort_sampling       = trim(self%cohort_sampling).eq.'yes'
     end subroutine derive_sampling_settings
 
     module subroutine derive_parallel_settings(self, cline)
@@ -687,6 +685,16 @@ contains
             case('yes','no')
             case DEFAULT
                 THROW_HARD('sticky_class_sampling must be yes or no')
+        end select
+        select case(trim(self%cohort_sampling))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('cohort_sampling must be yes or no')
+        end select
+        select case(trim(self%balance))
+            case('none','class','cavg')
+            case DEFAULT
+                THROW_HARD('balance must be none, class or cavg')
         end select
         select case(trim(self%ref_pose_init))
             case('cc','none')

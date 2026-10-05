@@ -4,7 +4,7 @@ use simple_ori_api
 use simple_ori, only: ori
 implicit none
 
-public :: oris, population_blend_weights
+public :: oris, population_blend_weights, class_sample_quotas, class_sample_sweep
 private
 #include "simple_local_flags.inc"
 
@@ -94,7 +94,6 @@ type :: oris
     procedure          :: get_group_update_counts
     procedure          :: get_state_update_fracs
     procedure          :: get_class_sample_stats
-    procedure          :: get_proj_sample_stats
     !======================================================================
     ! SETTERS / MUTATORS (simple_oris_setters.f90)
     !======================================================================
@@ -176,6 +175,7 @@ type :: oris
     procedure          :: sample4update_cnt
     procedure          :: sample4update_class
     procedure          :: sample4update_reprod
+    procedure          :: sample4update_rescore
     procedure          :: sample4update_updated
     procedure          :: sample4update_fillin
     procedure          :: sample4update_missing
@@ -780,12 +780,6 @@ interface
         character(len=*),      optional, intent(in)    :: label
     end subroutine get_class_sample_stats
 
-    module subroutine get_proj_sample_stats( self, eulspace, clssmp )
-        class(oris),                     intent(inout) :: self
-        class(oris),                     intent(in)    :: eulspace
-        type(class_sample), allocatable, intent(inout) :: clssmp(:)
-    end subroutine get_proj_sample_stats
-
     !======================================================================
     ! SETTERS / MUTATORS (simple_oris_setters.f90)
     !======================================================================
@@ -1275,6 +1269,14 @@ interface
         logical, optional,    intent(in)    :: allow_empty
     end subroutine sample4update_reprod
 
+    module subroutine sample4update_rescore( self, fromto, nsamples, inds, allow_empty )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical, optional,    intent(in)    :: allow_empty
+    end subroutine sample4update_rescore
+
     module subroutine sample4update_updated( self, fromto, nsamples, inds, incr_sampled )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -1378,6 +1380,21 @@ interface
         real,           intent(out) :: s, w, mnew
         real, optional, intent(in)  :: ufrac
     end subroutine population_blend_weights
+
+    ! Expected particles per iteration of every sampling unit under the nested equal quota of
+    ! sample4update_class (equal over groups, then over the units of a group, capped at populations)
+    module subroutine class_sample_quotas( clssmp, ntarget, quotas )
+        type(class_sample), intent(in)  :: clssmp(:)
+        integer,            intent(in)  :: ntarget
+        real,               intent(out) :: quotas(size(clssmp))
+    end subroutine class_sample_quotas
+
+    ! Iterations that visit every particle of every unit once: max over units of ceil(pop/quota)
+    module function class_sample_sweep( clssmp, ntarget ) result( sweep )
+        type(class_sample), intent(in) :: clssmp(:)
+        integer,            intent(in) :: ntarget
+        integer :: sweep
+    end function class_sample_sweep
 
     !======================================================================
     ! DISTANCES (simple_oris_dist.f90)

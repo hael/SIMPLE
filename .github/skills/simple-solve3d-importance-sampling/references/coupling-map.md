@@ -28,8 +28,12 @@ Important details:
 - the result is capped by `UPDATE_FRAC_MAX = 0.9`, so solve3D keeps
   fractional update enabled.
 
-That same command writes class-sampling statistics to `CLASS_SAMPLING_FILE`,
-which later balanced sampling reuses.
+That same command writes the sampling units to `CLASS_SAMPLING_FILE`
+(`clssmp.bin`, `make_class_samples` in `simple_view_partition_sampling`): one
+unit per selected 2D class with its `group` (0 under `balance=class`, the
+class-average group under `balance=cavg`), and prints the unit table with the
+expected visits per particle before the first stage. Stages only read the file.
+Nothing in this layer uses 3D maps, poses or projection directions.
 
 ### 2. The stage controller changes search mode and update policy together
 
@@ -60,7 +64,12 @@ and reconstruction behavior.
 
 Key routines:
 
-- `sample4update_class`: balanced class-aware sampling using `CLASS_SAMPLING_FILE`
+- `sample4update_class`: nested equal quota over the units of `CLASS_SAMPLING_FILE`
+  (equal over groups, then over the units of a group, then lowest `updatecnt`);
+  `class_sample_quotas` and `class_sample_sweep` give the expected quotas and the
+  draws one full sweep takes (`max ceil(pop/quota)`)
+- `sample4update_rescore`: the latest round again, `sampled`/`updatecnt` advanced
+  once (the `cohort_sampling` schedule of `refine3D_states` frequency blocks)
 - `sample4update_cnt`: prefers particles with lower `updatecnt`
 - `sample4update_fillin`: fills in particles with low update history late in the run
 - `sample4update_reprod`: reproduces the most recent sampled subset exactly
@@ -95,8 +104,9 @@ within the active updated pool.
 Behavior:
 
 - if `l_update_frac` is false, sample all active particles
-- if `balance=yes`, use `sample4update_class`
-- otherwise use `sample4update_cnt`
+- with `cohort_sampling=yes` and `which_iter /= startit`, use `sample4update_rescore`
+- `balance=class|cavg`: use `sample4update_class`
+- `balance=none`: use `sample4update_cnt`
 - if late-stage fill-in is enabled, `sample_ptcls4fillin` redirects to
   `sample4update_fillin`
 

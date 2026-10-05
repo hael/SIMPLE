@@ -22,10 +22,13 @@ contains
     !!     iteration's effective update equals the realized fraction f
     !!   - the chain-start iteration itself restores the current sample alone:
     !!     the previous map has no weight in it
+    !!   - one particle cohort held for k iterations (refine3D_states cohort schedule)
+    !!     reaches the cumulative current-map coefficient 1 - (1-u)^k
     subroutine run_all_accum_blend_tests()
         write(*,'(A)') '**** running all trailing-reconstruction blend tests ****'
         call test_trail_rec_blend()
         call test_trail_rec_population()
+        call test_trail_rec_cohort()
     end subroutine run_all_accum_blend_tests
 
     subroutine test_trail_rec_blend()
@@ -242,5 +245,59 @@ contains
         end subroutine make_unit_accum
 
     end subroutine test_trail_rec_population
+
+    !> One cohort (refine3D_states cohort_sampling) reconstructed for k iterations of a frequency block:
+    !! every iteration its partials (cohort map, mass f*D) are scaled by u/f and the full-mass chain by
+    !! 1-u. The even and odd chains and their density must follow the closed form: map coefficient of the
+    !! cohort 1 - (1-u)^k, earlier maps fading as (1-u)^k, density D throughout.
+    subroutine test_trail_rec_cohort()
+        real,    parameter :: D_FULL = 2.0
+        real,    parameter :: V_PREV(2) = [1.0, 2.0]  ! even, odd previous maps
+        real,    parameter :: V_COH(2)  = [3.0, 5.0]  ! even, odd cohort maps
+        real,    parameter :: TOL    = 1.e-4
+        integer, parameter :: NITS   = 4
+        real,    parameter :: F_COH  = 0.25           ! realized fraction of the cohort; u = f
+        type(image)       :: cur, chain
+        real, allocatable :: rho_cur(:,:,:), rho_chain(:,:,:)
+        real    :: coef
+        integer :: ieo, k
+        write(*,'(A)') 'test_trail_rec_cohort'
+        do ieo = 1, 2
+            call make_unit_density_accum(chain, rho_chain, V_PREV(ieo), D_FULL)
+            do k = 1, NITS
+                call make_unit_density_accum(cur, rho_cur, V_COH(ieo), F_COH * D_FULL)
+                call cur%scale_mats(rho_cur, 1.0)                ! u/f = 1 for u = f
+                call chain%scale_mats(rho_chain, 1.0 - F_COH)
+                call cur%sum_reduce_mats(chain, rho_cur, rho_chain)
+                ! the blend is the next chain
+                call chain%copy(cur)
+                rho_chain = rho_cur
+                call cur%kill
+                coef = 1.0 - (1.0 - F_COH)**k
+                call assert_real(D_FULL, rho_chain(1,1,1), TOL, 'cohort chain keeps full sampling mass')
+                call assert_real(V_PREV(ieo) + coef * (V_COH(ieo) - V_PREV(ieo)), &
+                    &real(chain%get_cmat_at(1,1,1)) / rho_chain(1,1,1), TOL, &
+                    &'cohort held k iterations: map coefficient 1 - (1-u)^k')
+            end do
+            call chain%kill
+            deallocate(rho_cur, rho_chain)
+        end do
+
+    contains
+
+        subroutine make_unit_density_accum( img, rho, map_value, density )
+            type(image),       intent(inout) :: img
+            real, allocatable, intent(inout) :: rho(:,:,:)
+            real,              intent(in)    :: map_value, density
+            integer :: shp(3)
+            call img%new([8,8,8], 1.0)
+            call img%set_ft(.true.)
+            call img%set_cmat(cmplx(map_value * density, 0.))
+            shp = img%get_array_shape()
+            if( allocated(rho) ) deallocate(rho)
+            allocate(rho(shp(1),shp(2),shp(3)), source=density)
+        end subroutine make_unit_density_accum
+
+    end subroutine test_trail_rec_cohort
 
 end module simple_accum_blend_tester

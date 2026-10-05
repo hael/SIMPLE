@@ -240,10 +240,6 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         call refine3D_states%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target', &
         &'Particles sampled per iteration; set 0 to derive the automatic target from the number of states', &
         &'particles (0=automatic)', .false., 0., group='search', visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
-        call refine3D_states%add_input(UI_SRCH, 'sticky_class_sampling', 'binary', 'Reuse one sampled cohort', &
-        &'Keep a projection-balanced stochastic cohort fixed across frequency stages(yes|no){no}', '', &
-        &.false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_DEVELOPER)
         call refine3D_states%add_input(UI_SRCH, sigma_est, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'pose_policy', 'multi', 'Pose-search policy', &
         &'Pose-search policy(fixed|local|global){global}. Fixed keeps the projection direction and optimizes the in-plane angle and x/y translations; local uses the current geometric neighborhood; global permits full probabilistic matching', &

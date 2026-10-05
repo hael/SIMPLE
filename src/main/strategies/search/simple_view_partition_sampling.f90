@@ -1,62 +1,99 @@
-!@descr: view-cluster sampling groups for partition=yes: selected class averages clustered by aligned correlation, one group per cluster
-! Within a group the particles are ordered by rank fraction inside their own class; ccs holds
-! 1 - that fraction (an order key, not a correlation).
+!@descr: fractional-update sampling units (balance=class|cavg): one unit per selected 2D class, cavg groups by class-average correlation
+! Under cavg the selected class averages are clustered into nclust groups by average linkage on their aligned
+! correlation; with no more selected classes than nclust every class is its own group. The sampler never uses
+! 3D maps, poses or projection directions.
 module simple_view_partition_sampling
 use simple_pftc_srch_api
 use simple_clustering_utils, only: cluster_dmat
 use simple_strategy2D_utils, only: prep_cavgs4clust, calc_cluster_cavgs_dmat
+use simple_oris,             only: class_sample_quotas, class_sample_sweep
 implicit none
 
-public :: make_view_partition_class_samples, VIEW_PARTITION_FILE
+public :: make_class_samples, report_class_sample_coverage, has_selected_cavgs, VIEW_PARTITION_FILE
 private
 #include "simple_local_flags.inc"
 
 character(len=*), parameter :: VIEW_PARTITION_FILE  = 'view_partition.txt'
 character(len=*), parameter :: VIEW_PARTITION_FBODY = 'view_partition'
+character(len=*), parameter :: VIEW_PARTITION_CRIT  = 'cc' !< in-plane, shift and mirror invariant correlation
 real,             parameter :: VIEW_PARTITION_LP    = 6.  !< low-pass limit of the class-average alignment (as cluster_cavgs)
 real,             parameter :: VIEW_PARTITION_TRS   = 10. !< shift search range of the class-average alignment (as cluster_cavgs)
+real,             parameter :: VISITS_WARN_FAC      = 10. !< warn when a unit's particles are visited this many times the target
 
 contains
 
-    !> one class_sample per view cluster of the selected class averages; ntarget (particles sampled
-    !! per iteration) only feeds the report; clustering runs on nthr threads
-    subroutine make_view_partition_class_samples( params, spproj, ntarget, nthr, clssmp )
+    !> whether the project carries selected class averages (cls2D state > 0 and a class-average stack)
+    logical function has_selected_cavgs( spproj ) result( l_has )
+        class(sp_project), intent(inout) :: spproj
+        type(string) :: stkname
+        integer      :: ncls
+        real         :: smpd
+        l_has = .false.
+        if( spproj%os_cls2D%get_noris() < 1 ) return
+        if( .not. any(spproj%os_cls2D%get_all_asint('state') > 0) ) return
+        call spproj%get_cavgs_stk(stkname, ncls, smpd, fail=.false.)
+        l_has = ncls > 0 .and. file_exists(stkname)
+        call stkname%kill
+    end function has_selected_cavgs
+
+    !> One class_sample per selected 2D class, best ptcl2D score first, for balance (class|cavg): group 0
+    !! under class, the class-average group under cavg. l_drop_inactive3D leaves out rows inactive in
+    !! ptcl3D (a workflow whose ptcl3D states are its own). The cavg clustering runs on nthr threads.
+    subroutine make_class_samples( params, spproj, balance, nthr, l_drop_inactive3D, clssmp )
         class(parameters),               intent(in)    :: params
         class(sp_project),               intent(inout) :: spproj
-        integer,                         intent(in)    :: ntarget
+        character(len=*),                intent(in)    :: balance
         integer,                         intent(in)    :: nthr
+        logical,                         intent(in)    :: l_drop_inactive3D
         type(class_sample), allocatable, intent(inout) :: clssmp(:)
+        integer, allocatable :: clsinds(:), labels(:)
+        integer :: i
+        select case(trim(balance))
+            case('class', 'cavg')
+            case DEFAULT
+                THROW_HARD('class sampling units need balance=class|cavg, not '//trim(balance))
+        end select
+        if( spproj%os_cls2D%get_noris() < 1 ) THROW_HARD('balance='//trim(balance)//' needs a cls2D segment')
+        clsinds = pack([(i, i=1,spproj%os_cls2D%get_noris())], mask=spproj%os_cls2D%get_all_asint('state') > 0)
+        if( size(clsinds) < 1 ) THROW_HARD('balance='//trim(balance)//' needs selected classes (cls2D state > 0)')
+        if( allocated(clssmp) ) call deallocate_class_samples(clssmp)
+        call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+        if( trim(balance) == 'cavg' )then
+            call cluster_selected_cavgs(params, spproj, nthr, clsinds, labels)
+            do i = 1, size(clssmp)
+                clssmp(i)%group = labels(i)
+            end do
+        endif
+        if( l_drop_inactive3D ) call drop_inactive_rows(spproj, clssmp)
+    end subroutine make_class_samples
+
+    !> class-average group of every selected class (clsinds order); every class is its own group when
+    !! there are no more selected classes than nclust
+    subroutine cluster_selected_cavgs( params, spproj, nthr, clsinds, labels )
+        class(parameters),    intent(in)    :: params
+        class(sp_project),    intent(inout) :: spproj
+        integer,              intent(in)    :: nthr
+        integer,              intent(in)    :: clsinds(:)
+        integer, allocatable, intent(inout) :: labels(:)
         type(cmdline)            :: cline_clust
         type(parameters)         :: params_clust
         type(image), allocatable :: cavg_imgs(:)
         real,        allocatable :: mm(:,:), dmat(:,:)
-        integer,     allocatable :: states(:), clspops(:), clsinds(:), labels(:), i_medoids(:)
+        integer,     allocatable :: states(:), clspops(:), clsinds_clust(:), i_medoids(:)
         logical,     allocatable :: l_sel(:)
-        integer(timer_int_kind) :: t_start, t_dmat
-        real(timer_int_kind)    :: rt_dmat
+        integer(timer_int_kind) :: t_start
         integer :: nsel, nclust, ldim(3), i
-        logical :: l_clustered
         t_start = tic()
-        rt_dmat = 0.
-        if( spproj%os_cls2D%get_noris() < 1 ) THROW_HARD('partition=yes needs class averages (an empty cls2D segment)')
+        if( params%nclust < 1 ) THROW_HARD('balance=cavg needs nclust >= 1')
+        if( .not. has_selected_cavgs(spproj) ) THROW_HARD('balance=cavg needs selected class averages')
         states = spproj%os_cls2D%get_all_asint('state')
         l_sel  = states > 0
         nsel   = count(l_sel)
-        if( nsel < 1 )          THROW_HARD('partition=yes needs selected class averages (cls2D state > 0)')
-        if( params%nclust < 1 ) THROW_HARD('partition=yes needs nclust >= 1')
-        select case(trim(params%clust_crit))
-            case('cc', 'sig', 'res', 'hybrid')
-            case DEFAULT
-                THROW_HARD('partition=yes supports clust_crit=cc|sig|res|hybrid, not '//trim(params%clust_crit))
-        end select
-        l_clustered = nsel > params%nclust
-        if( .not. l_clustered )then
-            nclust  = nsel
-            clsinds = pack([(i, i=1,size(states))], mask=l_sel)
-            clspops = pack(spproj%os_cls2D%get_all_asint('pop'), mask=l_sel)
-            labels  = [(i, i=1,nsel)]
+        if( nsel <= params%nclust )then
+            labels = [(i, i=1,nsel)]
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> CLASS-AVERAGE GROUPS: one group per class (', nsel, &
+                &' selected classes <= nclust=', params%nclust, ')'
         else
-            nclust = params%nclust
             ! the class averages are aligned and compared under their own parameters: objfun=cc, no CTF
             call cline_clust%set('prg',      'cluster_cavgs')
             call cline_clust%set('projfile', params%projfile)
@@ -70,127 +107,130 @@ contains
             call cline_clust%set('trs',      VIEW_PARTITION_TRS)
             ! sets the OpenMP team and nthr_glob to nthr until restored below
             call params_clust%new(cline_clust, silent=.true.)
-            call prep_cavgs4clust(spproj, cavg_imgs, params_clust%mskdiam, clspops, clsinds, l_sel, mm)
+            call prep_cavgs4clust(spproj, cavg_imgs, params_clust%mskdiam, clspops, clsinds_clust, l_sel, mm)
             ldim              = cavg_imgs(1)%get_ldim()
             params_clust%smpd = cavg_imgs(1)%get_smpd()
             params_clust%box  = ldim(1)
             params_clust%msk  = min(real(params_clust%box/2) - COSMSKHALFWIDTH - 1., &
                 &0.5 * params_clust%mskdiam / params_clust%smpd)
-            write(logfhandle,'(A,I0,A,I0,A,A,A,I0,A)') '>>> VIEW PARTITION: clustering ', nsel, ' class averages into ', &
-                &nclust, ' groups by average linkage on clust_crit=', trim(params%clust_crit), ' (', params_clust%nthr, ' threads)'
-            t_dmat  = tic()
-            dmat    = calc_cluster_cavgs_dmat(params_clust, cavg_imgs, [minval(mm(:,1)), maxval(mm(:,2))], trim(params%clust_crit))
-            rt_dmat = toc(t_dmat)
+            dmat = calc_cluster_cavgs_dmat(params_clust, cavg_imgs, [minval(mm(:,1)), maxval(mm(:,2))], VIEW_PARTITION_CRIT)
+            nclust = params%nclust
             call cluster_dmat(dmat, 'avglink', nclust, i_medoids, labels)
             call dealloc_imgarr(cavg_imgs)
             call cline_clust%kill
             !$ call omp_set_num_threads(params%nthr)
             nthr_glob = params%nthr
+            if( any(clsinds_clust /= clsinds) ) THROW_HARD('class-average clustering changed the class order')
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,F8.1,A)') '>>> CLASS-AVERAGE GROUPS: ', nsel, ' class averages in ', &
+                &nclust, ' groups by average linkage on correlation (', max(1, nthr), ' threads, ', toc(t_start), ' s)'
         endif
         ! inspection output
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_sel)
         call write_imgarr(nsel, cavg_imgs, labels, VIEW_PARTITION_FBODY, params%ext%to_char())
         call dealloc_imgarr(cavg_imgs)
         call write_partition_table
-        call make_groups
-        call print_report
+        if( allocated(clsinds_clust) ) deallocate(clsinds_clust)
 
     contains
-
-        !> one class_sample per group, particles ordered by rank fraction within their class
-        subroutine make_groups
-            integer, allocatable :: members(:), pinds_cls(:), pinds_grp(:)
-            real,    allocatable :: corrs_cls(:), keys(:)
-            integer :: ic, im, j, npop
-            if( allocated(clssmp) ) call deallocate_class_samples(clssmp)
-            allocate(clssmp(nclust))
-            do ic = 1, nclust
-                members = pack(clsinds, mask=labels == ic)
-                allocate(pinds_grp(0), keys(0))
-                do im = 1, size(members)
-                    call spproj%os_ptcl2D%get_pinds(members(im), 'class', pinds_cls)
-                    if( .not. allocated(pinds_cls) ) cycle
-                    npop = size(pinds_cls)
-                    if( npop > 0 )then
-                        allocate(corrs_cls(npop))
-                        do j = 1, npop
-                            corrs_cls(j) = spproj%os_ptcl2D%get(pinds_cls(j), 'corr')
-                        enddo
-                        call hpsort(corrs_cls, pinds_cls)
-                        call reverse(pinds_cls)
-                        pinds_grp = [pinds_grp, pinds_cls]
-                        keys      = [keys, [((real(j) - 0.5) / real(npop), j=1,npop)]]
-                        deallocate(corrs_cls)
-                    endif
-                    deallocate(pinds_cls)
-                enddo
-                if( size(pinds_grp) > 1 ) call hpsort(keys, pinds_grp)
-                clssmp(ic)%clsind = ic
-                clssmp(ic)%pop    = size(pinds_grp)
-                allocate(clssmp(ic)%pinds(clssmp(ic)%pop), source=pinds_grp)
-                allocate(clssmp(ic)%ccs(clssmp(ic)%pop),   source=1. - keys)
-                deallocate(pinds_grp, keys, members)
-            enddo
-        end subroutine make_groups
-
-        !> per-group populations and per-iteration samples (water-filling, as sample4update_class)
-        subroutine print_report
-            integer :: pops(nclust), nsmp(nclust), ncls_grp(nclust), ic, ntot, nsmp_tot
-            real    :: pct_ptcls(nclust), pct_smp(nclust)
-            pops = clssmp(:)%pop
-            do ic = 1, nclust
-                ncls_grp(ic) = count(labels == ic)
-            enddo
-            nsmp = 0
-            do while( sum(nsmp) < ntarget .and. any(nsmp < pops) )
-                where( nsmp < pops ) nsmp = nsmp + 1
-            enddo
-            ntot      = sum(pops)
-            nsmp_tot  = sum(nsmp)
-            pct_ptcls = 100. * real(pops) / real(max(1, ntot))
-            pct_smp   = 100. * real(nsmp) / real(max(1, nsmp_tot))
-            write(logfhandle,'(A)') ''
-            write(logfhandle,'(A)')               '>>> VIEW PARTITION SAMPLING GROUPS'
-            if( l_clustered )then
-                write(logfhandle,'(A,A)')         '    Grouping                      :   average linkage on clust_crit=', &
-                    &trim(params%clust_crit)
-                write(logfhandle,'(A,I12)')       '    Clustering threads            : ', max(1, nthr)
-                write(logfhandle,'(A,F12.1)')     '    Distance matrix time (s)      : ', rt_dmat
-            else
-                write(logfhandle,'(A,I0,A)')      '    Grouping                      :   one group per class '//&
-                    &'(selected classes <= nclust=', params%nclust, ')'
-            endif
-            write(logfhandle,'(A,F12.1)')         '    Total time (s)                : ', toc(t_start)
-            write(logfhandle,'(A,I12)')           '    Selected classes              : ', nsel
-            write(logfhandle,'(A,I12)')           '    Groups                        : ', nclust
-            write(logfhandle,'(A,I12)')           '    Active particles              : ', ntot
-            write(logfhandle,'(A,I12,F9.2,A)')    '    Sampled per iteration         : ', nsmp_tot, &
-                &100. * real(nsmp_tot) / real(max(1, ntot)), '%'
-            if( count(pops > 0) > 0 )then
-                write(logfhandle,'(A,F12.2)')     '    Group share max/min, particles: ', &
-                    &maxval(pct_ptcls) / minval(pct_ptcls, mask=pops > 0)
-                write(logfhandle,'(A,F12.2)')     '    Group share max/min, sampled  : ', &
-                    &maxval(pct_smp) / max(TINY, minval(pct_smp, mask=pops > 0))
-            endif
-            write(logfhandle,'(A)')               '    Group  Classes     Particles  Pct ptcls       Sampled  Pct sample'
-            do ic = 1, nclust
-                write(logfhandle,'(4X,I5,2X,I7,2X,I12,2X,F9.2,2X,I12,2X,F10.2)') &
-                    &ic, ncls_grp(ic), pops(ic), pct_ptcls(ic), nsmp(ic), pct_smp(ic)
-            enddo
-            write(logfhandle,'(A)') ''
-        end subroutine print_report
 
         subroutine write_partition_table
             integer :: funit, io_stat, k
             call fopen(funit, file=string(VIEW_PARTITION_FILE), status='REPLACE', action='WRITE', iostat=io_stat)
-            call fileiochk('make_view_partition_class_samples; '//VIEW_PARTITION_FILE, io_stat)
-            write(funit,'(A)') '# class group class_population'
+            call fileiochk('cluster_selected_cavgs; '//VIEW_PARTITION_FILE, io_stat)
+            write(funit,'(A)') '# class group'
             do k = 1, nsel
-                write(funit,'(I6,1X,I4,1X,I8)') clsinds(k), labels(k), clspops(k)
+                write(funit,'(I6,1X,I4)') clsinds(k), labels(k)
             enddo
             call fclose(funit)
         end subroutine write_partition_table
 
-    end subroutine make_view_partition_class_samples
+    end subroutine cluster_selected_cavgs
+
+    !> only active particles are sampled: rows with ptcl3D state 0 leave their unit
+    subroutine drop_inactive_rows( spproj, clssmp )
+        class(sp_project),  intent(inout) :: spproj
+        type(class_sample), intent(inout) :: clssmp(:)
+        integer, allocatable :: states(:)
+        logical, allocatable :: l_keep(:)
+        integer :: i
+        if( spproj%os_ptcl3D%get_noris() /= spproj%os_ptcl2D%get_noris() ) return
+        states = spproj%os_ptcl3D%get_all_asint('state')
+        do i = 1, size(clssmp)
+            if( .not. allocated(clssmp(i)%pinds) ) cycle
+            l_keep = states(clssmp(i)%pinds) > 0
+            if( all(l_keep) ) cycle
+            clssmp(i)%pinds = pack(clssmp(i)%pinds, mask=l_keep)
+            clssmp(i)%ccs   = pack(clssmp(i)%ccs,   mask=l_keep)
+            clssmp(i)%pop   = size(clssmp(i)%pinds)
+        end do
+    end subroutine drop_inactive_rows
+
+    !> The unit table, printed once before the first stage: per group and unit the population, the
+    !! per-draw quota and the expected visits per particle over nplanned draws (iterations, or frequency
+    !! blocks under cohorts), the draws one sweep needs, and a warning on short or excessive coverage.
+    subroutine report_class_sample_coverage( clssmp, balance, ntarget, nplanned, draw_label )
+        type(class_sample), intent(in) :: clssmp(:)
+        character(len=*),   intent(in) :: balance, draw_label
+        integer,            intent(in) :: ntarget, nplanned
+        real,    allocatable :: quotas(:), visits(:), keys(:)
+        integer, allocatable :: order(:)
+        type(string) :: msg
+        integer :: nunits, ngroups, nactive, sweep, i, k
+        real    :: target, vmin, vmax
+        nunits  = size(clssmp)
+        if( nunits < 1 ) return
+        nactive = sum(clssmp(:)%pop)
+        allocate(quotas(nunits), visits(nunits), keys(nunits))
+        call class_sample_quotas(clssmp, ntarget, quotas)
+        sweep  = class_sample_sweep(clssmp, ntarget)
+        visits = 0.
+        where( clssmp(:)%pop > 0 ) visits = real(nplanned) * quotas / real(max(1, clssmp(:)%pop))
+        target = real(nplanned) * real(min(ntarget, nactive)) / real(max(1, nactive))
+        ngroups = count(clssmp(:)%group == 0)
+        do i = 1, nunits
+            if( clssmp(i)%group > 0 )then
+                if( findloc(clssmp(:i-1)%group, clssmp(i)%group, dim=1) == 0 ) ngroups = ngroups + 1
+            endif
+        end do
+        ! group order: grouped units by group index, then the units that are their own group
+        order = [(i, i=1,nunits)]
+        do i = 1, nunits
+            if( clssmp(i)%group > 0 )then
+                keys(i) = real(clssmp(i)%group) * real(nunits + 1) + real(i)
+            else
+                keys(i) = real(maxval(clssmp(:)%group) + 1) * real(nunits + 1) + real(i)
+            endif
+        end do
+        call hpsort(keys, order)
+        vmin = minval(visits, mask=clssmp(:)%pop > 0)
+        vmax = maxval(visits, mask=clssmp(:)%pop > 0)
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A,A,A)')       '>>> FRACTIONAL-UPDATE SAMPLING UNITS (balance=', trim(balance), ')'
+        write(logfhandle,'(A,I10)')       '    Active particles in units      : ', nactive
+        write(logfhandle,'(A,I10)')       '    Particles drawn per draw       : ', ntarget
+        write(logfhandle,'(A,I10,A,I0)')  '    Groups / units                 : ', ngroups, ' / ', nunits
+        write(logfhandle,'(A,I10,A)')     '    Draws for one full sweep       : ', sweep, ' ('//draw_label//'s)'
+        write(logfhandle,'(A,I10,A)')     '    Draws planned                  : ', nplanned, ' ('//draw_label//'s)'
+        write(logfhandle,'(A,F10.2)')     '    Target visits per particle     : ', target
+        write(logfhandle,'(A,2F10.2)')    '    Visits per particle min/max    : ', vmin, vmax
+        write(logfhandle,'(A)')           '    Group   Class   Particles     Quota    Visits'
+        do k = 1, nunits
+            i = order(k)
+            write(logfhandle,'(4X,I5,2X,I6,2X,I10,2X,F8.2,2X,F8.2)') &
+                &clssmp(i)%group, clssmp(i)%clsind, clssmp(i)%pop, quotas(i), visits(i)
+        end do
+        write(logfhandle,'(A)') ''
+        if( vmin < 1. )then
+            msg = 'sampling coverage short: the least-visited unit is visited '//real2str(vmin)//&
+                &' times per particle over the planned '//draw_label//'s; one sweep needs '//int2str(sweep)
+            THROW_WARN(msg%to_char())
+        endif
+        if( vmax > VISITS_WARN_FAC * target )then
+            msg = 'sampling coverage uneven: the most-visited unit is visited '//real2str(vmax)//&
+                &' times per particle, above '//real2str(VISITS_WARN_FAC)//' times the target '//real2str(target)
+            THROW_WARN(msg%to_char())
+        endif
+        call msg%kill
+    end subroutine report_class_sample_coverage
 
 end module simple_view_partition_sampling

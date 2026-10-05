@@ -58,7 +58,7 @@ integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, envfsc
-    type(string) :: balance, partition, filt_mode, automsk, greedy_sampling, prob_neigh_mode
+    type(string) :: balance, filt_mode, automsk, greedy_sampling, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
@@ -361,8 +361,7 @@ contains
     subroutine set_refine3D_balance_policy( cfg, params )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
-        cfg%balance   = trim(params%balance)
-        cfg%partition = trim(params%partition)
+        cfg%balance = trim(params%balance)
     end subroutine set_refine3D_balance_policy
 
     subroutine set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
@@ -607,7 +606,11 @@ contains
             call cline_refine3D%delete('prob_neigh_mode')
         endif
         call cline_refine3D%set('balance',                cfg%balance)
-        call cline_refine3D%set('partition',              cfg%partition)
+        if( cfg%balance.eq.'cavg' )then
+            call cline_refine3D%set('nclust',             params%nclust)
+        else
+            call cline_refine3D%delete('nclust')
+        endif
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
         call cline_refine3D%delete('lpstart')

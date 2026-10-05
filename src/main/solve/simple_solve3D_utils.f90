@@ -183,10 +183,10 @@ contains
         cline_symmap        = cline
         cline_reconstruct3D = cline
         cline_reproject     = cline
-        call strip_view_partition_keys(cline_refine3D)
-        call strip_view_partition_keys(cline_symmap)
-        call strip_view_partition_keys(cline_reconstruct3D)
-        call strip_view_partition_keys(cline_reproject)
+        call strip_sampling_keys(cline_refine3D)
+        call strip_sampling_keys(cline_symmap)
+        call strip_sampling_keys(cline_reconstruct3D)
+        call strip_sampling_keys(cline_reproject)
         l_refine3D_mode_override   = cline%defined('refine')
         l_refine3D_lp_override     = cline%defined('lp')
         l_refine3D_lpstop_override = cline%defined('lpstop')
@@ -254,13 +254,13 @@ contains
         call child_cline%delete('smpd_crop')
     end subroutine strip_refine3D_planning_keys
 
-    !> the view partition is formed once by solve3D; child command lines do not carry its keys
-    subroutine strip_view_partition_keys( child_cline )
+    !> the sampling units are formed once by solve3D; child command lines do not carry its keys and
+    !! the stage controller sets them on every refine3D stage line
+    subroutine strip_sampling_keys( child_cline )
         class(cmdline), intent(inout) :: child_cline
-        call child_cline%delete('partition')
+        call child_cline%delete('balance')
         call child_cline%delete('nclust')
-        call child_cline%delete('clust_crit')
-    end subroutine strip_view_partition_keys
+    end subroutine strip_sampling_keys
 
     ! Remove the PCG backend key together with every PCG-only control. Any
     ! child command line that leaves the PCG backend must go through here.

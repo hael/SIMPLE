@@ -44,8 +44,8 @@ When unset, it supplies:
 - `filt_mode=nonuniform`
 - `automsk=no`
 - `gauref=yes`
-- `partition=no`
-- `clust_crit=cc` (used only by `partition=yes`)
+- `balance=cavg` (`class` with input volumes, which bring random classes and
+  no class averages; `cavg` is rejected there)
 
 For `multivol_mode=independent`, it also supplies conservative inspection
 defaults when the user has not overridden them:
@@ -81,9 +81,9 @@ Stage policy includes:
 - staged translation limits
 - staged ML regularization
 - staged fractional update with a fixed `nsample` target while `nsample/active_particles <= 0.9`
-- class-balanced fractional-update selection by default; `balance=no` instead
-  selects globally from the lowest `updatecnt` tiers (`partition=yes` still
-  requires balanced sampling)
+- fractional-update selection over the sampling units of `balance`: `cavg` by
+  default (groups of similar class averages, then their classes), `class` (one
+  unit per selected class) or `none` (global lowest `updatecnt` tiers)
 - mode-specific stochastic sampling start
 - early Gaussian reference filtering
 - optional trailing reconstruction by stage and multivol mode
@@ -115,20 +115,26 @@ each iteration by suppressing fractional controls (`update_frac`, `nsample`,
 reconstruction for staged `solve3D` commands, and startup class-biased
 sampling setup is bypassed in favor of all-active sampling.
 
-### Class-balanced sampling
+### Sampling units
 
-Every stage runs with `balance=yes`. Below the full-sampling switch,
-`solve3D` writes the class sampling file once at startup, and every
-fractional update gives each of its groups the same quota, capped at the
-group's population. The groups are the selected 2D classes; with
-`partition=yes` they are `nclust` (default 20) view groups of the selected
-class averages, formed by average linkage on the `clust_crit` distance
-(default `cc`), so a preferred view spread over many classes no longer
-dominates the sample. The groups are written as `view_partitionNN_cavgs`
-stacks with the table `view_partition.txt`. The clustering runs once, before
-the first stage, and its groups serve the whole run: the stages only read the
-class sampling file, and no child command line carries `partition`, `nclust`
-or `clust_crit`. The details are in
+Every stage runs with the run's `balance` (default `cavg`). Below the
+full-sampling switch, `solve3D` writes the class sampling file `clssmp.bin`
+once at startup: one unit per selected 2D class, and under `cavg` each unit's
+group among `nclust` (default 20) groups of similar class averages, formed by
+average linkage on their aligned correlation, so a preferred view spread over
+many classes no longer dominates the sample. Every fractional update shares
+its target equally over the groups, then equally over the classes of a group,
+each capped at its population, then lowest `updatecnt` first inside a class.
+Under `class` every class is its own group; under `none` the stages sample the
+global lowest `updatecnt` tiers, and the file holds class units only for the
+initial greedy sample and the docked split checkpoint. The groups are written
+as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The
+units are formed once, before the first stage, and serve the whole run: the
+stages only read the file, and every stage command line carries `balance` and,
+for `cavg`, `nclust`. Before the first stage `solve3D` prints the unit table
+with the expected visits per particle over the planned stage iterations and
+warns on short or very uneven coverage; nothing is adjusted automatically. The
+sampler never uses 3D maps, poses or projection directions. The details are in
 `doc/policies/importance_sampling_fractional_update_policy.md`.
 
 The emitted child command line owns `startit` and `which_iter` for the current
@@ -322,8 +328,8 @@ the workflow still runs the final original-sampling reconstruction so the run
 produces inspectable `rec_final_stateNN` volumes. To improve particle coverage
 before that early exit, independent mode starts stochastic balanced sampling at
 stage 4: the child `refine3D` stages switch to `greedy_sampling=no` with
-`frac_best=1.0` from stage 4 onward. This samples each class-balanced quota from
-the full class rather than from a top-ranked fraction of that class. The outer
+`frac_best=1.0` from stage 4 onward. This samples each unit's quota from the
+full class rather than from a top-ranked fraction of that class. The outer
 particle target remains the fixed `nsample`-derived update fraction while
 `nsample/active_particles <= 0.9`; above that threshold the workflow runs full
 active-particle updates each stage.
@@ -344,7 +350,8 @@ The docked split starts a new multi-state update epoch:
   coverage before relabeling
 - immediately before the pre-split cohort pass, clear `ptcl3D%sampled` and
   `ptcl3D%updatecnt`
-- run one class-balanced `refine=prob` assignment pass with `frac_best=1.0`,
+- run one `refine=prob` assignment pass over the run's sampling units (`class`
+  units when the run uses `balance=none`) with `frac_best=1.0`,
   `fillin=no`, `trail_rec=no`, `volrec=no`, and
   `sticky_class_sampling=no`; this pass
   defines a persistent cohort through `sampled > 0`
@@ -361,7 +368,8 @@ The docked split starts a new multi-state update epoch:
   clearing the cohort metadata
 - require each randomized split state to exceed the probabilistic-table minimum
   population threshold
-- select one post-split-sized, class-balanced subset from the persistent cohort
+- select one post-split-sized subset under the nested unit quota from the
+  persistent cohort
 - reconstruct state-specific split volumes and halfmaps from exactly that latest
   sampled subset without trailing volume averaging
 
@@ -371,10 +379,10 @@ particles outside the cohort retain `sampled == 0` and `updatecnt == 0`.
 After that pass succeeds and the requested state count is restored,
 `set_cline_refine3D` obtains the cohort state from
 `solve3D_docked_cohort_active` and emits the explicit internal child flag
-`sticky_class_sampling=yes`. The flag applies only to the class-balanced
-`sample4update_class` path, where it maps to `sampled_only`; particles outside
+`sticky_class_sampling=yes`. The flag applies only to the `sample4update_class`
+path (`balance=class|cavg`), where it maps to `sampled_only`; particles outside
 the cohort are ineligible while cohort members are rotated by increasing
-`updatecnt`. It does not alter unbalanced or full particle sampling. The matcher
+`updatecnt`. It does not alter `balance=none` or full particle sampling. The matcher
 does not infer stickiness from `nstates` or `multivol_mode`. The flag remains
 off in the full-sampling regime.
 `sampled == max(sampled)` continues to identify the exact current update, while

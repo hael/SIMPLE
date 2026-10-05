@@ -643,8 +643,8 @@ subroutine new_export_relion( prgtab )
         call selection%add_input(UI_PARM, 'append',          'binary', 'Append selection to existing', 'Previously deselected particles will stay deselected(yes|no){no}','', .false., 'no', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call selection%add_input(UI_PARM, 'balance',         'binary', 'Balanced selection of particles across classes', 'Balanced selection(yes|no){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        call selection%add_input(UI_PARM, 'balance',         'multi',  'Balanced selection of particles across classes', 'Balanced selection over classes or none(none|class){none}','', .false., 'none', &
+        &choices=ui_choices([character(len=5) :: 'none', 'class']), &
         &visibility=UI_VIS_ADVANCED)
         call selection%add_input(UI_PARM, 'nptcls_per_part', 'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)

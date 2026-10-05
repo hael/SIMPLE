@@ -104,7 +104,16 @@ pose, and shift assignment.
 The wrapper uses stochastic fractional updates when the active count exceeds
 the normal sample target and full updates otherwise. The automatic target is
 10,000 particles per state, capped at 100,000 total particles per iteration.
-Balanced class sampling is used only when appropriate metadata exists.
+Fractional updates are balanced over the sampling units of `balance=cavg`: one
+unit per selected 2D class, grouped into `nclust` (default 20) groups of
+similar class averages, with an equal share per group, then per class of a
+group, then lowest `updatecnt` first inside a class. Without selected class
+averages (or without 2D classification) the wrapper falls back to
+`balance=none`, the global lowest `updatecnt` tiers. Particles inactive in
+`ptcl3D` are not part of any unit, and the sampler never uses the references,
+poses or projection directions to choose particles. The unit table with the
+expected visits per particle over the planned iterations is printed before the
+first stage, with a warning when coverage is short or very uneven.
 
 ## 5. Frequency and Reconstruction
 

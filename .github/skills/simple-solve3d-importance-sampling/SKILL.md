@@ -31,7 +31,8 @@ Then answer the user request in this order:
    sampling, or inferred from `updatecnt`.
 4. Separate particle-domain search decisions from volume-domain trailing-reconstruction effects.
 5. Use exact field names such as `update_frac`, `sampled`, `updatecnt`,
-   `frac_best`, `fillin`, `balance`, and `ufrac_trec`.
+   `frac_best`, `fillin`, `balance` (`none|class|cavg`), `nclust`,
+   `cohort_sampling`, and `ufrac_trec`.
 
 ## Working Rules
 
@@ -76,8 +77,12 @@ Inspect:
 - `src/main/ori/simple_oris.f90`
 
 Focus on `sample4update_class`, `sample4update_cnt`,
-`sample4update_fillin`, `sample4update_reprod`, `sample4update_updated`,
-`incr_sampled_updatecnt`, and `get_update_frac`.
+`sample4update_fillin`, `sample4update_reprod`, `sample4update_rescore`,
+`sample4update_updated`, `incr_sampled_updatecnt`, `get_update_frac`, and the
+unit-table helpers `class_sample_quotas` and `class_sample_sweep`. The sampling
+units (`balance=none|class|cavg`) are produced by
+`src/main/strategies/search/simple_view_partition_sampling.f90`; the sampler
+never uses 3D maps, poses or projection directions.
 
 ### Probabilistic sampling reuse
 

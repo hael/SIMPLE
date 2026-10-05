@@ -222,6 +222,9 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_cnt
 
+    !> Nested equal quota: nint(update_frac * active) is shared equally over the groups (capped at their
+    !! populations), each group's share equally over its units (the remainder to the least-updated units),
+    !! and a unit draws its quota lowest updatecnt first. Units with group 0 are their own group.
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, &
         &frac_best, sampled_only, allow_empty )
         class(oris),          intent(inout) :: self
@@ -243,13 +246,10 @@ contains
         rstates        = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
-        clssmp(:)%nsample = 0
-        do while( sum(clssmp(:)%nsample) < nsamples_class )
-            where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
-        end do
+        call alloc_unit_quotas(self, clssmp, nsamples_class)
         if( l_sampled_only )then
-            ! The legacy balanced allocation may overshoot by up to one
-            ! particle per class. Cohort sampling is also the exact-K split
+            ! The equal group allocation may overshoot by up to one particle
+            ! per group. Cohort sampling is also the exact-K split
             ! reconstruction contract, so trim that overshoot deterministically.
             do i = size(clssmp), 1, -1
                 if( sum(clssmp(:)%nsample) == nsamples_class ) exit
@@ -323,6 +323,165 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_class
 
+    !> Integer unit quotas (clssmp%nsample) of the nested equal quota. Inside a group the remainder of
+    !! the equal split goes to the units with the lowest mean updatecnt (ties: larger population, then
+    !! lower index), so it is the same in every partition and rotates over the iterations.
+    subroutine alloc_unit_quotas( self, clssmp, ntarget )
+        class(oris),        intent(in)    :: self
+        type(class_sample), intent(inout) :: clssmp(:)
+        integer,            intent(in)    :: ntarget
+        integer, allocatable :: gquota(:), members(:), open_units(:)
+        real,    allocatable :: ucnt_mean(:)
+        logical, allocatable :: l_taken(:)
+        integer :: gind(size(clssmp)), ngroups, nunits, g, i, k, remaining, nopen, ibest
+        nunits = size(clssmp)
+        clssmp(:)%nsample = 0
+        if( nunits < 1 ) return
+        call unit_groups(clssmp, gind, ngroups)
+        call group_quotas(clssmp, gind, ngroups, ntarget, gquota)
+        allocate(ucnt_mean(nunits), source=0.)
+        do i = 1, nunits
+            if( clssmp(i)%pop < 1 ) cycle
+            do k = 1, clssmp(i)%pop
+                ucnt_mean(i) = ucnt_mean(i) + real(self%o(clssmp(i)%pinds(k))%get_int('updatecnt'))
+            end do
+            ucnt_mean(i) = ucnt_mean(i) / real(clssmp(i)%pop)
+        end do
+        do g = 1, ngroups
+            members   = pack([(i, i=1,nunits)], mask=gind == g)
+            remaining = gquota(g)
+            do
+                open_units = pack(members, mask=clssmp(members)%nsample < clssmp(members)%pop)
+                nopen      = size(open_units)
+                if( remaining <= 0 .or. nopen == 0 ) exit
+                if( remaining >= nopen )then
+                    clssmp(open_units)%nsample = clssmp(open_units)%nsample + 1
+                    remaining = remaining - nopen
+                else
+                    allocate(l_taken(nopen), source=.false.)
+                    do k = 1, remaining
+                        ibest = 0
+                        do i = 1, nopen
+                            if( l_taken(i) ) cycle
+                            if( ibest == 0 )then
+                                ibest = i
+                            else if( takes_remainder(open_units(i), open_units(ibest)) )then
+                                ibest = i
+                            endif
+                        end do
+                        l_taken(ibest) = .true.
+                        clssmp(open_units(ibest))%nsample = clssmp(open_units(ibest))%nsample + 1
+                    end do
+                    deallocate(l_taken)
+                    remaining = 0
+                endif
+            end do
+        end do
+
+    contains
+
+        logical function takes_remainder( a, b )
+            integer, intent(in) :: a, b
+            if( ucnt_mean(a) /= ucnt_mean(b) )then
+                takes_remainder = ucnt_mean(a) < ucnt_mean(b)
+            else if( clssmp(a)%pop /= clssmp(b)%pop )then
+                takes_remainder = clssmp(a)%pop > clssmp(b)%pop
+            else
+                takes_remainder = a < b
+            endif
+        end function takes_remainder
+
+    end subroutine alloc_unit_quotas
+
+    !> group index of every unit; a unit with group 0 is a group of its own
+    subroutine unit_groups( clssmp, gind, ngroups )
+        type(class_sample), intent(in)  :: clssmp(:)
+        integer,            intent(out) :: gind(size(clssmp)), ngroups
+        integer, allocatable :: labels(:)
+        integer :: i, k
+        allocate(labels(0))
+        do i = 1, size(clssmp)
+            k = 0
+            if( clssmp(i)%group > 0 ) k = findloc(labels, clssmp(i)%group, dim=1)
+            if( k == 0 )then
+                if( clssmp(i)%group > 0 )then
+                    labels = [labels, clssmp(i)%group]
+                else
+                    labels = [labels, -i]
+                endif
+                k = size(labels)
+            endif
+            gind(i) = k
+        end do
+        ngroups = size(labels)
+    end subroutine unit_groups
+
+    !> equal group quotas capped at the group populations; every open group gets one more particle
+    !! per round, so the total may exceed ntarget by fewer than the number of groups
+    subroutine group_quotas( clssmp, gind, ngroups, ntarget, gquota )
+        type(class_sample),   intent(in)    :: clssmp(:)
+        integer,              intent(in)    :: gind(:), ngroups, ntarget
+        integer, allocatable, intent(inout) :: gquota(:)
+        integer :: gpop(ngroups), g
+        do g = 1, ngroups
+            gpop(g) = sum(clssmp(:)%pop, mask=gind == g)
+        end do
+        if( allocated(gquota) ) deallocate(gquota)
+        allocate(gquota(ngroups), source=0)
+        do while( sum(gquota) < ntarget .and. any(gquota < gpop) )
+            where( gquota < gpop ) gquota = gquota + 1
+        end do
+    end subroutine group_quotas
+
+    module subroutine class_sample_quotas( clssmp, ntarget, quotas )
+        type(class_sample), intent(in)  :: clssmp(:)
+        integer,            intent(in)  :: ntarget
+        real,               intent(out) :: quotas(size(clssmp))
+        integer, allocatable :: gquota(:), members(:), open_units(:), capped(:)
+        integer :: gind(size(clssmp)), ngroups, nunits, g, i
+        real    :: remaining, share
+        nunits = size(clssmp)
+        quotas = 0.
+        if( nunits < 1 ) return
+        call unit_groups(clssmp, gind, ngroups)
+        call group_quotas(clssmp, gind, ngroups, ntarget, gquota)
+        do g = 1, ngroups
+            members    = pack([(i, i=1,nunits)], mask=gind == g .and. clssmp(:)%pop > 0)
+            open_units = members
+            remaining  = real(gquota(g))
+            do
+                if( size(open_units) == 0 .or. remaining <= 0. ) exit
+                share  = remaining / real(size(open_units))
+                capped = pack(open_units, mask=real(clssmp(open_units)%pop) <= share)
+                if( size(capped) == 0 )then
+                    quotas(open_units) = share
+                    exit
+                endif
+                quotas(capped) = real(clssmp(capped)%pop)
+                remaining      = remaining - real(sum(clssmp(capped)%pop))
+                open_units     = pack(open_units, mask=real(clssmp(open_units)%pop) > share)
+            end do
+        end do
+    end subroutine class_sample_quotas
+
+    module function class_sample_sweep( clssmp, ntarget ) result( sweep )
+        type(class_sample), intent(in) :: clssmp(:)
+        integer,            intent(in) :: ntarget
+        integer :: sweep
+        real    :: quotas(size(clssmp))
+        integer :: i
+        call class_sample_quotas(clssmp, ntarget, quotas)
+        sweep = 1
+        do i = 1, size(clssmp)
+            if( clssmp(i)%pop < 1 ) cycle
+            if( quotas(i) <= 0. )then
+                sweep = huge(sweep)
+                return
+            endif
+            sweep = max(sweep, ceiling(real(clssmp(i)%pop) / quotas(i) - 1.e-4))
+        end do
+    end function class_sample_sweep
+
     !> The particles of fromto the previous sampling selected. allow_empty
     !! accepts a range without any (a distributed partition of state-0 rows
     !! only, e.g. the frozen rows of solve3D_addon): nsamples is 0 and inds
@@ -350,6 +509,18 @@ contains
         if( nsamples == 0 .and. .not. empty_allowed(allow_empty) ) THROW_HARD('no particles sampled in previous sampling')
         inds     = pack(inds, mask=sampled == sample_ind)
     end subroutine sample4update_reprod
+
+    !> Cohort rescoring: the rows of fromto in the latest sampling round, as sample4update_reprod
+    !! returns them, with sampled and updatecnt advanced once, so the next call finds the same set
+    module subroutine sample4update_rescore( self, fromto, nsamples, inds, allow_empty )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical, optional,    intent(in)    :: allow_empty
+        call self%sample4update_reprod(fromto, nsamples, inds, allow_empty)
+        if( nsamples > 0 ) call self%incr_sampled_updatecnt(inds, .true.)
+    end subroutine sample4update_rescore
 
     module subroutine sample4update_updated( self, fromto, nsamples, inds, incr_sampled )
         class(oris),          intent(inout) :: self

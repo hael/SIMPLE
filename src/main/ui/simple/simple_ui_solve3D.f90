@@ -83,25 +83,18 @@ contains
         call solve3D%add_input(UI_SRCH, pgrp_start, group="model", &
         &visibility=UI_VIS_ADVANCED)
         call solve3D%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
-        call solve3D%add_input(UI_SRCH, 'balance', 'binary', 'Balance fractional updates across 2D classes', &
-            &'Balance each fractional-update sample across the selected 2D classes; no samples globally from the lowest update-count particles(yes|no){yes}', &
-            &'', .false., 'yes', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-            &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, 'partition', 'binary', 'View-balanced particle sampling', &
-        &'Give every group of similar views, not every 2D class, the same share of the per-iteration particle sample: '//&
-        &'the selected class averages are clustered into nclust groups by average linkage on clust_crit, and a '//&
-        &'preferred view spread over many classes no longer dominates the sample(yes|no){no}', '', .false., 'no', &
-        &group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, 'nclust', 'num', 'Number of view groups', &
-        &'Number of groups of similar views the selected class averages are clustered into with partition=yes; '//&
-        &'with no more selected classes than this, every class is its own group{20}', '# view groups{20}', .false., 20., &
-        &group="search", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('partition', [character(len=3) :: 'yes']))
-        call solve3D%add_input(UI_SRCH, 'clust_crit', 'multi', 'View grouping criterion', &
-        &'Class-average distance the partition=yes view groups are formed on; cc is the in-plane, shift and '//&
-        &'mirror invariant correlation(cc|sig|res|hybrid){cc}', '', .false., 'cc', group="search", &
-        &choices=ui_choices([character(len=6) :: 'cc', 'sig', 'res', 'hybrid']), visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('partition', [character(len=3) :: 'yes']))
+        call solve3D%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
+        &'Units every fractional-update sample is balanced over: none draws globally from the lowest update-count '//&
+        &'particles; class gives every selected 2D class the same share; cavg first gives every group of similar '//&
+        &'class averages the same share, then every class inside a group, so a preferred view spread over many '//&
+        &'classes no longer dominates the sample and classes of one view keep equal footing(none|class|cavg){cavg}', &
+        &'', .false., 'cavg', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
+        &visibility=UI_VIS_ADVANCED)
+        call solve3D%add_input(UI_SRCH, 'nclust', 'num', 'Number of class-average groups', &
+        &'Number of groups of similar class averages formed with balance=cavg, by average linkage on their aligned '//&
+        &'correlation; with no more selected classes than this, every class is its own group{20}', '# groups{20}', &
+        &.false., 20., group="search", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('balance', [character(len=4) :: 'cavg']))
         call solve3D%add_input(UI_SRCH, 'nstages', 'num', 'Last solve3D stage to run',&
             &'Last solve3D stage to run; default is 5 for multivol_mode=independent and 8 otherwise; &
             &independent mode writes final volumes at its last stage',&

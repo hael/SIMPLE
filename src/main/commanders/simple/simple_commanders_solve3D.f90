@@ -11,7 +11,7 @@ use simple_commanders_reproject,                   only: commander_reproject
 use simple_commanders_refine3D,                    only: commander_refine3D, commander_refine3D_states, commander_bootstrap_rec3D
 use simple_commanders_rec,                         only: commander_rec3D
 use simple_cluster_seed,                           only: gen_labelling
-use simple_view_partition_sampling,                only: make_view_partition_class_samples
+use simple_view_partition_sampling,                only: make_class_samples, report_class_sample_coverage
 use simple_refine3D_fnames,                        only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname, refine3D_frozen_context_fname, refine3D_fsc_fname
 use simple_halfmap_diagnostics,                    only: rename_support_provenance
@@ -774,7 +774,7 @@ contains
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         ! other
-        integer,            allocatable :: clsinds(:), pinds(:)
+        integer,            allocatable :: pinds(:)
         type(class_sample), allocatable :: clssmp(:)
         type(string),       allocatable :: external_refs(:), external_checkpoint(:)
         type(parameters)                :: params
@@ -788,6 +788,7 @@ contains
         logical :: l_force_full_sampling
         logical :: l_states_handoff_complete
         integer :: nthr_view
+        character(len=5) :: smpl_units
         real    :: sampled_active_frac
         real    :: update_frac_post_split
         ! run manifest: the command line as given and the emitted stage ladder
@@ -843,11 +844,14 @@ contains
         l_automsk_off = (cline%defined('automsk') .and. cline%get_carg('automsk') .eq. 'no')
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
-        if( .not. cline%defined('balance')     ) call cline%set('balance',                  'yes')
-        if( .not. cline%defined('partition')   ) call cline%set('partition',                 'no')
-        ! partition=yes requires balance=yes
-        if( cline%get_carg('partition') .eq. 'yes' ) call cline%set('balance', 'yes')
-        if( .not. cline%defined('clust_crit')  ) call cline%set('clust_crit',                'cc')
+        if( .not. cline%defined('balance') )then
+            ! external volumes come with random classes and no class averages to group
+            if( cline%defined('vol1') )then
+                call cline%set('balance', 'class')
+            else
+                call cline%set('balance', 'cavg')
+            endif
+        endif
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
         if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
@@ -1009,7 +1013,7 @@ contains
                 THROW_HARD('Unsupported volume input and multivol_mode: '//trim(params%multivol_mode))
             end select
             if( l_ini3D ) THROW_HARD('Cannot have both class initialization and an input volume')
-            if( trim(params%partition).eq.'yes' ) THROW_HARD('Volume input not currently supported with partition=yes')
+            if( trim(params%balance).eq.'cavg' ) THROW_HARD('Volume input does not support balance=cavg (random classes, no class averages)')
             ! input volumes are assumed aligned to the target symmetry axis
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
@@ -1055,28 +1059,24 @@ contains
                 write(logfhandle,'(A,F8.4,A,F8.4,A)') &
                     &'>>> SOLVE3D NSAMPLE/ACTIVE FRACTION ', sampled_active_frac, ' > ', &
                     &solve3D_full_sample_switch_frac(), ' -> FORCING FULL ACTIVE SAMPLING (NO FRACTIONAL OR TRAILING UPDATE)'
-                if( trim(params%partition).eq.'yes' ) write(logfhandle,'(A)') &
-                    &'>>> VIEW PARTITION: no groups formed; full active sampling updates every particle each iteration'
             else
                 update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
                 update_frac = min(solve3D_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
-                ! generate a data structure for class sampling on disk
-                if( trim(params%partition).eq.'yes' )then
-                    ! workers are idle before the first stage: nparts*nthr threads on local execution
-                    nthr_view = params%nthr
-                    if( trim(params%qsys_name) == 'local' .and. cline%defined('nparts') )then
-                        nthr_view = max(1, params%nparts) * params%nthr
-                        !$ nthr_view = min(omp_get_num_procs(), nthr_view)
-                        nthr_view = max(params%nthr, nthr_view)
-                    endif
-                    call make_view_partition_class_samples(params, spproj, nint(update_frac * real(nptcls_eff)), &
-                        &nthr_view, clssmp)
-                else
-                    clsinds = spproj%get_selected_clsinds()
-                    call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
-                    deallocate(clsinds)
+                ! the sampling units on disk: the run's under balance=class|cavg, class units under none,
+                ! which the initial greedy sample and the split checkpoint draw from
+                smpl_units = 'class'
+                if( trim(params%balance) == 'cavg' ) smpl_units = 'cavg'
+                ! workers are idle before the first stage: nparts*nthr threads on local execution
+                nthr_view = params%nthr
+                if( trim(params%qsys_name) == 'local' .and. cline%defined('nparts') )then
+                    nthr_view = max(1, params%nparts) * params%nthr
+                    !$ nthr_view = min(omp_get_num_procs(), nthr_view)
+                    nthr_view = max(params%nthr, nthr_view)
                 endif
+                call make_class_samples(params, spproj, smpl_units, nthr_view, .false., clssmp)
                 call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
+                if( trim(params%balance) /= 'none' ) call report_class_sample_coverage(clssmp, params%balance, &
+                    &nint(update_frac * real(nptcls_eff)), solve3D_remaining_niters(start_stage, nstages_refine3D), 'iteration')
             endif
             if( spproj%os_ptcl3D%has_been_sampled() )then
                 ! the ptcl3D field should be clean of sampling at this stage
@@ -1780,7 +1780,7 @@ contains
             cline_selection = cline
             call cline_selection%set('prg',      'selection')
             call strip_pcg_backend_keys(cline_selection)
-            call strip_view_partition_keys(cline_selection)
+            call strip_sampling_keys(cline_selection)
             call cline_selection%set('projfile', work_projfile)
             call cline_selection%set('projname', work_projname)
             call cline_selection%set('oritype',  'ptcl3D')
@@ -1882,7 +1882,7 @@ contains
             call cline_missing%set('prg',             'refine3D')
             call cline_missing%set('mkdir',                 'no')
             call cline_missing%set('refine',            'greedy')
-            call cline_missing%set('balance',               'no')
+            call cline_missing%set('balance',             'none')
             call cline_missing%set('greedy_sampling',      'yes')
             call cline_missing%set('frac_best',              1.0)
             call cline_missing%set('fillin',                'no')
@@ -1924,7 +1924,7 @@ contains
             ! Particle-stage PCG policy belongs to the outer solve3D run;
             ! class-average initialization retains its gridding workflow
             call strip_pcg_backend_keys(cline_ini3D)
-            call strip_view_partition_keys(cline_ini3D)
+            call strip_sampling_keys(cline_ini3D)
             call cline_ini3D%set('nstages', solve3D_nstages_ini3D())
             ! Resolution limits
             if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', solve3D_lpstart_ini3D())

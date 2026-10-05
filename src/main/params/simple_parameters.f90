@@ -27,7 +27,6 @@ type :: parameters
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction
-    character(len=3)          :: balance='no'         !< Balance class populations to smallest selected
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
@@ -101,7 +100,7 @@ type :: parameters
     character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations(yes|no){yes}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
-    character(len=3)          :: partition='no'       !< balanced sampling over view clusters of the class averages(yes|no){no}
+    character(len=3)          :: partition='no'       !< selection: states are partitions of classes, written to cls2D cluster(yes|no){no}
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
     character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
@@ -134,6 +133,8 @@ type :: parameters
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: sticky_class_sampling='no' !< sticky class-sampling cohort(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
+    character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
+    character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
     character(len=4)          :: ref_pose_init='none' !< external-reference pose initialization(cc|none){none}
@@ -376,7 +377,7 @@ type :: parameters
     integer :: ncls=500            !< # clusters
     integer :: ncls_coarse=0       !< # coarse clusters
     integer :: ncls_fine=0         !< # fine clusters
-    integer :: nclust=20           !< # view clusters of the class averages for partition=yes sampling{20}
+    integer :: nclust=20           !< # class-average groups of balance=cavg sampling{20}
     integer :: nptcls_coarse=0     !< # coarse particles
     integer :: nptcls_fine=0       !< # fine particles
     integer :: nsubcls_min=3       !< minimum subclasses per parent class for class splitting
@@ -508,8 +509,8 @@ type :: parameters
     real    :: fny=0.
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
-    real    :: frac_best=1.0       !< fraction of best particles to sample from per class when balance=yes
-    real    :: frac_worst=1.0      !< fraction of worst particles to sample from per class when balance=yes
+    real    :: frac_best=1.0       !< fraction of best particles to sample from per class with sampling units (balance=class|cavg)
+    real    :: frac_worst=1.0      !< fraction of worst particles to sample from per class in balanced selection
     real    :: frac_diam=0.5       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
     real    :: fraction_dose_target=FRACTION_DOSE_TARGET_DEFAULT !< dose (in e/A2)
@@ -635,6 +636,7 @@ type :: parameters
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first
     logical :: l_sigma_glob      = .false.
     logical :: l_sticky_class_sampling = .false.
+    logical :: l_cohort_sampling = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_update_missing  = .false.

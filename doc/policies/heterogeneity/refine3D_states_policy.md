@@ -93,15 +93,46 @@ not public inputs to this workflow; the commander derives them from
 
 The automatic per-iteration target is 10,000 particles per state, capped at
 100,000. If the active count exceeds the target, the wrapper uses stochastic
-fractional updates and projection-balanced class sampling. Otherwise it uses a
-full update.
+fractional updates over the sampling units of `balance=cavg`: one unit per
+selected 2D class, grouped into `nclust` (default 20) groups of similar class
+averages; every draw shares its target equally over the groups, then over the
+classes of a group, then lowest `updatecnt` first inside a class. Without
+selected class averages in the project the wrapper falls back to
+`balance=none` (global lowest `updatecnt` tiers). Particles inactive in
+`ptcl3D` (state 0, for example those flex initialization dropped) are not part
+of any unit. Otherwise it uses a full update. The sampler never uses the state
+maps, poses or projection directions to choose particles.
 
-When states are initialized stochastically under `local` or `global`, the
-`prob_state` init phase runs at least one full sweep of the active particles,
-`ceil(1 / update_frac)` iterations, and at most the larger of that sweep and
-ten iterations. The state-overlap exit cannot end the phase before the sweep
-completes, so every active particle receives an initial state label before
-`prob_neigh` refinement starts.
+With equal quotas one full visit of the active particles takes
+`sweep = max over units of ceil(pop / quota)` draws, computed from the unit
+table before the first stage. When states are initialized stochastically under
+`local` or `global`, the `prob_state` init phase runs at least `sweep`
+iterations and at most the larger of `sweep` and ten. The state-overlap exit
+cannot end the phase before the sweep completes, so every active particle
+receives an initial state label before `prob_neigh` refinement starts. The
+automatic `maxits` is four target updates per particle times `sweep`, between
+10 and 50 iterations.
+
+Each `prob_neigh` frequency block refines one particle cohort:
+`refine3D_states` sets the internal `cohort_sampling=yes` on the block's command
+line, the block draws a new cohort at its first iteration and rescores that
+cohort at the others, so state labelling and pose refinement converge on one
+particle set per block, and `% PARTICLES UPDATED SO FAR` grows only at block
+boundaries. A full visit therefore takes `sweep` blocks. Before the first stage
+the wrapper prints the unit table with the expected visits per particle over
+the planned blocks and warns when the least-visited unit falls below one visit
+or the most-visited exceeds ten times the target; neither `nsample` nor the
+frequency march is adjusted, and the terminal missing-update pass labels any
+particle the march did not reach. The `prob_state` phase and the missing-update
+pass draw every iteration. Holding one cohort for `k` iterations of trailing
+reconstruction gives it a cumulative map coefficient `1 − (1−u)^k`; the
+equal quota biases the composition of each partial reconstruction towards
+about `min(pop, quota)` particles per class, which moves with `nsample`,
+`nclust` and the class selection. Under cohorts `updatecnt` counts
+iterations, not draws; coverage is read from `% PARTICLES UPDATED SO FAR`.
+`sticky_class_sampling` is not an input of this workflow; the `solve3D`
+docked handoff still sets it internally to keep the post-split cohort, with its
+meaning unchanged.
 
 `lpstart` and `lpstop` define one common frequency schedule for all states.
 `simple_refine3D_stage_plan` returns short blocks containing the low-pass,
