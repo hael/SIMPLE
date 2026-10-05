@@ -10,7 +10,7 @@ use simple_builder,                    only: builder
 use simple_eul_prob_tab,               only: eul_prob_tab
 use simple_matcher_3Drec,              only: calc_3Drec
 use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
-use simple_matcher_smpl_and_lplims,    only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
+use simple_matcher_smpl_and_lplims,    only: sample_ptcls4iter3D, master_draws_sample3D
 use simple_qsys_funs,                  only: qsys_declare_part_finished
 use simple_refine3D_fnames,            only: refine3D_bench_fname
 use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes
@@ -337,16 +337,13 @@ contains
                 endif
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
                     &allow_empty=p_ptr%l_distr_worker)
+            else if( p_ptr%l_distr_worker .and. master_draws_sample3D(p_ptr) )then
+                ! the distributed master drew this iteration's sample over the whole project
+                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
+                    &allow_empty=.true.)
             else
-                if( p_ptr%l_update_missing )then
-                    call sample_ptcls4missing3D(b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local)
-                else if( p_ptr%l_fillin .and. mod(which_iter,5) == 0 )then
-                    call sample_ptcls4fillin(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local, &
-                        &allow_empty=p_ptr%l_distr_worker)
-                else
-                    call sample_ptcls4update3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], .true., nptcls, pinds_local, &
-                        &allow_empty=p_ptr%l_distr_worker)
-                endif
+                call sample_ptcls4iter3D(p_ptr, b_ptr, which_iter, [p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
+                    &allow_empty=p_ptr%l_distr_worker)
             endif
         end subroutine sample_particles_for_update
 

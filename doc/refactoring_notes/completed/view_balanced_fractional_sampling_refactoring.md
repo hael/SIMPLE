@@ -1,6 +1,6 @@
 # 3-D fractional-update balance refactoring
 
-Date: 2026-10-04. Status: completed 2026-10-05 (Phases 0–2; Phase 2 finished under the maintainer's ruling of 2026-10-05, see Progress). Report: `view_balanced_fractional_sampling_refactoring_report.md` beside this plan.
+Date: 2026-10-04. Status: completed 2026-10-05 (Phases 0–2; Phase 2 finished under the maintainer's ruling of 2026-10-05; Phase 3, a same-seed reproducibility control added by the maintainer, done; see Progress). Report: `view_balanced_fractional_sampling_refactoring_report.md` beside this plan.
 
 ## What changes
 
@@ -735,3 +735,77 @@ Exit:
   block's first iteration.
 - **Plan and report:** the plan is moved to `completed/` and the report is
   written beside it.
+
+### Phase 3: same-seed reproducibility control, 2026-10-05, done
+
+Added by the maintainer after Phase 2. It is not among the plan's phases: the
+run's phase list defines it, and the ruling of 2026-10-05 records it. No source
+change. Files changed: this plan (status line and this entry) and the report.
+
+Question. In Phase 2 the seeded pair (base build with `balance=yes`, new build
+with `balance=class`, both with `SIMPLE_SEED=20261005`) sampled identical
+particles in all 133 rounds, yet ended at 3.89 Å and 4.41 Å, and their
+alignments parted at iteration 1. Two explanations were possible: `solve3D` is
+not reproducible under a fixed seed even on one binary, or the new binary
+changes the alignment numerics.
+
+Runs. Case A was run twice more with `SIMPLE_SEED=20261005`, one after the
+other, exactly as the Phase 2 pair: the same scripts (`seed_pair2.sh`, a copy of
+`seed_pair.sh` with new run names, plus `run_case.sh` and `snap_watch.sh`), the
+same execution settings (`nparts=4 nthr=6`), the same command line, and an
+idle machine.
+
+- `Aseed_base2`: base build (`scratch/build_base`), `balance=yes`. Final FSC
+  0.5 / 0.143 of 6.66 / 4.47 Å, wall time 28:07.
+- `Aseed_class2`: Phase 1 build (`scratch/build_release`, the same binary as
+  `Aseed_class`), `balance=class`. Final FSC 0.5 / 0.143 of 4.41 / 3.93 Å,
+  wall time 28:23.
+
+Logs: `/home/elmlundho/agent_runs/balance_sampling/scratch/logs/case_Aseed_base2.log`
+and `case_Aseed_class2.log`.
+
+Comparison. `seed_logcmp.py` compares the quantities each iteration prints:
+the stage, the conical FSC area ratio (cFAR, a map-quality figure), the
+orientation overlap, the orientation change, the shift increment, the FSC
+0.143 resolution and the score, each with its full
+average/deviation/minimum/maximum line. Output:
+`scratch/logs/p3_seed_logcmp.txt`. "Iteration 1" below means the first
+iteration of stage 1.
+
+| Pair | First difference | Final FSC 0.143 |
+|---|---|---|
+| `Aseed_base` / `Aseed_base2` (same binary) | iteration 1: cFAR 0.4410 / 0.4314, mean orientation change 45.864° / 44.518°, score maximum 0.425 / 0.418 | 3.89 / 4.47 Å |
+| `Aseed_class` / `Aseed_class2` (same binary) | iteration 1: cFAR 0.2579 / 0.0046, mean orientation change 44.964° / 45.629°, score minimum 0.355 / 0.358 | 4.41 / 3.93 Å |
+| `Aseed_base` / `Aseed_class` (Phase 2, two binaries) | iteration 1: cFAR 0.4410 / 0.2579, mean orientation change 45.864° / 44.964° | 3.89 / 4.41 Å |
+
+All three pairs differ from iteration 1 in the same quantities, and in every
+one of the 134 iterations. `solve3D` is therefore not reproducible under a
+fixed `SIMPLE_SEED`, even on one binary: the seed fixes the random draws,
+including the particle sampling, but not the multithreaded alignment and
+reconstruction numerics. The base/`class` outcome difference in Phase 2 is
+not evidence against the change.
+
+All case-A runs of this refactoring, counting as poor a final FSC 0.143 above
+the Phase 0 limit of 4.00 Å:
+
+| Code | Runs | Final FSC 0.143 (Å) | Poor |
+|---|---|---|---|
+| base, `balance=yes` | Phase 0 A1 and A2, Phase 2 A3 and A4, `Aseed_base`, `Aseed_base2` | 3.84, 3.93, 3.89, 3.98, 3.89, 4.47 | 1 of 6 |
+| new, `balance=class` | A′1 to A′4, `Aseed_class`, `Aseed_class2` | 3.89, 4.29, 5.10, 3.89, 4.41, 3.93 | 3 of 6 |
+
+`balance=class` samples exactly as `balance=yes`, so both rows run the same
+sampling. The base code also produces poor de novo runs (`Aseed_base2`). The
+earlier trailing_halfmap run had 0 poor runs in 6 identical `solve3D` runs, and
+the view-partition runs here (B and B′) had 0 of 4. With these numbers, the
+difference between 1 of 6 and 3 of 6 does not separate from chance.
+
+Bulky outputs were deleted; the logs, the scripts and the text comparisons
+remain. No job is left running.
+
+Exit:
+- **Runs:** both seeded control runs completed.
+- **Comparisons:** both same-binary pairs were compared from iteration 1, and
+  the first difference is recorded above.
+- **Outcome:** both same-binary pairs differ from iteration 1, so the
+  prescribed outcome applies. `solve3D` is not reproducible under a fixed seed,
+  and the report's open item on de novo divergence is updated.

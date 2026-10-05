@@ -8,6 +8,7 @@ implicit none
 
 public :: set_bp_range3D, set_bp_range2D
 public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update2D
+public :: sample_ptcls4iter3D, master_draws_sample3D
 public :: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, refine2D_blends_carryover
 private
 #include "simple_local_flags.inc"
@@ -254,6 +255,44 @@ contains
                     &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty)
         end select
     end subroutine sample_ptcls4update3D
+
+    !> The particle sample of one refine3D search iteration over pfromto, advancing sampled and updatecnt:
+    !! the missing-update pass, the periodic fill-in, or the fractional-update policy of sample_ptcls4update3D
+    subroutine sample_ptcls4iter3D( params, build, which_iter, pfromto, nptcls2update, pinds, allow_empty )
+        class(parameters),    intent(in)    :: params
+        class(builder),       intent(inout) :: build
+        integer,              intent(in)    :: which_iter
+        integer,              intent(in)    :: pfromto(2)
+        integer,              intent(inout) :: nptcls2update
+        integer, allocatable, intent(inout) :: pinds(:)
+        logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
+        if( params%l_update_missing )then
+            call sample_ptcls4missing3D(build, pfromto, .true., nptcls2update, pinds)
+        else if( params%l_fillin .and. mod(which_iter,5) == 0 )then
+            call sample_ptcls4fillin(params, build, pfromto, .true., nptcls2update, pinds, allow_empty=allow_empty)
+        else
+            call sample_ptcls4update3D(params, build, pfromto, .true., nptcls2update, pinds, allow_empty=allow_empty)
+        endif
+    end subroutine sample_ptcls4iter3D
+
+    !> Whether the distributed refine3D master draws the iteration's fractional-update sample once, over
+    !! the whole project, for the workers to reproduce. Each worker would otherwise draw its own sample
+    !! over the whole project with its own random seed and keep the part in its range, so the union is
+    !! not one sample. Probabilistic passes draw in prob_align already, the polish pass reproduces the
+    !! discrete pass it follows, the missing-update pass and full sampling are deterministic, and the
+    !! eval and sigma passes keep their own selection. Master and workers evaluate this on the same
+    !! command line, so they agree.
+    logical function master_draws_sample3D( params ) result( l_master )
+        class(parameters), intent(in) :: params
+        l_master = .false.
+        if( .not. params%l_update_frac ) return
+        if( params%l_prob_align_mode .or. params%l_cont_polish .or. params%l_update_missing ) return
+        select case(trim(params%refine))
+            case('eval','sigma')
+                return
+        end select
+        l_master = .true.
+    end function master_draws_sample3D
 
     subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params

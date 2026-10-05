@@ -1,6 +1,6 @@
 # Report: 3-D fractional-update balance refactoring
 
-Date: 2026-10-05. Plan: `view_balanced_fractional_sampling_refactoring.md` beside this report (its Progress section
+Date: 2026-10-05 (updated after Phase 3). Plan: `view_balanced_fractional_sampling_refactoring.md` beside this report (its Progress section
 holds the detail). Run: autonomous run `balance_sampling` on dell, base commit 9ac9517d0, nothing committed. The
 diffs of the three phases are in `/home/elmlundho/agent_runs/balance_sampling/review/phase_N.diff`; logs, scripts and
 tables are under `/home/elmlundho/agent_runs/balance_sampling/scratch` (`logs/`, `cmp/`).
@@ -28,6 +28,9 @@ independent half-map reconstructions falls to 0.143; *sweep* is the number of dr
 - **Phase 2 (`phase_2.diff`).** Comparison runs; under the maintainer's ruling the per-state `updatecnt == 1`
   diagnostic added in Phase 1 was removed again, and the `class` equivalence was settled by a fixed-seed paired test.
   The plan moved to `completed/`.
+- **Phase 3 (`phase_3.diff`, plan and report only).** Added by the maintainer: two more seeded case-A runs, one per
+  binary, to test reproducibility under a fixed seed. Both same-binary pairs differ from iteration 1, so `solve3D` is
+  not reproducible under a fixed seed and the base/new outcome difference is not evidence against the change.
 
 ## Decisions taken under delegation
 
@@ -48,7 +51,8 @@ All are recorded in the plan's Progress section (Phase 0, Phase 1, Phase 2 entri
 - Case C′ restores A1's run directory from `scratch/keep/` before it starts, because the kept project refers to its
   consensus map by absolute path.
 - Phase 2 added four unseeded spread runs (two base, two `class`) as evidence when A′2 failed; they are not
-  acceptance runs.
+  acceptance runs. Phase 3 copied the Phase 2 seeded-pair script under new run names (`seed_pair2.sh`) and compared
+  the logs with a new script (`seed_logcmp.py`).
 
 ## Deviations from the plan
 
@@ -68,6 +72,8 @@ All are recorded in the plan's Progress section (Phase 0, Phase 1, Phase 2 entri
 | B / B′ (`partition=yes` / `cavg`) | 3.98, 3.84 Å | 3.93, 3.89 Å | pass (≤ 4.05 Å) |
 | C / C′ (`refine3D_states`) | state 1 4.03 Å, state 2 10.20 Å, 10:59 | 4.08 Å, 12.09 Å, 21:50 | completes, report shown, cohort behaviour holds |
 
+- Same-seed control (Phase 3): base build 3.89 and 4.47 Å, new build 4.41 and 3.93 Å, each pair differing from
+  iteration 1 (`scratch/logs/p3_seed_logcmp.txt`).
 - Paired fixed-seed test (`SIMPLE_SEED=20261005`, inherited by the workers): all 133 sampling rounds of all eight
   `solve3D` stages hold the identical particle set in the base (`balance=yes`) and new (`balance=class`) runs; final
   `sampled` and `updatecnt` agree for all 5,513 particles (`scratch/cmp/seed/compare_rounds.txt`). Final FSC 0.143:
@@ -83,12 +89,17 @@ All are recorded in the plan's Progress section (Phase 0, Phase 1, Phase 2 entri
 
 ## Open for the maintainer
 
-- **De novo divergence.** Unseeded `solve3D` on beta-galactosidase diverged in its ab initio stages in 2 of 4 `class`
-  runs (4.29 and 5.10 Å; stage-4 FSC 0.143 8.8–9.1 Å against 5.5–6.0 Å) and in 0 of 4 base runs here and 0 of 6
-  identical runs of the earlier trailing_halfmap run. Sampling is identical, and the seeded pair parts in the
-  multithreaded alignment from the first iteration, so the cause lies outside this refactoring's code path; whether
-  the rate difference is chance is not settled by these numbers. A two-run spread is too small a baseline for
-  acceptance on `solve3D` resolutions.
+- **De novo divergence (not caused by this change).** `solve3D` case A on beta-galactosidase sometimes goes wrong in
+  its ab initio stages (stage-4 FSC 0.143 near 8–9 Å instead of 5.5–6 Å) and ends above the Phase 0 limit of 4.00 Å.
+  All runs of this refactoring: base `balance=yes` 1 of 6 poor (3.84, 3.93, 3.89, 3.98, 3.89, 4.47 Å), new
+  `balance=class` 3 of 6 poor (3.89, 4.29, 5.10, 3.89, 4.41, 3.93 Å), view-partition B and B′ 0 of 4, and 0 of 6
+  identical runs in the earlier trailing_halfmap run. `class` samples the same particles as `balance=yes` in every
+  round (Phase 2 paired test), and Phase 3 showed that `solve3D` is not reproducible under a fixed `SIMPLE_SEED` even
+  on one binary: two same-seed runs of the base build, and two of the new build, part at iteration 1 in cFAR,
+  orientation change and score, as the base/new pair did. The spread is in the multithreaded alignment numerics, and
+  1 of 6 against 3 of 6 does not separate from chance. Open: the failure rate of `solve3D`'s random start on this data
+  set, and whether a fixed seed should make it reproducible. A two-run spread is too small a baseline for acceptance
+  on `solve3D` resolutions.
 - **Coverage warnings.** With the `refine3D_states` iteration cap of 50 and three-iteration blocks, any sweep above
   about 17 blocks will trigger the "least-visited unit below one visit" warning; by design nothing is adjusted.
 - **Pre-existing, not changed:** distributed non-probabilistic refinement draws its stochastic sample per partition

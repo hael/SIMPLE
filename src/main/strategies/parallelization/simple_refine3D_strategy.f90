@@ -1155,6 +1155,7 @@ contains
         use simple_commanders_euclid,    only: commander_calc_group_sigmas
         use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
         use simple_fsc,                  only: plot_fsc
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -1171,9 +1172,9 @@ contains
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
         type(string)  :: fname_vol, volpproc, vollp
         real, allocatable :: res(:), fsc(:)
-        integer, allocatable :: state_pops(:)
+        integer, allocatable :: state_pops(:), pinds_smpl(:)
         type(chash) :: job_descr_pass
-        integer :: state, iter
+        integer :: state, iter, nptcls_smpl
         logical :: l_prob_state_mode, l_prob_neigh_mode, l_polish
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
@@ -1220,6 +1221,11 @@ contains
             else
                 call xprob_align_distr%execute( cline_prob_align )
             endif
+        else if( master_draws_sample3D(params) )then
+            ! one fractional-update sample over the whole project; the workers reproduce it
+            call sample_ptcls4iter3D(params, build, iter, [1,params%nptcls], nptcls_smpl, pinds_smpl)
+            call build%spproj%write_segment_inside(params%oritype)
+            if( allocated(pinds_smpl) ) deallocate(pinds_smpl)
         endif
         if( L_BENCH_GLOB )then
             self%bench%rt_prob = toc(self%bench%t_prob)
