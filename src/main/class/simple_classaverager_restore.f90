@@ -754,7 +754,8 @@ contains
 
     ! PUBLIC UTILITIES
 
-    module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, pinds_in)
+    module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, pinds_in, &
+        &keep_ft, gridcorr)
         use simple_sp_project,          only: sp_project
         use simple_matcher_ptcl_io,     only: discrete_read_imgbatch, prepimgbatch, killimgbatch
         use simple_memoize_ft_maps
@@ -769,6 +770,11 @@ contains
         type(image), optional,              intent(inout) :: cavg
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         integer,     optional,              intent(in)    :: pinds_in(:)
+        !> keep_ft: leave every transformed image as its Fourier plane in the class frame (no
+        !! inverse transform, no gridding correction); the correction image is handed back through
+        !! gridcorr so the caller can apply it to whatever it builds from the planes
+        logical,     optional,              intent(in)    :: keep_ft
+        type(image), optional,              intent(inout) :: gridcorr
         class(oris), pointer :: pos
         type(kbinterpol)     :: kbwin
         type(image)          :: img(nthr_glob), gridcorr_img
@@ -781,12 +787,14 @@ contains
         real    :: mat(2,2), shift(2), loc(2), e3, pf2
         integer :: ldim_pd(3), ldim(3),logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
         integer :: i,iptcl, l,m, pop, h,k, hh,kk,hp,kp, ithr, iwinsz, wdim, physh,physk
-        logical :: l_phflip, l_ori_imgs, l_conjg
+        logical :: l_phflip, l_ori_imgs, l_conjg, l_keep_ft
         p_ptr => params
         b_ptr => build
         ! parse inputs
         l_phflip = .false.
         if( present(phflip) ) l_phflip = phflip
+        l_keep_ft = .false.
+        if( present(keep_ft) ) l_keep_ft = keep_ft
         l_ori_imgs = present(imgs_ori)
         if(present(cavg)) call cavg%kill
         call dealloc_imgarr(timgs)
@@ -929,8 +937,10 @@ contains
                 enddo
             enddo
             ! backwards FT & gridding correction
-            call timgs(i)%ifft
-            call timgs(i)%mul(gridcorr_img)
+            if( .not. l_keep_ft )then
+                call timgs(i)%ifft
+                call timgs(i)%mul(gridcorr_img)
+            endif
         enddo
         !$omp end parallel do
         if( present(cavg) )then
@@ -939,7 +949,12 @@ contains
                 call cavg%add(timgs(i))
             enddo
             call cavg%div(real(pop))
+            if( l_keep_ft )then
+                call cavg%ifft
+                call cavg%mul(gridcorr_img)
+            endif
         endif
+        if( present(gridcorr) ) call gridcorr%copy(gridcorr_img)
         ! cleanup
         call killimgbatch(build)
         call forget_ft_maps

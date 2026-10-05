@@ -203,7 +203,7 @@ contains
         call assert_registered_category('postprocess_nu', 'postprocess', 'Post-processing', 69)
         call assert_int(2, count_prgs_in_category('postprocess'), 'postprocess program count')
         call assert_registered_category('automask', 'mask', 'Masking', 100)
-        call assert_registered_category('cls_split', 'refine2d', 'Refine 2D Workflows', 30)
+        call assert_registered_category('cls_expansion', 'refine2d', 'Refine 2D Workflows', 30)
         call assert_registered_category('reimport_particles', 'project', 'Project Management', 10)
         call assert_registered_category('fractionate_movies', 'preproc', 'Pre-processing', 20)
         call assert_registered_category('split', 'image', 'General Image Processing', 90)

@@ -349,7 +349,8 @@ interface
 
     ! Public utility
 
-    module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, pinds_in)
+    module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, pinds_in, &
+        &keep_ft, gridcorr)
         use simple_sp_project,          only: sp_project
         use simple_matcher_ptcl_io,      only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
@@ -364,6 +365,8 @@ interface
         type(image), optional,              intent(inout) :: cavg
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         integer,     optional,              intent(in)    :: pinds_in(:)
+        logical,     optional,              intent(in)    :: keep_ft
+        type(image), optional,              intent(inout) :: gridcorr
     end subroutine transform_ptcls
 
 end interface

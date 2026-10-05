@@ -8,10 +8,11 @@ simple_exec prg=flex_pca ...        # projection-aware low-rank covariance (PCA)
 ```
 
 The `flex_analysis` diffusion-map pipeline that used to live here was removed;
-its embedding never produced usable states. The shared diffusion-map engines it
-used (`../pca/simple_diff_map_graphs.f90`, `../pca/simple_diff_map_denoise.f90`,
-`../pca/simple_diffusion_maps.f90`) remain, because `cls_split` and other
-applications still depend on them.
+its embedding never produced usable states, and so was the diffusion-map
+`cls_expansion` (2026-10-01: it split on background and density, not structure).
+The shared diffusion-map engines (`../pca/simple_diff_map_graphs.f90`,
+`../pca/simple_diff_map_denoise.f90`, `../pca/simple_diffusion_maps.f90`)
+remain, because `denoise_project` and other applications still depend on them.
 
 ## Layout
 
@@ -171,3 +172,22 @@ Other integration points: `../exec/simple_exec_denoise.f90`,
 `../apis/simple_private_exec_api.f90` and `../ui/simple/simple_ui_heterogeneity.f90`
 register the public and worker command; `../volume/simple_reconstructor.f90` is
 the shared reconstruction implementation.
+
+## `cls_expansion`
+
+`simple_flex_cls_expansion.f90` is the per-class covariance model behind `cls_expansion` (its only mode since 2026-10-01):
+members of one 2D class in the class frame (pose fixed), `y = c (mu + U z) + n` per Fourier
+coefficient with the CTF `c` rotated along and the canonical sigma2 as noise weights, PPCA EM
+(prior-free probe first), exactly `ncls` subclasses by divisive bisection of the cross-fitted latent plus the fit residual
+(junk axis), posterior-precision kernel weights, CTF-corrected weighted sub-class averages and a
+label-free cross-half reproducibility per subclass (`os_cls2D` `repro`). Arrays in, arrays out: it imports no parameters, builder,
+project or queue code. The strategy
+(`../strategies/parallelization/simple_cls_expansion_strategy.f90`, `split_class_flex`) prepares the
+planes through `transform_ptcls(keep_ft=.true.)`, evaluates the rotated CTF, owns the part files
+(`cls_expansion_weights_partNN.txt`, `cls_expansion_cavgs_partNN.mrc`), the merge and the project writes
+(`cls_expansion_cavgs.mrc`, `cls_expansion_weights.txt`, `os_cls2D` `neff`). The commander
+(`../commanders/simple/simple_commanders_denoise.f90`) skips the trailing `make_cavgs` on this
+path. Unit tests: `simple_flex_cls_expansion_tester.f90` (suite `flex_cls_expansion` of
+`unit_heterogeneity`). Method, benchmarks against the diffusion-map cls_expansion and the reasoning:
+`doc/implementation_notes/completed/flex_cls_expansion_2026_10_01.md`.
+

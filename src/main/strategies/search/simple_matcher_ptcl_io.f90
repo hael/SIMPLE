@@ -201,7 +201,7 @@ contains
             THROW_HARD('invalid batchlims; discrete_read_imgbatch')
         endif
         nbatch = batchlims(2) - batchlims(1) + 1
-        l_verbose = params%prg .eq. 'cls_split'
+        l_verbose = params%prg .eq. 'cls_expansion'
         if( l_verbose )then
             write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'discrete_read_imgbatch: n=', n, &
                 &' pinds[min,max]=', minval(pinds(batchlims(1):batchlims(2))), &
