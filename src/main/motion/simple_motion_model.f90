@@ -356,7 +356,11 @@ contains
         endif
         call starfile_table__setValue_double(table, EMDL_MICROGRAPH_BINNING,             real(self%binning,dp))
         call starfile_table__setValue_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(self%smpd_movie,dp))
-        call starfile_table__setValue_double(table, EMDL_MICROGRAPH_DOSE_RATE,           real(self%target_dose_per_frame, dp))
+        if( self%eer )then
+            call starfile_table__setValue_double(table, EMDL_MICROGRAPH_DOSE_RATE,       real(self%target_dose_per_frame, dp))
+        else
+            call starfile_table__setValue_double(table, EMDL_MICROGRAPH_DOSE_RATE,       real(self%dose_per_frame, dp))
+        endif
         call starfile_table__setValue_double(table, EMDL_MICROGRAPH_PRE_EXPOSURE,        0.d0)
         call starfile_table__setValue_double(table, EMDL_CTF_VOLTAGE,                    real(self%voltage, dp))
         call starfile_table__setValue_int(table,    EMDL_MICROGRAPH_START_FRAME,         1)
