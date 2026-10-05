@@ -922,22 +922,25 @@ contains
         real, optional, intent(in)    :: lp
         real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
         real, parameter   :: fourpisq = 4.*PI*PI
-        real, allocatable :: rmat(:,:,:)
+        real,    allocatable :: rmat(:,:,:), atom_aterm(:,:), atom_b(:,:), atom_xyz(:,:)
+        integer, allocatable :: atom_bbox(:,:,:)
+        logical, allocatable :: atom_valid(:)
         real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, D, E
         integer :: bbox(3,2), ldim(3), pos(3), i, j, k, l, jj, kk, z, icutoff
         if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
-        smpd    = vol%get_smpd()
-        ldim    = vol%get_ldim()
-        lp_here = 2.*smpd
+        smpd     = vol%get_smpd()
+        ldim     = vol%get_ldim()
+        lp_here  = 2.*smpd
         if( present(lp) ) lp_here = max(lp,lp_here)
-        bfac = (4.*lp_here)**2.
-        D    = sqrt(TWOPI) * 0.425 * lp_here
-        E    = 0.5 * lp_here*lp_here
-        allocate(rmat(ldim(1),ldim(2),ldim(3)),source=0.)
+        bfac     = (4.*lp_here)**2.
+        D        = sqrt(TWOPI) * 0.425 * lp_here
+        E        = 0.5 * lp_here*lp_here
+        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=0.)
+        allocate(atom_aterm(5,self%n), atom_b(5,self%n), atom_xyz(3,self%n), source=0.)
+        allocate(atom_bbox(3,2,self%n), source=0)
+        allocate(atom_valid(self%n), source=.false.)
         icutoff  = ceiling(cutoff/smpd)
         cutoffsq = cutoff*cutoff
-        !$omp parallel do default(shared) private(i,z,a,b,aterm,xyz,pos,bbox,j,k,l,r2,rjk2,jj,kk)&
-        !$omp proc_bind(close) reduction(+:rmat)
         do i = 1,self%n
             z = self%Z(i)
             select case(z)
@@ -1232,24 +1235,40 @@ contains
             case DEFAULT
                 cycle
             end select
-            b = b + bfac        ! eq B.6
-            aterm = a/b**1.5    ! eq B.6
-            xyz   = self%xyz(i,:)/smpd
-            pos   = floor(xyz)
-            bbox(:,1) = pos   - icutoff
-            bbox(:,2) = pos+1 + icutoff
+            b                = b + bfac    ! eq B.6
+            aterm            = a/b**1.5    ! eq B.6
+            xyz              = self%xyz(i,:)/smpd
+            pos              = floor(xyz)
+            bbox(:,1)        = pos   - icutoff
+            bbox(:,2)        = pos+1 + icutoff
             if( any(bbox(:,2) < 1) )      cycle
-            if( any(bbox(:,1) > ldim(1)) )cycle
-            where( bbox < 1 ) bbox = 1
-            where( bbox > ldim(1) ) bbox = ldim(1)
-            do j = bbox(1,1),bbox(1,2)
-                jj = j-1
-                do k = bbox(2,1),bbox(2,2)
-                    kk = k-1
-                    rjk2 = sum((smpd*(xyz(1:2)-real([jj,kk])))**2.)
-                    if(rjk2 > cutoffsq) cycle
-                    do l = bbox(3,1),bbox(3,2)
-                        r2 = rjk2 + (smpd*(xyz(3)-real(l-1)))**2.
+            if( any(bbox(:,1) > ldim) )   cycle
+            bbox(:,1)        = max(bbox(:,1), 1)
+            bbox(:,2)        = min(bbox(:,2), ldim)
+            atom_aterm(:,i)  = aterm
+            atom_b(:,i)      = b
+            atom_xyz(:,i)    = xyz
+            atom_bbox(:,:,i) = bbox
+            atom_valid(i)    = .true.
+        enddo
+        ! Each plane has one writer and accumulates atoms in input order.
+        !$omp parallel do default(shared) private(l,i,aterm,b,xyz,bbox,j,k,r2,rjk2,jj,kk)&
+        !$omp proc_bind(close) schedule(static)
+        do l = 1,ldim(3)
+            do i = 1,self%n
+                if( .not. atom_valid(i) ) cycle
+                bbox  = atom_bbox(:,:,i)
+                if( l < bbox(3,1) .or. l > bbox(3,2) ) cycle
+                aterm = atom_aterm(:,i)
+                b     = atom_b(:,i)
+                xyz   = atom_xyz(:,i)
+                do j = bbox(1,1),bbox(1,2)
+                    jj = j-1
+                    do k = bbox(2,1),bbox(2,2)
+                        kk          = k-1
+                        rjk2        = sum((smpd*(xyz(1:2)-real([jj,kk])))**2.)
+                        if( rjk2 > cutoffsq ) cycle
+                        r2          = rjk2 + (smpd*(xyz(3)-real(l-1)))**2.
                         if( r2 > cutoffsq ) cycle
                         rmat(j,k,l) = rmat(j,k,l) + epot(r2,aterm,b)
                     enddo
@@ -1258,7 +1277,7 @@ contains
         enddo
         !$omp end parallel do
         call vol%set_rmat(rmat,.false.)
-        deallocate(rmat)
+        deallocate(rmat, atom_aterm, atom_b, atom_xyz, atom_bbox, atom_valid)
 
     contains
     
@@ -1374,7 +1393,7 @@ contains
             call self%writepdb(pdbfile_centered)
         endif
         call self%convolve(vol, cutoff = 8*smpd)
-        call vol%write(vol_file)
+        call vol%write(vol_file, del_if_exists=.true.)
         call vol%kill()
         write(logfhandle,'(A,3I6,A)') "3D MRC simulated volume created (", ldim," ) voxels"
     end subroutine pdb2mrc

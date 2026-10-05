@@ -8,6 +8,7 @@ use simple_string, only: string
 use simple_syslib, only: del_file
 use simple_image,  only: image, unmemoize_mask_coords
 use simple_atoms,  only: atoms
+!$ use omp_lib,    only: omp_get_max_threads, omp_set_num_threads
 implicit none
 private
 public :: run_all_atoms_tests
@@ -166,7 +167,7 @@ contains
         real,    parameter :: SMPD = 1.0
         type(atoms) :: a
         type(image) :: vol, vol2
-        integer     :: i
+        integer     :: i, nthr_saved
         real        :: beta_min
         logical     :: ok
         write(*,'(A)') 'test_validation'
@@ -175,9 +176,16 @@ contains
         call a%set_coord(2, [16., 16., 16.])
         call a%set_coord(3, [24., 16., 16.])
         call vol%new([B3,B3,B3], SMPD, wthreads=.false.)
+        call vol2%new([B3,B3,B3], SMPD, wthreads=.false.)
+        nthr_saved = 1
+        !$ nthr_saved = omp_get_max_threads()
+        !$ call omp_set_num_threads(1)
         call a%convolve(vol, cutoff=8.*SMPD)
+        !$ call omp_set_num_threads(3)
+        call a%convolve(vol2, cutoff=8.*SMPD)
+        !$ call omp_set_num_threads(nthr_saved)
+        call assert_true(all(vol%get_rmat() == vol2%get_rmat()), 'convolve gives the same voxels with one or three threads')
         call assert_true(vol%get_rmat_at(17,17,17) > vol%get_rmat_at(13,17,17), 'convolve: density peaks at the atom')
-        call vol2%copy(vol)
         call a%map_validate(vol, vol2)
         ok = .true.
         do i = 1,a%get_n()
