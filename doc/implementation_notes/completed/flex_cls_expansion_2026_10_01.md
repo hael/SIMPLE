@@ -1,95 +1,48 @@
-# cls_expansion: method, benchmarks, and why it works where the diffusion-map split did not
+# cls_expansion: method and benchmarks
 
-Status: implemented on branch `flex-cls-split` (2026-09-30 to 2026-10-01). Run with
+    simple_exec prg=cls_expansion projfile=... ncls=3 mskdiam=... nparts=10 nthr=8
 
-    simple_exec prg=cls_expansion projfile=... ncls=3 nparts=10 nthr=8
-
-Since 2026-10-01 the flex model is the only mode of `cls_expansion`; the diffusion-map and kPCA split
-were removed after the measurements in section 4 (git history before that date keeps them).
-
-Unit suite (34 checks, about 5 s): `simple_test_exec prg=unit_heterogeneity suite=flex_cls_expansion`.
+The flex covariance model replaced the diffusion-map `cls_split` on 2026-10-05.
 
 ## 1. Method
 
-Per 2D class, with every member brought into the class frame by its own in-plane alignment:
+Per 2D class, with every member in the class frame by its own in-plane alignment:
 
 1. **Model.** `y_i = c_i (mu + U z_i + N nu_i) + noise` on the Fourier half-plane up to 30 A
-   (`lp=` overrides): `c_i` the member's CTF, `mu` the class mean, `U` a rank-8 basis (`neigs=`),
-   `N` four nuisance columns (the pose tangents dx, dy, dtheta of the class mean, and the mean
-   itself for contrast), `z_i` the member's latent. Noise weights are the member's CTF-squared over
-   the sigma2 shell spectrum (canonical sigma2 if present, else the class residual spectrum).
-   Fitted by an ALS probe (3 random starts, best weighted residual) then PPCA EM.
-2. **Cross-fitted embedding.** Members are dealt into 5 folds; the basis of the other folds embeds
-   each fold, and each held-out latent is carried into the full fit's frame through the bases
-   (the fold reconstruction projected onto the full basis). The in-sample posterior is
-   overconfident (a column fitted on a member's own noise resolves that noise), the cross-fitted
-   one is honest; its scatter over its posterior width per component is printed as the
-   calibration (1.0 = pure noise).
-3. **Placement.** The placement latent is `[z, log residual]`, the residual being the member's
-   cross-fitted weighted fit residual (1 = noise level), detrended against the member's CTF power.
-   Divisive bisection into exactly `ncls` leaves: candidates are k-means on the standardised
-   latent and on each single coordinate (the residual competes only on its own axis), scored by
-   Ashman's D along the cut's own centre axis; the leaf whose best cut separates most is cut next.
-   Junk the basis cannot describe is far from everything along the residual axis and forms its
-   own leaf. A tied-covariance GMM seeded by the leaves gives the labels.
-4. **One greedy in-plane round of cluster2D.** After the split the commander runs one stock
-   cluster2D iteration on the split project with the sub-averages as references and the classes
-   fixed (`refine=inpl`, iteration 3 so the previous alignment is used and the shift search is on,
-   `trs=3`, no joint continuous optimiser), then restores the sub-averages from the refined
-   alignment (`SIMPLE_FLEXCLS_LABELS=project` path: subclasses are the project's classes, parents
-   its clusters). The commander estimates the sigma2 state with calc_pspec first when the project
-   has none that resolves (a project that never went through abinitio2D, or one copied out of its
-   abinitio2D directory, which registers the state by a bare file name). A 10-degree rotation
-   window around each member's previous rotation was tried and measured against the stock sweep
-   on the same 10180 split: 0.877/0.623 against 0.870/0.631 in the two structural bands, so the
-   window is not kept (the stock sweep rotates 9 % of the members by more than 90 degrees without
-   any effect on reproducibility). The round's gain is in the shifts, not the rotations: median
-   rotation change 2-3 degrees, median shift change 7 px, every parent's reproducibility up
-   (0.76-0.93 -> 0.83-0.97 on the first 12). This replaced the module's own brute-force pass
-   (0.76/0.43 in the two structural bands against 0.88/0.62 now).
-5. **Weights and averages.** `w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s))` with `A_i` the
-   member's own posterior precision (a member whose latent is within its uncertainty of a centre
-   is pooled, no bandwidth, no population target); labelled members always count fully. The
-   delivered sub-averages are CTF-corrected weighted averages regularised like the class averager:
-   the CTF-squared sum plus the inverse signal power per shell, the signal power from the
-   subclass's own even/odd FRC (so a few-member subclass is damped where it has no signal rather
-   than amplifying noise on its CTF-zero rings), written as `cls_expansion_cavgs.mrc` plus the even
-   and odd member versions.
-6. **Readouts delivered per subclass** (`os_cls2D`, class map): `pop`, `neff` (Kish effective
-   population), `sep` (Ashman's D of the parent's first cut) and `repro`, the label-free
-   cross-half reproducibility: the correlation, over the fit band and sigma2-weighted, of the
-   even-member difference image between the subclass and its most different sibling with the
-   odd-member difference image. A real structural difference reproduces (towards 1), a noise-driven
-   split does not (towards 0).
-7. **Distribution.** The standard cls_expansion master/worker parts, the class being the scheduling
-   unit; part files are merged by the master. 46k particles at box 320 in 2 min on 80 cores,
-   132k in 3 min.
+   (`lp=`): `c_i` the member's CTF, `mu` the class mean, `U` a rank-8 basis (`neigs=`), `N` four
+   nuisance columns (the pose tangents dx, dy, dtheta of the class mean and the mean itself for
+   contrast), `z_i` the latent. Noise weights from the sigma2 shell spectrum. Fitted by an ALS
+   probe (3 random starts) then PPCA EM.
+2. **Cross-fit.** Five folds; each member is embedded with a basis fitted on the other folds and
+   its latent and posterior precision are mapped into the full fit's frame through the bases.
+3. **Placement.** Divisive bisection of `[z, log residual]` (the residual detrended against CTF
+   power) into exactly `ncls` leaves: 2-means candidates on the full latent and on each
+   coordinate, scored by Ashman's D along the cut axis, the leaf with the best cut split next; a
+   tied-covariance GMM seeded by the leaves gives the labels.
+4. **Weights.** `w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s))`, `A_i` the member's own
+   posterior precision; labelled members count fully; `neff` is the Kish effective population.
+5. **One greedy in-plane round** of `refine2D` against the sub-averages with the classes fixed
+   (`refine=inpl`, iteration 3, `trs=3`); the sigma2 state is estimated first when the project
+   has none that resolves.
+6. **Restoration.** CTF-corrected weighted averages from the refined alignment, regularised like
+   the class averager (`den += 1/tau2` per shell, `tau2` from the subclass's own even/odd FRC);
+   even and odd member versions are written too.
+7. **Readouts per subclass** (`os_cls2D`, class map): `pop`, `neff`, `sep` (Ashman's D of the
+   parent's first cut) and `repro`, the cross-half correlation of the subclass's difference image
+   to its most different sibling (even members vs odd members): a structural difference
+   reproduces, a noise-driven split does not.
 
-## 2. Benchmarks against the diffusion-map cls_expansion
+## 2. Benchmarks
 
-Synthetic (planted truth, abinitio2D classes of a mixed stack, SNR 0.05):
+Synthetic, planted truth, SNR 0.05, 2-way:
 
 | test | flex | diffusion maps |
 |---|---|---|
-| EMD-8440/8445 50/50 mix, 60 classes, 2-way: pure subclasses / majority purity / NMI | 143 of 180 / 0.90 / 0.24 | 35 of 120 / 0.68 / 0.01 |
-| five-state ladder 40/30/15/10/5, 2-way: purity / NMI | 0.62 / 0.18 | 0.42 / 0.01 |
+| EMD-8440/8445 50/50 mix, 60 classes: pure subclasses / purity / NMI | 143 of 180 / 0.90 / 0.24 | 35 of 120 / 0.68 / 0.01 |
+| five-state ladder 40/30/15/10/5: purity / NMI | 0.62 / 0.18 | 0.42 / 0.01 |
 
-Unit suite, one class each (flex only; the control has no equivalent): noiseless exactness,
-two-state recovery 1.0 at rank 1, 2 and 4, 80/20 at 1.0; junk isolation at 15 % and 30 % with
-recall 1.0 and a 100 % junk leaf; continuous motion ladder: latent tracks the motion at 0.95,
-five rungs ordered with a span of 1.3 of 2.0, sub-averages at 0.90 of the parent's correlation to
-the truth; null split reproducibility 0.015 vs 0.32-0.66 for the rungs; labels invariant to
-defocus (0.51) and to a global sigma2 rescale; sub-pixel residual shifts recovered at 0.998 with
-the pose tangents as nuisance.
-
-Real data: labels from a 3D classification (flex_pca's states for 10180, the deposited classes
-for 10076) are not ground truth. 10180: parents 0.615 majority purity, flex 0.648, diffusion maps
-0.616. 10076 (converged abinitio2D of the full 132k, 200 classes; the earlier 10076 project had
-zero shifts and was unconverged, see below): parents 0.357 (chance 0.347), flex 0.397 with 41
-subclasses above 70 % one state, diffusion maps 0.363 with 4. The label-free comparison:
-
-Best-pair cross-half reproducibility of the subclass differences per resolution band, 3-way,
-median over parents:
+Real data, label-free: best-pair cross-half reproducibility of the subclass differences per
+resolution band, 3-way, median over parents:
 
 | | > 60 A | 60-30 A | 30-15 A |
 |---|---|---|---|
@@ -98,11 +51,9 @@ median over parents:
 | 10076 flex | 0.86 | 0.81 | 0.79 |
 | 10076 diffusion maps | 0.99 | 0.43 | 0.24 |
 
-Seven real sets, 3-way, same settings, no per-dataset knobs (the 12 most populated parents, the
-ones in the montages). Reproducibility as above; effect size = cross-half power of the best
-sibling difference over the parent's cross-half power at 60-30 A (how big the difference is, where
-reproducibility only says whether it is real); largest share = the biggest subclass's fraction of
-the parent (a balanced split of conformers against a minority peeled off a dominant class):
+Seven real sets, 3-way, same settings, the 12 most populated parents. Effect size = cross-half
+power of the best sibling difference over the parent's cross-half power at 60-30 A; largest
+share = the biggest subclass's fraction of the parent:
 
 | dataset | particles | 60-30 A | 30-15 A | effect size | largest share | wall (80 cores) |
 |---|---|---|---|---|---|---|
@@ -114,93 +65,27 @@ the parent (a balanced split of conformers against a minority peeled off a domin
 | 10028 ribosome ref | 105k | 0.68 | 0.56 | 0.33 | 0.47 | 41 min |
 | flipqr (sieved) | 504k | 0.73 | 0.57 | 0.26 | 0.72 | 9 min |
 
-Every set reproduces in the 30-15 A band. The effect size, not the reproducibility, ranks the sets
-the way the montages read: the spliceosome shows conformers (balanced split, effect 1.06), the
-ribosome ratchets (2.87), 13553 and "not" split reproducibly into differences a third of the
-spliceosome's with one dominant subclass. Sibling centring contributes to the effect size (the
-spliceosome parent with the largest value also has a 14 px sibling shift), and over all 300
-parents a few tiny junk subclasses blow the ratio up (trpm4, flipqr reach 20-30), so a per-parent
-readout needs a population floor. Scorers: `repro_bands.py`, `split_amp.py`, `split_amp2.py`.
+Reproducibility says whether a difference is real; the effect size says how big it is and ranks
+the sets the way the montages read. Per 1000 particles the split costs about twice a `refine2D`
+pass and the restoration 1.5 times; 13553 (one 550 GB stack) is 10 times slower in both because
+members are fetched class by class, a random walk through the file.
 
-Neither method's differences are in-plane pose (aligning the sub-averages changes nothing),
-contrast (|corr(difference, parent)| 0.3-0.46), or defocus (between-subclass defocus spread over
-the within spread 0.14-0.19 for both after the flex fix below).
+## 3. Why it works, and why the diffusion-map split did not
 
-Ablation, model vs restoration (10180, 3-way; a labels-file mode, since removed, ran external labels
-one-hot through the flex restoration):
+- The comparison is made in the CTF-corrected, noise-whitened Fourier band where the structural
+  signal is, with defocus, contrast and residual pose in the model rather than in the distance.
+- Cross-fitting keeps the posterior honest; the kernel then pools members the data cannot tell
+  apart and keeps apart those it can.
+- Junk is not a cluster in a low-rank latent; the fit residual separates it.
+- The diffusion-map split used Euclidean distances between raw masked pixels: at cryo-EM SNR the
+  nearest-neighbour graph is a noise graph. Its subclass differences reproduce only above 60 A
+  (density, background, blob size) and collapse in the structural band.
 
-| labels / restoration | > 60 A | 60-30 A | 30-15 A |
-|---|---|---|---|
-| flex / flex | 0.90 | 0.74 | 0.36 |
-| diffusion maps / flex | 0.48 | 0.45 | 0.38 |
-| diffusion maps / make_cavgs | 0.90 | 0.27 | 0.07 |
+## 4. Limit
 
-The 60-30 A reproducibility is the model's (0.74 vs 0.45 under the same restoration); the 30-15 A
-value is the restoration's (the same labels reach 0.38); the control's 0.90 above 60 A is its
-restoration's background handling, not its labels (0.48 under ours).
-
-Wall time (80 cores): 10180 46k, split 71 s + greedy round 29 s + restoration 36 s, about 4 min
-in one call with the sigma2 estimate; the diffusion-map split took 2 min. Per 1000 particles the
-split costs 0.4 (box 180) to 1.8 s (box 420), about twice a stock cluster2D pass, the restoration
-about 1.5 times; five of the seven sets sit on that curve. The two off it: 10028 is slow in every
-phase including the stock cluster2D round (9 s per 1000, its 1083 stacks under the EMPIAR tree),
-so its data path, not the method; 13553 (one 550 GB stack) is normal in the cluster2D round and
-10 times slow in the split and restoration, which fetch members class by class, a random walk
-through the file where cluster2D streams particles in index order through its cache. Reading each
-worker's particle range once in index order and serving classes from memory is the fix; not done.
-
-Build note: the git commit hash now lives in `simple_gitinfo` (SimpleGitHash.h) instead of the
-root header, so a commit recompiles one object; before, every commit rebuilt the tree.
-
-Input caveat found on the way: the 10076 project used for all earlier numbers
-(`10076_flex2D/a200`, a flex2D-branch abinitio2D snapshot at iteration 5 of an unconverged run)
-had every particle shift at 0.0; its parents were rotation-only blobs at chance against the
-labels and both splits scored at chance on it. The numbers above are from a converged
-abinitio2D of the pristine import (`flexcls/10076/a2d_new`, 27 iterations).
-
-## 3. Why it works
-
-- **The metric is the likelihood's.** Members are compared in the CTF-corrected, noise-whitened
-  Fourier band where the structural signal is, with the per-member CTF in the model rather than
-  in the distance. Defocus, contrast and residual pose are modelled (nuisance columns, weights)
-  instead of being left to dominate a distance.
-- **The per-particle uncertainty is honest.** Cross-fitting removes the self-noise that makes an
-  in-sample posterior overconfident; the posterior-precision kernel then pools members that the
-  data cannot tell apart and keeps apart those it can, which is what the delivered weights are.
-- **Junk has its own axis.** Junk is not a cluster in a low-rank latent (recall 0.52 with the
-  latent alone); the fit residual separates it cleanly (junk 1.09-1.27 vs signal 0.91-1.08 at the
-  noise level 1.0), and detrending it against CTF power keeps it from becoming a defocus axis.
-- **Bimodality, not variance, picks the cut.** The largest-variance direction of a 2D class is a
-  pose residual and the most bimodal one is junk vs signal; divisive bisection by Ashman's D lets
-  the state surface at the second cut.
-- **Every step was gated by a synthetic suite** that plants states, junk, a motion continuum,
-  defocus-correlated noise and sub-pixel shifts. Three ideas that looked right were measured and
-  removed because the suite or the real-data readouts said no: a full-band likelihood EM of the
-  weights (collapses on a continuum; balanced, it only shuffles), same-view pooling of parents
-  (+0.034 vs +0.031), and a Procrustes alignment of fold latents (smears rank-4 columns).
-
-## 4. Why the diffusion-map split does not
-
-- **Its distance is Euclidean between raw masked pixels.** At cryo-EM SNR the squared distance
-  between two particle images is a constant noise term plus a tiny structural term; the
-  nearest-neighbour graph is a noise graph, and diffusion coordinates on it are noise. On a
-  planted, separable 50/50 mix it scores NMI 0.01, chance.
-- **What it does split on is the very-low-resolution content**: overall density, background
-  and blob size. Its subclass differences reproduce across halves above 60 A (0.90, 0.98) and
-  collapse in the structural band (0.27, 0.34). That is why its montage rows look like one average
-  at three brightness levels.
-- **No CTF, no whitening, no nuisance, no uncertainty**: defocus, contrast and residual pose are
-  not in the model, so there is nothing to stop them from entering the distance, and nothing to
-  say which members the data cannot separate; its averages are plain unweighted means, so small
-  noise-driven subclasses become empty tiles (down to 6 members on 10180, 4 on 10076).
-
-## 5. What limits both on real data
-
-The per-particle state signal within a 2D view class. The flex calibration on real classes is
-1.1-1.8 times the noise per component (2.0-2.4 in-sample): enough to order members weakly and to
-produce reproducible sub-average differences, not to label individual particles. Doubling the
-members per view (same-view pooling) did not change it. Raising it means pooling members across
-views, which is the 3D flex path.
+The per-particle state signal within a 2D view class: the cross-fitted latent scatter is 1.1-1.8
+times the posterior width on real classes, enough to order members and to give reproducible
+sub-average differences, not to label individual particles. Pooling across views is the 3D path.
 
 ---
 

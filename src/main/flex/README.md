@@ -175,19 +175,12 @@ the shared reconstruction implementation.
 
 ## `cls_expansion`
 
-`simple_flex_cls_expansion.f90` is the per-class covariance model behind `cls_expansion` (its only mode since 2026-10-01):
-members of one 2D class in the class frame (pose fixed), `y = c (mu + U z) + n` per Fourier
-coefficient with the CTF `c` rotated along and the canonical sigma2 as noise weights, PPCA EM
-(prior-free probe first), exactly `ncls` subclasses by divisive bisection of the cross-fitted latent plus the fit residual
-(junk axis), posterior-precision kernel weights, CTF-corrected weighted sub-class averages and a
-label-free cross-half reproducibility per subclass (`os_cls2D` `repro`). Arrays in, arrays out: it imports no parameters, builder,
-project or queue code. The strategy
-(`../strategies/parallelization/simple_cls_expansion_strategy.f90`, `split_class_flex`) prepares the
-planes through `transform_ptcls(keep_ft=.true.)`, evaluates the rotated CTF, owns the part files
-(`cls_expansion_weights_partNN.txt`, `cls_expansion_cavgs_partNN.mrc`), the merge and the project writes
-(`cls_expansion_cavgs.mrc`, `cls_expansion_weights.txt`, `os_cls2D` `neff`). The commander
-(`../commanders/simple/simple_commanders_denoise.f90`) skips the trailing `make_cavgs` on this
-path. Unit tests: `simple_flex_cls_expansion_tester.f90` (suite `flex_cls_expansion` of
-`unit_heterogeneity`). Method, benchmarks against the diffusion-map cls_expansion and the reasoning:
+`simple_flex_cls_expansion.f90` is the per-class covariance model behind `cls_expansion`: a
+CTF- and noise-weighted PPCA on the members of one 2D class in the class frame, cross-fitted,
+divisive placement into `ncls` subclasses, posterior-precision kernel weights, CTF-corrected
+weighted sub-class averages and a cross-half reproducibility per subclass. Arrays in, arrays out.
+The strategy (`../strategies/parallelization/simple_cls_expansion_strategy.f90`) prepares the
+planes through `transform_ptcls(keep_ft=.true.)`, owns the part files, the merge and the project
+writes; the commander (`../commanders/simple/simple_commanders_denoise.f90`) runs the split, one
+greedy in-plane `refine2D` round and the restoration. Method and benchmarks:
 `doc/implementation_notes/completed/flex_cls_expansion_2026_10_01.md`.
-

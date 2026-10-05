@@ -239,8 +239,7 @@ contains
         call set_master_num_threads(self%nthr_master, string('CLS_EXPANSION'))
         call prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
         call self%qenv%new(params, self%nparts_run, numlen=params%numlen)
-        ! Keep distributed workers inside the master's execution directory so
-        ! JOB_FINISHED flags and part outputs land where the master is watching.
+        ! workers run inside the master's execution directory
         call cline%set('mkdir', 'no')
         call cline%gen_job_descr(self%job_descr)
         call self%job_descr%set('mkdir', 'no')
@@ -330,8 +329,7 @@ contains
         type(string) :: label
         integer :: i
         call determine_split_label(params, build, label)
-        ! the distinct values of the label among the active particles (oris%get_label_inds reads
-        ! the class field whatever the label, which is wrong for cluster)
+        ! the distinct values of the label among the active particles
         cls_inds = split_label_inds(build, label)
         if( cline%defined('class') ) cls_inds = pack(cls_inds, mask=(cls_inds == params%class))
         if( cline%defined('class_assignment') )then
@@ -384,8 +382,7 @@ contains
         type(builder),    intent(inout) :: build
         type(string),     intent(out)   :: label
         label = 'class'
-        ! SIMPLE_FLEXCLS_LABELS=project: the project already holds a split (class = global
-        ! subclass, cluster = parent); the parents are the clusters
+        ! labels from the project: the parents are the clusters
         if( flex_labels_from_project() ) label = 'cluster'
     end subroutine determine_split_label
 
@@ -496,8 +493,6 @@ contains
                     sep_of_subcls(iglob)    = separation
                     repro_of_subcls(iglob)  = repro(j)
                 endif
-                ! the map carries the split separation and the cross-half reproducibility as fifth
-                ! and sixth columns (list-directed reads ignore them)
                 write(funit_map,'(I8,1X,I8,1X,I8,1X,I8,1X,F8.3,1X,F8.3)') iglob, cls_id, j, count(labels == j), separation, repro(j)
                 ! the sub-class average lands at its row: global index here, local row in a part
                 call cavgs(j)%write(stk_fname, iglob)
@@ -530,7 +525,7 @@ contains
     end subroutine run_local_split
 
 
-    ! ===== pca_mode=flex
+    ! ===== the flex model
 
     function flex_weights_part_fname( part, numlen ) result( fname )
         integer, intent(in) :: part, numlen
@@ -549,8 +544,7 @@ contains
         endif
     end function flex_cavgs_part_fname
 
-    !> the last Fourier shell of the covariance fit: lp= if given, else FLEX_CLS_LP_FIT_DEFAULT,
-    !! never beyond the lattice Nyquist
+    !> the last Fourier shell of the covariance fit (lp= or the default, capped at Nyquist)
     integer function flex_fit_band( params, cline ) result( kfit )
         type(parameters), intent(in) :: params
         class(cmdline),   intent(in) :: cline
@@ -563,9 +557,7 @@ contains
         kfit   = max(2, min(nyq, calc_fourier_index(lp_fit, params%box, params%smpd)))
     end function flex_fit_band
 
-    !> the canonical sigma2 spectra of every particle (objfun=euclid), loaded over the whole
-    !! particle field: a worker's params%fromp/top is a particle slice, but its classes draw
-    !! members from anywhere, so the field bounds are widened for the load and restored after
+    !> the canonical sigma2 spectra of every particle, loaded over the whole particle field
     subroutine prepare_flex_sigma2( params, build, spproj, cline, loaded )
         use simple_sigma2_files, only: canonical_sigma2_consumable, load_sigma2_groups
         type(parameters), intent(inout) :: params
@@ -581,8 +573,7 @@ contains
             return
         endif
         if( .not. canonical_sigma2_consumable(spproj, spproj%os_ptcl2D, params%box, params%smpd, params%l_sigma_glob, message) )then
-            ! the state may have been committed under the other grouping policy (per stack vs
-            ! pooled); either spectrum is a valid noise weight here, so adopt whichever is registered
+            ! either grouping policy's spectrum serves as the noise weight
             if( canonical_sigma2_consumable(spproj, spproj%os_ptcl2D, params%box, params%smpd, .not. params%l_sigma_glob, message) )then
                 params%l_sigma_glob = .not. params%l_sigma_glob
                 if( params%l_sigma_glob )then
@@ -607,10 +598,8 @@ contains
         params%top   = top_bak
     end subroutine prepare_flex_sigma2
 
-    !> The members of one parent class as Fourier planes in the class frame with their CTF
-    !! rotated along, on the h >= 0 half-plane lattice ((0,k<0) dropped as conjugates), shells
-    !! 1..nyq; noise weights from the canonical sigma2 or, failing that, the class's own residual
-    !! spectrum. nptcls = 0 when the class is too small.
+    !> the members of one class as Fourier planes in the class frame with their CTF, half-plane lattice, shells 1..nyq;
+    !! noise weights from the canonical sigma2 or the class's own residual spectrum; nptcls = 0 when too small
     subroutine flex_class_planes( params, build, spproj, cls_id, ncls, ncomp, kfit, l_sigma, pinds, y, c, w, wq, &
                                   hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls )
         use simple_flex_cls_expansion,  only: flex_cls_shell_noise
@@ -707,8 +696,7 @@ contains
         do i = 1, nptcls
             iptcl = pinds(i)
             e3    = spproj%os_ptcl2D%e3get(iptcl)
-            ! the same rotation transform_ptcls applied to the lattice: the class-frame coefficient
-            ! (h,k) was sampled at loc = [h,k] * mat in the particle frame, where its CTF lives
+            ! the CTF at the particle-frame location of the class-frame coefficient
             call rotmat2d(-e3, mat)
             if( l_ctf )then
                 ctfparms = spproj%get_ctfparams(params%oritype, iptcl)
@@ -747,8 +735,7 @@ contains
         call dealloc_imgarr(imgs)
         call forget_ft_maps
         if( .not. l_sigma )then
-            ! no canonical sigma2: the class's own residual spectrum sets the noise weights (unit
-            ! weights are wrong by the coefficient scale and let the PPCA prior collapse the basis)
+            ! no canonical sigma2: the class's own residual spectrum sets the noise weights
             allocate(s2(nyq))
             call flex_cls_shell_noise(y, c, shell, nyq, s2)
             do i = 1, nptcls
@@ -788,8 +775,7 @@ contains
         deallocate(neff)
     end subroutine flex_class_deliver
 
-    !> the restoration of one class from its weights: CTF-corrected weighted sub-averages with the
-    !! FRC-based Wiener prior, the even/odd versions, the cross-half reproducibility, the log line
+    !> the restoration of one class from its weights: regularised sub-averages, even/odd versions, reproducibility
     subroutine flex_class_restore_deliver( params, cls_id, ncls, y, c, w, wq, fitmask, shell, nsh, hidx, kidx, gridcorr_img, &
                                            ldim, ncoeff, nptcls, labels, weights, cavgs, repro, cavgs_even, cavgs_odd, neff, separation )
         use simple_flex_cls_expansion,  only: flex_cls_restore_states, flex_cls_half_reproducibility, flex_cls_signal_power
@@ -813,9 +799,7 @@ contains
         integer :: s
         allocate(repro(ncls))
         allocate(avgs(ncoeff,ncls), avgs_e(ncoeff,ncls), avgs_o(ncoeff,ncls), tau2(nsh,ncls), den_e(nsh,ncls), den_o(nsh,ncls))
-        ! plain CTF-corrected even/odd sub-averages give every subclass its FRC and noise
-        ! variance per shell, hence its prior signal power for the Wiener term of the delivered
-        ! averages (the class averager's ML regularisation, per half then merged)
+        ! unregularised even/odd sub-averages -> FRC and noise variance -> prior signal power
         call flex_cls_half_reproducibility(y, c, w, wq, fitmask, weights, repro, avgs_e, avgs_o, shell=shell, &
             &den_even=den_e, den_odd=den_o)
         call flex_cls_signal_power(avgs_e, avgs_o, den_e, den_o, shell, nsh, tau2)
@@ -848,9 +832,8 @@ contains
                 call imgs(s)%zero_and_flag_ft
                 do j = 1, ncoeff
                     call imgs(s)%set_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1, planes(j,s))
-                    ! the half-plane keeps the h=0 column for k>=0 only, but the physical layout
-                    ! stores both halves of that column: the k<0 mate must be set to the conjugate,
-                    ! or the column is not Hermitian and every image row gets a wrong mean (a stripe)
+                    ! the half-plane keeps the h=0 column for k>=0 only; the physical layout stores
+                    ! both halves of that column, so the k<0 mate is set to the conjugate
                     if( hidx(j) == 0 .and. kidx(j) > 0 ) call imgs(s)%set_cmat_at(ft_map_phys_addrh(0,-kidx(j)), &
                         &ft_map_phys_addrk(0,-kidx(j)), 1, conjg(planes(j,s)))
                 end do
@@ -861,8 +844,7 @@ contains
 
     end subroutine flex_class_restore_deliver
 
-    !> the SIMPLE_FLEXCLS_LABELS value: the environment (master, shared memory) or the mode file
-    !! the master wrote for its sbatch workers, whose environment is not the master's
+    !> the labels mode: the environment, or the mode file the master wrote for its workers
     subroutine flex_labels_mode( mode, found )
         character(len=STDLEN), intent(out) :: mode
         logical,               intent(out) :: found
@@ -901,9 +883,7 @@ contains
         flex_labels_from_project = found .and. trim(mode) == 'project'
     end function flex_labels_from_project
 
-    !> SIMPLE_FLEXCLS_LABELS=project: the labels are the project's class field (the parents being its
-    !! cluster field); the members' global subclasses are ranked into local labels 1..ncls (members
-    !! without a label get 0)
+    !> labels from the project's class field, ranked into local labels 1..ncls (0 when unlabelled)
     logical function flex_external_labels( spproj, pinds, ncls, labels )
         type(sp_project),     intent(inout) :: spproj
         integer,              intent(in)  :: pinds(:), ncls
@@ -963,9 +943,7 @@ contains
 
     end function flex_external_labels
 
-    !> One parent class through the flex covariance model on its own: planes, fit (with the
-    !! pose-residual tangents and the class mean as nuisance), delivery.
-    !! nsplit = 0 when the class is too small for the model.
+    !> one class through the model: planes, cross-fitted fit with nuisance, placement, delivery; nsplit = 0 when too small
     subroutine split_class_flex( params, build, spproj, cls_id, ncls, ncomp, kfit, l_sigma, nsplit, pinds, labels, weights, cavgs, &
                                  separation, repro, cavgs_even, cavgs_odd )
         use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_fit_crossed, flex_cls_weighted_mean, flex_cls_pose_tangents
@@ -998,10 +976,7 @@ contains
         call flex_class_planes(params, build, spproj, cls_id, ncls, ncomp, kfit, l_sigma, pinds, y, c, w, wq, &
             &hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls)
         if( nptcls < 1 ) return
-        ! the random start is seeded by the class so a class gives the same split whichever part
-        ! (or process) it lands in
-        ! restoration only (SIMPLE_FLEXCLS_LABELS=project): the project already holds the split, the
-        ! labels go one-hot through the restoration
+        ! restoration only: the project already holds the split
         if( flex_external_labels(spproj, pinds, ncls, labels) )then
             allocate(weights(nptcls,ncls), source=0.)
             do j = 1, nptcls
@@ -1016,13 +991,11 @@ contains
             return
         endif
         call seed_rnd_fixed(FLEX_CLS_SEED_BASE + cls_id)
-        ! nuisance: the pose tangents (dx, dy, dtheta) and the class mean itself, which absorbs
-        ! the per-particle contrast so amplitude does not occupy the structural latent
+        ! nuisance columns: the pose tangents and the class mean (per-particle contrast)
         allocate(mu_all(ncoeff), nuis(ncoeff,4))
         call flex_cls_weighted_mean(y, c, w, mu_all)
         call flex_cls_pose_tangents(mu_all, hidx, kidx, params%box, nuis(:,1:3))
         nuis(:,4) = cmplx(mu_all, kind=sp)
-        ! cross-fitted embedding: each member is embedded with a basis fitted on the other half
         call flex_cls_fit_crossed(model, y, c, w, wq, fitmask, ncomp, verbose=.true., nuis=nuis)
         write(logfhandle,'(A,4F9.4)') 'Cls expansion flex nuisance rms (x, y, rot, contrast; latent units): ', &
             &[(sqrt(sum(model%nu(:,j)**2)/real(nptcls,dp)), j=1,4)]
@@ -1193,8 +1166,7 @@ contains
         call map_fname%kill
     end subroutine merge_worker_outputs
 
-    !> flex: the part weight tables become one table with the global subclass, the part average
-    !! stacks are concatenated in global order, neff per global subclass is summed from the weights
+    !> merges the part weight tables, average stacks and neff into the global subclass order
     subroutine merge_flex_outputs(params, nparts_run, total, part_counts, part_parent, part_local, part_global, part_pop, neff, sep, repro)
         type(parameters),  intent(inout) :: params
         integer,           intent(in)    :: nparts_run, total, part_counts(:)

@@ -1,17 +1,4 @@
-!@descr: flex cls expansion: the per-class low-rank covariance model on Fourier coefficients with the
-!! in-plane pose fixed, its EM fit, the fixed-K latent placement and the weighted sub-class averages
-!!
-!! Model, per member i of one parent class, over the coefficients j the caller hands in:
-!!   y_ij = c_ij [ mu_j + sum_q U_jq z_iq ] + n_ij,   n_ij ~ N(0, 1/w_ij)
-!! c is the CTF in the class frame, w the inverse noise variance (1/sigma2 of the shell), z real.
-!! E-step: MAP z with posterior precision A_i = P + sum_j wq_j w_ij c_ij^2 Re(U_jq* U_jr), P = I
-!! under the PPCA prior and 0 in the prior-free (ALS) probe; b_iq = sum_j wq_j w_ij c_ij Re(U_jq*
-!! (y_ij - c_ij mu_j)). wq is the half-plane quadrature weight (2 off the self-conjugate line).
-!! M-step: per coefficient the (K+1)x(K+1) weighted least-squares solve
-!!   G_j = sum_i w_ij c_ij^2 E[a_i a_i^T],  h_j = sum_i w_ij c_ij y_ij E[a_i],  a_i = [1; z_i]
-!! with E[a a^T] = [1 m^T; m S + m m^T] from the posterior. ALS iterations first (unit-norm
-!! columns, latent free), then the latent is scaled to unit second moment and PPCA iterations
-!! follow. Nothing here knows about images, lattices, projects or parts: arrays in, arrays out.
+!@descr: cls_expansion backend: per-class low-rank covariance model on Fourier coefficients (fit, placement, weighted sub-averages, reproducibility); arrays in, arrays out
 module simple_flex_cls_expansion
 use simple_defs,               only: sp, dp, PI, DPI, CMPLX_ZERO, DCMPLX_ZERO, logfhandle
 use simple_error,              only: simple_exception
@@ -91,8 +78,7 @@ contains
         self%exists = .false.
     end subroutine model_kill
 
-    !> Fit mean and basis on the coefficients flagged by fitmask; the latent and its precision of
-    !! every member are left in the model (the final E-step, under the PPCA prior)
+    !> fits mean and basis on the coefficients in fitmask; leaves every member's latent and precision in the model
     subroutine flex_cls_fit( model, y, c, w, wq, fitmask, ncomp, verbose, nuis )
         type(flex_cls_model), intent(inout) :: model
         complex(sp),          intent(in)    :: y(:,:)      !< (ncoeff,nptcls) coefficients in the class frame
@@ -102,10 +88,7 @@ contains
         logical,              intent(in)    :: fitmask(:)  !< (ncoeff) coefficient enters the fit
         integer,              intent(in)    :: ncomp
         logical,    optional, intent(in)    :: verbose
-        !> (ncoeff,nnuis) nuisance directions (pose-residual tangents of the class mean): fitted
-        !! jointly with the latent in every E-step, removed from the data before every M-step,
-        !! never part of the delivered latent
-        complex(sp), optional, intent(in)   :: nuis(:,:)
+        complex(sp), optional, intent(in)   :: nuis(:,:)  !< (ncoeff,nnuis) nuisance columns, fitted jointly, never placed on
         complex(sp), allocatable :: yf(:,:)
         real(sp),    allocatable :: cf(:,:), wf(:,:), wqf(:)
         real(dp),    allocatable :: ea(:,:), eaa(:,:,:), zprev(:,:), ubest(:,:), zbest(:,:)
@@ -144,10 +127,8 @@ contains
             call orthonormalise(model%N, wqf, nfit, model%nnuis)
         endif
         allocate(ea(0:ncomp,nptcls), eaa(0:ncomp,0:ncomp,nptcls), zprev(nptcls,ncomp), source=0.d0)
-        ! mean: the Wiener-regularised weighted average
         call weighted_average(yf, cf, wf, nfit, nptcls, FLEX_CLS_WIENER_EPS, model%mu)
-        ! the ALS probe from nrs random starts (random projections of the CTF-weighted residuals,
-        ! orthonormalised); the start with the smallest weighted residual after the probe continues
+        ! ALS probe from nrs random starts; the start with the smallest weighted residual continues
         if( nrs > 1 .and. nals > 0 )then
             allocate(ubest(nfit,2*ncomp), zbest(nptcls,ncomp), mubest(nfit))
             resid_best = huge(1.d0)
@@ -174,7 +155,7 @@ contains
             model%mu = mubest
             deallocate(ubest, zbest, mubest)
             nals = 0   ! the probe is done; the loop below runs the PPCA iterations only
-            ! scale the basis so the probe's latent has unit second moment (see below)
+            ! scale the basis so the latent has unit second moment
             do q = 1, ncomp
                 sq = sqrt(max(sum(model%z(:,q)**2) / real(nptcls,dp), 1.d-30))
                 model%U(:,q) = model%U(:,q) * sq
@@ -186,8 +167,7 @@ contains
         do it = 1, nit
             l_prior = it > nals
             if( it == nals + 1 .and. nals > 0 )then
-                ! scale the basis so the latent of the last ALS pass has unit second moment: the
-                ! PPCA prior N(0,I) is then a statement about the data, not about the probe's units
+                ! scale the basis so the latent has unit second moment
                 do q = 1, ncomp
                     sq = sqrt(max(sum(model%z(:,q)**2) / real(nptcls,dp), 1.d-30))
                     model%U(:,q) = model%U(:,q) * sq
@@ -209,7 +189,7 @@ contains
             endif
             if( l_prior .and. dz < FLEX_CLS_CONV_TOL * znorm ) exit
         end do
-        ! the delivered latent: one more E-step under the prior on the final basis
+        ! final E-step under the prior
         call estep(model, yf, cf, wf, wqf, nfit, nptcls, ncomp, .true., ea, eaa)
         do i = 1, nptcls
             model%resid(i) = member_residual(model, yf(:,i), cf(:,i), wf(:,i), wqf, nfit, model%z(i,:), i)
@@ -218,16 +198,8 @@ contains
         deallocate(yf, cf, wf, wqf, ea, eaa, zprev)
     end subroutine flex_cls_fit
 
-    !> Cross-fitted embedding: the members are dealt into FLEX_CLS_NFOLD folds; for every fold a
-    !! basis is fitted on the OTHER folds and the fold's members are embedded with it, so no member
-    !! is embedded by a basis that saw its own noise. Each held-out latent is carried into the
-    !! full fit's frame through the bases (the fold reconstruction projected onto the full basis),
-    !! so centres and kernels live in one latent. The returned model holds the full fit's basis, the
-    !! cross-fitted latent and precision of EVERY member, and its nuisance coefficients. The
-    !! in-sample posterior claims a resolution the fit does not have (a column fitted on a member's
-    !! own noise resolves that noise as signal); the cross-fitted latent does not, so its scatter
-    !! against its posterior width is an honest calibration. Folds keep (NFOLD-1)/NFOLD of the
-    !! members in every basis; halves cost too much on small classes.
+    !> cross-fitted embedding: FLEX_CLS_NFOLD folds, every member embedded with a basis fitted on the other
+    !! folds and mapped into the full fit's frame; the model holds the full basis and every member's latent, precision and nuisance
     subroutine flex_cls_fit_crossed( model, y, c, w, wq, fitmask, ncomp, verbose, nuis )
         type(flex_cls_model),  intent(inout) :: model
         complex(sp),           intent(in)    :: y(:,:)
@@ -253,7 +225,6 @@ contains
         do i = 1, nptcls
             fold_of(i) = 1 + mod(i - 1, nfold)
         end do
-        ! the full in-sample fit gives the frame for aligning the folds
         if( present(nuis) )then
             call flex_cls_fit(model, y, c, w, wq, fitmask, ncomp, verbose=l_verb, nuis=nuis)
         else
@@ -284,18 +255,13 @@ contains
             else
                 call flex_cls_fit(fold, yt, ct, wt, wq, fitmask, ncomp, verbose=.false.)
             endif
-            ! map the fold latent into the full frame through the bases: the fold reconstruction
-            ! U_fold z projected onto the full basis, z_full = G^-1 (U_full^H W U_fold) z_fold.
-            ! A rotation of the latents (Procrustes) assumes the two frames differ by a rotation,
-            ! but the noise columns of a fold basis are not reproducible across folds and the
-            ! rotation that fits the training latents smears the reproducible columns.
+            ! z_full = G^-1 (U_full^H W U_fold) z_fold
             do q = 1, ncomp
                 do r = 1, ncomp
                     Bm(q,r) = sum(real(wq(model%fitidx),dp) * real(conjg(model%U(:,q)) * fold%U(:,r)))
                 end do
             end do
             T = matmul(G, Bm)
-            ! embed the held-out members with the fold basis and carry them over
             do i = 1, nptcls
                 if( fold_of(i) /= f ) cycle
                 if( model%nnuis > 0 )then
@@ -310,7 +276,6 @@ contains
                         &wq(fold%fitidx), nfit, model%z(i,:), 0)
                 endif
                 model%z(i,:) = matmul(T, model%z(i,:))
-                ! covariance transforms as T C T^T; the precision is its inverse
                 cov = model%prec(:,:,i)
                 call spd_inverse(cov, ncomp)
                 tmp = matmul(T, matmul(cov, transpose(T)))
@@ -325,7 +290,7 @@ contains
         deallocate(fold_of, zfull, ea, eaa)
     end subroutine flex_cls_fit_crossed
 
-    !> one member's MAP latent, precision and nuisance under a given basis (the E-step for one)
+    !> one member's latent, precision and nuisance under a given basis
     subroutine embed_one( basis, yi, ci, wi, wq, nfit, ncomp, z, prec, nu, ea, eaa )
         type(flex_cls_model), intent(inout) :: basis
         complex(sp),          intent(in)    :: yi(:)
@@ -337,7 +302,6 @@ contains
         real(sp)    :: cf(nfit,1), wf(nfit,1), wqf(nfit)
         type(flex_cls_model) :: one
         yf(:,1) = yi(basis%fitidx); cf(:,1) = ci(basis%fitidx); wf(:,1) = wi(basis%fitidx); wqf = wq(basis%fitidx)
-        ! a one-member view of the basis (estep writes into model%z/prec/nu)
         call one%new(nfit, ncomp, 1)
         one%fitidx = basis%fitidx; one%mu = basis%mu; one%U = basis%U
         if( basis%nnuis > 0 )then
@@ -352,10 +316,7 @@ contains
         call one%kill
     end subroutine embed_one
 
-    !> one member's weighted residual energy per coefficient after the basis (and nuisance) fit:
-    !! sum_j wq_j w_j |y_j - c_j (mu_j + U_j z + N_j nu)|^2 / sum_j wq_j; 1 at the noise level,
-    !! above it for a member the model does not describe (junk). The nuisance coefficients come
-    !! from the basis model row `inu` when `nu` is absent (in-sample), from `nu` otherwise.
+    !> one member's weighted fit residual per coefficient (1 at the noise level); nuisance from row inu or nu
     function member_residual( basis, yf, cf, wf, wqf, nfit, z, inu, nu ) result( r )
         type(flex_cls_model), intent(in) :: basis
         integer,              intent(in) :: nfit, inu
@@ -383,7 +344,7 @@ contains
         r = sum(real(wqf,dp) * real(wf,dp) * real(conjg(pred) * pred)) / max(sum(real(wqf,dp)), 1.d-30)
     end function member_residual
 
-    !> in-place inverse of a small SPD matrix through the flex posterior service (Cholesky)
+    !> in-place inverse of a small SPD matrix
     subroutine spd_inverse( A, k )
         integer,  intent(in)    :: k
         real(dp), intent(inout) :: A(k,k)
@@ -397,8 +358,7 @@ contains
         A = Ainv
     end subroutine spd_inverse
 
-    !> per component: the scatter of the cross-fitted latent against its posterior width, and
-    !! the same for the in-sample latent; >> 1 cross-fitted means resolvable heterogeneity
+    !> log: cross-fitted and in-sample latent scatter over the posterior width, per component
     subroutine flex_cls_calibration( model, zfull )
         type(flex_cls_model), intent(in) :: model
         real(dp),             intent(in) :: zfull(:,:)
@@ -415,13 +375,8 @@ contains
         end do
     end subroutine flex_cls_calibration
 
-    !> Exactly ncls subclasses from the latent by divisive bisection: the class is cut in two along
-    !! the most bimodal direction (candidates: k-means on the standardised full latent and on each
-    !! single component, scored by Ashman's D along the cut's own centre axis), then the subclass
-    !! whose best cut separates most is cut again, until ncls. The largest-variance direction of a
-    !! 2D class is a pose residual and the most bimodal one is often junk versus signal, so the
-    !! hierarchy lets the state surface at the second cut. The leaf centres seed a tied-covariance
-    !! GMM whose responsibilities are the weights; labels = argmax, neff = soft population.
+    !> exactly ncls subclasses: divisive bisection of the standardised latent (plus the log fit residual) scored by
+    !! Ashman's D, a tied-covariance GMM for the labels, posterior-precision kernel weights, Kish neff
     subroutine flex_cls_place_states( model, ncls, weights, labels, neff, separation )
         type(flex_cls_model), intent(in)  :: model
         integer,              intent(in)  :: ncls
@@ -438,18 +393,11 @@ contains
         if( ncls < 2 ) THROW_HARD('flex_cls_place_states: ncls must be >= 2')
         if( size(weights,1) /= model%nptcls .or. size(weights,2) /= ncls ) THROW_HARD('flex_cls_place_states: weights shape')
         if( size(labels) /= model%nptcls .or. size(neff) /= ncls ) THROW_HARD('flex_cls_place_states: labels/neff shape')
-        ! the placement latent is the model latent plus the log fit residual: a member the basis
-        ! does not describe (junk) is far from every other along that coordinate although its
-        ! latent may sit anywhere, so junk forms its own leaf instead of smearing over the states.
-        ! The residual coordinate carries the population scatter as its precision.
+        ! placement latent = model latent + log fit residual (precision = population scatter)
         nd = model%ncomp + 1
         allocate(zaug(model%nptcls,nd), paug(nd,nd,model%nptcls), source=0.d0)
         zaug(:,1:model%ncomp) = model%z
         zaug(:,nd) = log(max(model%resid, 1.d-30))
-        ! detrend the residual against the member's CTF power: the residual is normalised to a
-        ! class-wide noise model, and when the true per-member noise varies with defocus the
-        ! residual trends with it and the junk cut becomes a defocus cut (measured on 10076:
-        ! between/within defocus spread 0.49 -> 0.97 with the raw residual)
         call detrend(zaug(:,nd), model%cpow, model%nptcls)
         rmean = sum(zaug(:,nd)) / real(model%nptcls,dp)
         rvar  = sum((zaug(:,nd) - rmean)**2) / real(max(model%nptcls-1,1),dp)
@@ -459,12 +407,10 @@ contains
         end do
         allocate(tcen(nd,ncls), wcomp(nd), bw(ncls), zstd(model%nptcls,nd))
         allocate(cen2(nd,2,ncls), dsep_of(ncls), memb(model%nptcls), nmemb(ncls))
-        ! standardised latent: every coordinate counts the same in the full-space candidate
         do q = 1, nd
             var = sum((zaug(:,q) - sum(zaug(:,q))/real(model%nptcls,dp))**2) / real(max(model%nptcls-1,1),dp)
             zstd(:,q) = (zaug(:,q) - sum(zaug(:,q))/real(model%nptcls,dp)) / sqrt(max(var, 1.d-30))
         end do
-        ! leaf 1 = everything; every leaf carries its best bisection and that cut's separation
         memb  = 1
         nleaf = 1
         call best_bisection(zstd, model%nptcls, nd, memb, 1, cen2(:,:,1), dsep_of(1))
@@ -473,7 +419,6 @@ contains
             isplit = maxloc(dsep_of(1:nleaf), dim=1)
             if( dsep_of(isplit) < 0.d0 ) exit    ! nothing left to cut (leaves too small)
             nleaf = nleaf + 1
-            ! members of the split leaf go to the nearer of its two centres; the second becomes leaf nleaf
             do i = 1, model%nptcls
                 if( memb(i) /= isplit ) cycle
                 if( sum((zstd(i,:) - cen2(:,2,isplit))**2) < sum((zstd(i,:) - cen2(:,1,isplit))**2) ) memb(i) = nleaf
@@ -482,7 +427,7 @@ contains
             call best_bisection(zstd, model%nptcls, nd, memb, nleaf,  cen2(:,:,nleaf),  dsep_of(nleaf))
         end do
         if( nleaf < ncls )then
-            ! pad by halving the largest leaf (keeps the ncls contract on tiny classes)
+            ! too few leaves: halve the largest
             do k = nleaf + 1, ncls
                 isplit = maxloc([(count(memb == s), s=1,k-1)], dim=1)
                 nsub = 0
@@ -495,7 +440,6 @@ contains
             end do
             nleaf = ncls
         endif
-        ! leaf centres in the model's latent units, where the GMM and its precision live
         do s = 1, ncls
             nmemb(s) = count(memb == s)
             do q = 1, nd
@@ -516,8 +460,7 @@ contains
         bw      = 0.
         call gmm_state_weights(zaug, model%nptcls, nd, nd, ncls, tcen, wcomp, &
             &weights, neff, bw, labels, respawn=.false.)
-        ! the GMM leaves the weights untouched when its tied covariance is singular (a collapsed
-        ! latent): fall back to the divisive leaves, one-hot
+        ! singular GMM covariance: the divisive leaves, one-hot
         if( any(sum(weights, dim=2) < 0.5) )then
             write(logfhandle,'(A)') '>>> FLEX_CLS GMM responsibilities unavailable; hard divisive subclasses'
             weights = 0.
@@ -526,19 +469,11 @@ contains
                 weights(i,memb(i)) = 1.
             end do
         endif
-        ! The GMM responsibilities are near one-hot on real data, so an average over them is a
-        ! hard average and a small subclass is a blank tile. The delivered weights are instead
-        ! flex_pca's posterior-precision kernel: w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s)) with
-        ! A_i the member's own posterior precision. Members whose latent is within its own
-        ! uncertainty of the centre are pooled (nothing is lost by averaging them), members further
-        ! away are not; no bandwidth and no population target, the effective population is a
-        ! readout. Labels stay the argmax responsibilities.
         call posterior_kernel_weights(zaug, paug, model%nptcls, nd, ncls, labels, weights, neff)
         deallocate(tcen, wcomp, bw, zstd, cen2, dsep_of, memb, nmemb, zaug, paug)
     end subroutine flex_cls_place_states
 
-    !> w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s)), c_s the mean latent of the members
-    !! labelled s; neff(s) the Kish effective population
+    !> w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s)), c_s the mean latent of the members labelled s; neff = Kish
     subroutine posterior_kernel_weights( z, prec, nptcls, nd, ncls, labels, weights, neff )
         integer,  intent(in)  :: nptcls, nd, ncls, labels(:)
         real(dp), intent(in)  :: z(nptcls,nd), prec(nd,nd,nptcls)
@@ -560,17 +495,13 @@ contains
                 weights(i,s) = real(exp(-0.5d0 * q), sp)
             end do
             where( weights(:,s) < FLEX_CLS_W_CUTOFF ) weights(:,s) = 0.
-            ! a member always contributes to the subclass it is labelled in: no empty sub-average
             where( labels == s ) weights(:,s) = max(weights(:,s), 1.)
             sw = sum(real(weights(:,s),dp)); sw2 = sum(real(weights(:,s),dp)**2)
             neff(s) = real(sw * sw / max(sw2, 1.d-300), sp)
         end do
     end subroutine posterior_kernel_weights
 
-    !> the best two-way cut of leaf `leaf` of the partition memb: k-means with 2 centres on the
-    !! standardised latent restricted to the leaf, over the candidates (full latent, each single
-    !! component), scored by Ashman's D along the cut's centre axis; dsep = -1 when the leaf is
-    !! too small to cut
+    !> the best two-way cut of one leaf: 2-means on the full latent and on each coordinate, scored by Ashman's D; dsep = -1 when too small
     subroutine best_bisection( zstd, nptcls, ncomp, memb, leaf, cen, dsep )
         integer,  intent(in)  :: nptcls, ncomp, memb(nptcls), leaf
         real(dp), intent(in)  :: zstd(nptcls,ncomp)
@@ -590,8 +521,7 @@ contains
                 zsub(n,:) = zstd(i,:)
             endif
         end do
-        ! candidates: the full LATENT (the last coordinate, the fit residual, is a different kind
-        ! of quantity and only competes on its own axis), then each single coordinate
+        ! candidates: the full latent (without the residual coordinate), then each single coordinate
         do icand = 0, ncomp
             wcomp = 0.d0
             if( icand == 0 )then
@@ -610,8 +540,7 @@ contains
         deallocate(zsub, ccand, wcomp)
     end subroutine best_bisection
 
-    !> Ashman's D of the two best-separated clusters of a k-means partition, measured along
-    !! their centre-to-centre axis: |m1 - m2| / sqrt((s1^2 + s2^2)/2) of the projections
+    !> Ashman's D of the two best-separated clusters along their centre-to-centre axis
     function partition_separation( z, nptcls, ncomp, ncls, wcomp, cen ) result( dsep )
         integer,  intent(in) :: nptcls, ncomp, ncls
         real(dp), intent(in) :: z(nptcls,ncomp), wcomp(ncomp), cen(ncomp,ncls)
@@ -652,7 +581,7 @@ contains
         end do
     end function partition_separation
 
-    !> the CTF-weighted, Wiener-regularised mean over every coefficient
+    !> the CTF-weighted, Wiener-regularised mean
     subroutine flex_cls_weighted_mean( y, c, w, mu )
         complex(sp), intent(in)  :: y(:,:)
         real(sp),    intent(in)  :: c(:,:), w(:,:)
@@ -660,10 +589,7 @@ contains
         call weighted_average(y, c, w, size(y,1), size(y,2), FLEX_CLS_WIENER_EPS, mu)
     end subroutine flex_cls_weighted_mean
 
-    !> The in-plane pose-residual tangents of a class mean on the half-plane lattice: d/dx and d/dy
-    !! (phase ramps) and d/dtheta (the azimuthal derivative, by central differences over the
-    !! lattice with Friedel symmetry for the missing side). Columns are not normalised; the fit
-    !! orthonormalises them.
+    !> in-plane pose tangents of a class mean on the half-plane lattice: d/dx, d/dy (phase ramps), d/dtheta (central differences)
     subroutine flex_cls_pose_tangents( mu, hidx, kidx, box, nuis )
         complex(dp), intent(in)  :: mu(:)          !< (ncoeff)
         integer,     intent(in)  :: hidx(:), kidx(:), box
@@ -676,16 +602,13 @@ contains
         allocate(lookup(-hmax:hmax, kmin-1:kmax+1), source=0)
         do j = 1, ncoeff
             lookup(hidx(j),kidx(j)) = j
-            ! the conjugate partner, marked negative
             if( -hidx(j) >= -hmax .and. -kidx(j) >= kmin-1 .and. -kidx(j) <= kmax+1 ) lookup(-hidx(j),-kidx(j)) = -j
         end do
         do j = 1, ncoeff
             nuis(j,1) = cmplx(cmplx(0.d0, 2.d0*DPI*real(hidx(j),dp)/real(box,dp), kind=dp) * mu(j), kind=sp)
             nuis(j,2) = cmplx(cmplx(0.d0, 2.d0*DPI*real(kidx(j),dp)/real(box,dp), kind=dp) * mu(j), kind=sp)
-            ! central differences along h and k
             mp = value_at(hidx(j)+1, kidx(j)); mm = value_at(hidx(j)-1, kidx(j)); dh = 0.5d0 * (mp - mm)
             mp = value_at(hidx(j), kidx(j)+1); mm = value_at(hidx(j), kidx(j)-1); dk = 0.5d0 * (mp - mm)
-            ! rotation moves the lattice point along (-k, h)
             nuis(j,3) = cmplx(-real(kidx(j),dp) * dh + real(hidx(j),dp) * dk, kind=sp)
         end do
         deallocate(lookup)
@@ -704,9 +627,7 @@ contains
         end function value_at
     end subroutine flex_cls_pose_tangents
 
-    !> A per-class noise spectrum when no canonical sigma2 is available: the residual power to
-    !! the CTF-weighted mean, per shell, averaged over members and coefficients (its signal
-    !! variance is one member's share of the class variability, small against the noise)
+    !> per-class noise spectrum when no canonical sigma2 is available: residual power to the CTF-weighted mean, per shell
     subroutine flex_cls_shell_noise( y, c, shell, nsh, s2 )
         complex(sp), intent(in)  :: y(:,:)     !< (ncoeff,nptcls)
         real(sp),    intent(in)  :: c(:,:)     !< (ncoeff,nptcls)
@@ -740,15 +661,8 @@ contains
         deallocate(mu, w1)
     end subroutine flex_cls_shell_noise
 
-    !> CTF-corrected weighted sub-averages: num = sum_i r_is w_ij c_ij y_ij over
-    !! den = sum_i r_is w_ij c_ij^2 (+ the regularisation). Without `shell` a constant eps per
-    !! member regularises the division, a flat damping with no protection at the CTF zeros of a
-    !! small subclass (ring artefacts). With `shell` and `tau2` (the subclass's prior signal power
-    !! per shell, from its even/odd FRC through flex_cls_signal_power) the class averager's ML
-    !! regularisation is applied instead: den += 1/tau2, which vanishes where the FRC is 1 and
-    !! dominates where it is 0, so a few-member subclass is damped where it carries no signal.
-    !! With `shell` and no `tau2` the division is unregularised (the raw half-averages that give
-    !! the FRC), and `shell_den` returns the mean den per shell (1 / noise variance of the average).
+    !> CTF-corrected weighted sub-averages; without shell a constant eps regularises, with shell and tau2 den += 1/tau2,
+    !! with shell alone unregularised (shell_den returns the mean den per shell)
     subroutine flex_cls_restore_states( y, c, w, weights, avgs, shell, tau2, shell_den )
         complex(sp),        intent(in)  :: y(:,:)        !< (ncoeff,nptcls)
         real(sp),           intent(in)  :: c(:,:)        !< (ncoeff,nptcls)
@@ -828,9 +742,7 @@ contains
         deallocate(num0, den0, rsum, cnt)
     end subroutine flex_cls_restore_states
 
-    !> prior signal power per shell of every subclass from its even and odd sub-averages: the
-    !! half-set SSNR frc/(1-frc) times the half-average's noise variance (1 / its mean den over
-    !! the shell), as the class averager does per half before merging
+    !> prior signal power per shell and subclass from the even/odd sub-averages: ssnr * noise variance of the half-average
     subroutine flex_cls_signal_power( ae, ao, den_e, den_o, shell, nsh, tau2 )
         complex(sp), intent(in)  :: ae(:,:), ao(:,:)         !< (ncoeff,ncls)
         real(dp),    intent(in)  :: den_e(:,:), den_o(:,:)   !< (nsh,ncls)
@@ -850,7 +762,7 @@ contains
         end do
     end subroutine flex_cls_signal_power
 
-    !> per-shell Fourier ring correlation between two sets of sub-averages (even and odd)
+    !> per-shell Fourier ring correlation between two sets of sub-averages
     subroutine flex_cls_shell_frc( ae, ao, shell, nsh, frc )
         complex(sp), intent(in)  :: ae(:,:), ao(:,:)   !< (ncoeff,ncls)
         integer,     intent(in)  :: shell(:), nsh
@@ -872,13 +784,7 @@ contains
         end do
     end subroutine flex_cls_shell_frc
 
-    !> Label-free readout of whether a split is real: the sub-averages are built separately from
-    !! the even and the odd members (by member index), and for every pair of subclasses the even
-    !! difference image is correlated with the odd difference image over the fit band, weighted by
-    !! the quadrature and the mean inverse noise variance per coefficient. A structural difference
-    !! between two subclasses reproduces across the halves (correlation towards 1); a split driven
-    !! by noise gives a difference that does not (towards 0). repro(s) is the best such correlation
-    !! of subclass s against any sibling. The half sub-averages are returned for the even/odd stacks.
+    !> even/odd sub-averages and, per subclass, the best cross-half correlation of its difference image to a sibling
     subroutine flex_cls_half_reproducibility( y, c, w, wq, fitmask, weights, repro, avgs_even, avgs_odd, shell, tau2, den_even, den_odd )
         complex(sp), intent(in)  :: y(:,:)
         real(sp),    intent(in)  :: c(:,:), w(:,:), wq(:)
@@ -918,7 +824,6 @@ contains
         else
             call flex_cls_restore_states(y, c, w, wh, avgs_odd)
         endif
-        ! coefficient weights: quadrature x mean inverse noise variance, fit band only
         do j = 1, ncoeff
             om(j) = 0.d0
             if( fitmask(j) ) om(j) = real(wq(j),dp) * sum(real(w(j,:),dp)) / real(nptcls,dp)
@@ -986,6 +891,7 @@ contains
         !$omp end parallel do
     end subroutine weighted_average
 
+    !> random start: random projections of the CTF-weighted residuals, orthonormalised
     subroutine init_basis( model, yf, cf, wf, wqf, nfit, nptcls, ncomp )
         type(flex_cls_model), intent(inout) :: model
         integer,              intent(in)    :: nfit, nptcls, ncomp
@@ -997,7 +903,6 @@ contains
         allocate(g(nptcls,ncomp))
         do q = 1, ncomp
             do i = 1, nptcls
-                ! Box-Muller on ran3
                 u1 = max(real(ran3(),dp), 1.d-12)
                 u2 = real(ran3(),dp)
                 g(i,q) = sqrt(-2.d0*log(u1)) * cos(2.d0*PI*u2)
@@ -1059,8 +964,7 @@ contains
         end do
     end subroutine orthonormalise
 
-    !> posterior of every member's latent: z(i,:) = A^-1 b, prec(:,:,i) = A, and the moments
-    !! E[a] and E[a a^T] of a = [1; z] that the M-step needs
+    !> posterior of every member's latent and the moments E[a], E[a a^T] of a = [1; z] for the M-step
     subroutine estep( model, yf, cf, wf, wqf, nfit, nptcls, ncomp, l_prior, ea, eaa )
         type(flex_cls_model), intent(inout) :: model
         integer,              intent(in)    :: nfit, nptcls, ncomp
@@ -1101,7 +1005,7 @@ contains
                     A(q,r) = A(r,q)
                 end do
                 if( l_prior .and. q <= ncomp ) A(q,q) = A(q,q) + 1.d0
-                if( q > ncomp ) A(q,q) = A(q,q) + ridge   ! the nuisance is free, a ridge keeps it solvable
+                if( q > ncomp ) A(q,q) = A(q,q) + ridge
             end do
             call spd_solve_inverse(A, ntot, b, m, S, ok)
             if( .not. ok )then
@@ -1189,8 +1093,7 @@ contains
         !$omp end parallel do
     end subroutine mstep
 
-    !> solve A x = b and return A^-1 for a small SPD A through the flex posterior service
-    !! (Cholesky with its own ridge fallback); ok is false only when the result is not finite
+    !> solve A x = b and return A^-1 for a small SPD A; ok is false when the result is not finite
     subroutine spd_solve_inverse( A, n, b, x, Ainv, ok )
         integer,  intent(in)  :: n
         real(dp), intent(in)  :: A(n,n), b(n)

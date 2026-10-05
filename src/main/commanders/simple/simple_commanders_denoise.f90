@@ -42,11 +42,8 @@ contains
             return
         endif
         call build%kill_general_tbox
-        ! 2. one greedy in-plane round of refine2D against the sub-averages (classes fixed to the
-        !    subclasses; iteration 3 so the previous alignment is used and the shift search is on).
-        !    refine2D needs the project's canonical sigma2 state; a project that never went through
-        !    abinitio2D has none, and one copied out of its abinitio2D directory registers it by a
-        !    bare file name that no longer resolves: in both cases estimate it here with calc_pspec
+        ! 2. one greedy in-plane round of refine2D against the sub-averages, classes fixed; the
+        !    sigma2 state is estimated first when the project has none that resolves
         call spproj%read_segment('projinfo', params%projfile)
         call spproj%get_sigma2_state_path(sigma2_path, l_sigma2)
         if( l_sigma2 ) l_sigma2 = file_exists(sigma2_path%to_char())
@@ -81,8 +78,7 @@ contains
         call xrefine2D%execute(cline_c2d)
         call cline_c2d%kill
         call sigma2_path%kill
-        ! 3. the restoration from the refined alignment: the subclasses are the project's classes,
-        !    the parents its clusters (the mode file is how the strategy and its workers learn it)
+        ! 3. the restoration from the refined alignment (labels from the project, via the mode file)
         open(newunit=funit, file=FLEX_CLS_LABELS_MODE, status='replace', action='write')
         write(funit,'(A)') 'project'
         close(funit)

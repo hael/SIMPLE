@@ -770,11 +770,8 @@ contains
         type(image), optional,              intent(inout) :: cavg
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         integer,     optional,              intent(in)    :: pinds_in(:)
-        !> keep_ft: leave every transformed image as its Fourier plane in the class frame (no
-        !! inverse transform, no gridding correction); the correction image is handed back through
-        !! gridcorr so the caller can apply it to whatever it builds from the planes
-        logical,     optional,              intent(in)    :: keep_ft
-        type(image), optional,              intent(inout) :: gridcorr
+        logical,     optional,              intent(in)    :: keep_ft   !< return the class-frame Fourier planes (no ifft, no gridding correction)
+        type(image), optional,              intent(inout) :: gridcorr  !< the gridding-correction image, for the caller
         class(oris), pointer :: pos
         type(kbinterpol)     :: kbwin
         type(image)          :: img(nthr_glob), gridcorr_img
