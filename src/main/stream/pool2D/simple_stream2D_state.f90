@@ -28,12 +28,17 @@ type(starproject)               :: starproj
 type(scaled_dims)               :: chunk_dims
 type(scaled_dims)               :: pool_dims
 type(stream_chunk), allocatable :: chunks(:)
-type(stream_chunk), allocatable :: converged_chunks(:)
+! the pool's native sampling and its mask, known at its first import (init_pool_clustering), and
+! its hard low-pass limit; none of them is a parameter (they are not known when the stage starts)
+integer :: pool_native_box  = 0  ! particle box of the imported sets (px)
+real    :: pool_native_smpd = 0. ! their pixel size (A)
+real    :: pool_mskdiam     = 0. ! the pool's mask diameter (A)
+real    :: pool_user_lpstop = 0. ! the user's low-pass stop (A), 0 when none was given
+real    :: pool_lpstop      = 0. ! the hard low-pass limit (A): the user's, never below Nyquist
 
 !===========================
 ! 3. Global control flags
 !===========================
-logical :: l_no_chunks       = .false.
 logical :: l_scaling         = .false.
 logical :: l_stream2D_active = .false.
 logical :: l_pool_available  = .false.
@@ -54,7 +59,6 @@ integer :: numlen               = 0
 real             :: lpstart = 0.0
 real             :: lpstop  = 0.0
 real             :: lpcen   = 0.0
-character(len=6) :: lpthres_type = ""  ! "auto"/"manual"/"off"
 
 !===========================
 ! 6. GUI / JPEG / stats
@@ -62,16 +66,9 @@ character(len=6) :: lpthres_type = ""  ! "auto"/"manual"/"off"
 integer, allocatable      :: pool_jpeg_map(:)
 integer, allocatable      :: pool_jpeg_pop(:)
 real,    allocatable      :: pool_jpeg_res(:)
-type(string)              :: projfile4gui
 
 !===========================
-! 8. Match classes rejection/selection
-!===========================
-integer, allocatable      :: match_selection(:)
-logical                   :: l_match_selection_update = .false.
-
-!===========================
-! 9. Global filenames
+! 7. Global filenames
 !===========================
 type(string)              :: refs_glob
 type(string)              :: orig_projfile

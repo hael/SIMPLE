@@ -24,6 +24,7 @@ module simple_gui_metadata_stream_optics_assignment
     integer               :: optics_groups_assigned   = 0  ! number of distinct optics groups created
     integer               :: last_import_time         = 0  ! Unix timestamp of most recent import (stamped by set)
   contains
+    procedure :: kill => kill_override
     procedure :: set
     procedure :: get
     procedure :: jsonise => jsonise_override
@@ -82,5 +83,17 @@ contains
       nullify(json_ptr)
     end if
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_stream_optics_assignment), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_stream_optics_assignment )
+        self = gui_metadata_stream_optics_assignment()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_stream_optics_assignment

@@ -11,9 +11,12 @@
 !     - sets are numbered 1, 2, ... and named <number padded to numlen>.simple
 !     - a set can record where it came from (an upstream project), so that a
 !       restarted stage knows which inputs it has already handled
-!     - on restart the numbering continues after the highest completed set,
-!       whether or not anything in it was accepted, and the unfinished sets of
-!       the previous run are dropped (their inputs are submitted again)
+!     - on restart the numbering continues after the highest set of the
+!       previous run, completed or left unfinished, whether or not anything in
+!       it was accepted; the job folder with the unfinished sets is set aside
+!       (a job left running reads its set by path), and their inputs are
+!       submitted again
+!     - a stopping stage cancels the jobs in flight (cancel)
 !   What goes into a set, what a stage does with a finished one, and whether
 !   a finished set is moved to the completed folder stay in the stage.
 !
@@ -33,6 +36,7 @@ use simple_syslib,       only: simple_mkdir
 use simple_cmdline,      only: cmdline
 use simple_sp_project,   only: sp_project
 use simple_qsys_env,     only: qsys_env
+use simple_qsys_job_record, only: set_aside_dir
 implicit none
 
 public :: stream_job_sets
@@ -52,6 +56,7 @@ contains
     procedure :: write_set
     procedure :: submit
     procedure :: schedule
+    procedure :: cancel
     procedure :: collect
     procedure :: complete
     procedure :: restore
@@ -112,6 +117,13 @@ contains
         call qenv%qscripts%add_to_streaming(cline_worker)
     end subroutine submit
 
+    !> Cancels the jobs in flight and drops the queued ones (a stopping stage).
+    subroutine cancel( self, qenv )
+        class(stream_job_sets), intent(inout) :: self
+        class(qsys_env),        intent(inout) :: qenv
+        call qenv%qscripts%cancel_streaming(self%job_dir)
+    end subroutine cancel
+
     !> Starts queued jobs on the computing units that are free; the jobs run in the job folder.
     subroutine schedule( self, qenv )
         class(stream_job_sets), intent(inout) :: self
@@ -164,24 +176,29 @@ contains
     end subroutine complete
 
     !> Restart: the completed sets of the previous run (absolute paths) and, with @p sources,
-    !! each one's recorded origin ('' when none). Numbering continues after the highest
-    !! completed set, and the unfinished sets in the job folder are dropped.
+    !! each one's recorded origin ('' when none). Numbering continues after the highest set,
+    !! completed or left unfinished; a job folder holding unfinished sets is set aside, since a
+    !! job left running reads its set by path, and the job folder is made afresh.
     subroutine restore( self, completed, sources )
         class(stream_job_sets),              intent(inout) :: self
         type(string), allocatable,           intent(inout) :: completed(:)
         type(string), allocatable, optional, intent(inout) :: sources(:)
+        type(string),     allocatable :: unfinished(:)
         type(sp_project) :: proj
-        type(string)     :: fbody
-        integer          :: i, id, iostat
+        integer          :: i
+        logical          :: l_unfinished
         call simple_list_files_regexp(self%completed_dir, '\.simple$', completed)
         if( .not. allocated(completed) ) allocate(completed(0))
+        call simple_list_files_regexp(self%job_dir, '\.simple$', unfinished)
+        if( .not. allocated(unfinished) ) allocate(unfinished(0))
         self%counter = 0
         do i = 1,size(completed)
-            fbody = basename(completed(i))
-            fbody = get_fbody(fbody, METADATA_EXT, separator=.false.)
-            id    = str2int(fbody, iostat)
-            if( iostat == 0 ) self%counter = max(self%counter, id)
+            self%counter = max(self%counter, set_number(completed(i)))
         enddo
+        do i = 1,size(unfinished)
+            self%counter = max(self%counter, set_number(unfinished(i)))
+        enddo
+        l_unfinished = size(unfinished) > 0
         if( present(sources) )then
             if( allocated(sources) ) deallocate(sources)
             allocate(sources(size(completed)))
@@ -194,9 +211,25 @@ contains
                 call proj%kill
             enddo
         endif
-        call simple_rmdir(self%job_dir)
+        if( l_unfinished )then
+            call set_aside_dir(self%job_dir)
+        else
+            call simple_rmdir(self%job_dir)
+        endif
         call make_job_dir(self%job_dir)
     end subroutine restore
+
+    ! the number of the set file @p fname (0 when its name is not a number)
+    integer function set_number( fname )
+        class(string), intent(in) :: fname
+        type(string) :: fbody
+        integer      :: id, iostat
+        set_number = 0
+        fbody = basename(fname)
+        fbody = get_fbody(fbody, METADATA_EXT, separator=.false.)
+        id    = str2int(fbody, iostat)
+        if( iostat == 0 ) set_number = id
+    end function set_number
 
     integer function get_counter( self )
         class(stream_job_sets), intent(in) :: self

@@ -306,8 +306,9 @@ For `commander_stream_p07_solve3D_multistate` or any driver that grows a pool:
 
 - **Pool per update.** Build each update's current project as the previous
   solution's project (all its rows, in order) with the new classified sets
-  appended as rows: their `ptcl2D` records and 2D class labels kept, the class
-  averages seeded from the first set, as p07's import does.
+  appended as rows: their `ptcl2D` records and 2D class labels kept. p07 does
+  this by merging each pool publication into its rows and taking the
+  publication's class table (`doc/policies/stream/stream_3D_ingestion_policy.md`).
   `merge_projects` is not a substitute: it drops the 2D classification, and
   `solve3D` requires it.
 - **Separate files.** The frozen and current projects are different files;

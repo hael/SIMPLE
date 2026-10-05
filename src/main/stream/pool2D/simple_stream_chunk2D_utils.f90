@@ -5,24 +5,14 @@ use simple_defs_environment
 use simple_stream2D_state
 use simple_cmdline,                only: cmdline
 use simple_parameters,             only: parameters
-use simple_stream_chunk,           only: stream_chunk
 use simple_sp_project,             only: sp_project
 use simple_stream_refine2D_utils, only: setup_downscaling
-use simple_gui_utils,              only: mrc2jpeg_tiled
-use simple_rec_list,               only: project_rec, rec_list, rec_iterator
 implicit none
 
 ! LIFECYCLE
 public :: init_chunk_clustering
-public :: analyze2D_new_chunks
-public :: memoize_chunks
-public :: update_chunks
 private
 #include "simple_local_flags.inc"
-
-! Chunk rejection view
-type(string) :: chunk_rejected_jpeg
-real         :: chunk_rejected_jpeg_scale   = 1.0
 
 contains
 
@@ -44,7 +34,6 @@ contains
         nptcls_per_chunk = params%nptcls_per_cls*params%ncls_start
         ncls_glob        = 0
         numlen           = len(int2str(params%nparts))
-        l_no_chunks      = .false. ! will be using chunk indeed
         params%nparts_chunk = params%nparts ! required by chunk object, to remove
         ! bookkeeping & directory structure
         ! pool_proj is only iused as a placeholder for computational info here
@@ -133,139 +122,6 @@ contains
         l_stream2D_active = .true.
     end subroutine init_chunk_clustering
 
-    ! Initiates analysis of all available chunks
-    subroutine analyze2D_new_chunks( params, project_list, makecavgs )
-        class(parameters), intent(inout) :: params
-        class(rec_list),   intent(inout) :: project_list
-        logical, optional, intent(in)    :: makecavgs
-        type(project_rec)  :: prec
-        type(rec_iterator) :: it
-        type(rec_list)     :: project_list_slice
-        integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
-        integer :: first2import, last2import, n2import
-        if( .not. l_stream2D_active ) return
-        n_avail_chunks = count(chunks(:)%is_available())
-        ! cannot import yet
-        if( n_avail_chunks == 0 ) return
-        n_spprojs_in = project_list%size()
-        if( n_spprojs_in == 0 ) return
-        ! how many n2fill chunks to load
-        n2fill       = 0
-        nptcls       = 0
-        first2import = 0
-        it           = project_list%begin()
-        do iproj = 1,n_spprojs_in
-            ! retrieve one record from the list with the iterator
-            call it%get(prec)
-            if( prec%included )then
-                ! move the iterator
-                call it%next()
-                cycle
-            endif
-            if( prec%nptcls_sel > 0 )then
-                if( first2import == 0 ) first2import = iproj
-                nptcls = nptcls + prec%nptcls_sel
-                if( nptcls >= nptcls_per_chunk )then
-                    n2fill = n2fill + 1
-                    if( n2fill >= n_avail_chunks )exit
-                    nptcls = 0
-                endif
-            else
-                ! mask out empty stacks
-                prec%included = .true. 
-                ! replace the node
-                call project_list%replace_iterator(it, prec)
-            endif
-            ! move the iterator
-            call it%next()
-        enddo
-        if( n2fill == 0 ) return ! not enough particles
-        do ichunk = 1,params%nchunks
-            if(.not.chunks(ichunk)%is_available()) cycle
-            if( n2fill == 0 ) exit
-            n2fill   = n2fill - 1
-            nptcls   = 0
-            n2import = 0
-            it       = project_list%begin()
-            do iproj = first2import,n_spprojs_in
-                ! retrieve one record from the list with the iterator
-                call it%get(prec)
-                nptcls   = nptcls   + prec%nptcls_sel
-                n2import = n2import + 1
-                if( nptcls >= nptcls_per_chunk )then
-                    last2import = iproj
-                    exit
-                endif
-                ! move the iterator
-                call it%next()
-            enddo
-            if( nptcls >= nptcls_per_chunk )then
-                ! need a slice of project_list here
-                call project_list%slice(first2import, last2import, project_list_slice)
-                ! generate chunk from slice
-                call chunks(ichunk)%generate(project_list_slice)
-                ! flag inclusion in original list
-                call project_list%set_included_flags([first2import,last2import])
-                ! execution
-                call chunks(ichunk)%analyze2D(makecavgs=makecavgs)
-                first2import = last2import + 1 ! to avoid cycling through all projects
-                call project_list_slice%kill
-            endif
-        enddo
-    end subroutine analyze2D_new_chunks
-
-    ! Chunks Book-keeping
-    subroutine memoize_chunks( list, nchunks_imported )
-        class(rec_list), intent(inout) :: list
-        integer,         intent(out)   :: nchunks_imported
-        type(string) :: fname
-        integer      :: i, id, nchunks2import
-        if( OMP_IN_PARALLEL() )then
-            THROW_HARD('No memoization inside OpenMP regions')
-        endif
-        nchunks_imported = 0
-        if( .not.allocated(converged_chunks) ) return
-        nchunks2import = size(converged_chunks)
-        do i = 1,nchunks2import
-            fname = converged_chunks(i)%get_projfile_fname()
-            id    = converged_chunks(i)%get_id()
-            ! append to list
-            call list%push2chunk_list(fname, id, .false.)
-            ! destroy chunk
-            call converged_chunks(i)%kill
-        enddo
-        nchunks_imported = nchunks2import
-        deallocate(converged_chunks)
-    end subroutine memoize_chunks
-
-    ! GETTERS
-
-    ! Are all chunks inactive
-    logical function all_chunks_available( params )
-        class(parameters), intent(in) :: params
-        if( params%nchunks == 0 )then
-            all_chunks_available = .true.
-        else
-            all_chunks_available = all(chunks(:)%is_available())
-        endif
-    end function all_chunks_available
-
-    type(string) function get_chunk_rejected_jpeg()
-        get_chunk_rejected_jpeg = chunk_rejected_jpeg
-    end function get_chunk_rejected_jpeg
-
-    real function get_chunk_rejected_jpeg_scale()
-        get_chunk_rejected_jpeg_scale = chunk_rejected_jpeg_scale
-    end function get_chunk_rejected_jpeg_scale
-
-    integer function get_nchunks()
-        if(allocated(chunks)) then
-            get_nchunks = size(chunks)
-        else
-            get_nchunks = 0
-        end if
-    end function get_nchunks
-
     ! SETTERS
     
     subroutine set_chunk_dimensions( params )
@@ -282,57 +138,5 @@ contains
         call cline_refine2D_chunk%set('box',        params%box)
         call cline_refine2D_chunk%set('smpd',       params%smpd)
     end subroutine set_chunk_dimensions
-
-    ! UPDATERS
-
-    ! Deals with chunk completion, rejection, reset
-    subroutine update_chunks( params )
-        class(parameters),              intent(inout) :: params
-        type(stream_chunk), allocatable :: tmpchunks(:)
-        integer :: ichunk, jchunk, nthr2D, n
-        logical :: chunk_complete
-        if( .not. l_stream2D_active ) return
-        do ichunk = 1,params%nchunks
-            if( chunks(ichunk)%is_available() ) cycle
-            chunk_complete = .false.
-            if( chunks(ichunk)%to_analyze2D() )then
-                ! chunk meant to be classified
-                if( chunks(ichunk)%has_converged() )then
-                    chunk_complete = .true.
-                    call chunks(ichunk)%display_iter
-                endif
-            else
-                ! placeholder chunk (no analysis performed, sigma2 only)
-                if( chunks(ichunk)%has_converged() ) chunk_complete = .true.
-            endif
-            if( chunk_complete )then
-                ! updates list of chunks to import
-                if( allocated(converged_chunks) )then
-                    ! append item
-                    n = size(converged_chunks)
-                    allocate(tmpchunks(n+1),source=[converged_chunks(:), chunks(ichunk)])
-                    do jchunk = 1,n
-                        call converged_chunks(jchunk)%kill
-                    enddo
-                    deallocate(converged_chunks)
-                    allocate(converged_chunks(n+1),source=tmpchunks)
-                    do jchunk = 1,n+1
-                        call tmpchunks(jchunk)%kill
-                    enddo
-                    deallocate(tmpchunks)
-                else
-                    ! first item
-                    allocate(converged_chunks(1),source=[chunks(ichunk)])
-                endif
-                ! reinit and deal with nthr2D != nthr
-                glob_chunk_id = glob_chunk_id + 1
-                ! deal with nthr2d .ne. nthr
-                nthr2D = params%nthr2D
-                params%nthr2D = cline_refine2D_chunk%get_iarg('nthr')
-                call chunks(ichunk)%init_chunk(params, cline_refine2D_chunk, glob_chunk_id, pool_proj)
-                params%nthr2D = nthr2D
-            endif
-        enddo
-    end subroutine update_chunks
 
 end module simple_stream_chunk2D_utils

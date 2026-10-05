@@ -139,7 +139,8 @@ contains
     end subroutine test_process_imports
 
     !> restart: the set counter continues after the highest completed set even when that set has
-    !! no accepted micrograph; accepted micrographs come back with their movies in the history
+    !! no accepted micrograph; accepted micrographs come back; every movie processed, rejected ones
+    !! too, goes into the history, and import indices continue after the highest given
     subroutine test_import_previous_projects()
         class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
@@ -152,17 +153,21 @@ contains
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
         stage%movie_buff = stream_watcher(0, string('movies'))
-        call write_mic_project(string(DIR_STREAM_COMPLETED//'00007.simple'), [1,1,1], [4.,4.,4.], 'set7_')
-        call write_mic_project(string(DIR_STREAM_COMPLETED//'00009.simple'), [0,0],   [4.,4.],    'set9_')
+        call write_mic_project(string(DIR_STREAM_COMPLETED//'00007.simple'), [1,1,1], [4.,4.,4.], 'set7_', importind0=1)
+        call write_mic_project(string(DIR_STREAM_COMPLETED//'00009.simple'), [0,0],   [4.,4.],    'set9_', importind0=4)
         ! the watcher only records movies that exist
         do imic = 1,3
             call simple_touch(string('set7_'//int2str(imic)//'.mrcs'))
         enddo
+        do imic = 1,2
+            call simple_touch(string('set9_'//int2str(imic)//'.mrcs'))
+        enddo
         call stage%import_previous_projects()
         call assert_int(9, stage%sets%get_counter(),              'the set counter continues after the highest set')
         call assert_int(3, stage%spproj_glob%os_mic%get_noris(),  'the accepted micrographs are re-imported')
-        call assert_int(3, stage%import_counter,                  'the import counter continues after them')
-        call assert_true(stage%movie_buff%is_past(string('set7_1.mrcs')), 'their movies are in the watcher history')
+        call assert_int(5, stage%import_counter,                  'the import counter continues after the highest index given')
+        call assert_true(stage%movie_buff%is_past(string('set7_1.mrcs')), 'accepted movies are in the watcher history')
+        call assert_true(stage%movie_buff%is_past(string('set9_1.mrcs')), 'so are rejected ones: none is processed again')
         call assert_true(file_exists(string(DIR_STREAM_COMPLETED//'00009.simple')), 'a set with nothing accepted is kept')
         call stage%kill
         call cline%kill
@@ -263,7 +268,7 @@ contains
         gainref = cline%get_carg('gainref')
         call assert_true(gainref%has_substr('_flipX'), 'the command line names the flipped gain reference')
         call assert_true(file_exists(gainref),                  'the flipped gain reference is written')
-        call assert_char(gainref%to_char(), stage%params%gainref%to_char(), 'the parameters name the same file')
+        call assert_char(gainref%to_char(), stage%gainref%to_char(), 'the stage names the same file')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -300,9 +305,9 @@ contains
         call writer%send(buffer)
         call update%kill
         call stage%apply_gui_updates()
-        call assert_real(7.5,           stage%params%ctfresthreshold,  1.e-6, 'the ctfres update is applied')
-        call assert_real(3.0,           stage%params%astigthreshold,   1.e-6, 'the queued astigmatism update is applied')
-        call assert_real(ICEFRAC_THRES, stage%params%icefracthreshold, 1.e-6, 'an unset field changes nothing')
+        call assert_real(7.5,           stage%ctfres_thres,  1.e-6, 'the ctfres update is applied')
+        call assert_real(3.0,           stage%astig_thres,   1.e-6, 'the queued astigmatism update is applied')
+        call assert_real(ICEFRAC_THRES, stage%icefrac_thres, 1.e-6, 'an unset field changes nothing')
         call assert_real(7.5, stage%cline_exec%get_rarg('ctfresthreshold'), 1.e-6, 'workers get the new ctfres threshold')
         call assert_real(3.0, stage%cline_exec%get_rarg('astigthreshold'),  1.e-6, 'workers get the new astigmatism threshold')
         call writer%kill
@@ -416,16 +421,18 @@ contains
     end subroutine make_test_stage
 
     ! a project of micrographs with the given states and ctfres; movies are <prefix><i>.mrcs
-    subroutine write_mic_project( fname, states, ctfres, prefix )
-        class(string),    intent(in) :: fname
-        integer,          intent(in) :: states(:)
-        real,             intent(in) :: ctfres(:)
-        character(len=*), intent(in) :: prefix
+    subroutine write_mic_project( fname, states, ctfres, prefix, importind0 )
+        class(string),     intent(in) :: fname
+        integer,           intent(in) :: states(:)
+        real,              intent(in) :: ctfres(:)
+        character(len=*),  intent(in) :: prefix
+        integer, optional, intent(in) :: importind0 ! the first micrograph's import index
         type(sp_project) :: proj
         integer :: imic
         call proj%os_mic%new(size(states), is_ptcl=.false.)
         do imic = 1,size(states)
             call set_mic(proj%os_mic, imic, states(imic), ctfres(imic), string(prefix//int2str(imic)//'.mrcs'))
+            if( present(importind0) ) call proj%os_mic%set(imic, 'importind', importind0 + imic - 1)
         enddo
         call proj%update_projinfo(fname)
         call proj%write(fname)

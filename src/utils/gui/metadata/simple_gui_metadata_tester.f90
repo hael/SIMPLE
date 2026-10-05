@@ -1,5 +1,6 @@
 !@descr: Unit tests for all gui_metadata types — lifecycle, serialisation, and JSON serialisation
-! Per type: set/get round-trip, serialise (buffer length = sizeof) and jsonise. The JSON is pinned
+! Per type: set/get round-trip, serialise (buffer length = sizeof, and a copy received by transfer
+! holds the same fields as its JSON shows) and jsonise. The JSON is pinned
 ! by a fixed FNV-1a hash where the output is deterministic, otherwise by its length only.
 module simple_gui_metadata_tester
   use simple_test_utils,       only: assert_true, assert_int, assert_char
@@ -16,6 +17,7 @@ contains
   subroutine run_all_gui_metadata_tests()
     write(*,'(A)') '**** running all gui metadata tests ****'
     call test_new_kill()
+    call test_kill_resets_fields()
     call test_serialise()
     call test_set_get_micrograph()
     call test_serialise_micrograph()
@@ -64,6 +66,7 @@ contains
     call test_jsonise_stream_pool2D()
     call test_set_get_stream_pool2D_snapshot()
     call test_serialise_stream_pool2D_snapshot()
+    call test_serialise_stream_solve3D_multistate()
     call test_jsonise_stream_pool2D_snapshot()
   end subroutine run_all_gui_metadata_tests
 
@@ -79,6 +82,37 @@ contains
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_new_kill
+
+  ! Verify that kill() resets every field, also through the base class, so a reused object keeps
+  ! nothing of the previous message.
+  subroutine test_kill_resets_fields()
+    type(gui_metadata_micrograph)              :: meta, fresh
+    class(gui_metadata_base),      allocatable :: poly
+    write(*,'(A)') 'test_kill_resets_fields'
+    ! an unassigned object prints no JSON: mark the defaults assigned to compare them
+    call fresh%new(GUI_METADATA_MICROGRAPH_TYPE)
+    call fresh%set_assigned(.true.)
+    call meta%new(GUI_METADATA_MICROGRAPH_TYPE)
+    call meta%set(path=string('/test/path/to/micrograph.mrc'), dfx=0.25, dfy=2.89, ctfres=8.9, &
+                 &ctfimg=string('/test/path/to/ctf.mrc'), i_max=1, i=1)
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'killed object is not initialised')
+    call meta%new(GUI_METADATA_MICROGRAPH_TYPE)
+    call assert_true(.not.meta%assigned(), 'killed object is not assigned')
+    call meta%set_assigned(.true.)
+    call assert_char(json_text(meta), json_text(fresh), 'killed object holds only defaults')
+    allocate(poly, source=meta)
+    select type( poly )
+      type is( gui_metadata_micrograph )
+        call poly%set(path=string('/test/path/to/other.mrc'), dfx=1.5, dfy=1.5, ctfres=4.0, &
+                     &ctfimg=string('/test/path/to/other_ctf.mrc'), i_max=1, i=1)
+    end select
+    call poly%kill()
+    call poly%new(GUI_METADATA_MICROGRAPH_TYPE)
+    call poly%set_assigned(.true.)
+    call assert_char(json_text(poly), json_text(fresh), 'kill through the base class resets every field')
+    call fresh%kill()
+  end subroutine test_kill_resets_fields
 
   ! Verify that serialise() produces a buffer of sizeof(meta) bytes.
   subroutine test_serialise()
@@ -124,6 +158,7 @@ contains
   subroutine test_serialise_micrograph()
     character(len=:),             allocatable :: buffer
     type(gui_metadata_micrograph)             :: meta
+    type(gui_metadata_micrograph) :: copy
     write(*,'(A)') 'test_serialise_micrograph'
     call meta%new(GUI_METADATA_MICROGRAPH_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -134,6 +169,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_serialise_micrograph
@@ -203,6 +241,7 @@ contains
   subroutine test_serialise_histogram()
     character(len=:),             allocatable :: buffer
     type(gui_metadata_histogram)              :: meta
+    type(gui_metadata_histogram) :: copy
     real,                         allocatable :: labels(:)
     integer,                      allocatable :: data(:)
     integer                                   :: i
@@ -220,6 +259,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(labels, data)
@@ -297,6 +339,7 @@ contains
   subroutine test_serialise_timeplot()
     character(len=:),             allocatable :: buffer
     type(gui_metadata_timeplot)               :: meta
+    type(gui_metadata_timeplot) :: copy
     real,                         allocatable :: labels(:), data(:), data2(:)
     integer                                   :: i
     write(*,'(A)') 'test_serialise_timeplot'
@@ -314,6 +357,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(labels, data, data2)
@@ -389,6 +435,7 @@ contains
   ! Verify that the optics-group serialise buffer is the expected size.
   subroutine test_serialise_optics_group()
     type(gui_metadata_optics_group)          :: meta
+    type(gui_metadata_optics_group) :: copy
     character(kind=CK, len=:),   allocatable :: buffer
     real,                        allocatable :: xshifts(:), yshifts(:)
     integer                                  :: i
@@ -406,6 +453,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(xshifts, yshifts)
@@ -484,6 +534,7 @@ contains
   subroutine test_serialise_cavg2D()
     character(len=:),         allocatable :: buffer
     type(gui_metadata_cavg2D)             :: meta
+    type(gui_metadata_cavg2D) :: copy
     write(*,'(A)') 'test_serialise_cavg2D'
     call meta%new(GUI_METADATA_CAVG2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -495,6 +546,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_serialise_cavg2D
@@ -595,6 +649,7 @@ contains
   subroutine test_serialise_vol3D()
     character(len=:),         allocatable :: buffer
     type(gui_metadata_vol3D)              :: meta
+    type(gui_metadata_vol3D) :: copy
     write(*,'(A)') 'test_serialise_vol3D'
     call meta%new(GUI_METADATA_VOL3D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -607,6 +662,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_serialise_vol3D
@@ -677,6 +735,7 @@ contains
   subroutine test_serialise_ptcl()
     character(len=:),       allocatable :: buffer
     type(gui_metadata_ptcl)             :: meta
+    type(gui_metadata_ptcl) :: copy
     write(*,'(A)') 'test_serialise_ptcl'
     call meta%new(GUI_METADATA_PTCL_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -688,6 +747,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_serialise_ptcl
@@ -758,6 +820,7 @@ contains
   subroutine test_serialise_stream_preprocess()
     character(len=:),                    allocatable :: buffer
     type(gui_metadata_stream_preprocess)             :: meta
+    type(gui_metadata_stream_preprocess) :: copy
     write(*,'(A)') 'test_serialise_stream_preprocess'
     call meta%new(GUI_METADATA_STREAM_PREPROCESS_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -769,6 +832,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -833,6 +899,7 @@ contains
   ! Verify that the stream optics-assignment serialise buffer is the expected size.
   subroutine test_serialise_stream_optics_assignment()
     type(gui_metadata_stream_optics_assignment) :: meta
+    type(gui_metadata_stream_optics_assignment) :: copy
     character(len=:),               allocatable :: buffer
     write(*,'(A)') 'test_serialise_stream_optics_assignment'
     call meta%new(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
@@ -843,6 +910,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -883,7 +953,7 @@ contains
   !---------------- stream update ----------------
 
   ! Verify that each stream-update threshold field can be set and retrieved independently,
-  ! including pickrefs_selection, pickrefs_cycle, sieverefs_selection, and the snapshot2D compound field.
+  ! including pickrefs_selection, pickrefs_cycle, and the snapshot2D compound field.
   subroutine test_set_get_stream_update()
     type(gui_metadata_stream_update) :: meta
     integer,          allocatable    :: sel_out(:)
@@ -916,16 +986,6 @@ contains
     call assert_int(meta%get_pickrefs_cycle(), 0, 'pickrefs_cycle zero before set')
     call meta%set_pickrefs_cycle(3)
     call assert_int(meta%get_pickrefs_cycle(), 3, 'pickrefs_cycle set/get correctly')
-    ! sieverefs_selection
-    call assert_int(meta%get_sieverefs_selection_length(), 0, 'sieverefs_selection_length zero before set')
-    call meta%set_sieverefs_selection([3, 7, 42, 100])
-    call assert_int(meta%get_sieverefs_selection_length(), 4, 'sieverefs_selection_length set/get correctly')
-    sel_out = meta%get_sieverefs_selection()
-    call assert_int(size(sel_out), 4,   'sieverefs_selection size correct')
-    call assert_int(sel_out(1),    3,   'sieverefs_selection(1) correct')
-    call assert_int(sel_out(2),    7,   'sieverefs_selection(2) correct')
-    call assert_int(sel_out(4),    100, 'sieverefs_selection(4) correct')
-    deallocate(sel_out)
     call assert_true(.not.meta%has_snapshot2D_update(), 'has_snapshot2D_update false before set')
     call meta%set_snapshot2D_update(snapshot_id=3, iteration=5, &
                                     selection=[23,171,200,46,142], filename=string('snapshot_3.simple'))
@@ -943,10 +1003,11 @@ contains
   end subroutine test_set_get_stream_update
 
   ! Verify that the stream-update serialise buffer is the expected size, including
-  ! pickrefs_selection, sieverefs_selection, and the snapshot2D fields.
+  ! pickrefs_selection and the snapshot2D fields.
   subroutine test_serialise_stream_update()
     character(len=:),                allocatable :: buffer
     type(gui_metadata_stream_update)             :: meta
+    type(gui_metadata_stream_update) :: copy
     write(*,'(A)') 'test_serialise_stream_update'
     call meta%new(GUI_METADATA_STREAM_UPDATE_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -956,13 +1017,15 @@ contains
     call meta%set_icescore_update(0.3)
     call meta%set_mskdiam2D_update(180.0)
     call meta%set_pickrefs_selection([1, 0, 1, 1, 0])
-    call meta%set_sieverefs_selection([3, 7, 42])
     call meta%set_snapshot2D_update(snapshot_id=3, iteration=5, &
                                     selection=[23,171,200,46,142], filename=string('snapshot_3.simple'))
     call assert_true(meta%assigned(), 'metadata object is set')
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -1033,6 +1096,7 @@ contains
   subroutine test_serialise_stream_initial_picking()
     character(len=:),                         allocatable :: buffer
     type(gui_metadata_stream_picking)             :: meta
+    type(gui_metadata_stream_picking) :: copy
     write(*,'(A)') 'test_serialise_stream_initial_picking'
     call meta%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1043,6 +1107,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -1122,6 +1189,7 @@ contains
   subroutine test_serialise_stream_reference_picking()
     character(len=:),                         allocatable :: buffer
     type(gui_metadata_stream_picking)                     :: meta
+    type(gui_metadata_stream_picking) :: copy
     write(*,'(A)') 'test_serialise_stream_reference_picking'
     call meta%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1132,6 +1200,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -1203,6 +1274,7 @@ contains
   subroutine test_serialise_stream_opening2D()
     character(len=:),                   allocatable :: buffer
     type(gui_metadata_stream_opening2D)             :: meta
+    type(gui_metadata_stream_opening2D) :: copy
     write(*,'(A)') 'test_serialise_stream_opening2D'
     call meta%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1213,6 +1285,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -1287,6 +1362,7 @@ contains
   subroutine test_serialise_stream_particle_sieving()
     character(len=:),                          allocatable :: buffer
     type(gui_metadata_stream_particle_sieving)             :: meta
+    type(gui_metadata_stream_particle_sieving) :: copy
     write(*,'(A)') 'test_serialise_stream_particle_sieving'
     call meta%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1297,6 +1373,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -1379,6 +1458,7 @@ contains
   subroutine test_serialise_stream_pool2D()
     character(len=:),              allocatable :: buffer
     type(gui_metadata_stream_pool2D)           :: meta
+    type(gui_metadata_stream_pool2D) :: copy
     write(*,'(A)') 'test_serialise_stream_pool2D'
     call meta%new(GUI_METADATA_STREAM_POOL2D_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1389,6 +1469,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -1453,6 +1536,7 @@ contains
   subroutine test_serialise_stream_pool2D_snapshot()
     character(len=:),                         allocatable :: buffer
     type(gui_metadata_stream_pool2D_snapshot)             :: meta
+    type(gui_metadata_stream_pool2D_snapshot) :: copy
     write(*,'(A)') 'test_serialise_stream_pool2D_snapshot'
     call meta%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1462,6 +1546,9 @@ contains
     call meta%serialise(buffer=buffer)
     call assert_true(allocated(buffer), 'buffer allocated')
     call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    ! the copy a receiving process makes by transfer holds the same fields
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
@@ -1497,5 +1584,37 @@ contains
     call assert_true(.not.json%failed(), 'json destroyed')
     deallocate(buffer)
   end subroutine test_jsonise_stream_pool2D_snapshot
+
+  ! The multistate 3D status survives serialisation, as every type a stage sends must.
+  subroutine test_serialise_stream_solve3D_multistate()
+    character(len=:), allocatable                :: buffer
+    type(gui_metadata_stream_solve3D_multistate) :: meta, copy
+    write(*,'(A)') 'test_serialise_stream_solve3D_multistate'
+    call meta%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
+    call meta%set(stage=string('running solve3D'), solve3D_stage=1, refine_iteration=2, nstates=3,&
+        &particles_imported=1000, particles_at_last_refine=800, resolution=6.5)
+    call assert_true(meta%assigned(), 'metadata object is set')
+    call meta%serialise(buffer=buffer)
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_serialise_stream_solve3D_multistate
+
+  ! The compact JSON text of @p meta.
+  function json_text( meta ) result( txt )
+    class(gui_metadata_base), intent(inout) :: meta
+    character(len=:), allocatable :: txt
+    character(kind=CK, len=:), allocatable :: str
+    type(json_core)                        :: json
+    type(json_value), pointer              :: json_ptr
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    json_ptr => meta%jsonise()
+    call json%print_to_string(json_ptr, str)
+    call json%destroy(json_ptr)
+    txt = ''
+    if( allocated(str) ) txt = str
+  end function json_text
 
 end module simple_gui_metadata_tester

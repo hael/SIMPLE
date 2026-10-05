@@ -28,21 +28,23 @@
 !   new(cline) -> { iterate() } until finished() -> finalize() -> kill()
 !
 ! RESTART:
-!   A restart removes a leftover TERM_STREAM and starts again from the newest
-!   publication; solve3D runs again in its folder.
+!   A stop cancels the running 3D job (finalize). A restart removes a leftover
+!   TERM_STREAM and starts again from the newest publication; solve3D runs
+!   again in its folder, which is first moved aside when it holds a job left
+!   unfinished (fresh_job_dir), as is an addon iteration folder.
 !==============================================================================
 module simple_stream_stage_solve3D
 use simple_defs,                                      only: logfhandle, COSMSKHALFWIDTH
 use simple_defs_fname,                                only: TERM_STREAM, METADATA_EXT, MRC_EXT, JPG_EXT, PPROC_SUFFIX,&
                                                            &LP_SUFFIX, MIRR_SUFFIX
 use simple_defs_stream,                               only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME
-use simple_defs_environment,                          only: SIMPLE_STREAM_PREPROC_PARTITION
+use simple_defs_environment,                          only: SIMPLE_STREAM_SOLVE3D_PARTITION
 use simple_error,                                     only: simple_exception
 use simple_string,                                    only: string
 use simple_string_utils,                              only: int2str, int2str_pad, lex_sort
 use simple_fileio,                                    only: add2fbody, basename, del_file, file2rarr, file_exists, get_fbody,&
                                                            &get_fpath, simple_abspath, simple_getcwd
-use simple_syslib,                                    only: dir_exists, simple_mkdir
+use simple_syslib,                                    only: dir_exists, simple_mkdir, simple_list_dirs, simple_rmdir
 use simple_math,                                      only: round2even
 use simple_math_ft,                                   only: get_resarr
 use simple_estimate_ssnr,                             only: get_resolution
@@ -56,6 +58,7 @@ use simple_imgarr_utils,                              only: dealloc_imgarr
 use simple_qsys_env,                                  only: qsys_env
 use simple_qsys_funs,                                 only: qsys_cleanup
 use simple_qsys_async_job,                            only: qsys_async_job, ASYNC_JOB_RUNNING, ASYNC_JOB_DONE, ASYNC_JOB_FAILED
+use simple_qsys_job_record,                           only: fresh_job_dir
 use simple_rec_list,                                  only: rec_list, rec_iterator, chunk_rec
 use simple_stream_watcher,                            only: stream_watcher
 use simple_stream_state,                              only: ipc_pipe_solve3D_multistate_in
@@ -90,11 +93,20 @@ integer, parameter :: JOB_NONE        = 0
 integer, parameter :: JOB_SOLVE3D    = 1
 integer, parameter :: JOB_ADDON       = 2
 
+! the first run waits for this many selected particles per state, and an addon run for a cohort of
+! as many, solve3D_addon's own floor, and at least ADDON_COHORT_FRAC of the frozen particles
+integer, parameter :: MIN_PTCLS_PER_STATE = 5
+real,    parameter :: ADDON_COHORT_FRAC   = 0.10
+
 character(len=*), parameter :: SOLVE3D_DIR     = 'solve3D'
 character(len=*), parameter :: ADDON_DIR        = 'solve3D_addon'
 character(len=*), parameter :: QUALITY_DIR      = 'quality_selection'
 character(len=*), parameter :: SELECTED_CAVGS   = 'quality_selected_cavgs'
 character(len=*), parameter :: REJECTED_CAVGS   = 'quality_rejected_cavgs'
+! the quality folders kept: the newest NQUALITY_KEPT, and those of the publications a run started
+! from, listed in QUALITY_RUNS (stream fix plan, decision 31)
+integer,          parameter :: NQUALITY_KEPT    = 3
+character(len=*), parameter :: QUALITY_RUNS     = 'quality_selection/runs.txt'
 
 ! Components and steps are public so simple_stream_stage_solve3D_tester can assemble a stage
 ! and run one step at a time; production code uses new/iterate/finished/finalize/kill.
@@ -111,10 +123,14 @@ type :: stream_stage_solve3D
     type(string),   allocatable :: stk_names(:)    ! the stacks in the pool
     real,           allocatable :: state_res(:)    ! FSC=0.143 resolution per state of the latest run (0: none)
     type(string)                :: frozen_projfile ! the latest run's project, which the next addon run builds on
+    logical,        allocatable :: frozen_active(:) ! the rows active in that project: the frozen particles
+    type(string)                :: addon_verdict   ! the latest addon run's verdict per state, for the status
+    type(string)                :: last_stem       ! the latest publication taken (its quality folder's name)
     integer :: phase              = PHASE_IMPORTING
     integer :: naddon_runs        = 0
     integer :: nptcls_at_last_run = 0 ! particles in the pool when the latest run started
     integer :: nptcls_selected    = 0 ! selected particles in the rows
+    integer :: ncohort_refused    = -1 ! the cohort when the latest addon run failed; the next needs more
     real    :: mskdiam            = 0. ! pool 2D's mask diameter (A), from its first export
     logical :: l_mskdiam_read     = .false.
     logical :: l_restart          = .false.
@@ -147,6 +163,12 @@ contains
     procedure :: start_solve3D
     procedure :: start_addon
     procedure :: finish_run
+    procedure :: read_addon_verdict
+    procedure :: count_cohort
+    procedure :: count_frozen
+    procedure :: record_run_publication
+    procedure :: prune_quality_dirs
+    procedure :: prune_run_dirs
     procedure :: write_stage_project
     ! GUI
     procedure :: send_status
@@ -211,7 +233,7 @@ contains
     !! as before.
     subroutine init_queue( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        call init_stream_qenv(self%params, self%qenv, string(SIMPLE_STREAM_PREPROC_PARTITION))
+        call init_stream_qenv(self%params, self%qenv, string(SIMPLE_STREAM_SOLVE3D_PARTITION))
     end subroutine init_queue
 
     !> The GUI metadata objects and the pipe end to the master (-1: none).
@@ -249,9 +271,10 @@ contains
     end function finished
 
     !> The last status, and the stage's project with the latest result and the particles imported
-    !! since. A running job is left to finish.
+    !! since. A running job is cancelled: a restart starts a new run in a fresh directory.
     subroutine finalize( self )
         class(stream_stage_solve3D), intent(inout) :: self
+        call self%job%cancel()
         call self%meta_status%set_user_input(.false.)
         call self%send_status(string('terminating'))
         if( self%spproj%os_ptcl3D%get_noris() > 0 ) call self%write_stage_project()
@@ -273,6 +296,9 @@ contains
         call self%meta_status%kill
         call self%meta_reproj%kill
         call self%frozen_projfile%kill
+        call self%addon_verdict%kill
+        call self%last_stem%kill
+        if( allocated(self%frozen_active) ) deallocate(self%frozen_active)
         if( allocated(self%stk_names) ) deallocate(self%stk_names)
         if( allocated(self%state_res) ) deallocate(self%state_res)
         if( allocated(self%params) ) deallocate(self%params)
@@ -280,6 +306,7 @@ contains
         self%naddon_runs        = 0
         self%nptcls_at_last_run = 0
         self%nptcls_selected    = 0
+        self%ncohort_refused    = -1
         self%mskdiam            = 0.
         self%l_mskdiam_read     = .false.
         self%l_restart          = .false.
@@ -374,6 +401,8 @@ contains
         call self%select_cavgs(set, stem)
         call self%merge_publication(set, newest%id)
         call set%kill
+        self%last_stem = stem
+        call self%prune_quality_dirs()
         ! the newest and every older publication are taken
         it = self%setslist%begin()
         do irec = 1,inewest
@@ -427,9 +456,9 @@ contains
     end subroutine select_cavgs
 
     ! Merges the publication @p set (number @p id) into the stage's rows, which only ever grow
-    ! (solve3D_addon reads them by index). A stack the stage holds is matched by name: its
-    ! particles take the publication's 2D parameters and selection in place and keep their 3D
-    ! parameters, CTF and optics group. A new stack is appended with its micrograph and particles
+    ! (solve3D_addon reads them by index). A stack the stage holds is matched by name and its
+    ! particles by image index in the stack: they take the publication's 2D parameters and
+    ! selection in place, and keep their 3D parameters, multistate label, CTF and optics group. A new stack is appended with its micrograph and particles
     ! (2D and 3D). A stack the publication lacks keeps its rows, deselected. The classes are the
     ! publication's.
     subroutine merge_publication( self, set, id )
@@ -441,7 +470,7 @@ contains
         type(string), allocatable :: new_names(:)
         type(string) :: name
         integer :: nstks, nstks_pool, jstk, k, hint, nnew, nptcls_new, nptcls, i, iptcl, jptcl
-        integer :: fromp, fromp_set, pool_nmics, pool_nptcls, imic, nupdated, ndeselected, s
+        integer :: fromp, fromp_set, pool_nmics, pool_nptcls, imic, nupdated, ndeselected, s, iimg
         nstks = set%os_stk%get_noris()
         if( set%os_mic%get_noris() /= nstks ) THROW_HARD('# micrographs /= # stacks in publication '//int2str(id))
         nstks_pool = size(self%stk_names)
@@ -473,12 +502,26 @@ contains
             fromp     = self%spproj%os_stk%get_fromp(k)
             if( self%spproj%os_stk%get_top(k) - fromp + 1 /= nptcls ) THROW_HARD('a stack changed size: '//self%stk_names(k)%to_char())
             do i = 0,nptcls - 1
-                iptcl = fromp     + i
                 jptcl = fromp_set + i
+                ! the particle's image in its stack, as the publication records it (indstk); the
+                ! stage's rows of a stack hold its images in order, and must record the same one
+                iimg = i + 1
+                if( set%os_ptcl2D%isthere(jptcl, 'indstk') ) iimg = set%os_ptcl2D%get_int(jptcl, 'indstk')
+                if( iimg < 1 .or. iimg > nptcls ) THROW_HARD('an image index outside its stack in publication '//int2str(id))
+                iptcl = fromp + iimg - 1
+                if( self%spproj%os_ptcl2D%isthere(iptcl, 'indstk') )then
+                    if( self%spproj%os_ptcl2D%get_int(iptcl, 'indstk') /= iimg ) THROW_HARD('rows and images disagree: '//self%stk_names(k)%to_char())
+                endif
                 s     = set%os_ptcl2D%get_state(jptcl)
                 call self%spproj%os_ptcl2D%transfer_2Dparams(iptcl, set%os_ptcl2D, jptcl)
                 call self%spproj%os_ptcl2D%set_state(iptcl, s)
-                call self%spproj%os_ptcl3D%set_state(iptcl, s)
+                ! the 3D state is a run's multistate label: a deselected particle loses it, a
+                ! selected one keeps it, and one without a label (state 0) is selected as state 1
+                if( s == 0 )then
+                    call self%spproj%os_ptcl3D%set_state(iptcl, 0)
+                else if( self%spproj%os_ptcl3D%get_state(iptcl) == 0 )then
+                    call self%spproj%os_ptcl3D%set_state(iptcl, 1)
+                endif
             enddo
             nupdated = nupdated + nptcls
         enddo
@@ -563,26 +606,33 @@ contains
         enddo
     end function stack_index
 
-    ! A running job is checked: done, its result becomes the pool; failed, the stage stops. Without
-    ! a job, next_job decides whether to start solve3D or an addon run.
+    ! A running job is checked: done, its result becomes the pool; a failed solve3D stops the stage,
+    ! a failed addon run leaves the latest result the base. Without a job, next_job decides
+    ! whether to start solve3D or an addon run.
     subroutine advance_jobs( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string) :: logfile
-        integer      :: nptcls
         if( self%phase == PHASE_SOLVE3D .or. self%phase == PHASE_ADDON )then
             select case(self%job%status())
                 case(ASYNC_JOB_RUNNING)
                     return
                 case(ASYNC_JOB_FAILED)
                     logfile = self%job%get_log()
-                    THROW_HARD('the 3D job failed; see '//logfile%to_char())
+                    if( self%phase == PHASE_SOLVE3D ) THROW_HARD('solve3D failed; see '//logfile%to_char())
+                    ! a refused or failed addon run: the latest result stays the base, and the
+                    ! next run waits for a larger cohort
+                    self%ncohort_refused = self%count_cohort()
+                    write(logfhandle,'(A,A,A,I8,A)') '>>> WARNING: THE ADDON RUN FAILED (SEE ', logfile%to_char(),&
+                        &'); THE NEXT WAITS FOR A COHORT LARGER THAN ', self%ncohort_refused, ' PARTICLES'
+                    call self%job%kill()
+                    self%phase = PHASE_IDLE
                 case(ASYNC_JOB_DONE)
                     call self%finish_run()
             end select
             return
         endif
-        nptcls = self%spproj%os_ptcl3D%get_noris()
-        select case(next_job(self%phase, nptcls, self%nptcls_at_last_run))
+        select case(next_job(self%phase, self%nptcls_selected, self%count_cohort(), self%count_frozen(),&
+            &self%params%nstates, self%ncohort_refused))
             case(JOB_SOLVE3D)
                 call self%start_solve3D()
             case(JOB_ADDON)
@@ -597,7 +647,7 @@ contains
         type(string)  :: cwd, dir, server_address
         call simple_getcwd(cwd)
         dir = cwd//'/'//SOLVE3D_DIR
-        call simple_mkdir(dir)
+        call fresh_job_dir(dir, SOLVE3D_DIR) ! never the directory of a job left unfinished
         call self%spproj%write(dir//'/'//SOLVE3D_DIR//METADATA_EXT)
         call cline_job%set('prg',             'solve3D')
         call cline_job%set('mkdir',           'no')
@@ -614,8 +664,10 @@ contains
         call cline_job%set('worker_priority', 'high')
         server_address = self%qenv%get_persistent_worker_server_address()
         if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
+        if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
         call cline_job%printline()
         self%nptcls_at_last_run = self%spproj%os_ptcl3D%get_noris()
+        call self%record_run_publication()
         call self%job%start(self%qenv, cline_job, dir, SOLVE3D_DIR, exec_bin=string('simple_exec'))
         self%phase = PHASE_SOLVE3D
         call cline_job%kill
@@ -631,7 +683,7 @@ contains
         call simple_getcwd(cwd)
         call simple_mkdir(cwd//'/'//ADDON_DIR)
         dir = cwd//'/'//ADDON_DIR//'/it_'//int2str(self%naddon_runs)
-        call simple_mkdir(dir)
+        call fresh_job_dir(dir, ADDON_DIR) ! never the directory of a job left unfinished
         call self%spproj%write(dir//'/'//ADDON_DIR//METADATA_EXT)
         call cline_job%set('prg',             'solve3D_addon')
         call cline_job%set('mkdir',           'no')
@@ -642,8 +694,10 @@ contains
         call cline_job%set('worker_priority', 'high')
         server_address = self%qenv%get_persistent_worker_server_address()
         if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
+        if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
         call cline_job%printline()
         self%nptcls_at_last_run = self%spproj%os_ptcl3D%get_noris()
+        call self%record_run_publication()
         call self%job%start(self%qenv, cline_job, dir, ADDON_DIR, exec_bin=string('simple_exec'))
         self%phase = PHASE_ADDON
         call cline_job%kill
@@ -654,20 +708,162 @@ contains
     subroutine finish_run( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string) :: dir
-        dir = self%job%get_dir()
-        if( self%phase == PHASE_SOLVE3D )then
-            self%frozen_projfile = dir//'/'//SOLVE3D_DIR//METADATA_EXT
-        else
+        integer      :: i, n
+        logical      :: l_addon
+        dir     = self%job%get_dir()
+        l_addon = self%phase == PHASE_ADDON
+        if( l_addon )then
             self%frozen_projfile = dir//'/'//ADDON_DIR//METADATA_EXT
+        else
+            self%frozen_projfile = dir//'/'//SOLVE3D_DIR//METADATA_EXT
         endif
         if( .not. file_exists(self%frozen_projfile) ) THROW_HARD('no project from the 3D job: '//self%frozen_projfile%to_char())
         call self%spproj%kill
         call self%spproj%read(self%frozen_projfile)
+        ! the rows active in this result are the next addon run's frozen particles
+        n = self%spproj%os_ptcl3D%get_noris()
+        if( allocated(self%frozen_active) ) deallocate(self%frozen_active)
+        allocate(self%frozen_active(n))
+        do i = 1,n
+            self%frozen_active(i) = self%spproj%os_ptcl3D%get_state(i) > 0
+        enddo
+        self%ncohort_refused = -1
+        if( l_addon ) call self%read_addon_verdict(dir)
+        call self%prune_run_dirs()
         call self%job%kill
         self%phase = PHASE_IDLE
         call self%write_stage_project()
         call self%send_volumes()
     end subroutine finish_run
+
+    ! The verdict of the addon run in @p dir (solve3D_addon_report.txt), per state: logged and kept
+    ! for the status. A regression is warned about and the result stays the base, which is the
+    ! user's call (solve3D_addon_policy.md, section 11).
+    subroutine read_addon_verdict( self, dir )
+        use simple_solve3D_addon_report, only: solve3D_addon_report, ADDON_REPORT_FNAME
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(string),               intent(in)    :: dir
+        type(solve3D_addon_report) :: report
+        type(string)               :: fname
+        integer                    :: istate
+        call self%addon_verdict%kill()
+        fname = dir//'/'//ADDON_REPORT_FNAME
+        if( .not. file_exists(fname) )then
+            THROW_WARN('the addon run wrote no report: '//fname%to_char())
+            return
+        endif
+        call report%read(fname)
+        self%addon_verdict = 'addon run '//int2str(self%naddon_runs)//':'
+        do istate = 1,report%get_nstates()
+            self%addon_verdict = self%addon_verdict//' state '//int2str(istate)//' '//trim(report%get_verdict(istate))
+        enddo
+        write(logfhandle,'(A,A)') '>>> VERDICT OF THE ', self%addon_verdict%to_char()
+        if( report%any_regressed() ) THROW_WARN('the addon run regressed a state; its result stays the base')
+        call report%kill()
+    end subroutine read_addon_verdict
+
+    ! The addon's cohort: the selected rows (3D state > 0) that were not active in the frozen
+    ! solution, appended since or selected again.
+    integer function count_cohort( self )
+        class(stream_stage_solve3D), intent(in) :: self
+        integer :: i, nfrozen_rows
+        count_cohort = 0
+        nfrozen_rows = 0
+        if( allocated(self%frozen_active) ) nfrozen_rows = size(self%frozen_active)
+        do i = 1,self%spproj%os_ptcl3D%get_noris()
+            if( self%spproj%os_ptcl3D%get_state(i) == 0 ) cycle
+            if( i <= nfrozen_rows )then
+                if( self%frozen_active(i) ) cycle
+            endif
+            count_cohort = count_cohort + 1
+        enddo
+    end function count_cohort
+
+    ! The frozen particles: the rows active in the latest result.
+    integer function count_frozen( self )
+        class(stream_stage_solve3D), intent(in) :: self
+        count_frozen = 0
+        if( allocated(self%frozen_active) ) count_frozen = count(self%frozen_active)
+    end function count_frozen
+
+    ! The publication a run starts from keeps its quality folder (QUALITY_RUNS).
+    subroutine record_run_publication( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        integer :: funit, ios
+        if( self%last_stem%strlen() == 0 ) return
+        call simple_mkdir(QUALITY_DIR)
+        open(newunit=funit, file=QUALITY_RUNS, position='append', action='write', iostat=ios)
+        if( ios /= 0 ) return
+        write(funit,'(A)') self%last_stem%to_char()
+        close(funit)
+    end subroutine record_run_publication
+
+    ! The quality folders kept are the newest NQUALITY_KEPT and those of the publications a run
+    ! started from; the others go.
+    subroutine prune_quality_dirs( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(string), allocatable :: dirs(:), runs(:)
+        character(len=256) :: line
+        integer :: i, j, funit, ios, nruns
+        logical :: l_run
+        if( .not. dir_exists(QUALITY_DIR) ) return
+        dirs = simple_list_dirs(QUALITY_DIR)
+        if( size(dirs) <= NQUALITY_KEPT ) return
+        call lex_sort(dirs) ! 5-digit publication ids: the newest last
+        ! the publications that started a run, counted then read: growing an array of strings by
+        ! a constructor that holds the array (runs = [runs, ...]) crashed some gfortran builds
+        nruns = 0
+        open(newunit=funit, file=QUALITY_RUNS, status='old', action='read', iostat=ios)
+        if( ios == 0 )then
+            do
+                read(funit,'(A)',iostat=ios) line
+                if( ios /= 0 ) exit
+                nruns = nruns + 1
+            enddo
+            allocate(runs(nruns))
+            rewind(funit)
+            do j = 1,nruns
+                read(funit,'(A)',iostat=ios) line
+                if( ios /= 0 )then
+                    nruns = j - 1
+                    exit
+                endif
+                runs(j) = trim(line)
+            enddo
+            close(funit)
+        else
+            allocate(runs(0))
+        endif
+        do i = 1,size(dirs) - NQUALITY_KEPT
+            l_run = .false.
+            do j = 1,nruns
+                if( runs(j) == dirs(i)%to_char() ) l_run = .true.
+            enddo
+            if( l_run ) cycle
+            call simple_rmdir(QUALITY_DIR//'/'//dirs(i)%to_char())
+        enddo
+    end subroutine prune_quality_dirs
+
+    ! Once a run has completed and is the frozen base, the addon iteration folders before it and
+    ! the folders set aside for jobs left unfinished go (stream fix plan, decision 31).
+    subroutine prune_run_dirs( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(string), allocatable :: dirs(:)
+        integer :: i, k
+        do k = 1,self%naddon_runs - 1
+            if( dir_exists(ADDON_DIR//'/it_'//int2str(k)) ) call simple_rmdir(ADDON_DIR//'/it_'//int2str(k))
+        enddo
+        dirs = simple_list_dirs('.')
+        do i = 1,size(dirs)
+            if( dirs(i)%has_substr(SOLVE3D_DIR//'_unfinished') ) call simple_rmdir(dirs(i)%to_char())
+        enddo
+        if( dir_exists(ADDON_DIR) )then
+            dirs = simple_list_dirs(ADDON_DIR)
+            do i = 1,size(dirs)
+                if( dirs(i)%has_substr('_unfinished') ) call simple_rmdir(ADDON_DIR//'/'//dirs(i)%to_char())
+            enddo
+        endif
+    end subroutine prune_run_dirs
 
     ! The pool as the stage's project, written as a temporary file and renamed.
     subroutine write_stage_project( self )
@@ -691,10 +887,12 @@ contains
             case(PHASE_SOLVE3D)
                 stage_here = 'running solve3D'
             case(PHASE_ADDON)
-                stage_here = 'running refine3D'
+                stage_here = 'running solve3D_addon'
             case default
                 stage_here = 'idle'
         end select
+        ! the latest addon run's verdict, per state
+        if( self%addon_verdict%strlen() > 0 ) stage_here = stage_here//'; '//self%addon_verdict%to_char()
         if( present(stage) ) stage_here = stage
         call self%meta_status%set(stage=stage_here, solve3D_stage=min(self%phase, PHASE_IDLE),&
             &refine_iteration=self%naddon_runs, nstates=self%params%nstates,&
@@ -808,17 +1006,21 @@ contains
 
     !---------------- rules ----------------
 
-    !> The job to start in @p phase with @p nptcls particles in the pool: solve3D on the first
-    !! particles, an addon run once the pool has grown past the @p nptcls_last_run of the latest
-    !! run; none while a job runs.
-    pure integer function next_job( phase, nptcls, nptcls_last_run )
-        integer, intent(in) :: phase, nptcls, nptcls_last_run
+    !> The job to start in @p phase: solve3D once @p nselected particles are selected, at least
+    !! MIN_PTCLS_PER_STATE per state; an addon run once the cohort (@p ncohort, selected particles
+    !! not frozen) reaches max(MIN_PTCLS_PER_STATE * @p nstates, ADDON_COHORT_FRAC of the
+    !! @p nfrozen frozen particles) and exceeds the cohort a failed addon run had
+    !! (@p ncohort_refused, -1 for none); none while a job runs.
+    pure integer function next_job( phase, nselected, ncohort, nfrozen, nstates, ncohort_refused )
+        integer, intent(in) :: phase, nselected, ncohort, nfrozen, nstates, ncohort_refused
         next_job = JOB_NONE
         select case(phase)
             case(PHASE_IMPORTING)
-                if( nptcls > 0 ) next_job = JOB_SOLVE3D
+                if( nselected >= MIN_PTCLS_PER_STATE * nstates ) next_job = JOB_SOLVE3D
             case(PHASE_IDLE)
-                if( nptcls > nptcls_last_run ) next_job = JOB_ADDON
+                if( ncohort <= ncohort_refused ) return
+                if( ncohort >= max(MIN_PTCLS_PER_STATE * nstates, ceiling(ADDON_COHORT_FRAC * real(nfrozen))) )&
+                    &next_job = JOB_ADDON
         end select
     end function next_job
 

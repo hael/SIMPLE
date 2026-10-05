@@ -1,7 +1,7 @@
 !@descr: GUI metadata for a stream quality update — thresholds and user selections broadcast from the GUI
 ! The master copies GUI response fields here and sends the whole object to the running p01, p03 and p06.
 ! Unset values are 0; receivers ignore 0 and unchanged values. Readers: p01 thresholds,
-! p03 pickrefs_selection+cycle, p06 mskdiam2D/sieverefs/snapshot2D. increase_nmics has no reader.
+! p03 pickrefs_selection+cycle, p06 mskdiam2D/snapshot2D. increase_nmics has no reader.
 module simple_gui_metadata_stream_update
 use json_kinds
 use json_module,              only: json_core, json_value
@@ -25,8 +25,6 @@ type, extends(gui_metadata_base) :: gui_metadata_stream_update
   integer(kind=2)       :: pickrefs_selection(MAX_PICKREFS_SELECTION)     = 0 ! selected class indices
   integer               :: pickrefs_cycle               = 0    ! current pickrefs cycle
   integer               :: pickrefs_selection_length    = 0    ! number of classes in the selection
-  integer(kind=2)       :: sieverefs_selection(1000)    = 0    ! selected match-class indices (read by pool2D)
-  integer               :: sieverefs_selection_length   = 0    ! number of sieve-ref classes in the selection
   real                  :: ctfresupdate                 = 0.0  ! CTF resolution threshold (A); 0 = unset
   real                  :: astigmatismupdate            = 0.0  ! astigmatism threshold (A);   0 = unset
   real                  :: icescoreupdate               = 0.0  ! ice-contamination score;      0 = unset
@@ -37,6 +35,7 @@ type, extends(gui_metadata_base) :: gui_metadata_stream_update
   integer               :: snapshot2D_selection_length  = 0    ! number of valid entries in snapshot2D_selection
   character(len=STDLEN) :: snapshot2D_filename          = ''   ! project file name for the snapshot
 contains
+  procedure :: kill => kill_override
   procedure :: set_ctfres_update
   procedure :: get_ctfres_update
   procedure :: set_astigmatism_update
@@ -47,11 +46,7 @@ contains
   procedure :: get_pickrefs_selection
   procedure :: set_pickrefs_cycle
   procedure :: get_pickrefs_cycle
-  procedure :: set_pickrefs_selection_length
   procedure :: get_pickrefs_selection_length
-  procedure :: set_sieverefs_selection
-  procedure :: get_sieverefs_selection
-  procedure :: get_sieverefs_selection_length
   procedure :: set_mskdiam2D_update
   procedure :: get_mskdiam2D_update
   procedure :: set_snapshot2D_update
@@ -150,55 +145,12 @@ contains
     ncycle = self%pickrefs_cycle
   end function get_pickrefs_cycle
 
-  ! Set the number of classes in the selection.
-  subroutine set_pickrefs_selection_length( self, n )
-    class(gui_metadata_stream_update), intent(inout) :: self
-    integer,                           intent(in)    :: n
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    if( n < 0 ) THROW_HARD('pickrefs_selection_length must be non-negative')
-    if( n > size(self%pickrefs_selection) ) THROW_HARD('pickrefs_selection_length exceeds maximum size')
-    self%l_assigned             = .true.
-    self%pickrefs_selection_length = n
-  end subroutine set_pickrefs_selection_length
-
   ! Retrieve the number of classes in the selection.
   function get_pickrefs_selection_length( self ) result( n )
     class(gui_metadata_stream_update), intent(in) :: self
     integer                                       :: n
     n = self%pickrefs_selection_length
   end function get_pickrefs_selection_length
-
-  ! Store the GUI's ref_selection (match-class indices); read by pool2D (p06), not by sieving.
-  subroutine set_sieverefs_selection( self, selection )
-    class(gui_metadata_stream_update), intent(inout) :: self
-    integer,                           intent(in)    :: selection(:)
-    integer :: n
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    n = size(selection)
-    if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection exceeds maximum size')
-    self%l_assigned                 = .true.
-    self%sieverefs_selection_length = n
-    self%sieverefs_selection(1:n)   = int(selection, kind=kind(self%sieverefs_selection))  ! only 1:n is ever read back
-  end subroutine set_sieverefs_selection
-
-  ! Retrieve the sieve-reference class selection as an integer array
-  function get_sieverefs_selection( self ) result( selection )
-    class(gui_metadata_stream_update), intent(in)  :: self
-    integer, allocatable                           :: selection(:)
-    integer :: n
-    n = self%sieverefs_selection_length
-    if( n < 0 ) THROW_HARD('sieverefs_selection_length is negative')
-    if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection_length exceeds maximum size')
-    allocate(selection(n))
-    selection = self%sieverefs_selection(1:n)
-  end function get_sieverefs_selection
-
-  ! Retrieve the number of sieve-reference classes in the selection.
-  function get_sieverefs_selection_length( self ) result( n )
-    class(gui_metadata_stream_update), intent(in) :: self
-    integer                                       :: n
-    n = self%sieverefs_selection_length
-  end function get_sieverefs_selection_length
 
   ! Assign the mask diameter for 2D classification received from the GUI.
   subroutine set_mskdiam2D_update( self, mskdiam2D )
@@ -258,5 +210,17 @@ contains
     logical :: l_has
     l_has = self%snapshot2D_id > 0
   end function has_snapshot2D_update
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_stream_update), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_stream_update )
+        self = gui_metadata_stream_update()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_stream_update

@@ -94,6 +94,7 @@ type qsys_ctrl
     ! STREAMING
     procedure          :: schedule_streaming
     procedure          :: add_to_streaming
+    procedure          :: cancel_streaming
     procedure, private :: add_to_stream_stack
     procedure          :: get_stream_done_stack
     procedure          :: get_stream_fail_stack
@@ -492,6 +493,9 @@ contains
         endif
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
+        ! an asynchronous job first records its pid, host and scheduler job id next to its exit-status
+        ! file, so that it can be cancelled (simple_qsys_job_record: cancel_queued_job)
+        if( present(exit_code_fname) ) call write_job_record(funit, exit_code_fname)
         ! compose the command line
         job_str = job_descr%chash2str()
         write(funit,'(a)',advance='no') exec_bin%to_char()//' '//job_str%to_char()
@@ -519,10 +523,25 @@ contains
         endif
     end subroutine generate_script_2
 
+    !> The first lines of an asynchronous job's script: the job records its pid, its host and its
+    !! scheduler and job id in <exit_code_fname>.job, by temporary and rename.
+    subroutine write_job_record( funit, exit_code_fname )
+        integer,       intent(in) :: funit
+        class(string), intent(in) :: exit_code_fname
+        write(funit,'(a)') '{ echo $$; hostname; if [ -n "${SLURM_JOB_ID:-}" ]; then echo "slurm ${SLURM_JOB_ID}";'//&
+            &' elif [ -n "${LSB_JOBID:-}" ]; then echo "lsf ${LSB_JOBID}"; elif [ -n "${PBS_JOBID:-}" ];'//&
+            &' then echo "pbs ${PBS_JOBID}"; else echo "none 0"; fi; } > '//exit_code_fname%to_char()//JOB_INFO_EXT//&
+            &'.tmp && mv '//exit_code_fname%to_char()//JOB_INFO_EXT//'.tmp '//exit_code_fname%to_char()//JOB_INFO_EXT
+        write(funit,'(a)') ''
+    end subroutine write_job_record
+
     !> Generic overload generate_script: N sequential jobs packed into one script.
     !! All jobs share one output file.  exec_bins(:), when provided, overrides
-    !! exec_bin on a per-job basis and must match size(jobs_descr).
-    subroutine generate_script_4( self, jobs_descr, q_descr, exec_bin, script_name, outfile, exec_bins )
+    !! exec_bin on a per-job basis and must match size(jobs_descr). With
+    !! exit_code_fname, the job records itself as generate_script_2 does, a job
+    !! that fails ends the script, and the status of the failed or last job is
+    !! written there.
+    subroutine generate_script_4( self, jobs_descr, q_descr, exec_bin, script_name, outfile, exec_bins, exit_code_fname )
         class(qsys_ctrl),          intent(in) :: self
         type(chash),  allocatable, intent(in) :: jobs_descr(:)  !< one job description per sequential task
         class(chash),              intent(in) :: q_descr         !< queue-system metadata
@@ -530,6 +549,7 @@ contains
         class(string),             intent(in) :: script_name     !< path of the script to write
         class(string),             intent(in) :: outfile         !< shared stdout/stderr log path
         class(string), optional,   intent(in) :: exec_bins(:)    !< per-job executable overrides
+        class(string), optional,   intent(in) :: exit_code_fname !< write the status of the failed or last job here
         type(string) :: execution_binary, job_str
         character(len=512) :: io_msg
         integer :: ios, funit, i, njobs
@@ -546,6 +566,7 @@ contains
         endif
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
+        if( present(exit_code_fname) ) call write_job_record(funit, exit_code_fname)
         ! compose the command line
         njobs = size(jobs_descr)
         if( present(exec_bins) )then
@@ -564,6 +585,9 @@ contains
                 job_str = jobs_descr(i)%chash2str()
                 write(funit,'(a)',advance='no') execution_binary%to_char()//' '//job_str%to_char()
                 write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//outfile%to_char()
+                ! the program's status, not tee's
+                if( present(exit_code_fname) ) write(funit,'(a)') 'rc=${PIPESTATUS[0]}; if [ $rc -ne 0 ]; then echo $rc > '//&
+                    &exit_code_fname%to_char()//'; exit; fi'
                 write(funit,'(a)') ''
             enddo
         endif
@@ -575,6 +599,7 @@ contains
         job_str = jobs_descr(njobs)%chash2str()
         write(funit,'(a)',advance='no') execution_binary%to_char()//' '//job_str%to_char()
         write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//outfile%to_char()
+        if( present(exit_code_fname) ) write(funit,'(a)') 'echo ${PIPESTATUS[0]} > '//exit_code_fname%to_char()
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
@@ -991,6 +1016,29 @@ contains
             end subroutine updatestack
 
     end subroutine schedule_streaming
+
+    !> Cancels the streaming jobs in flight (submitted, not done), run in @p path, through the record
+    !! each job's script keeps of itself (simple_qsys_job_record); the pending stack is dropped.
+    subroutine cancel_streaming( self, path )
+        use simple_qsys_job_record, only: cancel_queued_job
+        class(qsys_ctrl), intent(inout) :: self
+        class(string),    intent(in)    :: path !< the directory the jobs run in
+        integer :: ipart, ncancelled
+        logical :: l_sent
+        ncancelled = 0
+        do ipart = 1, self%ncomputing_units
+            if( .not. self%jobs_submitted(ipart) ) cycle
+            if( self%jobs_done(ipart) ) cycle
+            l_sent = cancel_queued_job(path//'/'//self%jobs_exit_code_fnames(ipart)%to_char())
+            if( l_sent ) ncancelled = ncancelled + 1
+        end do
+        if( allocated(self%stream_cline_stack) )then
+            call self%stream_cline_stack(:)%kill
+            deallocate(self%stream_cline_stack)
+        end if
+        self%cline_stacksz = 0
+        if( ncancelled > 0 ) write(logfhandle,'(A,I4,A)') '>>> CANCELLED ', ncancelled, ' STREAMING JOB(S)'
+    end subroutine cancel_streaming
 
     !> Append cline to the pending streaming command-line stack (stream_cline_stack).
     subroutine add_to_streaming( self, cline )

@@ -17,9 +17,10 @@ type, extends( gui_metadata_base ) :: gui_metadata_optics_group
   integer :: i        = 1   ! index of this optics group within the current batch
   integer :: i_max    = 1   ! total optics groups in the current batch
   integer :: n_shifts = 0   ! number of populated beam-shift entries
-  real    :: xshifts(max_points)   ! beam-shift x components (Angstroms)
-  real    :: yshifts(max_points)   ! beam-shift y components (Angstroms)
+  real    :: xshifts(max_points) = 0. ! beam-shift x components (Angstroms)
+  real    :: yshifts(max_points) = 0. ! beam-shift y components (Angstroms)
 contains
+  procedure :: kill => kill_override
   procedure :: set
   procedure :: get
   procedure :: get_i
@@ -115,5 +116,17 @@ contains
     end do
     call json%add(json_ptr, json_coords_array_ptr)
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_optics_group), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_optics_group )
+        self = gui_metadata_optics_group()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_optics_group

@@ -127,7 +127,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Projects')
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, motion_gain, motion_model, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, optics_groups, optics_maps, motion_gain, motion_model, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -271,7 +271,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Stream')
         call lib_stream%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract)', '', .false., '')
+            &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract, sieve_to_3d, movies_to_3d)', '', .false., '')
         call add_ui_program('lib_stream', lib_stream, tsttab, UI_CATEGORY)
     end subroutine new_lib_stream
 

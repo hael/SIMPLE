@@ -8,7 +8,8 @@ character(len=*), parameter :: SIMPLE_DEFAULT_PARTITION_TIME   = 'SIMPLE_DEFAULT
 ! when the storage probe gets it wrong, e.g. on a parallel filesystem that wants
 ! more depth than the unknown-storage default.
 character(len=*), parameter :: SIMPLE_IO_NSTREAMS              = 'SIMPLE_IO_NSTREAMS'
-! STREAM ENVIRONMENT VARIABLES
+! STREAM ENVIRONMENT VARIABLES: SIMPLE_STREAM_<STAGE>_{NTHR,NPARTS,PARTITION}. The master reads
+! the NTHR and NPARTS ones (simple_stream_master_resources); each stage its PARTITION one.
 character(len=*), parameter :: SIMPLE_STREAM_PREPROC_NTHR      = 'SIMPLE_STREAM_PREPROC_NTHR'
 character(len=*), parameter :: SIMPLE_STREAM_PREPROC_PARTITION = 'SIMPLE_STREAM_PREPROC_PARTITION'
 character(len=*), parameter :: SIMPLE_STREAM_PREPROC_NPARTS    = 'SIMPLE_STREAM_PREPROC_NPARTS'
@@ -20,4 +21,11 @@ character(len=*), parameter :: SIMPLE_STREAM_POOL_PARTITION    = 'SIMPLE_STREAM_
 character(len=*), parameter :: SIMPLE_STREAM_POOL_NTHR         = 'SIMPLE_STREAM_POOL_NTHR'
 character(len=*), parameter :: SIMPLE_STREAM_REFGEN_PARTITION  = 'SIMPLE_STREAM_REFGEN_PARTITION'
 character(len=*), parameter :: SIMPLE_STREAM_REFGEN_NTHR       = 'SIMPLE_STREAM_REFGEN_NTHR'
+character(len=*), parameter :: SIMPLE_STREAM_REFGEN_NPARTS     = 'SIMPLE_STREAM_REFGEN_NPARTS'
+character(len=*), parameter :: SIMPLE_STREAM_PICK_NPARTS       = 'SIMPLE_STREAM_PICK_NPARTS'
+character(len=*), parameter :: SIMPLE_STREAM_CHUNK_NPARTS      = 'SIMPLE_STREAM_CHUNK_NPARTS'
+character(len=*), parameter :: SIMPLE_STREAM_POOL_NPARTS       = 'SIMPLE_STREAM_POOL_NPARTS'
+character(len=*), parameter :: SIMPLE_STREAM_SOLVE3D_NTHR      = 'SIMPLE_STREAM_SOLVE3D_NTHR'
+character(len=*), parameter :: SIMPLE_STREAM_SOLVE3D_NPARTS    = 'SIMPLE_STREAM_SOLVE3D_NPARTS'
+character(len=*), parameter :: SIMPLE_STREAM_SOLVE3D_PARTITION = 'SIMPLE_STREAM_SOLVE3D_PARTITION'
 end module simple_defs_environment

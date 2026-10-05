@@ -12,9 +12,9 @@
 !     3. each resulting cluster is an optics group: os_mic gets 'ogid', and
 !        os_optics gets one row per group with its population and centroid.
 !
-!   Until now this ran inside starproject_stream%stream_export_optics, as a
-!   side effect of writing optics.star, followed by a hidden write of the
-!   whole project. Here it only changes os_mic and os_optics in memory.
+!   The stream's optics.star export used to do this as a side effect,
+!   followed by a hidden write of the whole project. Here it only changes
+!   os_mic and os_optics in memory.
 !
 ! HOME:
 !   In src/main/stream/shared for now; it belongs beside the project's optics

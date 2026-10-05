@@ -269,4 +269,71 @@ contains
         end do
     end subroutine write_selected_cavgs
 
+    !> The class averages of @p stk (sampling @p smpd) written to @p outstk in the order of @p flag
+    !! ('res' and 'pop' ascending, 'corr' descending), with the ranks of the selected classes
+    !! (state > 0) in @p classdoc_fname. Nothing is done unless @p os_cls holds one row per class
+    !! average. The core of commander_rank_cavgs, which the stream pool calls directly.
+    subroutine rank_cavgs_stk( os_cls, stk, smpd, flag, outstk, classdoc_fname )
+        class(oris),      intent(in) :: os_cls
+        class(string),    intent(in) :: stk, outstk, classdoc_fname
+        real,             intent(in) :: smpd
+        character(len=*), intent(in) :: flag
+        type(oris)           :: clsdoc_ranked
+        type(stack_io)       :: stkio_r, stkio_w
+        type(image)          :: img
+        integer, allocatable :: order(:)
+        real,    allocatable :: vals(:), rstates(:)
+        logical, allocatable :: mask(:)
+        integer              :: ldim(3), ncls, icls, i, rank
+        select case(trim(flag))
+            case('res','corr','pop')
+                ! supported
+            case DEFAULT
+                THROW_HARD('Unsupported cavg flag: '//trim(flag))
+        end select
+        call find_ldim_nptcls(stk, ldim, ncls)
+        if( os_cls%get_noris() /= ncls ) return
+        call img%new([ldim(1),ldim(2),1], smpd)
+        call clsdoc_ranked%new(ncls, is_ptcl=.false.)
+        vals    = os_cls%get_all(flag)
+        order   = (/(icls,icls=1,ncls)/)
+        rstates = os_cls%get_all('state')
+        mask    = rstates > 0.5
+        call hpsort(vals, order)
+        if( trim(flag) == 'corr' ) call reverse(order)
+        call stkio_r%open(stk, smpd, 'read', bufsz=ncls)
+        call stkio_r%read_whole ! because need asynchronous access
+        call stkio_w%open(outstk, smpd, 'write', box=ldim(1), bufsz=ncls)
+        rank = 0
+        do icls=1,ncls
+            i = order(icls)
+            if( mask(i) )then
+                rank = rank + 1
+                call clsdoc_ranked%set(rank, 'class', i)
+                call clsdoc_ranked%set(rank, 'rank',  rank)
+                select case(trim(flag))
+                case('corr')
+                    call clsdoc_ranked%set(rank, 'corr', os_cls%get(i, 'corr'))
+                    write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,1x,f6.2)') 'CLASS:', i,&
+                    &'RANK:', rank ,'CORR:', os_cls%get(i, 'corr')
+                case DEFAULT
+                    call clsdoc_ranked%set(rank, 'pop',  os_cls%get(i, 'pop'))
+                    call clsdoc_ranked%set(rank, 'res',  os_cls%get(i, 'res'))
+                    call clsdoc_ranked%set(rank, 'corr', os_cls%get(i, 'corr'))
+                    write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', i,&
+                    &'RANK:', rank ,'POP:', os_cls%get_int(i, 'pop'),&
+                    &'RES:', os_cls%get(i, 'res')
+                end select
+                call flush(logfhandle)
+            endif
+            call stkio_r%get_image(i, img)
+            call stkio_w%write(icls, img)
+        end do
+        call stkio_r%close
+        call stkio_w%close
+        call clsdoc_ranked%write(classdoc_fname)
+        call clsdoc_ranked%kill
+        call img%kill
+    end subroutine rank_cavgs_stk
+
 end module simple_imgarr_utils

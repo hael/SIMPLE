@@ -1,4 +1,4 @@
-!@descr: unit tests for simple_forked_process (lifecycle, signals, restart, timestamps, I/O)
+!@descr: unit tests for simple_forked_process (lifecycle, signals, timestamps, I/O)
 ! Children run the default execute_test, which exits 0 on SIGTERM: terminate() must end in
 ! STOPPED, kill() (SIGKILL) in FAILED. test_logfile_redirection hashes execute_test's sentinel
 ! line. test_fork_with_running_monitor forks under a running memory monitor. Skipped on Windows.
@@ -8,7 +8,6 @@ module simple_forked_process_tester
                                    FORK_STATUS_RUNNING,    &
                                    FORK_STATUS_STOPPED,    &
                                    FORK_STATUS_FAILED,     &
-                                   FORK_STATUS_RESTARTING, &
                                    FORK_POLL_TIME
   use simple_cmdline,        only: cmdline
   use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish, mem_monitor_is_enabled
@@ -32,7 +31,6 @@ contains
     call test_start()
     call test_kill()
     call test_terminate()
-    call test_restart()
     call test_timestamps()
     call test_fail_timestamps()
     call test_destroy()
@@ -76,36 +74,6 @@ contains
     call proc%await_final_status()
     call assert_int(proc%status(), FORK_STATUS_STOPPED, 'process is stopped after SIGTERM')
   end subroutine test_terminate
-
-  ! Fork with restart=.true., SIGKILL it, and verify: status passes through
-  ! RESTARTING, the restarted PID differs from the original, get_nrestarts
-  ! returns 1, and the process eventually reaches STOPPED.
-  subroutine test_restart()
-    type(forked_process)  :: proc
-    integer(kind=c_pid_t) :: pid1, pid2
-    integer               :: rc, stat
-    write(*,'(A)') 'test_restart'
-    call proc%start(name=string('TEST_RESTART'), restart=.true.)
-    call assert_int(proc%status(), FORK_STATUS_RUNNING, 'process is running after start')
-    pid1 = proc%get_pid()
-    call assert_true(pid1 /= -1,                        'process has valid PID')
-    rc = c_usleep(FORK_POLL_TIME * 5)
-    call proc%kill()
-    ! Poll until we observe RESTARTING or a terminal state
-    stat = FORK_STATUS_RUNNING
-    do while( stat == FORK_STATUS_RUNNING )
-      rc   = c_usleep(FORK_POLL_TIME)
-      stat = proc%status()
-    end do
-    call assert_true(stat == FORK_STATUS_RESTARTING .or. stat == FORK_STATUS_STOPPED, &
-                     'process is restarting or stopped after kill')
-    call assert_int(proc%get_nrestarts(), 1,             'restart count is 1 after one failure')
-    pid2 = proc%get_pid()
-    call assert_true(pid2 /= -1,                        'restarted process has valid PID')
-    call assert_true(pid1 /= pid2,                      'restarted process has a new PID')
-    call proc%await_final_status()
-    call assert_int(proc%status(), FORK_STATUS_STOPPED,  'process is stopped after restart completes')
-  end subroutine test_restart
 
   ! Verify that queuetime, starttime, and stoptime are all positive and
   ! ordered correctly after a clean run (queuetime <= starttime <= stoptime).

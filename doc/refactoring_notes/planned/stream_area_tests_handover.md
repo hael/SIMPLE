@@ -154,9 +154,7 @@ It covers only the running and finished states. The master's aggregate status ha
    `failed` and the master reports `error`. When every child has failed or stopped, with at least
    one failed and none running, the master reports `failed`.
 2. **Skipped.** `skip` one child: it reports `skipped` and does not count as running.
-3. **Restarting.** Start one child with `restart=.true.` and kill it: it reports `restarting`
-   and the master reports `running`.
-4. **Shared process.** `initial_picking` and `opening2D` report the same pid, because they share
+3. **Shared process.** `initial_picking` and `opening2D` report the same pid, because they share
    one process in the master.
 
 ### `preproc` (workflow entry `stream_preproc`)
@@ -190,3 +188,28 @@ A useful replacement tests what the stream actually sends to `solve2D`:
 3. Assert class purity: at least 90 % of each family in one class, and the two classes different.
 
 At that size it belongs in `lib_stream`.
+
+## Chained tests (5 October 2026)
+
+Decision 19 of `doc/refactoring_notes/planned/stream_fix_plan_2026-10-05.md` adds two chained
+tests, in `src/main/stream/simple_stream_chain_tester.f90`, sub-suites of `lib_stream`:
+
+| sub-suite | stages | fixture |
+|---|---|---|
+| `sieve to 3D` | p05, p06, p07 | simulated particle stacks (a three-blob truth volume, CTF, noise) in completed reference-picking sets, `moldiam.txt`, and reference picking's finished marker |
+| `movies to 3D` | p01, p02, p04, p05, p06, p07 | simulated movies of reprojections of the truth, picking references reprojected from it; preprocessing is finalised once every movie is processed |
+
+Both drive the production stage types in one process, without the master: each stage is made
+with its own `new()` on its commander's command-line defaults (the commanders' `set_*_cline`
+routines are public for this), in a folder of its own, and the driver gives the stages a pass in
+turn until multistate 3D completes its first run or three hours pass. The stages submit their
+jobs to the local queue, so they need the installed executables (`SIMPLE_PATH`), like
+`stream_preproc`, and take tens of minutes. They check that each stage made its product: the
+sieve accepts particles and ends its intake, the pool takes the final set and publishes, 3D
+completes a run with a resolution. They were written without a build and have not been run.
+
+```text
+simple_test_exec test=lib_stream suite=sieve_to_3d
+simple_test_exec test=lib_stream suite=movies_to_3d
+```
+

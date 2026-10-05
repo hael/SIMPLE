@@ -391,6 +391,10 @@ contains
         spec%relational_coefficient  =   2.449666E-02
     end function pool_model_spec
 
+    ! The particle sieve's preset. Its weights were fitted on class averages scored with the box's
+    ! disc as the mask; since 5 October 2026 the sieve scores with its configured mask diameter
+    ! (the picking references' in stream p05, the box default in p03; the disc when it is 0), so
+    ! the preset awaits a validation run (ptcl_sieve_policy.md, section 2).
     function sieve_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
         spec%name                    = CAVG_QUALITY_MODEL_SIEVE_DEFAULT

@@ -115,10 +115,10 @@ These are live in the library now.
   - The `model_cavgs_rejection` commander writes its two stacks through it, with the same
     files and the same log lines.
 - **`simple_segdiam_bin_picker`** (new, `src/main/pick`): one picker type in place of the two
-  300-line routines `segdiampick_mics_multi` and `segdiampick_mics_multi_fixed_bins`. Those
-  are now wrappers, so the current p03 keeps working unchanged. `MOLDIAMS_PICK` moved with the
-  picker. The only output difference: the two "no accepted cluster" warnings became one
-  message.
+  300-line routines `segdiampick_mics_multi` and `segdiampick_mics_multi_fixed_bins`. p03
+  drives the picker directly; the two wrappers that replaced them were removed on 2026-10-05.
+  `MOLDIAMS_PICK` moved with the picker. The only output difference: the two "no accepted
+  cluster" warnings became one message.
 - **`simple_qsys_env%exec_simple_prg_in_queue_async`** has a new optional `exit_code_fname`.
   Existing callers are unaffected.
 - **`forked_process%start`** resets SIGTERM and SIGINT to their defaults in the child,
@@ -134,8 +134,8 @@ These are live in the library now.
   thread starts or while holding the listener's lock.
 - **Stage restarts are the GUI's alone.** A GUI restart used to fork with `forked_process`'s
   auto-restart on, so the stage then re-forked itself on any failure, including the SIGKILL
-  that ends a stage which ignores a stop. `stream_master_stage%start` takes no argument and
-  always forks without auto-restart.
+  that ends a stage which ignores a stop. `stream_master_stage%start` takes no argument, and
+  `forked_process` has no auto-restart any more (removed on 2026-10-05).
 - **`ptcl_sieve%new`** takes an optional `optics_dir`. With it, a finished chunk handed to
   `completedir` gets the groups of the newest optics map, applied by import index
   (`hand_off`, through `copy_project_with_optics_map`); the chunk's own project is not
@@ -218,8 +218,8 @@ These are live in the library now.
   - `write_gain_from_sum`: writes the normalised inverse average as a gain reference.
 - `simple_motion_gain_tester` (`unit_project`, "motion gain") has tests for all three.
 - `simple_starproject_stream`: a new `stream_write_optics` writes `optics.star` from
-  the groups already in the project and assigns nothing. `stream_export_optics` now
-  calls it after assigning, so its own behaviour is unchanged.
+  the groups already in the project and assigns nothing. (`stream_export_optics`, which
+  called it after assigning, was removed on 2026-10-05.)
 - `simple_test_utils`: `enter_fixture` / `leave_fixture` (a per-test directory, kept only
   when a check failed) moved here from `simple_stream_tester`, which now uses these.
 
@@ -511,8 +511,8 @@ named steps. The differences:
 ## Behaviour compared with the old `simple_stream_p06_pool2D_new`
 
 1. **No match-class selection.** Particles are no longer deselected at import by a GUI
-   selection of sieve references (`class_match`), and `update_match_class_states` is not
-   called; the GUI no longer sends that selection.
+   selection of sieve references (`class_match`); `update_match_class_states` was never
+   called and was removed on 2026-10-05; the GUI no longer sends that selection.
 2. **Default mask diameter** (no `mskdiam` given) is in Angstroms: the pixel count times
    the pixel size. Before, the pixel count was used as Angstroms.
 3. **A GUI mask diameter** also drops the sieve's pending one. Before, the sieve's mask
@@ -652,15 +652,9 @@ Remaining:
    Add each to its suite table in `simple_commanders_test_class` and to the suite's
    `suite=` help in the test UI. `scripts/check_test_registry.py` checks that the table
    and the help agree.
-3. **Clean up:**
-   - Delete the helpers only the old stages called: `update_match_class_states`,
-     `wait_for_folder`, `wait_for_folder2`, `update_user_params`, `update_user_params2D`,
-     `process_selected_refs`, `process_selected_refs_2`, `test_repick`,
-     `write_repick_refs` (a search finds no caller left; check before deleting).
-   - Delete the wrappers `segdiampick_mics_multi` and `segdiampick_mics_multi_fixed_bins`
-     from `simple_mini_stream_utils`.
-   - Remove `stream_export_optics` and the `assign_optics` / `h_clust` copy inside
-     `simple_starproject_stream`.
+3. **Clean up** (the helpers only the old stages called, the `segdiampick_mics_multi` wrappers
+   and `stream_export_optics` with its `assign_optics` / `h_clust` copy were deleted on
+   2026-10-05, WS9 of `stream_fix_plan_2026-10-05.md`):
    - Switch `simple_stream_refine2D_utils` to `import_latest_optics_map`, and delete its
      `get_latest_optics_map` copies.
    - Move `simple_mic_selection`, `simple_mic_import`, `simple_optics_groups`,

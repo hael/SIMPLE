@@ -7,7 +7,6 @@ use simple_parameters,   only: parameters
 use simple_qsys_env,     only: qsys_env
 use simple_sp_project,   only: sp_project
 use simple_rec_list,     only: rec_list
-use simple_qsys_funs,    only: qsys_cleanup
 implicit none
 
 public :: stream_chunk
@@ -36,19 +35,15 @@ type stream_chunk
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure          :: generate
-    procedure          :: get_id
     procedure          :: is_available
-    procedure          :: to_analyze2D
     procedure          :: get_projfile_fname
     procedure          :: calc_sigma2
     procedure          :: analyze2D
     procedure, private :: gen_final_cavgs
-    procedure          :: remove_folder
     procedure          :: display_iter
     procedure          :: has_converged
     procedure          :: is_finished
     procedure          :: print_info
-    procedure          :: terminate_chunk
     procedure          :: kill
 end type stream_chunk
 
@@ -162,22 +157,11 @@ contains
         call debug_print('end chunk%generate_2 '//int2str(self%id))
     end subroutine generate
 
-    integer function get_id( self )
-        class(stream_chunk), intent(in) :: self
-        get_id = self%id
-    end function get_id
-
     elemental function is_available( self ) result( avail )
         class(stream_chunk), intent(in) :: self
         logical :: avail
         avail = self%available
     end function is_available
-
-    elemental function to_analyze2D( self ) result( yes )
-        class(stream_chunk), intent(in) :: self
-        logical :: yes
-        yes = self%toanalyze2D
-    end function to_analyze2D
 
     function get_projfile_fname( self )result( fname )
         class(stream_chunk), intent(in) :: self
@@ -328,37 +312,6 @@ contains
         clines(n+1) = cline_make_cavgs
         call tmp(:)%kill; call cline_make_cavgs%kill; deallocate(tmp)
     end subroutine gen_final_cavgs
-
-    ! removes processing folder
-    subroutine remove_folder( self )
-        class(stream_chunk), intent(inout) :: self
-        call debug_print('in chunk%remove_folder '//int2str(self%id))
-        if( .not.self%converged )THROW_HARD('cannot remove chunk prior to convergence; remove_folder')
-        call simple_rmdir(self%path)
-        call debug_print('end chunk%remove_folder '//int2str(self%id))
-    end subroutine remove_folder
-
-    ! to interrupt processing
-    subroutine terminate_chunk( self )
-        class(stream_chunk), intent(inout) :: self
-        type(string) :: cwd
-        integer      :: ipart, numlen
-        if( self%id == 0 )   return
-        if( file_exists(self%path) )then
-            numlen = len(int2str(self%p_ptr%nparts_chunk))
-            call simple_chdir(self%path)
-            call simple_getcwd(cwd)
-            CWD_GLOB = cwd%to_char()
-            call qsys_cleanup(self%p_ptr, keep2D=.false.)
-            do ipart = 1,self%p_ptr%nparts_chunk
-                call simple_touch(JOB_FINISHED_FBODY//int2str_pad(ipart,numlen))
-            enddo
-            call simple_touch('CAVGASSEMBLE_FINISHED')
-            call simple_chdir('..')
-            call simple_getcwd(cwd)
-            CWD_GLOB = cwd%to_char()
-        endif
-    end subroutine terminate_chunk
 
     ! get & display convergence stats
     subroutine display_iter( self )

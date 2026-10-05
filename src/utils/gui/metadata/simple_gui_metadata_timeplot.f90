@@ -17,11 +17,12 @@ private
 type, extends( gui_metadata_base ) :: gui_metadata_timeplot
   private
   character(len=SHORTSTRLEN) :: name     = ''   ! display name for the plot
-  real                       :: labels(512)     ! x-axis values
-  real                       :: data(512)       ! primary y-axis trace
-  real                       :: data2(512)      ! secondary y-axis trace (optional)
+  real                       :: labels(512) = 0. ! x-axis values
+  real                       :: data(512)   = 0. ! primary y-axis trace
+  real                       :: data2(512)  = 0. ! secondary y-axis trace (optional)
   integer                    :: n_labels = 0    ! number of populated points
 contains
+  procedure :: kill => kill_override
   procedure :: set
   procedure :: get
   procedure :: jsonise => jsonise_override
@@ -100,5 +101,17 @@ contains
     call json%add(json_ptr, json_data_ptr)
     call json%add(json_ptr, json_data2_ptr)
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_timeplot), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_timeplot )
+        self = gui_metadata_timeplot()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_timeplot

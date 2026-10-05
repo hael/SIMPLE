@@ -34,6 +34,7 @@ module simple_gui_metadata_stream_solve3D_multistate
     integer                :: state_populations(MAX_STATES_SOLVE3D_MULTISTATE) = 0
     real                   :: state_resolutions(MAX_STATES_SOLVE3D_MULTISTATE) = 0.0
   contains
+    procedure :: kill => kill_override
     procedure :: set
     procedure :: set_user_input
     procedure :: set_state_stats
@@ -144,5 +145,17 @@ contains
       nullify(json_ptr)
     end if
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_stream_solve3D_multistate), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_stream_solve3D_multistate )
+        self = gui_metadata_stream_solve3D_multistate()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_stream_solve3D_multistate

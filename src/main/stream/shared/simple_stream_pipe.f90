@@ -12,7 +12,11 @@
 !   - send: retries immediately on EINTR and with a short sleep on
 !     EAGAIN/EWOULDBLOCK. A frame is dropped whole (nothing written within the
 !     retry budget) or delivered whole: once any byte is in the pipe the rest
-!     follows, because a partial frame desynchronises the reader for good.
+!     follows, because a partial frame desynchronises the reader. A writer
+!     whose reader may stop for good (the master writing to a stage) limits
+!     that wait (limit_partial_frames): a frame still part-written after the
+!     limit is abandoned, the channel is broken, and later sends are dropped
+!     until discard.
 !   - receive: a frame already assembled from earlier reads is returned before
 !     the pipe is touched, and a read that would block still lets buffered
 !     bytes complete a frame. A drain loop therefore sees every queued message,
@@ -21,7 +25,7 @@
 !     mid-frame) is reported and the buffered bytes are dropped, so the reader
 !     resynchronises on a later frame instead of stopping the process.
 !   - discard drops whatever the pipe and the buffer hold, for a reader whose
-!     writer has been replaced (a restarted stage).
+!     writer has been replaced (a restarted stage), and mends a broken writer.
 !   - The descriptors belong to the master (simple_stream_state); kill forgets
 !     them and never closes them.
 !
@@ -49,12 +53,16 @@ type :: stream_pipe
     integer                       :: fd_write        = -1
     integer                       :: max_frame_bytes = 0
     integer                       :: expected_len    = -1 ! payload bytes of the frame being assembled; -1 before its header
+    integer                       :: max_partial_retries = 0 ! EAGAIN retries before a part-written frame is abandoned; 0: no limit
+    logical                       :: l_broken        = .false. ! a frame was abandoned part-written: sends are dropped until discard
     character(len=:), allocatable :: pending              ! bytes read and not yet returned
     character(len=:), allocatable :: label                ! names the channel in diagnostics
 contains
     procedure          :: new
     procedure          :: send
     procedure          :: send_meta
+    procedure          :: limit_partial_frames
+    procedure          :: is_broken
     procedure          :: receive
     procedure          :: discard
     procedure          :: get_pending_bytes
@@ -79,7 +87,22 @@ contains
         self%label           = label
     end subroutine new
 
-    !> Sends @p buffer as one frame; a no-op without a write end or with an empty buffer.
+    !> A part-written frame is abandoned after @p nretries EAGAIN retries (RETRY_SLEEP_US apart),
+    !! which breaks the channel until discard; 0 waits as long as it takes.
+    subroutine limit_partial_frames( self, nretries )
+        class(stream_pipe), intent(inout) :: self
+        integer,            intent(in)    :: nretries
+        self%max_partial_retries = max(0, nretries)
+    end subroutine limit_partial_frames
+
+    !> .true. once a frame was abandoned part-written, until discard.
+    logical function is_broken( self )
+        class(stream_pipe), intent(in) :: self
+        is_broken = self%l_broken
+    end function is_broken
+
+    !> Sends @p buffer as one frame; a no-op without a write end, with an empty buffer or on a
+    !! broken channel.
     subroutine send( self, buffer )
         class(stream_pipe), intent(inout) :: self
         character(len=*),   intent(in)    :: buffer
@@ -89,6 +112,7 @@ contains
         integer(c_size_t) :: nwritten
         integer           :: header_bytes, nbytes, nframe, sent, nretries, err_no, rc
         if( self%fd_write < 0 ) return
+        if( self%l_broken ) return
         nbytes = len(buffer)
         if( nbytes <= 0 ) return
         msg_len      = int(nbytes, c_int)
@@ -113,6 +137,12 @@ contains
                 if( sent == 0 .and. nretries > MAX_SEND_RETRIES )then
                     warning = 'dropped a frame on the '//self%label//' pipe: the reader is not draining it'
                     THROW_WARN(warning)
+                    exit
+                endif
+                if( sent > 0 .and. self%max_partial_retries > 0 .and. nretries > self%max_partial_retries )then
+                    warning = 'abandoned a part-written frame on the '//self%label//' pipe; dropping sends until it is discarded'
+                    THROW_WARN(warning)
+                    self%l_broken = .true.
                     exit
                 endif
                 rc = c_usleep(RETRY_SLEEP_US)
@@ -172,6 +202,7 @@ contains
         character(kind=c_char), allocatable, target :: raw(:)
         integer(c_size_t) :: nread
         self%expected_len = -1
+        self%l_broken     = .false.
         if( allocated(self%pending) ) deallocate(self%pending)
         if( self%fd_read < 0 ) return
         allocate(raw(READ_CHUNK_BYTES))
@@ -196,6 +227,8 @@ contains
         self%fd_write        = -1
         self%max_frame_bytes = 0
         self%expected_len    = -1
+        self%max_partial_retries = 0
+        self%l_broken        = .false.
         if( allocated(self%pending) ) deallocate(self%pending)
         if( allocated(self%label)   ) deallocate(self%label)
     end subroutine kill

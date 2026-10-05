@@ -4,7 +4,6 @@ use simple_core_module_api
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
-use simple_histogram,  only: histogram
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 implicit none
@@ -19,20 +18,13 @@ type starproject_stream
     type(string)               :: starfile_name
     type(string)               :: starfile_tmp
     type(string)               :: rootpath
-    real                       :: tilt_thres      = 0.05 ! params%tilt_thres of the last export
-    real                       :: shift_threshold = 0.05
-    integer                    :: group_offset = 0
     logical                    :: nicestream   = .false.
-    logical                    :: use_beamtilt = .false.
     logical                    :: verbose      = .false.
 contains
     ! export
     procedure          :: stream_export_micrographs
-    procedure          :: stream_export_optics
     procedure          :: stream_write_optics
     procedure          :: stream_export_particles_2D
-    procedure          :: stream_export_pick_diameters
-    procedure          :: stream_export_picking_references
     ! starfile
     procedure, private :: starfile_init
     procedure, private :: starfile_deinit
@@ -41,11 +33,8 @@ contains
     procedure, private :: starfile_set_optics_group_table
     procedure, private :: starfile_set_micrographs_table
     procedure, private :: starfile_set_particles2D_table
-    procedure, private :: starfile_set_pick_diameters_table
-    procedure, private :: starfile_set_clusters2D_table
     ! optics
     procedure, private :: assign_optics_single
-    procedure, private :: assign_optics
     procedure          :: copy_optics
     procedure          :: copy_micrographs_optics
 end type starproject_stream
@@ -54,6 +43,8 @@ contains
 
     ! starfiles
 
+    ! The STAR file @p fname in @p outdir (the working directory when empty; an absolute @p fname
+    ! is taken as it is). Paths in it are relative to the folder above @p outdir, the project root.
     subroutine starfile_init( self, params, fname, outdir, verbose)
         class(starproject_stream), intent(inout) :: self
         class(parameters),         intent(in)    :: params
@@ -61,12 +52,19 @@ contains
         class(string),             intent(in)    :: outdir
         logical, optional,         intent(in)    :: verbose
         type(string) :: cwd, stem
-        self%tilt_thres      = params%tilt_thres
         self%projfile_optics = params%projfile_optics
         if(present(verbose)) self%verbose = verbose
-        self%starfile_name = fname
-        self%starfile_tmp  = fname // '.tmp'
-        call simple_getcwd(cwd)
+        if( outdir%strlen() > 0 )then
+            cwd = simple_abspath(outdir, check_exists=.false.)
+        else
+            call simple_getcwd(cwd)
+        endif
+        if( fname%to_char([1,1]) == '/' )then
+            self%starfile_name = fname
+        else
+            self%starfile_name = cwd//'/'//fname
+        endif
+        self%starfile_tmp  = self%starfile_name // '.tmp'
         stem = basename(stemname(cwd))
         self%rootpath = stem
         self%nicestream = .true.
@@ -144,23 +142,6 @@ contains
             end if
         end do
     end subroutine starfile_set_optics_group_table
-
-    subroutine starfile_set_pick_diameters_table( self, histogram_moldiams )
-        class(starproject_stream), intent(inout) :: self
-        type(histogram),           intent(in)    :: histogram_moldiams
-        integer :: i
-        call starfile_table__clear(self%starfile)
-        call starfile_table__new(self%starfile)
-        call starfile_table__setIsList(self%starfile, .false.)
-        call starfile_table__setname(self%starfile, 'pick_diameters')
-        do i=1, histogram_moldiams%get_nbins()
-            call starfile_table__addObject(self%starfile)
-            ! ints
-            call starfile_table__setValue_int(self%starfile,    SMPL_PICK_POPULATION, int(histogram_moldiams%get(i)))
-            ! doubles
-            call starfile_table__setValue_double(self%starfile, SMPL_PICK_DIAMETER,   real(histogram_moldiams%get_x(i), dp))
-        end do
-    end subroutine starfile_set_pick_diameters_table
 
     subroutine starfile_set_micrographs_table( self, spproj )
         class(starproject_stream),  intent(inout) :: self
@@ -282,48 +263,6 @@ contains
 
     end subroutine starfile_set_particles2D_table
 
-    subroutine starfile_set_clusters2D_table( self, spproj )
-        class(starproject_stream), intent(inout) :: self
-        class(sp_project),         intent(inout) :: spproj
-        character(len=XLONGSTRLEN) :: str_stk, stkname
-        integer                    :: i, stkind, pathtrim
-        pathtrim = 0
-        call starfile_table__clear(self%starfile)
-        call starfile_table__new(self%starfile)
-        call starfile_table__setIsList(self%starfile, .false.)
-        call starfile_table__setname(self%starfile, 'clusters')
-        do i=1,spproj%os_cls2D%get_noris()
-            if(spproj%os_cls2D%get(i, 'state') .eq. 0.0 ) cycle
-            call starfile_table__addObject(self%starfile)
-            ! ints
-            if(spproj%os_cls2D%isthere(i, 'ncls')) call starfile_table__setValue_int(self%starfile, SMPL_N_CLS, spproj%os_cls2D%get_int(i, 'ncls'))
-            ! doubles
-            if(spproj%os_cls2D%isthere(i, 'res'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_ESTIM_RESOL_REF, real(spproj%os_cls2D%get(i, 'res'),   dp))
-            if(spproj%os_cls2D%isthere(i, 'pop'  )) call starfile_table__setValue_double(self%starfile, EMDL_MLMODEL_PDF_CLASS,       real(spproj%os_cls2D%get(i, 'pop') ,  dp))
-            ! strings
-            if(spproj%os_cls2D%isthere(i, 'stkind') .and. spproj%os_cls2D%isthere(i, 'stk')) then
-                stkind  = floor(spproj%os_cls2D%get(i, 'stkind'))
-                call spproj%os_cls2D%get_static(i, 'stk', stkname)
-                str_stk = get_relative_path_here(stkname)
-                call starfile_table__setValue_string(self%starfile, EMDL_MLMODEL_REF_IMAGE,  int2str(stkind) // '@' // trim(str_stk))
-            end if
-        end do
-
-        contains
-
-            function get_relative_path_here ( path ) result ( newpath )
-                character(len=*), intent(in) :: path
-                character(len=XLONGSTRLEN)   :: newpath
-                if(pathtrim .eq. 0) pathtrim = index(path, self%rootpath%to_char()) 
-                if( pathtrim > 0 ) then
-                    newpath = trim(path(pathtrim:))
-                else
-                    newpath = trim(path)
-                end if
-            end function get_relative_path_here
-
-    end subroutine starfile_set_clusters2D_table
-
     ! export
 
     subroutine stream_export_micrographs( self, params, spproj, outdir, optics_set, filename)
@@ -349,22 +288,6 @@ contains
         call self%starfile_write_table(append = .true.)
         call self%starfile_deinit()
     end subroutine stream_export_micrographs
- 
-    subroutine stream_export_optics( self, params, spproj, outdir )
-        class(starproject_stream), intent(inout) :: self
-        class(parameters),         intent(in)    :: params
-        class(sp_project),         intent(inout) :: spproj
-        class(string),             intent(in)    :: outdir
-        self%tilt_thres      = params%tilt_thres
-        self%projfile_optics = params%projfile_optics
-        if(params%beamtilt .eq. 'yes') then
-            self%use_beamtilt = .true.
-        else
-            self%use_beamtilt = .false.
-        end if
-        call self%assign_optics(spproj)
-        call self%stream_write_optics(params, spproj, outdir)
-    end subroutine stream_export_optics
 
     ! Writes optics.star from the optics groups already in spproj; assigns nothing.
     subroutine stream_write_optics( self, params, spproj, outdir )
@@ -422,38 +345,6 @@ contains
         endif
     end subroutine stream_export_particles_2D
 
-    subroutine stream_export_pick_diameters( self, params, outdir, histogram_moldiams, filename)
-        class(starproject_stream), intent(inout) :: self
-        class(parameters),         intent(in)    :: params
-        type(histogram),           intent(inout) :: histogram_moldiams
-        class(string),             intent(in)    :: outdir
-        class(string), optional,   intent(in)    :: filename
-        if(present(filename)) then
-            call self%starfile_init(params, filename, outdir)
-        else
-            call self%starfile_init(params, string('pick.star'), outdir)
-        endif
-        call self%starfile_set_pick_diameters_table(histogram_moldiams)
-        call self%starfile_write_table(append = .true.)
-        call self%starfile_deinit()
-    end subroutine stream_export_pick_diameters
-
-    subroutine stream_export_picking_references( self, params, spproj, outdir, filename)
-        class(starproject_stream), intent(inout) :: self
-        class(parameters),         intent(in)    :: params
-        class(sp_project),         intent(inout) :: spproj
-        class(string),             intent(in)    :: outdir
-        class(string),optional,    intent(in)    :: filename
-        if(present(filename)) then
-            call self%starfile_init(params, filename, outdir)
-        else
-            call self%starfile_init(params, string('pickrefs.star'), outdir)
-        endif
-        call self%starfile_set_clusters2D_table(spproj)
-        call self%starfile_write_table(append = .true.)
-        call self%starfile_deinit()
-    end subroutine stream_export_picking_references
-
     ! optics
 
     subroutine assign_optics_single( self, spproj )
@@ -479,216 +370,6 @@ contains
         call spproj%os_optics%set(1, "opcy",  0.0)
         call spproj%os_optics%set(1, "pop",   real(spproj%os_mic%get_noris()))
     end subroutine assign_optics_single
-
-    subroutine assign_optics( self, spproj )
-        class(starproject_stream),  intent(inout) :: self
-        class(sp_project),          intent(inout) :: spproj
-        type(ori)                                 :: template_ori
-        real                                      :: grp_info(10000, 3) ! max 10000 optics groups ! 1: centroid x, 2: centroid y, 3: population
-        integer                                   :: i, ntilt, nshift
-        self%shift_threshold = self%tilt_thres
-        call assign_tiltgroups()
-        call assign_shiftgroups()
-        do i=1, spproj%os_mic%get_noris()
-            if(spproj%os_mic%get(i, 'state') .gt. 0.0 ) exit      
-        end do
-        call template_ori%new(.false.)
-        call template_ori%set("smpd",  spproj%os_mic%get(i, "smpd")   )
-        call template_ori%set("cs",    spproj%os_mic%get(i, "cs")     )
-        call template_ori%set("kv",    spproj%os_mic%get(i, "kv")     )
-        call template_ori%set("fraca", spproj%os_mic%get(i, "fraca")  )
-        call template_ori%set("state", 1.0)
-        call template_ori%set("pop",   0.0)
-        call template_ori%set("ogid",  0.0)
-        call template_ori%set("opcx",  0.0)
-        call template_ori%set("opcy",  0.0)
-        call template_ori%set("ogname", "opticsgroup")
-        call spproj%os_optics%new(nshift, is_ptcl=.false.)
-        do i = 1, nshift
-            call spproj%os_optics%append(i, template_ori)
-            call spproj%os_optics%set(i, "ogid", real(i + self%group_offset))
-            call spproj%os_optics%set(i, "pop",  grp_info(i, 3))
-            call spproj%os_optics%set(i, "opcx", grp_info(i, 1))
-            call spproj%os_optics%set(i, "opcy", grp_info(i, 2))
-            call spproj%os_optics%set(i, "ogname", "opticsgroup" // int2str(i + self%group_offset))
-        end do
-        call template_ori%kill()
-        call spproj%write()
-
-        contains
-
-            subroutine assign_tiltgroups()
-                real, allocatable :: tiltuniq(:)
-                integer           :: itilt, imic
-                if(self%use_beamtilt) then
-                    call elim_dup(spproj%os_mic%get_all('tiltgrp'), tiltuniq)
-                    ntilt = size(tiltuniq)
-                    do itilt=1, ntilt 
-                        do imic=1, spproj%os_mic%get_noris()
-                            if(spproj%os_mic%get(imic, 'tiltgrp') == tiltuniq(itilt)) call spproj%os_mic%set(imic, 'tmpgrp', real(itilt))
-                        end do
-                    end do
-                else
-                    ntilt = 1
-                    call spproj%os_mic%set_all2single('tmpgrp', 1.0)
-                end if
-                if(allocated(tiltuniq)) deallocate(tiltuniq)
-                write(logfhandle,'(A,I8)') '>>> # TILT GROUPS ASSIGNED : ', ntilt
-            end subroutine
-
-            subroutine assign_shiftgroups()
-                real,    allocatable :: tiltgrps(:), shiftxs(:), shiftys(:)
-                real,    allocatable :: shifts(:,:), centroids(:,:)
-                integer, allocatable :: populations(:), labels(:), indices(:)
-                integer              :: itilt, imic, ishift, tiltgrppop
-                write(logfhandle,'(A,F8.2)') '>>> CLUSTERING TILT GROUPS USING SHIFTS AND THRESHOLD : ', self%shift_threshold
-                tiltgrps = spproj%os_mic%get_all('tmpgrp')
-                shiftxs  = spproj%os_mic%get_all('shiftx')
-                shiftys  = spproj%os_mic%get_all('shifty')
-                nshift   = 0
-                do itilt = 1, ntilt
-                    write(logfhandle,'(A,I8)') '      CLUSTERING TILT GROUP : ', itilt
-                    tiltgrppop = count(tiltgrps == itilt)
-                    allocate(shifts(tiltgrppop, 2))
-                    allocate(labels(tiltgrppop   ))
-                    allocate(indices(tiltgrppop  ))
-                    ishift = 1
-                    do imic = 1, spproj%os_mic%get_noris()
-                        if(tiltgrps(imic) == itilt) then
-                            shifts(ishift, 1) = shiftxs(imic)
-                            shifts(ishift, 2) = shiftys(imic)
-                            indices(ishift) = imic 
-                            ishift = ishift + 1
-                        end if
-                    end do
-                    call h_clust(shifts, self%shift_threshold, labels, centroids, populations)
-                    do ishift = 1, size(labels)
-                        call spproj%os_mic%set(indices(ishift), 'ogid', real(labels(ishift) + nshift + self%group_offset))
-                    end do
-                    do ishift = 1, size(populations)
-                        grp_info(ishift + nshift, 1) = centroids(ishift, 1)
-                        grp_info(ishift + nshift, 2) = centroids(ishift, 2)
-                        grp_info(ishift + nshift, 3) = populations(ishift)
-                    end do
-                    nshift = nshift + size(populations)
-                    deallocate(shifts, labels, indices)
-                    write(logfhandle,'(A,I8)') '        # SHIFT GROUPS ASSIGNED : ', size(populations)
-                end do
-                call spproj%os_mic%delete_entry('tmpgrp')
-                if(allocated(populations)) deallocate(populations)
-                if(allocated(labels))      deallocate(labels)
-                if(allocated(indices))     deallocate(indices)
-                if(allocated(shifts))      deallocate(shifts)
-                if(allocated(centroids))   deallocate(centroids)
-                if(allocated(tiltgrps))    deallocate(tiltgrps)
-                if(allocated(shiftxs))     deallocate(shiftxs)
-                if(allocated(shiftys))     deallocate(shiftys)
-            end subroutine assign_shiftgroups
-
-            ! distance threshold based yerarchical clustering
-            ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
-            subroutine h_clust(data_in, thresh, labels, centroids, populations)
-                real,                 intent(in)  :: data_in(:,:)   ! input data, point coords
-                real,                 intent(in)  :: thresh         ! threshold for class merging
-                integer,              intent(out) :: labels(:)      ! labels of the elements in vec
-                real,    allocatable, intent(out) :: centroids(:,:) ! centroids of the classes
-                integer, allocatable, intent(out) :: populations(:) ! number of elements belonging to each class
-                real,    allocatable :: mat(:,:)                    ! pariwise distances matrix
-                logical, allocatable :: mask(:), outliers(:)
-                integer :: N, i, j, cnt, ncls
-                integer :: index(1), loc1(1), loc2(1)
-                real    :: d
-                if( size(data_in, dim = 2) .ne. 2 )then
-                    THROW_HARD('Input data should be two dimensional!; h_clust')
-                endif
-                N = size(data_in, dim = 1) ! number of data points
-                ! 1) calc all the couples of distances, using euclid dist
-                allocate(mat(N,N), source = 0.)
-                do i = 1, N-1
-                    do j = i+1, N
-                        mat(i,j) = sqrt((data_in(i,1)-data_in(j,1))**2 + (data_in(i,2)-data_in(j,2))**2) ! pariwise euclidean distance
-                        mat(j,i) = mat(i,j)
-                    enddo
-                enddo
-                ! 2) Generate binary clusters
-                allocate(mask(N),     source = .true. )
-                allocate(outliers(N), source = .false.)
-                ncls = 0
-                do i = 1, N
-                    if( mask(i) )then ! if it's not already been clustered
-                        mask(i) = .false.
-                        ! find the index of the couple
-                        d = minval(mat(i,:), mask)
-                        index(:) = minloc(mat(i,:), mask)
-                        ncls = ncls + 1
-                        ! assign labels
-                        labels(i) = ncls
-                        if(d <= thresh) then ! if it's not an outlier (it has a couple)
-                            labels(index(1)) = labels(i)
-                            mask(index(1)) = .false. ! index(1) has already been clustered
-                        else
-                            outliers(i) = .true.
-                        endif
-                    endif
-                enddo
-                ! 3) Calculate centroids
-                allocate(centroids(ncls,2), source = 0.)
-                mask = .true. ! reset
-                do i = 1, ncls
-                    ! find the first member of the class
-                    loc1(:) = minloc(abs(labels-i))
-                    if(.not. outliers(loc1(1))) then
-                        mask(loc1(1)) = .false.
-                        ! find the second member of the class
-                        loc2(:) = minloc(abs(labels-i), mask)
-                        mask(loc2(1)) = .false.
-                        centroids(i,1) = (data_in(loc1(1),1) + data_in(loc2(1),1))/2.
-                        centroids(i,2) = (data_in(loc1(1),2) + data_in(loc2(1),2))/2.
-                    else ! the class has just one element
-                        loc1(:) = minloc(abs(labels-i))
-                        centroids(i,1) = data_in(loc1(1),1)
-                        centroids(i,2) = data_in(loc1(1),2)
-                        mask(loc1(1)) = .false.
-                    endif
-                enddo
-                mask  = .true. ! reset
-                ! 4) merge classes
-                do i = 1, ncls-1
-                    do j = i+1, ncls
-                        if(sqrt((centroids(i,1)-centroids(j,1))**2+(centroids(i,2)-centroids(j,2))**2) <= thresh) then ! merge classes
-                            ! change label to class j
-                            where(labels == j) labels = i
-                        endif
-                    enddo
-                enddo
-                ! 5) Reoder labels
-                cnt = 0
-                do i = 1, ncls
-                    if( any(labels== i) )then !there is a class labelled i
-                        cnt = cnt + 1
-                        where(labels == i) labels = cnt
-                    endif
-                enddo
-                ! 6) recalculate centroids
-                deallocate(centroids)
-                ncls = maxval(labels) ! the nr of classes is maxval(labels)
-                allocate(centroids(ncls,2), source = 0.)
-                allocate(populations(ncls), source = 0 )
-                mask = .true. ! reset
-                do i = 1, ncls
-                    populations(i) = count(labels == i) ! counts the nr of elements in the class
-                    ! find the all the cnt member of the class and update the centroids
-                    do j = 1, populations(i)
-                        loc1(:) = minloc(abs(labels-i), mask)
-                        mask(loc1(1)) = .false. ! do not consider this member of the class anymore
-                        centroids(i,1) = centroids(i,1)+ data_in(loc1(1),1)
-                        centroids(i,2) = centroids(i,2)+ data_in(loc1(1),2)
-                    enddo
-                    centroids(i,:) = centroids(i,:)/real(populations(i))
-                enddo
-            end subroutine h_clust
-
-    end subroutine assign_optics
 
     subroutine copy_optics( self, spproj, spproj_src )
         class(starproject_stream),  intent(inout) :: self

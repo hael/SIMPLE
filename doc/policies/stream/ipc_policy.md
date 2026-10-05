@@ -56,27 +56,38 @@ A frame is a C `int` byte count followed by that many payload bytes.
    `MAX_PICKREFS_SELECTION`, `MAX_SNAPSHOT2D_SELECTION`, `MAX_MIC_COORDINATES`). Callers stay
    within them: the picks drawn on a thumbnail are cut at `MAX_MIC_COORDINATES`. The setters stop
    on overflow as a guard against programming errors; nothing from outside may reach that guard.
-4. **A reused metadata object must be reset with a default-initialised object**: `new` and
-   `kill` reset only the base flags, so fields a message does not set would otherwise keep the
-   previous message's values.
-5. **The master keeps the latest message per type** (`stream_master_meta_store`):
+4. **A reused metadata object is reset with `kill`**: every type extending `gui_metadata_base`
+   overrides `kill` to assign its default-initialised self, so no field of the previous message
+   survives into the next. Every component therefore keeps a default initialiser; `new` sets only
+   the base flags.
+5. **The master keeps the latest message per type** (`stream_master_meta_store`). A frame whose
+   length is not its tag's type's (a desynchronised pipe read as a frame) is dropped with a warning
+   before it is copied into anything (`frame_fits`).
+6. **What it keeps:**
    - a status replaces the previous one;
    - an item of a list (micrograph, optics group, class average, volume, reprojection tile)
      goes to slot `i` of a list of `i_max`, which is remade when `i_max` changes.
-6. **Locking:** the master's listener thread drains every stage's pipe into the store while
+7. **Locking:** the master's listener thread drains every stage's pipe into the store while
    holding the metadata lock. The main loop holds the same lock to assemble a heartbeat, and to
    discard a stage's pipes and fork it again.
 
 ## 5. Master to stage: updates
 
-1. Each GUI answer becomes one `gui_metadata_stream_update` holding that answer's fields only;
-   a field is sent once, in the update that brought it.
-2. The update goes to the running stages that read updates:
+1. Each GUI answer becomes one `gui_metadata_stream_update` holding that answer's fields. NICE
+   answers every heartbeat with its whole state, so most answers repeat the last one.
+2. The update goes to the running stages that read updates, and only when it differs from the
+   last update the stage was sent since it was started (`stream_master_stage%send_update`). A
+   restarted stage therefore receives the next answer whole:
    - p01 reads the CTF resolution, astigmatism and ice thresholds;
    - p03 reads the picking-reference selection and its cycle;
    - p06 reads the 2D mask diameter and snapshot requests.
-3. A stopped stage is not sent updates (its pipe would only fill).
+3. A stopped stage, and a stage asked to stop, is not sent updates (its pipe would only fill).
 4. A stage drains its updates once per pass and applies them in order.
+5. **The master's update writer gives up on a part-written frame** after
+   `UPDATE_PARTIAL_RETRIES` (about 2 s; `stream_pipe%limit_partial_frames`): a stage that stopped
+   reading must not hold the master. The channel is then broken, later updates are dropped, and
+   the discard before the stage's next start mends it. The stages' writers to the master have no
+   such limit, since the master's listener always drains them.
 
 ## 6. Master and GUI
 
@@ -91,7 +102,7 @@ A frame is a C `int` byte count followed by that many payload bytes.
    | Key | Effect |
    |---|---|
    | `terminate` | stop the stream |
-   | `terminate_<key>`, `restart_<key>` | stop, or restart when stopped, one stage (`<key>` from `stage_gui_key`) |
+   | `terminate_<key>`, `restart_<key>` | stop, or restart when stopped, one stage (`<key>` from `stage_gui_key`); NICE keeps `restart_<key>` until it sees the stage running, so the master acts on it once, again only after the key has left an answer, and never once the stream is stopping |
    | `ctfresthreshold`, `astigthreshold`, `icefracthreshold` | preprocessing thresholds |
    | `pickrefs_selection`, `pickrefs_cycle` | a picking-reference selection of p03's cycle |
    | `mskdiam2D` | the 2D pool's mask diameter |
@@ -110,8 +121,7 @@ A frame is a C `int` byte count followed by that many payload bytes.
    - optics assignment is asked first, with up to `OPTICS_STOP_TIMEOUT_S` (60 s);
    - then every running stage is asked on each pass;
    - a stage still running after `STOP_TIMEOUT_S` (600 s) is killed (SIGKILL).
-3. Stages are forked without `forked_process` auto-restart: a stage restarts only when the GUI
-   asks.
+3. `forked_process` never restarts a child by itself: a stage restarts only when the GUI asks.
 
 ## 8. Change rules
 
@@ -121,19 +131,19 @@ A frame is a C `int` byte count followed by that many payload bytes.
   added to section 6.
 - Any read of a stage pipe on the master's main thread takes the metadata lock.
 - Tests:
-  - `unit_ipc` "stream pipe": framing, resync, discard;
+  - `unit_ipc` "stream pipe": framing, resync, discard, an abandoned part-written frame;
   - `unit_stream` "stream master": stage names and keys; GUI answers, including invalid and
-    oversized ones; the store; a stage's pipes from both sides.
+    oversized ones; the store, including a frame of the wrong length; a stage's pipes from both
+    sides; an update sent once;
+  - `unit_ui` "GUI metadata": every type a stage sends survives serialisation
+    (a copy received by transfer holds the same fields).
 
 ## 9. Known gaps
 
-- **No serialise round-trip test** covers every metadata type.
 - **`gui_metadata_project`** has allocatable components and no `serialise` guard. It is not sent
   over a pipe today.
-- **Metadata `kill` resets only the base flags** in every type. Reuse is safe only through a
-  default-initialised assignment.
-- **The sieve-reference selection** (`sieverefs_selection`, `ref_selection`) has no writer in the
-  master and no reader in the stages.
+- **The sieve-reference selection** (`ref_selection`) is still sent by NICE and ignored; the
+  update type no longer has a field for it.
 - **`increase_nmics`** is still sent by NICE and ignored.
 - **The byte-copy format** ties the processes to one binary; a stage started by `exec` would need
   a real wire format.

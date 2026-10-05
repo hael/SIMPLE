@@ -1,15 +1,16 @@
 !@descr: utilities for running the pool 2D refinement
 module simple_stream_pool2D_utils
 use simple_stream_api
+use simple_qsys_job_record, only: cancel_queued_job
 implicit none
 
 ! CALCULATORS
 public :: init_pool_clustering
 public :: iterate_pool
+public :: draw_new_classes
 ! GETTERS
 public :: get_pool_assigned
 public :: get_pool_cavgs_jpeg
-public :: get_pool_cavgs_jpeg_ntiles
 public :: get_pool_cavgs_jpeg_ntilesx
 public :: get_pool_cavgs_jpeg_ntilesy
 public :: get_pool_cavgs_mrc
@@ -18,34 +19,34 @@ public :: get_pool_ptr
 public :: get_pool_rejected
 public :: get_pool_resolution
 public :: is_pool_available
+public :: is_pool_failed
 ! SETTERS
-public :: set_lpthres_type
 public :: set_pool_resolution_limits
 ! UPDATERS
 public :: update_mskdiam
-public :: update_match_class_states
 public :: update_pool
 public :: update_pool_aln_params
 public :: update_pool_status
+public :: cancel_pool_job
 ! JPGS / GUI
 public :: generate_pool_stats
 private
 #include "simple_local_flags.inc"
 
-character(16)           :: last_iteration_time = ""         ! string with last iteration timestamp
 integer                 :: current_jpeg_ntiles              ! number of used tiles in current JPEG
 integer                 :: current_jpeg_ntilesx             ! number of tiles in x
 integer                 :: current_jpeg_ntilesy             ! number of tiles in y
 integer                 :: lim_ufrac_nptcls  = 0            ! threshold for fractional updates
-integer                 :: ncls_max                         ! maximum allowed classes
 integer                 :: ncls_rejected_glob               ! number of rejected classes
 integer                 :: nptcls_glob                      ! total particles in pool
 integer                 :: nptcls_rejected_glob             ! rejected particles in pool
 logical,    allocatable :: pool_stacks_mask(:)              ! subset of stacks undergoing 2D analysis
-real                    :: current_jpeg_scale               ! tile scaling factor
 real                    :: current_resolution=999.          ! current estimated resolution
 real                    :: resolutions(POOL_NPREV_RES)=999. ! pool resolution history (length POOL_NPREV_RES)
 type(qsys_env)          :: pool_qenv                        ! qsys submission environment for pool
+integer                 :: pool_nattempts    = 0            ! submissions of the current iteration: a failed first is retried once
+logical                 :: l_pool_failed     = .false.      ! the current iteration failed twice: the pool stops
+type(string)            :: pool_center                      ! the pool's centering (yes|no) on a full update
 type(string)            :: current_jpeg                     ! filename of current pool JPEG (type(string))
 ! convergence
 real                    :: conv_frac     = 0.0
@@ -56,28 +57,30 @@ contains
 
     ! CALCULATORS
 
-    subroutine init_pool_clustering( params, cline, spproj, projfilegui, reference_generation )
+    ! The pool, at its first import: @p box and @p smpd are the imported sets' (px, A) and
+    ! @p mskdiam (A) the pool's mask diameter, kept as pool state (simple_stream2D_state).
+    subroutine init_pool_clustering( params, cline, spproj, box, smpd, mskdiam )
         class(parameters), intent(inout) :: params
         class(cmdline),    target, intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
-        class(string),     intent(in)    :: projfilegui
-        logical, optional, intent(in)    :: reference_generation
+        integer,           intent(in)    :: box
+        real,              intent(in)    :: smpd, mskdiam
         type(string)          :: carg, pool_sigma_path
-        character(len=STDLEN) :: pool_nthr_env, pool_part_env, refgen_nthr_env, refgen_part_env
+        character(len=STDLEN) :: pool_part_env
         integer               :: envlen
         call seed_rnd
-        ! reference generation: used for generating references from raw particles
-        l_no_chunks = .false.
-        if( present(reference_generation) ) l_no_chunks = reference_generation
         ! general parameters
         master_cline => cline
-        call mskdiam2lplimits(params%mskdiam, lpstart, lpstop, lpcen)
+        pool_native_box  = box
+        pool_native_smpd = smpd
+        pool_mskdiam     = mskdiam
+        pool_user_lpstop = 0.
+        if( cline%defined('lpstop') ) pool_user_lpstop = params%lpstop
+        call mskdiam2lplimits(pool_mskdiam, lpstart, lpstop, lpcen)
         l_scaling          = .true.
-        ncls_max           = params%ncls
         ncls_glob          = params%ncls
         ncls_rejected_glob = 0
         orig_projfile      = params%projfile
-        projfile4gui       = projfilegui
         params%nparts_pool = params%nparts ! backwards compatibility
         ! bookkeeping & directory structure
         numlen             = len(int2str(params%nparts))
@@ -99,8 +102,6 @@ contains
         if( cline%defined('walltime') ) call pool_proj%compenv%set(1,'walltime', params%walltime)
         ! commit to disk
         call pool_proj%write(string(POOL_DIR)//POOL_PROJFILE)
-        ! reference generation
-        if( l_no_chunks ) ncls_glob = params%ncls
         ! Pool command line
         call cline_refine2D_pool%set('prg',        'refine2D_distr')
         call cline_refine2D_pool%set('oritype',    'ptcl2D')
@@ -113,60 +114,40 @@ contains
         else
             call cline_refine2D_pool%set('cls_init', 'rand')
         endif
+        pool_center = 'yes'
         if( cline%defined('center') )then
-            carg = cline%get_carg('center')
-            call cline_refine2D_pool%set('center',carg)
+            carg        = cline%get_carg('center')
+            pool_center = carg
             call carg%kill
-        else
-            call cline_refine2D_pool%set('center','yes')
         endif
-        if( .not.cline%defined('center_type') )then
+        call cline_refine2D_pool%set('center', pool_center)
+        if( cline%defined('center_type') )then
+            call cline_refine2D_pool%set('center_type', params%center_type)
+        else
             call cline_refine2D_pool%set('center_type', 'seg')
         endif
         call cline_refine2D_pool%set('extr_iter', 99999)
         call cline_refine2D_pool%set('extr_lim',   MAX_EXTRLIM2D)
         call cline_refine2D_pool%set('mkdir',      'no')
-        call cline_refine2D_pool%set('mskdiam',    params%mskdiam)
+        call cline_refine2D_pool%set('mskdiam',    pool_mskdiam)
         call cline_refine2D_pool%set('async',      'yes') ! to enable hard termination
         call cline_refine2D_pool%set('stream2d',   'yes') ! the only place this flag should be turned on
         call cline_refine2D_pool%set('nparts',     params%nparts)
         if( cline%defined('worker_server') ) call cline_refine2D_pool%set('worker_server', cline%get_carg('worker_server'))
+        if( cline%defined('worker_server_nthr') ) call cline_refine2D_pool%set('worker_server_nthr', cline%get_iarg('worker_server_nthr'))
         call cline_refine2D_pool%delete('autoscale')
         ! when the 2D analysis is started from raw particles
         ! set # of ptcls beyond which fractional updates will be used
         lim_ufrac_nptcls = STREAM_NPTCLS_MAX
         if( master_cline%defined('nsample_max') ) lim_ufrac_nptcls = params%nsample_max
-        ! EV override
-        params%nthr2D = params%nthr ! will be deprecated
-        if( l_no_chunks )then
-            call get_environment_variable(SIMPLE_STREAM_REFGEN_NTHR, refgen_nthr_env, envlen)
-            if(envlen > 0) then
-                call cline_refine2D_pool%set('nthr', str2int(refgen_nthr_env))
-            else
-                call cline_refine2D_pool%set('nthr', params%nthr)
-            end if
-            call get_environment_variable(SIMPLE_STREAM_REFGEN_PARTITION, refgen_part_env, envlen)
-            if(envlen > 0) then
-                call pool_qenv%new(params, params%nparts, stream=.true., exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
-                &qsys_partition=string(trim(refgen_part_env)))
-            else
-                call pool_qenv%new(params, params%nparts, stream=.true., exec_bin=string('simple_private_exec'),qsys_name=string('local'))
-            end if
+        ! the iterations' threads (the master's resources table, SIMPLE_STREAM_POOL_NTHR over it)
+        call cline_refine2D_pool%set('nthr', params%nthr)
+        call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
+        if(envlen > 0) then
+            call pool_qenv%new(params, params%nparts, stream=.true., exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
+            &qsys_partition=string(trim(pool_part_env)))
         else
-            call get_environment_variable(SIMPLE_STREAM_POOL_NTHR, pool_nthr_env, envlen)
-            if(envlen > 0) then
-                call cline_refine2D_pool%set('nthr',    str2int(pool_nthr_env))
-                call cline_refine2D_pool%set('nthr2D', str2int(pool_nthr_env))
-            else
-                call cline_refine2D_pool%set('nthr', params%nthr)
-            end if
-            call get_environment_variable(SIMPLE_STREAM_POOL_PARTITION, pool_part_env, envlen)
-            if(envlen > 0) then
-                call pool_qenv%new(params, params%nparts, stream=.true., exec_bin=string('simple_private_exec'),qsys_name=string('local'),&
-                &qsys_partition=string(trim(pool_part_env)))
-            else
-                call pool_qenv%new(params, params%nparts, stream=.true., exec_bin=string('simple_private_exec'),qsys_name=string('local'))
-            end if
+            call pool_qenv%new(params, params%nparts, stream=.true., exec_bin=string('simple_private_exec'),qsys_name=string('local'))
         end if
         ! objective function
         call cline_refine2D_pool%set('objfun', 'euclid')
@@ -180,7 +161,7 @@ contains
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
         ! Determines dimensions for downscaling
-        call set_pool_dimensions(params)
+        call set_pool_dimensions()
         ! updates command-lines with resolution limits
         call set_pool_resolution_limits(params)
         ! module variables
@@ -194,15 +175,13 @@ contains
         logical, parameter            :: L_BENCH = .false.
         type(sp_project)              :: spproj
         integer(timer_int_kind)       :: t_tot
-        integer,          allocatable :: nptcls_per_stk(:), prev_eo_pops(:,:), prev_eo_pops_thread(:,:), clspops(:)
-        type(cmdline), allocatable :: pool_clines(:)
+        integer,          allocatable :: nptcls_per_stk(:)
         type(string) :: stkname
         real         :: frac_update, smpd
-        integer      :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl, islot
-        integer      :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls, ncls_drawn
+        integer      :: iptcl,i, nptcls_tot, fromp, top, nstks_tot, jptcl, islot
+        integer      :: nptcls_sel, istk, nptcls2update, nstks2update, jjptcl, ncls
         if( .not. l_stream2D_active ) return
         if( .not. l_pool_available  ) return
-        if( l_no_chunks ) THROW_HARD('Designed for pre-clustered/matched particles!')
         if( L_BENCH ) t_tot  = tic()
         nptcls_tot           = pool_proj%os_ptcl2D%get_noris()
         nptcls_glob          = nptcls_tot
@@ -247,9 +226,7 @@ contains
         ! counting number of stacks & selected particles
         nstks_tot  = pool_proj%os_stk%get_noris()
         allocate(nptcls_per_stk(nstks_tot), source=0)
-        nptcls_old = 0 ! Total # of particles with state=1
-        !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl)&
-        !$omp default(shared) reduction(+:nptcls_old)
+        !$omp parallel do schedule(static) proc_bind(close) private(istk,fromp,top,iptcl) default(shared)
         do istk = 1,nstks_tot
             fromp = pool_proj%os_stk%get_fromp(istk)
             top   = pool_proj%os_stk%get_top(istk)
@@ -258,7 +235,6 @@ contains
                     nptcls_per_stk(istk)  = nptcls_per_stk(istk) + 1 ! # ptcls with state=1
                 endif
             enddo
-            nptcls_old = nptcls_old + nptcls_per_stk(istk)
         enddo
         !$omp end parallel do
         nptcls_rejected_glob = nptcls_glob - sum(nptcls_per_stk)
@@ -271,7 +247,6 @@ contains
         ! Transfer stacks and particles
         call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
         call spproj%os_ptcl2D%new(nptcls2update, is_ptcl=.true.)
-        allocate(prev_eo_pops(ncls_glob,2),prev_eo_pops_thread(ncls_glob,2),source=0)
         i     = 0
         jptcl = 0
         do istk = 1,nstks_tot
@@ -291,95 +266,38 @@ contains
                 !$omp end parallel do
                 jptcl = jptcl + (top-fromp+1)
                 call spproj%os_stk%set(i, 'top', jptcl)
-            else
-                ! keeps track of skipped particles
-                prev_eo_pops_thread = 0
-                !$omp parallel do private(iptcl,icls,eo) proc_bind(close) default(shared)&
-                !$omp reduction(+:prev_eo_pops_thread)
-                do iptcl = fromp,top
-                    if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-                    if( pool_proj%os_ptcl2D%get_updatecnt(iptcl) == 0 ) cycle
-                    icls = pool_proj%os_ptcl2D%get_class(iptcl)
-                    eo   = pool_proj%os_ptcl2D%get_eo(iptcl) + 1
-                    prev_eo_pops_thread(icls,eo) = prev_eo_pops_thread(icls,eo) + 1
-                enddo
-                !$omp end parallel do
-                prev_eo_pops = prev_eo_pops + prev_eo_pops_thread
             endif
         enddo
         call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
         spproj%os_cls2D = pool_proj%os_cls2D
-        ! making sure the new particles are asigned a populated class; when none is populated
-        ! (every class rejected) they keep the class they have rather than draw forever
-        if( pool_iter >= 2 )then
-            clspops    = spproj%os_cls2D%get_all_asint('pop')
-            ncls_drawn = min(ncls_glob, size(clspops))
-            if( any(clspops(:ncls_drawn) > 0) )then
-                !$omp parallel do private(iptcl,icls) proc_bind(close) default(shared) schedule(static)
-                do iptcl = 1,nptcls2update
-                    if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
-                    if( spproj%os_ptcl2D%get_updatecnt(iptcl) == 0 )then
-                        icls = irnd_uni(ncls_drawn)
-                        do while( clspops(icls) == 0 )
-                            icls = irnd_uni(ncls_drawn)
-                        enddo
-                        call spproj%os_ptcl2D%set_class(iptcl, icls)
-                    endif
-                enddo
-                !$omp end parallel do
-            endif
-        endif
-        ! update command line with fractional update parameters
+        ! the new particles get a populated class, drawn reproducibly
+        if( pool_iter >= 2 ) call draw_new_classes(spproj, nptcls2update, pool_iter, ncls_glob)
+        ! the sampled stacks are the update set (decision 5): every particle of the sample is
+        ! updated, the others keep their parameters; only the user's update_frac thins the sample,
+        ! and then the class averages are not centered
         call cline_refine2D_pool%delete('update_frac')
         frac_update = 1.0
-        if( nptcls_sel > lim_ufrac_nptcls )then
-            if( (sum(prev_eo_pops) > 0) .and. (nptcls_old > 0))then
-                frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
-            endif
-        endif
-        ! User override
+        if( master_cline%defined('update_frac') ) frac_update = params%update_frac
         if( frac_update < 0.99999 )then
-            if( master_cline%defined('update_frac') ) frac_update = params%update_frac
             call cline_refine2D_pool%set('update_frac', frac_update)
-            call cline_refine2D_pool%set('center',       'no')
-            do icls = 1,ncls_glob
-                call spproj%os_cls2D%set(icls,'prev_pop_even',prev_eo_pops(icls,1))
-                call spproj%os_cls2D%set(icls,'prev_pop_odd', prev_eo_pops(icls,2))
-            enddo
+            call cline_refine2D_pool%set('center',      'no')
+        else
+            call cline_refine2D_pool%set('center',      pool_center)
         endif
-        ! write project
+        ! write project, and keep it as made for a retry
         call spproj%write(string(POOL_DIR)//POOL_PROJFILE)
         call spproj%kill
+        call simple_copy_file(string(POOL_DIR)//POOL_PROJFILE, string(POOL_DIR)//POOL_INPUT_PROJFILE)
         ! pool stats
         call generate_pool_stats(params)
         ! execution
-        if( params%cc_objfun == OBJFUN_EUCLID )then
-            ! Stream pool membership changes invalidate row identity. Rebuild a
-            ! complete canonical bootstrap for the exact pool layout, then run
-            ! clustering in the same queued script so no consumer can observe
-            ! a missing or stale state.
-            allocate(pool_clines(2))
-            pool_clines(1) = cline_refine2D_pool
-            call pool_clines(1)%set('prg', 'calc_pspec')
-            call pool_clines(1)%set('mkdir', 'no')
-            call pool_clines(1)%delete('stream2d')
-            call pool_clines(1)%delete('update_frac')
-            pool_clines(2) = cline_refine2D_pool
-            call pool_qenv%exec_simple_prgs_in_queue_async(pool_clines, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
-            call pool_clines(:)%kill
-            deallocate(pool_clines)
-        else
-            call pool_qenv%exec_simple_prg_in_queue_async(cline_refine2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE))
-        endif
-        l_pool_available = .false.
+        pool_nattempts = 0
+        call submit_pool_iteration(params)
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
         if( L_BENCH ) print *,'timer analyze2D_pool tot : ',toc(t_tot)
         ! cleanup
         if( allocated(nptcls_per_stk) )      deallocate(nptcls_per_stk)
-        if( allocated(prev_eo_pops) )        deallocate(prev_eo_pops)
-        if( allocated(prev_eo_pops_thread) ) deallocate(prev_eo_pops_thread)
-        if( allocated(clspops) )             deallocate(clspops)
         ! the files of the iteration that has just left the history
         call tidy_2Dstream_iter(pool_iter - 1 - POOL_NHISTORY)
 
@@ -409,7 +327,96 @@ contains
 
     end subroutine iterate_pool
 
+    ! Classes for the never-updated particles among the first @p nptcls of @p spproj, drawn among
+    ! its populated classes (of the first @p ncls) from a generator seeded with the iteration
+    ! @p iter, in one thread, so a run is reproducible; the process's generator state is restored
+    ! after. With no populated class they keep the class they have.
+    subroutine draw_new_classes( spproj, nptcls, iter, ncls )
+        use iso_fortran_env, only: int64
+        class(sp_project), intent(inout) :: spproj
+        integer,           intent(in)    :: nptcls, iter, ncls
+        integer, allocatable :: clspops(:), populated(:), saved_seed(:), seed(:)
+        integer :: ncls_drawn, iptcl, nseed, i
+        clspops    = spproj%os_cls2D%get_all_asint('pop')
+        ncls_drawn = min(ncls, size(clspops))
+        if( ncls_drawn < 1 ) return
+        populated  = pack([(i, i=1,ncls_drawn)], clspops(:ncls_drawn) > 0)
+        if( size(populated) == 0 ) return
+        call random_seed(size=nseed)
+        allocate(saved_seed(nseed), seed(nseed))
+        call random_seed(get=saved_seed)
+        do i = 1,nseed
+            seed(i) = int(modulo(int(iter,int64) * 7919_int64 + 104729_int64 * int(i-1,int64), int(huge(0)-1,int64)) + 1_int64)
+        enddo
+        call random_seed(put=seed)
+        do iptcl = 1,min(nptcls, spproj%os_ptcl2D%get_noris())
+            if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+            if( spproj%os_ptcl2D%get_updatecnt(iptcl) /= 0 ) cycle
+            call spproj%os_ptcl2D%set_class(iptcl, populated(irnd_uni(size(populated))))
+        enddo
+        call random_seed(put=saved_seed)
+    end subroutine draw_new_classes
+
+    ! Submits the pool's current iteration, with an exit-status file; the status and job record of
+    ! an earlier attempt are removed first, and the attempt is counted.
+    subroutine submit_pool_iteration( params )
+        class(parameters), intent(in) :: params
+        type(cmdline), allocatable :: pool_clines(:)
+        call del_file(POOL_DIR//POOL_EXIT_CODE)
+        call del_file(POOL_DIR//POOL_EXIT_CODE//JOB_INFO_EXT)
+        pool_nattempts = pool_nattempts + 1
+        if( params%cc_objfun == OBJFUN_EUCLID )then
+            ! Stream pool membership changes invalidate row identity. Rebuild a
+            ! complete canonical bootstrap for the exact pool layout, then run
+            ! clustering in the same queued script so no consumer can observe
+            ! a missing or stale state.
+            allocate(pool_clines(2))
+            pool_clines(1) = cline_refine2D_pool
+            call pool_clines(1)%set('prg', 'calc_pspec')
+            call pool_clines(1)%set('mkdir', 'no')
+            call pool_clines(1)%delete('stream2d')
+            call pool_clines(1)%delete('update_frac')
+            pool_clines(2) = cline_refine2D_pool
+            call pool_qenv%exec_simple_prgs_in_queue_async(pool_clines, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE),&
+                &exit_code_fname=string(POOL_DIR//POOL_EXIT_CODE))
+            call pool_clines(:)%kill
+            deallocate(pool_clines)
+        else
+            call pool_qenv%exec_simple_prg_in_queue_async(cline_refine2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE),&
+                &exit_code_fname=string(POOL_DIR//POOL_EXIT_CODE))
+        endif
+        l_pool_available = .false.
+    end subroutine submit_pool_iteration
+
+    ! .true. when the current iteration's job has exited (its script wrote a status) without
+    ! refine2D finishing, whatever the status. A job killed before its script writes a status is
+    ! not seen (restart_policy.md).
+    logical function pool_job_failed()
+        integer :: exit_code
+        logical :: err
+        pool_job_failed = .false.
+        if( .not. file_exists(POOL_DIR//POOL_EXIT_CODE) ) return
+        call read_exit_code(string(POOL_DIR//POOL_EXIT_CODE), exit_code, err)
+        if( err ) return ! being written
+        ! refine2D touches its marker before it exits and the script writes the status after
+        if( file_exists(POOL_DIR//REFINE2D_FINISHED) ) return
+        pool_job_failed = .true.
+    end function pool_job_failed
+
+    ! Cancels the job of the pool's current iteration when it recorded itself and has not exited
+    ! (simple_qsys_job_record): on stop, and on a restart for a job a crashed stage left running.
+    subroutine cancel_pool_job
+        if( cancel_queued_job(string(POOL_DIR//POOL_EXIT_CODE)) )then
+            write(logfhandle,'(A)') '>>> CANCELLED THE RUNNING POOL ITERATION'
+        endif
+    end subroutine cancel_pool_job
+
     ! GETTERS
+
+    ! .true. once an iteration has failed twice: the pool stops
+    logical function is_pool_failed()
+        is_pool_failed = l_pool_failed
+    end function is_pool_failed
 
     ! returns number currently assigned particles
     integer function get_pool_assigned()
@@ -420,10 +427,6 @@ contains
     type(string) function get_pool_cavgs_jpeg()
         get_pool_cavgs_jpeg = current_jpeg
     end function get_pool_cavgs_jpeg
-
-    integer function get_pool_cavgs_jpeg_ntiles()
-        get_pool_cavgs_jpeg_ntiles = current_jpeg_ntiles
-    end function get_pool_cavgs_jpeg_ntiles
 
     integer function get_pool_cavgs_jpeg_ntilesx()
         get_pool_cavgs_jpeg_ntilesx = current_jpeg_ntilesx
@@ -470,50 +473,64 @@ contains
 
     ! SETTERS
 
-    subroutine set_lpthres_type(type)
-        character(len=*), intent(in) :: type
-        lpthres_type = type
-    end subroutine set_lpthres_type
-
-    subroutine set_pool_dimensions( params )
-        class(parameters), intent(inout) :: params
-        call setup_downscaling(params)
-        pool_dims%smpd  = params%smpd_crop
-        pool_dims%box   = params%box_crop
-        pool_dims%boxpd = 2*round2even(KBALPHA*real(params%box_crop/2)) ! logics from parameters
-        pool_dims%msk   = params%msk_crop
+    ! The pool's working dimensions from its native ones: downscaled to a pixel size of up to
+    ! MAX_SMPD and never below a CHUNK_MINBOXSZ box (setup_downscaling's rule). The pool's command
+    ! line carries the cropped dimensions only; the native ones come from its project.
+    subroutine set_pool_dimensions
+        real    :: smpd, scale_factor
+        integer :: box
+        if( pool_native_box == 0 ) THROW_HARD('the pool has no native box; set_pool_dimensions')
+        pool_dims%smpd = pool_native_smpd
+        pool_dims%box  = pool_native_box
+        if( l_scaling .and. pool_native_box >= CHUNK_MINBOXSZ )then
+            call autoscale(pool_native_box, pool_native_smpd, MAX_SMPD, box, smpd, scale_factor, minbox=CHUNK_MINBOXSZ)
+            l_scaling = box < pool_native_box
+            if( l_scaling )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',pool_native_box,'/',box
+                pool_dims%smpd = smpd
+                pool_dims%box  = box
+            endif
+        endif
+        pool_dims%boxpd = 2*round2even(KBALPHA*real(pool_dims%box/2)) ! logics from parameters
+        call set_pool_mask()
         ! chunk & pool have the same dimensions to start with (used for import)
         chunk_dims = pool_dims
         ! Scaling-related command lines update
         call cline_refine2D_pool%set('smpd_crop',   pool_dims%smpd)
         call cline_refine2D_pool%set('box_crop',    pool_dims%box)
-        call cline_refine2D_pool%set('msk_crop',    pool_dims%msk)
-        call cline_refine2D_pool%set('box',         params%box)
-        call cline_refine2D_pool%set('smpd',        params%smpd)
     end subroutine set_pool_dimensions
+
+    ! The pool's mask radius at its working dimensions from its mask diameter, clamped (and logged)
+    ! to (box - COSMSKHALFWIDTH)/2 pixels, so a diameter beyond the box never reaches the workers
+    ! (D40); the diameter and the radius go on the pool's command line.
+    subroutine set_pool_mask
+        real :: msk_max
+        msk_max       = (real(pool_dims%box) - COSMSKHALFWIDTH) / 2.
+        pool_dims%msk = round2even(pool_mskdiam / pool_dims%smpd / 2.)
+        if( real(pool_dims%msk) > msk_max )then
+            write(logfhandle,'(A,F8.2,A,F8.2,A)') '>>> MASK DIAMETER ', pool_mskdiam, ' A EXCEEDS THE POOL''S BOX; CLAMPED TO ',&
+                &2. * msk_max * pool_dims%smpd, ' A'
+            pool_dims%msk = floor(msk_max)
+            pool_mskdiam  = 2. * msk_max * pool_dims%smpd
+        endif
+        call cline_refine2D_pool%set('mskdiam',  pool_mskdiam)
+        call cline_refine2D_pool%set('msk_crop', pool_dims%msk)
+    end subroutine set_pool_mask
 
     ! private routine for pool resolution-related updates to command-lines
     subroutine set_pool_resolution_limits( params )
         class(parameters), intent(inout) :: params
-        lpstart = max(lpstart, 2.0*params%smpd_crop)
-        if( l_no_chunks )then
-            params%lpstop = lpstop
-        else
-            if( master_cline%defined('lpstop') )then
-                params%lpstop = max(2.0*params%smpd_crop,params%lpstop)
-            else
-                params%lpstop = 2.0*params%smpd_crop
-            endif
-        endif
+        lpstart     = max(lpstart, 2.0*pool_dims%smpd)
+        pool_lpstop = max(2.0*pool_dims%smpd, pool_user_lpstop)
         call cline_refine2D_pool%set('lpstart',   lpstart)
-        call cline_refine2D_pool%set('lpstop',    params%lpstop)
+        call cline_refine2D_pool%set('lpstop',    pool_lpstop)
         if( .not.master_cline%defined('cenlp') )then
             call cline_refine2D_pool%set( 'cenlp', lpcen)
         else
             call cline_refine2D_pool%set( 'cenlp', params%cenlp)
         endif
         write(logfhandle,'(A,F5.1)') '>>> STARTING LOW-PASS LIMIT  (IN A): ', lpstart
-        write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT    (IN A): ', params%lpstop
+        write(logfhandle,'(A,F5.1)') '>>> HARD RESOLUTION LIMIT    (IN A): ', pool_lpstop
         write(logfhandle,'(A,F5.1)') '>>> CENTERING LOW-PASS LIMIT (IN A): ', lpcen
     end subroutine set_pool_resolution_limits
 
@@ -521,79 +538,25 @@ contains
 
     ! A new mask diameter (A) for the next pool iterations. The pool command line also carries
     ! the cropped mask radius (pixels), which the workers take over the one parameters would
-    ! derive from mskdiam, so it is updated with it; before the pool has dimensions
-    ! init_pool_clustering derives it from params%mskdiam.
-    subroutine update_mskdiam( params, new_mskdiam )
-        class(parameters), intent(inout) :: params
+    ! derive from mskdiam, so it is updated with it. Before the pool starts, the stage keeps the
+    ! diameter and gives it to init_pool_clustering.
+    subroutine update_mskdiam( new_mskdiam )
         integer, intent(in) :: new_mskdiam
         write(*,'(A,I4,A)')'>>> UPDATED MASK DIAMETER TO', new_mskdiam ,'Å'
-        params%mskdiam = real(new_mskdiam)
-        call cline_refine2D_pool%set('mskdiam',   params%mskdiam)
+        pool_mskdiam = real(new_mskdiam)
+        call cline_refine2D_pool%set('mskdiam',   pool_mskdiam)
         if( pool_dims%smpd > 0. )then
-            pool_dims%msk = round2even(params%mskdiam / pool_dims%smpd / 2.)
-            call cline_refine2D_pool%set('msk_crop', pool_dims%msk)
+            call set_pool_mask()
+            ! the low-pass ramp and the centering limit follow the mask
+            call mskdiam2lplimits(pool_mskdiam, lpstart, lpstop, lpcen)
+            lpstart = max(lpstart, 2.0*pool_dims%smpd)
+            call cline_refine2D_pool%set('lpstart', lpstart)
+            if( associated(master_cline) )then
+                if( .not. master_cline%defined('cenlp') ) call cline_refine2D_pool%set('cenlp', lpcen)
+            endif
+            write(logfhandle,'(A,F5.1,A,F5.1,A)') '>>> LOW-PASS RAMP FROM ', lpstart, ' A, CENTERING LOW-PASS ', lpcen, ' A'
         endif
     end subroutine update_mskdiam
-
-    !> Queues a GUI-driven match-class selection update for the next pool iteration.
-    !! @p selection  Array of selected match_class indices,
-    !!               as received via the GUI metadata stream (sieverefs_selection).
-    !! If the incoming mask differs from the cached @p match_selection — or if no
-    !! selection has been recorded yet — the cache is overwritten and
-    !! @p l_match_selection_update is raised so the next pool iteration applies it.
-    subroutine update_match_class_states( selection, changed )
-        integer, intent(in)  :: selection(:)
-        logical, intent(out) :: changed
-        ! A missing or differently-sized cache counts as changed; avoids an
-        ! illegal conformance check in the elemental `==` below.
-        if( .not. allocated(match_selection) )then
-            changed = .true.
-        else if( size(selection) /= size(match_selection) )then
-            changed = .true.
-        else
-            changed = .not. all(selection == match_selection)
-        end if
-        if( changed )then
-            match_selection          = selection    ! intrinsic reallocation on assignment
-            l_match_selection_update = .true.
-            if( pool_iter > 0 .and. pool_iter < 20 ) then
-                write(logfhandle,'(A,I6,A)') '>>> QUEUED MATCH CLASS SELECTION UPDATE FOR ITERATION 20'
-            else
-                write(logfhandle,'(A)') '>>> QUEUED UPDATE TO MATCH CLASS STATES'
-            end if
-        end if
-    end subroutine update_match_class_states
-
-    !> Applies the cached @p match_selection mask to @p pool_proj%%os_ptcl2D.
-    !! For each particle, if its class_match value is present in @p match_selection
-    !! its state is set to 1 (accepted); otherwise it is set to 0 (rejected).
-    !! The updated state vector is written back to @p pool_proj%%os_ptcl2D.
-    !! Called from update_pool once per flagged update cycle.
-    subroutine update_match_class_states_in_pool
-        integer, allocatable :: class_match(:), state(:)
-        integer              :: i, nptcls
-        ! Nothing to do if no selection has been received yet
-        if( .not. allocated(match_selection)   ) return
-        if( pool_iter > 0 .and. pool_iter < 20 ) return
-        nptcls      = pool_proj%os_ptcl2D%get_noris()
-        state       = pool_proj%os_ptcl2D%get_all_asint('state')
-        class_match = pool_proj%os_ptcl2D%get_all_asint('class_match')
-        do i = 1, nptcls
-            if( class_match(i) == 0 ) then
-                ! class_match=0 particles are always rejected
-                state(i) = 0
-            else if( any(match_selection == class_match(i)) ) then
-                ! accepted if class_match is in the selection mask
-                state(i) = 1
-            else
-                ! rejected otherwise
-                state(i) = 0
-            end if
-        end do
-        call pool_proj%os_ptcl2D%set_all('state', state)
-        l_match_selection_update = .false.
-        write(logfhandle,'(A)') '>>> APPLIED MATCH CLASS SELECTION TO POOL'
-    end subroutine update_match_class_states_in_pool
 
     ! Reports alignment info from completed iteration of subset
     ! of particles back to the pool
@@ -636,10 +599,6 @@ contains
         call spproj%read_segment('cls2D', string(POOL_DIR)//POOL_PROJFILE)
         if( spproj%os_cls2D%get_noris() == 0 )then
             ! not executed yet, do nothing
-            ! except update match_class states if needed
-            if( l_match_selection_update )then
-                call update_match_class_states_in_pool()
-            end if
         else
             if( .not.allocated(pool_stacks_mask) )then
                 THROW_HARD('Critical ERROR 0') ! first time
@@ -679,10 +638,6 @@ contains
             current_resolution = frcs%estimate_lp_for_align()
             write(logfhandle,'(A,F5.1)')'>>> CURRENT POOL RESOLUTION: ',current_resolution
             call frcs%kill
-            ! update match_class states if needed
-            if( l_match_selection_update )then
-                call update_match_class_states_in_pool()
-            end if
             ! deal with dimensions/resolution update
             call update_pool_dims(params)
             ! for gui
@@ -739,7 +694,6 @@ contains
         ! resolution book-keeping
         resolutions(1:POOL_NPREV_RES-1) = resolutions(2:POOL_NPREV_RES)
         resolutions(POOL_NPREV_RES)     = current_resolution
-        if( l_no_chunks ) return
         ! optional
         if( trim(params%dynreslim).ne.'yes' ) return
         prev_dims = pool_dims
@@ -749,36 +703,30 @@ contains
         if( pool_dims%smpd < POOL_SMPD_HARD_LIMIT ) return
         ! Too early?
         if( pool_iter < 10 ) return
-        if( ncls_glob < ncls_max ) return
         ! Current resolution at Nyquist?
         if( abs(current_resolution-2.*pool_dims%smpd) > 0.01 ) return
         ! When POOL_NPREV_RES iterations are at Nyquist the pool resolution may be updated
         if( any(abs(resolutions-current_resolution) > 0.01 ) ) return
         ! determines new dimensions
         new_dims%box   = find_larger_magic_box(pool_dims%box+1)
-        scale_factor   = real(new_dims%box) / real(params%box)
+        scale_factor   = real(new_dims%box) / real(pool_native_box)
         if( scale_factor > 0.99 ) return ! safety
-        new_dims%smpd  = params%smpd / scale_factor
+        new_dims%smpd  = pool_native_smpd / scale_factor
         new_dims%boxpd = 2 * round2even(KBALPHA * real(new_dims%box/2)) ! logics from parameters
-        new_dims%msk   = round2even(params%mskdiam / new_dims%smpd / 2.)
         ! New dimensions are accepted when new Nyquist is > 5/4 of original
-        if( new_dims%smpd < 1.25*params%smpd ) return
+        if( new_dims%smpd < 1.25*pool_native_smpd ) return
         ! Update global variables
-        l_scaling = .true.
-        pool_dims = new_dims
-        if( master_cline%defined('lpstop') )then
-            params%lpstop = max(2.0*pool_dims%smpd, master_cline%get_rarg('lpstop'))
-        else
-            params%lpstop = 2.0*pool_dims%smpd
-        endif
-        call cline_refine2D_pool%set('lpstop',     params%lpstop)
+        l_scaling   = .true.
+        pool_dims   = new_dims
+        call set_pool_mask()
+        pool_lpstop = max(2.0*pool_dims%smpd, pool_user_lpstop)
+        call cline_refine2D_pool%set('lpstop',     pool_lpstop)
         call cline_refine2D_pool%set('smpd_crop', pool_dims%smpd)
         call cline_refine2D_pool%set('box_crop',   pool_dims%box)
-        call cline_refine2D_pool%set('msk_crop',   pool_dims%msk)
         write(logfhandle,'(A)')             '>>> UPDATING POOL DIMENSIONS '
-        write(logfhandle,'(A,I5,A1,I5)')    '>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',pool_dims%box
-        write(logfhandle,'(A,F5.2,A1,F5.2)')'>>> ORIGINAL/CROPPED PIXEL SIZE (Angs)  : ',params%smpd,'/',pool_dims%smpd
-        write(logfhandle,'(A,F5.1)')        '>>> POOL   HARD RESOLUTION LIMIT (Angs) : ',params%lpstop
+        write(logfhandle,'(A,I5,A1,I5)')    '>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',pool_native_box,'/',pool_dims%box
+        write(logfhandle,'(A,F5.2,A1,F5.2)')'>>> ORIGINAL/CROPPED PIXEL SIZE (Angs)  : ',pool_native_smpd,'/',pool_dims%smpd
+        write(logfhandle,'(A,F5.1)')        '>>> POOL   HARD RESOLUTION LIMIT (Angs) : ',pool_lpstop
         ! upsample cavgs
         ldim = [pool_dims%box,pool_dims%box,1]
         str_tmp_mrc = TMP_STK_FNAME
@@ -806,7 +754,7 @@ contains
         call pool_proj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
     end subroutine update_pool_dims
 
-    !> Updates the project watched by the gui for display
+    !> Points the pool project at the iteration's class averages and writes its class STAR file
     subroutine update_pool_for_gui( params )
         class(parameters), intent(in) :: params
         type(oris)        :: os_backup
@@ -814,8 +762,6 @@ contains
         os_backup = pool_proj%os_cls2D
         call pool_proj%add_cavgs2os_out(string(POOL_DIR)//refs_glob, pool_dims%smpd, 'cavg')
         pool_proj%os_cls2D = os_backup
-        call pool_proj%write_segment_inside('out',   projfile4gui)
-        call pool_proj%write_segment_inside('cls2D', projfile4gui)
         ! Write star file for iteration
         call starproj%export_cls2D(pool_proj, pool_iter)
         call pool_proj%os_cls2D%delete_entry('stk')
@@ -823,13 +769,31 @@ contains
         call starproj%kill
     end subroutine update_pool_for_gui
 
-    ! Flags pool availibility & updates the global name of references
-    subroutine update_pool_status
+    ! Flags pool availibility & updates the global name of references. An iteration whose job
+    ! exited without finishing is submitted again once, from its project as made, after its log is
+    ! kept aside and the files of its parts are removed; a second failure stops the pool
+    ! (is_pool_failed).
+    subroutine update_pool_status( params )
+        class(parameters), intent(in) :: params
+        type(string) :: failed_log
         if( .not. l_stream2D_active ) return
-        if( .not. l_pool_available )then
-            l_pool_available = file_exists(POOL_DIR//REFINE2D_FINISHED)
-            if( l_pool_available .and. (pool_iter >= 1) )then
-                refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//MRC_EXT
+        if( l_pool_available .or. l_pool_failed ) return
+        l_pool_available = file_exists(POOL_DIR//REFINE2D_FINISHED)
+        if( l_pool_available )then
+            if( pool_iter >= 1 ) refs_glob = CAVGS_ITER_FBODY//int2str_pad(pool_iter,3)//MRC_EXT
+        else if( pool_job_failed() )then
+            failed_log = POOL_DIR//POOL_LOGFILE//'_failed_iter'//int2str_pad(pool_iter,3)//'_attempt'//int2str(pool_nattempts)
+            if( file_exists(POOL_DIR//POOL_LOGFILE) ) call simple_rename(string(POOL_DIR//POOL_LOGFILE), failed_log)
+            if( pool_nattempts < 2 .and. file_exists(POOL_DIR//POOL_INPUT_PROJFILE) )then
+                write(logfhandle,'(A,I6,A,A)') '>>> WARNING: POOL ITERATION ', pool_iter, ' FAILED; RETRYING IT ONCE. LOG: ',&
+                    &failed_log%to_char()
+                call qsys_cleanup(params)
+                call simple_copy_file(string(POOL_DIR)//POOL_INPUT_PROJFILE, string(POOL_DIR)//POOL_PROJFILE)
+                call submit_pool_iteration(params)
+            else
+                write(logfhandle,'(A,I6,A,A)') '>>> POOL ITERATION ', pool_iter, ' FAILED AGAIN; THE POOL STOPS. LOG: ',&
+                    &failed_log%to_char()
+                l_pool_failed = .true.
             endif
         endif
     end subroutine update_pool_status
@@ -881,7 +845,7 @@ contains
             pool_jpeg_res = [pool_jpeg_res, pool_proj%os_cls2D%get(icls,'res')]
             call img%zero_and_unflag_ft
             call stkio_r%get_image(icls, img)
-            call img%mask2D_softavg(params%mskdiam / (2 * pool_dims%smpd))
+            call img%mask2D_softavg(pool_mskdiam / (2 * pool_dims%smpd))
             call img%fft
             if(ldim_stk(1) > JPEG_DIM) then
                 call img%clip(img_pad)
@@ -903,67 +867,31 @@ contains
         current_jpeg_ntiles  = ntiles
         current_jpeg_ntilesx = xtiles
         current_jpeg_ntilesy = ytiles
-        current_jpeg_scale = real(JPEG_DIM) / real(params%box)
         call img%kill()
         call img_pad%kill()
         call img_jpeg%kill()
     end subroutine generate_pool_jpeg
 
-    ! Reports stats to GUI
+    ! When refine2D has not written the sprite sheet of the latest completed iteration, writes the
+    ! iteration's class averages as images (generate_2D_jpeg, generate_pool_jpeg)
     subroutine generate_pool_stats( params )
         class(parameters), intent(in) :: params
         type(guistats) :: pool_stats
         type(string)   :: cwd
         integer        :: iter_loc = 0
-        real           :: lpthres_sugg
         call simple_getcwd(cwd)
         if(file_exists(cwd//'/'//CLS2D_STARFBODY//'_iter'//int2str_pad(pool_iter,3)//STAR_EXT)) then
             iter_loc = pool_iter
         else if(file_exists(cwd//'/'//CLS2D_STARFBODY//'_iter'//int2str_pad(pool_iter - 1,3)//STAR_EXT)) then
             iter_loc = pool_iter - 1
         endif
-        call pool_stats%init
-        call pool_stats%set('particles', 'particles_assigned',  int2str(nptcls_glob - nptcls_rejected_glob) // '_(' // int2str(ceiling(100.0 * real(nptcls_glob - nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
-        call pool_stats%set('particles', 'particles_rejected',  int2str(nptcls_rejected_glob) // '_(' // int2str(floor(100.0 * real(nptcls_rejected_glob) / real(nptcls_glob))) // '%)')
-        call pool_stats%set('2D', 'iteration',                  iter_loc,             primary=.true.)
-        call pool_stats%set('2D', 'number_classes',             ncls_glob,            primary=.true.)
-        call pool_stats%set('2D', 'number_classes_rejected',    ncls_rejected_glob,   primary=.true.)
-        call mskdiam2streamresthreshold(params%mskdiam, lpthres_sugg)
-        if(current_resolution < lpthres_sugg / 4 .and. params%lpthres > lpthres_sugg) then
-            call pool_stats%set('2D', 'maximum_resolution', current_resolution, primary=.true., alert=.true., alerttext='maximum_resolution_suggests_&
-            &using_a_cutoff_of_' // int2str(int(lpthres_sugg)) // 'Å_or_better' , notify=.false.)
-        else
-            call pool_stats%set('2D', 'maximum_resolution', current_resolution, primary=.true., alert=.false., notify=.true.)
-        endif
         if(.not. file_exists(cwd//'/'//CAVGS_ITER_FBODY//int2str_pad(iter_loc, 3)//'.jpg')) then
-            if(iter_loc > 0) call pool_stats%set_now('2D', 'iteration_time')
-            call pool_stats%generate_2D_thumbnail('2D', 'top_classes', pool_proj%os_cls2D, iter_loc)
+            call pool_stats%init
             call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, pool_dims%smpd)
+            call pool_stats%kill
             last_complete_iter = iter_loc
-            !call pool_stats%generate_2D_jpeg('latest', '', pool_proj%os_cls2D, iter_loc, smpd)
-            ! nice
-            call set_iteration_time() ! called in wrong place
-            ! current_jpeg = trim(adjustl(cwd)) // '/' // CAVGS_ITER_FBODY // int2str_pad(iter_loc, 3) // '.jpg'
             call generate_pool_jpeg(params)
         endif
-        call pool_stats%write(string(POOLSTATS_FILE))
-        call pool_stats%kill
- 
-        contains
-
-        subroutine set_iteration_time()
-            character(8)  :: date
-            character(10) :: time
-            character(5)  :: zone
-            integer,dimension(8) :: values
-            ! using keyword arguments
-            call date_and_time(date,time,zone,values)
-            call date_and_time(DATE=date,ZONE=zone)
-            call date_and_time(TIME=time)
-            call date_and_time(VALUES=values)
-            write(last_iteration_time, '(I4,A,I2.2,A,I2.2,A,I2.2,A,I2.2)') values(1), '/', values(2), '/', values(3), '_', values(5), ':', values(6)
-        end subroutine set_iteration_time
-
     end subroutine generate_pool_stats
 
 end module simple_stream_pool2D_utils

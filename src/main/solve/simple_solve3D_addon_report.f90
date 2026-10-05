@@ -50,6 +50,7 @@ type :: solve3D_addon_report
     procedure :: compare_fsc
     procedure :: compare_maps
     procedure :: compare_cohort
+    procedure :: get_nstates
     procedure :: get_verdict
     procedure :: get_dshell
     procedure :: get_corr
@@ -168,6 +169,12 @@ contains
             st%l_cohort = .true.
         end associate
     end subroutine compare_cohort
+
+    !> the number of states the report covers
+    integer function get_nstates( self )
+        class(solve3D_addon_report), intent(in) :: self
+        get_nstates = self%nstates
+    end function get_nstates
 
     function get_verdict( self, s ) result( verdict )
         class(solve3D_addon_report), intent(in) :: self

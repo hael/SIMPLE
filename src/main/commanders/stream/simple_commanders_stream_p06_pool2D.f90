@@ -29,6 +29,7 @@ use simple_stream_sigterm,      only: install_sigterm_handler, restore_sigterm_h
 implicit none
 
 public :: commander_stream_p06_pool2D
+public :: set_pool2D_cline ! the stage's command-line defaults, for the chained stream tests
 private
 
 type, extends(commander_base) :: commander_stream_p06_pool2D
@@ -75,6 +76,7 @@ contains
         call cline%set('cls_init',    'rand')
         call cline%set('numlen',      5)
         if( .not. cline%defined('dynreslim')       ) call cline%set('dynreslim',       'yes')
+        if( .not. cline%defined('stepwise')        ) call cline%set('stepwise',        'yes')
         if( .not. cline%defined('center')          ) call cline%set('center',          'yes')
         if( .not. cline%defined('ncls')            ) call cline%set('ncls',            200)
         if( .not. cline%defined('projfile_optics') ) call cline%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)

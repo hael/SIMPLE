@@ -42,7 +42,7 @@ subroutine new_pool2D( prgtab )
         ! <empty>
         ! parameter input/output
         call pool2D%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
+        &'Directory where the sieve_cavgs application is running', 'e.g. 3_sieve_cavgs', .true., '', group="data", visibility=UI_VIS_STANDARD)
         call pool2D%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
         &'Directory where previous 2D analysis took place', 'e.g. 3_pool2D', .false., '', group="data", &
         &visibility=UI_VIS_DEVELOPER)
@@ -56,8 +56,41 @@ subroutine new_pool2D( prgtab )
         &'Center class averages by their center of gravity and map shifts back to the particles(yes|no){yes}', '', .false., 'yes', group="cluster 2D", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        ! preserve_default: the stage default lives in the p06 commander's set_pool2D_cline, which default_audit.py does not trace
+        call pool2D%add_input(UI_SRCH, 'stepwise', 'binary', 'Stepwise set import', &
+        &'Each import takes only as many sieved particle sets as its particles need to reach the particle threshold; &
+        &the other sets wait for a later import(yes|no){yes}', '', .false., 'yes', group="cluster 2D", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        ! preserve_default: the pool's fallback (seg) lives in its utilities, which default_audit.py does not trace
+        call pool2D%add_input(UI_SRCH, 'center_type', 'multi', 'Centering scheme', &
+        &'How class averages are centered: by their mass, by segmentation, or from the parameters(mass|seg|params){seg}', &
+        &'', .false., 'seg', group="cluster 2D", &
+        &choices=ui_choices([character(len=6) :: 'mass', 'seg', 'params']), &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        ! preserve_default: the fallback is STREAM_NPTCLS_MAX in the pool utilities, which default_audit.py does not trace
+        call pool2D%add_input(UI_SRCH, 'nsample_max', 'num', 'Particles before fractional updates', &
+        &'Number of selected particles in the pool beyond which each 2D iteration updates only a fraction of them', &
+        &'# particles', .false., real(STREAM_NPTCLS_MAX), group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call pool2D%add_input(UI_SRCH, update_frac, help_override='Fraction of the particles updated per iteration once &
+        &the pool uses fractional updates (beyond nsample_max particles); when not given, it is derived from the particles &
+        &added since the previous iteration', group="cluster 2D", visibility=UI_VIS_DEVELOPER)
         ! filter controls
-        ! <empty>
+        ! preserve_default: the stage default lives in the p06 commander's set_pool2D_cline, which default_audit.py does not trace
+        call pool2D%add_input(UI_FILT, 'dynreslim', 'binary', 'Dynamic resolution limit', &
+        &'Enlarge the working images of the pool once its resolution has stayed at their Nyquist limit, &
+        &which allows a finer resolution(yes|no){yes}', '', .false., 'yes', group="cluster 2D", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call pool2D%add_input(UI_FILT, 'lpstop', 'num', 'Hard resolution limit', &
+        &'Hard resolution limit of the pool 2D analysis (in Angstroms), never finer than the Nyquist limit of the &
+        &working images; when not given, that Nyquist limit', 'low-pass limit in Angstroms', .false., 8., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call pool2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', &
+        &'Low-pass limit (in Angstroms) applied before the class averages are centered; when not given, it is derived &
+        &from the mask diameter', 'centering low-pass limit in Angstroms', .false., 20., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         call pool2D%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
         &remove background noise', 'mask diameter in A', .false., 0., group="cluster 2D", visibility=UI_VIS_STANDARD)
@@ -86,16 +119,34 @@ subroutine new_pool2D( prgtab )
         ! <empty>
         ! parameter input/output
         call solve3D_stream%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
+        &'Directory where the pool2D application is running', 'e.g. 4_pool2D', .true., '', group="data", visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
+        ! preserve_default: the stage defaults below live in the p07 commander's set_solve3D_cline,
+        ! which default_audit.py does not trace
         ! search controls
+        call solve3D_stream%add_input(UI_SRCH, 'nstates', 'num', 'Number of states', &
+        &'Number of states reconstructed by each streaming solve3D run{3}', '# states', .false., 3., group="search", &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call solve3D_stream%add_input(UI_SRCH, 'nstages', 'num', 'Number of solve3D stages', &
+        &'Number of low-pass limit stages of each streaming solve3D run{5}', '# stages', .false., 5., group="search", &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         ! filter controls
-        ! <empty>
+        call solve3D_stream%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', &
+        &'Low-pass limit of the first stage of each streaming solve3D run (in Angstroms){50}', 'low-pass limit in Angstroms', &
+        &.false., 50., group="filter", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call solve3D_stream%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', &
+        &'Low-pass limit of the last stage of each streaming solve3D run (in Angstroms){10}', 'low-pass limit in Angstroms', &
+        &.false., 10., group="filter", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         ! mask controls
         ! computer controls
-        call solve3D_stream%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
         call solve3D_stream%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        call solve3D_stream%add_input(UI_COMP, 'nparts3D', 'num', 'Partitions of each 3D job', &
+        &'Number of partitions of each solve3D and solve3D_addon job{8}', '# partitions', .false., 8., group="compute", &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call solve3D_stream%add_input(UI_COMP, 'nthr3D', 'num', 'Threads of each 3D job', &
+        &'Number of OpenMP threads of each solve3D and solve3D_addon job{8}', '# threads', .false., 8., group="compute", &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call solve3D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., group="compute", &
         &visibility=UI_VIS_DEVELOPER)
@@ -119,10 +170,20 @@ subroutine new_pool2D( prgtab )
         call assign_optics%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', &
         &visibility=UI_VIS_STANDARD)
+        call assign_optics%add_input(UI_PARM, 'nmics', 'num', 'Micrographs before termination', &
+        &'Number of micrographs after which the optics assignment terminates; 0 = no limit{0}', '# micrographs{0}', .false., 0., &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        ! <empty>
+        call assign_optics%add_input(UI_SRCH, 'tilt_thres', 'num', 'Beam-shift clustering threshold', &
+        &'Distance threshold of the hierarchical clustering of the beam-image shifts into optics groups{0.05}', 'e.g 0.05', &
+        &.false., 0.05, group="optics groups", visibility=UI_VIS_DEVELOPER)
+        call assign_optics%add_input(UI_SRCH, 'beamtilt', 'binary', 'Use beam-tilt groups', &
+        &'Split the micrographs by beam-tilt group before their beam-image shifts are clustered into optics groups(yes|no){no}', &
+        &'', .false., 'no', group="optics groups", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         ! <empty>
         ! mask controls
@@ -150,19 +211,13 @@ subroutine new_pool2D( prgtab )
         call gen_pickrefs%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', &
         &visibility=UI_VIS_STANDARD)
-        call gen_pickrefs%add_input(UI_PARM, 'nmics', 'num', 'Number of micrographs to import',&
-        &'Number of micrographs to import for opening 2D', 'Number micrographs', .false., 100., &
-        &visibility=UI_VIS_ADVANCED)
+        call gen_pickrefs%add_input(UI_PARM, pcontrast, group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
         call gen_pickrefs%add_input(UI_SRCH, nptcls_per_cls, group="cluster 2D", &
         &visibility=UI_VIS_DEVELOPER)
-        call gen_pickrefs%add_input(UI_FILE, 'optics_dir', 'dir', 'Target directory for optics import',&
-        &'Directory where assign_optics application is running', 'e.g. optics_assignment', .false., '', &
-        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call gen_pickrefs%add_input(UI_SRCH, pick_roi, group="picking", &
-        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call gen_pickrefs%add_input(UI_FILT, 'amsklp', 'num', 'Automask low-pass limit', &
         &'Low-pass limit used before opening-2D automask generation', 'low-pass limit in Angstroms{20}', .false., 20., group="picking", &
@@ -177,6 +232,36 @@ subroutine new_pool2D( prgtab )
         call gen_pickrefs%add_input(UI_MASK, 'edge', 'num', 'Automask soft edge', &
         &'Cosine edge width used to soften the opening-2D automask', '# pixels{6}', .false., 6., group="picking", &
         &visibility=UI_VIS_DEVELOPER)
+        ! the 3D route to the picking references (the master forwards its own); 0 keeps the default. preserve_default: the defaults of nrestarts_collapse, lpstart_ini3D and
+        ! lpstop_ini3D live in the initial analysis stage, which default_audit.py does not trace
+        ! search controls
+        call gen_pickrefs%add_input(UI_SRCH, 'nstates_pickrefs', 'int',         'Picking-reference 3D states', &
+        &'Number of states of the solve3D_cavgs run in the 3D route of the initial analysis (picking references); &
+        &0 uses its default of 3', '0', .false., '', group="3D route", visibility=UI_VIS_DEVELOPER)
+        call gen_pickrefs%add_input(UI_SRCH, 'nstages_pickrefs', 'int',         'Picking-reference 3D stages', &
+        &'Number of solve3D_cavgs stages in the 3D route of the initial analysis (picking references); &
+        &0 uses its default of 3', '0', .false., '', group="3D route", visibility=UI_VIS_DEVELOPER)
+        call gen_pickrefs%add_input(UI_SRCH, 'nspace_pickrefs', 'int',          'Picking-reference reprojections', &
+        &'Number of reprojections of the 3D route''s volume used as picking references by the initial analysis; &
+        &0 uses its default of 50', '0', .false., '', group="3D route", visibility=UI_VIS_DEVELOPER)
+        call gen_pickrefs%add_input(UI_SRCH, 'nrestarts_collapse', 'int',       'Picking-reference 3D restarts', &
+        &'Number of solve3D_cavgs restarts when states collapse, in the 3D route of the initial analysis &
+        &(picking references){3}', '3', .false., 3., group="3D route", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        ! filter controls
+        call gen_pickrefs%add_input(UI_FILT, 'lpstop_pickrefs', 'float',        'Picking-reference final low-pass limit', &
+        &'Final low-pass limit (in Angstroms) of the solve3D_cavgs run in the 3D route of the initial analysis &
+        &(picking references); 0 uses its default of 8', '0', .false., '', group="3D route", visibility=UI_VIS_DEVELOPER)
+        call gen_pickrefs%add_input(UI_FILT, 'lpstart_ini3D', 'float',          'Picking-reference initial 3D starting low-pass limit', &
+        &'Starting low-pass limit (in Angstroms) of the solve3D_cavgs initial 3D model in the 3D route of the &
+        &initial analysis (picking references){100}', '100', .false., 100., group="3D route", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call gen_pickrefs%add_input(UI_FILT, 'lpstop_ini3D', 'float',           'Picking-reference initial 3D final low-pass limit', &
+        &'Final low-pass limit (in Angstroms) of the solve3D_cavgs initial 3D model in the 3D route of the &
+        &initial analysis (picking references){20}', '20', .false., 20., group="3D route", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        ! mask controls
+        ! computer controls
+        call gen_pickrefs%add_input(UI_COMP, 'nthr3D_pickrefs', 'int',          'Picking-reference 3D threads', &
+        &'Number of OpenMP threads of the solve3D_cavgs run and the reprojection in the 3D route of the initial analysis &
+        &(picking references); 0 uses its default of 16', '0', .false., '', group="3D route", visibility=UI_VIS_DEVELOPER)
         ! computer controls
         call gen_pickrefs%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         ! add to ui_hash
@@ -231,11 +316,46 @@ subroutine new_pool2D( prgtab )
         call master%add_input(UI_PARM, 'nicedispid',     'int',           'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'thres',          'float',         'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'nmics',          'int',           'Number of micrographs', 'Number of micrographs to collect before termination', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        ! optics assignment, forwarded by the master
+        call master%add_input(UI_PARM, 'beamtilt',       'binary',        'Use beam-tilt groups', &
+        &'Split the micrographs by beam-tilt group before their beam-image shifts are clustered into optics groups(yes|no){no}', &
+        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'tilt_thres',     'float',         'Beam-shift clustering threshold', &
+        &'Distance threshold of the hierarchical clustering of the beam-image shifts into optics groups', '0.05', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
+        ! the 3D route of the initial analysis (picking references), forwarded by the master; 0 keeps the
+        ! initial analysis' default. preserve_default: the defaults of nrestarts_collapse, lpstart_ini3D and
+        ! lpstop_ini3D live in the initial analysis stage, which default_audit.py does not trace
         ! search controls
+        call master%add_input(UI_SRCH, 'nstates_pickrefs', 'int',         'Picking-reference 3D states', &
+        &'Number of states of the solve3D_cavgs run in the 3D route of the initial analysis (picking references); &
+        &0 uses its default of 3', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_SRCH, 'nstages_pickrefs', 'int',         'Picking-reference 3D stages', &
+        &'Number of solve3D_cavgs stages in the 3D route of the initial analysis (picking references); &
+        &0 uses its default of 3', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_SRCH, 'nspace_pickrefs', 'int',          'Picking-reference reprojections', &
+        &'Number of reprojections of the 3D route''s volume used as picking references by the initial analysis; &
+        &0 uses its default of 50', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_SRCH, 'nrestarts_collapse', 'int',       'Picking-reference 3D restarts', &
+        &'Number of solve3D_cavgs restarts when states collapse, in the 3D route of the initial analysis &
+        &(picking references){3}', '3', .false., 3., visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         ! filter controls
+        call master%add_input(UI_FILT, 'lpstop_pickrefs', 'float',        'Picking-reference final low-pass limit', &
+        &'Final low-pass limit (in Angstroms) of the solve3D_cavgs run in the 3D route of the initial analysis &
+        &(picking references); 0 uses its default of 8', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_FILT, 'lpstart_ini3D', 'float',          'Picking-reference initial 3D starting low-pass limit', &
+        &'Starting low-pass limit (in Angstroms) of the solve3D_cavgs initial 3D model in the 3D route of the &
+        &initial analysis (picking references){100}', '100', .false., 100., visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call master%add_input(UI_FILT, 'lpstop_ini3D', 'float',           'Picking-reference initial 3D final low-pass limit', &
+        &'Final low-pass limit (in Angstroms) of the solve3D_cavgs initial 3D model in the 3D route of the &
+        &initial analysis (picking references){20}', '20', .false., 20., visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         ! mask controls
         ! computer controls
+        call master%add_input(UI_COMP, 'nthr3D_pickrefs', 'int',          'Picking-reference 3D threads', &
+        &'Number of OpenMP threads of the solve3D_cavgs run and the reprojection in the 3D route of the initial analysis &
+        &(picking references); 0 uses the master''s resources table (16, or SIMPLE_STREAM_REFGEN_NTHR)', '0', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
         call add_ui_program('master', master, prgtab, UI_CATEGORY)
     end subroutine new_master
@@ -261,22 +381,18 @@ subroutine new_pool2D( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call pick_extract%add_input(UI_PARM, box_extract, group="extract", &
         &visibility=UI_VIS_ADVANCED)
-        call pick_extract%add_input(UI_PARM, moldiam,     group="picking", &
-        &visibility=UI_VIS_ADVANCED)
         call pick_extract%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', group="data", &
         &visibility=UI_VIS_STANDARD)
-        call pick_extract%add_input(UI_PARM, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested',&
-        &'e.g. 5', .false., 5., group="picking", &
-        &visibility=UI_VIS_ADVANCED)
-        call pick_extract%add_input(UI_PARM, moldiam_max, group="picking", &
-        &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_FILE, 'optics_dir', 'dir', 'Optics assignment directory',&
+        &'Directory where the assign_optics application publishes its optics maps; the optics groups of the newest &
+        &map are applied to the picked micrographs', 'e.g. optics_assignment', .false., '', group="data", &
+        &visibility=UI_VIS_DEVELOPER)
         call pick_extract%add_input(UI_PARM, backgr_subtr, group="picking", &
         &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call pick_extract%add_input(UI_SRCH, pgrp, required_override=.false., group="picking", visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_SRCH, pick_roi, group="picking", &
         &visibility=UI_VIS_DEVELOPER)
         call pick_extract%add_input(UI_SRCH, 'thres', 'num', 'Peak-picking distance threshold', &
@@ -284,12 +400,6 @@ subroutine new_pool2D( prgtab )
         &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call pick_extract%add_input(UI_FILT, lp_pick,          group="picking", &
-        &visibility=UI_VIS_ADVANCED)
-        call pick_extract%add_input(UI_FILT, ctfresthreshold,  group="data", &
-        &visibility=UI_VIS_ADVANCED)
-        call pick_extract%add_input(UI_FILT, icefracthreshold, group="data", &
-        &visibility=UI_VIS_ADVANCED)
-        call pick_extract%add_input(UI_FILT, astigthreshold,   group="data", &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
@@ -317,20 +427,23 @@ subroutine new_pool2D( prgtab )
         ! image input/output
         call preproc%add_input(UI_FILE, dir_movies, group="data", visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_FILE, gainref,    group="data", visibility=UI_VIS_STANDARD)
-        call preproc%add_input(UI_FILE, 'dir_prev', 'file', 'Previous run directory',&
-            &'Directory where a previous stream application was run', 'e.g. 2_preproc', .false., '', group="data", &
-        &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_FILE, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
             &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '', group="data", visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call preproc%add_input(UI_PARM, total_dose,                      group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, fraction_dose_target,            group="data",              visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, 'nmics', 'num', 'Micrographs before termination', &
+        &'Number of micrographs after which the preprocessing terminates; 0 = no limit{0}', '# micrographs{0}', .false., 0., &
+        &group="data", visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, 'smpd_downscale', 'num', 'Sampling distance after downscale', &
         &'Distance between neighbouring pixels in Angstroms after downscale', 'pixel size in Angstroms', &
         &.false., STREAM_DEFAULT_SMPD_DOWNSCALE, group="motion correction", visibility=UI_VIS_STANDARD, &
         &preserve_default=.true.)
         call preproc%add_input(UI_PARM, eer_fraction,                    group="motion correction", &
         &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, 'eer_upsampling', 'num', 'EER up-sampling factor', &
+        &'Up-sampling factor of EER movies (1 or 2): 1 renders 4K and 2 renders 8K frames{1}', 'up-sampling factor{1}', &
+        &.false., 1., group="motion correction", visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, max_dose,                        group="motion correction", &
         &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, kv,    required_override=.true., group="data",              visibility=UI_VIS_STANDARD)
@@ -342,8 +455,12 @@ subroutine new_pool2D( prgtab )
         &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, ctfpatch, group="CTF estimation", &
         &visibility=UI_VIS_DEVELOPER)
-        call preproc%add_input(UI_PARM, flipgain, group="motion correction", &
-        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, flipgain, label_override='Gain reference processing', &
+        &help_override='Flip the gain reference along the given axis, detect the flip from the movies (flip_auto), or &
+        &generate a gain reference from the movies (generate); none and flip_x|flip_y|flip_xy are accepted as aliases of &
+        &no and x|y|xy(no|x|y|xy|yx|flip_auto|generate){no}', &
+        &choices_override=ui_choices([character(len=9) :: 'no', 'x', 'y', 'xy', 'yx', 'flip_auto', 'generate']), &
+        &group="motion correction", visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, algorithm, group="motion correction", &
         &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, mcconvention, group="motion correction", &
@@ -370,13 +487,6 @@ subroutine new_pool2D( prgtab )
         &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_SRCH, phshift_step, group="CTF estimation", &
         &visibility=UI_VIS_DEVELOPER)
-        call preproc%add_input(UI_SRCH, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
-        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05, group="optics groups", &
-        &visibility=UI_VIS_DEVELOPER)
-        call preproc%add_input(UI_SRCH, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
-        & 'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}','', .false., 'no', group="optics groups", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call preproc%add_input(UI_FILT, 'lpstart', 'num', 'Motion-correction low-pass start', &
         &'Starting low-pass limit for motion correction', 'low-pass limit in Angstroms{8}', .false., 8., group="motion correction", &
@@ -393,6 +503,10 @@ subroutine new_pool2D( prgtab )
         &'Low-pass limit for CTF parameter estimation', 'low-pass limit in Angstroms{5}', .false., 5., group="CTF estimation", &
         &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_FILT, ctfresthreshold, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_FILT, icefracthreshold, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_FILT, astigthreshold, group="CTF estimation", &
         &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         ! <empty>
@@ -418,22 +532,16 @@ subroutine new_pool2D( prgtab )
         &.true.,&                                                               ! requires sp_project
         &visibility=UI_VIS_STANDARD, display_name='Analyze Streaming 2D Data')
         ! image input/output
-        ! <empty>
+        call sieve_cavgs%add_input(UI_IMG, 'refs', 'file', 'Compatibility-model references', &
+        &'Class averages that pre-train the coarse and fine size-compatibility models before sieving starts; &
+        &skipped when the file does not exist', 'e.g. references.mrc', .false., '', group="data", &
+        &visibility=UI_VIS_DEVELOPER)
         ! parameter input/output
         call sieve_cavgs%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
-        call sieve_cavgs%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where previous 2D analysis took place', 'e.g. 3_sieve_cavgs', .false., '', group="data", &
-        &visibility=UI_VIS_ADVANCED)
-        call sieve_cavgs%add_input(UI_PARM, 'nmics', 'num', 'Micrographs per sieve cycle', &
-        &'Number of micrographs imported before each streaming sieving cycle', '# micrographs{100}', .false., 100., group="data", &
-        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call sieve_cavgs%add_input(UI_SRCH, ncls,                                     group="cluster 2D", visibility=UI_VIS_STANDARD)
-        call sieve_cavgs%add_input(UI_SRCH, nptcls_per_cls, required_override=.true., group="cluster 2D", visibility=UI_VIS_STANDARD)
-        call sieve_cavgs%add_input(UI_SRCH, nchunksperset,                                                      visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_SRCH, 'nptcls_coarse', 'num', 'Target coarse-pass particle count', &
         &'Target number of particles in each coarse sieving chunk', '# particles{5000}', .false., 5000., group="cluster 2D", &
         &visibility=UI_VIS_DEVELOPER)
@@ -458,8 +566,6 @@ subroutine new_pool2D( prgtab )
         call sieve_cavgs%add_input(UI_SRCH, 'ncls_fine', 'num', 'Fine-pass class count', &
         &'Number of 2D classes used during fine streaming sieving', '# classes{100}', .false., 100., group="cluster 2D", &
         &visibility=UI_VIS_DEVELOPER)
-        call sieve_cavgs%add_input(UI_SRCH, maxnchunks, group="cluster 2D", &
-        &visibility=UI_VIS_DEVELOPER)
         call sieve_cavgs%add_input(UI_SRCH, 'use_model', 'binary', 'Use class-average rejection model', &
         &'Use the class-average rejection model during streaming sieving(yes|no){yes}', '', .false., 'yes', group="cluster 2D", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -479,8 +585,7 @@ subroutine new_pool2D( prgtab )
         &'Final low-pass limit for fine streaming sieving', 'low-pass limit in Angstroms{10}', .false., 10., group="cluster 2D", &
         &visibility=UI_VIS_DEVELOPER)
         ! mask controls
-        call sieve_cavgs%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
-        &remove background noise', 'mask diameter in A', .false., 0., group="cluster 2D", visibility=UI_VIS_STANDARD)
+        ! <empty>: the mask diameter is the one of the picking references (moldiam.txt in dir_target)
         ! computer controls
         call sieve_cavgs%add_input(UI_COMP, nchunks,                          group="compute", visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_COMP, nparts, required_override=.true., group="compute", visibility=UI_VIS_STANDARD)

@@ -43,6 +43,8 @@ contains
         call test_store_list()
         call test_store_volume()
         call test_stage_pipes()
+        call test_update_dedupe()
+        call test_skipped_stays_skipped()
     end subroutine run_all_stream_master_tests
 
     subroutine test_stage_names()
@@ -146,6 +148,14 @@ contains
         call assert_char('second', stage%to_char(), 'the latest status is kept')
         call assert_int(2,  iter,      'with its iteration')
         call assert_int(20, nimported, 'and its counts')
+        ! a frame with the right tag and the wrong length (a desynchronised pipe) is dropped
+        call status%set(stage=string('third'), iteration=3, particles_imported=30, particles_accepted=28,&
+            &particles_rejected=2, mskdiam=150, mskscale=1., resolution=7.)
+        call status%serialise(buffer)
+        call store%store(buffer(1:len(buffer)-4))
+        l_assigned = store%pool2D%get(stage, iter, nimported, naccepted, nrejected, tlast, l_user_input, mskdiam,&
+            &mskscale, res)
+        call assert_char('second', stage%to_char(), 'a frame shorter than its type is dropped')
         call status%kill()
         call store%kill()
     end subroutine test_store_status
@@ -231,6 +241,50 @@ contains
         call assert_false(allocated(proc%fork%commander), 'and releases the commander')
         call cline%kill()
     end subroutine test_stage_pipes
+
+    !> an update goes to a stage only when it differs from the last one the stage was sent; a stop
+    !! request is remembered (no more updates until the next start), and kill forgets both
+    subroutine test_update_dedupe()
+        class(stream_master_stage), allocatable :: proc
+        type(cmdline)                           :: cline
+        type(noop_commander)                    :: commander
+        write(*,'(A)') 'test_update_dedupe'
+        allocate(proc)
+        call proc%new(STAGE_POOL2D, commander, cline, .true., max_metadata_size())
+        call assert_true(proc%is_new_update('thresholds'), 'the first update is new')
+        proc%last_update = 'thresholds'
+        call assert_false(proc%is_new_update('thresholds'), 'a repeated update is not')
+        call assert_true(proc%is_new_update('threshold2'), 'a changed update is')
+        call assert_true(proc%is_new_update('thresholds '), 'so is a longer one, whatever it ends with')
+        call assert_false(proc%l_stop_requested, 'a new stage has no stop request')
+        call proc%request_stop()
+        call assert_true(proc%l_stop_requested, 'a stop request is remembered')
+        call proc%kill()
+        call assert_false(allocated(proc%last_update), 'kill forgets the last update')
+        call assert_false(proc%l_stop_requested, 'and the stop request')
+        deallocate(proc)
+        call cline%kill()
+    end subroutine test_update_dedupe
+
+    !> a skipped stage is never started: start() leaves it skipped and forks nothing
+    subroutine test_skipped_stays_skipped()
+        class(stream_master_stage), allocatable :: proc
+        type(cmdline)                           :: cline
+        type(noop_commander)                    :: commander
+        write(*,'(A)') 'test_skipped_stays_skipped'
+        allocate(proc)
+        call proc%new(STAGE_PREPROCESS, commander, cline, .true., max_metadata_size())
+        call assert_false(proc%is_skipped(), 'a new stage is not skipped')
+        call proc%skip()
+        call assert_true(proc%is_skipped(),  'a skipped stage is skipped')
+        call assert_false(proc%is_running(), 'and not running')
+        call proc%start()
+        call assert_true(proc%is_skipped(),  'starting a skipped stage leaves it skipped')
+        call assert_false(proc%is_running(), 'and forks nothing')
+        call proc%kill()
+        deallocate(proc)
+        call cline%kill()
+    end subroutine test_skipped_stays_skipped
 
     ! ---- fixtures ------------------------------------------------------------
 

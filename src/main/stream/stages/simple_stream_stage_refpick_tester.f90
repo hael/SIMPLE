@@ -10,7 +10,8 @@ use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
 use simple_defs_fname,                  only: TERM_STREAM, METADATA_EXT
-use simple_defs_stream,                 only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET
+use simple_defs_stream,                 only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, STREAM_IDLE_MARKER,&
+                                             &STREAM_FINISHED_MARKER
 use simple_string,                      only: string
 use simple_string_utils,                only: int2str, int2str_pad
 use simple_fileio,                      only: file_exists, del_file, simple_getcwd, simple_touch
@@ -49,6 +50,7 @@ contains
         call test_restart_clear()
         call test_send_status()
         call test_iterate_waits()
+        call test_idle_marker_follows_upstream()
         call test_finished()
     end subroutine run_all_stream_stage_refpick_tests
 
@@ -131,8 +133,8 @@ contains
     end subroutine test_pickrefs_available
 
     !> an upstream project becomes a job set of its accepted micrographs, without the picking
-    !! preprocessing outputs; the pixel size is taken from it; a project with nothing accepted
-    !! makes no set
+    !! preprocessing outputs; a project with nothing accepted makes no set; the pixel size for
+    !! make_pickrefs is that of the first waiting project with an accepted micrograph
     subroutine test_create_set_project()
         class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
@@ -153,7 +155,6 @@ contains
         call assert_int(4, nselected, 'the four accepted micrographs are selected')
         call assert_int(1, stage%sets%get_counter(), 'one set is written')
         call assert_int(4, stage%n_mics_submitted,   'they count as submitted')
-        call assert_real(SMPD, stage%params%smpd, 1.e-6, 'the pixel size comes from the micrographs')
         val = stage%cline_exec%get_carg('projfile')
         call assert_char('00001.simple', val%to_char(), 'the worker command line names the set')
         call assert_int(4, stage%cline_exec%get_iarg('top'), 'over its four micrographs')
@@ -167,6 +168,9 @@ contains
         call stage%create_set_project(upstream2, nselected)
         call assert_int(0, nselected, 'nothing accepted: nothing selected')
         call assert_int(1, stage%sets%get_counter(), 'and no set written')
+        call stage%attach_upstream()
+        call assert_real(SMPD, stage%first_mics_smpd(), 1.e-6, 'the pixel size comes from the micrographs')
+        call assert_false(stage%project_buff%is_past(upstream1), 'its project waits for the references')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -348,7 +352,8 @@ contains
     end subroutine test_without_optics_map
 
     !> restart: the completed sets are imported again and their upstream projects are put in the
-    !! watcher history; an unfinished set is dropped and its upstream project is picked again
+    !! watcher history; an unfinished set is set aside with its job folder, its upstream project is
+    !! picked again, and the numbering continues past it (a job left running keeps its number)
     subroutine test_restart_history()
         class(stream_stage_refpick), allocatable :: stage
         type(cmdline)              :: cline
@@ -370,8 +375,8 @@ contains
         call stage%resume_previous_run()
         call assert_int(3, stage%spproj%os_mic%get_noris(), 'the completed set''s micrographs are imported again')
         call assert_int(1, size(stage%set_projects),        'the completed set is remembered')
-        call assert_int(1, stage%sets%get_counter(),        'numbering continues after the completed set')
-        call assert_false(file_exists(job_dir//'/00002.simple'), 'the unfinished set is dropped')
+        call assert_int(2, stage%sets%get_counter(),        'numbering continues past the unfinished set')
+        call assert_false(file_exists(job_dir//'/00002.simple'), 'the unfinished set is set aside')
         call stage%attach_upstream()
         call assert_true(stage%project_buff%is_past(upstream1),  'the completed set''s upstream project is in the history')
         call assert_false(stage%project_buff%is_past(upstream2), 'the unfinished set''s upstream project is not')
@@ -431,7 +436,7 @@ contains
         call stage%spproj%os_mic%new(3, is_ptcl=.false.)
         stage%n_mics_submitted = 7
         stage%nptcls_glob      = 42
-        stage%params%box       = 128
+        stage%box              = 128
         call stage%send_status(string('picking and extracting micrographs'))
         call assert_true(reader%receive(buffer), 'a status message is sent')
         if( allocated(buffer) )then
@@ -534,6 +539,41 @@ contains
         stage%wait_s   = 0
         stage%l_exists = .true.
     end subroutine make_test_stage
+
+    !> markers of an earlier run go at the start; preprocessing's marker is first noted, the idle
+    !! marker waits for a later watch, and goes once preprocessing has neither marker (the queue
+    !! check before the marker is written needs a queue and is left to the stream tests)
+    subroutine test_idle_marker_follows_upstream()
+        class(stream_stage_refpick), allocatable :: stage
+        type(cmdline)             :: cline
+        type(string)              :: cwd_saved, root
+        integer                   :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_idle_marker_follows_upstream'
+        nfail0 = tests_failed
+        call enter_fixture('rp_stage_idle', cwd_saved, root)
+        call make_upstream()
+        call simple_touch(STREAM_IDLE_MARKER)
+        call simple_touch(STREAM_FINISHED_MARKER)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call assert_false(file_exists(STREAM_IDLE_MARKER),     'an earlier run''s idle marker is removed')
+        call assert_false(file_exists(STREAM_FINISHED_MARKER), 'and its finished marker')
+        call stage%update_idle_marker()
+        call assert_int(0, stage%upstream_done_since, 'preprocessing without a marker is not done')
+        call simple_touch(UPSTREAM//'/'//STREAM_IDLE_MARKER)
+        call stage%update_idle_marker()
+        call assert_true(stage%upstream_done_since > 0,    'preprocessing''s idle marker is noted')
+        call assert_false(file_exists(STREAM_IDLE_MARKER), 'no idle marker before a later watch')
+        call simple_touch(STREAM_IDLE_MARKER)
+        call del_file(UPSTREAM//'/'//STREAM_IDLE_MARKER)
+        call stage%update_idle_marker()
+        call assert_false(file_exists(STREAM_IDLE_MARKER), 'preprocessing active again: the idle marker goes')
+        call assert_int(0, stage%upstream_done_since,      'and the wait starts again')
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_idle_marker_follows_upstream
 
     ! the folders preprocessing makes
     subroutine make_upstream()

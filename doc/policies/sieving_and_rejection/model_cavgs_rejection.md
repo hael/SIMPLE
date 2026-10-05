@@ -63,6 +63,12 @@ The contexts represent three workflow phases:
 - `chunk`: the next 2D stage, where sieve-cleaned particles are processed in larger chunks, typically 10-30k particles. This phase uses hard gates plus the chunk logistic model.
 - `pool`: the final 2D phase before 3D analysis, where highly clean particle sets from chunk modeling have been merged. This phase uses its own pool model.
 
+The contexts follow the workflow, not the chunk size. Particle sieving applies the `sieve` preset and
+context in both its tiers: its fine tier merges coarse-cleaned particles into chunks as large as
+the `chunk` description, but it is the sieve's second pass, so it keeps the sieve's scoring
+(`ptcl_sieve_policy.md` §8; stream fix plan, decision 8). The `chunk` preset and context belong to
+stream initial analysis and are the `model_cavgs_rejection` command's default.
+
 Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming cleanup gates for undersupported and fuzzy-ball-like class averages. Pool adds its own final pre-3D cleanup gates for low population, low band-pass localization, and poor nominal resolution. Sieve has its own pre-model gate policy and deliberately does not inherit the shared chunk/pool validity gates.
 
 | Criterion | Retired microchunk rule engine | `model_cavgs_rejection` |

@@ -34,6 +34,7 @@ use simple_stream_sigterm,          only: install_sigterm_handler, restore_sigte
 implicit none
 
 public :: commander_stream_p07_solve3D_multistate
+public :: set_solve3D_cline ! the stage's command-line defaults, for the chained stream tests
 private
 
 integer, parameter :: NSTATES3D = 3   ! states of the 3D

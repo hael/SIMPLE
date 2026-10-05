@@ -11,10 +11,6 @@
 !   the box size; later batches reuse both, so every batch of a stream is
 !   picked alike. The decision can also be supplied to new().
 !
-!   segdiampick_mics_multi and segdiampick_mics_multi_fixed_bins
-!   (simple_mini_stream_utils) were two 300-line copies of this procedure
-!   that differed only in that decision; they are now thin wrappers.
-!
 ! LIFECYCLE:
 !   new([accepted_bins, box]) -> { pick(spproj, ...) } -> kill()
 !==============================================================================

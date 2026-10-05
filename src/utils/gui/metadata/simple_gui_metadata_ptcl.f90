@@ -30,6 +30,7 @@ type, extends( gui_metadata_base ) :: gui_metadata_ptcl
   integer                   :: i          = 1     ! index of this entry within the current batch (IPC routing)
   integer                   :: i_max      = 1     ! total entries in the current batch (IPC routing)
 contains
+  procedure :: kill => kill_override
   procedure :: set
   procedure :: get
   procedure :: get_idx
@@ -134,5 +135,17 @@ contains
     if( self%l_df ) call json%add(json_ptr, "df", dble(self%df))
     if( self%l_box ) call json%add(json_ptr, "box", self%box)
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_ptcl), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_ptcl )
+        self = gui_metadata_ptcl()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_ptcl

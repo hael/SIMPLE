@@ -2,7 +2,7 @@
 module simple_commanders_sieve
 use simple_commanders_api
 use simple_rec_list,         only: rec_list
-use simple_ptcl_sieve,       only: ptcl_sieve, DEFAULT_COARSE_POP_THRESHOLD, DEFAULT_FINE_POP_THRESHOLD, &
+use simple_ptcl_sieve,       only: ptcl_sieve, sieve_settings, DEFAULT_COARSE_POP_THRESHOLD, DEFAULT_FINE_POP_THRESHOLD, &
                                       DEFAULT_COARSE_BOX, DEFAULT_FINE_BOX, DEFAULT_COARSE_NSAMPLE, DEFAULT_FINE_NSAMPLE, &
                                       DEFAULT_LPSTART, DEFAULT_COARSE_LP, DEFAULT_FINE_LP, DEFAULT_NCLS
 use simple_ptcl_sieve_utils, only: generate_sieve_projects
@@ -75,7 +75,7 @@ contains
         if( nchunks == 0 ) call simple_end('**** NO CHUNKS GENERATED — INSUFFICIENT PARTICLES OR MICROGRAPHS ****')
         ! --- drive multi-tier classification loop until all tiers are complete ---
         call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
-        call sieve%new(params, string(PATH_HERE // DIR_STREAM_COMPLETED), pre_chunked=.true.)
+        call sieve%new(params, sieve_settings(params), string(PATH_HERE // DIR_STREAM_COMPLETED), pre_chunked=.true.)
         l_once = .true.
         do
             call sieve%cycle(project_list)

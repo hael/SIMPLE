@@ -7,12 +7,37 @@ use simple_parameters, only: parameters
 use simple_segmentation
 implicit none
 
-public :: image_msk, automask2D, automask2D_support_pix, automask2D_mskdiam, density_inoutside_mask
+public :: image_msk, automask2D, automask2D_settings, automask2D_settings_from, automask2D_support_pix
+public :: automask2D_mskdiam, density_inoutside_mask
 private
 #include "simple_local_flags.inc"
 
 logical, parameter :: DEBUG         = .false.
 logical, parameter :: L_WRITE       = .false.
+
+!> What 2D automasking reads: the low-pass limit (A) before binarisation, the layers grown, the
+!> median filter window (px), the soft edge (px), tight (positive) Otsu, the mask radius (px; 0:
+!> half the box less the soft edge), the cropped box with its mask radius (px) for images of that
+!> box, and whether this process writes masks when asked (the first part). automask2D_settings_from
+!> fills it from a parameters object.
+type :: automask2D_settings
+    real    :: amsklp   = 0.
+    integer :: ngrow    = 0
+    integer :: winsz    = 0
+    integer :: edge     = 6
+    logical :: l_tight  = .false.
+    real    :: msk      = 0.
+    integer :: box_crop = 0
+    real    :: msk_crop = 0.
+    logical :: l_writer = .true.
+end type automask2D_settings
+
+!> 2D automasking with explicit settings, or from a parameters object with explicit ngrow, winsz
+!> and edge
+interface automask2D
+    module procedure automask2D_set
+    module procedure automask2D_params
+end interface automask2D
 
 type, extends(image_bin) :: image_msk
     private
@@ -308,10 +333,37 @@ contains
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine density_inoutside_mask
 
-    subroutine automask2D( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk, min_diams, verbose )
+    !> The 2D automasking settings of @p params, with @p ngrow, @p winsz and @p edge.
+    function automask2D_settings_from( params, ngrow, winsz, edge ) result( settings )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: ngrow, winsz, edge
+        type(automask2D_settings)     :: settings
+        settings%amsklp   = params%amsklp
+        settings%ngrow    = ngrow
+        settings%winsz    = winsz
+        settings%edge     = edge
+        settings%l_tight  = trim(params%automsk).eq.'tight'
+        settings%msk      = params%msk
+        settings%box_crop = params%box_crop
+        settings%msk_crop = params%msk_crop
+        settings%l_writer = params%part.eq.1
+    end function automask2D_settings_from
+
+    subroutine automask2D_params( params, imgs, ngrow, winsz, edge, diams, shifts, write2disk, min_diams, verbose )
         class(parameters),              intent(in)    :: params
         class(image),                   intent(inout) :: imgs(:)
         integer,                        intent(in)    :: ngrow, winsz, edge
+        real,              allocatable, intent(inout) :: diams(:), shifts(:,:)
+        logical, optional,              intent(in)    :: write2disk
+        real,    optional, allocatable, intent(inout) :: min_diams(:)
+        logical, optional,              intent(in)    :: verbose
+        call automask2D_set(automask2D_settings_from(params, ngrow, winsz, edge), imgs, diams, shifts,&
+            &write2disk=write2disk, min_diams=min_diams, verbose=verbose)
+    end subroutine automask2D_params
+
+    subroutine automask2D_set( settings, imgs, diams, shifts, write2disk, min_diams, verbose )
+        type(automask2D_settings),      intent(in)    :: settings
+        class(image),                   intent(inout) :: imgs(:)
         real,              allocatable, intent(inout) :: diams(:), shifts(:,:)
         logical, optional,              intent(in)    :: write2disk
         real,    optional, allocatable, intent(inout) :: min_diams(:)
@@ -324,7 +376,7 @@ contains
         n = size(imgs)
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
-        l_write = l_write .and. params%part.eq.1
+        l_write = l_write .and. settings%l_writer
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
         if( allocated(diams)     ) deallocate(diams)
@@ -333,7 +385,7 @@ contains
         allocate(diams(n), shifts(n,2), source=0.)
         allocate(cc_img(n))
         if( l_verbose )then
-            if( trim(params%automsk).eq.'tight' )then
+            if( settings%l_tight )then
                 write(logfhandle,'(A)') '>>> 2D AUTOMASKING, TIGHT'
             else
                 write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
@@ -342,10 +394,10 @@ contains
         call imgs(1)%memoize_mask_coords
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1,n
-            call automask2D_binary_one(params, imgs(i), ngrow, winsz, edge, cc_img(i), diams(i), shifts(i,:))
+            call automask2D_binary_one(settings, imgs(i), cc_img(i), diams(i), shifts(i,:))
             ! apply cosine egde to soften mask (to avoid Fourier artefacts)
             call imgs(i)%zero_and_unflag_ft
-            call cc_img(i)%cos_edge(edge,imgs(i))
+            call cc_img(i)%cos_edge(settings%edge,imgs(i))
         end do
         !$omp end parallel do
         if( present(min_diams) ) then
@@ -367,7 +419,7 @@ contains
             call imgs(i)%write(string('masks_automask2D.mrc'), i)
         end do
         deallocate(cc_img)
-    end subroutine automask2D
+    end subroutine automask2D_set
 
     !> The mask diameter for a particle measured on the automasks of its class averages or
     !! references (make_pickrefs and the stream's initial analysis): the largest automask diameter
@@ -393,8 +445,8 @@ contains
         type(image_bin)    :: bin_mask
         integer, allocatable :: imat(:,:,:)
         real :: diam_local, shift_local(2)
-        call automask2D_binary_one(params, img, ngrow, winsz, edge, bin_mask, diam_local, shift_local, &
-            &l_fallback_spherical=.false.)
+        call automask2D_binary_one(automask2D_settings_from(params, ngrow, winsz, edge), img, bin_mask, diam_local,&
+            &shift_local, l_fallback_spherical=.false.)
         call bin_mask%get_imat(imat)
         call binary_imat_to_pix(imat, pix)
         if( present(diam)  ) diam  = diam_local
@@ -403,23 +455,25 @@ contains
         if( allocated(imat) ) deallocate(imat)
     end subroutine automask2D_support_pix
 
-    subroutine automask2D_binary_one( params, img, ngrow, winsz, edge, bin_mask, diam, shift, l_fallback_spherical )
-        class(parameters), intent(in)    :: params
+    subroutine automask2D_binary_one( settings, img, bin_mask, diam, shift, l_fallback_spherical )
+        type(automask2D_settings), intent(in)    :: settings
         class(image),      intent(in)    :: img
-        integer,           intent(in)    :: ngrow, winsz, edge
         type(image_bin),   intent(inout) :: bin_mask
         real,              intent(out)   :: diam, shift(2)
         logical, optional, intent(in)    :: l_fallback_spherical
         type(image_bin)    :: img_bin
         real, allocatable  :: ccsizes(:)
-        integer :: loc, ldim(3)
+        integer :: loc, ldim(3), ngrow, winsz, edge
         real    :: smpd, xyz(3), mskrad
         logical :: l_spherical_fallback
+        ngrow = settings%ngrow
+        winsz = settings%winsz
+        edge  = settings%edge
         l_spherical_fallback = .true.
         if( present(l_fallback_spherical) ) l_spherical_fallback = l_fallback_spherical
         ldim = img%get_ldim()
         smpd = img%get_smpd()
-        mskrad = automask2D_mskrad(params, ldim)
+        mskrad = automask2D_mskrad(settings, ldim)
         call img_bin%new_bimg(ldim, smpd, wthreads=.false.)
         call img_bin%copy(img)
         call bin_mask%new_bimg(ldim, smpd, wthreads=.false.)
@@ -427,11 +481,11 @@ contains
         ! dampens below zero (object positive in class averages/reprojs)
         call img_bin%div_below(0.,10.)
         ! low-pass filter
-        call img_bin%bp(0., params%amsklp)
+        call img_bin%bp(0., settings%amsklp)
         ! filter with non-local means
         call img_bin%NLmean2D
         ! binarize with Otsu
-        call otsu_img(img_bin, mskrad=mskrad, positive=trim(params%automsk).eq.'tight')
+        call otsu_img(img_bin, mskrad=mskrad, positive=settings%l_tight)
         call img_bin%masscen(xyz)
         shift = xyz(:2)
         call img_bin%set_imat
@@ -476,14 +530,14 @@ contains
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine automask2D_binary_one
 
-    real function automask2D_mskrad( params, ldim )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: ldim(3)
+    real function automask2D_mskrad( settings, ldim )
+        type(automask2D_settings), intent(in) :: settings
+        integer,                   intent(in) :: ldim(3)
         real :: max_mskrad
         max_mskrad = max(1., real(ldim(1)) / 2. - COSMSKHALFWIDTH - 1.)
-        automask2D_mskrad = params%msk
-        if( params%box_crop > 0 .and. ldim(1) == params%box_crop .and. params%msk_crop > TINY )then
-            automask2D_mskrad = params%msk_crop
+        automask2D_mskrad = settings%msk
+        if( settings%box_crop > 0 .and. ldim(1) == settings%box_crop .and. settings%msk_crop > TINY )then
+            automask2D_mskrad = settings%msk_crop
         endif
         if( automask2D_mskrad <= TINY ) automask2D_mskrad = max_mskrad
         automask2D_mskrad = min(automask2D_mskrad, max_mskrad)

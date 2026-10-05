@@ -17,6 +17,7 @@
 !==============================================================================
 module simple_stream_master_meta_store
 use simple_defs,             only: logfhandle
+use simple_string_utils,     only: int2str
 use simple_error,            only: simple_exception
 use simple_gui_assembler,    only: gui_assembler
 use simple_gui_metadata_api, only: gui_metadata_micrograph, gui_metadata_histogram, gui_metadata_timeplot,&
@@ -120,39 +121,39 @@ contains
         select case(meta_type)
             ! a stage's status, or a fixed plot
             case(GUI_METADATA_STREAM_PREPROCESS_TYPE)
-                self%preprocess = transfer(buffer, self%preprocess)
+                if( frame_fits(buffer, sizeof(self%preprocess), meta_type) ) self%preprocess = transfer(buffer, self%preprocess)
             case(GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ASTIG_TYPE)
-                self%preprocess_histograms(1) = transfer(buffer, self%preprocess_histograms(1))
+                if( frame_fits(buffer, sizeof(self%preprocess_histograms(1)), meta_type) ) self%preprocess_histograms(1) = transfer(buffer, self%preprocess_histograms(1))
             case(GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_CTFRES_TYPE)
-                self%preprocess_histograms(2) = transfer(buffer, self%preprocess_histograms(2))
+                if( frame_fits(buffer, sizeof(self%preprocess_histograms(2)), meta_type) ) self%preprocess_histograms(2) = transfer(buffer, self%preprocess_histograms(2))
             case(GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ICEFRAC_TYPE)
-                self%preprocess_histograms(3) = transfer(buffer, self%preprocess_histograms(3))
+                if( frame_fits(buffer, sizeof(self%preprocess_histograms(3)), meta_type) ) self%preprocess_histograms(3) = transfer(buffer, self%preprocess_histograms(3))
             case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_ASTIG_TYPE)
-                self%preprocess_timeplots(1) = transfer(buffer, self%preprocess_timeplots(1))
+                if( frame_fits(buffer, sizeof(self%preprocess_timeplots(1)), meta_type) ) self%preprocess_timeplots(1) = transfer(buffer, self%preprocess_timeplots(1))
             case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_CTFRES_TYPE)
-                self%preprocess_timeplots(2) = transfer(buffer, self%preprocess_timeplots(2))
+                if( frame_fits(buffer, sizeof(self%preprocess_timeplots(2)), meta_type) ) self%preprocess_timeplots(2) = transfer(buffer, self%preprocess_timeplots(2))
             case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_DF_TYPE)
-                self%preprocess_timeplots(3) = transfer(buffer, self%preprocess_timeplots(3))
+                if( frame_fits(buffer, sizeof(self%preprocess_timeplots(3)), meta_type) ) self%preprocess_timeplots(3) = transfer(buffer, self%preprocess_timeplots(3))
             case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_RATE_TYPE)
-                self%preprocess_timeplots(4) = transfer(buffer, self%preprocess_timeplots(4))
+                if( frame_fits(buffer, sizeof(self%preprocess_timeplots(4)), meta_type) ) self%preprocess_timeplots(4) = transfer(buffer, self%preprocess_timeplots(4))
             case(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
-                self%optics_assignment = transfer(buffer, self%optics_assignment)
+                if( frame_fits(buffer, sizeof(self%optics_assignment), meta_type) ) self%optics_assignment = transfer(buffer, self%optics_assignment)
             case(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
-                self%initial_picking = transfer(buffer, self%initial_picking)
+                if( frame_fits(buffer, sizeof(self%initial_picking), meta_type) ) self%initial_picking = transfer(buffer, self%initial_picking)
             case(GUI_METADATA_STREAM_OPENING2D_TYPE)
-                self%opening2D = transfer(buffer, self%opening2D)
+                if( frame_fits(buffer, sizeof(self%opening2D), meta_type) ) self%opening2D = transfer(buffer, self%opening2D)
             case(GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE)
-                self%opening2D_vol3D = transfer(buffer, self%opening2D_vol3D)
+                if( frame_fits(buffer, sizeof(self%opening2D_vol3D), meta_type) ) self%opening2D_vol3D = transfer(buffer, self%opening2D_vol3D)
             case(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
-                self%reference_picking = transfer(buffer, self%reference_picking)
+                if( frame_fits(buffer, sizeof(self%reference_picking), meta_type) ) self%reference_picking = transfer(buffer, self%reference_picking)
             case(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
-                self%particle_sieving = transfer(buffer, self%particle_sieving)
+                if( frame_fits(buffer, sizeof(self%particle_sieving), meta_type) ) self%particle_sieving = transfer(buffer, self%particle_sieving)
             case(GUI_METADATA_STREAM_POOL2D_TYPE)
-                self%pool2D = transfer(buffer, self%pool2D)
+                if( frame_fits(buffer, sizeof(self%pool2D), meta_type) ) self%pool2D = transfer(buffer, self%pool2D)
             case(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
-                self%pool2D_snapshot = transfer(buffer, self%pool2D_snapshot)
+                if( frame_fits(buffer, sizeof(self%pool2D_snapshot), meta_type) ) self%pool2D_snapshot = transfer(buffer, self%pool2D_snapshot)
             case(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
-                self%solve3D = transfer(buffer, self%solve3D)
+                if( frame_fits(buffer, sizeof(self%solve3D), meta_type) ) self%solve3D = transfer(buffer, self%solve3D)
             ! an item of a list
             case(GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE)
                 call place_micrograph(self%preprocess_micrographs, buffer, meta_type)
@@ -273,6 +274,7 @@ contains
         integer,                                    intent(in)    :: meta_type
         type(gui_metadata_micrograph) :: item
         integer :: i
+        if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return
         if( allocated(arr) )then
@@ -293,6 +295,7 @@ contains
         integer,                                      intent(in)    :: meta_type
         type(gui_metadata_optics_group) :: item
         integer :: i
+        if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return
         if( allocated(arr) )then
@@ -313,6 +316,7 @@ contains
         integer,                                intent(in)    :: meta_type
         type(gui_metadata_cavg2D) :: item
         integer :: i
+        if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return
         if( allocated(arr) )then
@@ -335,6 +339,7 @@ contains
         integer,                               intent(in)    :: meta_type
         type(gui_metadata_vol3D) :: item
         integer :: i
+        if( .not. frame_fits(buffer, sizeof(item), meta_type) ) return
         item = transfer(buffer, item)
         if( .not. fits(item%get_i(), item%get_i_max()) ) return
         if( allocated(arr) )then
@@ -354,5 +359,21 @@ contains
         fits = i_max >= 1 .and. i >= 1 .and. i <= i_max
         if( .not. fits ) THROW_WARN('a GUI list item with an index out of range is dropped')
     end function fits
+
+    ! .true. when @p buffer is as long as the type it is copied into (@p nbytes): a frame read from
+    ! a desynchronised pipe (after a resync) can carry any tag and any length, and a copy of the
+    ! wrong length into a type with an allocatable component would leave it undefined.
+    logical function frame_fits( buffer, nbytes, meta_type )
+        use, intrinsic :: iso_c_binding, only: c_size_t
+        character(len=*),  intent(in) :: buffer
+        integer(c_size_t), intent(in) :: nbytes
+        integer,           intent(in) :: meta_type
+        character(len=:), allocatable :: warning
+        frame_fits = int(len(buffer), c_size_t) == nbytes
+        if( frame_fits ) return
+        warning = 'a GUI message of type '//int2str(meta_type)//' with '//int2str(len(buffer))//&
+            &' bytes instead of '//int2str(int(nbytes))//' is dropped'
+        THROW_WARN(warning)
+    end function frame_fits
 
 end module simple_stream_master_meta_store

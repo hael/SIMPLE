@@ -10,7 +10,7 @@ use simple_image,       only: image
 use simple_cmdline,     only: cmdline
 use simple_gui_utils,   only: mic2thumb
 use simple_nrtxtfile,   only: nrtxtfile
-use simple_segdiam_bin_picker, only: segdiam_bin_picker, MOLDIAMS_PICK
+use simple_segdiam_bin_picker, only: MOLDIAMS_PICK
 implicit none
 #include "simple_local_flags.inc"
 
@@ -242,42 +242,5 @@ contains
         call mic_shrink%kill
         call mic_den%kill
     end subroutine segdiampick_mics
-
-    ! Picks micrographs 1..mic_to with segdiam_bin_picker, which decides the accepted
-    ! diameter bins and the box size from this batch. Kept for the current stream p03.
-    subroutine segdiampick_mics_multi( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, mskdiam, accepted_bins )
-        class(sp_project),         intent(inout) :: spproj
-        character(len=*),          intent(in)    :: pcontrast
-        integer,                   intent(inout) :: mic_to     ! last micrograph to process
-        real,                      intent(in)    :: moldiam_max ! unused, kept for the callers
-        integer,                   intent(inout) :: box_in_pix
-        real,                      intent(inout) :: mskdiam
-        logical, optional, allocatable, intent(out) :: accepted_bins(:) ! one per bin of MOLDIAMS_PICK; .true. = accepted
-        type(segdiam_bin_picker) :: bin_picker
-        call bin_picker%new()
-        call bin_picker%pick(spproj, pcontrast, mic_to)
-        if( present(accepted_bins) ) accepted_bins = bin_picker%get_accepted_bins()
-        ! no accepted bin leaves the box and mask undecided
-        if( bin_picker%get_box() > 0 )then
-            box_in_pix = bin_picker%get_box()
-            mskdiam    = bin_picker%get_mskdiam()
-        endif
-        call bin_picker%kill()
-    end subroutine segdiampick_mics_multi
-
-    ! Picks micrographs 1..mic_to with segdiam_bin_picker, reusing accepted bins and a box
-    ! size decided earlier. Kept for the current stream p03.
-    subroutine segdiampick_mics_multi_fixed_bins( spproj, pcontrast, mic_to, moldiam_max, box_in_pix, accepted_bins )
-        class(sp_project),         intent(inout) :: spproj
-        character(len=*),          intent(in)    :: pcontrast
-        integer,                   intent(inout) :: mic_to     ! last micrograph to process
-        real,                      intent(in)    :: moldiam_max ! unused, kept for the callers
-        integer,                   intent(in)    :: box_in_pix ! box size (px) of the box files
-        logical,                   intent(in)    :: accepted_bins(:) ! one per bin of MOLDIAMS_PICK; .true. = accepted
-        type(segdiam_bin_picker) :: bin_picker
-        call bin_picker%new(accepted_bins, box_in_pix)
-        call bin_picker%pick(spproj, pcontrast, mic_to)
-        call bin_picker%kill()
-    end subroutine segdiampick_mics_multi_fixed_bins
 
 end module simple_mini_stream_utils

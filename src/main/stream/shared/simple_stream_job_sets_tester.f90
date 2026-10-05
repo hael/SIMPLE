@@ -25,6 +25,7 @@ contains
         call test_write_set()
         call test_complete()
         call test_restore()
+        call test_restore_past_unfinished()
     end subroutine run_all_stream_job_sets_tests
 
     subroutine test_new_makes_folders()
@@ -155,6 +156,7 @@ contains
         enddo
         call assert_true(l_found, 'set 3 is among the completed sets')
         call assert_false(file_exists(job_dir//'/00004.simple'), 'the unfinished sets are dropped')
+        call assert_true(file_exists(job_dir//'_unfinished1/00004.simple'), 'with their folder set aside, which a job may still use')
         call assert_true(dir_exists(job_dir//'/'//STDERROUT_DIR), 'the job folder is ready for new sets')
         call restarted%write_set(set_proj, cline_worker, 1)
         call assert_true(file_exists(job_dir//'/00008.simple'), 'the next set is number 8')
@@ -163,5 +165,36 @@ contains
         call restarted%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_restore
+
+    !> restart: numbering continues past an unfinished set numbered above the highest completed one
+    subroutine test_restore_past_unfinished()
+        type(stream_job_sets)     :: sets, restarted
+        type(sp_project)          :: set_proj
+        type(cmdline)             :: cline_worker
+        type(string), allocatable :: completed(:)
+        type(string)              :: cwd_saved, root, job_dir, done
+        integer                   :: nfail0, i
+        write(*,'(A)') 'test_restore_past_unfinished'
+        nfail0 = tests_failed
+        call enter_fixture('job_sets_restore_unfinished', cwd_saved, root)
+        call sets%new(string(JOB_FOLDER), string(COMPLETED_FOLDER), 5)
+        job_dir = sets%get_job_dir()
+        ! sets 1 to 5; 3 complete, 5 still queued or running when the stage stopped
+        do i = 1,5
+            call sets%write_set(set_proj, cline_worker, 1)
+        enddo
+        call sets%complete(job_dir//'/00003.simple', done)
+        call sets%kill
+        call restarted%new(string(JOB_FOLDER), string(COMPLETED_FOLDER), 5)
+        call restarted%restore(completed)
+        call assert_int(1, size(completed), 'the completed set comes back')
+        call assert_int(5, restarted%get_counter(), 'numbering continues after the highest set, completed or not')
+        call restarted%write_set(set_proj, cline_worker, 1)
+        call assert_true(file_exists(job_dir//'/00006.simple'), 'so a new set never takes an unfinished set''s number')
+        call set_proj%kill
+        call cline_worker%kill
+        call restarted%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_restore_past_unfinished
 
 end module simple_stream_job_sets_tester

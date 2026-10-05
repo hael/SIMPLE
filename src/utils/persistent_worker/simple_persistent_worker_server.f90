@@ -21,6 +21,7 @@ module simple_persistent_worker_server
     implicit none
 
     public :: persistent_worker
+    public :: forget_inherited_persistent_worker
     public :: persistent_worker_server
     public :: TCP_BUFSZ
     private
@@ -42,7 +43,8 @@ module simple_persistent_worker_server
     !! Only accessed from the main (non-listener) thread; no mutex needed.
     type persistent_worker_runtime
         integer                                 :: n_workers       = 0  !< number of worker slots launched
-        integer                                 :: nthr_per_worker = 0  !< thread count per worker process
+        integer                                 :: nthr_per_worker = 0  !< thread count per worker process; for a client of
+                                                                        !! another process's server, that server's (0: not given)
         type(string)                            :: launch_backend       !< base scheduler used to launch workers
         type(persistent_worker_server), pointer :: server => null()     !< owning server object
     end type persistent_worker_runtime
@@ -94,6 +96,22 @@ module simple_persistent_worker_server
     end type persistent_worker_server
 
 contains
+
+    !> In a forked child: forgets the persistent-worker server the parent started, without stopping
+    !! it or signalling its threads, which run in the parent only. The child's copies of the
+    !! server's sockets are closed, so it never reads or writes on the parent's connections, and the
+    !! server's mutex, copied in whatever state the parent's threads held it, is never touched. A
+    !! queue environment made afterwards connects as a client (worker_server) or starts its own.
+    subroutine forget_inherited_persistent_worker()
+        if( associated(persistent_worker%server) )then
+            call persistent_worker%server%ipc_socket_server%forget_inherited()
+            call persistent_worker%server%ipc_socket_client%kill()
+            nullify(persistent_worker%server)
+        endif
+        persistent_worker%n_workers       = 0
+        persistent_worker%nthr_per_worker = 0
+        call persistent_worker%launch_backend%kill()
+    end subroutine forget_inherited_persistent_worker
 
     !> Initialise shared state and the mutex, then start the listener (bind + pthread), or with client_only
     !> ("host:port") only connect to an existing server. n_workers = worker slots, nthr_workers = threads

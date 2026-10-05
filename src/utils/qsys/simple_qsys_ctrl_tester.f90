@@ -9,6 +9,7 @@ module simple_qsys_ctrl_tester
 use simple_core_module_api
 use simple_qsys_local, only: qsys_local
 use simple_qsys_ctrl,  only: qsys_ctrl
+use simple_qsys_job_record, only: cancel_queued_job, job_left_unfinished, fresh_job_dir
 use simple_cmdline,    only: cmdline
 use simple_test_utils
 implicit none
@@ -30,7 +31,51 @@ contains
         call test_single_job_scripts()
         call test_multi_job_script()
         call test_streaming_stack()
+        call test_async_job_record_and_fresh_dir()
     end subroutine run_all_qsys_ctrl_tests
+
+    !> a directory whose job recorded itself and wrote no exit status is moved aside before a new
+    !! job starts there; a finished job is never cancelled and its directory is kept
+    subroutine test_async_job_record_and_fresh_dir()
+        character(len=*), parameter :: EXIT_CODE = 'job/EXIT_CODE_test'
+        type(string) :: cwd_saved, root
+        integer      :: nfail0
+        write(*,'(A)') 'test_async_job_record_and_fresh_dir'
+        nfail0 = tests_failed
+        call enter_fixture('qsys_async_fresh_dir', cwd_saved, root)
+        call simple_mkdir(string('job'))
+        call assert_false(job_left_unfinished(string(EXIT_CODE)), 'a job that has not recorded itself is not unfinished')
+        call write_lines(EXIT_CODE//JOB_INFO_EXT, '12345', 'no-such-host.invalid', 'none 0')
+        call assert_true(job_left_unfinished(string(EXIT_CODE)), 'a recorded job without an exit status is unfinished')
+        call fresh_job_dir(string('job'), 'test')
+        call assert_true(dir_exists(string('job_unfinished1')), 'the directory of an unfinished job is moved aside')
+        call assert_true(dir_exists(string('job')), 'and made afresh')
+        call assert_false(job_left_unfinished(string(EXIT_CODE)), 'without the record')
+        ! a finished job
+        call write_lines(EXIT_CODE//JOB_INFO_EXT, '12345', 'no-such-host.invalid', 'none 0')
+        call write_lines(EXIT_CODE, '0')
+        call assert_false(job_left_unfinished(string(EXIT_CODE)), 'a recorded job with an exit status is finished')
+        call assert_false(cancel_queued_job(string(EXIT_CODE)), 'and is never cancelled')
+        call fresh_job_dir(string('job'), 'test')
+        call assert_false(dir_exists(string('job_unfinished2')), 'its directory is kept')
+        ! a running job of another host without a scheduler id: the cancel is sent, and acts there only
+        call del_file(EXIT_CODE)
+        call assert_true(cancel_queued_job(string(EXIT_CODE)), 'a recorded running job is sent a cancel')
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_async_job_record_and_fresh_dir
+
+    !> writes up to three lines to @p fname
+    subroutine write_lines( fname, line1, line2, line3 )
+        character(len=*),           intent(in) :: fname, line1
+        character(len=*), optional, intent(in) :: line2, line3
+        integer :: funit, ios
+        open(newunit=funit, file=fname, status='replace', action='write', iostat=ios)
+        if( ios /= 0 ) return
+        write(funit,'(a)') line1
+        if( present(line2) ) write(funit,'(a)') line2
+        if( present(line3) ) write(funit,'(a)') line3
+        close(funit)
+    end subroutine write_lines
 
     !> a local backend, the even parts table and a controller over all partitions
     subroutine make_ctrl( qsys_obj, parts, ctrl, stream )
@@ -170,6 +215,8 @@ contains
             &outfile=string('test_single_output_2.log'), exit_code_fname=string('test_exit_code_2'))
         call assert_true(file_exists(SNAME2), 'a single-job script is written from a job description')
         call assert_true(index(file_text(SNAME2), 'prg=refine2D') > 0, 'the single-job script carries the job description')
+        call assert_true(index(file_text(SNAME2), 'test_exit_code_2'//JOB_INFO_EXT) > 0,&
+            &'an asynchronous job''s script records the job next to its exit status')
         call cline%set('prg',  'refine2D')
         call cline%set('nthr', 4.)
         call cline%set('ncls', 50.)
@@ -210,6 +257,16 @@ contains
         txt = file_text(SNAME)
         call assert_true(index(txt, 'ncls=50') > 0 .and. index(txt, 'ncls=100') > 0 .and. index(txt, 'ncls=150') > 0, &
             &'the multi-job script runs all three jobs')
+        call assert_true(index(txt, 'EXIT_CODE') == 0, 'without an exit-status file, no status is written')
+        call del_file(SNAME)
+        ! with an exit-status file: the job records itself, a failed job ends the script with its status
+        call ctrl%generate_script(jobs, q_descr, string('simple_private_exec'), string(SNAME), string('test_multi_output_4.log'),&
+            &exit_code_fname=string('test_multi_EXIT_CODE'))
+        txt = file_text(SNAME)
+        call assert_true(index(txt, 'test_multi_EXIT_CODE'//JOB_INFO_EXT) > 0, 'the multi-job script records the job')
+        call assert_true(index(txt, 'rc=${PIPESTATUS[0]}; if [ $rc -ne 0 ]; then echo $rc > test_multi_EXIT_CODE; exit; fi') > 0,&
+            &'a failed job ends the script with its status')
+        call assert_true(index(txt, 'echo ${PIPESTATUS[0]} > test_multi_EXIT_CODE') > 0, 'the last job''s status is written')
         call del_file(SNAME)
         do ij = 1, 3
             call jobs(ij)%kill

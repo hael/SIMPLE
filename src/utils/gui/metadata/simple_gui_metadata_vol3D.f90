@@ -62,6 +62,7 @@ type, extends( gui_metadata_base ) :: gui_metadata_vol3D
   logical                   :: l_lppath_minmax = .false.
   logical                   :: l_pprocmirrpath_minmax = .false.
 contains
+  procedure :: kill => kill_override
   procedure :: set
   procedure :: set_fsc
   procedure :: set_oridist
@@ -372,5 +373,17 @@ contains
       call json%add(json_ptr, json_tiles_ptr)
     endif
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_vol3D), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_vol3D )
+        self = gui_metadata_vol3D()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_vol3D

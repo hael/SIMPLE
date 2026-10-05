@@ -233,8 +233,8 @@ contains
     subroutine assign_and_publish( self )
         class(stream_stage_optics), intent(inout) :: self
         call assign_optics_groups(self%spproj, self%params%tilt_thres, self%params%beamtilt == 'yes', 0)
-        call self%starproj_stream%stream_write_optics(self%params, self%spproj, self%params%outdir)
-        call self%starproj_stream%stream_export_micrographs(self%params, self%spproj, self%params%outdir, optics_set=.true.)
+        call self%starproj_stream%stream_write_optics(self%params, self%spproj, self%params%cwd)
+        call self%starproj_stream%stream_export_micrographs(self%params, self%spproj, self%params%cwd, optics_set=.true.)
         ! the STAR exporter used to rewrite the project here as a side effect; kept, now explicit
         call self%spproj%write
         call self%send_group_shifts()

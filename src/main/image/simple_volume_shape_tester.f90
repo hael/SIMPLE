@@ -1,7 +1,9 @@
 !@descr: analytic tests for three-dimensional shape descriptors
 module simple_volume_shape_tester
-use simple_test_utils, only: assert_real
+use simple_test_utils, only: assert_real, assert_int, enter_fixture, leave_fixture, tests_failed
+use simple_string,     only: string
 use simple_image,      only: image
+use simple_image_bin,  only: image_bin
 implicit none
 private
 public :: run_all_volume_shape_tests
@@ -41,7 +43,51 @@ contains
 
         call vol%kill
         deallocate(density)
+        call test_vol_shape_descr_components()
     end subroutine run_all_volume_shape_tests
+
+    !> the components vol_shape_descr counts: one blob is one object; two blobs of a size are two;
+    !! a blob outside the mask does not count; a speck below the size fraction does not count
+    subroutine test_vol_shape_descr_components()
+        integer, parameter :: NB = 48, C = NB / 2 + 1, HW = 4, SHIFT = 14
+        real,    parameter :: SMPD_VOL = 2.0, LP = 6.0, FRAC = 0.1
+        type(image)       :: vol
+        type(image_bin)   :: bin
+        type(string)      :: cwd_saved, root
+        real, allocatable :: density(:,:,:)
+        integer :: nccs, nfail0
+        nfail0 = tests_failed
+        call enter_fixture('vol_shape_descr', cwd_saved, root)
+        call vol%new([NB, NB, NB], SMPD_VOL, wthreads=.false.)
+        allocate(density(NB, NB, NB), source=0.0)
+        ! one blob at the centre
+        density(C-HW:C+HW, C-HW:C+HW, C-HW:C+HW) = 1.0
+        call vol%set_rmat(density, .false.)
+        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_one')
+        call assert_int(1, nccs, 'vol_shape_descr: one blob is one object')
+        call bin%kill_bimg
+        ! a second blob of the same size, inside the mask
+        density(C+SHIFT-HW:C+SHIFT+HW, C-HW:C+HW, C-HW:C+HW) = 1.0
+        call vol%set_rmat(density, .false.)
+        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_two')
+        call assert_int(2, nccs, 'vol_shape_descr: two blobs of a size are two objects')
+        call bin%kill_bimg
+        ! the same with a mask that leaves the second blob out
+        call bin%vol_shape_descr(vol, LP, 8.0, nccs, min_frac=FRAC, tag='_masked')
+        call assert_int(1, nccs, 'vol_shape_descr: a blob outside the mask does not count')
+        call bin%kill_bimg
+        ! the central blob with a speck
+        density = 0.0
+        density(C-HW:C+HW, C-HW:C+HW, C-HW:C+HW) = 1.0
+        density(C-SHIFT:C-SHIFT+1, C:C+1, C:C+1) = 1.0
+        call vol%set_rmat(density, .false.)
+        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_speck')
+        call assert_int(1, nccs, 'vol_shape_descr: a speck below the size fraction does not count')
+        call bin%kill_bimg
+        call vol%kill
+        deallocate(density)
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_vol_shape_descr_components
 
     subroutine verify_shape(vol, label, expected_ecc, expected_aniso, expected_asph, expected_acyl, expected_rg_sq)
         type(image),      intent(in) :: vol

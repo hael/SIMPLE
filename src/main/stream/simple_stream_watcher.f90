@@ -9,8 +9,6 @@ public :: workout_directory_structure, sniff_folders_SJ
 private
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: WATCHER_HISTORY = 'watcher_history.txt'
-character(len=*), parameter :: WATCHER_DIRS    = 'watcher_dirs.txt'
 integer,          parameter :: RATE_INTERVAL   = 3600 ! 1 hour
 integer,          parameter :: HISTORY_CAPACITY0 = 1024 ! first capacity of the history; doubled when full
 
@@ -25,16 +23,11 @@ type stream_watcher
     integer, public              :: n_history      = 0     !< history of movies detected
     integer, public              :: rate           = 0     !< current rate of movie detection
     integer                      :: report_time    = 600   !< time ellapsed prior to processing
-    integer                      :: starttime      = 0     !< time of first watch
-    integer                      :: ellapsedtime   = 0     !< time ellapsed between last and first watch
-    integer                      :: lastreporttime = 0     !< time ellapsed between last and first watch
     integer                      :: ratetime       = 0     !< time of last rate checkpoint
     integer                      :: raten          = 0     !< number imported at last rate checkpoint
     integer                      :: n_watch        = 0     !< number of times the folder has been watched
     logical                      :: exists         = .false.
 contains
-    ! I/O
-    procedure          :: write_checkpoint
     ! doers
     procedure          :: watch
     procedure, private :: watchdirs
@@ -109,38 +102,19 @@ contains
         self%exists  = .true.
     end function constructor
 
-    ! I/O
-
-    subroutine write_checkpoint( self )
-        class(stream_watcher), intent(in) :: self
-        type(string) :: str_watcher_dirs
-        if( self%exists )then
-            str_watcher_dirs = WATCHER_DIRS
-            if( self%n_history == 0 ) return
-            call write_filetable(string(WATCHER_HISTORY), self%history(:self%n_history))
-            if( allocated(self%watch_dirs))then
-                call write_filetable(str_watcher_dirs, [self%watch_dir, self%watch_dirs(:)])
-            else
-                call write_singlelineoftext(str_watcher_dirs, self%watch_dir)
-            endif
-            call str_watcher_dirs%kill
-        endif
-    end subroutine write_checkpoint
-
     ! DOERS
 
     !>  \brief  is the watching procedure
-    subroutine watch( self, n_movies, movies, max_nmovies, chrono )
+    subroutine watch( self, n_movies, movies, max_nmovies )
         class(stream_watcher),       intent(inout) :: self
         integer,                   intent(out)   :: n_movies
         type(string), allocatable, intent(out)   :: movies(:)
         integer, optional,         intent(in)    :: max_nmovies
-        logical, optional,         intent(in)    :: chrono
         type(string), allocatable :: farray(:)
         integer,      allocatable :: fileinfo(:)
         logical,      allocatable :: is_new_movie(:)
         integer                   :: tnow, last_accessed, last_modified, last_status_change ! in seconds
-        integer                   :: i, io_stat, n_lsfiles, cnt, fail_cnt
+        integer                   :: i, io_stat, n_lsfiles, cnt
         type(string) :: fname
         if( allocated(movies) ) deallocate(movies)
         n_movies = 0
@@ -148,14 +122,9 @@ contains
         ! init
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()
-        if( self%n_watch .eq. 1 )then
-            self%starttime = tnow ! first call
-            self%ratetime  = tnow ! first call
-        endif
-        self%ellapsedtime = tnow - self%starttime
-        fail_cnt = 0
+        if( self%n_watch .eq. 1 ) self%ratetime = tnow ! first call
         ! get file list
-        call self%watchdirs(farray, chrono)
+        call self%watchdirs(farray)
         if( .not.allocated(farray) )return ! nothing to report
         n_lsfiles = size(farray)
         ! identifies closed & untouched files
@@ -183,7 +152,6 @@ contains
                 endif
             else
                 ! some error occured
-                fail_cnt = fail_cnt + 1
                 write(logfhandle,*)'Error watching file: ', fname%to_char(), ' with code: ',io_stat
             endif
             if(allocated(fileinfo))deallocate(fileinfo)
@@ -368,10 +336,9 @@ contains
     end subroutine add2watchdirs
 
     !>  \brief  is for watching directories
-    subroutine watchdirs( self, farray, chrono )
+    subroutine watchdirs( self, farray )
         class(stream_watcher),       intent(in)    :: self
         type(string), allocatable, intent(inout) :: farray(:)
-        logical,       optional,   intent(in)    :: chrono
         type(string), allocatable :: tmp_farr(:), tmp_farr2(:)
         type(string)              :: dir
         integer :: idir,ndirs,n_newfiles,nfiles,cnt,i
@@ -385,7 +352,7 @@ contains
                 dir = self%watch_dirs(idir)
             endif
             if(allocated(tmp_farr)) deallocate(tmp_farr)
-            call simple_list_files_regexp(dir, self%regexp%to_char(), tmp_farr, chronological=chrono)
+            call simple_list_files_regexp(dir, self%regexp%to_char(), tmp_farr)
             if( .not.allocated(tmp_farr) ) cycle
             if( size(tmp_farr) == 0 )then
                 deallocate(tmp_farr)
@@ -429,9 +396,6 @@ contains
         if( allocated(self%watch_dirs) ) deallocate(self%watch_dirs)
         self%rate           = 0
         self%report_time    = 0
-        self%starttime      = 0
-        self%ellapsedtime   = 0
-        self%lastreporttime = 0
         self%ratetime       = 0
         self%raten          = 0
         self%n_watch        = 0

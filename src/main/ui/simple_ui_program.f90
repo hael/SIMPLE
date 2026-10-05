@@ -20,10 +20,10 @@ character(len=*), parameter :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
 !! program's declared inputs: the queue system, NICE and the stream's
 !! persistent workers. A program that holds its command line to its UI
 !! definition accepts these (ui_program%accepts).
-character(len=*), parameter :: UI_ENVIRONMENT_KEYS(17) = [character(len=19) :: &
+character(len=*), parameter :: UI_ENVIRONMENT_KEYS(18) = [character(len=19) :: &
     &'qsys_name', 'qsys_partition', 'qsys_qos', 'qsys_reservation', 'job_memory_per_task', 'time_per_image', &
     &'walltime', 'user_account', 'user_email', 'user_project', 'verbose_exit', 'verbose_exit_fname', &
-    &'niceprocid', 'niceserver', 'nicedispid', 'worker_server', 'worker_priority']
+    &'niceprocid', 'niceserver', 'nicedispid', 'worker_server', 'worker_server_nthr', 'worker_priority']
 
 public :: ui_cli_param_choices, ui_cli_param_summary
 

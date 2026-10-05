@@ -8,7 +8,6 @@ module simple_gui_assembler
                                      FORK_STATUS_RUNNING,   &
                                      FORK_STATUS_FAILED,    &
                                      FORK_STATUS_STOPPED,   &
-                                     FORK_STATUS_RESTARTING,&
                                      FORK_STATUS_SKIPPED
   use simple_gui_metadata_api, only: CK,                                     &
                                      json_core,                              &
@@ -124,10 +123,9 @@ contains
     class(forked_process), intent(inout) :: fork_reference_picking, fork_pool2D
     integer, optional,     intent(in)    :: n_active_persistent_workers
     type(json_value),      pointer       :: json_ptr, json_master_ptr
-    integer                              :: n_running, n_failed, n_restarting, n_unknown
+    integer                              :: n_running, n_failed, n_unknown
     n_running    = 0
     n_failed     = 0
-    n_restarting = 0
     n_unknown    = 0
     call self%json%remove_if_present(self%json_root, 'stream_heartbeat')
     call self%json%create_object(json_ptr, 'stream_heartbeat')
@@ -155,8 +153,6 @@ contains
       else
         call self%json%add(json_master_ptr, 'status', 'error')
       endif
-    else if( n_restarting > 0 ) then
-      call self%json%add(json_master_ptr, 'status', 'running')
     else if( n_running == 0 ) then
       call self%json%add(json_master_ptr, 'status', 'finished')
     else
@@ -175,7 +171,6 @@ contains
       call self%json%create_object(my_json_proc_ptr, my_process_name%to_char())
       call self%json%add(my_json_proc_ptr, 'timestamp',             int(c_time(0_c_long)))
       call self%json%add(my_json_proc_ptr, 'pid',             my_forked_process%get_pid())
-      call self%json%add(my_json_proc_ptr, 'restarts',  my_forked_process%get_nrestarts())
       call self%json%add(my_json_proc_ptr, 'queuetime', my_forked_process%get_queuetime())
       call self%json%add(my_json_proc_ptr, 'starttime', my_forked_process%get_starttime())
       call self%json%add(my_json_proc_ptr, 'failtime',   my_forked_process%get_failtime())
@@ -189,9 +184,6 @@ contains
           n_failed = n_failed + 1
         case(FORK_STATUS_STOPPED)
           call self%json%add(my_json_proc_ptr, 'status', 'finished')
-        case(FORK_STATUS_RESTARTING)
-          call self%json%add(my_json_proc_ptr, 'status', 'restarting')
-          n_restarting = n_restarting + 1
         case(FORK_STATUS_SKIPPED)
           call self%json%add(my_json_proc_ptr, 'status', 'skipped')
         case DEFAULT

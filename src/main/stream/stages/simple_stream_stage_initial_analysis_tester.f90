@@ -11,12 +11,12 @@ use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
 use simple_defs,                          only: COSMSKHALFWIDTH, MSK_EXP_FAC
-use simple_defs_fname,                    only: MRC_EXT, STK_EXT, JPG_EXT, METADATA_EXT
+use simple_defs_fname,                    only: MRC_EXT, STK_EXT, JPG_EXT, METADATA_EXT, SOLVE3D_CAVGS_FINAL_DIR
 use simple_defs_stream,                   only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, OPENING2D_PICKREFS
 use simple_string,                        only: string
 use simple_string_utils,                  only: int2str, int2str_pad
-use simple_fileio,                        only: file_exists, simple_getcwd, swap_suffix
-use simple_syslib,                        only: simple_mkdir
+use simple_fileio,                        only: file_exists, simple_getcwd, swap_suffix, write_singlelineoftext
+use simple_syslib,                        only: simple_mkdir, dir_exists
 use simple_imghead,                       only: find_ldim_nptcls
 use simple_cmdline,                       only: cmdline
 use simple_image,                         only: image, unmemoize_mask_coords
@@ -30,6 +30,9 @@ use simple_gui_metadata_stream_picking,   only: gui_metadata_stream_picking
 use simple_gui_metadata_cavg2D,           only: gui_metadata_cavg2D
 use simple_stream_pipe,                   only: stream_pipe
 use simple_stream_stage_initial_analysis, only: stream_stage_initial_analysis
+use simple_commanders_stream_p03_initial_analysis, only: set_initial_analysis_cline
+use simple_image_msk,                     only: automask2D_settings
+use simple_default_clines,                only: AUTOMASK2D_NGROW, AUTOMASK2D_WINSZ, AUTOMASK2D_AMSKLP, AUTOMASK2D_EDGE
 implicit none
 private
 public :: run_all_stream_stage_initial_analysis_tests
@@ -61,6 +64,8 @@ contains
         call test_status_messages()
         call test_balance_classes()
         call test_find_final_solve3D_dir()
+        call test_commander_defaults()
+        call test_clear_previous_run()
         call test_estimate_mskdiam()
         call test_choose_state()
         call test_finished()
@@ -500,7 +505,7 @@ contains
         class(stream_stage_initial_analysis), allocatable :: stage
         type(sp_project)                    :: proj, written
         type(image)                         :: img
-        type(string)                        :: cwd_saved, root, cwd, projfile, balanced, stk
+        type(string)                        :: cwd_saved, root, cwd, projfile, projfile_bal, balanced, stk
         integer                             :: nfail0, ldim(3), n, ncls
         real                                :: smpd_here
         allocate(stage)
@@ -511,7 +516,8 @@ contains
         projfile = cwd//'/all'//METADATA_EXT
         call write_cavgs_project(projfile, string('cavgs_iter010.mrc'), STATES, POPS, l_evenodd=.true.)
         call proj%read(projfile)
-        call stage%balance_classes(proj, projfile, string('balance_classes/all'))
+        projfile_bal = cwd//'/balance_classes/all/all_balanced'//METADATA_EXT
+        call stage%balance_classes(proj, projfile_bal, string('balance_classes/all'))
         ! 498 extra rows over populations 1, 3 and 6: 49.8, 149.4 and 298.8 -> 49, 149 and 298, and
         ! the two left over to the two largest fractions, the 0.8s, over the 0.4 (populations whose
         ! deciding fractions tie on paper would depend on single-precision rounding)
@@ -545,12 +551,48 @@ contains
         call proj%get_cavgs_stk(stk, ncls, smpd_here, fail=.false.)
         call assert_int(501, ncls, 'the class-average output entry counts 501')
         call assert_true(stk%has_substr('cavgs_balanced'//MRC_EXT), 'and names the balanced stack')
+        call written%read(projfile_bal)
+        call assert_int(501, written%os_cls2D%get_noris(), 'the balanced project is written to its own file')
+        call written%kill
+        ! a GUI selection of cycle 2 is read against the project it was shown: it stays unbalanced
         call written%read(projfile)
-        call assert_int(501, written%os_cls2D%get_noris(), 'the project is written')
+        call assert_int(4, written%os_cls2D%get_noris(), 'the project read keeps its four classes')
+        call written%get_cavgs_stk(stk, ncls, smpd_here, fail=.false.)
+        call assert_int(4, ncls, 'and its class-average stack')
+        call assert_false(stk%has_substr('cavgs_balanced'), 'not the balanced one')
         call written%kill
         call proj%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_balance_classes
+
+    !> a restart before publication clears the previous run's working folders, and only those
+    subroutine test_clear_previous_run()
+        class(stream_stage_initial_analysis), allocatable :: stage
+        type(cmdline)                       :: cline
+        type(string)                        :: cwd_saved, root
+        integer                             :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_clear_previous_run'
+        nfail0 = tests_failed
+        call enter_fixture('ia_stage_clear', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call simple_mkdir(DIR_STREAM//'all')
+        call simple_mkdir('chunks_coarse/chunk_coarse_1')
+        call simple_mkdir('solve2D/init')
+        call simple_mkdir('balance_classes/all')
+        call simple_mkdir('snapshots') ! not the stage's
+        call stage%clear_previous_run()
+        call assert_false(dir_exists(string(DIR_STREAM)),        'the micrograph copies go')
+        call assert_false(dir_exists(string('chunks_coarse')),   'the sieve''s chunks go')
+        call assert_false(dir_exists(string('solve2D')),         'the 2D runs go')
+        call assert_false(dir_exists(string('balance_classes')), 'the balancing goes')
+        call assert_true(dir_exists(string('snapshots')),        'a folder that is not the stage''s stays')
+        call assert_true(file_exists(string(TEST_PROJFILE)),     'and so does the stage''s project')
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_clear_previous_run
 
     !> the result of solve3D_cavgs is in the highest-numbered '<n>_solve3D_cavgs' directory
     subroutine test_find_final_solve3D_dir()
@@ -566,26 +608,64 @@ contains
         call simple_mkdir('1_solve3D_cavgs')
         call simple_mkdir('3_solve3D_cavgs')
         call simple_mkdir('10_solve3D_cavgs')
-        call simple_mkdir('x_solve3D_cavgs')       ! no number
-        call simple_mkdir('solve3D_cavgs')         ! no number
-        call simple_mkdir('12_solve3D_cavgs_old')  ! the suffix does not end the name
         call stage%find_final_solve3D_cavgs_dir(final_dir)
-        call assert_char('10_solve3D_cavgs', final_dir%to_char(), 'the highest number, compared as a number')
+        call assert_int(0, final_dir%strlen(), 'numbered run folders without the driver''s record: nothing is guessed')
+        ! the restart driver names the run whose result stands
+        call write_singlelineoftext(string(SOLVE3D_CAVGS_FINAL_DIR), string('3_solve3D_cavgs'))
+        call stage%find_final_solve3D_cavgs_dir(final_dir)
+        call assert_char('3_solve3D_cavgs', final_dir%to_char(), 'the run the driver names, not the highest number')
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_find_final_solve3D_dir
 
-    !> the state of the references: the fewest connected components (none ranks last), then the
-    !! most distinct projection directions, then the largest population; only candidates count
+    !> the commander's normalisation: the 3D route's settings and the jobs' resources get today's
+    !! defaults (3, 3, 8 A, 50, 16, and 3, 100 A, 20 A; 16 threads, 4 chunks), a 0 means the
+    !! default, and a value given is kept
+    subroutine test_commander_defaults()
+        type(cmdline) :: cline
+        write(*,'(A)') 'test_commander_defaults'
+        call cline%set('dir_target',       'preprocessing')
+        call cline%set('nstates_pickrefs', 0)
+        call cline%set('nspace_pickrefs',  80)
+        call set_initial_analysis_cline(cline)
+        call assert_int(3,  cline%get_iarg('nstates_pickrefs'),   '0 states: the default')
+        call assert_int(3,  cline%get_iarg('nstages_pickrefs'),   'the stages'' default')
+        call assert_int(80, cline%get_iarg('nspace_pickrefs'),    'a reprojection count given is kept')
+        call assert_int(16, cline%get_iarg('nthr3D_pickrefs'),    'the 3D threads'' default')
+        call assert_int(3,  cline%get_iarg('nrestarts_collapse'), 'the restarts'' default')
+        call assert_real(8.,   cline%get_rarg('lpstop_pickrefs'), 1.e-6, 'the final low-pass default')
+        call assert_real(100., cline%get_rarg('lpstart_ini3D'),   1.e-6, 'the initial model''s starting low-pass default')
+        call assert_real(20.,  cline%get_rarg('lpstop_ini3D'),    1.e-6, 'the initial model''s final low-pass default')
+        call assert_int(16, cline%get_iarg('nthr2D'),  'the 2D jobs'' threads'' default')
+        call assert_int(4,  cline%get_iarg('nchunks'), 'the sieve''s chunks'' default')
+        call assert_int(16, cline%get_iarg('worker_nthr'), 'each job claims the threads of the largest')
+        call cline%kill
+        ! the 2D jobs, larger than the 3D job and than a quarter of the stage's threads, set the claim
+        call cline%set('dir_target', 'preprocessing')
+        call cline%set('nthr',       32)
+        call cline%set('nthr2D',     24)
+        call set_initial_analysis_cline(cline)
+        call assert_int(24, cline%get_iarg('worker_nthr'), 'the claim follows the 2D jobs'' threads when they are the largest')
+        call cline%kill
+    end subroutine test_commander_defaults
+
+    !> the state of the references: a single object holding at least the population floor (10%)
+    !! passes the veto, and among those the most distinct projection directions, then the largest
+    !! population; when none passes, the fewest connected components (none ranks last), then the
+    !! directions, then the population; only candidates count
     subroutine test_choose_state()
         type(stream_stage_initial_analysis) :: stage
         logical, parameter :: ALL3(3) = .true.
         write(*,'(A)') 'test_choose_state'
+        call assert_int(2, stage%choose_state(ALL3, [3, 1, 2], [9, 1, 9], [9, 9, 9]),&
+            &'the only single object above the floor wins whatever its coverage')
+        call assert_int(3, stage%choose_state(ALL3, [1, 2, 1], [4, 9, 6], [9, 9, 5]),&
+            &'single objects above the floor: the most distinct projection directions')
+        call assert_int(1, stage%choose_state(ALL3, [1, 2, 1], [4, 9, 6], [9, 9, 1]),&
+            &'a single object below the population floor is vetoed')
         call assert_int(2, stage%choose_state(ALL3, [3, 1, 2], [9, 1, 9], [9, 1, 9]),&
-            &'the only single-component volume wins whatever its coverage')
-        call assert_int(3, stage%choose_state(ALL3, [1, 2, 1], [4, 9, 6], [9, 9, 1]),&
-            &'single-component volumes: the most distinct projection directions')
+            &'none passes the veto: the fewest components, as on 3 October')
         call assert_int(1, stage%choose_state(ALL3, [2, 4, 3], [1, 9, 9], [1, 9, 9]),&
-            &'no single-component volume: the fewest components')
+            &'no single object: the fewest components')
         call assert_int(3, stage%choose_state(ALL3, [3, 2, 2], [9, 5, 6], [9, 9, 1]),&
             &'equal fewest components: the most distinct projection directions')
         call assert_int(2, stage%choose_state(ALL3, [1, 1, 1], [5, 5, 5], [3, 7, 7]),&
@@ -607,6 +687,7 @@ contains
         type(stream_stage_initial_analysis) :: stage
         type(image)                         :: cavgs(3)
         type(string)                        :: cwd_saved, root
+        type(automask2D_settings)           :: msk_settings
         real    :: mskdiam_box, mskdiam_small, mskdiam_all, mskdiam_none, rule_small
         integer :: nfail0, i
         write(*,'(A)') 'test_estimate_mskdiam'
@@ -616,14 +697,19 @@ contains
         call make_disc_cavg(cavgs(2), BOX, SMPD_CAVG, RAD_SMALL)
         call make_disc_cavg(cavgs(3), BOX, SMPD_CAVG, RAD_LARGE)
         mskdiam_box = (real(BOX) - COSMSKHALFWIDTH) * SMPD_CAVG
+        ! make_pickrefs' automasking defaults, the gen_pickrefs commander's
+        msk_settings%amsklp = AUTOMASK2D_AMSKLP
+        msk_settings%ngrow  = AUTOMASK2D_NGROW
+        msk_settings%winsz  = nint(AUTOMASK2D_WINSZ)
+        msk_settings%edge   = AUTOMASK2D_EDGE
         ! the rule on the small disc's true diameter, less one pixel for rounding to an even box
         rule_small  = MSK_EXP_FAC * (2. * real(RAD_SMALL) + 2. * COSMSKHALFWIDTH) * SMPD_CAVG - SMPD_CAVG
-        mskdiam_small = stage%estimate_mskdiam(cavgs, [1, 1, 0], mskdiam_box)
+        mskdiam_small = stage%estimate_mskdiam(cavgs, [1, 1, 0], mskdiam_box, msk_settings)
         call assert_true(mskdiam_small >= rule_small, 'the estimate is generous')
         call assert_true(mskdiam_small < mskdiam_box, 'an unselected larger class does not widen the mask')
-        mskdiam_all = stage%estimate_mskdiam(cavgs, [1, 1, 1], mskdiam_box)
+        mskdiam_all = stage%estimate_mskdiam(cavgs, [1, 1, 1], mskdiam_box, msk_settings)
         call assert_real(mskdiam_box, mskdiam_all, 1.e-4, 'the estimate is capped at the box default')
-        mskdiam_none = stage%estimate_mskdiam(cavgs, [0, 0, 0], mskdiam_box)
+        mskdiam_none = stage%estimate_mskdiam(cavgs, [0, 0, 0], mskdiam_box, msk_settings)
         call assert_real(mskdiam_box, mskdiam_none, 1.e-4, 'no class selected: the box default')
         do i = 1, size(cavgs)
             call cavgs(i)%kill

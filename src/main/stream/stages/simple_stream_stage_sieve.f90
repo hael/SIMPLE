@@ -14,6 +14,12 @@
 !   The mask diameter is the one make_pickrefs decided, read from moldiam.txt
 !   in the reference-picking stage's directory (dir_target).
 !
+!   Final ingestion (the sieve stages its leftover particles and ends with a
+!   final set) is set while reference picking is idle or stopped (its
+!   STREAM_IDLE or STREAM_FINISHED marker in dir_target), once a watch a settle
+!   time later has found nothing new, and withdrawn when the marker goes or a
+!   new set arrives.
+!
 !   What happens is delegated:
 !     - chunking, 2D, rejection, hand-off -> ptcl_sieve
 !     - project import                    -> import_new_projects
@@ -25,18 +31,22 @@
 ! RESTART:
 !   Recognised by the output directory and logged; a leftover TERM_STREAM is
 !   removed, so the restarted stage runs. The sieve restores its chunks from
-!   its folders. The projects it has already chunked (its imported_projects.txt)
-!   go into the watcher history; projects imported but not yet chunked are
-!   imported again.
+!   its folders, and is made as soon as the upstream folder is attached, even
+!   with nothing new to import. Every set it has chunked from (its
+!   chunked_mics.txt) is imported again with the micrographs it chunked marked,
+!   so the rest of a partly chunked set is still sieved, and goes into the
+!   watcher history; sets imported but not chunked from are imported again.
+!   On stop, the 2D jobs of the running chunks are cancelled.
 !==============================================================================
 module simple_stream_stage_sieve
-use simple_defs,                                 only: logfhandle, PATH_HERE
+use simple_defs,                                 only: logfhandle, PATH_HERE, STDLEN
 use simple_defs_fname,                           only: TERM_STREAM, STREAM_MOLDIAM
 use simple_defs_stream,                          only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME
 use simple_defs_environment,                     only: SIMPLE_STREAM_CHUNK_PARTITION
 use simple_error,                                only: simple_exception
 use simple_string,                               only: string
-use simple_fileio,                               only: del_file, file_exists, read_filetable, simple_abspath
+use simple_string_utils,                         only: int2str
+use simple_fileio,                               only: del_file, file_exists, simple_abspath
 use simple_syslib,                               only: dir_exists, simple_mkdir
 use simple_timer,                                only: simple_gettime, cast_time_char
 use simple_cmdline,                              only: cmdline
@@ -47,8 +57,9 @@ use simple_qsys_env,                             only: qsys_env
 use simple_rec_list,                             only: rec_list
 use simple_stream_watcher,                       only: stream_watcher
 use simple_stream_state,                         only: ipc_pipe_sieve_cavgs_in
-use simple_stream_utils,                         only: create_stream_project, init_stream_qenv, import_new_projects
-use simple_ptcl_sieve,                           only: ptcl_sieve
+use simple_stream_utils,                         only: create_stream_project, init_stream_qenv, import_new_projects, upstream_done
+use simple_ptcl_sieve,                           only: ptcl_sieve, ptcl_sieve_settings, sieve_settings, CHUNKED_MICS,&
+                                                      &read_chunked_mics
 use simple_gui_metadata_utils,                   only: max_metadata_size
 use simple_gui_metadata_types,                   only: GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE,&
                                                       &GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE
@@ -63,8 +74,6 @@ private
 #include "simple_local_flags.inc"
 
 integer,          parameter :: MAX_PROJECTS_IMPORT       = 20      ! completed upstream sets taken per pass
-integer,          parameter :: FINAL_INGESTION_IDLE_TIME = 10 * 60 ! idle time (s) after the last import before final ingestion
-character(len=*), parameter :: IMPORTED_PROJECTS         = 'imported_projects.txt' ! written by the sieve
 
 ! Components and steps are public so simple_stream_stage_sieve_tester can assemble a stage and
 ! run one step at a time; production code uses new/iterate/finished/finalize/kill.
@@ -78,15 +87,19 @@ type :: stream_stage_sieve
     type(stream_pipe)                          :: pipe          ! to the master
     type(gui_metadata_stream_particle_sieving) :: meta_status
     type(gui_metadata_cavg2D)                  :: meta_cavgs
-    type(string), allocatable :: restored_imports(:)            ! restart: projects the sieve has already chunked
+    type(string), allocatable :: restored_imports(:)            ! restart: the sets the sieve has chunked from
     integer,      allocatable :: latest_inds(:), latest_pops(:), latest_selection(:)
     real,         allocatable :: latest_res(:)
     type(string)              :: latest_jpeg, latest_stk        ! the sieve's latest class averages
+    real    :: mskdiam          = 0.      ! the picking references' mask diameter (moldiam.txt), the sieve's
     integer :: latest_xtiles    = 0
     integer :: latest_ytiles    = 0
     integer :: n_mics_imported  = 0
     integer :: n_ptcls_imported = 0
     integer :: last_import_time = 0
+    integer :: last_watch       = 0       ! time of the last watch of the upstream folder
+    integer :: upstream_done_since = 0    ! when reference picking was first seen idle or stopped; 0: it is not
+    logical :: l_final          = .false. ! final ingestion is set
     logical :: l_attached       = .false. ! the upstream completed-sets folder exists and is watched
     logical :: l_waiting_logged = .false.
     logical :: l_sieve_active   = .false. ! the sieve is made (on the first import)
@@ -111,6 +124,8 @@ contains
     procedure :: attach_upstream
     procedure :: import_projects
     procedure :: start_sieve
+    procedure :: update_final_ingestion
+    procedure :: resumable
     procedure :: read_mask_diameter
     procedure :: send_status
     procedure :: send_latest_cavgs
@@ -178,12 +193,65 @@ contains
         call self%pipe%new(fd_read, fd_write, max_metadata_size(), 'particle_sieving')
     end subroutine init_gui
 
-    !> Restart: the projects the sieve has already chunked, for the watcher history (attach_upstream).
+    !> Restart: every set the sieve has chunked from is imported again, in the order it was
+    !! chunked, and the micrographs it put in a chunk are marked chunked; the rest of a partly
+    !! chunked set is left for the sieve. The sets go into the watcher history (attach_upstream).
+    !! The records of a set are pushed in micrograph order, so micrograph m of a set whose first
+    !! record is at n+1 is record n+m; the marked records come first, as the sieve's slicing needs.
     subroutine restore_imports( self )
         class(stream_stage_sieve), intent(inout) :: self
-        if( .not. file_exists(IMPORTED_PROJECTS) ) return
+        type(string), allocatable :: projnames(:), sets(:), one_set(:)
+        integer,      allocatable :: micinds(:)
+        integer :: i, j, nsets, n_before, irec
+        call read_chunked_mics(string(CHUNKED_MICS), projnames, micinds)
+        if( .not. allocated(projnames) ) return
+        if( size(projnames) == 0 ) return
         call self%send_status(string('importing previous run'))
-        call read_filetable(string(IMPORTED_PROJECTS), self%restored_imports)
+        allocate(sets(size(projnames)))
+        nsets = 0
+        i     = 1
+        do while( i <= size(projnames) )
+            ! one set's micrographs are consecutive
+            j = i
+            do while( j < size(projnames) )
+                if( projnames(j+1) /= projnames(i) ) exit
+                j = j + 1
+            end do
+            if( any_set(projnames(i)) )then
+                THROW_WARN('a set is listed twice in '//CHUNKED_MICS//'; its later lines are ignored')
+            else if( file_exists(projnames(i)) )then
+                nsets       = nsets + 1
+                sets(nsets) = projnames(i)
+                n_before    = self%project_list%size()
+                one_set     = [projnames(i)]
+                call import_new_projects(self%project_list, one_set, self%n_mics_imported, self%n_ptcls_imported)
+                do irec = i,j
+                    if( micinds(irec) < 1 ) cycle
+                    if( n_before + micinds(irec) > self%project_list%size() ) cycle
+                    call self%project_list%set_included_flags([n_before + micinds(irec), n_before + micinds(irec)])
+                end do
+            else
+                THROW_WARN('a set the sieve chunked from is gone: '//projnames(i)%to_char())
+            endif
+            i = j + 1
+        end do
+        if( nsets > 0 ) self%restored_imports = sets(:nsets)
+        write(logfhandle,'(A,I6,A,I8,A)') '>>> RESTORED ', nsets, ' SETS WITH ', size(projnames), ' CHUNKED MICROGRAPHS'
+
+    contains
+
+        logical function any_set( projname )
+            type(string), intent(in) :: projname
+            integer :: k
+            any_set = .false.
+            do k = 1,nsets
+                if( sets(k) == projname )then
+                    any_set = .true.
+                    return
+                endif
+            end do
+        end function any_set
+
     end subroutine restore_imports
 
     !> One pass: wait for the upstream folder, import new sets, run the sieve, report.
@@ -199,10 +267,10 @@ contains
         endif
         call self%import_projects()
         if( self%l_sieve_active )then
-            ! final ingestion once no set has arrived for a while; the next import undoes it
-            if( simple_gettime() - self%last_import_time >= FINAL_INGESTION_IDLE_TIME ) call self%sieve%set_final_ingestion()
+            call self%update_final_ingestion()
             call self%sieve%cycle(self%project_list)
-        else if( self%project_list%size() > 0 )then
+        else if( self%project_list%size() > 0 .or. self%resumable() )then
+            ! a restart resumes the sieve's chunks with nothing new to import
             call self%start_sieve()
         endif
         if( self%n_ptcls_imported > 0 )then
@@ -220,9 +288,10 @@ contains
         finished = file_exists(TERM_STREAM)
     end function finished
 
-    !> The last status: no more user input.
+    !> Cancels the running chunk jobs; the last status: no more user input.
     subroutine finalize( self )
         class(stream_stage_sieve), intent(inout) :: self
+        if( self%l_sieve_active ) call self%sieve%cancel()
         call self%meta_status%set_user_input(.false.)
         call self%send_status(string('terminating'))
     end subroutine finalize
@@ -253,6 +322,7 @@ contains
         call self%latest_stk%kill
         if( allocated(self%params) ) deallocate(self%params)
         self%latest_xtiles    = 0
+        self%mskdiam          = 0.
         self%latest_ytiles    = 0
         self%n_mics_imported  = 0
         self%n_ptcls_imported = 0
@@ -260,6 +330,9 @@ contains
         self%l_waiting_logged = .false.
         self%l_sieve_active   = .false.
         self%l_restart        = .false.
+        self%l_final          = .false.
+        self%last_watch       = 0
+        self%upstream_done_since = 0
         self%l_exists         = .false.
     end subroutine kill
 
@@ -299,31 +372,81 @@ contains
         class(stream_stage_sieve), intent(inout) :: self
         type(string), allocatable :: projects(:)
         integer :: nprojects
+        self%last_watch = simple_gettime()
         call self%project_buff%watch(nprojects, projects, max_nmovies=MAX_PROJECTS_IMPORT)
+        ! a capped watch may have left sets for the next pass
+        if( nprojects == MAX_PROJECTS_IMPORT ) self%upstream_done_since = 0
         if( nprojects == 0 ) return
         call import_new_projects(self%project_list, projects, self%n_mics_imported, self%n_ptcls_imported)
         call self%project_buff%add2history(projects)
-        if( self%l_sieve_active ) call self%sieve%unset_final_ingestion()
+        ! new sets: final ingestion waits for another quiet watch
+        self%upstream_done_since = 0
+        if( self%l_final )then
+            call self%sieve%unset_final_ingestion()
+            self%l_final = .false.
+            write(logfhandle,'(A)') '>>> NEW SETS: FINAL INGESTION WITHDRAWN'
+        endif
         self%last_import_time = simple_gettime()
         write(logfhandle,'(A,I6,I9)') '>>> # MICROGRAPHS / PARTICLES IMPORTED : ', self%n_mics_imported, self%n_ptcls_imported
         write(logfhandle,'(A,A)')     '>>> LAST IMPORT AT                     : ', cast_time_char(self%last_import_time)
     end subroutine import_projects
 
-    ! The sieve, made on the first import with the mask diameter of the picking references and the
-    ! optics directory for its hand-offs, then two warm-up cycles.
+    ! The sieve, made on the first import with the mask diameter of the picking references, the
+    ! chunk partition and the optics directory for its hand-offs, then two warm-up cycles.
     subroutine start_sieve( self )
         class(stream_stage_sieve), intent(inout) :: self
+        type(ptcl_sieve_settings) :: settings
+        character(len=STDLEN)     :: partition_env
+        integer                   :: envlen
         call self%read_mask_diameter()
+        settings         = sieve_settings(self%params)
+        settings%mskdiam = self%mskdiam
+        call get_environment_variable(SIMPLE_STREAM_CHUNK_PARTITION, partition_env, envlen)
+        if( envlen > 0 ) settings%partition = trim(partition_env)
         if( .not. allocated(self%sieve) ) allocate(self%sieve)
         if( self%params%optics_dir%strlen() > 0 )then
-            call self%sieve%new(self%params, string(PATH_HERE//DIR_STREAM_COMPLETED), optics_dir=self%params%optics_dir)
+            call self%sieve%new(self%params, settings, string(PATH_HERE//DIR_STREAM_COMPLETED), optics_dir=self%params%optics_dir)
         else
-            call self%sieve%new(self%params, string(PATH_HERE//DIR_STREAM_COMPLETED))
+            call self%sieve%new(self%params, settings, string(PATH_HERE//DIR_STREAM_COMPLETED))
         endif
         self%l_sieve_active = .true.
         call self%sieve%cycle(self%project_list)
         call self%sieve%cycle(self%project_list)
     end subroutine start_sieve
+
+    ! Final ingestion while reference picking is idle or stopped and a watch made a settle time
+    ! after that found nothing (every set it handed on before its marker has settled and been
+    ! taken); withdrawn when it is neither.
+    subroutine update_final_ingestion( self )
+        class(stream_stage_sieve), intent(inout) :: self
+        if( .not. upstream_done(self%params%dir_target) )then
+            self%upstream_done_since = 0
+            if( self%l_final )then
+                call self%sieve%unset_final_ingestion()
+                self%l_final = .false.
+                write(logfhandle,'(A)') '>>> REFERENCE PICKING IS ACTIVE AGAIN: FINAL INGESTION WITHDRAWN'
+            endif
+            return
+        endif
+        if( self%l_final ) return
+        if( self%upstream_done_since == 0 )then
+            self%upstream_done_since = simple_gettime()
+            return
+        endif
+        if( self%last_watch - self%upstream_done_since <= max(self%settle_s, 0) ) return
+        call self%sieve%set_final_ingestion()
+        self%l_final = .true.
+        write(logfhandle,'(A)') '>>> REFERENCE PICKING IS IDLE OR STOPPED AND EVERY SET IS TAKEN: FINAL INGESTION'
+    end subroutine update_final_ingestion
+
+    ! A restart whose sieve has chunks to take up: the mask diameter of the picking references
+    ! exists (written before reference picking completes any set).
+    logical function resumable( self )
+        class(stream_stage_sieve), intent(in) :: self
+        resumable = .false.
+        if( .not. self%l_restart ) return
+        resumable = file_exists(self%params%dir_target//'/'//STREAM_MOLDIAM)
+    end function resumable
 
     ! The mask diameter make_pickrefs decided, from moldiam.txt in the reference-picking
     ! stage's directory; it is written before reference picking completes any set.
@@ -335,9 +458,9 @@ contains
         if( .not. file_exists(fname) ) THROW_HARD('no mask diameter from reference picking: '//fname%to_char())
         call moldiam%new(1, is_ptcl=.false.)
         call moldiam%read(fname)
-        self%params%mskdiam = moldiam%get(1, 'mskdiam')
+        self%mskdiam = moldiam%get(1, 'mskdiam')
         call moldiam%kill
-        write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', self%params%mskdiam
+        write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', self%mskdiam
     end subroutine read_mask_diameter
 
     !---------------- GUI ----------------
@@ -346,14 +469,21 @@ contains
     subroutine send_status( self, stage )
         class(stream_stage_sieve), intent(inout) :: self
         type(string),              intent(in)    :: stage
-        integer :: i, naccepted, nrejected
-        naccepted = 0
-        nrejected = 0
+        type(string) :: stage_text
+        integer :: i, naccepted, nrejected, nfailed
+        naccepted  = 0
+        nrejected  = 0
+        nfailed    = 0
+        stage_text = stage
         if( allocated(self%sieve) )then
             naccepted = self%sieve%get_n_accepted_ptcls()
             nrejected = self%sieve%get_n_rejected_ptcls()
+            nfailed   = self%sieve%get_n_failed_chunks()
         endif
-        call self%meta_status%set(stage=stage, particles_imported=self%n_ptcls_imported,&
+        ! chunks whose 2D job failed twice are dropped with their particles (ptcl_sieve_policy.md)
+        if( nfailed > 0 ) stage_text = stage//'; '//int2str(nfailed)//' chunk(s) failed, '//&
+            &int2str(self%sieve%get_n_failed_ptcls())//' particles dropped'
+        call self%meta_status%set(stage=stage_text, particles_imported=self%n_ptcls_imported,&
             &particles_accepted=naccepted, particles_rejected=nrejected)
         call self%meta_status%clear_selection()
         if( allocated(self%latest_inds) .and. allocated(self%latest_selection) )then

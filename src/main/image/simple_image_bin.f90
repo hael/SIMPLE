@@ -556,20 +556,29 @@ contains
         call self%update_img_rmat
     end subroutine cc2bin
 
-    !> Shape descriptors of @p vol, low-passed to @p lp (A) and binarised (Otsu twice): the
-    !! descriptors within the mask radius @p msk (voxels) are logged, and @p nccs is the number
-    !! of connected components of the binarised volume.
-    subroutine vol_shape_descr( self, vol, lp, msk, nccs )
+    !> Shape descriptors of @p vol, low-passed to @p lp (A) and binarised (Otsu twice), logged; @p nccs
+    !! is the number of its connected components that lie inside the mask sphere of radius @p msk
+    !! (voxels, around the box centre) and, with @p min_frac, hold at least that fraction of the
+    !! largest one's voxels, so a speck of noise does not make a second object. The binarised volume
+    !! and the components are written as vol_binarized<tag>.mrc and vol_cc<tag>.mrc.
+    subroutine vol_shape_descr( self, vol, lp, msk, nccs, min_frac, tag )
         class(image_bin), intent(inout) :: self
         class(image), intent(in)        :: vol
         real, intent(in)                :: lp, msk
         integer, intent(out)            :: nccs
+        real,             optional, intent(in) :: min_frac
+        character(len=*), optional, intent(in) :: tag
         integer, allocatable :: cc_sz(:)
         real, allocatable    :: vals(:)
         real, pointer        :: rmat(:,:,:)
         type(image_bin)      :: vol_ccs
-        real                 :: ecc, aniso, asph, acyl, rg_sq, threshold, threshold_first
-        integer              :: ldim(3)
+        character(len=:), allocatable :: suffix
+        real                 :: ecc, aniso, asph, acyl, rg_sq, threshold, threshold_first, frac, cen(3)
+        integer              :: ldim(3), i, j, k
+        frac = 0.
+        if( present(min_frac) ) frac = min_frac
+        suffix = ''
+        if( present(tag) ) suffix = tag
         call self%new_bimg(vol%get_ldim(), vol%get_smpd())
         call vol_ccs%new_bimg(vol%get_ldim(), vol%get_smpd())
         call self%copy(vol)
@@ -586,20 +595,31 @@ contains
         elsewhere
             rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
         end where
+        ! only what lies inside the mask counts
+        cen = real(ldim / 2 + 1)
+        do k = 1,ldim(3)
+            do j = 1,ldim(2)
+                do i = 1,ldim(1)
+                    if( (real(i)-cen(1))**2 + (real(j)-cen(2))**2 + (real(k)-cen(3))**2 > msk**2 ) rmat(i,j,k) = 0.
+                enddo
+            enddo
+        enddo
         nullify(rmat)
         call self%set_imat
-        call self%write(string('vol_binarized.mrc'))
+        call self%write(string('vol_binarized'//suffix//'.mrc'))
         call self%calc_3D_shape_descriptors(msk, ecc, aniso, asph, acyl, rg_sq)
         call self%find_ccs(vol_ccs, update_imat=.true.)
         cc_sz = vol_ccs%size_ccs()
-        nccs  = size(cc_sz)
+        ! an empty binarisation has no component (size_ccs gives a single zero then)
+        nccs  = 0
+        if( maxval(cc_sz) > 0 ) nccs = count(cc_sz > 0 .and. real(cc_sz) >= frac * real(maxval(cc_sz)))
         write(logfhandle,'(A,F7.2)') '>>> Eccentricity          : ', ecc
         write(logfhandle,'(A,F7.2)') '>>> Anisotropy            : ', aniso
         write(logfhandle,'(A,F7.2)') '>>> Asphericity           : ', asph
         write(logfhandle,'(A,F7.2)') '>>> Acylindricity         : ', acyl
         write(logfhandle,'(A,F7.2)') '>>> Radius of gyration^2  : ', rg_sq
-        write(logfhandle,'(A,I7)')   '>>> Connected component(s): ', nccs
-        call vol_ccs%write_bimg(string('vol_cc.mrc'))
+        write(logfhandle,'(A,I7,A,I7,A)') '>>> Connected component(s): ', nccs, ' (', size(cc_sz), ' before the size cut)'
+        call vol_ccs%write_bimg(string('vol_cc'//suffix//'.mrc'))
         call vol_ccs%kill_bimg
         if( allocated(cc_sz) ) deallocate(cc_sz)
     end subroutine vol_shape_descr

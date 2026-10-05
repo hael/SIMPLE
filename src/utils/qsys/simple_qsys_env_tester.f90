@@ -6,7 +6,8 @@ module simple_qsys_env_tester
 use simple_core_module_api
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
-use simple_qsys_env,   only: qsys_env, register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs
+use simple_qsys_env,   only: qsys_env, register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs,&
+                            &forget_warmup_envs
 use simple_sp_project, only: sp_project
 use simple_test_utils
 implicit none
@@ -23,7 +24,22 @@ contains
         call test_active_balanced_split()
         call test_active_balanced_qsys_parts()
         call test_warmup_owner_lifetime()
+        call test_forget_warmup_envs()
     end subroutine run_all_qsys_env_tests
+
+    !> a forked stream stage forgets its parent's warm-up registrants
+    subroutine test_forget_warmup_envs()
+        type(qsys_env), target :: env_a, env_b
+        write(*,'(A)') 'test_forget_warmup_envs'
+        call register_warmup_env(env_a, owner=.true.)
+        call register_warmup_env(env_b)
+        call forget_warmup_envs()
+        call assert_int(0, n_warmup_envs(), 'no registrant is left')
+        call assert_false(is_warmup_owner(env_a), 'and no owner')
+        call env_a%kill
+        call env_b%kill
+        call assert_int(0, n_warmup_envs(), 'killing a forgotten environment is harmless')
+    end subroutine test_forget_warmup_envs
 
     !> The persistent-worker warm-up callback has one live owner: the oldest registrant. A
     !! shorter-lived reuser never takes it; killing the owner hands it to the surviving reuser;

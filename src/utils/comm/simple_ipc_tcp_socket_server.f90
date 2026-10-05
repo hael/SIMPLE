@@ -71,6 +71,7 @@ module simple_ipc_tcp_socket_server
     procedure :: get_port
     procedure :: get_server_ips
     procedure :: is_listening
+    procedure :: forget_inherited
   end type ipc_tcp_socket_server
 
   contains
@@ -111,6 +112,21 @@ module simple_ipc_tcp_socket_server
     self%port = -1
     call self%server_ips%kill()
   end subroutine kill
+
+  !> In a forked child: closes this process's copy of the listening socket and forgets the
+  !! listener, without signalling it. The listener thread runs in the parent only; kill would
+  !! connect to the shared port and stop the parent's listener.
+  subroutine forget_inherited(self)
+    class(ipc_tcp_socket_server), intent(inout) :: self
+    integer(kind=c_int) :: rc
+    if( self%fd >= 0 ) rc = c_close(self%fd)
+    self%fd             = -1
+    self%port           = -1
+    self%listening      = .false.
+    self%thread_started = .false.
+    nullify(self%listener_args)
+    call self%server_ips%kill()
+  end subroutine forget_inherited
 
   !> Bind an available port, call listen(), and launch the listener pthread.
   subroutine start_listener( self, thread_funloc, thread_args_ptr )

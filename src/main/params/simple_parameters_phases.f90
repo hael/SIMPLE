@@ -524,7 +524,8 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical :: nparts_set
         integer :: nthr
-        self%split_mode = 'even'
+        ! 'even' unless the command line asks for another (the streaming stages ask for 'stream')
+        if( .not. cline%defined('split_mode') ) self%split_mode = 'even'
         nparts_set      = .false.
         if( cline%defined('nparts') ) nparts_set = .true.
         if( .not. cline%defined('numlen') )then

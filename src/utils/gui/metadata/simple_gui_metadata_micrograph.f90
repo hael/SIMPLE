@@ -29,9 +29,10 @@ type, extends( gui_metadata_base ) :: gui_metadata_micrograph
   integer                   :: xdim          = 0     ! micrograph width in pixels
   integer                   :: ydim          = 0     ! micrograph height in pixels
   integer                   :: n_coordinates = 0     ! number of populated coordinate entries
-  integer(kind=2)           :: x_coordinates(MAX_MIC_COORDINATES) ! particle box centre x (int16, limits transfer size)
-  integer(kind=2)           :: y_coordinates(MAX_MIC_COORDINATES) ! particle box centre y (int16, limits transfer size)
+  integer(kind=2)           :: x_coordinates(MAX_MIC_COORDINATES) = 0_2 ! particle box centre x (int16, limits transfer size)
+  integer(kind=2)           :: y_coordinates(MAX_MIC_COORDINATES) = 0_2 ! particle box centre y (int16, limits transfer size)
 contains
+  procedure :: kill => kill_override
   procedure :: set
   procedure :: set_coordinate
   procedure :: clear_coordinates
@@ -159,5 +160,17 @@ contains
       call json%add(json_ptr, json_boxes_ptr)
     endif
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_micrograph), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_micrograph )
+        self = gui_metadata_micrograph()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_micrograph

@@ -72,7 +72,6 @@ select case(trim(prg))
     case( 'sieve_cavgs' )
         call xsieve_cavgs%execute(cline)
     case( 'pool2D' )
-        call cline%set('stepwise', 'yes') ! force stepwise mode for pool2D
         call xpool2D%execute(cline)
     case( 'solve3D_stream' )
         call xsolve3D_multistate%execute(cline)

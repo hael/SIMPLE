@@ -39,6 +39,10 @@ use simple_sp_project_tester,                only: run_all_sp_project_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
+use simple_mic_import_tester,                only: run_all_mic_import_tests
+use simple_mic_selection_tester,             only: run_all_mic_selection_tests
+use simple_optics_groups_tester,             only: run_all_optics_groups_tests
+use simple_optics_maps_tester,               only: run_all_optics_maps_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
 use simple_motion_model_tester,              only: run_all_motion_model_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
@@ -102,6 +106,7 @@ use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
+use simple_stream_chain_tester,              only: run_all_stream_chain_sieve_tests, run_all_stream_chain_movie_tests
 use simple_stream_stage_preprocess_tester,   only: run_all_stream_stage_preprocess_tests
 use simple_stream_stage_optics_tester,       only: run_all_stream_stage_optics_tests
 use simple_stream_stage_initial_analysis_tester, only: run_all_stream_stage_initial_analysis_tests
@@ -330,6 +335,10 @@ contains
         call add_suite(s, n, 'project merge',           run_all_project_merge_tests)
         call add_suite(s, n, 'class compatibility',     run_all_class_compatibility_tests)
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)
+        call add_suite(s, n, 'micrograph import',       run_all_mic_import_tests)
+        call add_suite(s, n, 'micrograph selection',    run_all_mic_selection_tests)
+        call add_suite(s, n, 'optics groups',           run_all_optics_groups_tests)
+        call add_suite(s, n, 'optics maps',             run_all_optics_maps_tests)
         call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
         call add_suite(s, n, 'motion model',            run_all_motion_model_tests)
         call add_suite(s, n, 'solve3D manifest',        run_all_solve3D_manifest_tests)
@@ -447,6 +456,10 @@ contains
         call add_suite(s, n, 'optics assignment',  run_all_stream_optics_tests)
         call add_suite(s, n, 'picking references', run_all_stream_pickrefs_tests)
         call add_suite(s, n, 'pick and extract',   run_all_stream_pick_extract_tests)
+        ! decision 19 of the 5 October 2026 fix plan: the stages chained without the master; they
+        ! submit jobs to the local queue (installed executables) and take tens of minutes
+        call add_suite(s, n, 'sieve to 3D',        run_all_stream_chain_sieve_tests)
+        call add_suite(s, n, 'movies to 3D',       run_all_stream_chain_movie_tests)
     end subroutine suites_lib_stream
 
     !> distributed execution: the job controller and the queue-system environment

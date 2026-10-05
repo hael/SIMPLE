@@ -25,7 +25,6 @@ contains
     procedure :: set_now
     procedure :: delete
     procedure :: hide
-    procedure :: generate_2D_thumbnail
     procedure :: generate_2D_jpeg
     ! getters
     generic   :: get => get_1
@@ -528,67 +527,6 @@ contains
 
     end subroutine write_json
     
-    subroutine generate_2D_thumbnail( self, section, key, oris2D, last_iter )
-        class(guistats),  intent(inout) :: self
-        type(oris),       intent(inout) :: oris2D
-        integer,          intent(in)    :: last_iter
-        character(len=*), intent(in)    :: section
-        character(len=*), intent(in)    :: key
-        integer,          allocatable   :: inds(:)
-        real,             allocatable   :: classres(:)
-        type(image)  :: clsstk, thumbimg
-        type(string) :: cavgs, cwd
-        integer      :: ncls, i, n, ldim_stk(3), ldim_thumb(3), classes(10), nptcls
-        call simple_getcwd(cwd)
-        cavgs = cwd%to_char() // '/' // trim(CAVGS_ITER_FBODY) // int2str_pad(last_iter,3) // '.mrc'
-        if(.not. oris2D%isthere("res")) return
-        if(.not. file_exists(cavgs)   ) return
-        ncls = oris2D%get_noris()
-        if(ncls <= 0) return
-        allocate(inds(ncls))
-        allocate(classres(ncls))
-        classres = 0.0
-        do i=1,ncls
-            classres(i) = real(oris2D%get(i, 'res'))
-        end do
-        inds = (/(i,i=1,ncls)/)
-        call hpsort(classres, inds)
-        classes = 0
-        n = 1
-        do i=1, ncls
-            if(n .gt. 10) exit
-            if(oris2D%get_state(inds(i)) .gt. 0.0) then
-                classes(n) = inds(i)
-                n = n + 1
-            end if
-        end do 
-        call find_ldim_nptcls(cavgs, ldim_stk, nptcls)
-        ldim_thumb(1) = ldim_stk(1) * 5
-        ldim_thumb(2) = ldim_stk(2) * 2
-        ldim_thumb(3) = 1
-        ldim_stk(3) = 1
-        call clsstk%new(ldim_stk, 1.0)
-        call thumbimg%new(ldim_thumb, 1.0)
-        do i=1, 5
-            if(classes(i) .gt. 0) then
-                call clsstk%read(cavgs, classes(i))
-                call thumbimg%tile(clsstk, i, 1)
-            endif
-        end do
-        do i=6, 10
-            if(classes(i) .gt. 0) then
-                call clsstk%read(cavgs, classes(i))
-                call thumbimg%tile(clsstk, i - 5, 2)
-            endif
-        end do
-        call thumbimg%write_jpg(string(REFINE2D_ITER_THUMB))
-        call self%set(section, key, cwd%to_char() // '/' // REFINE2D_ITER_THUMB, thumbnail = .true.)
-        call thumbimg%kill()
-        call clsstk%kill()
-        if(allocated(inds)    ) deallocate(inds)
-        if(allocated(classres)) deallocate(classres)
-    end subroutine generate_2D_thumbnail
-
     subroutine generate_2D_jpeg( self, section, key, oris2D, last_iter, smpd )
         class(guistats),  intent(inout) :: self
         type(oris),       intent(inout) :: oris2D

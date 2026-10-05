@@ -27,6 +27,7 @@ module simple_gui_metadata_stream_picking
     integer               :: last_micrograph_imported = 0  ! Unix timestamp of most recent import event
     integer               :: box_size                 = 0  ! particle box size in pixels
   contains
+    procedure :: kill => kill_override
     procedure :: set
     procedure :: get
     procedure :: jsonise => jsonise_override
@@ -102,5 +103,17 @@ contains
       nullify(json_ptr)
     end if
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_stream_picking), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_stream_picking )
+        self = gui_metadata_stream_picking()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_stream_picking

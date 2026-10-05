@@ -10,7 +10,7 @@ contains
         type(nrtxtfile)      :: mapfile
         real,    allocatable :: map_entries(:,:)
         integer, allocatable :: mics_optics_map(:)
-        real                 :: min_importind, max_importind
+        real                 :: max_importind
         integer              :: il, nl, imic, iptcl, importind, stkind, mapind
         if(self%os_mic%get_noris() .eq. 0)                return
         if(.not.file_exists(mapfileprefix//METADATA_EXT)) then
@@ -33,7 +33,9 @@ contains
             call mapfile%readNextDataLine(map_entries(:,il))
         enddo
         call mapfile%kill()
-        call self%os_mic%minmax('importind', min_importind, max_importind)
+        ! over every micrograph, whatever its state (minmax skips deselected and stateless ones,
+        ! which then lost their group)
+        max_importind = maxval(self%os_mic%get_all('importind'))
         allocate(mics_optics_map(int(max_importind)), source=1)
         do il = 1,nl
             mapind = int(map_entries(1, il))

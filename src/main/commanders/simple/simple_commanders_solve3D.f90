@@ -559,6 +559,7 @@ contains
         class(cmdline),                                         intent(inout) :: cline
         type(commander_solve3D_cavgs) :: xcommander_solve3D_cavgs
         type(cmdline) :: cline_backup
+        type(string)  :: run_dir
         integer       :: nrestarts, irestart, final_nstates, input_nstates, nstates_collapse
         logical       :: state_collapse, l_mkdir
         if( .not. cline%defined('nrestarts_collapse') )then
@@ -595,7 +596,10 @@ contains
             call cline%set('exit_collapse', 'yes')
             if (irestart == nrestarts ) call cline%delete('exit_collapse')
             call xcommander_solve3D_cavgs%execute(cline)
-            if( l_mkdir ) call chdir('..')
+            if( l_mkdir )then
+                call simple_getcwd(run_dir)
+                call chdir('..')
+            endif
             final_nstates = cline%get_iarg('final_nstates')
             call cline%delete('final_nstates')
             state_collapse = (final_nstates == 1)
@@ -609,6 +613,8 @@ contains
                 exit
             endif
         end do
+        ! the run whose result stands, the last, by name (SOLVE3D_CAVGS_FINAL_DIR)
+        call write_singlelineoftext(string(SOLVE3D_CAVGS_FINAL_DIR), basename(run_dir))
         ! cleanup
         call cline_backup%kill
         call simple_touch(TASK_FINISHED)

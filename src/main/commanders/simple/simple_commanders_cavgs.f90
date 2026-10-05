@@ -11,7 +11,8 @@ use simple_cavg_quality_selection, only: write_cavg_selection_stacks
 use simple_cavg_quality_types,    only: CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
     CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, cavg_quality_result
 use simple_strategy2D_utils
-use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
+use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr,&
+                               &rank_cavgs_stk
 implicit none
 #include "simple_local_flags.inc"
 
@@ -67,85 +68,20 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(sp_project), target  :: spproj
         class(oris),      pointer :: os_ptr => null()
-        type(parameters)     :: params
-        type(oris)           :: clsdoc_ranked
-        type(stack_io)       :: stkio_r, stkio_w
-        type(image)          :: img
-        integer, allocatable :: order(:)
-        real,    allocatable :: vals(:), rstates(:)
-        logical, allocatable :: mask(:)
-        integer              :: ldim(3), ncls, icls, i, rank
+        type(parameters)          :: params
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls2D')
         if( .not. cline%defined('flag') )    call cline%set('flag',    'res')
         call params%new(cline)
         call spproj%read_segment(params%oritype, params%projfile)
-        call find_ldim_nptcls(params%stk, ldim, ncls)
         if( trim(params%oritype) .eq. 'cls2D' )then
             os_ptr => spproj%os_cls2D
         else
             os_ptr => spproj%os_cls3D
         endif
-        params%ncls = ncls
-        if( os_ptr%get_noris() == params%ncls )then
-            ! all we need to do is fetch from classdoc in projfile &
-            ! order according to resolution
-            call img%new([params%box,params%box,1], params%smpd)
-            call clsdoc_ranked%new(params%ncls, is_ptcl=.false.)
-            select case(trim(params%flag))
-                case('res','corr','pop')
-                    ! supported
-                case DEFAULT
-                    THROW_HARD('Unsupported cavg flag: '//trim(params%flag))
-            end select
-            vals    = os_ptr%get_all(params%flag)
-            order   = (/(icls,icls=1,params%ncls)/)
-            rstates = os_ptr%get_all('state')
-            mask    = rstates > 0.5
-            call hpsort(vals, order)
-            select case(trim(params%flag))
-                case('corr')
-                    where( rstates < 0.5 ) vals = -1.0
-                    call reverse(order)
-                case DEFAULT
-                    ! done
-            end select
-            call stkio_r%open(params%stk, params%smpd, 'read', bufsz=params%ncls)
-            call stkio_r%read_whole ! because need asynchronous access
-            call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1), bufsz=params%ncls)
-            rank = 0
-            do icls=1,params%ncls
-                i = order(icls)
-                if( mask(i) )then
-                    rank = rank + 1
-                    call clsdoc_ranked%set(rank, 'class',    i)
-                    call clsdoc_ranked%set(rank, 'rank',     rank)
-                    select case(trim(params%flag))
-                    case('corr')
-                        call clsdoc_ranked%set(rank, 'corr', os_ptr%get(i, 'corr'))
-                        write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,1x,f6.2)') 'CLASS:', i,&
-                        &'RANK:', rank ,'CORR:', os_ptr%get(i, 'corr')
-                    case DEFAULT
-                        call clsdoc_ranked%set(rank, 'pop',  os_ptr%get(i,  'pop'))
-                        call clsdoc_ranked%set(rank, 'res',  os_ptr%get(i,  'res'))
-                        call clsdoc_ranked%set(rank, 'corr', os_ptr%get(i, 'corr'))
-                        write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', i,&
-                        &'RANK:', rank ,'POP:', os_ptr%get_int(i, 'pop'),&
-                        &'RES:', os_ptr%get(i, 'res')
-                    end select
-                    call flush(logfhandle)
-                endif
-                call stkio_r%get_image(i, img)
-                call stkio_w%write(icls, img)
-            end do
-            call stkio_r%close
-            call stkio_w%close
-            call clsdoc_ranked%write(string('classdoc_ranked.txt'))
-        else
-            ! nothing to do
-        endif
+        ! the class rows of the project, ordered by params%flag
+        call rank_cavgs_stk(os_ptr, params%stk, params%smpd, trim(params%flag), params%outstk,&
+            &string('classdoc_ranked.txt'))
         ! end gracefully
-        call clsdoc_ranked%kill
-        call img%kill
         call spproj%kill
         nullify(os_ptr)
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)

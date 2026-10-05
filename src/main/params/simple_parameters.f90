@@ -132,6 +132,7 @@ type :: parameters
     character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: sticky_class_sampling='no' !< sticky class-sampling cohort(yes|no){no}
+    character(len=3)          :: stepwise='no'        !< stream pool 2D: import only the sets that reach the particle threshold(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
     character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
@@ -432,13 +433,17 @@ type :: parameters
     integer :: nsnapshots=0        !< # cumulative project snapshots
     integer :: nspace=2500         !< # projection directions
     integer :: nspace_sub=500      !< # projection directions in subspace
+    integer :: nspace_pickrefs=0   !< # reprojections of the stream's picking references (0: the initial analysis' default)
     integer :: nstages=8           !< # low-pass limit stages
+    integer :: nstages_pickrefs=0  !< # solve3D_cavgs stages of the stream's picking references (0: the initial analysis' default)
     integer :: nstates=1           !< # states to reconstruct
+    integer :: nstates_pickrefs=0  !< # solve3D_cavgs states of the stream's picking references (0: the initial analysis' default)
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: nthr2D=1            !< # OpenMP threads{1}
     integer :: nthr_ini3D=1        !< # OpenMP threads{1}
     integer :: nthr3D=0            !< # OpenMP threads of the stream's 3D jobs (0: the stage's default)
+    integer :: nthr3D_pickrefs=0   !< # OpenMP threads of the solve3D_cavgs of the stream's picking references (0: the initial analysis' default)
     integer :: numlen=0            !< length of number string
     integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
     integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
@@ -469,6 +474,7 @@ type :: parameters
     integer :: which_iter=0        !< iteration nr
     integer :: workers=0           !< # workers for distributed execution
     integer :: worker_nthr=0       !< # threads per worker for distributed execution
+    integer :: worker_server_nthr=0 !< # threads per worker of the worker_server (0: not given)
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -537,6 +543,7 @@ type :: parameters
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
     real    :: lpstart_ini3D=0.    !< start low-pass limit(in A){15}
     real    :: lpstop_ini3D=8.0    !< stop low-pass limit(in A){8}
+    real    :: lpstop_pickrefs=0.  !< solve3D_cavgs low-pass stop of the stream's picking references (in A; 0: the initial analysis' default)
     real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
     real    :: lpstop_coarse=0.    !< stop low-pass limit(in A){0}
     real    :: lpstop_fine=0.      !< stop low-pass limit(in A){0}

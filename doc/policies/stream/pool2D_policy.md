@@ -17,8 +17,11 @@ by `doc/policies/stream/restart_policy.md`.
 ## 2. Inputs
 
 1. The particle sets the sieve (p05) hands off to its completed folder; each is a fine chunk's
-   project. The set marked `sieve_final=yes` in `os_out` is the sieve's last.
-2. The mask diameter of the sieve's 2D, read from the first set's class averages
+   project. The set marked `sieve_final=yes` in `os_out` is the sieve's last; it may hold no
+   particles (the sieve's empty final set), and then only ends the intake. A later set with
+   particles and without the flag takes the note back: the sieve's upstream had more movies
+   (`ptcl_sieve_policy.md`, section 6.3).
+2. The mask diameter of the sieve's 2D, read from the first set with class averages
    (`read_final_mskdiam`).
 3. The master's settings: `ncls` 150, `nparts` 6, `nthr` 8 (p00's table), `optics_dir`.
 4. GUI updates: a new 2D mask diameter (`mskdiam2D`), a snapshot request (`snapshot2D`).
@@ -31,10 +34,16 @@ Each pass of p06 runs, in this order:
 2. refresh the pool: a paused pool refreshes its statistics; a running one is checked for a
    completed iteration, whose particle parameters, classes and resolution come back into the
    pool, with a dimension update (section 7);
-3. publish the pool's classified state for 3D when the refresh brought back an iteration past
-   `EXPORT_START_ITER` (25), before anything new is imported or dispatched (the 3D ingestion
-   policy);
-4. import the new sets when the pool is free (the first import starts it, section 4);
+3. publish the pool's classified state for 3D when the refresh brought back iteration
+   `EXPORT_START_ITER` (25) or a later one, before anything new is imported or dispatched (the 3D
+   ingestion policy). The final run stops at `FINAL_ITER` (25), so a short session still
+   publishes its last iteration (until 5 October 2026 the publications started after iteration
+   25, and a session whose final set came before it never reached 3D);
+4. import the new sets when the pool is free (the first import starts it, section 4). With
+   `stepwise=yes` (p06's default, set by its commander; a registered parameter) an import takes
+   sets in order until its own particles reach the starting threshold (or `ncls` * 20 before it
+   is known); the rest wait for the next import. Only the particles of the import count, so a
+   pool past its threshold still takes as many sets as one threshold's worth;
 5. apply the pause rule (section 5);
 6. start the next iteration unless paused or below the starting threshold;
 7. from iteration `MSKDIAM_SWITCH_ITER` (10), switch once to the sieve's mask diameter;
@@ -72,30 +81,52 @@ Each pass of p06 runs, in this order:
    and no copy is made beyond the one per iteration.
 2. **Sampling:** stacks are shuffled and taken until more than `STREAM_NPTCLS_MAX` (500,000)
    selected particles, or `nsample_max` when given. There is no memory of earlier iterations.
-3. **Fractional update:** beyond the cap, the iteration runs with
-   `update_frac` = (selected particles - particles outside the sample) / (selected particles),
-   or the user's `update_frac`. The out-of-sample class populations are recorded in `cls2D`
-   (`prev_pop_even`, `prev_pop_odd`), and `center=no` is set on the pool's command line.
-4. **New particles:** from iteration 2, particles never updated get a random populated class
-   before their first alignment.
+3. **The sample is the update set** (decision 5): every particle of the sampled stacks is
+   updated, and the particles outside the sample keep their parameters; the class averages come
+   from the sample. Only the user's `update_frac` thins the sample again, and then the class
+   averages are not centered (`center=no`); otherwise the pool's own `center` applies, so a
+   return to a full update centers again.
+4. **New particles:** from iteration 2, particles never updated get a populated class before
+   their first alignment, drawn in one thread from a generator seeded with the iteration
+   (`draw_new_classes`), so a run is reproducible; the process's generator is left as it was.
 5. **Resolution:** `lpstart` and `lpstop` come from the mask diameter (`mskdiam2lplimits`), with
-   `lpstop` at least twice the pool's pixel size, or the user's `lpstop`. Until iteration 20 the
+   `lpstop` at least twice the pool's pixel size, or the user's `lpstop`. A new mask diameter (the
+   sieve's at iteration 10, or the GUI's) recomputes `lpstart`, the centering limit and the ramp. Until iteration 20 the
    low-pass limit follows lp = lpstop + (lpstart - lpstop) * (20 - iter) / 20 with a Gaussian
    filter at lp. The shift search is 0 until iteration 5, then `MINSHIFT`. After iteration 20 the
    limit is free.
 6. **Tidying:** each iteration deletes the files of the iteration that has just left the history
    (`tidy_2Dstream_iter`): its class averages (and even and odd halves), JPEG, class STAR file and
    `frcs_iterNNN.bin`. History and files always hold the same iterations.
+7. **Job:** the iteration is a local queued job with an exit status (`EXIT_CODE_refine2D_pool`)
+   and a job record; its project as made is kept (`refine2D_input.simple`). A job that writes a
+   status without `REFINE2D_FINISHED` has failed: its log is kept as
+   `simple_log_refine2D_pool_failed_iterNNN_attempt<k>`, the part files are cleared, and the
+   iteration is submitted again once from its project as made. A second failure stops the stage,
+   which reports it and writes its final project from the last complete iteration. A job killed
+   before it writes a status is not seen (`restart_policy.md`, known gaps). On stop, the running
+   iteration is cancelled.
 
 ## 7. Dimensions
 
-With `dynreslim=yes` (p06's default) and `autoscale=yes`, from iteration 10, the pool grows its
-box when the resolution has sat at Nyquist for `POOL_NPREV_RES` (5) iterations:
+The pool's native box and pixel size are those of its first import, and its mask diameter is
+the given one or the default (pool state, not parameters); its working dimensions are downscaled
+from them. The mask radius is clamped to (box - `COSMSKHALFWIDTH`)/2 pixels, and the clamp is
+logged, so a diameter beyond the box never reaches the workers (D40). The pool's command line
+carries the working dimensions only.
 
-- the box goes to the next magic size, and the pixel size follows;
-- the class averages and FRCs are Fourier-padded to it, and registered again in the pool's
-  project;
+With `dynreslim=yes` (p06's default) and `autoscale=yes`, from iteration 10, the pool grows its
+box when the resolution has sat at Nyquist for `POOL_NPREV_RES` (5) iterations (decision 6):
+
+- the box goes to the next magic size, and the pixel size follows, when the new pixel size is
+  more than 5/4 of the native one;
+- the class averages (and their even and odd halves) and FRCs are Fourier-padded to it, and
+  registered again in the pool's project, as are the carried class sums. Padding adds no
+  information: it only lets the next iterations reach a finer resolution with the new Nyquist;
+- the hard low-pass limit follows the new Nyquist (or the user's `lpstop`);
 - the pixel size never goes below `POOL_SMPD_HARD_LIMIT`.
+
+A guard on the class count that could never hold was removed on 5 October 2026.
 
 ## 8. Classes
 
@@ -138,31 +169,27 @@ instead.
   `NPTCLS_PER_CLS_MIN`,
   `OPTICS_ID_DELTA`) and in the pool module (`ITERLIM`, `ITERSHIFT`). A change of any of them
   updates this policy.
-- The pool command line sets `msk_crop` explicitly; changing `mskdiam` recomputes `msk_crop`
-  (`update_mskdiam`).
+- The pool command line sets `msk_crop` explicitly; changing `mskdiam` recomputes `msk_crop`,
+  clamped to the box (`set_pool_mask`), and the low-pass ramp (`update_mskdiam`).
 - Anything written for downstream use is rescaled to the native sampling or labelled with the
   pool's.
 - `POOL_NHISTORY` (`simple_stream2D_state`) sets both the history and the iterations whose files
   are kept; a change updates sections 6 and 9.
 - Tests: `unit_stream` "pool 2D" covers the rules (pause, final run, default mask), the set
   transfer, the final-set flag, the publication's contents and numbering, and the snapshot's
-  report to the GUI (written, and not written). Iterations, the history, the writing of
-  snapshots and dimension changes have no unit test.
+  report to the GUI (written, and not written), the reproducible class draws and the mask clamp.
+  Iterations, the update set, the history, the writing of snapshots and dimension changes have no
+  unit test.
 
 ## 12. Known gaps
 
 - **Module state** (review G1). The pool is about thirty-five public module variables, read and
   written by three modules; p06 holds a pointer the pool reads as `master_cline`. One process
   runs one pool, and the pool cannot be unit-tested. Proposal R6: a `stream_pool2D` type.
-- **Fractional update** (M4):
-  - suspected double sub-sampling (about frac²);
-  - the out-of-sample populations are written and never read;
-  - `center=no` stays set for good.
-- **Not reproducible:** new particles' classes are drawn inside an OpenMP loop.
+- **The user's `update_frac`** thins the sample again inside refine2D (about frac of the sample).
 - **Late particles:** the low-pass ramp follows the global iteration, so particles arriving after
   iteration 20 never see the coarse limits.
-- **Dimension growth** pads class averages and FRCs, which adds no information. The guard
-  `ncls_glob < ncls_max` can never be true.
+- **Dimension growth** pads class averages and FRCs, which adds no information.
 - **The mask diameter changes mid-run** at iteration 10.
 - **Optics group ids** of the STAR files depend on the GUI display id.
 - **History memory:** five full copies of the pool project in memory. A pool of millions of

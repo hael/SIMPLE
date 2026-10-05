@@ -5,7 +5,6 @@ character(len=*), parameter :: CHUNK_PROJNAME             = 'chunk'
 character(len=*), parameter :: CLASS2D_JOB_NAME           = 'classification_2D'       ! name of 2D classification job. also used for folder name
 character(len=*), parameter :: DIR_STREAM                 = './spprojs/'              ! location for projects to be processed
 character(len=*), parameter :: DIR_STREAM_COMPLETED       = './spprojs_completed/'    ! location for projects processed
-character(len=*), parameter :: MICSPPROJ_FNAME            = './streamdata.simple'
 character(len=*), parameter :: MULTISTATE3D_JOB_NAME      = 'solve3D_multistate'      ! name of solve3D multistate job. also used for folder name
 character(len=*), parameter :: OPENING2D_JOB_NAME         = 'opening_2D'              ! name of opening 2D job. also used for folder name
 character(len=*), parameter :: OPENING2D_PICKREFS         = 'selected_references.mrcs' ! picking references the opening 2D job publishes in its folder
@@ -14,11 +13,19 @@ character(len=*), parameter :: POOL_DIR                   = ''                  
 character(len=*), parameter :: POOL_DISTR_EXEC_FNAME      = './distr_refine2D_pool'
 character(len=*), parameter :: POOL_LOGFILE               = 'simple_log_refine2D_pool'
 character(len=*), parameter :: POOL_PROJFILE              = 'refine2D.simple'
+character(len=*), parameter :: POOL_INPUT_PROJFILE        = 'refine2D_input.simple'    ! a pool iteration's project as made, for its retry
+character(len=*), parameter :: POOL_EXIT_CODE             = 'EXIT_CODE_refine2D_pool'  ! a pool iteration's job writes its status here
 character(len=*), parameter :: PREPROC_JOB_NAME           = 'preprocessing'           ! name of preproc job. also used for folder name
 character(len=*), parameter :: REFPICK_JOB_NAME           = 'reference_based_picking' ! name of reference based picking job. also used for folder name
 character(len=*), parameter :: REJECTED_CLS_STACK         = './rejected_cls.mrc'
 character(len=*), parameter :: SIEVING_JOB_NAME           = 'particle_sieving'        ! name of particle sieving job. also used for folder name
 character(len=*), parameter :: SIEVING_REFS_FNAME         = 'sieving_references'
+! in a stage's own folder: STREAM_IDLE once its upstream has gone quiet (for preprocessing: no new
+! movie for MOVIES_IDLE_TIME_S) and it has handed on everything it took, removed when new work
+! arrives; STREAM_FINISHED once it has stopped, removed when it starts. A downstream stage ends its
+! intake (final ingestion) on either (doc/policies/sieving_and_rejection/ptcl_sieve_policy.md)
+character(len=*), parameter :: STREAM_IDLE_MARKER         = 'STREAM_IDLE'
+character(len=*), parameter :: STREAM_FINISHED_MARKER     = 'STREAM_FINISHED'
 character(len=*), parameter :: STREAM_DEFAULT_CS          = '2.7'
 character(len=*), parameter :: STREAM_DEFAULT_FRACA       = '0.1'
 integer(kind=8),  parameter :: FLUSH_TIMELIMIT            = 900                       ! time (secs) after which leftover particles join the pool IF the 2D analysis is paused
@@ -28,6 +35,7 @@ integer,          parameter :: CLASS2D_NPARTS             = 10
 integer,          parameter :: CLASS2D_NTHR               = 8
 integer,          parameter :: DEFAULT_NTHR_MASTER        = 4                         ! number of threads requested from queue system for master processes
 integer,          parameter :: INACTIVE_TIME              = 900                       ! inactive time trigger for writing project file
+integer,          parameter :: MOVIES_IDLE_TIME_S         = 900                       ! no new movie for this long (s): preprocessing is idle
 integer,          parameter :: LONGTIME                   = 60                        ! time lag after which a movie/project is processed
 integer,          parameter :: NMICS_DELTA                = 100                       ! number of micrographs to increment nmics by when user requests more particles to be used in reference generation
 integer,          parameter :: OPENING2D_NTHR             = 32                        ! number of threads requested from queue system for master process. overrides default

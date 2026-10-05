@@ -14,7 +14,7 @@ use simple_defs_stream,                               only: DIR_STREAM_COMPLETED
 use simple_string,                                    only: string
 use simple_string_utils,                              only: int2str_pad
 use simple_fileio,                                    only: arr2file, del_file, file_exists, simple_getcwd, simple_touch
-use simple_syslib,                                    only: simple_mkdir
+use simple_syslib,                                    only: simple_mkdir, dir_exists
 use simple_math_ft,                                   only: get_resarr
 use simple_cmdline,                                   only: cmdline
 use simple_image,                                     only: image
@@ -47,6 +47,8 @@ contains
         call test_watch_order_and_mskdiam()
         call test_merge_publications()
         call test_rules()
+        call test_cohort()
+        call test_retention()
         call test_send_status()
         call test_send_volumes()
         call test_iterate_waits()
@@ -150,7 +152,7 @@ contains
         type(cmdline)                 :: cline
         type(sp_project)              :: set
         type(string)                  :: cwd_saved, root
-        integer                       :: nfail0
+        integer                       :: nfail0, i
         allocate(stage)
         write(*,'(A)') 'test_merge_publications'
         nfail0 = tests_failed
@@ -165,8 +167,10 @@ contains
         call assert_int(5, stage%spproj%os_ptcl3D%get_noris(), 'its 3D particles')
         call assert_int(5, stage%spproj%os_ptcl2D%get_noris(), 'and 2D particles')
         call assert_int(4, stage%nptcls_selected,              'the selected particles are counted')
-        ! a 3D result for the first particle, which later publications must keep
+        ! a 3D result for the first particle, which later publications must keep, and a run's
+        ! multistate label on the second
         call stage%spproj%os_ptcl3D%set(1, 'e1', 33.)
+        call stage%spproj%os_ptcl3D%set_state(2, 2)
         ! publication 2, as a restarted pool lists it: B, A, then the new stack C (4), class 2
         call make_set(set, ['B', 'A', 'C'], [2, 3, 4], 5, icls=2)
         call stage%merge_publication(set, 2)
@@ -179,6 +183,7 @@ contains
         call assert_real(1., stage%spproj%os_ptcl3D%get(1, 'x'), 1.e-4, 'row 1 is still stack A''s first particle')
         call assert_int(2, stage%spproj%os_ptcl2D%get_class(1),       'which takes the new class')
         call assert_int(1, stage%spproj%os_ptcl3D%get_state(1),       'and the new selection')
+        call assert_int(2, stage%spproj%os_ptcl3D%get_state(2),       'a selected particle keeps its 3D state label')
         call assert_real(33., stage%spproj%os_ptcl3D%get(1, 'e1'), 1.e-4, 'and keeps its 3D parameters')
         call assert_int(1, stage%spproj%os_ptcl2D%get_int(1, 'stkind'), 'and its stack')
         call assert_int(5, stage%spproj%os_cls2D%get_noris(),         'the classes are the newest publication''s')
@@ -191,22 +196,99 @@ contains
         call assert_int(0, stage%spproj%os_ptcl3D%get_state(4), 'a stack it lacks is deselected')
         call assert_int(0, stage%spproj%os_ptcl2D%get_state(5), 'in both particle segments')
         call assert_int(7, stage%nptcls_selected,               'and no longer counted')
+        ! publication 4 lists stack A's images in reverse order: each updates its own row
+        call make_set(set, ['A'], [3], 13, icls=1)
+        do i = 1,3
+            call set%os_ptcl2D%set(i, 'indstk', 4 - i)
+            call set%os_ptcl2D%set_class(i, 14 - i)
+        enddo
+        call stage%merge_publication(set, 4)
+        call set%kill
+        call assert_int(11, stage%spproj%os_ptcl2D%get_class(1), 'a particle is matched by its image index, not its row')
+        call assert_int(13, stage%spproj%os_ptcl2D%get_class(3), 'whatever order the publication lists them in')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_merge_publications
+
+    !> the addon's cohort: selected rows not active in the frozen solution, appended or selected again
+    subroutine test_cohort()
+        class(stream_stage_solve3D), allocatable :: stage
+        integer, parameter :: STATES(6) = [1, 1, 0, 1, 1, 0]
+        integer :: i
+        allocate(stage)
+        write(*,'(A)') 'test_cohort'
+        call assert_int(0, stage%count_frozen(), 'before a run nothing is frozen')
+        call stage%spproj%os_ptcl3D%new(6, is_ptcl=.true.)
+        do i = 1,6
+            call stage%spproj%os_ptcl3D%set_state(i, STATES(i))
+        enddo
+        call assert_int(4, stage%count_cohort(), 'before a run every selected particle is in the cohort')
+        ! rows 1 to 4 were in the latest result, row 4 deselected there
+        stage%frozen_active = [.true., .true., .true., .false.]
+        call assert_int(3, stage%count_frozen(), 'the frozen particles are those active in the result')
+        call assert_int(2, stage%count_cohort(), 'a particle selected again and one appended')
+        call stage%spproj%kill
+        deallocate(stage%frozen_active)
+    end subroutine test_cohort
+
+    !> the newest quality folders and those runs started from are kept, and so is the latest addon
+    !! iteration; earlier iterations and folders set aside for unfinished jobs go
+    subroutine test_retention()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(string) :: cwd_saved, root
+        integer      :: nfail0, i, funit
+        allocate(stage)
+        write(*,'(A)') 'test_retention'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_retention', cwd_saved, root)
+        call simple_mkdir('quality_selection')
+        do i = 1,6
+            call simple_mkdir('quality_selection/'//int2str_pad(i, 5))
+        enddo
+        open(newunit=funit, file='quality_selection/runs.txt', action='write')
+        write(funit,'(A)') '00002'
+        close(funit)
+        call stage%prune_quality_dirs()
+        call assert_false(dir_exists('quality_selection/00001'), 'an old quality folder goes')
+        call assert_true(dir_exists('quality_selection/00002'),  'one a run started from stays')
+        call assert_false(dir_exists('quality_selection/00003'), 'like every other old one')
+        call assert_true(dir_exists('quality_selection/00004'),  'the newest three stay')
+        call assert_true(dir_exists('quality_selection/00006'),  'up to the newest')
+        call simple_mkdir('solve3D_addon')
+        do i = 1,3
+            call simple_mkdir('solve3D_addon/it_'//int2str_pad(i, 1))
+        enddo
+        call simple_mkdir('solve3D_addon/it_2_unfinished1')
+        call simple_mkdir('solve3D_unfinished1')
+        stage%naddon_runs = 3
+        call stage%prune_run_dirs()
+        call assert_false(dir_exists('solve3D_addon/it_1'), 'an addon iteration before the frozen base goes')
+        call assert_false(dir_exists('solve3D_addon/it_2'), 'every one')
+        call assert_true(dir_exists('solve3D_addon/it_3'),  'the frozen base stays')
+        call assert_false(dir_exists('solve3D_addon/it_2_unfinished1'), 'a folder set aside for an unfinished job goes')
+        call assert_false(dir_exists('solve3D_unfinished1'), 'for solve3D too')
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_retention
 
     !> which job starts when, and the mask diameter that fits the class averages
     subroutine test_rules()
         class(stream_stage_solve3D), allocatable :: stage
         allocate(stage)
         write(*,'(A)') 'test_rules'
-        call assert_int(JOB_NONE,     stage%next_job(PHASE_IMPORTING, 0,   0),   'no particles: no job')
-        call assert_int(JOB_SOLVE3D, stage%next_job(PHASE_IMPORTING, 10,  0),   'the first particles start solve3D')
-        call assert_int(JOB_NONE,     stage%next_job(PHASE_SOLVE3D,  100, 0),   'nothing starts while solve3D runs')
-        call assert_int(JOB_NONE,     stage%next_job(PHASE_IDLE,      100, 100), 'no growth: no addon run')
-        call assert_int(JOB_ADDON,    stage%next_job(PHASE_IDLE,      120, 100), 'growth starts an addon run')
-        call assert_int(JOB_NONE,     stage%next_job(PHASE_ADDON,     200, 100), 'nothing starts while it runs')
+        ! next_job(phase, selected, cohort, frozen, nstates, cohort of the last refused addon run)
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_IMPORTING, 0,   0, 0, 3, -1), 'no particles: no job')
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_IMPORTING, 14,  0, 0, 3, -1), 'fewer than 5 per state: no solve3D')
+        call assert_int(JOB_SOLVE3D, stage%next_job(PHASE_IMPORTING, 15,  0, 0, 3, -1), '5 per state start solve3D')
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_SOLVE3D,   100, 0, 0, 3, -1), 'nothing starts while solve3D runs')
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 100, 0,   100,  3, -1), 'no cohort: no addon run')
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 114, 14,  100,  3, -1), 'a cohort under 5 per state waits')
+        call assert_int(JOB_ADDON,   stage%next_job(PHASE_IDLE, 115, 15,  100,  3, -1), '5 per state start an addon run')
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 1099, 99, 1000, 3, -1), 'under 10% of the frozen particles waits')
+        call assert_int(JOB_ADDON,   stage%next_job(PHASE_IDLE, 1100, 100, 1000, 3, -1), '10% of them start it')
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 120, 20,  100,  3, 20), 'after a failed run, the same cohort waits')
+        call assert_int(JOB_ADDON,   stage%next_job(PHASE_IDLE, 121, 21,  100,  3, 20), 'a larger one starts the next')
+        call assert_int(JOB_NONE,    stage%next_job(PHASE_ADDON, 200, 100, 100, 3, -1), 'nothing starts while it runs')
         call assert_real(100., stage%fit_mskdiam(100.,  64, 2.0), 1.e-4, 'a mask diameter that fits is kept')
         call assert_real(116., stage%fit_mskdiam(400.,  64, 2.0), 1.e-4, 'one too large for the box gets the box default')
         call assert_real(116., stage%fit_mskdiam(0.,    64, 2.0), 1.e-4, 'none gets the box default')

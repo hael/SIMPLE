@@ -481,7 +481,15 @@ contains
                 top   = chunks(ic)%os_stk%get_top(i)
                 do j = fromp,top
                     iptcl_glob = iptcl_glob + 1
-                    if( chunks(ic)%os_ptcl2D%get_class(j) > 0) call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
+                    if( chunks(ic)%os_ptcl2D%get_class(j) > 0 )then
+                        if( chunks_have2D(ic) )then
+                            call chunks(ic)%os_ptcl2D%set_class(j, clsmap(chunks(ic)%os_ptcl2D%get_class(j)))
+                        else
+                            ! a chunk without classes of its own (staged by final ingestion) has no
+                            ! class map, and its particles no class in the merge
+                            call chunks(ic)%os_ptcl2D%set_class(j, 0)
+                        endif
+                    endif
                     call chunks(ic)%os_ptcl2D%set_stkind(j, istk)
                     call merged_proj%os_ptcl2D%transfer_ori(iptcl_glob, chunks(ic)%os_ptcl2D, j)
                     if( chunks(ic)%os_ptcl2D%get_state(j) == 0 ) call merged_proj%os_ptcl2D%reject(iptcl_glob)
@@ -503,9 +511,12 @@ contains
             call chunks(ic)%kill
         enddo
         deallocate(chunks)
-        ! add classes, frcs
-        call frcs%write(dir//trim(FRCS_FILE))
-        call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
+        ! add classes, frcs: a merge of chunks without class averages (a final-ingestion chunk
+        ! staged on its own) has read no FRCs, so there is nothing to write
+        if( frcs_initialised )then
+            call frcs%write(dir//trim(FRCS_FILE))
+            call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
+        endif
         if( file_exists(cavgs) )then
             call merged_proj%add_cavgs2os_out(cavgs, smpd, imgkind='cavg')
         else

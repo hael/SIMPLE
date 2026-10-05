@@ -16,10 +16,8 @@
 !   restored before execute returns.
 !==============================================================================
 module simple_commanders_stream_p04_refpick_extract
-use simple_defs,                 only: logfhandle, STDLEN, PICK_LP_DEFAULT
-use simple_defs_environment,     only: SIMPLE_STREAM_PICK_NTHR
+use simple_defs,                 only: logfhandle, PICK_LP_DEFAULT
 use simple_error,                only: simple_exception
-use simple_string_utils,         only: str2int
 use simple_jiffys,               only: simple_end
 use simple_cmdline,              only: cmdline
 use simple_commander_base,       only: commander_base
@@ -28,6 +26,7 @@ use simple_stream_sigterm,       only: install_sigterm_handler, restore_sigterm_
 implicit none
 
 public :: commander_stream_p04_refpick_extract
+public :: set_refpick_cline ! the stage's command-line defaults, for the chained stream tests
 private
 #include "simple_local_flags.inc"
 
@@ -61,11 +60,9 @@ contains
     end subroutine exec_stream_p04_refpick_extract
 
     ! Everything the stage needs on its command line before params%new: fixed settings,
-    ! picking and extraction defaults, and the environment override.
+    ! picking and extraction defaults (threads and parts: the master).
     subroutine set_refpick_cline( cline )
         class(cmdline), intent(inout) :: cline
-        character(len=STDLEN) :: env_val
-        integer               :: envlen
         if( .not. cline%defined('pickrefs') ) THROW_HARD('pickrefs must be defined')
         ! fixed for this stage
         call cline%set('oritype', 'mic')
@@ -87,9 +84,6 @@ contains
         ! extraction
         if( .not. cline%defined('pcontrast')      ) call cline%set('pcontrast',      'black')
         if( .not. cline%defined('extractfrommov') ) call cline%set('extractfrommov', 'no')
-        ! environment override
-        call get_environment_variable(SIMPLE_STREAM_PICK_NTHR, env_val, envlen)
-        if( envlen > 0 ) call cline%set('nthr', str2int(env_val))
     end subroutine set_refpick_cline
 
 end module simple_commanders_stream_p04_refpick_extract

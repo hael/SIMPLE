@@ -2,7 +2,8 @@
 ! The whole suite needs the listener thread, so Windows and __FreeBSD__ builds (the Mac build
 ! defines it) skip it.
 module simple_persistent_worker_server_tester
-  use simple_persistent_worker_server,       only: persistent_worker, persistent_worker_server, TCP_BUFSZ
+  use simple_persistent_worker_server,       only: persistent_worker, persistent_worker_server, TCP_BUFSZ,&
+                                                   &forget_inherited_persistent_worker
   use simple_test_utils,                     only: assert_true, assert_false, assert_int, assert_string_eq
   use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task
   use simple_string,                         only: string
@@ -37,6 +38,7 @@ contains
     call test_startup_pending_prevents_duplicate_warmup_claim()
     call test_queue_task_priority_requests()
     call test_queue_task_eventually_rejects_when_full()
+    call test_forget_inherited_persistent_worker()
 
     write(*,'(A)') '**** persistent worker server tests done ****'
 #endif
@@ -111,6 +113,25 @@ contains
     call assert_int(0, server%nthr_workers, 'kill() should reset nthr_workers to 0')
     call assert_int(0, server%job_count, 'kill() should reset job_count to 0')
   end subroutine test_new_and_kill_lifecycle
+
+  !> a forked stream stage forgets the server its parent started: the singleton no longer points
+  !! at it, and the call is harmless when repeated (no server is started here, so no thread runs)
+  subroutine test_forget_inherited_persistent_worker()
+    type(persistent_worker_server), pointer :: server
+    write(*,'(A)') 'test_forget_inherited_persistent_worker'
+    allocate(server)
+    persistent_worker%server          => server
+    persistent_worker%n_workers       = TEST_NWORKERS
+    persistent_worker%nthr_per_worker = TEST_NTHR_WORKERS
+    persistent_worker%launch_backend  = string('local')
+    call forget_inherited_persistent_worker()
+    call assert_false(associated(persistent_worker%server), 'the singleton forgets the server')
+    call assert_int(0, persistent_worker%n_workers,       'and its worker slots')
+    call assert_int(0, persistent_worker%nthr_per_worker, 'and its threads per worker')
+    call forget_inherited_persistent_worker()
+    call assert_false(associated(persistent_worker%server), 'a repeated call is harmless')
+    deallocate(server)
+  end subroutine test_forget_inherited_persistent_worker
 
   subroutine test_new_client_only_valid_address_parse()
     type(persistent_worker_server) :: server

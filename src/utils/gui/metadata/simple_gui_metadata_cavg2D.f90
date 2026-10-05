@@ -38,6 +38,7 @@ type, extends( gui_metadata_base ) :: gui_metadata_cavg2D
   integer                   :: i          = 1     ! index of this entry within the current batch (IPC routing)
   integer                   :: i_max      = 1     ! total entries in the current batch (IPC routing)
 contains
+  procedure :: kill => kill_override
   procedure :: set
   procedure :: get
   procedure :: get_idx
@@ -142,5 +143,17 @@ contains
     if( self%l_res ) call json%add(json_ptr, "res", dble(self%res))
     if( self%l_pop ) call json%add(json_ptr, "pop", self%pop)
   end function jsonise_override
+
+  ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
+  ! and marks the object uninitialised.
+  subroutine kill_override( self )
+    class(gui_metadata_cavg2D), intent(inout) :: self
+    select type( self )
+      type is( gui_metadata_cavg2D )
+        self = gui_metadata_cavg2D()
+      class default
+        call self%gui_metadata_base%kill()
+    end select
+  end subroutine kill_override
 
 end module simple_gui_metadata_cavg2D

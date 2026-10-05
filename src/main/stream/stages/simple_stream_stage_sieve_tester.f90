@@ -11,10 +11,10 @@ use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
 use simple_defs_fname,                           only: TERM_STREAM, STREAM_MOLDIAM, METADATA_EXT
-use simple_defs_stream,                          only: DIR_STREAM_COMPLETED
+use simple_defs_stream,                          only: DIR_STREAM_COMPLETED, STREAM_IDLE_MARKER
 use simple_string,                               only: string
 use simple_string_utils,                         only: int2str_pad
-use simple_fileio,                               only: del_file, file_exists, simple_getcwd, simple_touch, write_filetable
+use simple_fileio,                               only: del_file, file_exists, simple_getcwd, simple_touch
 use simple_syslib,                               only: dir_exists, simple_mkdir
 use simple_cmdline,                              only: cmdline
 use simple_oris,                                 only: oris
@@ -24,6 +24,7 @@ use simple_gui_metadata_types,                   only: GUI_METADATA_STREAM_PARTI
 use simple_gui_metadata_stream_particle_sieving, only: gui_metadata_stream_particle_sieving
 use simple_stream_pipe,                          only: stream_pipe
 use simple_stream_stage_sieve,                   only: stream_stage_sieve
+use simple_ptcl_sieve,                           only: CHUNKED_MICS
 implicit none
 private
 public :: run_all_stream_stage_sieve_tests
@@ -39,9 +40,11 @@ contains
         call test_init_params()
         call test_restart_removes_term_stream()
         call test_restore_and_attach()
+        call test_restart_resumes_sieve()
         call test_import_projects()
         call test_read_mask_diameter()
         call test_start_sieve()
+        call test_final_ingestion_follows_marker()
         call test_send_status()
         call test_iterate_waits()
         call test_finished()
@@ -97,8 +100,9 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_restart_removes_term_stream
 
-    !> restart: the projects the sieve has already chunked (its imported_projects.txt) go into the
-    !! watcher history once the upstream folder is attached
+    !> restart: a set the sieve has chunked from (its chunked_mics.txt) is imported again with the
+    !! chunked micrographs marked, so the rest of a partly chunked set is still sieved, and goes into
+    !! the watcher history once the upstream folder is attached
     subroutine test_restore_and_attach()
         class(stream_stage_sieve), allocatable :: stage
         type(cmdline)            :: cline
@@ -117,9 +121,15 @@ contains
         call make_upstream()
         set1 = write_completed_set(1, [10, 20])
         set2 = write_completed_set(2, [30])
-        call write_filetable(string('imported_projects.txt'), [set1])
+        ! set 1 is partly chunked: its first micrograph only
+        call write_chunked_mics(set1, [1])
         call stage%restore_imports()
-        call assert_true(allocated(stage%restored_imports), 'the chunked projects are read back')
+        call assert_true(allocated(stage%restored_imports), 'the sets chunked from are read back')
+        call assert_int(2,  stage%project_list%size(),  'every micrograph of a partly chunked set is imported again')
+        call assert_int(20, stage%project_list%get_nptcls_tot(l_not_included=.true.),&
+            &'only its unchunked micrograph (the second, 20 particles) is left for the sieve')
+        call assert_int(2,  stage%n_mics_imported,      'the restored micrographs are counted')
+        call assert_int(30, stage%n_ptcls_imported,     'and their particles')
         call stage%attach_upstream()
         call assert_true(stage%l_attached, 'attached once the folder exists')
         call assert_true(stage%project_buff%is_past(set1),  'an already chunked project is in the history')
@@ -129,6 +139,33 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_restore_and_attach
+
+    !> a restart with chunks to take up makes the sieve with nothing new to import
+    subroutine test_restart_resumes_sieve()
+        class(stream_stage_sieve), allocatable :: stage
+        type(cmdline)            :: cline
+        type(string)             :: cwd_saved, root
+        integer                  :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_restart_resumes_sieve'
+        nfail0 = tests_failed
+        call enter_fixture('sv_stage_resume', cwd_saved, root)
+        call make_upstream()
+        call write_moldiam()
+        call simple_mkdir('previous')
+        call set_test_cline(cline)
+        call cline%set('outdir', 'previous')
+        call make_test_stage(stage, cline)
+        call assert_true(stage%resumable(), 'a restart with the picking references'' mask diameter can resume')
+        call stage%iterate()
+        call assert_true(stage%l_attached,     'attached')
+        call assert_int(0, stage%project_list%size(), 'nothing new to import')
+        call assert_true(stage%l_sieve_active, 'the sieve is made all the same')
+        call stage%finalize()
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_restart_resumes_sieve
 
     !> one record per micrograph of each newly completed set, each set once
     subroutine test_import_projects()
@@ -172,7 +209,7 @@ contains
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
         call stage%read_mask_diameter()
-        call assert_real(MSKDIAM_REFS, stage%params%mskdiam, 1.e-4, 'the mask diameter of the picking references')
+        call assert_real(MSKDIAM_REFS, stage%mskdiam, 1.e-4, 'the mask diameter of the picking references')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -200,7 +237,7 @@ contains
         call stage%start_sieve()
         call assert_true(stage%l_sieve_active, 'the sieve is made')
         call assert_true(allocated(stage%sieve), 'starting the sieve allocates owned state')
-        call assert_real(MSKDIAM_REFS, stage%params%mskdiam, 1.e-4, 'with the picking references'' mask diameter')
+        call assert_real(MSKDIAM_REFS, stage%mskdiam, 1.e-4, 'with the picking references'' mask diameter')
         call assert_int(0, stage%sieve%get_n_chunks_coarse(), 'too few particles for a chunk')
         call assert_true(dir_exists(string('chunks_coarse')), 'the sieve''s chunk folders are made')
         call stage%kill
@@ -211,6 +248,43 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_start_sieve
+
+    !> final ingestion is set once reference picking's idle marker has been seen and a later watch
+    !! found nothing, and withdrawn when the marker goes
+    subroutine test_final_ingestion_follows_marker()
+        class(stream_stage_sieve), allocatable :: stage
+        type(cmdline)            :: cline
+        type(string)             :: cwd_saved, root, set1
+        integer                  :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_final_ingestion_follows_marker'
+        nfail0 = tests_failed
+        call enter_fixture('sv_stage_final', cwd_saved, root)
+        call make_upstream()
+        call write_moldiam()
+        set1 = write_completed_set(1, [10, 20])
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call stage%attach_upstream()
+        call stage%import_projects()
+        call stage%start_sieve()
+        call stage%update_final_ingestion()
+        call assert_false(stage%l_final, 'no marker: no final ingestion')
+        call simple_touch(UPSTREAM//'/'//STREAM_IDLE_MARKER)
+        call stage%update_final_ingestion()
+        call assert_false(stage%l_final, 'the marker first seen: wait for a later watch')
+        call assert_true(stage%upstream_done_since > 0, 'the time it was seen is kept')
+        stage%last_watch = stage%upstream_done_since + 1
+        call stage%update_final_ingestion()
+        call assert_true(stage%l_final, 'a later watch found nothing: final ingestion')
+        call del_file(UPSTREAM//'/'//STREAM_IDLE_MARKER)
+        call stage%update_final_ingestion()
+        call assert_false(stage%l_final, 'the marker gone: final ingestion withdrawn')
+        call assert_int(0, stage%upstream_done_since, 'and the wait starts again')
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_final_ingestion_follows_marker
 
     !> one status message per call, with the particle count and the classes the sieve selected
     subroutine test_send_status()
@@ -350,6 +424,18 @@ contains
         call moldiam%write(string(UPSTREAM//'/'//STREAM_MOLDIAM))
         call moldiam%kill
     end subroutine write_moldiam
+
+    ! the sieve's record of the micrographs @p micinds of set @p set put in a chunk
+    subroutine write_chunked_mics( set, micinds )
+        type(string), intent(in) :: set
+        integer,      intent(in) :: micinds(:)
+        integer :: funit, i
+        open(newunit=funit, file=CHUNKED_MICS, status='replace', action='write')
+        do i = 1,size(micinds)
+            write(funit,'(A,1X,I0)') set%to_char(), micinds(i)
+        enddo
+        close(funit)
+    end subroutine write_chunked_mics
 
     ! completed reference-picking set number @p id: one micrograph and one stack per entry of
     ! @p nptcls_mic; returns its absolute path

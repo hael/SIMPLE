@@ -17,12 +17,10 @@
 !   before execute returns.
 !==============================================================================
 module simple_commanders_stream_p01_preprocess
-use simple_defs,                    only: logfhandle, STDLEN, HP_CTF_ESTIMATE, LP_CTF_ESTIMATE, DFMIN_DEFAULT, DFMAX_DEFAULT
+use simple_defs,                    only: logfhandle, HP_CTF_ESTIMATE, LP_CTF_ESTIMATE, DFMIN_DEFAULT, DFMAX_DEFAULT
 use simple_defs_stream,             only: STREAM_CTFRES_THRESHOLD
-use simple_defs_environment,        only: SIMPLE_STREAM_PREPROC_NTHR, SIMPLE_STREAM_PREPROC_NPARTS
 use simple_error,                   only: simple_exception
 use simple_string,                  only: string
-use simple_string_utils,            only: str2int
 use simple_jiffys,                  only: simple_end
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
@@ -31,6 +29,7 @@ use simple_stream_sigterm,          only: install_sigterm_handler, restore_sigte
 implicit none
 
 public :: commander_stream_p01_preprocess
+public :: set_preprocess_stream_cline ! the stage's command-line defaults, for the chained stream tests
 private
 #include "simple_local_flags.inc"
 
@@ -64,11 +63,9 @@ contains
     end subroutine exec_stream_p01_preprocess
 
     ! Everything the stage needs on its command line before params%new: fixed settings,
-    ! defaults, environment overrides, and the gain options that need no movies.
+    ! defaults, and the gain options that need no movies (threads and parts: the master).
     subroutine set_preprocess_stream_cline( cline )
         class(cmdline), intent(inout) :: cline
-        character(len=STDLEN) :: env_val
-        integer               :: envlen
         ! fixed for this stage
         call cline%set('oritype',     'mic')
         call cline%set('mkdir',       'yes')
@@ -97,11 +94,6 @@ contains
         if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',           DFMAX_DEFAULT)
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',        'yes')
         if( .not. cline%defined('ctfresthreshold') ) call cline%set('ctfresthreshold', STREAM_CTFRES_THRESHOLD)
-        ! environment overrides
-        call get_environment_variable(SIMPLE_STREAM_PREPROC_NTHR, env_val, envlen)
-        if( envlen > 0 ) call cline%set('nthr', str2int(env_val))
-        call get_environment_variable(SIMPLE_STREAM_PREPROC_NPARTS, env_val, envlen)
-        if( envlen > 0 ) call cline%set('nparts', str2int(env_val))
         call set_flipgain(cline)
     end subroutine set_preprocess_stream_cline
 

@@ -12,12 +12,17 @@
 !
 !   The job runs in its own directory (created if needed); the script and the
 !   log are written there as ./distr_<label> and simple_log_<label>.
+!
+!   cancel uses the record the job's script keeps of itself
+!   (simple_qsys_job_record, which also has fresh_job_dir for the directory a
+!   new job starts in).
 !==============================================================================
 module simple_qsys_async_job
-use simple_defs,     only: CWD_GLOB
-use simple_string,   only: string
-use simple_fileio,   only: del_file, file_exists, read_exit_code, simple_chdir, simple_getcwd
-use simple_syslib,   only: simple_mkdir
+use simple_defs,            only: CWD_GLOB, logfhandle
+use simple_string,          only: string
+use simple_fileio,          only: del_file, file_exists, read_exit_code, simple_chdir, simple_getcwd
+use simple_syslib,          only: simple_mkdir
+use simple_qsys_job_record, only: cancel_queued_job
 use simple_cmdline,  only: cmdline
 use simple_qsys_env, only: qsys_env
 implicit none
@@ -42,6 +47,7 @@ contains
     procedure :: status
     procedure :: get_dir
     procedure :: get_log
+    procedure :: cancel
     procedure :: kill
 end type qsys_async_job
 
@@ -106,6 +112,18 @@ contains
         type(string) :: fname
         fname = self%dir//'/simple_log_'//self%label
     end function get_log
+
+    !> Cancels the job when it is running (cancel_queued_job); one not started or already ended is
+    !! left alone.
+    subroutine cancel( self )
+        class(qsys_async_job), intent(inout) :: self
+        if( self%status() /= ASYNC_JOB_RUNNING ) return
+        if( cancel_queued_job(self%exit_code_fname) )then
+            write(logfhandle,'(A,A)') '>>> CANCELLED JOB ', self%label%to_char()
+        else
+            write(logfhandle,'(A,A,A)') '>>> COULD NOT CANCEL JOB ', self%label%to_char(), ' (still queued, or on another host)'
+        endif
+    end subroutine cancel
 
     subroutine kill( self )
         class(qsys_async_job), intent(inout) :: self

@@ -29,11 +29,12 @@ use unix,                                               only: c_pthread_t, c_pth
 use simple_defs,                                        only: logfhandle
 use simple_defs_fname,                                  only: METADATA_EXT
 use simple_defs_stream,                                 only: PREPROC_JOB_NAME, OPTICS_JOB_NAME, OPENING2D_JOB_NAME, REFPICK_JOB_NAME,&
-                                                             &OPENING2D_PICKREFS, SIEVING_JOB_NAME, CLASS2D_JOB_NAME, MULTISTATE3D_JOB_NAME, PREPROC_NINIPICK
+                                                             &OPENING2D_PICKREFS, SIEVING_JOB_NAME, CLASS2D_JOB_NAME, MULTISTATE3D_JOB_NAME, PREPROC_NINIPICK,&
+                                                             &STREAM_IDLE_MARKER, STREAM_FINISHED_MARKER
 use simple_error,                                       only: simple_exception
 use simple_string,                                      only: string
-use simple_fileio,                                      only: simple_getcwd
-use simple_syslib,                                      only: dir_exists, symlink
+use simple_fileio,                                      only: simple_getcwd, file_exists, simple_touch
+use simple_syslib,                                      only: dir_exists, symlink, simple_abspath
 use simple_timer,                                       only: simple_gettime
 use simple_cmdline,                                     only: cmdline
 use simple_parameters,                                  only: parameters
@@ -47,6 +48,7 @@ use simple_stream_master_stage_ids,                     only: NSTAGES, STAGE_PRE
                                                              &STAGE_REFERENCE_PICKING, STAGE_PARTICLE_SIEVING, STAGE_POOL2D,&
                                                              &STAGE_SOLVE3D
 use simple_stream_master_stage,                         only: stream_master_stage
+use simple_stream_master_resources,                     only: stream_resources, stream_resources_from_env
 use simple_stream_master_meta_store,                    only: stream_master_meta_store
 use simple_stream_master_gui_commands,                  only: stream_master_gui_commands
 use simple_stream_sigterm,                              only: install_sigterm_handler, restore_sigterm_handler, sigterm_received
@@ -56,26 +58,20 @@ use simple_commanders_stream_p03_initial_analysis,      only: commander_stream_p
 use simple_commanders_stream_p04_refpick_extract,       only: commander_stream_p04_refpick_extract
 use simple_commanders_stream_p05_sieve_cavgs,           only: commander_stream_p05_sieve_cavgs
 use simple_commanders_stream_p06_pool2D,                only: commander_stream_p06_pool2D
-use simple_commanders_stream_p07_solve3D_multistate, only: commander_stream_p07_solve3D_multistate
+use simple_commanders_stream_p07_solve3D_multistate,    only: commander_stream_p07_solve3D_multistate
 implicit none
 
 public :: commander_stream_p00_master
 private
 #include "simple_local_flags.inc"
 
-! what the master gives the stages (its choices for a stream run from the GUI)
-integer, parameter :: PREPROCESS_NPARTS     = 16
-integer, parameter :: PREPROCESS_NTHR       = 4
-integer, parameter :: OPTICS_NTHR           = 1
-integer, parameter :: INITIAL_ANALYSIS_NTHR = 32
-integer, parameter :: REFPICK_NTHR          = 8
-integer, parameter :: REFPICK_NPARTS        = 8
-integer, parameter :: SIEVE_NTHR            = 16
-integer, parameter :: SIEVE_NCHUNKS         = 4
-integer, parameter :: POOL2D_NTHR           = 8
-integer, parameter :: POOL2D_NPARTS         = 6
+! what the master gives the stages (its choices for a stream run from the GUI); their threads
+! and parts are in simple_stream_master_resources
 integer, parameter :: POOL2D_NCLS           = 150
-integer, parameter :: SOLVE3D_NTHR       = 8
+! the initial analysis' 3D route settings (decision 20): forwarded to it only when given, kept off
+! preprocessing's command line (it is the master's own); nthr3D_pickrefs also has a table default
+character(len=*), parameter :: PICKREFS_3D_KEYS(7) = [character(len=18) :: 'nstates_pickrefs', 'nstages_pickrefs',&
+    &'lpstop_pickrefs', 'nspace_pickrefs', 'nrestarts_collapse', 'lpstart_ini3D', 'lpstop_ini3D']
 ! the master itself
 integer, parameter :: MASTER_NCUNITS        = 16    ! computing units of the master's queue environment
 integer, parameter :: MASTER_QSYS_NTHR      = 16
@@ -116,8 +112,9 @@ contains
         type(c_ptr)                   :: thread_ret
         type(string)                  :: request, cwd
         character(len=:), allocatable :: update_buffer
-        logical :: l_existing_pickrefs, l_existing_box, l_existing_preprocess, l_updates
+        logical :: l_existing_pickrefs, l_existing_box, l_existing_preprocess, l_updates, l_linked
         logical :: l_stop, l_stopping, l_last_loop
+        logical :: l_restart_seen(NSTAGES) ! a restart request in the last answer, acted on once
         integer :: id, nmics_stop, loop_counter, rc, max_frame_bytes, stop_time
         ! the command line
         l_existing_pickrefs = cline%defined('pickrefs')
@@ -157,10 +154,25 @@ contains
         enddo
         ! fork the stages; preprocessing and the initial analysis are skipped when given their outputs.
         ! The listener thread is started after them: a child gets a copy of the parent's memory but
-        ! not of its threads, so the first forks are made before there is a thread to copy mid-write
+        ! not of its threads, so the first forks are made before the listener can be caught
+        ! mid-write. The persistent-worker server's thread (qsys%new) does run already: each stage
+        ! forgets the server it inherits before its commander runs (stream_master_stage_fork) and
+        ! reaches it as a client through worker_server
         if( l_existing_preprocess )then
-            rc = symlink(params%dir_preprocess%to_char()//achar(0), PREPROC_JOB_NAME)
-            if( rc /= 0 ) THROW_HARD('failed to create symlink for existing preprocessing directory')
+            rc = symlink(params%dir_preprocess%to_char()//achar(0), PREPROC_JOB_NAME//achar(0))
+            if( rc /= 0 )then
+                ! a master restarted in the same folder finds its own link
+                l_linked = dir_exists(string(PREPROC_JOB_NAME))
+                if( l_linked ) l_linked = simple_abspath(PREPROC_JOB_NAME) == simple_abspath(params%dir_preprocess)
+                if( .not. l_linked ) THROW_HARD('failed to create symlink for existing preprocessing directory')
+            endif
+            ! nothing more comes from the earlier preprocessing: the stages that end their intake
+            ! when preprocessing goes idle or stops see it stopped
+            if( .not. file_exists(PREPROC_JOB_NAME//'/'//STREAM_IDLE_MARKER) .and.&
+                &.not. file_exists(PREPROC_JOB_NAME//'/'//STREAM_FINISHED_MARKER) )then
+                call simple_touch(PREPROC_JOB_NAME//'/'//STREAM_FINISHED_MARKER)
+                write(logfhandle,'(A)') '>>> THE EXISTING PREPROCESSING IS MARKED FINISHED'
+            endif
             call shared%stages(STAGE_PREPROCESS)%skip()
         else
             call shared%stages(STAGE_PREPROCESS)%start()
@@ -191,6 +203,7 @@ contains
         l_stop       = .false.
         l_stopping   = .false.
         l_last_loop  = .false.
+        l_restart_seen = .false.
         stop_time    = 0
         do
             loop_counter = loop_counter + 1
@@ -255,16 +268,27 @@ contains
 
         ! What the GUI asked in its answer to the last heartbeat. A restarted stage starts on clean
         ! pipes, and is forked, under the listener's lock: the listener reads the pipes and logs
-        ! only while it holds it, so the child is never forked with a log write half done. The
-        ! updates of this answer go to the running stages that read them.
+        ! only while it holds it, so the child is never forked with a log write half done. NICE
+        ! keeps a restart key in its answers until it sees the stage running, so a request is acted
+        ! on once, and again only after the key has left an answer; and never once the stream is
+        ! stopping. The updates of this answer go to the running stages that read them.
         subroutine apply_commands()
+            logical :: l_new_request
             if( commands%l_terminate_all ) l_stop = .true.
             do id = 1,NSTAGES
                 if( commands%l_terminate(id) ) call shared%stages(id)%request_stop()
             enddo
             do id = 1,NSTAGES
-                if( .not. commands%l_restart(id) ) cycle
+                l_new_request      = commands%l_restart(id) .and. .not. l_restart_seen(id)
+                l_restart_seen(id) = commands%l_restart(id)
+                if( .not. l_new_request ) cycle
+                if( l_stop .or. l_stopping .or. sigterm_received() ) cycle
                 if( shared%stages(id)%is_running() ) cycle
+                ! a skipped stage's output is the user's earlier run: it is never run here
+                if( shared%stages(id)%is_skipped() )then
+                    write(logfhandle,'(A)') '>>> RESTART OF SKIPPED '//shared%stages(id)%get_label()//' IGNORED'
+                    cycle
+                endif
                 call lock(shared%meta_mutex)
                 call shared%stages(id)%discard_pipes(max_frame_bytes)
                 call shared%stages(id)%start()
@@ -332,8 +356,14 @@ contains
         ! The stages' command lines: their programs, folders and links, and the master's settings.
         ! Preprocessing gets the master's own command line with the user's preprocessing options.
         subroutine make_stage_clines()
-            type(string) :: server_address
+            type(stream_resources) :: res
+            type(string)           :: server_address
+            integer                :: ikey
             server_address = qsys%get_persistent_worker_server_address()
+            ! the threads and parts of every stage and its jobs: defaults, the stages' environment
+            ! variables over them
+            res = stream_resources_from_env()
+            call res%log()
             ! preprocessing
             clines(STAGE_PREPROCESS) = cline
             associate( c => clines(STAGE_PREPROCESS) )
@@ -341,14 +371,19 @@ contains
                 call c%set('projfile', PREPROC_JOB_NAME//METADATA_EXT)
                 call c%set('outdir',   PREPROC_JOB_NAME)
                 call c%set('ninipick', PREPROC_NINIPICK)
-                call c%set('nparts',   PREPROCESS_NPARTS)
-                call c%set('nthr',     PREPROCESS_NTHR)
+                call c%set('nparts',   res%preprocess_nparts)
+                call c%set('nthr',     res%preprocess_nthr)
                 call c%set('mkdir',    'yes')
                 call c%delete('niceserver')
                 call c%delete('niceprocid')
                 call c%delete('box_extract')
                 call c%delete('pickrefs')
+                call c%delete('nthr3D_pickrefs')
+                do ikey = 1,size(PICKREFS_3D_KEYS)
+                    call c%delete(trim(PICKREFS_3D_KEYS(ikey)))
+                enddo
                 if( nmics_stop > 0 ) call c%set('nmics', nmics_stop)
+                if( server_address%strlen() > 0 ) call c%set('worker_server', server_address)
             end associate
             ! optics assignment, with the beam-tilt options entered with the preprocessing ones
             associate( c => clines(STAGE_ASSIGN_OPTICS) )
@@ -356,7 +391,7 @@ contains
                 call c%set('projfile',   OPTICS_JOB_NAME//METADATA_EXT)
                 call c%set('outdir',     OPTICS_JOB_NAME)
                 call c%set('dir_target', PREPROC_JOB_NAME)
-                call c%set('nthr',       OPTICS_NTHR)
+                call c%set('nthr',       res%optics_nthr)
                 call c%set('mkdir',      'yes')
                 if( cline%defined('beamtilt')   ) call c%set('beamtilt',   trim(params%beamtilt))
                 if( cline%defined('tilt_thres') ) call c%set('tilt_thres', params%tilt_thres)
@@ -368,9 +403,23 @@ contains
                 call c%set('outdir',          OPENING2D_JOB_NAME)
                 call c%set('dir_target',      PREPROC_JOB_NAME)
                 call c%set('optics_dir',      cwd//'/'//OPTICS_JOB_NAME)
-                call c%set('nthr',            INITIAL_ANALYSIS_NTHR)
+                call c%set('nthr',            res%initial_analysis_nthr)
+                call c%set('nthr2D',          res%initial_analysis_nthr2D)
+                call c%set('nparts',          res%initial_analysis_nparts)
+                call c%set('nchunks',         res%initial_analysis_nchunks)
+                ! the user's 3D threads win over the table's
+                if( cline%defined('nthr3D_pickrefs') )then
+                    call c%set('nthr3D_pickrefs', params%nthr3D_pickrefs)
+                else
+                    call c%set('nthr3D_pickrefs', res%initial_analysis_nthr3D)
+                endif
+                ! the 3D route's settings the user gave; the stage's commander defaults the others
+                do ikey = 1,size(PICKREFS_3D_KEYS)
+                    call c%copy_arg(cline, trim(PICKREFS_3D_KEYS(ikey)))
+                enddo
                 call c%set('mkdir',           'yes')
                 call c%set('worker_priority', 'high')
+                if( server_address%strlen() > 0 ) call c%set('worker_server', server_address)
             end associate
             ! reference picking, with the given references or those of the initial analysis
             associate( c => clines(STAGE_REFERENCE_PICKING) )
@@ -379,8 +428,8 @@ contains
                 call c%set('outdir',     REFPICK_JOB_NAME)
                 call c%set('dir_target', PREPROC_JOB_NAME)
                 call c%set('optics_dir', cwd//'/'//OPTICS_JOB_NAME)
-                call c%set('nthr',       REFPICK_NTHR)
-                call c%set('nparts',     REFPICK_NPARTS)
+                call c%set('nthr',       res%refpick_nthr)
+                call c%set('nparts',     res%refpick_nparts)
                 call c%set('mkdir',      'yes')
                 if( l_existing_pickrefs )then
                     call c%set('pickrefs', params%pickrefs)
@@ -389,6 +438,7 @@ contains
                 endif
                 if( l_existing_box       ) call c%set('box_extract', params%box_extract)
                 if( params%thres > 0.0   ) call c%set('thres',       params%thres)
+                if( server_address%strlen() > 0 ) call c%set('worker_server', server_address)
             end associate
             ! particle sieving
             associate( c => clines(STAGE_PARTICLE_SIEVING) )
@@ -397,8 +447,8 @@ contains
                 call c%set('outdir',          SIEVING_JOB_NAME)
                 call c%set('dir_target',      REFPICK_JOB_NAME)
                 call c%set('optics_dir',      cwd//'/'//OPTICS_JOB_NAME)
-                call c%set('nthr',            SIEVE_NTHR)
-                call c%set('nchunks',         SIEVE_NCHUNKS)
+                call c%set('nthr',            res%sieve_nthr)
+                call c%set('nchunks',         res%sieve_nchunks)
                 call c%set('mkdir',           'yes')
                 call c%set('worker_priority', 'high')
                 if( server_address%strlen() > 0 ) call c%set('worker_server', server_address)
@@ -411,8 +461,8 @@ contains
                 call c%set('dir_target',      SIEVING_JOB_NAME)
                 call c%set('optics_dir',      cwd//'/'//OPTICS_JOB_NAME)
                 call c%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)
-                call c%set('nthr',            POOL2D_NTHR)
-                call c%set('nparts',          POOL2D_NPARTS)
+                call c%set('nthr',            res%pool2D_nthr)
+                call c%set('nparts',          res%pool2D_nparts)
                 call c%set('ncls',            POOL2D_NCLS)
                 call c%set('mkdir',           'yes')
                 call c%set('nicedispid',      params%nicedispid)
@@ -425,12 +475,22 @@ contains
                 call c%set('projfile',        MULTISTATE3D_JOB_NAME//METADATA_EXT)
                 call c%set('outdir',          MULTISTATE3D_JOB_NAME)
                 call c%set('dir_target',      CLASS2D_JOB_NAME)
-                call c%set('nthr',            SOLVE3D_NTHR)
+                call c%set('nthr',            res%solve3D_nthr)
+                call c%set('nthr3D',          res%solve3D_nthr3D)
+                call c%set('nparts3D',        res%solve3D_nparts3D)
                 call c%set('mkdir',           'yes')
                 call c%set('nicedispid',      params%nicedispid)
                 call c%set('worker_priority', 'high')
                 if( server_address%strlen() > 0 ) call c%set('worker_server', server_address)
             end associate
+            ! the worker server's threads per worker beside its address: a stage's queues check their
+            ! jobs' claims against it (qsys_env)
+            if( server_address%strlen() > 0 .and. qsys%get_persistent_worker_nthr() > 0 )then
+                do id = 1,NSTAGES
+                    if( clines(id)%defined('worker_server') )&
+                        &call clines(id)%set('worker_server_nthr', qsys%get_persistent_worker_nthr())
+                enddo
+            endif
             ! every stage reports its memory when the master does
             if( params%memreport == 'yes' )then
                 do id = 1,NSTAGES
@@ -453,7 +513,7 @@ contains
             case(STAGE_REFERENCE_PICKING); allocate(commander_stream_p04_refpick_extract       :: commander)
             case(STAGE_PARTICLE_SIEVING);  allocate(commander_stream_p05_sieve_cavgs           :: commander)
             case(STAGE_POOL2D);            allocate(commander_stream_p06_pool2D                :: commander)
-            case(STAGE_SOLVE3D);        allocate(commander_stream_p07_solve3D_multistate :: commander)
+            case(STAGE_SOLVE3D);           allocate(commander_stream_p07_solve3D_multistate    :: commander)
             case default;                  THROW_HARD('unknown stream stage id')
         end select
     end function stage_commander

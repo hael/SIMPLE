@@ -28,6 +28,7 @@ use simple_stream_sigterm,     only: install_sigterm_handler, restore_sigterm_ha
 implicit none
 
 public :: commander_stream_p05_sieve_cavgs
+public :: set_sieve_cline ! the stage's command-line defaults, for the chained stream tests
 private
 
 type, extends(commander_base) :: commander_stream_p05_sieve_cavgs

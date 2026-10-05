@@ -26,19 +26,29 @@
 !   params is built once, in new(). After that only values known at run time
 !   are changed (the resolved gain reference, GUI threshold updates), each in
 !   one place that also updates the command line the worker jobs receive.
+!
+! RESTART:
+!   Recognised by the execution folder existing (outdir, or dir_exec). Every
+!   movie of the completed sets, accepted or rejected, goes into the watcher's
+!   history, and import indices continue after the highest given; the accepted
+!   micrographs are imported again. The thresholds the GUI set come back from
+!   gui_thresholds.txt, and a generated gain reference is reused. Set
+!   numbering continues (simple_stream_job_sets); unfinished sets are dropped
+!   and their movies submitted again.
 !==============================================================================
 module simple_stream_stage_preprocess
 use simple_defs,                           only: logfhandle, STDLEN, PATH_HERE
 use simple_defs_fname,                     only: DIR_CTF_ESTIMATE, DIR_MOTION_CORRECT, TERM_STREAM, GAIN_THUMBNAIL
 use simple_defs_stream,                    only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, LONGTIME,&
-                                                &SHORTWAIT, WAITTIME, INACTIVE_TIME, CTFRES_BINS, ICESCORE_BINS, ASTIG_BINS
+                                                &SHORTWAIT, WAITTIME, INACTIVE_TIME, CTFRES_BINS, ICESCORE_BINS, ASTIG_BINS,&
+                                                &STREAM_IDLE_MARKER, STREAM_FINISHED_MARKER, MOVIES_IDLE_TIME_S
 use simple_defs_environment,               only: SIMPLE_STREAM_PREPROC_PARTITION
 use simple_type_defs,                      only: ctfparams, CTFFLAG_YES
 use simple_error,                          only: simple_exception
 use simple_string,                         only: string
-use simple_fileio,                         only: basename, del_file, file_exists, filepath, fname2format,&
+use simple_fileio,                         only: basename, del_file, file_exists, filepath, fname2format, simple_touch,&
                                                 &simple_abspath, simple_getcwd, stemname
-use simple_syslib,                         only: simple_mkdir, dir_exists
+use simple_syslib,                         only: simple_mkdir, dir_exists, simple_rename
 use simple_timer,                          only: simple_gettime, cast_time_char
 use simple_cmdline,                        only: cmdline
 use simple_image,                          only: image
@@ -81,6 +91,9 @@ public :: stream_stage_preprocess
 private
 #include "simple_local_flags.inc"
 
+! the micrograph rejection thresholds last set from the GUI, kept in the stage's folder for a restart
+character(len=*), parameter :: GUI_THRESHOLDS = 'gui_thresholds.txt'
+
 integer, parameter :: PLOT_WINDOW      = 500   ! micrographs per point of the windowed time plots
 integer, parameter :: NTHUMBS          = 10    ! most recent micrograph thumbnails sent to the GUI
 integer, parameter :: STAR_EVERY_NMICS = 1000  ! below this many micrographs the STAR file is rewritten on every import...
@@ -103,7 +116,15 @@ type :: stream_stage_preprocess
     type(gui_metadata_histogram)         :: meta_hist_ctfres, meta_hist_icefrac, meta_hist_astig
     type(gui_metadata_timeplot)          :: meta_plot_ctfres, meta_plot_astig, meta_plot_df, meta_plot_rate
     type(stream_job_sets)                :: sets                  ! the movie sets the worker jobs run on
+    ! settled after params%new: the gain reference and its flip once resolved (resolve_gain), and
+    ! the micrograph rejection thresholds the GUI may change (set_threshold)
+    type(string)          :: gainref
+    character(len=STDLEN) :: flipgain     = 'no'
+    real                  :: ctfres_thres  = 0.
+    real                  :: astig_thres   = 0.
+    real                  :: icefrac_thres = 0.
     integer :: import_counter      = 0       ! last import index given to a movie
+    integer :: last_movie_time     = 0       ! when a new movie was last seen
     integer :: nmic_star           = 0       ! micrographs in the last STAR snapshot (above STAR_EVERY_NMICS)
     integer :: n_failed_jobs       = 0
     integer :: prev_stacksz        = 0
@@ -151,6 +172,10 @@ contains
     procedure :: send_status
     procedure :: apply_gui_updates
     procedure :: set_threshold
+    procedure :: apply_thresholds
+    procedure :: update_idle_marker
+    procedure :: save_thresholds
+    procedure :: restore_thresholds
     procedure :: write_mic_star_and_field
 end type stream_stage_preprocess
 
@@ -171,11 +196,18 @@ contains
         call self%init_job_dirs()
         if( self%l_restart ) call self%resume_previous_run(cline)
         call self%init_queue()
-        call self%resolve_gain(cline)
-        call self%build_worker_cline(cline)
+        ! the GUI hears from the stage while it waits for the movies of the gain step
         call self%init_gui(ipc_pipe_preprocess_out(1), ipc_pipe_preprocess_in(2))
+        call self%resolve_gain(cline)
+        if( sigterm_received() ) return ! stopped during the gain step
+        call self%build_worker_cline(cline)
+        if( self%l_restart ) call self%restore_thresholds()
         self%last_injection      = simple_gettime()
+        self%last_movie_time     = simple_gettime()
         self%nmovs2importperiter = 2 * self%params%nparts * STREAM_NMOVS_SET
+        ! the markers downstream ends its intake on are those of this run
+        call del_file(STREAM_IDLE_MARKER)
+        call del_file(STREAM_FINISHED_MARKER)
     end subroutine new
 
     !> The stage's project file (created when missing) and its parameters; the global
@@ -184,10 +216,14 @@ contains
         class(stream_stage_preprocess), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(string) :: projfile
-        ! a restart is recognised by its output directory, before params%new creates one
+        ! a restart is recognised by its execution folder existing before params%new creates or
+        ! enters it: outdir, or dir_exec (which simple_stream takes as the execution folder)
         self%l_restart = .false.
         if( cline%defined('outdir') )then
             self%l_restart = dir_exists(cline%get_carg('outdir'))
+        endif
+        if( cline%defined('dir_exec') )then
+            self%l_restart = self%l_restart .or. dir_exists(cline%get_carg('dir_exec'))
         endif
         projfile = cline%get_carg('projfile')
         if( .not. file_exists(projfile) )then
@@ -196,10 +232,15 @@ contains
             call self%spproj_glob%write
         endif
         if( .not. allocated(self%params) ) allocate(self%params)
+        ! one queue partition per computing unit; not passed on to the workers' command lines
+        call cline%set('split_mode', 'stream')
         call self%params%new(cline)
-        ! one queue partition per computing unit; set here because parameter derivation
-        ! (derive_parallel_settings) resets split_mode to 'even' whatever the command line says
-        self%params%split_mode = 'stream'
+        call cline%delete('split_mode')
+        self%gainref       = self%params%gainref
+        self%flipgain      = self%params%flipgain
+        self%ctfres_thres  = self%params%ctfresthreshold
+        self%astig_thres   = self%params%astigthreshold
+        self%icefrac_thres = self%params%icefracthreshold
         self%l_xml_meta = cline%defined('dir_meta')
         call self%spproj_glob%read(self%params%projfile)
         if( self%spproj_glob%os_mic%get_noris() /= 0 )then
@@ -268,6 +309,7 @@ contains
         else if( .not. self%l_movies_left )then
             call self%idle()
         endif
+        call self%update_idle_marker()
         call self%send_status()
         call self%apply_gui_updates()
         if( self%params%nmics > 0 )then
@@ -285,13 +327,15 @@ contains
         finished = self%l_nmics_reached .or. file_exists(TERM_STREAM)
     end function finished
 
-    !> Final STAR file with optics, and removal of the job scripts.
+    !> Cancels the jobs in flight, writes the final STAR file and removes the job scripts.
     subroutine finalize( self )
         class(stream_stage_preprocess), intent(inout) :: self
+        call self%sets%cancel(self%qenv) ! a restart sets the folder of unfinished sets aside
         if( self%spproj_glob%os_mic%get_noris() > 0 )then
             call self%write_mic_star_and_field(write_field=.true., copy_optics=.true.)
         endif
         call qsys_cleanup(self%params)
+        call simple_touch(STREAM_FINISHED_MARKER) ! downstream ends its intake
     end subroutine finalize
 
     subroutine kill( self )
@@ -307,6 +351,11 @@ contains
         call self%cline_exec%kill
         call self%meta_status%kill
         call self%meta_micrograph%kill
+        call self%gainref%kill
+        self%flipgain      = 'no'
+        self%ctfres_thres  = 0.
+        self%astig_thres   = 0.
+        self%icefrac_thres = 0.
         call self%meta_hist_ctfres%kill
         call self%meta_hist_icefrac%kill
         call self%meta_hist_astig%kill
@@ -356,19 +405,25 @@ contains
     subroutine import_previous_projects( self )
         class(stream_stage_preprocess), intent(inout) :: self
         type(string), allocatable :: completed_fnames(:)
-        integer :: nmics, imic
+        type(oris) :: os_done
+        integer    :: nmics, ndone, imic
         call self%sets%restore(completed_fnames)
         if( size(completed_fnames) == 0 ) return
-        call append_mics_from_projects(self%spproj_glob%os_mic, completed_fnames, .true., nmics)
-        if( nmics == 0 )then
-            write(logfhandle,'(A)') '>>> NO ACCEPTED MICROGRAPHS IN THE PREVIOUS RUN'
-            return
-        endif
-        self%import_counter = self%spproj_glob%os_mic%get_noris()
-        do imic = 1,self%spproj_glob%os_mic%get_noris()
-            call self%movie_buff%add2history(self%spproj_glob%os_mic%get_str(imic, 'movie'))
+        ! every movie of the completed sets is done, accepted or rejected: none is processed again,
+        ! and no import index already handed downstream is given again
+        call append_mics_from_projects(os_done, completed_fnames, .false., ndone)
+        do imic = 1,os_done%get_noris()
+            call self%movie_buff%add2history(os_done%get_str(imic, 'movie'))
+            if( os_done%isthere(imic, 'importind') )then
+                self%import_counter = max(self%import_counter, os_done%get_int(imic, 'importind'))
+            endif
         enddo
-        write(logfhandle,'(A,I6,A)') '>>> IMPORTED ', nmics, ' PREVIOUSLY PROCESSED MOVIES'
+        call os_done%kill()
+        ! the accepted micrographs make the stage's project again
+        call append_mics_from_projects(self%spproj_glob%os_mic, completed_fnames, .true., nmics)
+        if( nmics == 0 ) write(logfhandle,'(A)') '>>> NO ACCEPTED MICROGRAPHS IN THE PREVIOUS RUN'
+        write(logfhandle,'(A,I6,A,I6,A)') '>>> IMPORTED ', nmics, ' PREVIOUSLY ACCEPTED MICROGRAPHS OF ', ndone,&
+            &' MOVIES PROCESSED'
     end subroutine import_previous_projects
 
     ! Resolves flip_auto and generate from the first movies, then flips the gain reference once
@@ -377,22 +432,29 @@ contains
         class(stream_stage_preprocess), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(string) :: cwd, thumb
-        select case( trim(self%params%flipgain) )
+        select case( trim(self%flipgain) )
             case( 'flip_auto' )
-                self%params%flipgain = self%detect_gain_flip()
-                call cline%set('flipgain', trim(self%params%flipgain))
+                self%flipgain = self%detect_gain_flip()
+                call cline%set('flipgain', trim(self%flipgain))
             case( 'generate' )
-                self%params%gainref  = self%generate_gain_from_movies()
-                self%params%flipgain = 'no'
-                call cline%set('gainref',  self%params%gainref)
+                if( self%l_restart .and. file_exists(GENERATED_GAINREF) )then
+                    ! a restart keeps the gain reference generated before
+                    self%gainref = simple_abspath(GENERATED_GAINREF)
+                    write(logfhandle,'(A,A)') '>>> GAIN GENERATION: reusing ', self%gainref%to_char()
+                else
+                    self%gainref = self%generate_gain_from_movies()
+                endif
+                self%flipgain = 'no'
+                call cline%set('gainref',  self%gainref)
                 call cline%set('flipgain', 'no')
         end select
-        call flip_gain(cline, self%params%gainref, self%params%flipgain)
+        if( sigterm_received() ) return ! stopped while waiting for movies: no gain to resolve
+        call flip_gain(cline, self%gainref, trim(self%flipgain))
         if( cline%defined('gainref') )then
             if( .not. file_exists(GAIN_THUMBNAIL) )then
                 call simple_getcwd(cwd)
                 thumb = cwd//'/'//GAIN_THUMBNAIL
-                call gainref_to_jpg(self%params%gainref, thumb)
+                call gainref_to_jpg(self%gainref, thumb)
                 write(logfhandle,'(A)') '>>> GAIN REFERENCE'
                 write(logfhandle,'(A)') '>>> JPEG '//thumb%to_char()
             endif
@@ -403,7 +465,7 @@ contains
     ! movies; 'no' when there is no gain reference or too few movies arrive. Uses its own watcher,
     ! so the movies looked at here are still preprocessed.
     function detect_gain_flip( self ) result( flipgain )
-        class(stream_stage_preprocess), intent(in) :: self
+        class(stream_stage_preprocess), intent(inout) :: self
         character(len=:), allocatable :: flipgain
         integer, parameter :: MAX_BATCHES = 8
         integer, parameter :: MAX_WAITS   = 180
@@ -414,11 +476,11 @@ contains
         logical :: l_ok, ran_analysis
         integer :: nwaits, nbatches, part_movies, part_frames
         flipgain = 'no'
-        if( self%params%gainref == '' )then
+        if( self%gainref == '' )then
             write(logfhandle,'(A)') '>>> GAIN AUTO: gainref is empty; defaulting to no flip'
             return
         endif
-        if( .not. file_exists(self%params%gainref) )then
+        if( .not. file_exists(self%gainref) )then
             write(logfhandle,'(A)') '>>> GAIN AUTO: gainref not found; defaulting to no flip'
             return
         endif
@@ -428,15 +490,17 @@ contains
             write(logfhandle,'(A)') '>>> GAIN AUTO: no movie folders detected; defaulting to no flip'
             return
         endif
-        call analyzer%new(self%params%gainref, self%params%smpd)
+        call analyzer%new(self%gainref, self%params%smpd)
         nwaits   = 0
         nbatches = 0
         do while( nbatches < MAX_BATCHES )
             if( analyzer%get_converged() ) exit
+            if( sigterm_received() ) exit
             call self%next_movie_batch(watcher, batch, l_ok)
             if( .not. l_ok )then
                 nwaits = nwaits + 1
                 if( nwaits > MAX_WAITS ) exit
+                call self%send_status(string('waiting for movies for the gain orientation'))
                 call sleep(self%sniff_wait_s)
                 cycle
             endif
@@ -457,27 +521,32 @@ contains
     ! Writes a gain reference estimated from the first movies to the working directory and
     ! returns its absolute path. Uses its own watcher, so these movies are still preprocessed.
     function generate_gain_from_movies( self ) result( gainref )
-        class(stream_stage_preprocess), intent(in) :: self
+        class(stream_stage_preprocess), intent(inout) :: self
         type(string) :: gainref
         integer, parameter :: N_MOVIES_TARGET = 1000
-        integer, parameter :: MAX_WAITS       = 1200
         type(stream_watcher)      :: watcher
         type(image)               :: gain_sum
         type(string), allocatable :: batch(:)
         type(string)              :: fname
         logical :: l_ok
-        integer :: nwaits, movies_used, frames_used
+        integer :: movies_used, frames_used
+        gainref = ''
         write(logfhandle,'(A,I0,A)') '>>> GAIN GENERATION: waiting for ', N_MOVIES_TARGET, ' movies'
         call new_movie_watcher(self%params%dir_movies, self%l_sj_dirs, self%settle_s, watcher, l_ok)
         if( .not. l_ok ) THROW_HARD('GAIN GENERATION: could not detect movie folders')
         movies_used = 0
         frames_used = 0
-        nwaits      = 0
+        ! a session may pause for a grid exchange: the stage waits as long as it takes, and stops
+        ! when asked to
         do while( movies_used < N_MOVIES_TARGET )
+            if( sigterm_received() )then
+                call gain_sum%kill()
+                call watcher%kill()
+                return
+            endif
             call self%next_movie_batch(watcher, batch, l_ok)
             if( .not. l_ok )then
-                nwaits = nwaits + 1
-                if( nwaits > MAX_WAITS ) THROW_HARD('GAIN GENERATION: timeout waiting for enough non-EER movies')
+                call self%send_status(string('waiting for movies for the gain reference'))
                 call sleep(self%sniff_wait_s)
                 cycle
             endif
@@ -486,7 +555,6 @@ contains
                 &'; frames accumulated ', frames_used
             call watcher%add2history(batch)
             deallocate(batch)
-            nwaits = 0
         enddo
         fname = GENERATED_GAINREF
         call write_gain_from_sum(gain_sum, frames_used, fname)
@@ -550,6 +618,11 @@ contains
         self%l_movies_left = .false.
         call self%movie_buff%detect_and_add_dirs(self%params%dir_movies, self%l_sj_dirs)
         call self%movie_buff%watch(nmovies, movies, max_nmovies=self%nmovs2importperiter)
+        if( nmovies > 0 )then
+            ! a movie arrived: preprocessing is not idle
+            self%last_movie_time = simple_gettime()
+            if( file_exists(STREAM_IDLE_MARKER) ) call del_file(STREAM_IDLE_MARKER)
+        endif
         if( nmovies < STREAM_NMOVS_SET ) return
         nsets = nmovies / STREAM_NMOVS_SET
         cnt   = 0
@@ -674,7 +747,7 @@ contains
                     j = j + 1
                     call self%spproj_glob%os_mic%transfer_ori(j, job_projs(iproj)%os_mic, i)
                 enddo
-                call apply_thresholds(self%params, job_projs(iproj)%os_mic, nrejected)
+                call self%apply_thresholds(job_projs(iproj)%os_mic, nrejected)
                 if( nrejected > 0 ) call job_projs(iproj)%write_segment_inside('mic', job_fnames(iproj))
             enddo
         endif
@@ -691,7 +764,7 @@ contains
         class(stream_stage_preprocess), intent(inout) :: self
         integer :: nmics, nrejected
         nmics = self%spproj_glob%os_mic%get_noris()
-        call apply_thresholds(self%params, self%spproj_glob%os_mic, nrejected)
+        call self%apply_thresholds(self%spproj_glob%os_mic, nrejected)
         write(logfhandle,'(A,I8)')       '>>> # MOVIES PROCESSED & IMPORTED       : ', nmics
         write(logfhandle,'(A,I3,A2,I3)') '>>> # OF COMPUTING UNITS IN USE/TOTAL   : ', self%qenv%get_navail_computing_units(),&
                                          &'/ ', self%params%nparts
@@ -747,6 +820,21 @@ contains
         end associate
     end subroutine send_plots
 
+    ! STREAM_IDLE in the stage's folder once no new movie has been seen for MOVIES_IDLE_TIME_S and
+    ! every submitted set has been collected (none queued or running); removed as soon as a movie
+    ! arrives (submit_new_movies). Downstream stages end their intake on it.
+    subroutine update_idle_marker( self )
+        class(stream_stage_preprocess), intent(inout) :: self
+        logical :: l_drained
+        if( file_exists(STREAM_IDLE_MARKER) ) return
+        if( simple_gettime() - self%last_movie_time < MOVIES_IDLE_TIME_S ) return
+        l_drained = self%qenv%qscripts%get_stacksz() == 0
+        if( l_drained ) l_drained = self%qenv%get_navail_computing_units() >= self%params%nparts
+        if( .not. l_drained ) return
+        call simple_touch(STREAM_IDLE_MARKER)
+        write(logfhandle,'(A,I0,A)') '>>> NO NEW MOVIE FOR ', MOVIES_IDLE_TIME_S, ' S AND NOTHING LEFT TO PROCESS: IDLE'
+    end subroutine update_idle_marker
+
     ! Nothing imported and nothing pending: snapshot after a long inactivity, otherwise wait.
     subroutine idle( self )
         class(stream_stage_preprocess), intent(inout) :: self
@@ -760,10 +848,14 @@ contains
 
     !---------------- GUI ----------------
 
-    subroutine send_status( self )
+    subroutine send_status( self, stage )
         class(stream_stage_preprocess), intent(inout) :: self
+        type(string), optional,         intent(in)    :: stage
+        type(string) :: stage_here
         real    :: average_ctfres, average_astig, average_icefrac
         integer :: nmics
+        stage_here = 'finding and processing new movies'
+        if( present(stage) ) stage_here = stage
         associate( os_mic => self%spproj_glob%os_mic )
             nmics           = os_mic%get_noris()
             average_ctfres  = 0.
@@ -772,7 +864,7 @@ contains
             if( os_mic%isthere('ctfres')  ) average_ctfres  = os_mic%get_avg('ctfres')
             if( os_mic%isthere('icefrac') ) average_icefrac = os_mic%get_avg('icefrac')
             if( os_mic%isthere('astig')   ) average_astig   = os_mic%get_avg('astig')
-            call self%meta_status%set(stage=string('finding and processing new movies'),       &
+            call self%meta_status%set(stage=stage_here,                                         &
                 movies_imported     = self%movie_buff%n_history,                                &
                 movies_processed    = nmics + self%n_failed_jobs,                               &
                 movies_rejected     = self%n_failed_jobs + nmics - os_mic%count_state_gt_zero(),&
@@ -780,9 +872,9 @@ contains
                 average_ctf_res     = average_ctfres,                                           &
                 average_ice_score   = average_icefrac,                                          &
                 average_astigmatism = average_astig,                                            &
-                cutoff_ctf_res      = self%params%ctfresthreshold,                              &
-                cutoff_ice_score    = self%params%icefracthreshold,                             &
-                cutoff_astigmatism  = self%params%astigthreshold)
+                cutoff_ctf_res      = self%ctfres_thres,                                        &
+                cutoff_ice_score    = self%icefrac_thres,                                       &
+                cutoff_astigmatism  = self%astig_thres)
         end associate
         call self%pipe%send_meta(self%meta_status)
     end subroutine send_status
@@ -796,34 +888,64 @@ contains
         do while( self%pipe%receive(buffer) )
             update = transfer(buffer, update)
             val    = update%get_ctfres_update()
-            if( abs(val) > 0.001 .and. val /= self%params%ctfresthreshold  ) call self%set_threshold('ctfresthreshold',  val)
+            if( abs(val) > 0.001 .and. val /= self%ctfres_thres  ) call self%set_threshold('ctfresthreshold',  val)
             val    = update%get_astigmatism_update()
-            if( abs(val) > 0.001 .and. val /= self%params%astigthreshold   ) call self%set_threshold('astigthreshold',   val)
+            if( abs(val) > 0.001 .and. val /= self%astig_thres   ) call self%set_threshold('astigthreshold',   val)
             val    = update%get_icescore_update()
-            if( abs(val) > 0.001 .and. val /= self%params%icefracthreshold ) call self%set_threshold('icefracthreshold', val)
+            if( abs(val) > 0.001 .and. val /= self%icefrac_thres ) call self%set_threshold('icefracthreshold', val)
         enddo
     end subroutine apply_gui_updates
 
-    ! The single place a rejection threshold changes after new(): parameters and worker command line together.
+    ! The single place a rejection threshold changes after new(): the stage's threshold and the
+    ! worker command line together.
     subroutine set_threshold( self, key, val )
         class(stream_stage_preprocess), intent(inout) :: self
         character(len=*),               intent(in)    :: key
         real,                           intent(in)    :: val
         select case( key )
             case( 'ctfresthreshold' )
-                self%params%ctfresthreshold  = val
+                self%ctfres_thres  = val
                 write(logfhandle,'(A,F8.2)') '>>> CTF RESOLUTION THRESHOLD UPDATED TO: ', val
             case( 'astigthreshold' )
-                self%params%astigthreshold   = val
+                self%astig_thres   = val
                 write(logfhandle,'(A,F8.2)') '>>> ASTIGMATISM THRESHOLD UPDATED TO: ', val
             case( 'icefracthreshold' )
-                self%params%icefracthreshold = val
+                self%icefrac_thres = val
                 write(logfhandle,'(A,F8.2)') '>>> ICE SCORE THRESHOLD UPDATED TO: ', val
             case DEFAULT
                 THROW_HARD('not a micrograph rejection threshold: '//key)
         end select
         call self%cline_exec%set(key, val)
+        call self%save_thresholds()
     end subroutine set_threshold
+
+    !> The thresholds, kept for a restart (written as a temporary file and renamed).
+    subroutine save_thresholds( self )
+        class(stream_stage_preprocess), intent(inout) :: self
+        integer :: funit, ios
+        open(newunit=funit, file=GUI_THRESHOLDS//'.tmp', status='replace', action='write', iostat=ios)
+        if( ios /= 0 ) return
+        write(funit,*) self%ctfres_thres, self%astig_thres, self%icefrac_thres
+        close(funit)
+        call simple_rename(GUI_THRESHOLDS//'.tmp', GUI_THRESHOLDS)
+    end subroutine save_thresholds
+
+    !> Restart: the thresholds the GUI set before hold from the first pass, before any answer of
+    !! the GUI reaches the restarted stage.
+    subroutine restore_thresholds( self )
+        class(stream_stage_preprocess), intent(inout) :: self
+        real    :: ctfres, astig, icefrac
+        integer :: funit, ios
+        if( .not. file_exists(GUI_THRESHOLDS) ) return
+        open(newunit=funit, file=GUI_THRESHOLDS, status='old', action='read', iostat=ios)
+        if( ios /= 0 ) return
+        read(funit,*,iostat=ios) ctfres, astig, icefrac
+        close(funit)
+        if( ios /= 0 ) return
+        if( ctfres  /= self%ctfres_thres  ) call self%set_threshold('ctfresthreshold',  ctfres)
+        if( astig   /= self%astig_thres   ) call self%set_threshold('astigthreshold',   astig)
+        if( icefrac /= self%icefrac_thres ) call self%set_threshold('icefracthreshold', icefrac)
+    end subroutine restore_thresholds
 
     !---------------- helpers ----------------
 
@@ -837,9 +959,9 @@ contains
         if( present(copy_optics) ) l_copy_optics = copy_optics
         if( l_copy_optics )then
             call self%starproj_stream%copy_micrographs_optics(self%spproj_glob, verbose=.false.)
-            call self%starproj_stream%stream_export_micrographs(self%params, self%spproj_glob, self%params%outdir, optics_set=.true.)
+            call self%starproj_stream%stream_export_micrographs(self%params, self%spproj_glob, self%params%cwd, optics_set=.true.)
         else
-            call self%starproj_stream%stream_export_micrographs(self%params, self%spproj_glob, self%params%outdir)
+            call self%starproj_stream%stream_export_micrographs(self%params, self%spproj_glob, self%params%cwd)
         endif
         if( l_write_field )then
             call self%spproj_glob%write_segment_inside('mic', self%params%projfile)
@@ -870,12 +992,12 @@ contains
     end subroutine new_movie_watcher
 
     ! The current rejection thresholds applied to a micrograph segment.
-    subroutine apply_thresholds( params, os_mic, nrejected )
-        class(parameters), intent(in)    :: params
-        class(oris),       intent(inout) :: os_mic
-        integer,           intent(out)   :: nrejected
-        call reject_mics_by_thresholds(os_mic, nrejected, ctfres=params%ctfresthreshold,&
-            &icefrac=params%icefracthreshold, astig=params%astigthreshold)
+    subroutine apply_thresholds( self, os_mic, nrejected )
+        class(stream_stage_preprocess), intent(in)    :: self
+        class(oris),                    intent(inout) :: os_mic
+        integer,                        intent(out)   :: nrejected
+        call reject_mics_by_thresholds(os_mic, nrejected, ctfres=self%ctfres_thres,&
+            &icefrac=self%icefrac_thres, astig=self%astig_thres)
     end subroutine apply_thresholds
 
 end module simple_stream_stage_preprocess

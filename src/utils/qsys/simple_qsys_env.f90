@@ -19,7 +19,7 @@ use simple_qsys_sge,                 only: qsys_sge
 implicit none
 
 public :: qsys_env
-public :: register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs
+public :: register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs, forget_warmup_envs
 private
 #include "simple_local_flags.inc"
 
@@ -49,6 +49,7 @@ type :: qsys_env
     procedure :: start_persistent_workers
     procedure :: service_persistent_worker_warmup
     procedure :: get_persistent_worker_server_address
+    procedure :: get_persistent_worker_nthr
     procedure :: get_n_active_persistent_workers
     procedure :: get_exec_bin
     procedure :: get_qsys
@@ -266,18 +267,25 @@ contains
                 if( associated(persistent_worker%server) ) then
                     if( .not. persistent_worker%server%is_running()      ) THROW_HARD('cannot reuse existing worker server that is not running;')
                     if( persistent_worker%launch_backend /= qsnam        ) THROW_HARD('cannot reuse existing worker server with different backend; kill the server or use a persistent qsys name')
-                    if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('cannot reuse existing worker server with lower nthr_per_worker than requested;')
+                    call check_worker_claim
                 !    if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
                     call persistent_worker%server%set_warmup_cooldown_enabled(sstream)
                     call register_warmup_env(self)
                 else
                     persistent_worker%launch_backend  = qsnam
-                    persistent_worker%nthr_per_worker = nthr_workers
                     persistent_worker%n_workers       = n_workers
+                    ! the workers' threads: those this process starts its workers with, or, for a client
+                    ! of another process's server, that server's when given
+                    if( params%worker_server%strlen() > 0 )then
+                        persistent_worker%nthr_per_worker = params%worker_server_nthr
+                        call check_worker_claim
+                    else
+                        persistent_worker%nthr_per_worker = nthr_workers
+                    endif
                     allocate(persistent_worker%server)
                     call register_warmup_env(self, owner=.true.)
                     if( params%worker_server%strlen() > 0 ) then
-                        call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, &
+                        call persistent_worker%server%new(persistent_worker%n_workers, nthr_workers, &
                             client_only=params%worker_server, enable_warmup_cooldown=sstream)
                     else
                         call persistent_worker%server%new(persistent_worker%n_workers, persistent_worker%nthr_per_worker, &
@@ -296,6 +304,14 @@ contains
         call spproj%kill
         self%existence = .true.
       contains
+
+        ! A task is served only by a worker with as many free threads as it claims (qscripts'
+        ! nthr_worker, per queue), so a queue claiming more than a worker has would never run. A
+        ! client of a server of unknown size (worker_server_nthr not given) is not checked.
+        subroutine check_worker_claim
+            if( persistent_worker%nthr_per_worker <= 0 ) return
+            if( nthr_workers > persistent_worker%nthr_per_worker ) THROW_HARD('worker threads requested exceed the worker server threads per worker;')
+        end subroutine check_worker_claim
 
         ! Standard path: a single backend handles both script generation and dispatch.
         subroutine standard_exec_path
@@ -519,14 +535,15 @@ contains
 
     !> Generate and submit multiple scripts as a single batch without blocking.
     !! When base=.true. all scripts are routed through base_qscripts.
-    subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile, exec_bins, base )
+    subroutine exec_simple_prgs_in_queue_async( self, clines, script_name, outfile, exec_bins, base, exit_code_fname )
         use simple_cmdline, only: cmdline
         class(qsys_env),            intent(inout) :: self
-        type(cmdline), allocatable, intent(in)    :: clines(:)      !< one command line per job
-        class(string),              intent(in)    :: script_name    !< shared script path prefix
-        class(string),              intent(in)    :: outfile        !< shared stdout/stderr log path
-        class(string),    optional, intent(in)    :: exec_bins(:)   !< per-job executable overrides
-        logical,          optional, intent(in)    :: base           !< .true. to route via base controller
+        type(cmdline), allocatable, intent(in)    :: clines(:)       !< one command line per job
+        class(string),              intent(in)    :: script_name     !< shared script path prefix
+        class(string),              intent(in)    :: outfile         !< shared stdout/stderr log path
+        class(string),    optional, intent(in)    :: exec_bins(:)    !< per-job executable overrides
+        logical,          optional, intent(in)    :: base            !< .true. to route via base controller
+        class(string),    optional, intent(in)    :: exit_code_fname !< write the status of the failed or last job here
         type(chash), allocatable :: jobs_descr(:)
         integer :: i, njobs
         logical :: l_base
@@ -538,9 +555,11 @@ contains
             call clines(i)%gen_job_descr(jobs_descr(i))
         end do
         if( l_base ) then
-            call self%base_qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, exec_bins=exec_bins)
+            call self%base_qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile,&
+                &exec_bins=exec_bins, exit_code_fname=exit_code_fname)
         else
-            call self%qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, exec_bins=exec_bins)
+            call self%qscripts%generate_script(jobs_descr, self%qdescr, self%simple_exec_bin, script_name, outfile,&
+                &exec_bins=exec_bins, exit_code_fname=exit_code_fname)
         end if
         call wait_for_closure(script_name)
         if( l_base ) then
@@ -628,6 +647,16 @@ contains
         if( len_trim(first_host) > 0 ) server_address = string(trim(first_host)//':'//int2str(port))
         call host_ips%kill()
     end function get_persistent_worker_server_address
+
+    !> The threads per worker of the persistent worker server, this process's own or the one it is
+    !! a client of (worker_server_nthr); 0 without a running server or when not given.
+    integer function get_persistent_worker_nthr( self )
+        class(qsys_env), intent(in) :: self
+        get_persistent_worker_nthr = 0
+        if( .not. associated(persistent_worker%server) )  return
+        if( .not. persistent_worker%server%is_running() ) return
+        get_persistent_worker_nthr = max(0, persistent_worker%nthr_per_worker)
+    end function get_persistent_worker_nthr
 
     !> Return the number of currently connected/registered persistent workers.
     !! Returns 0 when no persistent worker server is allocated or not running.
@@ -747,6 +776,13 @@ contains
         class(qsys_env), target, intent(in) :: env
         is_warmup_owner = associated(active_persistent_worker_env, env)
     end function is_warmup_owner
+
+    !> In a forked child: forgets the parent's warm-up registrants, which serviced a server the
+    !! child does not own (simple_persistent_worker_server: forget_inherited_persistent_worker).
+    subroutine forget_warmup_envs()
+        if( allocated(warmup_envs) ) deallocate(warmup_envs)
+        nullify(active_persistent_worker_env)
+    end subroutine forget_warmup_envs
 
     !> Number of live warm-up registrants.
     integer function n_warmup_envs()

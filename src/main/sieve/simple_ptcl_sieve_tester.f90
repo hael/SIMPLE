@@ -4,12 +4,14 @@ use simple_test_utils
 use simple_core_module_api
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
-use simple_ptcl_sieve, only: ptcl_sieve, FINAL_INGESTION_MARKER, sieve_lpstart
+use simple_ptcl_sieve, only: ptcl_sieve, ptcl_sieve_settings, FINAL_INGESTION_MARKER, sieve_lpstart, sieve_settings,&
+                            &CHUNK_INPUT_PROJFILE, CHUNK_ATTEMPT1
 use simple_sp_project, only: sp_project
 use simple_image,      only: image
 use simple_rec_list,   only: rec_list
 use simple_string,     only: string
-use simple_defs_fname, only: METADATA_EXT, SOLVE2D_FINISHED
+use simple_defs_fname, only: METADATA_EXT, SOLVE2D_FINISHED, FRCS_FILE
+use simple_projfile_utils, only: merge_chunk_projfiles_without_sigma2
 use simple_optics_maps, only: publish_optics_map
 implicit none
 private
@@ -35,10 +37,84 @@ contains
         call test_single_pass_ignores_incomplete_fine()
         call test_new_accepts_tuning_overrides()
         call test_lpstart_given_or_derived()
+        call test_settings_from_params()
         call test_cycle_empty_project_list()
         call test_collect_and_reject_hard_gates()
         call test_hand_off_applies_optics_map()
+        call test_failed_chunk_retried_once()
+        call test_failed_chunk_dropped_after_retry()
+        call test_merge_staged_chunk_only()
     end subroutine run_all_ptcl_sieve_tests
+
+    !> a final flush of only the staged chunk (no class averages, so no FRCs and no class map)
+    !! merges its particles, without classes, and writes no FRC file
+    subroutine test_merge_staged_chunk_only()
+        type(sp_project) :: merged
+        type(string)     :: ws_dir, cwd_saved, fnames(1)
+        write(*,'(A)') 'test_merge_staged_chunk_only'
+        call setup_workspace(string('merge_staged_only'), ws_dir, cwd_saved)
+        call make_chunk_project('coarse', 1, 5, 5, 1)
+        fnames(1) = string('chunks_coarse/chunk_coarse_1/chunk_coarse_1'//METADATA_EXT)
+        call simple_mkdir(string('merged'))
+        call merge_chunk_projfiles_without_sigma2(fnames, string('merged'), merged)
+        call assert_int(5, merged%os_ptcl2D%get_noris(), 'the staged chunk''s particles are merged')
+        call assert_int(0, merged%os_ptcl2D%get_class(1), 'without a class, since the chunk has none of its own')
+        call assert_int(0, merged%os_cls2D%get_noris(),   'and no class rows')
+        call assert_false(file_exists(string('merged/'//trim(FRCS_FILE))), 'no FRC file is written')
+        call merged%kill
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_merge_staged_chunk_only
+
+    !> a chunk whose 2D run left no class averages fails: the first time it is retried, its
+    !! folder kept as <folder>_attempt1 and the chunk started again from its input project
+    subroutine test_failed_chunk_retried_once()
+        class(ptcl_sieve), allocatable :: sieve
+        type(parameters) :: params
+        type(string)     :: ws_dir, cwd_saved, chunk_dir
+        allocate(sieve)
+        write(*,'(A)') 'test_failed_chunk_retried_once'
+        call setup_workspace(string('failed_chunk_retry'), ws_dir, cwd_saved)
+        call make_chunk_project('coarse', 1, 6, 6, 1)
+        chunk_dir = string('chunks_coarse/chunk_coarse_1')
+        call simple_copy_file(chunk_dir//'/chunk_coarse_1'//METADATA_EXT, chunk_dir//'/'//CHUNK_INPUT_PROJFILE)
+        call simple_touch(chunk_dir//'/'//SOLVE2D_FINISHED) ! a finished 2D run without class averages
+        call init_test_params(params)
+        call sieve%new(params, sieve_settings(params), string('completed'))
+        call sieve%collect_and_reject()
+        call assert_true(dir_exists(chunk_dir//CHUNK_ATTEMPT1), 'the failed attempt''s folder is kept')
+        call assert_true(file_exists(chunk_dir//'/chunk_coarse_1'//METADATA_EXT), 'the chunk starts again from its input project')
+        call assert_false(file_exists(chunk_dir//'/'//SOLVE2D_FINISHED), 'in a fresh folder')
+        call assert_int(0, sieve%get_n_failed_chunks(), 'a first failure drops nothing')
+        call assert_false(sieve%get_finished(), 'and the chunk is not done')
+        call sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_failed_chunk_retried_once
+
+    !> a chunk that has used its retry and fails again is marked failed and complete, and its
+    !! particles are counted as dropped
+    subroutine test_failed_chunk_dropped_after_retry()
+        class(ptcl_sieve), allocatable :: sieve
+        type(parameters) :: params
+        type(string)     :: ws_dir, cwd_saved, chunk_dir
+        allocate(sieve)
+        write(*,'(A)') 'test_failed_chunk_dropped_after_retry'
+        call setup_workspace(string('failed_chunk_drop'), ws_dir, cwd_saved)
+        call make_chunk_project('coarse', 1, 6, 6, 1)
+        chunk_dir = string('chunks_coarse/chunk_coarse_1')
+        call simple_mkdir(chunk_dir//CHUNK_ATTEMPT1) ! the retry has been used
+        call simple_touch(chunk_dir//'/'//SOLVE2D_FINISHED)
+        call init_test_params(params)
+        call sieve%new(params, sieve_settings(params), string('completed'))
+        call sieve%collect_and_reject()
+        call assert_int(1, sieve%get_n_failed_chunks(), 'the chunk is dropped')
+        call assert_int(6, sieve%get_n_failed_ptcls(),  'with its particles')
+        call assert_true(file_exists(chunk_dir//'/REJECTION_FAILED'), 'it is marked failed')
+        call assert_true(file_exists(chunk_dir//'/COMPLETE'),         'and complete')
+        call assert_true(sieve%get_finished(), 'a dropped chunk counts as done')
+        call assert_int(0, sieve%get_n_pass_1_non_rejected_ptcls(), 'and none of its particles waits for the fine tier')
+        call sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_failed_chunk_dropped_after_retry
 
     subroutine test_new_kill_and_empty_queries()
         class(ptcl_sieve), allocatable          :: sieve
@@ -54,7 +130,7 @@ contains
 
         call setup_workspace(string('new_kill'), ws_dir, cwd_saved)
         call init_test_params(params)
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
 
         call assert_int(0, sieve%get_n_chunks_coarse(), 'new() initializes zero coarse chunks')
         call assert_int(0, sieve%get_n_chunks_fine(),   'new() initializes zero fine chunks')
@@ -103,7 +179,7 @@ contains
         call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
 
         call init_test_params(params)
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
 
         call assert_int(3, sieve%get_n_chunks_coarse(), 'imported three coarse chunks')
         call assert_int(1, sieve%get_n_chunks_fine(),   'imported one fine chunk')
@@ -134,7 +210,7 @@ contains
         call simple_touch(string('chunks_coarse/chunk_coarse_1/' // FINAL_INGESTION_MARKER))
 
         call init_test_params(params)
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
 
         call assert_int(1, sieve%get_n_chunks_coarse(),             'the staged chunk is imported')
         call assert_int(7, sieve%get_n_pass_1_non_rejected_ptcls(), 'its particles wait for the fine tier, as when staged')
@@ -167,7 +243,7 @@ contains
         call init_test_params(params)
 
         ! two-tier mode: no fine chunks => coarse completion is terminal.
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
         call assert_true(sieve%get_finished(), 'two-tier run with no fine chunks finishes at coarse completion')
         call sieve%kill()
 
@@ -176,13 +252,13 @@ contains
         call simple_touch(string('chunks_fine/chunk_fine_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
 
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
         call assert_false(sieve%get_finished(), 'two-tier run not finished while any fine chunk is incomplete')
         call sieve%kill()
 
         ! Mark fine complete; now finished.
         call simple_touch(string('chunks_fine/chunk_fine_1/COMPLETE'))
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
         call assert_true(sieve%get_finished(), 'two-tier run finishes once all fine chunks are complete/failed')
         call sieve%kill()
 
@@ -212,13 +288,13 @@ contains
 
         ! Baseline (two-tier): incomplete fine chunk prevents finished state.
         call init_test_params(params)
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
         call assert_false(sieve%get_finished(), 'two-tier run is not finished when fine chunk is incomplete')
         call sieve%kill()
 
         ! single_pass=yes: coarse-only terminal semantics apply.
         call init_test_params(params, single_pass='yes')
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
         call assert_true(sieve%get_finished(), 'single_pass run ignores incomplete fine tier for finished state')
         call sieve%kill()
 
@@ -237,7 +313,7 @@ contains
         call init_test_params(params, lpstart=12.0, lpstop_coarse=18.0, lpstop_fine=9.0, &
                               box_coarse=96, box_fine=80, nsample_coarse=500, nsample_fine=250, &
                               ncls_coarse=64, ncls_fine=48)
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
 
         call assert_int(0, sieve%get_n_chunks_coarse(), 'override init keeps empty coarse chunk list')
         call assert_int(0, sieve%get_n_chunks_fine(),   'override init keeps empty fine chunk list')
@@ -264,6 +340,34 @@ contains
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_lpstart_given_or_derived
 
+    !> the settings a parameters object gives the sieve: the mask, resources, mode and every tier
+    !! override, the population thresholds among them
+    subroutine test_settings_from_params()
+        type(parameters)          :: params
+        type(ptcl_sieve_settings) :: settings
+        type(string)              :: ws_dir, cwd_saved
+        write(*,'(A)') 'test_settings_from_params'
+        call setup_workspace(string('settings_rule'), ws_dir, cwd_saved)
+        call init_test_params(params, single_pass='yes', lpstop_coarse=14.0, box_fine=96, nsample_coarse=1500,&
+            &ncls_fine=40)
+        params%nptcls_coarse = 3000
+        params%nptcls_fine   = 7000
+        settings = sieve_settings(params)
+        call assert_real(120., settings%mskdiam, 1.e-6, 'the mask diameter')
+        call assert_real(0.,   settings%lpstart, 1.e-6, 'no starting low-pass when none was given')
+        call assert_int(1,     settings%nchunks,        'the chunk count')
+        call assert_true(settings%single_pass,          'the mode')
+        call assert_true(settings%use_model,            'model rejection by default')
+        call assert_int(3000,  settings%pop_coarse,     'the coarse population threshold')
+        call assert_int(7000,  settings%pop_fine,       'the fine population threshold')
+        call assert_real(14.,  settings%lpstop_coarse, 1.e-6, 'a coarse low-pass stop')
+        call assert_int(96,    settings%box_fine,       'a fine box')
+        call assert_int(1500,  settings%nsample_coarse, 'a coarse sample')
+        call assert_int(40,    settings%ncls_fine,      'a fine class count')
+        call assert_int(0,     settings%partition%strlen(), 'no partition from parameters')
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_settings_from_params
+
     subroutine test_cycle_empty_project_list()
         class(ptcl_sieve), allocatable :: sieve
         type(parameters) :: params
@@ -275,7 +379,7 @@ contains
 
         call setup_workspace(string('cycle_empty'), ws_dir, cwd_saved)
         call init_test_params(params)
-        call sieve%new(params, string('completed'))
+        call sieve%new(params, sieve_settings(params), string('completed'))
 
         call sieve%cycle(project_list)
         call assert_int(0, sieve%get_n_chunks_coarse(), 'cycle on empty list creates no coarse chunks')
@@ -307,7 +411,7 @@ contains
         call make_completed_coarse_chunk(string('collect_reject'), ws_dir, cwd_saved, chunk_dir, completed_path,&
             &chunk_projfile, cline_sieve)
         call params_sieve%new(cline_sieve)
-        call sieve%new(params_sieve, completed_path)
+        call sieve%new(params_sieve, sieve_settings(params_sieve), completed_path)
         call sieve%collect_and_reject()
 
         ! the collector's counters
@@ -406,7 +510,7 @@ contains
         call publish_optics_map(map_proj, optics_dir, 1, 5)
         call map_proj%kill()
         call params_sieve%new(cline_sieve)
-        call sieve%new(params_sieve, completed_path, optics_dir=optics_dir)
+        call sieve%new(params_sieve, sieve_settings(params_sieve), completed_path, optics_dir=optics_dir)
         call sieve%collect_and_reject()
 
         exported_projfile = filepath(completed_path, CHUNK_STEM//METADATA_EXT)

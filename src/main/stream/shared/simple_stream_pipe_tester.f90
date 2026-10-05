@@ -1,7 +1,7 @@
 !@descr: unit tests for stream_pipe: frames round-tripped through a real non-blocking pipe in one process
 module simple_stream_pipe_tester
 use, intrinsic :: iso_c_binding, only: c_char, c_int, c_size_t, c_loc, c_sizeof
-use unix,                        only: c_pipe, c_close, c_write, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
+use unix,                        only: c_pipe, c_close, c_read, c_write, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
 use simple_stream_pipe,          only: stream_pipe
 implicit none
@@ -20,7 +20,46 @@ contains
         call test_empty_and_closed_ends()
         call test_bad_length_resyncs()
         call test_discard()
+        call test_partial_frame_abandoned()
     end subroutine run_all_stream_pipe_tests
+
+    !> with a limit, a frame still part-written when the limit runs out is abandoned: the channel
+    !! is broken until discard mends it (the master's update writer, whose reader may have stopped)
+    subroutine test_partial_frame_abandoned()
+        integer, parameter :: BLOCK = 4096, NBIG = 3 * BLOCK
+        type(stream_pipe)                           :: pipe
+        character(kind=c_char), allocatable, target :: raw(:)
+        character(len=NBIG)                         :: big
+        integer(c_int)    :: fds(2), rc, flags
+        integer(c_size_t) :: nio
+        integer           :: nfilled
+        write(*,'(A)') 'test_partial_frame_abandoned'
+        call open_loopback(fds, pipe)
+        flags = c_fcntl(fds(2), F_GETFL, 0_c_int)
+        rc    = c_fcntl(fds(2), F_SETFL, ior(flags, O_NONBLOCK))
+        call assert_int(0, int(rc), 'the write end is made non-blocking')
+        ! fill the pipe, then read one block back: a larger frame then fits only in part
+        allocate(raw(BLOCK))
+        raw     = 'x'
+        nfilled = 0
+        do
+            nio = c_write(fds(2), c_loc(raw(1)), int(BLOCK, c_size_t))
+            if( nio <= 0 ) exit
+            nfilled = nfilled + int(nio)
+        enddo
+        call assert_true(nfilled >= BLOCK, 'the pipe is filled')
+        nio = c_read(fds(1), c_loc(raw(1)), int(BLOCK, c_size_t))
+        call assert_int(BLOCK, int(nio), 'one block is read back')
+        call pipe%limit_partial_frames(20)
+        big = repeat('y', NBIG)
+        call pipe%send(big)
+        call assert_true(pipe%is_broken(), 'a frame left part-written is abandoned and breaks the channel')
+        call pipe%send('dropped')
+        call pipe%discard()
+        call assert_false(pipe%is_broken(), 'discard mends the channel')
+        deallocate(raw)
+        call close_loopback(fds, pipe)
+    end subroutine test_partial_frame_abandoned
 
     subroutine test_single_frame_round_trip()
         type(stream_pipe)             :: pipe
