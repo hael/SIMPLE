@@ -189,7 +189,7 @@ contains
         type(string) :: eputiltgroup, str_meta
         type(string) :: cwd, gain_thumb_abspath
         integer      :: nmovies, fromto(2), imovie, ntot, frame_counter
-        logical      :: l_del_forctf
+        logical      :: l_del_forctf, l_gen_thumb
         ! gain reference thumbnail
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
@@ -258,6 +258,7 @@ contains
         do imovie = fromto(1),fromto(2)
             ! Reset deletion flag per exposure (fixes latent carry-over bug)
             l_del_forctf = .false.
+            l_gen_thumb  = .false.
             ! Fetch movie orientation
             call spproj%os_mic%get_ori(imovie, o_mov)
             ! Sanity check
@@ -280,16 +281,18 @@ contains
                     moviename_forctf = mciter%get_moviename('forctf')
                     l_del_forctf     = .true.
                 case('mic')
-                    ! Integrated micrograph: use directly for CTF
+                    ! Integrated micrograph: use directly for CTF, which also writes its thumbnail
+                    ! (motion correction writes a movie's)
                     ctfvars = spproj%get_micparams(imovie)
                     call o_mov%getter('intg', moviename_forctf)
+                    l_gen_thumb = .true.
                 case default
                     cycle
             end select
             ! CTF estimate
             params%hp = params%hp_ctf_estimate
             params%lp = max(params%fny, params%lp_ctf_estimate)
-            call ctfiter%iterate(params, ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
+            call ctfiter%iterate(params, ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, l_gen_thumb)
             ! Delete temporary file after estimation
             if( l_del_forctf )then
                 call o_mov%delete_entry('forctf')
