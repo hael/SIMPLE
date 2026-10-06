@@ -143,7 +143,8 @@ contains
         call shared%store%new()
         call make_stage_clines()
         do id = 1,NSTAGES
-            l_updates = id == STAGE_PREPROCESS .or. id == STAGE_INITIAL_ANALYSIS .or. id == STAGE_POOL2D
+            l_updates = id == STAGE_PREPROCESS .or. id == STAGE_INITIAL_ANALYSIS .or. id == STAGE_POOL2D .or.&
+                &id == STAGE_SOLVE3D
             call shared%stages(id)%new(id, stage_commander(id), clines(id), l_updates, max_frame_bytes)
         enddo
         ! fork the stages; preprocessing and the initial analysis are skipped when given their outputs.

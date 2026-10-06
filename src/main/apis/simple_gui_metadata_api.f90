@@ -20,6 +20,6 @@ module simple_gui_metadata_api
   use simple_gui_metadata_stream_initial_analysis,      only: gui_metadata_stream_initial_analysis
   use simple_gui_metadata_stream_particle_sieving,      only: gui_metadata_stream_particle_sieving
   use simple_gui_metadata_stream_pool2D,                only: gui_metadata_stream_pool2D
-  use simple_gui_metadata_stream_pool2D_snapshot,       only: gui_metadata_stream_pool2D_snapshot
+  use simple_gui_metadata_stream_snapshot,              only: gui_metadata_stream_snapshot
   use simple_gui_metadata_stream_solve3D_multistate,    only: gui_metadata_stream_solve3D_multistate
 end module simple_gui_metadata_api

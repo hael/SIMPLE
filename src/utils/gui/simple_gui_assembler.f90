@@ -21,7 +21,7 @@ module simple_gui_assembler
   use simple_gui_metadata_stream_initial_analysis,   only: gui_metadata_stream_initial_analysis
   use simple_gui_metadata_stream_particle_sieving,   only: gui_metadata_stream_particle_sieving
   use simple_gui_metadata_stream_pool2D,             only: gui_metadata_stream_pool2D
-  use simple_gui_metadata_stream_pool2D_snapshot,    only: gui_metadata_stream_pool2D_snapshot
+  use simple_gui_metadata_stream_snapshot,           only: gui_metadata_stream_snapshot
   use simple_gui_metadata_stream_solve3D_multistate, only: gui_metadata_stream_solve3D_multistate
   implicit none
 
@@ -347,7 +347,7 @@ contains
     class(gui_assembler),                                intent(inout) :: self
     type(gui_metadata_stream_pool2D),                    intent(in)    :: meta_pool2D
     type(gui_metadata_cavg2D),   allocatable,            intent(in)    :: meta_latest_cavgs2D(:)
-    type(gui_metadata_stream_pool2D_snapshot),           intent(in)    :: meta_pool2D_snapshot
+    type(gui_metadata_stream_snapshot),           intent(in)    :: meta_pool2D_snapshot
     type(gui_metadata_cavg2D),   allocatable, optional,  intent(in)    :: meta_snapshot_cavgs2D(:)
     type(json_value),            pointer                               :: json_ptr, json_snapshot_ptr
     if( .not. self%open_section(json_ptr, 'pool2D', meta_pool2D) ) return
@@ -365,7 +365,8 @@ contains
     call self%commit_section(json_ptr, SECTION_POOL2D)
   end subroutine assemble_stream_pool2D
 
-  ! Write the multistate solve3D section.
+  ! Write the multistate solve3D section, with the latest 3D snapshot report, when assigned,
+  ! nested as 'snapshot' (as pool2D nests its own).
   ! meta_states_vol3D, when present, holds the vol3D metadata for the current
   ! per-state reconstructed volumes and is embedded as a 'state_volumes' array,
   ! distinct from the lightweight per-state 'states' array already emitted by
@@ -374,15 +375,24 @@ contains
   ! tiles (gui_metadata_cavg2D, idx=state) and is nested per-state as a
   ! 'reprojtiles' array inside the matching state_volumes entry; a state without
   ! tiles has none.
-  subroutine assemble_stream_solve3D_multistate( self, meta_solve3D_multistate, meta_states_vol3D, meta_reprojtiles )
+  subroutine assemble_stream_solve3D_multistate( self, meta_solve3D_multistate, meta_snapshot, meta_states_vol3D, meta_reprojtiles )
     class(gui_assembler),                                 intent(inout) :: self
     type(gui_metadata_stream_solve3D_multistate),         intent(in)    :: meta_solve3D_multistate
+    type(gui_metadata_stream_snapshot),                   intent(in)    :: meta_snapshot
     type(gui_metadata_vol3D),  allocatable, optional,     intent(in)    :: meta_states_vol3D(:)
     type(gui_metadata_cavg2D), allocatable, optional,     intent(in)    :: meta_reprojtiles(:)
     type(json_value),          pointer                                  :: json_ptr, json_states_ptr, json_state_vol_ptr
+    type(json_value),          pointer                                  :: json_snapshot_ptr
     logical                                                             :: l_add
     integer                                                             :: i_state
     if( .not. self%open_section(json_ptr, 'solve3D_multistate', meta_solve3D_multistate) ) return
+    if( meta_snapshot%assigned() ) then
+      json_snapshot_ptr => meta_snapshot%jsonise()
+      if( associated(json_snapshot_ptr) ) then
+        call self%json%rename(json_snapshot_ptr, 'snapshot')
+        call self%json%add(json_ptr, json_snapshot_ptr)
+      end if
+    end if
     if( present(meta_states_vol3D) ) then
       if( allocated(meta_states_vol3D) ) then
         l_add = .false.

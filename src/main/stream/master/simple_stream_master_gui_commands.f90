@@ -10,9 +10,10 @@
 !   mask diameter, a 2D snapshot). parse() reads one response into this
 !   record; the master applies it. The update holds this response's fields
 !   only, so a field is sent to the stages once, in the update that brought
-!   it. A selection larger than the update holds, and a snapshot whose name
-!   is not a bare *.simple file name, are dropped with a warning; nothing in a
-!   response stops the master.
+!   it. A selection larger than the update holds, a 3D snapshot of no state or
+!   of a state out of range, and a snapshot whose name is not a bare *.simple
+!   file name, are dropped with a warning; nothing in a response stops the
+!   master.
 !==============================================================================
 module simple_stream_master_gui_commands
 use json_kinds,                        only: CK
@@ -22,7 +23,8 @@ use simple_defs_fname,                 only: METADATA_EXT
 use simple_string,                     only: string
 use simple_gui_metadata_types,         only: GUI_METADATA_STREAM_UPDATE_TYPE
 use simple_gui_metadata_stream_update, only: gui_metadata_stream_update, MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION,&
-                                            &MAX_SNAPSHOT2D_FNAME_LEN
+                                            &MAX_SNAPSHOT_FNAME_LEN
+use simple_gui_metadata_stream_solve3D_multistate, only: MAX_STATES_SOLVE3D_MULTISTATE
 use simple_stream_master_stage_ids,    only: NSTAGES, stage_gui_key
 implicit none
 
@@ -109,6 +111,29 @@ contains
                 endif
             endif
         endif
+        ! a 3D snapshot: the particles of the selected states of multistate 3D, merged into one
+        call json%get(root, 'snapshot3D', snapshot, l_found)
+        if( l_found .and. associated(snapshot) )then
+            if( allocated(i_arr)   ) deallocate(i_arr)
+            if( allocated(str_val) ) deallocate(str_val)
+            call json%get(snapshot, 'id',        snapshot_id, l_id)
+            call json%get(snapshot, 'selection', i_arr,       l_sel)
+            call json%get(snapshot, 'filename',  str_val,     l_file)
+            if( l_id .and. l_sel .and. l_file .and. allocated(i_arr) .and. allocated(str_val) )then
+                if( size(i_arr) == 0 .or. size(i_arr) > MAX_STATES_SOLVE3D_MULTISTATE )then
+                    write(logfhandle,'(A,I0,A,I0,A)') '>>> WARNING: GUI 3D snapshot selection of ', size(i_arr),&
+                        &' states is empty or exceeds ', MAX_STATES_SOLVE3D_MULTISTATE, '; ignored'
+                else if( any(i_arr < 1) .or. any(i_arr > MAX_STATES_SOLVE3D_MULTISTATE) )then
+                    write(logfhandle,'(A,I0,A)') '>>> WARNING: GUI 3D snapshot selection names a state outside 1..',&
+                        &MAX_STATES_SOLVE3D_MULTISTATE, '; ignored'
+                else if( .not. snapshot_fname_ok(str_val) )then
+                    write(logfhandle,'(A,A,A)') '>>> WARNING: GUI 3D snapshot name ', str_val(1:min(len(str_val),64)),&
+                        &' is not a bare *.simple file name; ignored'
+                else
+                    call self%update%set_snapshot3D_update(snapshot_id, i_arr, string(str_val))
+                endif
+            endif
+        endif
         call json%destroy(root)
         l_ok = .true.
 
@@ -128,14 +153,14 @@ contains
                 &'; ignored'
         end subroutine warn_dropped
 
-        ! A bare file name ending in METADATA_EXT, of at most MAX_SNAPSHOT2D_FNAME_LEN characters
+        ! A bare file name ending in METADATA_EXT, of at most MAX_SNAPSHOT_FNAME_LEN characters
         logical function snapshot_fname_ok( fname )
             character(len=*), intent(in) :: fname
             integer :: n, next
             n    = len_trim(fname)
             next = len(METADATA_EXT)
             snapshot_fname_ok = .false.
-            if( n <= next .or. n > MAX_SNAPSHOT2D_FNAME_LEN ) return
+            if( n <= next .or. n > MAX_SNAPSHOT_FNAME_LEN ) return
             if( index(fname(1:n), '/') > 0 ) return
             snapshot_fname_ok = fname(n-next+1:n) == METADATA_EXT
         end function snapshot_fname_ok

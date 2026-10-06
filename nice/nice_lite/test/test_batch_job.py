@@ -1192,7 +1192,7 @@ class BatchJobLifecycleTests(TestCase):
                 "particle_sets": [{
                     "id": 3,
                     "name": "particle set 3",
-                    "type": "snapshot",
+                    "type": "snapshot2D",
                     "filename": "snapshot_3.simple",
                     "time": 123,
                 }],
@@ -1217,6 +1217,44 @@ class BatchJobLifecycleTests(TestCase):
             "particle_set_id": 3,
             "filename": "snapshot_3.simple",
         })
+
+    def test_3D_snapshot_sources_are_resolved_from_their_stage_folder(self):
+        snapshot_dir = os.path.join(
+            self.workspace_dir,
+            "2_simple_stream",
+            "solve3D_multistate",
+            "snapshots",
+            "snapshot_4",
+        )
+        os.makedirs(snapshot_dir)
+        snapshot_path = os.path.join(snapshot_dir, "snapshot_4.simple")
+        with open(snapshot_path, "w", encoding="utf-8"):
+            pass
+        stream_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=2,
+            dirc="2_simple_stream",
+            particle_sets_stats={
+                "particle_sets": [{
+                    "id": 4,
+                    "name": "particle set 4",
+                    "type": "snapshot3D",
+                    "filename": "snapshot_4.simple",
+                    "states": [1, 3],
+                    "time": 123,
+                }],
+            },
+        )
+
+        project_path, metadata, error = job_builder_views._resolve_batch_project_source(
+            self.workspace,
+            f"snapshot:{stream_job.id}:4",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(project_path, snapshot_path)
+        self.assertEqual(metadata["particle_set_id"], 4)
 
 
 class SimpleBatchDispatchTests(TestCase):

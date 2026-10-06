@@ -12,7 +12,8 @@
 !   selection stays theirs for the session. Every later publication's class
 !   averages are selected once with the pool model, and the selection and 2D
 !   parameters are merged into the stage's rows (the first set's rows take only
-!   the 2D parameters). The selected particles start solve3D; once it is
+!   the 2D parameters). Its class averages and FRCs, copied into the stage's
+!   folder, come with its classes. The selected particles start solve3D; once it is
 !   done, every growth of the rows starts an solve3D_addon run from the
 !   latest result. An addon run whose verdict has a REGRESSED state is rolled
 !   back: the previous result stays. Once the pool's final publication is in
@@ -36,7 +37,7 @@
 !   new(cline) -> { iterate() } until finished() -> finalize() -> kill()
 !
 !   A publication the stage cannot use (its stacks disagree with the rows, its
-!   class averages are missing) is passed over with a warning and listed in
+!   class averages or FRCs are missing) is passed over with a warning and listed in
 !   REJECTED_PUBLICATIONS, and the stage waits for the next one.
 !
 ! RESTART:
@@ -49,14 +50,14 @@
 module simple_stream_stage_solve3D
 use simple_defs,                                      only: logfhandle, COSMSKHALFWIDTH
 use simple_defs_fname,                                only: TERM_STREAM, METADATA_EXT, MRC_EXT, JPG_EXT, PPROC_SUFFIX,&
-                                                           &LP_SUFFIX, MIRR_SUFFIX
-use simple_defs_stream,                               only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME
+                                                           &LP_SUFFIX, MIRR_SUFFIX, DIR_SNAPSHOT
+use simple_defs_stream,                               only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME, OPTICS_ID_DELTA
 use simple_defs_environment,                          only: SIMPLE_STREAM_SOLVE3D_PARTITION
 use simple_error,                                     only: simple_exception
 use simple_string,                                    only: string
-use simple_string_utils,                              only: int2str, lex_sort
+use simple_string_utils,                              only: int2str, int2str_pad, lex_sort
 use simple_fileio,                                    only: add2fbody, basename, del_file, file2rarr, file_exists, get_fbody,&
-                                                           &get_fpath, simple_abspath, simple_getcwd
+                                                           &get_fpath, simple_abspath, simple_getcwd, swap_suffix, simple_copy_file
 use simple_syslib,                                    only: dir_exists, simple_mkdir, simple_list_dirs, simple_rmdir
 use simple_math,                                      only: round2even
 use simple_math_ft,                                   only: get_resarr
@@ -75,7 +76,7 @@ use simple_qsys_async_job,                            only: qsys_async_job, ASYN
 use simple_qsys_job_record,                           only: fresh_job_dir
 use simple_rec_list,                                  only: rec_list, rec_iterator, chunk_rec
 use simple_stream_watcher,                            only: stream_watcher
-use simple_stream_state,                              only: ipc_pipe_solve3D_multistate_in
+use simple_stream_state,                              only: ipc_pipe_solve3D_multistate_in, ipc_pipe_solve3D_multistate_out
 use simple_stream_utils,                              only: create_stream_project, init_stream_qenv
 use simple_cavg_quality_model,                        only: cavg_quality_model, CAVG_QUALITY_MODEL_POOL_DEFAULT,&
                                                            &CAVG_QUALITY_MODEL_CHUNK_DEFAULT
@@ -85,7 +86,10 @@ use simple_cavg_quality_selection,                    only: score_project_cavgs,
 use simple_gui_utils,                                 only: mrc2jpeg_tiled
 use simple_gui_metadata_utils,                        only: max_metadata_size
 use simple_gui_metadata_types,                        only: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE, GUI_METADATA_VOL3D_TYPE,&
-                                                           &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE
+                                                           &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE,&
+                                                           &GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE
+use simple_gui_metadata_stream_snapshot,              only: gui_metadata_stream_snapshot
+use simple_gui_metadata_stream_update,                only: gui_metadata_stream_update
 use simple_gui_metadata_cavg2D,                       only: gui_metadata_cavg2D
 use simple_gui_metadata_vol3D,                        only: gui_metadata_vol3D, MAX_FSC_VOL3D, ORIDIST_NBINS_X, ORIDIST_NBINS_Y
 use simple_gui_metadata_stream_solve3D_multistate, only: gui_metadata_stream_solve3D_multistate
@@ -151,9 +155,11 @@ type :: stream_stage_solve3D
     type(stream_pipe)                               :: pipe          ! to the master
     type(gui_metadata_stream_solve3D_multistate) :: meta_status
     type(gui_metadata_cavg2D)                       :: meta_reproj
+    type(gui_metadata_stream_snapshot)              :: meta_snapshot
     type(string),   allocatable :: stk_names(:)    ! the stacks in the pool
     real,           allocatable :: state_res(:)    ! FSC=0.143 resolution per state of the latest run (0: none)
     type(string)                :: frozen_projfile ! the latest run's project, which the next addon run builds on
+    type(string)                :: result_projfile ! the latest finished run's project (solve3D, addon or final): 3D snapshots' source
     logical,        allocatable :: frozen_active(:) ! the rows active in that project: the frozen particles
     ! the first set (follow-up plan, decisions 31-38): its rows, whose selection the solve2D
     ! selection decides for the session, and the pool model's selection of them, for a failed solve2D
@@ -168,6 +174,8 @@ type :: stream_stage_solve3D
     integer :: ncohort_refused    = -1 ! the next addon run needs a larger cohort (after a failed or rolled-back one)
     integer :: n_rollbacks        = 0  ! addon runs rolled back in a row
     integer :: nptcls_at_full     = -1 ! selected particles at the last run that aligned all (solve3D, the final run)
+    integer :: last_snapshot_id   = 0  ! the latest 3D snapshot request answered; each is written once
+    integer :: optics_id_offset   = 0  ! optics group ids of the snapshots' STAR files, per GUI display
     logical :: l_final_pending    = .false. ! the pool's final publication is in; the final run is due
     logical :: l_solve2D_due      = .false. ! the first set is in; its solve2D is to start
     real    :: mskdiam            = 0. ! pool 2D's mask diameter (A), from the latest publication taken
@@ -202,6 +210,7 @@ contains
     procedure :: merge_first_set
     procedure :: in_first_set
     procedure :: merge_publication
+    procedure :: take_cavgs
     procedure :: stack_index
     procedure :: advance_jobs
     procedure :: start_solve2D
@@ -220,6 +229,8 @@ contains
     procedure :: prune_run_dirs
     procedure :: write_stage_project
     ! GUI
+    procedure :: apply_gui_updates
+    procedure :: write_snapshot
     procedure :: send_status
     procedure :: send_volumes
     procedure :: read_state_fsc
@@ -243,7 +254,7 @@ contains
         call self%init_params(cline)
         self%l_exists = .true. ! from here kill() releases what has been built
         call self%init_queue()
-        call self%init_gui(ipc_pipe_solve3D_multistate_in(2))
+        call self%init_gui(ipc_pipe_solve3D_multistate_out(1), ipc_pipe_solve3D_multistate_in(2))
         call self%send_status()
     end subroutine new
 
@@ -280,6 +291,7 @@ contains
         endif
         allocate(self%stk_names(0))
         allocate(self%state_res(self%params%nstates), source=0.)
+        self%optics_id_offset = max(self%params%nicedispid - 1, 0) * OPTICS_ID_DELTA
     end subroutine init_params
 
     !> The queue environment the 3D jobs are submitted through; on the preprocessing partition,
@@ -289,23 +301,25 @@ contains
         call init_stream_qenv(self%params, self%qenv, string(SIMPLE_STREAM_SOLVE3D_PARTITION))
     end subroutine init_queue
 
-    !> The GUI metadata objects and the pipe end to the master (-1: none).
-    subroutine init_gui( self, fd_write )
+    !> The GUI metadata objects and the pipe ends from and to the master (-1: none).
+    subroutine init_gui( self, fd_read, fd_write )
         class(stream_stage_solve3D), intent(inout) :: self
-        integer,                        intent(in)    :: fd_write
+        integer,                        intent(in)    :: fd_read, fd_write
         call self%meta_status%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
         call self%meta_reproj%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE)
-        call self%pipe%new(-1, fd_write, max_metadata_size(), 'solve3D_multistate')
+        call self%meta_snapshot%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
+        call self%pipe%new(fd_read, fd_write, max_metadata_size(), 'solve3D_multistate')
     end subroutine init_gui
 
     !> One pass: wait for pool 2D's folder; take new exports (unless a job runs); advance the 3D
-    !! jobs; report.
+    !! jobs; answer the GUI; report.
     subroutine iterate( self )
         class(stream_stage_solve3D), intent(inout) :: self
         if( .not. self%l_attached )then
             call self%attach_upstream()
             if( .not. self%l_attached )then
                 call self%send_status()
+                call self%apply_gui_updates()
                 call sleep(self%wait_s)
                 return
             endif
@@ -315,6 +329,7 @@ contains
         if( self%phase /= PHASE_SOLVE3D .and. self%phase /= PHASE_ADDON .and. self%phase /= PHASE_SOLVE2D&
             &.and. .not. self%l_solve2D_due ) call self%import_sets()
         call self%advance_jobs()
+        call self%apply_gui_updates()
         call self%send_status()
         call sleep(self%wait_s)
     end subroutine iterate
@@ -355,7 +370,9 @@ contains
         call self%pipe%kill
         call self%meta_status%kill
         call self%meta_reproj%kill
+        call self%meta_snapshot%kill
         call self%frozen_projfile%kill
+        call self%result_projfile%kill
         call self%addon_verdict%kill
         call self%last_stem%kill
         if( allocated(self%frozen_active) ) deallocate(self%frozen_active)
@@ -371,6 +388,8 @@ contains
         self%ncohort_refused    = -1
         self%n_rollbacks        = 0
         self%nptcls_at_full     = -1
+        self%last_snapshot_id   = 0
+        self%optics_id_offset   = 0
         self%l_final_pending    = .false.
         self%l_solve2D_due      = .false.
         self%mskdiam            = 0.
@@ -442,7 +461,8 @@ contains
     end subroutine take_mskdiam
 
     ! The newest publication not yet taken: its class averages are selected and it is merged into
-    ! the rows; into a stage without rows it is the first set (take_first_set). Older publications
+    ! the rows; into a stage without rows it is the first set (take_first_set). Its class averages
+    ! and FRCs come with its classes (take_cavgs). Older publications
     ! not taken are passed over: the newest holds what they held. A publication the stage cannot
     ! use (publication_problem) is passed over with a warning and listed in REJECTED_PUBLICATIONS,
     ! so a restart passes it over too; the next one is waited for.
@@ -483,6 +503,7 @@ contains
                     call self%select_cavgs(set, stem)
                     call self%merge_publication(set, newest%id)
                 endif
+                call self%take_cavgs(set, stem)
                 ! the pool's final publication makes the final run due; a later one that is not
                 ! final (the sieve took finality back) withdraws it
                 self%l_final_pending = is_final_publication(set)
@@ -535,12 +556,13 @@ contains
 
     end subroutine import_sets
 
-    ! Why publication @p set cannot be used, '' when it can: what select_cavgs and merge_publication
-    ! require of it, checked before either changes anything (class averages, rows_problem).
+    ! Why publication @p set cannot be used, '' when it can: what select_cavgs, merge_publication and
+    ! take_cavgs require of it, checked before any changes anything (class averages, FRCs,
+    ! rows_problem).
     function publication_problem( self, set ) result( problem )
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: set
-        type(string) :: problem, stk
+        type(string) :: problem, stk, frcs
         real    :: smpd
         integer :: ncls, ldim(3), nimgs
         problem = ''
@@ -560,6 +582,11 @@ contains
         call find_ldim_nptcls(stk, ldim, nimgs)
         if( nimgs /= set%os_cls2D%get_noris() )then
             problem = '# class averages /= # cls2D entries'
+            return
+        endif
+        call set%get_frcs(frcs, 'frc2D', fail=.false.)
+        if( .not. file_exists(frcs) )then
+            problem = 'its FRCs are missing'
             return
         endif
         problem = self%rows_problem(set)
@@ -748,7 +775,7 @@ contains
     ! A row of the first set takes the 2D parameters only: its selection stays solve2D's. A new
     ! stack is appended with its micrograph and particles (2D and 3D). A stack the publication
     ! lacks keeps its rows, deselected (the first set's keep their selection). The classes are
-    ! the publication's.
+    ! the publication's; take_cavgs then registers its class averages and FRCs with them.
     subroutine merge_publication( self, set, id )
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),              intent(inout) :: set
@@ -903,6 +930,40 @@ contains
             endif
         enddo
     end function stack_index
+
+    ! The class averages and FRCs of publication @p set, the stage's classes since merge_publication,
+    ! copied into its quality folder (QUALITY_DIR/<stem>) and registered in the stage's out segment
+    ! in place of the earlier ones; the volumes and FSCs stay. A run's class-average balancing
+    ! (balance=cavg) reads the class averages and FRCs of its classes. The copies outlive pool 2D's
+    ! retention of its publications, and are pruned with the quality folder, which stays as long
+    ! as a run started from the publication (prune_quality_dirs).
+    subroutine take_cavgs( self, set, stem )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(sp_project),           intent(inout) :: set
+        class(string),               intent(in)    :: stem
+        type(string) :: stk, frcs, dir, stk_copy, frcs_copy
+        real         :: smpd, mskdiam
+        integer      :: ncls
+        call set%get_cavgs_stk(stk, ncls, smpd, fail=.false.)
+        if( ncls <= 0 .or. .not. file_exists(stk) ) THROW_HARD('no class averages in the export '//stem%to_char())
+        call set%get_frcs(frcs, 'frc2D', fail=.false.)
+        if( .not. file_exists(frcs) ) THROW_HARD('no FRCs in the export '//stem%to_char())
+        dir = string(QUALITY_DIR//'/')//stem
+        call simple_mkdir(QUALITY_DIR)
+        call simple_mkdir(dir)
+        stk_copy  = dir//'/'//basename(stk)
+        frcs_copy = dir//'/'//basename(frcs)
+        call simple_copy_file(stk,  stk_copy)
+        call simple_copy_file(frcs, frcs_copy)
+        mskdiam = 0.
+        call set%get_mskdiam('cavg', mskdiam)
+        if( mskdiam > 0. )then
+            call self%spproj%add_cavgs2os_out(stk_copy, smpd, 'cavg', mskdiam=mskdiam)
+        else
+            call self%spproj%add_cavgs2os_out(stk_copy, smpd, 'cavg')
+        endif
+        call self%spproj%add_frcs2os_out(frcs_copy, 'frc2D')
+    end subroutine take_cavgs
 
     ! A running job is checked: done, its result becomes the pool (the first set's solve2D: its
     ! selection); a failed solve2D falls back to the pool model's selection, a failed solve3D
@@ -1179,6 +1240,7 @@ contains
         call self%spproj%read_segment('cls2D',  projfile)
         call self%spproj%read_segment('cls3D',  projfile)
         call self%spproj%read_segment('out',    projfile)
+        self%result_projfile = projfile
         if( .not. l_final )then
             self%frozen_projfile = projfile
             ! the rows active in this result are the next addon run's frozen particles
@@ -1401,6 +1463,94 @@ contains
     end subroutine write_stage_project
 
     !---------------- GUI ----------------
+
+    ! The GUI's updates, drained once a pass: a 3D snapshot request is written (write_snapshot);
+    ! the fields meant for other stages are ignored.
+    subroutine apply_gui_updates( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(gui_metadata_stream_update) :: update
+        character(len=:), allocatable    :: buffer
+        do while( self%pipe%receive(buffer) )
+            update = transfer(buffer, update)
+            if( update%has_snapshot3D_update() ) call self%write_snapshot(update)
+        enddo
+    end subroutine apply_gui_updates
+
+    ! A 3D snapshot the GUI asked for, from the latest finished run's result: the particles of the
+    ! selected states merged into state 1 (the others deselected, and the state volumes and FSCs
+    ! out of the project), written with micrograph and particle STAR files and the optics table to
+    ! snapshots/<name>/, beside copies of the selected states' volumes (vol_state<NN>.mrc). Each
+    ! request is written once. Before a result, or with no particle in the selected states, it is
+    ! reported with no particles and no file.
+    subroutine write_snapshot( self, update )
+        class(stream_stage_solve3D),      intent(inout) :: self
+        type(gui_metadata_stream_update), intent(in)    :: update
+        type(sp_project)     :: snap
+        integer, allocatable :: selection(:), states(:)
+        type(string)         :: filename, stem, cwd, dir, projfile, volpath
+        real                 :: smpd
+        integer              :: snapshot_id, nptcls, iptcl, istate, box
+        call update%get_snapshot3D_update(snapshot_id, selection, filename)
+        if( snapshot_id <= self%last_snapshot_id ) return
+        self%last_snapshot_id = snapshot_id
+        nptcls   = 0
+        projfile = string('')
+        if( self%result_projfile%strlen() == 0 .or. .not. file_exists(self%result_projfile) )then
+            write(logfhandle,'(A,I6,A)') '>>> 3D SNAPSHOT ', snapshot_id, ' REQUESTED BEFORE A 3D RESULT; NOT WRITTEN'
+        else
+            call snap%read(self%result_projfile)
+            ! the selected states' particles, merged into state 1
+            states = snap%os_ptcl3D%get_all_asint('state')
+            do iptcl = 1,size(states)
+                if( any(selection == states(iptcl)) )then
+                    states(iptcl) = 1
+                else
+                    states(iptcl) = 0
+                endif
+                call snap%os_ptcl3D%set_state(iptcl, states(iptcl))
+            enddo
+            if( snap%os_ptcl2D%get_noris() == size(states) )then
+                do iptcl = 1,size(states)
+                    call snap%os_ptcl2D%set_state(iptcl, states(iptcl))
+                enddo
+            endif
+            nptcls = count(states == 1)
+            if( nptcls == 0 )then
+                write(logfhandle,'(A,I6,A)') '>>> 3D SNAPSHOT ', snapshot_id, ': NO PARTICLE IN THE SELECTED STATES; NOT WRITTEN'
+            else
+                call simple_getcwd(cwd)
+                stem = swap_suffix(filename, '', METADATA_EXT)
+                dir  = cwd//'/'//DIR_SNAPSHOT//stem
+                if( .not. dir_exists(cwd//'/'//DIR_SNAPSHOT) ) call simple_mkdir(cwd//'/'//DIR_SNAPSHOT)
+                if( .not. dir_exists(dir) )                    call simple_mkdir(dir)
+                ! the selected states' volumes, copied beside the project, which has one merged state
+                do istate = 1,self%params%nstates
+                    if( .not. snap%isthere_in_osout('vol', istate) ) cycle
+                    if( any(selection == istate) )then
+                        call snap%get_vol('vol', istate, volpath, smpd, box)
+                        if( file_exists(volpath) ) call simple_copy_file(volpath, dir//'/vol_state'//int2str_pad(istate,2)//MRC_EXT)
+                    endif
+                enddo
+                do istate = 1,self%params%nstates
+                    call snap%remove_state_artifacts_from_osout(istate)
+                enddo
+                projfile = dir//'/'//filename
+                write(logfhandle,'(A,I6,A,I8,A,A)') '>>> WRITING 3D SNAPSHOT ', snapshot_id, ' OF ', nptcls, ' PARTICLES: ',&
+                    &projfile%to_char()
+                call snap%write(projfile)
+                call snap%write_mics_star(dir//'/'//stem//'_micrographs.star', optics_offset=self%optics_id_offset)
+                call snap%write_ptcl2D_star(dir//'/'//stem//'_particles.star', optics_offset=self%optics_id_offset)
+            endif
+            call snap%kill
+        endif
+        ! a snapshot that could not be written goes with no particles and no file
+        if( nptcls > 0 )then
+            call self%meta_snapshot%set(id=snapshot_id, snapshot_filename=projfile, snapshot_nptcls=nptcls, states=selection)
+        else
+            call self%meta_snapshot%set(id=snapshot_id, snapshot_filename=string(''), snapshot_nptcls=0, states=selection)
+        endif
+        call self%pipe%send_meta(self%meta_snapshot)
+    end subroutine write_snapshot
 
     ! The phase, the run count, the particle counts and, once a run is done, each state's
     ! population and resolution.

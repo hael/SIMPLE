@@ -114,8 +114,10 @@ class Job:
             print_error("jobmodel is none")
             return None
         master_update = dict(self.jobmodel.master_update)
-        if "snapshot2D" in self.jobmodel.master_update:
+        # a snapshot request goes out in one answer only: the stage writes each id once
+        if "snapshot2D" in self.jobmodel.master_update or "snapshot3D" in self.jobmodel.master_update:
             self.jobmodel.master_update.pop("snapshot2D", None)
+            self.jobmodel.master_update.pop("snapshot3D", None)
             self.jobmodel.save()
         return master_update
 

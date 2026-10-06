@@ -23,6 +23,7 @@ from ..data_structures.class_selection import (
 )
 from ..data_structures.project import Project
 from ..data_structures.simple import SIMPLEBatch
+from ..data_structures.streamjob import find_particle_set, snapshot_stage_dir
 from ..data_structures.workspace import Workspace
 from ..helpers import clear_checksum_cookies, get_job_id
 from ..models import JobModel
@@ -181,10 +182,15 @@ def _recorded_project_file(jobmodel):
         or particle_set_id <= 0
     ):
         return None
+    # the snapshot's stage folder follows its particle set's type (snapshot2D, snapshot3D)
+    particle_set = find_particle_set(getattr(source_job, "particle_sets_stats", None), particle_set_id)
+    stage_dir = snapshot_stage_dir(particle_set.get("type")) if particle_set is not None else None
+    if stage_dir is None:
+        return None
     snapshot_dir = os.path.splitext(filename)[0]
     return os.path.join(
         source_dir,
-        "classification_2D",
+        stage_dir,
         "snapshots",
         snapshot_dir,
         filename,

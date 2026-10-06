@@ -28,13 +28,14 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE, &
                                      GUI_METADATA_STREAM_POOL2D_TYPE,                     &
                                      GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE,               &
-                                     gui_metadata_stream_pool2D_snapshot,                 &
+                                     gui_metadata_stream_snapshot,                 &
                                      GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,            &
                                      gui_metadata_cavg2D,                                 &
                                      gui_metadata_vol3D,                                  &
                                      gui_metadata_stream_solve3D_multistate,              &
                                      GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE,         &
                                      GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE,  &
+                                     GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE,           &
                                      GUI_METADATA_VOL3D_TYPE,                             &
                                      sprite_sheet_pos
   use simple_gui_metadata_api,    only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
@@ -433,7 +434,7 @@ contains
   subroutine test_pool2D()
     type(gui_assembler)                              :: assembler
     type(gui_metadata_stream_pool2D)                 :: meta_pool2D
-    type(gui_metadata_stream_pool2D_snapshot)        :: meta_snapshot
+    type(gui_metadata_stream_snapshot)        :: meta_snapshot
     type(gui_metadata_cavg2D),           allocatable :: meta_latest_cavgs2D(:)
     type(string)                                     :: json_str
     integer                                          :: i
@@ -465,12 +466,14 @@ contains
 
   !---------------- solve3D_multistate assembly ----------------
 
-  ! Assemble a multistate solve3D JSON payload with a per-state 'state_volumes' vol3D array and
-  ! the reprojection tiles of state 1, and read back where the tiles land: nested in the entry of
-  ! their state, none in the entry of a state without tiles.
+  ! Assemble a multistate solve3D JSON payload with a per-state 'state_volumes' vol3D array, the
+  ! reprojection tiles of state 1 and a 3D snapshot report, and read back where they land: the
+  ! tiles nested in the entry of their state, none in the entry of a state without tiles, and the
+  ! snapshot with its states under 'snapshot'.
   subroutine test_solve3D_multistate()
     type(gui_assembler)                                       :: assembler
     type(gui_metadata_stream_solve3D_multistate)              :: meta_solve3D_multistate
+    type(gui_metadata_stream_snapshot)                        :: meta_snapshot
     type(gui_metadata_vol3D),                     allocatable :: meta_states_vol3D(:)
     type(gui_metadata_cavg2D),                    allocatable :: meta_reprojtiles(:)
     type(string)                                              :: json_str
@@ -501,12 +504,19 @@ contains
     enddo
     call assembler%new(0)
     call assert_true(assembler%is_associated(), 'assembler json associated')
-    call assembler%assemble_stream_solve3D_multistate(meta_solve3D_multistate, meta_states_vol3D, meta_reprojtiles)
+    call meta_snapshot%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
+    call meta_snapshot%set(id=2, snapshot_filename=string('/test/path/snapshots/snapshot_2/snapshot_2.simple'),&
+                          &snapshot_nptcls=12000, states=[1, 3])
+    call assembler%assemble_stream_solve3D_multistate(meta_solve3D_multistate, meta_snapshot, meta_states_vol3D, meta_reprojtiles)
     json_str = assembler%to_string()
     call assert_int(2, json_count(json_str, 'solve3D_multistate.state_volumes'),                 'one entry per state volume')
     call assert_int(1, json_int(json_str, 'solve3D_multistate.state_volumes(1).state'),          'the first is state 1')
     call assert_int(3, json_count(json_str, 'solve3D_multistate.state_volumes(1).reprojtiles'),  'state 1 holds its three tiles')
     call assert_int(-1, json_count(json_str, 'solve3D_multistate.state_volumes(2).reprojtiles'), 'state 2 has no tiles array')
+    call assert_int(2,     json_int(json_str,   'solve3D_multistate.snapshot.id'),              'the 3D snapshot report')
+    call assert_int(12000, json_int(json_str,   'solve3D_multistate.snapshot.snapshot_nptcls'), 'with its particles')
+    call assert_int(2,     json_count(json_str, 'solve3D_multistate.snapshot.states'),          'and its two states')
+    call assert_int(3,     json_int(json_str,   'solve3D_multistate.snapshot.states(2)'),       'the second being state 3')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(meta_states_vol3D, meta_reprojtiles)

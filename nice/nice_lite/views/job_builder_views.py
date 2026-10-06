@@ -21,7 +21,7 @@ from django.views.decorators.http import require_POST
 # local imports
 from ..data_structures.batchjob import BatchJob
 from ..data_structures.simple import SIMPLEBatch, SIMPLEStream
-from ..data_structures.streamjob import StreamJob
+from ..data_structures.streamjob import StreamJob, snapshot_stage_dir
 from ..data_structures.workspace import Workspace
 from ..models import JobModel
 from ..helpers import (
@@ -464,7 +464,8 @@ def _snapshot_source(jobmodel, particle_set, workspace_dir):
         return None
     if not isinstance(workspace_dir, str) or not isinstance(jobmodel.dirc, str):
         return None
-    if particle_set.get("type") != "snapshot":
+    stage_dir = snapshot_stage_dir(particle_set.get("type"))
+    if stage_dir is None:
         return None
     if "time" not in particle_set and "ctime" not in particle_set:
         return None
@@ -483,7 +484,7 @@ def _snapshot_source(jobmodel, particle_set, workspace_dir):
     project_path = os.path.realpath(os.path.join(
         workspace_root,
         jobmodel.dirc,
-        "classification_2D",
+        stage_dir,
         "snapshots",
         snapshot_dir,
         filename,

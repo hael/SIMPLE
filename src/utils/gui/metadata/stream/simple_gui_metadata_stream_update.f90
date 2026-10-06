@@ -1,22 +1,23 @@
 !@descr: GUI metadata for a stream quality update — thresholds and user selections broadcast from the GUI
-! The master copies GUI response fields here and sends the whole object to the running p01, p03 and p06.
-! Unset values are 0; receivers ignore 0 and unchanged values. Readers: p01 thresholds,
-! p03 pickrefs_selection+cycle, p06 mskdiam2D/snapshot2D.
+! The master copies GUI response fields here and sends the whole object to the running p01, p03,
+! p06 and p07. Unset values are 0; receivers ignore 0 and unchanged values. Readers: p01 thresholds,
+! p03 pickrefs_selection+cycle, p06 mskdiam2D/snapshot2D, p07 snapshot3D.
 module simple_gui_metadata_stream_update
 use simple_error,             only: simple_exception
 use simple_string,            only: string
 use simple_gui_metadata_base, only: gui_metadata_base
+use simple_gui_metadata_stream_solve3D_multistate, only: MAX_STATES_SOLVE3D_MULTISTATE
 
 implicit none
 
 public :: gui_metadata_stream_update
-public :: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION, MAX_SNAPSHOT2D_FNAME_LEN
+public :: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION, MAX_SNAPSHOT_FNAME_LEN
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: MAX_PICKREFS_SELECTION   = 500  ! classes a picking-reference selection holds
 integer, parameter :: MAX_SNAPSHOT2D_SELECTION = 1000 ! classes a 2D snapshot selection holds
-integer, parameter :: MAX_SNAPSHOT2D_FNAME_LEN = 128  ! characters of a 2D snapshot's file name
+integer, parameter :: MAX_SNAPSHOT_FNAME_LEN   = 128  ! characters of a snapshot's file name (2D and 3D)
 
 type, extends(gui_metadata_base) :: gui_metadata_stream_update
   private
@@ -31,7 +32,11 @@ type, extends(gui_metadata_base) :: gui_metadata_stream_update
   integer               :: snapshot2D_iteration         = 0    ! 2D classification iteration to snapshot; 0 = unset
   integer(kind=2)       :: snapshot2D_selection(MAX_SNAPSHOT2D_SELECTION) = 0 ! class indices included in the snapshot
   integer               :: snapshot2D_selection_length  = 0    ! number of valid entries in snapshot2D_selection
-  character(len=MAX_SNAPSHOT2D_FNAME_LEN) :: snapshot2D_filename = '' ! project file name for the snapshot
+  character(len=MAX_SNAPSHOT_FNAME_LEN) :: snapshot2D_filename = '' ! project file name for the snapshot
+  integer               :: snapshot3D_id                = 0    ! 3D snapshot set ID; 0 = unset
+  integer               :: snapshot3D_selection(MAX_STATES_SOLVE3D_MULTISTATE) = 0 ! states included in the 3D snapshot
+  integer               :: snapshot3D_selection_length  = 0    ! number of valid entries in snapshot3D_selection
+  character(len=MAX_SNAPSHOT_FNAME_LEN) :: snapshot3D_filename = '' ! project file name for the 3D snapshot
 contains
   procedure :: kill => kill_override
   procedure :: set_ctfres_update
@@ -50,6 +55,9 @@ contains
   procedure :: set_snapshot2D_update
   procedure :: get_snapshot2D_update
   procedure :: has_snapshot2D_update
+  procedure :: set_snapshot3D_update
+  procedure :: get_snapshot3D_update
+  procedure :: has_snapshot3D_update
 end type gui_metadata_stream_update
 
 contains
@@ -176,7 +184,7 @@ contains
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     n = size(selection)
     if( n > size(self%snapshot2D_selection) ) THROW_HARD('snapshot2D_selection exceeds maximum size')
-    if( filename%strlen() > MAX_SNAPSHOT2D_FNAME_LEN ) THROW_HARD('snapshot2D_filename exceeds maximum length')
+    if( filename%strlen() > MAX_SNAPSHOT_FNAME_LEN ) THROW_HARD('snapshot2D_filename exceeds maximum length')
     self%l_assigned                   = .true.
     self%snapshot2D_id                = snapshot_id
     self%snapshot2D_iteration         = iteration
@@ -209,6 +217,47 @@ contains
     logical :: l_has
     l_has = self%snapshot2D_id > 0
   end function has_snapshot2D_update
+
+  ! Store a 3D snapshot request from the GUI: the states whose particles it holds, merged into one.
+  subroutine set_snapshot3D_update( self, snapshot_id, selection, filename )
+    class(gui_metadata_stream_update), intent(inout) :: self
+    integer,                           intent(in)    :: snapshot_id
+    integer,                           intent(in)    :: selection(:)
+    type(string),                      intent(in)    :: filename
+    integer :: n
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    n = size(selection)
+    if( n > size(self%snapshot3D_selection) ) THROW_HARD('snapshot3D_selection exceeds maximum size')
+    if( filename%strlen() > MAX_SNAPSHOT_FNAME_LEN ) THROW_HARD('snapshot3D_filename exceeds maximum length')
+    self%l_assigned                  = .true.
+    self%snapshot3D_id               = snapshot_id
+    self%snapshot3D_selection_length = n
+    self%snapshot3D_selection(1:n)   = selection
+    self%snapshot3D_filename         = filename%to_char()
+  end subroutine set_snapshot3D_update
+
+  ! Retrieve the snapshot3D request fields.
+  subroutine get_snapshot3D_update( self, snapshot_id, selection, filename )
+    class(gui_metadata_stream_update), intent(in)  :: self
+    integer,                           intent(out) :: snapshot_id
+    integer,           allocatable,    intent(out) :: selection(:)
+    type(string),                      intent(out) :: filename
+    integer :: n
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    n = self%snapshot3D_selection_length
+    if( n < 0 ) THROW_HARD('snapshot3D_selection_length is negative')
+    if( n > size(self%snapshot3D_selection) ) THROW_HARD('snapshot3D_selection_length exceeds maximum size')
+    snapshot_id = self%snapshot3D_id
+    selection   = self%snapshot3D_selection(1:n)
+    filename    = trim(self%snapshot3D_filename)
+  end subroutine get_snapshot3D_update
+
+  ! Returns .true. when a snapshot3D request is present (snapshot_id > 0).
+  function has_snapshot3D_update( self ) result( l_has )
+    class(gui_metadata_stream_update), intent(in) :: self
+    logical :: l_has
+    l_has = self%snapshot3D_id > 0
+  end function has_snapshot3D_update
 
   ! Resets every field to its default, so a reused object keeps nothing of an earlier message,
   ! and marks the object uninitialised.

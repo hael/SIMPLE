@@ -47,7 +47,7 @@ module simple_stream_stage_pool2D
 use simple_defs,                                only: logfhandle, PATH_HERE, COSMSKHALFWIDTH
 use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, DIR_SNAPSHOT, REFINE2D_FINISHED, JOB_INFO_EXT
 use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME, POOL_EXIT_CODE, POOL_INPUT_PROJFILE,&
-                                                     &SIEVE_FINAL_SET_FBODY
+                                                     &OPTICS_ID_DELTA, SIEVE_FINAL_SET_FBODY
 use simple_srch_sort_loc,                       only: hpsort
 use simple_error,                               only: simple_exception
 use simple_string,                              only: string
@@ -70,7 +70,7 @@ use simple_gui_metadata_types,                  only: GUI_METADATA_STREAM_POOL2D
                                                      &GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE
 use simple_gui_metadata_cavg2D,                 only: gui_metadata_cavg2D
 use simple_gui_metadata_stream_pool2D,          only: gui_metadata_stream_pool2D
-use simple_gui_metadata_stream_pool2D_snapshot, only: gui_metadata_stream_pool2D_snapshot
+use simple_gui_metadata_stream_snapshot,        only: gui_metadata_stream_snapshot
 use simple_gui_metadata_stream_update,          only: gui_metadata_stream_update
 use simple_stream_pipe,                         only: stream_pipe
 use simple_stream_gui_senders,                  only: send_cavgs
@@ -80,7 +80,6 @@ public :: stream_stage_pool2D
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: OPTICS_ID_DELTA       = 500 ! optics group ids of the STAR files, per GUI display
 integer, parameter :: NPTCLS_PER_CLS_MIN    = 20  ! particles per class before the pool runs or resumes
 integer, parameter :: EARLY_RATE_FACTOR     = 50  ! micrographs' worth of particles a pause waits for, iterations 2-20
 integer, parameter :: LATE_RATE_FACTOR      = 500 ! the same after iteration 20, and before the first iteration
@@ -105,7 +104,7 @@ type :: stream_stage_pool2D
     type(stream_pipe)                         :: pipe            ! to and from the master
     type(gui_metadata_stream_pool2D)          :: meta_status
     type(gui_metadata_cavg2D)                 :: meta_cavgs
-    type(gui_metadata_stream_pool2D_snapshot) :: meta_snapshot
+    type(gui_metadata_stream_snapshot) :: meta_snapshot
     type(gui_metadata_cavg2D)                 :: meta_snapshot_cavgs
     ! the latest snapshot, as the pool's write_snapshot reports it
     type(string)              :: snapshot_dir, snapshot_filename, snapshot_jpeg, snapshot_mrc

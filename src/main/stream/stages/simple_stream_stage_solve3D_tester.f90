@@ -4,7 +4,9 @@
 ! and carries qsys_name=local for the stage project's computing environment. The upstream is a pool
 ! 2D directory whose completed folder holds exports. The class-average selection and the 3D jobs
 ! (which need a queue) are left to the high-level stream tests; the import is tested on sets made
-! in memory, and the volume messages on a fixture project with a volume and an FSC.
+! in memory, the class averages a publication brings on fixture stacks, and the volume messages
+! on a fixture project with a volume and an FSC; a 3D snapshot is written from a fixture result
+! project, on a request sent through the stage's update pipe.
 module simple_stream_stage_solve3D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
@@ -13,7 +15,7 @@ use simple_defs_fname,                                only: TERM_STREAM, METADAT
 use simple_refine3D_fnames,                           only: refine3D_reprojs_fname
 use simple_defs_stream,                               only: DIR_STREAM_COMPLETED
 use simple_string,                                    only: string
-use simple_string_utils,                              only: int2str_pad
+use simple_string_utils,                              only: int2str, int2str_pad
 use simple_fileio,                                    only: arr2file, del_file, file_exists, simple_getcwd, simple_touch
 use simple_syslib,                                    only: simple_mkdir, dir_exists
 use simple_math_ft,                                   only: get_resarr
@@ -23,8 +25,11 @@ use simple_sp_project,                                only: sp_project
 use simple_rec_list,                                  only: rec_iterator, chunk_rec
 use simple_gui_metadata_utils,                        only: max_metadata_size
 use simple_gui_metadata_types,                        only: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE, GUI_METADATA_VOL3D_TYPE,&
-                                                           &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE
+                                                           &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE,&
+                                                           &GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE, GUI_METADATA_STREAM_UPDATE_TYPE
 use simple_gui_metadata_stream_solve3D_multistate, only: gui_metadata_stream_solve3D_multistate
+use simple_gui_metadata_stream_snapshot,              only: gui_metadata_stream_snapshot
+use simple_gui_metadata_stream_update,                only: gui_metadata_stream_update
 use simple_gui_metadata_vol3D,                        only: gui_metadata_vol3D
 use simple_stream_pipe,                               only: stream_pipe
 use simple_stream_stage_solve3D,                   only: stream_stage_solve3D, PHASE_IMPORTING, PHASE_SOLVE3D,&
@@ -47,6 +52,7 @@ contains
         call test_restart_removes_term_stream()
         call test_watch_order_and_mskdiam()
         call test_merge_publications()
+        call test_take_cavgs()
         call test_first_set()
         call test_first_set_fallback()
         call test_mskdiam_from_each_publication()
@@ -56,6 +62,7 @@ contains
         call test_retention()
         call test_send_status()
         call test_send_volumes()
+        call test_snapshot3D()
         call test_iterate_waits()
         call test_finished()
     end subroutine run_all_stream_stage_solve3D_tests
@@ -221,6 +228,81 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_merge_publications
+
+    !> a publication's class averages and FRCs are copied into its quality folder and replace the
+    !! stage's earlier ones, whose state volume stays; a publication without FRCs cannot be used
+    subroutine test_take_cavgs()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)      :: cline
+        type(sp_project)   :: set
+        type(image)        :: img
+        type(string)       :: cwd_saved, root, stk, frcs, problem
+        real               :: smpd, mskdiam
+        integer            :: nfail0, ncls
+        integer, parameter :: NCLS_PUB = 4, NCLS_OLD = 2, BOX = 8
+        allocate(stage)
+        write(*,'(A)') 'test_take_cavgs'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_take_cavgs', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        ! the stage's earlier class averages and FRCs (a solve2D's), and a state volume
+        call write_stack(string('old_cavgs.mrcs'), NCLS_OLD)
+        call simple_touch('old_frcs.bin')
+        call stage%spproj%add_cavgs2os_out(string('old_cavgs.mrcs'), VOL_SMPD, 'cavg')
+        call stage%spproj%add_frcs2os_out(string('old_frcs.bin'), 'frc2D')
+        call img%new([BOX, BOX, BOX], VOL_SMPD)
+        call img%write(string('recvol_state01.mrc'))
+        call img%kill
+        call stage%spproj%add_vol2os_out(string('recvol_state01.mrc'), VOL_SMPD, 1, 'vol')
+        ! a publication with more classes
+        call simple_mkdir('pub')
+        call write_stack(string('pub/00003_cavgs.mrcs'), NCLS_PUB)
+        call set%add_cavgs2os_out(string('pub/00003_cavgs.mrcs'), VOL_SMPD, 'cavg', mskdiam=150.)
+        problem = stage%publication_problem(set)
+        call assert_char('its FRCs are missing', problem%to_char(), 'a publication without FRCs cannot be used')
+        call simple_touch('pub/00003_frcs.bin')
+        call set%add_frcs2os_out(string('pub/00003_frcs.bin'), 'frc2D')
+        problem = stage%publication_problem(set)
+        call assert_char('', problem%to_char(), 'one with them can')
+        ! its classes, as merge_publication takes them, then its class averages and FRCs
+        stage%spproj%os_cls2D = set%os_cls2D
+        call stage%take_cavgs(set, string('00003'))
+        call stage%spproj%get_cavgs_stk(stk, ncls, smpd)
+        call assert_int(NCLS_PUB, ncls, 'the class averages are the publication''s')
+        call assert_true(stk%has_substr('quality_selection/00003/00003_cavgs.mrcs'), 'copied into its quality folder')
+        call assert_true(file_exists(stk), 'where the copy is')
+        call stage%spproj%get_frcs(frcs, 'frc2D')
+        call assert_true(frcs%has_substr('quality_selection/00003/00003_frcs.bin'), 'and so are its FRCs')
+        call assert_true(file_exists(frcs), 'copied too')
+        call stage%spproj%get_mskdiam('cavg', mskdiam)
+        call assert_real(150., mskdiam, 1.e-4, 'with its mask diameter')
+        call assert_int(NCLS_PUB, stage%spproj%os_cls2D%get_noris(), 'the classes stay the publication''s')
+        call assert_true(stage%spproj%isthere_in_osout('vol', 1), 'the state volume stays')
+        ! pool 2D removes its older publications
+        call del_file('pub/00003_cavgs.mrcs')
+        call del_file('pub/00003_frcs.bin')
+        call assert_true(file_exists(stk),  'the class averages outlive the publication')
+        call assert_true(file_exists(frcs), 'and the FRCs')
+        call set%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+
+    contains
+
+        subroutine write_stack( fname, n )
+            class(string), intent(in) :: fname
+            integer,       intent(in) :: n
+            integer :: i
+            call img%new([BOX, BOX, 1], VOL_SMPD)
+            do i = 1,n
+                call img%write(fname, i)
+            enddo
+            call img%kill
+        end subroutine write_stack
+
+    end subroutine test_take_cavgs
 
     !> the first publication into a stage without rows is the first set: the particles it selects
     !! are due for solve2D, and the pool model's selection is kept for a failed one; later
@@ -497,7 +579,7 @@ contains
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
         call open_loopback(fds)
-        call stage%init_gui(int(fds(2)))
+        call stage%init_gui(-1, int(fds(2)))
         call reader%new(int(fds(1)), -1, max_metadata_size(), 'test reader')
         call stage%send_status()
         call assert_true(reader%receive(buffer), 'a status message is sent')
@@ -542,7 +624,7 @@ contains
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
         call open_loopback(fds)
-        call stage%init_gui(int(fds(2)))
+        call stage%init_gui(-1, int(fds(2)))
         call reader%new(int(fds(1)), -1, max_metadata_size(), 'test reader')
         ! state 1: a volume, its FSC and its reprojections; four particles in it
         volfile = 'recvol_state01.mrc'
@@ -597,6 +679,116 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_send_volumes
+
+    !> a 3D snapshot request: before a result, answered as not written; from a result, the
+    !! particles of the selected states merged into state 1, the state volumes out of the project
+    !! and the selected ones copied beside it, answered with the file and the particle count; each
+    !! request is written once
+    subroutine test_snapshot3D()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)                      :: cline
+        type(stream_pipe)                  :: writer, reader
+        type(gui_metadata_stream_update)   :: update
+        type(gui_metadata_stream_snapshot) :: report
+        type(sp_project)                   :: proj
+        type(image)                        :: vol
+        character(len=:), allocatable      :: buffer
+        integer,          allocatable      :: states(:)
+        type(string)                       :: cwd_saved, root, fname, volfile
+        integer(c_int)                     :: upd(2), gui(2)
+        integer                            :: nfail0, id, nptcls, tstamp, istate, iptcl
+        integer, parameter                 :: PTCL_STATES(6) = [1, 1, 2, 2, 3, 0]
+        allocate(stage)
+        write(*,'(A)') 'test_snapshot3D'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_snapshot3D', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call open_loopback(upd)
+        call open_loopback(gui)
+        call stage%init_gui(int(upd(1)), int(gui(2)))
+        call writer%new(-1, int(upd(2)), max_metadata_size(), 'test writer')
+        call reader%new(int(gui(1)), -1, max_metadata_size(), 'test reader')
+        ! before a result: answered as not written
+        call send_request(1, [1])
+        call stage%apply_gui_updates()
+        call assert_true(receive_report(), 'a request before a result is answered')
+        call assert_int(1, id,                 'with its id')
+        call assert_int(0, nptcls,             'and no particles')
+        call assert_char('', fname%to_char(),  'and no file')
+        ! a result: six particles in states 1, 1, 2, 2, 3 and none, and a volume per state
+        call proj%os_ptcl2D%new(size(PTCL_STATES), is_ptcl=.true.)
+        call proj%os_ptcl3D%new(size(PTCL_STATES), is_ptcl=.true.)
+        do iptcl = 1,size(PTCL_STATES)
+            call proj%os_ptcl2D%set_state(iptcl, PTCL_STATES(iptcl))
+            call proj%os_ptcl3D%set_state(iptcl, PTCL_STATES(iptcl))
+        enddo
+        do istate = 1,NSTATES
+            volfile = 'recvol_state'//int2str_pad(istate, 2)//'.mrc'
+            call vol%new([VOL_BOX, VOL_BOX, VOL_BOX], VOL_SMPD)
+            call vol%write(volfile)
+            call vol%kill
+            call proj%add_vol2os_out(volfile, VOL_SMPD, istate, 'vol')
+        enddo
+        call proj%write(string('result.simple'))
+        call proj%kill
+        stage%result_projfile = 'result.simple'
+        ! states 1 and 3
+        call send_request(2, [1, 3])
+        call stage%apply_gui_updates()
+        call assert_true(receive_report(), 'the request is answered')
+        call assert_int(2, id,     'with its id')
+        call assert_int(3, nptcls, 'and the particles of states 1 and 3')
+        states = report%get_states()
+        call assert_int(2, size(states), 'and its states')
+        call assert_true(file_exists(fname), 'the snapshot project is written')
+        if( file_exists(fname) )then
+            call proj%read(fname)
+            call assert_int(3, proj%os_ptcl3D%count_state_gt_zero(),           'with the selected particles')
+            call assert_int(1, maxval(proj%os_ptcl3D%get_all_asint('state')), 'merged into state 1')
+            call assert_int(3, proj%os_ptcl2D%count_state_gt_zero(),           'in both particle segments')
+            call assert_false(proj%isthere_in_osout('vol', 1),                 'without the state volumes')
+            call proj%kill
+        endif
+        call assert_true(file_exists(string('snapshots/snapshot_2/vol_state01.mrc')),  'the volume of state 1 is copied')
+        call assert_true(file_exists(string('snapshots/snapshot_2/vol_state03.mrc')),  'and that of state 3')
+        call assert_false(file_exists(string('snapshots/snapshot_2/vol_state02.mrc')), 'but not that of state 2')
+        ! the same request again
+        call send_request(2, [1, 3])
+        call stage%apply_gui_updates()
+        call assert_false(reader%receive(buffer), 'a request is written once')
+        call update%kill
+        call writer%kill
+        call reader%kill
+        call stage%kill
+        call close_loopback(upd)
+        call close_loopback(gui)
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+
+    contains
+
+        subroutine send_request( snapshot_id, selection )
+            integer, intent(in) :: snapshot_id, selection(:)
+            call update%kill
+            call update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
+            call update%set_snapshot3D_update(snapshot_id, selection, string('snapshot_'//int2str(snapshot_id)//METADATA_EXT))
+            call writer%send_meta(update)
+        end subroutine send_request
+
+        ! the latest 3D snapshot report the stage sent, into report, id, fname and nptcls
+        logical function receive_report()
+            integer :: meta_type
+            receive_report = .false.
+            do while( reader%receive(buffer) )
+                meta_type = transfer(buffer, meta_type)
+                if( meta_type /= GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE ) cycle
+                report         = transfer(buffer, report)
+                receive_report = report%get(id, fname, nptcls, tstamp)
+            enddo
+        end function receive_report
+
+    end subroutine test_snapshot3D
 
     !> the public loop waits for pool 2D's folder, then attaches; no job without particles
     subroutine test_iterate_waits()
@@ -666,7 +858,7 @@ contains
         class(stream_stage_solve3D), intent(inout) :: stage
         type(cmdline),                 intent(inout) :: cline
         call stage%init_params(cline)
-        call stage%init_gui(-1)
+        call stage%init_gui(-1, -1)
         stage%settle_s = -1
         stage%wait_s   = 0
         stage%l_exists = .true.

@@ -9,6 +9,7 @@ use simple_string,                     only: string
 use simple_cmdline,                    only: cmdline
 use simple_commander_base,             only: commander_base
 use simple_gui_metadata_api,           only: gui_metadata_cavg2D, gui_metadata_vol3D, gui_metadata_stream_pool2D,&
+                                            &gui_metadata_stream_snapshot, GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE,&
                                             &sprite_sheet_pos, GUI_METADATA_STREAM_POOL2D_TYPE,&
                                             &GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE, GUI_METADATA_VOL3D_TYPE,&
                                             &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE
@@ -22,7 +23,8 @@ use simple_forked_process,             only: forked_process, FORK_POLL_TIME
 use unix,                              only: c_usleep
 use simple_stream_master_meta_store,   only: stream_master_meta_store
 use simple_stream_master_gui_commands, only: stream_master_gui_commands
-use simple_gui_metadata_stream_update, only: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION, MAX_SNAPSHOT2D_FNAME_LEN
+use simple_gui_metadata_stream_update, only: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION, MAX_SNAPSHOT_FNAME_LEN
+use simple_gui_metadata_stream_solve3D_multistate, only: MAX_STATES_SOLVE3D_MULTISTATE
 use simple_string_utils,               only: int2str
 implicit none
 private
@@ -44,10 +46,12 @@ contains
         call test_gui_commands_invalid()
         call test_gui_commands_oversized()
         call test_gui_commands_snapshot_name()
+        call test_gui_commands_snapshot3D()
         call test_store_status()
         call test_store_list()
         call test_store_volume()
         call test_store_clear_stage()
+        call test_store_snapshot3D()
         call test_stage_pipes()
         call test_update_dedupe()
         call test_skipped_stays_skipped()
@@ -139,9 +143,9 @@ contains
         call assert_real(180., commands%update%get_mskdiam2D_update(), 1.e-5, 'the other updates are kept')
         call assert_false(snapshot_kept(commands, 'snap.txt'),       'a name without .simple is dropped')
         call assert_false(snapshot_kept(commands, '.simple'),        'a name of .simple alone is dropped')
-        long_name = repeat('s', MAX_SNAPSHOT2D_FNAME_LEN)//'.simple'
+        long_name = repeat('s', MAX_SNAPSHOT_FNAME_LEN)//'.simple'
         call assert_false(snapshot_kept(commands, long_name),        'an overlong name is dropped')
-        long_name = repeat('s', MAX_SNAPSHOT2D_FNAME_LEN - len('.simple'))//'.simple'
+        long_name = repeat('s', MAX_SNAPSHOT_FNAME_LEN - len('.simple'))//'.simple'
         call assert_true(snapshot_kept(commands, long_name),         'a name of the full length is kept')
         call assert_true(snapshot_kept(commands, 'snapshot_3.simple'), 'and the names NICE sends')
         call commands%kill()
@@ -157,6 +161,44 @@ contains
         end function snapshot_kept
 
     end subroutine test_gui_commands_snapshot_name
+
+    !> a 3D snapshot request keeps its states apart from the 2D request; one of no state, of too
+    !! many states, of a state out of range or with an unsafe name is dropped, and the rest of the
+    !! answer is applied
+    subroutine test_gui_commands_snapshot3D()
+        type(stream_master_gui_commands) :: commands
+        integer, allocatable             :: selection(:)
+        type(string)                     :: fname
+        integer                          :: snapshot_id
+        write(*,'(A)') 'test_gui_commands_snapshot3D'
+        call assert_true(snapshot3D_kept(commands, '[1,3]', 'snapshot_4.simple'), 'a 3D snapshot request is parsed')
+        call commands%update%get_snapshot3D_update(snapshot_id, selection, fname)
+        call assert_int(4, snapshot_id,     'with its id')
+        call assert_int(2, size(selection), 'its states')
+        call assert_int(3, selection(2),    'in order')
+        call assert_char('snapshot_4.simple', fname%to_char(), 'and its name')
+        call assert_false(commands%update%has_snapshot2D_update(), 'it is not a 2D request')
+        call assert_false(snapshot3D_kept(commands, '[]', 'snapshot_4.simple'),    'a selection of no state is dropped')
+        call assert_real(180., commands%update%get_mskdiam2D_update(), 1.e-5,      'the other updates are kept')
+        call assert_false(snapshot3D_kept(commands, '[0,2]', 'snapshot_4.simple'), 'a state below 1 is dropped')
+        call assert_false(snapshot3D_kept(commands, '[2,'//int2str(MAX_STATES_SOLVE3D_MULTISTATE + 1)//']',&
+            &'snapshot_4.simple'), 'a state above the largest is dropped')
+        call assert_false(snapshot3D_kept(commands, int_list(MAX_STATES_SOLVE3D_MULTISTATE + 1), 'snapshot_4.simple'),&
+            &'a selection of too many states is dropped')
+        call assert_false(snapshot3D_kept(commands, '[1]', '../snap.simple'),      'an unsafe name is dropped')
+        call commands%kill()
+
+    contains
+
+        logical function snapshot3D_kept( cmds, selection_json, fname_in )
+            type(stream_master_gui_commands), intent(inout) :: cmds
+            character(len=*),                 intent(in)    :: selection_json, fname_in
+            call assert_true(cmds%parse('{"mskdiam2D":180.0,"snapshot3D":{"id":4,"selection":'//selection_json//&
+                &',"filename":"'//fname_in//'"}}'), 'the answer is parsed')
+            snapshot3D_kept = cmds%update%has_snapshot3D_update()
+        end function snapshot3D_kept
+
+    end subroutine test_gui_commands_snapshot3D
 
     !> a stage's status replaces the previous one
     subroutine test_store_status()
@@ -241,6 +283,28 @@ contains
         call vol%kill()
         call store%kill()
     end subroutine test_store_volume
+
+    !> multistate 3D's snapshot report is kept, and dropped when the stage is started again
+    subroutine test_store_snapshot3D()
+        type(stream_master_meta_store)     :: store
+        type(gui_metadata_stream_snapshot) :: snapshot
+        character(len=:), allocatable      :: buffer
+        integer, allocatable               :: states(:)
+        write(*,'(A)') 'test_store_snapshot3D'
+        call store%new()
+        call snapshot%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
+        call snapshot%set(id=4, snapshot_filename=string('snapshot_4.simple'), snapshot_nptcls=9000, states=[1,3])
+        call snapshot%serialise(buffer)
+        call store%store(buffer)
+        call assert_true(store%solve3D_snapshot%assigned(), 'the 3D snapshot report is kept')
+        states = store%solve3D_snapshot%get_states()
+        call assert_int(2, size(states), 'with its states')
+        call assert_false(store%pool2D_snapshot%assigned(), 'and not as a 2D one')
+        call store%clear_stage(STAGE_SOLVE3D)
+        call assert_false(store%solve3D_snapshot%assigned(), 'a restart of multistate 3D drops it')
+        call snapshot%kill()
+        call store%kill()
+    end subroutine test_store_snapshot3D
 
     !> a restarted stage's lists are dropped, and only that stage's
     subroutine test_store_clear_stage()

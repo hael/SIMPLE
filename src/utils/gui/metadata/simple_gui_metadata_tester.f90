@@ -68,6 +68,7 @@ contains
     call test_set_get_stream_pool2D_snapshot()
     call test_serialise_stream_pool2D_snapshot()
     call test_jsonise_stream_pool2D_snapshot()
+    call test_stream_snapshot3D()
     call test_set_get_stream_solve3D_multistate()
     call test_serialise_stream_solve3D_multistate()
     call test_jsonise_stream_solve3D_multistate()
@@ -1031,6 +1032,18 @@ contains
     call assert_int(sel_out(5),       142,                 'snapshot2D_selection(5) correct')
     call assert_char(fname_out%to_char(),       'snapshot_3.simple', 'snapshot2D_filename set/get correctly')
     deallocate(sel_out)
+    ! snapshot3D: the selected states, apart from the 2D request
+    call assert_true(.not.meta%has_snapshot3D_update(), 'has_snapshot3D_update false before set')
+    call meta%set_snapshot3D_update(snapshot_id=4, selection=[1,3], filename=string('snapshot_4.simple'))
+    call assert_true(meta%has_snapshot3D_update(), 'has_snapshot3D_update true after set')
+    call meta%get_snapshot3D_update(snap_id_out, sel_out, fname_out)
+    call assert_int(snap_id_out,   4, 'snapshot3D_id set/get correctly')
+    call assert_int(size(sel_out), 2, 'snapshot3D_selection size correct')
+    call assert_int(sel_out(2),    3, 'snapshot3D_selection(2) correct')
+    call assert_char(fname_out%to_char(), 'snapshot_4.simple', 'snapshot3D_filename set/get correctly')
+    call meta%get_snapshot2D_update(snap_id_out, iter_out, sel_out, fname_out)
+    call assert_int(snap_id_out, 3, 'and the 2D request is kept apart')
+    deallocate(sel_out)
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_set_get_stream_update
@@ -1540,7 +1553,7 @@ contains
   ! Verify that all pool-2D snapshot fields round-trip through set/get,
   ! and that snapshot_time is populated automatically on set.
   subroutine test_set_get_stream_pool2D_snapshot()
-    type(gui_metadata_stream_pool2D_snapshot) :: meta
+    type(gui_metadata_stream_snapshot) :: meta
     type(string)                              :: fname_out
     integer                                   :: id_out, nptcls_out, time_out
     write(*,'(A)') 'test_set_get_stream_pool2D_snapshot'
@@ -1561,8 +1574,8 @@ contains
   ! Verify that the pool-2D snapshot serialise buffer is the expected size.
   subroutine test_serialise_stream_pool2D_snapshot()
     character(len=:),                         allocatable :: buffer
-    type(gui_metadata_stream_pool2D_snapshot)             :: meta
-    type(gui_metadata_stream_pool2D_snapshot) :: copy
+    type(gui_metadata_stream_snapshot)             :: meta
+    type(gui_metadata_stream_snapshot) :: copy
     write(*,'(A)') 'test_serialise_stream_pool2D_snapshot'
     call meta%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
@@ -1584,7 +1597,7 @@ contains
   ! field is zeroed before hashing to make the output deterministic.
   subroutine test_jsonise_stream_pool2D_snapshot()
     character(kind=CK, len=:),                allocatable :: buffer
-    type(gui_metadata_stream_pool2D_snapshot)             :: meta
+    type(gui_metadata_stream_snapshot)             :: meta
     type(json_core)                                       :: json
     type(json_value),                         pointer     :: json_ptr
     type(string)                                          :: json_str, json_hash
@@ -1610,6 +1623,40 @@ contains
     call assert_true(.not.json%failed(), 'json destroyed')
     deallocate(buffer)
   end subroutine test_jsonise_stream_pool2D_snapshot
+
+  ! A 3D snapshot report: its states round-trip, survive serialisation, and go to JSON as
+  ! 'states', which a 2D report leaves out.
+  subroutine test_stream_snapshot3D()
+    character(len=:),          allocatable :: buffer
+    character(kind=CK, len=:), allocatable :: json_buf
+    type(gui_metadata_stream_snapshot)     :: meta, copy
+    type(json_core)                        :: json
+    type(json_value),          pointer     :: json_ptr
+    type(string)                           :: json_str, json_hash
+    integer,                   allocatable :: states(:)
+    logical                                :: found
+    write(*,'(A)') 'test_stream_snapshot3D'
+    call meta%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
+    call meta%set(id=4, snapshot_filename=string('snapshot_4.simple'), snapshot_nptcls=9000, states=[1,3])
+    states = meta%get_states()
+    call assert_int(2, size(states), 'the states set/get correctly')
+    call assert_int(3, states(2),    'the second state set/get correctly')
+    call meta%serialise(buffer=buffer)
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(meta), json_text(copy), 'a received copy holds the same fields')
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    json_ptr => meta%jsonise()
+    call json%update(json_ptr, 'snapshot_time', 0, found)
+    call assert_true(found, 'snapshot_time field found')
+    call json%print_to_string(json_ptr, json_buf)
+    call assert_int(len(json_buf), 104, 'buffer correct size')
+    json_str  = json_buf
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), '731AFD4A575AE4B3', 'json is stable')
+    call json%destroy(json_ptr)
+    call meta%kill()
+    call copy%kill()
+  end subroutine test_stream_snapshot3D
 
   ! The multistate 3D status survives serialisation, as every type a stage sends must.
   ! Verify that the multistate solve3D fields round-trip through set/get, with the

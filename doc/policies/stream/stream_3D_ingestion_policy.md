@@ -16,6 +16,7 @@ preserve.
   verdict, and the folders it keeps. The addon program itself is
   governed by `doc/policies/3D/solve3D_addon_policy.md`; this policy relies on its row contract
   (section 4 there) and its report (section 11 there).
+- p07's 3D snapshots (section 8): `apply_gui_updates` and `write_snapshot` in the same file.
 
 ## 2. What the pool publishes
 
@@ -67,7 +68,7 @@ completed iteration left it.
 1. **Watching:** p07 watches p06's completed folder and records each publication once.
 2. **Only the newest:** in a pass where no 3D job runs, p07 takes the newest publication it has
    not taken. Older ones not taken are passed over, because the newest holds what they held.
-   - **A publication p07 cannot use** (no class averages or `cls2D`, a count mismatch, a stack
+   - **A publication p07 cannot use** (no class averages, FRCs or `cls2D`, a count mismatch, a stack
      that changed size, image indices that disagree with the rows: `publication_problem`) is
      passed over with a warning before anything is merged, and listed in
      `rejected_publications.txt` in p07's folder, so a restart passes it over too. The stage
@@ -113,6 +114,12 @@ completed iteration left it.
      set's rows keep their selection.
    - **The stage's `cls2D`** is the publication's, and so is its optics table when the
      publication carries one (the newest optics map's; group ids are kept across maps).
+   - **The class averages and FRCs come with the classes** (`take_cavgs`). The publication's are
+     copied into `quality_selection/<id>/` and replace the stage's `cavg` and `frc2D` entries in
+     its out segment; the volumes and FSCs stay. A run's class-average balancing (`balance=cavg`,
+     solve3D's default) reads the class averages and FRCs of the classes its rows are labelled
+     with, and p06 removes a publication two publications later (section 3, item 5), possibly
+     while a run reads it. The first set's `solve2D` replaces them with its own.
 6. **The first run:** `solve3D` starts once at least `MIN_PTCLS_PER_STATE` (5) particles per
    state are selected (`next_job`), in the pass that ends the first set's `solve2D` and
    selection (or its fallback); with fewer, it waits for later publications to select more. The commander checks 2 <= `nstates` <= 20 (the GUI status
@@ -149,7 +156,8 @@ completed iteration left it.
     orientation distribution, and in the status the selected particles as imported.
 12. **What p07 keeps:** the newest `NQUALITY_KEPT` (3) quality folders and those of the
     publications a run started from (listed in `quality_selection/runs.txt`, the first set's
-    publication among them), and `quality_selection/first_set/`; the `solve2D/` folder; the latest addon
+    publication among them), with the class averages and FRCs copied into them, so every run's
+    project and every 3D snapshot finds its own; `quality_selection/first_set/`; the `solve2D/` folder; the latest addon
     iteration folder (the frozen base), its predecessors removed once it has completed; no folder
     set aside for a job left unfinished once a later run has completed. A stop cancels the
     running job (`doc/policies/stream/restart_policy.md`).
@@ -223,3 +231,35 @@ completed iteration left it.
   own low-pass schedule from the FSC; it has not been run end to end in the stage.
 - **The addon run is not tested end to end in the stage:** its command line, frozen project and
   report reading are covered by the addon's own tests, not by p07's.
+
+## 8. 3D snapshots
+
+A 3D snapshot is a particle set the GUI asks for from multistate 3D's latest result: the particles
+of one or more selected states. The request (`snapshot3D`) and its report are in the IPC policy
+(section 6).
+
+1. **The source** is the latest finished run's project (`result_projfile`: solve3D, an addon pass
+   or the final refine3D), not the stage's rows. Rows imported since that run have no 3D
+   assignment yet. An addon run that is rolled back leaves the previous result as the source.
+2. **What it holds:**
+   - the particles of the selected states, merged into state 1 in `ptcl3D` and `ptcl2D` alike,
+     with their 3D orientations;
+   - every other particle deselected;
+   - no state artifacts in `out`: no volumes and no FSCs (`remove_state_artifacts_from_osout`, as
+     the batch `selection oritype=ptcl3D states=...` gives).
+3. **Where:** `snapshots/<name>/<name>.simple` in p07's folder, written with:
+   - `<name>_micrographs.star` and `<name>_particles.star`, with the optics table the result
+     holds (the newest publication's) and p06's optics offset (`OPTICS_ID_DELTA` per GUI display);
+   - each selected state's volume, copied as `vol_state<NN>.mrc` with its original state number,
+     which the project does not register.
+4. **When:** in the pass after the request arrives, between steps, so never while a job is
+   started or collected. Each id is written once.
+5. **Not written:** a request before any result, or one whose states hold no particle, is
+   answered with no particles and no file, as p06 answers a 2D snapshot of an iteration it no
+   longer keeps.
+6. **After the stream has finished,** p07 no longer runs. NICE then starts the batch
+   `selection oritype=ptcl3D states=...` on p07's final project
+   (`solve3D_multistate/solve3D_multistate.simple`). Its result is a batch job, with no snapshot
+   folder or STAR files.
+7. **Tests:** `test_snapshot3D` in p07's tester: before a result; from a fixture result with
+   three states, two of them selected; the same request again.

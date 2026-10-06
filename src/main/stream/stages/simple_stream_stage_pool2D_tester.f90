@@ -23,7 +23,7 @@ use simple_gui_metadata_utils,                  only: max_metadata_size
 use simple_gui_metadata_types,                  only: GUI_METADATA_STREAM_POOL2D_TYPE, GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,&
                                                      &GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE, GUI_METADATA_STREAM_UPDATE_TYPE
 use simple_gui_metadata_stream_pool2D,          only: gui_metadata_stream_pool2D
-use simple_gui_metadata_stream_pool2D_snapshot, only: gui_metadata_stream_pool2D_snapshot
+use simple_gui_metadata_stream_snapshot,        only: gui_metadata_stream_snapshot
 use simple_gui_metadata_stream_update,          only: gui_metadata_stream_update
 use simple_stream_pipe,                         only: stream_pipe
 use simple_stream_stage_pool2D,                 only: stream_stage_pool2D
@@ -601,7 +601,7 @@ contains
         class(stream_stage_pool2D), allocatable                 :: stage
         type(cmdline)                             :: cline
         type(stream_pipe)                         :: reader
-        type(gui_metadata_stream_pool2D_snapshot) :: snapshot
+        type(gui_metadata_stream_snapshot) :: snapshot
         character(len=:), allocatable             :: buffer
         type(string)                              :: cwd_saved, root, fname
         integer(c_int)                            :: fds(2)

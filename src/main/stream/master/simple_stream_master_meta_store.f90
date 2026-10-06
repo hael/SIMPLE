@@ -35,7 +35,7 @@ use simple_gui_metadata_stream_picking,            only: gui_metadata_stream_pic
 use simple_gui_metadata_stream_initial_analysis,   only: gui_metadata_stream_initial_analysis
 use simple_gui_metadata_stream_particle_sieving,   only: gui_metadata_stream_particle_sieving
 use simple_gui_metadata_stream_pool2D,             only: gui_metadata_stream_pool2D
-use simple_gui_metadata_stream_pool2D_snapshot,    only: gui_metadata_stream_pool2D_snapshot
+use simple_gui_metadata_stream_snapshot,           only: gui_metadata_stream_snapshot
 use simple_gui_metadata_stream_solve3D_multistate, only: gui_metadata_stream_solve3D_multistate
 use simple_gui_metadata_types, only: &
     &GUI_METADATA_STREAM_PREPROCESS_TYPE, GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ASTIG_TYPE,&
@@ -51,7 +51,7 @@ use simple_gui_metadata_types, only: &
     &GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE, GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE,&
     &GUI_METADATA_STREAM_POOL2D_TYPE, GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE, GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,&
     &GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE, GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE,&
-    &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE, GUI_METADATA_VOL3D_TYPE
+    &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE, GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE, GUI_METADATA_VOL3D_TYPE
 implicit none
 
 public :: stream_master_meta_store
@@ -83,12 +83,13 @@ type :: stream_master_meta_store
     ! pool 2D
     type(gui_metadata_stream_pool2D)                :: pool2D
     type(gui_metadata_cavg2D),          allocatable :: pool2D_cavgs(:)
-    type(gui_metadata_stream_pool2D_snapshot)       :: pool2D_snapshot
+    type(gui_metadata_stream_snapshot)       :: pool2D_snapshot
     type(gui_metadata_cavg2D),          allocatable :: pool2D_snapshot_cavgs(:)
     ! multistate 3D
     type(gui_metadata_stream_solve3D_multistate) :: solve3D
     type(gui_metadata_vol3D),           allocatable :: solve3D_vols(:)
     type(gui_metadata_cavg2D),          allocatable :: solve3D_reprojtiles(:)
+    type(gui_metadata_stream_snapshot)              :: solve3D_snapshot
     logical :: l_exists = .false.
 contains
     procedure :: new
@@ -123,6 +124,7 @@ contains
         call self%pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
         call self%pool2D_snapshot%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
         call self%solve3D%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
+        call self%solve3D_snapshot%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
         self%l_exists = .true.
     end subroutine new
 
@@ -168,6 +170,8 @@ contains
                 if( frame_fits(buffer, sizeof(self%pool2D_snapshot), meta_type) ) self%pool2D_snapshot = transfer(buffer, self%pool2D_snapshot)
             case(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
                 if( frame_fits(buffer, sizeof(self%solve3D), meta_type) ) self%solve3D = transfer(buffer, self%solve3D)
+            case(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
+                if( frame_fits(buffer, sizeof(self%solve3D_snapshot), meta_type) ) self%solve3D_snapshot = transfer(buffer, self%solve3D_snapshot)
             ! an item of a list
             case(GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE)
                 call place_micrograph(self%preprocess_micrographs, buffer, meta_type)
@@ -212,14 +216,15 @@ contains
             &self%particle_sieving_ref_cavgs)
         call assembler%assemble_stream_pool2D(self%pool2D, self%pool2D_cavgs, self%pool2D_snapshot,&
             &self%pool2D_snapshot_cavgs)
-        call assembler%assemble_stream_solve3D_multistate(self%solve3D, self%solve3D_vols,&
+        call assembler%assemble_stream_solve3D_multistate(self%solve3D, self%solve3D_snapshot, self%solve3D_vols,&
             &self%solve3D_reprojtiles)
     end subroutine assemble
 
     !> Before stage @p id is started again: its lists (micrographs, optics groups, class averages,
     !! volumes, reprojection tiles) are dropped, so entries the previous process sent and the new
-    !! one does not send again (a run's volumes, an older set's class averages) leave the GUI. Its
-    !! status and fixed plots are replaced by the new process's first messages.
+    !! one does not send again (a run's volumes, an older set's class averages) leave the GUI, and
+    !! so is multistate 3D's last snapshot report. Its status and fixed plots are replaced by the
+    !! new process's first messages.
     subroutine clear_stage( self, id )
         class(stream_master_meta_store), intent(inout) :: self
         integer,                         intent(in)    :: id
@@ -244,6 +249,8 @@ contains
             case(STAGE_SOLVE3D)
                 if( allocated(self%solve3D_vols)        ) deallocate(self%solve3D_vols)
                 if( allocated(self%solve3D_reprojtiles) ) deallocate(self%solve3D_reprojtiles)
+                call self%solve3D_snapshot%kill()
+                call self%solve3D_snapshot%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
         end select
     end subroutine clear_stage
 

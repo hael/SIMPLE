@@ -28,7 +28,7 @@ from django.contrib.auth.decorators import login_required
 from ..models                    import WorkspaceModel
 from ..data_structures.batchjob  import BatchJob
 from ..data_structures.project   import Project
-from ..data_structures.streamjob import StreamJob
+from ..data_structures.streamjob import StreamJob, snapshot_stage_dir
 from ..data_structures.workspace import Workspace
 from ..helpers                   import (
     HttpResponseNoContent,
@@ -1381,7 +1381,7 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
     if streamjob is None:
         return redirect("nice_lite:workspace")
 
-    if type not in {"snapshot", "final"}:
+    if type != "final" and snapshot_stage_dir(type) is None:
         print_error(f"link_particle_set: unsupported type '{type}' for job {jobid}")
         return redirect("nice_lite:view_stream", jobid=jobid)
     if not _is_safe_filename(filename):
@@ -1405,13 +1405,14 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
         print_error(f"link_particle_set: target workspace {link_workspace.id} not in project {project.id}")
         return redirect("nice_lite:view_stream", jobid=jobid)
 
-    if type == "snapshot":
-        # Snapshot links a generated snapshot directory to a new Batch particle-set job.
+    if type != "final":
+        # Snapshot links a generated snapshot directory (2D or 3D, in its stage's folder) to a
+        # new Batch particle-set job.
         set_proj = os.path.join(
             project.dirc,
             workspace.dirc,
             streamjob.dirc,
-            "classification_2D",
+            snapshot_stage_dir(type),
             "snapshots",
             pathlib.Path(filename).stem,
             filename,
@@ -1492,6 +1493,57 @@ def view_stream_snapshot_classification_2D(request):
     if not streamjob.snapshot_classification_2D(snapshot_selection, snapshot_iteration):
         print_error(f"snapshot_stream_classification_2D: failed for job {jobid}")
     return redirect("nice_lite:view_stream", jobid=jobid)
+
+
+def _parse_state_list(raw_value, log_context):
+    """Parse the posted JSON array of state numbers; None (logged) unless a non-empty list of states >= 1."""
+    try:
+        states = json.loads(raw_value)
+    except (TypeError, ValueError):
+        print_error(f"{log_context}: selected_states is not JSON")
+        return None
+    if not isinstance(states, list) or not states:
+        print_error(f"{log_context}: at least one state must be selected")
+        return None
+    if not all(isinstance(state, int) and not isinstance(state, bool) and state >= 1 for state in states):
+        print_error(f"{log_context}: selected_states must be state numbers >= 1")
+        return None
+    return sorted(set(states))
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_stream_snapshot_solve3D(request):
+    """Record a 3D snapshot particle set of the selected states and redirect to the stream view."""
+    streamjob, jobmodel = _get_accessible_streamjob(request, log_context="snapshot_stream_solve3D")
+    if streamjob is None:
+        return redirect("nice_lite:workspace")
+
+    jobid = jobmodel.id
+    selected_states = _parse_state_list(request.POST.get("selected_states", ""), "snapshot_stream_solve3D")
+    if selected_states is None:
+        return redirect("nice_lite:view_stream", jobid=jobid)
+    if not streamjob.snapshot_solve3D(selected_states):
+        print_error(f"snapshot_stream_solve3D: failed for job {jobid}")
+    return redirect("nice_lite:view_stream", jobid=jobid)
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_stream_select_solve3D(request):
+    """Create and launch a state-selection batch job on the finished stream's multistate 3D project."""
+    streamjob, jobmodel = _get_accessible_streamjob(request, log_context="select_stream_solve3D")
+    if streamjob is None:
+        return redirect("nice_lite:workspace")
+
+    jobid = jobmodel.id
+    selected_states = _parse_state_list(request.POST.get("selected_states", ""), "select_stream_solve3D")
+    if selected_states is None:
+        return redirect("nice_lite:view_stream", jobid=jobid)
+    if not streamjob.selection_solve3D(selected_states):
+        print_error(f"select_stream_solve3D: failed for job {jobid}")
+        return redirect("nice_lite:view_stream", jobid=jobid)
+    return redirect("nice_lite:workspace")
 
 
 @login_required(login_url="/login")

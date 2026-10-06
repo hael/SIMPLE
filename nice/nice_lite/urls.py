@@ -117,6 +117,8 @@ urlpatterns = [
     path("updatestreamclassification2Dmskdiam", stream_views.view_stream_update_classification_2D_mskdiam, name="update_classification_2D_mskdiam"),
     path("snapshotstreamclassification2D",      stream_views.view_stream_snapshot_classification_2D,       name="snapshot_stream_classification_2D"),
     path("selectstreamclassification2D",        stream_views.view_stream_select_classification_2D,         name="select_stream_classification_2D"),
+    path("snapshotstreamsolve3D",               stream_views.view_stream_snapshot_solve3D,                 name="snapshot_stream_solve3D"),
+    path("selectstreamsolve3D",                 stream_views.view_stream_select_solve3D,                   name="select_stream_solve3D"),
     path("selectpickrefs",                      stream_views.view_stream_select_pickrefs,                  name="select_pickrefs"),
 
     path(

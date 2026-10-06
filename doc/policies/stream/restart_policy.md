@@ -58,7 +58,7 @@ exist, and then removes `dir_exec` from the command lines it passes on.
 | the sieve's hand-offs, with its empty final set (`sieve_final_c<n>_f<m>.simple`) | p05's completed folder | p06 |
 | upstream idle or stopped | `STREAM_IDLE`, `STREAM_FINISHED` in p01's and p04's folders; both removed when the stage starts, the idle marker when new work arrives | p03 and p04 (p01's), p05 (p04's) |
 | publications for 3D and their numbering | p06's completed folder (the newest two) | p06 (next id), p07 |
-| snapshots | `snapshots/` in p06's folder | the GUI, users |
+| snapshots | `snapshots/` in p06's folder (2D) and in p07's (3D). A restarted stage keeps no record of the requests it answered; NICE sends each request once, so none comes again | the GUI, users |
 
 Anything kept only in memory is lost:
 - the pool's history of iterations;

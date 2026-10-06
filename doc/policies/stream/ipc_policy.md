@@ -53,7 +53,7 @@ A frame is a C `int` byte count followed by that many payload bytes.
      drops its reprojection tiles), or stops (`gui_metadata_project`, jsonised in-process only);
    - sender and receiver must be the same binary, which forked stages are.
 3. **Capacities are fixed** by the types (named constants where callers need them:
-   `MAX_PICKREFS_SELECTION`, `MAX_SNAPSHOT2D_SELECTION`, `MAX_SNAPSHOT2D_FNAME_LEN`,
+   `MAX_PICKREFS_SELECTION`, `MAX_SNAPSHOT2D_SELECTION`, `MAX_SNAPSHOT_FNAME_LEN`,
    `MAX_MIC_COORDINATES`, `MAX_OPTICS_SHIFTS`, `MAX_TIMEPLOT_POINTS`, `MAX_HISTOGRAM_BINS`,
    `MAX_SIEVE_SELECTION`, `MAX_FSC_VOL3D`, `MAX_STATES_SOLVE3D_MULTISTATE`). Callers stay
    within them: the picks drawn on a thumbnail are cut at `MAX_MIC_COORDINATES`, and a long run's
@@ -91,7 +91,8 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
    restarted stage therefore receives the next answer whole:
    - p01 reads the CTF resolution, astigmatism and ice thresholds;
    - p03 reads the picking-reference selection and its cycle;
-   - p06 reads the 2D mask diameter and snapshot requests.
+   - p06 reads the 2D mask diameter and 2D snapshot requests;
+   - p07 reads 3D snapshot requests.
 3. A stopped stage, and a stage asked to stop, is not sent updates (its pipe would only fill).
 4. A stage drains its updates once per pass and applies them in order.
 5. **The master's update writer gives up on a part-written frame** after
@@ -117,12 +118,14 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
    | `ctfresthreshold`, `astigthreshold`, `icefracthreshold` | preprocessing thresholds |
    | `pickrefs_selection`, `pickrefs_cycle` | a picking-reference selection of p03's cycle |
    | `mskdiam2D` | the 2D pool's mask diameter |
-   | `snapshot2D` {`id`, `iteration`, `selection`, `filename`} | a 2D snapshot request; p06 answers each id once with a snapshot report, where 0 particles and no file mean it was not written (an iteration no longer kept). `filename` is a bare file name ending in `.simple`, of at most `MAX_SNAPSHOT2D_FNAME_LEN` (128) characters: p06 makes a folder of it. NICE sends `snapshot_<id>.simple` |
+   | `snapshot2D` {`id`, `iteration`, `selection`, `filename`} | a 2D snapshot request; p06 answers each id once with a snapshot report, where 0 particles and no file mean it was not written (an iteration no longer kept). `filename` is a bare file name ending in `.simple`, of at most `MAX_SNAPSHOT_FNAME_LEN` (128) characters: p06 makes a folder of it. NICE sends `snapshot_<id>.simple` |
+   | `snapshot3D` {`id`, `selection`, `filename`} | a 3D snapshot request: the particles of the selected states of multistate 3D's latest result, merged into one state (`stream_3D_ingestion_policy.md`, section 8). `selection` holds 1 to `MAX_STATES_SOLVE3D_MULTISTATE` state numbers, each within 1..`MAX_STATES_SOLVE3D_MULTISTATE`; `filename` follows `snapshot2D`'s rule. p07 answers each id once with a 3D snapshot report (tag `GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE`, nested as `solve3D_multistate.snapshot`, with its `states`), where 0 particles and no file mean it was not written |
 
 3. **Dropped selections:** a selection larger than the update holds is dropped whole with a
    warning. Acting on part of it would act on classes the user did not choose; the rest of the
    answer is applied. A snapshot request whose `filename` breaks its rule is dropped the same
-   way.
+   way, and so is a 3D snapshot request of no state, of more than
+   `MAX_STATES_SOLVE3D_MULTISTATE` states, or of a state out of range.
 4. **Nothing in an answer stops the master.**
 
 ## 7. Stopping
@@ -161,8 +164,11 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
 - Tests:
   - `unit_ipc` "stream pipe": framing, resync, discard, an abandoned part-written frame;
   - `unit_stream` "stream master": stage names and keys; GUI answers, including invalid and
-    oversized ones and unsafe snapshot names; the store, including a frame of the wrong length; a
-    stage's pipes from both sides; an update sent once;
+    oversized ones, unsafe snapshot names and 3D snapshot selections out of range; the store,
+    including a frame of the wrong length and the 3D snapshot report; a stage's pipes from both
+    sides; an update sent once;
+  - `unit_stream` "solve 3D": a 3D snapshot request through the stage's update pipe, before and
+    after a result;
   - `unit_stream` "meta plots": the time plots of a run longer than their capacity;
   - `unit_ui` "GUI metadata": every type a stage sends survives serialisation
     (a copy received by transfer holds the same fields), a volume without its reprojection tiles;

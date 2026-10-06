@@ -227,9 +227,28 @@ class BatchViewTests(SimpleTestCase):
                     "particle_set_id": 2,
                     "filename": "snapshot_2.simple",
                 },
-                SimpleNamespace(dirc="3_simple_stream", pckg="simple_stream"),
+                SimpleNamespace(
+                    dirc="3_simple_stream",
+                    pckg="simple_stream",
+                    particle_sets_stats={"particle_sets": [{"id": 2, "type": "snapshot2D"}]},
+                ),
                 "3_simple_stream/classification_2D/snapshots/"
                 "snapshot_2/snapshot_2.simple",
+            ),
+            (
+                {
+                    "type": "stream_snapshot",
+                    "stream_job_id": 5,
+                    "particle_set_id": 4,
+                    "filename": "snapshot_4.simple",
+                },
+                SimpleNamespace(
+                    dirc="3_simple_stream",
+                    pckg="simple_stream",
+                    particle_sets_stats={"particle_sets": [{"id": 4, "type": "snapshot3D"}]},
+                ),
+                "3_simple_stream/solve3D_multistate/snapshots/"
+                "snapshot_4/snapshot_4.simple",
             ),
         )
 

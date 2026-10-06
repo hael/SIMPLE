@@ -3,7 +3,12 @@
   Two contexts:
    - streaming multistate zoom page: flat `jobstats.state_volumes` (reprojtiles).
      selectState() drives data-state-selector/data-state-panel/data-volume-panel-title
-     and calls the page's applyVolumeSelection()/lastinteraction when present.
+     and calls the page's applyVolumeSelection()/lastinteraction when present. Tiles
+     toggle like the batch ones; while multistate 3D runs, "create snapshot particle
+     set" posts the surviving states to snapshot_stream_solve3D (a 3D snapshot the
+     stage writes), and once it has finished, "create final particle set" posts them
+     to select_stream_solve3D, which launches the same `selection oritype=ptcl3D`
+     job as the batch viewer on the stream's multistate 3D project.
    - non-streaming per-stage panel (_cls3D_viewer.html): `cls3d_stages` (list of
      {key, states, volume_outputs, volume_kinds}, one entry per cls3D stage - see
      _batch_overview_context/_cls3d_stages in batch_views.py), grouped into
@@ -54,7 +59,8 @@
     <div class="flex flex-wrap gap-2 p-4">
         {% for state in jobstats.state_volumes %}
         <div onclick="selectState(this)" data-state-selector="{{ state.state }}"
-             class="flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
+             class="relative flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
+            <span aria-hidden="true" class="statecheck absolute flex h-4 w-4 items-center justify-center rounded-full bg-streamring text-[9px] font-bold text-white" style="right:0.25rem;top:0.25rem">✓</span>
             <p class="mt-1 w-full text-[9px] text-streamlabel">
                 <strong class="text-streamtext">state {{ state.state }}</strong>
             </p>
@@ -66,6 +72,25 @@
         </div>
         {% endfor %}
     </div>
+    {% if status == "running" or status == "finished" %}
+    <div class="flex items-center justify-end gap-2 p-2 border-t border-streamline">
+        {% if status == "running" %}
+        <form method="POST" action="{% url 'nice_lite:snapshot_stream_solve3D' %}">
+            {% csrf_token %}
+            <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
+            <input type="hidden" id="selected_states" name="selected_states" value=""/>
+            <button type="button" onclick="saveStateSelection(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">create snapshot particle set</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{% url 'nice_lite:select_stream_solve3D' %}">
+            {% csrf_token %}
+            <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
+            <input type="hidden" id="selected_states" name="selected_states" value=""/>
+            <button type="button" onclick="saveStateSelection(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">create final particle set</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
     {% endif %}
 </div>
 <script>

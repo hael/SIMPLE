@@ -18,6 +18,45 @@ from .simple import SIMPLEStream
 from .workspace import Workspace
 
 
+# A stream particle set's snapshot type, and the stage folder its snapshots/<name>/ lives in.
+SNAPSHOT_STAGE_DIRS = {
+    "snapshot2D": "classification_2D",
+    "snapshot3D": "solve3D_multistate",
+}
+
+
+def snapshot_stage_dir(set_type):
+    """Return the stage folder of a snapshot particle-set type, or None for any other type."""
+    return SNAPSHOT_STAGE_DIRS.get(set_type)
+
+
+def apply_snapshot_report(particle_set, snapshot):
+    """Fill a snapshot particle set from the stage's report, once.
+
+    The set keeps the bare file name NICE gave it (linking resolves the folder from its type);
+    the written project's absolute path goes to 'path'. A snapshot the stage could not write
+    (no particles, no file) loses its file name, so nothing offers to link it.
+    """
+    if particle_set is None or "time" in particle_set:
+        return
+    particle_set["nptcls"] = snapshot.get("snapshot_nptcls", 0)
+    particle_set["time"]   = snapshot.get("snapshot_time", 0)
+    reported = snapshot.get("snapshot_filename") or ""
+    if reported:
+        particle_set["path"]     = reported
+        particle_set["filename"] = os.path.basename(reported)
+    else:
+        particle_set.pop("filename", None)
+
+
+def find_particle_set(particle_sets_stats, set_id):
+    """Return the particle set with id set_id from a job's particle_sets_stats, or None."""
+    particle_sets = particle_sets_stats.get("particle_sets") if isinstance(particle_sets_stats, dict) else None
+    if not isinstance(particle_sets, list):
+        return None
+    return next((x for x in particle_sets if isinstance(x, dict) and x.get("id") == set_id), None)
+
+
 class StreamJob(Job):
     """
     Represents a single SIMPLE stream processing job within a workspace.
@@ -305,19 +344,23 @@ class StreamJob(Job):
         if "pool2D" in stats_json:
             updated = True
             if "snapshot" in stats_json["pool2D"]:
-                snapshot    = stats_json["pool2D"]["snapshot"]
-                snapshot_id = snapshot["id"]
-                particle_set = next((x for x in self.jobmodel.particle_sets_stats["particle_sets"] if x["id"] == snapshot_id), None)
+                snapshot     = stats_json["pool2D"]["snapshot"]
+                particle_set = find_particle_set(self.jobmodel.particle_sets_stats, snapshot.get("id"))
                 if particle_set is not None and "time" not in particle_set:
-                    particle_set["nptcls"]    = snapshot["snapshot_nptcls"]
-                    particle_set["time"]      = snapshot["snapshot_time"]
-                    particle_set["filename"]  = snapshot["snapshot_filename"]
-                    particle_set["cls2D"]     = snapshot["cls2D"]
+                    apply_snapshot_report(particle_set, snapshot)
+                    particle_set["cls2D"] = snapshot.get("cls2D", [])
             pool2D_stats = {k: v for k, v in stats_json["pool2D"].items() if k != "snapshot"}
             self.jobmodel.classification_2D_stats = pool2D_stats
         if "solve3D_multistate" in stats_json:
             updated = True
-            self.jobmodel.solve3D_multistate_stats = stats_json["solve3D_multistate"]
+            if "snapshot" in stats_json["solve3D_multistate"]:
+                snapshot     = stats_json["solve3D_multistate"]["snapshot"]
+                particle_set = find_particle_set(self.jobmodel.particle_sets_stats, snapshot.get("id"))
+                if particle_set is not None and "time" not in particle_set:
+                    apply_snapshot_report(particle_set, snapshot)
+                    particle_set["states"] = snapshot.get("states", particle_set.get("states", []))
+            solve3D_stats = {k: v for k, v in stats_json["solve3D_multistate"].items() if k != "snapshot"}
+            self.jobmodel.solve3D_multistate_stats = solve3D_stats
         if updated:
             self.jobmodel.save()
         return True
@@ -466,7 +509,7 @@ class StreamJob(Job):
         newset = {
             "id"       : setid,
             "name"     : "particle set " + str(setid),
-            "type"     : "snapshot",
+            "type"     : "snapshot2D",
             "filename" : projfile
         }
         particle_sets_stats["particle_sets"].insert(0, newset)
@@ -480,6 +523,73 @@ class StreamJob(Job):
         self.jobmodel.particle_sets_stats = particle_sets_stats
         self.jobmodel.save()
         return True
+
+    def snapshot_solve3D(self, selected_states):
+        """Record a 3D snapshot particle set and queue it for the stream.
+
+        Appends a new snapshot3D entry to particle_sets_stats and writes the
+        snapshot3D key into master_update so multistate 3D picks it up on the
+        next cycle: the particles of the selected states of its latest result,
+        merged into one state.
+
+        selected_states: list of the state numbers the snapshot holds.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+        if not selected_states:
+            print_error("snapshot_solve3D: no state selected")
+            return False
+        master_update = self.jobmodel.master_update
+        particle_sets_stats = self.jobmodel.particle_sets_stats
+        if "particle_sets" not in particle_sets_stats:
+            particle_sets_stats["particle_sets"] = []
+        setid = len(particle_sets_stats["particle_sets"]) + 1
+        projfile = "snapshot_" + str(setid) + ".simple"
+        newset = {
+            "id"       : setid,
+            "name"     : "particle set " + str(setid),
+            "type"     : "snapshot3D",
+            "filename" : projfile,
+            "states"   : sorted(selected_states),
+        }
+        particle_sets_stats["particle_sets"].insert(0, newset)
+        master_update["snapshot3D"] = {
+            "id"        : setid,
+            "selection" : sorted(selected_states),
+            "filename"  : projfile
+        }
+        self.jobmodel.master_update = master_update
+        self.jobmodel.particle_sets_stats = particle_sets_stats
+        self.jobmodel.save()
+        return True
+
+    def selection_solve3D(self, selected_states):
+        """Create and launch a state-selection ('selection') batch job on multistate 3D's final project.
+
+        After the stream has finished, multistate 3D no longer answers snapshot
+        requests: the selection runs as a batch job, as the batch 3D viewer's
+        does (BatchJob.createStateSelection), on this stream's own
+        solve3D_multistate project, rather than recording a particle set.
+
+        selected_states: list of the state numbers to keep, merged into one.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+        if not selected_states:
+            print_error("selection_solve3D: no state selected")
+            return False
+        parent_proj = os.path.join(
+            self.absdir, "solve3D_multistate", "solve3D_multistate.simple"
+        )
+        if not os.path.isfile(parent_proj):
+            print_error(f"selection_solve3D: no multistate 3D project {parent_proj}")
+            return False
+        project = Project(id=self.jobmodel.dset.proj.id)
+        workspace = Workspace(self.jobmodel.dset.id)
+        selectionjob = BatchJob()
+        return selectionjob.createStateSelection(project, workspace, parent_proj, selected_states)
 
     def selection_classification_2D(self, final_deselection):
         """Create and launch a cls2D-deselection ('selection') batch job from the final 2D-classification selection.
