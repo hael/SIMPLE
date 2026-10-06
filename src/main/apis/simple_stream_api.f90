@@ -4,7 +4,6 @@ use simple_core_module_api
 use simple_defs_environment
 use json_kinds
 use json_module
-use simple_stream2D_state
 use simple_class_frcs,             only: class_frcs
 use simple_cmdline,                only: cmdline
 use simple_commander_base,         only: commander_base
@@ -23,8 +22,7 @@ use simple_stack_io,               only: stack_io
 use simple_starproject_stream,     only: starproject_stream
 use simple_stream_chunk,           only: stream_chunk
 use simple_stream_chunk2D_utils,   only: init_chunk_clustering
-use simple_stream_refine2D_utils, only: cleanup_root_folder, setup_downscaling, terminate_stream2D,&
-                                  &tidy_2Dstream_iter, write_project_stream2D
+use simple_stream_refine2D_utils, only: cleanup_root_folder, setup_downscaling, tidy_2Dstream_iter
 use simple_stream_utils,           only: get_latest_optics_map_id, create_stream_project, init_stream_qenv, import_new_projects
 use simple_stream_watcher,         only: stream_watcher, sniff_folders_SJ, workout_directory_structure 
 end module simple_stream_api

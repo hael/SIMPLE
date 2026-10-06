@@ -7,9 +7,13 @@ and dimensions evolve, its snapshots and its final project. What a change must p
 
 - The stage (p06): `src/main/stream/stages/simple_stream_stage_pool2D.f90`, driven by
   `src/main/commanders/stream/simple_commanders_stream_p06_pool2D.f90`.
-- The pool's iterations, sampling, resolution and dimensions: `src/main/stream/pool2D/simple_stream_pool2D_utils.f90`.
-- Snapshots, publications for 3D, the final project: `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`.
-- The pool's state: `src/main/stream/pool2D/simple_stream2D_state.f90` (module variables).
+- The pool: `stream_pool2D` in `src/main/stream/pool2D/simple_stream_pool2D.f90`, its state
+  (private components) and its iterations, sampling, resolution, dimensions, snapshots,
+  publications for 3D and final project. p06 holds one, empty from its start, hands it the sets
+  it imports (`append_sets`) and starts it at the first import; what the GUI shows of it is one
+  record (`stats`). Its public procedures are those p06 calls, and `init_state` for its tester.
+- Stateless helpers (folder clean-up, the rows a set adds, class draws, publication building and
+  naming, iteration files): `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`.
 
 The publications for 3D are governed by `doc/policies/stream/stream_3D_ingestion_policy.md`; restarts
 by `doc/policies/stream/restart_policy.md`.
@@ -48,7 +52,9 @@ Each pass of p06 runs, in this order:
    run stops at `FINAL_ITER` (25), so a short session still publishes its last iteration (until 5
    October 2026 the publications started after iteration 25, and a session whose final set came
    before it never reached 3D);
-4. import the new sets when the pool is free (the first import starts it, section 4). With
+4. import the new sets when the pool is free (the first import starts it, section 4): p06 chooses
+   the sets and the pool appends them (`append_sets`: their micrographs, their stacks renumbered
+   after the pool's, their particles as new rows with no 2D parameters but their shifts). With
    `stepwise=yes` (p06's default, set by its commander; a registered parameter) an import takes
    sets in order until its own particles reach the starting threshold (or `ncls` * 20 before it
    is known); the rest wait for the next import. Only the particles of the import count, so a
@@ -86,7 +92,7 @@ Each pass of p06 runs, in this order:
 
 1. **History:** before dispatch, the completed iteration's pool project, with its class averages
    and a copy of its FRCs (`frcs_iterNNN.bin`), goes into the history. The history is a ring of
-   `POOL_NHISTORY` (5) iterations (`simple_stream2D_state`, slot `pool_history_slot(iter)`). The
+   `POOL_NHISTORY` (5) iterations (`simple_stream_pool2D`, slot `history_slot(iter)`). The
    new entry replaces the iteration `POOL_NHISTORY` before it, so memory is bounded at five copies
    and no copy is made beyond the one per iteration.
 2. **Sampling:** stacks are shuffled and taken until more than `STREAM_NPTCLS_MAX` (500,000)
@@ -148,7 +154,7 @@ in 3D, and in snapshots by the user's selection.
 
 1. A snapshot request from the GUI (id, iteration, selected classes, file name) is written once
    per id. A request before the pool has started is answered at once, as not written (item 6).
-2. It holds the selected classes of the requested iteration (`write_pool_snapshot`, the request
+2. It holds the selected classes of the requested iteration (the pool's `write_snapshot`, the request
    passed as arguments):
    - for the current iteration, the pool project;
    - for an earlier one, its history entry, when the history still holds it and its files exist.
@@ -175,7 +181,7 @@ When p06 stops, the pool's last complete iteration is written as the stage's pro
 
 Its class averages are then ranked. Before any complete iteration, the pool's imported
 micrographs, stacks and particles are written instead, as they came (no 2D parameters but their
-shifts), with the newest optics map's groups and the STAR files (`terminate_stream2D`). The groups
+shifts), with the newest optics map's groups and the STAR files (the pool's `finalise`). The groups
 are applied to the project as written; the root folder's optics project is not read.
 
 Publications for 3D (`stream_3D_ingestion_policy.md`): the one after iteration `FINAL_ITER` or a
@@ -191,22 +197,25 @@ segment (`publishes_final`); multistate 3D then runs its final refine3D.
   `OPTICS_ID_DELTA`) and in the pool module (`ITERLIM`, `ITERSHIFT`). A change of any of them
   updates this policy.
 - The pool command line sets `msk_crop` explicitly; changing `mskdiam` recomputes `msk_crop`,
-  clamped to the box (`set_pool_mask`), and the low-pass ramp (`update_mskdiam`).
+  clamped to the box (the pool's `set_mask`), and the low-pass ramp (`set_mskdiam`).
 - Anything written for downstream use is rescaled to the native sampling or labelled with the
   pool's.
-- `POOL_NHISTORY` (`simple_stream2D_state`) sets both the history and the iterations whose files
+- `POOL_NHISTORY` (`simple_stream_pool2D`) sets both the history and the iterations whose files
   are kept; a change updates sections 6 and 9.
 - Tests: `unit_stream` "pool 2D" covers the rules (pause, final run, default mask), the set
-  transfer, the final-set flag, the publication's contents and numbering, and the snapshot's
-  report to the GUI (written, and not written), the reproducible class draws and the mask clamp.
-  Iterations, the update set, the history, the writing of snapshots and dimension changes have no
-  unit test.
+  transfer as the stage counts it, the final-set flag, the publication's contents and numbering,
+  and the snapshot's report to the GUI (written, and not written). "pool 2D object"
+  (`simple_stream_pool2D_tester`) covers the pool: an empty pool and its kill, the rows a set
+  adds and the pool's counts after an import, the reproducible class draws, the mask clamp and
+  the mask in `stats`, a restart after kill, an unclassified pool publishing nothing, and a
+  snapshot of an iteration without FRCs. Iterations, the update set, the history, the writing of
+  snapshots and dimension changes need a queue and have no unit test.
 
 ## 12. Known gaps
 
-- **Module state** (review G1). The pool is about thirty-five public module variables, read and
-  written by three modules; p06 holds a pointer the pool reads as `master_cline`. One process
-  runs one pool, and the pool cannot be unit-tested. Proposal R6: a `stream_pool2D` type.
+- **One pool per folder:** the pool is a type (review G1 closed by
+  `doc/refactoring_notes/planned/pool2D_encapsulation_plan_2026-10-06.md`), but its files have
+  fixed names (the pool folder, its exit status, its iteration files).
 - **The user's `update_frac`** thins the sample again inside refine2D (about frac of the sample).
 - **Late particles:** the low-pass ramp follows the global iteration, so particles arriving after
   iteration 20 never see the coarse limits.

@@ -1411,7 +1411,7 @@ contains
         integer      :: istate, progress
         select case(self%phase)
             case(PHASE_IMPORTING)
-                stage_here = 'importing particles'
+                stage_here = 'waiting for classified particles'
                 if( .not. self%l_attached ) stage_here = 'waiting on pool 2D'
             case(PHASE_SOLVE2D)
                 stage_here = 'running solve2D on the first set'

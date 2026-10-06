@@ -27,16 +27,16 @@ Pipeline stages (one forked process each, launched by p00); commanders in `src/m
   - p03 `simple_stream_stage_initial_analysis`: opening 2D / ab initio 3D on segmentation picks; produces picking references
   - p04 `simple_stream_stage_refpick`: reference-based picking and extraction
   - p05 `simple_stream_stage_sieve`: continuous particle sieving via `ptcl_sieve`
-  - p06 `simple_stream_stage_pool2D`: global 2D pool classification over `simple_stream_pool2D_utils`, snapshots, publication of the classified pool state for 3D
+  - p06 `simple_stream_stage_pool2D`: global 2D pool classification by the pool object it holds (`stream_pool2D`), snapshots, publication of the classified pool state for 3D
   - p07 `simple_stream_stage_solve3D`: solve3D, then solve3D_addon runs, on the classified pool states p06 publishes (`doc/policies/stream/stream_3D_ingestion_policy.md`), merged into rows that only grow
 
 Shared pieces in `src/main/stream/shared`: `simple_stream_pipe` (framing), `simple_stream_state` (pipe descriptors), `simple_stream_sigterm`, `simple_stream_gui_senders`, `simple_stream_job_sets`, `simple_optics_maps`, `simple_optics_groups`, `simple_mic_import`, `simple_mic_selection`, `simple_stream_meta_plots`.
 
 The 2D pool and chunk layer in `src/main/stream/pool2D`:
 
-- `simple_stream_pool2D_utils.f90`, `simple_stream2D_state.f90`: pool2D iteration, import, history, snapshot state
-- `simple_stream_refine2D_utils.f90`: dimensions/downscaling, project write/snapshot/export, publications for 3D, cavgs rescaling
-- `simple_stream_chunk.f90`, `simple_stream_chunk2D_utils.f90`: chunk 2D helpers
+- `simple_stream_pool2D.f90`: the pool as a type (`stream_pool2D`, private components; tester `simple_stream_pool2D_tester`): iterations, history, dimensions and mask, snapshots, publications for 3D, the final project
+- `simple_stream_refine2D_utils.f90`: stateless helpers: folder clean-up, downscaling, iteration files, publication building and naming, snapshot sprite sheets
+- `simple_stream_chunk.f90`, `simple_stream_chunk2D_utils.f90`: chunk 2D helpers for `solve2D_chunks`, which owns its chunk state
 
 Supporting layers in `src/main/stream`:
 
@@ -48,7 +48,7 @@ Supporting layers in `src/main/stream`:
 
 - Stages exchange data through project files in watched directories (written as `.tmp` and renamed into place), and GUI metadata through `stream_pipe` frames on pipes (stage->master `*_in`, master->stage `*_out`, named in `simple_stream_state`)
 - A stage is a type with public components and named steps (`new`, `iterate`, `finished`, `finalize`, `kill`); its tester assembles it step by step without a queue or waits (`unit_stream`)
-- The pool's state is still module state of `simple_stream_pool2D_utils` / `simple_stream2D_state`, so a process runs one pool 2D stage
+- p06 holds the pool as an object, empty from `init_params` and started at the first import; the pool's state is private: p06 hands it imported sets (`append_sets`) and reads what the GUI shows from `stats()`; its files have fixed names, so a folder holds one pool
 
 ## Particle Sieving
 

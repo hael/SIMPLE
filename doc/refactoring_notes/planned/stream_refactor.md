@@ -25,8 +25,8 @@ moved into the library layout:
 - `src/main/stream/shared`: the modules the stages share (pipe and pipe descriptors
   `simple_stream_state`, sigterm, job sets, GUI senders, meta plots, and the micrograph and
   optics helpers) and their testers;
-- `src/main/stream/pool2D`: the 2D pool and chunk layer that stayed (`simple_stream2D_state`,
-  `simple_stream_pool2D_utils`, `simple_stream_refine2D_utils`, `simple_stream_chunk`,
+- `src/main/stream/pool2D`: the 2D pool and chunk layer that stayed (`simple_stream_pool2D`, the
+  pool as a type, and its tester; `simple_stream_refine2D_utils`, `simple_stream_chunk`,
   `simple_stream_chunk2D_utils`);
 - `src/main/stream`: the watcher, `simple_stream_utils`, `simple_mini_stream_utils`,
   `simple_stream_solve2D_chunks` and the library tests of the stages (`simple_stream_tester`).
@@ -558,7 +558,8 @@ named steps. The differences:
 
 ### Known limitation carried over
 
-- One stage per process: the pool's state is module state (step B: move it into a type).
+- One pool per folder: the pool is a type (`stream_pool2D`, step B done in step 1 of the pool
+  encapsulation plan, 6 October 2026), but its files have fixed names.
 
 ## Behaviour compared with the old `simple_commanders_stream_p07_solve3D_multistate`
 

@@ -113,6 +113,7 @@ use simple_stream_stage_initial_analysis_tester, only: run_all_stream_stage_init
 use simple_stream_stage_refpick_tester,      only: run_all_stream_stage_refpick_tests
 use simple_stream_stage_sieve_tester,        only: run_all_stream_stage_sieve_tests
 use simple_stream_stage_pool2D_tester,       only: run_all_stream_stage_pool2D_tests
+use simple_stream_pool2D_tester,             only: run_all_stream_pool2D_tests
 use simple_stream_stage_solve3D_tester,   only: run_all_stream_stage_solve3D_tests
 use simple_stream_master_tester,             only: run_all_stream_master_tests
 use simple_stream_job_sets_tester,           only: run_all_stream_job_sets_tests
@@ -441,6 +442,7 @@ contains
         call add_suite(s, n, 'reference picking',  run_all_stream_stage_refpick_tests)
         call add_suite(s, n, 'particle sieving',   run_all_stream_stage_sieve_tests)
         call add_suite(s, n, 'pool 2D',            run_all_stream_stage_pool2D_tests)
+        call add_suite(s, n, 'pool 2D object',     run_all_stream_pool2D_tests)
         call add_suite(s, n, 'solve 3D',        run_all_stream_stage_solve3D_tests)
         call add_suite(s, n, 'stream master',      run_all_stream_master_tests)
         call add_suite(s, n, 'job sets',           run_all_stream_job_sets_tests)

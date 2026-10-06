@@ -21,11 +21,13 @@ contains
         integer,          parameter :: WAITTIME  = 5
         integer,          parameter :: TARGET_NCLS_PER_CHUNK = 100
         integer, allocatable :: nptcls_per_chunk_vec(:), chunk_rec_fromto(:,:)
+        type(stream_chunk), allocatable :: chunks(:)
+        type(cmdline)    :: cline_refine2D_chunk ! the chunks' solve2D command line
         type(rec_list)   :: project_list
         type(string)     :: fname
         type(parameters) :: params
         type(sp_project) :: spproj_glob
-        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ncls_chunk
+        integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ncls_chunk, nptcls_per_chunk
         integer          :: nchunks_processed, nchunks_in_parallel
         call cline%set('oritype',      'ptcl2D')
         call cline%set('autoscale',    'yes')
@@ -67,8 +69,7 @@ contains
         ! initialize common solve2D chunk command line
         nptcls_per_chunk = nint(real(sum(nptcls_per_chunk_vec)) / real(ntot_chunks))
         params%ncls      = max(1, floor(real(nptcls_per_chunk) / real(params%nptcls_per_cls)))
-        call init_chunk_clustering( params, cline, spproj_glob )
-        numlen = params%numlen
+        call init_chunk_clustering( params, cline, spproj_glob, cline_refine2D_chunk, chunks )
         call del_file(POOL_DIR//REFINE2D_FINISHED)
         call cline_refine2D_chunk%set('center', params%center)
         if( cline%defined('center_type') ) call cline_refine2D_chunk%set('center_type', params%center_type)
@@ -106,6 +107,8 @@ contains
         do ichunk = 1,ntot_chunks
             call chunks(ichunk)%kill
         enddo
+        deallocate(chunks)
+        call cline_refine2D_chunk%kill
         call spproj_glob%kill
         call project_list%kill
         call simple_rmdir(STDERROUT_DIR)

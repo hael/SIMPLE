@@ -14,7 +14,7 @@ decided and the policy is updated with the code.
 |---|---|
 | [reference_generation_policy.md](reference_generation_policy.md) | the initial analysis (p03), the picking references, their hand-off to reference picking (p04) |
 | [stream_3D_ingestion_policy.md](stream_3D_ingestion_policy.md) | the pool's publications for 3D (p06), their import by multistate 3D (p07) |
-| [pool2D_policy.md](pool2D_policy.md) | the 2D pool's schedule, sampling, resolution, dimensions, snapshots (p06 and `simple_stream_pool2D_utils`, `simple_stream_refine2D_utils`) |
+| [pool2D_policy.md](pool2D_policy.md) | the 2D pool's schedule, sampling, resolution, dimensions, snapshots (p06 and `simple_stream_pool2D`, `simple_stream_refine2D_utils`) |
 | [ipc_policy.md](ipc_policy.md) | the stage-to-master pipes, the GUI metadata that crosses them, the master's heartbeat and the GUI's answers |
 | [restart_policy.md](restart_policy.md) | what each stage does when it is started again, by the GUI or in an existing run folder |
 

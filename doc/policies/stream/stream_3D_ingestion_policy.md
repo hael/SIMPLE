@@ -6,9 +6,9 @@ preserve.
 ## 1. Scope
 
 - The pool's publications (p06): `export_pool_state` in
-  `src/main/stream/stages/simple_stream_stage_pool2D.f90`, and `build_pool_publication`,
-  `publish_pool_state` and `delete_pool_publication` in
-  `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`.
+  `src/main/stream/stages/simple_stream_stage_pool2D.f90`, the pool's `publish` in
+  `src/main/stream/pool2D/simple_stream_pool2D.f90`, and `build_pool_publication` and
+  `delete_pool_publication` in `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`.
 - Their import (p07): `import_sets`, `select_cavgs`, `take_first_set` and `merge_publication` in
   `src/main/stream/stages/simple_stream_stage_solve3D.f90`.
 - p07's runs: the first set's `solve2D` (`start_solve2D`, `finish_solve2D`), when it starts

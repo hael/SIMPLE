@@ -2,15 +2,16 @@
 ! Each test assembles a stage in a fresh fixture directory from init_params and init_gui, with no
 ! waits and a settle time of -1. The command line names no registered program and carries
 ! qsys_name=local for the stage project's computing environment. The upstream is a sieve directory
-! whose completed folder holds handed-off sets. The pool itself (init_pool_clustering and its
-! iterations, which need a queue and keep module state) is not started: sets are transferred into a
-! local project, and the pool runs are covered by the high-level stream tests.
+! whose completed folder holds handed-off sets. The pool itself is not started (its iterations need
+! a queue): sets are handed to the stage's empty pool and checked through the stage's counts; the
+! pool object's own tests, rows included, are simple_stream_pool2D_tester (its own sub-suite), and
+! the pool runs are covered by the high-level stream tests.
 module simple_stream_stage_pool2D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
 use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, USER_PARAMS2D, REFINE2D_FINISHED
-use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, POOL_EXIT_CODE, POOL_INPUT_PROJFILE, scaled_dims
+use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, POOL_EXIT_CODE, POOL_INPUT_PROJFILE
 use simple_string,                              only: string
 use simple_string_utils,                        only: int2str_pad
 use simple_fileio,                              only: basename, del_file, file_exists, simple_getcwd, simple_touch
@@ -26,11 +27,8 @@ use simple_gui_metadata_stream_pool2D_snapshot, only: gui_metadata_stream_pool2D
 use simple_gui_metadata_stream_update,          only: gui_metadata_stream_update
 use simple_stream_pipe,                         only: stream_pipe
 use simple_stream_stage_pool2D,                 only: stream_stage_pool2D
-use simple_stream_refine2D_utils,              only: build_pool_publication, write_pool_snapshot
+use simple_stream_refine2D_utils,              only: build_pool_publication
 use simple_optics_maps,                         only: publish_optics_map
-use simple_stream_pool2D_utils,                 only: draw_new_classes, update_mskdiam
-use simple_stream2D_state,                      only: pool_dims, cline_refine2D_pool, pool_mskdiam, pool_iter
-use simple_defs,                                only: COSMSKHALFWIDTH
 implicit none
 private
 public :: run_all_stream_stage_pool2D_tests
@@ -53,11 +51,8 @@ contains
         call test_transfer_stepwise()
         call test_sieve_final_set()
         call test_pause_rules()
-        call test_draw_new_classes()
-        call test_mask_clamped_to_box()
         call test_gui_mskdiam_update()
         call test_given_mskdiam_kept()
-        call test_snapshot_without_frcs()
         call test_send_status()
         call test_send_snapshot()
         call test_iterate_waits()
@@ -310,12 +305,11 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_attach_and_watch
 
-    !> sets are appended to the pool in order, with stacks renumbered and particles as new ones;
-    !! each set once, and a later set after the others
+    !> the sets go to the pool in order, each once, and a later set after the others; the stage
+    !! counts the selected particles and the micrographs (the rows: simple_stream_pool2D_tester)
     subroutine test_transfer_sets()
         class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
-        type(sp_project)          :: pool
         type(string)              :: cwd_saved, root, set_file
         integer                   :: nfail0, nimported
         allocate(stage)
@@ -331,32 +325,21 @@ contains
         call stage%watch_sets()
         set_file = write_sieved_set(2, [4])
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_int(2, nimported,                    'both sets are imported')
-        call assert_int(3, pool%os_mic%get_noris(),      'their micrographs are in the pool')
-        call assert_int(3, pool%os_stk%get_noris(),      'with a stack each')
-        call assert_int(9, pool%os_ptcl2D%get_noris(),   'and every particle')
-        call assert_int(4, pool%os_stk%get_fromp(2),     'the second stack follows the first')
-        call assert_int(6, pool%os_stk%get_fromp(3),     'the second set''s stack follows the first set''s')
-        call assert_int(9, pool%os_stk%get_top(3),       'to the last particle')
-        call assert_int(3, pool%os_ptcl2D%get_int(7, 'stkind'),    'a particle points at its stack in the pool')
-        call assert_int(0, pool%os_ptcl2D%get_class(7),            'the particles come without classes')
-        call assert_int(0, pool%os_ptcl2D%get_int(7, 'updatecnt'), 'as new particles')
-        call assert_real(1.5, pool%os_ptcl2D%get(7, 'x'), 1.e-4,   'keeping their shifts')
         call assert_int(8, stage%nptcls_glob,            'the selected particles are counted')
         call assert_int(8, stage%nptcls_glob_state_1,    'so are those of the pool with state > 0')
         call assert_int(3, stage%nmics,                  'and the micrographs')
         call assert_int(3, stage%state_1_particle_rate,  'particles per micrograph, rounded up')
         call assert_true(all(stage%setslist%get_included_flags()), 'both sets are included')
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_int(0, nimported, 'a set is imported once')
         set_file = write_sieved_set(3, [2])
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_int(1,  nimported,                   'a later set is imported')
-        call assert_int(10, pool%os_stk%get_fromp(4),    'after the particles already there')
-        call assert_int(11, pool%os_ptcl2D%get_noris(),  'the pool grows')
-        call pool%kill
+        call assert_int(4,  stage%nmics,                 'the pool grows by its micrograph')
+        call assert_int(10, stage%nptcls_glob,           'and its particles')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -366,7 +349,6 @@ contains
     subroutine test_transfer_stepwise()
         class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
-        type(sp_project)          :: pool
         type(string)              :: cwd_saved, root, set_file
         integer                   :: nfail0, nimported
         allocate(stage)
@@ -386,12 +368,12 @@ contains
         call stage%watch_sets()
         set_file = write_sieved_set(3, [10])
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_int(2,  nimported,                 'the sets up to the threshold are imported')
-        call assert_int(25, pool%os_ptcl2D%get_noris(), 'their particles')
-        call stage%transfer_sets(pool, nimported)
+        call assert_int(25, stage%nptcls_glob,         'their particles')
+        call stage%transfer_sets(nimported)
         call assert_int(1,  nimported,                 'the deferred set comes with the next import')
-        call assert_int(35, pool%os_ptcl2D%get_noris(), 'after the others')
+        call assert_int(35, stage%nptcls_glob,         'after the others')
         ! past the threshold, an import still takes the sets its own particles need
         set_file = write_sieved_set(4, [10])
         call stage%watch_sets()
@@ -399,10 +381,9 @@ contains
         call stage%watch_sets()
         set_file = write_sieved_set(6, [10])
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_int(2,  nimported,                 'only this import''s particles count against the threshold')
-        call assert_int(55, pool%os_ptcl2D%get_noris(), 'two more sets')
-        call pool%kill
+        call assert_int(55, stage%nptcls_glob,         'two more sets')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -411,7 +392,6 @@ contains
     subroutine test_sieve_final_set()
         class(stream_stage_pool2D), allocatable :: stage
         type(cmdline)             :: cline
-        type(sp_project)          :: pool
         type(string)              :: cwd_saved, root, set_file
         integer                   :: nfail0, nimported, nmics0
         allocate(stage)
@@ -424,27 +404,26 @@ contains
         call make_test_stage(stage, cline)
         call stage%attach_upstream()
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_false(stage%l_sieve_final, 'an ordinary set')
         set_file = write_sieved_set(2, [3], l_final=.true.)
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_true(stage%l_sieve_final, 'the sieve''s final set is noted')
         ! a later set with particles that is not final: the sieve had more after all
         set_file = write_sieved_set(3, [3])
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_false(stage%l_sieve_final, 'a later ordinary set takes the final note back')
         ! the sieve's empty final set ends the intake and transfers nothing
         call write_empty_final_set(string(UPSTREAM//'/'//DIR_STREAM_COMPLETED//'sieve_final_c1_f1'//METADATA_EXT))
-        nmics0 = pool%os_mic%get_noris()
+        nmics0 = stage%nmics
         call stage%watch_sets()
-        call stage%transfer_sets(pool, nimported)
+        call stage%transfer_sets(nimported)
         call assert_true(stage%l_sieve_final,          'an empty final set is noted')
         call assert_int(0, nimported,                  'and imports nothing')
-        call assert_int(nmics0, pool%os_mic%get_noris(), 'the pool is unchanged')
+        call assert_int(nmics0, stage%nmics,           'the pool is unchanged')
         call assert_int(0, count(.not. stage%setslist%get_included_flags()), 'the empty set is taken')
-        call pool%kill
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -459,72 +438,6 @@ contains
         call final_set%write(fname)
         call final_set%kill
     end subroutine write_empty_final_set
-
-    !> new particles get a populated class, the same ones for the same iteration; particles
-    !! already updated, and deselected ones, keep theirs
-    subroutine test_draw_new_classes()
-        type(sp_project) :: proj1, proj2
-        integer :: i
-        logical :: l_same, l_populated
-        write(*,'(A)') 'test_draw_new_classes'
-        call make_draw_project(proj1)
-        call make_draw_project(proj2)
-        call draw_new_classes(proj1, 12, 7, 4)
-        call draw_new_classes(proj2, 12, 7, 4)
-        l_same      = .true.
-        l_populated = .true.
-        do i = 1,12
-            l_same = l_same .and. proj1%os_ptcl2D%get_class(i) == proj2%os_ptcl2D%get_class(i)
-            if( i > 6 .and. i < 12 ) l_populated = l_populated .and. any(proj1%os_ptcl2D%get_class(i) == [2, 4])
-        enddo
-        call assert_true(l_same,      'the same iteration draws the same classes')
-        call assert_true(l_populated, 'only populated classes are drawn')
-        call assert_int(1, proj1%os_ptcl2D%get_class(1),  'an updated particle keeps its class')
-        call assert_int(3, proj1%os_ptcl2D%get_class(12), 'a deselected particle keeps its class')
-        call proj1%kill
-        call proj2%kill
-
-    contains
-
-        ! 4 classes, populated 2 and 4; particles 1-6 updated (class 1), 7-12 new (class 3), 12 deselected
-        subroutine make_draw_project( proj )
-            type(sp_project), intent(inout) :: proj
-            integer :: j
-            call proj%os_cls2D%new(4, is_ptcl=.false.)
-            call proj%os_cls2D%set_all('pop', real([0, 5, 0, 3]))
-            call proj%os_ptcl2D%new(12, is_ptcl=.true.)
-            do j = 1,12
-                call proj%os_ptcl2D%set_state(j, 1)
-                if( j <= 6 )then
-                    call proj%os_ptcl2D%set(j, 'updatecnt', 1)
-                    call proj%os_ptcl2D%set_class(j, 1)
-                else
-                    call proj%os_ptcl2D%set(j, 'updatecnt', 0)
-                    call proj%os_ptcl2D%set_class(j, 3)
-                endif
-            enddo
-            call proj%os_ptcl2D%set_state(12, 0)
-        end subroutine make_draw_project
-
-    end subroutine test_draw_new_classes
-
-    !> a mask diameter beyond the pool's box reaches its command line clamped (D40)
-    subroutine test_mask_clamped_to_box()
-        real    :: mskdiam_max
-        write(*,'(A)') 'test_mask_clamped_to_box'
-        pool_dims%box  = 64
-        pool_dims%smpd = 2.0
-        mskdiam_max    = (64. - COSMSKHALFWIDTH) * 2.0
-        call update_mskdiam(1000)
-        call assert_true(cline_refine2D_pool%get_rarg('mskdiam') <= mskdiam_max + 1.e-3, 'the diameter is clamped to the box')
-        call assert_true(cline_refine2D_pool%get_rarg('msk_crop') <= (64. - COSMSKHALFWIDTH) / 2., 'and the radius')
-        call update_mskdiam(100)
-        call assert_real(100., cline_refine2D_pool%get_rarg('mskdiam'), 1.e-4, 'a diameter within the box is kept')
-        ! leave no pool state behind
-        pool_dims    = scaled_dims()
-        pool_mskdiam = 0.
-        call cline_refine2D_pool%kill
-    end subroutine test_mask_clamped_to_box
 
     !> the pause rule, the particle targets, the final run and the default mask diameter
     subroutine test_pause_rules()
@@ -610,19 +523,17 @@ contains
         class(stream_stage_pool2D), allocatable :: stage
         type(cmdline) :: cline
         type(string)  :: cwd_saved, root
-        integer       :: nfail0, iter_saved
+        integer       :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_given_mskdiam_kept'
         nfail0 = tests_failed
         call enter_fixture('p2_stage_given_mskdiam', cwd_saved, root)
-        iter_saved = pool_iter
-        pool_iter  = 10
         call set_test_cline(cline)
         call cline%set('mskdiam', 150.)
         call make_test_stage(stage, cline)
         call assert_true(stage%l_mskdiam_given, 'a mask diameter on the command line is given')
         stage%final_mskdiam = MSKDIAM_SIEVE
-        call stage%apply_final_mskdiam()
+        call stage%apply_final_mskdiam(10)
         call assert_real(150., stage%mskdiam, 1.e-4, 'it is kept at iteration 10')
         call assert_real(0., stage%final_mskdiam, 1.e-4, 'and the sieve''s is dropped')
         call stage%kill
@@ -631,33 +542,12 @@ contains
         call make_test_stage(stage, cline)
         call assert_false(stage%l_mskdiam_given, 'none given')
         stage%final_mskdiam = MSKDIAM_SIEVE
-        call stage%apply_final_mskdiam()
+        call stage%apply_final_mskdiam(10)
         call assert_real(MSKDIAM_SIEVE, stage%mskdiam, 1.e-4, 'the sieve''s applies at iteration 10')
         call stage%kill
         call cline%kill
-        pool_iter = iter_saved
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_given_mskdiam_kept
-
-    !> a snapshot of the current iteration before its frcs.bin exists is reported as not written
-    !! (no particles, no file) instead of stopping the stage
-    subroutine test_snapshot_without_frcs()
-        type(string)         :: cwd_saved, root, jpeg, mrc
-        integer, allocatable :: idx(:), pop(:)
-        real,    allocatable :: res(:)
-        integer              :: nfail0, iter_saved, nptcls, ntx, nty
-        write(*,'(A)') 'test_snapshot_without_frcs'
-        nfail0 = tests_failed
-        call enter_fixture('p2_snapshot_no_frcs', cwd_saved, root)
-        iter_saved = pool_iter
-        pool_iter  = 3
-        call write_pool_snapshot(3, [1], string('snapshots/snap/snap.simple'), string('snapshots/snap/snap'), string(''), 0,&
-            &nptcls, jpeg, mrc, ntx, nty, idx, pop, res)
-        call assert_int(0, nptcls, 'nothing written')
-        call assert_false(file_exists(string('snapshots/snap/snap.simple')), 'no project')
-        pool_iter = iter_saved
-        call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_snapshot_without_frcs
 
     !> one status message per call, with the stage name, the particles imported and the mask
     subroutine test_send_status()
