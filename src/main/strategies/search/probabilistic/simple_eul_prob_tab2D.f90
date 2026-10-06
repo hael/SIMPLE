@@ -619,11 +619,7 @@ contains
             do while( nleft > 0 )
                 if( nsel == 0 ) exit
                 neligible = min(self%nhood_sz, nsel)
-                if( neligible <= 1 )then
-                    assigned_idx = 1
-                else
-                    call sample_frontier_likelihood(neligible, assigned_idx)
-                endif
+                call sample_frontier_likelihood(neligible, assigned_idx)
                 call commit_selected_assignment()
             enddo
         end subroutine assign_particles_from_frontier

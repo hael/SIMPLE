@@ -32,6 +32,7 @@ contains
         params%l_doshift    = .false.
         call test_dense_stream()
         call test_sparse_stream()
+        call test_sparse_single_neighborhood()
         call table%kill
     end subroutine run_all_eul_prob_tab2D_tests
 
@@ -82,6 +83,31 @@ contains
         call del_file('prob2d_sparse_part1.dat')
         call del_file('prob2d_sparse_assignment.dat')
     end subroutine test_sparse_stream
+
+    !> A one-class support still selects the globally best class frontier.
+    subroutine test_sparse_single_neighborhood()
+        type(prob_candidate) :: candidates(6)
+        integer :: particle_indices(6)
+        write(*,'(A)') 'test_sparse_single_neighborhood'
+        params%refine = 'prob_snhc'
+        call set_candidate(candidates(1),1,0.5)
+        call set_candidate(candidates(2),2,0.1)
+        call set_candidate(candidates(3),1,0.4)
+        call set_candidate(candidates(4),2,0.2)
+        call set_candidate(candidates(5),1,0.3)
+        call set_candidate(candidates(6),2,0.6)
+        particle_indices = [1,1,2,2,3,3]
+        call write_candidate_stream('prob2d_sparse_single_part1.dat',particle_indices,candidates)
+        call table%new(params,build,pinds)
+        call table%read_tabs_to_glob(string('prob2d_sparse_single_part'),1,1)
+        call table%ref_assign
+        call table%write_assignment(string('prob2d_sparse_single_assignment.dat'))
+        call assert_assignment('prob2d_sparse_single_assignment.dat',[2,2,1],[0.1,0.2,0.3],&
+            &[2,2,2],[100.,100.,100.])
+        call table%kill
+        call del_file('prob2d_sparse_single_part1.dat')
+        call del_file('prob2d_sparse_single_assignment.dat')
+    end subroutine test_sparse_single_neighborhood
 
     subroutine set_candidate( candidate, icls, dist )
         type(prob_candidate), intent(out) :: candidate
