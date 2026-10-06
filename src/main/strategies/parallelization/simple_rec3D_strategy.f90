@@ -257,7 +257,7 @@ contains
         type(builder),                   intent(inout) :: build
         class(cmdline),                  intent(inout) :: cline
         call register_rec3D_outputs(params, build)
-        call maybe_postprocess_reconstruct3D(params, cline)
+        call maybe_postprocess_reconstruct3D(params, build, cline)
     end subroutine pcg_inmem_finalize_run
 
     subroutine inmem_finalize_run(self, params, build, cline)
@@ -265,7 +265,7 @@ contains
         type(parameters),            intent(in)    :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        call maybe_postprocess_reconstruct3D(params, cline)
+        call maybe_postprocess_reconstruct3D(params, build, cline)
     end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, build, cline)
@@ -359,7 +359,7 @@ contains
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
         call register_rec3D_outputs(params, build)
-        call maybe_postprocess_reconstruct3D(params, cline)
+        call maybe_postprocess_reconstruct3D(params, build, cline)
     end subroutine distr_finalize_run
 
     !> The state maps and FSCs registered in the project (mkdir=yes only)
@@ -507,9 +507,10 @@ contains
         endif
     end subroutine sync_resolved_rec_params
 
-    subroutine maybe_postprocess_reconstruct3D(params, cline)
+    subroutine maybe_postprocess_reconstruct3D(params, build, cline)
         use simple_commanders_volops, only: postprocess_volume_from_files
         type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         type(parameters) :: params_pp
         type(string)     :: fname_vol, fname_fsc
@@ -522,6 +523,9 @@ contains
                 &'>>> reconstruct3D postprocess: using classical postprocessing'
         endif
         do state = 1, params%nstates
+            if( .not. cline%defined('frozen_rec') )then
+                if( build%spproj_field%get_pop(state, 'state') == 0 ) cycle
+            endif
             params_pp = params
             fname_vol = refine3D_state_vol_fname(state)
             fname_fsc = refine3D_fsc_fname(state)
