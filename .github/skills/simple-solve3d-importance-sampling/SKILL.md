@@ -66,7 +66,8 @@ Inspect:
 - `src/main/solve/simple_solve3D_controller.f90`
 
 Focus on `update_frac`, `nsample*`, `UPDATE_FRAC_MAX`, `sample4update_class`,
-`shc_smpl`, `prob`, `prob_neigh`, `frac_best`, `fillin`, and `trail_rec`.
+`prob_neigh` (and `prob_neigh_mode`), `prob`, `frac_best`, `fillin`, and
+`trail_rec`.
 
 ### Particle-subset bookkeeping
 

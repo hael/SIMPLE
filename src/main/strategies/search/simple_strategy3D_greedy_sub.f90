@@ -1,7 +1,7 @@
 !@descr: 3D strategy for neighborhood projection matching with exhaustive subspace initialization
 module simple_strategy3D_greedy_sub
 use simple_core_module_api
-use simple_strategy3D_alloc, only: s3D, ref_state_from_index
+use simple_strategy3D_alloc, only: s3D, ref_state_from_index, ref_proj_from_index
 use simple_strategy3D_utils, only: extract_peak_ori, extract_peak_oris
 use simple_parameters,       only: parameters
 use simple_oris,             only: oris
@@ -40,11 +40,11 @@ contains
         class(oris),                  intent(inout) :: os
         integer,                      intent(in)    :: ithr
         integer   :: iref, isample, loc(1), iproj, ipeak, inds(self%s%nrots)
+        integer   :: peak_refs(self%s%npeaks)
         real      :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
         real      :: dist, corr
-        logical   :: lnns(self%s%p_ptr%nspace)
+        logical   :: lnns(self%s%p_ptr%nspace), lcells(self%s%p_ptr%nspace_sub)
         logical   :: l_prob_objfun
-        type(ori) :: o
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -79,14 +79,19 @@ contains
             end do
             ! prepare peak orientations
             call extract_peak_oris(self%s, self%s%npeaks)
-            ! construct multi-neighborhood search space from subspace peaks
-            lnns = .false.
+            ! neighborhood: the subspace cells (symmetry-aware nearest-coarse partition) of the
+            ! coarse peaks and of the previous direction; no angular threshold
+            lcells    = .false.
+            peak_refs = maxnloc(s3D%proj_space_corrs(:,self%s%ithr), self%s%npeaks)
             do ipeak = 1, self%s%npeaks
-                call self%s%opeaks%get_ori(ipeak, o)
-                call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, o, self%s%p_ptr%athres, lnns)
+                iproj = ref_proj_from_index(peak_refs(ipeak), self%s%nprojs)
+                lcells(self%s%b_ptr%subspace_full2sub_map(iproj)) = .true.
             end do
-            ! include the previous best ori in the multi-neighborhood search
-            call self%s%b_ptr%pgrpsyms%nearest_proj_neighbors(self%s%b_ptr%eulspace, self%s%o_prev, self%s%p_ptr%athres, lnns)
+            ! include the previous best direction's cell in the multi-neighborhood search
+            lcells(self%s%b_ptr%subspace_full2sub_map(self%s%prev_proj)) = .true.
+            do iproj = 1, self%s%p_ptr%nspace
+                lnns(iproj) = lcells(self%s%b_ptr%subspace_full2sub_map(iproj))
+            end do
             ! count the number of nearest neighbors
             self%s%nnn = count(lnns)
             ! search
@@ -136,8 +141,6 @@ contains
             call self%s%inpl_srch_peaks(min(self%s%npeaks_inpl, self%s%nsolns))
             ! prepare orientation
             call self%oris_assign
-            ! cleanup
-            call o%kill
         else
             call os%reject(self%s%iptcl)
         endif

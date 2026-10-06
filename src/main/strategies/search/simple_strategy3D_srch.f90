@@ -55,7 +55,6 @@ type strategy3D_srch
     integer                    :: prev_state      = 0         !< previous state index
     integer                    :: prev_ref        = 0         !< previous reference index
     integer                    :: prev_proj       = 0         !< previous projection direction index
-    real                       :: athres          = 10.       !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
     real                       :: prev_corr       = 1.        !< previous best correlation
     real                       :: prev_shvec(2)   = 0.        !< previous origin shift vector
     real                       :: xy_first(2)     = 0.        !< initial shifts identified by searching the previous best reference
@@ -109,7 +108,6 @@ contains
         self%nrefs_sub     = self%nprojs_sub * self%nstates
         self%npeaks        = self%p_ptr%npeaks
         self%npeaks_inpl   = self%p_ptr%npeaks_inpl
-        self%athres        = self%p_ptr%athres
         self%nbetter       = 0
         self%nrefs_eval    = 0
         self%ntrs_eval     = 0

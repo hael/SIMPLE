@@ -89,7 +89,6 @@ type :: oris
     procedure          :: has_been_sampled
     procedure          :: has_been_searched
     procedure          :: any_state_zero
-    procedure          :: is_first_update
     procedure          :: get_update_frac
     procedure          :: get_group_update_counts
     procedure          :: get_state_update_fracs
@@ -748,12 +747,6 @@ interface
         class(oris), intent(in) :: self
         logical :: any_state_zero
     end function any_state_zero
-
-    module function is_first_update( self, iter, iptcl )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: iter, iptcl
-        logical :: is_first_update
-    end function is_first_update
 
     module function get_update_frac( self ) result( update_frac )
         class(oris), intent(inout) :: self

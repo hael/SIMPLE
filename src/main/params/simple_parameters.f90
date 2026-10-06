@@ -308,7 +308,7 @@ type :: parameters
     ! class-average quality model preset(chunk100mics|sieve|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|shc_smpl|snhc_smpl|neigh|greedy|prob|prob_state|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|neigh|greedy|prob|prob_state|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sigma_est='global'   !< sigma estimation kind (global|group){global}
     character(len=STDLEN)     :: sigma_action='' !< explicit sigma conversion(star_import|star_export)

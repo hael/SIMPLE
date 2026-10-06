@@ -1,7 +1,7 @@
 !@descr: abstract parent of the polar (PFTC) 3D search strategies, owning their polar search object
 ! The representation-neutral strategy3D holds the particle spec and the four deferred methods
-! only; the polar strategies (greedy, greedy_inpl, greedy_smpl, greedy_sub, shc, shc_smpl,
-! snhc_smpl, eval, prob) extend this type, which adds the strategy3D_srch object s they drive.
+! only; the polar strategies (greedy, greedy_inpl, greedy_sub, shc, eval, prob) extend this
+! type, which adds the strategy3D_srch object s they drive.
 ! A Cartesian strategy extends strategy3D directly and carries no polar state (plan section 6.3).
 module simple_strategy3D_pftc
 use simple_strategy3D,      only: strategy3D

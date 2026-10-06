@@ -1004,7 +1004,6 @@ contains
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500
             if( .not. cline%defined('nspace') )     self%nspace     = 20000
-            if( .not. cline%defined('athres') )     self%athres     = 10.
             self%nspace_sub = round2even(real(self%nspace_sub))
             self%nspace     = round2even(real(self%nspace))
             self%l_neigh    = .true.

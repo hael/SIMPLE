@@ -39,6 +39,14 @@ restricted to the asymmetric unit of the point group. The angular spacing is
 roughly `sqrt(4 pi / n)`; `nspace = 2500` gives about 4 degrees, `20000` about
 1.4 degrees.
 
+The neighborhood modes also use a coarse spiral of `nspace_sub` directions
+(default 500). Every fine direction is assigned to its nearest coarse
+direction, with distances measured under the point-group symmetry, which
+splits the fine grid into one *cell* per coarse direction. Each coarse
+direction is represented in the search by its nearest fine direction. The
+cells, not an angular radius, define the neighborhoods, so their size
+follows the ratio `nspace / nspace_sub` and needs no threshold.
+
 ## Algorithm
 
 One iteration:
@@ -50,8 +58,10 @@ One iteration:
    nonuniform filtering has already produced a regularized map, in which case
    no further filter is applied. At low resolution, out to 20 A but no
    further than the shell where the FSC drops below 0.95, the two halves are
-   replaced by their average for matching purposes only, since they carry no
-   independent information there.
+   replaced by their average for matching purposes only. This keeps the even
+   and odd volumes in register: aligned against a shared low-resolution
+   reference, the two halves cannot drift apart in position or orientation,
+   so the FSC between them remains a meaningful comparison.
    An envelope mask is never multiplied into the matching reference: removing
    density that is present in the images destroys pose discrimination under
    the Euclidean objective.
@@ -62,16 +72,28 @@ One iteration:
    in-plane rotation, shift, and state:
    - `shc`: visit references in random order with the previous one last, take
      the best in-plane rotation for each, and stop at the first reference that
-     beats the previous score (first-improvement hill climbing).
-   - `snhc_smpl`: as above but bounded to a fraction of references that grows
-     with a cosine anneal from 5 percent at the first iteration to 70 percent
-     at the last, with direction and rotation drawn by power sampling rather
-     than argmax.
-   - `neigh`: search a coarse subspace of `nspace_sub` (default 500)
-     directions exhaustively, then all fine directions within `athres`
-     (default 10 degrees) of the coarse peaks and of the previous direction.
-   - `prob`, `prob_neigh`, `prob_state`: read the assignment from the table
-     and commit it.
+     beats the previous score (first-improvement hill climbing). A particle
+     that has never been searched, and one in ten of the others, gets an
+     exhaustive search instead.
+   - `neigh`: score the coarse representatives exhaustively, keep the best
+     `npeaks`, and search every fine direction in their cells, and in the
+     cell of the previous direction, exhaustively.
+   - `prob`: the table covers every direction of every state, and the
+     balanced assignment commits one candidate per particle.
+   - `prob_neigh`: the table is restricted, per particle, to a neighborhood.
+     In `state` mode (the default) the coarse representatives are scored and
+     the best `npeaks` cells, pooled across states, form the neighborhood;
+     in `geom` mode it is the cell that contains the previous projection, the
+     same for every state. The `shc` and `snhc` modes use no cells: they
+     score a stochastic subset of the fine directions with the
+     first-improvement rule of `shc` (unbounded for `shc`, annealed for
+     `snhc`) after a floor of five candidates.
+   - `prob_state`: each particle keeps its previous direction and in-plane
+     angle; that pose is scored, with shift refinement, against the
+     reference of every state, and the balanced assignment draws the state
+     label. This turns a consensus refinement into a multi-state one: it is
+     the split stage of docked `solve3D` and the initialization of
+     `refine3D_states`.
    Shifts are then refined by L-BFGS-B within `trs`, and optionally the
    committed `(sx, sy, theta)` is polished jointly with continuous angle
    ([continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)).

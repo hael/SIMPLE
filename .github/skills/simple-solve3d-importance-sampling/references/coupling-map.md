@@ -42,16 +42,21 @@ command line.
 
 Important stage transitions:
 
-- stages 1 to 4 use `refine='shc_smpl'`
-- stages 5 to 6 use `refine='prob'`
-- stages 7 to 8 use `refine='prob_neigh'`
-- stage 8 can turn on `fillin='yes'` for single-state solve3D
+- stages 1 to 2 use `refine='prob_neigh'` with `prob_neigh_mode='shc'`
+  (independent multi-state runs from particles use plain `refine='shc'`)
+- stages 3 to 5 use `refine='prob'`
+- stages 6 to 8 use `refine='prob_neigh'` with `prob_neigh_mode='state'`
+  (`geom` after the docked multi-state split; the split stage itself uses
+  `refine='prob_state'`)
+- the last active stage can turn on `fillin='yes'` for single-state solve3D
 
 Important coupling facts:
 
 - dynamic `update_frac` is recomputed per stage when the run uses dynamic sampling
-- `frac_best` becomes less greedy once probabilistic refinement starts
-- `trail_rec` is introduced only in later stages
+- sampling is greedy (top 2D score per unit) until `STOCH_SAMPL_STAGE` (5; 4 for
+  independent multi-state), then stochastic with `frac_best` 0.5, rising to
+  0.85 (0.98 multi-state) in stages 7 to 8
+- `trail_rec` is introduced only in later stages (`TRAILREC_STAGE_SINGLE` = 5)
 
 This is the main place where the code couples search strategy, sampling size,
 and reconstruction behavior.

@@ -879,12 +879,6 @@ contains
         end do
     end function any_state_zero
 
-    module function is_first_update( self, iter, iptcl )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: iter, iptcl
-        is_first_update = (self%o(iptcl)%get_int('updatecnt') == 1) .and. (iter > 1)
-    end function is_first_update
-
     module function get_update_frac( self ) result( update_frac )
         class(oris), intent(inout) :: self
         integer :: updatecnts(self%n), sampled(self%n), states(self%n), updatecnt_max, sampled_max, i

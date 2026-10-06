@@ -15,15 +15,12 @@ use simple_qsys_funs,                  only: qsys_declare_part_finished
 use simple_refine3D_fnames,            only: refine3D_bench_fname
 use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes
 use simple_strategy3D_eval,            only: strategy3D_eval
-use simple_strategy3D_greedy_smpl,     only: strategy3D_greedy_smpl
 use simple_strategy3D_greedy_sub,      only: strategy3D_greedy_sub
 use simple_strategy3D_greedy,          only: strategy3D_greedy
 use simple_strategy3D_greedy_inpl,     only: strategy3D_greedy_inpl
 use simple_strategy3D_prob,            only: strategy3D_prob
 use simple_strategy3D_cont,            only: strategy3D_cont
-use simple_strategy3D_shc_smpl,        only: strategy3D_shc_smpl
 use simple_strategy3D_shc,             only: strategy3D_shc
-use simple_strategy3D_snhc_smpl,       only: strategy3D_snhc_smpl
 use simple_strategy3D_srch,            only: strategy3D_spec
 use simple_strategy3D,                 only: strategy3D
 use simple_type_defs,                  only: OBJFUN_EUCLID
@@ -402,20 +399,6 @@ contains
                             else
                                 allocate(strategy3D_shc :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
-                        endif
-                    case('shc_smpl')
-                        if( b_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
-                            allocate(strategy3D_greedy_smpl    :: strategy3Dsrch(iptcl_batch)%ptr)
-                            cnt_greedy(ithr) = cnt_greedy(ithr) + 1
-                        else
-                            allocate(strategy3D_shc_smpl       :: strategy3Dsrch(iptcl_batch)%ptr)
-                        endif
-                    case('snhc_smpl')
-                        if( b_ptr%spproj_field%is_first_update(which_iter, iptcl) )then
-                            allocate(strategy3D_greedy_smpl    :: strategy3Dsrch(iptcl_batch)%ptr)
-                            cnt_greedy(ithr) = cnt_greedy(ithr) + 1
-                        else
-                            allocate(strategy3D_snhc_smpl      :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
                     case('eval')
                         allocate(strategy3D_eval               :: strategy3Dsrch(iptcl_batch)%ptr)

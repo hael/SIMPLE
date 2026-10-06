@@ -11,8 +11,7 @@ private
 
 type strategy3D_alloc
     ! global parameters
-    real,           allocatable :: smpl_refs_athres(:)      !< refine=smpl; angular threshold of projections directions
-    real,           allocatable :: smpl_inpl_athres(:)      !< refine=smpl; angular threshold of in-plane rotations
+    real,           allocatable :: smpl_inpl_athres(:)      !< angular threshold of in-plane rotation sampling
     logical,        allocatable :: state_exists(:)          !< indicates state existence
     ! per thread allocation
     type(ran_tabu), allocatable :: rts(:)                   !< stochastic search order generators
@@ -94,12 +93,10 @@ contains
                 if( allocated(s3D%srch_order_sub) ) s3D%srch_order_sub = 0
         end select
         ! calculate peak thresholds for probabilistic searches
-        if( allocated(s3D%smpl_refs_athres) ) deallocate(s3D%smpl_refs_athres)
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
         if( .not. l_prob_mode )then
-            allocate(s3D%smpl_refs_athres(params%nstates), s3D%smpl_inpl_athres(params%nstates))
+            allocate(s3D%smpl_inpl_athres(params%nstates))
             do istate = 1, params%nstates
-                s3D%smpl_refs_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist',      prob_athres=params%prob_athres, state=istate)
                 s3D%smpl_inpl_athres(istate) = calc_athres(os=build%spproj_field, field_str='dist_inpl', prob_athres=params%prob_athres, state=istate)
             enddo
         endif
@@ -131,7 +128,6 @@ contains
         if( allocated(s3D%proj_space_inplcoords) ) deallocate(s3D%proj_space_inplcoords)
         if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
         if( allocated(s3D%proj_space_inplvalid) ) deallocate(s3D%proj_space_inplvalid)
-        if( allocated(s3D%smpl_refs_athres)    ) deallocate(s3D%smpl_refs_athres)
         if( allocated(s3D%smpl_inpl_athres)    ) deallocate(s3D%smpl_inpl_athres)
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob
