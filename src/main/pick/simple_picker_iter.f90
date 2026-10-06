@@ -50,17 +50,6 @@ contains
                 else
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
-            case('seg')
-                if( .not. cline%defined('lp') )then
-                    THROW_HARD('Segmentation-based picker requires lp (low-pass limit) for filtering')
-                endif
-                if( cline%defined('moldiam') )then
-                    call exec_segpick(params, moviename_intg, boxfile, nptcls_out, dir_out=dir_out, moldiam=params%moldiam)
-                elseif( cline%defined('winsz') )then
-                    call exec_segpick(params, moviename_intg, boxfile, nptcls_out, dir_out=dir_out, winsz=int(params%winsz))
-                else
-                    call exec_segpick(params, moviename_intg, boxfile, nptcls_out, dir_out=dir_out)
-                endif
             case('segdiam')
                 call exec_segdiampick(params, moviename_intg, boxfile, smpd, nptcls_out, params%moldiam_max, dir_out=dir_out)
             case DEFAULT

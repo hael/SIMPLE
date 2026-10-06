@@ -108,7 +108,8 @@ source pointers confined to the last section.
    shift fitted to the Thon rings by multi-start differential evolution and
    gradient refinement, with a resolution and ice diagnostic.
 3. [Particle picking](particle_picking.md). Reference-free segmentation to
-   bootstrap, then exhaustive Pearson correlation against class averages with
+   bootstrap, then exhaustive Pearson correlation against class averages or
+   map reprojections, evaluated as batched BLAS matrix products, with
    non-maximum suppression under a physical exclusion radius.
 
 **2D: classes without a model.**

@@ -130,14 +130,14 @@ contains
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast')    ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'mic')
-        if( .not. cline%defined('thres')        ) call cline%set('thres',         24.)
+        if( .not. cline%defined('thres')        ) call cline%set('thres',          0.) ! 0: a third of the reference box, as in the stream
         if( .not. cline%defined('pick_roi')     ) call cline%set('pick_roi',    'yes')
         if( .not. cline%defined('backgr_subtr') ) call cline%set('backgr_subtr', 'no')
         if( .not. cline%defined('picker')       ) call cline%set('picker',      'new')
         if( .not. cline%defined('lp')           ) call cline%set('lp', PICK_LP_DEFAULT)
         ! ndev default depends on picker choice
         which_picker = cline%get_carg('picker')
-        if( which_picker .eq. 'seg' .or. which_picker .eq. 'segdiam' )then
+        if( which_picker .eq. 'segdiam' )then
             if( .not. cline%defined('ndev') ) call cline%set('ndev', 1.5)
         else
             if( .not. cline%defined('ndev') ) call cline%set('ndev', 2.0)
@@ -166,7 +166,7 @@ contains
                     THROW_HARD('Unsupported new picker mode')
                 endif
 
-            case('seg', 'segdiam')
+            case('segdiam')
                 if( templates_provided ) THROW_HARD('SEGDIAM picker does not requires PICKREFS input')
 
             case default

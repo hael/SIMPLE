@@ -3,12 +3,11 @@ module simple_picker_utils
 use simple_core_module_api
 use simple_parameters, only: parameters
 use simple_image,      only: image
-use simple_pickseg,    only: pickseg
 use simple_pickref
 use simple_picksegdiam
 implicit none
 
-public :: exec_refpick, exec_segpick, exec_segdiampick, exec_gaupick
+public :: exec_refpick, exec_segdiampick, exec_gaupick
 private
 #include "simple_local_flags.inc"
 
@@ -72,33 +71,6 @@ contains
         call refp%kill
         call refp_refine%kill
     end subroutine exec_refpick
-
-    subroutine exec_segpick( params, micname, boxfile_out, nptcls, dir_out, moldiam, winsz )
-        class(parameters),       intent(in)    :: params
-        class(string),           intent(in)    :: micname
-        class(string),           intent(out)   :: boxfile_out
-        integer,                 intent(out)   :: nptcls
-        class(string), optional, intent(in)    :: dir_out
-        real,          optional, intent(in)    :: moldiam
-        integer,       optional, intent(in)  :: winsz
-        type(string)  :: boxfile
-        type(pickseg) :: picker
-        boxfile = basename(fname_new_ext(micname,'box'))
-        if( present(dir_out) ) boxfile = dir_out//'/'//boxfile%to_char()
-        if( present(moldiam) )then
-            call picker%pick(params, micname, moldiam=moldiam)
-        elseif( present(winsz) )then
-            call picker%pick(params, micname, winsz=winsz)
-        else
-            call picker%pick(params, micname)
-        endif
-        call picker%report_boxfile(boxfile, nptcls)
-        if( nptcls == 0 )then
-            boxfile_out = ''
-        else
-            boxfile_out = simple_abspath(boxfile)
-        endif
-    end subroutine exec_segpick
 
     subroutine exec_segdiampick( params, micname, boxfile_out, smpd, nptcls, moldiam_max, dir_out )
         class(parameters),          intent(in)  :: params
