@@ -439,18 +439,18 @@ contains
         call json%add(process_inputs, '', 'dir_target=' // PREPROC_JOB_NAME)
         call json%add(process_inputs, '', 'outdir='     // OPTICS_JOB_NAME) !important - directory names and name must match between processes
         call json%add(process_inputs, '', 'nthr='       // int2str(DEFAULT_NTHR_MASTER))
-        !! opening 2D
+        !! initial analysis
         call json%create_object(process, 'process')
         call json%add(processes, process)
-        call json%add(process, 'name',         OPENING2D_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process, 'name',         INITIAL_ANALYSIS_JOB_NAME) !important - directory names and name must match between processes
         call json%add(process, 'prg',          'gen_pickrefs')
-        call json%add(process, 'nthr_master',  OPENING2D_NTHR)
+        call json%add(process, 'nthr_master',  INITIAL_ANALYSIS_NTHR)
         call json%create_array(process_inputs, 'static_inputs')
         call json%add(process, process_inputs)
         call json%add(process_inputs, '', 'dir_target='    // PREPROC_JOB_NAME)
         call json%add(process_inputs, '', 'optics_dir=../' // OPTICS_JOB_NAME)
-        call json%add(process_inputs, '', 'outdir='        // OPENING2D_JOB_NAME) !important - directory names and name must match between processes
-        call json%add(process_inputs, '', 'nthr='          // int2str(OPENING2D_NTHR))
+        call json%add(process_inputs, '', 'outdir='        // INITIAL_ANALYSIS_JOB_NAME) !important - directory names and name must match between processes
+        call json%add(process_inputs, '', 'nthr='          // int2str(INITIAL_ANALYSIS_NTHR))
         !! reference_based_picking
         call json%create_object(process, 'process')
         call json%add(processes, process)

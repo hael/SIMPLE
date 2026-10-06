@@ -24,7 +24,7 @@ contains
     type(gui_metadata_stream_preprocess)        :: meta_preprocess
     type(gui_metadata_stream_optics_assignment) :: meta_optics_assignment
     type(gui_metadata_stream_picking)          :: meta_initial_picking
-    type(gui_metadata_stream_opening2D)         :: meta_opening2D
+    type(gui_metadata_stream_initial_analysis)         :: meta_initial_analysis
     type(gui_metadata_stream_particle_sieving)  :: meta_particle_sieving
     type(gui_metadata_stream_pool2D)            :: meta_pool2D
     type(gui_metadata_stream_pool2D_snapshot)   :: meta_pool2D_snapshot
@@ -41,7 +41,7 @@ contains
                    sizeof(meta_preprocess),        &
                    sizeof(meta_optics_assignment), &
                    sizeof(meta_initial_picking),   &
-                   sizeof(meta_opening2D),         &
+                   sizeof(meta_initial_analysis),         &
                    sizeof(meta_particle_sieving),  &
                    sizeof(meta_pool2D),            &
                    sizeof(meta_pool2D_snapshot),   &

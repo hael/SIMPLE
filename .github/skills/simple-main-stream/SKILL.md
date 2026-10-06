@@ -60,7 +60,7 @@ Supporting layers in `src/main/stream`:
 - A forked child copies the master's memory but not its threads: fork a stage only before the listener starts or while holding its lock, and keep C state that a thread owns fork-safe (`pthread_atfork`, as the memory monitor does)
 - Stages are forked with `forked_process` auto-restart off; a stage restarts only when the GUI asks
 - The master returns from `execute`, so the entry point stops the persistent worker server it owns; forked stages exit directly from `forked_process` and never run the entry point's tail
-- p03 publishes the picking references once, as `OPENING2D_PICKREFS`, by a rename (`publish_pickrefs`). A GUI selection pre-empts the 3D route, and published references are final; don't write that file from anywhere else
+- p03 publishes the picking references once, as `INITIAL_ANALYSIS_PICKREFS`, by a rename (`publish_pickrefs`). A GUI selection pre-empts the 3D route, and published references are final; don't write that file from anywhere else
 - Watcher handoff assumes files are only returned once untouched for `report_time`; do not weaken that check, and write files a stage hands on as a temporary and rename them
 - GUI metadata is serialised by its bytes (`transfer`): never send an object with an allocated component (see `gui_metadata_vol3D%serialise`)
 - Signal handlers only set a flag (`simple_stream_sigterm`); poll it between steps, never log, join or exit inside a handler

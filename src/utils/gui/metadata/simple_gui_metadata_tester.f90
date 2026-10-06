@@ -55,9 +55,9 @@ contains
     call test_set_get_stream_reference_picking()
     call test_serialise_stream_reference_picking()
     call test_jsonise_stream_reference_picking()
-    call test_set_get_stream_opening2D()
-    call test_serialise_stream_opening2D()
-    call test_jsonise_stream_opening2D()
+    call test_set_get_stream_initial_analysis()
+    call test_serialise_stream_initial_analysis()
+    call test_jsonise_stream_initial_analysis()
     call test_set_get_stream_particle_sieving()
     call test_serialise_stream_particle_sieving()
     call test_jsonise_stream_particle_sieving()
@@ -1242,19 +1242,19 @@ contains
     deallocate(buffer)
   end subroutine test_jsonise_stream_reference_picking
 
-  !---------------- stream opening2D ----------------
+  !---------------- stream initial analysis ----------------
 
-  ! Verify that all stream opening-2D fields round-trip, including
+  ! Verify that all stream initial analysis fields round-trip, including
   ! the separately set user_input flag and the auto-populated
   ! last_particles_imported timestamp.
-  subroutine test_set_get_stream_opening2D()
-    type(gui_metadata_stream_opening2D) :: meta
+  subroutine test_set_get_stream_initial_analysis()
+    type(gui_metadata_stream_initial_analysis) :: meta
     type(string)                        :: stage
     integer :: particles_imported, particles_accepted, last_particles_imported
-    write(*,'(A)') 'test_set_get_stream_opening2D'
-    call meta%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
+    write(*,'(A)') 'test_set_get_stream_initial_analysis'
+    call meta%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
-    call assert_int(meta%type(), GUI_METADATA_STREAM_OPENING2D_TYPE, 'type is set correctly')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE, 'type is set correctly')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
                   mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
     call meta%set_user_input(.true.)
@@ -1268,17 +1268,17 @@ contains
     call assert_true(last_particles_imported > 0,   'last_particles_imported is set')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
-  end subroutine test_set_get_stream_opening2D
+  end subroutine test_set_get_stream_initial_analysis
 
-  ! Verify that the stream opening-2D serialise buffer is the expected size.
-  subroutine test_serialise_stream_opening2D()
+  ! Verify that the stream initial analysis serialise buffer is the expected size.
+  subroutine test_serialise_stream_initial_analysis()
     character(len=:),                   allocatable :: buffer
-    type(gui_metadata_stream_opening2D)             :: meta
-    type(gui_metadata_stream_opening2D) :: copy
-    write(*,'(A)') 'test_serialise_stream_opening2D'
-    call meta%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
+    type(gui_metadata_stream_initial_analysis)             :: meta
+    type(gui_metadata_stream_initial_analysis) :: copy
+    write(*,'(A)') 'test_serialise_stream_initial_analysis'
+    call meta%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
-    call assert_int(meta%type(), GUI_METADATA_STREAM_OPENING2D_TYPE, 'type is set correctly')
+    call assert_int(meta%type(), GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE, 'type is set correctly')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
                   mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
     call assert_true(meta%assigned(), 'metadata object is set')
@@ -1291,20 +1291,20 @@ contains
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     deallocate(buffer)
-  end subroutine test_serialise_stream_opening2D
+  end subroutine test_serialise_stream_initial_analysis
 
   ! jsonise embeds last_particles_imported (live Unix timestamp) so only
   ! non-emptiness is checked — a stable hash comparison is not possible.
-  subroutine test_jsonise_stream_opening2D()
+  subroutine test_jsonise_stream_initial_analysis()
     character(kind=CK, len=:),          allocatable :: buffer
-    type(gui_metadata_stream_opening2D)             :: meta
+    type(gui_metadata_stream_initial_analysis)             :: meta
     type(json_core)                                 :: json
     type(json_value),                   pointer     :: json_ptr
     type(string)                                    :: json_str
     logical                                         :: found
-    write(*,'(A)') 'test_jsonise_stream_opening2D'
+    write(*,'(A)') 'test_jsonise_stream_initial_analysis'
     call json%initialize(no_whitespace=.true., compact_reals=.true.)
-    call meta%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
+    call meta%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
                   mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
@@ -1322,7 +1322,7 @@ contains
     call json%destroy(json_ptr)
     call assert_true(.not.json%failed(), 'json destroyed')
     deallocate(buffer)
-  end subroutine test_jsonise_stream_opening2D
+  end subroutine test_jsonise_stream_initial_analysis
 
   !---------------- stream particle sieving ----------------
 

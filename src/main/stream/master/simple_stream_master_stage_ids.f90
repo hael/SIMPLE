@@ -15,7 +15,7 @@
 module simple_stream_master_stage_ids
 use unix,                only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_error,        only: simple_exception
-use simple_defs_stream,  only: PREPROC_JOB_NAME, OPTICS_JOB_NAME, OPENING2D_JOB_NAME, REFPICK_JOB_NAME,&
+use simple_defs_stream,  only: PREPROC_JOB_NAME, OPTICS_JOB_NAME, INITIAL_ANALYSIS_JOB_NAME, REFPICK_JOB_NAME,&
                                &SIEVING_JOB_NAME, CLASS2D_JOB_NAME, MULTISTATE3D_JOB_NAME
 use simple_stream_state, only: ipc_pipe_preprocess_in, ipc_pipe_preprocess_out, ipc_pipe_assign_optics_in,&
                                &ipc_pipe_assign_optics_out, ipc_pipe_initial_analysis_in, ipc_pipe_initial_analysis_out,&
@@ -54,7 +54,7 @@ contains
         select case(id)
             case(STAGE_PREPROCESS);        name = PREPROC_JOB_NAME
             case(STAGE_ASSIGN_OPTICS);     name = OPTICS_JOB_NAME
-            case(STAGE_INITIAL_ANALYSIS);  name = OPENING2D_JOB_NAME
+            case(STAGE_INITIAL_ANALYSIS);  name = INITIAL_ANALYSIS_JOB_NAME
             case(STAGE_REFERENCE_PICKING); name = REFPICK_JOB_NAME
             case(STAGE_PARTICLE_SIEVING);  name = SIEVING_JOB_NAME
             case(STAGE_POOL2D);            name = CLASS2D_JOB_NAME

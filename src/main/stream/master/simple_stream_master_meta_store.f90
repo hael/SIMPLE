@@ -25,7 +25,7 @@ use simple_stream_master_stage_ids, only: STAGE_PREPROCESS, STAGE_ASSIGN_OPTICS,
     &STAGE_REFERENCE_PICKING, STAGE_PARTICLE_SIEVING, STAGE_POOL2D, STAGE_SOLVE3D
 use simple_gui_metadata_api, only: gui_metadata_micrograph, gui_metadata_histogram, gui_metadata_timeplot,&
     &gui_metadata_optics_group, gui_metadata_cavg2D, gui_metadata_vol3D, gui_metadata_stream_preprocess,&
-    &gui_metadata_stream_optics_assignment, gui_metadata_stream_picking, gui_metadata_stream_opening2D,&
+    &gui_metadata_stream_optics_assignment, gui_metadata_stream_picking, gui_metadata_stream_initial_analysis,&
     &gui_metadata_stream_particle_sieving, gui_metadata_stream_pool2D, gui_metadata_stream_pool2D_snapshot,&
     &gui_metadata_stream_solve3D_multistate,&
     &GUI_METADATA_STREAM_PREPROCESS_TYPE, GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ASTIG_TYPE,&
@@ -34,9 +34,9 @@ use simple_gui_metadata_api, only: gui_metadata_micrograph, gui_metadata_histogr
     &GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_DF_TYPE, GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_RATE_TYPE,&
     &GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE, GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE,&
     &GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE, GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,&
-    &GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE, GUI_METADATA_STREAM_OPENING2D_TYPE,&
-    &GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE, GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,&
-    &GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE, GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,&
+    &GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE, GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE,&
+    &GUI_METADATA_STREAM_INITIAL_ANALYSIS_VOL3D_TYPE, GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE,&
+    &GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE, GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,&
     &GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE, GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE,&
     &GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE, GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE,&
     &GUI_METADATA_STREAM_POOL2D_TYPE, GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE, GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,&
@@ -57,12 +57,12 @@ type :: stream_master_meta_store
     ! optics assignment
     type(gui_metadata_stream_optics_assignment)     :: optics_assignment
     type(gui_metadata_optics_group),    allocatable :: optics_groups(:)
-    ! initial analysis: picking and opening 2D
+    ! initial analysis: picking and initial analysis
     type(gui_metadata_stream_picking)               :: initial_picking
     type(gui_metadata_micrograph),      allocatable :: initial_picking_micrographs(:)
-    type(gui_metadata_stream_opening2D)             :: opening2D
-    type(gui_metadata_cavg2D),          allocatable :: opening2D_cavgs(:), opening2D_final_cavgs(:)
-    type(gui_metadata_vol3D)                        :: opening2D_vol3D
+    type(gui_metadata_stream_initial_analysis)             :: initial_analysis
+    type(gui_metadata_cavg2D),          allocatable :: initial_analysis_cavgs(:), initial_analysis_final_cavgs(:)
+    type(gui_metadata_vol3D)                        :: initial_analysis_vol3D
     ! reference picking
     type(gui_metadata_stream_picking)               :: reference_picking
     type(gui_metadata_micrograph),      allocatable :: reference_picking_micrographs(:)
@@ -106,8 +106,8 @@ contains
         call self%preprocess_timeplots(4)%new(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_RATE_TYPE)
         call self%optics_assignment%new(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
         call self%initial_picking%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
-        call self%opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
-        call self%opening2D_vol3D%new(GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE)
+        call self%initial_analysis%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
+        call self%initial_analysis_vol3D%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_VOL3D_TYPE)
         call self%reference_picking%new(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
         call self%particle_sieving%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
         call self%pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
@@ -144,10 +144,10 @@ contains
                 if( frame_fits(buffer, sizeof(self%optics_assignment), meta_type) ) self%optics_assignment = transfer(buffer, self%optics_assignment)
             case(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
                 if( frame_fits(buffer, sizeof(self%initial_picking), meta_type) ) self%initial_picking = transfer(buffer, self%initial_picking)
-            case(GUI_METADATA_STREAM_OPENING2D_TYPE)
-                if( frame_fits(buffer, sizeof(self%opening2D), meta_type) ) self%opening2D = transfer(buffer, self%opening2D)
-            case(GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE)
-                if( frame_fits(buffer, sizeof(self%opening2D_vol3D), meta_type) ) self%opening2D_vol3D = transfer(buffer, self%opening2D_vol3D)
+            case(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
+                if( frame_fits(buffer, sizeof(self%initial_analysis), meta_type) ) self%initial_analysis = transfer(buffer, self%initial_analysis)
+            case(GUI_METADATA_STREAM_INITIAL_ANALYSIS_VOL3D_TYPE)
+                if( frame_fits(buffer, sizeof(self%initial_analysis_vol3D), meta_type) ) self%initial_analysis_vol3D = transfer(buffer, self%initial_analysis_vol3D)
             case(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
                 if( frame_fits(buffer, sizeof(self%reference_picking), meta_type) ) self%reference_picking = transfer(buffer, self%reference_picking)
             case(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
@@ -167,10 +167,10 @@ contains
                 call place_micrograph(self%reference_picking_micrographs, buffer, meta_type)
             case(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE)
                 call place_optics_group(self%optics_groups, buffer, meta_type)
-            case(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
-                call place_cavg2D(self%opening2D_cavgs, buffer, meta_type)
-            case(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
-                call place_cavg2D(self%opening2D_final_cavgs, buffer, meta_type)
+            case(GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE)
+                call place_cavg2D(self%initial_analysis_cavgs, buffer, meta_type)
+            case(GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE)
+                call place_cavg2D(self%initial_analysis_final_cavgs, buffer, meta_type)
             case(GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE)
                 call place_cavg2D(self%reference_picking_cavgs, buffer, meta_type)
             case(GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
@@ -194,8 +194,8 @@ contains
             &self%preprocess_histograms, self%preprocess_timeplots)
         call assembler%assemble_stream_optics_assignment(self%optics_assignment, self%optics_groups)
         call assembler%assemble_stream_initial_picking(self%initial_picking, self%initial_picking_micrographs)
-        call assembler%assemble_stream_opening2D(self%opening2D, self%opening2D_cavgs, self%opening2D_final_cavgs,&
-            &self%opening2D_vol3D)
+        call assembler%assemble_stream_initial_analysis(self%initial_analysis, self%initial_analysis_cavgs, self%initial_analysis_final_cavgs,&
+            &self%initial_analysis_vol3D)
         call assembler%assemble_stream_reference_picking(self%reference_picking, self%reference_picking_micrographs,&
             &self%reference_picking_cavgs)
         call assembler%assemble_stream_particle_sieving(self%particle_sieving, self%particle_sieving_cavgs,&
@@ -220,8 +220,8 @@ contains
                 if( allocated(self%optics_groups) ) deallocate(self%optics_groups)
             case(STAGE_INITIAL_ANALYSIS)
                 if( allocated(self%initial_picking_micrographs) ) deallocate(self%initial_picking_micrographs)
-                if( allocated(self%opening2D_cavgs)             ) deallocate(self%opening2D_cavgs)
-                if( allocated(self%opening2D_final_cavgs)       ) deallocate(self%opening2D_final_cavgs)
+                if( allocated(self%initial_analysis_cavgs)             ) deallocate(self%initial_analysis_cavgs)
+                if( allocated(self%initial_analysis_final_cavgs)       ) deallocate(self%initial_analysis_final_cavgs)
             case(STAGE_REFERENCE_PICKING)
                 if( allocated(self%reference_picking_micrographs) ) deallocate(self%reference_picking_micrographs)
                 if( allocated(self%reference_picking_cavgs)       ) deallocate(self%reference_picking_cavgs)
@@ -247,8 +247,8 @@ contains
             &' init_pick_mics=',    nmic(self%initial_picking_micrographs),&
             &' ref_pick_mics=',     nmic(self%reference_picking_micrographs),&
             &' optics_groups=',     nog(self%optics_groups),&
-            &' opening2D_cls=',     ncavg(self%opening2D_cavgs),&
-            &' opening2D_final=',   ncavg(self%opening2D_final_cavgs),&
+            &' initial_analysis_cls=',   ncavg(self%initial_analysis_cavgs),&
+            &' initial_analysis_final=', ncavg(self%initial_analysis_final_cavgs),&
             &' ref_pick_cls=',      ncavg(self%reference_picking_cavgs),&
             &' sieve_cls=',         ncavg(self%particle_sieving_cavgs),&
             &' pool2D_cls=',        ncavg(self%pool2D_cavgs),&

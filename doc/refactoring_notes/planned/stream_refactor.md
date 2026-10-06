@@ -379,7 +379,7 @@ named steps. The differences:
       after `finalize` and `kill`, the rest of the plan is skipped, and jobs already
       submitted (the "all" extractions, the sieve's chunks, solve2D/3D) keep running
       unattended. Changed since (stream area review, 2 October, D2): the references, from a
-      selection or the 3D route, are published once as `OPENING2D_PICKREFS`, the file the
+      selection or the 3D route, are published once as `INITIAL_ANALYSIS_PICKREFS`, the file the
       master points reference picking at, by a rename. A selection is read before the cycle
       steps of each pass, so it pre-empts the 3D route. A selection that publishes nothing no
       longer ends the stage. Published references are final, and a restarted stage that finds

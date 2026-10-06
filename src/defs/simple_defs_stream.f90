@@ -6,8 +6,8 @@ character(len=*), parameter :: CLASS2D_JOB_NAME           = 'classification_2D' 
 character(len=*), parameter :: DIR_STREAM                 = './spprojs/'              ! location for projects to be processed
 character(len=*), parameter :: DIR_STREAM_COMPLETED       = './spprojs_completed/'    ! location for projects processed
 character(len=*), parameter :: MULTISTATE3D_JOB_NAME      = 'solve3D_multistate'      ! name of solve3D multistate job. also used for folder name
-character(len=*), parameter :: OPENING2D_JOB_NAME         = 'opening_2D'              ! name of opening 2D job. also used for folder name
-character(len=*), parameter :: OPENING2D_PICKREFS         = 'selected_references.mrcs' ! picking references the opening 2D job publishes in its folder
+character(len=*), parameter :: INITIAL_ANALYSIS_JOB_NAME  = 'initial_analysis'        ! name of initial analysis job. also used for folder name
+character(len=*), parameter :: INITIAL_ANALYSIS_PICKREFS  = 'selected_references.mrcs' ! picking references the initial analysis job publishes in its folder
 character(len=*), parameter :: OPTICS_JOB_NAME            = 'optics_assignment'       ! name of optics assignment job. also used for folder name
 character(len=*), parameter :: POOL_DIR                   = ''                        ! should be './pool/' for tidyness but difficult with gui
 character(len=*), parameter :: POOL_DISTR_EXEC_FNAME      = './distr_refine2D_pool'
@@ -39,7 +39,7 @@ integer,          parameter :: INACTIVE_TIME              = 900                 
 integer,          parameter :: MOVIES_IDLE_TIME_S         = 900                       ! no new movie for this long (s): preprocessing is idle
 integer,          parameter :: LONGTIME                   = 60                        ! time lag after which a movie/project is processed
 integer,          parameter :: NMICS_DELTA                = 100                       ! number of micrographs to increment nmics by when user requests more particles to be used in reference generation
-integer,          parameter :: OPENING2D_NTHR             = 32                        ! number of threads requested from queue system for master process. overrides default
+integer,          parameter :: INITIAL_ANALYSIS_NTHR      = 32                        ! number of threads requested from queue system for master process. overrides default
 integer,          parameter :: PAUSE_NITERS               = 5                         ! # of iterations after which 2D analysis is paused
 integer,          parameter :: PAUSE_TIMELIMIT            = 600                       ! time (secs) after which 2D analysis is paused
 integer,          parameter :: POOL_FREQ_REJECTION        = 5                         ! pool class rejection performed every POOL_FREQ_REJECTION iteration

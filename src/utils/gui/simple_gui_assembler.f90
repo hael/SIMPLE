@@ -20,7 +20,7 @@ module simple_gui_assembler
                                      gui_metadata_optics_group,              &
                                      gui_metadata_stream_picking,            &
                                      gui_metadata_cavg2D,                    &
-                                     gui_metadata_stream_opening2D,          &
+                                     gui_metadata_stream_initial_analysis,          &
                                      gui_metadata_stream_particle_sieving,   &
                                      gui_metadata_stream_pool2D,             &
                                      gui_metadata_stream_pool2D_snapshot,    &
@@ -41,7 +41,7 @@ type :: gui_assembler
   type(string)              :: optics_assignment_hash  ! FNV-1a hash of last sent optics-assignment section
   type(string)              :: initial_picking_hash    ! FNV-1a hash of last sent initial-picking section
   type(string)              :: reference_picking_hash  ! FNV-1a hash of last sent reference-picking section
-  type(string)              :: opening2D_hash          ! FNV-1a hash of last sent opening2D section
+  type(string)              :: initial_analysis_hash          ! FNV-1a hash of last sent opening2D section
   type(string)              :: particle_sieving_hash
   type(string)              :: pool2D_hash             ! FNV-1a hash of last sent pool-2D section
   type(string)              :: solve3D_multistate_hash ! FNV-1a hash of last sent multistate solve3D section
@@ -65,7 +65,7 @@ contains
   procedure :: assemble_stream_optics_assignment
   procedure :: assemble_stream_initial_picking
   procedure :: assemble_stream_reference_picking
-  procedure :: assemble_stream_opening2D
+  procedure :: assemble_stream_initial_analysis
   procedure :: assemble_stream_particle_sieving
   procedure :: assemble_stream_pool2D
   procedure :: assemble_stream_solve3D_multistate
@@ -107,7 +107,7 @@ contains
     call self%optics_assignment_hash%kill()
     call self%initial_picking_hash%kill()
     call self%reference_picking_hash%kill()
-    call self%opening2D_hash%kill()
+    call self%initial_analysis_hash%kill()
     call self%particle_sieving_hash%kill()
     call self%pool2D_hash%kill()
     call self%solve3D_multistate_hash%kill()
@@ -116,10 +116,10 @@ contains
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
   ! aggregate status derived from the union of all child-process states.
-  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, &
+  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_initial_analysis, &
       fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate, n_active_persistent_workers )
     class(gui_assembler),  intent(inout) :: self
-    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D, fork_particle_sieving, fork_solve3D_multistate
+    class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_particle_sieving, fork_solve3D_multistate
     class(forked_process), intent(inout) :: fork_reference_picking, fork_pool2D
     integer, optional,     intent(in)    :: n_active_persistent_workers
     type(json_value),      pointer       :: json_ptr, json_master_ptr
@@ -131,8 +131,8 @@ contains
     call self%json%create_object(json_ptr, 'stream_heartbeat')
     call forked_process_status(string('preprocessing'),         fork_preprocess)
     call forked_process_status(string('assign_optics'),         fork_assign_optics)
-    call forked_process_status(string('initial_picking'),       fork_opening2D)
-    call forked_process_status(string('opening2D'),             fork_opening2D)
+    call forked_process_status(string('initial_picking'),       fork_initial_analysis)
+    call forked_process_status(string('opening2D'),             fork_initial_analysis)
     call forked_process_status(string('reference_picking'),     fork_reference_picking)
     call forked_process_status(string('particle_sieving'),      fork_particle_sieving)
     call forked_process_status(string('pool2D'),                fork_pool2D)
@@ -471,10 +471,10 @@ contains
   ! embedded as a nested 'volume' object (no FSC/postprocessed fields at this stage).
   ! The whole section (header + cavgs2D) is suppressed when its hash matches
   ! the previously sent hash.
-  subroutine assemble_stream_opening2D( self, meta_opening2D, meta_latest_cavgs2D, meta_selected_pickrefs, meta_vol3D )
+  subroutine assemble_stream_initial_analysis( self, meta_initial_analysis, meta_latest_cavgs2D, meta_selected_pickrefs, meta_vol3D )
     class(gui_assembler),                   intent(inout) :: self
     type(gui_metadata_cavg2D), allocatable, intent(inout) :: meta_latest_cavgs2D(:), meta_selected_pickrefs(:)
-    type(gui_metadata_stream_opening2D),    intent(inout) :: meta_opening2D
+    type(gui_metadata_stream_initial_analysis),    intent(inout) :: meta_initial_analysis
     type(gui_metadata_vol3D), optional,     intent(inout) :: meta_vol3D
     character(kind=CK,len=:),               allocatable   :: buffer
     type(json_value),                       pointer       :: json_ptr, json_cavgs2D_ptr, json_pickrefs_ptr, json_vol3D_ptr
@@ -482,7 +482,7 @@ contains
     logical                                               :: l_add
     integer                                               :: i_cls2D
     call self%json%remove_if_present(self%json_root, 'opening2D')
-    json_ptr => meta_opening2D%jsonise()
+    json_ptr => meta_initial_analysis%jsonise()
     if( .not. associated(json_ptr) ) return
     call self%json%rename(json_ptr, 'opening2D')
     if( present(meta_vol3D) ) then
@@ -527,16 +527,16 @@ contains
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
-    if( hash /= self%opening2D_hash ) then
+    if( hash /= self%initial_analysis_hash ) then
       call self%json%add(self%json_root, json_ptr)
-      call self%opening2D_hash%kill()
-      self%opening2D_hash = hash
+      call self%initial_analysis_hash%kill()
+      self%initial_analysis_hash = hash
     else
       call self%json%destroy(json_ptr)
     endif
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
-  end subroutine assemble_stream_opening2D
+  end subroutine assemble_stream_initial_analysis
 
   ! Write the particle-sieving section, including reference class averages or
   ! the latest class averages.  The whole section is suppressed when its hash

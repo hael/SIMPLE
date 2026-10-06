@@ -52,7 +52,7 @@ exist, and then removes `dir_exec` from the command lines it passes on.
 |---|---|---|
 | completed job sets, their numbering and origins | the completed folder (`DIR_STREAM_COMPLETED`) of p01 and p04 | `stream_job_sets%restore` |
 | optics-map ids | the maps in p02's folder | p02 (next id); readers take the newest |
-| published picking references | `OPENING2D_PICKREFS` in p03's folder | p03, p04 |
+| published picking references | `INITIAL_ANALYSIS_PICKREFS` in p03's folder | p03, p04 |
 | sieve chunks and their state | chunk folders and their marker files (`SOLVE2D_FINISHED`, `REJECTION_FINISHED`, `COMPLETE`, `REJECTION_FAILED`, `FINAL_INGESTION`), a chunk's job record and exit status (`EXIT_CODE_solve2D`, `.job`), `chunked_mics.txt` | the sieve in p03 and p05 |
 | queued jobs | each job's record (`<exit-status file>.job`: pid, host, scheduler and id) and exit status, beside the job | the stage's cancel on stop; a restart's fresh-folder check; the liveness check |
 | the sieve's hand-offs, with its empty final set (`sieve_final_c<n>_f<m>.simple`) | p05's completed folder | p06 |

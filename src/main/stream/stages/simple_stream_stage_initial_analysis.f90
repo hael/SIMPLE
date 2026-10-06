@@ -27,7 +27,7 @@
 !   3D with the one estimated from cycle 1's selected class averages
 !   (estimate_mskdiam), generous and never larger than the default.
 !
-!   The picking references are published once per run, as OPENING2D_PICKREFS
+!   The picking references are published once per run, as INITIAL_ANALYSIS_PICKREFS
 !   in the stage directory, the file the master points reference picking at:
 !   written in full under another name and renamed into place, so reference
 !   picking never reads a partial stack. Once published they are final.
@@ -113,17 +113,17 @@ use simple_segdiam_bin_picker,            only: segdiam_bin_picker
 use simple_stream_sigterm,                only: sigterm_received
 use simple_gui_metadata_utils,            only: max_metadata_size
 use simple_gui_metadata_types,            only: GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,&
-                                               &GUI_METADATA_STREAM_OPENING2D_TYPE,&
+                                               &GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE,&
                                                &GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE,&
-                                               &GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,&
-                                               &GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE,&
-                                               &GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE
+                                               &GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE,&
+                                               &GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE,&
+                                               &GUI_METADATA_STREAM_INITIAL_ANALYSIS_VOL3D_TYPE
 use simple_gui_metadata_cavg2D,           only: gui_metadata_cavg2D
 use simple_gui_metadata_micrograph,       only: gui_metadata_micrograph
 use simple_gui_metadata_vol3D,            only: gui_metadata_vol3D
 use simple_gui_metadata_stream_update,    only: gui_metadata_stream_update
 use simple_gui_metadata_stream_picking,   only: gui_metadata_stream_picking
-use simple_gui_metadata_stream_opening2D, only: gui_metadata_stream_opening2D
+use simple_gui_metadata_stream_initial_analysis, only: gui_metadata_stream_initial_analysis
 use simple_stream_pipe,                   only: stream_pipe
 use simple_stream_gui_senders,            only: send_cavgs, send_recent_micrographs
 use simple_mic_import,                    only: append_mics_from_projects
@@ -177,7 +177,7 @@ type :: stream_stage_initial_analysis
     logical,                allocatable :: extract_collected(:)
     type(stream_pipe)                   :: pipe
     type(gui_metadata_stream_picking)   :: meta_picking
-    type(gui_metadata_stream_opening2D) :: meta_opening2D
+    type(gui_metadata_stream_initial_analysis) :: meta_initial_analysis
     type(gui_metadata_micrograph)       :: meta_micrograph
     type(gui_metadata_cavg2D)           :: meta_cavg2D, meta_pickrefs
     type(string)                        :: cwd                     ! absolute stage directory
@@ -249,7 +249,7 @@ contains
     procedure :: publish_pickrefs
     procedure :: send_pickrefs
     procedure :: send_picking_status
-    procedure :: send_opening2D_status
+    procedure :: send_initial_analysis_status
     procedure :: cycle_projfile
     procedure :: balanced_projfile
     procedure :: all_projfile
@@ -298,7 +298,7 @@ contains
         if( .not. allocated(self%spproj_all)  ) allocate(self%spproj_all)
         if( .not. allocated(self%qenv)        ) allocate(self%qenv)
         if( .not. allocated(self%qenv_local)  ) allocate(self%qenv_local)
-        call create_stream_project(self%spproj, cline, string('opening_2D'))
+        call create_stream_project(self%spproj, cline, string(INITIAL_ANALYSIS_JOB_NAME))
         if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         call simple_getcwd(self%cwd)
@@ -329,10 +329,10 @@ contains
         class(stream_stage_initial_analysis), intent(inout) :: self
         integer,                              intent(in)    :: fd_read, fd_write
         call self%meta_picking%new(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
-        call self%meta_opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
+        call self%meta_initial_analysis%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
         call self%meta_micrograph%new(GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE)
-        call self%meta_cavg2D%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
-        call self%meta_pickrefs%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
+        call self%meta_cavg2D%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE)
+        call self%meta_pickrefs%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE)
         call self%pipe%new(fd_read, fd_write, max_metadata_size(), 'initial_analysis')
     end subroutine init_gui
 
@@ -357,8 +357,8 @@ contains
     !! again and the stage is finished, so the plan does not run again and cannot replace them.
     subroutine restore_pickrefs( self )
         class(stream_stage_initial_analysis), intent(inout) :: self
-        if( .not. file_exists(self%cwd//'/'//OPENING2D_PICKREFS) ) return
-        write(logfhandle,'(A)') '>>> PICKING REFERENCES ALREADY PUBLISHED: '//OPENING2D_PICKREFS//'; NOTHING TO DO'
+        if( .not. file_exists(self%cwd//'/'//INITIAL_ANALYSIS_PICKREFS) ) return
+        write(logfhandle,'(A)') '>>> PICKING REFERENCES ALREADY PUBLISHED: '//INITIAL_ANALYSIS_PICKREFS//'; NOTHING TO DO'
         call self%send_pickrefs()
         self%l_done = .true.
     end subroutine restore_pickrefs
@@ -410,7 +410,7 @@ contains
             enddo
         endif
         if( self%l_sieve_active ) call self%sieve%cancel()
-        call self%send_opening2D_status(string('terminating'), self%box, self%vis_cycle)
+        call self%send_initial_analysis_status(string('terminating'), self%box, self%vis_cycle)
     end subroutine finalize
 
     subroutine kill( self )
@@ -443,7 +443,7 @@ contains
         self%reproj_smpd_part = 0.
         call self%pipe%kill
         call self%meta_picking%kill
-        call self%meta_opening2D%kill
+        call self%meta_initial_analysis%kill
         call self%meta_micrograph%kill
         call self%meta_cavg2D%kill
         call self%meta_pickrefs%kill
@@ -731,7 +731,7 @@ contains
             call self%spproj%update_projinfo(projfile)
             call self%spproj%write()
             call self%send_picking_status(string('waiting for micrographs'))
-            call self%send_opening2D_status(string('waiting for particles'), self%box, self%vis_cycle)
+            call self%send_initial_analysis_status(string('waiting for particles'), self%box, self%vis_cycle)
             self%step1 = INIT_PICK
         endif
         if( self%step1 == INIT_PICK )then
@@ -793,7 +793,7 @@ contains
         if( self%step1 == INIT_CLASSIFY )then
             select case( self%job%status() )
                 case( ASYNC_JOB_IDLE )
-                    call self%send_opening2D_status(string('classifying particles'), self%box, self%vis_cycle)
+                    call self%send_initial_analysis_status(string('classifying particles'), self%box, self%vis_cycle)
                     call start_solve2D(self%qenv, self%job, self%params, projfile, string('solve2D/init'),&
                         &self%spproj%os_ptcl2D%count_state_gt_zero(), self%params%nptcls_per_cls, self%mskdiam_box)
                 case( ASYNC_JOB_DONE )
@@ -809,7 +809,7 @@ contains
         endif
         if( self%step1 == INIT_SELECT )then
             self%vis_cycle = 1
-            call self%send_opening2D_status(string('evaluating class average quality'), self%box, self%vis_cycle)
+            call self%send_initial_analysis_status(string('evaluating class average quality'), self%box, self%vis_cycle)
             call self%select_and_send(1, string('quality_selection/init'))
             self%icycle = 2
         endif
@@ -838,7 +838,7 @@ contains
         if( self%step2 == ALL_CLASSIFY )then
             select case( self%job%status() )
                 case( ASYNC_JOB_IDLE )
-                    call self%send_opening2D_status(string('classifying particles'), self%box, self%vis_cycle)
+                    call self%send_initial_analysis_status(string('classifying particles'), self%box, self%vis_cycle)
                     call start_solve2D(self%qenv, self%job, self%params, projfile, string('solve2D/all'),&
                         &self%spproj_all%os_ptcl2D%count_state_gt_zero(), self%params%nptcls_per_cls, self%mskdiam)
                 case( ASYNC_JOB_DONE )
@@ -854,19 +854,19 @@ contains
         endif
         if( self%step2 == ALL_SELECT )then
             self%vis_cycle = 2
-            call self%send_opening2D_status(string('evaluating class average quality'), self%box, self%vis_cycle)
+            call self%send_initial_analysis_status(string('evaluating class average quality'), self%box, self%vis_cycle)
             call self%select_and_send(2, string('quality_selection'))
             self%step2 = ALL_BALANCE
         endif
         if( self%step2 == ALL_BALANCE )then
-            call self%send_opening2D_status(string('balancing classes'), self%box, self%vis_cycle)
+            call self%send_initial_analysis_status(string('balancing classes'), self%box, self%vis_cycle)
             call balance_classes(self%spproj_all, projfile_3D, string('balance_classes/all'))
             self%step2 = ALL_SOLVE3D
         endif
         if( self%step2 == ALL_SOLVE3D )then
             select case( self%job%status() )
                 case( ASYNC_JOB_IDLE )
-                    call self%send_opening2D_status(string('solve3D and reproject'), self%box, self%vis_cycle)
+                    call self%send_initial_analysis_status(string('solve3D and reproject'), self%box, self%vis_cycle)
                     call start_solve3D(self%qenv, self%job, self%params, projfile_3D, string('solve3D/all'), nint(self%mskdiam))
                 case( ASYNC_JOB_DONE )
                     call self%job%kill()
@@ -1010,7 +1010,7 @@ contains
         if( .not. any(state_vetoes(l_cand, dominant, res, pops)) )then
             write(logfhandle,'(A)') '>>> WARNING: NO STATE PASSED THE SHAPE, POPULATION AND RESOLUTION CHECKS;'//&
                 &' CHOSEN BY PROJECTION DIRECTIONS AND POPULATION'
-            call self%send_opening2D_status(string('no state passed the checks; chosen by view coverage'), self%box,&
+            call self%send_initial_analysis_status(string('no state passed the checks; chosen by view coverage'), self%box,&
                 &self%vis_cycle)
         endif
         write(logfhandle,'(A,I0)') '>>> BEST VOLUME: STATE=', bestvol
@@ -1071,7 +1071,7 @@ contains
         call mrc2jpeg_tiled(reprojs, reprojs_jpg, n_xtiles=xtiles, n_ytiles=ytiles)
         call find_ldim_nptcls(self%reproj_vol, ldim, nuniq)
         vol_smpd = find_img_smpd(self%reproj_vol)
-        call meta_vol3D%new(GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE)
+        call meta_vol3D%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_VOL3D_TYPE)
         empty_path = string('')
         call meta_vol3D%set(reprojs_jpg, self%reproj_vol, empty_path, empty_path, empty_path, &
             &self%reproj_state, ldim(1), vol_smpd, 1, 1)
@@ -1165,7 +1165,7 @@ contains
         character(len=*),                     intent(in)    :: source
         logical,                              intent(out)   :: l_published
         type(string) :: pickrefs
-        pickrefs    = self%cwd//'/'//OPENING2D_PICKREFS
+        pickrefs    = self%cwd//'/'//INITIAL_ANALYSIS_PICKREFS
         l_published = .not. file_exists(pickrefs)
         if( .not. l_published )then
             write(logfhandle,'(A)') '>>> PICKING REFERENCES ALREADY PUBLISHED; THOSE FROM '//source//' ARE NOT USED'
@@ -1182,8 +1182,8 @@ contains
         integer, allocatable :: ref_inds(:)
         type(string)         :: pickrefs, jpg
         integer              :: nrefs, xtiles, ytiles, i
-        pickrefs = self%cwd//'/'//OPENING2D_PICKREFS
-        jpg      = self%cwd//'/'//swap_suffix(OPENING2D_PICKREFS, JPG_EXT, STK_EXT)
+        pickrefs = self%cwd//'/'//INITIAL_ANALYSIS_PICKREFS
+        jpg      = self%cwd//'/'//swap_suffix(INITIAL_ANALYSIS_PICKREFS, JPG_EXT, STK_EXT)
         call mrc2jpeg_tiled(pickrefs, jpg, ntiles=nrefs, n_xtiles=xtiles, n_ytiles=ytiles)
         ref_inds = [(i, i=1,nrefs)]
         call send_cavgs(self%pipe, self%meta_pickrefs, jpg, ref_inds, pickrefs, xtiles, ytiles)
@@ -1204,7 +1204,7 @@ contains
 
     ! 2D progress of the cycle under way: cycle 2's project once it holds particles, cycle 1's
     ! otherwise; sent even before any particle exists (smpd is then 0).
-    subroutine send_opening2D_status( self, stage, box_size, icycle )
+    subroutine send_initial_analysis_status( self, stage, box_size, icycle )
         class(stream_stage_initial_analysis), intent(inout) :: self
         type(string),                         intent(in)    :: stage
         integer,                              intent(in)    :: box_size, icycle
@@ -1220,11 +1220,11 @@ contains
             naccepted = self%spproj%os_ptcl2D%count_state_gt_zero()
             if( nptcls > 0 ) smpd = self%spproj%get_smpd()
         endif
-        call self%meta_opening2D%set(stage=stage, particles_imported=nptcls,&
+        call self%meta_initial_analysis%set(stage=stage, particles_imported=nptcls,&
             &particles_accepted=naccepted, mask_diam=nint(self%mskdiam),&
             &mask_scale=box_size*smpd, box_size=box_size, cycle=icycle)
-        call self%pipe%send_meta(self%meta_opening2D)
-    end subroutine send_opening2D_status
+        call self%pipe%send_meta(self%meta_initial_analysis)
+    end subroutine send_initial_analysis_status
 
     !---------------- paths ----------------
 

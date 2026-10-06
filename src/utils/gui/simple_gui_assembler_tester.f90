@@ -10,7 +10,7 @@ module simple_gui_assembler_tester
                                      gui_metadata_stream_optics_assignment,               &
                                      gui_metadata_optics_group,                           &
                                      gui_metadata_stream_picking,                         &
-                                     gui_metadata_stream_opening2D,                       &
+                                     gui_metadata_stream_initial_analysis,                       &
                                      gui_metadata_stream_particle_sieving,                &
                                      gui_metadata_stream_pool2D,                          &
                                      GUI_METADATA_STREAM_PREPROCESS_TYPE,                 &
@@ -21,8 +21,8 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,            &
                                      GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,          &
                                      GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE,    &
-                                     GUI_METADATA_STREAM_OPENING2D_TYPE,                  &
-                                     GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE,            &
+                                     GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE,                  &
+                                     GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE,            &
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE,           &
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE,     &
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE, &
@@ -71,7 +71,7 @@ contains
     call test_optics_assignment()
     call test_initial_picking()
     call test_reference_picking()
-    call test_opening2D()
+    call test_initial_analysis()
     call test_particle_sieving()
     call test_pool2D()
     call test_solve3D_multistate()
@@ -340,24 +340,24 @@ contains
     deallocate(meta_micrographs, meta_cavgs2D)
   end subroutine test_reference_picking
 
-  !---------------- opening2D assembly ----------------
+  !---------------- initial analysis assembly ----------------
 
-  ! Assemble a stream opening-2D JSON payload from synthetic metadata and verify
+  ! Assemble a stream initial analysis JSON payload from synthetic metadata and verify
   ! the section is non-empty.  An exact hash comparison is not possible because
   ! the section embeds a live Unix timestamp (last_particles_imported).
-  subroutine test_opening2D()
+  subroutine test_initial_analysis()
     type(gui_assembler)                            :: assembler
-    type(gui_metadata_stream_opening2D)            :: meta_opening2D
+    type(gui_metadata_stream_initial_analysis)            :: meta_initial_analysis
     type(gui_metadata_cavg2D),         allocatable :: meta_cavgs2D(:), meta_final_cavgs2D(:)
     type(string)                                   :: json_str
     integer                                        :: i
-    write(*,'(A)') 'test_opening2D'
-    call meta_opening2D%new(GUI_METADATA_STREAM_OPENING2D_TYPE)
-    call meta_opening2D%set(stage=string('test stage'), particles_imported=50000, &
+    write(*,'(A)') 'test_initial_analysis'
+    call meta_initial_analysis%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE)
+    call meta_initial_analysis%set(stage=string('test stage'), particles_imported=50000, &
                             particles_accepted=42000, mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
     allocate(meta_cavgs2D(3))
     do i=1, size(meta_cavgs2D)
-      call meta_cavgs2D(i)%new(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
+      call meta_cavgs2D(i)%new(GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE)
     enddo
     call meta_cavgs2D(1)%set(path=string('/test/path/cls.jpeg'), mrcpath=string('/test/path/cls.mrc'), &
                              idx=1, sprite=sprite_sheet_pos(x=0.0,  y=0.0, h=256, w=768), i=1, i_max=3)
@@ -367,13 +367,13 @@ contains
                              idx=3, sprite=sprite_sheet_pos(x=66.6, y=0.0, h=256, w=768), i=3, i_max=3)
     call assembler%new(0)
     call assert_true(assembler%is_associated(), 'assembler json associated')
-    call assembler%assemble_stream_opening2D(meta_opening2D, meta_cavgs2D, meta_final_cavgs2D)
+    call assembler%assemble_stream_initial_analysis(meta_initial_analysis, meta_cavgs2D, meta_final_cavgs2D)
     json_str = assembler%to_string()
     call assert_true(json_str%strlen() > 0, 'json length greater than 0')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
     deallocate(meta_cavgs2D)
-  end subroutine test_opening2D
+  end subroutine test_initial_analysis
 
   !---------------- particle sieving assembly ----------------
 
@@ -545,7 +545,7 @@ contains
   ! as in the master, which is not started): while running, every stage and the master report
   ! 'running' with pid and start time but no stop time; after SIGTERM, 'finished' with a stop time.
   subroutine test_stream_heartbeat_lifecycle()
-    type(forked_process) :: fork_preprocess, fork_assign_optics, fork_opening2D
+    type(forked_process) :: fork_preprocess, fork_assign_optics, fork_initial_analysis
     type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate
     type(gui_assembler)  :: assembler
     type(string)         :: running_heartbeat, finished_heartbeat
@@ -557,31 +557,31 @@ contains
     call assembler%new(HEARTBEAT_JOB_ID)
     call fork_preprocess%start(           name=string('TEST_HEARTBEAT_PREPROCESS'))
     call fork_assign_optics%start(        name=string('TEST_HEARTBEAT_ASSIGN_OPTICS'))
-    call fork_opening2D%start(            name=string('TEST_HEARTBEAT_OPENING2D'))
+    call fork_initial_analysis%start(            name=string('TEST_HEARTBEAT_INITIAL_ANALYSIS'))
     call fork_reference_picking%start(    name=string('TEST_HEARTBEAT_REFERENCE_PICKING'))
     call fork_particle_sieving%start(     name=string('TEST_HEARTBEAT_PARTICLE_SIEVING'))
     call fork_pool2D%start(               name=string('TEST_HEARTBEAT_POOL2D'))
     call fork_solve3D_multistate%start(name=string('TEST_HEARTBEAT_SOLVE3D_MULTISTATE'))
     rc = c_usleep(FORK_POLL_TIME * 5)
-    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
+    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, &
       &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate)
     running_heartbeat = assembler%to_string()
     call fork_preprocess%terminate()
     call fork_assign_optics%terminate()
-    call fork_opening2D%terminate()
+    call fork_initial_analysis%terminate()
     call fork_reference_picking%terminate()
     call fork_particle_sieving%terminate()
     call fork_pool2D%terminate()
     call fork_solve3D_multistate%terminate()
     call fork_preprocess%await_final_status()
     call fork_assign_optics%await_final_status()
-    call fork_opening2D%await_final_status()
+    call fork_initial_analysis%await_final_status()
     call fork_reference_picking%await_final_status()
     call fork_particle_sieving%await_final_status()
     call fork_pool2D%await_final_status()
     call fork_solve3D_multistate%await_final_status()
     call assembler%set_stoptime()
-    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
+    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, &
       &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate)
     finished_heartbeat = assembler%to_string()
     call assembler%kill()

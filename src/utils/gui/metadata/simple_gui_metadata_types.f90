@@ -34,11 +34,11 @@ enum, bind(c)
   ! initial picking stage
   enumerator :: GUI_METADATA_STREAM_INITIAL_PICKING_TYPE              ! 21
   enumerator :: GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE   ! 22
-  ! opening 2D stage
-  enumerator :: GUI_METADATA_STREAM_OPENING2D_TYPE             ! 23
-  enumerator :: GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE       ! 24
-  enumerator :: GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE ! 25
-  enumerator :: GUI_METADATA_STREAM_OPENING2D_VOL3D_TYPE       ! 26
+  ! initial analysis stage
+  enumerator :: GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE             ! 23
+  enumerator :: GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE       ! 24
+  enumerator :: GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE ! 25
+  enumerator :: GUI_METADATA_STREAM_INITIAL_ANALYSIS_VOL3D_TYPE       ! 26
   ! reference picking stage
   enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE            ! 27
   enumerator :: GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE ! 28

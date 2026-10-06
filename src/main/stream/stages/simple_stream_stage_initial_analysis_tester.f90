@@ -12,7 +12,7 @@ use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETF
 use simple_test_utils
 use simple_defs,                          only: COSMSKHALFWIDTH, MSK_EXP_FAC
 use simple_defs_fname,                    only: MRC_EXT, STK_EXT, JPG_EXT, METADATA_EXT, SOLVE3D_CAVGS_FINAL_DIR
-use simple_defs_stream,                   only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, OPENING2D_PICKREFS
+use simple_defs_stream,                   only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, INITIAL_ANALYSIS_PICKREFS
 use simple_string,                        only: string
 use simple_string_utils,                  only: int2str, int2str_pad
 use simple_fileio,                        only: file_exists, simple_getcwd, swap_suffix, write_singlelineoftext
@@ -24,10 +24,10 @@ use simple_sp_project,                    only: sp_project
 use simple_qsys_async_job,                only: ASYNC_JOB_IDLE
 use simple_gui_metadata_utils,            only: max_metadata_size
 use simple_gui_metadata_types,            only: GUI_METADATA_STREAM_UPDATE_TYPE, GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,&
-                                               &GUI_METADATA_STREAM_OPENING2D_TYPE, GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE
+                                               &GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE, GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE
 use simple_gui_metadata_stream_update,    only: gui_metadata_stream_update
 use simple_gui_metadata_stream_picking,   only: gui_metadata_stream_picking
-use simple_gui_metadata_stream_opening2D, only: gui_metadata_stream_opening2D
+use simple_gui_metadata_stream_initial_analysis, only: gui_metadata_stream_initial_analysis
 use simple_pick_strategy,                 only: template_lowpass
 use simple_gui_metadata_cavg2D,           only: gui_metadata_cavg2D
 use simple_stream_pipe,                   only: stream_pipe
@@ -247,7 +247,7 @@ contains
         call assert_true(reader%receive(buffer), 'a picking status is sent')
         call assert_int(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE, meta_type_of(buffer), 'it is a picking status')
         call assert_true(reader%receive(buffer), 'a 2D status is sent')
-        call assert_int(GUI_METADATA_STREAM_OPENING2D_TYPE, meta_type_of(buffer), 'it is a 2D status')
+        call assert_int(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE, meta_type_of(buffer), 'it is a 2D status')
         call assert_false(reader%receive(buffer), 'nothing more is sent')
         call stage%run_cycle1()
         call assert_int(INIT_PICK, stage%step1, 'too few micrographs: still waiting')
@@ -341,7 +341,7 @@ contains
         call update%kill
         call stage%apply_gui_updates()
         call assert_false(stage%l_done,                                   'a selection from a cycle without class averages is ignored')
-        call assert_false(file_exists(string(OPENING2D_PICKREFS)),        'and publishes nothing')
+        call assert_false(file_exists(string(INITIAL_ANALYSIS_PICKREFS)),        'and publishes nothing')
         call assert_false(reader%receive(buffer),                         'and sends nothing')
         ! no index is a class of cycle 1
         call update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
@@ -352,7 +352,7 @@ contains
         call update%kill
         call stage%apply_gui_updates()
         call assert_false(stage%l_done,                                   'a selection naming no class is ignored')
-        call assert_false(file_exists(string(OPENING2D_PICKREFS)),        'and publishes nothing')
+        call assert_false(file_exists(string(INITIAL_ANALYSIS_PICKREFS)),        'and publishes nothing')
         call assert_false(reader%receive(buffer),                         'and sends nothing')
         ! classes 2 and 4 of cycle 1, and an index out of range
         call update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
@@ -364,9 +364,9 @@ contains
         call stage%apply_gui_updates()
         call assert_true(stage%l_done,   'the selection ends the stage')
         call assert_true(stage%finished(), 'the stage is finished')
-        refs = OPENING2D_PICKREFS
+        refs = INITIAL_ANALYSIS_PICKREFS
         call assert_true(file_exists(refs), 'the selected class averages are published as the picking references')
-        call assert_true(file_exists(swap_suffix(OPENING2D_PICKREFS, JPG_EXT, STK_EXT)), 'with their sprite sheet')
+        call assert_true(file_exists(swap_suffix(INITIAL_ANALYSIS_PICKREFS, JPG_EXT, STK_EXT)), 'with their sprite sheet')
         call assert_false(file_exists(string('pickrefs_selection'//STK_EXT)), 'and no stack is left under another name')
         if( file_exists(refs) )then
             call find_ldim_nptcls(refs, ldim, nrefs)
@@ -383,8 +383,8 @@ contains
         do imsg = 1,2
             call assert_true(reader%receive(buffer), 'reference '//int2str(imsg)//' is sent to the GUI')
             if( .not. allocated(buffer) ) cycle
-            call assert_int(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE, meta_type_of(buffer), 'as a picking reference')
-            if( meta_type_of(buffer) /= GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE ) cycle
+            call assert_int(GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE, meta_type_of(buffer), 'as a picking reference')
+            if( meta_type_of(buffer) /= GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE ) cycle
             cavg = transfer(buffer, cavg)
             call assert_int(imsg, cavg%get_idx(),   'indexed in the written stack')
             call assert_int(2,    cavg%get_i_max(), 'of two')
@@ -424,15 +424,15 @@ contains
         call assert_false(stage%l_done,           'nothing published: the stage runs its plan')
         call assert_false(reader%receive(buffer), 'and sends nothing')
         ! references an earlier run published
-        refs = OPENING2D_PICKREFS
+        refs = INITIAL_ANALYSIS_PICKREFS
         call write_class_stack(refs, 2, 0.)
         call stage%restore_pickrefs()
         call assert_true(stage%finished(), 'published references: a restarted stage is finished at once')
         do imsg = 1,2
             call assert_true(reader%receive(buffer), 'reference '//int2str(imsg)//' is sent to the GUI again')
             if( .not. allocated(buffer) ) cycle
-            call assert_int(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE, meta_type_of(buffer), 'as a picking reference')
-            if( meta_type_of(buffer) /= GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE ) cycle
+            call assert_int(GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE, meta_type_of(buffer), 'as a picking reference')
+            if( meta_type_of(buffer) /= GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE ) cycle
             cavg = transfer(buffer, cavg)
             call assert_int(2, cavg%get_i_max(), 'of two')
         enddo
@@ -459,7 +459,7 @@ contains
         type(cmdline)                       :: cline
         type(stream_pipe)                   :: reader
         type(gui_metadata_stream_picking)   :: picking
-        type(gui_metadata_stream_opening2D) :: opening2D
+        type(gui_metadata_stream_initial_analysis) :: initial_analysis
         character(len=:), allocatable       :: buffer
         type(string)                        :: cwd_saved, root, stage_name
         integer(c_int)                      :: fds(2)
@@ -488,9 +488,9 @@ contains
                 call assert_int(64, box,       'the box')
             endif
         endif
-        call stage%send_opening2D_status(string('classifying particles'), 64, 1)
+        call stage%send_initial_analysis_status(string('classifying particles'), 64, 1)
         call assert_true(reader%receive(buffer), 'a 2D status is sent')
-        if( allocated(buffer) ) call assert_int(GUI_METADATA_STREAM_OPENING2D_TYPE, meta_type_of(buffer), 'it is a 2D status')
+        if( allocated(buffer) ) call assert_int(GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE, meta_type_of(buffer), 'it is a 2D status')
         call assert_false(reader%receive(buffer), 'one message per call')
         ! cycle 2 reports its own project: 5 particles, 3 selected, where cycle 1 had 2
         call stage%spproj%os_ptcl2D%new(2, is_ptcl=.true.)
@@ -501,12 +501,12 @@ contains
         call stage%spproj_all%os_ptcl2D%set_state(4, 0)
         call stage%spproj_all%os_ptcl2D%set_state(5, 0)
         stage%icycle = 2
-        call stage%send_opening2D_status(string('classifying particles'), 64, 2)
+        call stage%send_initial_analysis_status(string('classifying particles'), 64, 2)
         call assert_true(reader%receive(buffer), 'a cycle 2 status is sent')
         if( allocated(buffer) )then
-            if( meta_type_of(buffer) == GUI_METADATA_STREAM_OPENING2D_TYPE )then
-                opening2D  = transfer(buffer, opening2D)
-                l_assigned = opening2D%get(stage_name, nimported, naccepted, nptcls)
+            if( meta_type_of(buffer) == GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE )then
+                initial_analysis  = transfer(buffer, initial_analysis)
+                l_assigned = initial_analysis%get(stage_name, nimported, naccepted, nptcls)
                 call assert_int(5, nimported, 'cycle 2''s particles')
                 call assert_int(3, naccepted, 'and its selected ones')
             endif

@@ -28,8 +28,8 @@ use unix,                                               only: c_pthread_t, c_pth
                                                              &c_pthread_mutex_unlock, c_usleep
 use simple_defs,                                        only: logfhandle
 use simple_defs_fname,                                  only: METADATA_EXT
-use simple_defs_stream,                                 only: PREPROC_JOB_NAME, OPTICS_JOB_NAME, OPENING2D_JOB_NAME, REFPICK_JOB_NAME,&
-                                                             &OPENING2D_PICKREFS, SIEVING_JOB_NAME, CLASS2D_JOB_NAME, MULTISTATE3D_JOB_NAME, PREPROC_NINIPICK,&
+use simple_defs_stream,                                 only: PREPROC_JOB_NAME, OPTICS_JOB_NAME, INITIAL_ANALYSIS_JOB_NAME, REFPICK_JOB_NAME,&
+                                                             &INITIAL_ANALYSIS_PICKREFS, SIEVING_JOB_NAME, CLASS2D_JOB_NAME, MULTISTATE3D_JOB_NAME, PREPROC_NINIPICK,&
                                                              &STREAM_IDLE_MARKER, STREAM_FINISHED_MARKER
 use simple_error,                                       only: simple_exception
 use simple_string,                                      only: string
@@ -430,8 +430,8 @@ contains
             ! initial analysis
             associate( c => clines(STAGE_INITIAL_ANALYSIS) )
                 call c%set('prg',             'gen_pickrefs')
-                call c%set('projfile',        OPENING2D_JOB_NAME//METADATA_EXT)
-                call c%set('outdir',          OPENING2D_JOB_NAME)
+                call c%set('projfile',        INITIAL_ANALYSIS_JOB_NAME//METADATA_EXT)
+                call c%set('outdir',          INITIAL_ANALYSIS_JOB_NAME)
                 call c%set('dir_target',      PREPROC_JOB_NAME)
                 call c%set('optics_dir',      cwd//'/'//OPTICS_JOB_NAME)
                 call c%set('nthr',            res%initial_analysis_nthr)
@@ -465,7 +465,7 @@ contains
                 if( l_existing_pickrefs )then
                     call c%set('pickrefs', params%pickrefs)
                 else
-                    call c%set('pickrefs', '../'//OPENING2D_JOB_NAME//'/'//OPENING2D_PICKREFS)
+                    call c%set('pickrefs', '../'//INITIAL_ANALYSIS_JOB_NAME//'/'//INITIAL_ANALYSIS_PICKREFS)
                 endif
                 if( l_existing_box       ) call c%set('box_extract', params%box_extract)
                 if( params%thres > 0.0   ) call c%set('thres',       params%thres)

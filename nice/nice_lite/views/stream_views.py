@@ -832,8 +832,8 @@ def view_stream_initial_pick_zoom(request):
     """Returns initial picking zoom panel in stream view."""
     template = "nice_stream/zoominitialpick.html"
     checksum_cookie = "panel_initialpick_checksum"
-    logfile = "opening_2D.log"
-    errfile = "opening_2D.error"
+    logfile = "initial_analysis.log"
+    errfile = "initial_analysis.error"
     jobmodel, jobdir = _get_jobmodel_and_dir_from_request(request)
 
     if jobmodel is None:
@@ -892,8 +892,8 @@ def view_stream_generate_pickrefs_zoom(request):
     """Returns reference generation zoom panel in stream view."""
     template = "nice_stream/zoomgeneratepickrefs.html"
     checksum_cookie = "panel_pickrefs_checksum"
-    logfile = "opening_2D.log"
-    errfile = "opening_2D.error"
+    logfile = "initial_analysis.log"
+    errfile = "initial_analysis.error"
     jobmodel, jobdir = _get_jobmodel_and_dir_from_request(request)
 
     if jobmodel is None:

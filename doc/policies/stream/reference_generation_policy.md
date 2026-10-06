@@ -115,9 +115,9 @@ diameter is the one of the cycle's `solve2D`.
 
 ## 4. Output contract
 
-1. The references are one stack, `OPENING2D_PICKREFS` (`selected_references.mrcs`,
-   `simple_defs_stream`), in p03's folder (`OPENING2D_JOB_NAME`). The master gives p04
-   `pickrefs=../opening_2D/selected_references.mrcs` built from the same two constants; no other
+1. The references are one stack, `INITIAL_ANALYSIS_PICKREFS` (`selected_references.mrcs`,
+   `simple_defs_stream`), in p03's folder (`INITIAL_ANALYSIS_JOB_NAME`). The master gives p04
+   `pickrefs=../initial_analysis/selected_references.mrcs` built from the same two constants; no other
    name may be used on either side.
 2. They are published once per run by `publish_pickrefs`: a complete stack is renamed into place,
    so p04, which polls for the file, never reads a partial stack. Nothing writes the file
@@ -157,7 +157,7 @@ diameter is the one of the cycle's `solve2D`.
 
 ## 6. Change rules
 
-- Keep one publisher (`publish_pickrefs`) and one name (`OPENING2D_PICKREFS`).
+- Keep one publisher (`publish_pickrefs`) and one name (`INITIAL_ANALYSIS_PICKREFS`).
 - Keep the GUI updates ahead of the cycle steps in `iterate`.
 - A change that lets references change after publication must also make p04 re-make its templates
   for the sets submitted afterwards, and must say how particles picked with the old references
