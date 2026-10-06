@@ -1578,7 +1578,9 @@ contains
     type(image),         allocatable   :: cavg_imgs(:), out_imgs(:)
     integer,             allocatable   :: states(:)
     type(support_model_metrics)        :: compat_metrics
-    type(cavg_quality_result)          :: quality
+    ! allocatable: a plain local is set from gfortran's default-initialiser copy, whose array
+    ! descriptors -Wuninitialized reports at -O3 as read before set
+    type(cavg_quality_result), allocatable :: quality
     type(cavg_quality_model)           :: model
     type(sp_project)                   :: spproj
     type(string)                       :: stkname, jpgname, stk_score
@@ -1609,6 +1611,7 @@ contains
     ! scored with the configured mask diameter, or the box's disc when it is 0 (stream fix plan,
     ! decision 7); the relational feature's mask radius needs the class averages' pixel size
     call spproj%get_cavgs_stk(stk_score, ncls_score, smpd_score)
+    allocate(quality)
     if( self%model_rejection_enabled ) then
       call score_project_cavgs(spproj, model, self%mskdiam, cavg_imgs, quality, smpd=smpd_score)
     else
@@ -1725,6 +1728,8 @@ contains
     call dealloc_imgarr(cavg_imgs)
     call spproj%kill()
     if( allocated(states) ) deallocate(states)
+    call quality%kill()
+    deallocate(quality)
     call timer_stop(t0, string('reject_cavgs'))
   end subroutine reject_cavgs
 
