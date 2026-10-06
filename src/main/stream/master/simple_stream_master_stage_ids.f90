@@ -37,7 +37,7 @@ integer, parameter :: STAGE_INITIAL_ANALYSIS  = 3
 integer, parameter :: STAGE_REFERENCE_PICKING = 4
 integer, parameter :: STAGE_PARTICLE_SIEVING  = 5
 integer, parameter :: STAGE_POOL2D            = 6
-integer, parameter :: STAGE_SOLVE3D        = 7
+integer, parameter :: STAGE_SOLVE3D           = 7
 integer, parameter :: NSTAGES                 = 7
 
 ! what pipe_op does to a pipe

@@ -11,7 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: MSKDIAM2LP = 0.15, LP_LB = 30., LP_UB = 15.
+real,    parameter :: LP_PICK = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
 
 ! class variables
@@ -127,7 +127,7 @@ contains
         real,    optional, intent(in)    :: thres   !< distance threshold in A for peak separation
         logical, optional, intent(in)    :: roi
         integer, optional, intent(in)    :: nboxes_max
-        real    :: scale, lp, threshold
+        real    :: scale, threshold
         integer :: iref, box
         if( self%exists ) call self%kill
         self%l_roi = .false.
@@ -216,9 +216,8 @@ contains
             call self%mic_roi%copy(self%mic_shrink)
         endif
         ! low-pass filter mic_shrink
-        lp = min(max(LP_LB,MSKDIAM2LP * self%maxdiam),LP_UB)
         call self%mic_copy%copy(self%mic_shrink)
-        call self%mic_shrink%bp(0.,lp)
+        call self%mic_shrink%bp(0.,LP_PICK)
         if( allocated(self%l_mic_mask) ) deallocate(self%l_mic_mask)
         allocate(self%l_mic_mask(self%ldim(1),self%ldim(2)), source=.true.)
         if( present(nboxes_max) ) self%nboxes_max = nboxes_max

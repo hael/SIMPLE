@@ -65,8 +65,7 @@ they share is in [sampling and fractional updates](sampling_and_fractional_updat
 **4. Split the data in half.** Every reconstruction is made twice, from
 disjoint even and odd particle sets, and every claim about resolution, every
 filter, every regularizer, and every mask is derived from the agreement
-between the halves. This is what turns a fitted map into a measured one. The
-half-map comparison is the Fourier shell correlation in
+between the halves. The half-map comparison is the Fourier shell correlation in
 [refine3D](refine3d.md); the same idea made local gives
 [nonuniform filtering](nonuniform_filtering.md) and the
 [NU-evidence envelope](nu_evidence_envelope_mask.md).

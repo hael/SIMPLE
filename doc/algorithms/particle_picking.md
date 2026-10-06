@@ -36,12 +36,13 @@ reference bank's scale.
 ## Reference picking
 
 **Reference bank.** Each class average is automasked, damped in its
-negative values, centered, and low-passed at `min(max(30, 0.15 d), 15)` A
-for maximum diameter `d`. The bank is expanded over `nrots` in-plane rotations
-(about 100 references in total by default, 12 rotations in streaming) and,
-optionally, their mirrors. Rotations and mirrors are enumerated rather than
-searched because a rotation of the template is a different template; nothing
-in the score is rotation-invariant.
+negative values, centered, and low-passed at `0.15 d` clamped to 15 to 30 A,
+for `d` the largest automasked class-average diameter. The micrograph is
+low-passed at a fixed 15 A. The bank is expanded over `nrots` in-plane
+rotations (about 100 references in total by default, 12 rotations in
+streaming) and, optionally, their mirrors. Rotations and mirrors are
+enumerated rather than searched because a rotation of the template is a
+different template; nothing in the score is rotation-invariant.
 
 **Score.** For a prepared, normalized reference `S_r` with `N` pixels and a
 micrograph window `T_c` at position `c`, the score is the Pearson

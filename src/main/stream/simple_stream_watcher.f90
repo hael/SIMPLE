@@ -9,7 +9,7 @@ public :: workout_directory_structure, sniff_folders_SJ
 private
 #include "simple_local_flags.inc"
 
-integer,          parameter :: RATE_INTERVAL   = 3600 ! 1 hour
+integer,          parameter :: RATE_INTERVAL     = 3600 ! 1 hour
 integer,          parameter :: HISTORY_CAPACITY0 = 1024 ! first capacity of the history; doubled when full
 
 type stream_watcher
