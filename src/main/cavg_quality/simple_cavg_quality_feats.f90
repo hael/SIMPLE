@@ -456,7 +456,6 @@ contains
             call img_bp%pad_inplace(ldim_target)
         end if
         call img_bp%ifft()
-        call img_bp%set_smpd(img_bp%get_smpd() * real(ldim(1)) / real(ldim_target(1)))
         call img_bp%bp(OVERFIT_SIGNAL_BP_HP, OVERFIT_SIGNAL_BP_LP)
         bp_center_edge_std = img_bp%center_edge_snr((real(ldim_target(1)) * 0.4))
         bp_center_edge_var = bp_center_edge_std * bp_center_edge_std

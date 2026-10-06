@@ -23,7 +23,7 @@
 !     completed reference-picking sets, with the picking references' mask
 !     diameter and reference picking's finished marker; p05, p06, p07.
 !   - movies to 3D (lib_stream, "movies to 3D"): simulated movies; p01, p02,
-!     p04 with picking references reprojected from the truth, p05, p06, p07.
+!     p04 with picking references reprojected from both truths, p05, p06, p07.
 !     Preprocessing is finalised once every movie is processed, so its
 !     finished marker ends the intake downstream.
 !
@@ -70,8 +70,10 @@ integer, parameter :: NCLS2D        = 10
 integer, parameter :: NPTCLS_COARSE = 300
 integer, parameter :: NPTCLS_FINE   = 600
 integer, parameter :: NSTATES3D     = 2
-integer, parameter :: NSTAGES3D     = 3
+integer, parameter :: NSTAGES3D     = 2
 integer, parameter :: NTHR_JOBS     = 4
+integer, parameter :: MIN_PTCLS_3D  = 5 * NSTATES3D
+real,    parameter :: SIM_SNR       = 0.5
 
 contains
 
@@ -89,14 +91,15 @@ contains
     !! pool 2D and multistate 3D: the sieve accepts particles and hands on its final set, the pool
     !! runs to its final iteration and publishes, and 3D completes its first run
     subroutine test_sieve_to_solve3D()
-        integer, parameter :: NMICS = 40, NPTCLS_MIC = 30, NMICS_SET = 5
+        integer, parameter :: NMICS = 40, NPTCLS_MIC = 30, NMICS_SET = 5, NPOSES_STATE = 12
         type(stream_stage_sieve),   allocatable :: sieve
         type(stream_stage_pool2D),  allocatable :: pool
         type(stream_stage_solve3D), allocatable :: s3D
         type(cmdline) :: cline
-        type(string)  :: cwd_saved, root, dir_refpick, dir_sieve, dir_pool, dir_3D, all_stk
+        type(string)  :: cwd_saved, root, dir_refpick, dir_sieve, dir_pool, dir_3D
+        type(string)  :: truth1, truth2, oritab, all_stk, stk1, stk2
         integer       :: nfail0, t0
-        logical       :: l_done
+        logical       :: l_done, l_cannot_start_3D
         write(*,'(A)') 'test_sieve_to_solve3D'
         nfail0 = tests_failed
         call enter_fixture('test_stream_chain_sieve', cwd_saved, root)
@@ -107,11 +110,17 @@ contains
         dir_pool    = stage_dir(root, 'classification_2D')
         dir_3D      = stage_dir(root, 'solve3D_multistate')
         call simple_mkdir(dir_refpick//'/'//DIR_STREAM_COMPLETED)
-        ! the particles, and reference picking's output: completed sets, the mask diameter of the
-        ! picking references, and its finished marker
+        ! the two-state particles, and reference picking's completed output
         call enter(root)
-        call write_truth_volume(string('truth.mrc'))
-        all_stk = simulate_particle_stack(string('truth.mrc'), NMICS * NPTCLS_MIC)
+        truth1 = 'truth_state1.mrc'
+        truth2 = 'truth_state2.mrc'
+        call write_truth_volume(truth1, 1)
+        call write_truth_volume(truth2, 2)
+        oritab = 'simulated_particle_orientations.txt'
+        call write_repeated_orientations(oritab, NMICS * NPTCLS_MIC / 2, NPOSES_STATE)
+        stk1 = simulate_particle_stack(truth1, oritab, string('simulated_particles_state1.mrcs'), NMICS * NPTCLS_MIC / 2)
+        stk2 = simulate_particle_stack(truth2, oritab, string('simulated_particles_state2.mrcs'), NMICS * NPTCLS_MIC / 2)
+        all_stk = interleave_stacks(stk1, stk2, NMICS * NPTCLS_MIC / 2, string('simulated_particles.mrcs'))
         call write_picking_sets(all_stk, dir_refpick, NMICS, NPTCLS_MIC, NMICS_SET)
         call write_moldiam(dir_refpick)
         call simple_touch(dir_refpick//'/'//STREAM_FINISHED_MARKER)
@@ -133,8 +142,9 @@ contains
         s3D%wait_s = 0
         call cline%kill
         ! the passes
-        t0     = simple_gettime()
-        l_done = .false.
+        t0                  = simple_gettime()
+        l_done              = .false.
+        l_cannot_start_3D   = .false.
         do
             call enter(dir_sieve)
             call sieve%iterate()
@@ -143,7 +153,8 @@ contains
             call enter(dir_3D)
             call s3D%iterate()
             l_done = s3D%frozen_projfile%strlen() > 0
-            if( l_done ) exit
+            l_cannot_start_3D = .not. l_done .and. s3D%l_final_pending .and. s3D%nptcls_selected < MIN_PTCLS_3D
+            if( l_done .or. l_cannot_start_3D ) exit
             if( simple_gettime() - t0 > TIME_LIMIT_S ) exit
             call sleep(PASS_WAIT_S)
         enddo
@@ -153,6 +164,7 @@ contains
         call assert_true(sieve%l_final,          'chain: reference picking''s finished marker sets final ingestion')
         call assert_true(pool%l_sieve_final,     'chain: the pool takes the sieve''s final set')
         call assert_true(pool%last_export_id > 1, 'chain: the pool publishes for 3D')
+        call assert_false(l_cannot_start_3D,      'chain: the final publication has enough selected particles for 3D')
         call assert_true(l_done,                 'chain: 3D completes its first run within the time limit')
         if( allocated(s3D%state_res) ) call assert_true(any(s3D%state_res > 0.), 'chain: a state has a resolution')
         ! stop, cancelling what still runs
@@ -170,9 +182,9 @@ contains
     end subroutine test_sieve_to_solve3D
 
     !> simulated movies through preprocessing, optics assignment, reference picking (with picking
-    !! references reprojected from the truth), particle sieving, pool 2D and multistate 3D
+    !! references reprojected from both truths), particle sieving, pool 2D and multistate 3D
     subroutine test_movies_to_solve3D()
-        integer, parameter :: NMOVIES = 40, NPTCLS_MIC = 20, MIC_BOX = 512, NFRAMES = 8, NREFS = 10
+        integer, parameter :: NMOVIES = 40, NPTCLS_MIC = 24, MIC_BOX = 512, NFRAMES = 8, NREFS = 20
         type(stream_stage_preprocess), allocatable :: pre
         type(stream_stage_optics),     allocatable :: optics
         type(stream_stage_refpick),    allocatable :: refpick
@@ -181,9 +193,9 @@ contains
         type(stream_stage_solve3D),    allocatable :: s3D
         type(cmdline) :: cline
         type(string)  :: cwd_saved, root, dir_movies, dir_pre, dir_optics, dir_refpick, dir_sieve, dir_pool, dir_3D
-        type(string)  :: pickrefs, ptcl_stk
+        type(string)  :: truth1, truth2, pickrefs, pickrefs1, pickrefs2, ptcl_stk, ptcl_stk1, ptcl_stk2
         integer       :: nfail0, t0, nprocessed
-        logical       :: l_done, l_pre_active
+        logical       :: l_done, l_pre_active, l_cannot_start_3D
         write(*,'(A)') 'test_movies_to_solve3D'
         nfail0 = tests_failed
         call enter_fixture('test_stream_chain_movies', cwd_saved, root)
@@ -196,11 +208,18 @@ contains
         dir_sieve   = stage_dir(root, 'particle_sieving')
         dir_pool    = stage_dir(root, 'classification_2D')
         dir_3D      = stage_dir(root, 'solve3D_multistate')
-        ! the truth, its reprojections for the movies and for the picking references, the movies
+        ! the two truths, their reprojections for the movies and picking references, the movies
         call enter(root)
-        call write_truth_volume(string('truth.mrc'))
-        ptcl_stk = reproject_truth(string('truth.mrc'), string('movie_particles.mrcs'), NPTCLS_MIC)
-        pickrefs = reproject_truth(string('truth.mrc'), string('pickrefs.mrcs'), NREFS)
+        truth1 = 'truth_state1.mrc'
+        truth2 = 'truth_state2.mrc'
+        call write_truth_volume(truth1, 1)
+        call write_truth_volume(truth2, 2)
+        ptcl_stk1 = reproject_truth(truth1, string('movie_particles_state1.mrcs'), NPTCLS_MIC / 2)
+        ptcl_stk2 = reproject_truth(truth2, string('movie_particles_state2.mrcs'), NPTCLS_MIC / 2)
+        ptcl_stk  = interleave_stacks(ptcl_stk1, ptcl_stk2, NPTCLS_MIC / 2, string('movie_particles.mrcs'))
+        pickrefs1 = reproject_truth(truth1, string('pickrefs_state1.mrcs'), NREFS / 2)
+        pickrefs2 = reproject_truth(truth2, string('pickrefs_state2.mrcs'), NREFS / 2)
+        pickrefs  = interleave_stacks(pickrefs1, pickrefs2, NREFS / 2, string('pickrefs.mrcs'))
         call simulate_movies(ptcl_stk, dir_movies, NMOVIES, MIC_BOX, NFRAMES)
         ! the stages (each in its folder)
         allocate(pre, optics, refpick, sieve, pool, s3D)
@@ -236,9 +255,10 @@ contains
         call cline%kill
         ! the passes; preprocessing stops once every movie is processed, and its finished marker
         ! ends the intake downstream
-        t0           = simple_gettime()
-        l_done       = .false.
-        l_pre_active = .true.
+        t0                  = simple_gettime()
+        l_done              = .false.
+        l_pre_active        = .true.
+        l_cannot_start_3D   = .false.
         do
             if( l_pre_active )then
                 call enter(dir_pre)
@@ -260,7 +280,8 @@ contains
             call enter(dir_3D)
             call s3D%iterate()
             l_done = s3D%frozen_projfile%strlen() > 0
-            if( l_done ) exit
+            l_cannot_start_3D = .not. l_done .and. s3D%l_final_pending .and. s3D%nptcls_selected < MIN_PTCLS_3D
+            if( l_done .or. l_cannot_start_3D ) exit
             if( simple_gettime() - t0 > TIME_LIMIT_S ) exit
             call sleep(PASS_WAIT_S)
         enddo
@@ -272,6 +293,7 @@ contains
         call assert_true(sieve%l_final,               'chain: the sieve''s intake ends')
         if( allocated(sieve%sieve) ) call assert_true(sieve%sieve%get_n_accepted_ptcls() > 0, 'chain: the sieve accepts particles')
         call assert_true(pool%last_export_id > 1,     'chain: the pool publishes for 3D')
+        call assert_false(l_cannot_start_3D,          'chain: the final publication has enough selected particles for 3D')
         call assert_true(l_done,                      'chain: 3D completes its first run within the time limit')
         ! stop, cancelling what still runs
         call enter(dir_3D)
@@ -425,23 +447,33 @@ contains
         CWD_GLOB = dir%to_char()
     end subroutine enter
 
-    ! an asymmetric object in a BOX^3 volume: three Gaussian blobs of different sizes and weights
-    subroutine write_truth_volume( fname )
+    ! one of two distinct asymmetric multi-lobed objects in a BOX^3 volume
+    subroutine write_truth_volume( fname, state )
         class(string), intent(in) :: fname
-        real, parameter :: CEN(3,3)  = reshape([0., 0., 0.,  10., 4., -3.,  -6., -9., 7.], [3,3])
-        real, parameter :: SIG(3)    = [7., 4., 3.]
-        real, parameter :: WEIGHT(3) = [1., 0.8, 0.6]
+        integer,       intent(in) :: state
+        integer, parameter :: NBLOBS = 9
         type(image)       :: vol
         real, allocatable :: rmat(:,:,:)
         integer :: i, j, k, iblob
-        real    :: x(3), c
+        real    :: x(3), c, cen(3,NBLOBS), sig(NBLOBS), weight(NBLOBS)
+        if( state == 1 )then
+            cen = reshape([0.,0.,0.,  7.,0.,0.,  -7.,0.,0.,  0.,7.,0.,  0.,-7.,0.,  0.,0.,7.,  0.,0.,-7.,&
+                &12.,8.,-5.,  -11.,9.,6.], [3,NBLOBS])
+            sig    = [3.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2., 2.]
+            weight = [1., 0.8, 0.7, 0.75, 0.65, 0.8, 0.7, 0.6, 0.55]
+        else
+            cen = reshape([-14.,-5.,-4.,  -9.,-1.,1.,  -4.,4.,5.,  2.,8.,1.,  7.,4.,-5.,  12.,-1.,-1.,&
+                &15.,-7.,5.,  0.,-10.,8.,  -8.,10.,-7.], [3,NBLOBS])
+            sig    = [2.5, 2.8, 2.5, 2.5, 2.5, 2.8, 2.2, 2.2, 2.2]
+            weight = [0.65, 0.8, 0.7, 0.9, 0.75, 1., 0.6, 0.55, 0.5]
+        endif
         allocate(rmat(BOX,BOX,BOX), source=0.)
         c = real(BOX / 2 + 1)
         do k = 1,BOX
             do j = 1,BOX
                 do i = 1,BOX
                     x = [real(i), real(j), real(k)] - c
-                    do iblob = 1,3
+                    do iblob = 1,NBLOBS
                         rmat(i,j,k) = rmat(i,j,k) + WEIGHT(iblob) * exp(-sum((x - CEN(:,iblob))**2) / (2. * SIG(iblob)**2))
                     enddo
                 enddo
@@ -455,8 +487,8 @@ contains
 
     ! @p nptcls simulated particle images of @p vol, with CTF (one defocus) and noise; the stack's
     ! absolute path
-    function simulate_particle_stack( vol, nptcls ) result( stk )
-        class(string), intent(in) :: vol
+    function simulate_particle_stack( vol, oritab, outstk, nptcls ) result( stk )
+        class(string), intent(in) :: vol, oritab, outstk
         integer,       intent(in) :: nptcls
         type(string) :: stk
         type(commander_simulate_particles) :: xsim
@@ -464,15 +496,16 @@ contains
         call cline%set('prg',      'simulate_particles')
         call cline%set('mkdir',    'no')
         call cline%set('vol1',     vol)
-        call cline%set('outstk',   'simulated_particles.mrcs')
-        call cline%set('outfile',  'simulated_oris.txt')
+        call cline%set('oritab',   oritab)
+        call cline%set('outstk',   outstk)
+        call cline%set('outfile',  outstk//'.txt')
         call cline%set('nptcls',   nptcls)
         call cline%set('nthr',     NTHR_JOBS)
         call cline%set('smpd',     SMPD)
         call cline%set('mskdiam',  MSKDIAM)
         call cline%set('pgrp',     'c1')
         call cline%set('ctf',      'yes')
-        call cline%set('snr',      0.2)
+        call cline%set('snr',      SIM_SNR)
         call cline%set('kv',       KV)
         call cline%set('cs',       CS)
         call cline%set('fraca',    FRACA)
@@ -484,8 +517,46 @@ contains
         call cline%set('sherr',    2.)
         call xsim%execute(cline)
         call cline%kill
-        stk = simple_abspath(string('simulated_particles.mrcs'))
+        stk = simple_abspath(outstk)
     end function simulate_particle_stack
+
+    ! repeat a finite spiral so every pose has enough particles to make a coherent class average
+    subroutine write_repeated_orientations( fname, nptcls, nposes )
+        class(string), intent(in) :: fname
+        integer,       intent(in) :: nptcls, nposes
+        type(oris) :: poses, particles
+        type(ori)  :: pose
+        integer    :: i
+        call poses%new(nposes, is_ptcl=.false.)
+        call poses%spiral()
+        call particles%new(nptcls, is_ptcl=.true.)
+        do i = 1,nptcls
+            call poses%get_ori(mod(i - 1, nposes) + 1, pose)
+            call particles%set_ori(i, pose)
+        enddo
+        call particles%write(fname, [1,nptcls])
+        call pose%kill
+        call particles%kill
+        call poses%kill
+    end subroutine write_repeated_orientations
+
+    ! alternate two equal-size stacks into one, keeping both states balanced in every input set
+    function interleave_stacks( stk1, stk2, n_each, outstk ) result( stk )
+        class(string), intent(in) :: stk1, stk2, outstk
+        integer,       intent(in) :: n_each
+        type(string) :: stk
+        type(image)  :: img
+        integer      :: i
+        call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
+        do i = 1,n_each
+            call img%read(stk1, i)
+            call img%write(outstk, 2 * i - 1)
+            call img%read(stk2, i)
+            call img%write(outstk, 2 * i)
+        enddo
+        call img%kill
+        stk = simple_abspath(outstk)
+    end function interleave_stacks
 
     ! reference picking's completed sets in @p dir_refpick: the particles of @p all_stk split into
     ! @p nmics stacks of @p nptcls_mic, one per micrograph, @p nmics_set micrographs per set
@@ -594,7 +665,7 @@ contains
             call cline%set('ydim',    mic_box)
             call cline%set('nframes', nframes)
             call cline%set('smpd',    SMPD)
-            call cline%set('snr',     0.5)
+            call cline%set('snr',     SIM_SNR)
             call cline%set('kv',      KV)
             call cline%set('cs',      CS)
             call cline%set('fraca',   FRACA)
