@@ -1300,15 +1300,13 @@ contains
                         call build%spproj_field%get_pops(state_pops, 'state')
                         do state = 1,params%nstates
                             if( state_pops(state) == 0 )then
+                                vol_iter = refine3D_state_vol_fname(state)
+                                if( .not. file_exists(vol_iter) ) &
+                                    &THROW_HARD('carried-forward state volume is missing for state '//int2str(state))
                                 vol = 'vol'//int2str(state)
-                                call cline%delete(vol%to_char())
-                                call self%job_descr%delete(vol%to_char() )
-                                if( trim(params%oritype).eq.'cls3D' )then
-                                    call build%spproj%remove_entry_from_osout('vol_cavg', state)
-                                else
-                                    call build%spproj%remove_entry_from_osout('vol', state)
-                                endif
-                                call build%spproj%remove_entry_from_osout('fsc', state)
+                                params%vols(state) = vol_iter
+                                call cline%set(vol, vol_iter)
+                                call self%job_descr%set(vol, vol_iter)
                             else
                                 vol_iter  = refine3D_state_vol_fname(state)
                                 fsc_file  = refine3D_fsc_fname(state)
