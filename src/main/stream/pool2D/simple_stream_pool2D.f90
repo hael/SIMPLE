@@ -708,10 +708,7 @@ contains
                 self%last_complete_iter = it
                 call simple_getcwd(cwd)
                 self%jpeg = cwd//'/'//CAVGS_ITER_FBODY//int2str_pad(it, 3)//'.jpg'
-                self%jpeg_ntiles  = self%proj%os_cls2D%get_noris()
-                ! no classes yet after the first iteration (they are transferred below)
-                self%jpeg_ntilesx = max(1, floor(sqrt(real(self%jpeg_ntiles))))
-                self%jpeg_ntilesy = ceiling(real(self%jpeg_ntiles)/real(self%jpeg_ntilesx))
+                ! its grid follows the classes, transferred below
                 ! end new
                 write(logfhandle,'(A,I6,A,F7.3,A,F7.3,A,F7.3)')'>>> POOL         ITERATION ',it,&
                     &'; CLASS OVERLAP: ',self%conv_mi_class,'; SEARCH SPACE SCANNED: ',self%conv_frac,'; SCORE: ',self%conv_score
@@ -746,6 +743,12 @@ contains
             call self%proj%os_ptcl2D%get_pops(pops, 'class', maxn=self%ncls)
             self%proj%os_cls2D = spproj%os_cls2D
             call self%proj%os_cls2D%set_all('pop', real(pops))
+            ! the sprite sheet's grid, as refine2D lays it out (mrc2jpeg_tiled: a tile per class,
+            ! floor(sqrt(n)) across). Taken from the iteration's own classes: the pool has none
+            ! before the first iteration's, which gave a 1 x 0 grid and blank tiles in the GUI.
+            self%jpeg_ntiles  = self%proj%os_cls2D%get_noris()
+            self%jpeg_ntilesx = max(1, floor(sqrt(real(self%jpeg_ntiles))))
+            self%jpeg_ntilesy = ceiling(real(self%jpeg_ntiles)/real(self%jpeg_ntilesx))
             ! update thumbnail metadata
             if(allocated(self%jpeg_map)) deallocate(self%jpeg_map)
             if(allocated(self%jpeg_pop)) deallocate(self%jpeg_pop)
