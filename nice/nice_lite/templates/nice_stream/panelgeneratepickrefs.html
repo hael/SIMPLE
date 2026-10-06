@@ -44,9 +44,9 @@
         <!-- Stats row -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
             {% if "latest_cls2D" in jobstats or "final_cls2D" in jobstats %}
-                {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles classified" sublabel=jobstats.particles_accepted sublabel_sep="/" %}
+                {% include 'includes/_count_tile.html' with count=jobstats.particles_accepted label="particles accepted" sublabel=jobstats.particles_imported sublabel_sep="/" %}
             {% else %}
-                {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles classified" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%} 
+                {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles imported" sublabel=jobstats.particles_imported sublabel_sep="/" variant="action"%} 
             {% endif %}
             {% include 'includes/_count_tile.html' with count=jobstats.mask_diam label="particle mask" count_unit="Å" %}
         </div>
@@ -89,23 +89,17 @@
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
 
-                    <div class="flex flex-row overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+                    <div class="flex flex-row flex-1 scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
                         <div id="picking_references_available" class="grid grid-flow-col grid-rows-3">
                             {% for template in jobstats.latest_cls2D %}
-                                <div class="snap-center picktemplatecontainer rounded bg-black"
-                                     data-res="{{ template.res|floatformat:1 }}"
-                                     data-pop="{{ template.pop }}"
+                                <div class="snap-center sieveclscontainer"
+                                    data-pop="{{ template.pop }}"
+                                    data-res="{{ template.res|floatformat:1 }}"
                                     >
                                     <div oncontextmenu="showMenu(this, event)"
-                                         data-idx="{{ template.idx }}" data-path="{{ template.mrcpath }}"
-                                         style="background:url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%"
-                                         class="picktemplate picktemplateimg h-[70px] w-[70px] rounded m-auto">
-                                        <div class="xmark hidden h-[70px] w-[70px] text-streamerror flex items-center justify-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-                                                <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-                                            </svg>
-                                        </div>
-                                    </div>
+                                        data-idx="{{ template.idx }}"
+                                        style="background:url({% url 'nice_lite:image' template.path %}); background-size:{{ template.spritew }}% {{ template.spriteh }}%; background-position:{{ template.spritex }}% {{ template.spritey }}%"
+                                        class="sievecls h-[66px] w-[66px] rounded m-[2px]"></div>
                                 </div>
                             {% endfor %}
                         </div>

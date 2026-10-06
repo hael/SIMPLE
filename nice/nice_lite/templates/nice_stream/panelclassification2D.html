@@ -54,23 +54,23 @@
 
         <!-- Latest classes gallery (user-input mode, iteration > 0) -->
         {% if jobstats.user_input is True and "latest_cls2D" in jobstats and "iteration" in jobstats and jobstats.iteration > 0 %}
-            <div class="flex flex-col px-4 pt-2 flex-1 max-w-[465px]">
+            <div class="flex flex-col px-4 pt-2 flex-1">
                 <span class="text-[10px] text-streamlabel mb-2">latest classes</span>
                 <div class="flex items-center gap-1">
 
                     {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
 
-                    <div class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+                    <div class="flex flex-row flex-1 scrollbar-hidden overflow-y-hidden overflow-x-scroll snap-x snap-mandatory">
                         <div id="accepted_cls2D_slider" class="grid grid-flow-col grid-rows-3">
                             {% for cls2D in jobstats.latest_cls2D %}
-                                <div class="cls2dcontainer snap-center w-[68px] h-[68px] m-[1px] overflow-hidden bg-black rounded"
+                                <div class="cls2dcontainer snap-center"
                                      data-res="{{ cls2D.res|floatformat:1 }}"
                                      data-pop="{{ cls2D.pop }}"
                                     >
                                     <div oncontextmenu="showMenu(this, event)"
                                          data-idx="{{ cls2D.mrcidx }}"
                                          style="background:url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%"
-                                         class="cls2D cls2Dimg h-[68px] w-[68px] rounded m-auto">
+                                         class="cls2D cls2Dimg h-[66px] w-[66px] rounded m-[2px]">
                                         <canvas class="mskcanvas z-1" height="70" width="70"
                                                 data-mskscale="{{ cls2D.mskscale }}"
                                                 data-mskdiam="{{ cls2D.mskdiam }}"></canvas>
