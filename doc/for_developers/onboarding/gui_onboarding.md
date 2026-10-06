@@ -69,7 +69,6 @@ Start with these files and directories:
 | GUI assembler | `src/utils/gui/simple_gui_assembler.f90` | Newer stream-side JSON assembly with change detection. |
 | Project builder | `src/utils/gui/simple_gui_project_builder.f90` | Builds the batch project metadata from an `sp_project` and writes the previews it shows, outside the metadata lock; `apply` copies the result into the record under it. |
 | Stream communicator | `src/utils/comm/simple_stream_communicator.f90` | HTTP communicator used by stream stages. |
-| Legacy NICE comm | `src/utils/gui/simple_nice.f90` | Older socket/thread communication object used by several batch commanders. |
 | GUI tests | `src/utils/gui/metadata/simple_gui_metadata_tester.f90` and `src/utils/gui/simple_gui_assembler_tester.f90` | Fortran-side GUI metadata tests: the `GUI metadata` and `GUI assembler` sub-suites of `simple_test_exec test=unit_ui`. |
 | Django tests | `nice/nice_lite/test/` | Existing model and data-structure tests. |
 
@@ -161,8 +160,8 @@ The batch and stream GUIs should eventually share the same concepts:
 - termination request
 
 Stream already points in this direction. Batch currently has lighter-weight
-status handling through `JobClassicModel.status`, `heartbeat`, and `update`,
-plus older `simple_nice_comm` usage in selected commanders.
+status handling through `JobClassicModel.status`, `heartbeat`, and `update`;
+batch commanders report through `simple_gui_communicator`.
 
 A useful target envelope is:
 
@@ -269,7 +268,7 @@ scientific behavior of SIMPLE.
 5. Harden `nice_local` startup: avoid fragile rename behavior, detect occupied
    ports, write logs, and make repeated launches idempotent.
 6. Choose one batch command, such as `import_movies`, and trace its
-   `simple_nice_comm` updates from commander to Django.
+   `simple_gui_communicator` updates from commander to Django.
 7. Prototype a generic batch heartbeat using the same status vocabulary as the
    stream master.
 8. Add a UI-level smoke test for new batch job form rendering from
@@ -297,7 +296,8 @@ scientific behavior of SIMPLE.
   `nice_lite_dev` be merged back first? - Yes. We should move nice_lite_dev to 
   nice_lite once we're ready to start active development. 
 - Should the future batch communicator use HTTP like stream, or adapt the older
-  `simple_nice_comm` socket/thread model? use HTTP like stream
+  `simple_nice_comm` socket/thread model? use HTTP like stream (`simple_nice_comm`
+  was retired on 6 October 2026)
 - Which batch commands are the first-class desktop workflows? import procedures
 - What minimum offline/local behavior is required for a desktop release? None - already implemented
 - Should the desktop app support local-only execution first, or also configure

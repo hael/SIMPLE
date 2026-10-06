@@ -2,7 +2,6 @@
 module simple_commanders_api
 use simple_core_module_api
 use simple_default_clines
-use simple_nice
 use simple_qsys_funs
 use simple_binoris_io,       only: binread_nlines, binread_oritab, binwrite_oritab, binread_ctfparams_state_eo
 use simple_builder,          only: builder

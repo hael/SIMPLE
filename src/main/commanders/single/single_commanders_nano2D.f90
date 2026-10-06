@@ -154,7 +154,6 @@ contains
         type(commander_estimate_diam)  :: xest_diam
         type(commander_simulate_nanoparticle) :: xsim_np
         ! other variables
-        type(simple_nice_comm)      :: nice_comm
         type(parameters)            :: params
         type(sp_project)            :: spproj
         type(cmdline)               :: cline_est_diam, cline_sim_nanoparticle, cline_copy
@@ -167,9 +166,6 @@ contains
         call cline%set('objfun', 'cc') ! best objfun
         call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms
         call params%new(cline)
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         cline_copy = cline
@@ -212,7 +208,6 @@ contains
         call cline%set('mkdir',  'no')
         call xrefine2D%execute(cline)
         ! end gracefully
-        call nice_comm%terminate()
         call simple_end('**** SIMPLE_ANALYSIS2D_NANO NORMAL STOP ****')
     end subroutine exec_analysis2D_nano
 

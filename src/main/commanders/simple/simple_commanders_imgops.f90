@@ -261,7 +261,6 @@ contains
         type(image)                   :: avg_img
         real,              allocatable :: avg(:), pcavecs(:, :), tmpvec(:), zavg(:), corrvec(:)
         type(diffmap_graph)            :: steer_graph
-        type(simple_nice_comm)         :: nice_comm
         type(parameters)               :: params
         type(builder)                  :: build
         integer(int64)                 :: t0, t1
@@ -279,9 +278,6 @@ contains
         l_diffmap      = trim(params%pca_mode) .eq. 'diffusion_maps'
         l_profile_pca = trim(params%pca_mode) .eq. 'kpca' .or. trim(params%pca_mode) .eq. 'ppca' .or. &
             l_hybrid_resid .or. l_diffmap
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         call system_clock(t0, trate)
         allocate(imgs(params%nptcls))
         do iptcl = 1, params%nptcls
@@ -361,7 +357,6 @@ contains
             if( allocated(den_ptcls) ) call dealloc_imgarr(den_ptcls)
             if( allocated(imgs)       ) call dealloc_imgarr(imgs)
             call build%kill_general_tbox
-            call nice_comm%terminate()
             call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
             return
         endif
@@ -473,7 +468,6 @@ contains
             deallocate(zavg, tmpvec, corrvec)
             deallocate(ppca_ptr_typed, kpca_ptr)
             call build%kill_general_tbox
-            call nice_comm%terminate()
             call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
             return
         endif
@@ -578,7 +572,6 @@ contains
         deallocate(imgs)
         call build%kill_general_tbox
         ! end gracefully
-        call nice_comm%terminate()
         call simple_end('**** SIMPLE_PPCA_DENOISE NORMAL STOP ****')
     end subroutine exec_ppca_denoise
 

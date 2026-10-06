@@ -24,14 +24,10 @@ contains
     subroutine exec_import_cavgs( self, cline )
         class(commander_import_cavgs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(simple_nice_comm) :: nice_comm
         type(parameters)       :: params
         type(sp_project)       :: spproj
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         if( file_exists(params%projfile) ) call spproj%read(params%projfile)
         call spproj%add_cavgs2os_out(params%stk, params%smpd)
         if( cline%defined('frcs') ) call spproj%add_frcs2os_out(params%frcs,'frc2D')
@@ -42,14 +38,12 @@ contains
         call spproj%update_compenv( cline )
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import
-        call nice_comm%terminate()
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs
 
     subroutine exec_export_cavgs( self, cline )
         class(commander_export_cavgs),   intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(simple_nice_comm) :: nice_comm
         type(parameters)       :: params
         type(sp_project)       :: spproj
         type(image)            :: img
@@ -59,9 +53,6 @@ contains
         real    :: smpd
         call cline%set('oritype', 'cls2D')
         call params%new(cline)
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         ! read files and sanity checks
         if( .not.file_exists(params%projfile) ) THROW_HARD('Project file does not exist!')
         call spproj%read_segment(params%oritype,params%projfile)
@@ -85,14 +76,12 @@ contains
             endif
         enddo
         ! the end
-        call nice_comm%terminate()
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
     subroutine exec_sample_classes( self, cline )
         class(commander_sample_classes), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(simple_nice_comm)          :: nice_comm
         type(parameters)                :: params
         type(sp_project)                :: spproj, spproj_part
         integer,            allocatable :: states(:), tmpinds(:), clsinds(:), states_map(:), clustinds(:)
@@ -108,9 +97,6 @@ contains
         if( .not. cline%defined('ranked_parts')    ) call cline%set('ranked_parts',    'yes')
         if( .not. cline%defined('prune')           ) call cline%set('prune',           'no')
         call params%new(cline, silent=.true.)
-         ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         ! read project (almost all or largest segments are updated)
         call spproj%read(params%projfile)
         ! check number of oris in field
@@ -194,7 +180,6 @@ contains
         endif
         ! final full write
         call spproj%write(params%projfile)
-        call nice_comm%terminate()
         call simple_end('**** SAMPLE_CLASSES NORMAL STOP ****')
     end subroutine exec_sample_classes
 

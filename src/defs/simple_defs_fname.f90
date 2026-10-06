@@ -119,7 +119,6 @@ character(len=*), parameter :: CALCPSPEC_FINISHED            = 'CALCPSPEC_FINISH
 character(len=*), parameter :: SOLVE3D_FINISHED              = 'SOLVE3D_FINISHED'
 character(len=*), parameter :: DIR_SNAPSHOT                  = './snapshots/'
 character(len=*), parameter :: SNAPSHOT_REQUEST              = 'SNAPSHOT'
-character(len=*), parameter :: GUISTATS_FILE                 = '.guistats'
 character(len=*), parameter :: GUI_METADATA_FILE              = 'metadata.json'
 character(len=*), parameter :: DIR_CHUNK                     = 'chunk_'
 character(len=*), parameter :: DIR_SET                       = 'set_'

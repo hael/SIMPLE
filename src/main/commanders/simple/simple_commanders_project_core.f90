@@ -261,7 +261,6 @@ contains
         use simple_projfile_utils, only: remap_project_paths
         class(commander_update_project), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(simple_nice_comm) :: nice_comm
         type(parameters)       :: params
         type(sp_project)       :: spproj
         integer, parameter :: NREMAP_SCOPES = 4
@@ -313,9 +312,6 @@ contains
                 scope_new_roots(iscope) = params%new_root
             enddo
         endif
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         if( remap_requested )then
             if( cline%defined('projfile_out') )then
                 projfile_out = params%projfile_out
@@ -367,7 +363,6 @@ contains
             call spproj%write_non_data_segments(params%projfile)
         endif
         ! no printing for this program
-        call nice_comm%terminate()
     end subroutine exec_update_project
 
     subroutine exec_merge_projects( self, cline )

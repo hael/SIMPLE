@@ -27,7 +27,6 @@ use simple_sp_project,            only: sp_project
 use simple_class_frcs,            only: class_frcs
 use simple_image,                 only: image
 use simple_stack_io,              only: stack_io
-use simple_guistats,              only: guistats
 use simple_starproject,           only: starproject
 use simple_starproject_stream,    only: starproject_stream
 use simple_qsys_env,              only: qsys_env
@@ -943,7 +942,7 @@ contains
         if(present(filename)) then
             jpeg_path = filename
         else
-            jpeg_path = fname_new_ext(self%refs, "jpeg") ! temporarily jpeg so compatible with old pool_stats.
+            jpeg_path = fname_new_ext(self%refs, "jpeg") ! .jpeg, beside refine2D's .jpg sprite sheet of the iteration
         end if
         if(.not. file_exists(self%refs)) return
         if(file_exists(jpeg_path))       return
@@ -1003,11 +1002,10 @@ contains
     end subroutine write_jpeg
 
     ! When refine2D has not written the sprite sheet of the latest completed iteration, writes the
-    ! iteration's class averages as images (generate_2D_jpeg, write_jpeg)
+    ! pool's own (write_jpeg)
     subroutine write_stats( self, params )
         class(stream_pool2D), intent(inout) :: self
         class(parameters),    intent(in)    :: params
-        type(guistats) :: pool_stats
         type(string)   :: cwd
         call simple_getcwd(cwd)
         if(file_exists(cwd//'/'//CLS2D_STARFBODY//'_iter'//int2str_pad(self%iter,3)//STAR_EXT)) then
@@ -1016,9 +1014,6 @@ contains
             self%stats_iter = self%iter - 1
         endif
         if(.not. file_exists(cwd//'/'//CAVGS_ITER_FBODY//int2str_pad(self%stats_iter, 3)//'.jpg')) then
-            call pool_stats%init
-            call pool_stats%generate_2D_jpeg('latest', '', self%proj%os_cls2D, self%stats_iter, self%dims%smpd)
-            call pool_stats%kill
             self%last_complete_iter = self%stats_iter
             call self%write_jpeg(params)
         endif

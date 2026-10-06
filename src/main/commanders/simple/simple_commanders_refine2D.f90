@@ -39,7 +39,6 @@ contains
         class(refine2D_strategy), allocatable     :: strategy
         type(parameters)       :: params
         type(builder)          :: build
-        type(simple_nice_comm) :: nice_comm
         logical                :: converged
         integer                :: niters
         ! local defaults (kept consistent with previous distributed master)
@@ -49,10 +48,7 @@ contains
         strategy = create_refine2D_strategy(cline)
         call strategy%initialize(params, build, cline)
         if( params%l_nonuniform ) THROW_HARD('nonuniform filtering is not available in 2D; exec_refine2D')
-        ! Nice communicator
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        nice_comm%stat_root%stage = "initialising"
-        call nice_comm%cycle()
+        ! the iteration jobs do not report to NICE
         if( cline%defined("niceserver") ) call cline%delete('niceserver')
         if( cline%defined("niceprocid") ) call cline%delete('niceprocid')
         if( trim(params%stream2d).eq.'no' ) call progressfile_init()
@@ -70,8 +66,6 @@ contains
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
-            nice_comm%stat_root%stage = "iteration " // int2str(params%which_iter)
-            call nice_comm%cycle()
             ! Strategy handles everything: alignment + cavgs + convergence
             call strategy%execute_iteration(params, build, cline, converged)
             call strategy%finalize_iteration(params, build)
@@ -79,11 +73,8 @@ contains
             if( niters >= params%maxits .and. .not. refine2D_requires_full_assignment(params) ) exit
         end do
         ! Cleanup
-        nice_comm%stat_root%stage = "terminating"
-        call nice_comm%cycle()
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params)
-        call nice_comm%terminate()
         call qsys_cleanup(params)
         if( allocated(strategy) ) deallocate(strategy)
         ! Global teardown (strategies may have built different toolboxes)

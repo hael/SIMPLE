@@ -468,6 +468,19 @@ An independent review of the change set found seven issues. All are resolved.
   `src/main/solve/simple_solve2D_chunk.f90`. The program name, its UI and its
   behaviour are unchanged. Plan:
   `doc/refactoring_notes/planned/solve2D_chunks_move_plan_2026-10-06.md`.
+- **`simple_nice` and `simple_guistats`: retired (2026-10-06)**, formerly items
+  A1 and C13 of the inventory, about 2,300 lines.
+  - `simple_nice_comm` sent messages without a `version`, which NICE's API
+    answers with HTTP 400. Nothing it sent arrived, and no answer ever set
+    its `exit` or `stop`. The nine commanders that created it (`refine2D`,
+    `project_core`, `project_cls`, `project_ptcl`, `starproject`, `imgops` and
+    `single`'s `nano2D`) no longer do. Batch commanders report through
+    `simple_gui_communicator`.
+  - `guistats` was left only as the pool's fallback for a missing
+    `cavgs_iterNNN.jpg`, which refine2D writes after every iteration. Its
+    single-column strip did not match the GUI's tile grid. The pool's own
+    sprite sheet (`write_jpeg`) covers the case.
+  - `GUISTATS_FILE` went with it.
 - **Streaming and NICE clean-ups.** Dead routines, stale constants, unused
   NICE fields, a squash of the NICE migrations, old statistics channels,
   compatibility parameters and module renames. These wait for the developer

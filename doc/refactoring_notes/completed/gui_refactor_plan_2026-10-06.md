@@ -232,6 +232,7 @@ Defaults taken without a question (each can be changed when its step comes):
 ## Out of scope
 
 - `simple_nice` and `simple_guistats`, which are A1 and C13 of the release 4 inventory.
+  *Retired afterwards (6 October 2026)*: see section 12 of `release4_legacy_cleanup_report.md`.
 - NICE. Its prompts for the initial-analysis, sieve and multistate panels stay inert, as they are
   today; it could drop them.
 - Making the previews before the communicator takes the metadata mutex. Today the communication

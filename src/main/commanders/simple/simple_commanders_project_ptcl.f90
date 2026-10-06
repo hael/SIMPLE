@@ -55,7 +55,6 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(string), allocatable :: stkfnames(:)
         real,         allocatable :: line(:)
-        type(simple_nice_comm)    :: nice_comm
         type(string)              :: ctfstr
         type(parameters)          :: params
         type(sp_project)          :: spproj
@@ -96,9 +95,6 @@ contains
                 THROW_HARD('either stk or stktab needed on command line; exec_import_particles')
             endif
         endif
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
 
         ! IMPORT
         if( inputted_star )then
@@ -297,7 +293,6 @@ contains
         endif
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import
-        call nice_comm%terminate()
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_import_particles
 
@@ -440,20 +435,15 @@ contains
     subroutine exec_zero_project_shifts( self, cline )
         class(commander_zero_project_shifts), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(simple_nice_comm) :: nice_comm
         type(parameters)       :: params
         type(sp_project)       :: spproj
         call cline%set('mkdir', 'yes')
         call params%new(cline, silent=.true.)
-        ! nice communicator init
-        call nice_comm%init(params%niceprocid, params%niceserver)
-        call nice_comm%cycle()
         call spproj%read(params%projfile)
         call spproj%os_ptcl2D%zero_shifts
         call spproj%os_ptcl3D%zero_shifts
         call spproj%write(params%projfile)
         call spproj%kill
-        call nice_comm%terminate()
     end subroutine exec_zero_project_shifts
 
     subroutine exec_prune_project_distr( self, cline )
