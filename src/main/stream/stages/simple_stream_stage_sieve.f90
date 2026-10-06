@@ -293,11 +293,10 @@ contains
         finished = file_exists(TERM_STREAM)
     end function finished
 
-    !> Cancels the running chunk jobs; the last status: no more user input.
+    !> Cancels the running chunk jobs, and sends the last status.
     subroutine finalize( self )
         class(stream_stage_sieve), intent(inout) :: self
         if( self%l_sieve_active ) call self%sieve%cancel()
-        call self%meta_status%set_user_input(.false.)
         call self%send_status(string('terminating'))
     end subroutine finalize
 

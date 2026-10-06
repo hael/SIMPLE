@@ -1,26 +1,24 @@
 !@descr: GUI metadata type for a single 3D volume entry (product paths + stats).
 ! Optional fields (res0143/res05/pop, cfar when > 0, FSC, 72x36 oridist, oridistpath, per-kind MRC
 ! min/max, reprojtiles) are emitted only when set; i/i_max route IPC batches.
-! reprojtiles is allocatable: never set it on objects sent via raw serialise().
-! See doc/refactoring_notes/completed/stream_area_review_2026-09-30.md, item A6.
+! reprojtiles is allocatable and jsonised in-process only: serialise() sends a copy without it,
+! the stream sends the tiles as messages of their own. The orientation histogram is binned by
+! oridist_from_oris (simple_oris_utils) on a grid of ORIDIST_NBINS_X x ORIDIST_NBINS_Y.
 module simple_gui_metadata_vol3D
-use json_module,               only: json_core, json_value
-use simple_defs,               only: LONGSTRLEN
-use simple_error,              only: simple_exception
-use simple_string,             only: string
-use simple_gui_metadata_base,  only: gui_metadata_base
-use simple_gui_metadata_types, only: GUI_METADATA_VOL3D_TYPE
+use json_module,                only: json_core, json_value
+use simple_defs,                only: LONGSTRLEN
+use simple_error,               only: simple_exception
+use simple_string,              only: string
+use simple_gui_metadata_base,   only: gui_metadata_base
 use simple_gui_metadata_cavg2D, only: gui_metadata_cavg2D
-use simple_oris,               only: oris
-use simple_linalg,             only: rad2deg
 
 implicit none
 
-public :: gui_metadata_vol3D
+public :: gui_metadata_vol3D, MAX_FSC_VOL3D, ORIDIST_NBINS_X, ORIDIST_NBINS_Y
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: MAX_FSC_VOL3D    = 1000
+integer, parameter :: MAX_FSC_VOL3D    = 1000 ! points an FSC curve holds
 integer, parameter :: ORIDIST_BINWIDTH = 5
 integer, parameter :: ORIDIST_NBINS_X  = 360 / ORIDIST_BINWIDTH  ! azimuth,   -180..180
 integer, parameter :: ORIDIST_NBINS_Y  = 180 / ORIDIST_BINWIDTH  ! elevation, -90..90
@@ -38,12 +36,11 @@ type, extends( gui_metadata_base ) :: gui_metadata_vol3D
   real                      :: smpd       = 0.0   ! pixel size (Angstroms)
   real                      :: res0143    = 0.0   ! FSC=0.143 resolution estimate (Angstroms); valid only when l_res0143
   real                      :: res05      = 0.0   ! FSC=0.5 resolution estimate (Angstroms); valid only when l_res05
-  real                      :: cfar       = 0.0   ! some kind of resolution estimate or threshold
+  real                      :: cfar       = 0.0   ! conical FSC area ratio of the half maps (anisotropy, 0..1); set when > 0
   integer                   :: pop        = 0     ! particle population count; valid only when l_pop
   logical                   :: l_res0143  = .false.
   logical                   :: l_res05    = .false.
   logical                   :: l_pop      = .false.
-  logical                   :: l_cfar     = .false.
   real                      :: fsc_invres(MAX_FSC_VOL3D) = 0.0  ! FSC curve x-axis, 1/resolution
   real                      :: fsc_corr(MAX_FSC_VOL3D)   = 0.0  ! FSC curve correlation values
   integer                   :: n_fsc      = 0     ! number of populated FSC points
@@ -66,7 +63,6 @@ contains
   procedure :: set
   procedure :: set_fsc
   procedure :: set_oridist
-  procedure :: set_oridist_from_oris
   procedure :: set_reprojtiles
   procedure :: set_minmax
   procedure :: get
@@ -108,7 +104,7 @@ contains
   !---------------- setters ----------------
 
   ! Set all volume fields and mark the object as assigned.
-  ! res0143, res05, cfar and pop are optional; omitting one clears its flag.
+  ! res0143, res05, cfar and pop are optional; omitting one clears it.
   ! An omitted oridistpath keeps its previous value.
   ! i and i_max are required IPC routing fields (batch index / batch size).
   subroutine set( self, reprojpath, volpath, pprocpath, lppath, pprocmirrpath, state, box, smpd, i, i_max, res0143, res05, cfar, pop, oridistpath )
@@ -137,8 +133,8 @@ contains
     if( self%l_res0143 ) self%res0143 = res0143
     self%l_res05    = present(res05)
     if( self%l_res05 ) self%res05 = res05
-    self%l_cfar     = present(cfar)
-    if( self%l_cfar ) self%cfar = cfar
+    self%cfar       = 0.0
+    if( present(cfar) ) self%cfar = cfar
     self%l_pop      = present(pop)
     if( self%l_pop ) self%pop = pop
   end subroutine set
@@ -167,28 +163,6 @@ contains
     self%l_oridist  = .true.
     self%oridist    = hist
   end subroutine set_oridist
-
-  ! Bin the projection directions of the particles of @p state in @p os into the
-  ! orientation distribution histogram (azimuth -180..180 x elevation -90..90) and
-  ! store it as set_oridist does.
-  subroutine set_oridist_from_oris( self, os, state )
-    class(gui_metadata_vol3D), intent(inout) :: self
-    class(oris),               intent(in)    :: os
-    integer,                   intent(in)    :: state
-    integer :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y), iptcl, ix, iy
-    real    :: normal(3), azimuth, elevation
-    hist = 0
-    do iptcl = 1,os%get_noris()
-      if( os%get_state(iptcl) /= state ) cycle
-      normal    = os%get_normal(iptcl)
-      azimuth   = rad2deg(atan2(normal(2), normal(1)))
-      elevation = rad2deg(asin(max(-1.0, min(1.0, normal(3)))))
-      ix = min(ORIDIST_NBINS_X, max(1, floor((azimuth   + 180.0) / real(ORIDIST_BINWIDTH)) + 1))
-      iy = min(ORIDIST_NBINS_Y, max(1, floor((elevation +  90.0) / real(ORIDIST_BINWIDTH)) + 1))
-      hist(ix, iy) = hist(ix, iy) + 1
-    enddo
-    call self%set_oridist(hist)
-  end subroutine set_oridist_from_oris
 
   ! Store the orthogonal reprojection sprite-sheet tiles for this state, nested
   ! as a 'reprojtiles' array by jsonise_override; matches the streaming assembler's
@@ -229,7 +203,7 @@ contains
 
   ! Return all fields; result is .true. if the object has been assigned.
   ! res0143, res05, pop and oridistpath are set only when the corresponding
-  ! optional was supplied to set() (oridistpath returns '' otherwise).
+  ! optional was supplied to set() (oridistpath returns '' otherwise), cfar only when positive.
   function get( self, reprojpath, volpath, pprocpath, lppath, pprocmirrpath, state, box, smpd, res0143, res05, cfar, pop, oridistpath ) result( l_assigned )
     class(gui_metadata_vol3D), intent(in)  :: self
     type(string),               intent(out) :: reprojpath, volpath, pprocpath, lppath, pprocmirrpath
@@ -252,7 +226,7 @@ contains
     smpd       = self%smpd
     if( present(res0143) .and. self%l_res0143 ) res0143 = self%res0143
     if( present(res05)   .and. self%l_res05   ) res05   = self%res05
-    if( present(cfar)    .and. self%l_cfar    ) cfar    = self%cfar
+    if( present(cfar)    .and. self%cfar > 0. ) cfar    = self%cfar
     if( present(pop)     .and. self%l_pop     ) pop     = self%pop
   end function get
 
@@ -304,7 +278,7 @@ contains
   ! Emit the mandatory fields plus every optional field that is set (cfar when > 0) as a JSON object.
   ! Returns a null pointer when the object has not been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_vol3D), intent(inout) :: self
+    class(gui_metadata_vol3D), intent(in)    :: self
     type(json_core)                           :: json
     type(json_value),          pointer       :: json_ptr, json_invres_ptr, json_corr_ptr
     type(json_value),          pointer       :: json_oridist_ptr, json_row_ptr, json_tiles_ptr

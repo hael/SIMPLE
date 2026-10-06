@@ -1,11 +1,8 @@
 !@descr: GUI metadata for a stream quality update — thresholds and user selections broadcast from the GUI
 ! The master copies GUI response fields here and sends the whole object to the running p01, p03 and p06.
 ! Unset values are 0; receivers ignore 0 and unchanged values. Readers: p01 thresholds,
-! p03 pickrefs_selection+cycle, p06 mskdiam2D/snapshot2D. increase_nmics has no reader.
+! p03 pickrefs_selection+cycle, p06 mskdiam2D/snapshot2D.
 module simple_gui_metadata_stream_update
-use json_kinds
-use json_module,              only: json_core, json_value
-use simple_defs,              only: STDLEN
 use simple_error,             only: simple_exception
 use simple_string,            only: string
 use simple_gui_metadata_base, only: gui_metadata_base
@@ -13,12 +10,13 @@ use simple_gui_metadata_base, only: gui_metadata_base
 implicit none
 
 public :: gui_metadata_stream_update
-public :: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION
+public :: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION, MAX_SNAPSHOT2D_FNAME_LEN
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: MAX_PICKREFS_SELECTION   = 500  ! classes a picking-reference selection holds
 integer, parameter :: MAX_SNAPSHOT2D_SELECTION = 1000 ! classes a 2D snapshot selection holds
+integer, parameter :: MAX_SNAPSHOT2D_FNAME_LEN = 128  ! characters of a 2D snapshot's file name
 
 type, extends(gui_metadata_base) :: gui_metadata_stream_update
   private
@@ -28,12 +26,12 @@ type, extends(gui_metadata_base) :: gui_metadata_stream_update
   real                  :: ctfresupdate                 = 0.0  ! CTF resolution threshold (A); 0 = unset
   real                  :: astigmatismupdate            = 0.0  ! astigmatism threshold (A);   0 = unset
   real                  :: icescoreupdate               = 0.0  ! ice-contamination score;      0 = unset
-  real                  :: mskdiam2D                    = 0.0  ! mask diameter for 2D classification (pixels); 0 = unset
+  real                  :: mskdiam2D                    = 0.0  ! mask diameter for 2D classification (A); 0 = unset
   integer               :: snapshot2D_id                = 0    ! snapshot set ID; 0 = unset
   integer               :: snapshot2D_iteration         = 0    ! 2D classification iteration to snapshot; 0 = unset
   integer(kind=2)       :: snapshot2D_selection(MAX_SNAPSHOT2D_SELECTION) = 0 ! class indices included in the snapshot
   integer               :: snapshot2D_selection_length  = 0    ! number of valid entries in snapshot2D_selection
-  character(len=STDLEN) :: snapshot2D_filename          = ''   ! project file name for the snapshot
+  character(len=MAX_SNAPSHOT2D_FNAME_LEN) :: snapshot2D_filename = '' ! project file name for the snapshot
 contains
   procedure :: kill => kill_override
   procedure :: set_ctfres_update
@@ -178,6 +176,7 @@ contains
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     n = size(selection)
     if( n > size(self%snapshot2D_selection) ) THROW_HARD('snapshot2D_selection exceeds maximum size')
+    if( filename%strlen() > MAX_SNAPSHOT2D_FNAME_LEN ) THROW_HARD('snapshot2D_filename exceeds maximum length')
     self%l_assigned                   = .true.
     self%snapshot2D_id                = snapshot_id
     self%snapshot2D_iteration         = iteration

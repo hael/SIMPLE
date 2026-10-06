@@ -9,6 +9,7 @@ use simple_http_post,            only: http_post, http_response
 use simple_core_module_api
 use simple_parameters,           only: parameters
 use simple_gui_metadata_project, only: gui_metadata_project
+use simple_gui_project_builder,  only: build_project_metadata
 use simple_gui_metadata_types,   only: GUI_METADATA_PROJECT_TYPE
 implicit none
 
@@ -126,7 +127,7 @@ contains
         if( present(stage)     ) i_stage = stage
         if( present(selection) ) l_selection = selection
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage, l_selection)
+        call build_project_metadata(gui_project_metadata_inst, spproj, md_oritype, i_stage, l_selection)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
     end subroutine add_metadata_1
 
@@ -165,7 +166,7 @@ contains
         if( present(stage)   ) i_stage    = stage
         if( present(oritype) ) md_oritype = oritype
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call gui_project_metadata_inst%set(spproj, md_oritype, i_stage, l_selection)
+        call build_project_metadata(gui_project_metadata_inst, spproj, md_oritype, i_stage, l_selection)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
         call spproj%kill()
     end subroutine add_metadata_2

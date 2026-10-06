@@ -7,7 +7,6 @@ use simple_defs,               only: LONGSTRLEN
 use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_gui_metadata_base,  only: gui_metadata_base
-use simple_gui_metadata_types, only: GUI_METADATA_CAVG2D_TYPE
 
 implicit none
 
@@ -124,7 +123,7 @@ contains
   ! Emit all mandatory fields plus optional res/pop as a JSON object.
   ! Returns a null pointer when the object has not been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_cavg2D), intent(inout) :: self
+    class(gui_metadata_cavg2D), intent(in)    :: self
     type(json_core)                           :: json
     type(json_value),           pointer       :: json_ptr
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')

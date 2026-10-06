@@ -1,7 +1,8 @@
 !@descr: unit tests for the pieces of the stream master: the GUI's commands, the metadata store, the stages' pipes
 ! The GUI's answer is parsed from JSON text, the store is fed serialised metadata objects, and a
-! stage's pipes are opened and used from both sides in this process. Forking the stages, the
-! heartbeat and the HTTP link are left to the high-level stream tests.
+! stage's pipes are opened and used from both sides in this process. run_stream_heartbeat_tests
+! reads live forked processes into the GUI heartbeat's records, so it runs in the forked_process
+! entry. Forking the stages and the HTTP link are left to the high-level stream tests.
 module simple_stream_master_tester
 use simple_test_utils
 use simple_string,                     only: string
@@ -15,14 +16,17 @@ use simple_gui_metadata_utils,         only: max_metadata_size
 use simple_stream_pipe,                only: stream_pipe
 use simple_stream_master_stage_ids,    only: NSTAGES, STAGE_PREPROCESS, STAGE_POOL2D, STAGE_SOLVE3D, stage_gui_key,&
                                             &stage_job_name, master_fds, stage_fds
-use simple_stream_master_stage,        only: stream_master_stage
+use simple_stream_master_stage,        only: stream_master_stage, fork_gui_status
+use simple_gui_assembler,              only: gui_stage_status, GUI_STAGE_STATUS_RUNNING, GUI_STAGE_STATUS_FINISHED
+use simple_forked_process,             only: forked_process, FORK_POLL_TIME
+use unix,                              only: c_usleep
 use simple_stream_master_meta_store,   only: stream_master_meta_store
 use simple_stream_master_gui_commands, only: stream_master_gui_commands
-use simple_gui_metadata_stream_update, only: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION
+use simple_gui_metadata_stream_update, only: MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION, MAX_SNAPSHOT2D_FNAME_LEN
 use simple_string_utils,               only: int2str
 implicit none
 private
-public :: run_all_stream_master_tests
+public :: run_all_stream_master_tests, run_stream_heartbeat_tests
 
 !> a stage's commander for the tests, which never fork the stage
 type, extends(commander_base) :: noop_commander
@@ -39,6 +43,7 @@ contains
         call test_gui_commands_fresh_each_answer()
         call test_gui_commands_invalid()
         call test_gui_commands_oversized()
+        call test_gui_commands_snapshot_name()
         call test_store_status()
         call test_store_list()
         call test_store_volume()
@@ -123,6 +128,35 @@ contains
         call assert_int(MAX_PICKREFS_SELECTION, commands%update%get_pickrefs_selection_length(), 'and kept')
         call commands%kill()
     end subroutine test_gui_commands_oversized
+
+    !> a snapshot whose name is not a bare *.simple file name is dropped (p06 makes a folder of
+    !! it), and the rest of the answer is applied
+    subroutine test_gui_commands_snapshot_name()
+        type(stream_master_gui_commands) :: commands
+        character(len=:), allocatable    :: long_name
+        write(*,'(A)') 'test_gui_commands_snapshot_name'
+        call assert_false(snapshot_kept(commands, '../snap.simple'), 'a name with a directory is dropped')
+        call assert_real(180., commands%update%get_mskdiam2D_update(), 1.e-5, 'the other updates are kept')
+        call assert_false(snapshot_kept(commands, 'snap.txt'),       'a name without .simple is dropped')
+        call assert_false(snapshot_kept(commands, '.simple'),        'a name of .simple alone is dropped')
+        long_name = repeat('s', MAX_SNAPSHOT2D_FNAME_LEN)//'.simple'
+        call assert_false(snapshot_kept(commands, long_name),        'an overlong name is dropped')
+        long_name = repeat('s', MAX_SNAPSHOT2D_FNAME_LEN - len('.simple'))//'.simple'
+        call assert_true(snapshot_kept(commands, long_name),         'a name of the full length is kept')
+        call assert_true(snapshot_kept(commands, 'snapshot_3.simple'), 'and the names NICE sends')
+        call commands%kill()
+
+    contains
+
+        logical function snapshot_kept( cmds, fname )
+            type(stream_master_gui_commands), intent(inout) :: cmds
+            character(len=*),                 intent(in)    :: fname
+            call assert_true(cmds%parse('{"mskdiam2D":180.0,"snapshot2D":{"id":3,"iteration":12,'//&
+                &'"selection":[1,4],"filename":"'//fname//'"}}'), 'the answer is parsed')
+            snapshot_kept = cmds%update%has_snapshot2D_update()
+        end function snapshot_kept
+
+    end subroutine test_gui_commands_snapshot_name
 
     !> a stage's status replaces the previous one
     subroutine test_store_status()
@@ -312,6 +346,40 @@ contains
         deallocate(proc)
         call cline%kill()
     end subroutine test_skipped_stays_skipped
+
+    ! ---- the GUI heartbeat over live processes ---------------------------------
+
+    !> Reads live forked processes into the GUI heartbeat's records. They fork real children, so
+    !! they run in the forked_process platform entry, not with the other master tests.
+    subroutine run_stream_heartbeat_tests()
+        write(*,'(A)') '**** running all stream heartbeat tests ****'
+        call test_fork_gui_status()
+    end subroutine run_stream_heartbeat_tests
+
+    !> a running child reports running, with its pid and start time and no stop time; once
+    !! stopped, finished, with its stop time
+    subroutine test_fork_gui_status()
+        type(forked_process)   :: fork
+        type(gui_stage_status) :: stage_status
+        integer                :: rc
+        write(*,'(A)') 'test_fork_gui_status'
+#if defined(_WIN32)
+        write(*,'(A)') 'skipped: forked processes are unavailable on Windows'
+#else
+        call fork%start(name=string('TEST_HEARTBEAT_STAGE'))
+        rc = c_usleep(FORK_POLL_TIME * 5)
+        stage_status = fork_gui_status(fork)
+        call assert_int(GUI_STAGE_STATUS_RUNNING, stage_status%status, 'a running child reports running')
+        call assert_true(stage_status%pid > 0,                         'with its pid')
+        call assert_true(stage_status%starttime > 0,                   'and its start time')
+        call assert_int(0, stage_status%stoptime,                      'and no stop time')
+        call fork%terminate()
+        call fork%await_final_status()
+        stage_status = fork_gui_status(fork)
+        call assert_int(GUI_STAGE_STATUS_FINISHED, stage_status%status, 'a stopped child reports finished')
+        call assert_true(stage_status%stoptime > 0,                     'with its stop time')
+#endif
+    end subroutine test_fork_gui_status
 
     ! ---- fixtures ------------------------------------------------------------
 

@@ -23,11 +23,21 @@ use simple_error,            only: simple_exception
 use simple_gui_assembler,    only: gui_assembler
 use simple_stream_master_stage_ids, only: STAGE_PREPROCESS, STAGE_ASSIGN_OPTICS, STAGE_INITIAL_ANALYSIS,&
     &STAGE_REFERENCE_PICKING, STAGE_PARTICLE_SIEVING, STAGE_POOL2D, STAGE_SOLVE3D
-use simple_gui_metadata_api, only: gui_metadata_micrograph, gui_metadata_histogram, gui_metadata_timeplot,&
-    &gui_metadata_optics_group, gui_metadata_cavg2D, gui_metadata_vol3D, gui_metadata_stream_preprocess,&
-    &gui_metadata_stream_optics_assignment, gui_metadata_stream_picking, gui_metadata_stream_initial_analysis,&
-    &gui_metadata_stream_particle_sieving, gui_metadata_stream_pool2D, gui_metadata_stream_pool2D_snapshot,&
-    &gui_metadata_stream_solve3D_multistate,&
+use simple_gui_metadata_micrograph,                only: gui_metadata_micrograph
+use simple_gui_metadata_histogram,                 only: gui_metadata_histogram
+use simple_gui_metadata_timeplot,                  only: gui_metadata_timeplot
+use simple_gui_metadata_optics_group,              only: gui_metadata_optics_group
+use simple_gui_metadata_cavg2D,                    only: gui_metadata_cavg2D
+use simple_gui_metadata_vol3D,                     only: gui_metadata_vol3D
+use simple_gui_metadata_stream_preprocess,         only: gui_metadata_stream_preprocess
+use simple_gui_metadata_stream_optics_assignment,  only: gui_metadata_stream_optics_assignment
+use simple_gui_metadata_stream_picking,            only: gui_metadata_stream_picking
+use simple_gui_metadata_stream_initial_analysis,   only: gui_metadata_stream_initial_analysis
+use simple_gui_metadata_stream_particle_sieving,   only: gui_metadata_stream_particle_sieving
+use simple_gui_metadata_stream_pool2D,             only: gui_metadata_stream_pool2D
+use simple_gui_metadata_stream_pool2D_snapshot,    only: gui_metadata_stream_pool2D_snapshot
+use simple_gui_metadata_stream_solve3D_multistate, only: gui_metadata_stream_solve3D_multistate
+use simple_gui_metadata_types, only: &
     &GUI_METADATA_STREAM_PREPROCESS_TYPE, GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ASTIG_TYPE,&
     &GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_CTFRES_TYPE, GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ICEFRAC_TYPE,&
     &GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_ASTIG_TYPE, GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_CTFRES_TYPE,&

@@ -66,7 +66,7 @@ contains
   ! Serialise all fields to a JSON object. Returns a null pointer when
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_pool2D_snapshot), intent(inout) :: self
+    class(gui_metadata_stream_pool2D_snapshot), intent(in)    :: self
     type(json_core)                                           :: json
     type(json_value),                           pointer       :: json_ptr
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')

@@ -1,7 +1,7 @@
-!@descr: Unit tests for gui_assembler — lifecycle, hash suppression, and all assemble_stream_* procedures
-! JSON is pinned by an FNV-1a hash where it is deterministic (no live timestamps), otherwise only
-! checked for being non-empty. run_stream_heartbeat_tests forks seven live children, so it runs in
-! the forked_process test entry, not with run_all_gui_assembler_tests in unit_ui.
+!@descr: Unit tests for gui_assembler — lifecycle, hash suppression, the stream heartbeat and all assemble_* procedures
+! JSON is pinned by an FNV-1a hash where it is deterministic (no live timestamps); otherwise its
+! fixed fields are read back. The heartbeat is assembled from plain stage-status records; reading
+! live forked processes into them is tested with the stream master (fork_gui_status).
 module simple_gui_assembler_tester
   use simple_gui_metadata_api, only: gui_metadata_stream_preprocess,                      &
                                      gui_metadata_micrograph,                             &
@@ -10,7 +10,7 @@ module simple_gui_assembler_tester
                                      gui_metadata_stream_optics_assignment,               &
                                      gui_metadata_optics_group,                           &
                                      gui_metadata_stream_picking,                         &
-                                     gui_metadata_stream_initial_analysis,                       &
+                                     gui_metadata_stream_initial_analysis,                &
                                      gui_metadata_stream_particle_sieving,                &
                                      gui_metadata_stream_pool2D,                          &
                                      GUI_METADATA_STREAM_PREPROCESS_TYPE,                 &
@@ -21,8 +21,8 @@ module simple_gui_assembler_tester
                                      GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,            &
                                      GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE,          &
                                      GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE,    &
-                                     GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE,                  &
-                                     GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE,            &
+                                     GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE,           &
+                                     GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_TYPE,     &
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE,           &
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE,     &
                                      GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_REF_TYPE, &
@@ -34,19 +34,20 @@ module simple_gui_assembler_tester
                                      gui_metadata_vol3D,                                  &
                                      gui_metadata_stream_solve3D_multistate,              &
                                      GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE,         &
+                                     GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE,  &
                                      GUI_METADATA_VOL3D_TYPE,                             &
                                      sprite_sheet_pos
-  use simple_gui_metadata_api, only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
-  use simple_gui_metadata_api, only: CK, json_core, json_value
-  use simple_forked_process,   only: forked_process, FORK_POLL_TIME
-  use unix,                    only: c_usleep
-  use simple_gui_assembler,    only: gui_assembler
-  use simple_sp_project,       only: sp_project
-  use simple_test_utils,       only: assert_true, assert_char, assert_int
-  use simple_string,           only: string
+  use simple_gui_metadata_api,    only: gui_metadata_project, GUI_METADATA_PROJECT_TYPE
+  use simple_gui_metadata_api,    only: CK, json_core, json_value
+  use simple_gui_assembler,       only: gui_assembler, gui_stage_status, GUI_STAGE_STATUS_RUNNING,&
+                                        GUI_STAGE_STATUS_FAILED, GUI_STAGE_STATUS_FINISHED
+  use simple_gui_project_builder, only: build_project_metadata
+  use simple_sp_project,          only: sp_project
+  use simple_test_utils,          only: assert_true, assert_char, assert_int
+  use simple_string,              only: string
   implicit none
 
-public :: run_all_gui_assembler_tests, run_stream_heartbeat_tests
+public :: run_all_gui_assembler_tests
 private
 #include "simple_local_flags.inc"
 
@@ -67,6 +68,7 @@ contains
     call test_set_stoptime()
     call test_clear_hashes()
     call test_batch_heartbeat()
+    call test_stream_heartbeat()
     call test_preprocess()
     call test_optics_assignment()
     call test_initial_picking()
@@ -463,15 +465,16 @@ contains
 
   !---------------- solve3D_multistate assembly ----------------
 
-  ! Assemble a multistate solve3D JSON payload with a per-state 'state_volumes'
-  ! vol3D array and verify the section is non-empty.  An exact hash comparison
-  ! is not possible because the section embeds a live Unix timestamp (last_import_time).
+  ! Assemble a multistate solve3D JSON payload with a per-state 'state_volumes' vol3D array and
+  ! the reprojection tiles of state 1, and read back where the tiles land: nested in the entry of
+  ! their state, none in the entry of a state without tiles.
   subroutine test_solve3D_multistate()
     type(gui_assembler)                                       :: assembler
     type(gui_metadata_stream_solve3D_multistate)              :: meta_solve3D_multistate
     type(gui_metadata_vol3D),                     allocatable :: meta_states_vol3D(:)
-    type(string)                                               :: json_str
-    integer                                                    :: i
+    type(gui_metadata_cavg2D),                    allocatable :: meta_reprojtiles(:)
+    type(string)                                              :: json_str
+    integer                                                   :: i
     write(*,'(A)') 'test_solve3D_multistate'
     call meta_solve3D_multistate%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
     call meta_solve3D_multistate%set(stage=string('refine3D'), solve3D_stage=1, refine_iteration=5, &
@@ -489,22 +492,31 @@ contains
                                   pprocpath=string('/test/path/vol_state02_pproc.mrc'), lppath=string('/test/path/vol_state02_lp.mrc'), &
                                   pprocmirrpath=string('/test/path/vol_state02_pproc_mirr.mrc'), state=2, box=256, smpd=1.5, &
                                   i=2, i_max=2, res0143=4.5, res05=7.5, pop=9000)
+    ! three tiles of state 1 (idx is the state)
+    allocate(meta_reprojtiles(3))
+    do i=1, size(meta_reprojtiles)
+      call meta_reprojtiles(i)%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE)
+      call meta_reprojtiles(i)%set(path=string('/test/path/reprojs_state01.jpg'), mrcpath=string('/test/path/vol_state01.mrc'), &
+                                   idx=1, sprite=sprite_sheet_pos(x=real(i-1)*50., y=0.0, h=100, w=300), i=i, i_max=3)
+    enddo
     call assembler%new(0)
     call assert_true(assembler%is_associated(), 'assembler json associated')
-    call assembler%assemble_stream_solve3D_multistate(meta_solve3D_multistate, meta_states_vol3D)
+    call assembler%assemble_stream_solve3D_multistate(meta_solve3D_multistate, meta_states_vol3D, meta_reprojtiles)
     json_str = assembler%to_string()
-    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
+    call assert_int(2, json_count(json_str, 'solve3D_multistate.state_volumes'),                 'one entry per state volume')
+    call assert_int(1, json_int(json_str, 'solve3D_multistate.state_volumes(1).state'),          'the first is state 1')
+    call assert_int(3, json_count(json_str, 'solve3D_multistate.state_volumes(1).reprojtiles'),  'state 1 holds its three tiles')
+    call assert_int(-1, json_count(json_str, 'solve3D_multistate.state_volumes(2).reprojtiles'), 'state 2 has no tiles array')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
-    deallocate(meta_states_vol3D)
+    deallocate(meta_states_vol3D, meta_reprojtiles)
   end subroutine test_solve3D_multistate
 
   !---------------- project assembly ----------------
 
-  ! Build a minimal project, populate gui_metadata_project via the in-memory
-  ! set(spproj) overload, and verify the assembled project section is
-  ! non-empty.  An exact hash comparison is not possible because the section
-  ! embeds a live Unix timestamp (created).
+  ! Build a minimal project, fill gui_metadata_project through the project builder, and read
+  ! the assembled project section's fixed fields back. An exact hash comparison is not possible
+  ! because the section embeds a live Unix timestamp (created).
   subroutine test_project()
     type(gui_assembler)        :: assembler
     type(gui_metadata_project) :: meta_project_inmem
@@ -517,7 +529,7 @@ contains
     call proj%os_ptcl2D%new(10, is_ptcl=.true.)
     call proj%update_projinfo(projfile)
     call meta_project_inmem%new(GUI_METADATA_PROJECT_TYPE)
-    call meta_project_inmem%set(proj)
+    call build_project_metadata(meta_project_inmem, proj, 'all', 1, .false.)
     call assert_true(meta_project_inmem%get(projname, projfile, nmics, nstks, nptcls, created), &
         &'meta_project_inmem assigned')
     call assert_int(2,  nmics,  'meta_project_inmem nmics from in-memory project')
@@ -527,70 +539,43 @@ contains
     call assert_true(assembler%is_associated(), 'assembler json associated')
     call assembler%assemble_batch_metadata(meta_project_inmem)
     json_str = assembler%to_string()
-    call assert_true(json_str%strlen() > 0, 'json length greater than 0')
+    call assert_int(2,  json_int(json_str, 'project_metadata.nmics'),  'the section holds the micrograph count')
+    call assert_int(10, json_int(json_str, 'project_metadata.nptcls'), 'and the particle count')
+    call assert_true(json_int(json_str, 'project_metadata.created') > 0, 'and the time the record was made')
     call assembler%kill()
     call assert_true(.not.assembler%is_associated(), 'assembler json destroyed')
+    call meta_project_inmem%kill()
   end subroutine test_project
 
-  !---------------- stream heartbeat (live forked children) ----------------
+  !---------------- stream heartbeat ----------------
 
-  ! Run the stream-heartbeat tests. They fork seven real child processes, so they
-  ! are registered in the forked_process platform entry, not in unit_ui.
-  subroutine run_stream_heartbeat_tests()
-    write(*,'(A)') '**** running all stream heartbeat tests ****'
-    call test_stream_heartbeat_lifecycle()
-  end subroutine run_stream_heartbeat_tests
-
-  ! Stream heartbeat over seven live default fork workers (initial_picking and opening2D share one,
-  ! as in the master, which is not started): while running, every stage and the master report
-  ! 'running' with pid and start time but no stop time; after SIGTERM, 'finished' with a stop time.
-  subroutine test_stream_heartbeat_lifecycle()
-    type(forked_process) :: fork_preprocess, fork_assign_optics, fork_initial_analysis
-    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate
-    type(gui_assembler)  :: assembler
-    type(string)         :: running_heartbeat, finished_heartbeat
-    integer              :: rc
-    write(*,'(A)') 'test_stream_heartbeat_lifecycle'
-#if defined(_WIN32)
-    write(*,'(A)') 'skipped: forked processes are unavailable on Windows'
-#else
+  ! The stream heartbeat from stage-status records: while the stages run, every stage and the
+  ! master report 'running' with pid and start time but no stop time; once they have finished,
+  ! 'finished' with a stop time. A failed stage beside running ones makes the master report an error.
+  subroutine test_stream_heartbeat()
+    type(gui_assembler)    :: assembler
+    type(gui_stage_status) :: running, finished, failed
+    type(string)           :: payload
+    write(*,'(A)') 'test_stream_heartbeat'
+    running  = gui_stage_status(pid=4242, queuetime=100, starttime=101, failtime=0,   stoptime=0,   status=GUI_STAGE_STATUS_RUNNING)
+    finished = gui_stage_status(pid=4242, queuetime=100, starttime=101, failtime=0,   stoptime=200, status=GUI_STAGE_STATUS_FINISHED)
+    failed   = gui_stage_status(pid=4242, queuetime=100, starttime=101, failtime=150, stoptime=0,   status=GUI_STAGE_STATUS_FAILED)
     call assembler%new(HEARTBEAT_JOB_ID)
-    call fork_preprocess%start(           name=string('TEST_HEARTBEAT_PREPROCESS'))
-    call fork_assign_optics%start(        name=string('TEST_HEARTBEAT_ASSIGN_OPTICS'))
-    call fork_initial_analysis%start(            name=string('TEST_HEARTBEAT_INITIAL_ANALYSIS'))
-    call fork_reference_picking%start(    name=string('TEST_HEARTBEAT_REFERENCE_PICKING'))
-    call fork_particle_sieving%start(     name=string('TEST_HEARTBEAT_PARTICLE_SIEVING'))
-    call fork_pool2D%start(               name=string('TEST_HEARTBEAT_POOL2D'))
-    call fork_solve3D_multistate%start(name=string('TEST_HEARTBEAT_SOLVE3D_MULTISTATE'))
-    rc = c_usleep(FORK_POLL_TIME * 5)
-    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, &
-      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate)
-    running_heartbeat = assembler%to_string()
-    call fork_preprocess%terminate()
-    call fork_assign_optics%terminate()
-    call fork_initial_analysis%terminate()
-    call fork_reference_picking%terminate()
-    call fork_particle_sieving%terminate()
-    call fork_pool2D%terminate()
-    call fork_solve3D_multistate%terminate()
-    call fork_preprocess%await_final_status()
-    call fork_assign_optics%await_final_status()
-    call fork_initial_analysis%await_final_status()
-    call fork_reference_picking%await_final_status()
-    call fork_particle_sieving%await_final_status()
-    call fork_pool2D%await_final_status()
-    call fork_solve3D_multistate%await_final_status()
-    call assembler%set_stoptime()
-    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, &
-      &fork_reference_picking, fork_particle_sieving, fork_pool2D, fork_solve3D_multistate)
-    finished_heartbeat = assembler%to_string()
-    call assembler%kill()
-    call assert_char('', heartbeat_mismatch(running_heartbeat, 'running'), &
+    call assembler%assemble_stream_heartbeat(running, running, running, running, running, running, running)
+    payload = assembler%to_string()
+    call assert_char('', heartbeat_mismatch(payload, 'running'), &
       &'running heartbeat: every stage and the master running, with pid and start time, no stop time')
-    call assert_char('', heartbeat_mismatch(finished_heartbeat, 'finished'), &
+    call assembler%assemble_stream_heartbeat(running, failed, running, running, running, running, running)
+    payload = assembler%to_string()
+    call assert_char('failed', json_str_field(payload, 'stream_heartbeat.assign_optics.status'), 'the failed stage reports it')
+    call assert_char('error',  json_str_field(payload, 'stream_heartbeat.master.status'),        'and the master an error')
+    call assembler%set_stoptime()
+    call assembler%assemble_stream_heartbeat(finished, finished, finished, finished, finished, finished, finished)
+    payload = assembler%to_string()
+    call assert_char('', heartbeat_mismatch(payload, 'finished'), &
       &'finished heartbeat: every stage and the master finished, with pid, start and stop time')
-#endif
-  end subroutine test_stream_heartbeat_lifecycle
+    call assembler%kill()
+  end subroutine test_stream_heartbeat
 
   ! '' when the payload carries the job id and, for every stage and the master,
   ! the expected status, a positive pid and start time, and a stop time that is 0
@@ -647,5 +632,71 @@ contains
     enddo
     call json%destroy(root)
   end function heartbeat_mismatch
+
+  !---------------- reading the payload back ----------------
+
+  ! The integer at @p path of @p payload; -1 when there is none
+  function json_int( payload, path ) result( val )
+    type(string),     intent(in) :: payload
+    character(len=*), intent(in) :: path
+    integer                      :: val
+    type(json_core)              :: json
+    type(json_value), pointer    :: root
+    logical                      :: found
+    val = -1
+    call parse_payload(json, root, payload)
+    if( .not. associated(root) ) return
+    call json%get(root, path, val, found)
+    if( .not. found ) val = -1
+    call json%destroy(root)
+  end function json_int
+
+  ! The string at @p path of @p payload; '' when there is none
+  function json_str_field( payload, path ) result( val )
+    type(string),     intent(in)          :: payload
+    character(len=*), intent(in)          :: path
+    character(len=:), allocatable         :: val
+    character(kind=CK,len=:), allocatable :: cval
+    type(json_core)                       :: json
+    type(json_value), pointer             :: root
+    logical                               :: found
+    val = ''
+    call parse_payload(json, root, payload)
+    if( .not. associated(root) ) return
+    call json%get(root, path, cval, found)
+    if( found .and. allocated(cval) ) val = cval
+    call json%destroy(root)
+  end function json_str_field
+
+  ! The number of children at @p path of @p payload; -1 when there is nothing there
+  function json_count( payload, path ) result( n )
+    type(string),     intent(in) :: payload
+    character(len=*), intent(in) :: path
+    integer                      :: n
+    type(json_core)              :: json
+    type(json_value), pointer    :: root, node
+    logical                      :: found
+    n = -1
+    call parse_payload(json, root, payload)
+    if( .not. associated(root) ) return
+    nullify(node)
+    call json%get(root, path, node, found)
+    if( found .and. associated(node) ) n = json%count(node)
+    call json%destroy(root)
+  end function json_count
+
+  subroutine parse_payload( json, root, payload )
+    type(json_core),           intent(inout) :: json
+    type(json_value), pointer                :: root
+    type(string),              intent(in)    :: payload
+    nullify(root)
+    call json%initialize()
+    call json%parse(root, payload%to_char())
+    if( json%failed() )then
+      call json%clear_exceptions()
+      if( associated(root) ) call json%destroy(root)
+      nullify(root)
+    endif
+  end subroutine parse_payload
 
 end module simple_gui_assembler_tester

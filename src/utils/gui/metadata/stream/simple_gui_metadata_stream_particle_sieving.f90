@@ -1,6 +1,6 @@
-!@descr: GUI metadata for the stream particle-sieving stage — particle counts, class selection, and user-input flag
+!@descr: GUI metadata for the stream particle-sieving stage — particle counts and class selection
 ! Filled by stream p05 from ptcl_sieve: all three counts are passed in (rejected is not derived).
-! selection holds up to 1500 selected class indices of the latest product, as int16.
+! selection holds up to MAX_SIEVE_SELECTION selected class indices of the latest product, as int16.
 ! set() stamps last_import_time (Unix time) whenever particles_imported changes.
 module simple_gui_metadata_stream_particle_sieving
   use unix,                     only: c_long, c_time
@@ -10,28 +10,26 @@ module simple_gui_metadata_stream_particle_sieving
   use simple_string,            only: string
   use simple_gui_metadata_base, only: gui_metadata_base
 
-
   implicit none
 
-  public :: gui_metadata_stream_particle_sieving
+  public :: gui_metadata_stream_particle_sieving, MAX_SIEVE_SELECTION
   private
 #include "simple_local_flags.inc"
 
+  integer, parameter :: MAX_SIEVE_SELECTION = 1500 ! selected classes a status holds
+
   type, extends(gui_metadata_base) :: gui_metadata_stream_particle_sieving
     private
-    
     character(len=STDLEN) :: stage                   = 'unknown'
-    integer(kind=2)       :: selection(1500)         = 0
+    integer(kind=2)       :: selection(MAX_SIEVE_SELECTION) = 0
     integer               :: n_selection             = 0
     integer               :: particles_imported      = 0       ! total particles received from upstream
     integer               :: particles_accepted      = 0       ! particles passing 2-D selection criteria
     integer               :: particles_rejected      = 0       ! particles rejected by the sieve (caller-supplied)
     integer               :: last_import_time        = 0       ! Unix timestamp of most recent import event
-    logical               :: user_input              = .false. ! .true. once the user has supplied input
   contains
     procedure :: kill => kill_override
     procedure :: set
-    procedure :: set_user_input
     procedure :: set_selection
     procedure :: clear_selection
     procedure :: get
@@ -56,15 +54,6 @@ contains
     self%particles_rejected = particles_rejected
   end subroutine set
 
-  ! Set the user-input flag. May be called independently of set().
-  subroutine set_user_input( self, user_input )
-    class(gui_metadata_stream_particle_sieving), intent(inout) :: self
-    logical,                                     intent(in)    :: user_input
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    self%l_assigned = .true.
-    self%user_input = user_input
-  end subroutine set_user_input
-
   ! Append one selected class index to the packed selection list.
   ! Enforces initialization and fixed-capacity bounds.
   subroutine set_selection( self, idx )
@@ -86,14 +75,13 @@ contains
     self%n_selection = 0
   end subroutine clear_selection
 
-  ! Retrieve particle counts, user-input flag, and the last-import timestamp.
+  ! Retrieve particle counts and the last-import timestamp.
   ! Returns .true. if the object has been assigned.
-  function get( self, stage, particles_imported, particles_accepted, particles_rejected, last_import_time, user_input ) result( l_assigned )
+  function get( self, stage, particles_imported, particles_accepted, particles_rejected, last_import_time ) result( l_assigned )
     class(gui_metadata_stream_particle_sieving), intent(in)    :: self
     type(string),                                intent(out)   :: stage
     integer,                                     intent(out)   :: particles_imported, particles_accepted, particles_rejected
     integer,                                     intent(out)   :: last_import_time
-    logical,                                     intent(out)   :: user_input
     logical                                                    :: l_assigned
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned         = self%l_assigned
@@ -102,13 +90,12 @@ contains
     particles_accepted = self%particles_accepted
     particles_rejected = self%particles_rejected
     last_import_time   = self%last_import_time
-    user_input         = self%user_input
   end function get
 
   ! Serialise all fields to a JSON object. Returns a null pointer when
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_particle_sieving), intent(inout) :: self
+    class(gui_metadata_stream_particle_sieving), intent(in)    :: self
     type(json_core)                                            :: json
     type(json_value),                             pointer      :: json_ptr, json_ref_selection_ptr => null()
     integer                                                    :: i_ref
@@ -120,7 +107,6 @@ contains
       call json%add(json_ptr, 'particles_accepted',      self%particles_accepted )
       call json%add(json_ptr, 'particles_rejected',      self%particles_rejected )
       call json%add(json_ptr, 'last_import_time',        self%last_import_time   )
-      call json%add(json_ptr, 'user_input',              self%user_input         )
       if( self%n_selection > 0 ) then
         call json%create_array(json_ref_selection_ptr, 'selection')
         do i_ref = 1, self%n_selection

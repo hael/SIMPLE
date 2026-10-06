@@ -61,6 +61,7 @@ Supporting layers in `src/main/stream`:
 - p03 publishes the picking references once, as `INITIAL_ANALYSIS_PICKREFS`, by a rename (`publish_pickrefs`). A GUI selection pre-empts the 3D route, and published references are final; don't write that file from anywhere else
 - Watcher handoff assumes files are only returned once untouched for `report_time`; do not weaken that check, and write files a stage hands on as a temporary and rename them
 - GUI metadata is serialised by its bytes (`transfer`): never send an object with an allocated component (see `gui_metadata_vol3D%serialise`)
+- The GUI metadata types and the assembler import nothing that reaches `src/main` (IPC policy §8): domain work for the GUI belongs to the caller (`simple_gui_project_builder`, `simple_oris_utils`, `simple_stream_meta_plots`)
 - Signal handlers only set a flag (`simple_stream_sigterm`); poll it between steps, never log, join or exit inside a handler
 - The pool command line sets `msk_crop` explicitly, so changing `mskdiam` must also recompute `msk_crop`
 - The pool may run downscaled (`pool_dims` vs `params` box/smpd); anything written for downstream use must be rescaled or labelled with the matching smpd

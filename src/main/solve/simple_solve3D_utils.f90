@@ -10,7 +10,7 @@ use simple_matcher_refvol_utils, only: remove_ref_section_files
 use simple_parameters,           only: parameters
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
     &refine3D_startvol_fname, refine3D_startvol_half_fname, &
-    &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname
+    &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname, refine3D_reprojs_fname
 use simple_sigma2_state,         only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
 use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
@@ -941,14 +941,13 @@ contains
     subroutine gen_ortho_reprojs4viz( params, spproj )
         class(parameters), intent(in)    :: params
         type(sp_project),  intent(inout) :: spproj
-        type(string) :: str_state, fname
+        type(string) :: fname
         type(image)  :: final_vol, reprojs
         integer      :: state, ifoo, ldim(3)
         real         :: smpd
         call spproj%read_segment('out', params%projfile)
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle   ! empty-state case
-            str_state = int2str_pad(state,2)
             fname = refine3D_state_vol_fname(state)
             if( .not. file_exists(fname) )cycle
             exit
@@ -957,13 +956,12 @@ contains
         smpd = params%smpd
         call final_vol%new(ldim, smpd)
         do state = 1, params%nstates
-            str_state = int2str_pad(state,2)
             if( spproj%isthere_in_osout('vol', state) )then
                 fname = refine3D_state_vol_fname(state)
                 if( .not. file_exists(fname) )cycle
                 call final_vol%read(fname)
                 call final_vol%generate_orthogonal_reprojs(reprojs)
-                call reprojs%write_jpg(string('orthogonal_reprojs_state')//str_state//'.jpg')
+                call reprojs%write_jpg(refine3D_reprojs_fname(state))
                 call reprojs%kill
             endif
         enddo

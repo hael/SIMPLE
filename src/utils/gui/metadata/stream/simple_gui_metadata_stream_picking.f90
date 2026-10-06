@@ -3,7 +3,6 @@
 ! and particles_per_mic, and stamps last_micrograph_imported (Unix time) when the import count changes.
 module simple_gui_metadata_stream_picking
   use unix,                     only: c_long, c_time
-  use json_kinds
   use json_module,              only: json_core, json_value
   use simple_defs,              only: STDLEN
   use simple_string,            only: string
@@ -63,7 +62,7 @@ contains
   ! Retrieve all fields. Returns .true. if the object has been assigned.
   function get( self, stage, micrographs_imported, micrographs_accepted, micrographs_rejected, &
                 particles_extracted, particles_per_mic, last_micrograph_imported, box_size ) result( l_assigned )
-    class(gui_metadata_stream_picking), intent(inout) :: self
+    class(gui_metadata_stream_picking),         intent(in)    :: self
     type(string),                               intent(out)   :: stage
     integer,                                    intent(out)   :: micrographs_imported, micrographs_accepted
     integer,                                    intent(out)   :: micrographs_rejected, particles_extracted
@@ -85,7 +84,7 @@ contains
   ! Serialise to a JSON object containing all fields. Returns a null pointer
   ! when the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_picking), intent(inout) :: self
+    class(gui_metadata_stream_picking), intent(in)    :: self
     type(json_core)                                           :: json
     type(json_value),                           pointer       :: json_ptr
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')

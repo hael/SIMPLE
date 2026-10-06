@@ -296,7 +296,7 @@ contains
         type(string)                               :: cwd_saved, root, stage_name
         integer(c_int)                             :: fds(2)
         integer                                    :: nfail0, meta_type, nimported, naccepted, nrejected, tlast
-        logical                                    :: l_assigned, l_user_input
+        logical                                    :: l_assigned
         allocate(stage)
         write(*,'(A)') 'test_send_status'
         nfail0 = tests_failed
@@ -317,7 +317,7 @@ contains
             call assert_int(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE, meta_type, 'it is a particle-sieving status')
             if( meta_type == GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE )then
                 status     = transfer(buffer, status)
-                l_assigned = status%get(stage_name, nimported, naccepted, nrejected, tlast, l_user_input)
+                l_assigned = status%get(stage_name, nimported, naccepted, nrejected, tlast)
                 call assert_int(50, nimported, 'the particles imported')
                 call assert_int(0, naccepted, 'initial status has no accepted particles')
                 call assert_int(0, nrejected, 'initial status has no rejected particles')

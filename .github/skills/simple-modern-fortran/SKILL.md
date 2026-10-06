@@ -122,6 +122,10 @@ See `doc/refactoring_notes/completed/comment_novel_inventory_2026-09-30.md`.
   routine lists, field lists); point to the doc instead.
 - When code changes, fix or delete the comments it falsifies. A comment that
   names a switch or path must name one that exists.
+- Do not pass the pointer result of a polymorphic type-bound function straight
+  as an actual argument (`call json%add(p, item%jsonise())` with `item` a
+  `class(...)` dummy): assign it to a local pointer first. gfortran 15.2
+  corrupted the json-fortran tree when the result was passed straight on.
 
 ## Debugging And Build Notes
 

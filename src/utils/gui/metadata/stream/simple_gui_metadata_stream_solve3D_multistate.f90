@@ -1,8 +1,8 @@
-!@descr: GUI metadata for the stream multistate solve3D stage — pipeline stage, particle/state counts, per-state resolution, and user-input flag
+!@descr: GUI metadata for the stream multistate solve3D stage — pipeline stage, particle/state counts and per-state resolution
 ! Filled by stream p07: refine_iteration and particles_at_last_refine count solve3D_addon
 ! passes and the pool size at the last one. last_import_time is stamped when particles_imported
-! changes. p07 always sends resolution=0 and never sets user_input; per-state stats follow once
-! solve3D is done.
+! changes. p07 always sends resolution=0; per-state stats, for up to MAX_STATES_SOLVE3D_MULTISTATE
+! states, follow once solve3D is done.
 module simple_gui_metadata_stream_solve3D_multistate
   use unix,                     only: c_long, c_time
   use simple_error,             only: simple_exception
@@ -29,14 +29,12 @@ module simple_gui_metadata_stream_solve3D_multistate
     integer                :: particles_imported        = 0       ! total particles pooled from upstream
     integer                :: particles_at_last_refine  = 0       ! pool size when solve3D or the last addon pass began
     integer                :: last_import_time          = 0       ! Unix timestamp of most recent import event
-    logical                :: user_input                = .false. ! .true. once the user has supplied input
     real                   :: resolution                = 0.0     ! overall current low-pass/resolution estimate
     integer                :: state_populations(MAX_STATES_SOLVE3D_MULTISTATE) = 0
     real                   :: state_resolutions(MAX_STATES_SOLVE3D_MULTISTATE) = 0.0
   contains
     procedure :: kill => kill_override
     procedure :: set
-    procedure :: set_user_input
     procedure :: set_state_stats
     procedure :: get
     procedure :: jsonise => jsonise_override
@@ -53,6 +51,7 @@ contains
     integer,      intent(in) :: particles_imported, particles_at_last_refine
     real,         intent(in) :: resolution
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( nstates > MAX_STATES_SOLVE3D_MULTISTATE ) THROW_HARD('nstates exceeds MAX_STATES_SOLVE3D_MULTISTATE')
     self%l_assigned                = .true.
     self%stage                     = stage%to_char()
     self%solve3D_stage             = solve3D_stage
@@ -64,15 +63,6 @@ contains
     self%particles_at_last_refine  = particles_at_last_refine
     self%resolution                = resolution
   end subroutine set
-
-  ! Set the user-input flag. May be called independently of set().
-  subroutine set_user_input( self, user_input )
-    class(gui_metadata_stream_solve3D_multistate), intent(inout) :: self
-    logical,                                           intent(in)    :: user_input
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    self%l_assigned = .true.
-    self%user_input = user_input
-  end subroutine set_user_input
 
   ! Assign the pooled particle population and resolution estimate for one state.
   subroutine set_state_stats( self, state, population, resolution )
@@ -87,15 +77,14 @@ contains
   end subroutine set_state_stats
 
   ! Retrieve pipeline stage, progress counters, particle counts, overall
-  ! resolution, user-input flag, and the last-import timestamp. Returns
-  ! .true. if the object has been assigned.
-  function get( self, stage, solve3D_stage, refine_iteration, nstates, particles_imported, particles_at_last_refine, last_import_time, user_input, resolution ) result( l_assigned )
+  ! resolution and the last-import timestamp. Returns .true. if the object
+  ! has been assigned.
+  function get( self, stage, solve3D_stage, refine_iteration, nstates, particles_imported, particles_at_last_refine, last_import_time, resolution ) result( l_assigned )
     class(gui_metadata_stream_solve3D_multistate), intent(in)     :: self
     type(string), intent(out) :: stage
     integer,      intent(out) :: solve3D_stage, refine_iteration, nstates
     integer,      intent(out) :: particles_imported, particles_at_last_refine
     integer,      intent(out) :: last_import_time
-    logical,      intent(out) :: user_input
     real,         intent(out) :: resolution
     logical                   :: l_assigned
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
@@ -107,14 +96,13 @@ contains
     particles_imported        = self%particles_imported
     particles_at_last_refine  = self%particles_at_last_refine
     last_import_time          = self%last_import_time
-    user_input                = self%user_input
     resolution                = self%resolution
   end function get
 
   ! Serialise all fields to a JSON object. Returns a null pointer when
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_solve3D_multistate), intent(inout) :: self
+    class(gui_metadata_stream_solve3D_multistate), intent(in)    :: self
     type(json_core)                                   :: json
     type(json_value), pointer                         :: json_ptr, json_states_ptr => null(), json_state_ptr => null()
     integer                                            :: i_state
@@ -128,7 +116,6 @@ contains
       call json%add(json_ptr, 'particles_imported',        self%particles_imported        )
       call json%add(json_ptr, 'particles_at_last_refine',  self%particles_at_last_refine  )
       call json%add(json_ptr, 'last_import_time',          self%last_import_time          )
-      call json%add(json_ptr, 'user_input',                self%user_input                )
       call json%add(json_ptr, 'resolution',                dble(self%resolution)          )
       if( self%nstates > 0 ) then
         call json%create_array(json_states_ptr, 'states')

@@ -46,7 +46,7 @@ use simple_optics_maps_tester,               only: run_all_optics_maps_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
 use simple_motion_model_tester,              only: run_all_motion_model_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
-use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests, run_stream_heartbeat_tests
+use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests
 use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
 use simple_ui_visibility_tester,             only: run_all_ui_visibility_tests
 use simple_rnd_tester,                       only: run_all_rnd_tests
@@ -115,8 +115,9 @@ use simple_stream_stage_sieve_tester,        only: run_all_stream_stage_sieve_te
 use simple_stream_stage_pool2D_tester,       only: run_all_stream_stage_pool2D_tests
 use simple_stream_pool2D_tester,             only: run_all_stream_pool2D_tests
 use simple_stream_stage_solve3D_tester,   only: run_all_stream_stage_solve3D_tests
-use simple_stream_master_tester,             only: run_all_stream_master_tests
+use simple_stream_master_tester,             only: run_all_stream_master_tests, run_stream_heartbeat_tests
 use simple_stream_job_sets_tester,           only: run_all_stream_job_sets_tests
+use simple_stream_meta_plots_tester,         only: run_all_stream_meta_plots_tests
 use simple_stream_watcher_tester,            only: run_all_stream_watcher_tests
 use simple_ui,                               only: validate_ui_json
 implicit none
@@ -431,8 +432,9 @@ contains
 
     !> STREAM stages (src/main/stream/stages), step by step without a queue or waits:
     !! preprocessing, optics assignment, initial analysis, reference picking, particle sieving,
-    !! pool 2D, solve 3D, the job sets preprocessing and reference picking run on, the
-    !! master's GUI commands, metadata store and stage pipes, and the watcher's history
+    !! pool 2D, solve 3D, the job sets preprocessing and reference picking run on, the GUI plots
+    !! preprocessing fills, the master's GUI commands, metadata store and stage pipes, and the
+    !! watcher's history
     subroutine suites_stream( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
@@ -446,6 +448,7 @@ contains
         call add_suite(s, n, 'solve 3D',        run_all_stream_stage_solve3D_tests)
         call add_suite(s, n, 'stream master',      run_all_stream_master_tests)
         call add_suite(s, n, 'job sets',           run_all_stream_job_sets_tests)
+        call add_suite(s, n, 'meta plots',         run_all_stream_meta_plots_tests)
         call add_suite(s, n, 'stream watcher',     run_all_stream_watcher_tests)
     end subroutine suites_stream
 

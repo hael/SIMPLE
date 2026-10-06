@@ -1,5 +1,5 @@
 !@descr: GUI metadata type for a single particle entry (sprite-sheet position + stats).
-! One tile of the random particle montage written by gui_metadata_project%set: path is the montage
+! One tile of the random particle montage written by simple_gui_project_builder: path is the montage
 ! JPEG, pathlp its low-pass twin, idx the ptcl2D index. df (microns) and box are emitted only when
 ! passed to set().
 module simple_gui_metadata_ptcl
@@ -8,7 +8,6 @@ use simple_defs,                only: LONGSTRLEN
 use simple_error,               only: simple_exception
 use simple_string,              only: string
 use simple_gui_metadata_base,   only: gui_metadata_base
-use simple_gui_metadata_types,  only: GUI_METADATA_PTCL_TYPE
 use simple_gui_metadata_cavg2D, only: sprite_sheet_pos
 
 implicit none
@@ -116,7 +115,7 @@ contains
   ! Emit all mandatory fields plus optional df/box as a JSON object.
   ! Returns a null pointer when the object has not been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_ptcl), intent(inout) :: self
+    class(gui_metadata_ptcl), intent(in)    :: self
     type(json_core)                         :: json
     type(json_value),         pointer       :: json_ptr
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')

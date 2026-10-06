@@ -1,37 +1,20 @@
-!@descr: GUI metadata for the top-level SIMPLE project — populated from an in-memory sp_project
-! set() fills the sections chosen by oritype (mov, mic, ptcl, cls2D, cls3D; default all) and writes
-! preview files as it goes (movie thumbnail, particle montage JPEGs, per-stage copies of the 3D
-! reprojection/heatmap JPEGs). stage2D selects the 2D/3D stage slot, 0 the final one.
+!@descr: GUI metadata for the top-level SIMPLE project — a record of its sections, filled by setters
+! simple_gui_project_builder reads the sp_project, writes the previews and fills this record:
+! set_project first, then start_update, then the setters of the sections an update touches. The
+! 2D and 3D sections keep one slot per stage (stage s >= 1 in slot s) and one final slot (stage 0).
 ! Holds allocatable components, so it is jsonised in-process and never serialised over IPC.
 module simple_gui_metadata_project
   use unix,                           only: c_long, c_time
-  use json_kinds
   use json_module,                    only: json_core, json_value
-  use simple_defs,                    only: LONGSTRLEN, GUI_PSPECSZ, SHORTSTRLEN
-  use simple_defs_fname,              only: MRC_EXT, JPG_EXT, MOVTHUMB_FBODY, PPROC_SUFFIX, LP_SUFFIX, MIRR_SUFFIX
-  use simple_fileio,                  only: swap_suffix, file_exists, fname2format, file2rarr, add2fbody, get_fpath, simple_copy_file
+  use simple_defs,                    only: LONGSTRLEN
   use simple_string,                  only: string
   use simple_error,                   only: simple_exception
-  use simple_string_utils,            only: int2str, int2str_pad
-  use simple_sp_project,              only: sp_project
+  use simple_string_utils,            only: int2str
   use simple_gui_metadata_base,       only: gui_metadata_base
-  use simple_gui_metadata_types,      only: GUI_METADATA_MICROGRAPH_TYPE, GUI_METADATA_CAVG2D_TYPE, GUI_METADATA_PTCL_TYPE, &
-                                            &GUI_METADATA_VOL3D_TYPE
-  use simple_gui_metadata_micrograph, only: gui_metadata_micrograph, MAX_MIC_COORDINATES
+  use simple_gui_metadata_micrograph, only: gui_metadata_micrograph
   use simple_gui_metadata_ptcl,       only: gui_metadata_ptcl
-  use simple_gui_metadata_cavg2D,     only: gui_metadata_cavg2D, sprite_sheet_pos
+  use simple_gui_metadata_cavg2D,     only: gui_metadata_cavg2D
   use simple_gui_metadata_vol3D,      only: gui_metadata_vol3D
-  use simple_imghead,                 only: get_mrc_minmax
-  use simple_nrtxtfile,               only: nrtxtfile
-  use simple_image,                   only: image
-  use simple_math,                    only: round2even
-  use simple_math_ft,                 only: get_resarr
-  use simple_estimate_ssnr,           only: get_resolution
-  use simple_motion_gain_helpers,     only: read_movies_and_sum_frames
-  use simple_procimgstk,              only: random_selection_from_imgfile, bp_imgfile
-  use simple_gui_utils,               only: mrc2jpeg_tiled
-  use simple_syslib,                  only: del_file, simple_abspath, simple_rename, get_process_id
-  use simple_refine3D_fnames,         only: refine3D_oris_heatmap_fname
 
   implicit none
 
@@ -82,510 +65,173 @@ module simple_gui_metadata_project
     type(gui_metadata_ptcl),         allocatable :: meta_ptcls(:)
   contains
     procedure :: kill => kill_override
-    procedure :: set
+    procedure :: set_project
+    procedure :: start_update
+    procedure :: set_summary
+    procedure :: set_movies
+    procedure :: set_micrographs
+    procedure :: set_particles
+    procedure :: set_cavgs2D
+    procedure :: set_vols3D
     procedure :: get
+    procedure :: serialise => serialise_override
     procedure :: jsonise => jsonise_override
   end type gui_metadata_project
 
 contains
 
-  ! Populate the oritype-selected sections from an in-memory project (the project file is not
-  ! read); preview JPEGs are written as a side effect.
-  subroutine set( self, spproj, oritype, stage2D, selection )
-    class(gui_metadata_project),     intent(inout) :: self
-    type(sp_project),                intent(inout) :: spproj
-    character(len=*),    optional,   intent(in)    :: oritype
-    integer,             optional,   intent(in)    :: stage2D
-    logical,             optional,   intent(in)    :: selection
-    type(gui_metadata_cavg2D_stage), allocatable   :: meta_cavg2D_tmp(:)
-    type(gui_metadata_micrograph),   allocatable   :: meta_micrographs_tmp(:), meta_movies_tmp(:)
-    type(gui_metadata_cavg2D),       allocatable   :: cavgs_tmp(:)
-    real,                            allocatable   :: boxdata(:)
-    integer,                         allocatable   :: micrograph_indices(:)
-    type(nrtxtfile)                                :: boxfile
-    type(string)                                   :: projname, projfile, cavgsstk, cavgsjpg, boxpath
-    character(len=SHORTSTRLEN)                     :: md_oritype
-    integer                                        :: i, j, x, y, nmeta_micrographs, ncls_stk, n_valid_micrographs, n_valid_cavgs
-    integer                                        :: xtiles, ytiles, xtile, ytile, nrecs, nlines
-    integer                                        :: nstage2D, array_idx, out_ind
-    integer                                        :: nptcls_all, nptcls_valid, nptcls_sample, box_ptcls, n_valid_ptcls, preview_pid
-    logical                                        :: l_final, l_selection, l_ctf
-    real                                           :: smpd_cavgs, box_cavgs, mskdiam_cavgs, smpd_ptcls
-    type(string)                                   :: ptclsstk, ptclsjpg, ptclslpstk, ptclsjpglp
-    type(string)                                   :: ptclsjpg_final, ptclsjpglp_final, preview_id
-    integer,                            parameter  :: N_PTCLS_SAMPLE = 100
-    integer,                            parameter  :: N_MOV_THUMBS   = 1
-    type(image)                                    :: movsum, movthumb
-    type(string)                                   :: movfname, movthumbfname
-    integer                                        :: n_movthumbs, n_movies_sum, n_frames_sum, ldim_mov(3), ldim_thumb(3)
-    real                                           :: scale_thumb
-    type(gui_metadata_vol3D_stage),  allocatable   :: meta_vol3D_tmp(:)
-    type(gui_metadata_vol3D),        allocatable   :: vol3D_tmp(:)
-    type(string)                                   :: volpath, volpath_out, fsc_fname, pprocpath, lppath, pprocmirrpath
-    type(string)                                   :: reprojpath, reprojpath_stage, oridistpath, oridistpath_stage
-    type(gui_metadata_cavg2D)                      :: reproj_tiles3D(3)
-    integer,                            parameter  :: NTILES3D = 3
-    integer                                        :: itile3D, iptcl3D
-    real,                            allocatable   :: fsc_arr(:), res_arr(:), invres_arr(:)
-    integer                                        :: istate3D, n_valid_states3D, box3D, pop3D, fsc_box, n_fsc_pts, k
-    real                                            :: smpd3D, res0143, res05, cfar
-    real                                            :: minval3D, maxval3D
-    logical                                         :: l_have_fsc
-                
+  !---------------- setters ----------------
+
+  ! Name the project and mark the record assigned; the first call stamps the created time.
+  subroutine set_project( self, projname, projfile )
+    class(gui_metadata_project), intent(inout) :: self
+    type(string),                intent(in)    :: projname, projfile
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    l_final = present(stage2D)
-    if( l_final ) l_final = stage2D == 0
-    l_selection = .false.
-    if( present(selection) ) l_selection = selection
-    md_oritype = 'all'
-    if( present(oritype) ) md_oritype = oritype
-    if( l_final ) then
-        nstage2D = 0
-    else
-        nstage2D = 1
-        if( present(stage2D) ) nstage2D = stage2D
-        if( nstage2D < 1 ) THROW_HARD('stage2D must be >= 1, or 0 for final output')
-    end if
-    call spproj%projinfo%getter(1, 'projname', projname)
-    call spproj%projinfo%getter(1, 'projfile', projfile)
     if( .not. self%l_assigned ) self%created = int(c_time(0_c_long))
     self%l_assigned = .true.
     self%projname   = projname%to_char()
     self%projfile   = projfile%to_char()
-    
-   ! self%nstks      = spproj%os_stk%get_noris() ! do we really need this?
-   ! self%nptcls     = spproj%os_ptcl2D%get_noris()
-   ! self%ncls2D     = spproj%os_cls2D%get_noris()
-   ! self%pspec_size = GUI_PSPECSZ
-    ! add movies (max 10)
-    if( allocated(self%meta_movies) ) deallocate(self%meta_movies)
-    if( md_oritype == 'mov' .or. md_oritype == 'all' ) then
-        self%nmics  = spproj%os_mic%get_noris()
-        n_movthumbs = 0
-        if( self%nmics > 0 ) allocate(self%meta_movies(N_MOV_THUMBS)) 
-        do i = 1, self%nmics
-            if( n_movthumbs >= N_MOV_THUMBS ) exit
-            if( .not. spproj%os_mic%isthere(i, 'imgkind') ) cycle
-            if( spproj%os_mic%get_str(i, 'imgkind') /= 'movie' ) cycle
-            if( spproj%os_mic%isthere(i, 'movthumb') ) cycle ! already generated
-            n_movthumbs = n_movthumbs + 1
-            movfname = spproj%os_mic%get_str(i, 'movie')
-            call read_movies_and_sum_frames([movfname], spproj%os_mic%get(i, 'smpd'), movsum, n_movies_sum, n_frames_sum)
-            ldim_mov      = movsum%get_ldim()
-            scale_thumb   = real(GUI_PSPECSZ) / real(ldim_mov(1))
-            ldim_thumb(1) = round2even(real(ldim_mov(1)) * scale_thumb)
-            ldim_thumb(2) = round2even(real(ldim_mov(2)) * scale_thumb)
-            ldim_thumb(3) = 1
-            call movthumb%new(ldim_thumb, spproj%os_mic%get(i, 'smpd'))
-            call movsum%fft()
-            call movsum%clip(movthumb)
-            call movthumb%ifft()
-            movthumbfname = MOVTHUMB_FBODY // int2str(i) // JPG_EXT
-            call movthumb%write_jpg(movthumbfname, norm=.true., quality=90)
-            movthumbfname = simple_abspath(movthumbfname)
-            call self%meta_movies(n_movthumbs)%new(GUI_METADATA_MICROGRAPH_TYPE)
-            call self%meta_movies(n_movthumbs)%set(path  = movthumbfname  , &
-                                                  i_max  = N_MOV_THUMBS   , &
-                                                  i      = i                )                                 
-            call movsum%kill()
-            call movthumb%kill()
-        end do
-        ! trim unused (unassigned) slots left by skipped micrographs
-        if( n_movthumbs < N_MOV_THUMBS ) then
-            allocate(meta_movies_tmp(n_movthumbs))
-            meta_movies_tmp = self%meta_movies(1:n_movthumbs)
-            call move_alloc(meta_movies_tmp, self%meta_movies)
-        end if
-    end if
-    ! add micrographs (max 50)
-    if( allocated(self%meta_micrographs) ) deallocate(self%meta_micrographs)
-    if( md_oritype == 'mic' .or. md_oritype == 'ptcl' .or. md_oritype == 'all' ) then
-        self%nmics      = spproj%os_mic%get_noris()
-        self%pspec_size = GUI_PSPECSZ
-        if( md_oritype == 'ptcl' ) then
-            self%nstks  = spproj%os_stk%get_noris()
-            self%nptcls = spproj%os_ptcl2D%get_noris()
-        end if
-        if( l_selection) self%nmics_selected = spproj%os_mic%count_state_gt_zero()
-        if(spproj%os_mic%isthere('thumb')) then
-            nmeta_micrographs = min(50, self%nmics)
-            allocate(self%meta_micrographs(nmeta_micrographs))
-            self%xdim_mic       = nint(spproj%os_mic%get(1, "xdim"))
-            self%ydim_mic       = nint(spproj%os_mic%get(1, "ydim"))
-            self%smpd_mic       = spproj%os_mic%get(1, "smpd")
-            n_valid_micrographs = 0
-            l_ctf = .false.
-            if( spproj%os_mic%isthere('ctfjpg') ) l_ctf = .true.
-            do i = 1, nmeta_micrographs
-                if( spproj%os_mic%get_state(i) == 0 ) cycle ! needs improvement to work with pagination
-                n_valid_micrographs = n_valid_micrographs + 1
-                call self%meta_micrographs(n_valid_micrographs)%new(GUI_METADATA_MICROGRAPH_TYPE)
-                if( l_ctf ) then
-                    call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
-                                                      dfx   =spproj%os_mic%get(i,     "dfx")    , &
-                                                      dfy   =spproj%os_mic%get(i,     "dfy")    , &
-                                                      ctfres=spproj%os_mic%get(i,      "ctfres"), &
-                                                      ctfimg=spproj%os_mic%get_str(i, "ctfjpg") , &
-                                                      i_max =nmeta_micrographs                  , &
-                                                      i     =i                                    )
-                else
-                    call self%meta_micrographs(n_valid_micrographs)%set(path  =spproj%os_mic%get_str(i, "thumb")  , &
-                                                      dfx   =spproj%os_mic%get(i,     "dfx")    , &
-                                                      dfy   =spproj%os_mic%get(i,     "dfy")    , &
-                                                      ctfres=spproj%os_mic%get(i,      "ctfres"), &
-                                                      i_max =nmeta_micrographs                  , &
-                                                      i     =i                                    )
-                end if
-                call self%meta_micrographs(n_valid_micrographs)%clear_coordinates()
-                boxpath = spproj%os_mic%get_str(i, "boxfile")
-                if( boxpath%strlen() > 0 .and. file_exists(boxpath) ) then
-                    call boxfile%new(boxpath, 1)
-                    nrecs  = boxfile%get_nrecs_per_line()
-                    nlines = boxfile%get_ndatalines()
-                    if( nrecs >= 4 ) then
-                        allocate(boxdata(nrecs))
-                        ! at most the picks the micrograph's metadata holds
-                        do j = 1, min(nlines, MAX_MIC_COORDINATES)
-                            call boxfile%readNextDataLine(boxdata)
-                            x = nint(boxdata(1) + boxdata(3)/2)
-                            y = nint(boxdata(2) + boxdata(4)/2)
-                            call self%meta_micrographs(n_valid_micrographs)%set_coordinate(j, x, y, self%xdim_mic, self%ydim_mic)
-                        enddo
-                        deallocate(boxdata)
-                    endif
-                    call boxfile%kill()
-                endif
-            end do
-            ! trim unused (unassigned) slots left by skipped micrographs
-            if( n_valid_micrographs < nmeta_micrographs ) then
-                allocate(meta_micrographs_tmp(n_valid_micrographs))
-                meta_micrographs_tmp = self%meta_micrographs(1:n_valid_micrographs)
-                call move_alloc(meta_micrographs_tmp, self%meta_micrographs)
-            end if
-            
-        end if
-    end if
-    ! add particles: JPEG montage of a random sample of (selected) particles
-    if( allocated(self%meta_ptcls) ) deallocate(self%meta_ptcls)
-    if( md_oritype == 'ptcl' .or. md_oritype == 'all' ) then
-        nptcls_all = spproj%os_ptcl2D%get_noris()
-        if( nptcls_all > 0 ) then
-            if( spproj%os_ptcl2D%isthere('state') ) then
-                nptcls_valid = spproj%os_ptcl2D%count_state_gt_zero()
-            else
-                nptcls_valid = nptcls_all
-            end if
-            nptcls_sample = min(N_PTCLS_SAMPLE, nptcls_valid)
-            if( nptcls_sample > 0 ) then
-                box_ptcls  = nint(spproj%os_stk%get(1, 'box'))
-                smpd_ptcls = spproj%os_stk%get(1, 'smpd')
-                ! Keep intermediate preview files private to this process. Concurrent
-                ! batch submissions share the execution directory and otherwise can
-                ! delete another process's sample stack before it is filtered.
-                preview_pid      = get_process_id()
-                preview_id       = 'ptcls_sample_' // int2str(preview_pid)
-                ptclsstk         = preview_id // MRC_EXT
-                ptclsjpg         = preview_id // JPG_EXT
-                ptclslpstk       = preview_id // '_lp' // MRC_EXT
-                ptclsjpglp       = preview_id // '_lp' // JPG_EXT
-                ptclsjpg_final   = 'ptcls_sample' // JPG_EXT
-                ptclsjpglp_final = 'ptcls_sample_lp' // JPG_EXT
-                call random_selection_from_imgfile(spproj, ptclsstk, box_ptcls, nptcls_sample, pinds=micrograph_indices)
-                call mrc2jpeg_tiled(ptclsstk, ptclsjpg, ntiles=n_valid_ptcls)
-                call bp_imgfile(ptclsstk, ptclslpstk, smpd_ptcls, 0., 10.)
-                call mrc2jpeg_tiled(ptclslpstk, ptclsjpglp, ntiles=n_valid_ptcls)
-                call simple_rename(ptclsjpg,   ptclsjpg_final,   overwrite=.true.)
-                call simple_rename(ptclsjpglp, ptclsjpglp_final, overwrite=.true.)
-                call del_file(ptclslpstk)
-                call del_file(ptclsstk)
-                ptclsjpg          = simple_abspath(ptclsjpg_final)
-                ptclsjpglp        = simple_abspath(ptclsjpglp_final)
-                self%ptcls_jpg    = ptclsjpg%to_char()
-                self%nptcls_shown = n_valid_ptcls
-                allocate(self%meta_ptcls(n_valid_ptcls))
-                xtiles         = floor(sqrt(real(n_valid_ptcls)))
-                ytiles         = ceiling(real(n_valid_ptcls) / real(xtiles))
-                n_valid_cavgs  = 0
-                do i = 1, n_valid_ptcls
-                    n_valid_cavgs = n_valid_cavgs + 1
-                    xtile = mod(i-1, xtiles)
-                    ytile = (i-1) / xtiles
-                    call self%meta_ptcls(i)%new(GUI_METADATA_PTCL_TYPE)
-                    call self%meta_ptcls(i)%set(path    = ptclsjpg,                           &
-                                                pathlp  = ptclsjpglp,                         &
-                                                i       = i,                                  &
-                                                i_max   = n_valid_ptcls,                      &
-                                                df      = (spproj%os_ptcl2D%get(micrograph_indices(i), 'dfx') + spproj%os_ptcl2D%get(micrograph_indices(i), 'dfy')) / 2.0, &
-                                                box     = box_ptcls,                          &
-                                                idx     = micrograph_indices(i),              &
-                                                sprite  = sprite_sheet_pos(                   &
-                                                    x = xtile * (100.0 / max(1, xtiles - 1)), &
-                                                    y = ytile * (100.0 / max(1, ytiles - 1)), &
-                                                    h = 100 * ytiles,                         &
-                                                    w = 100 * xtiles)                         )
-                end do
-                if( allocated(micrograph_indices) ) deallocate(micrograph_indices)
-            end if
-        end if
-    end if
-    ! add 2D classes
-    if( nstage2D == 1 ) then
-        if( allocated(self%meta_cavg2D) ) deallocate(self%meta_cavg2D)
-    end if
-    if( md_oritype == 'cls2D' .or. md_oritype == 'all' ) then
-        self%nstks  = spproj%os_stk%get_noris()
-        self%nptcls = spproj%os_ptcl2D%get_noris()
-        self%ncls2D = spproj%os_cls2D%get_noris()
-        if( l_selection ) then
-            self%nptcls_selected = nint(spproj%os_cls2D%get_sum('pop'))
-            self%ncls2D_selected = spproj%os_cls2D%count_state_gt_zero()
-        end if
-        if( self%ncls2D > 0 ) then
-            if( l_final ) then
-                ! reuse an existing final slot, or append a new one at the end of the stage array
-                array_idx = 0
-                if( allocated(self%meta_cavg2D) ) then
-                    do i = 1, size(self%meta_cavg2D)
-                        if( self%meta_cavg2D(i)%is_final ) then
-                            array_idx = i
-                            exit
-                        end if
-                    end do
-                end if
-                if( array_idx == 0 ) then
-                    if( .not. allocated(self%meta_cavg2D) ) then
-                        allocate(self%meta_cavg2D(1))
-                    else
-                        allocate(meta_cavg2D_tmp(size(self%meta_cavg2D) + 1))
-                        meta_cavg2D_tmp(1:size(self%meta_cavg2D)) = self%meta_cavg2D
-                        call move_alloc(meta_cavg2D_tmp, self%meta_cavg2D)
-                    end if
-                    array_idx = size(self%meta_cavg2D)
-                end if
-                self%meta_cavg2D(array_idx)%is_final = .true.
-            else
-                if( .not. allocated(self%meta_cavg2D) ) then
-                    allocate(self%meta_cavg2D(nstage2D))
-                else if( size(self%meta_cavg2D) < nstage2D ) then
-                    ! grow the stage array, preserving previously recorded stage containers
-                    allocate(meta_cavg2D_tmp(nstage2D))
-                    meta_cavg2D_tmp(1:size(self%meta_cavg2D)) = self%meta_cavg2D
-                    call move_alloc(meta_cavg2D_tmp, self%meta_cavg2D)
-                end if
-                array_idx = nstage2D
-                self%meta_cavg2D(array_idx)%is_final = .false.
-            end if
-            if( allocated(self%meta_cavg2D(array_idx)%cavgs) ) deallocate(self%meta_cavg2D(array_idx)%cavgs)
-            allocate(self%meta_cavg2D(array_idx)%cavgs(self%ncls2D))
-            box_cavgs = 0.
-            out_ind   = 0
-            call spproj%get_cavgs_stk(cavgsstk, ncls_stk, smpd_cavgs, fail=.false., out_ind=out_ind, box=box_cavgs)
-            if( ncls_stk /= self%ncls2D ) THROW_HARD('cavgs stack ncls does not match os_cls2D record count')
-            mskdiam_cavgs = 0.
-            if( out_ind > 0 .and. spproj%os_out%isthere(out_ind, 'mskdiam') ) mskdiam_cavgs = spproj%os_out%get(out_ind, 'mskdiam')
-            self%dim_cavgs = nint(box_cavgs)
-            self%mskdiam   = mskdiam_cavgs
-            self%mskscale  = box_cavgs * smpd_cavgs
-            cavgsjpg       = swap_suffix(cavgsstk, JPG_EXT, MRC_EXT)
-            xtiles         = floor(sqrt(real(self%ncls2D)))
-            ytiles         = ceiling(real(self%ncls2D) / real(xtiles))
-            n_valid_cavgs  = 0
-            do i = 1, self%ncls2D
-                if( spproj%os_cls2D%get_state(i) == 0 ) cycle
-                n_valid_cavgs = n_valid_cavgs + 1
-                xtile = mod(i-1, xtiles)
-                ytile = (i-1) / xtiles
-                call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%new(GUI_METADATA_CAVG2D_TYPE)
-                call self%meta_cavg2D(array_idx)%cavgs(n_valid_cavgs)%set(path    = cavgsjpg,               &
-                                            mrcpath = cavgsstk,                           &
-                                            i       = i,                                  &
-                                            i_max   = self%ncls2D,                        &
-                                            res     = spproj%os_cls2D%get(i, 'res'),      &
-                                            pop     = spproj%os_cls2D%get_int(i, 'pop'),  &
-                                            idx     = i,                                  &
-                                            sprite  = sprite_sheet_pos(                   &
-                                                x = xtile * (100.0 / max(1, xtiles - 1)), &
-                                                y = ytile * (100.0 / max(1, ytiles - 1)), &
-                                                h = 100 * ytiles,                         &
-                                                w = 100 * xtiles)                         )
-            end do
-            ! trim unused (unassigned) slots left by skipped classes
-            if( n_valid_cavgs < self%ncls2D ) then
-                allocate(cavgs_tmp(n_valid_cavgs))
-                cavgs_tmp = self%meta_cavg2D(array_idx)%cavgs(1:n_valid_cavgs)
-                call move_alloc(cavgs_tmp, self%meta_cavg2D(array_idx)%cavgs)
-            end if
-        end if
-    end if
-    ! add 3D states/volumes
-    if( nstage2D == 1 ) then
-        if( allocated(self%meta_vol3D) ) deallocate(self%meta_vol3D)
-    end if
-    if( md_oritype == 'cls3D' .or. md_oritype == 'all' ) then
-        self%nstates3D = spproj%os_ptcl3D%get_n('state')
-        if( self%nstates3D > 0 ) then
-            if( l_final ) then
-                ! reuse an existing final slot, or append a new one at the end of the stage array
-                array_idx = 0
-                if( allocated(self%meta_vol3D) ) then
-                    do i = 1, size(self%meta_vol3D)
-                        if( self%meta_vol3D(i)%is_final ) then
-                            array_idx = i
-                            exit
-                        end if
-                    end do
-                end if
-                if( array_idx == 0 ) then
-                    if( .not. allocated(self%meta_vol3D) ) then
-                        allocate(self%meta_vol3D(1))
-                    else
-                        allocate(meta_vol3D_tmp(size(self%meta_vol3D) + 1))
-                        meta_vol3D_tmp(1:size(self%meta_vol3D)) = self%meta_vol3D
-                        call move_alloc(meta_vol3D_tmp, self%meta_vol3D)
-                    end if
-                    array_idx = size(self%meta_vol3D)
-                end if
-                self%meta_vol3D(array_idx)%is_final = .true.
-            else
-                if( .not. allocated(self%meta_vol3D) ) then
-                    allocate(self%meta_vol3D(nstage2D))
-                else if( size(self%meta_vol3D) < nstage2D ) then
-                    ! grow the stage array, preserving previously recorded stage containers
-                    allocate(meta_vol3D_tmp(nstage2D))
-                    meta_vol3D_tmp(1:size(self%meta_vol3D)) = self%meta_vol3D
-                    call move_alloc(meta_vol3D_tmp, self%meta_vol3D)
-                end if
-                array_idx = nstage2D
-                self%meta_vol3D(array_idx)%is_final = .false.
-            end if
-            if( allocated(self%meta_vol3D(array_idx)%states) ) deallocate(self%meta_vol3D(array_idx)%states)
-            allocate(self%meta_vol3D(array_idx)%states(self%nstates3D))
-            n_valid_states3D = 0
-            do istate3D = 1, self%nstates3D
-                if( .not. spproj%isthere_in_osout('vol', istate3D) ) cycle
-                call spproj%get_vol('vol', istate3D, volpath, smpd3D, box3D)
-                if( volpath%strlen() == 0 ) cycle
-                n_valid_states3D = n_valid_states3D + 1
-                pop3D = spproj%os_ptcl3D%get_pop(istate3D, 'state')
-                if( l_final ) then
-                    volpath_out   = volpath
-                    lppath        = add2fbody(volpath, MRC_EXT, LP_SUFFIX)
-                    pprocpath     = add2fbody(volpath, MRC_EXT, PPROC_SUFFIX)
-                    if( .not. file_exists(pprocpath) ) pprocpath = string('')
-                    if( pprocpath%strlen() > 0 ) then
-                        pprocmirrpath = add2fbody(pprocpath, MRC_EXT, MIRR_SUFFIX)
-                        if( .not. file_exists(pprocmirrpath) ) pprocmirrpath = string('')
-                    else
-                        pprocmirrpath = string('')
-                    end if
-                else
-                    ! non-final stages only ever get a per-stage lowpass snapshot,
-                    ! e.g. recvol_state01_stage03_lp.mrc (simple_solve3D_utils exec_refine3D);
-                    ! volpath/pprocpath/pprocmirrpath are final-only products, withheld here
-                    volpath_out   = string('')
-                    lppath        = add2fbody(volpath, MRC_EXT, '_stage'//int2str_pad(nstage2D,2)//LP_SUFFIX)
-                    pprocpath     = string('')
-                    pprocmirrpath = string('')
-                end if
-                if( .not. file_exists(lppath) ) lppath = string('')
-                ! orthogonal reprojections + orientation-distribution heatmap jpegs, written
-                ! alongside the volume (as simple_stream_stage_solve3D%send_volumes finds them)
-                reprojpath = get_fpath(volpath) // string('orthogonal_reprojs_state') // int2str_pad(istate3D,2) // JPG_EXT
-                if( .not. file_exists(reprojpath) ) then
-                    reprojpath = string('')
-                else if( .not. l_final ) then
-                    ! shared filename gets overwritten by the next stage; copy it out so
-                    ! this stage's reprojections remain available, e.g. ..._state01_stage03.jpg
-                    reprojpath_stage = add2fbody(reprojpath, JPG_EXT, '_stage'//int2str_pad(nstage2D,2))
-                    call simple_copy_file(reprojpath, reprojpath_stage)
-                    reprojpath = reprojpath_stage
-                end if
-                oridistpath = get_fpath(volpath) // refine3D_oris_heatmap_fname(istate3D)
-                if( .not. file_exists(oridistpath) ) then
-                    oridistpath = string('')
-                else if( .not. l_final ) then
-                    ! shared filename gets overwritten by the next stage; copy it out so
-                    ! this stage's heatmap remains available, e.g. ..._state01_stage03.jpg
-                    oridistpath_stage = add2fbody(oridistpath, JPG_EXT, '_stage'//int2str_pad(nstage2D,2))
-                    call simple_copy_file(oridistpath, oridistpath_stage)
-                    oridistpath = oridistpath_stage
-                end if
-                call self%meta_vol3D(array_idx)%states(n_valid_states3D)%new(GUI_METADATA_VOL3D_TYPE)
-                l_have_fsc = .false.
-                res0143    = 0.
-                res05      = 0.
-                cfar       = 0.0
-                if( spproj%isthere_in_osout('fsc', istate3D) ) then
-                    call spproj%get_fsc(istate3D, fsc_fname, fsc_box)
-                    if( fsc_fname%strlen() > 0 ) then
-                        if( file_exists(fsc_fname) ) then
-                            fsc_arr    = file2rarr(fsc_fname)
-                            res_arr    = get_resarr(fsc_box, smpd3D)
-                            call get_resolution(fsc_arr, res_arr, res05, res0143)
-                            do iptcl3D = 1, spproj%os_ptcl3D%get_noris()
-                              if( spproj%os_ptcl3D%get_state(iptcl3D) /= istate3D ) cycle
-                              if( .not. spproj%os_ptcl3D%isthere(iptcl3D, 'cfar') ) cycle
-                              cfar = spproj%os_ptcl3D%get(iptcl3D, 'cfar')
-                              exit
-                            enddo
-                            l_have_fsc = .true.
-                        end if
-                    end if
-                end if
-                if( l_have_fsc ) then
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set(reprojpath, volpath_out, pprocpath, lppath, pprocmirrpath, &
-                        &istate3D, box3D, smpd3D, n_valid_states3D, self%nstates3D, res0143=res0143, res05=res05, cfar=cfar, pop=pop3D, oridistpath=oridistpath)
-                    n_fsc_pts = min(size(fsc_arr), 1000)
-                    allocate(invres_arr(n_fsc_pts))
-                    do k = 1, n_fsc_pts
-                        invres_arr(k) = 1.0 / res_arr(k)
-                    end do
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_fsc(invres_arr(1:n_fsc_pts), fsc_arr(1:n_fsc_pts))
-                    deallocate(invres_arr)
-                else
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set(reprojpath, volpath_out, pprocpath, lppath, pprocmirrpath, &
-                        &istate3D, box3D, smpd3D, n_valid_states3D, self%nstates3D, pop=pop3D, oridistpath=oridistpath)
-                end if
-                ! MRC header min/max, read once here so GUI consumers don't need to
-                ! reopen each volume file per request
-                if( volpath_out%strlen() > 0 ) then
-                    call get_mrc_minmax(volpath_out, minval3D, maxval3D)
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('volpath', minval3D, maxval3D)
-                end if
-                if( pprocpath%strlen() > 0 ) then
-                    call get_mrc_minmax(pprocpath, minval3D, maxval3D)
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('pprocpath', minval3D, maxval3D)
-                end if
-                if( lppath%strlen() > 0 ) then
-                    call get_mrc_minmax(lppath, minval3D, maxval3D)
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('lppath', minval3D, maxval3D)
-                end if
-                if( pprocmirrpath%strlen() > 0 ) then
-                    call get_mrc_minmax(pprocmirrpath, minval3D, maxval3D)
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_minmax('pprocmirrpath', minval3D, maxval3D)
-                end if
-                if( reprojpath%strlen() > 0 ) then
-                    do itile3D = 1, NTILES3D
-                        call reproj_tiles3D(itile3D)%new(GUI_METADATA_CAVG2D_TYPE)
-                        call reproj_tiles3D(itile3D)%set(path=reprojpath, mrcpath=volpath, idx=istate3D, &
-                            &sprite=sprite_sheet_pos(x=real(itile3D-1)*(100.0/real(NTILES3D-1)), y=0.0, h=100, w=100*NTILES3D), &
-                            &i=itile3D, i_max=NTILES3D, pop=pop3D)
-                    end do
-                    call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_reprojtiles(reproj_tiles3D)
-                end if
-                ! this state's particle orientations as the azimuth/elevation histogram
-                call self%meta_vol3D(array_idx)%states(n_valid_states3D)%set_oridist_from_oris(spproj%os_ptcl3D, istate3D)
-            end do
-            ! trim unused (unassigned) slots left by states with no volume yet
-            if( n_valid_states3D < self%nstates3D ) then
-                allocate(vol3D_tmp(n_valid_states3D))
-                vol3D_tmp = self%meta_vol3D(array_idx)%states(1:n_valid_states3D)
-                call move_alloc(vol3D_tmp, self%meta_vol3D(array_idx)%states)
-            end if
-        end if
-    end if
+  end subroutine set_project
 
-  end subroutine set
+  ! Start an update: the movie, micrograph and particle lists are dropped, and so are the 2D and
+  ! 3D stages when @p stage is 1, the first of a new run. The counts and sizes are kept.
+  subroutine start_update( self, stage )
+    class(gui_metadata_project), intent(inout) :: self
+    integer,                     intent(in)    :: stage
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( allocated(self%meta_movies)      ) deallocate(self%meta_movies)
+    if( allocated(self%meta_micrographs) ) deallocate(self%meta_micrographs)
+    if( allocated(self%meta_ptcls)       ) deallocate(self%meta_ptcls)
+    if( stage == 1 )then
+      if( allocated(self%meta_cavg2D) ) deallocate(self%meta_cavg2D)
+      if( allocated(self%meta_vol3D)  ) deallocate(self%meta_vol3D)
+    endif
+  end subroutine start_update
+
+  ! Set the counts and sizes given; the others keep their values.
+  subroutine set_summary( self, nmics, nmics_selected, nstks, nptcls, nptcls_selected, ncls2D, ncls2D_selected, nstates3D, pspec_size )
+    class(gui_metadata_project), intent(inout) :: self
+    integer, optional,           intent(in)    :: nmics, nmics_selected, nstks, nptcls, nptcls_selected
+    integer, optional,           intent(in)    :: ncls2D, ncls2D_selected, nstates3D, pspec_size
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( present(nmics)           ) self%nmics           = nmics
+    if( present(nmics_selected)  ) self%nmics_selected  = nmics_selected
+    if( present(nstks)           ) self%nstks           = nstks
+    if( present(nptcls)          ) self%nptcls          = nptcls
+    if( present(nptcls_selected) ) self%nptcls_selected = nptcls_selected
+    if( present(ncls2D)          ) self%ncls2D          = ncls2D
+    if( present(ncls2D_selected) ) self%ncls2D_selected = ncls2D_selected
+    if( present(nstates3D)       ) self%nstates3D       = nstates3D
+    if( present(pspec_size)      ) self%pspec_size      = pspec_size
+  end subroutine set_summary
+
+  ! The movie thumbnails.
+  subroutine set_movies( self, movies )
+    class(gui_metadata_project),   intent(inout) :: self
+    type(gui_metadata_micrograph), intent(in)    :: movies(:)
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    self%meta_movies = movies
+  end subroutine set_movies
+
+  ! The micrographs shown, with the dimensions (pixels) and pixel size (A) of the micrographs.
+  subroutine set_micrographs( self, micrographs, xdim, ydim, smpd )
+    class(gui_metadata_project),   intent(inout) :: self
+    type(gui_metadata_micrograph), intent(in)    :: micrographs(:)
+    integer,                       intent(in)    :: xdim, ydim
+    real,                          intent(in)    :: smpd
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    self%meta_micrographs = micrographs
+    self%xdim_mic         = xdim
+    self%ydim_mic         = ydim
+    self%smpd_mic         = smpd
+  end subroutine set_micrographs
+
+  ! The particle sample: the montage @p ptcls_jpg and one entry per tile.
+  subroutine set_particles( self, ptcls_jpg, ptcls )
+    class(gui_metadata_project), intent(inout) :: self
+    type(string),                intent(in)    :: ptcls_jpg
+    type(gui_metadata_ptcl),     intent(in)    :: ptcls(:)
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    self%ptcls_jpg    = ptcls_jpg%to_char()
+    self%nptcls_shown = size(ptcls)
+    self%meta_ptcls   = ptcls
+  end subroutine set_particles
+
+  ! The class averages of a 2D stage (0 the final one), with the class-average box (pixels), the
+  ! mask diameter (A) and the box in A.
+  subroutine set_cavgs2D( self, stage, cavgs, dim_cavgs, mskdiam, mskscale )
+    class(gui_metadata_project), intent(inout) :: self
+    integer,                     intent(in)    :: stage
+    type(gui_metadata_cavg2D),   intent(in)    :: cavgs(:)
+    integer,                     intent(in)    :: dim_cavgs
+    real,                        intent(in)    :: mskdiam, mskscale
+    type(gui_metadata_cavg2D_stage), allocatable :: tmp(:)
+    integer :: islot, nslots
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final one')
+    if( allocated(self%meta_cavg2D) )then
+      call stage_slot(self%meta_cavg2D%is_final, stage, islot, nslots)
+      if( nslots > size(self%meta_cavg2D) )then
+        allocate(tmp(nslots))
+        tmp(1:size(self%meta_cavg2D)) = self%meta_cavg2D
+        call move_alloc(tmp, self%meta_cavg2D)
+      endif
+    else
+      call stage_slot([logical ::], stage, islot, nslots)
+      allocate(self%meta_cavg2D(nslots))
+    endif
+    self%meta_cavg2D(islot)%is_final = stage == 0
+    self%meta_cavg2D(islot)%cavgs    = cavgs
+    self%dim_cavgs = dim_cavgs
+    self%mskdiam   = mskdiam
+    self%mskscale  = mskscale
+  end subroutine set_cavgs2D
+
+  ! The state volumes of a 3D stage (0 the final one).
+  subroutine set_vols3D( self, stage, vols )
+    class(gui_metadata_project), intent(inout) :: self
+    integer,                     intent(in)    :: stage
+    type(gui_metadata_vol3D),    intent(in)    :: vols(:)
+    type(gui_metadata_vol3D_stage), allocatable :: tmp(:)
+    integer :: islot, nslots
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final one')
+    if( allocated(self%meta_vol3D) )then
+      call stage_slot(self%meta_vol3D%is_final, stage, islot, nslots)
+      if( nslots > size(self%meta_vol3D) )then
+        allocate(tmp(nslots))
+        tmp(1:size(self%meta_vol3D)) = self%meta_vol3D
+        call move_alloc(tmp, self%meta_vol3D)
+      endif
+    else
+      call stage_slot([logical ::], stage, islot, nslots)
+      allocate(self%meta_vol3D(nslots))
+    endif
+    self%meta_vol3D(islot)%is_final = stage == 0
+    self%meta_vol3D(islot)%states   = vols
+  end subroutine set_vols3D
+
+  ! The slot of @p stage in a stage array whose slots' final flags are @p is_final: stage s >= 1
+  ! is slot s; stage 0 is the final slot, reused when there is one and appended otherwise.
+  ! @p nslots is the size the array needs.
+  subroutine stage_slot( is_final, stage, islot, nslots )
+    logical, intent(in)  :: is_final(:)
+    integer, intent(in)  :: stage
+    integer, intent(out) :: islot, nslots
+    nslots = size(is_final)
+    if( stage == 0 )then
+      islot = findloc(is_final, .true., 1)
+      if( islot == 0 )then
+        nslots = nslots + 1
+        islot  = nslots
+      endif
+    else
+      islot  = stage
+      nslots = max(nslots, stage)
+    endif
+  end subroutine stage_slot
+
+  !---------------- getters ----------------
 
   ! Retrieve the project name, project file path, segment record counts, and
   ! created timestamp. Returns .true. if the object has been assigned.
@@ -604,10 +250,22 @@ contains
     created    = self%created
   end function get
 
+  !---------------- serialisation ----------------
+
+  ! The record's allocatable components would travel as descriptors of this process's memory:
+  ! it is jsonised in-process only, and never sent over a pipe.
+  subroutine serialise_override( self, buffer )
+    class(gui_metadata_project),           intent(in)    :: self
+    character(len=:),         allocatable, intent(inout) :: buffer
+    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    if( allocated(buffer) ) deallocate(buffer)
+    THROW_HARD('gui_metadata_project holds allocatable components and is jsonised in-process only')
+  end subroutine serialise_override
+
   ! Serialise all fields to a JSON object. Returns a null pointer when
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_project), intent(inout) :: self
+    class(gui_metadata_project), intent(in)    :: self
     type(json_core)                            :: json
     type(json_value),             pointer      :: json_ptr, json_mics_ptr, json_cls2D_ptr, json_stage_ptr, json_ptcls_ptr
     type(json_value),             pointer      :: json_cls3D_ptr

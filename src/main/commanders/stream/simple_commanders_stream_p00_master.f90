@@ -47,7 +47,7 @@ use simple_memory_monitor,                              only: mem_monitor_init, 
 use simple_stream_master_stage_ids,                     only: NSTAGES, STAGE_PREPROCESS, STAGE_ASSIGN_OPTICS, STAGE_INITIAL_ANALYSIS,&
                                                              &STAGE_REFERENCE_PICKING, STAGE_PARTICLE_SIEVING, STAGE_POOL2D,&
                                                              &STAGE_SOLVE3D
-use simple_stream_master_stage,                         only: stream_master_stage
+use simple_stream_master_stage,                         only: stream_master_stage, fork_gui_status
 use simple_stream_master_resources,                     only: stream_resources, stream_resources_from_env
 use simple_stream_master_meta_store,                    only: stream_master_meta_store
 use simple_stream_master_gui_commands,                  only: stream_master_gui_commands
@@ -241,10 +241,12 @@ contains
         ! did not accept (no answer, or a status other than 200) may not have been read: the next
         ! one sends everything again, not only what changed since.
         subroutine send_heartbeat()
-            call assembler%assemble_stream_heartbeat(shared%stages(STAGE_PREPROCESS)%fork,&
-                &shared%stages(STAGE_ASSIGN_OPTICS)%fork, shared%stages(STAGE_INITIAL_ANALYSIS)%fork,&
-                &shared%stages(STAGE_REFERENCE_PICKING)%fork, shared%stages(STAGE_PARTICLE_SIEVING)%fork,&
-                &shared%stages(STAGE_POOL2D)%fork, shared%stages(STAGE_SOLVE3D)%fork,&
+            call assembler%assemble_stream_heartbeat(fork_gui_status(shared%stages(STAGE_PREPROCESS)%fork),&
+                &fork_gui_status(shared%stages(STAGE_ASSIGN_OPTICS)%fork),&
+                &fork_gui_status(shared%stages(STAGE_INITIAL_ANALYSIS)%fork),&
+                &fork_gui_status(shared%stages(STAGE_REFERENCE_PICKING)%fork),&
+                &fork_gui_status(shared%stages(STAGE_PARTICLE_SIEVING)%fork),&
+                &fork_gui_status(shared%stages(STAGE_POOL2D)%fork), fork_gui_status(shared%stages(STAGE_SOLVE3D)%fork),&
                 &n_active_persistent_workers=qsys%get_n_active_persistent_workers())
             call lock(shared%meta_mutex)
             call shared%store%assemble(assembler)

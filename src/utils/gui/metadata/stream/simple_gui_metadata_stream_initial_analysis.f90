@@ -1,10 +1,10 @@
-!@descr: GUI metadata for the stream initial analysis stage — particle counts, masking parameters, and user-input flag
+!@descr: GUI metadata for the stream initial analysis stage — particle counts and masking parameters
 ! Filled by stream p03 (send_initial_analysis_status). particles_rejected = imported - accepted;
 ! last_particles_imported is a Unix timestamp, stamped when particles_imported changes.
 ! mask_diam is in A; mask_scale (JSON mskscale) is the box size in A, for overlay scaling.
+! The assembler sends it under the JSON key opening2D, which NICE reads.
 module simple_gui_metadata_stream_initial_analysis
   use unix,                     only: c_long, c_time
-  use json_kinds
   use json_module,              only: json_core, json_value
   use simple_defs,              only: STDLEN
   use simple_string,            only: string
@@ -28,11 +28,9 @@ module simple_gui_metadata_stream_initial_analysis
     integer               :: cycle                        = 0       ! initial analysis plan cycle index
     integer               :: last_particles_imported      = 0       ! Unix timestamp of most recent import event
     real                  :: mask_scale                   = 0.0     ! box size in A (box_size * smpd)
-    logical               :: user_input                   = .false. ! .true. once the user has supplied input
   contains
     procedure :: kill => kill_override
     procedure :: set
-    procedure :: set_user_input
     procedure :: get
     procedure :: jsonise => jsonise_override
   end type gui_metadata_stream_initial_analysis
@@ -44,11 +42,11 @@ contains
   ! count changes.
   subroutine set( self, stage, particles_imported, particles_accepted, mask_diam, box_size, mask_scale, cycle )
     class(gui_metadata_stream_initial_analysis), intent(inout) :: self
-    type(string),                         intent(in)    :: stage
-    integer,                              intent(in)    :: particles_imported, particles_accepted
-    integer,                              intent(in)    :: mask_diam, box_size
-    real,                                 intent(in)    :: mask_scale
-    integer,                              intent(in)    :: cycle
+    type(string),                                intent(in)    :: stage
+    integer,                                     intent(in)    :: particles_imported, particles_accepted
+    integer,                                     intent(in)    :: mask_diam, box_size
+    real,                                        intent(in)    :: mask_scale
+    integer,                                     intent(in)    :: cycle
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     self%l_assigned          = .true.
     self%stage               = stage%to_char()
@@ -63,23 +61,14 @@ contains
     self%cycle               = cycle
   end subroutine set
 
-  ! Set the user-input flag. May be called independently of set().
-  subroutine set_user_input( self, user_input )
-    class(gui_metadata_stream_initial_analysis), intent(inout) :: self
-    logical,                              intent(in)    :: user_input
-    if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
-    self%l_assigned = .true.
-    self%user_input = user_input
-  end subroutine set_user_input
-
   ! Retrieve particle counts and the last-import timestamp.
   ! Returns .true. if the object has been assigned.
   function get( self, stage, particles_imported, particles_accepted, last_particles_imported ) result( l_assigned )
-    class(gui_metadata_stream_initial_analysis), intent(inout) :: self
-    type(string),                         intent(out)   :: stage
-    integer,                              intent(out)   :: particles_imported, particles_accepted
-    integer,                              intent(out)   :: last_particles_imported
-    logical                                             :: l_assigned
+    class(gui_metadata_stream_initial_analysis), intent(in)  :: self
+    type(string),                                intent(out) :: stage
+    integer,                                     intent(out) :: particles_imported, particles_accepted
+    integer,                                     intent(out) :: last_particles_imported
+    logical                                                  :: l_assigned
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned              = self%l_assigned
     stage                   = trim(self%stage)
@@ -91,9 +80,9 @@ contains
   ! Serialise all fields to a JSON object. Returns a null pointer when
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_initial_analysis), intent(inout) :: self
-    type(json_core)                                     :: json
-    type(json_value),                     pointer       :: json_ptr
+    class(gui_metadata_stream_initial_analysis), intent(in) :: self
+    type(json_core)                                         :: json
+    type(json_value),                            pointer    :: json_ptr
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( self%l_assigned ) then
       call json%create_object(json_ptr, '')
@@ -106,7 +95,6 @@ contains
       call json%add(json_ptr, 'box_size',                 self%box_size                  )
       call json%add(json_ptr, 'cycle',                    self%cycle                     )
       call json%add(json_ptr, 'mskscale',                 dble(self%mask_scale)          )
-      call json%add(json_ptr, 'user_input',               self%user_input                )
     else
       nullify(json_ptr)
     end if

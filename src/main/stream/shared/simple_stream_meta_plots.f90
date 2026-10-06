@@ -8,14 +8,18 @@
 !   fills a GUI metadata object; sending it is the caller's business.
 !
 !   Lives on the stream side rather than in src/utils/gui/metadata because it
-!   reads oris, and utils must not depend on src/main.
+!   reads oris: the GUI metadata types import nothing that reaches src/main, so
+!   the stages and the master can use them cheaply.
+!
+!   A plot holds MAX_TIMEPLOT_POINTS points: the windowed plots widen their
+!   window to keep the whole run, the rate plot keeps its newest intervals.
 !==============================================================================
 module simple_stream_meta_plots
 use simple_oris,                    only: oris
 use simple_string,                  only: string
 use simple_histogram,               only: histogram
 use simple_gui_metadata_histogram,  only: gui_metadata_histogram
-use simple_gui_metadata_timeplot,   only: gui_metadata_timeplot
+use simple_gui_metadata_timeplot,   only: gui_metadata_timeplot, MAX_TIMEPLOT_POINTS
 implicit none
 
 public :: set_histogram_from_oris, set_timeplot_from_oris, set_rate_timeplot, recent_shifts_by_optics_group
@@ -47,7 +51,8 @@ contains
         call hist%kill()
     end subroutine set_histogram_from_oris
 
-    !> Mean and standard deviation of @p key over consecutive windows of @p window entries of @p os.
+    !> Mean and standard deviation of @p key over consecutive windows of @p window entries of @p os,
+    !! or of more entries when the windows would not fit in a plot; labelled 1, 2, ...
     subroutine set_timeplot_from_oris( meta, os, key, window )
         class(gui_metadata_timeplot), intent(inout) :: meta
         class(oris),                  intent(inout) :: os
@@ -55,15 +60,16 @@ contains
         integer,                      intent(in)    :: window
         real, allocatable :: labels(:), avgs(:), sdevs(:)
         real    :: ave, sdev, var
-        integer :: n, nwin, iwin, fromto(2)
+        integer :: n, win, nwin, iwin, fromto(2)
         logical :: err
         n = os%get_noris()
         if( n == 0 .or. window <= 0 ) return
-        nwin = ceiling(real(n) / real(window))
+        win  = max(window, ceiling(real(n) / real(MAX_TIMEPLOT_POINTS)))
+        nwin = ceiling(real(n) / real(win))
         allocate(labels(nwin), avgs(nwin), sdevs(nwin))
         do iwin = 1,nwin
-            fromto(1) = (iwin - 1) * window + 1
-            fromto(2) = min(iwin * window, n)
+            fromto(1) = (iwin - 1) * win + 1
+            fromto(2) = min(iwin * win, n)
             call os%stats(key, ave, sdev, var, err, fromto)
             labels(iwin) = real(iwin)
             avgs(iwin)   = ave
@@ -72,17 +78,20 @@ contains
         call meta%set(name=string(key), labels=labels, data=avgs, data2=sdevs)
     end subroutine set_timeplot_from_oris
 
-    !> One point per rate interval of a stream_watcher (movies per hour).
+    !> One point per rate interval of a stream_watcher (movies per hour), for the newest
+    !! MAX_TIMEPLOT_POINTS intervals, each labelled with its interval's number.
     subroutine set_rate_timeplot( meta, rates )
         class(gui_metadata_timeplot), intent(inout) :: meta
         integer,                      intent(in)    :: rates(:)
         real, allocatable :: labels(:), data(:)
-        integer :: i
+        integer :: i, first, n
         if( size(rates) == 0 ) return
-        allocate(labels(size(rates)), data(size(rates)))
-        do i = 1,size(rates)
-            labels(i) = real(i)
-            data(i)   = real(rates(i))
+        first = max(1, size(rates) - MAX_TIMEPLOT_POINTS + 1)
+        n     = size(rates) - first + 1
+        allocate(labels(n), data(n))
+        do i = 1,n
+            labels(i) = real(first + i - 1)
+            data(i)   = real(rates(first + i - 1))
         enddo
         call meta%set(name=string('rate'), labels=labels, data=data)
     end subroutine set_rate_timeplot

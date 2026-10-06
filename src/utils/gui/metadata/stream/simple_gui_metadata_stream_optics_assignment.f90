@@ -3,7 +3,6 @@
 ! changes.
 module simple_gui_metadata_stream_optics_assignment
   use unix,                     only: c_long, c_time
-  use json_kinds
   use json_module,              only: json_core, json_value
   use simple_string,            only: string
   use simple_defs,              only: STDLEN
@@ -50,7 +49,7 @@ contains
 
   ! Retrieve all fields. Returns .true. if the object has been assigned.
   function get( self, stage, micrographs_assigned, optics_groups_assigned, last_import_time, micrographs_imported ) result( l_assigned )
-    class(gui_metadata_stream_optics_assignment), intent(inout) :: self
+    class(gui_metadata_stream_optics_assignment), intent(in)    :: self
     type(string),                                 intent(out)   :: stage
     integer,                                      intent(out)   :: micrographs_assigned, optics_groups_assigned
     integer,                                      intent(out)   :: last_import_time
@@ -68,7 +67,7 @@ contains
   ! Serialise all fields to a JSON object. Returns a null pointer when
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_optics_assignment), intent(inout) :: self
+    class(gui_metadata_stream_optics_assignment), intent(in)    :: self
     type(json_core)                                             :: json
     type(json_value),                             pointer       :: json_ptr
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')

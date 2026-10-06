@@ -65,8 +65,9 @@ Start with these files and directories:
 | Stream UI group | `src/main/ui/simple_ui_stream_group.f90` | Registers stream GUI programs. |
 | UI JSON printer | `src/main/ui/simple_ui.f90` | Implements `print_ui_json` and stream UI JSON output. |
 | Private exec | `production/simple_private_exec.f90` | Dispatches `print_ui_json` and `print_ui_stream`. |
-| GUI metadata | `src/utils/gui/metadata/` | Typed Fortran metadata objects that serialize to JSON. |
+| GUI metadata | `src/utils/gui/metadata/` | Typed Fortran metadata objects that serialize to JSON; they import nothing that reaches `src/main`. |
 | GUI assembler | `src/utils/gui/simple_gui_assembler.f90` | Newer stream-side JSON assembly with change detection. |
+| Project builder | `src/utils/gui/simple_gui_project_builder.f90` | Fills the batch project metadata from an `sp_project` and writes the previews it shows. |
 | Stream communicator | `src/utils/comm/simple_stream_communicator.f90` | HTTP communicator used by stream stages. |
 | Legacy NICE comm | `src/utils/gui/simple_nice.f90` | Older socket/thread communication object used by several batch commanders. |
 | GUI tests | `src/utils/gui/metadata/simple_gui_metadata_tester.f90` and `src/utils/gui/simple_gui_assembler_tester.f90` | Fortran-side GUI metadata tests: the `GUI metadata` and `GUI assembler` sub-suites of `simple_test_exec test=unit_ui`. |

@@ -1,5 +1,5 @@
 !@descr: GUI metadata type for a labelled histogram.
-! Up to 512 bins of real labels and integer counts; jsonise emits {labels:[...], data:[...]} as an
+! Up to MAX_HISTOGRAM_BINS bins of real labels and integer counts; jsonise emits {labels:[...], data:[...]} as an
 ! object named after the histogram (name is the key, not a field).
 module simple_gui_metadata_histogram
 use json_module,              only: json_core, json_value
@@ -10,15 +10,17 @@ use simple_gui_metadata_base, only: gui_metadata_base
 
 implicit none
 
-public :: gui_metadata_histogram
+public :: gui_metadata_histogram, MAX_HISTOGRAM_BINS
 private
 #include "simple_local_flags.inc"
+
+integer, parameter :: MAX_HISTOGRAM_BINS = 512 ! bins a histogram holds
 
 type, extends( gui_metadata_base ) :: gui_metadata_histogram
   private
   character(len=SHORTSTRLEN) :: name     = ''   ! display name for the histogram
-  real                       :: labels(512) = 0. ! bin boundary / centre values
-  integer                    :: data(512)   = 0  ! bin counts
+  real                       :: labels(MAX_HISTOGRAM_BINS) = 0. ! bin boundary / centre values
+  integer                    :: data(MAX_HISTOGRAM_BINS)   = 0  ! bin counts
   integer                    :: n_labels = 0    ! number of populated bins
 contains
   procedure :: kill => kill_override
@@ -32,7 +34,7 @@ contains
   !---------------- setters ----------------
 
   ! Set the histogram name, labels, and data arrays; arrays must be the same
-  ! length and must not exceed 512 elements.
+  ! length and must not exceed MAX_HISTOGRAM_BINS elements.
   subroutine set( self, name, labels, data )
     class(gui_metadata_histogram),              intent(inout) :: self
     type(string),                               intent(in)    :: name
@@ -70,7 +72,7 @@ contains
   ! Emit name, labels array, and data array as a JSON object.
   ! Returns a null pointer when the object has not been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_histogram), intent(inout) :: self
+    class(gui_metadata_histogram), intent(in)    :: self
     type(json_core)                              :: json
     type(json_value),              pointer       :: json_ptr, json_labels_ptr, json_data_ptr
     integer                                      :: i

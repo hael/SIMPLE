@@ -36,6 +36,7 @@ contains
     call test_jsonise_cavg2D()
     call test_set_get_vol3D()
     call test_serialise_vol3D()
+    call test_serialise_vol3D_tiles()
     call test_jsonise_vol3D()
     call test_set_get_ptcl()
     call test_serialise_ptcl()
@@ -66,8 +67,10 @@ contains
     call test_jsonise_stream_pool2D()
     call test_set_get_stream_pool2D_snapshot()
     call test_serialise_stream_pool2D_snapshot()
-    call test_serialise_stream_solve3D_multistate()
     call test_jsonise_stream_pool2D_snapshot()
+    call test_set_get_stream_solve3D_multistate()
+    call test_serialise_stream_solve3D_multistate()
+    call test_jsonise_stream_solve3D_multistate()
   end subroutine run_all_gui_metadata_tests
 
   !---------------- base ----------------
@@ -669,6 +672,36 @@ contains
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_serialise_vol3D
 
+  ! Verify that a volume with reprojection tiles is serialised without them (their descriptor
+  ! would point into this process's memory), and that the copy holds every other field.
+  subroutine test_serialise_vol3D_tiles()
+    character(len=:),         allocatable :: buffer
+    type(gui_metadata_vol3D)              :: meta, plain, copy
+    type(gui_metadata_cavg2D)             :: tiles(3)
+    integer                               :: itile
+    write(*,'(A)') 'test_serialise_vol3D_tiles'
+    call meta%new(GUI_METADATA_VOL3D_TYPE)
+    call meta%set(reprojpath=string('/test/path/to/vol_reproj.mrc'), volpath=string('/test/path/to/vol.mrc'), &
+                 &pprocpath=string('/test/path/to/vol_pproc.mrc'), lppath=string('/test/path/to/vol_lp.mrc'), &
+                 &pprocmirrpath=string('/test/path/to/vol_pproc_mirr.mrc'), state=1, box=256, smpd=1.5, &
+                 &i=1, i_max=1, res0143=3.5, res05=6.5, pop=5000)
+    plain = meta
+    do itile = 1, 3
+      call tiles(itile)%new(GUI_METADATA_CAVG2D_TYPE)
+      call tiles(itile)%set(path=string('/test/path/to/reprojs.jpg'), mrcpath=string('/test/path/to/vol.mrc'), idx=1, &
+                           &sprite=sprite_sheet_pos(x=real(itile-1)*50., y=0., h=100, w=300), i=itile, i_max=3)
+    end do
+    call meta%set_reprojtiles(tiles)
+    call assert_true(index(json_text(meta), 'reprojtiles') > 0, 'the volume holds its tiles')
+    call meta%serialise(buffer=buffer)
+    call assert_int(len(buffer), int(sizeof(meta), kind=4), 'buffer correct size')
+    copy = transfer(buffer, copy)
+    call assert_char(json_text(plain), json_text(copy), 'a received copy holds every field but the tiles')
+    call meta%kill()
+    call plain%kill()
+    call copy%kill()
+  end subroutine test_serialise_vol3D_tiles
+
   ! Verify the vol3D JSON output via buffer length and FNV-1a hash.
   subroutine test_jsonise_vol3D()
     character(kind=CK, len=:), allocatable :: buffer
@@ -1245,8 +1278,7 @@ contains
   !---------------- stream initial analysis ----------------
 
   ! Verify that all stream initial analysis fields round-trip, including
-  ! the separately set user_input flag and the auto-populated
-  ! last_particles_imported timestamp.
+  ! the auto-populated last_particles_imported timestamp.
   subroutine test_set_get_stream_initial_analysis()
     type(gui_metadata_stream_initial_analysis) :: meta
     type(string)                        :: stage
@@ -1257,7 +1289,6 @@ contains
     call assert_int(meta%type(), GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE, 'type is set correctly')
     call meta%set(stage=string('test stage'), particles_imported=50000, particles_accepted=42000, &
                   mask_diam=160, box_size=256, mask_scale=0.75, cycle=2)
-    call meta%set_user_input(.true.)
     call assert_true(meta%assigned(), 'metadata object is set')
     call assert_true(meta%get(stage=stage, particles_imported=particles_imported,           &
                               particles_accepted=particles_accepted,                        &
@@ -1327,33 +1358,29 @@ contains
   !---------------- stream particle sieving ----------------
 
   ! Verify that all particle-sieving fields round-trip through set/get,
-  ! including the separately set user_input flag and the ref-selection array.
+  ! with the class selection set beside them.
   subroutine test_set_get_stream_particle_sieving()
     type(gui_metadata_stream_particle_sieving) :: meta
     type(string) :: stage
     integer      :: particles_imported, particles_accepted, particles_rejected, last_import_time
-    logical      :: user_input
     write(*,'(A)') 'test_set_get_stream_particle_sieving'
     call meta%new(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
     call assert_true(meta%initialized(), 'type is initialised')
     call assert_int(meta%type(), GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE, 'type is set correctly')
     call meta%set(stage=string('sieving'), particles_imported=10000, &
                   particles_accepted=8000, particles_rejected=2000)
-    call meta%set_user_input(.true.)
     call meta%set_selection(3)
     call meta%set_selection(7)
     call assert_true(meta%assigned(), 'metadata object is set')
     call assert_true(meta%get(stage=stage, particles_imported=particles_imported,     &
                               particles_accepted=particles_accepted,                  &
                               particles_rejected=particles_rejected,                  &
-                              last_import_time=last_import_time,                      &
-                              user_input=user_input), 'metadata retrieved')
+                              last_import_time=last_import_time), 'metadata retrieved')
     call assert_char(stage%to_char(), 'sieving', 'stage set/get correctly')
     call assert_int(particles_imported,  10000,  'particles_imported set/get correctly')
     call assert_int(particles_accepted,   8000,  'particles_accepted set/get correctly')
     call assert_int(particles_rejected,   2000,  'particles_rejected set/get correctly')
     call assert_true(last_import_time > 0,       'last_import_time is set')
-    call assert_true(user_input,                 'user_input set/get correctly')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_set_get_stream_particle_sieving
@@ -1405,7 +1432,7 @@ contains
     call assert_true(len(buffer) > 0, 'json output is non-empty')
     json_str = buffer
     json_hash = json_str%to_fnv1a_hash64()
-    call assert_char(json_hash%to_char(), '743600493199B0C3', 'json is stable')
+    call assert_char(json_hash%to_char(), 'B4647FCF3A8461C6', 'json is stable')
     call meta%kill()
     call assert_true(.not.meta%initialized(), 'type is not initialised')
     call json%destroy(json_ptr)
@@ -1431,7 +1458,6 @@ contains
     call meta%set(stage=string('pool2D'), iteration=3, particles_imported=20000, &
                   particles_accepted=16000, particles_rejected=4000, mskdiam=180, mskscale=0.5, resolution=3.5)
     call meta%set_user_input(.true.)
-    call meta%set_initial_ref_selection(2)
     call assert_true(meta%assigned(), 'metadata object is set')
     call assert_true(meta%get(stage=stage, iteration=iteration,                      &
                               particles_imported=particles_imported,                  &
@@ -1586,6 +1612,33 @@ contains
   end subroutine test_jsonise_stream_pool2D_snapshot
 
   ! The multistate 3D status survives serialisation, as every type a stage sends must.
+  ! Verify that the multistate solve3D fields round-trip through set/get, with the
+  ! auto-populated last_import_time.
+  subroutine test_set_get_stream_solve3D_multistate()
+    type(gui_metadata_stream_solve3D_multistate) :: meta
+    type(string) :: stage
+    integer      :: solve3D_stage, refine_iteration, nstates, particles_imported, particles_at_last_refine
+    integer      :: last_import_time
+    real         :: resolution
+    write(*,'(A)') 'test_set_get_stream_solve3D_multistate'
+    call meta%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
+    call meta%set(stage=string('running solve3D'), solve3D_stage=1, refine_iteration=2, nstates=2,&
+        &particles_imported=1000, particles_at_last_refine=800, resolution=6.5)
+    call assert_true(meta%get(stage=stage, solve3D_stage=solve3D_stage, refine_iteration=refine_iteration,&
+        &nstates=nstates, particles_imported=particles_imported, particles_at_last_refine=particles_at_last_refine,&
+        &last_import_time=last_import_time, resolution=resolution), 'metadata retrieved')
+    call assert_char(stage%to_char(), 'running solve3D', 'stage set/get correctly')
+    call assert_int(solve3D_stage,              1,    'solve3D_stage set/get correctly')
+    call assert_int(refine_iteration,           2,    'refine_iteration set/get correctly')
+    call assert_int(nstates,                    2,    'nstates set/get correctly')
+    call assert_int(particles_imported,         1000, 'particles_imported set/get correctly')
+    call assert_int(particles_at_last_refine,   800,  'particles_at_last_refine set/get correctly')
+    call assert_true(last_import_time > 0,            'last_import_time is set')
+    call assert_true(resolution == 6.5,               'resolution set/get correctly')
+    call meta%kill()
+    call assert_true(.not.meta%initialized(), 'type is not initialised')
+  end subroutine test_set_get_stream_solve3D_multistate
+
   subroutine test_serialise_stream_solve3D_multistate()
     character(len=:), allocatable                :: buffer
     type(gui_metadata_stream_solve3D_multistate) :: meta, copy
@@ -1602,9 +1655,40 @@ contains
     call assert_true(.not.meta%initialized(), 'type is not initialised')
   end subroutine test_serialise_stream_solve3D_multistate
 
+  ! jsonise embeds last_import_time (live Unix timestamp) so the timestamp field is zeroed
+  ! before hashing; the per-state stats follow as 'states'.
+  subroutine test_jsonise_stream_solve3D_multistate()
+    character(kind=CK, len=:),                   allocatable :: buffer
+    type(gui_metadata_stream_solve3D_multistate)             :: meta
+    type(json_core)                                          :: json
+    type(json_value),                            pointer     :: json_ptr
+    type(string)                                             :: json_str, json_hash
+    logical                                                  :: found
+    write(*,'(A)') 'test_jsonise_stream_solve3D_multistate'
+    call json%initialize(no_whitespace=.true., compact_reals=.true.)
+    call meta%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
+    call meta%set(stage=string('running solve3D'), solve3D_stage=1, refine_iteration=2, nstates=2,&
+        &particles_imported=1000, particles_at_last_refine=800, resolution=6.5)
+    call meta%set_state_stats(1, 600, 4.5)
+    call meta%set_state_stats(2, 400, 5.25)
+    json_ptr => meta%jsonise()
+    call assert_true(associated(json_ptr), 'json pointer is associated')
+    call json%update(json_ptr, 'last_import_time', 0, found)
+    call assert_true(found, 'last_import_time field found')
+    call json%print_to_string(json_ptr, buffer)
+    call assert_int(len(buffer), 289, 'buffer correct size')
+    json_str  = buffer
+    json_hash = json_str%to_fnv1a_hash64()
+    call assert_char(json_hash%to_char(), '635B82E4D421D574', 'json is stable')
+    call meta%kill()
+    call json%destroy(json_ptr)
+    call assert_true(.not.json%failed(), 'json destroyed')
+    deallocate(buffer)
+  end subroutine test_jsonise_stream_solve3D_multistate
+
   ! The compact JSON text of @p meta.
   function json_text( meta ) result( txt )
-    class(gui_metadata_base), intent(inout) :: meta
+    class(gui_metadata_base), intent(in) :: meta
     character(len=:), allocatable :: txt
     character(kind=CK, len=:), allocatable :: str
     type(json_core)                        :: json

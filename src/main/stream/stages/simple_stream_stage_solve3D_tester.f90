@@ -9,7 +9,8 @@ module simple_stream_stage_solve3D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
-use simple_defs_fname,                                only: TERM_STREAM, METADATA_EXT, JPG_EXT
+use simple_defs_fname,                                only: TERM_STREAM, METADATA_EXT
+use simple_refine3D_fnames,                           only: refine3D_reprojs_fname
 use simple_defs_stream,                               only: DIR_STREAM_COMPLETED
 use simple_string,                                    only: string
 use simple_string_utils,                              only: int2str_pad
@@ -487,7 +488,7 @@ contains
         type(string)                                    :: cwd_saved, root, stage_name
         integer(c_int)                                  :: fds(2)
         integer :: nfail0, meta_type, solve3D_stage, refine_it, nstates_got, nimported, nlast, tlast
-        logical :: l_assigned, l_user_input
+        logical :: l_assigned
         real    :: res
         allocate(stage)
         write(*,'(A)') 'test_send_status'
@@ -505,8 +506,7 @@ contains
             call assert_int(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE, meta_type, 'it is a multistate 3D status')
             if( meta_type == GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE )then
                 status     = transfer(buffer, status)
-                l_assigned = status%get(stage_name, solve3D_stage, refine_it, nstates_got, nimported, nlast, tlast,&
-                    &l_user_input, res)
+                l_assigned = status%get(stage_name, solve3D_stage, refine_it, nstates_got, nimported, nlast, tlast, res)
                 call assert_char('waiting on pool 2D', stage_name%to_char(), 'before pool 2D''s folder exists')
                 call assert_int(0,       solve3D_stage, 'no 3D yet')
                 call assert_int(NSTATES, nstates_got,      'the number of states')
@@ -556,7 +556,7 @@ contains
         enddo
         fscfile = 'fsc_state01.bin'
         call arr2file(fsc, fscfile)
-        call simple_touch('orthogonal_reprojs_state01'//JPG_EXT)
+        call simple_touch(refine3D_reprojs_fname(1))
         call stage%spproj%add_vol2os_out(volfile, VOL_SMPD, 1, 'vol')
         call stage%spproj%add_fsc2os_out(fscfile, 1, VOL_BOX)
         ! state 2: a volume only; two particles in it

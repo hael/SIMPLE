@@ -95,7 +95,7 @@ contains
 
   ! Return a JSON object pointer; emits {} when assigned, null otherwise.
   function jsonise( self ) result( json_ptr )
-    class(gui_metadata_base), intent(inout) :: self
+    class(gui_metadata_base), intent(in) :: self
     type(json_core)                         :: json
     type(json_value),         pointer       :: json_ptr
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')

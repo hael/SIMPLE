@@ -3,6 +3,7 @@ module simple_oris_tester
 use simple_core_module_api
 use simple_test_utils    ! for assert_* utilities and counters
 use simple_oris,        only: population_blend_weights, class_sample_quotas, class_sample_sweep
+use simple_oris_utils,  only: oridist_from_oris
 implicit none
 private
 public :: run_all_oris_tests
@@ -34,6 +35,7 @@ contains
         call test_write_read_roundtrip()
         call test_rnd_oris_bounds()
         call test_assignment()
+        call test_oridist_from_oris()
     end subroutine run_all_oris_tests
 
     !---------------------------------------------------------------
@@ -1172,5 +1174,35 @@ contains
         call os%kill
         call os2%kill
     end subroutine test_assignment
+
+    !> The orientation histogram of a state: its particles only, in the elevation band of their
+    !! projection direction, on the grid the histogram's shape gives
+    subroutine test_oridist_from_oris()
+        type(oris) :: os
+        integer    :: hist(72,36), coarse(4,2)
+        write(*,'(A)') 'test_oridist_from_oris'
+        call os%new(5, is_ptcl=.true.)
+        ! two north-pole and one south-pole directions in state 1, two in state 2
+        call os%set_euler(1, [0.,   0., 0.])
+        call os%set_euler(2, [30.,  0., 0.])
+        call os%set_euler(3, [0., 180., 0.])
+        call os%set_euler(4, [0.,   0., 0.])
+        call os%set_euler(5, [0.,   0., 0.])
+        call os%set_state(1, 1)
+        call os%set_state(2, 1)
+        call os%set_state(3, 1)
+        call os%set_state(4, 2)
+        call os%set_state(5, 2)
+        call oridist_from_oris(os, 1, hist)
+        call assert_int(3, sum(hist),        'the particles of state 1 only')
+        call assert_int(2, sum(hist(:,36)),  'north-pole directions in the top elevation band')
+        call assert_int(1, sum(hist(:,1)),   'south-pole directions in the bottom band')
+        call oridist_from_oris(os, 2, hist)
+        call assert_int(2, sum(hist),        'the particles of state 2 only')
+        call oridist_from_oris(os, 1, coarse)
+        call assert_int(2, sum(coarse(:,2)), 'the bins follow the histogram''s shape')
+        call assert_int(1, sum(coarse(:,1)), 'in both bands')
+        call os%kill
+    end subroutine test_oridist_from_oris
 
 end module simple_oris_tester

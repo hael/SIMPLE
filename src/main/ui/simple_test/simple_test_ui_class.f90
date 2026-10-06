@@ -254,11 +254,11 @@ contains
         call unit_stream%new(&
         &'unit_stream',&
         &'unit tests: STREAM (in-process) stages',&
-        &'is the fast-gate unit suite for the steps of the stream stages, without a queue or waits: preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D and its pool object, solve 3D, their job sets, and the stream master',&
+        &'is the fast-gate unit suite for the steps of the stream stages, without a queue or waits: preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D and its pool object, solve 3D, their job sets and GUI plots, and the stream master',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: STREAM')
         call unit_stream%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (preprocessing, optics_assignment, initial_analysis, reference_picking, particle_sieving, pool_2d, pool_2d_object, solve_3d, stream_master, job_sets, stream_watcher)', '', .false., '')
+            &'One sub-suite of this area to run alone (preprocessing, optics_assignment, initial_analysis, reference_picking, particle_sieving, pool_2d, pool_2d_object, solve_3d, stream_master, job_sets, meta_plots, stream_watcher)', '', .false., '')
         call add_ui_program('unit_stream', unit_stream, tsttab, UI_CATEGORY)
     end subroutine new_unit_stream
 

@@ -2,7 +2,6 @@
 ! Filled by stream p01: movies_rate is the movie watcher's detection rate (movies per hour) and
 ! the cutoffs are the current ctfres/icefrac/astig thresholds.
 module simple_gui_metadata_stream_preprocess
-  use json_kinds
   use json_module,              only: json_core, json_value
   use simple_string,            only: string
   use simple_defs,              only: STDLEN
@@ -67,7 +66,7 @@ contains
   function get( self, stage, movies_imported, movies_processed, movies_rejected, movies_rate, &
                 average_ctf_res, average_ice_score, average_astigmatism,                      &
                 cutoff_ctf_res, cutoff_ice_score, cutoff_astigmatism ) result( l_assigned )
-    class(gui_metadata_stream_preprocess), intent(inout) :: self
+    class(gui_metadata_stream_preprocess), intent(in)    :: self
     type(string),                          intent(out)   :: stage
     integer,                               intent(out)   :: movies_imported, movies_processed
     integer,                               intent(out)   :: movies_rejected, movies_rate
@@ -93,7 +92,7 @@ contains
   ! Serialise all fields to a JSON object. Reals are promoted to double
   ! precision for JSON fidelity. Returns a null pointer when unassigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_preprocess), intent(inout) :: self
+    class(gui_metadata_stream_preprocess), intent(in)    :: self
     type(json_core)                                      :: json
     type(json_value),                      pointer       :: json_ptr
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')

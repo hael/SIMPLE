@@ -1,5 +1,5 @@
 !@descr: GUI metadata type for an optics group and its beam-shift scatter plot.
-! Holds up to max_points shifts; jsonise emits {id: i, coordinates: [{x, y}, ...]}.
+! Holds up to MAX_OPTICS_SHIFTS shifts; jsonise emits {id: i, coordinates: [{x, y}, ...]}.
 module simple_gui_metadata_optics_group
 use json_module,              only: json_core, json_value
 use simple_error,             only: simple_exception
@@ -7,9 +7,9 @@ use simple_gui_metadata_base, only: gui_metadata_base
 
 implicit none
 
-public :: gui_metadata_optics_group
+public :: gui_metadata_optics_group, MAX_OPTICS_SHIFTS
 private
-integer, parameter :: max_points = 100   ! maximum number of beam-shift entries
+integer, parameter :: MAX_OPTICS_SHIFTS = 100 ! beam-shift entries a group holds
 #include "simple_local_flags.inc"
 
 type, extends( gui_metadata_base ) :: gui_metadata_optics_group
@@ -17,15 +17,14 @@ type, extends( gui_metadata_base ) :: gui_metadata_optics_group
   integer :: i        = 1   ! index of this optics group within the current batch
   integer :: i_max    = 1   ! total optics groups in the current batch
   integer :: n_shifts = 0   ! number of populated beam-shift entries
-  real    :: xshifts(max_points) = 0. ! beam-shift x components (Angstroms)
-  real    :: yshifts(max_points) = 0. ! beam-shift y components (Angstroms)
+  real    :: xshifts(MAX_OPTICS_SHIFTS) = 0. ! beam-shift x components (Angstroms)
+  real    :: yshifts(MAX_OPTICS_SHIFTS) = 0. ! beam-shift y components (Angstroms)
 contains
   procedure :: kill => kill_override
   procedure :: set
   procedure :: get
   procedure :: get_i
   procedure :: get_i_max
-  procedure :: get_max_points
   procedure :: jsonise => jsonise_override
 end type gui_metadata_optics_group
 
@@ -33,7 +32,7 @@ contains
 
   !---------------- setters ----------------
 
-  ! Set all optics-group fields; n_shifts must not exceed max_points or
+  ! Set all optics-group fields; n_shifts must not exceed MAX_OPTICS_SHIFTS or
   ! the size of the supplied shift arrays.
   subroutine set( self, i, i_max, xshifts, yshifts, n_shifts )
     class(gui_metadata_optics_group), intent(inout) :: self
@@ -41,7 +40,7 @@ contains
     real,                allocatable, intent(in)    :: xshifts(:), yshifts(:)
     if( .not.self%l_initialized   ) THROW_HARD('gui metadata object is uninitialised')
     if( n_shifts < 0              ) THROW_HARD('n_shifts must be non-negative')
-    if( n_shifts > max_points     ) THROW_HARD('n_shifts exceeds max_points')
+    if( n_shifts > MAX_OPTICS_SHIFTS ) THROW_HARD('n_shifts exceeds MAX_OPTICS_SHIFTS')
     if( n_shifts > size(xshifts)  ) THROW_HARD('n_shifts exceeds size of xshifts')
     if( n_shifts > size(yshifts)  ) THROW_HARD('n_shifts exceeds size of yshifts')
     self%l_assigned              = .true.
@@ -84,19 +83,12 @@ contains
     i_max = self%i_max
   end function get_i_max
 
-  ! Return the maximum number of beam-shift entries supported.
-  function get_max_points( self ) result( n )
-    class(gui_metadata_optics_group), intent(in) :: self
-    integer                                      :: n
-    n = max_points
-  end function get_max_points
-
   !---------------- serialisation ----------------
 
   ! Emit id and a "coordinates" array of {x, y} shift objects as a JSON object.
   ! Returns a null pointer when the object has not been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_optics_group), intent(inout) :: self
+    class(gui_metadata_optics_group), intent(in)    :: self
     type(json_core)                                 :: json
     type(json_value),                 pointer       :: json_ptr, json_coords_ptr, json_coords_array_ptr
     integer                                         :: i_coord

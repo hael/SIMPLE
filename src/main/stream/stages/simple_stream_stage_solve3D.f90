@@ -26,7 +26,7 @@
 !     - class-average selection -> simple_cavg_quality_selection, simple_class_compatibility
 !     - jobs                    -> simple_qsys_async_job (solve2D, solve3D, solve3D_addon)
 !     - GUI                     -> simple_stream_pipe, simple_stream_gui_senders,
-!                                  gui_metadata_vol3D%set_oridist_from_oris
+!                                  simple_oris_utils (the orientation histograms)
 !
 !   The stage's rows only ever grow, as solve3D_addon requires (rows are
 !   read by index, never renumbered): a publication's stacks are matched to
@@ -54,7 +54,7 @@ use simple_defs_stream,                               only: DIR_STREAM_COMPLETED
 use simple_defs_environment,                          only: SIMPLE_STREAM_SOLVE3D_PARTITION
 use simple_error,                                     only: simple_exception
 use simple_string,                                    only: string
-use simple_string_utils,                              only: int2str, int2str_pad, lex_sort
+use simple_string_utils,                              only: int2str, lex_sort
 use simple_fileio,                                    only: add2fbody, basename, del_file, file2rarr, file_exists, get_fbody,&
                                                            &get_fpath, simple_abspath, simple_getcwd
 use simple_syslib,                                    only: dir_exists, simple_mkdir, simple_list_dirs, simple_rmdir
@@ -62,7 +62,8 @@ use simple_math,                                      only: round2even
 use simple_math_ft,                                   only: get_resarr
 use simple_estimate_ssnr,                             only: get_resolution
 use simple_imghead,                                   only: get_mrc_minmax, find_ldim_nptcls
-use simple_refine3D_fnames,                           only: refine3D_oris_heatmap_fname
+use simple_refine3D_fnames,                           only: refine3D_oris_heatmap_fname, refine3D_reprojs_fname
+use simple_oris_utils,                                only: oridist_from_oris
 use simple_cmdline,                                   only: cmdline
 use simple_parameters,                                only: parameters
 use simple_sp_project,                                only: sp_project
@@ -86,7 +87,7 @@ use simple_gui_metadata_utils,                        only: max_metadata_size
 use simple_gui_metadata_types,                        only: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE, GUI_METADATA_VOL3D_TYPE,&
                                                            &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE
 use simple_gui_metadata_cavg2D,                       only: gui_metadata_cavg2D
-use simple_gui_metadata_vol3D,                        only: gui_metadata_vol3D
+use simple_gui_metadata_vol3D,                        only: gui_metadata_vol3D, MAX_FSC_VOL3D, ORIDIST_NBINS_X, ORIDIST_NBINS_Y
 use simple_gui_metadata_stream_solve3D_multistate, only: gui_metadata_stream_solve3D_multistate
 use simple_stream_pipe,                               only: stream_pipe
 use simple_stream_gui_senders,                        only: send_reproj_tiles
@@ -329,7 +330,6 @@ contains
     subroutine finalize( self )
         class(stream_stage_solve3D), intent(inout) :: self
         call self%job%cancel()
-        call self%meta_status%set_user_input(.false.)
         call self%send_status(string('terminating'))
         if( self%spproj%os_ptcl3D%get_noris() > 0 ) call self%write_stage_project()
         call qsys_cleanup(self%params)
@@ -1453,6 +1453,7 @@ contains
         real, allocatable        :: fsc(:), res(:)
         real                     :: smpd, res05, res0143, vmin, vmax
         integer                  :: istate, box, pop, n
+        integer                  :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
         logical                  :: l_fsc
         self%state_res = 0.
         do istate = 1,self%params%nstates
@@ -1471,22 +1472,22 @@ contains
                 if( .not. file_exists(pprocmirrpath) ) pprocmirrpath = ''
             endif
             ! JPEGs the 3D writes beside the volume
-            reprojpath = get_fpath(volpath)//'orthogonal_reprojs_state'//int2str_pad(istate, 2)//JPG_EXT
+            reprojpath = get_fpath(volpath)//refine3D_reprojs_fname(istate)
             if( .not. file_exists(reprojpath) ) reprojpath = ''
             oridistpath = get_fpath(volpath)//refine3D_oris_heatmap_fname(istate)
             if( .not. file_exists(oridistpath) ) oridistpath = ''
             if( reprojpath%strlen() > 0 ) call send_reproj_tiles(self%pipe, self%meta_reproj, reprojpath, volpath,&
                 &istate, self%params%nstates, pop)
             l_fsc = self%read_state_fsc(istate, smpd, fsc, res, res05, res0143)
-            ! every field back to its default: new and kill reset only the flags, and a state
-            ! without an FSC curve or a product must not carry the previous state's
+            ! every field back to its default: a state without an FSC curve or a product must not
+            ! carry the previous state's
             meta = fresh_meta
             call meta%new(GUI_METADATA_VOL3D_TYPE)
             if( l_fsc )then
                 self%state_res(istate) = res0143
                 call meta%set(reprojpath, volpath, pprocpath, lppath, pprocmirrpath, istate, box, smpd, istate,&
                     &self%params%nstates, res0143=res0143, res05=res05, pop=pop, oridistpath=oridistpath)
-                n = min(size(fsc), size(res), 1000) ! gui_metadata_vol3D holds 1000 points
+                n = min(size(fsc), size(res), MAX_FSC_VOL3D)
                 call meta%set_fsc(1. / res(:n), fsc(:n))
             else
                 call meta%set(reprojpath, volpath, pprocpath, lppath, pprocmirrpath, istate, box, smpd, istate,&
@@ -1507,7 +1508,8 @@ contains
                 call get_mrc_minmax(pprocmirrpath, vmin, vmax)
                 call meta%set_minmax('pprocmirrpath', vmin, vmax)
             endif
-            call meta%set_oridist_from_oris(self%spproj%os_ptcl3D, istate)
+            call oridist_from_oris(self%spproj%os_ptcl3D, istate, hist)
+            call meta%set_oridist(hist)
             call self%pipe%send_meta(meta)
             call meta%kill
         enddo

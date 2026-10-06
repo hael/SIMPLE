@@ -1,8 +1,7 @@
-!@descr: GUI metadata for the stream pool-2D stage — particle counts, mask geometry, initial reference selection, and user-input flag
+!@descr: GUI metadata for the stream pool-2D stage — particle counts, mask geometry, and user-input flag
 ! Filled by stream p06: all counts are passed in (rejected is not derived); mskdiam is in A and
 ! mskscale is the box size in A. p06 sets user_input once the pool is past iteration 1.
 ! set() stamps last_import_time (Unix time) when particles_imported changes.
-! initial_ref_selection (up to 1500 int16 indices) has no production writer.
 module simple_gui_metadata_stream_pool2D
   use unix,                     only: c_long, c_time
   use simple_error,             only: simple_exception
@@ -22,8 +21,6 @@ module simple_gui_metadata_stream_pool2D
     private
     
     character(len=STDLEN) :: stage                   = 'unknown'
-    integer(kind=2)       :: initial_ref_selection(1500) = 0
-    integer               :: n_initial_ref_selection = 0
     integer               :: iteration               = 0       ! current 2-D classification iteration
     integer               :: particles_imported      = 0       ! total particles received from upstream
     integer               :: particles_accepted      = 0       ! particles passing 2-D selection criteria
@@ -37,7 +34,6 @@ module simple_gui_metadata_stream_pool2D
     procedure :: kill => kill_override
     procedure :: set
     procedure :: set_user_input
-    procedure :: set_initial_ref_selection
     procedure :: get
     procedure :: jsonise => jsonise_override
   end type gui_metadata_stream_pool2D
@@ -76,16 +72,6 @@ contains
     self%user_input = user_input
   end subroutine set_user_input
 
-  subroutine set_initial_ref_selection( self, idx )
-    class(gui_metadata_stream_pool2D), intent(inout) :: self
-    integer,                           intent(in)    :: idx
-    if( .not.self%l_initialized )                THROW_HARD('gui metadata object is uninitialised')
-    if( self%n_initial_ref_selection >= size(self%initial_ref_selection) ) THROW_HARD('idx is out of range')
-    self%l_assigned = .true.
-    self%n_initial_ref_selection = self%n_initial_ref_selection + 1
-    self%initial_ref_selection(self%n_initial_ref_selection) = int2(idx)
-  end subroutine set_initial_ref_selection
-
   ! Retrieve particle counts, user-input flag, and the last-import timestamp.
   ! Returns .true. if the object has been assigned.
   function get( self, stage, iteration, particles_imported, particles_accepted, particles_rejected, last_import_time, user_input, mskdiam, mskscale, resolution ) result( l_assigned )
@@ -115,10 +101,9 @@ contains
   ! Serialise all fields to a JSON object. Returns a null pointer when
   ! the object has not yet been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_stream_pool2D), intent(inout) :: self
+    class(gui_metadata_stream_pool2D), intent(in)    :: self
     type(json_core)                                            :: json
-    type(json_value),                             pointer      :: json_ptr, json_ref_selection_ptr => null()
-    integer                                                    :: i_ref
+    type(json_value),                             pointer      :: json_ptr
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( self%l_assigned ) then
       call json%create_object(json_ptr, '')
@@ -132,13 +117,6 @@ contains
       call json%add(json_ptr, 'mskdiam',                 self%mskdiam            )
       call json%add(json_ptr, 'mskscale',                dble(self%mskscale)     )
       call json%add(json_ptr, 'resolution',              dble(self%resolution)   )
-      if( self%n_initial_ref_selection > 0 ) then
-        call json%create_array(json_ref_selection_ptr, 'initial_ref_selection')
-        do i_ref = 1, self%n_initial_ref_selection
-          call json%add(json_ref_selection_ptr, '', int(self%initial_ref_selection(i_ref)))
-        end do
-        call json%add(json_ptr, json_ref_selection_ptr)
-      end if
     else
       nullify(json_ptr)
     end if

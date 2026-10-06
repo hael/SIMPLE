@@ -130,7 +130,7 @@ contains
   ! Emit all fields as a JSON object; appends a "boxes" array when coordinates
   ! are present.  Returns a null pointer when the object has not been assigned.
   function jsonise_override( self ) result( json_ptr )
-    class(gui_metadata_micrograph), intent(inout) :: self
+    class(gui_metadata_micrograph), intent(in)    :: self
     type(json_core)                               :: json
     type(json_value),               pointer       :: json_ptr, json_boxes_ptr, json_coords_ptr
     integer                                       :: i_coord

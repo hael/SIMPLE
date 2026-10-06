@@ -10,16 +10,19 @@
 !   mask diameter, a 2D snapshot). parse() reads one response into this
 !   record; the master applies it. The update holds this response's fields
 !   only, so a field is sent to the stages once, in the update that brought
-!   it. A selection larger than the update holds is dropped with a warning;
-!   nothing in a response stops the master.
+!   it. A selection larger than the update holds, and a snapshot whose name
+!   is not a bare *.simple file name, are dropped with a warning; nothing in a
+!   response stops the master.
 !==============================================================================
 module simple_stream_master_gui_commands
 use json_kinds,                        only: CK
 use json_module,                       only: json_core, json_value
 use simple_defs,                       only: logfhandle, dp
+use simple_defs_fname,                 only: METADATA_EXT
 use simple_string,                     only: string
 use simple_gui_metadata_types,         only: GUI_METADATA_STREAM_UPDATE_TYPE
-use simple_gui_metadata_stream_update, only: gui_metadata_stream_update, MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION
+use simple_gui_metadata_stream_update, only: gui_metadata_stream_update, MAX_PICKREFS_SELECTION, MAX_SNAPSHOT2D_SELECTION,&
+                                            &MAX_SNAPSHOT2D_FNAME_LEN
 use simple_stream_master_stage_ids,    only: NSTAGES, stage_gui_key
 implicit none
 
@@ -95,10 +98,14 @@ contains
             call json%get(snapshot, 'selection', i_arr,       l_sel)
             call json%get(snapshot, 'filename',  str_val,     l_file)
             if( l_id .and. l_iter .and. l_sel .and. l_file .and. allocated(i_arr) .and. allocated(str_val) )then
-                if( size(i_arr) <= MAX_SNAPSHOT2D_SELECTION )then
-                    call self%update%set_snapshot2D_update(snapshot_id, i_val, i_arr, string(str_val))
-                else
+                if( size(i_arr) > MAX_SNAPSHOT2D_SELECTION )then
                     call warn_dropped('2D snapshot selection', size(i_arr), MAX_SNAPSHOT2D_SELECTION)
+                else if( .not. snapshot_fname_ok(str_val) )then
+                    ! p06 writes the snapshot into snapshots/<name without .simple>/<name>
+                    write(logfhandle,'(A,A,A)') '>>> WARNING: GUI 2D snapshot name ', str_val(1:min(len(str_val),64)),&
+                        &' is not a bare *.simple file name; ignored'
+                else
+                    call self%update%set_snapshot2D_update(snapshot_id, i_val, i_arr, string(str_val))
                 endif
             endif
         endif
@@ -120,6 +127,18 @@ contains
             write(logfhandle,'(A,A,A,I0,A,I0,A)') '>>> WARNING: GUI ', what, ' of ', n, ' classes exceeds ', nmax,&
                 &'; ignored'
         end subroutine warn_dropped
+
+        ! A bare file name ending in METADATA_EXT, of at most MAX_SNAPSHOT2D_FNAME_LEN characters
+        logical function snapshot_fname_ok( fname )
+            character(len=*), intent(in) :: fname
+            integer :: n, next
+            n    = len_trim(fname)
+            next = len(METADATA_EXT)
+            snapshot_fname_ok = .false.
+            if( n <= next .or. n > MAX_SNAPSHOT2D_FNAME_LEN ) return
+            if( index(fname(1:n), '/') > 0 ) return
+            snapshot_fname_ok = fname(n-next+1:n) == METADATA_EXT
+        end function snapshot_fname_ok
 
     end function parse
 

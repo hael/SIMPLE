@@ -49,12 +49,15 @@ A frame is a C `int` byte count followed by that many payload bytes.
    (`GUI_METADATA_*_TYPE`).
 2. **Serialisation is a byte copy** (`transfer`) of the object, so:
    - an object sent over a pipe has no allocated allocatable or pointer component. A type with
-     one overrides `serialise` and sends a copy without it (`gui_metadata_vol3D` drops its
-     reprojection tiles);
+     one overrides `serialise`: it sends a copy without the component (`gui_metadata_vol3D`
+     drops its reprojection tiles), or stops (`gui_metadata_project`, jsonised in-process only);
    - sender and receiver must be the same binary, which forked stages are.
 3. **Capacities are fixed** by the types (named constants where callers need them:
-   `MAX_PICKREFS_SELECTION`, `MAX_SNAPSHOT2D_SELECTION`, `MAX_MIC_COORDINATES`). Callers stay
-   within them: the picks drawn on a thumbnail are cut at `MAX_MIC_COORDINATES`. The setters stop
+   `MAX_PICKREFS_SELECTION`, `MAX_SNAPSHOT2D_SELECTION`, `MAX_SNAPSHOT2D_FNAME_LEN`,
+   `MAX_MIC_COORDINATES`, `MAX_OPTICS_SHIFTS`, `MAX_TIMEPLOT_POINTS`, `MAX_HISTOGRAM_BINS`,
+   `MAX_SIEVE_SELECTION`, `MAX_FSC_VOL3D`, `MAX_STATES_SOLVE3D_MULTISTATE`). Callers stay
+   within them: the picks drawn on a thumbnail are cut at `MAX_MIC_COORDINATES`, and a long run's
+   time plots widen their window or keep their newest points (`simple_stream_meta_plots`). The setters stop
    on overflow as a guard against programming errors; nothing from outside may reach that guard.
 4. **A reused metadata object is reset with `kill`**: every type extending `gui_metadata_base`
    overrides `kill` to assign its default-initialised self, so no field of the previous message
@@ -114,11 +117,12 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
    | `ctfresthreshold`, `astigthreshold`, `icefracthreshold` | preprocessing thresholds |
    | `pickrefs_selection`, `pickrefs_cycle` | a picking-reference selection of p03's cycle |
    | `mskdiam2D` | the 2D pool's mask diameter |
-   | `snapshot2D` {`id`, `iteration`, `selection`, `filename`} | a 2D snapshot request; p06 answers each id once with a snapshot report, where 0 particles and no file mean it was not written (an iteration no longer kept) |
+   | `snapshot2D` {`id`, `iteration`, `selection`, `filename`} | a 2D snapshot request; p06 answers each id once with a snapshot report, where 0 particles and no file mean it was not written (an iteration no longer kept). `filename` is a bare file name ending in `.simple`, of at most `MAX_SNAPSHOT2D_FNAME_LEN` (128) characters: p06 makes a folder of it. NICE sends `snapshot_<id>.simple` |
 
 3. **Dropped selections:** a selection larger than the update holds is dropped whole with a
    warning. Acting on part of it would act on classes the user did not choose; the rest of the
-   answer is applied.
+   answer is applied. A snapshot request whose `filename` breaks its rule is dropped the same
+   way.
 4. **Nothing in an answer stops the master.**
 
 ## 7. Stopping
@@ -146,22 +150,27 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
 
 - A new metadata type: no allocatable or pointer component in what it sends (or a `serialise`
   override), and a named capacity for any array a caller fills from outside.
+- The GUI metadata types (`src/utils/gui/metadata/`) and the assembler import nothing that reaches
+  `src/main`, directly or through their imports, so the stages and the master can use them
+  cheaply; a new one keeps it so. Work that needs the domain (reading an `sp_project`, binning
+  orientations, writing previews) belongs to the caller: `simple_gui_project_builder`,
+  `simple_oris_utils`, `simple_stream_meta_plots`, and the master's `fork_gui_status`.
 - A new GUI answer key: parsed in `stream_master_gui_commands`, with oversized arrays dropped, and
   added to section 6.
 - Any read of a stage pipe on the master's main thread takes the metadata lock.
 - Tests:
   - `unit_ipc` "stream pipe": framing, resync, discard, an abandoned part-written frame;
   - `unit_stream` "stream master": stage names and keys; GUI answers, including invalid and
-    oversized ones; the store, including a frame of the wrong length; a stage's pipes from both
-    sides; an update sent once;
+    oversized ones and unsafe snapshot names; the store, including a frame of the wrong length; a
+    stage's pipes from both sides; an update sent once;
+  - `unit_stream` "meta plots": the time plots of a run longer than their capacity;
   - `unit_ui` "GUI metadata": every type a stage sends survives serialisation
-    (a copy received by transfer holds the same fields).
+    (a copy received by transfer holds the same fields), a volume without its reprojection tiles;
+  - `unit_ui` "GUI assembler": the sections and the heartbeat, from stage-status records;
+  - `forked_process` "stream heartbeat": a live process read into its heartbeat record
+    (`fork_gui_status`).
 
 ## 9. Known gaps
 
-- **`gui_metadata_project`** has allocatable components and no `serialise` guard. It is not sent
-  over a pipe today.
-- **`initial_ref_selection`** is still a field of the pool's GUI metadata with no writer; NICE no
-  longer reads it (nor sends `ref_selection` or `increase_nmics`).
 - **The byte-copy format** ties the processes to one binary; a stage started by `exec` would need
   a real wire format.

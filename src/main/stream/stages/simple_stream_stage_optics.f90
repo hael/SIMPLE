@@ -46,7 +46,7 @@ use simple_stream_state,                          only: ipc_pipe_assign_optics_i
 use simple_gui_metadata_utils,                    only: max_metadata_size
 use simple_gui_metadata_types,                    only: GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE,&
                                                        &GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE
-use simple_gui_metadata_optics_group,             only: gui_metadata_optics_group
+use simple_gui_metadata_optics_group,             only: gui_metadata_optics_group, MAX_OPTICS_SHIFTS
 use simple_gui_metadata_stream_optics_assignment, only: gui_metadata_stream_optics_assignment
 use simple_stream_pipe,                           only: stream_pipe
 use simple_mic_import,                            only: append_mics_from_projects
@@ -330,7 +330,7 @@ contains
         real,    allocatable :: xshifts(:,:), yshifts(:,:), xs(:), ys(:)
         integer, allocatable :: npoints(:)
         integer :: ngroups, igroup
-        call recent_shifts_by_optics_group(self%spproj%os_mic, self%spproj%os_optics, self%meta_group%get_max_points(),&
+        call recent_shifts_by_optics_group(self%spproj%os_mic, self%spproj%os_optics, MAX_OPTICS_SHIFTS,&
             &xshifts, yshifts, npoints)
         ngroups = size(npoints)
         do igroup = 1,ngroups

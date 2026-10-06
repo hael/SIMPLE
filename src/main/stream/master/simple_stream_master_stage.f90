@@ -15,7 +15,8 @@
 !   One fork type serves every stage: its
 !   execute closes the other stages' pipe ends and runs the commander the
 !   master gave the stage, so this module knows commanders only as
-!   commander_base.
+!   commander_base. fork_gui_status reads a forked process into the record
+!   the GUI heartbeat takes.
 !
 ! LIFECYCLE:
 !   new(id, commander, cline, l_updates, max_frame_bytes) -> start / request_stop /
@@ -27,14 +28,17 @@ use simple_error,                   only: simple_exception
 use simple_string,                  only: string
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
-use simple_forked_process,          only: forked_process, FORK_STATUS_RUNNING, FORK_STATUS_SKIPPED
+use simple_forked_process,          only: forked_process, FORK_STATUS_RUNNING, FORK_STATUS_SKIPPED,&
+                                         &FORK_STATUS_FAILED, FORK_STATUS_STOPPED
+use simple_gui_assembler,           only: gui_stage_status, GUI_STAGE_STATUS_UNKNOWN, GUI_STAGE_STATUS_RUNNING,&
+                                         &GUI_STAGE_STATUS_FAILED, GUI_STAGE_STATUS_FINISHED, GUI_STAGE_STATUS_SKIPPED
 use simple_qsys_job_record,         only: cancel_unfinished_jobs
 use simple_stream_pipe,             only: stream_pipe
 use simple_stream_master_stage_ids, only: stage_job_name, stage_label, open_stage_pipes, close_stage_pipes,&
                                          &close_other_pipe_ends, master_fds, stage_fds
 implicit none
 
-public :: stream_master_stage, stream_master_stage_fork
+public :: stream_master_stage, stream_master_stage_fork, fork_gui_status
 private
 #include "simple_local_flags.inc"
 
@@ -230,5 +234,30 @@ contains
         self%l_stop_requested = .false.
         self%l_exists         = .false.
     end subroutine kill
+
+    !---------------- the GUI heartbeat ----------------
+
+    !> A forked process as the GUI heartbeat reports it: its pid, its times and its status.
+    function fork_gui_status( fork ) result( stage_status )
+        class(forked_process), intent(inout) :: fork
+        type(gui_stage_status) :: stage_status
+        stage_status%pid       = int(fork%get_pid())
+        stage_status%queuetime = fork%get_queuetime()
+        stage_status%starttime = fork%get_starttime()
+        stage_status%failtime  = fork%get_failtime()
+        stage_status%stoptime  = fork%get_stoptime()
+        select case( fork%status() )
+            case( FORK_STATUS_RUNNING )
+                stage_status%status = GUI_STAGE_STATUS_RUNNING
+            case( FORK_STATUS_FAILED )
+                stage_status%status = GUI_STAGE_STATUS_FAILED
+            case( FORK_STATUS_STOPPED )
+                stage_status%status = GUI_STAGE_STATUS_FINISHED
+            case( FORK_STATUS_SKIPPED )
+                stage_status%status = GUI_STAGE_STATUS_SKIPPED
+            case DEFAULT
+                stage_status%status = GUI_STAGE_STATUS_UNKNOWN
+        end select
+    end function fork_gui_status
 
 end module simple_stream_master_stage
