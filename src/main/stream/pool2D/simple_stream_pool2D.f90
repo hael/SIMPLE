@@ -598,7 +598,7 @@ contains
     end subroutine cancel
 
     ! The pool's working dimensions from its native ones: downscaled to a pixel size of up to
-    ! MAX_SMPD and never below a CHUNK_MINBOXSZ box (setup_downscaling's rule). The pool's command
+    ! MAX_SMPD and never below a CHUNK_MINBOXSZ box. The pool's command
     ! line carries the cropped dimensions only; the native ones come from its project.
     subroutine set_dimensions( self )
         class(stream_pool2D), intent(inout) :: self

@@ -1,14 +1,12 @@
-!@descr: stateless helpers of the stream's 2D pool and chunks: folder clean-up, downscaling, iteration files, set appending, class draws, publication building and naming, snapshot sprite sheets
+!@descr: stateless helpers of the stream's 2D pool: folder clean-up, iteration files, set appending, class draws, publication building and naming, snapshot sprite sheets
 module simple_stream_refine2D_utils
 use simple_core_module_api
-use simple_parameters,           only: parameters
 use simple_sp_project,           only: sp_project
 use simple_optics_maps,          only: import_latest_optics_map
 use simple_syslib,               only: get_current_rss_bytes, get_peak_rss_bytes
 implicit none
 
 public :: cleanup_root_folder
-public :: setup_downscaling
 public :: tidy_2Dstream_iter
 public :: build_pool_publication
 public :: delete_pool_publication
@@ -52,37 +50,6 @@ contains
             endif
         endif
     end subroutine cleanup_root_folder
-
-    ! Determines dimensions for downscaling; @p l_scaling, on entry whether to downscale, on return
-    ! whether the box was downscaled
-    subroutine setup_downscaling( params, l_scaling )
-        class(parameters), intent(inout) :: params
-        logical,           intent(inout) :: l_scaling
-        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
-        real    :: smpd, scale_factor, msk_max
-        integer :: box
-        if( params%box == 0 ) THROW_HARD('FATAL ERROR')
-        scale_factor          = 1.0
-        params%smpd_crop = params%smpd
-        params%box_crop  = params%box
-        if( l_scaling .and. params%box >= CHUNK_MINBOXSZ )then
-            call autoscale(params%box, params%smpd, SMPD_TARGET, box, smpd, scale_factor, minbox=CHUNK_MINBOXSZ)
-            l_scaling = box < params%box
-            if( l_scaling )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',box
-                params%smpd_crop = smpd
-                params%box_crop  = box
-            endif
-        endif
-        params%msk_crop = round2even(params%mskdiam / params%smpd_crop / 2.)
-        ! the mask within the box (D40)
-        msk_max = (real(params%box_crop) - COSMSKHALFWIDTH) / 2.
-        if( params%msk_crop > msk_max )then
-            write(logfhandle,'(A,F8.2,A,F7.1,A)') '>>> MASK DIAMETER ', params%mskdiam, ' A EXCEEDS THE BOX; MASK RADIUS CLAMPED TO ',&
-                &real(floor(msk_max)), ' PIXELS'
-            params%msk_crop = floor(msk_max)
-        endif
-    end subroutine setup_downscaling
 
     ! Removes some unnecessary files
     !> Removes the files of pool iteration @p iter (none when it is below 1): its class averages

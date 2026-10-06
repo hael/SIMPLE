@@ -1,11 +1,11 @@
 ---
 name: simple-main-stream
-description: Use when working on SIMPLE's streaming pipeline, including the p00-p07 commanders in src/main/commanders/stream, the stage types in src/main/stream/stages, the master's parts in src/main/stream/master, the shared stage modules in src/main/stream/shared (pipes, sigterm, job sets, GUI senders, micrograph and optics helpers), the 2D pool and chunk layer in src/main/stream/pool2D, and the src/main/stream support layers (watchers, particle-sieve integration, streaming variants of preprocessing and refine2D workflows).
+description: Use when working on SIMPLE's streaming pipeline, including the p00-p07 commanders in src/main/commanders/stream, the stage types in src/main/stream/stages, the master's parts in src/main/stream/master, the shared stage modules in src/main/stream/shared (pipes, sigterm, job sets, GUI senders, micrograph and optics helpers), the 2D pool in src/main/stream/pool2D, and the src/main/stream support layers (watchers, particle-sieve integration, streaming variants of preprocessing and refine2D workflows).
 ---
 
 # SIMPLE stream pipeline
 
-The commanders live in `src/main/commanders/stream`, the stage types they drive in `src/main/stream/stages`, the master's parts in `src/main/stream/master`, the modules the stages share in `src/main/stream/shared`, and the 2D pool and chunk layer in `src/main/stream/pool2D`; `src/main/stream` itself keeps the watcher and the stream utilities.
+The commanders live in `src/main/commanders/stream`, the stage types they drive in `src/main/stream/stages`, the master's parts in `src/main/stream/master`, the modules the stages share in `src/main/stream/shared`, and the 2D pool in `src/main/stream/pool2D`; `src/main/stream` itself keeps the watcher and the stream utilities.
 
 ## Read First
 
@@ -32,16 +32,14 @@ Pipeline stages (one forked process each, launched by p00); commanders in `src/m
 
 Shared pieces in `src/main/stream/shared`: `simple_stream_pipe` (framing), `simple_stream_state` (pipe descriptors), `simple_stream_sigterm`, `simple_stream_gui_senders`, `simple_stream_job_sets`, `simple_optics_maps`, `simple_optics_groups`, `simple_mic_import`, `simple_mic_selection`, `simple_stream_meta_plots`.
 
-The 2D pool and chunk layer in `src/main/stream/pool2D`:
+The 2D pool in `src/main/stream/pool2D`:
 
 - `simple_stream_pool2D.f90`: the pool as a type (`stream_pool2D`, private components; tester `simple_stream_pool2D_tester`): iterations, history, dimensions and mask, snapshots, publications for 3D, the final project
-- `simple_stream_refine2D_utils.f90`: stateless helpers: folder clean-up, downscaling, iteration files, publication building and naming, snapshot sprite sheets
-- `simple_stream_chunk.f90`, `simple_stream_chunk2D_utils.f90`: chunk 2D helpers for `solve2D_chunks`, which owns its chunk state
+- `simple_stream_refine2D_utils.f90`: stateless helpers: folder clean-up, iteration files, set appending, class draws, publication building and naming, snapshot sprite sheets
 
 Supporting layers in `src/main/stream`:
 
 - `simple_stream_watcher.f90`: directory watcher used both for movie import and for stage-to-stage project handoff
-- `simple_stream_solve2D_chunks.f90`: the `solve2D_chunks` program (run by the refine2D exec router, not by the stream)
 - `simple_stream_utils.f90`, `simple_mini_stream_utils.f90`: utilities
 
 ## Structure

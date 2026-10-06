@@ -70,7 +70,7 @@ Each pass of p06 runs, in this order:
 
 1. The first import gives the pool its pixel size and box (from the data) and, when none was
    given, a mask diameter of (box/2 - soft edge - 1 px) * 2 * smpd (`default_mskdiam`).
-2. The pool runs downscaled when that is possible (`setup_downscaling`): to a pixel size of up to
+2. The pool runs downscaled when that is possible (`set_dimensions`): to a pixel size of up to
    `MAX_SMPD` (2.67 Å), and never below a 128-pixel box (`CHUNK_MINBOXSZ`). Everything written for
    use downstream is rescaled to the native sampling or labelled with the pool's.
 3. The first iteration waits for max(`ncls` * 20, rate * 500) particles, where rate is the

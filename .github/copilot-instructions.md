@@ -85,7 +85,7 @@ living docs and leave the old ones in dated history docs.
 - `src/main/commanders`: high-level workflow command objects; `commanders/stream` holds the
   stream pipeline's (the p00 master and p01-p07), driving the stage types of
   `src/main/stream/stages` (the master's parts are in `src/main/stream/master`, the modules
-  the stages share in `src/main/stream/shared`, the 2D pool and chunk layer in
+  the stages share in `src/main/stream/shared`, the 2D pool in
   `src/main/stream/pool2D`).
 - `src/main/strategies`: algorithm and execution-policy layers.
 - `src/main/nu_filt`: nonuniform filtering implementation used by volume assembly.

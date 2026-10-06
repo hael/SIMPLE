@@ -7,8 +7,7 @@ use simple_commanders_project_cls,          only: commander_sample_classes
 use simple_commanders_refine2D,             only: commander_ppca_denoise_classes
 use simple_commanders_mkcavgs,              only: commander_make_cavgs_distr, commander_bootstrap_cavgs, &
                                                   commander_unbootstrap_cavgs, commander_write_classes
-use simple_commanders_solve2D,              only: commander_solve2D
-use simple_stream_solve2D_chunks,           only: stream_solve2D_chunks
+use simple_commanders_solve2D,              only: commander_solve2D, commander_solve2D_chunks
 use simple_commanders_cavgs,                only: commander_map_cavgs_selection
 
 implicit none
@@ -17,7 +16,7 @@ public :: exec_refine2D_commander
 private
 
 type(commander_solve2D)                     :: xsolve2D
-type(stream_solve2D_chunks)                 :: xsolve2D_chunks
+type(commander_solve2D_chunks)              :: xsolve2D_chunks
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_bootstrap_cavgs)             :: xbootstrap_cavgs
 type(commander_unbootstrap_cavgs)           :: xunbootstrap_cavgs

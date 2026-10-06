@@ -25,11 +25,15 @@ moved into the library layout:
 - `src/main/stream/shared`: the modules the stages share (pipe and pipe descriptors
   `simple_stream_state`, sigterm, job sets, GUI senders, meta plots, and the micrograph and
   optics helpers) and their testers;
-- `src/main/stream/pool2D`: the 2D pool and chunk layer that stayed (`simple_stream_pool2D`, the
-  pool as a type, and its tester; `simple_stream_refine2D_utils`, `simple_stream_chunk`,
-  `simple_stream_chunk2D_utils`);
-- `src/main/stream`: the watcher, `simple_stream_utils`, `simple_mini_stream_utils`,
-  `simple_stream_solve2D_chunks` and the library tests of the stages (`simple_stream_tester`).
+- `src/main/stream/pool2D`: the 2D pool (`simple_stream_pool2D`, the pool as a type, and its
+  tester; `simple_stream_refine2D_utils`, its stateless helpers);
+- `src/main/stream`: the watcher, `simple_stream_utils`, `simple_mini_stream_utils` and the
+  library tests of the stages (`simple_stream_tester`).
+
+The `solve2D_chunks` program, which the refine2D exec router runs and the stream never did, left
+the stream on 2026-10-06: its commander is `commander_solve2D_chunks` in
+`simple_commanders_solve2D`, its chunk type `solve2D_chunk` in `src/main/solve`
+(`solve2D_chunks_move_plan_2026-10-06.md`).
 
 **Build note.** `src/CMakeLists.txt` collects `main/*.f90` recursively, so these
 modules are compiled into the library on the next configure. The `*_tester` modules

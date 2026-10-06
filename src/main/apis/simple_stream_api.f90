@@ -20,9 +20,7 @@ use simple_rec_list,               only: rec, project_rec, process_rec, chunk_re
 use simple_sp_project,             only: sp_project
 use simple_stack_io,               only: stack_io
 use simple_starproject_stream,     only: starproject_stream
-use simple_stream_chunk,           only: stream_chunk
-use simple_stream_chunk2D_utils,   only: init_chunk_clustering
-use simple_stream_refine2D_utils, only: cleanup_root_folder, setup_downscaling, tidy_2Dstream_iter
+use simple_stream_refine2D_utils, only: cleanup_root_folder, tidy_2Dstream_iter
 use simple_stream_utils,           only: get_latest_optics_map_id, create_stream_project, init_stream_qenv, import_new_projects
 use simple_stream_watcher,         only: stream_watcher, sniff_folders_SJ, workout_directory_structure 
 end module simple_stream_api

@@ -460,6 +460,14 @@ An independent review of the change set found seven issues. All are resolved.
   are unchanged within run-to-run spread. Design, record and report:
   `doc/refactoring_notes/completed/trailing_reconstruction_without_halfmap_blend.md`
   and `trailing_reconstruction_without_halfmap_blend_report.md` beside it.
+- **`solve2D_chunks`: kept and moved (2026-10-06).** The experimental program
+  that runs `solve2D` on stack-bound subsets of a project stays (formerly item
+  C15 of the inventory). It has left the stream: its commander,
+  `commander_solve2D_chunks`, sits beside `commander_solve2D` in
+  `simple_commanders_solve2D`, and its chunk type is `solve2D_chunk` in
+  `src/main/solve/simple_solve2D_chunk.f90`. The program name, its UI and its
+  behaviour are unchanged. Plan:
+  `doc/refactoring_notes/planned/solve2D_chunks_move_plan_2026-10-06.md`.
 - **Streaming and NICE clean-ups.** Dead routines, stale constants, unused
   NICE fields, a squash of the NICE migrations, old statistics channels,
   compatibility parameters and module renames. These wait for the developer

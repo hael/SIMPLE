@@ -1,7 +1,7 @@
-!@descr: abstract data type for the stream_chunk, defining a chunk of data processed in parallel 
-module simple_stream_chunk
+!@descr: one subset of solve2D_chunks: its project, queue environment, command line and solve2D job
+module simple_solve2D_chunk
 use simple_core_module_api
-use simple_defs_environment
+use simple_defs_environment, only: SIMPLE_STREAM_CHUNK_PARTITION
 use simple_cmdline,      only: cmdline
 use simple_parameters,   only: parameters
 use simple_qsys_env,     only: qsys_env
@@ -9,17 +9,18 @@ use simple_sp_project,   only: sp_project
 use simple_rec_list,     only: rec_list
 implicit none
 
-public :: stream_chunk
+public :: solve2D_chunk
 private
 #include "simple_local_flags.inc"
 
 ! Type to handle a single chunk
-type stream_chunk
+type solve2D_chunk
     private
     class(parameters), pointer :: p_ptr => null()       ! parameters pointer
-    type(sp_project)           :: spproj                ! master project
-    type(qsys_env)             :: qenv                  ! submission handler
-    type(cmdline)              :: cline                 ! command line
+    ! allocatable (compile-time policy), allocated in init_chunk and released in kill
+    type(sp_project), allocatable :: spproj             ! master project
+    type(qsys_env),   allocatable :: qenv               ! submission handler
+    type(cmdline),    allocatable :: cline              ! command line
     type(string), allocatable  :: orig_stks(:)          ! list of stacks
     type(string)               :: path, projfile_out    ! physical location
     integer                    :: id                    ! unique id
@@ -45,7 +46,7 @@ type stream_chunk
     procedure          :: is_finished
     procedure          :: print_info
     procedure          :: kill
-end type stream_chunk
+end type solve2D_chunk
 
 logical, parameter :: DEBUG_HERE = .false.
 
@@ -62,7 +63,7 @@ contains
 
     !>  Instantiator
     subroutine init_chunk( self, params, cline, id, master_spproj )
-        class(stream_chunk),       intent(inout) :: self
+        class(solve2D_chunk),       intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(cmdline),            intent(in)    :: cline
         integer,                   intent(in)    :: id
@@ -71,6 +72,9 @@ contains
         character(len=STDLEN) :: chunk_part_env
         integer               :: envlen
         call debug_print('in chunk%init '//int2str(id))
+        if( .not. allocated(self%spproj) ) allocate(self%spproj)
+        if( .not. allocated(self%qenv)   ) allocate(self%qenv)
+        if( .not. allocated(self%cline)  ) allocate(self%cline)
         call self%spproj%kill
         self%p_ptr  => params
         self%id     = id
@@ -113,12 +117,19 @@ contains
     end subroutine init_chunk
 
     subroutine copy( dest, src )
-        class(stream_chunk), intent(inout) :: dest
-        class(stream_chunk), intent(in)    :: src
+        class(solve2D_chunk), intent(inout) :: dest
+        class(solve2D_chunk), intent(in)    :: src
         call dest%kill
-        dest%spproj       = src%spproj
-        dest%qenv         = src%qenv
-        dest%cline        = src%cline
+        ! sp_project and cmdline assign through a defined assignment: allocated first
+        if( allocated(src%spproj) )then
+            allocate(dest%spproj)
+            dest%spproj = src%spproj
+        endif
+        if( allocated(src%qenv) ) dest%qenv = src%qenv
+        if( allocated(src%cline) )then
+            allocate(dest%cline)
+            dest%cline = src%cline
+        endif
         dest%orig_stks    = src%orig_stks(:)
         dest%path         = src%path
         dest%projfile_out = src%projfile_out
@@ -134,13 +145,13 @@ contains
 
     !>  \brief  assign, polymorphic assignment (=)
     subroutine assign( selfout, selfin )
-        class(stream_chunk), intent(inout) :: selfout
-        class(stream_chunk), intent(in)    :: selfin
+        class(solve2D_chunk), intent(inout) :: selfout
+        class(solve2D_chunk), intent(in)    :: selfin
         call selfout%copy(selfin)
     end subroutine assign
 
     subroutine generate( self, project_list )
-        class(stream_chunk), intent(inout) :: self
+        class(solve2D_chunk), intent(inout) :: self
         class(rec_list),     intent(inout) :: project_list
         integer :: istk, sz
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
@@ -158,20 +169,20 @@ contains
     end subroutine generate
 
     elemental function is_available( self ) result( avail )
-        class(stream_chunk), intent(in) :: self
+        class(solve2D_chunk), intent(in) :: self
         logical :: avail
         avail = self%available
     end function is_available
 
     function get_projfile_fname( self )result( fname )
-        class(stream_chunk), intent(in) :: self
+        class(solve2D_chunk), intent(in) :: self
         type(string) :: fname
         fname = self%path//self%projfile_out
     end function get_projfile_fname
 
     ! Initiates 2D analysis
     subroutine analyze2D( self, makecavgs )
-        class(stream_chunk), intent(inout) :: self
+        class(solve2D_chunk), intent(inout) :: self
         logical,   optional, intent(in)    :: makecavgs
         type(string),  allocatable :: bins(:)
         type(cmdline), allocatable :: clines(:)
@@ -230,7 +241,7 @@ contains
 
     ! To calculate noise power estimates only
     subroutine calc_sigma2( self, cline_analyze2D, need_sigma )
-        class(stream_chunk), intent(inout) :: self
+        class(solve2D_chunk), intent(inout) :: self
         class(cmdline),      intent(in)    :: cline_analyze2D
         logical,             intent(in)    :: need_sigma
         type(cmdline) :: cline_pspec
@@ -283,7 +294,7 @@ contains
 
     ! classes generation at original sampling
     subroutine gen_final_cavgs( self, clines )
-        class(stream_chunk),         intent(in)    :: self
+        class(solve2D_chunk),         intent(in)    :: self
         type(cmdline),  allocatable, intent(inout) :: clines(:)
         type(cmdline),    allocatable :: tmp(:)
         type(cmdline)                 :: cline_make_cavgs
@@ -315,7 +326,7 @@ contains
 
     ! get & display convergence stats
     subroutine display_iter( self )
-        class(stream_chunk), intent(inout) :: self
+        class(solve2D_chunk), intent(inout) :: self
         type(oris)   :: os
         type(string) :: fname
         real         :: mi_class,frac,corr
@@ -341,7 +352,7 @@ contains
 
     ! Check for convergence of 2D analysis is complete
     logical function has_converged( self )
-        class(stream_chunk), intent(inout) :: self
+        class(solve2D_chunk), intent(inout) :: self
         type(string) :: str_prg
         if( .not.self%converged )then
             if( self%toanalyze2D )then
@@ -357,13 +368,13 @@ contains
 
     ! Check for convergence of 2D analysis is complete
     elemental logical function is_finished( self )
-        class(stream_chunk), intent(in) :: self
+        class(solve2D_chunk), intent(in) :: self
         is_finished  = self%converged
     end function is_finished
 
     ! For debugging
     subroutine print_info( self )
-        class(stream_chunk), intent(inout) :: self
+        class(solve2D_chunk), intent(inout) :: self
         print *,'self%id           : ',self%id
         print *,'self%path         : ',self%path%to_char()
         print *,'self%it           : ',self%it
@@ -374,12 +385,21 @@ contains
     end subroutine print_info
 
     subroutine kill( self )
-        class(stream_chunk), intent(inout) :: self
+        class(solve2D_chunk), intent(inout) :: self
         self%id        = 0
         self%it        = 0
-        call self%spproj%kill
-        call self%qenv%kill
-        call self%cline%kill
+        if( allocated(self%spproj) )then
+            call self%spproj%kill
+            deallocate(self%spproj)
+        endif
+        if( allocated(self%qenv) )then
+            call self%qenv%kill
+            deallocate(self%qenv)
+        endif
+        if( allocated(self%cline) )then
+            call self%cline%kill
+            deallocate(self%cline)
+        endif
         self%nmics     = 0
         self%nptcls    = 0
         self%path      = ''
@@ -394,4 +414,4 @@ contains
         self%p_ptr      => null()
     end subroutine kill
 
-end module simple_stream_chunk
+end module simple_solve2D_chunk

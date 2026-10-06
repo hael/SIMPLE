@@ -32,6 +32,8 @@ If fractional update or probabilistic sampling is involved, also read
 ## Ownership Map
 
 - `solve2D`: orchestrating workflow policy and staged `refine2D` calls.
+- `solve2D_chunks`: `commander_solve2D_chunks` in `simple_commanders_solve2D` runs one `solve2D` per
+  stack-bound subset; its chunk type is `solve2D_chunk` (`src/main/solve/simple_solve2D_chunk.f90`).
 - `refine2D`: 2D classification stage implementation.
 - `simple_strategy2D_matcher`: online particle alignment, orientation/class updates, and worker partial sums.
 - `simple_matcher_ptcl_batch`: batch image loading and preprocessing.

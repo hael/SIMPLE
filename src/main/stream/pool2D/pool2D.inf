@@ -1,1 +1,1 @@
-!@descr: the 2D pool and chunk layer: the pool's module state, iterations, snapshots and publications that p06 drives, and the chunk 2D helpers
+!@descr: the 2D pool that p06 drives: the stream_pool2D type (iterations, snapshots, publications) and its stateless helpers
