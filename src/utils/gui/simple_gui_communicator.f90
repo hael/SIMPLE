@@ -9,7 +9,7 @@ use simple_http_post,            only: http_post, http_response
 use simple_core_module_api
 use simple_parameters,           only: parameters
 use simple_gui_metadata_project, only: gui_metadata_project
-use simple_gui_project_builder,  only: build_project_metadata
+use simple_gui_project_builder,  only: gui_project_builder
 use simple_gui_metadata_types,   only: GUI_METADATA_PROJECT_TYPE
 implicit none
 
@@ -116,6 +116,7 @@ contains
         character(len=*), optional, intent(in)    :: oritype
         integer,          optional, intent(in)    :: stage
         logical,          optional, intent(in)    :: selection
+        type(gui_project_builder)                 :: builder
         character(len=SHORTSTRLEN)                :: md_oritype
         integer                                   :: i_stage
         logical                                   :: l_selection
@@ -126,9 +127,12 @@ contains
         if( present(oritype)   ) md_oritype = oritype
         if( present(stage)     ) i_stage = stage
         if( present(selection) ) l_selection = selection
+        ! the previews are made before the lock: the communication thread waits for the copy only
+        call builder%build(spproj, md_oritype, i_stage, l_selection)
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call build_project_metadata(gui_project_metadata_inst, spproj, md_oritype, i_stage, l_selection)
+        call builder%apply(gui_project_metadata_inst)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
+        call builder%kill()
     end subroutine add_metadata_1
 
     subroutine add_metadata_2( self, projfile, oritype, stage, selection )
@@ -138,6 +142,7 @@ contains
         integer,          optional, intent(in)    :: stage
         logical,          optional, intent(in)    :: selection
         type(sp_project)                          :: spproj
+        type(gui_project_builder)                 :: builder
         character(len=SHORTSTRLEN)                :: md_oritype
         integer                                   :: i_stage
         logical                                   :: l_selection
@@ -165,9 +170,12 @@ contains
         md_oritype = 'all'
         if( present(stage)   ) i_stage    = stage
         if( present(oritype) ) md_oritype = oritype
+        ! the previews are made before the lock: the communication thread waits for the copy only
+        call builder%build(spproj, md_oritype, i_stage, l_selection)
         if( c_pthread_mutex_lock(gui_comm_args_inst%metadata_mutex) /= 0   ) THROW_HARD('failed to lock metadata mutex')
-        call build_project_metadata(gui_project_metadata_inst, spproj, md_oritype, i_stage, l_selection)
+        call builder%apply(gui_project_metadata_inst)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
+        call builder%kill()
         call spproj%kill()
     end subroutine add_metadata_2
 

@@ -236,6 +236,9 @@ Defaults taken without a question (each can be changed when its step comes):
   today; it could drop them.
 - Making the previews before the communicator takes the metadata mutex. Today the communication
   thread waits while a movie is summed. The builder makes this possible, as a later step.
+  *Done as a follow-up (6 October 2026):* the builder became a class, `gui_project_builder`. Its
+  `build` reads the project and writes the previews into its own state, without the lock; its
+  `apply` copies the result into the record, and only `apply` runs under the mutex.
 - `simple_forked_process`'s own import of `simple_cmdline`.
 
 ## Status

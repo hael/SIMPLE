@@ -41,7 +41,7 @@ module simple_gui_assembler_tester
   use simple_gui_metadata_api,    only: CK, json_core, json_value
   use simple_gui_assembler,       only: gui_assembler, gui_stage_status, GUI_STAGE_STATUS_RUNNING,&
                                         GUI_STAGE_STATUS_FAILED, GUI_STAGE_STATUS_FINISHED
-  use simple_gui_project_builder, only: build_project_metadata
+  use simple_gui_project_builder, only: gui_project_builder
   use simple_sp_project,          only: sp_project
   use simple_test_utils,          only: assert_true, assert_char, assert_int
   use simple_string,              only: string
@@ -515,11 +515,13 @@ contains
   !---------------- project assembly ----------------
 
   ! Build a minimal project, fill gui_metadata_project through the project builder, and read
-  ! the assembled project section's fixed fields back. An exact hash comparison is not possible
-  ! because the section embeds a live Unix timestamp (created).
+  ! the assembled project section's fixed fields back. The builder's build leaves the record
+  ! alone (the communicator runs it outside the metadata lock); its apply fills it. An exact hash
+  ! comparison is not possible because the section embeds a live Unix timestamp (created).
   subroutine test_project()
     type(gui_assembler)        :: assembler
     type(gui_metadata_project) :: meta_project_inmem
+    type(gui_project_builder)  :: builder
     type(sp_project)           :: proj
     type(string)                :: projfile, projname, json_str
     integer                     :: nmics, nstks, nptcls, created
@@ -529,7 +531,10 @@ contains
     call proj%os_ptcl2D%new(10, is_ptcl=.true.)
     call proj%update_projinfo(projfile)
     call meta_project_inmem%new(GUI_METADATA_PROJECT_TYPE)
-    call build_project_metadata(meta_project_inmem, proj, 'all', 1, .false.)
+    call builder%build(proj, 'all', 1, .false.)
+    call assert_true(.not. meta_project_inmem%assigned(), 'build leaves the record alone')
+    call builder%apply(meta_project_inmem)
+    call builder%kill()
     call assert_true(meta_project_inmem%get(projname, projfile, nmics, nstks, nptcls, created), &
         &'meta_project_inmem assigned')
     call assert_int(2,  nmics,  'meta_project_inmem nmics from in-memory project')

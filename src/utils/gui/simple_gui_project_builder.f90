@@ -1,8 +1,11 @@
-!@descr: fills the GUI's project metadata from an in-memory project, writing the previews it shows
-! build_project_metadata does for gui_communicator%add_metadata what the record cannot: it reads
+!@descr: builds the GUI's project metadata from an in-memory project, writing the previews it shows
+! gui_project_builder does for gui_communicator%add_metadata what the record cannot. build reads
 ! the sp_project segments chosen by oritype (mov, mic, ptcl, cls2D, cls3D; all of them for 'all'),
 ! writes the preview files (a movie thumbnail, a particle montage, per-stage copies of the 3D
-! reprojection and heat-map JPEGs) and reads the box files, FSC curves and MRC headers.
+! reprojection and heat-map JPEGs) and reads the box files, FSC curves and MRC headers, into the
+! builder's own state; apply then copies the result into a gui_metadata_project. build touches no
+! shared state, so the communicator runs it before taking the metadata mutex and holds the mutex
+! for apply only: the communication thread never waits while a movie is summed.
 ! gui_metadata_project only records the result, so the metadata types need nothing from src/main.
 ! stage selects the 2D/3D stage slot (stage 1 starts a new run), 0 the final one. A reporting gap
 ! never fails the job: a section that cannot be filled is left out with a warning.
@@ -35,39 +38,118 @@ use simple_gui_metadata_vol3D,      only: gui_metadata_vol3D, MAX_FSC_VOL3D, ORI
 use simple_gui_metadata_project,    only: gui_metadata_project
 implicit none
 
-public :: build_project_metadata
+public :: gui_project_builder
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: UNSET = -1 ! a count or size the update leaves as it is
+
+! one update of the project metadata, built from a project and applied to the record
+type :: gui_project_builder
+  private
+  type(string) :: projname, projfile
+  integer      :: stage = 1
+  ! the counts and sizes the update sets; UNSET for the others
+  integer      :: nmics           = UNSET
+  integer      :: nmics_selected  = UNSET
+  integer      :: nstks           = UNSET
+  integer      :: nptcls          = UNSET
+  integer      :: nptcls_selected = UNSET
+  integer      :: ncls2D          = UNSET
+  integer      :: ncls2D_selected = UNSET
+  integer      :: nstates3D       = UNSET
+  integer      :: pspec_size      = UNSET
+  ! the sections the update sets, with what their setters take
+  logical      :: l_movies      = .false.
+  logical      :: l_micrographs = .false.
+  logical      :: l_particles   = .false.
+  logical      :: l_cavgs2D     = .false.
+  logical      :: l_vols3D      = .false.
+  type(gui_metadata_micrograph), allocatable :: movies(:)
+  type(gui_metadata_micrograph), allocatable :: micrographs(:)
+  integer      :: xdim_mic  = 0
+  integer      :: ydim_mic  = 0
+  real         :: smpd_mic  = 0.
+  type(string) :: ptcls_jpg
+  type(gui_metadata_ptcl),       allocatable :: ptcls(:)
+  type(gui_metadata_cavg2D),     allocatable :: cavgs(:)
+  integer      :: dim_cavgs = 0
+  real         :: mskdiam   = 0.
+  real         :: mskscale  = 0.
+  type(gui_metadata_vol3D),      allocatable :: vols(:)
+contains
+  procedure          :: build
+  procedure          :: apply
+  procedure          :: kill
+  procedure, private :: add_movies
+  procedure, private :: add_micrographs
+  procedure, private :: add_particles
+  procedure, private :: add_cavgs2D
+  procedure, private :: add_vols3D
+end type gui_project_builder
+
 contains
 
-    !> Updates @p meta with the sections of @p spproj that @p oritype selects, for @p stage (0 the
-    !! final one); @p selection adds the selected counts.
-    subroutine build_project_metadata( meta, spproj, oritype, stage, selection )
-        type(gui_metadata_project), intent(inout) :: meta
+    !> The update of the sections of @p spproj that @p oritype selects, for @p stage (0 the final
+    !! one); @p selection adds the selected counts. Writes the previews; touches no shared state.
+    subroutine build( self, spproj, oritype, stage, selection )
+        class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         character(len=*),           intent(in)    :: oritype
         integer,                    intent(in)    :: stage
         logical,                    intent(in)    :: selection
-        type(string) :: projname, projfile
-        logical      :: l_all
+        logical :: l_all
         if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final output')
-        call spproj%projinfo%getter(1, 'projname', projname)
-        call spproj%projinfo%getter(1, 'projfile', projfile)
-        call meta%set_project(projname, projfile)
-        call meta%start_update(stage)
+        call self%kill()
+        self%stage = stage
+        call spproj%projinfo%getter(1, 'projname', self%projname)
+        call spproj%projinfo%getter(1, 'projfile', self%projfile)
         l_all = oritype == 'all'
-        if( l_all .or. oritype == 'mov' )                        call add_movies(meta, spproj)
-        if( l_all .or. oritype == 'mic' .or. oritype == 'ptcl' ) call add_micrographs(meta, spproj, oritype == 'ptcl', selection)
-        if( l_all .or. oritype == 'ptcl' )                       call add_particles(meta, spproj)
-        if( l_all .or. oritype == 'cls2D' )                      call add_cavgs2D(meta, spproj, stage, selection)
-        if( l_all .or. oritype == 'cls3D' )                      call add_vols3D(meta, spproj, stage)
-    end subroutine build_project_metadata
+        if( l_all .or. oritype == 'mov' )                        call self%add_movies(spproj)
+        if( l_all .or. oritype == 'mic' .or. oritype == 'ptcl' ) call self%add_micrographs(spproj, oritype == 'ptcl', selection)
+        if( l_all .or. oritype == 'ptcl' )                       call self%add_particles(spproj)
+        if( l_all .or. oritype == 'cls2D' )                      call self%add_cavgs2D(spproj, selection)
+        if( l_all .or. oritype == 'cls3D' )                      call self%add_vols3D(spproj)
+    end subroutine build
+
+    !> Copies the update into @p meta: the project's name, then start_update (the lists dropped,
+    !! and at stage 1 the 2D and 3D stages), the counts and sizes it sets, and its sections. Cheap:
+    !! the communicator holds the metadata mutex for it.
+    subroutine apply( self, meta )
+        class(gui_project_builder), intent(in)    :: self
+        type(gui_metadata_project), intent(inout) :: meta
+        call meta%set_project(self%projname, self%projfile)
+        call meta%start_update(self%stage)
+        if( self%nmics           /= UNSET ) call meta%set_summary(nmics=self%nmics)
+        if( self%nmics_selected  /= UNSET ) call meta%set_summary(nmics_selected=self%nmics_selected)
+        if( self%nstks           /= UNSET ) call meta%set_summary(nstks=self%nstks)
+        if( self%nptcls          /= UNSET ) call meta%set_summary(nptcls=self%nptcls)
+        if( self%nptcls_selected /= UNSET ) call meta%set_summary(nptcls_selected=self%nptcls_selected)
+        if( self%ncls2D          /= UNSET ) call meta%set_summary(ncls2D=self%ncls2D)
+        if( self%ncls2D_selected /= UNSET ) call meta%set_summary(ncls2D_selected=self%ncls2D_selected)
+        if( self%nstates3D       /= UNSET ) call meta%set_summary(nstates3D=self%nstates3D)
+        if( self%pspec_size      /= UNSET ) call meta%set_summary(pspec_size=self%pspec_size)
+        if( self%l_movies      ) call meta%set_movies(self%movies)
+        if( self%l_micrographs ) call meta%set_micrographs(self%micrographs, self%xdim_mic, self%ydim_mic, self%smpd_mic)
+        if( self%l_particles   ) call meta%set_particles(self%ptcls_jpg, self%ptcls)
+        if( self%l_cavgs2D     ) call meta%set_cavgs2D(self%stage, self%cavgs, self%dim_cavgs, self%mskdiam, self%mskscale)
+        if( self%l_vols3D      ) call meta%set_vols3D(self%stage, self%vols)
+    end subroutine apply
+
+    !> Back to an empty update.
+    subroutine kill( self )
+        class(gui_project_builder), intent(inout) :: self
+        type(gui_project_builder) :: fresh
+        select type( self )
+            type is( gui_project_builder )
+                self = fresh
+        end select
+    end subroutine kill
 
     ! A thumbnail of the first movie: its frames summed and Fourier-cropped to GUI_PSPECSZ pixels
     ! across, written as movthumb<i>.jpg in the working directory
-    subroutine add_movies( meta, spproj )
-        type(gui_metadata_project), intent(inout) :: meta
+    subroutine add_movies( self, spproj )
+        class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         integer, parameter :: N_MOV_THUMBS = 1
         type(gui_metadata_micrograph) :: movies(N_MOV_THUMBS)
@@ -75,8 +157,8 @@ contains
         type(string) :: movfname, thumbfname
         integer      :: i, nmics, nthumbs, n_movies_sum, n_frames_sum, ldim_mov(3), ldim_thumb(3)
         real         :: smpd, scale_thumb
-        nmics = spproj%os_mic%get_noris()
-        call meta%set_summary(nmics=nmics)
+        nmics      = spproj%os_mic%get_noris()
+        self%nmics = nmics
         if( nmics == 0 ) return
         nthumbs = 0
         do i = 1,nmics
@@ -104,13 +186,14 @@ contains
             call movsum%kill()
             call movthumb%kill()
         end do
-        call meta%set_movies(movies(1:nthumbs))
+        self%movies   = movies(1:nthumbs)
+        self%l_movies = .true.
     end subroutine add_movies
 
     ! The first micrographs with their CTF fit and their picks (from their box files), when the
     ! micrographs have thumbnails; @p l_ptcl adds the stack and particle counts
-    subroutine add_micrographs( meta, spproj, l_ptcl, l_selection )
-        type(gui_metadata_project), intent(inout) :: meta
+    subroutine add_micrographs( self, spproj, l_ptcl, l_selection )
+        class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         logical,                    intent(in)    :: l_ptcl, l_selection
         integer, parameter :: N_MICS_SHOWN = 50
@@ -120,10 +203,14 @@ contains
         type(string)    :: boxpath
         integer :: i, j, x, y, nmics, nshown, nvalid, nrecs, nlines, xdim, ydim
         logical :: l_ctf
-        nmics = spproj%os_mic%get_noris()
-        call meta%set_summary(nmics=nmics, pspec_size=GUI_PSPECSZ)
-        if( l_ptcl      ) call meta%set_summary(nstks=spproj%os_stk%get_noris(), nptcls=spproj%os_ptcl2D%get_noris())
-        if( l_selection ) call meta%set_summary(nmics_selected=spproj%os_mic%count_state_gt_zero())
+        nmics           = spproj%os_mic%get_noris()
+        self%nmics      = nmics
+        self%pspec_size = GUI_PSPECSZ
+        if( l_ptcl )then
+            self%nstks  = spproj%os_stk%get_noris()
+            self%nptcls = spproj%os_ptcl2D%get_noris()
+        endif
+        if( l_selection ) self%nmics_selected = spproj%os_mic%count_state_gt_zero()
         if( .not. spproj%os_mic%isthere('thumb') ) return
         nshown = min(N_MICS_SHOWN, nmics)
         allocate(mics(nshown))
@@ -162,17 +249,20 @@ contains
                 call boxfile%kill()
             endif
         enddo
-        call meta%set_micrographs(mics(1:nvalid), xdim, ydim, spproj%os_mic%get(1, 'smpd'))
+        self%micrographs   = mics(1:nvalid)
+        self%xdim_mic      = xdim
+        self%ydim_mic      = ydim
+        self%smpd_mic      = spproj%os_mic%get(1, 'smpd')
+        self%l_micrographs = .true.
     end subroutine add_micrographs
 
     ! A JPEG montage of a random sample of the selected particles, with its low-pass twin, named
     ! after this process: concurrent batch jobs share the execution directory
-    subroutine add_particles( meta, spproj )
-        type(gui_metadata_project), intent(inout) :: meta
+    subroutine add_particles( self, spproj )
+        class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         integer, parameter :: N_PTCLS_SAMPLE = 100
-        type(gui_metadata_ptcl), allocatable :: ptcls(:)
-        integer,                 allocatable :: ptcl_inds(:)
+        integer, allocatable :: ptcl_inds(:)
         type(string) :: stem, stk, jpg, lpstk, lpjpg
         integer :: i, nptcls_all, nptcls_valid, nsample, nshown, box, xtiles, ytiles, xtile, ytile
         real    :: smpd, df
@@ -202,33 +292,37 @@ contains
         lpjpg  = simple_abspath(lpjpg)
         xtiles = floor(sqrt(real(nshown)))
         ytiles = ceiling(real(nshown) / real(xtiles))
-        allocate(ptcls(nshown))
+        allocate(self%ptcls(nshown))
         do i = 1,nshown
             xtile = mod(i-1, xtiles)
             ytile = (i-1) / xtiles
             df    = (spproj%os_ptcl2D%get(ptcl_inds(i), 'dfx') + spproj%os_ptcl2D%get(ptcl_inds(i), 'dfy')) / 2.0
-            call ptcls(i)%new(GUI_METADATA_PTCL_TYPE)
-            call ptcls(i)%set(path=jpg, pathlp=lpjpg, i=i, i_max=nshown, df=df, box=box, idx=ptcl_inds(i),&
+            call self%ptcls(i)%new(GUI_METADATA_PTCL_TYPE)
+            call self%ptcls(i)%set(path=jpg, pathlp=lpjpg, i=i, i_max=nshown, df=df, box=box, idx=ptcl_inds(i),&
                 &sprite=sprite_sheet_pos(x=xtile * (100.0 / max(1, xtiles - 1)), y=ytile * (100.0 / max(1, ytiles - 1)),&
                 &h=100 * ytiles, w=100 * xtiles))
         enddo
-        call meta%set_particles(jpg, ptcls)
+        self%ptcls_jpg   = jpg
+        self%l_particles = .true.
     end subroutine add_particles
 
     ! The selected class averages of the project, as tiles of the stack's JPEG sprite sheet
-    subroutine add_cavgs2D( meta, spproj, stage, l_selection )
-        type(gui_metadata_project), intent(inout) :: meta
+    subroutine add_cavgs2D( self, spproj, l_selection )
+        class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
-        integer,                    intent(in)    :: stage
         logical,                    intent(in)    :: l_selection
         type(gui_metadata_cavg2D), allocatable :: cavgs(:)
         type(string) :: cavgsstk, cavgsjpg
         integer :: i, ncls, ncls_stk, nvalid, out_ind, xtiles, ytiles, xtile, ytile
         real    :: smpd, box, mskdiam
-        ncls = spproj%os_cls2D%get_noris()
-        call meta%set_summary(nstks=spproj%os_stk%get_noris(), nptcls=spproj%os_ptcl2D%get_noris(), ncls2D=ncls)
-        if( l_selection ) call meta%set_summary(nptcls_selected=nint(spproj%os_cls2D%get_sum('pop')),&
-            &ncls2D_selected=spproj%os_cls2D%count_state_gt_zero())
+        ncls        = spproj%os_cls2D%get_noris()
+        self%nstks  = spproj%os_stk%get_noris()
+        self%nptcls = spproj%os_ptcl2D%get_noris()
+        self%ncls2D = ncls
+        if( l_selection )then
+            self%nptcls_selected = nint(spproj%os_cls2D%get_sum('pop'))
+            self%ncls2D_selected = spproj%os_cls2D%count_state_gt_zero()
+        endif
         if( ncls == 0 ) return
         box     = 0.
         out_ind = 0
@@ -258,15 +352,18 @@ contains
                 &sprite=sprite_sheet_pos(x=xtile * (100.0 / max(1, xtiles - 1)), y=ytile * (100.0 / max(1, ytiles - 1)),&
                 &h=100 * ytiles, w=100 * xtiles))
         enddo
-        call meta%set_cavgs2D(stage, cavgs(1:nvalid), dim_cavgs=nint(box), mskdiam=mskdiam, mskscale=box * smpd)
+        self%cavgs     = cavgs(1:nvalid)
+        self%dim_cavgs = nint(box)
+        self%mskdiam   = mskdiam
+        self%mskscale  = box * smpd
+        self%l_cavgs2D = .true.
     end subroutine add_cavgs2D
 
     ! The state volumes of the project: their products, FSC, MRC header minimum and maximum,
     ! orthogonal reprojections and orientation histogram
-    subroutine add_vols3D( meta, spproj, stage )
-        type(gui_metadata_project), intent(inout) :: meta
+    subroutine add_vols3D( self, spproj )
+        class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
-        integer,                    intent(in)    :: stage
         integer, parameter :: NTILES3D = 3
         type(gui_metadata_vol3D), allocatable :: vols(:)
         real,                     allocatable :: fsc_arr(:), res_arr(:)
@@ -276,9 +373,9 @@ contains
         integer      :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
         integer      :: nstates, istate, nvalid, box, pop, fsc_box, nfsc, itile, iptcl
         logical      :: l_final, l_have_fsc
-        l_final = stage == 0
-        nstates = spproj%os_ptcl3D%get_n('state')
-        call meta%set_summary(nstates3D=nstates)
+        l_final        = self%stage == 0
+        nstates        = spproj%os_ptcl3D%get_n('state')
+        self%nstates3D = nstates
         if( nstates == 0 ) return
         allocate(vols(nstates))
         nvalid = 0
@@ -303,14 +400,14 @@ contains
                 ! e.g. recvol_state01_stage03_lp.mrc (simple_solve3D_utils exec_refine3D);
                 ! volpath/pprocpath/pprocmirrpath are final-only products, withheld here
                 volpath_out   = string('')
-                lppath        = add2fbody(volpath, MRC_EXT, '_stage'//int2str_pad(stage,2)//LP_SUFFIX)
+                lppath        = add2fbody(volpath, MRC_EXT, '_stage'//int2str_pad(self%stage,2)//LP_SUFFIX)
                 pprocpath     = string('')
                 pprocmirrpath = string('')
             endif
             if( .not. file_exists(lppath) ) lppath = string('')
             ! the JPEGs the 3D writes beside the volume
-            reprojpath  = stage_jpeg(get_fpath(volpath)//refine3D_reprojs_fname(istate), stage)
-            oridistpath = stage_jpeg(get_fpath(volpath)//refine3D_oris_heatmap_fname(istate), stage)
+            reprojpath  = stage_jpeg(get_fpath(volpath)//refine3D_reprojs_fname(istate), self%stage)
+            oridistpath = stage_jpeg(get_fpath(volpath)//refine3D_oris_heatmap_fname(istate), self%stage)
             call vols(nvalid)%new(GUI_METADATA_VOL3D_TYPE)
             ! the FSC curve and the resolutions; cfar from the first particle of the state holding it
             l_have_fsc = .false.
@@ -374,7 +471,8 @@ contains
             call oridist_from_oris(spproj%os_ptcl3D, istate, hist)
             call vols(nvalid)%set_oridist(hist)
         enddo
-        call meta%set_vols3D(stage, vols(1:nvalid))
+        self%vols     = vols(1:nvalid)
+        self%l_vols3D = .true.
     end subroutine add_vols3D
 
     ! @p fname when it exists, '' otherwise. For a non-final @p stage, a copy named after the
