@@ -1724,7 +1724,7 @@ contains
       label%to_char(), ' # ', chunk%id, ' : ', &
       chunk%nptcls_selected, '/', chunk%nptcls, ' PARTICLES SELECTED'
       
-    call self%cleanup_chunk(chunk, label)
+    call self%cleanup_chunk(chunk, label, stk_score)
     call dealloc_imgarr(cavg_imgs)
     call spproj%kill()
     if( allocated(states) ) deallocate(states)
@@ -1775,13 +1775,14 @@ contains
     self%n_failed_ptcls      = self%n_failed_ptcls  + chunk%nptcls
   end subroutine fail_chunk
 
-  subroutine cleanup_chunk( self, chunk, label )
+  subroutine cleanup_chunk( self, chunk, label, cavgs_stk )
     use simple_sigma2_state_file, only: SIGMA2_STATE_FNAME
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(inout) :: chunk
     type(string),        intent(in)    :: label
+    type(string),        intent(in)    :: cavgs_stk
     type(string), allocatable          :: files(:)
-    type(string)                       :: fname_keep, fname_keep_last_iter_jpeg, fname_keep_last_iter_stk
+    type(string)                       :: fname_keep, fname_keep_cavgs, fname_keep_last_iter_jpeg, fname_keep_last_iter_stk
     type(string)                       :: fname_keep_last_iter_even_stk, fname_keep_last_iter_odd_stk
     type(string)                       :: fname_keep_sigma_final, fname_keep_sigma_iter_1, fname_keep_sigma_iter_2, fname
     integer(timer_int_kind)            :: t0
@@ -1797,6 +1798,7 @@ contains
     end if
 
     fname_keep                = basename(chunk%projfile)
+    fname_keep_cavgs          = basename(cavgs_stk)
     fname_keep_last_iter_jpeg = ''
     fname_keep_last_iter_stk  = ''
     fname_keep_last_iter_even_stk = ''
@@ -1863,6 +1865,7 @@ contains
     do i = 1, size(files)
       fname = basename(files(i))
       if( fname == fname_keep ) cycle
+      if( fname == fname_keep_cavgs ) cycle
       if( fname == string(SOLVE2D_FINISHED) ) cycle
       if( fname == string('REJECTION_FINISHED') ) cycle
       if( fname == string('COMPLETE') ) cycle

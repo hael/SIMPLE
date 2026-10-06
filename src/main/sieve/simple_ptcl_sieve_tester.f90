@@ -20,7 +20,7 @@ public :: run_all_ptcl_sieve_tests
 
 ! the completed coarse chunk of test_collect_and_reject_hard_gates and test_hand_off_applies_optics_map
 character(len=*), parameter :: CHUNK_STEM = 'chunk_coarse_1'
-character(len=*), parameter :: CAVG_STACK = 'cavgs_iter001'//MRC_EXT
+character(len=*), parameter :: CAVG_STACK = 'cavgs'//MRC_EXT
 real,             parameter :: SMPD       = 2.0
 integer,          parameter :: CAVG_BOX   = 64
 integer,          parameter :: NCLASSES   = 2

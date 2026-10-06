@@ -294,8 +294,9 @@ Cleanup retention policy (`cleanup_chunk`):
 4. keep selected/rejected JPEG renderings;
 5. keep all-reasons reason-overlay JPEG and its sidecar key file;
 6. keep latest iteration JPEG for the chunk;
-7. keep final iteration stacks for all three stack variants when present:
-  whole stack (non-`_even`/`_odd`), `_even`, and `_odd`;
+7. keep the class-average stack registered in the chunk project, plus final
+  iteration stacks for all three stack variants when present: whole stack
+  (non-`_even`/`_odd`), `_even`, and `_odd`;
 8. keep the highest-rank sigma STAR candidate (`sigma*.star`, preferring
   `_iterNNN` when available).
 
