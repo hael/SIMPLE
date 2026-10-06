@@ -86,7 +86,10 @@ contains
         call spproj%read_segment('ptcl3D', projfile)
         do state = 1, params%nstates
             pop = spproj%os_ptcl3D%get_pop(state, 'state')
-            if( pop == 0 )cycle     ! empty-state case
+            if( pop == 0 )then
+                call spproj%remove_state_artifacts_from_osout(state)
+                cycle
+            endif
             str_state = int2str_pad(state,2)
             vol_name  = refine3D_state_vol_fname(state)
             if( .not. file_exists(vol_name) )cycle
