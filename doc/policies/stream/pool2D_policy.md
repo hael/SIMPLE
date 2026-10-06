@@ -17,8 +17,9 @@ by `doc/policies/stream/restart_policy.md`.
 ## 2. Inputs
 
 1. The particle sets the sieve (p05) hands off to its completed folder; each is a fine chunk's
-   project. The set marked `sieve_final=yes` in `os_out` is the sieve's last; it may hold no
-   particles (the sieve's empty final set), and then only ends the intake. A later set with
+   project. The set marked `sieve_final=yes` in `os_out` is the sieve's last. The sieve marks
+   only its empty final set, handed off once every chunk has ended, which ends the intake and
+   transfers nothing; the pool also takes the flag on a set with particles. A later set with
    particles and without the flag takes the note back: the sieve's upstream had more movies
    (`ptcl_sieve_policy.md`, section 6.3).
 2. The mask diameter of the sieve's 2D, read from the first set with class averages
@@ -30,15 +31,23 @@ by `doc/policies/stream/restart_policy.md`.
 
 Each pass of p06 runs, in this order:
 
-1. take the sets handed off since the last pass;
+1. take the sets handed off since the last pass, in the order the sieve handed them off: by the
+   number ending their name (a chunk's id, so `chunk_fine_10` after `chunk_fine_2`), the sieve's
+   final sets (`sieve_final_c<n>_f<m>`) after every other (`sort_sets`), whatever order the folder
+   lists them in. A final set is therefore never taken before a set the sieve handed off earlier,
+   which would otherwise read as a set after the final one and take the final note back;
 2. refresh the pool: a paused pool refreshes its statistics; a running one is checked for a
    completed iteration, whose particle parameters, classes and resolution come back into the
    pool, with a dimension update (section 7);
 3. publish the pool's classified state for 3D when the refresh brought back iteration
-   `EXPORT_START_ITER` (25) or a later one, before anything new is imported or dispatched (the 3D
-   ingestion policy). The final run stops at `FINAL_ITER` (25), so a short session still
-   publishes its last iteration (until 5 October 2026 the publications started after iteration
-   25, and a session whose final set came before it never reached 3D);
+   `EXPORT_START_ITER` (25) or a later one, or iteration `FIRST_EXPORT_ITER` (10, the
+   `MSKDIAM_SWITCH_ITER`) in a pool that has published nothing yet (`exports_after`), before
+   anything new is imported or dispatched (the 3D ingestion policy). The iteration-10 publication
+   is 3D's first set and carries the sieve's mask diameter, which the pool took when it dispatched
+   iteration 10; a restarted pool with publications on disk skips it and resumes at 25. The final
+   run stops at `FINAL_ITER` (25), so a short session still publishes its last iteration (until 5
+   October 2026 the publications started after iteration 25, and a session whose final set came
+   before it never reached 3D);
 4. import the new sets when the pool is free (the first import starts it, section 4). With
    `stepwise=yes` (p06's default, set by its commander; a registered parameter) an import takes
    sets in order until its own particles reach the starting threshold (or `ncls` * 20 before it
@@ -46,7 +55,8 @@ Each pass of p06 runs, in this order:
    pool past its threshold still takes as many sets as one threshold's worth;
 5. apply the pause rule (section 5);
 6. start the next iteration unless paused or below the starting threshold;
-7. from iteration `MSKDIAM_SWITCH_ITER` (10), switch once to the sieve's mask diameter;
+7. from iteration `MSKDIAM_SWITCH_ITER` (10), switch once to the sieve's mask diameter, unless
+   one was given on the command line, which is kept (follow-up plan, decision 7);
 8. send the class averages to the GUI;
 9. apply the GUI's updates.
 
@@ -103,8 +113,9 @@ Each pass of p06 runs, in this order:
    status without `REFINE2D_FINISHED` has failed: its log is kept as
    `simple_log_refine2D_pool_failed_iterNNN_attempt<k>`, the part files are cleared, and the
    iteration is submitted again once from its project as made. A second failure stops the stage,
-   which reports it and writes its final project from the last complete iteration. A job killed
-   before it writes a status is not seen (`restart_policy.md`, known gaps). On stop, the running
+   which reports it and writes its final project from the last complete iteration. The iteration
+   runs as the pool's `qsys_async_job` (label `refine2D_pool`), whose liveness check finds a job
+   killed before it writes a status (`restart_policy.md`, job lifecycle). On stop, the running
    iteration is cancelled.
 
 ## 7. Dimensions
@@ -136,7 +147,7 @@ in 3D, and in snapshots by the user's selection.
 ## 9. Snapshots
 
 1. A snapshot request from the GUI (id, iteration, selected classes, file name) is written once
-   per id, once the pool has started.
+   per id. A request before the pool has started is answered at once, as not written (item 6).
 2. It holds the selected classes of the requested iteration (`write_pool_snapshot`, the request
    passed as arguments):
    - for the current iteration, the pool project;
@@ -146,26 +157,36 @@ in 3D, and in snapshots by the user's selection.
 4. The STAR files' optics group ids are offset by (`nicedispid` - 1) * 500, so the GUI's displays
    do not collide.
 5. The snapshot's class averages go back to the GUI, with its particle count.
-6. A request the pool cannot serve is not fatal: an iteration no longer kept, or files missing.
-   Nothing is written, a warning is logged, and the GUI is told the snapshot has 0 particles and
-   no file.
+6. A request the pool cannot serve is not fatal: no iteration yet, an iteration no longer kept,
+   or files missing (also the current iteration's `frcs.bin`, which is registered only when it
+   exists). Nothing is written, a warning is logged, and the GUI is told the snapshot has 0
+   particles and no file.
 
 ## 10. The final project
 
 When p06 stops, the pool's last complete iteration is written as the stage's project:
-- the class averages and FRCs at the native sampling;
+- the class averages and FRCs at the native sampling; when the stop came mid-iteration, the
+  previous iteration's class averages go with its own FRCs (`frcs_iterNNN.bin`), not with
+  `frcs.bin`, which the cancelled iteration was rewriting;
 - the newest optics map's groups;
 - `ptcl3D` prepared for 3D: 2D clustering removed (class, in-plane angle, corr, frac), shifts
   kept, `updatecnt` and `sampled` removed;
 - the micrograph and particle STAR files.
 
-Its class averages are then ranked. Before any iteration, the raw imported particles are written
-instead.
+Its class averages are then ranked. Before any complete iteration, the pool's imported
+micrographs, stacks and particles are written instead, as they came (no 2D parameters but their
+shifts), with the newest optics map's groups and the STAR files (`terminate_stream2D`). The groups
+are applied to the project as written; the root folder's optics project is not read.
+
+Publications for 3D (`stream_3D_ingestion_policy.md`): the one after iteration `FINAL_ITER` or a
+later one, while the sieve's final set is in the pool, carries `pool_final=yes` in its out
+segment (`publishes_final`); multistate 3D then runs its final refine3D.
 
 ## 11. Change rules
 
 - The schedule constants are named in the stage (`EARLY_RATE_FACTOR`, `LATE_RATE_FACTOR`,
-  `LATE_ITER`, `FINAL_ITER`, `MSKDIAM_SWITCH_ITER`, `EXPORT_START_ITER`, `NPUBLICATIONS_KEPT`,
+  `LATE_ITER`, `FINAL_ITER`, `MSKDIAM_SWITCH_ITER`, `FIRST_EXPORT_ITER`, `EXPORT_START_ITER`,
+  `NPUBLICATIONS_KEPT`,
   `NPTCLS_PER_CLS_MIN`,
   `OPTICS_ID_DELTA`) and in the pool module (`ITERLIM`, `ITERSHIFT`). A change of any of them
   updates this policy.
@@ -190,7 +211,7 @@ instead.
 - **Late particles:** the low-pass ramp follows the global iteration, so particles arriving after
   iteration 20 never see the coarse limits.
 - **Dimension growth** pads class averages and FRCs, which adds no information.
-- **The mask diameter changes mid-run** at iteration 10.
+- **The mask diameter changes mid-run** at iteration 10, when none was given.
 - **Optics group ids** of the STAR files depend on the GUI display id.
 - **History memory:** five full copies of the pool project in memory. A pool of millions of
   particles may want the history on disk instead (writing one project per iteration).

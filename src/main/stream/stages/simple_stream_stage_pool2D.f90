@@ -7,8 +7,10 @@
 !   sieve has handed off since the last pass, adds them to the pool when it is
 !   free, lets the pool run its next 2D iteration (or pauses it while too few
 !   new particles arrive), answers the GUI (mask diameter, snapshots) and
-!   publishes the pool's classified state for 3D after each completed
-!   iteration (doc/policies/stream/stream_3D_ingestion_policy.md). The commander
+!   publishes the pool's classified state for 3D: once after iteration
+!   MSKDIAM_SWITCH_ITER in a pool that has published nothing yet, then after each
+!   completed iteration from EXPORT_START_ITER
+!   (doc/policies/stream/stream_3D_ingestion_policy.md). The commander
 !   (simple_commanders_stream_p06_pool2D) only normalises the command line and loops over
 !   iterate() until finished().
 !
@@ -44,7 +46,9 @@
 module simple_stream_stage_pool2D
 use simple_defs,                                only: logfhandle, PATH_HERE, COSMSKHALFWIDTH
 use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, DIR_SNAPSHOT, REFINE2D_FINISHED, JOB_INFO_EXT
-use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME, POOL_EXIT_CODE, POOL_INPUT_PROJFILE
+use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME, POOL_EXIT_CODE, POOL_INPUT_PROJFILE,&
+                                                     &SIEVE_FINAL_SET_FBODY
+use simple_srch_sort_loc,                       only: hpsort
 use simple_error,                               only: simple_exception
 use simple_string,                              only: string
 use simple_string_utils,                        only: int2str, int2str_pad, str2int
@@ -90,6 +94,8 @@ integer, parameter :: LATE_RATE_FACTOR      = 500 ! the same after iteration 20,
 integer, parameter :: LATE_ITER             = 20  ! last iteration of the early pause rule
 integer, parameter :: FINAL_ITER            = 25  ! the final sieve set runs the pool uninterrupted to here
 integer, parameter :: MSKDIAM_SWITCH_ITER   = 10  ! iteration from which the sieve's mask diameter applies
+integer, parameter :: FIRST_EXPORT_ITER     = MSKDIAM_SWITCH_ITER ! a fresh pool's first publication for 3D, after this
+                                                   ! iteration: it carries the sieve's mask diameter, set when it was dispatched
 integer, parameter :: EXPORT_START_ITER     = 25  ! the pool is published for 3D after each iteration from this one on
                                                    ! (the final run's last iteration, FINAL_ITER, among them)
 integer, parameter :: NPUBLICATIONS_KEPT    = 2   ! the newest publications kept on disk; older ones are removed
@@ -99,7 +105,7 @@ integer, parameter :: NPUBLICATIONS_KEPT    = 2   ! the newest publications kept
 type :: stream_stage_pool2D
     type(parameters), allocatable             :: params
     type(cmdline), pointer                    :: cline => null() ! the stage's command line, read by the pool (master_cline)
-    type(sp_project)                          :: spproj          ! the stage's project
+    type(sp_project), allocatable             :: spproj          ! the stage's project (init_params..kill)
     type(stream_watcher)                      :: project_buff    ! the sets the sieve hands off
     type(rec_list)                            :: setslist        ! one record per set; included once in the pool
     type(stream_pipe)                         :: pipe            ! to and from the master
@@ -124,7 +130,7 @@ type :: stream_stage_pool2D
     integer :: nptcls_dynamic_threshold  = 0  ! particles a paused pool waits for
     integer :: iter_last_import          = -1 ! pool iteration of the last import
     integer :: last_sent_iter            = 0  ! iteration whose class averages the GUI has
-    integer :: last_export_iteration     = EXPORT_START_ITER - 1
+    integer :: last_export_iteration     = 0  ! pool iteration of the last publication attempt
     integer :: last_export_id            = 1
     integer :: optics_id_offset          = 0
     real    :: final_mskdiam             = 0. ! the sieve's mask diameter (A), applied from MSKDIAM_SWITCH_ITER
@@ -135,6 +141,7 @@ type :: stream_stage_pool2D
     logical :: l_sieve_final             = .false. ! the sieve's final set is in the pool
     logical :: l_stepwise                = .false. ! import only enough sets to reach the threshold
     logical :: l_mskdiam_read            = .false. ! final_mskdiam has been read from the first set
+    logical :: l_mskdiam_given           = .false. ! a mask diameter on the command line: the sieve's does not replace it
     logical :: l_restart                 = .false.
     logical :: l_pool_started            = .false. ! init_pool_clustering has run (on the first import)
     logical :: l_attached                = .false. ! the sieve's completed folder exists and is watched
@@ -179,6 +186,8 @@ contains
     procedure, nopass :: pause_rate_factor
     procedure, nopass :: target_nptcls
     procedure, nopass :: runs_to_final
+    procedure, nopass :: publishes_final
+    procedure, nopass :: exports_after
     procedure, nopass :: default_mskdiam
 end type stream_stage_pool2D
 
@@ -216,11 +225,13 @@ contains
             if( .not. file_exists(dir_exec) ) THROW_HARD('Previous directory does not exist: '//dir_exec%to_char())
             self%l_restart = .true.
         endif
+        if( .not. allocated(self%spproj) ) allocate(self%spproj)
         call create_stream_project(self%spproj, cline, string('pool2D'))
         if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
         self%l_stepwise = self%params%stepwise == 'yes'
         self%mskdiam    = self%params%mskdiam
+        self%l_mskdiam_given = self%params%mskdiam > 0.
         allocate(self%cline)
         self%cline = cline
         call self%cline%set('mkdir', 'no')
@@ -331,6 +342,10 @@ contains
 
     subroutine kill( self )
         class(stream_stage_pool2D), intent(inout) :: self
+        if( allocated(self%spproj) )then
+            call self%spproj%kill
+            deallocate(self%spproj)
+        endif
         if( .not. self%l_exists )then
             if( allocated(self%params) ) deallocate(self%params)
             return
@@ -341,7 +356,6 @@ contains
             deallocate(self%cline)
         endif
         nullify(self%cline)
-        call self%spproj%kill
         call self%project_buff%kill
         call self%setslist%kill
         call self%pipe%kill
@@ -369,7 +383,7 @@ contains
         self%nptcls_dynamic_threshold = 0
         self%iter_last_import         = -1
         self%last_sent_iter           = 0
-        self%last_export_iteration    = EXPORT_START_ITER - 1
+        self%last_export_iteration    = 0
         self%last_export_id           = 1
         self%optics_id_offset         = 0
         self%final_mskdiam            = 0.
@@ -380,6 +394,7 @@ contains
         self%l_sieve_final            = .false.
         self%l_stepwise               = .false.
         self%l_mskdiam_read           = .false.
+        self%l_mskdiam_given          = .false.
         self%l_restart                = .false.
         self%l_pool_started           = .false.
         self%l_attached               = .false.
@@ -410,13 +425,17 @@ contains
         self%l_waiting_logged = .false.
     end subroutine attach_upstream
 
-    ! One record per newly handed-off set; the first set gives the sieve's mask diameter.
+    ! One record per newly handed-off set, in the order the sieve handed them off (sort_sets): the
+    ! sets present are imported in that order, whatever order the folder lists them in, so a final
+    ! set is never taken before a set the sieve handed off earlier. The first set gives the sieve's
+    ! mask diameter.
     subroutine watch_sets( self )
         class(stream_stage_pool2D), intent(inout) :: self
         type(string), allocatable :: projects(:)
         integer :: nprojects, i
         call self%project_buff%watch(nprojects, projects)
         if( nprojects == 0 ) return
+        call sort_sets(projects)
         call self%project_buff%add2history(projects)
         do i = 1,nprojects
             call self%setslist%push2chunk_list(projects(i), self%setslist%size() + 1, .true.)
@@ -618,6 +637,59 @@ contains
         deallocate(sets, l_included)
     end subroutine transfer_sets
 
+    ! The sets @p projects in the order the sieve hands them off: by the number that ends their name
+    ! (a chunk's id: chunk_fine_<id>, chunk_coarse_<id>), the sieve's final sets
+    ! (SIEVE_FINAL_SET_FBODY) after every other; ties by name.
+    subroutine sort_sets( projects )
+        type(string), allocatable, intent(inout) :: projects(:)
+        type(string), allocatable :: sorted(:)
+        integer,      allocatable :: order(:), keys(:)
+        logical,      allocatable :: l_final(:)
+        type(string) :: fbody
+        integer      :: n, i
+        n = size(projects)
+        if( n < 2 ) return
+        allocate(keys(n), l_final(n))
+        do i = 1,n
+            fbody      = get_fbody(basename(projects(i)), METADATA_EXT, separator=.false.)
+            l_final(i) = fbody%has_substr(SIEVE_FINAL_SET_FBODY)
+            keys(i)    = trailing_number(fbody%to_char())
+        enddo
+        order = [(i, i=1,n)]
+        call hpsort(order, handed_off_before)
+        sorted = projects(order)
+        call move_alloc(sorted, projects)
+
+    contains
+
+        logical function handed_off_before( a, b )
+            integer, intent(in) :: a, b
+            if( l_final(a) .neqv. l_final(b) )then
+                handed_off_before = l_final(b)
+            else if( keys(a) /= keys(b) )then
+                handed_off_before = keys(a) < keys(b)
+            else
+                handed_off_before = llt(projects(a)%to_char(), projects(b)%to_char())
+            endif
+        end function handed_off_before
+
+        ! the number ending @p name, 0 when it ends in none
+        integer function trailing_number( name )
+            character(len=*), intent(in) :: name
+            integer :: k, ios
+            trailing_number = 0
+            k = len_trim(name)
+            do while( k > 0 )
+                if( verify(name(k:k), '0123456789') /= 0 ) exit
+                k = k - 1
+            enddo
+            if( k == len_trim(name) ) return
+            read(name(k+1:len_trim(name)),*,iostat=ios) trailing_number
+            if( ios /= 0 ) trailing_number = 0
+        end function trailing_number
+
+    end subroutine sort_sets
+
     ! .true. for the sieve's final set (sieve_final=yes in its out segment)
     logical function is_final_set( set )
         class(sp_project), intent(inout) :: set
@@ -706,17 +778,23 @@ contains
         endif
     end subroutine set_mskdiam
 
-    ! From MSKDIAM_SWITCH_ITER the pool uses the mask diameter of the sieve's 2D, once.
+    ! From MSKDIAM_SWITCH_ITER the pool uses the mask diameter of the sieve's 2D, once, unless one
+    ! was given on the command line (decision 7 of the follow-up plan), which is kept.
     subroutine apply_final_mskdiam( self )
         class(stream_stage_pool2D), intent(inout) :: self
         if( get_pool_iter() < MSKDIAM_SWITCH_ITER .or. self%final_mskdiam <= 0. ) return
-        call self%set_mskdiam(nint(self%final_mskdiam))
+        if( self%l_mskdiam_given )then
+            write(logfhandle,'(A,F8.2,A)') '>>> THE GIVEN MASK DIAMETER IS KEPT; THE SIEVE''S (', self%final_mskdiam,&
+                &' A) IS NOT APPLIED'
+        else
+            call self%set_mskdiam(nint(self%final_mskdiam))
+        endif
         self%final_mskdiam = 0.
     end subroutine apply_final_mskdiam
 
     ! Drains the GUI updates. A new mask diameter applies from the next iteration, resumes a paused
-    ! pool and replaces the sieve's pending one; a snapshot request (once the pool runs) is written
-    ! and sent back.
+    ! pool and replaces the sieve's pending one; a snapshot request is written and sent back, or,
+    ! before the pool starts, answered at once as not written.
     subroutine apply_gui_updates( self )
         class(stream_stage_pool2D), intent(inout) :: self
         type(gui_metadata_stream_update) :: update
@@ -730,7 +808,7 @@ contains
                 self%final_mskdiam = 0.
                 call self%unpause()
             endif
-            if( update%has_snapshot2D_update() .and. self%l_pool_started ) call self%write_snapshot(update)
+            if( update%has_snapshot2D_update() ) call self%write_snapshot(update)
         enddo
     end subroutine apply_gui_updates
 
@@ -746,18 +824,27 @@ contains
         integer      :: snapshot_id, iteration
         call update%get_snapshot2D_update(snapshot_id, iteration, selection, self%snapshot_filename)
         if( snapshot_id <= self%last_snapshot_id ) return
-        call simple_getcwd(cwd)
-        stem              = swap_suffix(self%snapshot_filename, '', METADATA_EXT)
-        self%snapshot_dir = cwd//'/'//DIR_SNAPSHOT//stem
-        call write_pool_snapshot(iteration, selection, self%snapshot_dir//'/'//self%snapshot_filename,&
-            &self%snapshot_dir//'/'//stem, self%params%optics_dir, self%optics_id_offset, self%snapshot_nptcls,&
-            &self%snapshot_jpeg, self%snapshot_mrc, self%snapshot_ntilesx, self%snapshot_ntilesy,&
-            &self%snapshot_idx, self%snapshot_pop, self%snapshot_res)
+        if( self%l_pool_started )then
+            call simple_getcwd(cwd)
+            stem              = swap_suffix(self%snapshot_filename, '', METADATA_EXT)
+            self%snapshot_dir = cwd//'/'//DIR_SNAPSHOT//stem
+            call write_pool_snapshot(iteration, selection, self%snapshot_dir//'/'//self%snapshot_filename,&
+                &self%snapshot_dir//'/'//stem, self%params%optics_dir, self%optics_id_offset, self%snapshot_nptcls,&
+                &self%snapshot_jpeg, self%snapshot_mrc, self%snapshot_ntilesx, self%snapshot_ntilesy,&
+                &self%snapshot_idx, self%snapshot_pop, self%snapshot_res)
+        else
+            ! no iteration yet: answered at once, with no particles and no file
+            write(logfhandle,'(A,I6,A)') '>>> SNAPSHOT ', snapshot_id, ' REQUESTED BEFORE THE POOL STARTED; NOT WRITTEN'
+            self%snapshot_nptcls = 0
+            if( allocated(self%snapshot_idx) ) deallocate(self%snapshot_idx)
+            if( allocated(self%snapshot_pop) ) deallocate(self%snapshot_pop)
+            if( allocated(self%snapshot_res) ) deallocate(self%snapshot_res)
+        endif
         self%last_snapshot_id = snapshot_id
         call self%send_snapshot()
     end subroutine write_snapshot
 
-    ! Once iteration EXPORT_START_ITER or a later one has come back, and before the next is dispatched, the
+    ! Once an iteration exports_after names has come back, and before the next is dispatched, the
     ! pool's classified state is published as the next project of the completed folder (stacks
     ! whose particles have been through an iteration; never particles just imported). The newest
     ! NPUBLICATIONS_KEPT publications are kept. One publication per iteration.
@@ -768,8 +855,11 @@ contains
         if( .not. self%l_pool_started ) return
         if( .not. is_pool_available() ) return
         if( get_pool_iter() <= self%last_export_iteration ) return
+        ! no publication on disk yet (restore_export_id found none): a fresh pool
+        if( .not. exports_after(get_pool_iter(), self%last_export_id == 1) ) return
         call simple_getcwd(cwd)
-        call publish_pool_state(publication_fname(cwd, self%last_export_id), nstks)
+        call publish_pool_state(publication_fname(cwd, self%last_export_id), nstks, self%params%optics_dir,&
+            &publishes_final(get_pool_iter(), self%l_sieve_final))
         if( nstks > 0 )then
             if( self%last_export_id > NPUBLICATIONS_KEPT )then
                 call delete_pool_publication(publication_fname(cwd, self%last_export_id - NPUBLICATIONS_KEPT))
@@ -853,6 +943,25 @@ contains
         logical, intent(in) :: l_sieve_final
         runs_to_final = l_sieve_final .and. iter < FINAL_ITER
     end function runs_to_final
+
+    !> Whether a publication after iteration @p iter is the pool's final one: the sieve's final set
+    !! is in the pool and the final run has reached FINAL_ITER (multistate 3D then runs its final
+    !! refine3D). A later set that is not final takes the note back (transfer_sets).
+    pure logical function publishes_final( iter, l_sieve_final )
+        integer, intent(in) :: iter
+        logical, intent(in) :: l_sieve_final
+        publishes_final = l_sieve_final .and. iter >= FINAL_ITER
+    end function publishes_final
+
+    !> Whether the pool publishes for 3D after iteration @p iter: after every iteration from
+    !! EXPORT_START_ITER, and once after FIRST_EXPORT_ITER when it has published nothing yet
+    !! (@p l_none_yet). A restarted pool with publications on disk resumes from EXPORT_START_ITER,
+    !! so 3D never takes the early classification of a restarted pool as a later publication.
+    pure logical function exports_after( iter, l_none_yet )
+        integer, intent(in) :: iter
+        logical, intent(in) :: l_none_yet
+        exports_after = iter >= EXPORT_START_ITER .or. (iter == FIRST_EXPORT_ITER .and. l_none_yet)
+    end function exports_after
 
     !> The mask diameter (A) when none is given: the box less the soft edge and a pixel. The stage
     !! this replaces used the pixel count as Angstroms.

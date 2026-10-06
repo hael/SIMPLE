@@ -52,13 +52,6 @@ use simple_stream_master_resources,                     only: stream_resources, 
 use simple_stream_master_meta_store,                    only: stream_master_meta_store
 use simple_stream_master_gui_commands,                  only: stream_master_gui_commands
 use simple_stream_sigterm,                              only: install_sigterm_handler, restore_sigterm_handler, sigterm_received
-use simple_commanders_stream_p01_preprocess,            only: commander_stream_p01_preprocess
-use simple_commanders_stream_p02_assign_optics,         only: commander_stream_p02_assign_optics
-use simple_commanders_stream_p03_initial_analysis,      only: commander_stream_p03_initial_analysis
-use simple_commanders_stream_p04_refpick_extract,       only: commander_stream_p04_refpick_extract
-use simple_commanders_stream_p05_sieve_cavgs,           only: commander_stream_p05_sieve_cavgs
-use simple_commanders_stream_p06_pool2D,                only: commander_stream_p06_pool2D
-use simple_commanders_stream_p07_solve3D_multistate,    only: commander_stream_p07_solve3D_multistate
 implicit none
 
 public :: commander_stream_p00_master
@@ -79,6 +72,7 @@ integer, parameter :: HEARTBEAT_S           = 5     ! between heartbeats
 integer, parameter :: MEMLOG_EVERY          = 12    ! heartbeats between memory logs
 integer, parameter :: OPTICS_STOP_TIMEOUT_S = 60    ! optics assignment stops first, waited for up to this
 integer, parameter :: STOP_TIMEOUT_S        = 600   ! a stage still running this long after the stop is killed
+integer, parameter :: STARTUP_STOP_TIMEOUT_S = 60   ! after a start-up failure, the stages are killed after this
 integer, parameter :: LISTENER_SLEEP_US     = 10000 ! the listener's pause between drains
 
 ! What the listener thread shares with the main loop; it gets the address.
@@ -190,11 +184,11 @@ contains
         do id = 1,NSTAGES
             if( id == STAGE_PREPROCESS       .and. l_existing_preprocess ) cycle
             if( id == STAGE_INITIAL_ANALYSIS .and. l_existing_pickrefs   ) cycle
-            if( .not. shared%stages(id)%is_running() ) THROW_HARD('failed to fork '//shared%stages(id)%get_label())
+            if( .not. shared%stages(id)%is_running() ) call abort_startup('failed to fork '//shared%stages(id)%get_label())
         enddo
         ! the listener thread; the stages' first messages wait in their pipes until it reads them
         rc = c_pthread_create(listener, c_null_ptr, c_funloc(metadata_listener), c_loc(shared))
-        if( rc /= 0 ) THROW_HARD('failed to create metadata listener thread')
+        if( rc /= 0 ) call abort_startup('failed to create metadata listener thread')
         ! the handlers after the forks (a forked stage resets them anyway)
         call install_sigterm_handler(also_sigint=.true.)
         call mem_monitor_init(cline, 'simple_stream: master')
@@ -207,30 +201,7 @@ contains
         stop_time    = 0
         do
             loop_counter = loop_counter + 1
-            call assembler%assemble_stream_heartbeat(shared%stages(STAGE_PREPROCESS)%fork,&
-                &shared%stages(STAGE_ASSIGN_OPTICS)%fork, shared%stages(STAGE_INITIAL_ANALYSIS)%fork,&
-                &shared%stages(STAGE_REFERENCE_PICKING)%fork, shared%stages(STAGE_PARTICLE_SIEVING)%fork,&
-                &shared%stages(STAGE_POOL2D)%fork, shared%stages(STAGE_SOLVE3D)%fork,&
-                &n_active_persistent_workers=qsys%get_n_active_persistent_workers())
-            call lock(shared%meta_mutex)
-            call shared%store%assemble(assembler)
-            call unlock(shared%meta_mutex)
-            request = assembler%to_string()
-            ! a heartbeat the GUI did not accept (no answer, or a status other than 200) may not have
-            ! been read: the next one sends everything again, not only what changed since
-            if( post%request(response, request) )then
-                if( response%code == 200 )then
-                    if( commands%parse(response%content%to_char()) ) call apply_commands()
-                else
-                    call assembler%clear_hashes()
-                endif
-            else
-                call assembler%clear_hashes()
-            endif
-            call request%kill()
-            call response%content%kill()
-            call response%content_type%kill()
-            call qsys%service_persistent_worker_warmup()
+            call send_heartbeat()
             if( mod(loop_counter, MEMLOG_EVERY) == 0 ) call log_memory()
             if( l_last_loop ) exit
             if( l_stop .or. sigterm_received() )then
@@ -266,6 +237,62 @@ contains
 
     contains
 
+        ! One heartbeat: the stages' state to the GUI, and its answer applied. A heartbeat the GUI
+        ! did not accept (no answer, or a status other than 200) may not have been read: the next
+        ! one sends everything again, not only what changed since.
+        subroutine send_heartbeat()
+            call assembler%assemble_stream_heartbeat(shared%stages(STAGE_PREPROCESS)%fork,&
+                &shared%stages(STAGE_ASSIGN_OPTICS)%fork, shared%stages(STAGE_INITIAL_ANALYSIS)%fork,&
+                &shared%stages(STAGE_REFERENCE_PICKING)%fork, shared%stages(STAGE_PARTICLE_SIEVING)%fork,&
+                &shared%stages(STAGE_POOL2D)%fork, shared%stages(STAGE_SOLVE3D)%fork,&
+                &n_active_persistent_workers=qsys%get_n_active_persistent_workers())
+            call lock(shared%meta_mutex)
+            call shared%store%assemble(assembler)
+            call unlock(shared%meta_mutex)
+            request = assembler%to_string()
+            if( post%request(response, request) )then
+                if( response%code == 200 )then
+                    if( commands%parse(response%content%to_char()) ) call apply_commands()
+                else
+                    call assembler%clear_hashes()
+                endif
+            else
+                call assembler%clear_hashes()
+            endif
+            call request%kill()
+            call response%content%kill()
+            call response%content_type%kill()
+            call qsys%service_persistent_worker_warmup()
+        end subroutine send_heartbeat
+
+        ! A start-up failure once stages are forked: they are asked to stop, and killed (their
+        ! jobs cancelled) when still running after STARTUP_STOP_TIMEOUT_S, before the master
+        ! stops. The persistent-worker server ends with this process, and its workers, which
+        ! leave when they lose it, with it.
+        subroutine abort_startup( msg )
+            character(len=*), intent(in) :: msg
+            integer, parameter :: POLL_US = 200000
+            integer :: jd, ipoll, rc_wait
+            logical :: l_any
+            write(logfhandle,'(A)') '>>> START-UP FAILED: '//msg//'; STOPPING THE STAGES'
+            do jd = 1,NSTAGES
+                if( shared%stages(jd)%is_running() ) call shared%stages(jd)%request_stop()
+            enddo
+            do ipoll = 1,(STARTUP_STOP_TIMEOUT_S * 1000000) / POLL_US
+                l_any = .false.
+                do jd = 1,NSTAGES
+                    if( shared%stages(jd)%is_running() ) l_any = .true.
+                enddo
+                if( .not. l_any ) exit
+                rc_wait = c_usleep(POLL_US)
+            enddo
+            do jd = 1,NSTAGES
+                call shared%stages(jd)%force_stop()
+            enddo
+            call flush(logfhandle)
+            THROW_HARD(msg)
+        end subroutine abort_startup
+
         ! What the GUI asked in its answer to the last heartbeat. A restarted stage starts on clean
         ! pipes, and is forked, under the listener's lock: the listener reads the pipes and logs
         ! only while it holds it, so the child is never forked with a log write half done. NICE
@@ -291,6 +318,7 @@ contains
                 endif
                 call lock(shared%meta_mutex)
                 call shared%stages(id)%discard_pipes(max_frame_bytes)
+                call shared%store%clear_stage(id)
                 call shared%stages(id)%start()
                 call unlock(shared%meta_mutex)
             enddo
@@ -308,12 +336,13 @@ contains
         subroutine stop_stages()
             if( .not. l_stopping )then
                 write(logfhandle,'(A)') 'TERMINATE '
+                ! stopping from here on: the heartbeats of the wait act on no restart request
+                l_stopping = .true.
                 if( shared%stages(STAGE_ASSIGN_OPTICS)%is_running() )then
                     call shared%stages(STAGE_ASSIGN_OPTICS)%request_stop()
                     call wait_for_stop(shared%stages(STAGE_ASSIGN_OPTICS), OPTICS_STOP_TIMEOUT_S)
                 endif
                 stop_time  = simple_gettime()
-                l_stopping = .true.
             endif
             l_last_loop = .true.
             do id = 1,NSTAGES
@@ -329,7 +358,8 @@ contains
             endif
         end subroutine stop_stages
 
-        ! Waits for @p stage to stop, for up to @p timeout_s.
+        ! Waits for @p stage to stop, for up to @p timeout_s, with a heartbeat every HEARTBEAT_S so
+        ! the GUI does not lose the master meanwhile.
         subroutine wait_for_stop( stage, timeout_s )
             type(stream_master_stage), intent(inout) :: stage
             integer,                 intent(in)    :: timeout_s
@@ -337,6 +367,7 @@ contains
             integer :: ipoll, rc_wait
             do ipoll = 1,(timeout_s * 1000000) / POLL_US
                 if( .not. stage%is_running() ) return
+                if( mod(ipoll, (HEARTBEAT_S * 1000000) / POLL_US) == 0 ) call send_heartbeat()
                 rc_wait = c_usleep(POLL_US)
             enddo
             write(logfhandle,'(A)') stage%get_label()//' DID NOT TERMINATE WITHIN TIMEOUT'
@@ -460,7 +491,6 @@ contains
                 call c%set('outdir',          CLASS2D_JOB_NAME)
                 call c%set('dir_target',      SIEVING_JOB_NAME)
                 call c%set('optics_dir',      cwd//'/'//OPTICS_JOB_NAME)
-                call c%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)
                 call c%set('nthr',            res%pool2D_nthr)
                 call c%set('nparts',          res%pool2D_nparts)
                 call c%set('ncls',            POOL2D_NCLS)
@@ -502,8 +532,16 @@ contains
 
     end subroutine exec_stream_p00_master
 
-    ! The commander that runs stage @p id in its forked process.
+    ! The commander that runs stage @p id in its forked process. The stage commanders are imported
+    ! here only, the one place that needs them (compile-time policy).
     function stage_commander( id ) result( commander )
+        use simple_commanders_stream_p01_preprocess,         only: commander_stream_p01_preprocess
+        use simple_commanders_stream_p02_assign_optics,      only: commander_stream_p02_assign_optics
+        use simple_commanders_stream_p03_initial_analysis,   only: commander_stream_p03_initial_analysis
+        use simple_commanders_stream_p04_refpick_extract,    only: commander_stream_p04_refpick_extract
+        use simple_commanders_stream_p05_sieve_cavgs,        only: commander_stream_p05_sieve_cavgs
+        use simple_commanders_stream_p06_pool2D,             only: commander_stream_p06_pool2D
+        use simple_commanders_stream_p07_solve3D_multistate, only: commander_stream_p07_solve3D_multistate
         integer, intent(in) :: id
         class(commander_base), allocatable :: commander
         select case(id)

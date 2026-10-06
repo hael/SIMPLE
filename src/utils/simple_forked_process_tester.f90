@@ -3,7 +3,7 @@
 ! STOPPED, kill() (SIGKILL) in FAILED. test_logfile_redirection hashes execute_test's sentinel
 ! line. test_fork_with_running_monitor forks under a running memory monitor. Skipped on Windows.
 module simple_forked_process_tester
-  use unix,                  only: c_pid_t, c_usleep
+  use unix,                  only: c_pid_t, c_usleep, c_kill, c_int, SIGINT
   use simple_forked_process, only: forked_process,         &
                                    FORK_STATUS_RUNNING,    &
                                    FORK_STATUS_STOPPED,    &
@@ -31,6 +31,7 @@ contains
     call test_start()
     call test_kill()
     call test_terminate()
+    call test_sigint_ignored()
     call test_timestamps()
     call test_fail_timestamps()
     call test_destroy()
@@ -75,6 +76,24 @@ contains
     call assert_int(proc%status(), FORK_STATUS_STOPPED, 'process is stopped after SIGTERM')
   end subroutine test_terminate
 
+  ! A child ignores SIGINT (a terminal's Ctrl-C is the parent's to handle) and still stops on
+  ! SIGTERM.
+  subroutine test_sigint_ignored()
+    type(forked_process) :: proc
+    integer              :: rc
+    integer(kind=c_int)  :: rc_kill
+    write(*,'(A)') 'test_sigint_ignored'
+    call proc%start(name=string('TEST_SIGINT_IGNORED'))
+    rc = c_usleep(FORK_POLL_TIME * 5)
+    rc_kill = c_kill(proc%get_pid(), SIGINT)
+    call assert_int(0, int(rc_kill), 'SIGINT is delivered')
+    rc = c_usleep(FORK_POLL_TIME * 2)
+    call assert_int(FORK_STATUS_RUNNING, proc%status(), 'the child runs on after SIGINT')
+    call proc%terminate()
+    call proc%await_final_status()
+    call assert_int(FORK_STATUS_STOPPED, proc%status(), 'and stops on SIGTERM')
+  end subroutine test_sigint_ignored
+
   ! Verify that queuetime, starttime, and stoptime are all positive and
   ! ordered correctly after a clean run (queuetime <= starttime <= stoptime).
   subroutine test_timestamps()
@@ -93,7 +112,7 @@ contains
   ! Verify that failtime is set (non-zero) after a SIGKILL simulated failure.
   subroutine test_fail_timestamps()
     type(forked_process) :: proc
-    integer              :: rc
+    integer              :: rc, failtime0
     write(*,'(A)') 'test_fail_timestamps'
     call proc%start(name=string('TEST_FAIL_TIMESTAMPS'))
     rc = c_usleep(FORK_POLL_TIME * 5)
@@ -101,6 +120,11 @@ contains
     call proc%await_final_status()
     call assert_true(proc%get_failtime() > 0,  'failtime is set after SIGKILL')
     call assert_true(proc%get_stoptime() == 0, 'stoptime is zero after failure')
+    ! polled again more than a second later
+    failtime0 = proc%get_failtime()
+    rc = c_usleep(FORK_POLL_TIME * 11)
+    call assert_int(FORK_STATUS_FAILED, proc%status(), 'the child stays failed')
+    call assert_true(proc%get_failtime() == failtime0, 'failtime keeps the time the failure was seen')
   end subroutine test_fail_timestamps
 
   ! Smoke test: destroy() completes without error.

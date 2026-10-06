@@ -298,7 +298,9 @@ to `solve3D_addon_report.txt`:
 - both runs' limits for every stage.
 
 A regression is warned about and the result is published all the same;
-rejecting it is the user's call.
+rejecting it is the caller's call. The stream's multistate stage rolls such a
+run back (`doc/policies/stream/stream_3D_ingestion_policy.md`, section 4,
+item 8).
 
 ## 12. Streaming Integration
 

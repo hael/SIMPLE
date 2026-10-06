@@ -27,8 +27,9 @@ contains
         class(qsys_local), intent(inout) :: self
         ! make the container
         call self%env%new(MAXENVITEMS)
-        ! define the environment:
-        call self%env%push('qsys_submit_cmd', 'nohup')
+        ! define the environment: a job in a session (and process group) of its own, which its
+        ! cancel signals whole (simple_qsys_job_record); plain nohup where setsid is missing
+        call self%env%push('qsys_submit_cmd', '$(command -v setsid) nohup')
     end subroutine new_local_env
 
     !> \brief  is a getter

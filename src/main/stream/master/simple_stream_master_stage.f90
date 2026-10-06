@@ -28,6 +28,7 @@ use simple_string,                  only: string
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
 use simple_forked_process,          only: forked_process, FORK_STATUS_RUNNING, FORK_STATUS_SKIPPED
+use simple_qsys_job_record,         only: cancel_unfinished_jobs
 use simple_stream_pipe,             only: stream_pipe
 use simple_stream_master_stage_ids, only: stage_job_name, stage_label, open_stage_pipes, close_stage_pipes,&
                                          &close_other_pipe_ends, master_fds, stage_fds
@@ -49,8 +50,7 @@ end type stream_master_stage_fork
 
 type :: stream_master_stage
     integer                        :: id        = 0
-    type(stream_master_stage_fork) :: fork
-    type(cmdline)                  :: cline
+    type(stream_master_stage_fork) :: fork                ! holds the stage's command line (set_cline)
     type(stream_pipe)              :: reader              ! the stage's GUI messages
     type(stream_pipe)              :: writer              ! the GUI updates, to a stage that reads them
     character(len=:), allocatable  :: last_update         ! the last update sent since the stage started
@@ -106,7 +106,7 @@ contains
         self%id      = id
         self%fork%id = id
         allocate(self%fork%commander, source=commander)
-        self%cline   = cline
+        call self%fork%set_cline(cline)
         self%l_updates = l_updates
         call open_stage_pipes(id)
         call master_fds(id, fd_read, fd_write)
@@ -127,8 +127,7 @@ contains
         endif
         if( allocated(self%last_update) ) deallocate(self%last_update)
         self%l_stop_requested = .false.
-        call self%fork%start(name=string(stage_job_name(self%id)), logfile=string(stage_job_name(self%id)//'.log'),&
-            &cline=self%cline)
+        call self%fork%start(name=string(stage_job_name(self%id)), logfile=string(stage_job_name(self%id)//'.log'))
     end subroutine start
 
     !> The stage is not run (its output exists already).
@@ -156,12 +155,18 @@ contains
         if( self%is_running() ) call self%fork%terminate()
     end subroutine request_stop
 
-    !> Ends a running stage at once (SIGKILL), for one that did not stop when asked.
+    !> Ends a running stage at once (SIGKILL), for one that did not stop when asked. A killed stage
+    !! cannot cancel its jobs, so the master cancels those recorded in the stage's folder that
+    !! wrote no exit status.
     subroutine force_stop( self )
         class(stream_master_stage), intent(inout) :: self
+        integer :: ncancelled
         if( .not. self%is_running() ) return
         write(logfhandle,'(A)') '>>> '//stage_label(self%id)//' DID NOT STOP WHEN ASKED; KILLING IT'
         call self%fork%kill()
+        call cancel_unfinished_jobs(string(stage_job_name(self%id)), ncancelled)
+        if( ncancelled > 0 ) write(logfhandle,'(A,I6,A)') '>>> CANCELLED ', ncancelled,&
+            &' JOBS OF '//stage_label(self%id)
     end subroutine force_stop
 
     !> Before a restart: drops what the stopped stage left in its pipes, both its unread messages
@@ -218,7 +223,7 @@ contains
         call self%reader%kill()
         call self%writer%kill()
         call close_stage_pipes(self%id)
-        call self%cline%kill()
+        call self%fork%destroy()
         if( allocated(self%fork%commander) ) deallocate(self%fork%commander)
         if( allocated(self%last_update)    ) deallocate(self%last_update)
         self%l_updates        = .false.

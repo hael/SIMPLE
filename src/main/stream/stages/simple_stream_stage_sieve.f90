@@ -59,7 +59,7 @@ use simple_stream_watcher,                       only: stream_watcher
 use simple_stream_state,                         only: ipc_pipe_sieve_cavgs_in
 use simple_stream_utils,                         only: create_stream_project, init_stream_qenv, import_new_projects, upstream_done
 use simple_ptcl_sieve,                           only: ptcl_sieve, ptcl_sieve_settings, sieve_settings, CHUNKED_MICS,&
-                                                      &read_chunked_mics
+                                                      &read_chunked_mics, rebuild_chunked_mics
 use simple_gui_metadata_utils,                   only: max_metadata_size
 use simple_gui_metadata_types,                   only: GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE,&
                                                       &GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE
@@ -79,8 +79,9 @@ integer,          parameter :: MAX_PROJECTS_IMPORT       = 20      ! completed u
 ! run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_sieve
     type(parameters), allocatable              :: params
-    type(qsys_env)                             :: qenv          ! starts the persistent workers the sieve's chunk jobs run on
-    type(sp_project)                           :: spproj        ! the stage's project
+    ! allocatable (compile-time policy), allocated in init_params and released in kill
+    type(qsys_env),   allocatable              :: qenv          ! starts the persistent workers the sieve's chunk jobs run on
+    type(sp_project), allocatable              :: spproj        ! the stage's project
     type(stream_watcher)                       :: project_buff  ! completed reference-picking sets
     type(rec_list)                             :: project_list  ! one record per imported micrograph
     type(ptcl_sieve), allocatable              :: sieve
@@ -163,6 +164,8 @@ contains
             outdir = cline%get_carg('outdir')
             if( outdir%strlen() > 0 ) self%l_restart = dir_exists(outdir)
         endif
+        if( .not. allocated(self%spproj) ) allocate(self%spproj)
+        if( .not. allocated(self%qenv)   ) allocate(self%qenv)
         call create_stream_project(self%spproj, cline, string('sieve_cavgs'))
         if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
@@ -203,6 +206,8 @@ contains
         type(string), allocatable :: projnames(:), sets(:), one_set(:)
         integer,      allocatable :: micinds(:)
         integer :: i, j, nsets, n_before, irec
+        ! from the chunks that exist: a crash may have come between a chunk and the list
+        call rebuild_chunked_mics()
         call read_chunked_mics(string(CHUNKED_MICS), projnames, micinds)
         if( .not. allocated(projnames) ) return
         if( size(projnames) == 0 ) return
@@ -300,6 +305,7 @@ contains
         class(stream_stage_sieve), intent(inout) :: self
         if( .not. self%l_exists )then
             if( allocated(self%params) ) deallocate(self%params)
+            call release_heavy
             return
         endif
         if( allocated(self%sieve) )then
@@ -308,8 +314,7 @@ contains
         endif
         call self%project_buff%kill
         call self%project_list%kill
-        call self%qenv%kill
-        call self%spproj%kill
+        call release_heavy
         call self%pipe%kill
         call self%meta_status%kill
         call self%meta_cavgs%kill
@@ -334,6 +339,20 @@ contains
         self%last_watch       = 0
         self%upstream_done_since = 0
         self%l_exists         = .false.
+
+    contains
+
+        subroutine release_heavy
+            if( allocated(self%spproj) )then
+                call self%spproj%kill
+                deallocate(self%spproj)
+            endif
+            if( allocated(self%qenv) )then
+                call self%qenv%kill
+                deallocate(self%qenv)
+            endif
+        end subroutine release_heavy
+
     end subroutine kill
 
     !---------------- steps ----------------

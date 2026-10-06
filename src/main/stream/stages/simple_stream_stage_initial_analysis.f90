@@ -79,12 +79,14 @@
 !   Unchanged from the stage this replaces. balance_classes replicates class
 !   averages to TARGET_NCLS rows, and the references are reprojections of a
 !   3-state ab initio volume; see stream_area_review_2026-09-30.md, B1/B2 and
-!   E2/E3, for the proposed changes. The state reprojected is the one whose
-!   binarised volume has the fewest connected components, then the widest view
-!   coverage of its classes, then the largest population (choose_state).
+!   E2/E3, for the proposed changes. The state reprojected passes three vetoes
+!   (one object, a population floor, a resolution near the best state's) and
+!   then has the widest view coverage of its classes, then the largest
+!   population (choose_state, state_vetoes).
 !==============================================================================
 module simple_stream_stage_initial_analysis
 use simple_core_module_api
+use simple_refine3D_fnames,               only: refine3D_fsc_fname
 use simple_defs_environment,              only: SIMPLE_STREAM_REFGEN_PARTITION
 use simple_cmdline,                       only: cmdline
 use simple_parameters,                    only: parameters
@@ -139,10 +141,13 @@ integer, parameter :: NCLS_MIN = 10, NCLS_MAX = 100    ! solve2D class-count bou
 integer, parameter :: NSAMPLE2D           = 2000       ! minimum solve2D sample
 real,    parameter :: LPSTOP2D            = 8.         ! solve2D low-pass stop (A)
 integer, parameter :: EXTRACT_NTHR        = 4          ! threads of each extraction (one per project, several at once)
-! the state choice's shape veto (decision 4), to be set by a validation run: a component counts when
-! it holds this fraction of the largest one's voxels, and a state needs this fraction of the population
-real,    parameter :: STATE_CC_MIN_FRAC   = 0.1
+! the state choice's vetoes (follow-up plan, decisions 11-14), PROVISIONAL until a validation run on
+! datasets with a known answer sets them: one object (its largest component holds this share of the
+! foreground inside the mask), this share of the candidates' population, and an FSC 0.143
+! resolution within this factor of the best candidate's
+real,    parameter :: STATE_DOMINANT_FRAC = 0.8
 real,    parameter :: STATE_POP_FLOOR     = 0.1
+real,    parameter :: STATE_RES_FACTOR    = 1.5
 integer, parameter :: TARGET_NCLS         = 501        ! rows after class balancing
 character(len=*), parameter :: PICKREFS_SELECTION = 'pickrefs_selection.mrcs' ! a GUI selection, written in full before it is published
 
@@ -156,11 +161,12 @@ integer, parameter :: ALL_COLLECT = 0, ALL_SIEVE = 1, ALL_CLASSIFY = 2, ALL_SELE
 ! stage and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_initial_analysis
     type(parameters),      allocatable :: params
-    type(qsys_env)                      :: qenv
-    type(qsys_env)                      :: qenv_local              ! jobs that run on this machine (the reprojection)
-    type(sp_project)                    :: spproj                  ! cycle 1 project
-    type(sp_project)                    :: spproj_part             ! one project of the "all" set
-    type(sp_project)                    :: spproj_all              ! cycle 2 project
+    ! allocatable (compile-time policy), allocated in init_params and released in kill
+    type(qsys_env),   allocatable       :: qenv
+    type(qsys_env),   allocatable       :: qenv_local              ! jobs that run on this machine (the reprojection)
+    type(sp_project), allocatable       :: spproj                  ! cycle 1 project
+    type(sp_project), allocatable       :: spproj_part             ! one project of the "all" set
+    type(sp_project), allocatable       :: spproj_all              ! cycle 2 project
     type(stream_watcher)                :: project_buff
     type(rec_list)                      :: project_list            ! one record per accepted imported micrograph
     type(rec_list)                      :: extracted_project_list  ! one record per extracted micrograph of the "all" set
@@ -188,6 +194,7 @@ type :: stream_stage_initial_analysis
     integer :: step2             = ALL_COLLECT
     integer :: nmics_target      = NMICS_PLAN(1)
     integer :: n_mics_imported   = 0
+    integer :: nmics_failed_pick = 0       ! micrographs imported when cycle 1's pick found no diameter bin
     integer :: n_ptcls_imported  = 0
     integer :: n_extract_started = 0
     integer :: n_extract_done    = 0
@@ -251,6 +258,7 @@ contains
     procedure, nopass :: find_final_solve3D_cavgs_dir
     procedure, nopass :: estimate_mskdiam
     procedure, nopass :: choose_state
+    procedure, nopass :: state_vetoes
 end type stream_stage_initial_analysis
 
 contains
@@ -285,6 +293,11 @@ contains
             self%l_restart = dir_exists(outdir)
             if( self%l_restart ) write(logfhandle,'(A)') '>>> RESTARTING EXISTING JOB'
         endif
+        if( .not. allocated(self%spproj)      ) allocate(self%spproj)
+        if( .not. allocated(self%spproj_part) ) allocate(self%spproj_part)
+        if( .not. allocated(self%spproj_all)  ) allocate(self%spproj_all)
+        if( .not. allocated(self%qenv)        ) allocate(self%qenv)
+        if( .not. allocated(self%qenv_local)  ) allocate(self%qenv_local)
         call create_stream_project(self%spproj, cline, string('opening_2D'))
         if( .not. allocated(self%params) ) allocate(self%params)
         call self%params%new(cline)
@@ -363,7 +376,8 @@ contains
         call self%import_projects()
         call self%update_upstream_state()
         if( sigterm_received() ) return
-        if( self%picker%bins_set() .and. self%project_list%size() > 0 ) call self%pick_extract_all()
+        ! the bins and a box are known (a pick with no accepted bin sets the bins but no box)
+        if( self%picker%bins_set() .and. self%box > 0 .and. self%project_list%size() > 0 ) call self%pick_extract_all()
         ! a selection made in the GUI comes first: it pre-empts the 3D route, even one finishing now
         call self%apply_gui_updates()
         ! no new job once a stop is requested
@@ -404,11 +418,9 @@ contains
         integer :: i
         if( .not. self%l_exists )then
             if( allocated(self%params) ) deallocate(self%params)
+            call release_heavy
             return
         endif
-        call self%spproj%kill
-        call self%spproj_part%kill
-        call self%spproj_all%kill
         call self%project_buff%kill
         call self%picker%kill
         if( allocated(self%sieve) )then
@@ -423,8 +435,7 @@ contains
             deallocate(self%extract_jobs)
         endif
         if( allocated(self%extract_collected) ) deallocate(self%extract_collected)
-        call self%qenv%kill
-        call self%qenv_local%kill
+        call release_heavy
         call self%reproj_vol%kill
         call self%reproj_dir%kill
         self%reproj_state     = 0
@@ -443,6 +454,7 @@ contains
         self%step2             = ALL_COLLECT
         self%nmics_target      = NMICS_PLAN(1)
         self%n_mics_imported   = 0
+        self%nmics_failed_pick = 0
         self%n_ptcls_imported  = 0
         self%n_extract_started = 0
         self%n_extract_done    = 0
@@ -461,6 +473,32 @@ contains
         self%l_upstream_quiet  = .false.
         self%l_final_wait_logged = .false.
         self%l_exists          = .false.
+
+    contains
+
+        subroutine release_heavy
+            if( allocated(self%spproj) )then
+                call self%spproj%kill
+                deallocate(self%spproj)
+            endif
+            if( allocated(self%spproj_part) )then
+                call self%spproj_part%kill
+                deallocate(self%spproj_part)
+            endif
+            if( allocated(self%spproj_all) )then
+                call self%spproj_all%kill
+                deallocate(self%spproj_all)
+            endif
+            if( allocated(self%qenv) )then
+                call self%qenv%kill
+                deallocate(self%qenv)
+            endif
+            if( allocated(self%qenv_local) )then
+                call self%qenv_local%kill
+                deallocate(self%qenv_local)
+            endif
+        end subroutine release_heavy
+
     end subroutine kill
 
     !---------------- import, and the "all" set ----------------
@@ -537,6 +575,8 @@ contains
             do iproj = 1, self%project_list%size()
                 ! picking runs in-process; stop between projects, each of which is complete
                 if( sigterm_received() ) return
+                ! the cap holds within a pass too: no project is started once it is reached
+                if( count(self%project_list%get_included_flags()) >= NMICS_PLAN(2) ) exit
                 call self%project_list%at(iproj, prec)
                 if( prec%included ) cycle
                 self%n_extract_started = self%n_extract_started + 1
@@ -696,8 +736,9 @@ contains
         endif
         if( self%step1 == INIT_PICK )then
             l_enough = self%n_mics_imported > self%nmics_target
-            ! fewer micrographs once preprocessing will hand on no more
-            if( .not. l_enough .and. self%n_mics_imported > 0 .and. self%l_upstream_quiet )then
+            ! fewer micrographs once preprocessing will hand on no more; never the same micrographs
+            ! again after a pick that found no diameter bin
+            if( .not. l_enough .and. self%n_mics_imported > max(0, self%nmics_failed_pick) .and. self%l_upstream_quiet )then
                 write(logfhandle,'(A,I6,A)') '>>> PREPROCESSING IS IDLE OR STOPPED: CYCLE 1 ON THE ', self%n_mics_imported,&
                     &' MICROGRAPHS IMPORTED'
                 self%nmics_target = self%n_mics_imported
@@ -713,15 +754,23 @@ contains
                 ! the first pick decides the diameter bins and the box for every later one
                 call self%picker%new()
                 call self%picker%pick(self%spproj, self%params%pcontrast, self%nmics_target)
+                call send_recent_micrographs(self%pipe, self%meta_micrograph, self%spproj%os_mic, NTHUMB_MAX)
+                call simple_chdir(self%cwd)
                 if( self%picker%get_box() > 0 )then
                     self%box         = self%picker%get_box()
                     ! the picker's mask diameter is the box's default, (box - COSMSKHALFWIDTH) * smpd
                     self%mskdiam_box = self%picker%get_mskdiam()
                     self%mskdiam     = self%mskdiam_box ! until cycle 1's selection gives the estimate
+                    self%step1       = INIT_EXTRACT
+                else
+                    ! no accepted diameter bin, so no box: nothing is extracted, and cycle 1 picks again
+                    ! once more micrographs are in (follow-up plan, decision 4)
+                    self%nmics_failed_pick = self%n_mics_imported
+                    self%nmics_target      = self%n_mics_imported + NMICS_PLAN(1)
+                    write(logfhandle,'(A,I6,A,I6,A)') '>>> WARNING: NO ACCEPTED DIAMETER BIN IN ', self%n_mics_imported,&
+                        &' MICROGRAPHS; PICKING AGAIN WITH ', self%nmics_target, ' OR ONCE PREPROCESSING HANDS ON NO MORE'
+                    call self%send_picking_status(string('no particle size found; waiting for more micrographs'))
                 endif
-                call send_recent_micrographs(self%pipe, self%meta_micrograph, self%spproj%os_mic, NTHUMB_MAX)
-                call simple_chdir(self%cwd)
-                self%step1 = INIT_EXTRACT
             endif
         endif
         if( self%step1 == INIT_EXTRACT )then
@@ -880,9 +929,9 @@ contains
         endif
     end subroutine select_and_send
 
-    ! Picks the solve3D_cavgs state (choose_state: the fewest connected components, then the
-    ! widest view coverage) and starts its reprojection, a job on this machine in the 3D result's
-    ! reproject folder; publish_reprojections takes it from there.
+    ! Picks the solve3D_cavgs state (choose_state: the vetoes, then the widest view coverage) and
+    ! starts its reprojection, a job on this machine in the 3D result's reproject folder;
+    ! publish_reprojections takes it from there.
     subroutine finish_solve3D( self, projfile, outdir )
         class(stream_stage_initial_analysis), intent(inout) :: self
         class(string),                        intent(in)    :: projfile, outdir
@@ -891,6 +940,7 @@ contains
         type(image)               :: vol_shape
         type(image_bin)           :: mskvol_shape
         integer, allocatable      :: nccs(:), nproj(:), pops(:)
+        real,    allocatable      :: dominant(:), res(:)
         logical, allocatable      :: l_cand(:)
         integer :: ldim(3), nuniq, ivol, bestvol, i, nstates
         real    :: vol_smpd
@@ -908,9 +958,10 @@ contains
             call self%spproj_all%read(projfile)
             reprojdir = cwd//'/'//outdir
         endif
-        ! the candidates, the populated states with a volume, and the connected components of each
+        ! the candidates, the populated states with a volume, with the shape and resolution of each
         nstates = self%params%nstates_pickrefs
         allocate(nccs(nstates), nproj(nstates), pops(nstates), source=0)
+        allocate(dominant(nstates), res(nstates), source=0.)
         allocate(l_cand(nstates), source=.false.)
         do ivol = 1, nstates
             pops(ivol) = self%spproj_all%os_cls3D%get_pop(ivol, 'state')
@@ -924,8 +975,9 @@ contains
             write(logfhandle,'(A,I0)') '>>> VOLUME SHAPE DESCRIPTORS FOR STATE=', ivol
             ! the mask radius in the volume's voxels
             call mskvol_shape%vol_shape_descr(vol_shape, 20.0, self%mskdiam / (2. * vol_shape%get_smpd()), nccs(ivol),&
-                &min_frac=STATE_CC_MIN_FRAC, tag='_state'//int2str_pad(ivol,2))
+                &tag='_state'//int2str_pad(ivol,2), dominant_frac=dominant(ivol))
             call mskvol_shape%kill_bimg
+            res(ivol) = state_fsc_res(ivol, ldim(1), vol_shape%get_smpd())
             call vol_shape%kill
         enddo
         ! the distinct projection directions of each state's classes (os_cls3D proj); all 0 when
@@ -946,13 +998,21 @@ contains
         else
             write(logfhandle,'(A)') '>>> WARNING: no cls3D state/proj; projection directions not counted'
         endif
+        ! every key of every candidate, so a validation run can be read from the log
         do ivol = 1, nstates
             if( .not. l_cand(ivol) ) cycle
-            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> STATE ', ivol, ': CONNECTED COMPONENTS ', nccs(ivol),&
-                &', DISTINCT PROJECTION DIRECTIONS ', nproj(ivol), ', POPULATION ', pops(ivol)
+            write(logfhandle,'(A,I0,A,I0,A,F6.3,A,F7.2,A,I0,A,I0)') '>>> STATE ', ivol, ': CONNECTED COMPONENTS ', nccs(ivol),&
+                &', LARGEST COMPONENT ', dominant(ivol), ', FSC0.143 ', res(ivol), ' A, DISTINCT PROJECTION DIRECTIONS ',&
+                &nproj(ivol), ', POPULATION ', pops(ivol)
         enddo
-        bestvol = choose_state(l_cand, nccs, nproj, pops)
+        bestvol = choose_state(l_cand, dominant, res, nproj, pops)
         if( bestvol == 0 ) THROW_HARD('No populated solve3D state with a reconstructed volume')
+        if( .not. any(state_vetoes(l_cand, dominant, res, pops)) )then
+            write(logfhandle,'(A)') '>>> WARNING: NO STATE PASSED THE SHAPE, POPULATION AND RESOLUTION CHECKS;'//&
+                &' CHOSEN BY PROJECTION DIRECTIONS AND POPULATION'
+            call self%send_opening2D_status(string('no state passed the checks; chosen by view coverage'), self%box,&
+                &self%vis_cycle)
+        endif
         write(logfhandle,'(A,I0)') '>>> BEST VOLUME: STATE=', bestvol
         volpath = string('recvol_state'//int2str_pad(bestvol,2)//MRC_EXT)
         if( .not. file_exists(volpath) ) THROW_HARD('Expected solve3D output volume not found: '//volpath%to_char())
@@ -969,6 +1029,27 @@ contains
         call self%spproj_all%read(projfile)
         call start_reproject(self%qenv_local, self%job, self%params, self%reproj_vol, vol_smpd, nint(self%mskdiam),&
             &self%reproj_dir//'/reproject')
+
+    contains
+
+        ! the FSC 0.143 resolution (A) of state @p istate from its FSC file in the result folder (the
+        ! working directory here), for a volume of @p box voxels at @p smpd; 0 when there is none
+        real function state_fsc_res( istate, box, smpd )
+            integer, intent(in) :: istate, box
+            real,    intent(in) :: smpd
+            real, allocatable :: fsc(:), resarr(:)
+            type(string)      :: fname
+            real              :: res05, res0143
+            state_fsc_res = 0.
+            fname = refine3D_fsc_fname(istate)
+            if( .not. file_exists(fname) ) return
+            fsc    = file2rarr(fname)
+            resarr = get_resarr(box, smpd)
+            if( size(fsc) /= size(resarr) ) return
+            call get_resolution(fsc, resarr, res05, res0143)
+            if( res0143 > 0. .and. res0143 == res0143 ) state_fsc_res = res0143
+        end function state_fsc_res
+
     end subroutine finish_solve3D
 
     ! The chosen state's reprojections, back from their job: a sprite sheet and the volume to the
@@ -1121,18 +1202,26 @@ contains
         call self%pipe%send_meta(self%meta_picking)
     end subroutine send_picking_status
 
-    ! 2D progress; sent even before any particle exists (smpd is then 0).
+    ! 2D progress of the cycle under way: cycle 2's project once it holds particles, cycle 1's
+    ! otherwise; sent even before any particle exists (smpd is then 0).
     subroutine send_opening2D_status( self, stage, box_size, icycle )
         class(stream_stage_initial_analysis), intent(inout) :: self
         type(string),                         intent(in)    :: stage
         integer,                              intent(in)    :: box_size, icycle
         real    :: smpd
-        integer :: nptcls
-        nptcls = self%spproj%os_ptcl2D%get_noris()
-        smpd   = 0.0
-        if( nptcls > 0 ) smpd = self%spproj%get_smpd()
+        integer :: nptcls, naccepted
+        smpd = 0.0
+        if( self%icycle == 2 .and. self%spproj_all%os_ptcl2D%get_noris() > 0 )then
+            nptcls    = self%spproj_all%os_ptcl2D%get_noris()
+            naccepted = self%spproj_all%os_ptcl2D%count_state_gt_zero()
+            smpd      = self%spproj_all%get_smpd()
+        else
+            nptcls    = self%spproj%os_ptcl2D%get_noris()
+            naccepted = self%spproj%os_ptcl2D%count_state_gt_zero()
+            if( nptcls > 0 ) smpd = self%spproj%get_smpd()
+        endif
         call self%meta_opening2D%set(stage=stage, particles_imported=nptcls,&
-            &particles_accepted=self%spproj%os_ptcl2D%count_state_gt_zero(), mask_diam=nint(self%mskdiam),&
+            &particles_accepted=naccepted, mask_diam=nint(self%mskdiam),&
             &mask_scale=box_size*smpd, box_size=box_size, cycle=icycle)
         call self%pipe%send_meta(self%meta_opening2D)
     end subroutine send_opening2D_status
@@ -1253,6 +1342,8 @@ contains
         class(string),        intent(in)    :: projfile, outdir
         integer,              intent(in)    :: mskdiam
         type(cmdline) :: cline
+        type(string)  :: server_address
+        server_address = qenv%get_persistent_worker_server_address()
         call simple_mkdir('solve3D')
         call cline%set('prg',                'solve3D_cavgs')
         call cline%set('pgrp',               'c1')
@@ -1263,10 +1354,16 @@ contains
         call cline%set('lpstop_ini3D',       params%lpstop_ini3D)
         call cline%set('prune',              'no')
         call cline%set('nthr',               params%nthr3D_pickrefs)
-        call cline%set('nparts',             params%nparts)
+        ! nparts on the command line makes refine3D distributed even at 1, and a distributed
+        ! iteration that empties a state stops the next one; one part runs in shared memory,
+        ! where solve3D_cavgs handles the collapse after the stage
+        if( params%nparts > 1 ) call cline%set('nparts', params%nparts)
         call cline%set('nstages',            params%nstages_pickrefs)
         call cline%set('nrestarts_collapse', params%nrestarts_collapse)
         call cline%set('projfile',           projfile)
+        call cline%set('worker_priority',    'high')
+        if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
+        if( qenv%get_persistent_worker_nthr() > 0 ) call cline%set('worker_server_nthr', qenv%get_persistent_worker_nthr())
         call cline%printline()
         call job%start(qenv, cline, outdir, 'solve3D', exec_bin=string('simple_exec'))
         call cline%kill
@@ -1409,41 +1506,44 @@ contains
         call dealloc_imgarr(masks)
     end function estimate_mskdiam
 
-    ! The state to make the references from, among the candidates @p l_cand (populated, with a
-    ! volume; stream fix plan, decision 4). A candidate passes the shape veto when it is one object
-    ! (@p nccs, the components inside the mask above a fraction of the largest, is 1) and holds at
-    ! least STATE_POP_FLOOR of the candidates' population @p pops; among those, the most distinct
-    ! projection directions @p nproj, then the largest population, then the lowest state. When none
-    ! passes, the 3 October order: the fewest components (none, an empty binarisation, ranks last),
-    ! then the directions, then the population. 0 without a candidate.
-    pure integer function choose_state( l_cand, nccs, nproj, pops ) result( best )
+    ! The candidates @p l_cand (populated, with a volume) that pass the vetoes (follow-up plan,
+    ! decisions 11 and 12): one object, its largest component holding at least STATE_DOMINANT_FRAC
+    ! of the foreground inside the mask (@p dominant); at least STATE_POP_FLOOR of the candidates'
+    ! population @p pops; and an FSC 0.143 resolution @p res (A) within STATE_RES_FACTOR of the
+    ! best candidate's, unless it is not known (0), which does not veto.
+    pure function state_vetoes( l_cand, dominant, res, pops ) result( l_pass )
         logical, intent(in) :: l_cand(:)
-        integer, intent(in) :: nccs(:), nproj(:), pops(:)
+        real,    intent(in) :: dominant(:), res(:)
+        integer, intent(in) :: pops(:)
         logical :: l_pass(size(l_cand))
-        integer :: ivol, key(size(nccs)), ntot
+        real    :: best_res
+        integer :: ntot
         ntot   = sum(pops, mask=l_cand)
-        l_pass = l_cand .and. nccs == 1 .and. real(pops) >= STATE_POP_FLOOR * real(ntot)
-        best   = 0
-        if( any(l_pass) )then
-            do ivol = 1, size(l_pass)
-                if( .not. l_pass(ivol) ) cycle
-                if( best == 0 )then
-                    best = ivol
-                else if( nproj(ivol) /= nproj(best) )then
-                    if( nproj(ivol) > nproj(best) ) best = ivol
-                else if( pops(ivol) > pops(best) )then
-                    best = ivol
-                endif
-            enddo
-            return
+        l_pass = l_cand .and. dominant >= STATE_DOMINANT_FRAC .and. real(pops) >= STATE_POP_FLOOR * real(ntot)
+        if( any(l_cand .and. res > 0.) )then
+            best_res = minval(res, mask=l_cand .and. res > 0.)
+            l_pass   = l_pass .and. (res <= 0. .or. res <= STATE_RES_FACTOR * best_res)
         endif
-        key  = merge(nccs, huge(nccs), nccs > 0)
-        do ivol = 1, size(l_cand)
-            if( .not. l_cand(ivol) ) cycle
+    end function state_vetoes
+
+    ! The state to make the references from (follow-up plan, decisions 11-13): among the candidates
+    ! that pass the vetoes (state_vetoes), the most distinct projection directions @p nproj, then
+    ! the largest population @p pops, then the lowest state. When none passes, the same order over
+    ! every candidate (the component key of the 3 October order, which preferred compact junk, is
+    ! gone). 0 without a candidate.
+    pure integer function choose_state( l_cand, dominant, res, nproj, pops ) result( best )
+        logical, intent(in) :: l_cand(:)
+        real,    intent(in) :: dominant(:), res(:)
+        integer, intent(in) :: nproj(:), pops(:)
+        logical :: l_pool(size(l_cand))
+        integer :: ivol
+        l_pool = state_vetoes(l_cand, dominant, res, pops)
+        if( .not. any(l_pool) ) l_pool = l_cand
+        best = 0
+        do ivol = 1, size(l_pool)
+            if( .not. l_pool(ivol) ) cycle
             if( best == 0 )then
                 best = ivol
-            else if( key(ivol) /= key(best) )then
-                if( key(ivol) < key(best) ) best = ivol
             else if( nproj(ivol) /= nproj(best) )then
                 if( nproj(ivol) > nproj(best) ) best = ivol
             else if( pops(ivol) > pops(best) )then

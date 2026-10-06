@@ -99,15 +99,18 @@ integer, parameter :: NTHUMBS          = 10    ! most recent micrograph thumbnai
 integer, parameter :: STAR_EVERY_NMICS = 1000  ! below this many micrographs the STAR file is rewritten on every import...
 integer, parameter :: STAR_STEP_NMICS  = 100   ! ...above it, every this many new micrographs
 integer, parameter :: GAIN_BATCH_NMOVIES = 10  ! movies per batch handed to the gain analysis/estimation
+integer, parameter :: PARTIAL_SET_QUIET_S = 180 ! movies short of a set go as a partial set after this long (s)
+                                                ! without a new movie; below MOVIES_IDLE_TIME_S, so before idling
 character(len=*), parameter :: GENERATED_GAINREF = 'gainref_generated.mrc'
 
 ! Components and steps are public so simple_stream_stage_preprocess_tester can assemble a
 ! stage and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_preprocess
     type(parameters), allocatable        :: params
-    type(cmdline)                        :: cline_exec            ! command line of the preprocess worker jobs
-    type(qsys_env)                       :: qenv
-    type(sp_project)                     :: spproj_glob           ! every imported micrograph
+    ! allocatable (compile-time policy), allocated in init_params and released in kill
+    type(cmdline),    allocatable        :: cline_exec            ! command line of the preprocess worker jobs
+    type(qsys_env),   allocatable        :: qenv
+    type(sp_project), allocatable        :: spproj_glob           ! every imported micrograph
     type(stream_watcher)                 :: movie_buff
     type(starproject_stream)             :: starproj_stream
     type(stream_pipe)                    :: pipe                  ! to and from the master
@@ -133,6 +136,7 @@ type :: stream_stage_preprocess
     logical :: l_sj_dirs           = .false. ! movies arrive in <dir_movies>/<xx>/Data/ folders
     logical :: l_xml_meta          = .false. ! per-movie XML metadata in dir_meta
     logical :: l_movies_left       = .false. ! the watcher returned more movies than were submitted
+    integer :: nmovies_unset       = 0       ! movies short of a set at the end of the last pass
     logical :: l_haschanged        = .false. ! imports since the last idle STAR snapshot
     logical :: l_nmics_reached     = .false.
     logical :: l_restart           = .false. ! the output directory existed before params%new
@@ -225,6 +229,9 @@ contains
         if( cline%defined('dir_exec') )then
             self%l_restart = self%l_restart .or. dir_exists(cline%get_carg('dir_exec'))
         endif
+        if( .not. allocated(self%spproj_glob) ) allocate(self%spproj_glob)
+        if( .not. allocated(self%qenv)        ) allocate(self%qenv)
+        if( .not. allocated(self%cline_exec)  ) allocate(self%cline_exec)
         projfile = cline%get_carg('projfile')
         if( .not. file_exists(projfile) )then
             call self%spproj_glob%update_projinfo(cline)
@@ -332,7 +339,7 @@ contains
         class(stream_stage_preprocess), intent(inout) :: self
         call self%sets%cancel(self%qenv) ! a restart sets the folder of unfinished sets aside
         if( self%spproj_glob%os_mic%get_noris() > 0 )then
-            call self%write_mic_star_and_field(write_field=.true., copy_optics=.true.)
+            call self%write_mic_star_and_field(write_field=.true., optics_set=.true.)
         endif
         call qsys_cleanup(self%params)
         call simple_touch(STREAM_FINISHED_MARKER) ! downstream ends its intake
@@ -342,13 +349,12 @@ contains
         class(stream_stage_preprocess), intent(inout) :: self
         if( .not. self%l_exists )then
             if( allocated(self%params) ) deallocate(self%params)
+            call release_heavy
             return
         endif
-        call self%spproj_glob%kill
-        call self%qenv%kill
+        call release_heavy
         call self%movie_buff%kill
         call self%pipe%kill
-        call self%cline_exec%kill
         call self%meta_status%kill
         call self%meta_micrograph%kill
         call self%gainref%kill
@@ -370,10 +376,29 @@ contains
         self%n_failed_jobs      = 0
         self%prev_stacksz       = 0
         self%l_movies_left      = .false.
+        self%nmovies_unset      = 0
         self%l_haschanged       = .false.
         self%l_nmics_reached    = .false.
         self%l_restart          = .false.
         self%l_exists           = .false.
+
+    contains
+
+        subroutine release_heavy
+            if( allocated(self%spproj_glob) )then
+                call self%spproj_glob%kill
+                deallocate(self%spproj_glob)
+            endif
+            if( allocated(self%qenv) )then
+                call self%qenv%kill
+                deallocate(self%qenv)
+            endif
+            if( allocated(self%cline_exec) )then
+                call self%cline_exec%kill
+                deallocate(self%cline_exec)
+            endif
+        end subroutine release_heavy
+
     end subroutine kill
 
     !---------------- set-up ----------------
@@ -597,6 +622,8 @@ contains
     subroutine build_worker_cline( self, cline )
         class(stream_stage_preprocess), intent(inout) :: self
         class(cmdline),                 intent(in)    :: cline
+        ! cmdline's defined assignment needs an allocated left-hand side
+        if( .not. allocated(self%cline_exec) ) allocate(self%cline_exec)
         self%cline_exec = cline
         call self%cline_exec%set('prg',   'preprocess')
         call self%cline_exec%set('mkdir', 'no')
@@ -611,6 +638,9 @@ contains
     !---------------- submission ----------------
 
     ! Groups newly detected movies into sets of STREAM_NMOVS_SET and queues one preprocess job per set.
+    ! The movies short of a set wait for more (the watcher returns them again, since they are not in
+    ! its history); once no movie has arrived for PARTIAL_SET_QUIET_S they go as a partial set, so
+    ! the last movies of a session are processed (follow-up plan, decision 3).
     subroutine submit_new_movies( self )
         class(stream_stage_preprocess), intent(inout) :: self
         type(string), allocatable :: movies(:)
@@ -618,12 +648,12 @@ contains
         self%l_movies_left = .false.
         call self%movie_buff%detect_and_add_dirs(self%params%dir_movies, self%l_sj_dirs)
         call self%movie_buff%watch(nmovies, movies, max_nmovies=self%nmovs2importperiter)
-        if( nmovies > 0 )then
-            ! a movie arrived: preprocessing is not idle
+        ! a movie arrived when the watch returns more than the movies left short of a set before
+        if( nmovies > self%nmovies_unset )then
+            ! preprocessing is not idle
             self%last_movie_time = simple_gettime()
             if( file_exists(STREAM_IDLE_MARKER) ) call del_file(STREAM_IDLE_MARKER)
         endif
-        if( nmovies < STREAM_NMOVS_SET ) return
         nsets = nmovies / STREAM_NMOVS_SET
         cnt   = 0
         do iset = 1,nsets
@@ -637,15 +667,29 @@ contains
             enddo
             if( cnt == min(self%nmovs2importperiter, nmovies) ) exit
         enddo
-        write(logfhandle,'(A,I4,A,A)') '>>> ', cnt, ' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
-        self%l_movies_left = cnt /= nmovies
+        ! the movies short of a set, once nothing has arrived for a while: a partial set
+        if( nmovies - cnt > 0 .and. nmovies - cnt < STREAM_NMOVS_SET )then
+            if( simple_gettime() - self%last_movie_time >= PARTIAL_SET_QUIET_S )then
+                write(logfhandle,'(A,I2,A,I0,A)') '>>> ', nmovies - cnt, ' MOVIES SHORT OF A SET AFTER ', PARTIAL_SET_QUIET_S,&
+                    &' S WITHOUT A NEW ONE: SUBMITTED AS A PARTIAL SET'
+                call self%create_movies_set_project(movies(cnt + 1:nmovies))
+                call self%sets%submit(self%qenv, self%cline_exec)
+                do imovie = cnt + 1,nmovies
+                    call self%movie_buff%add2history(movies(imovie))
+                enddo
+                cnt = nmovies
+            endif
+        endif
+        if( cnt > 0 ) write(logfhandle,'(A,I4,A,A)') '>>> ', cnt, ' NEW MOVIES ADDED; ', cast_time_char(simple_gettime())
+        self%nmovies_unset = nmovies - cnt
+        self%l_movies_left = nmovies - cnt >= STREAM_NMOVS_SET
     end subroutine submit_new_movies
 
-    ! Writes the project of one movie set (absolute movie paths) as the next job set and points
-    ! the worker command line at it.
+    ! Writes the project of one movie set (absolute movie paths; STREAM_NMOVS_SET, or fewer for a
+    ! partial set) as the next job set and points the worker command line at it.
     subroutine create_movies_set_project( self, movie_names )
         class(stream_stage_preprocess), intent(inout) :: self
-        type(string),                   intent(in)    :: movie_names(STREAM_NMOVS_SET)
+        type(string),                   intent(in)    :: movie_names(:)
         type(sp_project) :: spproj_here
         type(ctfparams)  :: ctfvars
         type(string)     :: xmlfile, xmldir
@@ -657,8 +701,8 @@ contains
         ctfvars%cs      = self%params%cs
         ctfvars%kv      = self%params%kv
         ctfvars%fraca   = self%params%fraca
-        call spproj_here%add_movies(movie_names(1:STREAM_NMOVS_SET), ctfvars, verbose=.false.)
-        do imov = 1,STREAM_NMOVS_SET
+        call spproj_here%add_movies(movie_names, ctfvars, verbose=.false.)
+        do imov = 1,size(movie_names)
             self%import_counter = self%import_counter + 1
             call spproj_here%os_mic%set(imov, 'importind', real(self%import_counter))
             call spproj_here%os_mic%set(imov, 'tiltgrp',   0.0)
@@ -678,7 +722,7 @@ contains
                 call spproj_here%os_mic%set(imov, 'meta', xmlfile)
             endif
         enddo
-        call self%sets%write_set(spproj_here, self%cline_exec, STREAM_NMOVS_SET)
+        call self%sets%write_set(spproj_here, self%cline_exec, size(movie_names))
         call spproj_here%kill
     end subroutine create_movies_set_project
 
@@ -702,6 +746,7 @@ contains
         type(string), allocatable :: done(:)
         integer :: n_failed
         n_imported = 0
+        ! n_failed: the movies of the failed jobs, all of a set's
         call self%sets%collect(self%qenv, done, n_failed)
         if( size(done) > 0 ) call self%import_completed(done, n_imported)
         self%n_failed_jobs = self%n_failed_jobs + n_failed
@@ -716,18 +761,25 @@ contains
         integer,                        intent(out)   :: n_imported
         type(sp_project), allocatable :: job_projs(:)
         logical,          allocatable :: mics_mask(:)
+        integer,          allocatable :: first(:) ! the first micrograph of each set in mics_mask
         type(string) :: fname
-        integer      :: n_jobs, n_old, nmics, iproj, i, imic, j, nrejected
+        integer      :: n_jobs, n_old, nmics, iproj, i, imic, j, nrejected, n_set
         n_imported = 0
         n_jobs     = size(job_fnames)
         if( n_jobs == 0 ) return
         n_old = self%spproj_glob%os_mic%get_noris()
-        nmics = STREAM_NMOVS_SET * n_jobs
-        allocate(job_projs(n_jobs), mics_mask(nmics))
+        ! a set holds STREAM_NMOVS_SET micrographs, or fewer (a partial set)
+        allocate(job_projs(n_jobs), first(n_jobs + 1))
+        first(1) = 1
         do iproj = 1,n_jobs
             call job_projs(iproj)%read_segment('mic', job_fnames(iproj))
-            do i = 1,STREAM_NMOVS_SET
-                mics_mask((iproj - 1) * STREAM_NMOVS_SET + i) = job_projs(iproj)%os_mic%get_state(i) == 1
+            first(iproj + 1) = first(iproj) + job_projs(iproj)%os_mic%get_noris()
+        enddo
+        nmics = first(n_jobs + 1) - 1
+        allocate(mics_mask(nmics))
+        do iproj = 1,n_jobs
+            do i = 1,job_projs(iproj)%os_mic%get_noris()
+                mics_mask(first(iproj) + i - 1) = job_projs(iproj)%os_mic%get_state(i) == 1
             enddo
         enddo
         n_imported         = count(mics_mask)
@@ -741,7 +793,7 @@ contains
             imic = 0
             j    = n_old
             do iproj = 1,n_jobs
-                do i = 1,STREAM_NMOVS_SET
+                do i = 1,job_projs(iproj)%os_mic%get_noris()
                     imic = imic + 1
                     if( .not. mics_mask(imic) ) cycle
                     j = j + 1
@@ -752,11 +804,13 @@ contains
             enddo
         endif
         do iproj = 1,n_jobs
-            imic = (iproj - 1) * STREAM_NMOVS_SET + 1
-            if( any(mics_mask(imic:imic+STREAM_NMOVS_SET-1)) ) call self%sets%complete(job_fnames(iproj), fname)
+            n_set = first(iproj + 1) - first(iproj)
+            if( n_set > 0 )then
+                if( any(mics_mask(first(iproj):first(iproj + 1) - 1)) ) call self%sets%complete(job_fnames(iproj), fname)
+            endif
             call job_projs(iproj)%kill
         enddo
-        deallocate(job_projs, mics_mask)
+        deallocate(job_projs, mics_mask, first)
     end subroutine import_completed
 
     ! After an import: thresholds, log, GUI plots and thumbnails, STAR snapshot.
@@ -949,16 +1003,15 @@ contains
 
     !---------------- helpers ----------------
 
-    subroutine write_mic_star_and_field( self, write_field, copy_optics )
+    subroutine write_mic_star_and_field( self, write_field, optics_set )
         class(stream_stage_preprocess), intent(inout) :: self
-        logical, optional,              intent(in)    :: write_field, copy_optics
-        logical :: l_write_field, l_copy_optics
+        logical, optional,              intent(in)    :: write_field, optics_set
+        logical :: l_write_field, l_optics_set
         l_write_field = .false.
-        l_copy_optics = .false.
+        l_optics_set  = .false.
         if( present(write_field) ) l_write_field = write_field
-        if( present(copy_optics) ) l_copy_optics = copy_optics
-        if( l_copy_optics )then
-            call self%starproj_stream%copy_micrographs_optics(self%spproj_glob, verbose=.false.)
+        if( present(optics_set)  ) l_optics_set  = optics_set
+        if( l_optics_set )then
             call self%starproj_stream%stream_export_micrographs(self%params, self%spproj_glob, self%params%cwd, optics_set=.true.)
         else
             call self%starproj_stream%stream_export_micrographs(self%params, self%spproj_glob, self%params%cwd)

@@ -2,8 +2,12 @@
 ! Extend and override execute(cline); start() forks and runs it in the child (exit 0).
 ! status() polls waitpid(WNOHANG); a non-zero wait status (including signals) is FAILED.
 ! A failed child is not restarted here: the owner calls start() again.
-! terminate() sends SIGTERM, kill() SIGKILL.
+! terminate() sends SIGTERM, kill() SIGKILL. The parent's buffered output is flushed before
+! the fork, so a child does not write it again; the child ignores SIGINT, so a terminal's
+! Ctrl-C reaches the parent, which stops its children in order.
 module simple_forked_process
+  use, intrinsic :: iso_c_binding,   only: c_intptr_t
+  use, intrinsic :: iso_fortran_env, only: output_unit, error_unit
   use unix,                  only: c_pid_t, c_int, c_long, c_null_char, &
                                   c_fork, c_kill, c_exit, c_time,     &
                                   c_waitpid, c_usleep, c_perror,      &
@@ -31,7 +35,7 @@ module simple_forked_process
 
   type :: forked_process
     private
-    type(cmdline)         :: cline
+    type(cmdline), allocatable :: cline ! what the child runs execute with (set_cline, or start's)
     type(string)          :: name
     type(string)          :: logfile
     integer(kind=c_pid_t) :: pid        = -1
@@ -49,6 +53,7 @@ module simple_forked_process
     procedure :: terminate
     procedure :: kill => kill_forked_process
     procedure :: destroy
+    procedure :: set_cline
     procedure :: skip
     procedure :: status
     procedure :: await_final_status
@@ -72,6 +77,8 @@ contains
     type(c_funptr)                                 :: prev_handler
     if( present(logfile) ) self%logfile = logfile
     if( present(name)    ) self%name    = name
+    ! cmdline's defined assignment needs an allocated left-hand side
+    if( .not. allocated(self%cline) ) allocate(self%cline)
     if( present(cline)   ) self%cline   = cline
 #if defined(_WIN32)
       self%pid      = -1
@@ -82,6 +89,10 @@ contains
       return
 #endif
     self%skipped = .false.
+    ! what the parent has buffered would otherwise be written by the child too
+    flush(logfhandle,   iostat=ios)
+    flush(output_unit,  iostat=ios)
+    flush(error_unit,   iostat=ios)
     self%pid = c_fork()
     if( self%pid < 0 ) then
       ! Fork failed — terminal error.
@@ -89,11 +100,12 @@ contains
       THROW_HARD('Failed to fork process')
     else if( self%pid == 0 ) then
       ! Child process: optionally redirect log output, execute, then exit.
-      ! Default SIGTERM/SIGINT first: handlers inherited from the parent act on the
-      ! parent's state and threads, which the child does not have; execute()
-      ! installs its own.
+      ! Default SIGTERM first: a handler inherited from the parent acts on the parent's
+      ! state and threads, which the child does not have; execute() installs its own.
+      ! SIGINT is ignored, and stays ignored in what the child execs: a terminal's Ctrl-C
+      ! goes to the whole process group, and the parent stops its children in order.
       prev_handler = c_signal(SIGTERM, c_null_funptr)
-      prev_handler = c_signal(SIGINT,  c_null_funptr)
+      prev_handler = c_signal(SIGINT,  sig_ign())
       if( .not. self%logfile%is_blank() ) then
         if( file_exists(self%logfile%to_char()) ) then
           open(UNIT=logfhandle, FILE=self%logfile%to_char(), IOSTAT=ios, &
@@ -182,10 +194,22 @@ contains
     end do
   end subroutine await_final_status
 
-  ! No-op destructor placeholder.
+  ! Releases the command line; the process is not touched.
   subroutine destroy( self )
     class(forked_process), intent(inout) :: self
+    if( allocated(self%cline) )then
+      call self%cline%kill()
+      deallocate(self%cline)
+    end if
   end subroutine destroy
+
+  ! The command line every later start runs execute with (one copy, kept here).
+  subroutine set_cline( self, cline )
+    class(forked_process), intent(inout) :: self
+    class(cmdline),        intent(in)    :: cline
+    if( .not. allocated(self%cline) ) allocate(self%cline)
+    self%cline = cline
+  end subroutine set_cline
 
   ! Non-blocking status poll. Uses waitpid(WNOHANG) to check whether the
   ! child has exited. Records stop/fail timestamps.
@@ -207,8 +231,10 @@ contains
           self%stopped = .true.
           self%failed  = .false.
         else
-          self%stopped = .false.
-          self%failed  = .true.
+          self%stopped  = .false.
+          self%failed   = .true.
+          ! when the failure is seen, not on every later poll
+          self%failtime = int(c_time(0_c_long))
         end if
       end if
     end if
@@ -216,10 +242,7 @@ contains
       status_code = FORK_STATUS_STOPPED
       if( self%stoptime == 0 ) self%stoptime = int(c_time(0_c_long))
     end if
-    if( self%failed ) then
-      self%failtime = int(c_time(0_c_long))
-      status_code   = FORK_STATUS_FAILED
-    end if
+    if( self%failed ) status_code = FORK_STATUS_FAILED
   end function status
 
   ! Return the child's PID.
@@ -256,5 +279,11 @@ contains
     integer                           :: failtime
     failtime = self%failtime
   end function get_failtime
+
+  ! SIG_IGN, which the unix bindings do not define: the handler value 1 on Linux and macOS.
+  function sig_ign() result( handler )
+    type(c_funptr) :: handler
+    handler = transfer(1_c_intptr_t, handler)
+  end function sig_ign
 
 end module simple_forked_process

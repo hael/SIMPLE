@@ -20,6 +20,7 @@ character(len=*), parameter :: REFPICK_JOB_NAME           = 'reference_based_pic
 character(len=*), parameter :: REJECTED_CLS_STACK         = './rejected_cls.mrc'
 character(len=*), parameter :: SIEVING_JOB_NAME           = 'particle_sieving'        ! name of particle sieving job. also used for folder name
 character(len=*), parameter :: SIEVING_REFS_FNAME         = 'sieving_references'
+character(len=*), parameter :: SIEVE_FINAL_SET_FBODY      = 'sieve_final_'            ! the sieve's empty final set, in its hand-off folder: sieve_final_c<n>_f<m>.simple
 ! in a stage's own folder: STREAM_IDLE once its upstream has gone quiet (for preprocessing: no new
 ! movie for MOVIES_IDLE_TIME_S) and it has handed on everything it took, removed when new work
 ! arrives; STREAM_FINISHED once it has stopped, removed when it starts. A downstream stage ends its

@@ -58,3 +58,17 @@ master passes its threads per worker with the address (`worker_server_nthr`), an
 both on to the jobs that run queues of their own. A queue that claims more stops when it is made
 (`qsys_env`): no worker could serve it, and a high-priority job waiting there would hold back
 every normal-priority job on the server.
+
+## Optics groups
+
+Optics assignment (p02) groups every micrograph again on each pass that imports any
+(`simple_optics_groups`): within a tilt group (one, without `beamtilt=yes`), two micrographs are
+linked when their beam-image shifts lie within `tilt_thres`, and each connected set is a group
+(single linkage, found on a grid of cells `tilt_thres/sqrt(2)` wide with no distance matrix, so a
+session of any length costs memory linear in its micrographs). Closely spaced shift positions can
+chain into one group. A group keeps the id most of its micrographs had at the previous pass (the
+group sharing most first, each id once), and a new group takes the next id never given, so ids are
+stable and can have gaps once groups merge; code that reads an optics row looks it up by `ogid`,
+never by row number. Each pass publishes the next optics map (`simple_optics_maps`), which the
+sieve, the pool and reference picking apply by import index; a micrograph a map does not list
+gets group 1. On a restart, see `restart_policy.md` (p02).

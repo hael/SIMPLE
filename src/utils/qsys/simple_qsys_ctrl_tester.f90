@@ -9,7 +9,8 @@ module simple_qsys_ctrl_tester
 use simple_core_module_api
 use simple_qsys_local, only: qsys_local
 use simple_qsys_ctrl,  only: qsys_ctrl
-use simple_qsys_job_record, only: cancel_queued_job, job_left_unfinished, fresh_job_dir
+use simple_qsys_job_record, only: cancel_queued_job, cancel_unfinished_jobs, job_left_unfinished, fresh_job_dir,&
+                                  &query_job, check_job_lost, JOB_ALIVE, JOB_GONE, JOB_UNKNOWN, JOB_LOST_EXIT_CODE
 use simple_cmdline,    only: cmdline
 use simple_test_utils
 implicit none
@@ -32,7 +33,71 @@ contains
         call test_multi_job_script()
         call test_streaming_stack()
         call test_async_job_record_and_fresh_dir()
+        call test_cancel_unfinished_jobs()
+        call test_job_liveness()
     end subroutine run_all_qsys_ctrl_tests
+
+    !> a local job of this host is alive while its process is, gone once it is not; one of another
+    !! host cannot be told; a job gone at two checks in a row gets the lost status written
+    subroutine test_job_liveness()
+        character(len=*), parameter :: EXIT_CODE = 'EXIT_CODE_live'
+        type(string) :: cwd_saved, root, host
+        integer      :: nfail0, last_check, nmisses, code
+        logical      :: l_lost, err
+        write(*,'(A)') 'test_job_liveness'
+        nfail0 = tests_failed
+        call enter_fixture('qsys_job_liveness', cwd_saved, root)
+        call exec_cmdline('hostname > host.txt', suppress_errors=.true.)
+        host = file_text('host.txt')
+        host = trim(adjustl(host%to_char()))
+        ! this process: alive
+        call write_lines(EXIT_CODE//JOB_INFO_EXT, int2str(get_process_id()), host%to_char(), 'none 0')
+        call assert_int(JOB_ALIVE, query_job(string(EXIT_CODE)), 'a local job whose process runs is alive')
+        ! a process that does not exist: gone
+        call write_lines(EXIT_CODE//JOB_INFO_EXT, '4194303', host%to_char(), 'none 0')
+        call assert_int(JOB_GONE, query_job(string(EXIT_CODE)), 'one whose process is gone is gone')
+        ! another host: cannot be told
+        call write_lines(EXIT_CODE//JOB_INFO_EXT, '12345', 'no-such-host.invalid', 'none 0')
+        call assert_int(JOB_UNKNOWN, query_job(string(EXIT_CODE)), 'a local job of another host cannot be told')
+        ! gone at two checks in a row: lost
+        call write_lines(EXIT_CODE//JOB_INFO_EXT, '4194303', host%to_char(), 'none 0')
+        last_check = 0
+        nmisses    = 0
+        l_lost = check_job_lost(string(EXIT_CODE), last_check, nmisses, interval_s=0)
+        call assert_false(l_lost, 'one miss is not enough')
+        call assert_int(1, nmisses, 'it is counted')
+        l_lost = check_job_lost(string(EXIT_CODE), last_check, nmisses, interval_s=0)
+        call assert_true(l_lost, 'two in a row: lost')
+        call assert_true(file_exists(string(EXIT_CODE)), 'its exit status is written')
+        call read_exit_code(string(EXIT_CODE), code, err)
+        call assert_int(JOB_LOST_EXIT_CODE, code, 'as the lost status')
+        call assert_int(JOB_UNKNOWN, query_job(string(EXIT_CODE)), 'a job with a status is not queried')
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_job_liveness
+
+    !> the jobs recorded at any depth under a folder that wrote no exit status are sent a cancel
+    !! (a stage the master had to kill); finished ones are left alone
+    subroutine test_cancel_unfinished_jobs()
+        type(string) :: cwd_saved, root
+        integer      :: nfail0, ncancelled
+        write(*,'(A)') 'test_cancel_unfinished_jobs'
+        nfail0 = tests_failed
+        call enter_fixture('qsys_cancel_unfinished', cwd_saved, root)
+        call simple_mkdir(string('stage'))
+        call simple_mkdir(string('stage/a'))
+        call simple_mkdir(string('stage/a/b'))
+        call simple_mkdir(string('stage/c'))
+        ! records of another host without a scheduler id: the cancel acts there only
+        call write_lines('stage/EXIT_CODE_top'//JOB_INFO_EXT,     '12345', 'no-such-host.invalid', 'none 0')
+        call write_lines('stage/a/b/EXIT_CODE_deep'//JOB_INFO_EXT, '12346', 'no-such-host.invalid', 'none 0')
+        call write_lines('stage/c/EXIT_CODE_done'//JOB_INFO_EXT,  '12347', 'no-such-host.invalid', 'none 0')
+        call write_lines('stage/c/EXIT_CODE_done', '0')
+        call cancel_unfinished_jobs(string('stage'), ncancelled)
+        call assert_int(2, ncancelled, 'the two unfinished jobs, at any depth, are sent a cancel')
+        call cancel_unfinished_jobs(string('no_such_stage'), ncancelled)
+        call assert_int(0, ncancelled, 'a folder that does not exist has none')
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_cancel_unfinished_jobs
 
     !> a directory whose job recorded itself and wrote no exit status is moved aside before a new
     !! job starts there; a finished job is never cancelled and its directory is kept

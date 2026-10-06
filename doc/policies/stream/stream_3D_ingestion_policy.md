@@ -9,10 +9,11 @@ preserve.
   `src/main/stream/stages/simple_stream_stage_pool2D.f90`, and `build_pool_publication`,
   `publish_pool_state` and `delete_pool_publication` in
   `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`.
-- Their import (p07): `import_sets`, `select_cavgs` and `merge_publication` in
+- Their import (p07): `import_sets`, `select_cavgs`, `take_first_set` and `merge_publication` in
   `src/main/stream/stages/simple_stream_stage_solve3D.f90`.
-- p07's runs: when it starts `solve3D` and `solve3D_addon` (`next_job`), what it does with a
-  failed run and an addon verdict, and the folders it keeps. The addon program itself is
+- p07's runs: the first set's `solve2D` (`start_solve2D`, `finish_solve2D`), when it starts
+  `solve3D` and `solve3D_addon` (`next_job`), what it does with a failed run and an addon
+  verdict, and the folders it keeps. The addon program itself is
   governed by `doc/policies/3D/solve3D_addon_policy.md`; this policy relies on its row contract
   (section 4 there) and its report (section 11 there).
 
@@ -26,8 +27,11 @@ completed iteration left it.
    the last dispatch, are never published. Within a published stack, a particle never updated (a
    fractional update did not sample it) keeps its row but is published deselected (state 0): its
    class is the random one it was given on import. A later publication selects it once updated.
-2. **2D parameters at publication time:** class, in-plane angle, shifts and state. `ptcl3D` is a
-   copy of `ptcl2D`.
+2. **2D parameters at publication time:** class, in-plane angle, shifts and state in `ptcl2D`.
+   `ptcl3D` is prepared as the pool's final project prepares it: a copy of `ptcl2D` with the 2D
+   clustering removed (class, in-plane angle, corr, frac), shifts kept, and no `updatecnt` or
+   `sampled`. A publication carries the newest optics map's groups (micrographs, stacks,
+   particles) and its optics table (`build_pool_publication`); the pool keeps none of its own.
 3. **Self-consistent indexing.** Stacks are renumbered from 1, and their particle ranges and the
    particles' stack indices follow. Each particle carries its image index in its stack
    (`indstk`).
@@ -38,9 +42,16 @@ completed iteration left it.
 
 ## 3. When and how it is published
 
-1. **When:** once per completed pool iteration from `EXPORT_START_ITER` (25) on, in the pass where
-   that iteration's results have come back and before the next iteration is dispatched. The
-   publication is therefore one consistent iteration.
+1. **When:** once per completed pool iteration from `EXPORT_START_ITER` (25) on, and once after
+   iteration `FIRST_EXPORT_ITER` (10) in a pool that has published nothing yet (`exports_after`,
+   follow-up plan, decisions 31 and 37), in the pass where that iteration's results have come back
+   and before the next iteration is dispatched. The publication is therefore one consistent
+   iteration. The iteration-10 publication carries the sieve's mask diameter: the pool takes it
+   when it dispatches iteration 10 (`MSKDIAM_SWITCH_ITER`), so that iteration's class averages were
+   still made with the previous one, which is why 3D classifies its particles again (section 4,
+   item 3). A restarted pool with publications on disk skips it and resumes at 25, so 3D never
+   takes the early classification of a restarted pool as a later publication. Iterations 11 to 24
+   publish nothing.
 2. **Nothing classified:** a pool with no classified stack publishes nothing for that iteration.
 3. **File names:** a publication is `<id>.simple` (5-digit id) in p06's completed folder
    (`DIR_STREAM_COMPLETED`). Its class averages and FRCs are written beside it first
@@ -56,51 +67,102 @@ completed iteration left it.
 1. **Watching:** p07 watches p06's completed folder and records each publication once.
 2. **Only the newest:** in a pass where no 3D job runs, p07 takes the newest publication it has
    not taken. Older ones not taken are passed over, because the newest holds what they held.
-3. **One quality decision per publication.** The publication's class averages are scored once
-   with the pool quality model (`CAVG_QUALITY_MODEL_POOL_DEFAULT`), with a mask diameter fitted
-   to their box (`fit_mskdiam`). The selection is mapped to the publication's particles by class
-   (`map_cavgs_selection`). The selected and rejected class averages are written with JPEGs in
-   `quality_selection/<id>/`.
-4. **Merge** into the stage's rows (`merge_publication`):
+   - **A publication p07 cannot use** (no class averages or `cls2D`, a count mismatch, a stack
+     that changed size, image indices that disagree with the rows: `publication_problem`) is
+     passed over with a warning before anything is merged, and listed in
+     `rejected_publications.txt` in p07's folder, so a restart passes it over too. The stage
+     waits for the next publication instead of stopping.
+   - **The mask diameter** is taken from every publication used (`take_mskdiam`): a change is
+     logged and applies from the next run.
+3. **The first set** (decisions 31 to 38): the first publication p07 takes, into a stage without
+   rows (in a fresh session, the iteration-10 one; after a p07 restart, the newest), is merged as
+   it selects its particles (those an iteration has updated; `take_first_set`), with no pool-model
+   decision. Those rows are the first set. `solve2D` classifies them again in `solve2D/`, with the
+   publication's mask diameter, sized as p03 sizes its own (one class per 100 particles within
+   10 to 100, a sample of at least 2000, `lpstop` 8 A) on the 3D jobs' resources (`nthr3D`,
+   `nparts3D`). Its class averages are selected as p03 selects after its `solve2D`: the chunk model
+   (`CAVG_QUALITY_MODEL_CHUNK_DEFAULT`), then the class-compatibility filter, mapped to the rows by
+   class, with JPEGs in `quality_selection/first_set/`. Its shifts become the rows' 3D start
+   (`map2Dshifts23D`), and each first-set row keeps this selection for the session (item 5). No
+   publication is taken from the first set until the first `solve3D` starts: `solve3D` starts
+   in the pass that ends `solve2D` (or applies the fallback below), so the first run sees the
+   first set's selection alone and later particles come in through the addon runs (decision 38).
+   When that selection is too small for `solve3D` (item 6), publications are taken as before
+   until it is not.
+   - **A failed `solve2D`** (or one that leaves no class averages) falls back: the first set's rows
+     take the pool model's selection of the first publication, made when it was taken and kept for
+     this, and they are no longer the first set, so the pool governs them like any other row.
+4. **One quality decision per later publication.** The publication's class averages are scored
+   once with the pool quality model (`CAVG_QUALITY_MODEL_POOL_DEFAULT`), with a mask diameter
+   fitted to their box (`fit_mskdiam`). The selection is mapped to the publication's particles by
+   class (`map_cavgs_selection`). The selected and rejected class averages are written with JPEGs
+   in `quality_selection/<id>/`.
+5. **Merge** into the stage's rows (`merge_publication`):
    - **A stack the stage holds** is matched by its stack name, in whatever order the publication
      lists it, and each particle by its image index in the stack (`indstk`; the stage's row must
      record the same image, or the stage stops). Its particles take the publication's 2D
      parameters (`transfer_2Dparams`) and 2D state in place. The 3D state is a run's multistate label: a particle the publication
      deselects gets 0, a selected particle keeps its label, and a selected particle without one
-     (state 0) gets 1. They keep their 3D parameters, CTF and optics group.
+     (state 0) gets 1. They keep their 3D parameters, CTF and optics group. **A first-set row**
+     takes the 2D parameters only: its selection and multistate label stay as the first set's
+     selection and the runs leave them (decision 34).
    - **A new stack** is appended with its micrograph and particles (2D and 3D), after the rows
      the stage holds.
    - **A stack the publication lacks** keeps its rows, deselected (state 0 in both segments). This
-     happens after a pool restart, until the restarted pool has classified it again.
-   - **The stage's `cls2D`** is the publication's.
-5. **The first run:** `solve3D` starts once at least `MIN_PTCLS_PER_STATE` (5) particles per
-   state are selected (`next_job`). Its settings come from the command line, defaulting to
+     happens after a pool restart, until the restarted pool has classified it again. The first
+     set's rows keep their selection.
+   - **The stage's `cls2D`** is the publication's, and so is its optics table when the
+     publication carries one (the newest optics map's; group ids are kept across maps).
+6. **The first run:** `solve3D` starts once at least `MIN_PTCLS_PER_STATE` (5) particles per
+   state are selected (`next_job`), in the pass that ends the first set's `solve2D` and
+   selection (or its fallback); with fewer, it waits for later publications to select more. The commander checks 2 <= `nstates` <= 20 (the GUI status
+   holds `MAX_STATES_SOLVE3D_MULTISTATE`) before the stage starts. Its settings come from the
+   command line, defaulting to
    `NSTATES3D` (3), `NSTAGES3D` (5), `LPSTART3D` (50), `LPSTOP3D` (10), `NPARTS3D` (8) and
-   `NTHR3D` (8), with the pool's mask diameter. Publications start past the pool's low-pass ramp
-   (iteration 20), so the first is already a settled classification.
-6. **Addon runs:** once a result exists, its active rows are the frozen particles, and the
+   `NTHR3D` (8), with the pool's mask diameter. The first set's classification is p07's own
+   `solve2D`, not the pool's iteration 10; the later publications start past the pool's low-pass
+   ramp (iteration 20), so the pool model scores settled classifications.
+7. **Addon runs:** once a result exists, its active rows are the frozen particles, and the
    cohort is the selected rows that are not (appended since, or selected again). An
    `solve3D_addon` run starts when the cohort reaches max(`MIN_PTCLS_PER_STATE` × nstates,
    `ADDON_COHORT_FRAC` (10%) of the frozen particles). The first bound is the addon's own floor
    (its refusals of an empty or small cohort cannot happen); the second bounds the total cost,
    since every run accumulates all frozen particles.
-7. **Failures:** a failed `solve3D` stops the stage (`THROW_HARD`). A failed addon run (refused,
+8. **Failures:** a failed `solve2D` falls back (item 3); a failed `solve3D` stops the stage
+   (`THROW_HARD`). A failed addon run (refused,
    for example for a state without frozen particles, or crashed) leaves the latest result the
    base, and the next run waits for a cohort larger than the one that failed.
-8. **The verdict:** after each addon run its report (`solve3D_addon_report.txt`) is read; the
-   verdict per state (IMPROVED, UNCHANGED, REGRESSED) is logged and shown in the GUI status. A
-   REGRESSED state is warned about and the result stays the base: rejecting it is the user's
-   call (addon policy, section 11).
-9. **Particles are aligned once.** A particle's pose and state, once frozen, are never revisited,
-   and later runs inherit the first `solve3D`'s ladder. There is no rebase (a fresh `solve3D` or
-   a `refine3D` once the data have grown); that is a known gap (section 7).
-10. **After each run** the stage's project is written (under a temporary name, renamed). The GUI
-    gets each state's volume, resolution, FSC curve, reprojections and orientation distribution.
-11. **What p07 keeps:** the newest `NQUALITY_KEPT` (3) quality folders and those of the
-    publications a run started from (listed in `quality_selection/runs.txt`); the latest addon
+9. **The verdict:** after each addon run its report (`solve3D_addon_report.txt`) is read before
+   anything is adopted; the verdict per state (IMPROVED, UNCHANGED, REGRESSED) is logged and shown
+   in the GUI status. A run with a REGRESSED state is rolled back (follow-up plan, decision 22): the
+   frozen base, the stage's project and the GUI's volumes stay the previous run's, and the next
+   attempt waits until the cohort has grown by the cadence step again (`retry_cohort`). The status
+   says "rolled back" and how many in a row. A run that keeps regressing never replaces the base;
+   the final run (item 13) realigns everything at the end. A run that wrote no report is adopted.
+10. **Particles are aligned once during a session.** A particle's pose and state, once frozen, are
+   not revisited by the addon runs, and they inherit the first `solve3D`'s ladder. There is no
+   rebase during a session (decision 21); the final run (item 13) is the one realignment.
+11. **After each run** the job's data segments (micrographs, stacks, particles, classes, outputs)
+    become the stage's; the stage keeps its own project information, computing environment and
+    optics table (`finish_run`). The stage's project is then written (under a temporary name,
+    renamed). The GUI gets each state's volume, resolution, FSC curve, reprojections and
+    orientation distribution, and in the status the selected particles as imported.
+12. **What p07 keeps:** the newest `NQUALITY_KEPT` (3) quality folders and those of the
+    publications a run started from (listed in `quality_selection/runs.txt`, the first set's
+    publication among them), and `quality_selection/first_set/`; the `solve2D/` folder; the latest addon
     iteration folder (the frozen base), its predecessors removed once it has completed; no folder
     set aside for a job left unfinished once a later run has completed. A stop cancels the
     running job (`doc/policies/stream/restart_policy.md`).
+13. **The final run** (decisions 23, 24): the pool flags its final publication (`pool_final=yes`
+    in its out segment: the publication after `FINAL_ITER` while the sieve's final set is in the
+    pool). Once p07 has merged it and no job runs, it starts one multistate `refine3D` of every
+    selected particle from the current state volumes (`vol<s>`), capped by its `lpstop`, in
+    `refine3D_final/`, unless the last run that aligned every particle (`solve3D`, or an earlier
+    final run) had the same number of selected particles. Its result becomes the stage's project
+    and the GUI's volumes, with each state's resolution logged before and after; the addon runs
+    keep their own base (`solve3D_addon` needs a `solve3D` base), so when the sieve takes finality
+    back they go on from it, and the next final publication starts a new final run. A failed final
+    run leaves the latest result. A stop cancels it like any job.
 
 ## 5. Invariants a change must keep
 
@@ -117,7 +179,10 @@ completed iteration left it.
   reorders its stacks changes nothing in p07.
 - **A row's 3D parameters, its multistate label, CTF and optics group are changed only by a 3D
   run**, never by a publication, which only deselects or selects (a deselected row loses its
-  label).
+  label). The first set's `solve2D` sets its rows' 3D shifts before any 3D run.
+- **One quality authority per row:** a first-set row's selection is the first set's selection
+  (or, after a failed `solve2D`, the pool model's like any other row); every other row's is the
+  newest publication's.
 
 ## 6. Change rules
 
@@ -126,27 +191,35 @@ completed iteration left it.
 - A change of the merge keeps the row invariants of section 5 and the addon policy's section 4.
 - Tests:
   - `unit_stream` "pool 2D": `test_publication_holds_classified_stacks` (classified stacks only,
-    renumbering, image indices, nothing to publish before any iteration) and
-    `test_export_numbering`;
+    renumbering, image indices, nothing to publish before any iteration),
+    `test_export_numbering`, and `test_pause_rules` (`exports_after`: iteration 10 in a fresh pool
+    only, every iteration from 25);
   - `unit_stream` "solve 3D": `test_merge_publications` (appending, matching in another order
     and by image index, selection and class in place with the 3D parameters and multistate label
     kept, deselection of a missing stack, the classes), the watch order and mask diameter, the job
     rule (first run, cohort thresholds, a failed run), the cohort count, the retention, the
-    volumes sent.
-  - The class-average selection of a publication has no unit test.
+    volumes sent; `test_first_set` (the first set and its due `solve2D`, the kept pool-model
+    selection, later publications updating the first set's 2D parameters but not its selection,
+    also with its stack missing) and `test_first_set_fallback`.
+  - The class-average selection of a publication and of the first set's `solve2D`, and the
+    `solve2D` run itself, have no unit test.
 
 ## 7. Known gaps
 
 - **Cost of a publication:** each one writes the pool's whole classified set, about the size of
-  the pool project, once per iteration past 25.
+  the pool project, once after iteration 10 and once per iteration from 25.
 - **Stack matching** is a search from the last match; it is linear per stack only when the
   publication's order differs from the stage's (after a pool restart).
 - **p07 never removes rows:** a stack the pool drops for good stays deselected in p07's rows.
 - **Retention of 2:** a reader that lags two publications behind finds the files of the older
   one gone. p07 reads the newest in the pass it sees it.
-- **Not yet decided:** a stability trigger other than "past iteration 25" for the first
-  `solve3D`.
-- **No rebase:** frozen particles are never realigned, and the first run's ladder is inherited
-  (section 4, item 9).
+- **The first set's `solve2D` is not tested end to end in the stage:** its command line, its
+  selection and the fallback after a real failure.
+- **A p07 restart** makes the newest publication the first set, so after a restart past
+  iteration 25 the first set is the whole pool of that publication.
+- **No rebase during a session** (decided): the addon runs never realign frozen particles; only
+  the final run does (section 4, items 10 and 13).
+- **The final run's command line** (`refine3D` with `vol<s>` and `lpstop`) relies on refine3D's
+  own low-pass schedule from the FSC; it has not been run end to end in the stage.
 - **The addon run is not tested end to end in the stage:** its command line, frozen project and
   report reading are covered by the addon's own tests, not by p07's.

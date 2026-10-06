@@ -2,6 +2,7 @@
 module simple_stream_pool2D_utils
 use simple_stream_api
 use simple_qsys_job_record, only: cancel_queued_job
+use simple_qsys_async_job,  only: qsys_async_job, ASYNC_JOB_DONE, ASYNC_JOB_FAILED
 implicit none
 
 ! CALCULATORS
@@ -46,6 +47,8 @@ real                    :: resolutions(POOL_NPREV_RES)=999. ! pool resolution hi
 type(qsys_env)          :: pool_qenv                        ! qsys submission environment for pool
 integer                 :: pool_nattempts    = 0            ! submissions of the current iteration: a failed first is retried once
 logical                 :: l_pool_failed     = .false.      ! the current iteration failed twice: the pool stops
+type(qsys_async_job)    :: pool_job                         ! the current iteration's job (its files: POOL_EXIT_CODE...)
+character(len=*), parameter :: POOL_JOB_LABEL = 'refine2D_pool' ! names its script, log and exit status as POOL_* do
 type(string)            :: pool_center                      ! the pool's centering (yes|no) on a full update
 type(string)            :: current_jpeg                     ! filename of current pool JPEG (type(string))
 ! convergence
@@ -357,13 +360,14 @@ contains
         call random_seed(put=saved_seed)
     end subroutine draw_new_classes
 
-    ! Submits the pool's current iteration, with an exit-status file; the status and job record of
-    ! an earlier attempt are removed first, and the attempt is counted.
+    ! Submits the pool's current iteration as the pool's job (qsys_async_job, in the stage's folder:
+    ! POOL_DIR is empty), which removes the status and job record of an earlier attempt; the attempt
+    ! is counted.
     subroutine submit_pool_iteration( params )
         class(parameters), intent(in) :: params
         type(cmdline), allocatable :: pool_clines(:)
-        call del_file(POOL_DIR//POOL_EXIT_CODE)
-        call del_file(POOL_DIR//POOL_EXIT_CODE//JOB_INFO_EXT)
+        type(string)               :: cwd
+        call simple_getcwd(cwd)
         pool_nattempts = pool_nattempts + 1
         if( params%cc_objfun == OBJFUN_EUCLID )then
             ! Stream pool membership changes invalidate row identity. Rebuild a
@@ -377,27 +381,23 @@ contains
             call pool_clines(1)%delete('stream2d')
             call pool_clines(1)%delete('update_frac')
             pool_clines(2) = cline_refine2D_pool
-            call pool_qenv%exec_simple_prgs_in_queue_async(pool_clines, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE),&
-                &exit_code_fname=string(POOL_DIR//POOL_EXIT_CODE))
+            call pool_job%start_seq(pool_qenv, pool_clines, cwd, POOL_JOB_LABEL)
             call pool_clines(:)%kill
             deallocate(pool_clines)
         else
-            call pool_qenv%exec_simple_prg_in_queue_async(cline_refine2D_pool, string(POOL_DISTR_EXEC_FNAME), string(POOL_LOGFILE),&
-                &exit_code_fname=string(POOL_DIR//POOL_EXIT_CODE))
+            call pool_job%start(pool_qenv, cline_refine2D_pool, cwd, POOL_JOB_LABEL)
         endif
         l_pool_available = .false.
     end subroutine submit_pool_iteration
 
-    ! .true. when the current iteration's job has exited (its script wrote a status) without
-    ! refine2D finishing, whatever the status. A job killed before its script writes a status is
-    ! not seen (restart_policy.md).
+    ! .true. when the current iteration's job has ended without refine2D finishing: it exited,
+    ! whatever its status, or vanished without one, which the job's liveness check finds
+    ! (qsys_async_job: a walltime kill, a lost node).
     logical function pool_job_failed()
-        integer :: exit_code
-        logical :: err
+        integer :: job_status
         pool_job_failed = .false.
-        if( .not. file_exists(POOL_DIR//POOL_EXIT_CODE) ) return
-        call read_exit_code(string(POOL_DIR//POOL_EXIT_CODE), exit_code, err)
-        if( err ) return ! being written
+        job_status = pool_job%status()
+        if( job_status /= ASYNC_JOB_DONE .and. job_status /= ASYNC_JOB_FAILED ) return
         ! refine2D touches its marker before it exits and the script writes the status after
         if( file_exists(POOL_DIR//REFINE2D_FINISHED) ) return
         pool_job_failed = .true.

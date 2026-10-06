@@ -122,7 +122,12 @@ contains
         ! init
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()
-        if( self%n_watch .eq. 1 ) self%ratetime = tnow ! first call
+        if( self%n_watch .eq. 1 )then
+            ! first call: the rate counts from here, so the history added before it (a restart's
+            ! restored movies) is not taken for movies detected now
+            self%ratetime = tnow
+            self%raten    = self%n_history
+        endif
         ! get file list
         call self%watchdirs(farray)
         if( .not.allocated(farray) )return ! nothing to report

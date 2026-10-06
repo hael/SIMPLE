@@ -18,6 +18,8 @@
 !   Readers switch to import_latest_optics_map when their stages move over.
 !   copy_project_with_optics_map hands a project to the next stage with the
 !   newest groups applied (the particle sieve uses it for finished chunks).
+!   latest_optics_map_table reads the newest map's table as it is (the
+!   optics stage restores its groups from it on a restart).
 !
 ! HOME:
 !   In src/main/stream/shared for now; it belongs beside sp_project's
@@ -31,11 +33,13 @@ use simple_defs_fname,   only: OPTICS_MAP_PREFIX, TXT_EXT, METADATA_EXT
 use simple_string,       only: string
 use simple_string_utils, only: int2str
 use simple_fileio,       only: del_file, file_exists, simple_copy_file, simple_rename, swap_suffix
+use simple_nrtxtfile,    only: nrtxtfile
 use simple_sp_project,   only: sp_project
 use simple_stream_utils, only: get_latest_optics_map_id
 implicit none
 
-public :: publish_optics_map, import_latest_optics_map, latest_optics_map_id, copy_project_with_optics_map
+public :: publish_optics_map, import_latest_optics_map, latest_optics_map_id, copy_project_with_optics_map,&
+          &latest_optics_map_table
 private
 
 contains
@@ -85,6 +89,37 @@ contains
         call spproj%write(dst, tempfile=.true.)
         call spproj%kill
     end subroutine copy_project_with_optics_map
+
+    !> The table of the newest map in @p dir: the import indices it lists and their group ids
+    !! (empty when there is no map, or it cannot be read). Returns the map's id, 0 when none.
+    function latest_optics_map_table( dir, importinds, ogids ) result( id )
+        class(string),        intent(in)  :: dir
+        integer, allocatable, intent(out) :: importinds(:), ogids(:)
+        integer         :: id
+        type(nrtxtfile) :: mapfile
+        type(string)    :: fname
+        real            :: entry(2)
+        integer         :: il, nl
+        allocate(importinds(0), ogids(0))
+        id = latest_optics_map_id(dir)
+        if( id == 0 ) return
+        fname = map_prefix(dir, id)//TXT_EXT
+        if( .not. file_exists(fname) ) return
+        call mapfile%new(fname, 1)
+        if( mapfile%get_nrecs_per_line() /= 2 )then
+            call mapfile%kill()
+            return
+        endif
+        nl = mapfile%get_ndatalines()
+        deallocate(importinds, ogids)
+        allocate(importinds(nl), ogids(nl))
+        do il = 1,nl
+            call mapfile%readNextDataLine(entry)
+            importinds(il) = nint(entry(1))
+            ogids(il)      = nint(entry(2))
+        enddo
+        call mapfile%kill()
+    end function latest_optics_map_table
 
     !> The highest map id in @p dir, 0 when there is none.
     function latest_optics_map_id( dir ) result( id )

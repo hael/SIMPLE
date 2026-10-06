@@ -586,7 +586,7 @@ contains
 
             subroutine calculate_optics_plot()
                 type(json_value),  pointer :: optics_plot, datasets, dataset, data, xy
-                integer                    :: i, j
+                integer                    :: i, j, ogid
                 if(self%os_optics%get_noris() .eq. 0)   return
                 if(self%os_mic%get_noris()    .eq. 0)   return
                 if(.not. self%os_mic%isthere('ogid'))   return
@@ -595,12 +595,14 @@ contains
                 call json%create_object(optics_plot, 'assignments')
                 call json%add(optics_plot, 'type', 'plot_scatter')
                 call json%create_array(datasets, 'datasets')
+                ! a group by its id, which need not be its row (stream optics groups keep theirs)
                 do i = 1, self%os_optics%get_noris()
+                    ogid = self%os_optics%get_int(i, 'ogid')
                     call json%create_object(dataset, 'dataset')
                     call json%create_array(data, 'data')
-                    call json%add(dataset, 'label', 'optics group ' // int2str(i))
+                    call json%add(dataset, 'label', 'optics group ' // int2str(ogid))
                     do j = 1, self%os_mic%get_noris()
-                        if(self%os_mic%get(j, 'ogid') == i) then
+                        if(self%os_mic%get_int(j, 'ogid') == ogid) then
                             call json%create_object(xy, 'xy')
                             call json%add(xy, 'x', dble(self%os_mic%get(j, 'shiftx')))
                             call json%add(xy, 'y', dble(self%os_mic%get(j, 'shifty')))

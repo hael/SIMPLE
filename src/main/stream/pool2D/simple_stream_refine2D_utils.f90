@@ -8,7 +8,6 @@ use simple_imgarr_utils,         only: rank_cavgs_stk
 use simple_image,                only: image
 use simple_parameters,           only: parameters
 use simple_qsys_funs,            only: qsys_cleanup
-use simple_rec_list,             only: rec_list
 use simple_sp_project,           only: sp_project
 use simple_stack_io,             only: stack_io
 use simple_starproject,          only: starproject
@@ -201,10 +200,11 @@ contains
         endif
     end subroutine setup_downscaling
 
-    ! ends processing, generates project & cleanup
-    subroutine terminate_stream2D( params, project_list, optics_dir)
+    !> Ends the pool and writes its final project (pool2D_policy.md section 10): from the last
+    !! complete iteration, or, before the first, the raw project of every imported particle, both
+    !! with the newest optics map's groups (with @p optics_dir); then cleans up.
+    subroutine terminate_stream2D( params, optics_dir )
         class(parameters),         intent(inout) :: params
-        class(rec_list), optional, intent(inout) :: project_list
         class(string),   optional, intent(in)    :: optics_dir
         integer      :: ipart, lastmap
         if( pool_iter <= 0 )then
@@ -239,19 +239,24 @@ contains
 
         contains
 
-            ! no pool clustering performed, all available info is written down
+            ! no complete pool iteration: the pool's imported micrographs, stacks and particles as they
+            ! came (no 2D parameters but their shifts), with the newest optics map's groups, applied
+            ! to the project as written (not before it is assembled, nor from a stub)
             subroutine write_raw_project
-                if( present(project_list) )then
-                    if( project_list%size() > 0 )then
-                        ! the groups of the newest optics map, when there is one
-                        if( present(optics_dir) ) lastmap = import_latest_optics_map(pool_proj, optics_dir)
-                        call pool_proj%projrecords2proj(project_list)
-                        call starproj_stream%copy_micrographs_optics(pool_proj, verbose=DEBUG_HERE)
-                        call starproj_stream%stream_export_micrographs(params, pool_proj, params%cwd, optics_set=.true.)
-                        call starproj_stream%stream_export_particles_2D(params, pool_proj, params%cwd, optics_set=.true.)
-                        call pool_proj%write(orig_projfile)
-                    endif
-                endif
+                type(string) :: projfile
+                if( pool_proj%os_ptcl2D%get_noris() == 0 ) return
+                pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
+                call pool_proj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
+                if( present(optics_dir) ) lastmap = import_latest_optics_map(pool_proj, optics_dir)
+                projfile = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)//METADATA_EXT
+                call pool_proj%projinfo%set(1, 'projname', get_fbody(orig_projfile, METADATA_EXT, separator=.false.))
+                call pool_proj%projinfo%set(1, 'projfile', projfile)
+                call starproj_stream%stream_export_micrographs(params, pool_proj, params%cwd, optics_set=.true.)
+                call starproj_stream%stream_export_particles_2D(params, pool_proj, params%cwd, optics_set=.true.)
+                call pool_proj%write(projfile)
+                write(logfhandle,'(A,A,A,I8,A)') '>>> NO COMPLETE POOL ITERATION; RAW PROJECT ', projfile%to_char(), ' WITH ',&
+                    &pool_proj%os_ptcl2D%count_state_gt_zero(), ' SELECTED PARTICLES'
+                call pool_proj%os_ptcl3D%kill
             end subroutine write_raw_project
 
     end subroutine terminate_stream2D
@@ -283,7 +288,7 @@ contains
         class(string), optional, intent(in) :: optics_dir
         type(class_frcs)   :: frcs
         type(oris)         :: os_backup
-        type(string)       :: projfile, projfname, cavgsfname, frcsfname, pool_refs
+        type(string)       :: projfile, projfname, cavgsfname, frcsfname, pool_refs, frcs_src
         integer            :: lastmap
         logical            :: l_write_star, l_clspath
         l_write_star = .false.
@@ -300,6 +305,10 @@ contains
         cavgsfname = cavgsfname//MRC_EXT
         frcsfname  = frcsfname//BIN_EXT
         pool_refs  = string(POOL_DIR)//refs_glob
+        ! the FRCs of the iteration written: its kept copy when there is one (a stop mid-iteration
+        ! falls back on the previous iteration while frcs.bin is being rewritten), frcs.bin otherwise
+        frcs_src   = string(POOL_DIR)//swap_suffix(FRCS_FILE, "_iter"//int2str_pad(pool_iter, 3)//".bin", ".bin")
+        if( .not. file_exists(frcs_src) ) frcs_src = string(POOL_DIR)//FRCS_FILE
         lastmap    = 0
         write(logfhandle,'(A,A,A,A)')'>>> WRITING PROJECT ', projfile%to_char(), ' AT: ',cast_time_char(simple_gettime())
         if( present(optics_dir) ) lastmap = import_latest_optics_map(pool_proj, optics_dir)
@@ -311,7 +320,7 @@ contains
             pool_proj%os_cls2D = os_backup
             call os_backup%kill
             ! rescale frcs
-            call frcs%read(string(POOL_DIR)//FRCS_FILE)
+            call frcs%read(frcs_src)
             call frcs%pad(pool_native_smpd, pool_native_box)
             call frcs%write(frcsfname)
             call frcs%kill
@@ -319,6 +328,7 @@ contains
         else
             call pool_proj%os_out%kill
             call pool_proj%add_cavgs2os_out(cavgsfname, pool_native_smpd, 'cavg', clspath=l_clspath)
+            if( .not. (frcs_src == frcsfname) ) call simple_copy_file(frcs_src, frcsfname)
             call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
         endif
         ! the 3D field as the STAR files have it: 2D clustering removed, shifts kept
@@ -391,9 +401,12 @@ contains
         ! the iteration: the current one, or one the history keeps
         l_found = .false.
         if( iteration == pool_iter )then
-            call snapshot_proj%copy(pool_proj)
-            call snapshot_proj%add_frcs2os_out(string(POOL_DIR)//FRCS_FILE, 'frc2D')
-            l_found = .true.
+            ! registered only when it exists (add_frcs2os_out requires the file)
+            if( file_exists(string(POOL_DIR)//FRCS_FILE) )then
+                call snapshot_proj%copy(pool_proj)
+                call snapshot_proj%add_frcs2os_out(string(POOL_DIR)//FRCS_FILE, 'frc2D')
+                l_found = .true.
+            endif
         else if( iteration >= 1 )then
             islot   = pool_history_slot(iteration)
             l_found = pool_history_iter(islot) == iteration
@@ -501,14 +514,18 @@ contains
     !! ranges and stack indices follow, so the project is self-consistent; a particle keeps its
     !! image index in its stack. Stacks never classified are left out; within a published stack,
     !! a particle never updated (a fractional update did not sample it) keeps its row but is
-    !! published deselected, since its class is the random one it was given on import. @p nstks
-    !! is the number of stacks published (0: nothing to publish, @p pub is empty).
-    subroutine build_pool_publication( src, pub, nstks )
-        class(sp_project), intent(inout) :: src
-        class(sp_project), intent(inout) :: pub
-        integer,           intent(out)   :: nstks
+    !! published deselected, since its class is the random one it was given on import. The 3D
+    !! particles are prepared as the final project's (2D clustering removed, shifts kept, no update
+    !! counts), and with @p optics_dir the newest optics map's groups and optics table are applied
+    !! (the pool keeps no optics table of its own). @p nstks is the number of stacks published
+    !! (0: nothing to publish, @p pub is empty).
+    subroutine build_pool_publication( src, pub, nstks, optics_dir )
+        class(sp_project),       intent(inout) :: src
+        class(sp_project),       intent(inout) :: pub
+        integer,                 intent(out)   :: nstks
+        class(string), optional, intent(in)    :: optics_dir
         logical, allocatable :: l_stk(:)
-        integer :: nstks_src, istk, jstk, iptcl, jptcl, fromp, top, nptcls, stkind_src, ind_in_stk
+        integer :: nstks_src, istk, jstk, iptcl, jptcl, fromp, top, nptcls, stkind_src, ind_in_stk, lastmap
         call pub%kill
         nstks     = 0
         nstks_src = src%os_stk%get_noris()
@@ -559,22 +576,30 @@ contains
             enddo
         enddo
         pub%os_ptcl3D = pub%os_ptcl2D
+        call pub%os_ptcl3D%delete_2Dclustering
+        call pub%os_ptcl3D%clean_entry('updatecnt', 'sampled')
+        if( present(optics_dir) )then
+            if( optics_dir%strlen() > 0 ) lastmap = import_latest_optics_map(pub, optics_dir)
+        endif
         deallocate(l_stk)
     end subroutine build_pool_publication
 
-    !> Publishes the pool's classified state for 3D as @p projfile (build_pool_publication), with
-    !! the pool's class averages (and their even and odd halves) and FRCs at the native sampling
-    !! beside it, registered with the pool's mask diameter. The class averages and FRCs are written
-    !! first and the project last, under a temporary name renamed into place, so a reader that
-    !! finds the project finds it complete. @p nstks is the number of stacks published (0: nothing
-    !! was written).
-    subroutine publish_pool_state( projfile, nstks )
+    !> Publishes the pool's classified state for 3D as @p projfile (build_pool_publication, with the
+    !! newest optics map of @p optics_dir), with the pool's class averages (and their even and odd
+    !! halves) and FRCs at the native sampling beside it, registered with the pool's mask diameter.
+    !! The class averages and FRCs are written first and the project last, under a temporary name
+    !! renamed into place, so a reader that finds the project finds it complete. @p l_final marks
+    !! the pool's final publication (pool_final=yes in its out segment), which starts multistate
+    !! 3D's final run. @p nstks is the number of stacks published (0: nothing was written).
+    subroutine publish_pool_state( projfile, nstks, optics_dir, l_final )
         class(string),     intent(in)  :: projfile
         integer,           intent(out) :: nstks
+        class(string),     intent(in)  :: optics_dir
+        logical,           intent(in)  :: l_final
         type(sp_project) :: pub
         type(class_frcs) :: frcs
         type(string)     :: pool_refs, cavgsfname, frcsfname
-        call build_pool_publication(pool_proj, pub, nstks)
+        call build_pool_publication(pool_proj, pub, nstks, optics_dir)
         if( nstks == 0 ) return
         call pool_publication_names(projfile, cavgsfname, frcsfname)
         pool_refs = string(POOL_DIR)//refs_glob
@@ -595,9 +620,11 @@ contains
         call pub%os_out%kill
         call pub%add_cavgs2os_out(cavgsfname, pool_native_smpd, 'cavg', mskdiam=pool_mskdiam)
         call pub%add_frcs2os_out(frcsfname, 'frc2D')
+        if( l_final ) call pub%os_out%set(1, 'pool_final', 'yes')
         call pub%write(projfile, tempfile=.true.)
         write(logfhandle,'(A,A,A,I8,A,I8,A)') '>>> PUBLISHED THE POOL FOR 3D: ', projfile%to_char(), ', ',&
             &nstks, ' STACK(S), ', pub%os_ptcl2D%count_state_gt_zero(), ' PARTICLE(S)'
+        if( l_final ) write(logfhandle,'(A)') '>>> THE POOL''S FINAL PUBLICATION'
         call pub%kill
     end subroutine publish_pool_state
 

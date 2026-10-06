@@ -98,12 +98,13 @@ character(len=*), parameter :: PICKREFS_JOB_DIR = 'make_pickrefs' ! the folder o
 ! and run one step at a time; production code uses new/iterate/finished/finalize/kill.
 type :: stream_stage_refpick
     type(parameters), allocatable     :: params
-    type(cmdline)                     :: cline_exec       ! command line of the pick_extract worker jobs
-    type(cmdline)                     :: cline_pickrefs   ! make_pickrefs, run once the pixel size is known
-    type(qsys_env)                    :: qenv
-    type(qsys_env)                    :: qenv_local       ! jobs that run on this machine (make_pickrefs)
+    ! allocatable (compile-time policy), allocated in init_params and released in kill
+    type(cmdline),    allocatable     :: cline_exec       ! command line of the pick_extract worker jobs
+    type(cmdline),    allocatable     :: cline_pickrefs   ! make_pickrefs, run once the pixel size is known
+    type(qsys_env),   allocatable     :: qenv
+    type(qsys_env),   allocatable     :: qenv_local       ! jobs that run on this machine (make_pickrefs)
     type(qsys_async_job)              :: pickrefs_job     ! make_pickrefs, once
-    type(sp_project)                  :: spproj           ! every imported micrograph; stacks and particles when written
+    type(sp_project), allocatable     :: spproj           ! every imported micrograph; stacks and particles when written
     type(stream_job_sets)             :: sets             ! one per upstream project, picked and extracted by one job
     type(stream_watcher)              :: project_buff     ! completed preprocessing projects
     type(starproject_stream)          :: starproj_stream
@@ -204,6 +205,11 @@ contains
             if( .not. file_exists(dir_exec) ) THROW_HARD('Previous directory does not exist: '//dir_exec%to_char())
             self%l_restart = .true.
         endif
+        if( .not. allocated(self%spproj)         ) allocate(self%spproj)
+        if( .not. allocated(self%qenv)           ) allocate(self%qenv)
+        if( .not. allocated(self%qenv_local)     ) allocate(self%qenv_local)
+        if( .not. allocated(self%cline_exec)     ) allocate(self%cline_exec)
+        if( .not. allocated(self%cline_pickrefs) ) allocate(self%cline_pickrefs)
         call create_stream_project(self%spproj, cline, string('reference_picking'))
         if( .not. allocated(self%params) ) allocate(self%params)
         ! one queue partition per computing unit; not passed on to the workers' command lines
@@ -263,13 +269,21 @@ contains
     subroutine build_worker_cline( self, cline )
         class(stream_stage_refpick), intent(inout) :: self
         class(cmdline),              intent(in)    :: cline
+        ! cmdline's defined assignment needs an allocated left-hand side
+        if( .not. allocated(self%cline_exec) ) allocate(self%cline_exec)
         self%cline_exec = cline
         call self%cline_exec%set('prg',     'pick_extract')
         call self%cline_exec%set('mkdir',   'no')
         call self%cline_exec%set('dir',     PATH_PARENT)
         call self%cline_exec%set('extract', 'yes')
+        ! a forced extraction box is used as given (follow-up plan, decision 5), with a warning below
+        ! the default
         if( cline%defined('box_extract') )then
-            call self%cline_exec%set('box_extract', max(self%params%box_extract, DEFAULT_EXTRACT_BOX))
+            call self%cline_exec%set('box_extract', self%params%box_extract)
+            if( self%params%box_extract < DEFAULT_EXTRACT_BOX )then
+                write(logfhandle,'(A,I4,A,I4,A)') '>>> WARNING: THE GIVEN EXTRACTION BOX (', self%params%box_extract,&
+                    &' PX) IS BELOW THE DEFAULT ', DEFAULT_EXTRACT_BOX, ' PX; IT IS USED AS GIVEN'
+            endif
         endif
         if( self%cline_exec%defined('dir_exec') ) call self%cline_exec%delete('dir_exec')
         ! make_pickrefs runs in a folder of its own: the input references by absolute path
@@ -353,17 +367,14 @@ contains
         class(stream_stage_refpick), intent(inout) :: self
         if( .not. self%l_exists )then
             if( allocated(self%params) ) deallocate(self%params)
+            call release_heavy
             return
         endif
-        call self%spproj%kill
         call self%sets%kill
-        call self%qenv%kill
         call self%project_buff%kill
         call self%pipe%kill
-        call self%cline_exec%kill
-        call self%cline_pickrefs%kill
         call self%pickrefs_job%kill
-        call self%qenv_local%kill
+        call release_heavy
         self%box              = 0
         call self%meta_status%kill
         call self%meta_micrograph%kill
@@ -387,6 +398,32 @@ contains
         self%l_haschanged     = .false.
         self%l_restart        = .false.
         self%l_exists         = .false.
+
+    contains
+
+        subroutine release_heavy
+            if( allocated(self%spproj) )then
+                call self%spproj%kill
+                deallocate(self%spproj)
+            endif
+            if( allocated(self%qenv) )then
+                call self%qenv%kill
+                deallocate(self%qenv)
+            endif
+            if( allocated(self%qenv_local) )then
+                call self%qenv_local%kill
+                deallocate(self%qenv_local)
+            endif
+            if( allocated(self%cline_exec) )then
+                call self%cline_exec%kill
+                deallocate(self%cline_exec)
+            endif
+            if( allocated(self%cline_pickrefs) )then
+                call self%cline_pickrefs%kill
+                deallocate(self%cline_pickrefs)
+            endif
+        end subroutine release_heavy
+
     end subroutine kill
 
     !---------------- waiting ----------------
@@ -608,6 +645,7 @@ contains
         integer,                     intent(out)   :: n_imported
         type(string), allocatable :: done(:)
         integer :: n_failed
+        ! the micrographs of the failed jobs
         call self%sets%collect(self%qenv, done, n_failed)
         self%n_failed_jobs = self%n_failed_jobs + n_failed
         call self%import_finished_sets(done, n_imported)

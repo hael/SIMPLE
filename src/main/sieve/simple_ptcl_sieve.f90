@@ -3,25 +3,30 @@
 ! -> submit (fine first) -> hand_off_final_set (final ingestion, nothing pending). Restart state
 ! comes from per-chunk sentinels
 ! (SOLVE2D_FINISHED, REJECTION_FINISHED, COMPLETE, and FINAL_INGESTION for a chunk final
-! ingestion staged without coarse 2D).
+! ingestion staged without coarse 2D). A chunk exists once its project is written (by temporary
+! and rename); what it took is listed in its folder before that (CHUNK_MICS, CONSUMED_COARSE), so
+! a restart can redo whatever followed. Chunk ids continue past the highest folder on disk.
 ! Contract: doc/policies/sieving_and_rejection/ptcl_sieve_policy.md
 module simple_ptcl_sieve
   use simple_defs,                        only: logfhandle, CWD_GLOB, JPEG_DIM
   use simple_error,                       only: simple_exception
   use simple_image,                       only: image
   use simple_timer,                       only: timer_int_kind, tic, toc
-  use simple_fileio,                      only: swap_suffix, simple_copy_file, simple_touch, basename, simple_list_files,&
-                                                read_exit_code
+  use simple_fileio,                      only: swap_suffix, simple_copy_file, simple_touch, basename, simple_list_files
   use simple_string,                      only: string
   use simple_syslib,                      only: simple_mkdir, simple_abspath, simple_chdir, &
-                                                simple_getcwd, file_exists, del_file, dir_exists, simple_rename
+                                                simple_getcwd, file_exists, del_file, dir_exists, simple_rename,&
+                                                simple_list_dirs
   use simple_cmdline,                     only: cmdline
   use simple_qsys_env,                    only: qsys_env
   use simple_rec_list,                    only: rec_list, rec_iterator, project_rec
   use simple_qsys_job_record,             only: cancel_queued_job, job_left_unfinished, set_aside_dir
+  use simple_qsys_async_job,              only: qsys_async_job, ASYNC_JOB_DONE, ASYNC_JOB_FAILED
   use simple_image_bin,                   only: image_bin
   use simple_gui_utils,                   only: mrc2jpeg_tiled
   use simple_defs_fname,                  only: METADATA_EXT, SOLVE2D_FINISHED, FRCS_FILE, JPG_EXT, MRC_EXT
+  ! in the hand-off folder: the empty final set (hand_off_final_set), named by the chunk counts
+  use simple_defs_stream,                 only: SIEVE_FINAL_SET_FBODY
   use simple_parameters,                  only: parameters
   use simple_sp_project,                  only: sp_project
   use simple_imgarr_utils,                only: dealloc_imgarr, write_imgarr
@@ -41,7 +46,7 @@ module simple_ptcl_sieve
   implicit none
   public :: ptcl_sieve, ptcl_sieve_settings, sieve_settings
   public :: CHUNK_INPUT_PROJFILE, CHUNK_ATTEMPT1
-  public :: CHUNKED_MICS, read_chunked_mics
+  public :: CHUNKED_MICS, CHUNK_MICS, CONSUMED_COARSE, read_chunked_mics, rebuild_chunked_mics
   public :: DEFAULT_COARSE_POP_THRESHOLD
   public :: DEFAULT_FINE_POP_THRESHOLD
   public :: DEFAULT_NCLS
@@ -80,20 +85,29 @@ module simple_ptcl_sieve
   character(len=*), parameter :: FINAL_INGESTION_MARKER = 'FINAL_INGESTION'
   ! a chunk's 2D job: the exit status its script writes in the chunk folder, the chunk's project as
   ! made (kept for a retry), and the suffix of the folder a failed first attempt is moved to
-  character(len=*), parameter :: CHUNK_EXIT_CODE      = 'EXIT_CODE_solve2D'
+  character(len=*), parameter :: CHUNK_JOB_LABEL      = 'solve2D'
+  character(len=*), parameter :: CHUNK_EXIT_CODE      = 'EXIT_CODE_'//CHUNK_JOB_LABEL ! the job's (qsys_async_job)
   character(len=*), parameter :: CHUNK_INPUT_PROJFILE = 'chunk_input'//METADATA_EXT
   character(len=*), parameter :: CHUNK_ATTEMPT1       = '_attempt1'
   ! in the working directory: every micrograph put in a chunk, one "<project file> <micrograph
   ! index>" line each, in project_list order (write_chunked_mics, read_chunked_mics)
   character(len=*), parameter :: CHUNKED_MICS         = 'chunked_mics.txt'
-  ! in the hand-off folder: the empty final set (hand_off_final_set), named by the chunk counts
-  character(len=*), parameter :: FINAL_SET_FBODY      = 'sieve_final_'
+  ! in a coarse chunk's folder: the micrographs it took, in CHUNKED_MICS' format, written before
+  ! its project; a restart rebuilds CHUNKED_MICS from the chunks that exist (rebuild_chunked_mics)
+  character(len=*), parameter :: CHUNK_MICS           = 'chunk_mics.txt'
+  ! in a fine chunk's folder: the ids of the coarse chunks it merged, one per line, written before
+  ! its project; a restart marks them complete when the fine chunk exists
+  character(len=*), parameter :: CONSUMED_COARSE      = 'consumed_coarse.txt'
+  ! a chunk's folder and project: <prefix><id>
+  character(len=*), parameter :: COARSE_PREFIX        = 'chunk_coarse_'
+  character(len=*), parameter :: FINE_PREFIX          = 'chunk_fine_'
 
   type :: chunk2D_state
     private
     type(string)  :: projfile
     type(string)  :: folder
-    type(cmdline) :: cline
+    type(cmdline), allocatable :: cline   ! the chunk's 2D job command line (generate_chunk_*_cline)
+    type(qsys_async_job) :: job           ! the chunk's 2D job, while this process runs it
     integer       :: id                  = 0
     integer       :: nptcls              = 0
     integer       :: nptcls_selected     = 0
@@ -162,7 +176,7 @@ module simple_ptcl_sieve
     type(class_compatibility)         :: fine_compatibility_model
     type(chunk2D_coarse_defaults)     :: coarse_defaults
     type(chunk2D_fine_defaults)       :: fine_defaults
-    type(qsys_env)                    :: qenv
+    type(qsys_env), allocatable       :: qenv                    ! new..kill (compile-time policy)
     type(string)                      :: outdir_chunks_coarse
     type(string)                      :: outdir_chunks_fine
     type(string)                      :: completedir
@@ -188,6 +202,8 @@ module simple_ptcl_sieve
     integer                           :: n_failed_ptcls     = 0 ! their particles, never handed on
     integer                           :: latest_jpeg_xtiles = 0
     integer                           :: latest_jpeg_ytiles = 0
+    integer                           :: last_id_coarse     = 0 ! the highest chunk id on disk or made
+    integer                           :: last_id_fine       = 0
     real                              :: mskdiam            = 0.0
   contains
     procedure :: new
@@ -195,6 +211,8 @@ module simple_ptcl_sieve
     procedure :: cycle
     procedure :: import_existing_chunks_coarse
     procedure :: import_existing_chunks_fine
+    procedure :: reconcile_consumed_coarse
+    procedure :: restore_counters
     procedure :: get_n_chunks_coarse
     procedure :: get_n_chunks_fine
     procedure :: get_n_chunks_running
@@ -251,6 +269,8 @@ contains
     integer(timer_int_kind)                   :: t0
     t0 = timer_start()
     call self%kill()
+    ! before the imports, whose chunk command lines read it
+    allocate(self%qenv)
     call simple_getcwd(cwd)
     self%completedir = completedir
     self%nparallel   = max(1, settings%nchunks)
@@ -284,6 +304,8 @@ contains
     ! Import existing chunks before creating directories.
     if( dir_exists(self%outdir_chunks_coarse) ) call self%import_existing_chunks_coarse()
     if( dir_exists(self%outdir_chunks_fine)   ) call self%import_existing_chunks_fine()
+    call self%reconcile_consumed_coarse()
+    call self%restore_counters()
     call simple_mkdir(self%outdir_chunks_coarse)
     call simple_mkdir(self%outdir_chunks_fine)
     ! the chunk jobs' threads and partition, whatever the driving stage's own
@@ -315,17 +337,20 @@ contains
     t0 = timer_start()
     if( allocated(self%chunks_coarse) ) then
       do i = 1, self%get_n_chunks_coarse()
-        call self%chunks_coarse(i)%cline%kill()
+        if( allocated(self%chunks_coarse(i)%cline) ) call self%chunks_coarse(i)%cline%kill()
       end do
       deallocate(self%chunks_coarse)
     end if
     if( allocated(self%chunks_fine) ) then
       do i = 1, self%get_n_chunks_fine()
-        call self%chunks_fine(i)%cline%kill()
+        if( allocated(self%chunks_fine(i)%cline) ) call self%chunks_fine(i)%cline%kill()
       end do
       deallocate(self%chunks_fine)
     end if
-    call self%qenv%kill()
+    if( allocated(self%qenv) )then
+      call self%qenv%kill()
+      deallocate(self%qenv)
+    end if
     call self%coarse_compatibility_model%kill()
     call self%fine_compatibility_model%kill()
     self%n_coarse_accepted_ptcls = 0
@@ -346,6 +371,17 @@ contains
     self%coarse_defaults = chunk2D_coarse_defaults()
     self%fine_defaults   = chunk2D_fine_defaults()
     self%mskdiam         = 0.
+    self%last_id_coarse  = 0
+    self%last_id_fine    = 0
+    ! the previews
+    if( allocated(self%latest_jpeg_inds)      ) deallocate(self%latest_jpeg_inds)
+    if( allocated(self%latest_jpeg_pops)      ) deallocate(self%latest_jpeg_pops)
+    if( allocated(self%latest_jpeg_selection) ) deallocate(self%latest_jpeg_selection)
+    if( allocated(self%latest_jpeg_res)       ) deallocate(self%latest_jpeg_res)
+    call self%latest_jpeg%kill
+    call self%latest_stkname%kill
+    self%latest_jpeg_xtiles = 0
+    self%latest_jpeg_ytiles = 0
     call timer_stop(t0, string('kill'))
   end subroutine kill
 
@@ -374,25 +410,28 @@ contains
   ! Regenerates the cline for any chunk that has not yet completed solve2D,
   ! so that interrupted chunks can be resubmitted after a restart; such a chunk
   ! whose job may still run is made afresh first (renew_unfinished_chunk).
+  ! Every chunk folder on disk is looked at, in id order, and new ids continue past the highest:
+  ! a folder without its project (a chunk whose making was cut short) is skipped, never reused.
   subroutine import_existing_chunks_coarse( self )
     class(ptcl_sieve), intent(inout) :: self
     type(sp_project)                     :: chunk_project
     type(chunk2D_state)                  :: new_chunk
     type(string)                         :: chunk_folder
+    integer,             allocatable     :: ids(:)
     integer(timer_int_kind)              :: t0
-    integer                              :: chunk_id
+    integer                              :: chunk_id, iid
     logical                              :: l_staged
-    t0       = timer_start()
-    chunk_id = 0
-    do
-      chunk_id     = chunk_id + 1
+    t0  = timer_start()
+    ids = chunk_folder_ids(self%outdir_chunks_coarse, COARSE_PREFIX)
+    if( size(ids) > 0 ) self%last_id_coarse = maxval(ids)
+    do iid = 1, size(ids)
+      chunk_id     = ids(iid)
       chunk_folder = string(self%outdir_chunks_coarse%to_char() // &
-                            '/chunk_coarse_' // int2str(chunk_id))
-      if( .not. dir_exists(chunk_folder) ) exit
+                            '/' // COARSE_PREFIX // int2str(chunk_id))
       new_chunk%id       = chunk_id
       new_chunk%folder   = simple_abspath(chunk_folder)
       new_chunk%projfile = string(new_chunk%folder%to_char() // &
-                                  '/chunk_coarse_' // int2str(chunk_id) // METADATA_EXT)
+                                  '/' // COARSE_PREFIX // int2str(chunk_id) // METADATA_EXT)
       if( .not. file_exists(new_chunk%projfile) ) then
         write(logfhandle,'(A,I6,A)') '>>> WARNING: missing project file for coarse chunk #', chunk_id, ', skipping'
         cycle
@@ -431,19 +470,20 @@ contains
     type(sp_project)                 :: chunk_project
     type(chunk2D_state)              :: new_chunk
     type(string)                     :: chunk_folder
+    integer,             allocatable :: ids(:)
     integer(timer_int_kind)          :: t0
-    integer                          :: chunk_id
-    t0       = timer_start()
-    chunk_id = 0
-    do
-      chunk_id     = chunk_id + 1
+    integer                          :: chunk_id, iid
+    t0  = timer_start()
+    ids = chunk_folder_ids(self%outdir_chunks_fine, FINE_PREFIX)
+    if( size(ids) > 0 ) self%last_id_fine = maxval(ids)
+    do iid = 1, size(ids)
+      chunk_id     = ids(iid)
       chunk_folder = string(self%outdir_chunks_fine%to_char() // &
-                            '/chunk_fine_' // int2str(chunk_id))
-      if( .not. dir_exists(chunk_folder) ) exit
+                            '/' // FINE_PREFIX // int2str(chunk_id))
       new_chunk%id       = chunk_id
       new_chunk%folder   = simple_abspath(chunk_folder)
       new_chunk%projfile = string(new_chunk%folder%to_char() // &
-                                  '/chunk_fine_' // int2str(chunk_id) // METADATA_EXT)
+                                  '/' // FINE_PREFIX // int2str(chunk_id) // METADATA_EXT)
       if( .not. file_exists(new_chunk%projfile) ) then
         write(logfhandle,'(A,I6,A)') '>>> WARNING: missing project file for fine chunk #', chunk_id, ', skipping'
         cycle
@@ -468,6 +508,85 @@ contains
     end do
     call timer_stop(t0, string('import_existing_chunks_fine'))
   end subroutine import_existing_chunks_fine
+
+  ! On restart, after the imports: the coarse chunks a fine chunk that exists merged (its
+  ! CONSUMED_COARSE) are complete, also when a crash came between the fine chunk's project and
+  ! their COMPLETE markers; otherwise they would be merged again.
+  subroutine reconcile_consumed_coarse( self )
+    class(ptcl_sieve), intent(inout) :: self
+    integer, allocatable :: consumed(:)
+    integer :: i, j, k
+    do i = 1, self%get_n_chunks_fine()
+      call read_consumed_coarse(self%chunks_fine(i)%folder//'/'//CONSUMED_COARSE, consumed)
+      do j = 1, size(consumed)
+        do k = 1, self%get_n_chunks_coarse()
+          if( self%chunks_coarse(k)%id /= consumed(j) ) cycle
+          if( .not. self%chunks_coarse(k)%complete )then
+            call simple_touch(self%chunks_coarse(k)%folder%to_char() // '/COMPLETE')
+            self%chunks_coarse(k)%complete = .true.
+            write(logfhandle,'(A,I6,A,I6)') '>>> COARSE CHUNK # ', consumed(j), ' MARKED COMPLETE: MERGED INTO FINE CHUNK # ',&
+              &self%chunks_fine(i)%id
+          endif
+          exit
+        end do
+      end do
+    end do
+  end subroutine reconcile_consumed_coarse
+
+  ! On restart, after the imports: the cumulative counters as the run counted them. Per tier, the
+  ! chunks whose rejection ran (REJECTION_FINISHED; a chunk staged for final ingestion had none);
+  ! terminal, the finalised chunks of the terminal tier (coarse in coarse-only mode, fine
+  ! otherwise), and in two-tier mode the coarse chunks finalised empty; the failed chunks.
+  subroutine restore_counters( self )
+    class(ptcl_sieve), intent(inout) :: self
+    type(sp_project) :: spproj
+    integer :: i
+    do i = 1, self%get_n_chunks_coarse()
+      call count_chunk(self%chunks_coarse(i), .true.)
+    end do
+    do i = 1, self%get_n_chunks_fine()
+      call count_chunk(self%chunks_fine(i), .false.)
+    end do
+    if( self%get_n_chunks_coarse() + self%get_n_chunks_fine() > 0 )then
+      write(logfhandle,'(A,I8,A,I8,A)') '>>> RESTORED COUNTS: ', self%n_accepted_ptcls, ' PARTICLES ACCEPTED, ',&
+        &self%n_rejected_ptcls, ' REJECTED'
+    endif
+
+  contains
+
+    subroutine count_chunk( chunk, l_coarse )
+      type(chunk2D_state), intent(in) :: chunk
+      logical,             intent(in) :: l_coarse
+      integer :: nrejected
+      if( chunk%failed )then
+        self%n_failed_chunks = self%n_failed_chunks + 1
+        self%n_failed_ptcls  = self%n_failed_ptcls  + chunk%nptcls
+        return
+      endif
+      nrejected = chunk%nptcls - chunk%nptcls_selected
+      if( file_exists(chunk%folder%to_char() // '/REJECTION_FINISHED') )then
+        if( l_coarse )then
+          self%n_coarse_accepted_ptcls = self%n_coarse_accepted_ptcls + chunk%nptcls_selected
+          self%n_coarse_rejected_ptcls = self%n_coarse_rejected_ptcls + nrejected
+        else
+          self%n_fine_accepted_ptcls   = self%n_fine_accepted_ptcls   + chunk%nptcls_selected
+          self%n_fine_rejected_ptcls   = self%n_fine_rejected_ptcls   + nrejected
+        endif
+      endif
+      if( .not. chunk%complete ) return
+      if( l_coarse .and. .not. self%coarse_only )then
+        ! merged into a fine chunk, which counts its particles; one finalised empty is counted here
+        if( chunk%rejection_complete .and. chunk%nptcls_selected == 0 ) self%n_rejected_ptcls = self%n_rejected_ptcls + chunk%nptcls
+        return
+      endif
+      call spproj%read_segment('mic', chunk%projfile)
+      self%n_accepted_mics  = self%n_accepted_mics + spproj%os_mic%count_state_gt_zero()
+      call spproj%kill()
+      self%n_accepted_ptcls = self%n_accepted_ptcls + chunk%nptcls_selected
+      self%n_rejected_ptcls = self%n_rejected_ptcls + nrejected
+    end subroutine count_chunk
+
+  end subroutine restore_counters
 
   ! --------------------------------------------------------------------------
   ! MAIN LOOP WRAPPER
@@ -757,14 +876,15 @@ contains
           THROW_HARD('missing pre-chunked project file: '//unique_projfiles(i)%to_char())
         end if
 
-        chunk_id                  = self%get_n_chunks_coarse() + 1
+        self%last_id_coarse       = self%last_id_coarse + 1
+        chunk_id                  = self%last_id_coarse
         chunk_folder              = string(self%outdir_chunks_coarse%to_char() // &
-                                           '/chunk_coarse_' // int2str(chunk_id))
+                                           '/' // COARSE_PREFIX // int2str(chunk_id))
         call simple_mkdir(chunk_folder)
         new_chunk%id              = chunk_id
         new_chunk%folder          = simple_abspath(chunk_folder)
         new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                           '/chunk_coarse_' // int2str(chunk_id) // METADATA_EXT)
+                                           '/' // COARSE_PREFIX // int2str(chunk_id) // METADATA_EXT)
         call simple_copy_file(unique_projfiles(i), new_chunk%projfile)
         call chunk_project%read(new_chunk%projfile)
         new_chunk%nptcls          = chunk_project%os_ptcl2D%get_noris()
@@ -803,20 +923,22 @@ contains
       if( chunk_nptcls == 0 ) exit
 
       ! Create the chunk folder and populate chunk fields
-      chunk_id                  = self%get_n_chunks_coarse() + 1
+      self%last_id_coarse       = self%last_id_coarse + 1
+      chunk_id                  = self%last_id_coarse
       chunk_folder              = string(self%outdir_chunks_coarse%to_char() // &
-                                         '/chunk_coarse_' // int2str(chunk_id))
+                                         '/' // COARSE_PREFIX // int2str(chunk_id))
       call simple_mkdir(chunk_folder)
       new_chunk%id              = chunk_id
       new_chunk%nptcls          = chunk_nptcls
       new_chunk%nptcls_selected = chunk_nptcls
       new_chunk%folder          = simple_abspath(chunk_folder)
       new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                         '/chunk_coarse_' // int2str(chunk_id) // METADATA_EXT)
+                                         '/' // COARSE_PREFIX // int2str(chunk_id) // METADATA_EXT)
       call self%generate_chunk_coarse_cline(new_chunk, new_chunk%nptcls_selected)
 
-      ! Build the project file from the sliced record list
+      ! Build the project file from the sliced record list, the list of its micrographs first
       call project_list%slice(ids(1), ids(imic), chunk_project_list)
+      call write_chunk_mics(new_chunk%folder//'/'//CHUNK_MICS, chunk_project_list)
       call chunk_project%projrecords2proj(chunk_project_list)
       call chunk_project_list%kill()
       call chunk_project%update_projinfo(new_chunk%cline)
@@ -825,7 +947,8 @@ contains
       ! the chunk jobs' queue partition, when the stage gives one
       if( self%partition%strlen() > 0 ) call chunk_project%compenv%set(1, 'qsys_partition', self%partition%to_char())
 
-      call chunk_project%write(new_chunk%projfile)
+      ! the chunk exists from here on
+      call chunk_project%write(new_chunk%projfile, tempfile=.true.)
       call chunk_project%kill()
 
       call self%append_chunk_coarse(new_chunk)
@@ -846,25 +969,28 @@ contains
       ids      = pack(project_list%get_ids(),    .not. included)
       nptcls   = pack(project_list%get_nptcls(), .not. included)
       if( size(ids) > 0 ) then
-        chunk_id                  = self%get_n_chunks_coarse() + 1
+        self%last_id_coarse       = self%last_id_coarse + 1
+        chunk_id                  = self%last_id_coarse
         chunk_folder              = string(self%outdir_chunks_coarse%to_char() // &
-                                           '/chunk_coarse_' // int2str(chunk_id))
+                                           '/' // COARSE_PREFIX // int2str(chunk_id))
         call simple_mkdir(chunk_folder)
         new_chunk%id              = chunk_id
         new_chunk%nptcls          = sum(nptcls)
         new_chunk%nptcls_selected = sum(nptcls)
         new_chunk%folder          = simple_abspath(chunk_folder)
         new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                           '/chunk_coarse_' // int2str(chunk_id) // METADATA_EXT)
+                                           '/' // COARSE_PREFIX // int2str(chunk_id) // METADATA_EXT)
         call self%generate_chunk_coarse_cline(new_chunk, new_chunk%nptcls_selected)
         call project_list%slice(ids(1), ids(size(ids)), chunk_project_list)
+        call write_chunk_mics(new_chunk%folder//'/'//CHUNK_MICS, chunk_project_list)
         call chunk_project%projrecords2proj(chunk_project_list)
         call chunk_project_list%kill()
         call chunk_project%update_projinfo(new_chunk%cline)
         call chunk_project%update_compenv(new_chunk%cline)
-        call chunk_project%write(new_chunk%projfile)
-        call chunk_project%kill()
+        ! the marker before the project: a staged chunk exists only with it
         call simple_touch(new_chunk%folder%to_char() // '/' // FINAL_INGESTION_MARKER)
+        call chunk_project%write(new_chunk%projfile, tempfile=.true.)
+        call chunk_project%kill()
         new_chunk%solve2D_complete = .true.
         new_chunk%rejection_complete  = .true.
         call self%append_chunk_coarse(new_chunk)
@@ -915,29 +1041,26 @@ contains
       projfiles = projfiles(:n_consumed)
       consumed  = consumed(:n_consumed)
 
-      chunk_id                  = self%get_n_chunks_fine() + 1
+      self%last_id_fine         = self%last_id_fine + 1
+      chunk_id                  = self%last_id_fine
       chunk_folder              = string(self%outdir_chunks_fine%to_char() // &
-                                         '/chunk_fine_' // int2str(chunk_id))
+                                         '/' // FINE_PREFIX // int2str(chunk_id))
       call simple_mkdir(chunk_folder)
       new_chunk%id              = chunk_id
       new_chunk%nptcls          = chunk_nptcls
       new_chunk%nptcls_selected = chunk_nptcls_selected
       new_chunk%folder          = simple_abspath(chunk_folder)
       new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                         '/chunk_fine_' // int2str(chunk_id) // METADATA_EXT)
+                                         '/' // FINE_PREFIX // int2str(chunk_id) // METADATA_EXT)
       call self%generate_chunk_fine_cline(new_chunk, new_chunk%nptcls_selected)
 
       call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline, self%partition)
+      call write_consumed_coarse(new_chunk%folder//'/'//CONSUMED_COARSE, self%chunks_coarse(consumed)%id)
 
-      do i = 1, size(consumed)
-        self%chunks_coarse(consumed(i))%complete = .true.
-        call simple_touch(self%chunks_coarse(consumed(i))%folder%to_char() // '/COMPLETE')
-      end do
-
-      ! Flag this as the final sieve chunk once final ingestion is signaled and all coarse chunks are done.
-      if( self%final_ingestion .and. all(self%chunks_coarse(:)%complete .or. self%chunks_coarse(:)%failed) )then
-        if( chunk_project%os_out%get_noris() < 1 ) call chunk_project%os_out%new(1, is_ptcl=.false.)
-        call chunk_project%os_out%set(1, 'sieve_final', 'yes')
+      ! The last fine chunk once final ingestion is signaled and every coarse chunk but those merged
+      ! here is done. It carries no final flag: chunks end in any order, so the end of the intake is
+      ! the empty final set, handed on once every chunk has ended (hand_off_final_set).
+      if( self%final_ingestion .and. all_done_but(consumed) )then
         write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> FINAL FINE CHUNK # ', chunk_id, &
         ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
       else
@@ -945,8 +1068,14 @@ contains
         ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
       end if
 
-      call chunk_project%write(new_chunk%projfile)
+      ! the fine chunk exists from here on; then the coarse chunks it merged are complete (a
+      ! restart completes them from CONSUMED_COARSE when a crash comes in between)
+      call chunk_project%write(new_chunk%projfile, tempfile=.true.)
       call chunk_project%kill()
+      do i = 1, size(consumed)
+        self%chunks_coarse(consumed(i))%complete = .true.
+        call simple_touch(self%chunks_coarse(consumed(i))%folder%to_char() // '/COMPLETE')
+      end do
 
       call self%append_chunk_fine(new_chunk)
       deallocate(projfiles, consumed)
@@ -980,22 +1109,22 @@ contains
       if( n_consumed > 0 ) then
         projfiles = projfiles(:n_consumed)
         consumed  = consumed(:n_consumed)
-        chunk_id                  = self%get_n_chunks_fine() + 1
+        self%last_id_fine         = self%last_id_fine + 1
+        chunk_id                  = self%last_id_fine
         chunk_folder              = string(self%outdir_chunks_fine%to_char() // &
-                                           '/chunk_fine_' // int2str(chunk_id))
+                                           '/' // FINE_PREFIX // int2str(chunk_id))
         call simple_mkdir(chunk_folder)
         new_chunk%id              = chunk_id
         new_chunk%nptcls          = chunk_nptcls
         new_chunk%nptcls_selected = chunk_nptcls_selected
         new_chunk%folder          = simple_abspath(chunk_folder)
         new_chunk%projfile        = string(new_chunk%folder%to_char() // &
-                                           '/chunk_fine_' // int2str(chunk_id) // METADATA_EXT)
+                                           '/' // FINE_PREFIX // int2str(chunk_id) // METADATA_EXT)
         call self%generate_chunk_fine_cline(new_chunk, new_chunk%nptcls_selected)
         call merge_and_clear(projfiles, chunk_folder, chunk_project, new_chunk%cline, self%partition)
-        ! Flag this as the final sieve chunk once final ingestion is signaled and all coarse chunks are done.
-        if( chunk_project%os_out%get_noris() < 1 ) call chunk_project%os_out%new(1, is_ptcl=.false.)
-        call chunk_project%os_out%set(1, 'sieve_final', 'yes')
-        call chunk_project%write(new_chunk%projfile)
+        call write_consumed_coarse(new_chunk%folder//'/'//CONSUMED_COARSE, self%chunks_coarse(consumed)%id)
+        ! no final flag here either: the empty final set follows once every chunk has ended
+        call chunk_project%write(new_chunk%projfile, tempfile=.true.)
         call chunk_project%kill()
         do i = 1, size(consumed)
           self%chunks_coarse(consumed(i))%complete = .true.
@@ -1010,6 +1139,23 @@ contains
     end if
 
     call timer_stop(t0, string('generate_chunks_fine'))
+
+  contains
+
+    ! .true. when every coarse chunk is complete or failed, or among @p merged (the ones the fine
+    ! chunk being made consumes, marked complete once it exists)
+    logical function all_done_but( merged )
+      integer, intent(in) :: merged(:)
+      integer :: k
+      all_done_but = .true.
+      do k = 1, self%get_n_chunks_coarse()
+        if( self%chunks_coarse(k)%complete .or. self%chunks_coarse(k)%failed ) cycle
+        if( any(merged == k) ) cycle
+        all_done_but = .false.
+        return
+      end do
+    end function all_done_but
+
   end subroutine generate_chunks_fine
 
   ! --------------------------------------------------------------------------
@@ -1060,6 +1206,7 @@ contains
     type(chunk2D_state), intent(inout) :: new_chunk
     integer,             intent(in)    :: nptcls
     type(string)                       :: server_address
+    if( .not. allocated(new_chunk%cline) ) allocate(new_chunk%cline)
     server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
       call cline%set('prg',                               'solve2D')
@@ -1076,6 +1223,7 @@ contains
       call cline%set('walltime',                      DEFAULT_WALLTIME)
       if( self%nparts > 1             ) call cline%set('nparts',           self%nparts)
       if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
+      if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
     end associate
     call server_address%kill()
   end subroutine generate_chunk_coarse_cline
@@ -1086,6 +1234,7 @@ contains
     type(chunk2D_state), intent(inout) :: new_chunk
     integer,             intent(in)    :: nptcls
     type(string)                       :: server_address
+    if( .not. allocated(new_chunk%cline) ) allocate(new_chunk%cline)
     server_address = self%qenv%get_persistent_worker_server_address()
     associate( cline => new_chunk%cline )
       call cline%set('prg',                               'solve2D')
@@ -1102,6 +1251,7 @@ contains
       call cline%set('walltime',                      DEFAULT_WALLTIME)
       if( self%nparts > 1             ) call cline%set('nparts',           self%nparts)
       if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
+      if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
     end associate
     call server_address%kill()
   end subroutine generate_chunk_fine_cline
@@ -1215,11 +1365,7 @@ contains
         if( chunk%failed .or. chunk%complete ) cycle
         if( chunk%solve2D_running .or. chunk%solve2D_complete ) cycle
         call prepare_chunk_attempt(chunk)
-        call simple_chdir(chunk%folder)
-        CWD_GLOB = chunk%folder%to_char()
-        call self%qenv%exec_simple_prg_in_queue_async( &
-          chunk%cline, string('./distr_ptcl_sieve'), string('simple_log_chunk_fine'),&
-          &exit_code_fname=chunk%folder//'/'//CHUNK_EXIT_CODE)
+        call chunk%job%start(self%qenv, chunk%cline, chunk%folder, CHUNK_JOB_LABEL)
         chunk%solve2D_running = .true.
         call chunk%cline%kill()
         write(logfhandle,'(A,I6)') '>>> INITIATED 2D ANALYSIS OF FINE CHUNK # ', chunk%id
@@ -1235,11 +1381,7 @@ contains
         if( chunk%failed .or. chunk%complete ) cycle
         if( chunk%solve2D_running .or. chunk%solve2D_complete ) cycle
         call prepare_chunk_attempt(chunk)
-        call simple_chdir(chunk%folder)
-        CWD_GLOB = chunk%folder%to_char()
-        call self%qenv%exec_simple_prg_in_queue_async( &
-          chunk%cline, string('./distr_ptcl_sieve'), string('simple_log_chunk_coarse'),&
-          &exit_code_fname=chunk%folder//'/'//CHUNK_EXIT_CODE)
+        call chunk%job%start(self%qenv, chunk%cline, chunk%folder, CHUNK_JOB_LABEL)
         chunk%solve2D_running = .true.
         call chunk%cline%kill()
         write(logfhandle,'(A,I6)') '>>> INITIATED 2D ANALYSIS OF COARSE CHUNK # ', chunk%id
@@ -1274,12 +1416,14 @@ contains
     ncancelled = 0
     do i = 1, self%get_n_chunks_fine()
       if( .not. self%chunks_fine(i)%solve2D_running ) cycle
-      if( cancel_queued_job(self%chunks_fine(i)%folder//'/'//CHUNK_EXIT_CODE) ) ncancelled = ncancelled + 1
+      call self%chunks_fine(i)%job%cancel()
+      ncancelled = ncancelled + 1
       self%chunks_fine(i)%solve2D_running = .false.
     end do
     do i = 1, self%get_n_chunks_coarse()
       if( .not. self%chunks_coarse(i)%solve2D_running ) cycle
-      if( cancel_queued_job(self%chunks_coarse(i)%folder//'/'//CHUNK_EXIT_CODE) ) ncancelled = ncancelled + 1
+      call self%chunks_coarse(i)%job%cancel()
+      ncancelled = ncancelled + 1
       self%chunks_coarse(i)%solve2D_running = .false.
     end do
     if( ncancelled > 0 ) write(logfhandle,'(A,I6,A)') '>>> CANCELLED THE 2D JOBS OF ', ncancelled, ' RUNNING CHUNK(S)'
@@ -1366,6 +1510,8 @@ contains
           if( chunk%nptcls_selected == 0 ) then
             call simple_touch(chunk%folder%to_char() // '/COMPLETE')
             chunk%complete = .true.
+            ! no fine chunk will count its particles: all rejected
+            self%n_rejected_ptcls = self%n_rejected_ptcls + chunk%nptcls
             write(logfhandle,'(A,I6,A)') '>>> FINALISED EMPTY COARSE CHUNK # ', chunk%id, ' (NO SELECTED PARTICLES)'
           end if
         end if
@@ -1473,7 +1619,7 @@ contains
       do iimg = 1, size(cavg_imgs)
           if( quality%states(iimg) == 0 ) then
               call spproj%os_cls2D%set(iimg, 'state', 0)
-              call spproj%os_cls2D%set(iimg, 'rejection_reason', string('coarse_reject: ')//cavg_rejection_reason_string(quality%reasons(iimg)))
+              call spproj%os_cls2D%set(iimg, 'rejection_reason', reason_token('coarse_reject', quality%reasons(iimg)))
           end if
       end do
       ! Map the coarse selection to the cluster-average level and write out the updated project file.
@@ -1497,7 +1643,7 @@ contains
       do iimg = 1, size(cavg_imgs)
           if( quality%states(iimg) == 0 ) then
               call spproj%os_cls2D%set(iimg, 'state', 0)
-              call spproj%os_cls2D%set(iimg, 'rejection_reason', string('fine_reject: ')//cavg_rejection_reason_string(quality%reasons(iimg)))
+              call spproj%os_cls2D%set(iimg, 'rejection_reason', reason_token('fine_reject', quality%reasons(iimg)))
           end if
       end do
       ! Train the fine compatibility model if it has not yet converged, then infer the fine compatibility scores for all class averages.
@@ -1601,10 +1747,11 @@ contains
         &'); RETRYING IT ONCE'
       call simple_rename(chunk%folder, attempt1)
       call simple_mkdir(chunk%folder)
+      call carry_chunk_lists(attempt1, chunk%folder)
       input = attempt1//'/'//CHUNK_INPUT_PROJFILE
       call simple_copy_file(input, chunk%projfile)
       call simple_copy_file(input, chunk%folder//'/'//CHUNK_INPUT_PROJFILE)
-      call chunk%cline%kill()
+      if( allocated(chunk%cline) ) call chunk%cline%kill()
       if( label == LABEL_COARSE ) then
         call self%generate_chunk_coarse_cline(chunk, chunk%nptcls_selected)
       else
@@ -1995,18 +2142,21 @@ contains
       end select
     end function reason_color
 
+    ! the reason's code from its text, written with underscores for blanks (reason_token) or not
     integer function reason_code_from_text(reason_text)
       type(string), intent(in) :: reason_text
+      type(string) :: txt
+      txt = blanks_for_underscores(reason_text%to_char())
       reason_code_from_text = 100
-      if( reason_text%has_substr('low population') ) then
+      if( txt%has_substr('low population') ) then
         reason_code_from_text = CAVG_REJECT_REASON_POP
-      else if( reason_text%has_substr('bad pixels') ) then
+      else if( txt%has_substr('bad pixels') ) then
         reason_code_from_text = CAVG_REJECT_REASON_BAD_PIXELS
-      else if( reason_text%has_substr('no mask component') ) then
+      else if( txt%has_substr('no mask component') ) then
         reason_code_from_text = CAVG_REJECT_REASON_NO_COMPONENT
-      else if( reason_text%has_substr('mask geometry issues') ) then
+      else if( txt%has_substr('mask geometry issues') ) then
         reason_code_from_text = CAVG_REJECT_REASON_MASK_GEOMETRY
-      else if( reason_text%has_substr('learned model') ) then
+      else if( txt%has_substr('learned model') ) then
         reason_code_from_text = CAVG_REJECT_REASON_MODEL
       end if
     end function reason_code_from_text
@@ -2234,10 +2384,11 @@ contains
 
   ! With final ingestion set and every particle through (no record left to chunk, every chunk
   ! complete or failed), an empty project with sieve_final=yes is handed on, once per chunk count.
-  ! The pool reads it as the end of its intake even when no chunk carried the flag: nothing was
-  ! pending at final ingestion, the last chunk flagged final failed, or a coarse chunk finished
-  ! with nothing selected after the last fine chunk was made. After a chunk flagged final it is a
-  ! second final set, which changes nothing for the pool. New chunks after a retraction change the
+  ! It is the sieve's only final signal; no chunk carries the flag. Chunks end in any order, so a
+  ! flag on the last chunk made could reach the pool before an earlier chunk still running, and the
+  ! pool would publish its final result without that chunk's particles. Written in the cycle that
+  ! hands off the last chunk (collect_and_reject runs first), it follows every chunk's hand-off,
+  ! and the pool takes final sets last (pool2D_policy.md). New chunks after a retraction change the
   ! name, so the next final ingestion hands on a new one.
   subroutine hand_off_final_set( self, project_list )
     class(ptcl_sieve), intent(inout) :: self
@@ -2255,7 +2406,7 @@ contains
     if( self%get_n_chunks_fine() > 0 ) then
       if( .not. all(self%chunks_fine(:)%complete .or. self%chunks_fine(:)%failed) ) return
     end if
-    dst = self%completedir//'/'//FINAL_SET_FBODY//'c'//int2str(self%get_n_chunks_coarse())//&
+    dst = self%completedir//'/'//SIEVE_FINAL_SET_FBODY//'c'//int2str(self%get_n_chunks_coarse())//&
       &'_f'//int2str(self%get_n_chunks_fine())//METADATA_EXT
     if( file_exists(dst) ) return
     call final_set%os_out%new(1, is_ptcl=.false.)
@@ -2279,10 +2430,207 @@ contains
     if( cancel_queued_job(exit_code) ) write(logfhandle,'(A,A,A,I6)') '>>> CANCELLED THE 2D JOB LEFT RUNNING BY ', label, ' # ', chunk%id
     call set_aside_dir(chunk%folder, aside)
     call simple_mkdir(chunk%folder)
+    call carry_chunk_lists(aside, chunk%folder)
     input = aside//'/'//CHUNK_INPUT_PROJFILE
     call simple_copy_file(input, chunk%projfile)
     call simple_copy_file(input, chunk%folder//'/'//CHUNK_INPUT_PROJFILE)
   end subroutine renew_unfinished_chunk
+
+  ! What a chunk took (CHUNK_MICS, CONSUMED_COARSE), from the folder @p from it was made in to the
+  ! folder @p to it is made again in.
+  subroutine carry_chunk_lists( from, to )
+    class(string), intent(in) :: from, to
+    if( file_exists(from//'/'//CHUNK_MICS)      ) call simple_copy_file(from//'/'//CHUNK_MICS,      to//'/'//CHUNK_MICS)
+    if( file_exists(from//'/'//CONSUMED_COARSE) ) call simple_copy_file(from//'/'//CONSUMED_COARSE, to//'/'//CONSUMED_COARSE)
+  end subroutine carry_chunk_lists
+
+  ! The micrographs of @p chunk_list (a chunk's records), in CHUNKED_MICS' format, to @p fname.
+  subroutine write_chunk_mics( fname, chunk_list )
+    class(string),  intent(in)    :: fname
+    type(rec_list), intent(inout) :: chunk_list
+    type(rec_iterator) :: it
+    type(project_rec)  :: prec
+    integer :: funit, ios
+    open(newunit=funit, file=fname%to_char(), status='replace', action='write', iostat=ios)
+    if( ios /= 0 )then
+      THROW_WARN('cannot write '//fname%to_char())
+      return
+    endif
+    it = chunk_list%begin()
+    do while( it%valid() )
+      call it%get(prec)
+      write(funit,'(A,1X,I0)') prec%projname%to_char(), prec%micind
+      call it%next()
+    end do
+    close(funit)
+  end subroutine write_chunk_mics
+
+  ! On restart, before CHUNKED_MICS is read (the particle-sieving stage): rebuilt in the working
+  ! directory from the lists of the coarse chunks that exist (their project written), in id order,
+  ! so a crash between a chunk's project and CHUNKED_MICS neither imports its micrographs again nor
+  ! loses them. Left as it is when a chunk that exists has no list.
+  subroutine rebuild_chunked_mics()
+    character(len=4096) :: line
+    integer, allocatable :: ids(:)
+    type(string) :: dir, folder, projfile
+    integer      :: i, funit_out, funit_in, ios
+    logical      :: l_chunk
+    dir = string('chunks_coarse')
+    if( .not. dir_exists(dir) ) return
+    ids = chunk_folder_ids(dir, COARSE_PREFIX)
+    do i = 1, size(ids)
+      call chunk_paths(ids(i), folder, projfile, l_chunk)
+      if( .not. l_chunk ) cycle
+      if( .not. file_exists(folder//'/'//CHUNK_MICS) )then
+        THROW_WARN('a coarse chunk without its micrograph list: '//CHUNKED_MICS//' is kept as it is')
+        return
+      endif
+    end do
+    open(newunit=funit_out, file=CHUNKED_MICS//'.tmp', status='replace', action='write', iostat=ios)
+    if( ios /= 0 )then
+      THROW_WARN('cannot write '//CHUNKED_MICS//'.tmp')
+      return
+    endif
+    do i = 1, size(ids)
+      call chunk_paths(ids(i), folder, projfile, l_chunk)
+      if( .not. l_chunk ) cycle
+      open(newunit=funit_in, file=folder%to_char()//'/'//CHUNK_MICS, status='old', action='read', iostat=ios)
+      if( ios /= 0 ) cycle
+      do
+        read(funit_in,'(A)',iostat=ios) line
+        if( ios /= 0 ) exit
+        if( len_trim(line) > 0 ) write(funit_out,'(A)') trim(line)
+      end do
+      close(funit_in)
+    end do
+    close(funit_out)
+    call simple_rename(CHUNKED_MICS//'.tmp', CHUNKED_MICS)
+
+  contains
+
+    subroutine chunk_paths( id, folder, projfile, l_chunk )
+      integer,      intent(in)  :: id
+      type(string), intent(out) :: folder, projfile
+      logical,      intent(out) :: l_chunk
+      folder   = dir//'/'//COARSE_PREFIX//int2str(id)
+      projfile = folder//'/'//COARSE_PREFIX//int2str(id)//METADATA_EXT
+      l_chunk  = file_exists(projfile)
+    end subroutine chunk_paths
+
+  end subroutine rebuild_chunked_mics
+
+  ! The coarse chunk ids @p ids, one per line, to @p fname.
+  subroutine write_consumed_coarse( fname, ids )
+    class(string), intent(in) :: fname
+    integer,       intent(in) :: ids(:)
+    integer :: funit, ios, i
+    open(newunit=funit, file=fname%to_char(), status='replace', action='write', iostat=ios)
+    if( ios /= 0 )then
+      THROW_WARN('cannot write '//fname%to_char())
+      return
+    endif
+    do i = 1, size(ids)
+      write(funit,'(I0)') ids(i)
+    end do
+    close(funit)
+  end subroutine write_consumed_coarse
+
+  ! The coarse chunk ids in @p fname (a CONSUMED_COARSE); none when it is missing.
+  subroutine read_consumed_coarse( fname, ids )
+    class(string),        intent(in)  :: fname
+    integer, allocatable, intent(out) :: ids(:)
+    integer :: funit, ios, id, n
+    allocate(ids(0))
+    if( .not. file_exists(fname) ) return
+    open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
+    if( ios /= 0 ) return
+    n = 0
+    do
+      read(funit,*,iostat=ios) id
+      if( ios /= 0 ) exit
+      n = n + 1
+    end do
+    deallocate(ids)
+    allocate(ids(n))
+    rewind(funit)
+    do n = 1, size(ids)
+      read(funit,*,iostat=ios) ids(n)
+      if( ios /= 0 ) ids(n) = 0
+    end do
+    close(funit)
+  end subroutine read_consumed_coarse
+
+  ! The ids of the chunk folders <dir>/<prefix><id> on disk, ascending; a folder set aside
+  ! (<prefix><id>_unfinished<k>, <prefix><id>_attempt1) is not a chunk's.
+  function chunk_folder_ids( dir, prefix ) result( ids )
+    class(string),    intent(in) :: dir
+    character(len=*), intent(in) :: prefix
+    integer,      allocatable :: ids(:)
+    type(string), allocatable :: dirs(:)
+    type(string)                  :: bname
+    character(len=:), allocatable :: name
+    integer :: i, j, id, ios, n
+    allocate(ids(0))
+    if( .not. dir_exists(dir) ) return
+    dirs = simple_list_dirs(dir)
+    if( .not. allocated(dirs) ) return
+    deallocate(ids)
+    allocate(ids(size(dirs)))
+    n = 0
+    do i = 1, size(dirs)
+      bname = basename(dirs(i))
+      name  = trim(bname%to_char())
+      if( len(name) <= len(prefix) ) cycle
+      if( name(1:len(prefix)) /= prefix ) cycle
+      if( verify(name(len(prefix)+1:), '0123456789') /= 0 ) cycle
+      read(name(len(prefix)+1:),*,iostat=ios) id
+      if( ios /= 0 ) cycle
+      ! insertion in ascending order
+      j = n
+      do while( j > 0 )
+        if( ids(j) <= id ) exit
+        ids(j+1) = ids(j)
+        j = j - 1
+      end do
+      ids(j+1) = id
+      n = n + 1
+    end do
+    ids = ids(:n)
+  end function chunk_folder_ids
+
+  ! The reason a class was rejected, @p tier then the reason's text, with no blank: the orientation
+  ! reader splits values at blanks.
+  function reason_token( tier, reason_code ) result( token )
+    character(len=*), intent(in) :: tier
+    integer,          intent(in) :: reason_code
+    type(string) :: token, reason
+    reason = cavg_rejection_reason_string(reason_code)
+    token  = underscores_for_blanks(tier//':'//reason%to_char())
+  end function reason_token
+
+  function underscores_for_blanks( txt ) result( token )
+    character(len=*), intent(in) :: txt
+    type(string) :: token
+    character(len=len_trim(txt)) :: buf
+    integer :: i
+    buf = trim(txt)
+    do i = 1, len(buf)
+      if( buf(i:i) == ' ' ) buf(i:i) = '_'
+    end do
+    token = buf
+  end function underscores_for_blanks
+
+  function blanks_for_underscores( txt ) result( token )
+    character(len=*), intent(in) :: txt
+    type(string) :: token
+    character(len=len_trim(txt)) :: buf
+    integer :: i
+    buf = trim(txt)
+    do i = 1, len(buf)
+      if( buf(i:i) == '_' ) buf(i:i) = ' '
+    end do
+    token = buf
+  end function blanks_for_underscores
 
   ! Rewrites CHUNKED_MICS from the records of @p project_list put in a chunk, by temporary and
   ! rename, so a restart never reads a half-written list.
@@ -2347,19 +2695,15 @@ contains
     endif
   end subroutine read_chunked_mics
 
-  ! .true. when the chunk's 2D job has exited (its script wrote an exit status) without the program
-  ! finishing (no SOLVE2D_FINISHED), whatever the status. A job killed before its script writes a
-  ! status (walltime, a lost node) is not seen; ptcl_sieve_policy.md says so.
+  ! .true. when the chunk's 2D job has ended without the program finishing (no SOLVE2D_FINISHED):
+  ! it exited, whatever its status, or vanished without one, which the job's liveness check finds
+  ! (qsys_async_job, simple_qsys_job_record: a walltime kill, a lost node).
   logical function chunk_job_failed( chunk )
-    type(chunk2D_state), intent(in) :: chunk
-    type(string) :: exit_code_fname
-    integer      :: exit_code
-    logical      :: err
+    type(chunk2D_state), intent(inout) :: chunk
+    integer :: job_status
     chunk_job_failed = .false.
-    exit_code_fname  = chunk%folder//'/'//CHUNK_EXIT_CODE
-    if( .not. file_exists(exit_code_fname) ) return
-    call read_exit_code(exit_code_fname, exit_code, err)
-    if( err ) return ! being written
+    job_status = chunk%job%status()
+    if( job_status /= ASYNC_JOB_DONE .and. job_status /= ASYNC_JOB_FAILED ) return
     ! the program writes its marker before it exits and the script the status after: look again
     if( file_exists(chunk%folder%to_char() // '/' // SOLVE2D_FINISHED) ) return
     chunk_job_failed = .true.

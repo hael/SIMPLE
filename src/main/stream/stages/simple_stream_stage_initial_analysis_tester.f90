@@ -27,6 +27,8 @@ use simple_gui_metadata_types,            only: GUI_METADATA_STREAM_UPDATE_TYPE,
                                                &GUI_METADATA_STREAM_OPENING2D_TYPE, GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE
 use simple_gui_metadata_stream_update,    only: gui_metadata_stream_update
 use simple_gui_metadata_stream_picking,   only: gui_metadata_stream_picking
+use simple_gui_metadata_stream_opening2D, only: gui_metadata_stream_opening2D
+use simple_pick_strategy,                 only: template_lowpass
 use simple_gui_metadata_cavg2D,           only: gui_metadata_cavg2D
 use simple_stream_pipe,                   only: stream_pipe
 use simple_stream_stage_initial_analysis, only: stream_stage_initial_analysis
@@ -107,7 +109,7 @@ contains
         call assert_true(allocated(stage%params), 'partial initialization recreates owned parameters')
         call stage%kill
         call assert_false(allocated(stage%params), 'partial-stage cleanup releases parameters')
-        call stage%spproj%kill
+        call assert_false(allocated(stage%spproj), 'partial-stage cleanup releases the project')
         call stage%cwd%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -457,6 +459,7 @@ contains
         type(cmdline)                       :: cline
         type(stream_pipe)                   :: reader
         type(gui_metadata_stream_picking)   :: picking
+        type(gui_metadata_stream_opening2D) :: opening2D
         character(len=:), allocatable       :: buffer
         type(string)                        :: cwd_saved, root, stage_name
         integer(c_int)                      :: fds(2)
@@ -489,6 +492,25 @@ contains
         call assert_true(reader%receive(buffer), 'a 2D status is sent')
         if( allocated(buffer) ) call assert_int(GUI_METADATA_STREAM_OPENING2D_TYPE, meta_type_of(buffer), 'it is a 2D status')
         call assert_false(reader%receive(buffer), 'one message per call')
+        ! cycle 2 reports its own project: 5 particles, 3 selected, where cycle 1 had 2
+        call stage%spproj%os_ptcl2D%new(2, is_ptcl=.true.)
+        call stage%spproj_all%os_stk%new(1, is_ptcl=.false.)
+        call stage%spproj_all%os_stk%set(1, 'smpd', SMPD)
+        call stage%spproj_all%os_ptcl2D%new(5, is_ptcl=.true.)
+        call stage%spproj_all%os_ptcl2D%set_all2single('state', 1.)
+        call stage%spproj_all%os_ptcl2D%set_state(4, 0)
+        call stage%spproj_all%os_ptcl2D%set_state(5, 0)
+        stage%icycle = 2
+        call stage%send_opening2D_status(string('classifying particles'), 64, 2)
+        call assert_true(reader%receive(buffer), 'a cycle 2 status is sent')
+        if( allocated(buffer) )then
+            if( meta_type_of(buffer) == GUI_METADATA_STREAM_OPENING2D_TYPE )then
+                opening2D  = transfer(buffer, opening2D)
+                l_assigned = opening2D%get(stage_name, nimported, naccepted, nptcls)
+                call assert_int(5, nimported, 'cycle 2''s particles')
+                call assert_int(3, naccepted, 'and its selected ones')
+            endif
+        endif
         call reader%kill
         call stage%kill
         call close_loopback(fds)
@@ -638,6 +660,10 @@ contains
         call assert_int(16, cline%get_iarg('nthr2D'),  'the 2D jobs'' threads'' default')
         call assert_int(4,  cline%get_iarg('nchunks'), 'the sieve''s chunks'' default')
         call assert_int(16, cline%get_iarg('worker_nthr'), 'each job claims the threads of the largest')
+        ! the picking templates' low-pass limit: 0.15 of the largest diameter, within [15, 30] A
+        call assert_real(15., template_lowpass(50.),  1.e-4, 'a small particle gets 15 A')
+        call assert_real(22.5, template_lowpass(150.), 1.e-4, 'a mid-sized one 0.15 of its diameter')
+        call assert_real(30., template_lowpass(400.), 1.e-4, 'a large one 30 A')
         call cline%kill
         ! the 2D jobs, larger than the 3D job and than a quarter of the stage's threads, set the claim
         call cline%set('dir_target', 'preprocessing')
@@ -648,34 +674,38 @@ contains
         call cline%kill
     end subroutine test_commander_defaults
 
-    !> the state of the references: a single object holding at least the population floor (10%)
-    !! passes the veto, and among those the most distinct projection directions, then the largest
-    !! population; when none passes, the fewest connected components (none ranks last), then the
-    !! directions, then the population; only candidates count
+    !> the state of the references: a candidate passes the vetoes when one object (its largest
+    !! component holds 80% of the foreground), 10% of the population, and an FSC resolution within
+    !! 1.5 times the best (not known: no veto); among those the most distinct projection directions,
+    !! then the largest population; when none passes, the same order over every candidate
     subroutine test_choose_state()
-        type(stream_stage_initial_analysis) :: stage
+        class(stream_stage_initial_analysis), allocatable :: stage
         logical, parameter :: ALL3(3) = .true.
+        real,    parameter :: NORES(3) = 0.
+        allocate(stage)
         write(*,'(A)') 'test_choose_state'
-        call assert_int(2, stage%choose_state(ALL3, [3, 1, 2], [9, 1, 9], [9, 9, 9]),&
-            &'the only single object above the floor wins whatever its coverage')
-        call assert_int(3, stage%choose_state(ALL3, [1, 2, 1], [4, 9, 6], [9, 9, 5]),&
-            &'single objects above the floor: the most distinct projection directions')
-        call assert_int(1, stage%choose_state(ALL3, [1, 2, 1], [4, 9, 6], [9, 9, 1]),&
-            &'a single object below the population floor is vetoed')
-        call assert_int(2, stage%choose_state(ALL3, [3, 1, 2], [9, 1, 9], [9, 1, 9]),&
-            &'none passes the veto: the fewest components, as on 3 October')
-        call assert_int(1, stage%choose_state(ALL3, [2, 4, 3], [1, 9, 9], [1, 9, 9]),&
-            &'no single object: the fewest components')
-        call assert_int(3, stage%choose_state(ALL3, [3, 2, 2], [9, 5, 6], [9, 9, 1]),&
-            &'equal fewest components: the most distinct projection directions')
-        call assert_int(2, stage%choose_state(ALL3, [1, 1, 1], [5, 5, 5], [3, 7, 7]),&
+        ! dominant fraction, resolution, directions, population
+        call assert_int(1, stage%choose_state(ALL3, [0.85, 0.5, 0.95], NORES, [9, 9, 1], [9, 9, 9]),&
+            &'a split particle with a dominant component beats a compact state with fewer directions')
+        call assert_int(1, stage%choose_state(ALL3, [0.85, 0.95, 0.95], [8., 20., 9.], [9, 9, 9], [9, 9, 5]),&
+            &'a compact state far coarser than the best is vetoed')
+        call assert_int(3, stage%choose_state(ALL3, [0.85, 0.95, 0.95], [8., 20., 11.], [5, 9, 9], [9, 9, 5]),&
+            &'within 1.5 times the best: the most distinct projection directions')
+        call assert_int(2, stage%choose_state(ALL3, [0.9, 0.9, 0.9], [8., 0., 20.], [5, 9, 9], [9, 9, 9]),&
+            &'an unknown resolution does not veto')
+        call assert_int(3, stage%choose_state(ALL3, [0.9, 0.4, 0.9], NORES, [4, 9, 6], [9, 9, 5]),&
+            &'a state below the dominant fraction is vetoed')
+        call assert_int(1, stage%choose_state(ALL3, [0.9, 0.4, 0.9], NORES, [4, 9, 6], [9, 9, 1]),&
+            &'a state below the population floor is vetoed')
+        call assert_int(2, stage%choose_state(ALL3, [0.5, 0.4, 0.6], NORES, [4, 9, 6], [9, 9, 9]),&
+            &'none passes: the directions decide, not the components')
+        call assert_int(2, stage%choose_state(ALL3, [0.9, 0.9, 0.9], NORES, [5, 5, 5], [3, 7, 7]),&
             &'equal directions: the largest population, then the lowest state')
-        call assert_int(3, stage%choose_state(ALL3, [0, 0, 5], [9, 9, 1], [9, 9, 1]),&
-            &'no component ranks after any number of them')
-        call assert_int(3, stage%choose_state([.false., .true., .true.], [1, 2, 2], [9, 1, 2], [9, 9, 9]),&
+        call assert_int(3, stage%choose_state([.false., .true., .true.], [0.9, 0.9, 0.9], NORES, [9, 1, 2], [9, 9, 9]),&
             &'a state without a volume is not a candidate')
-        call assert_int(0, stage%choose_state([.false., .false., .false.], [1, 1, 1], [1, 1, 1], [1, 1, 1]),&
+        call assert_int(0, stage%choose_state([.false., .false., .false.], [0.9, 0.9, 0.9], NORES, [1, 1, 1], [1, 1, 1]),&
             &'no candidate: 0')
+        call assert_false(any(stage%state_vetoes(ALL3, [0.5, 0.4, 0.6], NORES, [9, 9, 9])), 'none passing is reported')
     end subroutine test_choose_state
 
     !> the mask diameter of cycle 2 and 3D: from the selected class averages only, at least the

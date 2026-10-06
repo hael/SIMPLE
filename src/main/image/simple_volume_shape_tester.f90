@@ -1,6 +1,6 @@
 !@descr: analytic tests for three-dimensional shape descriptors
 module simple_volume_shape_tester
-use simple_test_utils, only: assert_real, assert_int, enter_fixture, leave_fixture, tests_failed
+use simple_test_utils, only: assert_real, assert_int, assert_true, enter_fixture, leave_fixture, tests_failed
 use simple_string,     only: string
 use simple_image,      only: image
 use simple_image_bin,  only: image_bin
@@ -47,7 +47,9 @@ contains
     end subroutine run_all_volume_shape_tests
 
     !> the components vol_shape_descr counts: one blob is one object; two blobs of a size are two;
-    !! a blob outside the mask does not count; a speck below the size fraction does not count
+    !! a blob outside the mask does not count; a speck below the size fraction does not count. The
+    !! largest component's share is 1 for one blob, a half for two of a size, near 1 with a speck;
+    !! dense solvent outside the mask does not move the thresholds
     subroutine test_vol_shape_descr_components()
         integer, parameter :: NB = 48, C = NB / 2 + 1, HW = 4, SHIFT = 14
         real,    parameter :: SMPD_VOL = 2.0, LP = 6.0, FRAC = 0.1
@@ -55,6 +57,7 @@ contains
         type(image_bin)   :: bin
         type(string)      :: cwd_saved, root
         real, allocatable :: density(:,:,:)
+        real    :: dominant
         integer :: nccs, nfail0
         nfail0 = tests_failed
         call enter_fixture('vol_shape_descr', cwd_saved, root)
@@ -63,14 +66,16 @@ contains
         ! one blob at the centre
         density(C-HW:C+HW, C-HW:C+HW, C-HW:C+HW) = 1.0
         call vol%set_rmat(density, .false.)
-        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_one')
+        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_one', dominant_frac=dominant)
         call assert_int(1, nccs, 'vol_shape_descr: one blob is one object')
+        call assert_real(1.0, dominant, TOL, 'vol_shape_descr: one blob is all the foreground')
         call bin%kill_bimg
         ! a second blob of the same size, inside the mask
         density(C+SHIFT-HW:C+SHIFT+HW, C-HW:C+HW, C-HW:C+HW) = 1.0
         call vol%set_rmat(density, .false.)
-        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_two')
+        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_two', dominant_frac=dominant)
         call assert_int(2, nccs, 'vol_shape_descr: two blobs of a size are two objects')
+        call assert_real(0.5, dominant, 0.05, 'vol_shape_descr: each half the foreground')
         call bin%kill_bimg
         ! the same with a mask that leaves the second blob out
         call bin%vol_shape_descr(vol, LP, 8.0, nccs, min_frac=FRAC, tag='_masked')
@@ -81,8 +86,18 @@ contains
         density(C-HW:C+HW, C-HW:C+HW, C-HW:C+HW) = 1.0
         density(C-SHIFT:C-SHIFT+1, C:C+1, C:C+1) = 1.0
         call vol%set_rmat(density, .false.)
-        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_speck')
+        call bin%vol_shape_descr(vol, LP, 23.0, nccs, min_frac=FRAC, tag='_speck', dominant_frac=dominant)
         call assert_int(1, nccs, 'vol_shape_descr: a speck below the size fraction does not count')
+        call assert_true(dominant > 0.9, 'vol_shape_descr: the blob holds nearly all the foreground')
+        call bin%kill_bimg
+        ! the central blob with dense solvent outside the mask: the thresholds come from inside it
+        density = 0.0
+        density(C-HW:C+HW, C-HW:C+HW, C-HW:C+HW) = 1.0
+        density(1:6, :, :) = 10.0
+        call vol%set_rmat(density, .false.)
+        call bin%vol_shape_descr(vol, LP, 12.0, nccs, min_frac=FRAC, tag='_solvent', dominant_frac=dominant)
+        call assert_int(1, nccs, 'vol_shape_descr: dense solvent outside the mask leaves the blob found')
+        call assert_real(1.0, dominant, TOL, 'vol_shape_descr: and it alone')
         call bin%kill_bimg
         call vol%kill
         deallocate(density)

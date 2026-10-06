@@ -18,7 +18,39 @@ contains
         write(*,'(A)') '**** running all stream watcher tests ****'
         call test_history_lookup()
         call test_history_growth()
+        call test_rate_after_restored_history()
     end subroutine run_all_stream_watcher_tests
+
+    !> the history a restart restores before the first watch is not counted as movies detected
+    !! since: the rate counts only what is added after the first watch
+    subroutine test_rate_after_restored_history()
+        integer, parameter   :: NRESTORED = 100
+        type(stream_watcher) :: watcher
+        type(string), allocatable :: movies(:)
+        type(string)         :: cwd_saved, root, cwd
+        integer              :: nfail0, i, nmovies
+        write(*,'(A)') 'test_rate_after_restored_history'
+        nfail0 = tests_failed
+        call enter_fixture('watcher_rate', cwd_saved, root)
+        call simple_getcwd(cwd)
+        watcher = stream_watcher(-1, cwd)
+        do i = 1,NRESTORED
+            call simple_touch(string('restored_'//int2str_pad(i, 3)//'.mrc'))
+            call watcher%add2history(cwd//'/restored_'//int2str_pad(i, 3)//'.mrc')
+        enddo
+        call watcher%watch(nmovies, movies)
+        call assert_int(0, nmovies, 'the restored movies are not new')
+        do i = 1,2
+            call simple_touch(string('new_'//int2str(i)//'.mrc'))
+            call watcher%add2history(cwd//'/new_'//int2str(i)//'.mrc')
+        enddo
+        call sleep(1)
+        call watcher%watch(nmovies, movies)
+        call assert_true(watcher%rate <= 7200, 'two movies a second or less, not the restored hundred')
+        call assert_true(watcher%rate > 0,     'the new ones count')
+        call watcher%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_rate_after_restored_history
 
     !> files added in any order are found, by basename, whatever their directory; a file not added
     !! is not; a file added twice is kept once; clearing empties the history

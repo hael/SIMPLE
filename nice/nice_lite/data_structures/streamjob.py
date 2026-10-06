@@ -131,15 +131,18 @@ class StreamJob(Job):
     # GUI parameter updates
     # ------------------------------------------------------------------
 
-    def update(self, ctfres=None, astigmatism=None, icescore=None, increase_nmics=None):
+    def update(self, ctfres=None, astigmatism=None, icescore=None):
         """
         Push GUI-driven parameter changes into the master_update dict so the
         running job picks them up on its next poll.
 
+        master_update is sent whole in every heartbeat answer: the stream
+        master forwards to each stage only what changed (the contract is
+        doc/policies/stream/ipc_policy.md, sections 5 and 6, in SIMPLE).
+
         ctfres         — CTF resolution threshold (Angstroms)
         astigmatism    — astigmatism threshold
         icescore       — ice fraction threshold
-        increase_nmics — if set, increments the micrograph count for pickrefs
         """
         if self.jobmodel is None:
             print_error("jobmodel is none")
@@ -156,10 +159,6 @@ class StreamJob(Job):
         if icescore is not None:
             master_update["icefracthreshold"]       = icescore
             preprocessing_stats["cutoff_ice_score"] = icescore
-        if increase_nmics is not None:
-            master_update["increase_nmics"] = master_update.get("increase_nmics", 0) + 1
-            generate_pickrefs_stats["user_input"] = False
-            generate_pickrefs_stats["stage"]      = "using more particles"
         self.jobmodel.master_update           = master_update
         self.jobmodel.preprocessing_stats     = preprocessing_stats
         self.jobmodel.generate_pickrefs_stats = generate_pickrefs_stats
@@ -261,7 +260,6 @@ class StreamJob(Job):
                     master_update.pop("restart_opening2D", None)
                 else:
                     # clear pending user inputs once the stage is no longer running
-                    master_update.pop("increase_nmics",     None)
                     master_update.pop("pickrefs_selection", None)
                     master_update.pop("pickrefs_cycle",  None)
             if "reference_picking" in heartbeat:
@@ -304,8 +302,6 @@ class StreamJob(Job):
         if "particle_sieving" in stats_json:
             updated = True
             self.jobmodel.particle_sieving_stats = stats_json["particle_sieving"]
-            if "initial_ref_selection" in stats_json["particle_sieving"] and "ref_selection" not in self.jobmodel.master_update:
-                self.jobmodel.master_update["ref_selection"] = stats_json["particle_sieving"]["initial_ref_selection"]
         if "pool2D" in stats_json:
             updated = True
             if "snapshot" in stats_json["pool2D"]:
@@ -435,20 +431,6 @@ class StreamJob(Job):
         self.jobmodel.save()
         return True
     
-    def select_sieve_particles(self, accepted_cls2D):
-        """Store the user's 2D class selection for the particle-sieving stage.
-        accepted_cls2D: list of class indices accepted by the user.
-        Writes ref_selection into master_update so the stream picks it up.
-        """
-        if self.jobmodel is None:
-            print_error("jobmodel is none")
-            return False
-        master_update = self.jobmodel.master_update
-        master_update["ref_selection"] = accepted_cls2D
-        self.jobmodel.master_update = master_update
-        self.jobmodel.save()
-        return True
-
     def update_mskdiam(self, mskdiam):
         """Store the mask diameter for 2D classification.
         Writes mskdiam2D into master_update so the stream picks it up.

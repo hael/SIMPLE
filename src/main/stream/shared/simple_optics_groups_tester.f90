@@ -24,7 +24,112 @@ contains
         call test_two_shift_clusters_without_beamtilt()
         call test_group_offset()
         call test_ctf_constants_from_first_accepted()
+        call test_equal_shifts_one_group()
+        call test_chain_is_one_group()
+        call test_ids_kept_across_regroupings()
     end subroutine run_all_optics_groups_tests
+
+    !> equal shifts (no dir_meta: all 0) form one group, quickly and without a distance matrix
+    subroutine test_equal_shifts_one_group()
+        integer, parameter :: NMANY = 50000
+        type(sp_project) :: spproj
+        real, allocatable :: xs(:)
+        write(*,'(A)') 'test_equal_shifts_one_group'
+        allocate(xs(NMANY), source=0.)
+        call make_line(spproj, xs)
+        call assign_optics_groups(spproj, TILT_THRES, .false., 0)
+        call assert_int(1, spproj%os_optics%get_noris(), '50,000 equal shifts: one group')
+        call assert_int(NMANY, nint(spproj%os_optics%get(1, 'pop')), 'holding every micrograph')
+        call spproj%kill
+    end subroutine test_equal_shifts_one_group
+
+    !> single linkage: shifts each within the threshold of the next form one group, a gap wider
+    !! than it another
+    subroutine test_chain_is_one_group()
+        type(sp_project) :: spproj
+        integer          :: i
+        write(*,'(A)') 'test_chain_is_one_group'
+        call make_line(spproj, [0.0, 0.4, 0.8, 1.2, 3.0])
+        call assign_optics_groups(spproj, TILT_THRES, .false., 0)
+        call assert_int(2, spproj%os_optics%get_noris(), 'a chain and an outlier: two groups')
+        call assert_true(all([(spproj%os_mic%get_int(i, 'ogid'), i=2,4)] == spproj%os_mic%get_int(1, 'ogid')),&
+            &'the chain is one group')
+        call assert_true(spproj%os_mic%get_int(5, 'ogid') /= spproj%os_mic%get_int(1, 'ogid'), 'the outlier is another')
+        call spproj%kill
+    end subroutine test_chain_is_one_group
+
+    !> regrouped with last_ogid, a group keeps the id most of its micrographs had: adding a
+    !! micrograph keeps both ids; when two groups merge the larger keeps its id; a new group takes
+    !! the next id never given; os_optics rows follow the ids
+    subroutine test_ids_kept_across_regroupings()
+        type(sp_project) :: spproj
+        integer :: last_ogid, id_a, id_b
+        write(*,'(A)') 'test_ids_kept_across_regroupings'
+        ! group A at 0 (two), group B at 0.9 (three): apart, as 0.9 exceeds the threshold
+        call make_line(spproj, [0.0, 0.0, 0.9, 0.9, 0.9])
+        last_ogid = 0
+        call assign_optics_groups(spproj, TILT_THRES, .false., 0, last_ogid=last_ogid)
+        call assert_int(2, spproj%os_optics%get_noris(), 'two groups')
+        call assert_int(2, last_ogid, 'ids 1 and 2 given')
+        id_a = spproj%os_mic%get_int(1, 'ogid')
+        id_b = spproj%os_mic%get_int(3, 'ogid')
+        ! one more micrograph in B
+        call add_mic(spproj, 0.9)
+        call assign_optics_groups(spproj, TILT_THRES, .false., 0, last_ogid=last_ogid)
+        call assert_int(id_a, spproj%os_mic%get_int(1, 'ogid'), 'A keeps its id')
+        call assert_int(id_b, spproj%os_mic%get_int(3, 'ogid'), 'B keeps its id')
+        call assert_int(id_b, spproj%os_mic%get_int(6, 'ogid'), 'the new micrograph joins B')
+        ! a bridge at 0.45 joins A and B: the merged group keeps B's id, B being larger
+        call add_mic(spproj, 0.45)
+        call assign_optics_groups(spproj, TILT_THRES, .false., 0, last_ogid=last_ogid)
+        call assert_int(1, spproj%os_optics%get_noris(), 'merged: one group')
+        call assert_int(id_b, spproj%os_mic%get_int(1, 'ogid'), 'the merged group keeps the larger group''s id')
+        call assert_int(id_b, spproj%os_optics%get_int(1, 'ogid'), 'and its row has it')
+        ! far away: a new group with the next id never given
+        call add_mic(spproj, 20.0)
+        call assign_optics_groups(spproj, TILT_THRES, .false., 0, last_ogid=last_ogid)
+        call assert_int(2, spproj%os_optics%get_noris(), 'a new group')
+        call assert_int(3, spproj%os_mic%get_int(8, 'ogid'), 'with id 3, not the merged-away id')
+        call assert_int(3, last_ogid, 'the highest id given')
+        call assert_true(spproj%os_optics%get_int(1, 'ogid') < spproj%os_optics%get_int(2, 'ogid'), 'rows in id order')
+        call spproj%kill
+    end subroutine test_ids_kept_across_regroupings
+
+    ! micrographs with shifts (@p xs, 0), all accepted, one tilt group
+    subroutine make_line( spproj, xs )
+        type(sp_project), intent(inout) :: spproj
+        real,             intent(in)    :: xs(:)
+        integer :: imic
+        call spproj%os_mic%new(size(xs), is_ptcl=.false.)
+        do imic = 1,size(xs)
+            call set_mic(spproj, imic, xs(imic))
+        enddo
+    end subroutine make_line
+
+    ! one more micrograph at shift (@p x, 0), without a group
+    subroutine add_mic( spproj, x )
+        type(sp_project), intent(inout) :: spproj
+        real,             intent(in)    :: x
+        integer :: n
+        n = spproj%os_mic%get_noris()
+        call spproj%os_mic%reallocate(n + 1)
+        call set_mic(spproj, n + 1, x)
+    end subroutine add_mic
+
+    subroutine set_mic( spproj, imic, x )
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: imic
+        real,             intent(in)    :: x
+        call spproj%os_mic%set_state(imic, 1)
+        call spproj%os_mic%set(imic, 'smpd',    SMPD)
+        call spproj%os_mic%set(imic, 'cs',      CS)
+        call spproj%os_mic%set(imic, 'kv',      KV)
+        call spproj%os_mic%set(imic, 'fraca',   FRACA)
+        call spproj%os_mic%set(imic, 'shiftx',  x)
+        call spproj%os_mic%set(imic, 'shifty',  0.0)
+        call spproj%os_mic%set(imic, 'tiltgrp', 1.0)
+    end subroutine set_mic
+
 
     subroutine test_two_shift_clusters_with_beamtilt()
         type(sp_project) :: spproj

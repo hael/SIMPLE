@@ -15,14 +15,21 @@
 !
 !   cancel uses the record the job's script keeps of itself
 !   (simple_qsys_job_record, which also has fresh_job_dir for the directory a
-!   new job starts in).
+!   new job starts in). status also asks, every JOB_LIVENESS_S, whether a job
+!   without an exit status still exists (check_job_lost): one gone at two
+!   checks in a row is FAILED, so a job its scheduler killed before the script
+!   wrote a status is no longer waited for. Every queued job of the stream runs
+!   through this type, except the job sets of preprocessing and reference
+!   picking, which the queue controller's streaming scheduler runs with the
+!   same record, exit status, liveness check and cancel.
 !==============================================================================
 module simple_qsys_async_job
 use simple_defs,            only: CWD_GLOB, logfhandle
 use simple_string,          only: string
+use simple_defs_fname,      only: JOB_INFO_EXT
 use simple_fileio,          only: del_file, file_exists, read_exit_code, simple_chdir, simple_getcwd
 use simple_syslib,          only: simple_mkdir
-use simple_qsys_job_record, only: cancel_queued_job
+use simple_qsys_job_record, only: cancel_queued_job, check_job_lost
 use simple_cmdline,  only: cmdline
 use simple_qsys_env, only: qsys_env
 implicit none
@@ -41,9 +48,12 @@ type :: qsys_async_job
     type(string) :: dir             ! absolute job directory
     type(string) :: label
     type(string) :: exit_code_fname ! absolute
+    integer      :: last_check = 0  ! the latest liveness check (check_job_lost)
+    integer      :: nmisses    = 0  ! liveness checks in a row that found the job gone
     logical      :: l_started = .false.
 contains
     procedure :: start
+    procedure :: start_seq
     procedure :: status
     procedure :: get_dir
     procedure :: get_log
@@ -73,6 +83,7 @@ contains
         self%label           = label
         self%exit_code_fname = cwd_job//'/EXIT_CODE_'//label
         if( file_exists(self%exit_code_fname) ) call del_file(self%exit_code_fname)
+        if( file_exists(self%exit_code_fname//JOB_INFO_EXT) ) call del_file(self%exit_code_fname//JOB_INFO_EXT)
         call qenv%exec_simple_prg_in_queue_async(cline, string('./distr_'//label), string('simple_log_'//label),&
             &exec_bin=exec_bin, exit_code_fname=self%exit_code_fname)
         call simple_chdir(cwd)
@@ -80,16 +91,46 @@ contains
         self%l_started = .true.
     end subroutine start
 
+    !> As start, with the programs @p clines run one after the other in one script, which stops at
+    !! the first that fails; the exit status is that one's, or the last one's.
+    subroutine start_seq( self, qenv, clines, dir, label )
+        class(qsys_async_job),      intent(inout) :: self
+        class(qsys_env),            intent(inout) :: qenv
+        type(cmdline), allocatable, intent(in)    :: clines(:)
+        class(string),              intent(in)    :: dir
+        character(len=*),           intent(in)    :: label
+        type(string) :: cwd, cwd_job
+        call self%kill()
+        call simple_getcwd(cwd)
+        call simple_mkdir(dir)
+        call simple_chdir(dir)
+        call simple_getcwd(cwd_job)
+        CWD_GLOB             = cwd_job%to_char()
+        self%dir             = cwd_job
+        self%label           = label
+        self%exit_code_fname = cwd_job//'/EXIT_CODE_'//label
+        if( file_exists(self%exit_code_fname) ) call del_file(self%exit_code_fname)
+        if( file_exists(self%exit_code_fname//JOB_INFO_EXT) ) call del_file(self%exit_code_fname//JOB_INFO_EXT)
+        call qenv%exec_simple_prgs_in_queue_async(clines, string('./distr_'//label), string('simple_log_'//label),&
+            &exit_code_fname=self%exit_code_fname)
+        call simple_chdir(cwd)
+        CWD_GLOB       = cwd%to_char()
+        self%l_started = .true.
+    end subroutine start_seq
+
     !> ASYNC_JOB_IDLE, _RUNNING, _DONE or _FAILED. An exit-status file that cannot be read yet
-    !! (being written) counts as running.
+    !! (being written) counts as running. A running job is checked for liveness (check_job_lost);
+    !! one gone without a status gets JOB_LOST_EXIT_CODE written as its status, and is FAILED.
     integer function status( self )
-        class(qsys_async_job), intent(in) :: self
+        class(qsys_async_job), intent(inout) :: self
         integer :: exit_code
         logical :: err
         status = ASYNC_JOB_IDLE
         if( .not. self%l_started ) return
         status = ASYNC_JOB_RUNNING
-        if( .not. file_exists(self%exit_code_fname) ) return
+        if( .not. file_exists(self%exit_code_fname) )then
+            if( .not. check_job_lost(self%exit_code_fname, self%last_check, self%nmisses) ) return
+        endif
         call read_exit_code(self%exit_code_fname, exit_code, err)
         if( err ) return
         if( exit_code == 0 )then
@@ -130,7 +171,9 @@ contains
         call self%dir%kill
         call self%label%kill
         call self%exit_code_fname%kill
-        self%l_started = .false.
+        self%last_check = 0
+        self%nmisses    = 0
+        self%l_started  = .false.
     end subroutine kill
 
 end module simple_qsys_async_job

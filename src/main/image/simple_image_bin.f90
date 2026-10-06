@@ -556,20 +556,25 @@ contains
         call self%update_img_rmat
     end subroutine cc2bin
 
-    !> Shape descriptors of @p vol, low-passed to @p lp (A) and binarised (Otsu twice), logged; @p nccs
-    !! is the number of its connected components that lie inside the mask sphere of radius @p msk
-    !! (voxels, around the box centre) and, with @p min_frac, hold at least that fraction of the
-    !! largest one's voxels, so a speck of noise does not make a second object. The binarised volume
-    !! and the components are written as vol_binarized<tag>.mrc and vol_cc<tag>.mrc.
-    subroutine vol_shape_descr( self, vol, lp, msk, nccs, min_frac, tag )
+    !> Shape descriptors of @p vol, low-passed to @p lp (A) and binarised (Otsu twice, both
+    !! thresholds from the voxels inside the mask sphere of radius @p msk (voxels, around the box
+    !! centre), so the solvent outside does not drive them; only what lies inside is kept), logged.
+    !! @p nccs is the number of connected components that, with @p min_frac, hold at least that
+    !! fraction of the largest one's voxels, so a speck of noise does not make a second object;
+    !! @p dominant_frac is the largest component's share of the foreground voxels (0 for an empty
+    !! binarisation), near 1 for one object whatever specks or small splits come with it. The
+    !! binarised volume and the components are written as vol_binarized<tag>.mrc and vol_cc<tag>.mrc.
+    subroutine vol_shape_descr( self, vol, lp, msk, nccs, min_frac, tag, dominant_frac )
         class(image_bin), intent(inout) :: self
         class(image), intent(in)        :: vol
         real, intent(in)                :: lp, msk
         integer, intent(out)            :: nccs
-        real,             optional, intent(in) :: min_frac
-        character(len=*), optional, intent(in) :: tag
+        real,             optional, intent(in)  :: min_frac
+        character(len=*), optional, intent(in)  :: tag
+        real,             optional, intent(out) :: dominant_frac
         integer, allocatable :: cc_sz(:)
         real, allocatable    :: vals(:)
+        logical, allocatable :: l_in(:,:,:)
         real, pointer        :: rmat(:,:,:)
         type(image_bin)      :: vol_ccs
         character(len=:), allocatable :: suffix
@@ -585,25 +590,34 @@ contains
         call self%bp(0., lp)
         ldim = self%get_ldim()
         call self%get_rmat_ptr(rmat)
-        vals = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
-        call otsu(size(vals), vals, threshold_first)
-        vals = pack(vals, vals > threshold_first)
-        call otsu(size(vals), vals, threshold)
-        if( count(rmat(1:ldim(1),1:ldim(2),1:ldim(3)) >= threshold) < ldim(1) ) threshold = threshold_first
-        where( rmat(1:ldim(1),1:ldim(2),1:ldim(3)) >= threshold )
-            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 1.
-        elsewhere
-            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
-        end where
-        ! only what lies inside the mask counts
+        ! the voxels inside the mask
+        allocate(l_in(ldim(1),ldim(2),ldim(3)))
         cen = real(ldim / 2 + 1)
         do k = 1,ldim(3)
             do j = 1,ldim(2)
                 do i = 1,ldim(1)
-                    if( (real(i)-cen(1))**2 + (real(j)-cen(2))**2 + (real(k)-cen(3))**2 > msk**2 ) rmat(i,j,k) = 0.
+                    l_in(i,j,k) = (real(i)-cen(1))**2 + (real(j)-cen(2))**2 + (real(k)-cen(3))**2 <= msk**2
                 enddo
             enddo
         enddo
+        if( .not. any(l_in) ) l_in = .true.
+        ! the thresholds from them only
+        vals = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), l_in)
+        call otsu(size(vals), vals, threshold_first)
+        vals = pack(vals, vals > threshold_first)
+        if( size(vals) > 0 )then
+            call otsu(size(vals), vals, threshold)
+        else
+            threshold = threshold_first
+        endif
+        if( count(rmat(1:ldim(1),1:ldim(2),1:ldim(3)) >= threshold .and. l_in) < ldim(1) ) threshold = threshold_first
+        ! only what lies inside the mask counts
+        where( rmat(1:ldim(1),1:ldim(2),1:ldim(3)) >= threshold .and. l_in )
+            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 1.
+        elsewhere
+            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
+        end where
+        deallocate(l_in)
         nullify(rmat)
         call self%set_imat
         call self%write(string('vol_binarized'//suffix//'.mrc'))
@@ -613,12 +627,17 @@ contains
         ! an empty binarisation has no component (size_ccs gives a single zero then)
         nccs  = 0
         if( maxval(cc_sz) > 0 ) nccs = count(cc_sz > 0 .and. real(cc_sz) >= frac * real(maxval(cc_sz)))
+        if( present(dominant_frac) )then
+            dominant_frac = 0.
+            if( sum(cc_sz) > 0 ) dominant_frac = real(maxval(cc_sz)) / real(sum(cc_sz))
+        endif
         write(logfhandle,'(A,F7.2)') '>>> Eccentricity          : ', ecc
         write(logfhandle,'(A,F7.2)') '>>> Anisotropy            : ', aniso
         write(logfhandle,'(A,F7.2)') '>>> Asphericity           : ', asph
         write(logfhandle,'(A,F7.2)') '>>> Acylindricity         : ', acyl
         write(logfhandle,'(A,F7.2)') '>>> Radius of gyration^2  : ', rg_sq
         write(logfhandle,'(A,I7,A,I7,A)') '>>> Connected component(s): ', nccs, ' (', size(cc_sz), ' before the size cut)'
+        if( present(dominant_frac) ) write(logfhandle,'(A,F7.3)') '>>> Largest component      : ', dominant_frac
         call vol_ccs%write_bimg(string('vol_cc'//suffix//'.mrc'))
         call vol_ccs%kill_bimg
         if( allocated(cc_sz) ) deallocate(cc_sz)

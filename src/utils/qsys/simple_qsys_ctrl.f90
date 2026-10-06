@@ -9,6 +9,7 @@ use simple_qsys_coarray,             only: qsys_coarray
 use simple_cmdline,                  only: cmdline
 use simple_parameters,               only: parameters
 use simple_syslib,                   only: simple_rmfile
+use simple_qsys_job_record,          only: check_job_lost
 use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task 
 use simple_persistent_worker_server,       only: persistent_worker
 use simple_mem_estimator
@@ -40,6 +41,8 @@ type qsys_ctrl
     type(string),     allocatable :: coarray_job_args(:)           !< direct per-partition command arguments for coarray dispatch
     type(string),     allocatable :: jobs_done_fnames(:)           !< per-partition completion sentinel file paths
     type(string),     allocatable :: jobs_exit_code_fnames(:)      !< per-partition exit-code file paths (streaming only)
+    integer,          allocatable :: jobs_last_check(:)            !< per-partition latest liveness check (streaming only)
+    integer,          allocatable :: jobs_nmisses(:)               !< per-partition liveness checks in a row that found the job gone
     ! --- scheduler state ---
     class(qsys_base), pointer     :: myqsys     => null()          !< polymorphic scheduler backend (not owned)
     integer,          pointer     :: parts(:,:) => null()          !< fromp/top particle ranges for all partitions (not owned)
@@ -171,6 +174,8 @@ contains
                   self%coarray_job_args(fromto_part(1):fromto_part(2)),    &
                   self%jobs_done_fnames(fromto_part(1):fromto_part(2)),    &
                   self%jobs_exit_code_fnames(fromto_part(1):fromto_part(2)) )
+        allocate(self%jobs_last_check(fromto_part(1):fromto_part(2)), self%jobs_nmisses(fromto_part(1):fromto_part(2)),&
+            &source=0)
         if( self%stream ) then
             ! In streaming mode jobs start as 'done' (free slot) and are filled on demand.
             self%jobs_done = .true.
@@ -861,7 +866,7 @@ contains
     subroutine update_queue( self )
         class(qsys_ctrl), intent(inout) :: self
         integer :: ipart, njobs_in_queue, exit_code
-        logical :: err
+        logical :: err, l_lost
         select type( pmyqsys => self%myqsys )
             class is(qsys_coarray)
                 return
@@ -869,6 +874,12 @@ contains
         if( self%stream ) then
             do ipart = self%fromto_part(1), self%fromto_part(2)
                 if( self%jobs_done(ipart) ) cycle
+                ! a job without an exit status is checked for liveness: one gone at two checks in a
+                ! row gets JOB_LOST_EXIT_CODE written and goes to the fail stack below
+                if( .not. file_exists(self%jobs_exit_code_fnames(ipart)) )then
+                    l_lost = check_job_lost(self%jobs_exit_code_fnames(ipart), self%jobs_last_check(ipart),&
+                        &self%jobs_nmisses(ipart))
+                endif
                 if( file_exists(self%jobs_exit_code_fnames(ipart)) ) then
                     ! Exit-code file present: job has completed (successfully or not).
                     call read_exit_code(self%jobs_exit_code_fnames(ipart), exit_code, err)
@@ -982,8 +993,11 @@ contains
                         call self%stream_cline_submitted(ipart)%gen_job_descr(job_descr)
                         self%jobs_submitted(ipart) = .true.
                         self%jobs_done(ipart)      = .false.
+                        self%jobs_last_check(ipart) = 0
+                        self%jobs_nmisses(ipart)    = 0
                         call simple_rmfile(self%jobs_done_fnames(ipart))
                         call simple_rmfile(self%jobs_exit_code_fnames(ipart))
+                        call simple_rmfile(self%jobs_exit_code_fnames(ipart)//JOB_INFO_EXT)
                         call self%generate_script_2(job_descr, q_descr, self%exec_binary, self%script_names(ipart), &
                             &exit_code_fname=self%jobs_exit_code_fnames(ipart))
                         call self%submit_script(self%script_names(ipart))
@@ -1174,6 +1188,8 @@ contains
         ! Deallocate tracking arrays.
         deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, &
                    self%jobs_exit_code_fnames, self%jobs_submitted, self%coarray_job_args)
+        if( allocated(self%jobs_last_check) ) deallocate(self%jobs_last_check)
+        if( allocated(self%jobs_nmisses)    ) deallocate(self%jobs_nmisses)
         ! Deallocate streaming stacks (kill cmdlines before dealloc where required).
         if( allocated(self%stream_cline_stack) )      deallocate(self%stream_cline_stack)
         if( allocated(self%stream_cline_submitted) ) then

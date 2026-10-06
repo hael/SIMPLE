@@ -22,6 +22,7 @@ public :: pick_inmem_strategy
 public :: pick_distr_strategy
 public :: create_pick_strategy
 public :: make_pickrefs_impl
+public :: template_lowpass
 private
 #include "simple_local_flags.inc"
 
@@ -196,7 +197,6 @@ contains
         type(string)             :: pickrefs_source_jpeg, cwd
         real,        allocatable :: diams(:), shifts(:,:)
         integer,     allocatable :: medoid_inds(:), medoid_map(:)
-        real,    parameter :: MSKDIAM2LP = 0.15, LP_LB = 30., LP_UB = 15.
         integer, parameter :: NREFS = 100
         real    :: ang, rot, lp, diam_max, maxdiam, moldiam, mskdiam, smpd_stk, smpd_read, smpd_cluster
         integer :: nrots, iref, irot, ldim_clip(3), ldim(3), ldim_stk(3), ncavgs, icavg
@@ -330,7 +330,7 @@ contains
         end do
         ! estimate new box size and clip
         diam_max        = maxval(diams)
-        lp              = min(max(LP_LB, MSKDIAM2LP * diam_max), LP_UB)
+        lp              = template_lowpass(diam_max)
         call automask2D_mskdiam(diam_max, params%smpd, ldim(1), box_for_pick, moldiam, mskdiam)
         maxdiam         = moldiam + moldiam * BOX_EXP_FAC
         box_for_extract = find_larger_magic_box(round2even(maxdiam / params%smpd))
@@ -568,5 +568,14 @@ contains
         character(len=:), allocatable :: msg
         msg = '**** SIMPLE_DISTR_PICK NORMAL STOP ****'
     end function distr_end_message
+
+    !> The picking templates' low-pass limit (A) for class averages whose largest diameter is
+    !! @p diam_max (A): 0.15 of it, within [15, 30] A (follow-up plan, decision 6; the clamp was
+    !! inverted and always gave 15 A).
+    pure real function template_lowpass( diam_max )
+        real, intent(in) :: diam_max
+        real, parameter  :: MSKDIAM2LP = 0.15, LP_FINEST = 15., LP_COARSEST = 30.
+        template_lowpass = max(LP_FINEST, min(LP_COARSEST, MSKDIAM2LP * diam_max))
+    end function template_lowpass
 
 end module simple_pick_strategy

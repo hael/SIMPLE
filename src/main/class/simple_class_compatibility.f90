@@ -216,7 +216,7 @@ contains
             if( states(iimg) <= 0 ) cycle
             call self%preprocess_img(imgs(iimg), min_dim, max_dim)
             call self%apply_support_model(states(iimg), min_dim, max_dim)
-            if(states(iimg) <= 0) call spproj%os_cls2D%set(iimg, 'rejection_reason', string('class_compatibility: size_incompatible_subset'))
+            if(states(iimg) <= 0) call spproj%os_cls2D%set(iimg, 'rejection_reason', string('class_compatibility:size_incompatible_subset'))
         end do
         call spproj%map_cavgs_selection(states)
         call dealloc_imgarr(imgs)

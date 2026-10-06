@@ -616,9 +616,12 @@ contains
     subroutine check_stk_params(self, spproj)
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
-        integer          :: i, fromp, top, ogid, stkbox, box, ldim(3), nstk_imgs
+        integer          :: i, fromp, top, ogid, stkbox, box, ldim(3), nstk_imgs, irow
         real             :: foundval, detpix, mag
+        real, allocatable :: optics_ids(:)
         type(string)     :: datapath
+        ! a group's row from its id: ids need not be row numbers (stream optics groups keep theirs)
+        optics_ids = spproj%os_optics%get_all('ogid')
         do i = 1, spproj%os_stk%get_noris()
             fromp = spproj%os_stk%get_fromp(i)
             top   = spproj%os_stk%get_top(i)
@@ -659,10 +662,12 @@ contains
            end if
            ogid   = spproj%os_stk%get_int(i, 'ogid')
            stkbox = spproj%os_stk%get_int(i, 'box')
-           if(ogid > 0 .and. stkbox > 0) then
-                box = spproj%os_optics%get_int(ogid, 'box')
+           irow   = 0
+           if( allocated(optics_ids) ) irow = findloc(nint(optics_ids), ogid, 1)
+           if(ogid > 0 .and. stkbox > 0 .and. irow > 0) then
+                box = spproj%os_optics%get_int(irow, 'box')
                 if(box == 0) then
-                    call spproj%os_optics%set(ogid, 'box', stkbox)
+                    call spproj%os_optics%set(irow, 'box', stkbox)
                 end if
            end if
         end do

@@ -269,7 +269,9 @@ contains
                     if( persistent_worker%launch_backend /= qsnam        ) THROW_HARD('cannot reuse existing worker server with different backend; kill the server or use a persistent qsys name')
                     call check_worker_claim
                 !    if( n_workers > persistent_worker%n_workers          ) THROW_HARD('cannot reuse existing worker server with lower n_workers than requested;')
-                    call persistent_worker%server%set_warmup_cooldown_enabled(sstream)
+                    ! a streaming queue turns the server's warm-up cooldown on; none turns it off
+                    ! (the sieve's queue reuses the server a streaming stage started)
+                    if( sstream ) call persistent_worker%server%set_warmup_cooldown_enabled(.true.)
                     call register_warmup_env(self)
                 else
                     persistent_worker%launch_backend  = qsnam

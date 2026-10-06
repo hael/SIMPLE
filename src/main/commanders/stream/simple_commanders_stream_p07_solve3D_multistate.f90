@@ -25,13 +25,16 @@
 !==============================================================================
 module simple_commanders_stream_p07_solve3D_multistate
 use simple_defs,                    only: logfhandle
+use simple_error,                   only: simple_exception
 use simple_defs_fname,              only: METADATA_EXT
 use simple_jiffys,                  only: simple_end
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
 use simple_stream_stage_solve3D, only: stream_stage_solve3D
 use simple_stream_sigterm,          only: install_sigterm_handler, restore_sigterm_handler, sigterm_received
+use simple_gui_metadata_stream_solve3D_multistate, only: MAX_STATES_SOLVE3D_MULTISTATE
 implicit none
+#include "simple_local_flags.inc"
 
 public :: commander_stream_p07_solve3D_multistate
 public :: set_solve3D_cline ! the stage's command-line defaults, for the chained stream tests
@@ -74,12 +77,15 @@ contains
     end subroutine exec_stream_p07_solve3D_multistate
 
     ! Everything the stage needs on its command line before params%new: the 3D job settings
-    ! unless given, and the project name when none is.
+    ! unless given, and the project name when none is. The states are checked: a multistate run
+    ! needs two at least, and the GUI's status holds MAX_STATES_SOLVE3D_MULTISTATE (20).
     subroutine set_solve3D_cline( cline )
         class(cmdline), intent(inout) :: cline
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'yes')
         if( .not. cline%defined('nstates')  ) call cline%set('nstates',  NSTATES3D)
+        if( cline%get_iarg('nstates') < 2 ) THROW_HARD('multistate 3D needs nstates of 2 at least')
+        if( cline%get_iarg('nstates') > MAX_STATES_SOLVE3D_MULTISTATE ) THROW_HARD('multistate 3D takes nstates of 20 at most')
         if( .not. cline%defined('nstages')  ) call cline%set('nstages',  NSTAGES3D)
         if( .not. cline%defined('lpstart')  ) call cline%set('lpstart',  LPSTART3D)
         if( .not. cline%defined('lpstop')   ) call cline%set('lpstop',   LPSTOP3D)

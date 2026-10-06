@@ -66,12 +66,20 @@ A frame is a C `int` byte count followed by that many payload bytes.
 6. **What it keeps:**
    - a status replaces the previous one;
    - an item of a list (micrograph, optics group, class average, volume, reprojection tile)
-     goes to slot `i` of a list of `i_max`, which is remade when `i_max` changes.
+     goes to slot `i` of a list of `i_max`, which is remade when `i_max` changes;
+   - a stage restarted by the GUI has its lists dropped first (`clear_stage`), so entries its
+     previous process sent and the new one does not send again (a run's volumes) leave the GUI.
 7. **Locking:** the master's listener thread drains every stage's pipe into the store while
    holding the metadata lock. The main loop holds the same lock to assemble a heartbeat, and to
    discard a stage's pipes and fork it again.
 
 ## 5. Master to stage: updates
+
+Sections 5 and 6 are the contract with NICE (`nice/nice_lite/data_structures/streamjob.py`
+points here): NICE answers every heartbeat with its whole state (`master_update`), never with
+deltas; the master forwards to each stage only what changed since its last update to that stage,
+nothing to a stopping stage, and acts on a `restart_<key>` once, again only after the key has left
+an answer. A key not listed in section 6 is not part of the contract and is ignored.
 
 1. Each GUI answer becomes one `gui_metadata_stream_update` holding that answer's fields. NICE
    answers every heartbeat with its whole state, so most answers repeat the last one.
@@ -117,11 +125,22 @@ A frame is a C `int` byte count followed by that many payload bytes.
 
 1. Every stage, and the master, handles SIGTERM (the master also SIGINT) by setting a flag only
    (`simple_stream_sigterm`); the flag is polled between steps.
-2. **The master's stop:**
-   - optics assignment is asked first, with up to `OPTICS_STOP_TIMEOUT_S` (60 s);
+2. **Ctrl-C stops the stream in order.** A forked stage ignores SIGINT (`forked_process`), and so
+   does what it execs, so a terminal's Ctrl-C, which reaches the whole process group, stops only
+   the master, which then stops the stages as below. The master flushes its output before every
+   fork, so a child does not write the master's buffered lines again.
+3. **The master's stop:**
+   - optics assignment is asked first, with up to `OPTICS_STOP_TIMEOUT_S` (60 s), during which
+     the heartbeat goes on (restart requests are ignored from the stop on);
    - then every running stage is asked on each pass;
-   - a stage still running after `STOP_TIMEOUT_S` (600 s) is killed (SIGKILL).
-3. `forked_process` never restarts a child by itself: a stage restarts only when the GUI asks.
+   - a stage still running after `STOP_TIMEOUT_S` (600 s) is killed (SIGKILL), and the master
+     cancels the jobs recorded in its folder that wrote no exit status
+     (`cancel_unfinished_jobs`), which the killed stage can no longer cancel.
+4. **A start-up failure** once stages are forked (a stage not running, the listener thread not
+   made) stops them before the master stops: asked, then killed with their jobs cancelled after
+   `STARTUP_STOP_TIMEOUT_S` (60 s). The persistent-worker server ends with the master's process;
+   its workers leave when they lose it.
+5. `forked_process` never restarts a child by itself: a stage restarts only when the GUI asks.
 
 ## 8. Change rules
 
@@ -142,8 +161,7 @@ A frame is a C `int` byte count followed by that many payload bytes.
 
 - **`gui_metadata_project`** has allocatable components and no `serialise` guard. It is not sent
   over a pipe today.
-- **The sieve-reference selection** (`ref_selection`) is still sent by NICE and ignored; the
-  update type no longer has a field for it.
-- **`increase_nmics`** is still sent by NICE and ignored.
+- **`initial_ref_selection`** is still a field of the pool's GUI metadata with no writer; NICE no
+  longer reads it (nor sends `ref_selection` or `increase_nmics`).
 - **The byte-copy format** ties the processes to one binary; a stage started by `exec` would need
   a real wire format.

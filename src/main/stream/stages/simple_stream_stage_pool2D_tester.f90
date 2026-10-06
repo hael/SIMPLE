@@ -13,7 +13,8 @@ use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT,
 use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, POOL_EXIT_CODE, POOL_INPUT_PROJFILE, scaled_dims
 use simple_string,                              only: string
 use simple_string_utils,                        only: int2str_pad
-use simple_fileio,                              only: del_file, file_exists, simple_getcwd, simple_touch
+use simple_fileio,                              only: basename, del_file, file_exists, simple_getcwd, simple_touch
+use simple_rec_list,                            only: rec_iterator, chunk_rec
 use simple_syslib,                              only: dir_exists, simple_mkdir
 use simple_cmdline,                             only: cmdline
 use simple_sp_project,                          only: sp_project
@@ -25,9 +26,10 @@ use simple_gui_metadata_stream_pool2D_snapshot, only: gui_metadata_stream_pool2D
 use simple_gui_metadata_stream_update,          only: gui_metadata_stream_update
 use simple_stream_pipe,                         only: stream_pipe
 use simple_stream_stage_pool2D,                 only: stream_stage_pool2D
-use simple_stream_refine2D_utils,              only: build_pool_publication
+use simple_stream_refine2D_utils,              only: build_pool_publication, write_pool_snapshot
+use simple_optics_maps,                         only: publish_optics_map
 use simple_stream_pool2D_utils,                 only: draw_new_classes, update_mskdiam
-use simple_stream2D_state,                      only: pool_dims, cline_refine2D_pool, pool_mskdiam
+use simple_stream2D_state,                      only: pool_dims, cline_refine2D_pool, pool_mskdiam, pool_iter
 use simple_defs,                                only: COSMSKHALFWIDTH
 implicit none
 private
@@ -46,6 +48,7 @@ contains
         call test_export_numbering()
         call test_publication_holds_classified_stacks()
         call test_attach_and_watch()
+        call test_sets_taken_in_order()
         call test_transfer_sets()
         call test_transfer_stepwise()
         call test_sieve_final_set()
@@ -53,6 +56,8 @@ contains
         call test_draw_new_classes()
         call test_mask_clamped_to_box()
         call test_gui_mskdiam_update()
+        call test_given_mskdiam_kept()
+        call test_snapshot_without_frcs()
         call test_send_status()
         call test_send_snapshot()
         call test_iterate_waits()
@@ -207,6 +212,18 @@ contains
         call assert_int(0, pub%os_ptcl2D%get_state(6),   'like every never-updated particle of the stack')
         call assert_int(0, pub%os_ptcl3D%get_state(4),   'in both particle segments')
         call assert_int(4, pub%os_cls2D%get_noris(),     'and the pool''s class table')
+        call assert_int(0, pub%os_ptcl3D%get_class(1),   'the 3D particles have no 2D class')
+        call assert_real(1., pub%os_ptcl3D%get(1, 'x'), 1.e-4, 'and keep their shifts')
+        call assert_int(0, pub%os_ptcl3D%get_int(1, 'updatecnt'), 'and no update count')
+        call assert_int(0, pub%os_optics%get_noris(),    'without optics maps, no optics table')
+        call pub%kill
+        ! with an optics map: its groups and optics table
+        call simple_mkdir('optics')
+        call make_optics_map('optics', pool)
+        call build_pool_publication(pool, pub, nstks, string('optics'))
+        call assert_int(1, pub%os_optics%get_noris(),    'the publication carries the map''s optics table')
+        call assert_int(7, pub%os_mic%get_int(1, 'ogid'), 'and its groups')
+        call assert_int(7, pub%os_ptcl3D%get_int(1, 'ogid'), 'down to the particles')
         call pub%kill
         ! nothing classified yet: nothing to publish
         do iptcl = 1,3 * NPTCLS_STK
@@ -217,6 +234,48 @@ contains
         call pub%kill
         call pool%kill
     end subroutine test_publication_holds_classified_stacks
+
+    !> the sets present are taken in the order the sieve handed them off, by the number ending
+    !! their name (10 after 2), with the final set last, whatever order the folder lists them in
+    subroutine test_sets_taken_in_order()
+        class(stream_stage_pool2D), allocatable :: stage
+        type(cmdline)             :: cline
+        type(string)              :: cwd_saved, root, cwd, set_any, names(4)
+        type(rec_iterator)        :: it
+        type(chunk_rec)           :: crec
+        character(len=*), parameter :: EXPECTED(4) = [character(len=24) :: '00002.simple', '00003.simple',&
+            &'00010.simple', 'sieve_final_c3_f3.simple']
+        integer                   :: nfail0, i
+        allocate(stage)
+        write(*,'(A)') 'test_sets_taken_in_order'
+        nfail0 = tests_failed
+        call enter_fixture('p2_stage_order', cwd_saved, root)
+        call simple_getcwd(cwd)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call make_upstream()
+        call write_empty_final_set(cwd//'/'//UPSTREAM//'/'//DIR_STREAM_COMPLETED//'sieve_final_c3_f3.simple')
+        set_any = write_sieved_set(10, [2])
+        set_any = write_sieved_set(2,  [2])
+        set_any = write_sieved_set(3,  [2])
+        call stage%attach_upstream()
+        call stage%watch_sets()
+        call assert_int(4, stage%setslist%size(), 'every set present is recorded')
+        if( stage%setslist%size() == 4 )then
+            it = stage%setslist%begin()
+            do i = 1,4
+                call it%get(crec)
+                names(i) = basename(crec%projfile)
+                call it%next()
+            enddo
+            do i = 1,4
+                call assert_char(trim(EXPECTED(i)), names(i)%to_char(), 'set '//int2str_pad(i, 1)//' in hand-off order')
+            enddo
+        endif
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_sets_taken_in_order
 
     !> the stage waits for the sieve's completed folder, then takes each set once; the first gives
     !! the sieve's mask diameter
@@ -484,6 +543,17 @@ contains
         call assert_true(stage%runs_to_final(24, .true.),  'the final set runs the pool uninterrupted')
         call assert_false(stage%runs_to_final(25, .true.), 'up to iteration 25')
         call assert_false(stage%runs_to_final(5, .false.), 'only with the final set')
+        call assert_true(stage%publishes_final(25, .true.),  'the publication after iteration 25 with the final set is final')
+        call assert_true(stage%publishes_final(31, .true.),  'as is one after a later iteration')
+        call assert_false(stage%publishes_final(24, .true.), 'not before iteration 25')
+        call assert_false(stage%publishes_final(30, .false.), 'nor without the final set')
+        call assert_true(stage%exports_after(10, .true.),   'a fresh pool publishes after iteration 10')
+        call assert_false(stage%exports_after(10, .false.), 'a pool with publications on disk does not')
+        call assert_false(stage%exports_after(9, .true.),   'nor before iteration 10')
+        call assert_false(stage%exports_after(11, .true.),  'nor between 10 and 25')
+        call assert_false(stage%exports_after(24, .true.),  'up to iteration 24')
+        call assert_true(stage%exports_after(25, .false.),  'from iteration 25 every pool publishes')
+        call assert_true(stage%exports_after(31, .true.),   'after each iteration')
         call assert_real(100., stage%default_mskdiam(64, 2.0), 1.e-4, 'the default mask diameter is in Angstroms')
     end subroutine test_pause_rules
 
@@ -524,7 +594,8 @@ contains
         call update%set_snapshot2D_update(1, 3, [1, 2], string('snap.simple'))
         call writer%send_meta(update)
         call stage%apply_gui_updates()
-        call assert_int(0, stage%last_snapshot_id, 'no snapshot before the pool runs')
+        call assert_int(1, stage%last_snapshot_id, 'a snapshot before the pool runs is answered at once')
+        call assert_int(0, stage%snapshot_nptcls,  'as not written')
         call update%kill
         call writer%kill
         call stage%kill
@@ -532,6 +603,61 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_gui_mskdiam_update
+
+    !> from iteration 10 the sieve's mask diameter replaces the pool's, unless one was given on the
+    !! command line
+    subroutine test_given_mskdiam_kept()
+        class(stream_stage_pool2D), allocatable :: stage
+        type(cmdline) :: cline
+        type(string)  :: cwd_saved, root
+        integer       :: nfail0, iter_saved
+        allocate(stage)
+        write(*,'(A)') 'test_given_mskdiam_kept'
+        nfail0 = tests_failed
+        call enter_fixture('p2_stage_given_mskdiam', cwd_saved, root)
+        iter_saved = pool_iter
+        pool_iter  = 10
+        call set_test_cline(cline)
+        call cline%set('mskdiam', 150.)
+        call make_test_stage(stage, cline)
+        call assert_true(stage%l_mskdiam_given, 'a mask diameter on the command line is given')
+        stage%final_mskdiam = MSKDIAM_SIEVE
+        call stage%apply_final_mskdiam()
+        call assert_real(150., stage%mskdiam, 1.e-4, 'it is kept at iteration 10')
+        call assert_real(0., stage%final_mskdiam, 1.e-4, 'and the sieve''s is dropped')
+        call stage%kill
+        call cline%kill
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call assert_false(stage%l_mskdiam_given, 'none given')
+        stage%final_mskdiam = MSKDIAM_SIEVE
+        call stage%apply_final_mskdiam()
+        call assert_real(MSKDIAM_SIEVE, stage%mskdiam, 1.e-4, 'the sieve''s applies at iteration 10')
+        call stage%kill
+        call cline%kill
+        pool_iter = iter_saved
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_given_mskdiam_kept
+
+    !> a snapshot of the current iteration before its frcs.bin exists is reported as not written
+    !! (no particles, no file) instead of stopping the stage
+    subroutine test_snapshot_without_frcs()
+        type(string)         :: cwd_saved, root, jpeg, mrc
+        integer, allocatable :: idx(:), pop(:)
+        real,    allocatable :: res(:)
+        integer              :: nfail0, iter_saved, nptcls, ntx, nty
+        write(*,'(A)') 'test_snapshot_without_frcs'
+        nfail0 = tests_failed
+        call enter_fixture('p2_snapshot_no_frcs', cwd_saved, root)
+        iter_saved = pool_iter
+        pool_iter  = 3
+        call write_pool_snapshot(3, [1], string('snapshots/snap/snap.simple'), string('snapshots/snap/snap'), string(''), 0,&
+            &nptcls, jpeg, mrc, ntx, nty, idx, pop, res)
+        call assert_int(0, nptcls, 'nothing written')
+        call assert_false(file_exists(string('snapshots/snap/snap.simple')), 'no project')
+        pool_iter = iter_saved
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_snapshot_without_frcs
 
     !> one status message per call, with the stage name, the particles imported and the mask
     subroutine test_send_status()
@@ -784,6 +910,26 @@ contains
         call proj%write(fname)
         call proj%kill
     end function write_sieved_set
+
+    ! optics map 1 in @p dir: every micrograph of @p proj (import index 1, 2, ...) in group 7, and
+    ! an optics table of that one group
+    subroutine make_optics_map( dir, proj )
+        character(len=*), intent(in)    :: dir
+        type(sp_project), intent(inout) :: proj
+        type(sp_project) :: mapproj
+        integer :: imic
+        call mapproj%os_mic%new(proj%os_mic%get_noris(), is_ptcl=.false.)
+        do imic = 1,proj%os_mic%get_noris()
+            call mapproj%os_mic%set(imic, 'importind', imic)
+            call mapproj%os_mic%set(imic, 'ogid',      7)
+            call proj%os_mic%set(imic, 'importind', imic)
+        enddo
+        call mapproj%os_optics%new(1, is_ptcl=.false.)
+        call mapproj%os_optics%set(1, 'ogid', 7)
+        call mapproj%os_optics%set(1, 'pop',  proj%os_mic%get_noris())
+        call publish_optics_map(mapproj, string(dir), 1, 5)
+        call mapproj%kill
+    end subroutine make_optics_map
 
     ! a pipe with a non-blocking read end
     subroutine open_loopback( fds )

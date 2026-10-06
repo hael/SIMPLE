@@ -13,7 +13,7 @@ module simple_gui_metadata_stream_solve3D_multistate
 
   implicit none
 
-  public :: gui_metadata_stream_solve3D_multistate
+  public :: gui_metadata_stream_solve3D_multistate, MAX_STATES_SOLVE3D_MULTISTATE
   private
 #include "simple_local_flags.inc"
 

@@ -132,17 +132,18 @@ contains
     end subroutine schedule
 
     !> The sets whose jobs have finished since the last call (absolute paths, in the job folder),
-    !! and the number of jobs that failed.
-    subroutine collect( self, qenv, done, nfailed )
+    !! and the items of the jobs that failed (the items each set's job was given, fromp to top:
+    !! the movies of a preprocessing set, partial or not).
+    subroutine collect( self, qenv, done, nfailed_items )
         class(stream_job_sets),    intent(inout) :: self
         class(qsys_env),           intent(inout) :: qenv
         type(string), allocatable, intent(inout) :: done(:)
-        integer,                   intent(out)   :: nfailed
+        integer,                   intent(out)   :: nfailed_items
         class(cmdline), allocatable :: done_clines(:), failed_clines(:)
         integer :: i, n
         if( allocated(done) ) deallocate(done)
         allocate(done(0))
-        nfailed = 0
+        nfailed_items = 0
         if( qenv%qscripts%get_done_stacksz() > 0 )then
             call qenv%qscripts%get_stream_done_stack(done_clines)
             n = size(done_clines)
@@ -157,8 +158,8 @@ contains
         if( qenv%qscripts%get_failed_stacksz() > 0 )then
             call qenv%qscripts%get_stream_fail_stack(failed_clines, n)
             if( n > 0 )then
-                nfailed = n
                 do i = 1,n
+                    nfailed_items = nfailed_items + max(1, failed_clines(i)%get_iarg('top') - failed_clines(i)%get_iarg('fromp') + 1)
                     call failed_clines(i)%kill
                 enddo
                 deallocate(failed_clines)

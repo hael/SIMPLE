@@ -48,6 +48,7 @@ contains
         call test_assign_and_publish()
         call test_beamtilt_from_command_line()
         call test_map_ids_continue_after_restart()
+        call test_restart_restores_groups()
         call test_iterate_passes()
         call test_send_status()
         call test_send_group_shifts()
@@ -280,6 +281,54 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_map_ids_continue_after_restart
 
+    !> a restart publishes no map until the micrographs of the newest map are imported again, and
+    !! they come back with the group ids that map gave them
+    subroutine test_restart_restores_groups()
+        class(stream_stage_optics), allocatable :: stage, restarted
+        type(cmdline)             :: cline
+        type(string)              :: cwd_saved, root
+        integer                   :: nfail0, nimported, imic, importind
+        integer                   :: ogid_of(2*STREAM_NMOVS_SET)
+        logical                   :: l_same
+        allocate(stage, restarted)
+        write(*,'(A)') 'test_restart_restores_groups'
+        nfail0 = tests_failed
+        call enter_fixture('optics_stage_restore', cwd_saved, root)
+        call make_upstream()
+        call write_completed_project(1, ALL_ACCEPTED)
+        call write_completed_project(2, ALL_ACCEPTED)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call stage%attach_upstream()
+        call stage%import_new_projects(nimported)
+        call stage%assign_and_publish()
+        call assert_int(1, stage%map_id, 'map 1 published')
+        do imic = 1,stage%spproj%os_mic%get_noris()
+            ogid_of(stage%spproj%os_mic%get_int(imic, 'importind')) = stage%spproj%os_mic%get_int(imic, 'ogid')
+        enddo
+        call stage%kill
+        ! the restart finds only the first project at first
+        call del_file(string(UPSTREAM//'/'//DIR_STREAM_COMPLETED//int2str_pad(2, 5)//METADATA_EXT))
+        call make_test_stage(restarted, cline)
+        call assert_true(restarted%l_restoring, 'the restarted stage restores the groups of map 1')
+        call restarted%iterate()
+        call assert_int(STREAM_NMOVS_SET, restarted%spproj%os_mic%get_noris(), 'pass 1: the first project is back')
+        call assert_int(1, restarted%map_id, 'pass 1: no map while micrographs of map 1 are missing')
+        call write_completed_project(2, ALL_ACCEPTED)
+        call restarted%iterate()
+        call assert_false(restarted%l_restoring, 'pass 2: every micrograph of map 1 is back')
+        call assert_int(2, restarted%map_id, 'pass 2: map 2 is published')
+        l_same = .true.
+        do imic = 1,restarted%spproj%os_mic%get_noris()
+            importind = restarted%spproj%os_mic%get_int(imic, 'importind')
+            if( restarted%spproj%os_mic%get_int(imic, 'ogid') /= ogid_of(importind) ) l_same = .false.
+        enddo
+        call assert_true(l_same, 'every micrograph keeps the group id map 1 gave it')
+        call restarted%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_restart_restores_groups
+
     !> the public loop: a pass while preprocessing has no output yet, a pass that attaches, imports
     !! and publishes, an idle pass, then finished once nmics micrographs are in; finalize writes
     !! the project
@@ -356,7 +405,7 @@ contains
                 l_assigned = status%get(stage_name, nassigned, ngroups, tlast, nimported)
                 call assert_int(2, nassigned, 'micrographs assigned: the accepted ones')
                 call assert_int(2, ngroups,   'optics groups assigned')
-                call assert_int(2, nimported, 'micrographs imported: the accepted ones')
+                call assert_int(3, nimported, 'micrographs imported: every one, accepted or not')
             endif
         endif
         call assert_false(reader%receive(buffer), 'exactly one message per call')

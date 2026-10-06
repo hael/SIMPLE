@@ -20,7 +20,6 @@
 module simple_commanders_stream_p06_pool2D
 use simple_defs,                only: logfhandle
 use simple_defs_fname,          only: METADATA_EXT
-use simple_defs_stream,         only: OPTICS_JOB_NAME
 use simple_jiffys,              only: simple_end
 use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base
@@ -79,7 +78,6 @@ contains
         if( .not. cline%defined('stepwise')        ) call cline%set('stepwise',        'yes')
         if( .not. cline%defined('center')          ) call cline%set('center',          'yes')
         if( .not. cline%defined('ncls')            ) call cline%set('ncls',            200)
-        if( .not. cline%defined('projfile_optics') ) call cline%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)
         if( .not. cline%defined('projfile') )then
             call cline%set('projname', 'stream_solve2D')
             call cline%set('projfile', 'stream_solve2D'//METADATA_EXT)

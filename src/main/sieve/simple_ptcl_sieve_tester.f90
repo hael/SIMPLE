@@ -5,7 +5,8 @@ use simple_core_module_api
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 use simple_ptcl_sieve, only: ptcl_sieve, ptcl_sieve_settings, FINAL_INGESTION_MARKER, sieve_lpstart, sieve_settings,&
-                            &CHUNK_INPUT_PROJFILE, CHUNK_ATTEMPT1
+                            &CHUNK_INPUT_PROJFILE, CHUNK_ATTEMPT1, CHUNKED_MICS, CHUNK_MICS, CONSUMED_COARSE,&
+                            &read_chunked_mics, rebuild_chunked_mics
 use simple_sp_project, only: sp_project
 use simple_image,      only: image
 use simple_rec_list,   only: rec_list
@@ -33,6 +34,8 @@ contains
         call test_new_kill_and_empty_queries()
         call test_import_existing_chunks_and_counts()
         call test_import_restores_final_ingestion_chunk()
+        call test_restart_reconciles_and_counts()
+        call test_rebuild_chunked_mics()
         call test_finished_semantics()
         call test_single_pass_ignores_incomplete_fine()
         call test_new_accepts_tuning_overrides()
@@ -69,7 +72,7 @@ contains
     !! folder kept as <folder>_attempt1 and the chunk started again from its input project
     subroutine test_failed_chunk_retried_once()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved, chunk_dir
         allocate(sieve)
         write(*,'(A)') 'test_failed_chunk_retried_once'
@@ -78,6 +81,7 @@ contains
         chunk_dir = string('chunks_coarse/chunk_coarse_1')
         call simple_copy_file(chunk_dir//'/chunk_coarse_1'//METADATA_EXT, chunk_dir//'/'//CHUNK_INPUT_PROJFILE)
         call simple_touch(chunk_dir//'/'//SOLVE2D_FINISHED) ! a finished 2D run without class averages
+        allocate(params)
         call init_test_params(params)
         call sieve%new(params, sieve_settings(params), string('completed'))
         call sieve%collect_and_reject()
@@ -94,7 +98,7 @@ contains
     !! particles are counted as dropped
     subroutine test_failed_chunk_dropped_after_retry()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved, chunk_dir
         allocate(sieve)
         write(*,'(A)') 'test_failed_chunk_dropped_after_retry'
@@ -103,6 +107,7 @@ contains
         chunk_dir = string('chunks_coarse/chunk_coarse_1')
         call simple_mkdir(chunk_dir//CHUNK_ATTEMPT1) ! the retry has been used
         call simple_touch(chunk_dir//'/'//SOLVE2D_FINISHED)
+        allocate(params)
         call init_test_params(params)
         call sieve%new(params, sieve_settings(params), string('completed'))
         call sieve%collect_and_reject()
@@ -118,7 +123,7 @@ contains
 
     subroutine test_new_kill_and_empty_queries()
         class(ptcl_sieve), allocatable          :: sieve
-        type(parameters)          :: params
+        class(parameters), allocatable :: params
         type(string)              :: ws_dir, cwd_saved, jpeg, stk
         integer, allocatable      :: inds(:), pops(:), sel(:)
         real, allocatable         :: res(:)
@@ -129,6 +134,7 @@ contains
         write(*,'(A)') 'test_new_kill_and_empty_queries'
 
         call setup_workspace(string('new_kill'), ws_dir, cwd_saved)
+        allocate(params)
         call init_test_params(params)
         call sieve%new(params, sieve_settings(params), string('completed'))
 
@@ -150,7 +156,7 @@ contains
 
     subroutine test_import_existing_chunks_and_counts()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved
 
         allocate(sieve)
@@ -178,6 +184,7 @@ contains
         call simple_touch(string('chunks_fine/chunk_fine_1/' // SOLVE2D_FINISHED))
         call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
 
+        allocate(params)
         call init_test_params(params)
         call sieve%new(params, sieve_settings(params), string('completed'))
 
@@ -192,12 +199,94 @@ contains
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_import_existing_chunks_and_counts
 
+    !> a restart imports every chunk folder past a missing one, skips a folder without its project,
+    !! marks complete the coarse chunks a fine chunk that exists merged, and rebuilds the counters
+    !! as the run counted them (two tiers: the fine chunks and the empty coarse ones are terminal)
+    subroutine test_restart_reconciles_and_counts()
+        class(ptcl_sieve), allocatable :: sieve
+        class(parameters), allocatable :: params
+        type(string)     :: ws_dir, cwd_saved
+        allocate(sieve)
+        write(*,'(A)') 'test_restart_reconciles_and_counts'
+        call setup_workspace(string('restart_reconcile'), ws_dir, cwd_saved)
+        ! coarse 1, rejected (6 of 10 selected) and merged into fine 2, but not marked complete:
+        ! the crash came between the fine chunk's project and the marker
+        call make_chunk_project('coarse', 1, 10, 6, 1)
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/' // SOLVE2D_FINISHED))
+        call simple_touch(string('chunks_coarse/chunk_coarse_1/REJECTION_FINISHED'))
+        ! coarse 2 missing; coarse 3 finalised empty; coarse 4 failed
+        call make_chunk_project('coarse', 3, 8, 0, 1)
+        call simple_touch(string('chunks_coarse/chunk_coarse_3/' // SOLVE2D_FINISHED))
+        call simple_touch(string('chunks_coarse/chunk_coarse_3/REJECTION_FINISHED'))
+        call simple_touch(string('chunks_coarse/chunk_coarse_3/COMPLETE'))
+        call make_chunk_project('coarse', 4, 7, 4, 1)
+        call simple_touch(string('chunks_coarse/chunk_coarse_4/REJECTION_FAILED'))
+        ! fine 1 missing; fine 2 finalised (6 of 10 selected), made from coarse 1; fine 3 cut short
+        call make_chunk_project('fine', 2, 10, 6, 1)
+        call simple_touch(string('chunks_fine/chunk_fine_2/' // SOLVE2D_FINISHED))
+        call simple_touch(string('chunks_fine/chunk_fine_2/REJECTION_FINISHED'))
+        call simple_touch(string('chunks_fine/chunk_fine_2/COMPLETE'))
+        call write_text('chunks_fine/chunk_fine_2/'//CONSUMED_COARSE, '1')
+        call simple_mkdir(string('chunks_fine/chunk_fine_3'))
+        allocate(params)
+        call init_test_params(params, single_pass='no')
+        call sieve%new(params, sieve_settings(params), string('completed'))
+        call assert_int(3, sieve%get_n_chunks_coarse(), 'the coarse chunks past the missing folder are imported')
+        call assert_int(1, sieve%get_n_chunks_fine(),   'a fine folder without its project is skipped')
+        call assert_true(file_exists(string('chunks_coarse/chunk_coarse_1/COMPLETE')), 'the merged coarse chunk is marked complete')
+        call assert_int(0, sieve%get_n_pass_1_non_rejected_ptcls(), 'and is not merged again')
+        call assert_int(6,  sieve%get_n_coarse_accepted_ptcls(), 'coarse accepted, restored')
+        call assert_int(12, sieve%get_n_coarse_rejected_ptcls(), 'coarse rejected, restored')
+        call assert_int(6,  sieve%get_n_fine_accepted_ptcls(),   'fine accepted, restored')
+        call assert_int(1,  sieve%get_n_failed_chunks(),         'failed chunks, restored')
+        call assert_int(7,  sieve%get_n_failed_ptcls(),          'their particles, restored')
+        call assert_int(6,  sieve%get_n_accepted_ptcls(),        'terminal accepted: the fine chunk''s')
+        call assert_int(12, sieve%get_n_rejected_ptcls(),        'terminal rejected: the fine chunk''s and the empty coarse chunk''s')
+        call assert_int(1,  sieve%get_n_accepted_micrographs(),  'terminal accepted micrographs')
+        call sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_restart_reconciles_and_counts
+
+    !> chunked_mics.txt rebuilt from the lists of the coarse chunks that exist, in id order (a chunk
+    !! whose project was not written does not count); kept as it is when a chunk that exists has
+    !! no list
+    subroutine test_rebuild_chunked_mics()
+        type(string), allocatable :: projnames(:)
+        integer,      allocatable :: micinds(:)
+        type(string) :: ws_dir, cwd_saved
+        write(*,'(A)') 'test_rebuild_chunked_mics'
+        call setup_workspace(string('rebuild_chunked'), ws_dir, cwd_saved)
+        call make_chunk_project('coarse', 1, 4, 4, 1)
+        call write_text('chunks_coarse/chunk_coarse_1/'//CHUNK_MICS, 'setA.simple 1', 'setA.simple 2')
+        call simple_mkdir(string('chunks_coarse/chunk_coarse_2'))
+        call write_text('chunks_coarse/chunk_coarse_2/'//CHUNK_MICS, 'setC.simple 9')
+        call make_chunk_project('coarse', 3, 4, 4, 1)
+        call write_text('chunks_coarse/chunk_coarse_3/'//CHUNK_MICS, 'setB.simple 1')
+        ! the list the crash left: without coarse 1's second micrograph and coarse 3's
+        call write_text(CHUNKED_MICS, 'setA.simple 1')
+        call rebuild_chunked_mics()
+        call read_chunked_mics(string(CHUNKED_MICS), projnames, micinds)
+        call assert_int(3, size(projnames), 'the micrographs of the chunks that exist')
+        if( size(projnames) == 3 )then
+            call assert_true(projnames(1) == 'setA.simple' .and. micinds(1) == 1, 'coarse 1, micrograph 1')
+            call assert_true(projnames(2) == 'setA.simple' .and. micinds(2) == 2, 'coarse 1, micrograph 2')
+            call assert_true(projnames(3) == 'setB.simple' .and. micinds(3) == 1, 'coarse 3, micrograph 1')
+        endif
+        ! a chunk that exists without a list: the file is kept
+        call make_chunk_project('coarse', 4, 4, 4, 1)
+        call write_text(CHUNKED_MICS, 'setD.simple 5')
+        call rebuild_chunked_mics()
+        call read_chunked_mics(string(CHUNKED_MICS), projnames, micinds)
+        call assert_int(1, size(projnames), 'kept when a chunk has no list')
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_rebuild_chunked_mics
+
     !> a coarse chunk final ingestion staged for pass 2 is restored on a restart as it was staged:
     !! classified and rejection-complete, so its particles wait for the fine tier instead of a
     !! coarse 2D run
     subroutine test_import_restores_final_ingestion_chunk()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved
 
         allocate(sieve)
@@ -209,6 +298,7 @@ contains
         call make_chunk_project('coarse', 1, 7, 7, 1)
         call simple_touch(string('chunks_coarse/chunk_coarse_1/' // FINAL_INGESTION_MARKER))
 
+        allocate(params)
         call init_test_params(params)
         call sieve%new(params, sieve_settings(params), string('completed'))
 
@@ -222,7 +312,7 @@ contains
 
     subroutine test_finished_semantics()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved
 
         allocate(sieve)
@@ -240,6 +330,7 @@ contains
         call make_chunk_project('coarse', 2, 6, 0, 1)
         call simple_touch(string('chunks_coarse/chunk_coarse_2/REJECTION_FAILED'))
 
+        allocate(params)
         call init_test_params(params)
 
         ! two-tier mode: no fine chunks => coarse completion is terminal.
@@ -267,7 +358,7 @@ contains
 
     subroutine test_single_pass_ignores_incomplete_fine()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved
 
         allocate(sieve)
@@ -287,6 +378,7 @@ contains
         call simple_touch(string('chunks_fine/chunk_fine_1/REJECTION_FINISHED'))
 
         ! Baseline (two-tier): incomplete fine chunk prevents finished state.
+        allocate(params)
         call init_test_params(params)
         call sieve%new(params, sieve_settings(params), string('completed'))
         call assert_false(sieve%get_finished(), 'two-tier run is not finished when fine chunk is incomplete')
@@ -303,13 +395,14 @@ contains
 
     subroutine test_new_accepts_tuning_overrides()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved
 
         allocate(sieve)
         write(*,'(A)') 'test_new_accepts_tuning_overrides'
 
         call setup_workspace(string('override_init'), ws_dir, cwd_saved)
+        allocate(params)
         call init_test_params(params, lpstart=12.0, lpstop_coarse=18.0, lpstop_fine=9.0, &
                               box_coarse=96, box_fine=80, nsample_coarse=500, nsample_fine=250, &
                               ncls_coarse=64, ncls_fine=48)
@@ -326,12 +419,13 @@ contains
     !! chunks get none (their solve2D derives it from the mask diameter), although parameter
     !! validation has lifted the unset value to Nyquist
     subroutine test_lpstart_given_or_derived()
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(string)     :: ws_dir, cwd_saved
 
         write(*,'(A)') 'test_lpstart_given_or_derived'
 
         call setup_workspace(string('lpstart_rule'), ws_dir, cwd_saved)
+        allocate(params)
         call init_test_params(params)
         call assert_real(params%fny, params%lpstart, 1.e-6, 'validation lifts an unset lpstart to Nyquist')
         call assert_real(0., sieve_lpstart(params), 1.e-6, 'which the sieve does not pass on')
@@ -343,11 +437,12 @@ contains
     !> the settings a parameters object gives the sieve: the mask, resources, mode and every tier
     !! override, the population thresholds among them
     subroutine test_settings_from_params()
-        type(parameters)          :: params
+        class(parameters), allocatable :: params
         type(ptcl_sieve_settings) :: settings
         type(string)              :: ws_dir, cwd_saved
         write(*,'(A)') 'test_settings_from_params'
         call setup_workspace(string('settings_rule'), ws_dir, cwd_saved)
+        allocate(params)
         call init_test_params(params, single_pass='yes', lpstop_coarse=14.0, box_fine=96, nsample_coarse=1500,&
             &ncls_fine=40)
         params%nptcls_coarse = 3000
@@ -370,7 +465,7 @@ contains
 
     subroutine test_cycle_empty_project_list()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params
+        class(parameters), allocatable :: params
         type(rec_list)   :: project_list
         type(string)     :: ws_dir, cwd_saved
 
@@ -378,6 +473,7 @@ contains
         write(*,'(A)') 'test_cycle_empty_project_list'
 
         call setup_workspace(string('cycle_empty'), ws_dir, cwd_saved)
+        allocate(params)
         call init_test_params(params)
         call sieve%new(params, sieve_settings(params), string('completed'))
 
@@ -394,8 +490,8 @@ contains
     !! rejected, and the selection reaches particles, sentinels, export, previews and latest product
     subroutine test_collect_and_reject_hard_gates()
         class(ptcl_sieve), allocatable     :: sieve
-        type(parameters)     :: params_sieve
-        type(cmdline)        :: cline_sieve
+        class(parameters), allocatable :: params_sieve
+        class(cmdline), allocatable :: cline_sieve
         type(sp_project)     :: result
         type(string)         :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
         type(string)         :: completed_projfile, rejection_reason, latest_jpeg, latest_stk
@@ -408,8 +504,10 @@ contains
         allocate(sieve)
         write(*,'(A)') 'test_collect_and_reject_hard_gates'
 
+        allocate(cline_sieve)
         call make_completed_coarse_chunk(string('collect_reject'), ws_dir, cwd_saved, chunk_dir, completed_path,&
             &chunk_projfile, cline_sieve)
+        allocate(params_sieve)
         call params_sieve%new(cline_sieve)
         call sieve%new(params_sieve, sieve_settings(params_sieve), completed_path)
         call sieve%collect_and_reject()
@@ -431,10 +529,11 @@ contains
         call assert_true(all(result%os_cls2D%get_all_asint('state') == [1, 0]), 'class 1 selected, class 2 rejected')
         call assert_int(NPER_CLASS, result%os_ptcl2D%count_state_gt_zero(), 'the selection reaches the 2D particles')
         call assert_int(NPER_CLASS, result%os_ptcl3D%count_state_gt_zero(), 'the selection reaches the 3D particles')
-        ! the orientation reader splits character values at blanks, so the round-tripped part of
-        ! the reason is its tier prefix
+        ! written without blanks, which the orientation reader would split at: the whole reason
+        ! round-trips, not only its tier prefix
         rejection_reason = result%os_cls2D%get_str(2, 'rejection_reason')
-        call assert_true(rejection_reason%has_substr('coarse_reject'), 'the rejected class records the coarse rejection')
+        call assert_true(rejection_reason%has_substr('coarse_reject:'), 'the rejected class records the coarse rejection')
+        call assert_true(rejection_reason%strlen() > len('coarse_reject:'), 'and its reason')
         call result%kill()
 
         ! the exported project and the previews
@@ -477,6 +576,9 @@ contains
         if( allocated(latest_res)       ) deallocate(latest_res)
         if( allocated(latest_selection) ) deallocate(latest_selection)
         call sieve%kill()
+        has_latest = sieve%get_latest(latest_inds, latest_pops, latest_res, latest_jpeg, latest_stk, &
+            &xtiles, ytiles, latest_selection)
+        call assert_false(has_latest, 'kill clears the latest product')
         call cline_sieve%kill()
         call teardown_workspace(ws_dir, cwd_saved)
     end subroutine test_collect_and_reject_hard_gates
@@ -486,8 +588,8 @@ contains
     !! stays without them
     subroutine test_hand_off_applies_optics_map()
         class(ptcl_sieve), allocatable :: sieve
-        type(parameters) :: params_sieve
-        type(cmdline)    :: cline_sieve
+        class(parameters), allocatable :: params_sieve
+        class(cmdline), allocatable :: cline_sieve
         type(sp_project) :: map_proj, exported, chunk_proj
         type(string)     :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile, optics_dir, exported_projfile
         integer          :: igroup
@@ -495,6 +597,7 @@ contains
         allocate(sieve)
         write(*,'(A)') 'test_hand_off_applies_optics_map'
 
+        allocate(cline_sieve)
         call make_completed_coarse_chunk(string('hand_off_optics'), ws_dir, cwd_saved, chunk_dir, completed_path,&
             &chunk_projfile, cline_sieve, l_extracted=.true.)
         optics_dir = filepath(ws_dir, 'optics')
@@ -509,6 +612,7 @@ contains
         enddo
         call publish_optics_map(map_proj, optics_dir, 1, 5)
         call map_proj%kill()
+        allocate(params_sieve)
         call params_sieve%new(cline_sieve)
         call sieve%new(params_sieve, sieve_settings(params_sieve), completed_path, optics_dir=optics_dir)
         call sieve%collect_and_reject()
@@ -639,11 +743,12 @@ contains
     subroutine init_test_params(params, single_pass, lpstart, lpstop_coarse, lpstop_fine, box_coarse, box_fine, &
                                 nsample_coarse, nsample_fine, ncls_coarse, ncls_fine)
         type(parameters), intent(inout) :: params
-        type(cmdline)                   :: cline
         character(len=*), optional, intent(in) :: single_pass
         real, optional, intent(in) :: lpstart, lpstop_coarse, lpstop_fine
         integer, optional, intent(in) :: box_coarse, box_fine, nsample_coarse, nsample_fine, ncls_coarse, ncls_fine
+        class(cmdline), allocatable :: cline
 
+        allocate(cline)
         ! a program outside every UI table: with a registered program the
         ! result depended on whether an earlier suite built the UI (then
         ! solve2D requires a project and mkdir=yes enters a run directory;
@@ -689,6 +794,18 @@ contains
         call simple_chdir(cwd_saved)
         call exec_cmdline('rm -rf ' // ws_dir%to_char())
     end subroutine teardown_workspace
+
+    !> up to two lines to @p fname
+    subroutine write_text( fname, line1, line2 )
+        character(len=*),           intent(in) :: fname, line1
+        character(len=*), optional, intent(in) :: line2
+        integer :: funit, ios
+        open(newunit=funit, file=fname, status='replace', action='write', iostat=ios)
+        if( ios /= 0 ) return
+        write(funit,'(A)') line1
+        if( present(line2) ) write(funit,'(A)') line2
+        close(funit)
+    end subroutine write_text
 
     subroutine make_chunk_project(tier, id, nptcls, nsel, nmics)
         character(len=*), intent(in) :: tier

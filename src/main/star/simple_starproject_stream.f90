@@ -13,7 +13,6 @@ private
 #include "simple_local_flags.inc"
 
 type starproject_stream
-    type(string)               :: projfile_optics ! params%projfile_optics of the last export
     type(starfile_table_type)  :: starfile
     type(string)               :: starfile_name
     type(string)               :: starfile_tmp
@@ -36,7 +35,6 @@ contains
     ! optics
     procedure, private :: assign_optics_single
     procedure          :: copy_optics
-    procedure          :: copy_micrographs_optics
 end type starproject_stream
 
 contains
@@ -52,7 +50,6 @@ contains
         class(string),             intent(in)    :: outdir
         logical, optional,         intent(in)    :: verbose
         type(string) :: cwd, stem
-        self%projfile_optics = params%projfile_optics
         if(present(verbose)) self%verbose = verbose
         if( outdir%strlen() > 0 )then
             cwd = simple_abspath(outdir, check_exists=.false.)
@@ -404,30 +401,5 @@ contains
         deallocate(ogmap)
     end subroutine copy_optics  
 
-    subroutine copy_micrographs_optics( self, spproj_dest, write, verbose )
-        class(starproject_stream), intent(inout) :: self
-        class(sp_project),         intent(inout) :: spproj_dest
-        logical,         optional, intent(in)    :: write, verbose
-        type(sp_project)        :: spproj_optics
-        integer(timer_int_kind) :: ms0
-        real(timer_int_kind)    :: ms_copy_optics
-        logical                 :: l_verbose, l_write
-        l_verbose = .false.
-        l_write   = .false.
-        if( present(verbose) ) l_verbose = verbose
-        if( present(write)   ) l_write   = write
-        if( (self%projfile_optics .ne. '') .and.&
-           &(file_exists(string('../')//self%projfile_optics)) ) then
-            if( l_verbose ) ms0 = tic()
-            call spproj_optics%read(string('../')//self%projfile_optics)
-            call self%copy_optics(spproj_dest, spproj_optics)
-            call spproj_optics%kill()
-            if( l_write ) call spproj_dest%write
-            if( l_verbose )then
-                ms_copy_optics = toc(ms0)
-                print *,'ms_copy_optics  : ', ms_copy_optics; call flush(6)
-            endif
-        end if
-    end subroutine copy_micrographs_optics
 
 end module simple_starproject_stream

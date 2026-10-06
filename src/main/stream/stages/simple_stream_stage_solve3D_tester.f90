@@ -46,6 +46,10 @@ contains
         call test_restart_removes_term_stream()
         call test_watch_order_and_mskdiam()
         call test_merge_publications()
+        call test_first_set()
+        call test_first_set_fallback()
+        call test_mskdiam_from_each_publication()
+        call test_rows_problem()
         call test_rules()
         call test_cohort()
         call test_retention()
@@ -101,8 +105,7 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_restart_removes_term_stream
 
-    !> exports are taken in export order whatever order they are listed in, each once; the first
-    !! gives pool 2D's mask diameter
+    !> exports are taken in export order whatever order they are listed in, each once
     subroutine test_watch_order_and_mskdiam()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
@@ -135,7 +138,6 @@ contains
             call it%get(crec)
             call assert_true(crec%projfile%has_substr('00002'//METADATA_EXT), 'then export 2')
         endif
-        call assert_real(150., stage%mskdiam, 1.e-4, 'the mask diameter of the first export')
         call stage%watch_sets()
         call assert_int(2, stage%setslist%size(), 'an export is taken once')
         call stage%kill
@@ -206,10 +208,168 @@ contains
         call set%kill
         call assert_int(11, stage%spproj%os_ptcl2D%get_class(1), 'a particle is matched by its image index, not its row')
         call assert_int(13, stage%spproj%os_ptcl2D%get_class(3), 'whatever order the publication lists them in')
+        ! a publication with the optics map's table brings it
+        call make_set(set, ['A'], [3], 13, icls=1)
+        call set%os_optics%new(2, is_ptcl=.false.)
+        call set%os_optics%set(1, 'ogid', 4)
+        call set%os_optics%set(2, 'ogid', 9)
+        call stage%merge_publication(set, 5)
+        call set%kill
+        call assert_int(2, stage%spproj%os_optics%get_noris(), 'the stage takes the publication''s optics table')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_merge_publications
+
+    !> the first publication into a stage without rows is the first set: the particles it selects
+    !! are due for solve2D, and the pool model's selection is kept for a failed one; later
+    !! publications change the first set's 2D parameters but not its selection, also when they
+    !! lack its stack, and select every other row as before
+    subroutine test_first_set()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)                 :: cline
+        type(sp_project)              :: set
+        type(string)                  :: cwd_saved, root
+        integer                       :: nfail0, i
+        allocate(stage)
+        write(*,'(A)') 'test_first_set'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_first_set', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        ! publication 1: stacks A (3) and B (2), the first particle never updated (deselected);
+        ! the pool model would keep particles 2 and 4
+        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
+        call stage%merge_first_set(set, 1, [.false., .true., .false., .true., .false.])
+        call set%kill
+        call assert_true(stage%l_solve2D_due,           'the first set is due for solve2D')
+        call assert_int(4, count(stage%first_set),      'every particle the publication selects is in it')
+        call assert_false(stage%in_first_set(1),        'a particle never updated is not')
+        call assert_int(4, stage%nptcls_selected,       'the rows take the publication''s own selection')
+        call assert_int(2, count(stage%first_fallback), 'the pool model''s selection is kept for a failed solve2D')
+        ! as solve2D and its selection leave them: rows 2 and 4 selected, rows 3 and 5 rejected
+        do i = 3,5,2
+            call stage%spproj%os_ptcl2D%set_state(i, 0)
+            call stage%spproj%os_ptcl3D%set_state(i, 0)
+        enddo
+        stage%l_solve2D_due = .false.
+        ! publication 2 selects every particle, in class 2, with the new stack C (2)
+        call make_set(set, ['A', 'B', 'C'], [3, 2, 2], 5, icls=2)
+        call stage%merge_publication(set, 2)
+        call set%kill
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(3), 'a first-set row its selection rejected stays rejected')
+        call assert_int(0, stage%spproj%os_ptcl2D%get_state(5), 'in both segments')
+        call assert_int(2, stage%spproj%os_ptcl2D%get_class(3), 'and takes the publication''s 2D parameters')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(2), 'a first-set row it selected stays selected')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'a row outside the first set takes the publication''s selection')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(6), 'as do the new stack''s rows')
+        call assert_false(stage%in_first_set(6),                'which are not in the first set')
+        call assert_int(5, stage%nptcls_selected,               'the selected rows are counted')
+        ! publication 3 lacks stack B (rows 4 and 5)
+        call make_set(set, ['A', 'C'], [3, 2], 5, icls=2)
+        call stage%merge_publication(set, 3)
+        call set%kill
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(4), 'a first-set row keeps its selection when its stack is missing')
+        call assert_int(5, stage%nptcls_selected,               'so the count is unchanged')
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_first_set
+
+    !> a failed solve2D: the first set's rows take the pool model's selection of the first
+    !! publication and are no longer the first set
+    subroutine test_first_set_fallback()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)                 :: cline
+        type(sp_project)              :: set
+        type(string)                  :: cwd_saved, root
+        integer                       :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_first_set_fallback'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_first_set_fallback', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
+        call stage%merge_first_set(set, 1, [.false., .true., .false., .true., .false.])
+        call set%kill
+        call stage%fallback_first_set()
+        call assert_int(2, stage%nptcls_selected,               'the pool model''s selection applies')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(3), 'which deselects what it rejected')
+        call assert_int(1, stage%spproj%os_ptcl2D%get_state(4), 'and keeps what it selected')
+        call assert_false(allocated(stage%first_set),           'no row is the first set any more')
+        call assert_false(stage%l_solve2D_due,                  'no solve2D is due')
+        call assert_int(PHASE_IMPORTING, stage%phase,           'solve3D waits for its particles as before')
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_first_set_fallback
+
+    !> the mask diameter comes from every publication taken; a change is taken for the next run, and
+    !! a publication without one leaves it
+    subroutine test_mskdiam_from_each_publication()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: set
+        type(string)     :: cwd_saved, root
+        integer          :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_mskdiam_from_each_publication'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_mskdiam', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call add_cavgs_entry(set, 150.)
+        call stage%take_mskdiam(set)
+        call assert_real(150., stage%mskdiam, 1.e-4, 'the first publication''s mask diameter')
+        call set%kill
+        call add_cavgs_entry(set, 170.)
+        call stage%take_mskdiam(set)
+        call assert_real(170., stage%mskdiam, 1.e-4, 'a later publication''s new one')
+        call set%kill
+        call add_cavgs_entry(set, 0.)
+        call stage%take_mskdiam(set)
+        call assert_real(170., stage%mskdiam, 1.e-4, 'one without keeps the latest')
+        call set%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_mskdiam_from_each_publication
+
+    !> a publication whose stacks disagree with the rows is found before anything is merged
+    subroutine test_rows_problem()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: set
+        type(string)     :: cwd_saved, root, problem
+        integer          :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_rows_problem'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_rows_problem', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call make_set(set, ['A'], [3], 2, icls=1)
+        call stage%merge_publication(set, 1)
+        call set%kill
+        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
+        problem = stage%rows_problem(set)
+        call assert_int(0, problem%strlen(), 'a publication that agrees with the rows')
+        call set%kill
+        call make_set(set, ['A'], [4], 2, icls=1)
+        problem = stage%rows_problem(set)
+        call assert_true(problem%has_substr('changed size'), 'a stack that changed size is found')
+        call assert_int(3, stage%spproj%os_ptcl3D%get_noris(), 'and the rows are untouched')
+        call set%kill
+        call make_set(set, ['A'], [3], 2, icls=1)
+        call set%os_ptcl2D%set(1, 'indstk', 7)
+        problem = stage%rows_problem(set)
+        call assert_true(problem%has_substr('outside its stack'), 'an image index outside its stack is found')
+        call set%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_rows_problem
 
     !> the addon's cohort: selected rows not active in the frozen solution, appended or selected again
     subroutine test_cohort()
@@ -217,6 +377,7 @@ contains
         integer, parameter :: STATES(6) = [1, 1, 0, 1, 1, 0]
         integer :: i
         allocate(stage)
+        allocate(stage%spproj) ! made by init_params in the stage; this test sets rows directly
         write(*,'(A)') 'test_cohort'
         call assert_int(0, stage%count_frozen(), 'before a run nothing is frozen')
         call stage%spproj%os_ptcl3D%new(6, is_ptcl=.true.)
@@ -229,6 +390,7 @@ contains
         call assert_int(3, stage%count_frozen(), 'the frozen particles are those active in the result')
         call assert_int(2, stage%count_cohort(), 'a particle selected again and one appended')
         call stage%spproj%kill
+        deallocate(stage%spproj)
         deallocate(stage%frozen_active)
     end subroutine test_cohort
 
@@ -293,7 +455,27 @@ contains
         call assert_real(116., stage%fit_mskdiam(400.,  64, 2.0), 1.e-4, 'one too large for the box gets the box default')
         call assert_real(116., stage%fit_mskdiam(0.,    64, 2.0), 1.e-4, 'none gets the box default')
         call assert_real(116., stage%fit_mskdiam(-7.8,  64, 2.0), 1.e-4, 'a negative one too')
+        ! after a rolled-back addon run of 120 with 1000 frozen and 3 states, the next waits for
+        ! the cadence step (max(15, 100)) beyond it
+        call assert_int(219, stage%retry_cohort(120, 1000, 3), 'the cohort to exceed after a rollback')
+        call assert_int(JOB_NONE,  stage%next_job(PHASE_IDLE, 1219, 219, 1000, 3, stage%retry_cohort(120, 1000, 3)),&
+            &'a few more particles do not start a retry')
+        call assert_int(JOB_ADDON, stage%next_job(PHASE_IDLE, 1220, 220, 1000, 3, stage%retry_cohort(120, 1000, 3)),&
+            &'a cadence step more does')
+        call check_final_publication()
     end subroutine test_rules
+
+    !> a publication flagged pool_final=yes in its out segment is the pool's final one
+    subroutine check_final_publication()
+        type(sp_project) :: set
+        class(stream_stage_solve3D), allocatable :: stage
+        allocate(stage)
+        call add_cavgs_entry(set, 150.)
+        call assert_false(stage%is_final_publication(set), 'a publication without the flag is not final')
+        call set%os_out%set(1, 'pool_final', 'yes')
+        call assert_true(stage%is_final_publication(set), 'one with pool_final=yes is')
+        call set%kill
+    end subroutine check_final_publication
 
     !> one status message per call, with the stage name, the phase and the particle count
     subroutine test_send_status()
@@ -546,6 +728,17 @@ contains
             enddo
         endif
     end subroutine make_set
+
+    ! a publication's class averages entry with mask diameter @p mskdiam (none when 0)
+    subroutine add_cavgs_entry( set, mskdiam )
+        type(sp_project), intent(inout) :: set
+        real,             intent(in)    :: mskdiam
+        call set%os_out%new(1, is_ptcl=.false.)
+        call set%os_out%set(1, 'imgkind', 'cavg')
+        call set%os_out%set(1, 'stk',     'cavgs.mrc')
+        call set%os_out%set(1, 'nptcls',  10)
+        if( mskdiam > 0. ) call set%os_out%set(1, 'mskdiam', mskdiam)
+    end subroutine add_cavgs_entry
 
     ! a pipe with a non-blocking read end
     subroutine open_loopback( fds )

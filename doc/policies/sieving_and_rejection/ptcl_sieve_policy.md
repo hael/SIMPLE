@@ -105,6 +105,15 @@ Sentinel files define state transitions:
   when it starts; with no exit status, the job may still run
 - `chunk_input.simple`  -> the chunk's project as made, kept at its first submission for a retry
 - `<folder>_attempt1`   -> the folder of a failed first attempt: the chunk has used its retry
+- `chunk_mics.txt`      -> in a coarse chunk: the micrographs it took (`chunked_mics.txt` format)
+- `consumed_coarse.txt` -> in a fine chunk: the ids of the coarse chunks it merged
+
+A chunk exists once its project is written, which is done by temporary and rename. What it took
+is written to its folder first (`chunk_mics.txt`, `consumed_coarse.txt`, and `FINAL_INGESTION` for
+a staged chunk); what follows its project (the coarse chunks' `COMPLETE` after a fine chunk,
+`chunked_mics.txt` after a coarse chunk) is redone by a restart. A retried or renewed chunk keeps
+its lists. Chunk ids continue past the highest chunk folder on disk (`chunk_coarse_<id>`,
+`chunk_fine_<id>`), so a folder whose making was cut short is never reused.
 
 Import policy from previous runs:
 
@@ -115,7 +124,16 @@ Import policy from previous runs:
    still run (a crashed stage leaves it): the job is cancelled, the folder set
    aside to `<folder>_unfinished<k>`, and the chunk made afresh from
    `chunk_input.simple`, so a resubmitted job never shares its folder;
-4. missing chunk project files are warning-and-skip, not hard stop.
+4. missing chunk project files are warning-and-skip, not hard stop; every chunk folder on disk
+   is looked at, in id order, also past a missing one;
+5. the coarse chunks a fine chunk that exists merged (its `consumed_coarse.txt`) are marked
+   complete, also when the crash came before their `COMPLETE`, so they are not merged again;
+6. the counters (section 11) are rebuilt from the imported chunks as the run counted them;
+7. the particle-sieving stage rebuilds `chunked_mics.txt` from the `chunk_mics.txt` of the coarse
+   chunks that exist before it reads it (`rebuild_chunked_mics`), so a crash between a chunk's
+   project and `chunked_mics.txt` neither imports its micrographs twice nor loses them. While a
+   chunk that exists has no list (made before lists were kept, or `pre_chunked`), the file is kept
+   as it is.
 
 `cancel` cancels the 2D jobs of the running chunks; the stage calls it when it
 stops (p03 and p05). A cancelled chunk is resubmitted after a restart.
@@ -165,7 +183,8 @@ more input is expected. It is by design that they skip the coarse pass.
    will hand on nothing more. Upstream says so with a marker in its folder
    (`STREAM_IDLE` or `STREAM_FINISHED`, `simple_defs_stream`; `upstream_done`):
    preprocessing (p01) writes `STREAM_IDLE` once no new movie has come for
-   `MOVIES_IDLE_TIME_S` (15 minutes) and its sets are done, and reference
+   `MOVIES_IDLE_TIME_S` (15 minutes) and its sets are done (the movies short of a set of five go
+   as a partial set after `PARTIAL_SET_QUIET_S`, 3 minutes, without a new movie), and reference
    picking (p04) once preprocessing is idle or stopped and its own sets are
    done; each writes `STREAM_FINISHED` when it stops. A marker counts once a
    watch made a settle time after it was first seen has found nothing new, so
@@ -186,19 +205,24 @@ more input is expected. It is by design that they skip the coarse pass.
 3. Two-tier mode: the staged chunk feeds the fine tier with all its particles,
    so they get the fine 2D and rejection only. Once final ingestion is set and
    every coarse chunk is complete or failed, the last fine chunk is flushed
-   below the fine threshold and marked `sieve_final=yes` in its `os_out`. The
-   2D pool then runs to its final iteration.
+   below the fine threshold. No chunk is marked final: fine chunks end in any
+   order, so a flag on the last one made could reach the 2D pool before an
+   earlier chunk still running, and the pool would publish its final result
+   (and 3D start its final run) without that chunk's particles. The end of the
+   intake is the empty final set of step 5.
 4. Coarse-only mode (`single_pass=yes`, the initial analysis): the staged
    chunk is handed off as it is, with no screening. The initial analysis
    classifies and selects over the combined set in its cycle 2.
-5. The final signal is always sent: once final ingestion is set and every
-   particle is through (no record left to chunk, every chunk complete or
-   failed), `hand_off_final_set` hands on an empty project with
-   `sieve_final=yes` (`sieve_final_c<ncoarse>_f<nfine>.simple`), once per chunk
-   count. It covers what step 3 can miss: nothing pending at final ingestion,
-   a final chunk that failed, a coarse chunk finished with nothing selected
-   after the last fine chunk. After a chunk flagged final it is a second final
-   set, which changes nothing for the pool.
+5. The final signal is the only one, and always sent: once final ingestion is
+   set and every particle is through (no record left to chunk, every coarse
+   and fine chunk complete or failed), `hand_off_final_set` hands on an empty
+   project with `sieve_final=yes` (`sieve_final_c<ncoarse>_f<nfine>.simple`),
+   once per chunk count. It is written in the cycle that hands off the last
+   chunk (`collect_and_reject` runs before it), so it follows every chunk's
+   hand-off and costs no extra cycle; the pool takes final sets after every
+   other (`pool2D_policy.md`, section 3). It also covers nothing pending at
+   final ingestion, a last chunk that failed, and a coarse chunk finished with
+   nothing selected after the last fine chunk.
 6. Retraction reaches the pool: the pool takes back its final note when a set
    with particles and without the flag arrives after it (`pool2D_policy.md`).
 
@@ -218,6 +242,10 @@ Queue partition override policy:
   partition of the coarse chunks and the merged fine chunks; it is the variable the
   particle-sieving stage's queue reads. The former name `SIMPLE_CHUNK_PARTITION` is no
   longer read.
+
+Worker server: the sieve's queue reuses the persistent-worker server of the process that drives
+it. Reusing a server never turns its warm-up cooldown (autoscaling) off; a streaming queue turns
+it on (`qsys_env`).
 
 ## 8. Rejection Policy
 
@@ -249,10 +277,12 @@ Rejection outputs and artifacts:
 
 1. project state is mapped through `map_cavgs_selection` and persisted;
 2. selected and rejected class-average stacks/JPEGs are written;
-3. an all-class JPEG (`*_all_reasons.jpg`) is written with reason-coded
+3. a rejected class records `rejection_reason` as `<tier>_reject:<reason>` with underscores for
+   blanks (`coarse_reject:low_population`), since the orientation reader splits values at blanks;
+4. an all-class JPEG (`*_all_reasons.jpg`) is written with reason-coded
   borders plus a sidecar key file (`*_all_reasons.jpg.key.txt`);
-4. `REJECTION_FINISHED` sentinel is emitted on completion;
-5. chunk selected-count is updated from particle states.
+5. `REJECTION_FINISHED` sentinel is emitted on completion;
+6. chunk selected-count is updated from particle states.
 
 Cleanup retention policy (`cleanup_chunk`):
 
@@ -327,7 +357,10 @@ No-op policy:
 Counters must remain monotonic and query-safe:
 
 - `get_n_accepted_ptcls`, `get_n_rejected_ptcls`,
-  `get_n_accepted_micrographs` are cumulative terminal counters.
+  `get_n_accepted_micrographs` are cumulative terminal counters: the finalised chunks of the
+  terminal tier, and in two-tier mode the coarse chunks finalised with nothing selected (all
+  their particles rejected), which no fine chunk counts.
+- every counter is cumulative across restarts: `new` rebuilds them from the imported chunks.
 - `get_n_pass_1_non_rejected_ptcls` and `get_n_pass_2_non_rejected_ptcls`
   reflect non-terminal per-tier selected counts.
 - `get_n_coarse_accepted_ptcls` and `get_n_coarse_rejected_ptcls` are
@@ -358,9 +391,11 @@ classes, or class rows that do not match) (`fail_chunk`):
    both in its GUI status.
 3. A chunk without `chunk_input.simple` (made before this rule) is dropped at its
    first failure.
-4. **Not detected:** a job the scheduler kills before its script writes an exit
-   status (walltime, a lost node) never fails; it keeps its slot. Exit codes are
-   the only signal (stream fix plan, decision 26).
+4. **A job that vanishes** before its script writes an exit status (walltime, a
+   lost node) is found by its job's liveness check (`qsys_async_job`; the chunk's
+   job runs through it): gone at two checks `JOB_LIVENESS_S` (5 minutes) apart, it
+   gets a lost status and the chunk takes the failure path above (follow-up plan,
+   decision 29).
 
 ## 13. Test Policy
 

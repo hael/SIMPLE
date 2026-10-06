@@ -78,7 +78,7 @@ contains
         class(stream_stage_preprocess), allocatable :: stage
         type(cmdline)                 :: cline
         type(sp_project)              :: job
-        type(string)                  :: cwd_saved, root, job_dir, done(2)
+        type(string)                  :: cwd_saved, root, job_dir, done(2), partial(1)
         integer                       :: nfail0, n_imported
         allocate(stage)
         write(*,'(A)') 'test_import_completed'
@@ -104,6 +104,13 @@ contains
             call assert_int(1, job%os_mic%get_state(1), 'an accepted micrograph stays accepted in the job project')
             call job%kill
         endif
+        ! a partial set of three micrographs
+        partial(1) = job_dir//'/00003.simple'
+        call write_mic_project(partial(1), [1,1,0], [4.,4.,4.], 'job3_')
+        call stage%import_completed(partial, n_imported)
+        call assert_int(2, n_imported,                           'a partial set: its two accepted micrographs')
+        call assert_int(6, stage%spproj_glob%os_mic%get_noris(), 'join the global project')
+        call assert_int(7, stage%n_failed_jobs,                  'and its third counts as failed')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -214,6 +221,16 @@ contains
         endif
         projfile = stage%cline_exec%get_carg('projfile')
         call assert_char('00001.simple', projfile%to_char(), 'the worker command line names the set project')
+        ! the movies short of a set, as a partial set
+        call stage%create_movies_set_project(movies(1:3))
+        projfile = stage%sets%get_job_dir()//'/'//int2str_pad(2, 5)//'.simple'
+        call assert_true(file_exists(projfile), 'a partial set is written')
+        if( file_exists(projfile) )then
+            call set_proj%read_segment('mic', projfile)
+            call assert_int(3, set_proj%os_mic%get_noris(), 'with its three movies')
+            call set_proj%kill
+        endif
+        call assert_int(3, stage%cline_exec%get_iarg('top'), 'and its job processes three')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)

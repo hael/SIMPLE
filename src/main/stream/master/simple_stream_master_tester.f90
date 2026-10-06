@@ -42,6 +42,7 @@ contains
         call test_store_status()
         call test_store_list()
         call test_store_volume()
+        call test_store_clear_stage()
         call test_stage_pipes()
         call test_update_dedupe()
         call test_skipped_stays_skipped()
@@ -207,16 +208,40 @@ contains
         call store%kill()
     end subroutine test_store_volume
 
+    !> a restarted stage's lists are dropped, and only that stage's
+    subroutine test_store_clear_stage()
+        type(stream_master_meta_store) :: store
+        type(gui_metadata_vol3D)       :: vol
+        character(len=:), allocatable  :: buffer
+        write(*,'(A)') 'test_store_clear_stage'
+        call store%new()
+        call vol%new(GUI_METADATA_VOL3D_TYPE)
+        call vol%set(string('reprojs.jpg'), string('vol.mrc'), string(''), string(''), string(''), 1, 64, 1.5, 1, 2)
+        call vol%serialise(buffer)
+        call store%store(buffer)
+        call store%store(cavg_message(1, 2, 7))
+        call assert_true(allocated(store%solve3D_vols), 'a volume is stored')
+        call store%clear_stage(STAGE_SOLVE3D)
+        call assert_false(allocated(store%solve3D_vols), 'restarting multistate 3D drops its volumes')
+        call assert_true(allocated(store%pool2D_cavgs),  'and leaves the pool''s class averages')
+        call store%clear_stage(STAGE_POOL2D)
+        call assert_false(allocated(store%pool2D_cavgs), 'restarting pool 2D drops them')
+        call vol%kill()
+        call store%kill()
+    end subroutine test_store_clear_stage
+
     !> a stage keeps the commander it is given; its messages reach the master's reader, the master's
     !! updates reach the stage, and a restart's discard empties both pipes
     subroutine test_stage_pipes()
-        type(stream_master_stage)     :: proc
+        class(stream_master_stage), allocatable :: proc
         type(stream_pipe)             :: stage_side
-        type(cmdline)                 :: cline
+        class(cmdline), allocatable :: cline
         type(noop_commander)          :: commander
         character(len=:), allocatable :: buffer
         integer :: fd_write, fd_read, fd_master_read, fd_master_write
         write(*,'(A)') 'test_stage_pipes'
+        allocate(proc)
+        allocate(cline)
         call proc%new(STAGE_POOL2D, commander, cline, .true., max_metadata_size())
         call assert_true(allocated(proc%fork%commander), 'the stage keeps its commander')
         call stage_fds(STAGE_POOL2D, fd_write, fd_read)
@@ -246,10 +271,11 @@ contains
     !! request is remembered (no more updates until the next start), and kill forgets both
     subroutine test_update_dedupe()
         class(stream_master_stage), allocatable :: proc
-        type(cmdline)                           :: cline
+        class(cmdline), allocatable :: cline
         type(noop_commander)                    :: commander
         write(*,'(A)') 'test_update_dedupe'
         allocate(proc)
+        allocate(cline)
         call proc%new(STAGE_POOL2D, commander, cline, .true., max_metadata_size())
         call assert_true(proc%is_new_update('thresholds'), 'the first update is new')
         proc%last_update = 'thresholds'
@@ -269,10 +295,11 @@ contains
     !> a skipped stage is never started: start() leaves it skipped and forks nothing
     subroutine test_skipped_stays_skipped()
         class(stream_master_stage), allocatable :: proc
-        type(cmdline)                           :: cline
+        class(cmdline), allocatable :: cline
         type(noop_commander)                    :: commander
         write(*,'(A)') 'test_skipped_stays_skipped'
         allocate(proc)
+        allocate(cline)
         call proc%new(STAGE_PREPROCESS, commander, cline, .true., max_metadata_size())
         call assert_false(proc%is_skipped(), 'a new stage is not skipped')
         call proc%skip()

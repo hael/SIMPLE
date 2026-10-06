@@ -9,6 +9,60 @@ methodology items M6 (p03's state choice) and M8 (p07's addon route), its defect
 regrouping) and its architecture items G12 to G15 are here too, in their own sections and
 workstreams G to L; they are the review's items of those names, not D41 items.
 
+## Status, 5 October 2026
+
+Every workstream (A to L) is implemented, in the order of section 4; nothing has been compiled or
+run. Each landed with its tests and policy updates. Where the code differs from the plan:
+
+- **E (O2):** the raw final project before the first complete iteration is written from the pool
+  project itself (every imported particle, as it came), not from p06's set list, whose records are
+  sets, not micrographs. `projfile_optics` and the root-stub copy are gone from the stream.
+- **B (P4):** p02 keeps writing its project in the launch folder before `params%new`: the program
+  requires a project, and `params%new` copies that file into the stage's folder. p02 now writes
+  explicitly to its copy (`params%projfile`); nothing reads the launch folder's file any more.
+- **B (P3a):** `stream_job_sets%collect` returns the items (movies or micrographs) of the failed
+  jobs, for p01 and p04 alike.
+- **C (R3):** the clamp is a pure function, `template_lowpass` in `simple_pick_strategy`.
+- **I:** the final refine3D's result is the stage's project and the GUI's maps, but not the addon
+  runs' base: `solve3D_addon` needs a `solve3D` base, so when finality is withdrawn the addons go
+  on from theirs. The final run sets no low-pass start; refine3D's own FSC schedule, capped by
+  `lpstop`, applies.
+- **K:** NICE's `ref_selection` and `increase_nmics` paths were dead (no caller, and no SIMPLE
+  writer of `initial_ref_selection`) and are removed; the stream view that shows the sieve's
+  selection stays. SIMPLE's unwritten `initial_ref_selection` field of the pool's GUI metadata stays
+  (removing it changes the serialised layout).
+- **L (decision 28):** the sieve's chunks and the pool iteration now run through
+  `qsys_async_job` (with `start_seq` for the pool's two-program script); p01's and p04's job sets
+  keep the queue controller's streaming scheduler, since the stream programs rely on its per-part
+  numbering and done markers. Both share the record, exit status, liveness check (decision 29, in
+  `simple_qsys_job_record`: `query_job`, `check_job_lost`) and the process-group cancel (decision
+  30: local jobs start under `$(command -v setsid) nohup`).
+- **J:** besides the listed components, `forked_process` keeps the one command line
+  (`set_cline`), which the master's stage record no longer copies; the sieve's chunk jobs also get
+  `worker_server_nthr`.
+
+After the workstreams, two fixes to the sieve-to-pool hand-off:
+- p06 takes the handed-off sets in hand-off order (`sort_sets`: by the chunk id ending the name,
+  the sieve's final sets last), not in the folder's listing order.
+- The sieve no longer flags a fine chunk `sieve_final` when it is made. Chunks end in any order, so
+  a flagged last chunk could reach the pool before an earlier chunk still running; past
+  `FINAL_ITER` the pool's next publication was then final and p07 could start its final refine3D
+  without that chunk's particles. The empty final set (`hand_off_final_set`), written once every
+  chunk has ended and in the same cycle as the last hand-off, is now the only final signal.
+
+p07's first set (decisions 31 to 38, `stream_3D_ingestion_policy.md` section 4 item 3) is
+implemented: p06 publishes once after iteration 10 in a fresh pool (`exports_after`), and p07 runs
+`solve2D` and the chunk-model selection on that first publication before `solve3D`.
+
+To confirm with a build and runs:
+- **G:** that the per-state FSC files are where `finish_solve3D` reads them (the 3D result's
+  folder), on a first run and a restart; the three state-choice constants need the validation run.
+- **I:** the final `refine3D` command line (`vol<s>`, `lpstop`) end to end in the stage.
+- **L:** the scheduler queries (`squeue`, `bjobs`, `qstat` answers for ended jobs) on each site's
+  scheduler; `setsid` where SIMPLE runs.
+- **First set:** p07's `solve2D` command line end to end, that its project's class averages are
+  found by the selection, and the stage after a real `solve2D` failure.
+
 ## 1. Status of each D41 item
 
 | Id | Area | Defect (review wording, shortened) | Status now | Where |
@@ -440,6 +494,27 @@ G12 to G15).
     26.
 30. **A local job's cancel (G15).** Local jobs run in their own process group, which the cancel
     signals as a whole.
+31. **p07's first set: when (5 October 2026).** A fresh pool publishes once after iteration 10,
+    with the sieve's mask diameter, then after every iteration from 25 as before; iterations 11 to
+    24 publish nothing.
+32. **The first set's input.** Every particle the first publication selects (those an iteration
+    has updated), with no pool-model decision on iteration 10's class averages.
+33. **The first set's selection.** As p03 selects after its `solve2D`: the chunk model, then the
+    class-compatibility filter.
+34. **Who selects the first set later.** The first set's selection, for the session: later
+    publications update its rows' 2D parameters only, also when they lack its stack. Every other
+    row (new stacks, rows not updated at iteration 10) follows the publications as before.
+35. **The first set's `solve2D`.** Sized as p03's (one class per 100 particles within 10 to 100,
+    a sample of at least 2000, `lpstop` 8 A), with the publication's mask diameter, on p07's
+    `nthr3D` and `nparts3D`; no new parameters.
+36. **A failed `solve2D`.** The pool model's selection of the first publication applies, and the
+    pool governs those rows like any other; too few particles needs no rule (`solve3D` waits).
+37. **A restarted pool.** Publishes at iteration 10 only when it has published nothing yet; with
+    publications on disk it resumes at 25.
+38. **Ingestion around the first set.** No publication is taken from the first set until the
+    first `solve3D` starts, which it does in the pass that ends `solve2D` (or its fallback); later
+    particles come in through the addon runs. A selection too small for `solve3D` lets
+    publications in as before.
 
 ## 4. Order
 

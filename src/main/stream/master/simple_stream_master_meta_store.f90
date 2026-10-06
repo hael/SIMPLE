@@ -8,9 +8,10 @@
 !   a stage status replaces the previous one; an item of a list (a micrograph,
 !   an optics group, a class average, a volume, a reprojection tile) goes to
 !   slot i of a list of i_max, which is remade when i_max changes. assemble()
-!   hands everything to the GUI assembler for the next heartbeat. The master
-!   holds its metadata lock around both: its listener thread stores, its main
-!   loop assembles.
+!   hands everything to the GUI assembler for the next heartbeat. clear_stage()
+!   drops a stage's lists when the stage is restarted, so the GUI shows only
+!   what the new process sends. The master holds its metadata lock around
+!   all three: its listener thread stores, its main loop assembles and clears.
 !
 ! TESTS:
 !   simple_stream_master_tester
@@ -20,6 +21,8 @@ use simple_defs,             only: logfhandle
 use simple_string_utils,     only: int2str
 use simple_error,            only: simple_exception
 use simple_gui_assembler,    only: gui_assembler
+use simple_stream_master_stage_ids, only: STAGE_PREPROCESS, STAGE_ASSIGN_OPTICS, STAGE_INITIAL_ANALYSIS,&
+    &STAGE_REFERENCE_PICKING, STAGE_PARTICLE_SIEVING, STAGE_POOL2D, STAGE_SOLVE3D
 use simple_gui_metadata_api, only: gui_metadata_micrograph, gui_metadata_histogram, gui_metadata_timeplot,&
     &gui_metadata_optics_group, gui_metadata_cavg2D, gui_metadata_vol3D, gui_metadata_stream_preprocess,&
     &gui_metadata_stream_optics_assignment, gui_metadata_stream_picking, gui_metadata_stream_opening2D,&
@@ -81,6 +84,7 @@ contains
     procedure :: new
     procedure :: store
     procedure :: assemble
+    procedure :: clear_stage
     procedure :: log_state
     procedure :: kill
 end type stream_master_meta_store
@@ -201,6 +205,37 @@ contains
         call assembler%assemble_stream_solve3D_multistate(self%solve3D, self%solve3D_vols,&
             &self%solve3D_reprojtiles)
     end subroutine assemble
+
+    !> Before stage @p id is started again: its lists (micrographs, optics groups, class averages,
+    !! volumes, reprojection tiles) are dropped, so entries the previous process sent and the new
+    !! one does not send again (a run's volumes, an older set's class averages) leave the GUI. Its
+    !! status and fixed plots are replaced by the new process's first messages.
+    subroutine clear_stage( self, id )
+        class(stream_master_meta_store), intent(inout) :: self
+        integer,                         intent(in)    :: id
+        select case(id)
+            case(STAGE_PREPROCESS)
+                if( allocated(self%preprocess_micrographs) ) deallocate(self%preprocess_micrographs)
+            case(STAGE_ASSIGN_OPTICS)
+                if( allocated(self%optics_groups) ) deallocate(self%optics_groups)
+            case(STAGE_INITIAL_ANALYSIS)
+                if( allocated(self%initial_picking_micrographs) ) deallocate(self%initial_picking_micrographs)
+                if( allocated(self%opening2D_cavgs)             ) deallocate(self%opening2D_cavgs)
+                if( allocated(self%opening2D_final_cavgs)       ) deallocate(self%opening2D_final_cavgs)
+            case(STAGE_REFERENCE_PICKING)
+                if( allocated(self%reference_picking_micrographs) ) deallocate(self%reference_picking_micrographs)
+                if( allocated(self%reference_picking_cavgs)       ) deallocate(self%reference_picking_cavgs)
+            case(STAGE_PARTICLE_SIEVING)
+                if( allocated(self%particle_sieving_cavgs)     ) deallocate(self%particle_sieving_cavgs)
+                if( allocated(self%particle_sieving_ref_cavgs) ) deallocate(self%particle_sieving_ref_cavgs)
+            case(STAGE_POOL2D)
+                if( allocated(self%pool2D_cavgs)          ) deallocate(self%pool2D_cavgs)
+                if( allocated(self%pool2D_snapshot_cavgs) ) deallocate(self%pool2D_snapshot_cavgs)
+            case(STAGE_SOLVE3D)
+                if( allocated(self%solve3D_vols)        ) deallocate(self%solve3D_vols)
+                if( allocated(self%solve3D_reprojtiles) ) deallocate(self%solve3D_reprojtiles)
+        end select
+    end subroutine clear_stage
 
     !> The list sizes and @p pending_bytes (unparsed bytes in the pipes), for the memory log.
     subroutine log_state( self, pending_bytes )
