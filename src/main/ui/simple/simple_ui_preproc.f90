@@ -183,8 +183,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, pcontrast, &
         &visibility=UI_VIS_ADVANCED)
-        call refine_motion_model%add_input(UI_PARM, backgr_subtr, &
-        &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, 'fromf', 'num', 'Starting frame', &
         & 'Starting movie frame for particle re-extraction', 'frame index{1}', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)

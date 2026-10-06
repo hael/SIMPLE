@@ -81,11 +81,10 @@ contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
 
-    subroutine motion_correct_init( params, movie_stack_fname, ctfvars, err, movie_sum, gainref )
+    subroutine motion_correct_init( params, movie_stack_fname, ctfvars, movie_sum, gainref )
         class(parameters), target, intent(in)    :: params
         class(string),             intent(in)    :: movie_stack_fname !< input filename of stack
         type(ctfparams),           intent(in)    :: ctfvars           !< CTF parameters
-        logical,                   intent(out)   :: err               !< error flag
         type(image),               intent(inout) :: movie_sum
         class(string), optional,   intent(in)    :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
@@ -129,13 +128,7 @@ contains
         end select
         total_nframes = nframes
         ldim_orig     = ldim
-        err = .false.
-        if( nframes < 2 )then
-            err = .true.
-            write(logfhandle,*) 'movie: ', movie_stack_fname%to_char()
-            THROW_WARN('nframes of movie < 2, aborting motion_correct')
-            return
-        endif
+        if( nframes < 2 ) THROW_HARD('fewer than 2 frames in movie: '//movie_stack_fname%to_char())
         ldim(3) = 1
         ! dose weighting prep
         dose_per_frame = 0.
@@ -151,12 +144,7 @@ contains
                 enddo
                 nframes = min(iframe,nframes)
             endif
-            if( nframes < 2 )then
-                err = .true.
-                write(logfhandle,*) 'movie: ', movie_stack_fname%to_char()
-                THROW_WARN('nframes of movie < 2, aborting motion_correct')
-                return
-            endif
+            if( nframes < 2 ) THROW_HARD('fewer than 2 frames within max_dose in movie: '//movie_stack_fname%to_char())
         endif
         ! scaling
         if( p_ptr%scale_movies < 0.99 )then
@@ -279,13 +267,12 @@ contains
         type(image),             intent(inout) :: movie_sum
         class(string), optional, intent(in)    :: gainref_fname     !< gain reference filename
         real                      :: ave, sdev, var, minw, maxw, corr
-        logical                   :: err, err_stat
+        logical                   :: err_stat
         type(motion_align_hybrid) :: hybrid_srch
         ! initialise
         if( l_BENCH ) t_correct_iso_init = tic()
-        call motion_correct_init(params, movie_stack_fname, ctfvars, err, movie_sum, gainref_fname)
+        call motion_correct_init(params, movie_stack_fname, ctfvars, movie_sum, gainref_fname)
         if( l_BENCH ) rt_correct_iso_init = toc(t_correct_iso_init)
-        if( err ) return
         if( l_BENCH ) t_correct_iso_transfmat = tic()
         call ftexp_transfmat_init(movie_frames_scaled(1), p_ptr%lpstop)
         if( l_BENCH ) rt_correct_iso_transfmat = toc(t_correct_iso_transfmat)
@@ -380,7 +367,7 @@ contains
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
         call movie_sum_corrected%zero_and_flag_ft
         do iframe=1,nframes
-            call movie_sum_corrected%add_workshare(movie_frames_scaled(iframe))
+            call movie_sum_corrected%add_workshare(movie_frames_scaled(iframe), frameweights(iframe))
         end do
         call movie_sum_corrected%ifft
         if( l_BENCH ) rt_mic = toc(t_mic)
@@ -395,8 +382,8 @@ contains
         logical, intent(in)  :: include_patch
         real,    intent(out) :: bid
         if( include_patch )then
-            bid = real(sum(patched_shifts**2) / real(nframes*p_ptr%nxpatch*p_ptr%nypatch,dp))
-            bid = sqrt( bid )
+            ! RMS local offset over frames and the patch grid actually fitted (reduced after a retry)
+            bid = sqrt(real(sum(patched_shifts**2) / real(size(patched_shifts(1,:,:,:)),dp)))
         else
             bid = 0.0
         endif

@@ -147,11 +147,18 @@ contains
     ! ====================================================================
 
     subroutine inmem_initialize(self, params, cline)
+        use simple_motion_correct_utils, only: flip_gain
         class(motion_correct_inmem_strategy), intent(inout) :: self
         type(parameters),                     intent(inout) :: params
         class(cmdline),                       intent(inout) :: cline
         call set_motion_correct_defaults(cline)
         call params%new(cline)
+        ! Direct runs prepare the gain; scheduled workers already have flipgain=no.
+        call flip_gain(cline, params%gainref, params%flipgain)
+        if( cline%defined('gainref') .and. cline%defined('flipgain') )then
+            params%flipgain = 'no'
+            call cline%set('flipgain', 'no')
+        endif
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, cline)
@@ -282,6 +289,10 @@ contains
         call self%spproj%kill
         ! gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
+        if( cline%defined('gainref') .and. cline%defined('flipgain') )then
+            params%flipgain = 'no'
+            call cline%set('flipgain', 'no')
+        endif
         ! gain reference thumbnail
         if( cline%defined('gainref') )then
             if( .not.file_exists(GAIN_THUMBNAIL)) then

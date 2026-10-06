@@ -175,10 +175,10 @@ contains
             endif
             if( self%l_eer )then
                 call correct_gain(self%frames, self%gainrefname, self%gain,&
-                    & eerdecoder=self%eer)
+                    &eerdecoder=self%eer, flipgain=self%mmodel%flipgain)
                 call self%add_eer_gain_defects
             else
-                call correct_gain(self%frames, self%gainrefname, self%gain)
+                call correct_gain(self%frames, self%gainrefname, self%gain, flipgain=self%mmodel%flipgain)
             endif
         endif
         if( self%nhotpix > 0 )then
@@ -467,6 +467,7 @@ contains
         print *, 'voltage        ', self%kv
         print *, 'doseperframe   ', self%doseperframe
         print *, 'gainrefname    ', self%gainrefname%to_char()
+        if( self%l_model ) print *, 'flipgain       ', trim(self%mmodel%flipgain)
         print *, 'moviename      ', self%moviename%to_char()
         print *, 'doseweighting  ', self%l_doseweighing
         print *, 'total dose     ', self%total_dose

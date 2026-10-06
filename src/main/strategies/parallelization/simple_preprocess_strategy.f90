@@ -151,6 +151,7 @@ contains
     ! ====================================================================
 
     subroutine inmem_initialize(self, params, cline)
+        use simple_motion_correct_utils, only: flip_gain
         class(preprocess_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         class(cmdline),                   intent(inout) :: cline
@@ -158,6 +159,12 @@ contains
         call params%new(cline)
         if( params%scale_movies > 1.01 )then
             THROW_HARD('scale_movies cannot be > 1; exec_preprocess')
+        endif
+        ! Direct runs prepare the gain; scheduled workers already have flipgain=no.
+        call flip_gain(cline, params%gainref, params%flipgain)
+        if( cline%defined('gainref') .and. cline%defined('flipgain') )then
+            params%flipgain = 'no'
+            call cline%set('flipgain', 'no')
         endif
     end subroutine inmem_initialize
 
@@ -394,6 +401,10 @@ contains
         call cline%set('numlen', params%numlen)
         ! Gain reference
         call flip_gain(cline, params%gainref, params%flipgain)
+        if( cline%defined('gainref') .and. cline%defined('flipgain') )then
+            params%flipgain = 'no'
+            call cline%set('flipgain', 'no')
+        endif
         ! Setup the environment for distributed execution
         call self%qenv%new(params, params%nparts)
         ! Prepare job description

@@ -22,6 +22,7 @@ contains
         call test_add_movies_to_gain_sum_accumulates()
         call test_write_gain_from_sum()
         call test_gain_flip_mode_mapping()
+        call test_correct_gain_flipping()
     end subroutine run_all_motion_gain_tests
 
     subroutine test_read_movies_and_sum_frames_counts()
@@ -187,6 +188,78 @@ contains
         analyzer%best_idx = 4
         call assert_char('xy', analyzer%get_flip_mode(), 'flip mode for the xy variant')
     end subroutine test_gain_flip_mode_mapping
+
+    subroutine test_correct_gain_flipping()
+        use simple_motion_correct_utils, only: correct_gain
+        integer, parameter :: NX = 6, NY = 4, NFRAMES_TEST = 3
+        character(len=2), parameter :: MODES(5) = ['no', 'x ', 'y ', 'xy', 'yx']
+        type(image), allocatable :: frames(:)
+        class(image), allocatable :: gain
+        type(string) :: fname
+        real :: source_gain(NX,NY,1), source_frame(NX,NY,1), expected_gain(NX,NY,1)
+        real, allocatable :: actual(:,:,:)
+        integer :: i, j, iframe, imode, ix, iy, saved_log, scratch_log
+        write(*,'(A)') 'test_correct_gain_flipping'
+        allocate(frames(NFRAMES_TEST), gain)
+        fname = 'tmp_motion_gain_flip_input.mrc'
+        do j = 1,NY
+            do i = 1,NX
+                source_gain(i,j,1) = real(i+10*j)
+                source_frame(i,j,1) = real(2*i+j)
+            enddo
+        enddo
+        ! An off-centre dead pixel also tests the orientation of the returned
+        ! gain used to discover EER defects after correction.
+        source_gain(2,1,1) = 0.
+        call gain%new([NX,NY,1], 1.0, wthreads=.false.)
+        call gain%set_rmat(source_gain, .false.)
+        call gain%write(fname, del_if_exists=.true.)
+        saved_log = logfhandle
+        open(newunit=scratch_log, status='scratch', action='write')
+        logfhandle = scratch_log
+        do imode = 0,size(MODES)
+            do iframe = 1,NFRAMES_TEST
+                call frames(iframe)%new([NX,NY,1], 1.0, wthreads=.false.)
+                call frames(iframe)%set_rmat(real(iframe)*source_frame, .false.)
+            enddo
+            expected_gain = source_gain
+            if( imode == 0 )then
+                ! Omitting the new argument preserves existing callers.
+                call correct_gain(frames, fname, gain, frames_range=[2,2])
+            else
+                ! Independent index permutation, not image%flip, supplies truth.
+                do j = 1,NY
+                    iy = j
+                    if( index(MODES(imode),'y') > 0 ) iy = NY-j+1
+                    do i = 1,NX
+                        ix = i
+                        if( index(MODES(imode),'x') > 0 ) ix = NX-i+1
+                        expected_gain(i,j,1) = source_gain(ix,iy,1)
+                    enddo
+                enddo
+                call correct_gain(frames, fname, gain, frames_range=[2,2], flipgain=MODES(imode))
+            endif
+            actual = gain%get_rmat()
+            call assert_true(all(actual == expected_gain), 'correction returns the gain in movie coordinates')
+            actual = frames(2)%get_rmat()
+            call assert_true(all(actual == 2.*source_frame*expected_gain), 'gain is flipped before frame multiplication')
+            actual = frames(1)%get_rmat()
+            call assert_true(all(actual == source_frame), 'gain correction preserves frames before the selected range')
+            actual = frames(3)%get_rmat()
+            call assert_true(all(actual == 3.*source_frame), 'gain correction preserves frames after the selected range')
+        enddo
+        ! Flipping is in memory only; reusing the same file must not flip it again.
+        call gain%read(fname)
+        actual = gain%get_rmat()
+        call assert_true(all(actual == source_gain), 'gain correction leaves the input gain file unchanged')
+        logfhandle = saved_log
+        close(scratch_log)
+        do iframe = 1,NFRAMES_TEST
+            call frames(iframe)%kill()
+        enddo
+        call gain%kill()
+        call del_file(fname)
+    end subroutine test_correct_gain_flipping
 
     subroutine create_movie_stack(fname, ldim, smpd, frame_values)
         type(string), intent(in) :: fname

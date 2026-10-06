@@ -132,7 +132,6 @@ contains
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl3D')
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('pcontrast')    ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('backgr_subtr') ) call cline%set('backgr_subtr',    'no')
         if( .not. cline%defined('wfloat16')     ) call cline%set('wfloat16',        'no')
         if( .not.cline%defined('fromf')         ) call cline%set('fromf',              1)
         if( .not.cline%defined('tof')           ) call cline%set('tof',                0)
@@ -677,14 +676,5 @@ contains
         character(len=:), allocatable :: msg
         msg = '**** SIMPLE_REFINE_MOTION_MODEL_DISTR NORMAL STOP ****'
     end function distr_end_message
-
-    pure logical function box_inside(ildim, coord, box)
-        integer, intent(in) :: ildim(3), coord(2), box
-        integer             :: fromc(2), toc(2)
-        fromc = coord + 1
-        toc   = fromc + (box - 1)
-        box_inside = .true.
-        if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) box_inside = .false.
-    end function box_inside
 
 end module simple_refine_motion_model_strategy

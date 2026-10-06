@@ -12,15 +12,56 @@ private
 
 public :: run_all_motion_model_tests
 
+character(len=2), parameter :: FLIP_MODES(5) = ['no', 'x ', 'y ', 'xy', 'yx']
+
 contains
 
     subroutine run_all_motion_model_tests()
         write(*,'(A)') '**** running all motion model tests ****'
+        call test_flipgain_lifecycle()
         call test_binary_roundtrip_with_optional_arrays()
         call test_binary_roundtrip_with_rejected_patch()
         call test_binary_roundtrip_without_optional_arrays()
         call test_refit_polynomial_known_coefficients()
     end subroutine run_all_motion_model_tests
+
+    subroutine test_flipgain_lifecycle()
+        use simple_image, only: image
+        character(len=2), parameter :: EXPECTED_MODES(5) = ['NO', 'X ', 'Y ', 'XY', 'YX']
+        class(motion_model), allocatable :: model
+        class(parameters), allocatable, target :: params
+        class(image), pointer :: frames(:)
+        type(string) :: movie, gain
+        integer :: imode
+        write(*,'(A)') 'test_flipgain_lifecycle'
+        allocate(model, params)
+        allocate(frames(1))
+        call frames(1)%new([6,4,1], 1.5, wthreads=.false.)
+        movie = 'tmp_motion_model_flipgain_movie.mrc'
+        gain  = 'tmp_motion_model_flipgain_gain.mrc'
+        call frames(1)%write(movie, del_if_exists=.true.)
+        params%fraction_dose_target = 1.5
+        params%total_dose = 1.0
+        params%eer_upsampling = 1
+        call assert_char('no', model%flipgain, 'motion model gain flipping defaults to no')
+        do imode = 1,size(FLIP_MODES)
+            params%flipgain = FLIP_MODES(imode)
+            call model%new(params, movie, [6,4], 1.5, frames, 1, 1, 300., 1., 0, gain=gain)
+            call assert_char(EXPECTED_MODES(imode), model%flipgain,&
+                &'constructor stores the gain flipping mode in uppercase')
+            params%flipgain = FLIP_MODES(mod(imode,size(FLIP_MODES))+1)
+            call assert_char(EXPECTED_MODES(imode), model%flipgain,&
+                &'gain flipping is independent of later parameter changes')
+            call model%kill()
+            call assert_char('no', model%flipgain, 'killing an active model resets gain flipping')
+        enddo
+        model%flipgain = 'xy'
+        call model%kill()
+        call assert_char('no', model%flipgain, 'killing an inactive model also resets gain flipping')
+        call frames(1)%kill()
+        deallocate(frames)
+        call del_file(movie)
+    end subroutine test_flipgain_lifecycle
 
     subroutine test_refit_polynomial_known_coefficients()
         integer, parameter :: NFRAMES_TEST = 7, NGRID = 3, REF_FRAMES(2) = [1,4]
@@ -138,9 +179,11 @@ contains
     subroutine test_binary_roundtrip( input_bin, output_bin, output_star, with_optional_arrays, patch_accepted )
         type(string), intent(in) :: input_bin, output_bin, output_star
         logical,      intent(in) :: with_optional_arrays, patch_accepted
-        type(motion_model)       :: model
-        type(parameters), target :: params
-        type(cmdline)            :: cline
+        class(motion_model), allocatable :: model
+        class(parameters), allocatable, target :: params
+        class(cmdline), allocatable :: cline
+        integer :: imode
+        allocate(model, params, cline)
         ! a program outside every UI table: parameters is only the container
         ! here, and a registered program (motion_correct requires a project)
         ! made the result depend on whether an earlier suite built the UI
@@ -156,14 +199,19 @@ contains
         call del_file(input_bin)
         call del_file(output_bin)
         call del_file(output_star)
-        call write_reference_binary(input_bin, with_optional_arrays, patch_accepted)
-        call model%read(input_bin, params)
-        call assert_true(model%patch_accepted .eqv. patch_accepted,&
-            &'motion model read preserves patch acceptance')
-        call model%write(output_star, output_bin, patch_accepted)
-        call assert_true(file_exists(output_bin), 'motion model roundtrip writes a binary model')
-        call assert_true(binary_files_equal(input_bin, output_bin),&
-            &'motion model read/write preserves the independently generated binary payload')
+        do imode = 1,size(FLIP_MODES)
+            ! Deliberately disagree with the file: read must use stored metadata.
+            params%flipgain = FLIP_MODES(mod(imode,size(FLIP_MODES))+1)
+            call write_reference_binary(input_bin, with_optional_arrays, patch_accepted, FLIP_MODES(imode))
+            call model%read(input_bin, params)
+            call assert_char(FLIP_MODES(imode), model%flipgain, 'binary gain flipping overrides runtime parameters')
+            call assert_true(model%patch_accepted .eqv. patch_accepted,&
+                &'motion model read preserves patch acceptance')
+            call model%write(output_star, output_bin, patch_accepted)
+            call assert_true(file_exists(output_bin), 'motion model roundtrip writes a binary model')
+            call assert_true(binary_files_equal(input_bin, output_bin),&
+                &'motion model read/write preserves the independently generated binary payload')
+        enddo
         call model%kill()
         call del_file(input_bin)
         call del_file(output_bin)
@@ -171,9 +219,10 @@ contains
         call cline%kill()
     end subroutine test_binary_roundtrip
 
-    subroutine write_reference_binary( fname, with_optional_arrays, patch_accepted )
+    subroutine write_reference_binary( fname, with_optional_arrays, patch_accepted, flipgain )
         type(string), intent(in) :: fname
         logical,      intent(in) :: with_optional_arrays, patch_accepted
+        character(len=*), intent(in) :: flipgain
         integer(int8) :: flag
         integer       :: funit, ios, i, noutliers
         integer       :: file_version, model_version
@@ -188,7 +237,7 @@ contains
         real, allocatable :: patch_coords(:,:,:), local_x(:,:,:), local_y(:,:,:)
         real(dp)      :: coeffs_x(18), coeffs_y(18)
         character(len=:), allocatable :: gain
-        file_version         = 0
+        file_version         = 1
         model_version        = 0
         smpd_movie           = 1.5
         ldim_movie           = [9, 7]
@@ -241,6 +290,7 @@ contains
         write(funit) file_version, model_version
         call write_reference_string(funit, 'tmp_motion_model_movie.mrc')
         call write_reference_string(funit, gain)
+        call write_reference_string(funit, trim(flipgain))
         write(funit) smpd_movie, ldim_movie, smpd, ldim, binning
         write(funit) nframes, total_nframes
         write(funit) voltage, dose_per_frame, target_dose_per_frame, total_dose, accumulated_dose

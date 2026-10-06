@@ -12,7 +12,7 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: MODEL_VERSION = 0    ! Attempt at versioning the model
-integer, parameter :: FILE_VERSION  = 0    ! Attempt at versioning file format
+integer, parameter :: FILE_VERSION  = 1    ! Version 1 adds flipgain after the gain filename
 integer, parameter :: MODELSZ       = 18   ! number of the models polynomial coefficients
 
 type :: motion_model
@@ -21,6 +21,7 @@ type :: motion_model
     type(string)         :: file_name
     type(string)         :: movie
     type(string)         :: gain
+    character(len=STDLEN) :: flipgain = 'no'
     ! Images dimensions
     real                 :: smpd_movie
     integer              :: ldim_movie(2)
@@ -95,6 +96,7 @@ contains
         self%p_ptr => params
         self%movie = simple_abspath(movie)
         if( present(gain) ) self%gain = gain
+        self%flipgain   = uppercase(self%p_ptr%flipgain)
         self%eer        = fname2format(self%movie) == 'K'
         self%ldim_movie = ldim_movie
         self%smpd_movie = smpd_movie
@@ -460,6 +462,7 @@ contains
         write(funit) stored_file_version, stored_model_version
         call write_string(funit, self%movie)
         call write_string(funit, self%gain)
+        call write_string(funit, string(trim(self%flipgain)))
         write(funit) self%smpd_movie, self%ldim_movie, self%smpd, self%ldim, self%binning
         write(funit) self%nframes, self%total_nframes
         write(funit) self%voltage, self%dose_per_frame, self%target_dose_per_frame,&
@@ -488,6 +491,7 @@ contains
         class(motion_model), intent(inout) :: self
         class(string),                  intent(in)    :: bin_fname
         class(parameters), target,      intent(in)    :: params
+        type(string)  :: stored_flipgain
         integer(int8) :: flag
         integer       :: funit, ios, stored_file_version, stored_model_version, noutliers
         call self%kill
@@ -503,6 +507,14 @@ contains
         endif
         call read_string(funit, self%movie)
         call read_string(funit, self%gain)
+        call read_string(funit, stored_flipgain)
+        select case(trim(uppercase(stored_flipgain%to_char())))
+        case('NO','X','Y','XY','YX')
+            self%flipgain = stored_flipgain%to_char()
+        case default
+            THROW_HARD('invalid gain flipping mode in motion model binary')
+        end select
+        call stored_flipgain%kill
         read(funit) self%smpd_movie, self%ldim_movie, self%smpd, self%ldim, self%binning
         read(funit) self%nframes, self%total_nframes
         read(funit) self%voltage, self%dose_per_frame, self%target_dose_per_frame,&
@@ -566,6 +578,7 @@ contains
         write(logfhandle,'(a25,1x,a)')       'file name:', trim(self%file_name%to_char())
         write(logfhandle,'(a25,1x,a)')       'movie:', trim(self%movie%to_char())
         write(logfhandle,'(a25,1x,a)')       'gain:', trim(self%gain%to_char())
+        write(logfhandle,'(a25,1x,a)')       'gain flipping:', trim(self%flipgain)
         write(logfhandle,'(a25,1x,es15.7)')  'movie sampling:', self%smpd_movie
         write(logfhandle,'(a25,2(1x,i0))')   'movie dimensions:', self%ldim_movie
         write(logfhandle,'(a25,1x,es15.7)')  'sampling:', self%smpd
@@ -656,6 +669,7 @@ contains
             if( allocated(self%outlier_coords) ) deallocate(self%outlier_coords)
             nullify(self%p_ptr)
         endif
+        self%flipgain = 'no'
         self%exists = .false.
     end subroutine kill
 

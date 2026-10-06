@@ -58,12 +58,13 @@ contains
     end function apply_patch_poly
 
     ! gain correction, calculate image sum and identify outliers
-    subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder, frames_range )
+    subroutine correct_gain( frames_here, gainref_fname, gainimg, eerdecoder, frames_range, flipgain )
         type(image),     allocatable, intent(inout) :: frames_here(:)
         class(string),                intent(in)    :: gainref_fname
         class(image),                 intent(inout) :: gainimg
         class(eer_decoder), optional, intent(in)    :: eerdecoder
         integer,            optional, intent(in)    :: frames_range(2)
+        character(len=*),   optional, intent(in)    :: flipgain
         integer :: ldim_here(3), ldim_gain(3), iframe, ifoo, nframes_here, from, to
         write(logfhandle,'(a)') '>>> PERFORMING GAIN CORRECTION'
         nframes_here = size(frames_here)
@@ -89,6 +90,12 @@ contains
             endif
             call gainimg%new(ldim_gain, frames_here(from)%get_smpd())
             call gainimg%read(gainref_fname)
+        endif
+        ! Orient the loaded/prepared gain before applying it to any frame. Keep
+        ! gainimg in this orientation so EER defect coordinates use the same axes.
+        if( present(flipgain) )then
+            write(logfhandle,'(a,a)') '>>> GAIN FLIPPING: ', trim(flipgain)
+            if( trim(uppercase(flipgain)) /= 'NO' ) call gainimg%flip(flipgain)
         endif
         !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
         do iframe = from,to
