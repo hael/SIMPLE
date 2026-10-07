@@ -30,7 +30,7 @@ logical,          allocatable :: nu_observed_mask(:)
 integer :: n_nu_observed = 0
 real,             allocatable :: nu_smooth_norm(:,:,:)
 ! Solvent-constraint clamp (pcg_priors_history.md dev item 4): the objective and null
-! competition retain the broad spherical domain. The whitening fit omits exact
+! competition retain the broad spherical domain. The noise-level fit omits exact
 ! zero/zero samples introduced by a narrower PCG solve support because those
 ! are boundary conditions, not noise observations. Solvent voxels are fixed to
 ! the coarsest signal candidate in both the filter and evidence Potts fields,
@@ -57,10 +57,9 @@ integer :: n_nu_mask = 0
 integer :: nu_smooth_norm_radius = -1
 real    :: smpd, nu_support_mskdiam = 0.
 logical :: nu_l_report = .true.
-! Radial raw E/O noise profile that whitens the Huber unary (image::nu_objective_noise_profile),
+! Global raw E/O noise level sigma_0 of the squared-error unary (image::nu_objective_noise_scale),
 ! computed once per setup_nu_dmats and reused by build_nu_evidence_state for its null candidate.
-real, allocatable :: nu_noise_profile_cached(:)
-real    :: nu_noise_rmax_cached = 0.
+real    :: nu_noise_scale_cached = 0.
 integer :: nu_aux_replacement_label = 0
 real    :: nu_aux_replacement_resolution = 0.
 logical :: nu_evidence_requested = .false.

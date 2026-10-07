@@ -72,7 +72,9 @@ Describe it as local selection among candidate filtered even/odd pairs:
 - build a low-pass candidate bank from the unfiltered even/odd pair
 - construct spherical objective support from `mskdiam`
 - optionally append the auxiliary pair as the last (finest) bank member
-- compute mask-packed voxelwise objective costs
+- compute mask-packed voxelwise objective costs: the squared cross-half
+  prediction error at one global noise level (no local noise estimate; the
+  level never changes a voxel's winner)
 - smooth each candidate objective inside spherical support
 - choose the best candidate per voxel
 - apply ordered-label Potts smoothing
@@ -100,8 +102,9 @@ Read:
 
 - `src/main/nu_filt/simple_nu_filter.f90`
 - `src/main/nu_filt/simple_nu_filter_*.f90`
-- `simple_exec prg=nu_filt3D` on a refined map (the standalone `nu_filter` test
-  program was deleted: it asserted nothing; see `doc/policies/test_environment_policy.md`)
+- `src/main/nu_filt/simple_nu_filter_tester.f90` (sub-suite `nonuniform
+  filtering` of `unit_reconstruction`) and `simple_exec prg=nu_filt3D` on a
+  refined map
 - the implementation notes in [references/nonuniform-regularization-map.md](./references/nonuniform-regularization-map.md)
 
 Watch for mask-packed arrays, temporary full-volume buffers, disk-backed cache

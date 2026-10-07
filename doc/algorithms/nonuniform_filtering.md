@@ -34,28 +34,35 @@ signal that it does. The evidence for candidate `c` at `v` is therefore the
 cross-half prediction error
 
 ```text
-r1_c(v) = [E(v) - O_c(v)] / sigma(|v|),
-r2_c(v) = [E_c(v) - O(v)] / sigma(|v|),
-C_c(v)  = H(r1_c(v)) + H(r2_c(v)),
+r1_c(v) = [E(v) - O_c(v)] / sigma_0,
+r2_c(v) = [E_c(v) - O(v)] / sigma_0,
+C_c(v)  = [r1_c(v)^2 + r2_c(v)^2] / 2,
 ```
 
-with the Huber loss `H(r) = r^2/2` for `|r| <= 1.345`, else
-`1.345(|r| - 0.6725)`. The transition 1.345 gives 95 percent efficiency at
-the Gaussian; the linear tail stops isolated large residuals (a stray
-strong voxel) from dominating.
+the plain squared error: the cross-validated criterion of cryoSPARC's
+non-uniform refinement (Punjani, Zhang and Fleet, Nature Methods 2020).
+Reconstruction noise is a sum over very many Fourier coefficients and is
+Gaussian, so there are no heavy tails to guard against; the large residuals
+are real signal that a too-coarse candidate removed, and the squared error
+charges them in full. Isolated voxels are already limited by the smoothing of
+the costs (step 1 below).
 
-**Whitening.** The noise scale `sigma(r)` is a function of real-space radius,
-estimated once from the raw difference `E - O`: in each radial shell,
+**Noise level.** `sigma_0` is one scalar per setup, the Gaussian-scaled MAD
+of the raw difference over the observed support (voxels where both halves are
+exactly zero are unobserved and left out):
 
 ```text
-sigma_j = 1.4826 * median | (E-O)_j - median(E-O)_j |,
+sigma_0 = 1.4826 * median | (E-O) - median(E-O) |.
 ```
 
-with gap filling, radial smoothing, and linear interpolation between shell
-centers. A radial profile rather than a global scalar is required because
-the gridding correction and any tapered solve support make reconstruction
-noise grow toward the periphery; a global scale would put central and
-peripheral residuals in different Huber regimes.
+Because every candidate's cost is divided by the same level, the winner at a
+voxel does not depend on `sigma_0` at all; the level only sets the balance
+between the costs and the Potts prior. No local noise estimate is needed for
+the competition, and none is made: a profile estimated from `E - O` would be
+inflated wherever the halves disagree over density, and a median over the
+whole support is not. Where the noise is higher, as toward the box edge under
+the gridding correction, the finer candidates are simply costlier, which is
+the right response for that map.
 
 **Support.** All statistics are evaluated inside the sphere of diameter
 `mskdiam`. The sphere, rather than a density mask, is used because it keeps
@@ -141,9 +148,9 @@ separate estimator: [NU-evidence envelope masking](nu_evidence_envelope_mask.md)
 - Cross-half prediction error is a direct, model-free test of local
   resolution: it needs no assumption about the signal, only that the two
   halves have independent noise.
-- Comparing candidates with one shared whitening profile makes the
-  minimum-cost label meaningful; comparing candidates each smoothed at its
-  own scale would bias the boundary.
+- Dividing every candidate's cost by one shared level keeps the minimum-cost
+  label a property of the halves alone; comparing candidates each smoothed at
+  its own scale would bias the boundary.
 - The ordered Potts prior encodes that resolution varies continuously in
   space, which is what distinguishes local resolution from voxelwise noise.
 
@@ -151,7 +158,10 @@ separate estimator: [NU-evidence envelope masking](nu_evidence_envelope_mask.md)
 
 - Bank, costs, labels: `src/main/nu_filt/simple_nu_filter*.f90`; the per-state
   driver: `src/main/volume/simple_nu_state_filter.f90`.
-- Noise scale and Huber objective: `src/main/image/simple_image_calc.f90`.
+- Noise level and squared-error objective (`nu_objective_noise_scale`,
+  `nu_objective`): `src/main/image/simple_image_calc.f90`.
+- Unit tests, including the two-resolution phantom and the neutral fixture:
+  `src/main/nu_filt/simple_nu_filter_tester.f90` (`unit_reconstruction`).
 - Integration into volume assembly:
   `src/main/commanders/simple/simple_commanders_rec_distr.f90`.
 - Matching bandwidth handoff:

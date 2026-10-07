@@ -55,7 +55,7 @@ real,             parameter   :: NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A = 30.0
 ! Largest representable NU unary with useful relative precision. The image
 ! objective uses the same bound before its single-precision smoothing volume
 ! is formed. This is still overwhelmingly unfavorable relative to ordinary
-! noise-normalized Huber costs, without behaving like a numeric sentinel.
+! noise-normalized squared-error costs, without behaving like a numeric sentinel.
 real,             parameter   :: NU_OBJECTIVE_UNARY_CAP           = 1. / epsilon(1.)
 ! Report continuity health using the same hinge as the ordered-label prior:
 ! one-step retained-bank transitions are tolerated, larger jumps are penalized.
@@ -132,7 +132,8 @@ character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE = 'base_unfil'
 ! lag-one evidence source for the PCG trailing bootstrap: the previous
 ! iteration's shipped half pair, the same pair that supplies the bootstrap FSC
 character(len=*), parameter   :: NU_EVIDENCE_SOURCE_PREV = 'previous_shipped'
-character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v1'
+! bumped whenever the unary or its calibration changes; v2 is the squared-error unary at one noise level
+character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v2'
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 ! Opt-in diagnostics for NU-filter development. Keep normal runs concise; this

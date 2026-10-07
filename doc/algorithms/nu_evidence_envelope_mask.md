@@ -28,52 +28,40 @@ The static low-pass bank is
 Let `E` and `O` be the raw even and odd maps and let `E_c` and `O_c`
 be the maps filtered with candidate `c`.
 
-## Radially Whitened Huber Objective
+## Squared-Error Objective at One Noise Level
 
-First, SIMPLE estimates one candidate-independent radial noise profile from the
-raw even-minus-odd values inside the sphere. Supported voxels are grouped by
-real-space radius, and each radial shell receives the Gaussian-scaled MAD
+First, SIMPLE estimates one candidate-independent noise level from the raw
+even-minus-odd values of the observed voxels inside the sphere (voxels where
+both half maps are exactly zero are unobserved and left out), the
+Gaussian-scaled MAD
 
 \[
-\sigma_j = 1.4826\,\operatorname{median}
-\left| (E-O)_j-\operatorname{median}(E-O)_j \right|.
+\sigma_0 = 1.4826\,\operatorname{median}
+\left| (E-O)-\operatorname{median}(E-O) \right|.
 \]
 
-Empty or numerically degenerate shells are filled from valid neighbors and the
-profile is smoothed radially. If no shell has a valid MAD, a global MAD, then
-RMS, supplies the fallback. Linear interpolation between shell centers gives
-`sigma(r(v))` at voxel `v`.
-
-This whitening is candidate-independent but spatially varying. It accounts for
-radial noise changes introduced by reconstruction deapodization and tapered
-solve support; a single global scale would put central and peripheral residuals
-in different Huber regimes. For every candidate and supported voxel `v`, the
+A median over the whole support is not inflated by the minority of voxels
+where the halves disagree over density, which a locally estimated level would
+be. If the MAD is degenerate the RMS supplies the fallback, and an all-zero
+pair takes the unit level. For every candidate and supported voxel `v`, the
 cross-half residuals are
 
 \[
-r_{1,c}(v)=\frac{E(v)-O_c(v)}{\sigma(r(v))}, \qquad
-r_{2,c}(v)=\frac{E_c(v)-O(v)}{\sigma(r(v))}.
+r_{1,c}(v)=\frac{E(v)-O_c(v)}{\sigma_0}, \qquad
+r_{2,c}(v)=\frac{E_c(v)-O(v)}{\sigma_0},
 \]
 
-The candidate cost is
+and the candidate cost is the plain squared error
 
 \[
-C_c(v)=H_{1.345}(r_{1,c}(v))+H_{1.345}(r_{2,c}(v)),
+C_c(v)=\tfrac12\left[r_{1,c}(v)^2+r_{2,c}(v)^2\right].
 \]
 
-where
-
-\[
-H_\delta(r)=
-\begin{cases}
-\tfrac12 r^2, & |r|\le\delta,\\
-\delta\left(|r|-\tfrac12\delta\right), & |r|>\delta.
-\end{cases}
-\]
-
-The common radial profile makes candidates comparable at each voxel. The Huber
-loss remains quadratic near the expected local noise level but prevents
-isolated large residuals from dominating the evidence.
+Reconstruction noise is Gaussian, so no robust loss is needed; the large
+residuals come from signal that a too-coarse candidate removed and are
+charged in full. The shared level makes candidates comparable at each voxel
+and drops out of the per-voxel competition altogether; it enters the
+evidence only through the margins below, which are thresholded across voxels.
 
 ## Evidence Margin
 
@@ -111,8 +99,16 @@ e(v)=\widetilde D(v).
 \]
 
 An absolute margin is used, rather than a baseline-to-best ratio, because the
-Huber costs are already noise-normalized and candidate-independent; a ratio
+costs are already noise-normalized and candidate-independent; a ratio
 would let a high-contrast core outvote weak but ordered density.
+
+The margin does depend on the noise level, unlike the per-voxel competition:
+where the noise is higher, as toward the box edge under the gridding
+correction, the same true improvement yields a smaller margin. One global
+level therefore costs some recall of peripheral density against a
+spatially varying one; the measured trade-off and the alternative (dividing
+the margins by the reconstruction's known geometric noise factor) are
+recorded in the refactoring note `nu_euclidean_loss.md`.
 
 ## Robust Evidence Score
 
@@ -202,7 +198,7 @@ The remaining algorithm parameters are fixed but retain explicit roles:
 
 | Fixed choice | Value | Effect |
 |---|---:|---|
-| Scale-free evidence | no | A baseline-to-best ratio can prevent weak but ordered density from being outvoted by a high-contrast core; production uses the absolute Huber-cost margin |
+| Scale-free evidence | no | A baseline-to-best ratio can prevent weak but ordered density from being outvoted by a high-contrast core; production uses the absolute squared-error cost margin |
 | Density weight | 0.0 | Positive weight retains strong but poorly ordered density; zero keeps the mask evidence-only |
 | MRF beta | 1.0 | Boundary smoothness; higher values give smoother boundaries |
 | Minimum component fraction | 0.1 | Smallest connected component kept relative to the largest |
@@ -237,12 +233,15 @@ independent density automask, and the NU objective keeps the spherical
   `src/main/nu_filt/simple_nu_filter_bank.f90`
 - Evidence calculation and binary MRF:
   `src/main/nu_filt/simple_nu_filter_envmask.f90`
-- Noise scale and Huber objective:
+- Noise level and squared-error objective:
   `src/main/image/simple_image_calc.f90`
 - Component filtering, hole filling, dilation, and soft edge:
   `src/main/image/simple_image_msk.f90`
-- Synthetic regression: `production/tests/simple_test_nu_envmask.f90` was
-  retired on 2026-09-23 (test-environment plan, section 9.7, singles II); the
-  filter is exercised end to end through `simple_exec prg=nu_filt3D`
+- Synthetic regression: the neutral fixture (a sphere of band-limited common
+  signal in a noise support) is `test_evidence_envelope` of
+  `src/main/nu_filt/simple_nu_filter_tester.f90` (`unit_reconstruction`); it
+  reports the envelope's recall of true density and its solvent
+  false-positive rate; the filter is exercised end to end through
+  `simple_exec prg=nu_filt3D`
 
 Historical design constraints: [superseded NU-evidence envelope masking note](../implementation_notes/rejected/nu_evidence_envelope_masking.md) (its reference-masking design was retired; the envelope itself is live).

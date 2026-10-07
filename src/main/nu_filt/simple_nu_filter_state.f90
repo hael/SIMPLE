@@ -208,8 +208,7 @@ contains
         n_nu_mask = 0
         smpd = 0.
         nu_support_mskdiam = 0.
-        if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
-        nu_noise_rmax_cached = 0.
+        nu_noise_scale_cached = 0.
         nu_evidence_requested = .false.
         nu_evidence_source = ''
         nu_evidence_source_fingerprint = 0.d0
@@ -374,9 +373,8 @@ contains
     end subroutine stash_aux_volumes
 
     !> Packed observation mask of the setup pair, in nu_mask_vox order. Uses
-    !! the same exact zero/zero criterion as nu_objective_noise_profile so
-    !! the whitening fit and the evidence statistics see one definition of
-    !! "unobserved". A pair without any exact zeros is fully observed.
+    !! the same exact zero/zero criterion as nu_objective_noise_scale so the
+    !! noise level and the evidence statistics see one definition of "unobserved".
     module subroutine setup_nu_observed_mask( vol_even, vol_odd )
         class(image), intent(in) :: vol_even, vol_odd
         real(kind=c_float), pointer :: rmat_even(:,:,:), rmat_odd(:,:,:)

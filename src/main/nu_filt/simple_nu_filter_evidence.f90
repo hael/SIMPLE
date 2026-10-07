@@ -24,7 +24,6 @@ contains
         real, allocatable :: band_limits_active(:)
         real    :: nextb
         real(kind=8) :: fingerprint(6), cutoff_checksum, uncertainty_checksum, support_checksum
-        real(kind=8) :: whitening_checksum
         real :: beta, temperature, best_e, second_e, e, prob_sum, entropy, null_lp
         real :: unconstrained_null_fraction
         real :: null_bias_median, null_bias_mad, null_bias_threshold
@@ -47,8 +46,8 @@ contains
             &THROW_HARD('NU evidence half-map sampling differs from setup')
         if( .not.allocated(dmats_mask) .or. .not.allocated(candidate_coords) ) &
             &THROW_HARD('NU unary bank was released before evidence compaction')
-        if( .not.allocated(nu_noise_profile_cached) ) &
-            &THROW_HARD('NU whitening profile is unavailable for evidence compaction')
+        if( .not.ieee_is_finite(nu_noise_scale_cached) .or. nu_noise_scale_cached <= 0. ) &
+            &THROW_HARD('NU noise level is unavailable for evidence compaction')
         if( n_nu_mask < 1 ) THROW_HARD('NU evidence support is empty')
         ! Calibration statistics use observed voxels only: exact zero/zero voxels left by a density-constrained
         ! PCG solve are boundary conditions, frozen at the explicit null with zero band support.
@@ -101,8 +100,7 @@ contains
         allocate(null_cost(n_nu_mask), source=0.)
         call vol_zero%new(ldim, smpd)
         call vol_zero%zero
-        call vol_even%nu_objective(vol_zero, vol_odd, vol_zero, null_full, nu_lmask, &
-            &nu_noise_profile_cached, nu_noise_rmax_cached)
+        call vol_even%nu_objective(vol_zero, vol_odd, vol_zero, null_full, nu_lmask, nu_noise_scale_cached)
         null_lp = nu_label_lowpass_limit(1)
         call smooth_nu_objective(null_full, smooth_tmp, null_lp)
         !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
@@ -168,8 +166,8 @@ contains
         unconstrained_null_fraction = real(n_null_observed) / real(n_observed)
 
         ! Calibrate confidence against the final spatial-model energy gap, not
-        ! against raw Huber values.  This is a deterministic temperature for
-        ! the exact bank, whitening profile, smoothing radii, and Potts model.
+        ! against raw unary values: a deterministic temperature for the exact
+        ! bank, noise level, smoothing radii and Potts model.
         allocate(gaps(n_nu_mask), source=0.)
         !$omp parallel do schedule(static) default(shared) &
         !$omp private(imask,i,j,k,icand,best_e,second_e,e) proc_bind(close)
@@ -374,16 +372,8 @@ contains
         state%summary%provenance = trim(state%summary%provenance)//';null_bias_mad='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') null_bias_threshold
         state%summary%provenance = trim(state%summary%provenance)//';null_bias_threshold='//trim(adjustl(value_text))
-        write(value_text,'(I0)') size(nu_noise_profile_cached)
-        state%summary%provenance = trim(state%summary%provenance)//';whitening_shells='//trim(value_text)
-        whitening_checksum = 0.d0
-        do i = 1, size(nu_noise_profile_cached)
-            whitening_checksum = whitening_checksum + real(i,8) * real(nu_noise_profile_cached(i),8)
-        enddo
-        write(value_text,'(ES22.14)') whitening_checksum
-        state%summary%provenance = trim(state%summary%provenance)//';whitening_checksum='//trim(adjustl(value_text))
-        write(value_text,'(ES14.6)') nu_noise_rmax_cached
-        state%summary%provenance = trim(state%summary%provenance)//';whitening_rmax='//trim(adjustl(value_text))
+        write(value_text,'(ES14.6)') nu_noise_scale_cached
+        state%summary%provenance = trim(state%summary%provenance)//';noise_scale='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') nu_support_mskdiam
         state%summary%provenance = trim(state%summary%provenance)//';mskdiam_A='//trim(adjustl(value_text))
 
@@ -700,7 +690,11 @@ contains
                     k = nu_mask_vox(3,imask)
                     if( nu_label_smooth_color(i,j,k) /= color ) cycle
                     if( .not.nu_observed_mask(imask) ) cycle
-                    if( l_constrain .and. nu_solvent_lmask(i,j,k) ) cycle
+                    ! nested, not one .and.: Fortran evaluates both operands, and the
+                    ! envelope array is unallocated when the background is not constrained
+                    if( l_constrain )then
+                        if( nu_solvent_lmask(i,j,k) ) cycle
+                    endif
                     current = int(candmap(i,j,k))
                     best = current
                     best_e = evidence_site_energy(imask, current, null_cost, signal_costs, coords, candmap, beta)

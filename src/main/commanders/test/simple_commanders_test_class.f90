@@ -66,6 +66,7 @@ use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_test
 use simple_project_superset_tester,          only: run_all_project_superset_tests
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
+use simple_nu_filter_tester,                 only: run_all_nu_filter_tests
 use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
@@ -378,6 +379,7 @@ contains
         call add_suite(s, n, 'trailing chain identity',   run_all_trail_chain_manifest_tests)
         call add_suite(s, n, 'frozen accumulator',        run_all_frozen_accum_tests)
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
+        call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
     end subroutine suites_reconstruction
 
     !> registration on the polar Fourier transform, shared by the 2D and 3D searches

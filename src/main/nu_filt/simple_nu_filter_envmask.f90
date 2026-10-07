@@ -271,7 +271,7 @@ contains
         logical, allocatable,    intent(inout) :: lmask(:,:,:)
         type(nu_envmask_stats),  intent(inout) :: stats
         logical, allocatable :: lab(:,:,:)
-        integer :: iter, color, imask, i, j, k, ineigh, ni, nj, nk, nsig
+        integer :: iter, color, imask, i, j, k, ineigh, ni, nj, nk
         integer :: n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz, deg, nsig, nchanged
         real    :: e_sig, e_sol, beta
         logical :: newlab
@@ -501,9 +501,9 @@ contains
         call evmap%write(fname, del_if_exists=.true.)
         write(logfhandle,'(A,A)') '>>> WROTE NU EVIDENCE MARGIN MAP: ', fname%to_char()
         if( l_rel )then
-            write(logfhandle,'(A)') '    Values are dimensionless baseline-to-best Huber cost-improvement ratios.'
+            write(logfhandle,'(A)') '    Values are dimensionless baseline-to-best squared-error cost-improvement ratios.'
         else
-            write(logfhandle,'(A)') '    Units are normalized Huber objective improvement over the coarsest candidate.'
+            write(logfhandle,'(A)') '    Units are noise-normalized squared-error improvement over the coarsest candidate.'
         endif
         call evmap%kill
         deallocate(margin)

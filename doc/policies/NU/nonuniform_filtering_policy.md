@@ -192,7 +192,7 @@ gridding the identical `mask3D_soft` applied after deapodization in
 All NU entry paths use a spherical support mask derived from `mskdiam`.
 `setup_nu_dmats` constructs that mask internally; callers cannot supply an
 arbitrary logical envelope. This prevents density- or correlation-conditioned
-masks from changing the normalized Huber objective domain and keeps a broad
+masks from changing the normalized objective domain and keeps a broad
 solvent population available for future NU-evidence null estimation.
 
 Spherical geometry alone does not guarantee a valid solvent-majority null.
@@ -212,26 +212,26 @@ Envelope generation and compatibility remain separate from NU support.
 Standalone `nu_filt3D` therefore exposes `mskdiam`, not `automsk`, for NU
 support.
 
-The Huber unary is WHITENED by a radially-resolved raw E/O noise profile
-(`image::nu_objective_noise_profile`: shell-wise Gaussian-scaled MAD of the
-raw even-odd difference over real-space radius, gap-filled and smoothed, with
-per-voxel linear interpolation between shell centres). Reconstruction noise is
-not spatially stationary — deapodization amplifies the periphery and solve
-supports taper it — and the earlier single global scale put peripheral
-residuals in the wrong Huber regime, compressing their cost-improvement
-margins and biasing both the filter competition and the evidence envelope
-toward the centre. (That flaw was historically masked by the gridding
-under-deapodization bug, whose radial fade approximately cancelled the true
-sigma(r) rise; fixing deapodization exposed it as over-tight envelopes.
-Measured on the neutral fixture: sigma(r) edge/centre 1.29; whitening raised
-envelope recall of true density from 0.48 to 0.61 at unchanged component
-count.) `>>> NU WHITENING PROFILE` reports shells, min/max and edge/centre
-ratio at every setup.
+The candidate cost is the plain squared cross-half prediction error,
+`C_c(v) = (r1^2 + r2^2) / 2`, with both residuals divided by ONE global noise
+level `sigma_0` (`image::nu_objective_noise_scale`: the Gaussian-scaled MAD of
+the raw even-odd difference over the observed voxels of the sphere, exact
+zero/zero pairs excluded). The level drops out of the per-voxel competition,
+which therefore needs no local noise estimate: a level estimated locally from
+`E - O` is inflated wherever the halves disagree over density, which is
+exactly the disagreement the filter is meant to find. Noise that is higher in
+some region makes the finer candidates costlier there, which is the correct
+response for that map. The level does enter the evidence envelope, whose
+margins are thresholded across voxels; the trade-off against a spatially
+varying level is measured on the neutral fixture by the unit tests and
+recorded in the refactoring note `nu_euclidean_loss.md`. `>>> NU NOISE LEVEL`
+reports `sigma_0` at every setup under `NU_DEV_OUTPUT`, and the evidence
+provenance carries it as `noise_scale`.
 
 When standalone NU-evidence envelope generation is enabled, its public shape
 controls are limited to `nu_msk_sig` (robust evidence threshold) and `amsklp`
 (physical evidence scale, in Angstrom). Production fixes the evidence form to
-the radially-whitened Huber-cost margin, density weight to zero, MRF
+the absolute squared-error cost margin, density weight to zero, MRF
 beta to 1, and minimum component fraction to 0.1. It also fixes binary growth
 at 1 A and the cosine edge at 6 A; `nu_filt3D` converts those physical lengths
 to the nearest voxel counts at the input-map sampling, with a one-voxel
@@ -300,7 +300,7 @@ prior-free base pair and APPLIED to the solvent-prior'd pair when the
 `_nu_filt` references are composed (`nu_filter_vols` apply pair,
 2026-09-21): per-label Butterworth of the prior'd halves scattered by the
 field, the auxiliary label from the ML pair as always. The competition,
-its whitening (a solvent-dominated MAD the prior would collapse), the
+its noise level (a solvent-dominated MAD the prior would collapse), the
 evidence null, the handoff and the `_nu_locres` map never see the prior'd
 pair; the references do, in every voxel. Log: `>>> NU REFERENCES: STATE n,
 LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR`.
@@ -339,7 +339,7 @@ An opt-in evidence API can compact this full unary bank before it is
 released. Callers must tag the setup source as `base_unfil`; the API fingerprints
 and rechecks the exact half pair and rejects the ML auxiliary-replacement path.
 It adds a zero cross-half-prediction null to a separate ordered-label model.
-Because raw zero prediction has a systematic Huber-loss offset relative to a
+Because raw zero prediction has a systematic cost offset relative to a
 smoothed predictor even for independent noise, and selecting the best of several
 signal candidates adds a multiple-comparison advantage, the null score
 subtracts the lower quartile of `C_zero-min(C_signal bank)` over the observed
@@ -360,7 +360,7 @@ calibration (starved and saturated null respectively) and hard-errors --
 validity alone does not qualify the evidence. The
 observed part excludes exact zero/zero voxels that a density-constrained PCG
 solve leaves inside the sphere (`nu_observed_mask`, set by `setup_nu_dmats`
-with the same test as the whitening profile); every calibration statistic
+with the same test as the noise level); every calibration statistic
 (null-bias center, spatial beta, temperature, null/uncertain/band-support
 fractions) is confined to it, unobserved voxels are frozen at the explicit
 null with zero band support, and the summary reports `observed_fraction`.

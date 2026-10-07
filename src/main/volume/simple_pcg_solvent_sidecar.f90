@@ -151,8 +151,8 @@ contains
     end subroutine build_solvent_prior_weight
 
     !> Relative ridge coefficient by closed-form cross-validation on the prior-free pair, no solve:
-    !! s = h/(h + lambda data_scale (1-w)) shrinks each half; J = whitened Huber cross-half error over
-    !! the support (window >= 1/2); grid argmin, one parabolic step in log lambda, edge/flat flagged.
+    !! s = h/(h + lambda data_scale (1-w)) shrinks each half; J = mean squared cross-half prediction error
+    !! at the pair's noise level over the support (window >= 1/2); grid argmin, one parabolic step in log lambda.
     subroutine estimate_solvent_prior_lambda( state, x_even, x_odd, weight_even, weight_odd, support, &
             &h_even, h_odd, data_scale_even, data_scale_odd, lambda_opt, stats )
         integer,                       intent(in)    :: state
@@ -163,9 +163,9 @@ contains
         type(pcg_solvent_lambda_stats),intent(out)   :: stats
         type(image) :: s_even, s_odd
         real(kind=c_float), pointer :: rmat_sup(:,:,:)
-        real,    allocatable :: sigma_r(:), diff(:,:,:), jgrid(:)
+        real,    allocatable :: diff(:,:,:), jgrid(:)
         logical, allocatable :: lmask(:,:,:)
-        real    :: rmax, jref, y0, y1, y2, xa, xb, xc, denom, xopt
+        real    :: noise_scale, jref, y0, y1, y2, xa, xb, xc, denom, xopt
         integer :: ldim(3), ig, ng, imin, nmask
         ldim = x_even%get_ldim()
         if( any(x_odd%get_ldim() /= ldim) .or. any(weight_even%get_ldim() /= ldim) .or. &
@@ -179,11 +179,11 @@ contains
         nullify(rmat_sup)
         nmask = count(lmask)
         if( nmask < 1 ) THROW_HARD('empty production support; estimate_solvent_prior_lambda')
-        ! whitening of the prior-free pair, the same profile the NU unary uses
-        call x_even%nu_objective_noise_profile(x_odd, lmask, sigma_r, rmax)
+        ! noise level of the prior-free pair, the same level the NU unary uses
+        noise_scale = x_even%nu_objective_noise_scale(x_odd, lmask)
         allocate(diff(ldim(1),ldim(2),ldim(3)), source=0.)
         ! reference: no prior (the shrunk halves are the prior-free halves)
-        call x_even%nu_objective(x_even, x_odd, x_odd, diff, lmask, sigma_r, rmax)
+        call x_even%nu_objective(x_even, x_odd, x_odd, diff, lmask, noise_scale)
         jref = sum(diff, mask=lmask) / real(nmask)
         ng = size(PCG_SOLVENT_LAMBDA_GRID)
         allocate(jgrid(ng), source=0.)
@@ -198,7 +198,7 @@ contains
         do ig = 1, ng
             call shrink_half(x_even, weight_even, h_even, PCG_SOLVENT_LAMBDA_GRID(ig) * data_scale_even, s_even)
             call shrink_half(x_odd,  weight_odd,  h_odd,  PCG_SOLVENT_LAMBDA_GRID(ig) * data_scale_odd,  s_odd)
-            call x_even%nu_objective(s_even, x_odd, s_odd, diff, lmask, sigma_r, rmax)
+            call x_even%nu_objective(s_even, x_odd, s_odd, diff, lmask, noise_scale)
             jgrid(ig) = sum(diff, mask=lmask) / real(nmask)
             write(logfhandle,'(A,F8.3,A,F10.4)') '     ', PCG_SOLVENT_LAMBDA_GRID(ig), '  ', jgrid(ig) / max(TINY, jref)
         enddo
@@ -235,7 +235,7 @@ contains
             &'>>> PCG SOLVENT PRIOR LAMBDA: flat curve; the weight map, not the strength, is the limit'
         call s_even%kill
         call s_odd%kill
-        deallocate(sigma_r, diff, jgrid, lmask)
+        deallocate(diff, jgrid, lmask)
 
     contains
 
@@ -263,17 +263,16 @@ contains
 
     end subroutine estimate_solvent_prior_lambda
 
-    !> The same objective on any candidate pair (the dev check compares the
-    !! closed form with real re-solves): whitened Huber cross-half prediction
-    !! error of the candidate halves against the prior-free other halves, mean
-    !! over the production support (window >= 1/2).
+    !> The same objective on any candidate pair (the dev check compares the closed form with real
+    !! re-solves): mean squared cross-half prediction error of the candidate halves against the
+    !! prior-free other halves, at the prior-free pair's noise level, over the support (window >= 1/2).
     real function solvent_prior_cross_half_objective( x_even, x_odd, cand_even, cand_odd, support ) result( j )
         class(image),         intent(in) :: x_even, x_odd, cand_even, cand_odd
         class(image), target, intent(in) :: support
         real(kind=c_float), pointer :: rmat_sup(:,:,:)
-        real,    allocatable :: sigma_r(:), diff(:,:,:)
+        real,    allocatable :: diff(:,:,:)
         logical, allocatable :: lmask(:,:,:)
-        real    :: rmax
+        real    :: noise_scale
         integer :: ldim(3), nmask
         ldim = x_even%get_ldim()
         call support%get_rmat_ptr(rmat_sup)
@@ -282,11 +281,11 @@ contains
         nullify(rmat_sup)
         nmask = count(lmask)
         if( nmask < 1 ) THROW_HARD('empty production support; solvent_prior_cross_half_objective')
-        call x_even%nu_objective_noise_profile(x_odd, lmask, sigma_r, rmax)
+        noise_scale = x_even%nu_objective_noise_scale(x_odd, lmask)
         allocate(diff(ldim(1),ldim(2),ldim(3)), source=0.)
-        call x_even%nu_objective(cand_even, x_odd, cand_odd, diff, lmask, sigma_r, rmax)
+        call x_even%nu_objective(cand_even, x_odd, cand_odd, diff, lmask, noise_scale)
         j = sum(diff, mask=lmask) / real(nmask)
-        deallocate(sigma_r, diff, lmask)
+        deallocate(diff, lmask)
     end function solvent_prior_cross_half_objective
 
     !> pcg_solvent=yes: the per-half protein weights of the soft solvent prior,

@@ -22,7 +22,7 @@ type stream_watcher
     integer, public, allocatable :: ratehistory(:)
     integer, public              :: n_history      = 0     !< history of movies detected
     integer, public              :: rate           = 0     !< current rate of movie detection
-    integer                      :: report_time    = 600   !< time ellapsed prior to processing
+    integer                      :: report_time    = 600   !< a file is reported once untouched this long; negative: as soon as listed
     integer                      :: ratetime       = 0     !< time of last rate checkpoint
     integer                      :: raten          = 0     !< number imported at last rate checkpoint
     integer                      :: n_watch        = 0     !< number of times the folder has been watched
@@ -132,6 +132,9 @@ contains
         call self%watchdirs(farray)
         if( .not.allocated(farray) )return ! nothing to report
         n_lsfiles = size(farray)
+        ! the listing forks a shell; the settle check reads the clock after it, so a file touched
+        ! (by any process) while the listing ran cannot have a timestamp past tnow's second
+        tnow = simple_gettime()
         ! identifies closed & untouched files
         allocate(is_new_movie(n_lsfiles), source=.false.)
         cnt = 0
@@ -144,16 +147,22 @@ contains
             if( self%is_past(fname) )cycle
             call simple_file_stat(fname, io_stat, fileinfo)
             if( io_stat.eq.0 )then
-                ! not seen before: reported only once untouched for report_time seconds,
-                ! otherwise left for a later watch
-                last_accessed      = tnow - fileinfo( 9)
-                last_modified      = tnow - fileinfo(10)
-                last_status_change = tnow - fileinfo(11)
-                if(        (last_accessed      > self%report_time)&
-                    &.and. (last_modified      > self%report_time)&
-                    &.and. (last_status_change > self%report_time) )then
+                if( self%report_time < 0 )then
+                    ! no settle time: taken as soon as listed, whatever its timestamps
                     is_new_movie(i) = .true.
                     cnt = cnt + 1
+                else
+                    ! not seen before: reported only once untouched for report_time seconds,
+                    ! otherwise left for a later watch
+                    last_accessed      = tnow - fileinfo( 9)
+                    last_modified      = tnow - fileinfo(10)
+                    last_status_change = tnow - fileinfo(11)
+                    if(        (last_accessed      > self%report_time)&
+                        &.and. (last_modified      > self%report_time)&
+                        &.and. (last_status_change > self%report_time) )then
+                        is_new_movie(i) = .true.
+                        cnt = cnt + 1
+                    endif
                 endif
             else
                 ! some error occured

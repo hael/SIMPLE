@@ -7,7 +7,10 @@
 The idea is supported by a synthetic check in numpy (section 4). Nothing has
 been run in SIMPLE or on real half-map pairs. The first step, when wanted, is
 a diagnostic table with no change of behaviour (section 6). Code references
-are to `c961fb432`.
+are to `c961fb432`. Since then (`nu_euclidean_loss.md`, 2026-10-06)
+`image%nu_objective` is the plain squared error at one global noise level
+`sigma_0`, no longer the Huber loss `H` under the radial profile `sigma(r)`
+written below; `J(t)` would use that cost.
 
 ## 1. Question
 

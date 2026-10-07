@@ -162,11 +162,11 @@ contains
         call unit_reconstruction%new(&
         &'unit_reconstruction',&
         &'unit tests: 3D reconstruction backends and observation noise',&
-        &'is the fast-gate unit suite for 3D reconstruction: the rec3D backend selector and the Gaussian observation-noise contracts',&
+        &'is the fast-gate unit suite for 3D reconstruction: the rec3D backend selector, the Gaussian observation-noise contracts and the nonuniform filter competition',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Reconstruction')
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, trailing_chain_identity, frozen_accumulator, volume_pair_metrics)', '', .false., '')
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, trailing_chain_identity, frozen_accumulator, volume_pair_metrics, nonuniform_filtering)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
 

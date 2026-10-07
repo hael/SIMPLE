@@ -111,7 +111,12 @@ high-resolution extension only when `nu_refine=yes`.
 - validates positive `mskdiam` and constructs nonempty spherical support
 - builds Butterworth filters for the cutoff bank
 - caches filtered base even/odd pairs on disk
-- computes mask-packed objective costs for each candidate
+- estimates one global noise level `sigma_0` (`image%nu_objective_noise_scale`:
+  Gaussian-scaled MAD of the raw even-odd difference over the observed
+  support, exact zero/zero voxels excluded)
+- computes mask-packed objective costs for each candidate: the squared
+  cross-half prediction error `((E - O_c)^2 + (E_c - O)^2) / (2 sigma_0^2)`
+  (`image%nu_objective`); the level never changes a voxel's winner
 - smooths each candidate objective over mask-normalized local support
 - uses auxiliary replacement volumes only when their effective resolution is
   finer than the finest retained static-bank label
@@ -177,9 +182,12 @@ product. Fallback matters before the first assembled nonuniform products exist.
 
 ## Tests and Manual Checks
 
-The standalone drivers `simple_test_nu_filter` and `simple_test_nu_envmask`
-were deleted in September 2026 (they asserted nothing, or duplicated what
-`nu_filt3D` exercises; see `doc/policies/test_environment_policy.md`). Run the
+The unit tests are `src/main/nu_filt/simple_nu_filter_tester.f90`, the
+sub-suite `nonuniform filtering` of `unit_reconstruction`: the objective's
+closed form, the noise level, the ranking's independence of that level, the
+label field on a two-resolution phantom, and the evidence state and envelope
+on the neutral fixture (a sphere of band-limited common signal in a noise
+support; it reports envelope recall and solvent false-positive rate). Run the
 filter end to end with `simple_exec prg=nu_filt3D` on a refined half-map pair.
 
 For code changes, consider:
