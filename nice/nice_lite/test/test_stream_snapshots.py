@@ -6,7 +6,9 @@ import tempfile
 from importlib import import_module
 
 from django.apps import apps
-from django.test import TestCase
+from django.template.loader import render_to_string
+from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from ..data_structures.streamjob import StreamJob, snapshot_stage_dir
@@ -123,3 +125,49 @@ class StateListParsingTests(TestCase):
         for raw in ("", "not json", "[]", "[0]", "[true]", "[1.5]", "{\"a\": 1}"):
             with self.subTest(raw=raw):
                 self.assertIsNone(stream_views._parse_state_list(raw, "test"))
+
+
+class StateSelectorTemplateTests(SimpleTestCase):
+    """The 3D state tiles: a click views a state, a checkbox selects it, and the selection survives
+    the streaming zoom page's reload and is sent once."""
+
+    def _stream_context(self, status):
+        return {
+            "jobid": 7,
+            "status": status,
+            "jobstats": {"state_volumes": [{"state": 1}, {"state": 2}, {"state": 3}]},
+        }
+
+    def test_stream_tiles_select_by_checkbox(self):
+        rendered = render_to_string("includes/_cls3D_state_selector.html", self._stream_context("running"))
+        for state in (1, 2, 3):
+            self.assertIn(f'data-state-include="{state}"', rendered)
+        self.assertEqual(rendered.count('type="checkbox" checked'), 3)
+        self.assertIn('onchange="toggleStateInclude(this)"', rendered)
+        self.assertIn(f'action="{reverse("nice_lite:snapshot_stream_solve3D")}"', rendered)
+        self.assertIn('data-submit-label="create snapshot of"', rendered)
+        # viewing a state leaves the selection alone
+        select_state = rendered.split("const selectState", 1)[1].split("const selectCls3DStage", 1)[0]
+        self.assertNotIn("disabledbutton", select_state)
+        self.assertNotIn("checked", select_state)
+        # the states left out survive a reload, and a selection is sent once
+        self.assertIn("sessionStorage.setItem", rendered)
+        self.assertIn("cls3D_excluded:7:", rendered)
+        self.assertIn("element.disabled = true", rendered)
+
+    def test_finished_stream_posts_a_final_selection(self):
+        rendered = render_to_string("includes/_cls3D_state_selector.html", self._stream_context("finished"))
+        self.assertIn(f'action="{reverse("nice_lite:select_stream_solve3D")}"', rendered)
+        self.assertIn('data-submit-label="create final particle set of"', rendered)
+        self.assertNotIn(reverse("nice_lite:snapshot_stream_solve3D"), rendered)
+
+    def test_batch_stage_groups_select_by_checkbox(self):
+        rendered = render_to_string("includes/_cls3D_state_selector.html", {
+            "jobid": 9,
+            "jobstats": {"cls3D": {"stage1": [{"state": 1}, {"state": 2}]}},
+            "cls3d_stages": [{"key": "stage1", "states": [{"state": 1}, {"state": 2}]}],
+        })
+        self.assertIn('data-stage="stage1"', rendered)
+        self.assertEqual(rendered.count('type="checkbox" checked'), 2)
+        self.assertIn(f'action="{reverse("nice_lite:batch_cls3D_selection", args=[9])}"', rendered)
+        self.assertIn('data-submit-label="save selection of"', rendered)

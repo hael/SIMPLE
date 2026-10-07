@@ -147,6 +147,7 @@ type :: stream_stage_solve3D
     type(gui_metadata_stream_snapshot)              :: meta_snapshot
     type(string),   allocatable :: stk_names(:)    ! the stacks in the pool
     real,           allocatable :: state_res(:)    ! FSC=0.143 resolution per state of the latest run (0: none)
+    integer,        allocatable :: state_pop(:)    ! population per state of the latest run's result (0: none)
     type(string)                :: frozen_projfile ! the latest run's project, which the next addon run builds on
     type(string)                :: result_projfile ! the latest finished run's project (solve3D, addon or final): 3D snapshots' source
     logical,        allocatable :: frozen_active(:) ! the rows active in that project: the frozen particles
@@ -155,7 +156,7 @@ type :: stream_stage_solve3D
     type(string)                :: last_stem       ! the latest publication taken (its quality folder's name)
     integer :: phase              = PHASE_IMPORTING
     integer :: naddon_runs        = 0
-    integer :: nptcls_at_last_run = 0 ! particles in the pool when the latest run started
+    integer :: nptcls_at_last_run = 0 ! particles the latest run took: those selected at its start, less the queued
     integer :: nptcls_selected    = 0 ! selected particles in the rows
     integer :: ncohort_refused    = -1 ! the next addon run needs a larger cohort (after a failed or rolled-back one)
     integer :: n_rollbacks        = 0  ! addon runs rolled back in a row
@@ -273,6 +274,7 @@ contains
         endif
         allocate(self%stk_names(0))
         allocate(self%state_res(self%params%nstates), source=0.)
+        allocate(self%state_pop(self%params%nstates), source=0)
         self%optics_id_offset = max(self%params%nicedispid - 1, 0) * OPTICS_ID_DELTA
     end subroutine init_params
 
@@ -360,6 +362,7 @@ contains
         if( allocated(self%queued) ) deallocate(self%queued)
         if( allocated(self%stk_names) ) deallocate(self%stk_names)
         if( allocated(self%state_res) ) deallocate(self%state_res)
+        if( allocated(self%state_pop) ) deallocate(self%state_pop)
         if( allocated(self%params) ) deallocate(self%params)
         self%phase              = PHASE_IMPORTING
         self%naddon_runs        = 0
@@ -994,6 +997,7 @@ contains
         call fresh_job_dir(dir, SOLVE3D_DIR) ! never the directory of a job left unfinished
         call self%draw_first_run()
         call self%set_queued_states(0)
+        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
         call self%spproj%write(dir//'/'//SOLVE3D_DIR//METADATA_EXT)
         call self%set_queued_states(1)
         ! a run that leaves particles queued does not align every selected particle
@@ -1016,7 +1020,6 @@ contains
         if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
         if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
         call cline_job%printline()
-        self%nptcls_at_last_run = self%spproj%os_ptcl3D%get_noris()
         call self%record_run_publication()
         call self%job%start(self%qenv, cline_job, dir, SOLVE3D_DIR, exec_bin=string('simple_exec'))
         self%phase = PHASE_SOLVE3D
@@ -1046,7 +1049,7 @@ contains
         if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
         if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
         call cline_job%printline()
-        self%nptcls_at_last_run = self%spproj%os_ptcl3D%get_noris()
+        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
         call self%record_run_publication()
         call self%job%start(self%qenv, cline_job, dir, ADDON_DIR, exec_bin=string('simple_exec'))
         self%phase = PHASE_ADDON
@@ -1104,13 +1107,14 @@ contains
             self%ncohort_refused = -1
             call self%prune_run_dirs()
         endif
-        ! after the first solve3D, the particles it left queued are the first addon run's cohort
-        call self%release_queue()
         call self%job%kill
         self%phase = PHASE_IDLE
-        call self%write_stage_project()
+        ! the GUI gets the result's states, populations and orientations as the run left them
         if( allocated(self%state_res) ) res_before = self%state_res
         call self%send_volumes()
+        ! then the particles the first solve3D left queued are the first addon run's cohort
+        call self%release_queue()
+        call self%write_stage_project()
         if( l_final .and. allocated(res_before) )then
             do i = 1,min(size(res_before), size(self%state_res))
                 write(logfhandle,'(A,I3,A,F8.2,A,F8.2,A)') '>>> FINAL REFINE3D STATE ', i, ': RESOLUTION ', res_before(i),&
@@ -1153,7 +1157,7 @@ contains
         if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
         if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
         call cline_job%printline()
-        self%nptcls_at_last_run = self%spproj%os_ptcl3D%get_noris()
+        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
         self%nptcls_at_full     = self%nptcls_selected
         self%l_final_pending    = .false.
         call self%record_run_publication()
@@ -1429,14 +1433,17 @@ contains
         if( present(stage) ) stage_here = stage
         ! the GUI's 3D progress: 0 none yet, 1 solve3D, 2 a result
         progress = min(self%phase, PHASE_IDLE)
+        ! particles_imported is the particles selected now, merged or not; particles_at_last_refine
+        ! those the latest run took
         call self%meta_status%set(stage=stage_here, solve3D_stage=progress,&
             &refine_iteration=self%naddon_runs, nstates=self%params%nstates,&
             &particles_imported=self%spproj%os_ptcl3D%count_state_gt_zero(), particles_at_last_refine=self%nptcls_at_last_run,&
             &resolution=0.)
-        if( self%frozen_projfile%strlen() > 0 .and. allocated(self%state_res) )then
+        ! each state's population and resolution in the latest result (send_volumes): the rows'
+        ! current labels also count the particles merged since, which no map holds yet
+        if( self%frozen_projfile%strlen() > 0 .and. allocated(self%state_res) .and. allocated(self%state_pop) )then
             do istate = 1,self%params%nstates
-                call self%meta_status%set_state_stats(istate, self%spproj%os_ptcl3D%get_pop(istate, 'state'),&
-                    &self%state_res(istate))
+                call self%meta_status%set_state_stats(istate, self%state_pop(istate), self%state_res(istate))
             enddo
         endif
         call self%pipe%send_meta(self%meta_status)
@@ -1444,7 +1451,8 @@ contains
 
     ! Each state with a volume in the pool's project: its products, population, resolution and FSC
     ! curve, the minimum and maximum of each volume, the orientation distribution, and its three
-    ! reprojections as tiles. The resolutions are kept for the status.
+    ! reprojections as tiles. The resolutions and populations are kept for the status. Called on
+    ! a run's result, before any particle merged or queued since rejoins a state.
     subroutine send_volumes( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(gui_metadata_vol3D) :: meta, fresh_meta
@@ -1455,11 +1463,13 @@ contains
         integer                  :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
         logical                  :: l_fsc
         self%state_res = 0.
+        self%state_pop = 0
         do istate = 1,self%params%nstates
             if( .not. self%spproj%isthere_in_osout('vol', istate) ) cycle
             call self%spproj%get_vol('vol', istate, volpath, smpd, box)
             if( volpath%strlen() == 0 ) cycle
             pop = self%spproj%os_ptcl3D%get_pop(istate, 'state')
+            self%state_pop(istate) = pop
             ! products of a postprocessing, when on disk (none runs in this stage)
             pprocpath = add2fbody(volpath, MRC_EXT, PPROC_SUFFIX)
             if( .not. file_exists(pprocpath) ) pprocpath = ''

@@ -1708,7 +1708,7 @@ contains
     character(kind=CK, len=:),                   allocatable :: buffer
     type(gui_metadata_stream_solve3D_multistate)             :: meta
     type(json_core)                                          :: json
-    type(json_value),                            pointer     :: json_ptr
+    type(json_value),                            pointer     :: json_ptr, json_states_ptr
     type(string)                                             :: json_str, json_hash
     logical                                                  :: found
     write(*,'(A)') 'test_jsonise_stream_solve3D_multistate'
@@ -1730,6 +1730,15 @@ contains
     call meta%kill()
     call json%destroy(json_ptr)
     call assert_true(.not.json%failed(), 'json destroyed')
+    ! before a result has set them, no per-state stats
+    call meta%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
+    call meta%set(stage=string('running solve3D'), solve3D_stage=1, refine_iteration=0, nstates=2,&
+        &particles_imported=1000, particles_at_last_refine=0, resolution=0.)
+    json_ptr => meta%jsonise()
+    call json%get(json_ptr, 'states', json_states_ptr, found)
+    call assert_true(.not. found, 'no states before set_state_stats')
+    call meta%kill()
+    call json%destroy(json_ptr)
     deallocate(buffer)
   end subroutine test_jsonise_stream_solve3D_multistate
 

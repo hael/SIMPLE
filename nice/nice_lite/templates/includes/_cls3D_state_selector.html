@@ -1,25 +1,29 @@
 {% comment %}
-  _cls3D_state_selector.html — clickable state tile list for 3D volume viewers.
+  _cls3D_state_selector.html — state tile list for 3D volume viewers.
+  Viewing and selecting are separate: a click on a tile shows that state (selectState() drives
+  data-state-selector/data-state-panel/data-volume-panel-title and calls the page's
+  applyVolumeSelection()/lastinteraction when present); the checkbox in the tile's corner
+  (data-state-include) puts the state in or out of the selection, and a tile left out is dimmed.
+  Every state starts in. The states left out are kept in sessionStorage per job, page and stage
+  group, so the streaming zoom page's periodic reload keeps them; submitting clears them. Each
+  form's button names the states it sends, is disabled when none is in, and is disabled after
+  one click.
   Two contexts:
-   - streaming multistate zoom page: flat `jobstats.state_volumes` (reprojtiles).
-     selectState() drives data-state-selector/data-state-panel/data-volume-panel-title
-     and calls the page's applyVolumeSelection()/lastinteraction when present. Tiles
-     toggle like the batch ones; while multistate 3D runs, "create snapshot particle
-     set" posts the surviving states to snapshot_stream_solve3D (a 3D snapshot the
-     stage writes), and once it has finished, "create final particle set" posts them
-     to select_stream_solve3D, which launches the same `selection oritype=ptcl3D`
-     job as the batch viewer on the stream's multistate 3D project.
+   - streaming multistate zoom page: flat `jobstats.state_volumes` (reprojtiles). While
+     multistate 3D runs, "create snapshot of states ..." posts the states in to
+     snapshot_stream_solve3D (a 3D snapshot the stage writes); once it has finished, "create
+     final particle set of states ..." posts them to select_stream_solve3D, which launches the
+     same `selection oritype=ptcl3D` job as the batch viewer on the stream's multistate 3D
+     project.
    - non-streaming per-stage panel (_cls3D_viewer.html): `cls3d_stages` (list of
      {key, states, volume_outputs, volume_kinds}, one entry per cls3D stage - see
      _batch_overview_context/_cls3d_stages in batch_views.py), grouped into
      .cls3dstagegroup tile groups AND .cls3dstagedetail detail panels (in
      _cls3D_viewer.html), both toggled by the "stage" select via
      selectCls3DStage(); that select is rendered in _cls3D_viewer.html's
-     header, not here. selectState() also toggles each tile's own
-     disabledbutton/checkmark (like cls2D); "save selection" posts the
-     surviving (non-disabled) states of the active stage group to
-     batch_cls3D_selection, which launches a `selection oritype=ptcl3D
-     states=...` job to keep only those states.
+     header, not here. "save selection of states ..." posts the states in of the active stage
+     group to batch_cls3D_selection, which launches a `selection oritype=ptcl3D states=...` job
+     to keep only those states.
 {% endcomment %}
 <div class="flex w-min mx-[10px] flex-col h-full bg-streambar rounded-xl text-streamtext overflow-y-auto">
     {% if "cls3D" in jobstats %}
@@ -29,7 +33,9 @@
             {% for state in stage.states %}
             <div onclick="selectState(this)" data-state-selector="{{ state.state }}"
                  class="relative flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
-                <span aria-hidden="true" class="statecheck absolute flex h-4 w-4 items-center justify-center rounded-full bg-streamring text-[9px] font-bold text-white" style="right:0.25rem;top:0.25rem">✓</span>
+                <label onclick="event.stopPropagation()" class="absolute flex items-center" style="right:0.25rem;top:0.25rem" title="include state {{ state.state }} in the selection">
+                    <input type="checkbox" checked data-state-include="{{ state.state }}" onchange="toggleStateInclude(this)" style="accent-color: var(--color-streamring)"/>
+                </label>
                 <p class="mt-1 w-full text-[9px] text-streamlabel">
                     <strong class="text-streamtext">state {{ state.state }}</strong>
                 </p>
@@ -48,8 +54,8 @@
     <div class="flex items-center justify-end gap-2 p-2 border-t border-streamline">
         <form id="savebatchstateselection" method="POST" action="{% url 'nice_lite:batch_cls3D_selection' jobid %}">
             {% csrf_token %}
-            <input type="hidden" id="selected_states" name="selected_states" value=""/>
-            <button class="selectionbutton" type="button" onclick="saveStateSelection(this)">save selection</button>
+            <input type="hidden" name="selected_states" value=""/>
+            <button class="selectionbutton disabled:cursor-not-allowed disabled:opacity-50" type="button" data-selection-submit data-submit-label="save selection of" onclick="saveStateSelection(this)">save selection</button>
         </form>
     </div>
     {% elif "state_volumes" in jobstats and jobstats.state_volumes|length > 0 %}
@@ -60,7 +66,9 @@
         {% for state in jobstats.state_volumes %}
         <div onclick="selectState(this)" data-state-selector="{{ state.state }}"
              class="relative flex cursor-pointer flex-col items-center rounded-md border p-1 {% if state.state == 1 %}border-streamring bg-streamring/10{% else %}border-streamline bg-streambg{% endif %}">
-            <span aria-hidden="true" class="statecheck absolute flex h-4 w-4 items-center justify-center rounded-full bg-streamring text-[9px] font-bold text-white" style="right:0.25rem;top:0.25rem">✓</span>
+            <label onclick="event.stopPropagation()" class="absolute flex items-center" style="right:0.25rem;top:0.25rem" title="include state {{ state.state }} in the selection">
+                <input type="checkbox" checked data-state-include="{{ state.state }}" onchange="toggleStateInclude(this)" style="accent-color: var(--color-streamring)"/>
+            </label>
             <p class="mt-1 w-full text-[9px] text-streamlabel">
                 <strong class="text-streamtext">state {{ state.state }}</strong>
             </p>
@@ -78,15 +86,15 @@
         <form method="POST" action="{% url 'nice_lite:snapshot_stream_solve3D' %}">
             {% csrf_token %}
             <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
-            <input type="hidden" id="selected_states" name="selected_states" value=""/>
-            <button type="button" onclick="saveStateSelection(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">create snapshot particle set</button>
+            <input type="hidden" name="selected_states" value=""/>
+            <button type="button" data-selection-submit data-submit-label="create snapshot of" onclick="saveStateSelection(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50">create snapshot particle set</button>
         </form>
         {% else %}
         <form method="POST" action="{% url 'nice_lite:select_stream_solve3D' %}">
             {% csrf_token %}
             <input name="selected_job_id" value="{{ jobid }}" type="hidden"/>
-            <input type="hidden" id="selected_states" name="selected_states" value=""/>
-            <button type="button" onclick="saveStateSelection(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity">create final particle set</button>
+            <input type="hidden" name="selected_states" value=""/>
+            <button type="button" data-selection-submit data-submit-label="create final particle set of" onclick="saveStateSelection(this)" class="text-xs font-medium px-4 py-2 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50">create final particle set</button>
         </form>
         {% endif %}
     </div>
@@ -102,13 +110,86 @@
         return slider.querySelector(".cls3dstagegroup:not(.hidden)") || slider;
     };
 
-    const updateStateSelectionMark = (element) => {
-        const check = element.querySelector(".statecheck");
-        const deselected = element.classList.contains("disabledbutton");
-        element.classList.toggle("opacity-40", deselected);
-        if (check) check.classList.toggle("hidden", deselected);
+    // The tiles a selection is made over: the active stage group's (batch), or every tile (stream).
+    const selectionScope = () => getActiveCls3DStageGroup() || document;
+
+    // The sessionStorage key of a group's states left out: per job, page and stage group.
+    const excludedStoreKey = (group) => {
+        const stage = (group && group.dataset && group.dataset.stage) || "all";
+        return `cls3D_excluded:{{ jobid }}:${location.pathname}:${stage}`;
     };
 
+    const readExcluded = (group) => {
+        try {
+            const stored = JSON.parse(sessionStorage.getItem(excludedStoreKey(group)) || "[]");
+            return Array.isArray(stored) ? stored.map(String) : [];
+        } catch (err) {
+            return [];
+        }
+    };
+
+    const writeExcluded = (group) => {
+        const excluded = [];
+        for (const box of group.querySelectorAll("[data-state-include]")) {
+            if (!box.checked) excluded.push(box.dataset.stateInclude);
+        }
+        try {
+            if (excluded.length) {
+                sessionStorage.setItem(excludedStoreKey(group), JSON.stringify(excluded));
+            } else {
+                sessionStorage.removeItem(excludedStoreKey(group));
+            }
+        } catch (err) {
+            // the selection still works, it just does not survive a reload
+        }
+    };
+
+    const clearExcluded = (group) => {
+        try {
+            sessionStorage.removeItem(excludedStoreKey(group));
+        } catch (err) {
+            // nothing kept
+        }
+    };
+
+    // The group a checkbox belongs to: its stage group (batch) or the document (stream).
+    const groupOf = (element) => element.closest(".cls3dstagegroup") || document;
+
+    const markTile = (box) => {
+        const tile = box.closest("[data-state-selector]");
+        if (tile) tile.classList.toggle("opacity-40", !box.checked);
+    };
+
+    // The states in the active scope's selection, sorted.
+    const includedStates = () => {
+        const states = new Set();
+        for (const box of selectionScope().querySelectorAll("[data-state-include]")) {
+            if (box.checked) states.add(Number(box.dataset.stateInclude));
+        }
+        return Array.from(states).sort((a, b) => a - b);
+    };
+
+    // Each submit button names the states it sends, and is disabled when none is in.
+    const updateSelectionButtons = () => {
+        const states = includedStates();
+        const what = states.length === 1 ? `state ${states[0]}` : `states ${states.join(", ")}`;
+        for (const button of document.querySelectorAll("[data-selection-submit]")) {
+            if (button.dataset.submitted === "true") continue;
+            button.disabled = states.length === 0;
+            button.textContent = states.length === 0
+                ? `${button.dataset.submitLabel}: no state selected`
+                : `${button.dataset.submitLabel} ${what}`;
+        }
+    };
+
+    const toggleStateInclude = (box) => {
+        markTile(box);
+        writeExcluded(groupOf(box));
+        updateSelectionButtons();
+        if (typeof lastinteraction !== "undefined") lastinteraction = Date.now();
+    };
+
+    // A click on a tile shows its state; it leaves the selection alone.
     const selectState = (element) => {
         currentStateNum = element.dataset.stateSelector;
         document.querySelectorAll("[data-state-selector]").forEach((el) => {
@@ -121,8 +202,6 @@
         document.querySelectorAll("[data-state-panel]").forEach((el) => {
             el.classList.toggle("hidden", el.dataset.statePanel != currentStateNum);
         });
-        element.classList.toggle("disabledbutton");
-        updateStateSelectionMark(element);
         const volumeScope = document.querySelector(".cls3dstagedetail:not(.hidden)") || document;
         const volumePanelTitle = volumeScope.querySelector("[data-volume-panel-title]");
         if (volumePanelTitle) volumePanelTitle.textContent = `volume · state ${currentStateNum}`;
@@ -144,22 +223,42 @@
         });
         // Re-sync the newly-visible stage's volume <select> to the current state/kind.
         if (typeof applyVolumeSelection === "function") applyVolumeSelection();
+        updateSelectionButtons();
     };
 
+    // Posts the states in the active scope's selection, once.
     const saveStateSelection = (element) => {
-        const scope = getActiveCls3DStageGroup();
-        const tiles = scope ? scope.querySelectorAll("[data-state-selector]") : document.querySelectorAll("[data-state-selector]");
-        const selected = new Set();
-        for (const tile of tiles) {
-            if (!tile.classList.contains("disabledbutton")) {
-                selected.add(Number(tile.dataset.stateSelector));
-            }
-        }
-
-        const selectionField = document.getElementById("selected_states");
-        if (selectionField) selectionField.value = JSON.stringify(Array.from(selected));
-
+        const states = includedStates();
+        if (states.length === 0 || element.dataset.submitted === "true") return;
+        const selectionField = element.form.querySelector("[name=selected_states]");
+        if (selectionField) selectionField.value = JSON.stringify(states);
+        element.dataset.submitted = "true";
+        element.disabled = true;
+        clearExcluded(selectionScope());
         element.form.submit();
     };
-</script>
 
+    // The states left out before a reload, back out; the buttons named after the selection.
+    const restoreStateSelection = () => {
+        const groups = Array.from(document.querySelectorAll(".cls3dstagegroup"));
+        for (const group of (groups.length ? groups : [document])) {
+            const excluded = readExcluded(group);
+            for (const box of group.querySelectorAll("[data-state-include]")) {
+                box.checked = !excluded.includes(box.dataset.stateInclude);
+                markTile(box);
+            }
+        }
+        updateSelectionButtons();
+    };
+
+    restoreStateSelection();
+
+    // A page restored from the back-forward cache gets its buttons back.
+    window.addEventListener("pageshow", (event) => {
+        if (!event.persisted) return;
+        for (const button of document.querySelectorAll("[data-selection-submit]")) {
+            delete button.dataset.submitted;
+        }
+        restoreStateSelection();
+    });
+</script>

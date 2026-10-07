@@ -1,8 +1,9 @@
 !@descr: GUI metadata for the stream multistate solve3D stage — pipeline stage, particle/state counts and per-state resolution
-! Filled by stream p07: refine_iteration and particles_at_last_refine count solve3D_addon
-! passes and the pool size at the last one. last_import_time is stamped when particles_imported
-! changes. p07 always sends resolution=0; per-state stats, for up to MAX_STATES_SOLVE3D_MULTISTATE
-! states, follow once solve3D is done.
+! Filled by stream p07: refine_iteration counts the solve3D_addon runs started,
+! particles_imported the particles selected now and particles_at_last_refine those the latest
+! run took. last_import_time is stamped when particles_imported changes. p07 always sends
+! resolution=0. The per-state stats, for up to MAX_STATES_SOLVE3D_MULTISTATE states, are those
+! of the latest result and are emitted ('states') only once set_state_stats has set them.
 module simple_gui_metadata_stream_solve3D_multistate
   use unix,                     only: c_long, c_time
   use simple_error,             only: simple_exception
@@ -26,12 +27,13 @@ module simple_gui_metadata_stream_solve3D_multistate
     integer                :: solve3D_stage             = 0       ! internal solve3D progress: 0=not started, 1=running, 2=complete
     integer                :: refine_iteration          = 0       ! solve3D_addon passes started
     integer                :: nstates                   = 0       ! number of states being resolved
-    integer                :: particles_imported        = 0       ! total particles pooled from upstream
-    integer                :: particles_at_last_refine  = 0       ! pool size when solve3D or the last addon pass began
+    integer                :: particles_imported        = 0       ! particles selected now
+    integer                :: particles_at_last_refine  = 0       ! particles the latest run (solve3D, addon or final) took
     integer                :: last_import_time          = 0       ! Unix timestamp of most recent import event
     real                   :: resolution                = 0.0     ! overall current low-pass/resolution estimate
     integer                :: state_populations(MAX_STATES_SOLVE3D_MULTISTATE) = 0
     real                   :: state_resolutions(MAX_STATES_SOLVE3D_MULTISTATE) = 0.0
+    logical                :: l_states                  = .false. ! set_state_stats has set the per-state stats
   contains
     procedure :: kill => kill_override
     procedure :: set
@@ -64,7 +66,7 @@ contains
     self%resolution                = resolution
   end subroutine set
 
-  ! Assign the pooled particle population and resolution estimate for one state.
+  ! Assign the population and resolution of one state in the latest result.
   subroutine set_state_stats( self, state, population, resolution )
     class(gui_metadata_stream_solve3D_multistate), intent(inout) :: self
     integer,                                          intent(in)    :: state, population
@@ -72,6 +74,7 @@ contains
     if( .not.self%l_initialized )                          THROW_HARD('gui metadata object is uninitialised')
     if( state < 1 .or. state > size(self%state_populations) ) THROW_HARD('state is out of range')
     self%l_assigned                    = .true.
+    self%l_states                      = .true.
     self%state_populations(state)      = population
     self%state_resolutions(state)      = resolution
   end subroutine set_state_stats
@@ -117,7 +120,7 @@ contains
       call json%add(json_ptr, 'particles_at_last_refine',  self%particles_at_last_refine  )
       call json%add(json_ptr, 'last_import_time',          self%last_import_time          )
       call json%add(json_ptr, 'resolution',                dble(self%resolution)          )
-      if( self%nstates > 0 ) then
+      if( self%nstates > 0 .and. self%l_states ) then
         call json%create_array(json_states_ptr, 'states')
         do i_state = 1, self%nstates
           call json%create_object(json_state_ptr, '')

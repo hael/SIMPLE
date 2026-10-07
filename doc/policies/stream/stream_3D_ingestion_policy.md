@@ -150,9 +150,16 @@ completed iteration left it.
    rebase during a session (decision 21); the final run (item 13) is the one realignment.
 11. **After each run** the job's data segments (micrographs, stacks, particles, classes, outputs)
     become the stage's; the stage keeps its own project information, computing environment and
-    optics table (`finish_run`). The stage's project is then written (under a temporary name,
-    renamed). The GUI gets each state's volume, resolution, FSC curve, reprojections and
-    orientation distribution, and in the status the selected particles as imported.
+    optics table (`finish_run`). The GUI gets each state's volume, population, resolution, FSC
+    curve, reprojections and orientation distribution, all from the result's rows: after the
+    first `solve3D`, before its queued particles are selected again. The stage's project is then
+    written (under a temporary name, renamed).
+    - **The status** reports the particles selected now (`particles_imported`, shown as "particles
+      selected"), the particles the latest run took (`particles_at_last_refine`: those selected
+      at its start, less the first `solve3D`'s queue), and each state's population and resolution
+      in the latest result, kept from `send_volumes`. The rows' current labels are not used, since
+      the particles merged since a run carry state 1 before any map holds them. The per-state
+      stats appear only once a run has set them.
 12. **What p07 keeps:** the newest `NQUALITY_KEPT` (3) quality folders and those of the
     publications a run started from (listed in `quality_selection/runs.txt`, the first run's
     publication among them), with the class averages and FRCs copied into them, so every run's
@@ -240,6 +247,12 @@ completed iteration left it.
 A 3D snapshot is a particle set the GUI asks for from multistate 3D's latest result: the particles
 of one or more selected states. The request (`snapshot3D`) and its report are in the IPC policy
 (section 6).
+
+In NICE the states come from the multistate page's state tiles (`_cls3D_state_selector.html`). A
+click on a tile only shows its state; the checkbox in its corner puts it in or out of the
+selection. Every state starts in. The states left out are kept in `sessionStorage`, because the
+zoom page reloads itself every 10 s without an interaction. The button names the states it sends
+and is disabled after one click.
 
 1. **The source** is the latest finished run's project (`result_projfile`: solve3D, an addon pass
    or the final refine3D), not the stage's rows. Rows imported since that run have no 3D

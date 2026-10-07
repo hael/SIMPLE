@@ -11,6 +11,7 @@
 module simple_stream_stage_solve3D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
+use json_module,                 only: json_core, json_value
 use simple_test_utils
 use simple_defs_fname,                                only: TERM_STREAM, METADATA_EXT
 use simple_refine3D_fnames,                           only: refine3D_reprojs_fname
@@ -84,6 +85,7 @@ contains
         call assert_false(stage%l_restart,                  'a fresh run is no restart')
         call assert_int(PHASE_IMPORTING, stage%phase,       'the stage starts importing')
         call assert_int(NSTATES, size(stage%state_res),     'one resolution per state')
+        call assert_int(NSTATES, size(stage%state_pop),     'and one population')
         call assert_int(0, size(stage%stk_names),           'no stack yet')
         call stage%kill
         call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
@@ -660,12 +662,15 @@ contains
         type(stream_pipe)             :: reader
         type(image)                   :: vol
         type(gui_metadata_vol3D)      :: meta_vol
+        type(gui_metadata_stream_solve3D_multistate) :: status
+        type(json_core)               :: json
+        type(json_value), pointer     :: json_ptr
         character(len=:), allocatable :: buffer
         real,             allocatable :: res(:), fsc(:), invres_got(:), fsc_got(:)
         type(string)                  :: cwd_saved, root, volfile, fscfile
         integer(c_int)                :: fds(2)
-        integer                       :: nfail0, meta_type, nvols, ntiles, iptcl, k
-        logical                       :: l_fsc_state(2)
+        integer                       :: nfail0, meta_type, nvols, ntiles, iptcl, k, pop_got
+        logical                       :: l_fsc_state(2), l_found
         allocate(stage)
         write(*,'(A)') 'test_send_volumes'
         nfail0 = tests_failed
@@ -722,6 +727,26 @@ contains
         call assert_true(stage%state_res(1) > 0.,          'the resolution of state 1 is kept for the status')
         call assert_real(0., stage%state_res(2), 1.e-6,     'a state without an FSC curve has none')
         call assert_real(0., stage%state_res(3), 1.e-6,     'nor does a state without a volume')
+        call assert_int(4, stage%state_pop(1), 'the population of state 1 is kept for the status')
+        call assert_int(2, stage%state_pop(2), 'and that of state 2')
+        call assert_int(0, stage%state_pop(3), 'a state without a volume has none')
+        ! a later merge labels a particle state 1 before any map holds it: the status reports the
+        ! result's populations, not the rows' labels
+        call stage%spproj%os_ptcl3D%set_state(5, 1)
+        stage%frozen_projfile = 'result.simple'
+        call stage%send_status()
+        l_found = .false.
+        pop_got = -1
+        do while( reader%receive(buffer) )
+            meta_type = transfer(buffer, meta_type)
+            if( meta_type /= GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE ) cycle
+            status   = transfer(buffer, status)
+            json_ptr => status%jsonise()
+            call json%get(json_ptr, 'states(1).population', pop_got, l_found)
+            call json%destroy(json_ptr)
+        enddo
+        call assert_true(l_found,    'the status carries the per-state stats')
+        call assert_int(4, pop_got,  'with state 1''s population in the result')
         call reader%kill
         call stage%kill
         call close_loopback(fds)

@@ -34,7 +34,7 @@
                 </div>
                 <!-- Count tiles -->
                 <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-                    {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles imported" variant="action" %}
+                    {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles selected" variant="action" %}
                     {% if "particles_at_last_refine" in jobstats and jobstats.particles_at_last_refine > 0 %}
                         {% include 'includes/_count_tile.html' with count=jobstats.particles_at_last_refine label="particles at last refine" %}
                     {% endif %}

@@ -4,7 +4,7 @@
   Structure:
     - Loading / waiting / status gauzes.
     - Header bar: status indicator · "multistate 3D" title · stop/restart.
-    - Particles imported + resolution stat tiles.
+    - Particles selected (particles_imported: those selected now) + resolution stat tiles.
 
   Context variables:
     jobstats — dict with stage, solve3D_stage, refine_iteration, nstates,
@@ -43,7 +43,7 @@
 
         <!-- Count tiles -->
         <div class="grid grid-cols-2 gap-2 px-4 pt-2">
-            {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles imported" variant="action"%}
+            {% include 'includes/_count_tile.html' with count=jobstats.particles_imported label="particles selected" variant="action"%}
             {% if "resolution" in jobstats %}
                 {% if jobstats.resolution|floatformat:1 > 0.0 %}
                     {% include 'includes/_count_tile.html' with count=jobstats.resolution|floatformat:1 label="resolution" count_unit="Å" %}
