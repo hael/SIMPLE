@@ -3,7 +3,6 @@ module simple_exec_other
 use simple_cmdline,                 only: cmdline
 use simple_commanders_atoms,        only: commander_cif2pdb
 use simple_commanders_distr,        only: commander_split
-use simple_commanders_motion,       only: commander_fractionate_movies_distr
 use simple_commanders_project_ptcl, only: commander_split_stack
 use simple_commanders_euclid,       only: commander_sigma2_convert
 implicit none
@@ -12,7 +11,6 @@ public :: exec_other_commander
 private
 
 type(commander_cif2pdb)                  :: xcif2pdb
-type(commander_fractionate_movies_distr) :: xfractionate_movies
 type(commander_split)                    :: xsplit
 type(commander_split_stack)              :: xsplit_stack
 type(commander_sigma2_convert)            :: xsigma2_convert
@@ -30,8 +28,6 @@ contains
         select case(trim(which))
             case('cif2pdb')
                 call xcif2pdb%execute(cline)
-            case('fractionate_movies')
-                call xfractionate_movies%execute(cline)
             case( 'split' )
                 call xsplit%execute(cline)
             case( 'split_stack' )

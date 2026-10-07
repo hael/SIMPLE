@@ -243,7 +243,6 @@ contains
         type(commander_ppca_denoise)            :: xppca_denoise
         ! MISCELLANOUS PROGRAMS
         type(commander_aggregate_chunks)        :: xaggregate_chunks
-        type(commander_fractionate_movies)      :: xfractionate_movies
         type(commander_kstest)                  :: xkstst
         type(commander_pearsn)                  :: xpearsn
         ! ORIENTATION DATA MANAGEMENT PROGRAMS
@@ -361,8 +360,6 @@ contains
             ! MISCELLANOUS PROGRAMS
             case( 'aggregate_chunks' )
                 call xaggregate_chunks%execute(cline)
-            case( 'fractionate_movies' )
-                call xfractionate_movies%execute(cline)
             case( 'kstest' )
                 call xkstst%execute(cline)
             case( 'pearsn' )

@@ -205,7 +205,6 @@ contains
         call assert_registered_category('automask', 'mask', 'Masking', 100)
         call assert_registered_category('cls_expansion', 'refine2d', 'Refine 2D Workflows', 30)
         call assert_registered_category('reimport_particles', 'project', 'Project Management', 10)
-        call assert_registered_category('fractionate_movies', 'preproc', 'Pre-processing', 20)
         call assert_registered_category('split', 'image', 'General Image Processing', 90)
         call assert_registered_category('split_stack', 'image', 'General Image Processing', 90)
         call assert_registered_category('filter', 'filter', 'Filtering', 80)
