@@ -42,6 +42,11 @@ db.sqlite3
 __pycache__
 /doc/code_overview/code_base_map.md
 /doc/code_overview/test_inventory.md
+/doc/code_overview/fortran-indexes/api_index.md
+/doc/code_overview/fortran-indexes/module_graph.dot
+/doc/code_overview/fortran-indexes/module_index.md
+/doc/code_overview/fortran-indexes/modules.md
+/doc/code_overview/fortran-indexes/symbol_index.csv
 /.vscode
 # Codex agent notes are local by default; force-add only deliberately shared files.
 /.codex
