@@ -28,8 +28,8 @@ integer,          parameter :: KLEN = 24
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
 !! search policy plus the entry routes (provenance)
-character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(35) = [character(len=KLEN) :: &
-    &'pgrp', 'mskdiam', 'nstates', 'multivol_mode', 'split_stage', 'nstages', 'rec_backend', 'maxits_pcg', &
+character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(33) = [character(len=KLEN) :: &
+    &'pgrp', 'mskdiam', 'nstates', 'nstages', 'rec_backend', 'maxits_pcg', &
     &'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', 'filt_mode', 'automsk', 'envfsc', 'envmsklp', &
     &'objfun', 'sigma_est', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', &
     &'prob_athres', 'bfac', 'gauref', 'balance', 'nclust', &
@@ -37,7 +37,7 @@ character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(35) = [character(len=KLEN)
 
 !> The subset solve3D_addon replays as given: everything that describes the
 !! model the cohort is aligned to. Entry routes and their controls, the state
-!! layout and mode (derived from the completed solution), the stage range
+!! layout (derived from the completed solution), the stage range
 !! (from the ladder), centring (forced off) and the compute/convergence keys
 !! the add-on accepts from its own command line are not replayed.
 character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(25) = [character(len=KLEN) :: &
@@ -67,9 +67,9 @@ type :: solve3D_manifest
     integer            :: nrows = 0
     integer(int64)     :: layout_digest = 0_int64, stack_digest = 0_int64, optics_digest = 0_int64
     ! the solution
-    integer            :: nstates = 0, box = 0, split_stage = 0
+    integer            :: nstates = 0, box = 0
     real               :: smpd = 0., mskdiam = 0.
-    character(len=16)  :: pgrp = '', base_multivol_mode = ''
+    character(len=16)  :: pgrp = ''
     ! effective and provenance values of the base population
     integer            :: nsample = 0, nptcls_eff = 0
     real               :: update_frac = 1.
@@ -159,18 +159,16 @@ contains
     end subroutine new
 
     !> the completed solution: state layout, point group, native grid and mask
-    subroutine set_solution( self, nstates, pgrp, box, smpd, mskdiam, multivol_mode, split_stage )
+    subroutine set_solution( self, nstates, pgrp, box, smpd, mskdiam )
         class(solve3D_manifest), intent(inout) :: self
-        integer,                    intent(in)    :: nstates, box, split_stage
-        character(len=*),           intent(in)    :: pgrp, multivol_mode
+        integer,                    intent(in)    :: nstates, box
+        character(len=*),           intent(in)    :: pgrp
         real,                       intent(in)    :: smpd, mskdiam
         self%nstates            = nstates
         self%pgrp               = trim(pgrp)
         self%box                = box
         self%smpd               = smpd
         self%mskdiam            = mskdiam
-        self%base_multivol_mode = trim(multivol_mode)
-        self%split_stage        = split_stage
     end subroutine set_solution
 
     !> the effective sampling of the base population
@@ -384,8 +382,6 @@ contains
         call push('box '//int2str(self%box))
         call push('smpd '//trim(fmt_real(self%smpd)))
         call push('mskdiam '//trim(fmt_real(self%mskdiam)))
-        call push('base_multivol_mode '//trim(self%base_multivol_mode))
-        call push('split_stage '//int2str(self%split_stage))
         call push('nsample '//int2str(self%nsample))
         call push('nptcls_eff '//int2str(self%nptcls_eff))
         call push('update_frac '//trim(fmt_real(self%update_frac)))
@@ -522,8 +518,6 @@ contains
                 case('box');           read(rest,*,iostat=io_stat) self%box
                 case('smpd');          read(rest,*,iostat=io_stat) self%smpd
                 case('mskdiam');       read(rest,*,iostat=io_stat) self%mskdiam
-                case('base_multivol_mode'); read(rest,*,iostat=io_stat) self%base_multivol_mode
-                case('split_stage');   read(rest,*,iostat=io_stat) self%split_stage
                 case('nsample');       read(rest,*,iostat=io_stat) self%nsample
                 case('nptcls_eff');    read(rest,*,iostat=io_stat) self%nptcls_eff
                 case('update_frac');   read(rest,*,iostat=io_stat) self%update_frac
@@ -761,7 +755,7 @@ contains
     !> The base run's settings onto a command line: the replayed inputs as
     !! given, the stage command line's shape at
     !! planning time (not the input text), and the completed solution (state
-    !! layout and mode, point group, mask, ladder end and effective nsample)
+    !! layout, point group, mask, ladder end and effective nsample)
     subroutine replay( self, cline )
         class(solve3D_manifest), intent(in)       :: self
         class(cmdline),             intent(inout) :: cline
@@ -781,7 +775,6 @@ contains
         call cline%set('pgrp_start',    trim(self%pgrp))
         call cline%set('mskdiam',       self%mskdiam)
         call cline%set('nstates',       self%nstates)
-        call cline%set('multivol_mode', trim(merge('single     ', 'independent', self%nstates == 1)))
         call cline%set('nstages',       self%last_stage)
         call cline%set('nsample',       self%nsample)
     end subroutine replay
@@ -915,11 +908,9 @@ contains
         self%optics_digest  = 0_int64
         self%nstates        = 0
         self%box            = 0
-        self%split_stage    = 0
         self%smpd           = 0.
         self%mskdiam        = 0.
         self%pgrp           = ''
-        self%base_multivol_mode = ''
         self%nsample        = 0
         self%nptcls_eff     = 0
         self%update_frac    = 1.

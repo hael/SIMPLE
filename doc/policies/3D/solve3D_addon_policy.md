@@ -176,11 +176,11 @@ inherited state are refused.
   FSC, priors and NU filtering consume `U`. Before the first trailing stage the
   stage-boundary reconstruction seeds a full-mass, cohort-only chain through
   `trail_seed`; the frozen term never enters the chain.
-- **Multi-state.** One frozen state gives `single`, more gives `independent`,
-  whatever the frozen run's `multivol_mode` was (`base_multivol_mode` and
-  `split_stage` are provenance only). Frozen rows keep their labels; the
-  `independent` `prob`/`prob_neigh` policies update the cohort; no consensus
-  accumulator, split, `prob_state` or docked neighbourhood is built. Every
+- **Multi-state.** One frozen state gives a single-state add-on, more gives
+  the multi-state (independent) policies, decided by the frozen run's
+  `nstates` alone. Frozen rows keep their labels; the multi-state
+  `prob`/`prob_neigh` policies update the cohort; no consensus accumulator or
+  split is built. Every
   inherited state is carried: a state without cohort particles is
   reconstructed from its frozen term.
 

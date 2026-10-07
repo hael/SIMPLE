@@ -126,7 +126,6 @@ contains
         call cline_sigma%delete('frozen_seed')
         call cline_sigma%delete('frozen_rec')
         call cline_sigma%delete('ufrac_trec')
-        call cline_sigma%delete('sticky_class_sampling')
         call cline_sigma%delete('cohort_sampling')
         call cline_sigma%delete('postprocess')
         call cline_sigma%delete('combine_eo')

@@ -74,7 +74,7 @@ contains
         if( allocated(s3D%proj_space_inplvalid) ) s3D%proj_space_inplvalid = .false.
         ! search orders allocation
         select case( trim(params%refine) )
-            case( 'cluster','clustersym','clustersoft','prob','prob_state','prob_neigh')
+            case( 'cluster','clustersym','clustersoft','prob','prob_neigh')
                 srch_order_allocated = .false.
             case DEFAULT
                 allocate(s3D%srch_order(nrefs,nthr_glob), s3D%rts(nthr_glob),&

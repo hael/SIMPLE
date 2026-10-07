@@ -27,12 +27,7 @@ The route sets:
 - `filt_mode=none`
 - `automsk=no`
 
-Canonical sigma persistence is used for single-state,
-`multivol_mode=independent`, and `multivol_mode=docked`. At the docked split,
-state relabelling does not alter
-the canonical row identity or global/stack grouping. The split reconstruction
-therefore reuses the last committed generation directly; candidate creation and
-publication resume with the subsequent matcher pass.
+Canonical sigma persistence is used for single-state and multi-state runs.
 
 When unset, it supplies:
 
@@ -71,9 +66,6 @@ The staged matcher and subsequent standalone reconstruction children resolve
 that registered state through the shared sigma-group loader. Canonical loads
 validate the committed state against the temporary project's native grid,
 ordered particle layout, and grouping policy before reconstruction begins.
-The docked split does not run the legacy iteration-STAR consolidation barrier:
-its state-only relabelling leaves the committed per-particle records and grouped
-curves valid.
 
 The temporary project is deleted at the end of the workflow.
 
@@ -98,32 +90,19 @@ only one is an error.
 ## 5. Staged Refinement
 
 The number of ini3D stages is capped by `solve3D_nstages_ini3D_max()`. A user
-`nstages` value can shorten the route up to that cap. In
-`multivol_mode=docked`, the shortened route must still reach the configured
-`split_stage`; otherwise the command is rejected instead of completing as an
-accidental single-state initializer.
+`nstages` value can shorten the route up to that cap.
 
-Supported `multivol_mode` values are:
-
-- `single`
-- `independent`
-- `docked`
-
-`single` requires `nstates=1`. `independent` and `docked` require more than one
-state. When the user gives `nstates > 1` and no `multivol_mode`, the commander
-defaults to `independent`, matching particle `solve3D`.
+`nstates` alone selects the mode, as in particle `solve3D`: `nstates=1` is
+the single-state run and `nstates > 1` refines independent states from the
+start. `solve3D_cavgs` has no `multivol_mode` input and refuses it on the
+command line; the docked mode (one model up to a split stage, then a random
+split of the class averages into states) was removed on 2026-10-06.
 
 Before staged refinement, `rndstart` randomizes orientations, zeros shifts,
-randomizes states with balanced uniform labels for ordinary multi-state runs, and reconstructs
-starting volumes. In `multivol_mode=docked`, active class-average entries are
-first collapsed to one active state, so the pre-split stages build a single
-class-average solve3D model. At the configured `split_stage` (default 6), the
-commander restores the requested `nstates`, clears `sampled` and `updatecnt`,
-randomizes active temporary `ptcl3D` entries into balanced uniform state labels,
-requires every randomized state to exceed the probabilistic-table minimum
-population threshold, and reconstructs split state volumes before entering the
-split-stage `refine3D`. Starting volumes and half maps are renamed to the standard
-`refine3D` start-volume names, including `_unfil` copies of the half maps.
+randomizes states with balanced uniform labels for multi-state runs, and
+reconstructs starting volumes. Starting volumes and half maps are renamed to
+the standard `refine3D` start-volume names, including `_unfil` copies of the
+half maps.
 
 Each stage is configured through the shared solve3D stage controller with
 `l_cavgs=.true.`. In this mode:
@@ -135,14 +114,10 @@ Each stage is configured through the shared solve3D stage controller with
 - `snr_noise_reg` is set from the stage controls
 - early Gaussian reference filtering remains available through stage policy
 
-For `multivol_mode=independent`, class-average stages 1 and 2 retain
+For multi-state runs, class-average stages 1 and 2 retain
 `refine=prob_neigh` with `prob_neigh_mode=shc`. They do not adopt the direct
-`refine=shc` startup used by particle-based independent `solve3D`.
+`refine=shc` startup used by particle-based multi-state `solve3D`.
 
-The docked split shares the particle `solve3D` search-mode policy: the split
-stage is emitted as `refine=prob_state`, and later docked multi-state
-neighborhood stages use `prob_neigh_mode=geom`. The class-average route does
-not adopt particle `solve3D`'s fractional split preparation or update epoch.
 Because `l_cavgs=.true.` removes `update_frac`, `refine3D` derives full-update
 mode and disables trailing reconstruction effectively, even when the shared
 stage controller emits `trail_rec=yes`.

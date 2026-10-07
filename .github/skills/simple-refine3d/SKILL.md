@@ -104,3 +104,4 @@ Preserve that split when refactoring.
 - `volassemble` is intentionally the execution site for expensive volume-domain work.
 - Avoid moving assembled-reference postprocessing back into strategy or matcher layers.
 - Avoid trading the matcher single-read particle I/O contract for lower peak memory without an explicit policy change.
+- `refine=prob_state`, `refine3D_states pose_policy=fixed`, the `flex` key and docked `solve3D`/`solve3D_cavgs` are retired with no aliases: `flex_pca` is the only state initializer of `refine3D_states` (state-0/1 input, `nstates>=3`), and multi-state `solve3D` (`nstates>1`) refines independent states.

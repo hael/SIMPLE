@@ -2,13 +2,12 @@
 module simple_commanders_solve3D
 use simple_commanders_api
 use simple_solve3D_utils
-use simple_solve3D_split_checkpoint,               only: build_solve3D_split_checkpoint
 use simple_final_rec,                              only: calc_final_rec
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
 use simple_procimgstk,                             only: shift_imgfile
 use simple_commanders_project_core,                only: commander_selection
 use simple_commanders_reproject,                   only: commander_reproject
-use simple_commanders_refine3D,                    only: commander_refine3D, commander_refine3D_states, commander_bootstrap_rec3D
+use simple_commanders_refine3D,                    only: commander_refine3D, commander_bootstrap_rec3D
 use simple_commanders_rec,                         only: commander_rec3D
 use simple_cluster_seed,                           only: gen_labelling
 use simple_view_partition_sampling,                only: make_class_samples, report_class_sample_coverage
@@ -78,7 +77,7 @@ contains
         type(stack_io)            :: stkio_r, stkio_r2, stkio_w
         type(string)              :: final_vol, work_projfile
         integer                   :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
-        integer                   :: nstates_on_cline, nstates_target, split_stage, pop
+        integer                   :: nstates_target, pop
         integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates
         real                      :: cavg_smpd
         if( cline%defined('part') )then
@@ -87,6 +86,9 @@ contains
         ! the parser accepts every vocabulary key for every program
         if( cline%defined('projfile_frozen') .or. cline%defined('addon_diag') )then
             THROW_HARD('projfile_frozen and addon_diag belong to solve3D_addon, not solve3D_cavgs')
+        endif
+        if( cline%defined('multivol_mode') )then
+            THROW_HARD('solve3D_cavgs takes no multivol_mode: nstates>1 refines independent states')
         endif
         l_state_continue_mode = .false.
         call cline%set('sigma_est', 'global') ! obviously
@@ -106,36 +108,10 @@ contains
         if( .not. cline%defined('lpstop')           ) call cline%set('lpstop',   solve3D_lpstop_ini3D())
         if( .not. cline%defined('gauref')           ) call cline%set('gauref',                     'yes')
         if( .not. cline%defined('exit_collapse')    ) call cline%set('exit_collapse',               'no')
-        ! splitting stage
-        split_stage = solve3D_het_docked_stage()
-        if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
-        if( split_stage < 2 .or. split_stage > solve3D_nstages_ini3D_max() )then
-            THROW_HARD('split_stage must be between 2 and '//int2str(solve3D_nstages_ini3D_max())//' for solve3D_cavgs')
-        endif
-        call cline%set('split_stage', split_stage)
-        ! adjust default multivol_mode unless given on command line
-        if( cline%defined('nstates') )then
-            nstates_on_cline = cline%get_iarg('nstates')
-            if( nstates_on_cline > 1 .and. .not. cline%defined('multivol_mode') )then
-                call cline%set('multivol_mode', 'independent')
-            endif
-        endif
         ! make master parameters
         call params%new(cline)
         nstates_target = params%nstates
         nstates_glob   = nstates_target
-        select case(trim(params%multivol_mode))
-            case('single')
-                if( nstates_target /= 1 ) THROW_HARD('nstates /= 1 incompatible with multivol_mode:' //trim(params%multivol_mode))
-            case('independent', 'docked')
-                if( nstates_target == 1 ) THROW_HARD('nstates == 1 incompatible with multivol_mode: '//trim(params%multivol_mode))
-            case DEFAULT
-                THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
-        end select
-        if( trim(params%multivol_mode).eq.'docked' )then
-            params%nstates = 1
-            call cline%delete('nstates')
-        endif
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         params%oritype = 'ptcl3D'
@@ -147,9 +123,6 @@ contains
         nstages_ini3D = solve3D_nstages_ini3D_max()
         if( cline%defined('nstages') )then
             nstages_ini3D = min(solve3D_nstages_ini3D_max(),params%nstages)
-        endif
-        if( trim(params%multivol_mode).eq.'docked' .and. nstages_ini3D < split_stage )then
-            THROW_HARD('multivol_mode=docked requires nstages >= split_stage for solve3D_cavgs')
         endif
         nstages_refine3D = nstages_ini3D
         ! prepare class command lines
@@ -207,9 +180,6 @@ contains
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//params%projfile%to_char()//'; solve3D_cavgs')
         endif
-        if( trim(params%multivol_mode).eq.'docked' )then
-            where( states > 0 ) states = 1
-        endif
         params%nptcls = 2 * ncavgs
         call configure_cavgs_distributed_clines
         ! prepare a temporary project file
@@ -259,22 +229,8 @@ contains
         do istage = 1, nstages_ini3D
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', lpinfo(istage)%lp, ' A'
-            ! Splitting stage of docked mode
-            if( trim(params%multivol_mode).eq.'docked' )then
-                if( istage == split_stage-1 )then
-                    write(logfhandle,'(A,I0,A,I0)') &
-                        &'>>> SOLVE3D_CAVGS DOCKED PRE-SPLIT STAGE/NSTATES: ', istage, '/', params%nstates
-                else if( istage == split_stage )then
-                    params%nstates = nstates_target
-                    write(logfhandle,'(A,I0,A,I0)') &
-                        &'>>> SOLVE3D_CAVGS DOCKED SPLIT STAGE/NSTATES: ', istage, '/', params%nstates
-                endif
-            endif
             ! Preparation of command line for probabilistic search
             call set_cline_refine3D(params, istage, l_cavgs=.true.)
-            if( trim(params%multivol_mode).eq.'docked' .and. istage == split_stage )then
-                call randomize_states(params, work_proj, work_projfile, xrec3D, split_stage)
-            endif
             if( cline_refine3D%get_iarg('box_crop') < params%box )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
                     &cline_refine3D%get_iarg('box_crop')
@@ -776,7 +732,6 @@ contains
         class(cmdline),              intent(inout) :: cline
         ! commanders
         type(commander_refine3D)        :: xrefine3D
-        type(commander_refine3D_states) :: xrefine3D_states
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         ! other
@@ -788,15 +743,13 @@ contains
         type(gui_communicator)          :: gui_comm
         real    :: lprange(2)
         integer :: state, istage, start_stage, nptcls2update, noris, nstates_on_cline
-        integer :: nstates_in_project, split_stage, last_stage, pose_init_iter
+        integer :: nstates_in_project, last_stage, pose_init_iter
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
         logical :: l_force_full_sampling
-        logical :: l_states_handoff_complete
         integer :: nthr_view
         character(len=5) :: smpl_units
         real    :: sampled_active_frac
-        real    :: update_frac_post_split
         ! run manifest: the command line as given and the emitted stage ladder
         type(cmdline)     :: cline_entry
         real, allocatable :: emitted_lp(:), emitted_lpstop(:)
@@ -823,9 +776,13 @@ contains
                 THROW_HARD('projfile_frozen and addon_diag belong to solve3D_addon, not solve3D')
             endif
         endif
+        if( cline%defined('multivol_mode') )then
+            THROW_HARD('solve3D takes no multivol_mode: nstates>1 refines independent states')
+        endif
+        nstates_on_cline = 1
+        if( cline%defined('nstates') ) nstates_on_cline = cline%get_iarg('nstates')
         l_state_continue = cline%defined('state')
         l_force_full_sampling = .false.
-        l_states_handoff_complete = .false.
         sampled_active_frac   = 0.
         l_state_continue_mode = .false.
         ! Particle caching is a 2D-only feature; reject rather than silently ignore
@@ -864,43 +821,22 @@ contains
             THROW_HARD('solve3D does not take nsample_start/nsample_stop; set nsample instead')
         endif
         if( l_state_continue )then
-            if( cline%defined('multivol_mode') )then
-                if( cline%get_carg('multivol_mode').ne.'single' )then
-                    THROW_HARD('solve3D state continuation requires multivol_mode=single')
-                endif
-            endif
-            call cline%set('multivol_mode', 'single')
+            if( nstates_on_cline > 1 ) THROW_HARD('solve3D state continuation refines one state; remove nstates')
             call cline%set('filt_mode',     'nonuniform')
         endif
         l_user_nstages = cline%defined('nstages')
         l_user_lpstop  = cline%defined('lpstop')
-        ! splitting stage
-        split_stage = solve3D_het_docked_stage()
-        if( cline%defined('split_stage') ) split_stage = cline%get_iarg('split_stage')
-        if( split_stage < 2 .or. split_stage > solve3D_nstages() )then
-            THROW_HARD('split_stage must be between 2 and '//int2str(solve3D_nstages())//' for solve3D')
-        endif
-        call cline%set('split_stage', split_stage)
-        ! adjust default multivol_mode unless given on command line
-        if( cline%defined('nstates') )then
-            nstates_on_cline = cline%get_iarg('nstates')
-            if( nstates_on_cline > 1 .and. .not. cline%defined('multivol_mode') )then
-                call cline%set('multivol_mode', 'independent')
-            endif
-        endif
-        if( cline%defined('multivol_mode') .and. .not. l_addon )then
-            if( cline%get_carg('multivol_mode').eq.'independent' )then
-                ! Stop independent multi-state starts before prob_neigh/NU by default.
-                if( .not. l_user_nstages ) call cline%set('nstages', solve3D_independent_nstages_default())
-                if( .not. l_user_lpstop  ) call cline%set('lpstop',  solve3D_independent_lpstop_default())
-            endif
+        if( nstates_on_cline > 1 .and. .not. l_addon )then
+            ! Stop independent multi-state starts before prob_neigh/NU by default.
+            if( .not. l_user_nstages ) call cline%set('nstages', solve3D_independent_nstages_default())
+            if( .not. l_user_lpstop  ) call cline%set('lpstop',  solve3D_independent_lpstop_default())
         endif
         ! make master parameters
         call params%new(cline)
         call gui_comm%new(params)
         if( l_addon ) call addon_parse
         l_state_continue_mode = l_state_continue
-        if( trim(params%multivol_mode).eq.'independent' )then
+        if( params%nstates > 1 .and. .not. l_addon )then
             if( .not. l_user_nstages ) write(logfhandle,'(A,I0)') &
                 &'>>> SOLVE3D INDEPENDENT MULTI-STATE DEFAULT NSTAGES: ', params%nstages
             if( .not. l_user_lpstop ) write(logfhandle,'(A,F4.1,A)') &
@@ -921,21 +857,6 @@ contains
         endif
         ! Multiple states
         nstates_glob = params%nstates
-        select case(trim(params%multivol_mode))
-            case('single')
-                if( nstates_glob /= 1 ) THROW_HARD('nstates /= 1 incompatible with multivol_mode:' //trim(params%multivol_mode))
-            case('independent', 'docked')
-                if( nstates_glob == 1 ) THROW_HARD('nstates == 1 incompatible with multivol_mode: '//trim(params%multivol_mode))
-            case DEFAULT
-                THROW_HARD('Unsupported multivol_mode: '//trim(params%multivol_mode))
-        end select
-        if( trim(params%multivol_mode).eq.'docked' .and. last_stage < split_stage )then
-            THROW_HARD('multivol_mode=docked requires nstages >= split_stage unless running an explicit pre-split diagnostic')
-        endif
-        if( trim(params%multivol_mode).eq.'docked' )then
-            params%nstates = 1
-            call cline%delete('nstates')
-        endif
         ! read project
         call spproj%read(params%projfile)
         ! A fresh solve3D never continues another run's sigma2 estimate: a
@@ -1004,20 +925,12 @@ contains
         if( l_vol_ini_ext )then
             ! sanity checks, it is also assumed no 2D clustering info has been performed
             ! resolution limits have to be defined
-            select case(trim(params%multivol_mode))
-            case('single','independent','docked')
-                ! volume input only allowed for these modes
-                if( (params%nstates > 1)  )then
-                    ! making sure all volumes are present (for 'docked', nstates==1 here)
-                    do state = 2, params%nstates
-                        if( .not. cline%defined('vol'//int2str(state)) )then
-                            THROW_HARD('vol'//int2str(state)//' must be defined for state s='//int2str(state))
-                        endif
-                    enddo
+            ! making sure all volumes are present
+            do state = 2, params%nstates
+                if( .not. cline%defined('vol'//int2str(state)) )then
+                    THROW_HARD('vol'//int2str(state)//' must be defined for state s='//int2str(state))
                 endif
-            case DEFAULT
-                THROW_HARD('Unsupported volume input and multivol_mode: '//trim(params%multivol_mode))
-            end select
+            enddo
             if( l_ini3D ) THROW_HARD('Cannot have both class initialization and an input volume')
             if( trim(params%balance).eq.'cavg' ) THROW_HARD('Volume input does not support balance=cavg (random classes, no class averages)')
             ! input volumes are assumed aligned to the target symmetry axis
@@ -1037,7 +950,7 @@ contains
         if( nstages_refine3D < start_stage )then
             THROW_HARD('nstages must be >= first executable solve3D stage')
         endif
-        l_run_final_rec = nstages_refine3D == solve3D_nstages() .or. trim(params%multivol_mode).eq.'independent'
+        l_run_final_rec = nstages_refine3D == solve3D_nstages() .or. params%nstates > 1
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk     = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! l_automsk_off (the EXPLICIT automsk=no veto of the pcg-backend
@@ -1069,7 +982,7 @@ contains
                 update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
                 update_frac = min(solve3D_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
                 ! the sampling units on disk: the run's under balance=class|cavg, class units under none,
-                ! which the initial greedy sample and the split checkpoint draw from
+                ! which the initial greedy sample draws from
                 smpl_units = 'class'
                 if( trim(params%balance) == 'cavg' ) smpl_units = 'cavg'
                 ! workers are idle before the first stage: nparts*nthr threads on local execution
@@ -1138,7 +1051,7 @@ contains
                     THROW_HARD('Unsupported ORITYPE; exec_solve3D')
             end select
             ! randomize states
-            if( trim(params%multivol_mode).eq.'independent' .and. .not.l_cavg_ini_ext )then
+            if( params%nstates > 1 .and. .not.l_cavg_ini_ext )then
                 call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
             endif
             call spproj%write_segment_inside(params%oritype, params%projfile)
@@ -1170,7 +1083,7 @@ contains
                 THROW_HARD('Prior 3D alignment is lacking for starting volume generation')
             endif
             ! randomize states
-            if( trim(params%multivol_mode).eq.'independent' .and. .not.l_cavg_ini_ext )then
+            if( params%nstates > 1 .and. .not.l_cavg_ini_ext )then
                 call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
             endif
             ! create an initial balanced greedy sampling
@@ -1205,31 +1118,8 @@ contains
         ! Frequency marching
         call print_states(params, 0)
         do istage = start_stage, nstages_refine3D
-            ! Splitting stage of docked mode
-            if( params%multivol_mode.eq.'docked' )then
-                if( istage == split_stage-1 )then
-                    ! update pre-split sampling
-                    if( l_force_full_sampling )then
-                        update_frac = 1.0
-                    else
-                        update_frac = real(nstates_glob * params%nsample) / real(nptcls_eff)
-                        update_frac = min(solve3D_update_frac_max(), update_frac)
-                    endif
-                    write(logfhandle,'(A,I0,A,F8.4)') &
-                        &'>>> SOLVE3D DOCKED SPLIT STAGE/PRE-SPLIT_UPDATE_FRAC: ',istage, '/',update_frac
-                endif
-            endif
             ! Preparation of command line for refinement
-            if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                ! A local receives the intent(out) update fraction: the checkpoint
-                ! routine reads the module-level update_frac through
-                ! set_cline_refine3D, so passing the module variable itself would
-                ! alias an intent(out) dummy with host-associated reads (F2018
-                ! 15.5.2.13).
-                call build_solve3D_split_checkpoint(params, spproj, xrefine3D, xrec3D, split_stage, &
-                    &nptcls_eff, nstates_glob, l_force_full_sampling, update_frac_post_split)
-                update_frac = update_frac_post_split
-            else if( l_addon )then
+            if( l_addon )then
                 call set_cline_refine3D(params, istage, l_cavgs=.false., addon=addon_ctx)
             else
                 call set_cline_refine3D(params, istage, l_cavgs=.false.)
@@ -1249,11 +1139,6 @@ contains
                 endif
             else
                 write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH NU-SELECTED MATCHING LP'
-            endif
-            if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                call handoff_split_checkpoint_to_refine3D_states
-                l_states_handoff_complete = .true.
-                exit
             endif
             if( cline_refine3D%get_iarg('box_crop') < params%box )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
@@ -1277,14 +1162,8 @@ contains
             call gen_ortho_reprojs4viz(params, spproj)
             call gui_comm%add_metadata(spproj, oritype='cls3D', stage=istage)
         enddo
-        if( l_states_handoff_complete )then
-            write(logfhandle,'(A)') &
-                &'>>> SOLVE3D POST-SPLIT REFINEMENT AND FINAL RECONSTRUCTION OWNED BY REFINE3D_STATES'
-        else if( l_run_final_rec )then
-            select case(trim(params%multivol_mode))
-                case('independent','docked')
-                    call ensure_multistate_particle_assignments
-            end select
+        if( l_run_final_rec )then
+            if( params%nstates > 1 ) call ensure_multistate_particle_assignments
             ! the shared ending: final all-particle reconstruction at original
             ! sampling, project registration, final products and reprojections
             ! solve3D_addon: every particle is active again and the
@@ -1299,7 +1178,7 @@ contains
             write(logfhandle,'(A)')'>>> FINAL ALL-PARTICLE RECONSTRUCTION SKIPPED'
         endif
         ! the run manifest, last and never fatal: a completed run (final
-        ! reconstruction or refine3D_states handoff) is a candidate frozen input
+        ! reconstruction) is a candidate frozen input
         if( l_addon )then
             ! epilogue: union metadata and the report against the base
             ! solution; with its union sigma2 state the output is a frozen
@@ -1307,7 +1186,7 @@ contains
             if( .not. l_run_final_rec ) THROW_HARD('solve3D_addon inherited a ladder without a final reconstruction')
             call addon_epilogue
             call write_run_manifest(.true., 'solve3D_addon')
-        else if( l_states_handoff_complete .or. l_run_final_rec )then
+        else if( l_run_final_rec )then
             call write_run_manifest(.true., 'solve3D')
         endif
         ! final update GUI
@@ -1669,8 +1548,7 @@ contains
             integer :: i, status
             call spproj_man%read(params%projfile)
             call man%new(run_id, program_name, l_eligible, spproj_man)
-            call man%set_solution(nstates_glob, params%pgrp, params%box, params%smpd, params%mskdiam, &
-                &params%multivol_mode, split_stage)
+            call man%set_solution(nstates_glob, params%pgrp, params%box, params%smpd, params%mskdiam)
             call man%set_sampling(params%nsample, nptcls_eff, update_frac, l_force_full_sampling)
             call man%set_stage_line(l_refine3D_lp_override, params%lp, l_refine3D_lpstop_override, params%lpstop)
             allocate(stages(size(lpinfo)))
@@ -1702,64 +1580,6 @@ contains
             call spproj_man%kill
             call fname%kill
         end subroutine write_run_manifest
-
-        subroutine handoff_split_checkpoint_to_refine3D_states
-            type(cmdline) :: cline_states
-            integer       :: state, first_iter, remaining_niters, nsample_handoff
-            cline_states = cline_refine3D
-            first_iter = next_refine3D_iteration()
-            remaining_niters = solve3D_remaining_niters(split_stage, nstages_refine3D)
-            if( remaining_niters < 1 )then
-                THROW_HARD('solve3D split checkpoint has no remaining refine3D_states iterations')
-            endif
-            nsample_handoff = min(nptcls_eff, max(1, nint(update_frac * real(nptcls_eff))))
-            call cline_states%set('prg',          'refine3D_states')
-            call cline_states%set('mkdir',                       'no')
-            call cline_states%set('pose_policy',              'local')
-            call cline_states%set('flex',                        'no') ! the checkpoint already carries the states
-            call cline_states%set('nstates',            nstates_glob)
-            call cline_states%set('nsample',          nsample_handoff)
-            call cline_states%set('maxits',          remaining_niters)
-            call cline_states%set('lpstart',   lpinfo(split_stage)%lp)
-            call cline_states%set('lpstop', lpinfo(nstages_refine3D)%lp)
-            call cline_states%set('startit',              first_iter)
-            call cline_states%set('which_iter',           first_iter)
-            call cline_states%set('extr_iter',            first_iter)
-            call cline_states%set('filt_mode',    'nonuniform_lpset')
-            if( l_force_full_sampling )then
-                call cline_states%set('sticky_class_sampling', 'no')
-            else
-                call cline_states%set('sticky_class_sampling', 'yes')
-            endif
-            call cline_states%delete('multivol_mode')
-            call cline_states%delete('prob_neigh_mode')
-            call cline_states%delete('refine')
-            call cline_states%delete('nspace')
-            call cline_states%delete('nspace_sub')
-            call cline_states%delete('lp')
-            call cline_states%delete('minits')
-            call cline_states%delete('endit')
-            ! refine3D_states owns the state-overlap convergence policy; the
-            ! inherited solve3D stage target must not override its default
-            call cline_states%delete('overlap')
-            ! refine3D_states rejects vol1..volN inputs and takes its starting
-            ! state maps from the project out segment, where calc_rec registered
-            ! the split-checkpoint reconstructions
-            call spproj%read_segment('out', params%projfile)
-            do state = 1,nstates_glob
-                if( .not. spproj%isthere_in_osout('vol', state) )then
-                    THROW_HARD('solve3D split checkpoint did not register every state volume in the project')
-                endif
-                call cline_states%delete('vol'//int2str(state))
-            enddo
-            write(logfhandle,'(A,I0,A,I0,A,I0,A,F7.2,A,F7.2)') &
-                &'>>> SOLVE3D -> REFINE3D_STATES FIRST_ITER/MAXITS/NSAMPLE/LPSTART/LPSTOP: ', &
-                &first_iter, '/', remaining_niters, '/', nsample_handoff, '/', &
-                &lpinfo(split_stage)%lp, '/', lpinfo(nstages_refine3D)%lp
-            call xrefine3D_states%execute(cline_states)
-            call spproj%read(params%projfile)
-            call cline_states%kill
-        end subroutine handoff_split_checkpoint_to_refine3D_states
 
         subroutine clean_ptcl3D_sampling
             call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
@@ -1843,20 +1663,20 @@ contains
 
         subroutine ensure_multistate_particle_assignments
             integer :: nactive, nupdated, nmissing
-            call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
+            call read_multistate_update_coverage(nactive, nupdated, nmissing)
             if( nactive < 1 )then
                 THROW_HARD('multistate solve3D has no active particles after staged refinement')
             endif
             if( nmissing > 0 )then
                 call run_multistate_missing_update(nmissing, nactive)
-                call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
+                call read_multistate_update_coverage(nactive, nupdated, nmissing)
                 if( nmissing > 0 )then
                     THROW_HARD('multistate solve3D final missing-update pass failed to update every active particle')
                 endif
             endif
         end subroutine ensure_multistate_particle_assignments
 
-        subroutine read_multistate_assignment_coverage( nactive, nupdated, nmissing )
+        subroutine read_multistate_update_coverage( nactive, nupdated, nmissing )
             integer, intent(out) :: nactive, nupdated, nmissing
             integer, allocatable :: states(:), updatecnts(:)
             call spproj%read_segment('ptcl3D', params%projfile)
@@ -1868,20 +1688,20 @@ contains
             nactive    = count(states > 0)
             nupdated   = count(states > 0 .and. updatecnts > 0)
             nmissing   = nactive - nupdated
-            write(logfhandle,'(A,A,A,I0,A,I0,A,I0)') &
-                &'>>> SOLVE3D MULTISTATE ASSIGNMENT COVERAGE MODE=', trim(params%multivol_mode), &
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') &
+                &'>>> SOLVE3D MULTISTATE ASSIGNMENT COVERAGE NSTATES=', params%nstates, &
                 &' UPDATED/ACTIVE/MISSING: ', nupdated, '/', nactive, '/', nmissing
             if( allocated(states)     ) deallocate(states)
             if( allocated(updatecnts) ) deallocate(updatecnts)
-        end subroutine read_multistate_assignment_coverage
+        end subroutine read_multistate_update_coverage
 
         subroutine run_multistate_missing_update( nmissing, nactive )
             integer, intent(in) :: nmissing, nactive
             type(cmdline) :: cline_missing
             integer       :: iter_missing
             iter_missing = next_refine3D_iteration()
-            write(logfhandle,'(A,A,A,I0,A,I0,A,I0)') &
-                &'>>> SOLVE3D MULTISTATE FINAL MISSING-UPDATE GREEDY ASSIGNMENT MODE=', trim(params%multivol_mode), &
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') &
+                &'>>> SOLVE3D MULTISTATE FINAL MISSING-UPDATE GREEDY ASSIGNMENT NSTATES=', params%nstates, &
                 &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_missing
             call flush(logfhandle)
             cline_missing = cline_refine3D
@@ -1896,7 +1716,6 @@ contains
             call cline_missing%set('update_frac',            1.0)
             call cline_missing%set('trail_rec',             'no')
             call cline_missing%set('volrec',                'no')
-            call cline_missing%set('sticky_class_sampling', 'no')
             call cline_missing%set('maxits',                   1)
             call cline_missing%set('startit',       iter_missing)
             call cline_missing%set('which_iter',    iter_missing)

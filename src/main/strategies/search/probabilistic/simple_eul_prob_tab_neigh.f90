@@ -792,7 +792,7 @@ contains
                 if( nsel == 0 ) exit
                 ! Multi-state state labelling is deterministic (argmin distance) for both weighting
                 ! schemes; probabilistic exploration is confined to the within-state projection
-                ! assignment (assign_particles_for_state). Only refine=prob_state samples the state.
+                ! assignment (assign_particles_for_state).
                 assigned_idx = minloc(frontier%sel_dists(1:nsel), dim=1)
                 assigned_iref = frontier%sel_refs(assigned_idx)
                 assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)

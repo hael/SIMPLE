@@ -53,7 +53,6 @@ contains
         type(eul_prob_tab)       :: eulprob_obj_part
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
         integer, allocatable :: batches(:,:)
-        logical :: l_state_only
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! The policy here ought to be that nothing is done with regards to sampling other than reproducing
@@ -85,7 +84,6 @@ contains
         call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Fill the partition table in matcher-sized batches to cap particle PFT memo memory.
-        l_state_only = str_has_substr(params%refine, 'prob_state')
         call eulprob_obj_part%new_worker(params,build,pinds)
         call eulprob_obj_part%begin_write(fname)
         do ibatch = 1, nbatches
@@ -93,11 +91,7 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles3D(params, build, batchsz, pinds(batch_start:batch_end), tmp_imgs, tmp_imgs_pad)
-            if( l_state_only )then
-                call eulprob_obj_part%fill_tab_state_only_range(batch_start, batch_end)
-            else
-                call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
-            endif
+            call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
         end do
         call eulprob_obj_part%write_tab(fname)
         call eulprob_obj_part%kill
@@ -204,7 +198,6 @@ contains
         type(qsys_env)           :: qenv
         type(chash)              :: job_descr
         integer :: nptcls, ipart
-        logical :: l_state_only
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -239,26 +232,13 @@ contains
         endif
         ! Build the global table only after worker tables are complete.  Keeping it
         ! live while workers build dense partition tables roughly doubles peak RSS.
-        l_state_only = str_has_substr(params%refine, 'prob_state')
-        if( l_state_only )then
-            call eulprob_obj_glob%new_state(params,build,pinds)
-        else
-            call eulprob_obj_glob%new(params,build,pinds)
-        endif
+        call eulprob_obj_glob%new(params,build,pinds)
         ! reading corrs from all parts
-        if( l_state_only )then
-            do ipart = 1, params%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-                call eulprob_obj_glob%read_state_tab(fname)
-            enddo
-            call eulprob_obj_glob%state_assign
-        else
-            do ipart = 1, params%nparts
-                fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-                call eulprob_obj_glob%read_tab_to_glob(fname)
-            enddo
-            call eulprob_obj_glob%ref_assign
-        endif
+        do ipart = 1, params%nparts
+            fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
+            call eulprob_obj_glob%read_tab_to_glob(fname)
+        enddo
+        call eulprob_obj_glob%ref_assign
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)

@@ -38,21 +38,20 @@ of state maps, half maps, FSCs, masks, and filtering.
 The project must contain active particles and meaningful 3D orientations. The
 workflow may start from:
 
-1. populated multi-state labels plus compatible project state maps, which
-   continue without state initialization;
-2. state-0/1 input plus `nstates`, initialized by `flex_pca` by default
-   (`flex=yes`): labels and maps derive from the project consensus map under a
-   population floor (`min_state_frac`, default 0.1) so that no
-   under-populated flex cluster enters the volume refinement;
-3. state-0/1 input plus `nstates` and `flex=no`, initialized by the
-   distributed stochastic startup reconstruction;
-4. a `solve3D` split checkpoint whose state maps are registered in the
-   project `out` segment.
+1. populated multi-state labels, which continue without state
+   initialization; compatible project state maps are used as they are,
+   otherwise the state maps are reconstructed from the labels;
+2. state-0/1 input (every active particle in one state) plus `nstates`,
+   initialized by `flex_pca`: labels and maps derive from the project
+   consensus map under a population floor (`min_state_frac`, default 0.1) so
+   that no under-populated flex cluster enters the volume refinement.
 
-`flex` defaults to `yes`. It is skipped automatically when the project already
-carries multi-state labels, and an explicit `flex=yes` on such a project is an
-error. Flex initialization requires `nstates >= 3`; two-state stochastic
-initialization needs `flex=no`.
+`flex_pca` is the only state initializer; there is no key to select or skip
+it. It runs exactly when the project carries no multi-state labels, and it
+requires `nstates >= 3`: `nstates` is a ceiling, because flex PCA merges
+indistinct states and its population floors may drop states. The run
+continues with the number of states flex delivers and stops with an error
+when fewer than two remain.
 
 `vol1..volN` input is rejected: starting state maps must come from the project
 lineage. Classification against supplied references belongs to
@@ -67,19 +66,12 @@ populated.
 
 | Policy | Scientific meaning | Internal search mapping |
 | --- | --- | --- |
-| `fixed` | Keep each particle's projection direction; stochastically choose its state while optimizing the in-plane angle and in-plane translations | `refine=prob_state` |
 | `local` | Search state, projection direction, in-plane angle, and translations inside the current geometric neighborhood | `refine=prob_neigh`, `prob_neigh_mode=geom` |
 | `global` | Search every pose degree of freedom through full state-pooled probabilistic matching | `refine=prob_neigh`, `prob_neigh_mode=state` |
 
-`fixed` does not freeze the complete stored pose record. Its invariant is:
-
-```text
-projection direction after update = projection direction before update
-```
-
-The committed in-plane angle, x/y translations, state, correlation, and update
-accounting come from the selected optimized state candidate. Discarding those
-optimized in-plane values would violate the policy.
+Fixed-pose classification (keeping every projection direction and choosing
+only the state) is not a pose policy: it is what `flex_pca` does when it
+initializes the states.
 
 For `local`, angular, in-plane, and shift bounds are automatic. Advanced
 `local_ang_bound`, `local_inpl_bound`, and `local_shift_bound` values override
@@ -105,13 +97,8 @@ maps, poses or projection directions to choose particles.
 
 With equal quotas one full visit of the active particles takes
 `sweep = max over units of ceil(pop / quota)` draws, computed from the unit
-table before the first stage. When states are initialized stochastically under
-`local` or `global`, the `prob_state` init phase runs at least `sweep`
-iterations and at most the larger of `sweep` and ten. The state-overlap exit
-cannot end the phase before the sweep completes, so every active particle
-receives an initial state label before `prob_neigh` refinement starts. The
-automatic `maxits` is four target updates per particle times `sweep`, between
-10 and 50 iterations.
+table before the first stage. The automatic `maxits` is four target updates
+per particle times `sweep`, between 10 and 50 iterations.
 
 Each `prob_neigh` frequency block refines one particle cohort:
 `refine3D_states` sets the internal `cohort_sampling=yes` on the block's command
@@ -123,16 +110,13 @@ the wrapper prints the unit table with the expected visits per particle over
 the planned blocks and warns when the least-visited unit falls below one visit
 or the most-visited exceeds ten times the target; neither `nsample` nor the
 frequency march is adjusted, and the terminal missing-update pass labels any
-particle the march did not reach. The `prob_state` phase and the missing-update
-pass draw every iteration. Holding one cohort for `k` iterations of trailing
+particle the march did not reach. The missing-update pass draws every
+active particle that has not been updated. Holding one cohort for `k` iterations of trailing
 reconstruction gives it a cumulative map coefficient `1 − (1−u)^k`; the
 equal quota biases the composition of each partial reconstruction towards
 about `min(pop, quota)` particles per class, which moves with `nsample`,
 `nclust` and the class selection. Under cohorts `updatecnt` counts
 iterations, not draws; coverage is read from `% PARTICLES UPDATED SO FAR`.
-`sticky_class_sampling` is not an input of this workflow; the `solve3D`
-docked handoff still sets it internally to keep the post-split cohort, with its
-meaning unchanged.
 
 `lpstart` and `lpstop` define one common frequency schedule for all states.
 `simple_refine3D_stage_plan` returns short blocks containing the low-pass,
@@ -144,18 +128,12 @@ competitive evidence state-dependent.
 Every planned frequency block is executed so the workflow reaches `lpstop`;
 state-overlap diagnostics do not terminate the march at an earlier bandwidth.
 
-## 5. `solve3D` Handoff
+## 5. Relation to `solve3D`
 
-For docked multi-state `solve3D` work, `solve3D` owns the single-state
-scaffold and split-checkpoint construction. The checkpoint preserves state
-labels, maps, sampled/update metadata, the capped cohort, realized update
-fraction, and iteration position. Post-split refinement is dispatched once to
-`refine3D_states` with `pose_policy=local`; the checkpoint state maps reach it
-through the project `out` segment, not as `vol1..volN` inputs.
-
-The split checkpoint is constructed by
-`simple_solve3D_split_checkpoint`; the old post-split state-refinement loop
-is not a second production path.
+`solve3D` does not hand off to `refine3D_states`. Its multi-state runs
+(`nstates > 1`) refine independent states from the start; to split a
+finished single-state `solve3D` solution into states, run `refine3D_states`
+on its project, where `flex_pca` initializes the states.
 
 ## 6. Focus Evidence Boundary
 
@@ -168,8 +146,8 @@ is enabled until the matcher can enforce this separation.
 ## 7. Completion and Outputs
 
 Before final reconstruction, every active particle must have `updatecnt > 0`.
-A missing-update pass fills remaining assignments without intermediate volume
-reconstruction. Final state maps are then produced by the shared ending
+A missing-update pass (`refine=greedy`) fills remaining assignments without
+intermediate volume reconstruction. Final state maps are then produced by the shared ending
 `calc_final_rec` (module `simple_final_rec`), the same routine that closes
 `solve3D`, `refine3D_auto`, and `classify3D_refs`: committed canonical
 sigmas are reused when valid at native sampling, otherwise `bootstrap_rec3D`
@@ -182,13 +160,13 @@ orthogonal reprojections.
 
 User-side validation must cover:
 
-- all three pose policies and the `global` default;
-- projection-direction identity plus in-plane/translation updates for `fixed`;
+- both pose policies and the `global` default;
+- `flex_pca` initialization of state-0/1 input, the `nstates >= 3` rule, and
+  continuation with fewer delivered states;
 - automatic and overridden local bounds;
 - monotonic common frequency marching through `lpstop`;
 - stochastic/full sampling and final update coverage;
 - shared-memory and distributed execution;
-- split-checkpoint handoff from `solve3D`;
 - native-sampling final maps and expected artifacts.
 
 Compilation and runtime tests are performed by the user. No Linux or BOX

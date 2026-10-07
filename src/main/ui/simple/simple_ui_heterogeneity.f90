@@ -222,19 +222,14 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         call refine3D_states%new(&
         &'refine3D_states',&
         &'Refine conformational states from a same-lineage particle orientation scaffold',&
-        &'refines conformational states from existing particle poses. The pose policy fixes the projection direction, searches a local neighborhood, or permits global matching',&
+        &'refines conformational states from existing particle poses. Input without state labels is split into states by flex PCA; the pose policy searches a local neighborhood or permits global matching',&
         &'simple_exec',&
         &.true.,&
         &visibility=UI_VIS_STANDARD, display_name='Conformational State Refinement')
         call refine3D_states%add_input(UI_SRCH, maxits, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, nstates, required_override=.false., group='search', visibility=UI_VIS_STANDARD)
-        call refine3D_states%add_input(UI_SRCH, 'flex', 'binary', 'Initialize states with flex PCA', &
-        &'Run flex_pca to derive the initial particle states and state volumes; the default for state=0/1 input, &
-        &skipped automatically when the project already carries multi-state labels; flex=no selects stochastic &
-        &state initialization(yes|no){yes}', '', &
-        &.false., 'yes', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'min_state_frac', 'num', 'Minimum flex state population fraction', &
-        &'With flex=yes, every initial state must hold at least this fraction of the particles; under-populated &
+        &'For state=0/1 input, initialized by flex PCA (nstates>=3), every initial state must hold at least this fraction of the particles; under-populated &
         &flex clusters are dropped and their particles randomized over the delivered states{0.1}', &
         &'fraction of particles', .false., 0.1, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target', &
@@ -242,9 +237,9 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         &'particles (0=automatic)', .false., 0., group='search', visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call refine3D_states%add_input(UI_SRCH, sigma_est, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'pose_policy', 'multi', 'Pose-search policy', &
-        &'Pose-search policy(fixed|local|global){global}. Fixed keeps the projection direction and optimizes the in-plane angle and x/y translations; local uses the current geometric neighborhood; global permits full probabilistic matching', &
-        &'fixed, local, or global', .false., 'global', group='search', &
-        &choices=ui_choices([character(len=6) :: 'fixed', 'local', 'global']), visibility=UI_VIS_STANDARD)
+        &'Pose-search policy(local|global){global}. Local uses the current geometric neighborhood; global permits full probabilistic matching', &
+        &'local or global', .false., 'global', group='search', &
+        &choices=ui_choices([character(len=6) :: 'local', 'global']), visibility=UI_VIS_STANDARD)
         call refine3D_states%add_input(UI_SRCH, 'local_ang_bound', 'num', 'Local projection-angle bound', &
         &'Advanced override for the automatically derived local projection-direction neighborhood in degrees', &
         &'degrees (-1=automatic)', .false., -1., group='search', visibility=UI_VIS_DEVELOPER)

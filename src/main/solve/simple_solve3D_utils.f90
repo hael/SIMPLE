@@ -4,7 +4,6 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
 use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration, sigma2_estimate_available
 use simple_commanders_volops,    only: commander_symmetrize_map
-use simple_cluster_seed,         only: gen_labelling
 use simple_class_frcs,           only: class_frcs
 use simple_matcher_refvol_utils, only: remove_ref_section_files
 use simple_parameters,           only: parameters
@@ -121,16 +120,6 @@ interface
         integer :: istage
     end function solve3D_ml_reg_start_stage
 
-    module function solve3D_het_docked_stage() result(istage)
-        integer :: istage
-    end function solve3D_het_docked_stage
-
-    module function solve3D_docked_cohort_active( params, istage ) result(l_active)
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
-        logical :: l_active
-    end function solve3D_docked_cohort_active
-
     module function solve3D_stoch_sampl_stage(params) result(istage)
         class(parameters), intent(in) :: params
         integer :: istage
@@ -151,13 +140,6 @@ interface
         logical,                              intent(in) :: l_cavgs
         type(solve3D_addon_ctx), optional, intent(in) :: addon
     end subroutine set_cline_refine3D
-
-    module subroutine calc_docked_multistate_max_sampling( params, nptcls, nptcls_cap, ufrac_cap )
-        class(parameters), intent(in)  :: params
-        integer,           intent(in)  :: nptcls
-        integer,           intent(out) :: nptcls_cap
-        real,              intent(out) :: ufrac_cap
-    end subroutine calc_docked_multistate_max_sampling
 
 end interface
 
@@ -704,21 +686,18 @@ contains
     end subroutine commit_deferred_sigma_update
 
     ! Performs reconstruction at selected stage boundaries.
-    subroutine calc_rec( params, projfile, xrec3D, istage, current_sample_only )
+    subroutine calc_rec( params, projfile, xrec3D, istage )
         class(parameters),       intent(inout) :: params
         class(string),           intent(in)    :: projfile
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
-        logical, optional,       intent(in)    :: current_sample_only
         type(string)      :: vol_even, vol_odd, vol_even_unfil, vol_odd_unfil, vol_even_solvent, vol_odd_solvent
         type(string)      :: tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         integer           :: state, sigma_iter
         real              :: lp_snapshot
-        logical           :: have_even_stage, have_odd_stage, l_current_sample_only, l_seed_trail_chain, l_pcg_rec
+        logical           :: have_even_stage, have_odd_stage, l_seed_trail_chain, l_pcg_rec
         logical           :: l_sigma_bootstrapped
-        l_current_sample_only = .false.
-        if( present(current_sample_only) ) l_current_sample_only = current_sample_only
         ! Seed the trailing accumulator chain only when the stage this boundary
         ! feeds actually trails (its refine3D cline is already configured);
         ! seeding earlier would park stale full-weight alignments in the chain.
@@ -737,7 +716,6 @@ contains
         call cline_rec%set('pgrp',      pgrp)
         call cline_rec%set('box_crop',  solve3D_stage_box_crop(params, istage))
         call cline_rec%set('trail_rec', 'no')
-        call cline_rec%delete('sticky_class_sampling')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
         l_pcg_rec = cline_rec%defined('rec_backend')
         if( l_pcg_rec ) l_pcg_rec = cline_rec%get_carg('rec_backend').eq.'pcg'
@@ -746,18 +724,11 @@ contains
         enddo
         call cline_rec%delete('vol_even')
         call cline_rec%delete('vol_odd')
-        if( l_current_sample_only )then
-            if( .not. cline_refine3D%defined('update_frac') )then
-                THROW_HARD('current-sample reconstruction requires update_frac')
-            endif
-            call cline_rec%set('update_frac', cline_refine3D%get_rarg('update_frac'))
-        else
-            call cline_rec%delete('update_frac')
-            ! A full stage-boundary reconstruction is the producer of the
-            ! trailing accumulator chain: seed it at full-dataset weight so the
-            ! consuming trail_rec stage starts from complete blended statistics.
-            if( l_seed_trail_chain ) call cline_rec%set('trail_seed', 'yes')
-        endif
+        call cline_rec%delete('update_frac')
+        ! A full stage-boundary reconstruction is the producer of the
+        ! trailing accumulator chain: seed it at full-dataset weight so the
+        ! consuming trail_rec stage starts from complete blended statistics.
+        if( l_seed_trail_chain ) call cline_rec%set('trail_seed', 'yes')
         call strip_refine3D_planning_keys(cline_rec)
         if( stage_rec_is_euclid(cline_rec) )then
             ! The ini3D routes (cavg_ini, cavg_ini_ext) enter at a stage whose
@@ -871,7 +842,6 @@ contains
         call cline_rec%set('box_crop',    box)
         call cline_rec%set('trail_rec',   'no')
         call cline_rec%delete('trail_seed')
-        call cline_rec%delete('sticky_class_sampling')
         call cline_rec%delete('update_frac')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
         do state = 1,params%nstates
@@ -900,43 +870,6 @@ contains
         l_euclid = .true.
         if( cline_rec%defined('objfun') ) l_euclid = cline_rec%get_carg('objfun') .eq. 'euclid'
     end function stage_rec_is_euclid
-
-    subroutine randomize_states( params, spproj, projfile, xrec3D, istage, clean_sampling, reconstruct_states )
-        class(parameters),     intent(inout) :: params
-        class(sp_project),     intent(inout) :: spproj
-        class(string),         intent(in)    :: projfile
-        class(commander_base), intent(inout) :: xrec3D
-        integer,               intent(in)    :: istage
-        logical, optional,     intent(in)    :: clean_sampling, reconstruct_states
-        integer, parameter :: MIN_SPLIT_STATE_POP = 5
-        integer :: pop, state
-        logical :: l_clean_sampling, l_reconstruct_states
-        l_clean_sampling     = .true.
-        l_reconstruct_states = .true.
-        if( present(clean_sampling)     ) l_clean_sampling     = clean_sampling
-        if( present(reconstruct_states) ) l_reconstruct_states = reconstruct_states
-        call spproj%read_segment('ptcl3D', projfile)
-        if( l_clean_sampling ) call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
-        call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
-        do state = 1, params%nstates
-            pop = spproj%os_ptcl3D%get_pop(state, 'state')
-            if( pop <= MIN_SPLIT_STATE_POP )then
-                THROW_HARD('docked split generated insufficient state population; reduce nstates or provide more active particles/classes')
-            endif
-        enddo
-        call spproj%write_segment_inside(params%oritype, projfile)
-        call cline_refine3D%set(     'nstates', params%nstates)
-        call cline_reconstruct3D%set('nstates', params%nstates)
-        call cline_reproject%set(    'nstates', params%nstates)
-        ! Canonical state is already committed and state relabelling does not
-        ! change its row identity or global/stack grouping; reconstruct3D
-        ! consumes it directly.
-        if( cline_refine3D%get_carg('ml_reg').eq.'yes' )then
-            write(logfhandle,'(A)') '>>> DOCKED SPLIT: reusing committed canonical sigmas'
-        endif
-        ! Multi-state reconstruction
-        if( l_reconstruct_states ) call calc_rec(params, projfile, xrec3D, istage)
-    end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz( params, spproj )
         class(parameters), intent(in)    :: params

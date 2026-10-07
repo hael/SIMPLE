@@ -43,11 +43,11 @@ command line.
 Important stage transitions:
 
 - stages 1 to 2 use `refine='prob_neigh'` with `prob_neigh_mode='shc'`
-  (independent multi-state runs from particles use plain `refine='shc'`)
+  (multi-state runs from particles, `nstates>1`, use plain `refine='shc'`)
 - stages 3 to 5 use `refine='prob'`
 - stages 6 to 8 use `refine='prob_neigh'` with `prob_neigh_mode='state'`
-  (`geom` after the docked multi-state split; the split stage itself uses
-  `refine='prob_state'`)
+- `nstates` alone selects single-state or independent multi-state stage
+  rules; solve3D has no `multivol_mode` input and no docked split
 - the last active stage can turn on `fillin='yes'` for single-state solve3D
 
 Important coupling facts:

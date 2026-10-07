@@ -7,9 +7,11 @@ several same-lineage conformational maps and their particle assignments. The
 shared estimator, bandwidth schedule, and final reconstruction are described
 in the [heterogeneity-analysis overview](README.md).
 
-The input may contain an existing label set with project state maps, the
-[`flex_pca`](flex_pca.md) initializer (the default for state-0/1 input), the
-stochastic state initializer (`flex=no`), or a `solve3D` docked checkpoint.
+The input is either an existing label set, with or without project state
+maps, or a single-state project (all particles in state 0 or 1), whose states
+the [`flex_pca`](flex_pca.md) initializer derives at fixed poses. Flex
+initialization needs `nstates >= 3`; `nstates` is a ceiling, because flex
+merges indistinct states, and the run continues with the states it delivers.
 Supplied reference volumes are not accepted; that input belongs to
 [`classify3D_refs`](classify3d_refs.md).
 
@@ -17,8 +19,6 @@ Supplied reference volumes are not accepted; that input belongs to
 
 `pose_policy` controls how much of the pose may move while states are decided:
 
-- `fixed` freezes the projection direction and optimizes only the in-plane
-  angle, shift, and state. This is classification given the consensus geometry.
 - `local` permits the direction to move within the coarse Voronoi cell of its
   previous value. A bound `alpha` in degrees becomes
   `nspace_sub = min(5000, max(2, 2/(1 - cos alpha)))`, matching the number of
@@ -35,9 +35,9 @@ reconstructed from its members.
 ## Rationale
 
 A shared pose and map lineage makes direct Euclidean state competition valid.
-The selectable pose policy separates nearly fixed-pose classification from
-local or global conformational refinement, while balanced view sampling keeps
-an initially larger state from winning solely through better angular coverage.
+Classification at fixed poses is the flex PCA initialization; the pose policy
+then chooses local or global conformational refinement, while balanced view
+sampling keeps an initially larger state from winning solely through better angular coverage.
 
 ## Implementation
 

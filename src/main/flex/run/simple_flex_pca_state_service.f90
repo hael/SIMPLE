@@ -35,9 +35,9 @@ real,    parameter :: FLEX_AUTO_NEFF_OCCUPANCY = 0.10
 ! the two-gate merge collapses the indistinct ones, so the recovered K is only ever <= it.
 ! preimage_auto=yes raises that ceiling to AUTO_NSTATES and turns the merge on, since over-provisioning
 ! is the only regime in which the merge can recover K at all.
-!> provision cap of the population floor (min_state_frac > 0, refine3D_states flex=yes); independent of AUTO_NSTATES
+!> provision cap of the population floor (min_state_frac > 0, refine3D_states flex initialization); independent of AUTO_NSTATES
 integer, parameter :: AUTO_NSTATES = 8
-!> provision cap of the population floor (min_state_frac > 0, refine3D_states flex=yes); independent of AUTO_NSTATES
+!> provision cap of the population floor (min_state_frac > 0, refine3D_states flex initialization); independent of AUTO_NSTATES
 integer, parameter :: POP_FLOOR_MAX_NSTATES = 32
 
 contains

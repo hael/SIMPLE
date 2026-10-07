@@ -48,6 +48,9 @@ Then answer the user request in this order:
   angles are sampled for those particles.
 - Treat `sampled` as the marker for the current sampling round and `updatecnt`
   as persistent history across rounds.
+- There is no docked solve3D split, sticky class sampling or `sampled_only`
+  cohort restriction any more; multi-state solve3D is independent from the
+  start, and the only cohort rule is `refine3D_states` `cohort_sampling`.
 - When explaining behavior, call out whether the code path is initial solve3D
   seeding, normal iteration, final-stage fill-in, or trailing reconstruction.
 - Preserve the online matcher single-read contract. If reconstruction or

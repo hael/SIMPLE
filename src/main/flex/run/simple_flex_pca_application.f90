@@ -318,7 +318,7 @@ contains
         ! when no deconvolution happened
         if( params%min_state_frac > 0. )then
             ! population floor: exactly nstates hard-labelled states, every one at or above the floor
-            ! (refine3D_states flex=yes relies on it); the bandwidth CV below does not apply
+            ! (refine3D_states flex initialization relies on it); the bandwidth CV below does not apply
             sess%l_pop_floor = .true.
             call place_states_with_population_floor(sess%latent, sess%model, sess%nkern, sess%state_axis, sess%min_neff, &
                 &params%min_state_frac, sess%states, equal_occ=trim(params%state_placement) == 'equal_occ')

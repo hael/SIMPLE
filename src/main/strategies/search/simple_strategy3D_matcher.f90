@@ -408,7 +408,7 @@ contains
                         allocate(strategy3D_greedy             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy_inpl')
                         allocate(strategy3D_greedy_inpl        :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('prob','prob_state','prob_neigh')
+                    case('prob','prob_neigh')
                         allocate(strategy3D_prob               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('sigma')
                         ! residual-only pass: no search, the particle's projection

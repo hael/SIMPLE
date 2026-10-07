@@ -36,9 +36,8 @@ s_i = argmin_s  min_{R,theta,shift} L_i(s, R, theta, shift).
 
 In the probabilistic table the state is chosen by a deterministic argmin over
 the heads of the balanced assignment loop
-([sampling](../sampling_and_fractional_updates.md)); only
-`refine=prob_state` draws the state from the full softmax
-`exp(-(d_s - d_min))`. The projection within the chosen state is then drawn
+([sampling](../sampling_and_fractional_updates.md)). The projection within
+the chosen state is then drawn
 stochastically as usual. A shift seed from one state is never reused to rank
 another state.
 

@@ -88,12 +88,9 @@ One iteration:
      score a stochastic subset of the fine directions with the
      first-improvement rule of `shc` (unbounded for `shc`, annealed for
      `snhc`) after a floor of five candidates.
-   - `prob_state`: each particle keeps its previous direction and in-plane
-     angle; that pose is scored, with shift refinement, against the
-     reference of every state, and the balanced assignment draws the state
-     label. This turns a consensus refinement into a multi-state one: it is
-     the split stage of docked `solve3D` and the initialization of
-     `refine3D_states`.
+   There is no state-only mode: a consensus refinement becomes a multi-state
+   one through `refine3D_states`, whose [flex PCA](heterogeneity_analysis/flex_pca.md)
+   initializer assigns the first states at fixed poses.
    Shifts are then refined by L-BFGS-B within `trs`, and optionally the
    committed `(sx, sy, theta)` is polished jointly with continuous angle
    ([continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)).

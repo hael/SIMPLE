@@ -229,11 +229,6 @@ contains
         endif
         select case(trim(params%balance))
             case('class', 'cavg')
-                if( params%l_sticky_class_sampling )then
-                    if( .not. build%spproj_field%has_been_sampled() )then
-                        THROW_HARD('sticky_class_sampling requires a pre-existing sampled particle cohort')
-                    endif
-                endif
                 fname = CLASS_SAMPLING_FILE
                 if( .not. file_exists(fname) )then
                     THROW_HARD('File for class-balanced sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exist!')
@@ -242,11 +237,11 @@ contains
                 if( params%l_frac_best )then
                     call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
                         &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best, &
-                        &sampled_only=params%l_sticky_class_sampling, allow_empty=allow_empty)
+                        &allow_empty=allow_empty)
                 else
                     call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
                         &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, &
-                        &sampled_only=params%l_sticky_class_sampling, allow_empty=allow_empty)
+                        &allow_empty=allow_empty)
                 endif
                 call deallocate_class_samples(clssmp)
                 call fname%kill

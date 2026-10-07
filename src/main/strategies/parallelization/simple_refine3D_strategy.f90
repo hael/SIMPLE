@@ -27,7 +27,7 @@ public :: strip_refine3D_search_only_args
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: PROB_STATE_MIN_POP = 5
+integer, parameter :: PROB_MULTISTATE_MIN_POP = 5
 
 !> Minimal strategy interface - only divergent operations
 type, abstract :: refine3D_strategy
@@ -482,8 +482,8 @@ contains
         if( .not. params%l_prob_align_mode ) return
         do state = 1,params%nstates
             pop = build%spproj_field%get_pop(state, 'state')
-            if( pop <= PROB_STATE_MIN_POP )then
-                write(logfhandle,*) 'state, population, required minimum: ', state, pop, PROB_STATE_MIN_POP + 1
+            if( pop <= PROB_MULTISTATE_MIN_POP )then
+                write(logfhandle,*) 'state, population, required minimum: ', state, pop, PROB_MULTISTATE_MIN_POP + 1
                 THROW_HARD('refine3D refine=prob multi-state startup has an insufficient state population')
             endif
         end do
@@ -669,7 +669,7 @@ contains
         type(cmdline)                     :: cline_build, cline_polish
         integer(timer_int_kind)           :: t_recphase
         integer                           :: state, iter, extr_iter
-        logical                           :: l_prob_state_mode, l_prob_neigh_mode
+        logical                           :: l_prob_neigh_mode
         logical                           :: l_write_partial_recs, l_polish
         type(string)                      :: volname
         601 format(A,1X,F12.3)
@@ -710,7 +710,6 @@ contains
         if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model(params, cline, current_build=build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
-        l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         ! refine=prob* pre-step
         if( L_BENCH_GLOB )then
@@ -719,7 +718,7 @@ contains
         endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
-            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
                 call cline_prob_align%set('prg', 'prob_align')
@@ -730,7 +729,7 @@ contains
             enddo
             ! communicate changes to probabilistic alignment
             call build%spproj%write_segment_inside(params%oritype)
-            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode )then
                 call xprob_align_neigh%execute( cline_prob_align )
             else
                 call xprob_align%execute( cline_prob_align )
@@ -906,7 +905,7 @@ contains
         type(string)  :: prev_refine_path, fname_vol, vol, fsc_file, chain_files(2)
         real    :: smpd
         integer :: state, box
-        logical :: fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
+        logical :: fall_over, vol_defined, l_prob_neigh_mode
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -952,9 +951,8 @@ contains
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
-        l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
+        if( l_prob_neigh_mode )then
             call self%cline_prob_align_distr%set( 'prg', 'prob_align_neigh' )
         else
             call self%cline_prob_align_distr%set( 'prg', 'prob_align' )
@@ -1175,7 +1173,7 @@ contains
         integer, allocatable :: state_pops(:), pinds_smpl(:)
         type(chash) :: job_descr_pass
         integer :: state, iter, nptcls_smpl
-        logical :: l_prob_state_mode, l_prob_neigh_mode, l_polish
+        logical :: l_prob_neigh_mode, l_polish
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
@@ -1200,7 +1198,6 @@ contains
         if( self%have_oris .or. iter > params%startit )then
             call build%spproj%read(params%projfile)
         endif
-        l_prob_state_mode = trim(params%refine) == 'prob_state'
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         ! prob refinement
         if( L_BENCH_GLOB )then
@@ -1209,14 +1206,14 @@ contains
         endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
-            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
                 call cline_prob_align%set('prg', 'prob_align')
             endif
             call cline_prob_align%set('which_iter', iter)
             call build%spproj%write_segment_inside(params%oritype)
-            if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
+            if( l_prob_neigh_mode )then
                 call xprob_align_neigh_distr%execute( cline_prob_align )
             else
                 call xprob_align_distr%execute( cline_prob_align )

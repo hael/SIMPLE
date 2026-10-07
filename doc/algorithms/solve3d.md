@@ -124,14 +124,17 @@ multi-state runs each state finds and applies its own axis.
 
 ## Multi-state modes
 
-- `single`: one map.
-- `independent`: `nstates` maps refined from random labels and independent
-  random starts. Its default five-stage schedule stops at 6 A, before the
-  local, NU, trailing, and automask stages, because its purpose is inspection.
-- `docked`: one shared map through stage 5, then a balanced cohort of
-  particles (capped at 100 000) is randomly split into states and refined with
-  shared geometric neighborhoods, so the states begin from one consensus
-  geometry and diverge only in density.
+`nstates` selects the mode; there is no mode key.
+
+- `nstates=1`, single: one map.
+- `nstates>1`, independent: `nstates` maps refined from random labels and
+  independent random starts. Its default five-stage schedule stops at 6 A,
+  before the local, NU, trailing, and automask stages, because its purpose is
+  inspection.
+
+To split a finished single-state solution into states that share its
+geometry, run [`refine3D_states`](heterogeneity_analysis/refine3d_states.md)
+on it: flex PCA initializes the states at the consensus poses.
 
 ## Final reconstruction
 

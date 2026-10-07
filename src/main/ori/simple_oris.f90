@@ -1242,7 +1242,7 @@ interface
     end subroutine sample4update_cnt
 
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, &
-                                        incr_sampled, l_greedy, frac_best, sampled_only, allow_empty )
+                                        incr_sampled, l_greedy, frac_best, allow_empty )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:)
         integer,              intent(in)    :: fromto(2)
@@ -1251,7 +1251,7 @@ interface
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled, l_greedy
         real,    optional,    intent(in)    :: frac_best
-        logical, optional,    intent(in)    :: sampled_only, allow_empty
+        logical, optional,    intent(in)    :: allow_empty
     end subroutine sample4update_class
 
     module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )

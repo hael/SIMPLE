@@ -47,8 +47,8 @@ When unset, it supplies:
 - `balance=cavg` (`class` with input volumes, which bring random classes and
   no class averages; `cavg` is rejected there)
 
-For `multivol_mode=independent`, it also supplies conservative inspection
-defaults when the user has not overridden them:
+For a multi-state run (`nstates > 1`), it also supplies conservative
+inspection defaults when the user has not overridden them:
 
 - `nstages=5`
 - `lpstop=6.0 A`
@@ -71,10 +71,10 @@ Stage policy includes:
 - stage 1 starts with `nspace=500`; stages 2 through 4 use `nspace=1000`
 - every stage gets its low-pass and crop information independently from the
   normal FRC/input schedule
-- mode-specific staged search:
-  - `single` and `docked` particle runs use `prob_neigh` with
-    `prob_neigh_mode=shc` in stages 1-2, middle `prob`, and late `prob_neigh`
-  - `independent` particle runs use direct `shc` in stages 1-2, `prob` in
+- staged search by state count:
+  - single-state particle runs use `prob_neigh` with `prob_neigh_mode=shc`
+    in stages 1-2, middle `prob`, and late `prob_neigh`
+  - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
     stages 3-5, and `prob_neigh` in later user-enabled stages
 - `nspace_sub` for `prob_neigh`
 - staged point-group policy between `pgrp_start` and `pgrp`
@@ -84,9 +84,9 @@ Stage policy includes:
 - fractional-update selection over the sampling units of `balance`: `cavg` by
   default (groups of similar class averages, then their classes), `class` (one
   unit per selected class) or `none` (global lowest `updatecnt` tiers)
-- mode-specific stochastic sampling start
+- stochastic sampling start by state count
 - early Gaussian reference filtering
-- optional trailing reconstruction by stage and multivol mode
+- optional trailing reconstruction by stage and state count
 - staged NU filtering from `NU_FILTER_STAGE`
 - staged automasking only from `AUTOMSK_STAGE`
 - an explicitly requested PCG solvent prior from `PCG_SOLVENT_START_STAGE`
@@ -98,8 +98,8 @@ The downscaled particle cache is a 2D-only feature: `solve3D` rejects
 ladder.
 
 The effective crop and its physically equivalent pixel size are shared by
-starting-volume generation, matcher reconstruction, split-stage reconstruction,
-symmetry-map commands, FSC diagnostics, low-pass snapshots, and project volume
+starting-volume generation, matcher reconstruction, stage-boundary
+reconstruction, symmetry-map commands, FSC diagnostics, low-pass snapshots, and project volume
 registration. This preserves `box * smpd == box_crop * smpd_crop` across every
 particle-to-volume handoff.
 
@@ -127,7 +127,7 @@ its target equally over the groups, then equally over the classes of a group,
 each capped at its population, then lowest `updatecnt` first inside a class.
 Under `class` every class is its own group; under `none` the stages sample the
 global lowest `updatecnt` tiers, and the file holds class units only for the
-initial greedy sample and the docked split checkpoint. The groups are written
+initial greedy sample. The groups are written
 as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The
 units are formed once, before the first stage, and serve the whole run: the
 stages only read the file, and every stage command line carries `balance` and,
@@ -260,8 +260,8 @@ FSC resolution when an FSC exists. The planned stage LP is only a fallback.
   `cavg_ini=yes`
 - externally supplied class-average initialization through `cavg_ini_ext=yes`
 
-Volume input is allowed for `single`, `independent`, and `docked`
-multi-volume modes. It cannot be combined with class-average initialization or
+Volume input is allowed for single- and multi-state runs (one volume per
+state). It cannot be combined with class-average initialization or
 partitioned startup. User-supplied input volumes are assumed to be aligned to
 the target symmetry axis, so `pgrp_start` is set to `pgrp` and the particle
 workflow does not run symmetry-axis search on them.
@@ -283,7 +283,7 @@ Normal particle-based starts treat `solve3D` as the producer of new
 sampling, deletes previous 3D alignment while preserving shifts, transfers 2D
 shifts from `ptcl2D`, and initializes `ptcl3D%state` only from the 2D
 selection state: selected particles become state 1 and unselected particles
-become state 0. Fresh `independent` runs then randomize active particles into
+become state 0. Fresh multi-state runs then randomize active particles into
 the requested 3D states with balanced uniform labels.
 
 Class-average initialization and external class-average initialization both
@@ -297,119 +297,44 @@ orientations are already symmetrized, and starts after the symmetry-search
 stage. If `nstates > 1`, every requested prior `ptcl3D` state must exist and be
 populated.
 
-## 6. Multi-Volume Policy
+## 6. Multi-State Policy
 
-Supported `multivol_mode` values are:
+`nstates` alone selects the mode; `solve3D` has no `multivol_mode` input and
+refuses it on the command line. `nstates=1` is the single-state run.
+`nstates > 1` refines independent states from the start: every state has its
+own starting model and its own refinement. There is no docked mode (one
+consensus model up to a split stage, then states); it was removed on
+2026-10-06. To split a finished single-state solution into states, run
+`refine3D_states` on its project, where flex PCA initializes the states.
 
-- `single`
-- `independent`
-- `docked`
-
-`single` requires `nstates=1`. `independent` and `docked` require more than
-one state.
-When the user gives `nstates > 1` and no `multivol_mode`, the commander
-defaults to `independent`.
-
-In `independent` mode, the workflow preserves the staged point-group policy
-between `pgrp_start` and `pgrp`. When `pgrp_start != pgrp`, the symmetry-search
-stage searches the symmetry axis independently for each state, matching the
+A multi-state run preserves the staged point-group policy between
+`pgrp_start` and `pgrp`. When `pgrp_start != pgrp`, the symmetry-search stage
+searches the symmetry axis independently for each state, matching the
 state-wise behavior used by direct `solve3D_cavgs` runs. This applies to
-fresh particle starts only; `cavg_ini=yes`, `cavg_ini_ext=yes`, and user-supplied
-input volumes are already in the target symmetry frame before the parent
-particle workflow resumes. This mode is intended for severe heterogeneity where
-early inspection is more valuable than committing to a longer refinement
-immediately. Its particle stages 1 and 2 use direct `refine=shc` rather than
-the probabilistic-neighborhood startup used by `single` and `docked`; stages
-3-5 use `refine=prob`. Direct `solve3D_cavgs` initialization retains its
-own class-average search schedule. Unless the user overrides them, the
-commander sets `nstages=5` and `lpstop=6.0 A`. Stage 5 remains in `prob`; it
-does not enter `prob_neigh`, static NU filtering,
-independent-mode trailing reconstruction, or staged automasking. After stage 5,
-the workflow still runs the final original-sampling reconstruction so the run
-produces inspectable `rec_final_stateNN` volumes. To improve particle coverage
-before that early exit, independent mode starts stochastic balanced sampling at
-stage 4: the child `refine3D` stages switch to `greedy_sampling=no` with
-`frac_best=1.0` from stage 4 onward. This samples each unit's quota from the
-full class rather than from a top-ranked fraction of that class. The outer
-particle target remains the fixed `nsample`-derived update fraction while
-`nsample/active_particles <= 0.9`; above that threshold the workflow runs full
-active-particle updates each stage.
+fresh particle starts only; `cavg_ini=yes`, `cavg_ini_ext=yes`, and
+user-supplied input volumes are already in the target symmetry frame before
+the parent particle workflow resumes. The multi-state run is intended for
+severe heterogeneity where early inspection is more valuable than committing
+to a longer refinement immediately. Its particle stages 1 and 2 use direct
+`refine=shc` rather than the probabilistic-neighborhood startup of the
+single-state run; stages 3-5 use `refine=prob`. Direct `solve3D_cavgs`
+initialization retains its own class-average search schedule. Unless the
+user overrides them, the commander sets `nstages=5` and `lpstop=6.0 A`.
+Stage 5 remains in `prob`; it does not enter `prob_neigh`, static NU
+filtering, multi-state trailing reconstruction, or staged automasking. After
+stage 5, the workflow still runs the final original-sampling reconstruction
+so the run produces inspectable `rec_final_stateNN` volumes. To improve
+particle coverage before that early exit, the multi-state run starts
+stochastic balanced sampling at stage 4: the child `refine3D` stages switch
+to `greedy_sampling=no` with `frac_best=1.0` from stage 4 onward. This
+samples each unit's quota from the full class rather than from a top-ranked
+fraction of that class. The outer particle target remains the fixed
+`nsample`-derived update fraction while `nsample/active_particles <= 0.9`;
+above that threshold the workflow runs full active-particle updates each
+stage.
 
-In `docked` mode, the controller starts as one state, runs stages 1-5 as a
-single-state solve3D model, then expands to the requested number of states at
-the docked split stage. The default split stage is 6, meaning the split occurs
-after stage 5. Docked schedules must reach the configured split stage; an
-ordinary `nstages` early stop before `split_stage` is rejected rather than
-silently producing a single-state result.
-
-The docked split starts a new multi-state update epoch:
-
-- ordinary pre-split stages use the one-state target
-  `min(UPDATE_FRAC_MAX, nsample / active_particles)`
-- the stage immediately before the split increases the one-state target to
-  `min(UPDATE_FRAC_MAX, nstates * nsample / active_particles)` to broaden pose
-  coverage before relabeling
-- immediately before the pre-split cohort pass, clear `ptcl3D%sampled` and
-  `ptcl3D%updatecnt`
-- run one `refine=prob` assignment pass over the run's sampling units (`class`
-  units when the run uses `balance=none`) with `frac_best=1.0`,
-  `fillin=no`, `trail_rec=no`, `volrec=no`, and
-  `sticky_class_sampling=no`; this pass
-  defines a persistent cohort through `sampled > 0`
-- in the fractional regime, use a nominal cohort target of
-  `round(2.5 * nstates * nsample)`, subject to
-  `NSAMPLE_HET_SPLIT_CAP = 100000`, the active population, and the 90-percent
-  `UPDATE_FRAC_MAX` limit; the cohort target is never allowed below the
-  effective post-split update target
-- in the global full-sampling regime, make the auxiliary pass target all active
-  particles
-- restore `nstates` to the requested value and recompute the fixed post-split
-  target `min(UPDATE_FRAC_MAX, nstates * nsample / active_particles)`
-- randomize active particles into balanced uniform state labels without
-  clearing the cohort metadata
-- require each randomized split state to exceed the probabilistic-table minimum
-  population threshold
-- select one post-split-sized subset under the nested unit quota from the
-  persistent cohort
-- reconstruct state-specific split volumes and halfmaps from exactly that latest
-  sampled subset without trailing volume averaging
-
-The cohort pass prepares one-state pose coverage and establishes the only
-ordinary post-split sampling pool. Because its reset happens before the pass,
-particles outside the cohort retain `sampled == 0` and `updatecnt == 0`.
-After that pass succeeds and the requested state count is restored,
-`set_cline_refine3D` obtains the cohort state from
-`solve3D_docked_cohort_active` and emits the explicit internal child flag
-`sticky_class_sampling=yes`. The flag applies only to the `sample4update_class`
-path (`balance=class|cavg`), where it maps to `sampled_only`; particles outside
-the cohort are ineligible while cohort members are rotated by increasing
-`updatecnt`. It does not alter `balance=none` or full particle sampling. The matcher
-does not infer stickiness from `nstates` or `multivol_mode`. The flag remains
-off in the full-sampling regime.
-`sampled == max(sampled)` continues to identify the exact current update, while
-`sampled > 0` identifies the persistent cohort.
-
-Checkpoint construction is isolated in
-`simple_solve3D_split_checkpoint`. Once the state-specific split maps and
-metadata exist, `solve3D` does not run another private post-split loop. It
-hands the checkpoint to `refine3D_states` with `pose_policy=local`, the fixed
-post-split update fraction, sticky cohort eligibility in the fractional
-regime, and the remaining iteration/frequency range. The split state maps
-travel through the project `out` segment, since `refine3D_states` rejects
-`vol1..volN` inputs. `refine3D_states` then owns all post-split matching,
-coverage enforcement, trailing policy, and final native-sampling
-reconstruction. Local policy maps to
-`refine=prob_neigh,prob_neigh_mode=geom`, so every state is evaluated in the
-same neighborhood around the particle's current projection direction.
-
-When `nsample/active_particles > 0.9`, the global full-sampling switch remains
-authoritative throughout docked refinement: emitted stage commands omit
-`update_frac`, `nsample`, and `fillin`, and trailing is disabled, including at
-the split stage.
-
-`input_oris_start` and `input_oris_fixed` are no longer supported by
-`solve3D`. Prior-orientation multi-state refinement belongs in the explicit
-multi-state refinement workflows, not in particle-based solve3D startup.
+Prior-orientation multi-state refinement belongs in `refine3D_states`, not in
+particle-based solve3D startup.
 
 ## 7. Symmetry
 
@@ -469,7 +394,7 @@ uses current evidence for assembled references plus the lagged evidence
 artifact for early consumers, with density fallback. There is no separate
 reference-mask control, so early stages remain spherical.
 
-The default `multivol_mode=independent` stage limit stops at stage 5, before
+The default multi-state (`nstates > 1`) stage limit stops at stage 5, before
 this NU-filtering policy is activated. Users who override `nstages` past that
 point re-enter the staged NU policy described here.
 
@@ -479,15 +404,11 @@ automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
 
 ## 9. Final Reconstruction
 
-For non-docked schedules, `solve3D` runs a fresh original-sampling
-reconstruction from selected particles for full schedules and for
-`multivol_mode=independent` schedules. Other explicit early-stop schedules skip
-this final all-particle reconstruction.
-
-For `docked` mode, `refine3D_states` owns completion. It verifies that every
-active particle has `updatecnt > 0` in the multi-state epoch before producing
-the final native-sampling maps. `solve3D` does not repeat that reconstruction
-after the nested workflow returns.
+`solve3D` runs a fresh original-sampling reconstruction from selected
+particles for full schedules and for every multi-state schedule. Other
+explicit early-stop schedules skip this final all-particle reconstruction.
+Before a multi-state final reconstruction, a greedy missing-update pass
+(`refine=greedy`) assigns every active particle that no stage updated.
 
 The final reconstruction inherits only the scientific reconstruction policy it
 needs. It preserves the parent `envfsc` request so the original-sampling half

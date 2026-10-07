@@ -70,10 +70,10 @@ contains
         call refine3D%add_input(UI_SRCH, objfun, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
-        &'Refinement mode; cont refines the stored poses continuously(shc|neigh|prob|prob_state|prob_neigh|cont){shc}','',&
+        &'Refinement mode; cont refines the stored poses continuously(shc|neigh|prob|prob_neigh|cont){shc}','',&
         &.false., 'shc', group="search", &
         &choices=ui_choices([character(len=10) :: 'shc', 'neigh', &
-        &'prob', 'prob_state', 'prob_neigh', 'cont']), &
+        &'prob', 'prob_neigh', 'cont']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
         &'Prob-neigh neighborhood mode(state|geom|shc|snhc){state}','', .false., 'state', &

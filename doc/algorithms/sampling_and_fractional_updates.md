@@ -143,8 +143,8 @@ the optimal assignment that the Hungarian algorithm would find. Optimality is
 not wanted here, because the draw is the exploration mechanism.
 
 In multi-state 3D, the state label is assigned first, by the same loop with a
-deterministic choice of the lowest head loss (only `refine=prob_state`
-samples the state), and the projection within the state is then drawn
+deterministic choice of the lowest head loss, and the projection within the
+state is then drawn
 stochastically. Neighborhood variants (`prob_neigh`) restrict which
 references are scored for each particle: a stochastic subset (`shc`,
 `snhc`), the coarse cell of projection directions that contains the previous

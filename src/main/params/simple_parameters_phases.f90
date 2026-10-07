@@ -514,7 +514,6 @@ contains
         self%l_update_missing = trim(self%update_missing).eq.'yes'
         self%l_frac_best   = self%frac_best  <= 0.99
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
-        self%l_sticky_class_sampling = trim(self%sticky_class_sampling).eq.'yes'
         self%l_cohort_sampling       = trim(self%cohort_sampling).eq.'yes'
     end subroutine derive_sampling_settings
 
@@ -676,16 +675,6 @@ contains
             case('yes','no')
             case DEFAULT
                 THROW_HARD('memreport must be yes or no')
-        end select
-        select case(trim(self%flex))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('flex must be yes or no')
-        end select
-        select case(trim(self%sticky_class_sampling))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('sticky_class_sampling must be yes or no')
         end select
         select case(trim(self%cohort_sampling))
             case('yes','no')
@@ -960,7 +949,7 @@ contains
         end select
         self%l_prob_align_mode = .false.
         select case(trim(self%refine))
-            case('prob','prob_state','prob_neigh','prob_snhc')
+            case('prob','prob_neigh','prob_snhc')
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
@@ -987,9 +976,9 @@ contains
                 THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
         end select
         select case(trim(self%pose_policy))
-            case('fixed','local','global')
+            case('local','global')
             case DEFAULT
-                THROW_HARD('unsupported pose_policy; expected fixed|local|global')
+                THROW_HARD('unsupported pose_policy; expected local|global')
         end select
         ! negative values other than the -1. automatic sentinel are invalid
         if( (self%local_ang_bound   < 0. .and. abs(self%local_ang_bound   + 1.) > 1.e-6) .or. &

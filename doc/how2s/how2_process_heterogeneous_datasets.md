@@ -298,9 +298,10 @@ simple_exec prg=refine3D_states \
 ```
 
 Do not pass `vol1` through `volN` to this program. It derives same-lineage
-states from the consensus project. For a state-0/1 input, the default
-`flex=yes` uses `flex_pca` to initialize the states before their joint
-refinement.
+states from the consensus project. For a state-0/1 input, `flex_pca`
+initializes the states before their joint refinement; it needs
+`nstates >= 3`, and the run continues with the number of states flex
+delivers.
 
 The pose policy controls how much orientation can change while states compete:
 

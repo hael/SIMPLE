@@ -96,19 +96,13 @@ contains
         &.false., 20., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('balance', [character(len=4) :: 'cavg']))
         call solve3D%add_input(UI_SRCH, 'nstages', 'num', 'Last solve3D stage to run',&
-            &'Last solve3D stage to run; default is 5 for multivol_mode=independent and 8 otherwise; &
-            &independent mode writes final volumes at its last stage',&
+            &'Last solve3D stage to run; default is 5 for nstates>1 and 8 otherwise; &
+            &a multi-state run writes final volumes at its last stage',&
             &'last stage', .false., 8., group="search", visibility=UI_VIS_ADVANCED)
         call solve3D%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         call solve3D%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &
             &'State label to select from an existing multi-state solve3D project and continue as a single-state stage-5 search', &
             &'state label', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume solve3D mode', 'Multi-volume solve3D mode(single|independent|docked){single}','', .false., 'single', &
-        &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']), &
-        &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, 'split_stage', 'num', 'Docked-state split stage', &
-        &'Stage at which docked multi-volume solve3D splits into state-specific volumes', &
-        &'stage number', .false., 6., group="search", visibility=UI_VIS_DEVELOPER)
         call solve3D%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of particle assignments for solve3D stage convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)
@@ -123,7 +117,7 @@ contains
             &'low-pass limit for the initial stage in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call solve3D%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the final stage in Angstroms; default is 6 for multivol_mode=independent &
+            &'low-pass limit for the final stage in Angstroms; default is 6 for nstates>1 &
             &and 8 otherwise',    .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call solve3D%add_input(UI_FILT, lp, group="filter", &
@@ -241,13 +235,6 @@ contains
         call solve3D_cavgs%add_input(UI_SRCH, pgrp_start, &
         &visibility=UI_VIS_ADVANCED)
         call solve3D_cavgs%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
-        call solve3D_cavgs%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume class-average solve3D mode', &
-            &'Multi-volume class-average solve3D mode(single|independent|docked){single}','', .false., 'single', &
-        &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']), &
-        &visibility=UI_VIS_ADVANCED)
-        call solve3D_cavgs%add_input(UI_SRCH, 'split_stage', 'num', 'Docked-state split stage', &
-        &'Stage at which docked multi-volume class-average solve3D splits into state-specific volumes', &
-        &'stage number', .false., 6., group="search", visibility=UI_VIS_DEVELOPER)
         call solve3D_cavgs%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of class-average assignments for solve3D stage convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)

@@ -70,7 +70,7 @@ contains
         character(len=*), optional, intent(in)    :: vol1  !< the starting-volume input (a path)
         type(cmdline) :: cl
         call man%new(RUN_ID, 'solve3D', .true., spproj)
-        call man%set_solution(nstates, 'c3', 128, 1.3, 180., 'independent', 6)
+        call man%set_solution(nstates, 'c3', 128, 1.3, 180.)
         call man%set_sampling(10000, 8000, 1., .true.)
         call man%set_stage_line(.false., 0., .true., 6.)
         call man%set_ladder(1, 5, ladder())
@@ -327,6 +327,10 @@ contains
         call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
         call back%read(string(MAN_FNAME), status, msg)
         call assert_true(status /= 0 .and. index(msg, 'unknown') > 0, 'a field of a removed feature is refused')
+        tampered(1:iend+1) = [lines(1:iend-2), [character(len=1024) :: 'split_stage 6'], lines(iend-1:iend)]
+        call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
+        call back%read(string(MAN_FNAME), status, msg)
+        call assert_true(status /= 0 .and. index(msg, 'unknown') > 0, 'the removed docked split stage is refused')
         ! records after the end marker
         tampered(1:n+1) = [lines(1:iend), [character(len=1024) :: 'nrows 12'], lines(iend+1:n)]
         call write_lines(MAN_FNAME, tampered(1:n+1))
@@ -462,7 +466,7 @@ contains
         call assert_real(6., cl%get_rarg('lpstop'), 0., 'lpstop from the stage line shape')
         call assert_real(180., cl%get_rarg('mskdiam'), 0., 'the mask diameter of the solution')
         call assert_int(2, cl%get_iarg('nstates'), 'the state layout of the solution')
-        call assert_string_eq('independent', cl%get_carg('multivol_mode'), 'a multi-state solution replays independently')
+        call assert_false(cl%defined('multivol_mode'), 'the replay sets no multi-volume mode: nstates selects it')
         call assert_int(5,     cl%get_iarg('nstages'), 'the ladder ends at the base run''s last stage')
         call assert_int(10000, cl%get_iarg('nsample'), 'the effective nsample')
         call assert_false(cl%defined('nthr'), 'a key outside the manifest inputs is not replayed')
@@ -524,7 +528,7 @@ contains
             logical,          intent(in) :: l_eligible
             integer,          intent(in) :: nstates
             call foreign%new(RUN_ID, program_name, l_eligible, spproj)
-            call foreign%set_solution(nstates, 'c3', 128, 1.3, 180., 'independent', 6)
+            call foreign%set_solution(nstates, 'c3', 128, 1.3, 180.)
             call foreign%record_artifacts(spproj)
         end subroutine make_foreign
 

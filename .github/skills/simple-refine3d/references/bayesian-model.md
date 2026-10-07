@@ -51,8 +51,9 @@ Important details:
 
 - `fill_tab` evaluates per-reference candidates and can refine shifts with BFGS
   after identifying a probabilistic neighborhood.
-- `fill_tab_state_only` handles `prob_state` mode, where the table only resolves state.
-- `ref_assign` and `state_assign` convert aggregated tables into a single assignment map.
+- `ref_assign` converts the aggregated table into a single assignment map; the
+  state label is the deterministic argmin over states, and only the projection
+  within the state is drawn.
 - `prob_athres` governs thresholded probabilistic sampling rather than exact posterior integration.
 
 ## Search Modes
@@ -60,7 +61,6 @@ Important details:
 The main refine modes relevant here are:
 
 - `prob`
-- `prob_state`
 - `prob_neigh`
 - greedy and SHC variants with probabilistic in-plane sampling
 - tree-based variants that use probabilistic descent without the same exhaustive table shape

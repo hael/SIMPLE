@@ -601,7 +601,7 @@ bank is the static ladder of section 8. solve3D has no gold-standard stage
 is always promoted to `nonuniform_lpset`. The controller forces
 `envfsc=no` before `ENVFSC_STAGE` and forwards the requested value at that stage;
 scheduled stage `lp` remains on the refine3D command line.
-The default `multivol_mode=independent` policy stops at stage 5, before this
+The default multi-state (`nstates > 1`) `solve3D` policy stops at stage 5, before this
 NU-filtering and envfsc stage boundary, unless the user explicitly requests
 later stages. The separate final original-sampling reconstruction still
 inherits the parent `envfsc` request.

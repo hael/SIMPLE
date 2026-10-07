@@ -34,12 +34,9 @@ integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: ENVFSC_STAGE            = NSTAGES     ! when to activate enveloppe masking & FSC phase randomized resolution estimation
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
-integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
-integer,          parameter :: NSAMPLE_HET_SPLIT_CAP   = 100000
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
 character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
-character(len=*), parameter :: PROB_NEIGH_MODE_DOCKED  = 'geom'
 
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
@@ -151,25 +148,11 @@ contains
         istage = ML_REG_START_STAGE
     end function solve3D_ml_reg_start_stage
 
-    module function solve3D_het_docked_stage() result(istage)
-        integer :: istage
-        istage = HET_DOCKED_STAGE
-    end function solve3D_het_docked_stage
-
-    module function solve3D_docked_cohort_active( params, istage ) result(l_active)
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
-        logical :: l_active
-        l_active = trim(params%multivol_mode).eq.'docked' .and. &
-            &params%nstates > 1 .and. istage >= params%split_stage .and. &
-            &.not. force_full_sampling_mode(params)
-    end function solve3D_docked_cohort_active
-
     module function solve3D_stoch_sampl_stage(params) result(istage)
         class(parameters), intent(in) :: params
         integer :: istage
         istage = STOCH_SAMPL_STAGE
-        if( trim(params%multivol_mode).eq.'independent' ) istage = STOCH_SAMPL_STAGE_INDEP
+        if( params%nstates > 1 ) istage = STOCH_SAMPL_STAGE_INDEP
     end function solve3D_stoch_sampl_stage
 
     module function solve3D_nsample_default() result(nsample)
@@ -198,13 +181,7 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
-        logical :: l_sticky_class_sampling_active, l_addon
-        l_sticky_class_sampling_active = .false.
-        if( .not. l_cavgs ) l_sticky_class_sampling_active = solve3D_docked_cohort_active(params, istage)
-        if( l_sticky_class_sampling_active .and. docked_split_stage(params, istage) )then
-            write(logfhandle,'(A)') &
-                '>>> SOLVE3D DOCKED STICKY CLASS SAMPLING ENABLED FOR POST-SPLIT STAGES'
-        endif
+        logical :: l_addon
         l_addon = .false.
         if( present(addon) ) l_addon = addon%active
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
@@ -216,8 +193,7 @@ contains
                 cfg%fracsrch = 90.
             endif
         endif
-        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, &
-            &l_refine3D_lp_override, l_sticky_class_sampling_active )
+        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_refine3D_lp_override )
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
             call cline_refine3D%set('frozen_rec', addon%frozen_rec)
@@ -299,51 +275,32 @@ contains
             if( cfg%refine.eq.'prob_neigh' )then
                 cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
             endif
-        else
-            if( trim(params%multivol_mode).eq.'single' )then
-                if( istage < PROB_REFINE_STAGE )then
+        else if( params%nstates > 1 )then
+            ! independent multi-state: particle starts use shc before the prob stages
+            if( istage < PROB_REFINE_STAGE )then
+                if( l_cavgs )then
                     cfg%refine           = 'prob_neigh'
                     cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
-                else if( istage < PROB_NEIGH_REFINE_STAGE )then
-                    cfg%refine = 'prob'
                 else
-                    cfg%refine           = 'prob_neigh'
-                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
+                    cfg%refine           = 'shc'
+                    cfg%prob_neigh_mode  = ''
                 endif
-            else if( trim(params%multivol_mode).eq.'docked' )then
-                if( istage < PROB_REFINE_STAGE )then
-                    cfg%refine           = 'prob_neigh'
-                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
-                else if( istage < PROB_NEIGH_REFINE_STAGE )then
-                    cfg%refine = 'prob'
-                else
-                    cfg%refine = 'prob_neigh'
-                    if( params%nstates > 1 )then
-                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_DOCKED
-                    else
-                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_LATE
-                    endif
-                endif
-            else if( trim(params%multivol_mode).eq.'independent' )then
-                if( istage < PROB_REFINE_STAGE )then
-                    if( l_cavgs )then
-                        cfg%refine           = 'prob_neigh'
-                        cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
-                    else
-                        cfg%refine           = 'shc'
-                        cfg%prob_neigh_mode  = ''
-                    endif
-                else if( istage < PROB_NEIGH_REFINE_STAGE )then
-                    cfg%refine = 'prob'
-                else
-                    cfg%refine           = 'prob_neigh'
-                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
-                endif
+            else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                cfg%refine = 'prob'
+            else
+                cfg%refine           = 'prob_neigh'
+                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
             endif
-        endif
-        if( docked_split_stage(params, istage) )then
-            cfg%refine = 'prob_state'
-            cfg%prob_neigh_mode  = ''
+        else
+            if( istage < PROB_REFINE_STAGE )then
+                cfg%refine           = 'prob_neigh'
+                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
+            else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                cfg%refine = 'prob'
+            else
+                cfg%refine           = 'prob_neigh'
+                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
+            endif
         endif
     end subroutine set_refine3D_mode_policy
 
@@ -381,18 +338,11 @@ contains
         integer,                  intent(in)    :: istage
         cfg%trail_rec = 'no'
         if( force_full_sampling_mode(params) ) return
-        select case(trim(params%multivol_mode))
-            case('single')
-                if( istage >= TRAILREC_STAGE_SINGLE ) cfg%trail_rec = 'yes'
-            case('independent')
-                if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
-            case('docked')
-                if( istage >= TRAILREC_STAGE_SINGLE )then
-                    cfg%trail_rec = 'yes'
-                endif
-            case default
-                cfg%trail_rec = 'no'
-        end select
+        if( params%nstates > 1 )then
+            if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
+        else
+            if( istage >= TRAILREC_STAGE_SINGLE ) cfg%trail_rec = 'yes'
+        endif
     end subroutine set_refine3D_trailrec_policy
 
     subroutine set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
@@ -461,7 +411,7 @@ contains
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
                 cfg%frac_best     = 1.0
-                if( trim(params%multivol_mode).eq.'independent' .and. istage >= stoch_stage )then
+                if( params%nstates > 1 .and. istage >= stoch_stage )then
                     cfg%greedy_sampling = 'no'
                 else if( istage >= stoch_stage )then
                     cfg%frac_best = 0.5
@@ -478,11 +428,9 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                if( trim(params%multivol_mode).eq.'independent' )then
+                if( params%nstates > 1 )then
                     cfg%frac_best       = 1.0
                     cfg%greedy_sampling = 'no'
-                else if( params%nstates > 1 )then
-                    cfg%frac_best = 0.98
                 else
                     cfg%frac_best = 0.85
                 endif
@@ -512,13 +460,12 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_sticky_class_sampling )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
-        logical,                  intent(in) :: l_sticky_class_sampling
         real :: lp_eff, lpstop_eff, lp_cap
         logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
         l_full_update_stage = force_full_sampling_mode(params)
@@ -562,11 +509,6 @@ contains
             else
                 call cline_refine3D%set('nsample', params%nsample)
             endif
-        endif
-        if( l_sticky_class_sampling )then
-            call cline_refine3D%set('sticky_class_sampling', 'yes')
-        else
-            call cline_refine3D%delete('sticky_class_sampling')
         endif
         call cline_refine3D%set('box_crop',               solve3D_stage_box_crop(params, istage))
         call cline_refine3D%set('startit',                cfg%iter)
@@ -654,27 +596,6 @@ contains
             call cline_refine3D%delete('gaufreq')
         endif
     end subroutine emit_refine3D_stage_cfg
-
-    logical function docked_split_stage( params, istage )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
-        docked_split_stage = trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage
-    end function docked_split_stage
-
-    module subroutine calc_docked_multistate_max_sampling( params, nptcls, nptcls_cap, ufrac_cap )
-        class(parameters), intent(in)  :: params
-        integer,           intent(in)  :: nptcls
-        integer,           intent(out) :: nptcls_cap
-        real,              intent(out) :: ufrac_cap
-        integer :: nptcls_update
-        nptcls_update = min(nstates_glob * params%nsample, nptcls)
-        nptcls_cap = min(nint(nstates_glob * 2.5 * params%nsample), NSAMPLE_HET_SPLIT_CAP)
-        nptcls_cap = max(nptcls_cap, nptcls_update)
-        nptcls_cap = min(nptcls_cap, nptcls)
-        ufrac_cap  = min(real(nptcls_cap) / real(nptcls), 1.0)
-        ufrac_cap  = min(solve3D_update_frac_max(), ufrac_cap)
-        nptcls_cap = min(nptcls,nint(nptcls*ufrac_cap))
-    end subroutine calc_docked_multistate_max_sampling
 
     logical function force_full_sampling_mode( params ) result( l_force_full )
         class(parameters), intent(in) :: params

@@ -40,7 +40,7 @@ RESULT_FIELDS = (
     "particle_pixels", "total_input_pixels", "smpd_angstrom_per_pixel",
     "physical_box_angstrom", "effective_box", "effective_voxels",
     "mskdiam_angstrom", "nthr", "nthr_ini3d", "nparts", "ncunits",
-    "nstates", "multivol_mode", "nsample_requested", "nsample_effective",
+    "nstates", "nsample_requested", "nsample_effective",
     "sample_fraction", "pgrp", "pgrp_start", "symmetry_search",
     "lpstart_angstrom", "lpstop_angstrom", "initialization",
     "iteration_budget", "iterations_observed", "nstages", "filt_mode",
@@ -61,7 +61,6 @@ class Case:
     nthr: int = 4
     nparts: int = 1
     nstates: int = 1
-    multivol_mode: str = "single"
     nsample: int = 0
     pgrp: str = "c1"
     pgrp_start: str = "c1"
@@ -75,7 +74,7 @@ class Case:
     def key(self) -> tuple[object, ...]:
         return tuple(getattr(self, name) for name in (
             "nptcls", "box", "smpd", "mskdiam", "nthr", "nparts",
-            "nstates", "multivol_mode", "nsample", "pgrp", "pgrp_start",
+            "nstates", "nsample", "pgrp", "pgrp_start",
             "lpstart", "lpstop", "initialization", "iteration_budget",
         ))
 
@@ -83,7 +82,7 @@ class Case:
         sample = "all" if self.nsample == 0 else str(self.nsample)
         return (
             f"n{self.nptcls:05d}_b{self.box:03d}_a{self.smpd:.1f}_m{self.mskdiam:.0f}_"
-            f"t{self.nthr:02d}_p{self.nparts:02d}_s{self.nstates}_{self.multivol_mode[:3]}_"
+            f"t{self.nthr:02d}_p{self.nparts:02d}_s{self.nstates}_"
             f"q{sample}_{self.pgrp}-{self.pgrp_start}_lp{self.lpstop:g}_"
             f"{self.initialization[:3]}_"
             f"i{self.iteration_budget:02d}_x{repeat:02d}"
@@ -107,8 +106,8 @@ def screening_design() -> list[Case]:
     cases += [replace(base, box=v, group="box_size") for v in (64, 96, 128, 160)]
     cases += [replace(base, nthr=v, group="thread_count") for v in (1, 2, 4, 8)]
     cases += [
-        replace(base, nstates=2, multivol_mode="independent", group="state_count"),
-        replace(base, nstates=4, multivol_mode="independent", group="state_count"),
+        replace(base, nstates=2, group="state_count"),
+        replace(base, nstates=4, group="state_count"),
     ]
     cases += [
         replace(base, nptcls=500, nsample=v, group="sampled_particles")
@@ -128,7 +127,7 @@ def screening_design() -> list[Case]:
         replace(base, nptcls=1000, box=128, nthr=8, nsample=250, group="interaction"),
         replace(base, nptcls=500, box=160, nthr=4, smpd=2.0, group="interaction"),
         replace(base, nptcls=500, box=128, nthr=2, nparts=4, group="interaction"),
-        replace(base, nptcls=500, box=128, nstates=4, multivol_mode="independent", nsample=100, group="interaction"),
+        replace(base, nptcls=500, box=128, nstates=4, nsample=100, group="interaction"),
     ]
     return unique_cases(cases)
 
@@ -269,7 +268,7 @@ def measure_case(case_dir: Path, case: Case, repeat: int, volume: Path, project_
     command = [
         str(simple_exec), "prg=solve3D", f"projfile={project_file}", "mkdir=no",
         f"pgrp={case.pgrp}", f"pgrp_start={case.pgrp_start}", f"mskdiam={case.mskdiam:.8g}",
-        f"nstates={case.nstates}", f"multivol_mode={case.multivol_mode}", "filt_mode=none", "automsk=no",
+        f"nstates={case.nstates}", "filt_mode=none", "automsk=no",
         "nstages=1", f"nsample={nsample}", f"nparts={case.nparts}", f"ncunits={case.nparts}",
         f"nthr={case.nthr}", f"nthr_ini3D={case.nthr}", "force_lp_range=yes",
         f"lpstart={case.lpstart:.8g}", f"lpstop={case.lpstop:.8g}",
@@ -291,7 +290,7 @@ def measure_case(case_dir: Path, case: Case, repeat: int, volume: Path, project_
         "physical_box_angstrom": f"{case.box * case.smpd:.6f}", "effective_box": effective_box,
         "effective_voxels": effective_box ** 3, "mskdiam_angstrom": f"{case.mskdiam:.6f}",
         "nthr": case.nthr, "nthr_ini3d": case.nthr, "nparts": case.nparts, "ncunits": case.nparts,
-        "nstates": case.nstates, "multivol_mode": case.multivol_mode,
+        "nstates": case.nstates,
         "nsample_requested": case.nsample, "nsample_effective": nsample,
         "sample_fraction": f"{nsample / case.nptcls:.6f}", "pgrp": case.pgrp,
         "pgrp_start": case.pgrp_start, "symmetry_search": "yes" if case.pgrp != case.pgrp_start else "no",
@@ -364,11 +363,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.dry_run:
         writer = csv.writer(sys.stdout)
         writer.writerow(("case", "group", "nptcls", "box", "smpd", "mskdiam", "nthr", "nparts",
-                         "nstates", "multivol_mode", "nsample", "pgrp", "pgrp_start", "lpstart",
+                         "nstates", "nsample", "pgrp", "pgrp_start", "lpstart",
                          "lpstop", "initialization", "iteration_budget"))
         for i, c in enumerate(cases, 1):
             writer.writerow((i, c.group, c.nptcls, c.box, c.smpd, c.mskdiam, c.nthr, c.nparts,
-                             c.nstates, c.multivol_mode, c.nsample, c.pgrp, c.pgrp_start, c.lpstart,
+                             c.nstates, c.nsample, c.pgrp, c.pgrp_start, c.lpstart,
                              c.lpstop, c.initialization, c.iteration_budget))
         return 0
 
