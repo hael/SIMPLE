@@ -1,10 +1,6 @@
 const DEFAULT_SURFACE_COLOR = 0x808080;
-const DEFAULT_CONTOUR_FRACTION = 0.3;
+const DEFAULT_VISIBLE_VOXEL_FRACTION = 0.01;
 const STARTING_ZOOM_FACTOR = 2;
-const BACKGROUND_COLORS = {
-    black: 0x000000,
-    white: 0xffffff,
-};
 
 function selectedVolumeOption(sourceSelect) {
     return sourceSelect.options[sourceSelect.selectedIndex] || null;
@@ -32,58 +28,46 @@ function densityToInt8(option, value) {
         : value;
 }
 
-function initialIsovalue(option) {
+function int8ToDensity(option, value) {
     const range = volumeDensityRange(option);
-    if (range) {
-        return {
-            type: "absolute",
-            value: range.minimum
-                + DEFAULT_CONTOUR_FRACTION * (range.maximum - range.minimum),
-            color: DEFAULT_SURFACE_COLOR,
-        };
+    return range
+        ? range.minimum + (value + 128) * (range.maximum - range.minimum) / 255
+        : value;
+}
+
+function topOnePercentThreshold(values) {
+    // The volume endpoint sends signed 8-bit voxels, so a histogram avoids
+    // sorting or copying the full grid in the browser.
+    if (!(values instanceof Int8Array) || !values.length) {
+        throw new Error("The loaded volume has no 8-bit voxel data.");
     }
-    return {
-        type: "relative",
-        value: 1.5,
-        color: DEFAULT_SURFACE_COLOR,
-    };
+    const counts = new Uint32Array(256);
+    for (const value of values) {
+        counts[value + 128] += 1;
+    }
+
+    let remaining = Math.max(1, Math.ceil(values.length * DEFAULT_VISIBLE_VOXEL_FRACTION));
+    for (let value = 127; value >= -128; value--) {
+        remaining -= counts[value + 128];
+        if (remaining <= 0) {
+            return value;
+        }
+    }
 }
 
 function formatDensity(value) {
     return Number(value.toPrecision(5)).toString();
 }
 
-function setIsovalueDisplay(control, value) {
-    if (control instanceof HTMLInputElement) {
-        control.value = value;
-    } else {
-        control.textContent = value;
-    }
-}
-
-function setIsovalueDisplayDisabled(control, disabled) {
-    if (control instanceof HTMLInputElement) {
-        control.disabled = disabled;
-    }
-}
-
-function configureIsovalueControl(option, input, display) {
-    const isovalue = initialIsovalue(option);
-    if (isovalue.type !== "absolute") {
-        input.disabled = true;
-        setIsovalueDisplay(display, "n/a");
-        setIsovalueDisplayDisabled(display, true);
-        return isovalue;
-    }
-
+function configureIsovalueControl(option, input, text, value) {
     const range = volumeDensityRange(option);
-    input.min = String(range.minimum);
-    input.max = String(range.maximum);
-    input.step = String((range.maximum - range.minimum) / 1000);
-    input.value = String(isovalue.value);
-    setIsovalueDisplay(display, formatDensity(isovalue.value));
-    setIsovalueDisplayDisabled(display, false);
-    return isovalue;
+    for (const control of [input, text]) {
+        control.min = String(range?.minimum ?? -128);
+        control.max = String(range?.maximum ?? 127);
+        control.step = "any";
+    }
+    input.value = String(value);
+    text.value = formatDensity(value);
 }
 
 async function updateMolstarIsovalue(viewer, absoluteValue) {
@@ -105,6 +89,27 @@ async function updateMolstarIsovalue(viewer, absoluteValue) {
         },
     }).commit();
     return true;
+}
+
+async function addMolstarSurface(viewer, volume, absoluteValue) {
+    const {registry, themes} = viewer.plugin.representation.volume;
+    const isosurface = registry.get("isosurface");
+    const color = themes.colorThemeRegistry.get("uniform");
+    const size = themes.sizeThemeRegistry.get("uniform");
+    await viewer.plugin.build().to(volume.cell).apply(
+        window.molstar.lib.plugin.StateTransforms.Representation.VolumeRepresentation3D,
+        {
+            type: {name: "isosurface", params: {
+                ...isosurface.defaultValues,
+                isoValue: {kind: "absolute", absoluteValue},
+            }},
+            colorTheme: {name: "uniform", params: {
+                ...color.defaultValues,
+                value: DEFAULT_SURFACE_COLOR,
+            }},
+            sizeTheme: {name: "uniform", params: size.defaultValues},
+        },
+    ).commit();
 }
 
 function formatVolumeMetadata(option) {
@@ -129,7 +134,6 @@ function startingCameraSnapshot(scene, camera) {
     if (!position || !target) {
         return snapshot;
     }
-
     return {
         ...snapshot,
         position: position.map((coordinate, index) => (
@@ -144,26 +148,15 @@ async function initializeMolstarVolumeViewer(root) {
     const backgroundSelect = root.querySelector("[data-volume-background]");
     const isovalueInput = root.querySelector("[data-volume-isovalue]");
     const isovalueText = root.querySelector("[data-volume-isovalue-text]");
-    const isovalueOutput = root.querySelector("[data-volume-isovalue-output]");
-    const isovalueDisplay = isovalueText || isovalueOutput;
     const resetButton = root.querySelector("[data-volume-reset]");
     const viewport = root.querySelector("[data-volume-viewport]");
     const host = root.querySelector("[data-volume-molstar]");
     const metadata = root.querySelector("[data-volume-metadata]");
     const loadingIndicator = root.querySelector("[data-volume-loading]");
-    if (
-        !sourceSelect
-        || !backgroundSelect
-        || !isovalueInput
-        || !isovalueDisplay
-        || !resetButton
-        || !viewport
-        || !host
-        || !metadata
-    ) {
-        return;
-    }
-    if (!window.molstar?.Viewer) {
+    if (!window.molstar?.Viewer || [
+        sourceSelect, backgroundSelect, isovalueInput, isovalueText,
+        resetButton, viewport, host, metadata,
+    ].some((element) => !element)) {
         return;
     }
 
@@ -174,14 +167,11 @@ async function initializeMolstarVolumeViewer(root) {
         layoutShowSequence: false,
         layoutShowLog: false,
         layoutShowLeftPanel: false,
-        collapseRightPanel: false,
         viewportShowExpand: false,
-        viewportShowToggleFullscreen: true,
         viewportShowSelectionMode: false,
         viewportShowAnimation: false,
         viewportShowTrajectoryControls: false,
         viewportBackgroundColor: "#ffffff",
-        powerPreference: "high-performance",
     });
 
     viewer.plugin.canvas3d?.setProps({
@@ -200,16 +190,18 @@ async function initializeMolstarVolumeViewer(root) {
     });
 
     const applyBackground = () => {
-        const color = BACKGROUND_COLORS[backgroundSelect.value]
-            ?? BACKGROUND_COLORS.white;
-        viewport.style.backgroundColor = color === BACKGROUND_COLORS.white
-            ? "#ffffff"
-            : "#000000";
+        const black = backgroundSelect.value === "black";
+        const color = black ? 0x000000 : 0xffffff;
+        viewport.style.backgroundColor = black ? "#000000" : "#ffffff";
         viewer.plugin.canvas3d?.setProps({renderer: {backgroundColor: color}});
     };
+    const resetCamera = (durationMs) => viewer.plugin.canvas3d?.requestCameraReset({
+        durationMs, snapshot: startingCameraSnapshot,
+    });
 
     let isovalueUpdateTimer = null;
     let isovalueUpdatePromise = Promise.resolve();
+    let defaultDensityValue = null;
     const applyIsovalue = (value) => {
         const int8Value = densityToInt8(selectedVolumeOption(sourceSelect), value);
         isovalueUpdatePromise = isovalueUpdatePromise
@@ -218,12 +210,10 @@ async function initializeMolstarVolumeViewer(root) {
         return isovalueUpdatePromise;
     };
 
-    const scheduleIsovalueUpdate = () => {
-        const value = Number(isovalueInput.value);
+    const scheduleIsovalueUpdate = (value) => {
         if (!Number.isFinite(value)) {
             return;
         }
-        setIsovalueDisplay(isovalueDisplay, formatDensity(value));
         window.clearTimeout(isovalueUpdateTimer);
         isovalueUpdateTimer = window.setTimeout(() => {
             applyIsovalue(value).catch((error) => {
@@ -240,72 +230,72 @@ async function initializeMolstarVolumeViewer(root) {
 
         sourceSelect.disabled = true;
         isovalueInput.disabled = true;
-        setIsovalueDisplayDisabled(isovalueDisplay, true);
+        isovalueText.disabled = true;
         resetButton.disabled = true;
         metadata.textContent = formatVolumeMetadata(option);
         loadingIndicator?.classList.remove("hidden");
         window.clearTimeout(isovalueUpdateTimer);
         await isovalueUpdatePromise.catch(() => {});
-        const isovalue = configureIsovalueControl(
-            option,
-            isovalueInput,
-            isovalueDisplay,
-        );
+        defaultDensityValue = null;
         try {
             await viewer.plugin.clear();
             await viewer.loadVolumeFromUrl(
                 {url: option.value, format: "ccp4", isBinary: true},
-                [isovalue.type === "absolute"
-                    ? {...isovalue, value: densityToInt8(option, isovalue.value)}
-                    : isovalue],
+                [],
                 {entryId: option.dataset.volumeName || "solve3D"},
             );
+            const volume = viewer.plugin.managers.volume.hierarchy.current.volumes[0];
+            const voxels = volume?.cell?.obj?.data?.grid?.cells?.data;
+            const value = int8ToDensity(
+                option, topOnePercentThreshold(voxels),
+            );
+            configureIsovalueControl(option, isovalueInput, isovalueText, value);
+            await addMolstarSurface(viewer, volume, densityToInt8(option, value));
             applyBackground();
-            viewer.plugin.canvas3d?.requestCameraReset({
-                durationMs: 0,
-                snapshot: startingCameraSnapshot,
-            });
-            isovalueInput.disabled = isovalue.type !== "absolute";
-            setIsovalueDisplayDisabled(isovalueDisplay, isovalue.type !== "absolute");
+            resetCamera(0);
+            isovalueInput.disabled = false;
+            isovalueText.disabled = false;
+            defaultDensityValue = value;
         } catch (error) {
             console.error("Unable to load the Batch volume in Mol*.", error);
         } finally {
             sourceSelect.disabled = false;
-            resetButton.disabled = false;
+            resetButton.disabled = defaultDensityValue === null;
             loadingIndicator?.classList.add("hidden");
         }
     };
 
     backgroundSelect.addEventListener("change", applyBackground);
-    isovalueInput.addEventListener("input", scheduleIsovalueUpdate);
-    isovalueText?.addEventListener("input", () => {
-        const value = Number(isovalueText.value);
+    isovalueInput.addEventListener("input", () => {
+        const value = Number(isovalueInput.value);
+        isovalueText.value = formatDensity(value);
+        scheduleIsovalueUpdate(value);
+    });
+    isovalueText.addEventListener("input", () => {
+        const value = isovalueText.valueAsNumber;
         if (!Number.isFinite(value)) {
             return;
         }
         isovalueInput.value = String(value);
-        setIsovalueDisplay(isovalueDisplay, formatDensity(Number(isovalueInput.value)));
-        scheduleIsovalueUpdate();
+        scheduleIsovalueUpdate(Number(isovalueInput.value));
     });
     resetButton.addEventListener("click", async () => {
-        const isovalue = configureIsovalueControl(
-            selectedVolumeOption(sourceSelect),
-            isovalueInput,
-            isovalueDisplay,
-        );
-        if (isovalue.type === "absolute") {
-            try {
-                await applyIsovalue(isovalue.value);
-                isovalueInput.disabled = false;
-                setIsovalueDisplayDisabled(isovalueDisplay, false);
-            } catch (error) {
-                console.error("Unable to reset the Mol* iso value.", error);
-            }
+        if (defaultDensityValue === null) {
+            return;
         }
-        viewer.plugin.canvas3d?.requestCameraReset({
-            durationMs: 250,
-            snapshot: startingCameraSnapshot,
-        });
+        window.clearTimeout(isovalueUpdateTimer);
+        configureIsovalueControl(
+            selectedVolumeOption(sourceSelect), isovalueInput, isovalueText,
+            defaultDensityValue,
+        );
+        try {
+            await applyIsovalue(defaultDensityValue);
+            isovalueInput.disabled = false;
+            isovalueText.disabled = false;
+        } catch (error) {
+            console.error("Unable to reset the Mol* iso value.", error);
+        }
+        resetCamera(250);
     });
     sourceSelect.addEventListener("change", loadSelectedVolume);
 
