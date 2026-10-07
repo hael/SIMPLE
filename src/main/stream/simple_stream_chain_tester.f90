@@ -55,7 +55,8 @@ private
 public :: run_all_stream_chain_sieve_tests, run_all_stream_chain_movie_tests
 
 ! the particles
-integer, parameter :: BOX       = 64    ! particle box (px)
+integer, parameter :: BOX        = 64    ! sieve working and movie projection box (px)
+integer, parameter :: BOX_DIRECT = 108   ! direct fixture's native particle box (px)
 real,    parameter :: SMPD      = 2.0   ! A
 real,    parameter :: MSKDIAM   = 100.  ! A
 real,    parameter :: KV        = 300.
@@ -114,15 +115,16 @@ contains
         call enter(root)
         truth1 = 'truth_state1.mrc'
         truth2 = 'truth_state2.mrc'
-        call write_truth_volume(truth1, 1)
-        call write_truth_volume(truth2, 2)
+        call write_truth_volume(truth1, 1, BOX_DIRECT)
+        call write_truth_volume(truth2, 2, BOX_DIRECT)
         oritab = 'simulated_particle_orientations.txt'
         call write_repeated_orientations(oritab, NMICS * NPTCLS_MIC / 2, NPOSES_STATE)
         stk1 = simulate_particle_stack(truth1, oritab, string('simulated_particles_state1.mrcs'), NMICS * NPTCLS_MIC / 2)
         stk2 = simulate_particle_stack(truth2, oritab, string('simulated_particles_state2.mrcs'), NMICS * NPTCLS_MIC / 2)
-        all_stk = interleave_stacks(stk1, stk2, NMICS * NPTCLS_MIC / 2, string('simulated_particles.mrcs'))
-        call write_picking_sets(all_stk, dir_refpick, NMICS, NPTCLS_MIC, NMICS_SET)
-        call write_moldiam(dir_refpick)
+        all_stk = interleave_stacks(stk1, stk2, NMICS * NPTCLS_MIC / 2, NPOSES_STATE, BOX_DIRECT,&
+            &string('simulated_particles.mrcs'))
+        call write_picking_sets(all_stk, dir_refpick, NMICS, NPTCLS_MIC, NMICS_SET, BOX_DIRECT)
+        call write_moldiam(dir_refpick, BOX_DIRECT)
         call simple_touch(dir_refpick//'/'//STREAM_FINISHED_MARKER)
         ! the stages
         allocate(sieve, pool, s3D)
@@ -212,14 +214,15 @@ contains
         call enter(root)
         truth1 = 'truth_state1.mrc'
         truth2 = 'truth_state2.mrc'
-        call write_truth_volume(truth1, 1)
-        call write_truth_volume(truth2, 2)
+        call write_truth_volume(truth1, 1, BOX)
+        call write_truth_volume(truth2, 2, BOX)
         ptcl_stk1 = reproject_truth(truth1, string('movie_particles_state1.mrcs'), NPTCLS_MIC / 2)
         ptcl_stk2 = reproject_truth(truth2, string('movie_particles_state2.mrcs'), NPTCLS_MIC / 2)
-        ptcl_stk  = interleave_stacks(ptcl_stk1, ptcl_stk2, NPTCLS_MIC / 2, string('movie_particles.mrcs'))
+        ptcl_stk  = interleave_stacks(ptcl_stk1, ptcl_stk2, NPTCLS_MIC / 2, NPTCLS_MIC / 2, BOX,&
+            &string('movie_particles.mrcs'))
         pickrefs1 = reproject_truth(truth1, string('pickrefs_state1.mrcs'), NREFS / 2)
         pickrefs2 = reproject_truth(truth2, string('pickrefs_state2.mrcs'), NREFS / 2)
-        pickrefs  = interleave_stacks(pickrefs1, pickrefs2, NREFS / 2, string('pickrefs.mrcs'))
+        pickrefs  = interleave_stacks(pickrefs1, pickrefs2, NREFS / 2, NREFS / 2, BOX, string('pickrefs.mrcs'))
         call simulate_movies(ptcl_stk, dir_movies, NMOVIES, MIC_BOX, NFRAMES)
         ! the stages (each in its folder)
         allocate(pre, optics, refpick, sieve, pool, s3D)
@@ -447,10 +450,10 @@ contains
         CWD_GLOB = dir%to_char()
     end subroutine enter
 
-    ! one of two distinct asymmetric multi-lobed objects in a BOX^3 volume
-    subroutine write_truth_volume( fname, state )
+    ! one of two distinct asymmetric multi-lobed objects in a @p box^3 volume
+    subroutine write_truth_volume( fname, state, box )
         class(string), intent(in) :: fname
-        integer,       intent(in) :: state
+        integer,       intent(in) :: state, box
         integer, parameter :: NBLOBS = 9
         type(image)       :: vol
         real, allocatable :: rmat(:,:,:)
@@ -467,11 +470,11 @@ contains
             sig    = [2.5, 2.8, 2.5, 2.5, 2.5, 2.8, 2.2, 2.2, 2.2]
             weight = [0.65, 0.8, 0.7, 0.9, 0.75, 1., 0.6, 0.55, 0.5]
         endif
-        allocate(rmat(BOX,BOX,BOX), source=0.)
-        c = real(BOX / 2 + 1)
-        do k = 1,BOX
-            do j = 1,BOX
-                do i = 1,BOX
+        allocate(rmat(box,box,box), source=0.)
+        c = real(box / 2 + 1)
+        do k = 1,box
+            do j = 1,box
+                do i = 1,box
                     x = [real(i), real(j), real(k)] - c
                     do iblob = 1,NBLOBS
                         rmat(i,j,k) = rmat(i,j,k) + WEIGHT(iblob) * exp(-sum((x - CEN(:,iblob))**2) / (2. * SIG(iblob)**2))
@@ -479,7 +482,7 @@ contains
                 enddo
             enddo
         enddo
-        call vol%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
+        call vol%new([box,box,box], SMPD, wthreads=.false.)
         call vol%set_rmat(rmat, .false.)
         call vol%write(fname)
         call vol%kill
@@ -540,19 +543,26 @@ contains
         call poses%kill
     end subroutine write_repeated_orientations
 
-    ! alternate two equal-size stacks into one, keeping both states balanced in every input set
-    function interleave_stacks( stk1, stk2, n_each, outstk ) result( stk )
+    ! interleave two equal-size stacks, flipping their order every @p swap_stride pairs
+    function interleave_stacks( stk1, stk2, n_each, swap_stride, box, outstk ) result( stk )
         class(string), intent(in) :: stk1, stk2, outstk
-        integer,       intent(in) :: n_each
+        integer,       intent(in) :: n_each, swap_stride, box
         type(string) :: stk
         type(image)  :: img
         integer      :: i
-        call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
+        call img%new([box,box,1], SMPD, wthreads=.false.)
         do i = 1,n_each
-            call img%read(stk1, i)
-            call img%write(outstk, 2 * i - 1)
-            call img%read(stk2, i)
-            call img%write(outstk, 2 * i)
+            if( mod((i - 1) / swap_stride, 2) == 0 )then
+                call img%read(stk1, i)
+                call img%write(outstk, 2 * i - 1)
+                call img%read(stk2, i)
+                call img%write(outstk, 2 * i)
+            else
+                call img%read(stk2, i)
+                call img%write(outstk, 2 * i - 1)
+                call img%read(stk1, i)
+                call img%write(outstk, 2 * i)
+            endif
         enddo
         call img%kill
         stk = simple_abspath(outstk)
@@ -560,9 +570,9 @@ contains
 
     ! reference picking's completed sets in @p dir_refpick: the particles of @p all_stk split into
     ! @p nmics stacks of @p nptcls_mic, one per micrograph, @p nmics_set micrographs per set
-    subroutine write_picking_sets( all_stk, dir_refpick, nmics, nptcls_mic, nmics_set )
+    subroutine write_picking_sets( all_stk, dir_refpick, nmics, nptcls_mic, nmics_set, box )
         class(string), intent(in) :: all_stk, dir_refpick
-        integer,       intent(in) :: nmics, nptcls_mic, nmics_set
+        integer,       intent(in) :: nmics, nptcls_mic, nmics_set, box
         type(image)      :: img
         type(sp_project) :: set
         type(ctfparams)  :: ctfvars
@@ -575,7 +585,7 @@ contains
         ctfvars%fraca   = FRACA
         ctfvars%dfx     = DEFOCUS
         ctfvars%dfy     = DEFOCUS
-        call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
+        call img%new([box,box,1], SMPD, wthreads=.false.)
         nsets = nmics / nmics_set
         imic  = 0
         do iset = 1,nsets
@@ -613,13 +623,14 @@ contains
     end subroutine write_picking_sets
 
     ! the moldiam.txt make_pickrefs writes beside the picking references
-    subroutine write_moldiam( dir_refpick )
+    subroutine write_moldiam( dir_refpick, box )
         class(string), intent(in) :: dir_refpick
+        integer,       intent(in) :: box
         type(oris) :: moldiam
         call moldiam%new(1, is_ptcl=.false.)
         call moldiam%set(1, 'mskdiam',         MSKDIAM)
         call moldiam%set(1, 'moldiam',         MSKDIAM / 1.2)
-        call moldiam%set(1, 'box_for_extract', BOX)
+        call moldiam%set(1, 'box_for_extract', box)
         call moldiam%write(dir_refpick//'/'//STREAM_MOLDIAM)
         call moldiam%kill
     end subroutine write_moldiam
