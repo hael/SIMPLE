@@ -18,7 +18,6 @@ character(len=*), parameter :: VIEW_PARTITION_FBODY = 'view_partition'
 character(len=*), parameter :: VIEW_PARTITION_CRIT  = 'cc' !< in-plane, shift and mirror invariant correlation
 real,             parameter :: VIEW_PARTITION_LP    = 6.  !< low-pass limit of the class-average alignment (as cluster_cavgs)
 real,             parameter :: VIEW_PARTITION_TRS   = 10. !< shift search range of the class-average alignment (as cluster_cavgs)
-real,             parameter :: VISITS_WARN_FAC      = 10. !< warn when a unit's particles are visited this many times the target
 
 contains
 
@@ -167,15 +166,16 @@ contains
 
     !> The unit table, printed once before the first stage: per group and unit the population, the
     !! per-draw quota and the expected visits per particle over nplanned draws (iterations, or frequency
-    !! blocks under cohorts), the draws one sweep needs, and a warning on short or excessive coverage.
+    !! blocks under cohorts), the draws one sweep needs, the view imbalance corrected, and a warning on
+    !! short coverage (the only condition the user can act on: more draws or a larger sample)
     subroutine report_class_sample_coverage( clssmp, balance, ntarget, nplanned, draw_label )
         type(class_sample), intent(in) :: clssmp(:)
         character(len=*),   intent(in) :: balance, draw_label
         integer,            intent(in) :: ntarget, nplanned
         real,    allocatable :: quotas(:), visits(:), keys(:)
         integer, allocatable :: order(:)
-        type(string) :: msg
-        integer :: nunits, ngroups, nactive, sweep, i, k
+        character(len=256)   :: msg
+        integer :: nunits, ngroups, nactive, sweep, nfull, i, k
         real    :: target, vmin, vmax
         nunits  = size(clssmp)
         if( nunits < 1 ) return
@@ -213,6 +213,12 @@ contains
         write(logfhandle,'(A,I10,A)')     '    Draws planned                  : ', nplanned, ' ('//draw_label//'s)'
         write(logfhandle,'(A,F10.2)')     '    Target visits per particle     : ', target
         write(logfhandle,'(A,2F10.2)')    '    Visits per particle min/max    : ', vmin, vmax
+        ! the visit ratio is the view skew the balancing corrected: a property of the data, not a fault
+        if( vmin > 0. ) write(logfhandle,'(A,F9.1,A,F0.2,A)') '    View imbalance corrected       : ', vmax / vmin, &
+            &'x (unbalanced sampling would visit every particle ', target, ' times)'
+        ! a unit smaller than its quota is drawn whole every draw: a 100% update fraction for a rare view
+        nfull = count(clssmp(:)%pop > 0 .and. quotas >= real(clssmp(:)%pop) - 1.e-3)
+        write(logfhandle,'(A,I10,A)')     '    Units drawn in full each draw  : ', nfull, ' (smaller than their quota)'
         write(logfhandle,'(A)')           '    Group   Class   Particles     Quota    Visits'
         do k = 1, nunits
             i = order(k)
@@ -221,16 +227,10 @@ contains
         end do
         write(logfhandle,'(A)') ''
         if( vmin < 1. )then
-            msg = 'sampling coverage short: the least-visited unit is visited '//real2str(vmin)//&
-                &' times per particle over the planned '//draw_label//'s; one sweep needs '//int2str(sweep)
-            THROW_WARN(msg%to_char())
+            write(msg,'(A,F0.2,A,I0)') 'sampling coverage short: the least-visited unit is visited ', vmin, &
+                &' times per particle over the planned '//draw_label//'s; one sweep needs ', sweep
+            THROW_WARN(trim(msg))
         endif
-        if( vmax > VISITS_WARN_FAC * target )then
-            msg = 'sampling coverage uneven: the most-visited unit is visited '//real2str(vmax)//&
-                &' times per particle, above '//real2str(VISITS_WARN_FAC)//' times the target '//real2str(target)
-            THROW_WARN(msg%to_char())
-        endif
-        call msg%kill
     end subroutine report_class_sample_coverage
 
 end module simple_view_partition_sampling

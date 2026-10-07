@@ -132,8 +132,9 @@ as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The
 units are formed once, before the first stage, and serve the whole run: the
 stages only read the file, and every stage command line carries `balance` and,
 for `cavg`, `nclust`. Before the first stage `solve3D` prints the unit table
-with the expected visits per particle over the planned stage iterations and
-warns on short or very uneven coverage; nothing is adjusted automatically. The
+with the expected visits per particle over the planned stage iterations, the
+view imbalance corrected, and a warning on short coverage only; nothing is
+adjusted automatically. The
 sampler never uses 3D maps, poses or projection directions. The details are in
 `doc/policies/importance_sampling_fractional_update_policy.md`.
 

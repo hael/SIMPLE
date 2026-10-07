@@ -380,11 +380,14 @@ Before the first stage the producer's caller prints the unit table
 (`>>> FRACTIONAL-UPDATE SAMPLING UNITS`): per group and unit the population,
 the quota and the expected visits per particle over the planned draws
 (iterations; frequency blocks under the cohort schedule), the draws one sweep
-needs, and the minimum and maximum visits over units. It warns when the
-minimum is below one (some particles would not be reached) or the maximum
-exceeds ten times the target. Nothing is adjusted automatically: neither
-`nsample` nor the frequency march changes, and the terminal missing-update pass
-labels any particle the march did not reach.
+needs, the minimum and maximum visits over units, the view imbalance the
+balancing corrected (the ratio of the two, against the visits an unbalanced
+draw would give every particle) and the number of units smaller than their
+quota, which are drawn whole every draw. A large ratio is a property of the
+data, not a fault. The one warning is coverage short: the minimum below one,
+some particles not reached in the planned draws. Nothing is adjusted
+automatically: neither `nsample` nor the frequency march changes, and the
+terminal missing-update pass labels any particle the march did not reach.
 
 ### Cohort schedule (`refine3D_states`)
 
