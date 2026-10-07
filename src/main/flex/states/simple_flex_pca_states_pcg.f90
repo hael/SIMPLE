@@ -4,16 +4,16 @@
 !  (doc/implementation_notes/completed/flex_pca_envelope_support.md, section 3.3); one cold solve per (state, half)
 module simple_flex_pca_states_pcg
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_core_module_api
-use simple_builder,           only: builder
-use simple_parameters,        only: parameters
-use simple_image,             only: image
-use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE
-use simple_flex_pca_pcg,      only: flex_pcg_support_volume, flex_mskfile_set
-use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, prep_rec_observation
-use simple_math_ft,           only: resample_sigma2
+use simple_core_module_api, only: cosmskhalfwidth, ctfparams, del_file, file_exists, logfhandle, maximgbatchsz, &
+    &nthr_glob, objfun_euclid, ori, oris, simple_exception, string, tic, timer_int_kind, toc
+use simple_builder,                 only: builder
+use simple_parameters,              only: parameters
+use simple_image,                   only: image
+use simple_reconstructor_pcg,       only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE
+use simple_flex_pca_pcg,            only: flex_pcg_support_volume, flex_mskfile_set, FLEX_PCG_LAMBDA_REL_DEFAULT
+use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch, prep_rec_observation
+use simple_math_ft,                 only: resample_sigma2
 use simple_flex_pca_rounds,         only: flex_pca_rounds
-use simple_flex_pca_run_types,      only: flex_run_settings
 use simple_flex_pca_state_parts,    only: flex_pcg_state_raw_fname, flex_pcg_state_provenance
 use simple_flex_pca_states_backend, only: flex_states_backend, flex_state_maps, flex_state_delivery_policy
 !$ use omp_lib, only: omp_get_max_active_levels, omp_set_max_active_levels, omp_set_num_threads
@@ -25,17 +25,13 @@ private
 
 !> kernel weights below this floor drop the particle from the state's selection: 1/w has to stay
 !! finite in single precision and a vanishing weight contributes nothing to the solve
-real,    parameter :: FLEX_PCG_WEIGHT_FLOOR = 1.0e-3
-!> Tikhonov ridge relative to the weighted data scale: with weights in [0,1] the effective particle
-!! count of a sparse state is a small fraction of N, so the refinement backend's absolute PCG_LAMBDA
-!! would be a materially stronger prior on it than on a populated state
-real,    parameter :: FLEX_PCG_LAMBDA_REL = 1.0e-3
+real,             parameter :: FLEX_PCG_WEIGHT_FLOOR  = 1.0e-3
 !> iteration budget of the cold state solves: the reconstruct3D PCG default (maxits_pcg=2). It is NOT
 !! params%maxits_pcg, which is the warm-started basis M-step's budget; a positive rtol still stops earlier
-integer, parameter :: FLEX_PCG_STATE_MAXITS = 2
+integer,          parameter :: FLEX_PCG_STATE_MAXITS  = 2
 !> thread budget of the paired even/odd solve (PCG_MASTER_NTHR_CAP of the reconstruct3D PCG master)
-integer, parameter :: FLEX_PCG_PAIR_NTHR_CAP = 32
-character(len=*), parameter :: PCG_STATE_TABLE = 'flex_pca_state_pcg.txt'
+integer,          parameter :: FLEX_PCG_PAIR_NTHR_CAP = 32
+character(len=*), parameter :: PCG_STATE_TABLE        = 'flex_pca_state_pcg.txt'
 
 !> outcome of one (state, half) solve, recorded inside the concurrent even/odd sections and reported after
 type :: half_solve_rec
@@ -71,13 +67,13 @@ end type flex_states_pcg
 contains
 
     subroutine pcg_begin( self, params, build, rounds, pinds, state_weights, nstates, l_fuse, l_floor_rho, box_rec, smpd_rec )
-        class(flex_states_pcg),  intent(inout) :: self
-        class(parameters),       intent(inout) :: params
-        class(builder),          intent(inout) :: build
-        class(flex_pca_rounds),  intent(inout) :: rounds
-        integer,                 intent(in)    :: pinds(:), nstates, box_rec
-        real,                    intent(in)    :: state_weights(:,:), smpd_rec
-        logical,                 intent(in)    :: l_fuse, l_floor_rho
+        class(flex_states_pcg), intent(inout) :: self
+        class(parameters),      intent(inout) :: params
+        class(builder),         intent(inout) :: build
+        class(flex_pca_rounds), intent(inout) :: rounds
+        integer,                intent(in)    :: pinds(:), nstates, box_rec
+        real,                   intent(in)    :: state_weights(:,:), smpd_rec
+        logical,                intent(in)    :: l_fuse, l_floor_rho
         call self%kill
         call self%set_selection(pinds, state_weights, nstates, l_fuse, l_floor_rho, box_rec, smpd_rec)
         ! the same spherical support as the gridding delivery mask, capped at the box edge
@@ -99,10 +95,10 @@ contains
     !! only the image batch is prepared here; each state accumulates in place when its maps are
     !! finalized (one operator pair resident).
     subroutine pcg_accumulate( self, params, build, rounds )
-        class(flex_states_pcg),  intent(inout) :: self
-        class(parameters),       intent(inout) :: params
-        class(builder),          intent(inout) :: build
-        class(flex_pca_rounds),  intent(inout) :: rounds
+        class(flex_states_pcg), intent(inout) :: self
+        class(parameters),      intent(inout) :: params
+        class(builder),         intent(inout) :: build
+        class(flex_pca_rounds), intent(inout) :: rounds
         type(reconstructor_pcg) :: pcgop
         type(string) :: fname
         integer :: state, eo, nsel
@@ -111,7 +107,7 @@ contains
         do state = 1, self%nstates
             do eo = 0, self%neo
                 call accumulate_state_half(self, params, build, rounds, state, eo, pcgop, nsel)
-                fname = flex_pcg_state_raw_fname(params, params%part, state, eo)
+                fname = flex_pcg_state_raw_fname(params, rounds, params%part, state, eo)
                 ! the part count comes from the command line: rounds%nparts() is the master's plan (1 on a worker)
                 call pcgop%write_raw_accum(fname, state, eo, params%part, max(1,params%nparts), nsel, self%provenance)
                 write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> FLEX_PCA PCG STATE RAW: part ', params%part, &
@@ -126,10 +122,10 @@ contains
     !> Distributed master: nothing to do up front -- the raw parts of one state are reduced when
     !! its maps are finalized, so one operator pair is resident rather than nstates.
     subroutine pcg_fold_parts( self, params, build, rounds )
-        class(flex_states_pcg),  intent(inout) :: self
-        class(parameters),       intent(inout) :: params
-        class(builder),          intent(inout) :: build
-        class(flex_pca_rounds),  intent(inout) :: rounds
+        class(flex_states_pcg), intent(inout) :: self
+        class(parameters),      intent(inout) :: params
+        class(builder),         intent(inout) :: build
+        class(flex_pca_rounds), intent(inout) :: rounds
         write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA PCG STATES: ', max(1,params%nparts), &
             &' raw parts per (state, half), reduced per state at its solve'
         call flush(logfhandle)
@@ -138,12 +134,12 @@ contains
     !> Reduce (distributed) or accumulate (shared memory) both halves of one state, solve them
     !! concurrently, report, and hand the maps over: window*u per half, combined = (even+odd)/2.
     subroutine pcg_finalize_maps( self, params, build, rounds, state, maps )
-        class(flex_states_pcg),  intent(inout) :: self
-        class(parameters),       intent(inout) :: params
-        class(builder),          intent(inout) :: build
-        class(flex_pca_rounds),  intent(inout) :: rounds
-        integer,                 intent(in)    :: state
-        type(flex_state_maps),   intent(inout) :: maps
+        class(flex_states_pcg), intent(inout) :: self
+        class(parameters),      intent(inout) :: params
+        class(builder),         intent(inout) :: build
+        class(flex_pca_rounds), intent(inout) :: rounds
+        integer,                intent(in)    :: state
+        type(flex_state_maps),  intent(inout) :: maps
         type(string) :: fname
         integer :: eo, nsel, nsel_part, ipart, nsel_eo(0:1), prev_levels
         call maps%kill
@@ -157,7 +153,7 @@ contains
                 call self%pcgops(eo)%begin_reduction
                 nsel = 0
                 do ipart = 1, max(1,params%nparts)
-                    fname = flex_pcg_state_raw_fname(params, ipart, state, eo)
+                    fname = flex_pcg_state_raw_fname(params, rounds, ipart, state, eo)
                     if( .not. file_exists(fname) ) THROW_HARD('missing flex PCG raw part: '//fname%to_char())
                     call self%pcgops(eo)%add_raw_accum(fname, state, eo, ipart, max(1,params%nparts), self%provenance, nsel_part)
                     nsel = nsel + nsel_part
@@ -205,15 +201,12 @@ contains
         endif
     end subroutine pcg_finalize_maps
 
-    !> The PCG delivery: the same per-state eo-FSC filter as the gridding path (selected by the run
-    !! settings), on the windowed solutions as they come out of the solve -- no background
+    !> The PCG delivery: the same per-state low-pass policy as the gridding path, on the windowed
+    !! solutions as they come out of the solve -- no background
     !! removal, no second mask, no project-FSC fallback (a single-set state is delivered unfiltered).
-    function pcg_delivery_policy( self, cfg ) result( policy )
-        class(flex_states_pcg),  intent(in) :: self
-        type(flex_run_settings), intent(in) :: cfg
+    function pcg_delivery_policy( self ) result( policy )
+        class(flex_states_pcg), intent(in) :: self
         type(flex_state_delivery_policy) :: policy
-        policy%l_state_eofilt = cfg%l_state_eofilt
-        policy%l_state_filt   = cfg%l_state_filt
         policy%l_mask         = .false.
         policy%l_project_fsc_fallback = .false.
         policy%tag = ' (PCG)'
@@ -243,10 +236,12 @@ contains
             call op%new(self%box_rec, self%smpd_rec, fft_nthreads=self%nthr_half)
         endif
         call op%set_sym(build%pgrpsyms)
-        call op%set_lambda_relative(FLEX_PCG_LAMBDA_REL)
-        if( flex_mskfile_set(params) )then
+        ! Use the same data-relative ridge as the coupled FLEX PCG solve.
+        call op%set_lambda_relative(FLEX_PCG_LAMBDA_REL_DEFAULT)
+        if( flex_mskfile_set(params%pcg_mskfile) )then
             ! step 2: the envelope resampled to the state box is the solve support
-            call flex_pcg_support_volume(params, self%box_rec, self%smpd_rec, envimg, 'state box')
+            call flex_pcg_support_volume(params%pcg_mskfile, params%box, params%smpd, params%mskdiam, &
+                &self%box_rec, self%smpd_rec, envimg, 'state box')
             call op%set_mask_volume(envimg)
             call envimg%kill
         else
@@ -368,7 +363,7 @@ contains
     subroutine report_state_half( self, state_here, eo_here, nsel_here, rec )
         class(flex_states_pcg), intent(in) :: self
         integer,                intent(in) :: state_here, eo_here, nsel_here
-        type(half_solve_rec), intent(in) :: rec
+        type(half_solve_rec),   intent(in) :: rec
         character(len=4) :: half
         half = 'all '
         if( self%l_fuse ) half = merge('odd ', 'even', eo_here == 1)

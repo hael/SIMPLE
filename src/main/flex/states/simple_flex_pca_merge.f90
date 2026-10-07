@@ -2,15 +2,15 @@
 !        Gate 1 (orientation): a state whose viewing-axis distribution stands out from its peers is a view
 !        cluster, folded into a sufficiently similar map. Gate 2 (volume): pairs whose deviation maps agree within
 !        their own half-map reproducibility fuse under complete linkage. Latent distance never merges.
-!        On when SIMPLE_COV_MERGE is non-zero or preimage_auto=yes; SIMPLE_COV_MERGE=0 always wins.
+!        Invoked by the application when preimage_auto=yes.
 module simple_flex_pca_merge
-use simple_core_module_api
+use simple_core_module_api, only: dp, dtiny, file_exists, int2str_pad, logfhandle, mrc_ext, simple_exception, string
+use simple_defs_flex,        only: FLEX_FSC_SIGNAL_THRESHOLD
 use simple_flex_pca_records, only: flex_state_set
-use simple_image,          only: image
-use simple_parameters,     only: parameters
-use simple_flex_pca_rec3D, only: flex_rec_smpd
-use simple_flex_pca_run_types, only: flex_run_settings
-use simple_flex_pca_pcg,   only: flex_env_init, flex_env_active, flex_window_apply
+use simple_image,            only: image
+use simple_parameters,       only: parameters
+use simple_flex_pca_rec3D,   only: flex_rec_smpd
+use simple_flex_pca_pcg,     only: flex_pcg_environment
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -19,39 +19,27 @@ public :: two_gate_state_merge
 
 !> Viewing-axis second moments are symmetric 3x3 with unit trace (v is a unit vector), leaving
 !! five free parameters.
-integer,  parameter :: VIEW_DOF = 5
+integer,  parameter :: VIEW_DOF        = 5
 !> Upper tail of chi^2_5 at p = 0.001. Necessary but not sufficient: at realistic neff the test is
 !! over-powered and every state clears it, since no experimental view distribution is exactly the
 !! global one. It only guards the sparse states, where a departure really could be sampling.
-real(dp), parameter :: VIEW_CHI2_CRIT = 20.515d0
+real(dp), parameter :: VIEW_CHI2_CRIT  = 20.515d0
 !> The decision is therefore made on effect size, chi2/neff, which does not grow with N. The cut is
 !! robust and relative to this dataset's own states (median + k*MAD): a specimen with preferred
 !! orientation gives every state a non-global view distribution, so what marks a view cluster is
 !! standing out from its peers. Gate 2 covers the case where every state is a view cluster and
 !! there are no outliers to find.
-real(dp), parameter :: VIEW_MAD_K = 3.0d0
+real(dp), parameter :: VIEW_MAD_K      = 3.0d0
 !> MAD -> sigma for a normal, so VIEW_MAD_K is read in familiar units.
-real(dp), parameter :: MAD2SIGMA = 1.4826d0
+real(dp), parameter :: MAD2SIGMA       = 1.4826d0
 !> A view-clustered state is folded into its best map match only if it substantially resembles it.
 !! Without the floor gate 1 folds on the best available match however poor it is, tipping particles
 !! into maps they do not resemble. Below the floor the state is reported and kept: a component that
 !! is view-driven and resembles nothing is a finding, not something to hide in an unrelated class.
 real(dp), parameter :: VIEW_FOLD_MIN_R = 0.8d0
-!> Shells where both states reproduce below this are noise in both and carry no evidence either way.
-real(dp), parameter :: FSC_SIGNAL_FLOOR = 0.143d0
 !> Default gate on the DEVIATION-from-ensemble-mean disattenuated ratio (see pair_map_ratio); 1 means
-!! the two maps agree as well as each agrees with itself. SIMPLE_COV_MERGE_R pins it (no adaptive cut).
+!! the two maps agree as well as each agrees with itself.
 real(dp), parameter :: MERGE_R_DEFAULT = 0.98d0
-!> Absolute SANITY bound for the adaptive gate -- not a duplicate threshold. Two states whose
-!! deviations correlate below this are never duplicates whatever the gap structure says. It must
-!! stay well BELOW the duplicate cluster of any dataset: measured, that cluster sits at 0.975+ on
-!! Ribosembly but at 0.88-0.98 on EMPIAR-10076, so a floor at 0.90 would silently disable
-!! adaptation on 10076 (it did) -- the cut has to be free to follow the data.
-real(dp), parameter :: MERGE_R_FLOOR   = 0.50d0
-!> A break is a real cluster boundary only if it dwarfs the typical spacing among the candidates.
-real(dp), parameter :: MERGE_GAP_K     = 4.0d0
-!> ... and only if what it separates stays a small minority of all pairs.
-real(dp), parameter :: MERGE_TOP_FRAC  = 0.15d0
 
 
 contains
@@ -138,28 +126,24 @@ contains
     !! taken across halfsets (even_s vs odd_t, odd_s vs even_t) so all four spectra involve disjoint
     !! particles. If s and t are the same underlying map the cross spectrum is the common signal
     !! attenuated by each map's own reliability, so C_st / sqrt(C_ss*C_tt) is 1; below 1 they differ.
-    subroutine pair_map_ratio( evols, ovols, nstates, nshell, R, Rmin, lstop )
+    subroutine pair_map_ratio( evols, ovols, nstates, nshell, R, Rmin )
         integer,     intent(in)    :: nstates, nshell
         type(image), intent(inout) :: evols(nstates), ovols(nstates)
         real(dp),    intent(out)   :: R(nstates,nstates)
         !> min of the TWO half-independent cross estimates (e_s vs o_t and o_s vs e_t), each
         !! disattenuated by the same reliabilities. R is their mean, so 2*(R - Rmin) is the
         !! halfset disagreement — a per-pair noise scale for the merge decision.
-        real(dp), optional, intent(out) :: Rmin(nstates,nstates)
-        !> optional band cap (shell index): conformations are low-frequency objects, and the
-        !! per-shell signal floor alone can admit mid-band shells that carry reconstruction
-        !! noise rather than conformation (validated externally at ~25 A on 10076/10049)
-        integer,  optional, intent(in)  :: lstop
+        real(dp),    intent(out)   :: Rmin(nstates,nstates)
         real,     allocatable :: css(:,:), cst(:), cts(:)
         real(dp) :: num_a, num_b, den, ratio, ratio_a, ratio_b
-        integer  :: s, t, l, nval, lmax
+        integer  :: s, t, l, nval
         allocate(css(nshell,nstates), source=0.)
         allocate(cst(nshell), cts(nshell), source=0.)
         do s = 1, nstates
             call evols(s)%fsc(ovols(s), css(:,s))
         end do
         R = 1.d0
-        if( present(Rmin) ) Rmin = 1.d0
+        Rmin = 1.d0
         do s = 1, nstates - 1
             do t = s + 1, nstates
                 call evols(s)%fsc(ovols(t), cst)
@@ -168,12 +152,10 @@ contains
                 num_b = 0.d0
                 den   = 0.d0
                 nval  = 0
-                lmax  = nshell
-                if( present(lstop) ) lmax = max(2, min(nshell, lstop))
-                do l = 1, lmax
+                do l = 1, nshell
                     ! a shell where either state is already noise carries no evidence
-                    if( real(css(l,s),dp) <= FSC_SIGNAL_FLOOR ) cycle
-                    if( real(css(l,t),dp) <= FSC_SIGNAL_FLOOR ) cycle
+                    if( real(css(l,s),dp) <= FLEX_FSC_SIGNAL_THRESHOLD ) cycle
+                    if( real(css(l,t),dp) <= FLEX_FSC_SIGNAL_THRESHOLD ) cycle
                     num_a = num_a + real(cst(l),dp)
                     num_b = num_b + real(cts(l),dp)
                     den   = den + sqrt(real(css(l,s),dp)*real(css(l,t),dp))
@@ -190,37 +172,34 @@ contains
                 endif
                 R(s,t) = ratio
                 R(t,s) = ratio
-                if( present(Rmin) )then
-                    Rmin(s,t) = min(ratio_a, ratio_b)
-                    Rmin(t,s) = Rmin(s,t)
-                endif
+                Rmin(s,t) = min(ratio_a, ratio_b)
+                Rmin(t,s) = Rmin(s,t)
             end do
         end do
         deallocate(css, cst, cts)
     end subroutine pair_map_ratio
 
     !> Two-gate merge. Returns the state each input state was merged into (1..nstates_out).
-    subroutine two_gate_state_merge( params, cfg, views, states, label_out, nstates_out )
-        type(flex_state_set), intent(in) :: states
+    subroutine two_gate_state_merge( params, env, views, states, label_out, nstates_out )
+        class(flex_pcg_environment), intent(inout) :: env
+        type(flex_state_set),        intent(in)    :: states
         integer :: nptcls
-        class(parameters), intent(in)  :: params
-        type(flex_run_settings), intent(in)    :: cfg
-        real(dp),          intent(in)  :: views(:,:)
-        integer,           intent(out) :: label_out(:)
-        integer,           intent(out) :: nstates_out
+        class(parameters),    intent(in)  :: params
+        real(dp),             intent(in)  :: views(:,:)
+        integer,              intent(out) :: label_out(:)
+        integer,              intent(out) :: nstates_out
         type(image), allocatable :: evols(:), ovols(:)
         type(image) :: mskwarm
-        real(dp),    allocatable :: chi2(:), neff(:), effsz(:), work(:), R(:,:), Rmin(:,:), Rdec(:,:)
+        real(dp),    allocatable :: chi2(:), neff(:), effsz(:), work(:), R(:,:), Rmin(:,:)
         real(dp),    allocatable :: mass(:)
         logical,     allocatable :: view_bad(:), l_live(:)
         integer,     allocatable :: parent(:), remap(:)
         type(string) :: fn
-        real(dp) :: r_thresh, rbest, rlink, mad_k, eff_med, eff_mad, eff_cut, rloc
-        real(dp) :: rmargin, rqual, thresh_eff, akv
+        real(dp) :: rbest, rlink, eff_med, eff_mad, eff_cut, rloc
         real     :: mskrad
         integer  :: s, t, u, w, nshell, tbest, nfail, nmerge, npair, kmin_a, kmin_b, aloc, bloc, nnear
         integer  :: nlive
-        logical  :: l_gate1, l_single, l_eo, l_fixed_gate
+        logical  :: l_gate1
         nptcls = size(states%weights,1)
         nstates_out = states%nstates
         do s = 1, states%nstates
@@ -247,28 +226,10 @@ contains
             call flush(logfhandle)
             return
         endif
-        r_thresh = MERGE_R_DEFAULT
-        if( cfg%l_merge_r_value ) r_thresh = cfg%merge_r
-        ! an explicitly supplied gate pins the threshold and disables the adaptive cut below
-        l_fixed_gate = cfg%l_merge_r_set
-        ! Decision-robustness levers, both default OFF.
-        ! MARGIN: merge only when the ratio clears the gate by this much. EO: merge only when BOTH
-        ! half-independent cross estimates clear the gate on their own -- a pair the halfsets
-        ! disagree about is genuinely ambiguous, and requiring their agreement makes the delivered
-        ! K stable under epsilon-level perturbation (thread count, GPU atomic order), which a bare
-        ! threshold on their mean is not.
-        rmargin = cfg%merge_margin
-        l_eo    = cfg%l_merge_eo
-        if( rmargin > 0.d0 ) write(logfhandle,'(A,F6.3)') &
-            &'>>> FLEX_PCA MERGE gate 2: SIMPLE_COV_MERGE_MARGIN=', rmargin
-        if( l_eo ) write(logfhandle,'(A)') &
-            &'>>> FLEX_PCA MERGE gate 2: SIMPLE_COV_MERGE_EO=1 -- both halfset estimates must clear the gate'
         ! ---- GATE 1: orientation ----
         ! significant AND an effect-size outlier among this dataset's own states: significance alone
         ! flags everything at these neff, and a bare effect size has no scale that transfers between
         ! specimens
-        mad_k = VIEW_MAD_K
-        if( cfg%l_merge_madk_set ) mad_k = cfg%merge_madk
         allocate(chi2(states%nstates), neff(states%nstates), effsz(states%nstates), view_bad(states%nstates))
         call view_coverage_chi2(views, states%weights, nptcls, states%nstates, chi2, neff, effsz)
         ! robust statistics over LIVE states only, else the zero-mass placeholders drag the median
@@ -289,7 +250,7 @@ contains
         end do
         call sort_dp(work, nlive)
         eff_mad = median_of_sorted(work, nlive)
-        eff_cut = eff_med + mad_k*MAD2SIGMA*eff_mad
+        eff_cut = eff_med + VIEW_MAD_K*MAD2SIGMA*eff_mad
         deallocate(work)
         do s = 1, states%nstates
             view_bad(s) = l_live(s) .and. chi2(s) > VIEW_CHI2_CRIT .and. effsz(s) > eff_cut
@@ -310,7 +271,7 @@ contains
             nfail    = 0
         endif
         write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,F4.1,A)') '>>>   effect-size median=',eff_med, &
-            &'  MAD=',eff_mad,'  cut=',eff_cut,'  (k=',mad_k,' robust sigma)'
+            &'  MAD=',eff_mad,'  cut=',eff_cut,'  (k=',VIEW_MAD_K,' robust sigma)'
         do s = 1, states%nstates
             write(logfhandle,'(A,I3,A,F12.2,A,F10.1,A,ES12.4,A,L1)') '>>>   state=',s,'  chi2=',chi2(s), &
                 &'  neff=',neff(s),'  effect=',effsz(s),'  view_clustered=',view_bad(s)
@@ -336,16 +297,15 @@ contains
         call mskwarm%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         call mskwarm%mask3D_soft(mskrad)
         call mskwarm%kill
-        call flex_env_init(params)
         ! Mask and transform are per-state independent and are where the prologue's time goes:
         ! 2*nstates volume FFTs, which at an over-provisioned ceiling is the bulk of gate 2's setup.
         ! Mask before the transform: solvent reproduces between halves for reasons unrelated to the
         ! state and would enter every spectrum below.
         !$omp parallel do default(shared) private(s) schedule(dynamic) proc_bind(close)
         do s = 1, states%nstates
-            if( flex_env_active() )then
-                call flex_window_apply(evols(s), params)
-                call flex_window_apply(ovols(s), params)
+            if( env%active() )then
+                call env%apply(evols(s), params%box_crop, params%msk_crop)
+                call env%apply(ovols(s), params%box_crop, params%msk_crop)
             else
                 call evols(s)%mask3D_soft(mskrad)
                 call ovols(s)%mask3D_soft(mskrad)
@@ -383,27 +343,9 @@ contains
         end do
         !$omp end parallel do
         nshell = evols(1)%get_lfny(1)
-        allocate(R(states%nstates,states%nstates), Rmin(states%nstates,states%nstates), Rdec(states%nstates,states%nstates))
-        ! optional merge-band cap in Angstrom (SIMPLE_COV_MERGE_LP): conformational
-        ! distinctness is a low-frequency question; 25 A validated on both judges
-        block
-            real(dp) :: mlp
-            integer  :: lstop_sh
-            mlp = cfg%merge_lp
-            if( mlp > 0.d0 )then
-                lstop_sh = nint(real(params%box_crop,dp)*real(params%smpd_crop,dp)/mlp)
-                write(logfhandle,'(A,F6.1,A,I0,A,I0)') '>>> FLEX_PCA MERGE band cap: ', mlp, &
-                    &' A -> shells 1..', max(2, min(nshell, lstop_sh)), ' of ', nshell
-                call pair_map_ratio(evols, ovols, states%nstates, nshell, R, Rmin, lstop=lstop_sh)
-            else
-                call pair_map_ratio(evols, ovols, states%nstates, nshell, R, Rmin)
-            endif
-        end block
-        ! the DECISION statistic: the mean estimate by default, the conservative halfset minimum
-        ! under EO; ordering in the linkage scan always uses the mean (the better point estimate)
-        Rdec = R
-        if( l_eo ) Rdec = Rmin
-        thresh_eff = r_thresh + rmargin
+        allocate(R(states%nstates,states%nstates), Rmin(states%nstates,states%nstates))
+        call pair_map_ratio(evols, ovols, states%nstates, nshell, R, Rmin)
+        ! The halfset mean decides the merge; the minimum is retained for near-gate diagnostics.
         ! report the ratio distribution even when nothing merges: "no pair reached 0.95" reads the
         ! same whether the closest pair sat at 0.94 or 0.28, and those mean opposite things
         npair = nlive*(nlive-1)/2
@@ -418,10 +360,9 @@ contains
             end do
         end do
         call sort_dp(work, npair)
-        thresh_eff = r_thresh + rmargin
         write(logfhandle,'(A,I0,A,F7.4,A,F7.4,A,F7.4,A,F6.3,A)') &
             &'>>> FLEX_PCA MERGE gate 2 (volume): ',npair,' pairs, disattenuated ratio min=',work(1), &
-            &'  median=',median_of_sorted(work, npair),'  max=',work(npair),'  (merge at ',r_thresh,')'
+            &'  median=',median_of_sorted(work, npair),'  max=',work(npair),'  (merge at ',MERGE_R_DEFAULT,')'
         deallocate(work)
         ! Near-gate visibility: any pair within 0.01 of the gate, or whose halfset estimates
         ! straddle it, makes the delivered K sensitive to epsilon-level perturbation. Say so.
@@ -430,8 +371,8 @@ contains
             if( .not. l_live(s) ) cycle
             do t = s + 1, states%nstates
                 if( .not. l_live(t) ) cycle
-                if( abs(R(s,t) - r_thresh) <= 0.01d0 .or. &
-                   &(R(s,t) >= r_thresh .and. Rmin(s,t) < r_thresh) )then
+                if( abs(R(s,t) - MERGE_R_DEFAULT) <= 0.01d0 .or. &
+                   &(R(s,t) >= MERGE_R_DEFAULT .and. Rmin(s,t) < MERGE_R_DEFAULT) )then
                     nnear = nnear + 1
                     if( nnear <= 5 ) write(logfhandle,'(A,I3,A,I3,A,F7.4,A,F7.4,A)') &
                         &'>>> FLEX_PCA MERGE gate 2 NEAR-GATE: pair ',s,',',t,'  ratio=',R(s,t), &
@@ -445,97 +386,67 @@ contains
         ! ---- AGGLOMERATE ----
         ! COMPLETE linkage: a group merges only if EVERY cross pair clears the threshold — the
         ! transitive closure this replaces let one borderline pair chain unlike groups.
-        ! SIMPLE_COV_MERGE_LINK=single restores the old behaviour.
         allocate(parent(states%nstates))
         do s = 1, states%nstates
             parent(s) = s                              ! parent doubles as the cluster id
         end do
-        nmerge   = 0
-        l_single = cfg%l_merge_link_single
-        if( l_single )then
-            write(logfhandle,'(A)') '>>> FLEX_PCA MERGE gate 2: SINGLE linkage (transitive closure)'
+        nmerge = 0
+        ! greedily merge the qualifying cluster pair with the STRONGEST weakest link, repeat.
+        ! The candidate scan is O(nstates^2) cluster pairs x O(|a|*|b|) cross pairs per merge and
+        ! runs once per merge, so it is threaded over the outer representative. Each thread keeps
+        ! its own best and the winners are combined under a critical section; both the local and
+        ! the combining test break ties on the LOWEST (s,t), so the pair chosen is independent of
+        ! thread count and schedule and matches the serial scan exactly.
+        do
+            rbest = -1.d0; kmin_a = 0; kmin_b = 0
+            !$omp parallel default(shared) private(s,t,u,w,rlink,rloc,aloc,bloc) proc_bind(close)
+            rloc = -1.d0; aloc = 0; bloc = 0
+            !$omp do schedule(dynamic)
             do s = 1, states%nstates - 1
-                if( .not. l_live(s) ) cycle
+                if( parent(s) /= s .or. .not. l_live(s) ) cycle   ! only LIVE cluster representatives
                 do t = s + 1, states%nstates
-                    if( .not. l_live(t) ) cycle
-                    if( Rdec(s,t) >= thresh_eff )then
-                        call uf_union(parent, s, t, nmerge)
-                        write(logfhandle,'(A,I3,A,I3,A,F7.4,A)') '>>> FLEX_PCA MERGE gate 2: states ',s,' + ',t, &
-                            &'  disattenuated ratio=',R(s,t),' -> indistinguishable within their own noise'
-                    endif
-                end do
-            end do
-        else
-            ! greedily merge the qualifying cluster pair with the STRONGEST weakest link, repeat.
-            ! The candidate scan is O(nstates^2) cluster pairs x O(|a|*|b|) cross pairs per merge and
-            ! runs once per merge, so it is threaded over the outer representative. Each thread keeps
-            ! its own best and the winners are combined under a critical section; both the local and
-            ! the combining test break ties on the LOWEST (s,t), so the pair chosen is independent of
-            ! thread count and schedule and matches the serial scan exactly.
-            do
-                rbest = -1.d0; kmin_a = 0; kmin_b = 0
-                !$omp parallel default(shared) private(s,t,u,w,rlink,rqual,rloc,aloc,bloc) proc_bind(close)
-                rloc = -1.d0; aloc = 0; bloc = 0
-                !$omp do schedule(dynamic)
-                do s = 1, states%nstates - 1
-                    if( parent(s) /= s .or. .not. l_live(s) ) cycle   ! only LIVE cluster representatives
-                    do t = s + 1, states%nstates
-                        if( parent(t) /= t .or. .not. l_live(t) ) cycle
-                        ! weakest cross pair between the two clusters: rlink (mean estimate) orders
-                        ! candidates, rqual (decision statistic) qualifies them
-                        rlink = huge(1.d0)
-                        rqual = huge(1.d0)
-                        do u = 1, states%nstates
-                            if( parent(u) /= s ) cycle
-                            do w = 1, states%nstates
-                                if( parent(w) /= t ) cycle
-                                rlink = min(rlink, R(u,w))
-                                rqual = min(rqual, Rdec(u,w))
-                            end do
+                    if( parent(t) /= t .or. .not. l_live(t) ) cycle
+                    rlink = huge(1.d0)
+                    do u = 1, states%nstates
+                        if( parent(u) /= s ) cycle
+                        do w = 1, states%nstates
+                            if( parent(w) /= t ) cycle
+                            rlink = min(rlink, R(u,w))
                         end do
-                        if( rqual >= thresh_eff )then
-                            if( aloc == 0 )then
-                                rloc = rlink; aloc = s; bloc = t
-                            else if( rlink > rloc )then
-                                rloc = rlink; aloc = s; bloc = t
-                            else if( rlink == rloc .and. (s < aloc .or. (s == aloc .and. t < bloc)) )then
-                                rloc = rlink; aloc = s; bloc = t
-                            endif
-                        endif
                     end do
-                end do
-                !$omp end do
-                !$omp critical (flex_pca_merge_best)
-                if( aloc > 0 )then
-                    if( kmin_a == 0 )then
-                        rbest = rloc; kmin_a = aloc; kmin_b = bloc
-                    else if( rloc > rbest )then
-                        rbest = rloc; kmin_a = aloc; kmin_b = bloc
-                    else if( rloc == rbest .and. (aloc < kmin_a .or. &
-                        &(aloc == kmin_a .and. bloc < kmin_b)) )then
-                        rbest = rloc; kmin_a = aloc; kmin_b = bloc
+                    if( rlink >= MERGE_R_DEFAULT )then
+                        if( aloc == 0 )then
+                            rloc = rlink; aloc = s; bloc = t
+                        else if( rlink > rloc )then
+                            rloc = rlink; aloc = s; bloc = t
+                        else if( rlink == rloc .and. (s < aloc .or. (s == aloc .and. t < bloc)) )then
+                            rloc = rlink; aloc = s; bloc = t
+                        endif
                     endif
-                endif
-                !$omp end critical (flex_pca_merge_best)
-                !$omp end parallel
-                if( kmin_a < 1 ) exit
-                do u = 1, states%nstates                      ! fold b's members into a
-                    if( parent(u) == kmin_b ) parent(u) = kmin_a
                 end do
-                nmerge = nmerge + 1
-                write(logfhandle,'(A,I3,A,I3,A,F7.4,A)') '>>> FLEX_PCA MERGE gate 2: states ',kmin_a, &
-                    &' + ',kmin_b,'  weakest cross ratio=',rbest,' -> indistinguishable within their own noise'
             end do
-        endif
-        ! SIMPLE_COV_AUTO_K > 0 makes the merge a map-space duplicate fuse only: gate 2 decides, gate 1 reports
-        ! but never folds, since its view-independence premise fails for a compositional mixture
-        akv = cfg%auto_k
-        if( akv > 0.d0 )then
-            if( count(view_bad) > 0 ) write(logfhandle,'(A,I0,A)') &
-                &'>>> FLEX_PCA MERGE gate 1: AUTO-K active -- ', count(view_bad), &
-                &' view-clustered states REPORTED only, not folded'
-            view_bad = .false.
-        endif
+            !$omp end do
+            !$omp critical (flex_pca_merge_best)
+            if( aloc > 0 )then
+                if( kmin_a == 0 )then
+                    rbest = rloc; kmin_a = aloc; kmin_b = bloc
+                else if( rloc > rbest )then
+                    rbest = rloc; kmin_a = aloc; kmin_b = bloc
+                else if( rloc == rbest .and. (aloc < kmin_a .or. &
+                    &(aloc == kmin_a .and. bloc < kmin_b)) )then
+                    rbest = rloc; kmin_a = aloc; kmin_b = bloc
+                endif
+            endif
+            !$omp end critical (flex_pca_merge_best)
+            !$omp end parallel
+            if( kmin_a < 1 ) exit
+            do u = 1, states%nstates                      ! fold b's members into a
+                if( parent(u) == kmin_b ) parent(u) = kmin_a
+            end do
+            nmerge = nmerge + 1
+            write(logfhandle,'(A,I3,A,I3,A,F7.4,A)') '>>> FLEX_PCA MERGE gate 2: states ',kmin_a, &
+                &' + ',kmin_b,'  weakest cross ratio=',rbest,' -> indistinguishable within their own noise'
+        end do
         ! fold each view-contaminated state into the state its map most resembles, rather than
         ! deleting it, so its particles keep contributing somewhere
         do s = 1, states%nstates
@@ -580,7 +491,7 @@ contains
         do s = 1, states%nstates
             call evols(s)%kill; call ovols(s)%kill
         end do
-        deallocate(evols, ovols, chi2, neff, effsz, view_bad, R, parent, remap, mass, l_live)
+        deallocate(evols, ovols, chi2, neff, effsz, view_bad, R, Rmin, parent, remap, mass, l_live)
     end subroutine two_gate_state_merge
 
     !> Ascending insertion sort. n is the state count, so the O(n^2) is irrelevant and this avoids

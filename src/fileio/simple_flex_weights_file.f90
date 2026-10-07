@@ -14,7 +14,6 @@ public :: flex_weights_header
 public :: flex_weights_init_header, flex_weights_read_header, flex_weights_create_candidate
 public :: flex_weights_write_rows, flex_weights_read_rows
 public :: flex_weights_write_scalars, flex_weights_read_scalars
-public :: flex_weights_write_local_range, flex_weights_read_local_range
 public :: flex_weights_validate_file, flex_weights_publish
 public :: FLEX_WEIGHTS_FBODY, FLEX_WEIGHTS_EXT
 public :: FLEX_WEIGHTS_KIND_PARTITION, FLEX_WEIGHTS_KIND_KERNEL
@@ -26,8 +25,6 @@ public :: FLEX_WEIGHTS_SCALAR_BW, FLEX_WEIGHTS_SCALAR_NFIELDS
 character(len=*),  parameter :: FLEX_WEIGHTS_FBODY = 'flex_weights_state_'
 character(len=*),  parameter :: FLEX_WEIGHTS_EXT   = '.bin'
 character(len=16), parameter :: STATE_MAGIC = 'SIMPLE_FLEXW_V02'
-character(len=16), parameter :: RANGE_MAGIC = 'SIMPLE_FXW_RNG_2'
-
 integer(int32), parameter :: FLEX_WEIGHTS_VERSION = 2_int32
 !> across the files of one delivery every assigned row sums to one: responsibilities, regions, hard labels
 integer(int32), parameter :: FLEX_WEIGHTS_KIND_PARTITION = 1_int32
@@ -46,9 +43,7 @@ integer, parameter :: FLEX_WEIGHTS_SCALAR_BW      = 4
 integer, parameter :: FLEX_WEIGHTS_SCALAR_NFIELDS = 4
 
 integer(int64), parameter :: STATE_HEADER_BYTES = 512_int64
-integer(int64), parameter :: RANGE_HEADER_BYTES = 256_int64
 integer, parameter :: STATE_NWORDS = 32
-integer, parameter :: RANGE_NWORDS = 16
 integer(int64), parameter :: FNV_OFFSET = int(z'CBF29CE484222325', int64)
 integer(int64), parameter :: FNV_PRIME  = int(z'00000100000001B3', int64)
 
@@ -57,10 +52,6 @@ integer, parameter :: W_STATE_INDEX=6, W_NCOMP=7, W_KIND=8, W_PROVENANCE=9, W_GE
 integer, parameter :: W_STATE=11, W_LAYOUT_DIGEST=12, W_BOX=13, W_SMPD_BITS=14, W_BOX_CROP=15
 integer, parameter :: W_SMPD_CROP_BITS=16, W_SCALAR_OFFSET=17, W_WEIGHT_OFFSET=18, W_FLAG_OFFSET=19
 integer, parameter :: W_FILE_BYTES=20, W_SCALAR_CHECKSUM=21, W_HEADER_CHECKSUM=32
-
-integer, parameter :: RW_VERSION=1, RW_HEADER_BYTES=2, RW_STATE_INDEX=3, RW_FIRST=4, RW_LAST=5
-integer, parameter :: RW_GENERATION=6, RW_LAYOUT_DIGEST=7, RW_WEIGHT_OFFSET=8, RW_FLAG_OFFSET=9
-integer, parameter :: RW_FILE_BYTES=10, RW_HEADER_CHECKSUM=16
 
 type :: flex_weights_header
     integer(int32) :: version         = FLEX_WEIGHTS_VERSION
@@ -585,122 +576,6 @@ contains
         status = io_stat
         if( status /= 0 ) message = 'cannot sync flex weights directory'
     end subroutine flex_weights_publish
-
-    !> One worker's exclusive row range of one state for the update that commits `generation`
-    subroutine flex_weights_write_local_range(path, generation, layout_digest, state_index, first_row, &
-        &weights, flags, status, message)
-        character(len=*), intent(in)  :: path
-        integer(int64),   intent(in)  :: generation, layout_digest
-        integer,          intent(in)  :: state_index, first_row
-        real(real32),     intent(in)  :: weights(:)
-        integer(int32),   intent(in)  :: flags(:)
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        integer(int64) :: words(RANGE_NWORDS), weight_offset, flag_offset, file_bytes
-        integer :: funit, io_stat, nrows, last_row
-        status = 0
-        message = ''
-        nrows    = size(weights)
-        last_row = first_row + nrows - 1
-        if( first_row < 1 .or. nrows < 1 .or. state_index < 1 .or. size(flags) /= nrows )then
-            status = 1; message = 'invalid local flex weights range'; return
-        endif
-        if( file_exists(path) )then
-            status = 1; message = 'local flex weights range file already exists'; return
-        endif
-        weight_offset = RANGE_HEADER_BYTES + 1_int64
-        flag_offset   = weight_offset + int(nrows,int64)*4_int64
-        file_bytes    = flag_offset + int(nrows,int64)*4_int64 - 1_int64
-        words = 0_int64
-        words(RW_VERSION)         = int(FLEX_WEIGHTS_VERSION,int64)
-        words(RW_HEADER_BYTES)    = RANGE_HEADER_BYTES
-        words(RW_STATE_INDEX)     = int(state_index,int64)
-        words(RW_FIRST)           = int(first_row,int64)
-        words(RW_LAST)            = int(last_row,int64)
-        words(RW_GENERATION)      = generation
-        words(RW_LAYOUT_DIGEST)   = layout_digest
-        words(RW_WEIGHT_OFFSET)   = weight_offset
-        words(RW_FLAG_OFFSET)     = flag_offset
-        words(RW_FILE_BYTES)      = file_bytes
-        words(RW_HEADER_CHECKSUM) = checksum_words(words(:RW_HEADER_CHECKSUM-1))
-        open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
-            &status='new', action='readwrite', iostat=io_stat)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot create local flex weights range file'; return
-        endif
-        write(funit, pos=1, iostat=io_stat) RANGE_MAGIC
-        if( io_stat == 0 ) write(funit, pos=17, iostat=io_stat) words
-        if( io_stat == 0 ) write(funit, pos=weight_offset, iostat=io_stat) weights
-        if( io_stat == 0 ) write(funit, pos=flag_offset, iostat=io_stat) flags
-        flush(funit)
-        close(funit)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot write local flex weights range file'; return
-        endif
-        call simple_sync_file(path, io_stat)
-        status = io_stat
-        if( status /= 0 ) message = 'cannot sync local flex weights range file'
-    end subroutine flex_weights_write_local_range
-
-    subroutine flex_weights_read_local_range(path, generation, layout_digest, state_index, first_row, last_row, &
-        &weights, flags, status, message)
-        character(len=*), intent(in)  :: path
-        integer(int64),   intent(out) :: generation, layout_digest
-        integer,          intent(out) :: state_index, first_row, last_row
-        real(real32),   allocatable, intent(out) :: weights(:)
-        integer(int32), allocatable, intent(out) :: flags(:)
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        character(len=16) :: magic
-        integer(int64) :: words(RANGE_NWORDS), actual_bytes, expected_flag_offset, expected_file_bytes
-        integer :: funit, io_stat, nrows
-        status = 0
-        message = ''
-        generation = 0_int64; layout_digest = 0_int64
-        state_index = 0; first_row = 0; last_row = -1
-        if( .not. file_exists(path) )then
-            status = 1; message = 'local flex weights range file does not exist'; return
-        endif
-        open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
-            &status='old', action='read', iostat=io_stat)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot open local flex weights range file'; return
-        endif
-        read(funit, pos=1, iostat=io_stat) magic
-        if( io_stat == 0 ) read(funit, pos=17, iostat=io_stat) words
-        if( io_stat /= 0 )then
-            close(funit)
-            status = io_stat; message = 'cannot read local flex weights range header'; return
-        endif
-        if( magic /= RANGE_MAGIC .or. words(RW_VERSION) /= FLEX_WEIGHTS_VERSION .or. &
-            &words(RW_HEADER_BYTES) /= RANGE_HEADER_BYTES )then
-            close(funit); status = 1; message = 'invalid local flex weights range header'; return
-        endif
-        if( checksum_words(words(:RW_HEADER_CHECKSUM-1)) /= words(RW_HEADER_CHECKSUM) )then
-            close(funit); status = 1; message = 'invalid local flex weights range header checksum'; return
-        endif
-        state_index = int(words(RW_STATE_INDEX))
-        first_row   = int(words(RW_FIRST)); last_row = int(words(RW_LAST))
-        generation  = words(RW_GENERATION); layout_digest = words(RW_LAYOUT_DIGEST)
-        nrows = last_row-first_row+1
-        inquire(file=trim(path), size=actual_bytes, iostat=io_stat)
-        expected_flag_offset = RANGE_HEADER_BYTES + 1_int64 + int(nrows,int64)*4_int64
-        expected_file_bytes  = expected_flag_offset + int(nrows,int64)*4_int64 - 1_int64
-        if( io_stat /= 0 .or. actual_bytes /= words(RW_FILE_BYTES) .or. nrows < 1 .or. first_row < 1 .or. &
-            &state_index < 1 .or. words(RW_WEIGHT_OFFSET) /= RANGE_HEADER_BYTES+1_int64 .or. &
-            &words(RW_FLAG_OFFSET) /= expected_flag_offset .or. &
-            &words(RW_FILE_BYTES) /= expected_file_bytes .or. generation < 1_int64 .or. &
-            &layout_digest == 0_int64 )then
-            close(funit); status = 1; message = 'invalid local flex weights range layout'; return
-        endif
-        allocate(weights(nrows), flags(nrows))
-        read(funit, pos=words(RW_WEIGHT_OFFSET), iostat=io_stat) weights
-        if( io_stat == 0 ) read(funit, pos=words(RW_FLAG_OFFSET), iostat=io_stat) flags
-        close(funit)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot read local flex weights range data'; return
-        endif
-    end subroutine flex_weights_read_local_range
 
     ! ---- FNV-1a helpers, the same hash the sigma2 store uses (kept private there) ----
 

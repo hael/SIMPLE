@@ -3,36 +3,35 @@
 !! half-fits every iteration. Its only consumer is the SSNR/tau^2 ridge (crossfsc_to_invtau2);
 !! `paired`, `khi_shared`, `march_on` (always 0) and `s_stop` stay in the layout as file-format fields.
 module simple_flex_pca_crossfsc
-use simple_core_module_api
+use simple_core_module_api, only: del_file, dp, fclose, file_exists, fileiochk, find, fopen, logfhandle, &
+    &simple_exception, simple_rename, string, tiny
 use simple_flex_reconstructor_latent_ops, only: pair_index
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: crossfsc_record, crossfsc_file
-public :: crossfsc_load, crossfsc_write, crossfsc_append, crossfsc_latest_upto
-public :: crossfsc_kill, crossfsc_kill_record
 public :: crossfsc_to_invtau2, crossfsc_harvest_h, crossfsc_stop_stat
 public :: crossfsc_inband_mean, crossfsc_khi_deepest
 public :: COV_XFSC_FNAME
 
-character(len=8), parameter :: COV_XFSC_MAGIC   = 'SIMPLFXF'
-integer,          parameter :: COV_XFSC_VERSION = 1
+character(len=8), parameter :: COV_XFSC_MAGIC        = 'SIMPLFXF'
+integer,          parameter :: COV_XFSC_VERSION      = 1
 character(len=*), parameter :: COV_XFSC_FNAME        = 'flex_pca_crossfsc.bin'
 character(len=*), parameter :: COV_XFSC_SERIES_FNAME = 'flex_pca_crossfsc_series.txt'
 !> per-shell sampling below this is a dead shell, matching add_invtausq2rho's rsum floor
-real(dp),         parameter :: COV_XFSC_H_FLOOR = 1.0d-10
+real(dp),         parameter :: COV_XFSC_H_FLOOR      = 1.0d-10
 
 !> One per-iteration record (layout COV_XFSC_VERSION). Unmatched components appear in the per-fit
 !! blocks (fsc_int/h/eigvals) but not in the matched blocks (match_*/fsc_cross).
 type crossfsc_record
-    integer :: it_eff     = 0   !< global iteration stamp (never a worker-local counter)
+    integer :: it_eff     = 0                !< global iteration stamp (never a worker-local counter)
     integer :: ncomp_a    = 0, ncomp_b = 0   !< per-fit delivered ranks
-    integer :: kmatch     = 0   !< number of matched pairs
+    integer :: kmatch     = 0                !< number of matched pairs
     integer :: khi_a      = 0, khi_b = 0     !< each fit's internal-FSC band (deepest-crossing criterion)
-    integer :: khi_shared = 0   !< the shared band in force (written as khi_full)
-    integer :: reg_mode   = 0   !< the ridge arm ACTIVE this iteration (0 when degraded)
-    integer :: march_on   = 0   !< band-marching flag, written as 0
+    integer :: khi_shared = 0                !< the shared band in force (written as khi_full)
+    integer :: reg_mode   = 0                !< the ridge arm ACTIVE this iteration (0 when degraded)
+    integer :: march_on   = 0                !< band-marching flag, written as 0
     integer,  allocatable :: match_a(:), match_b(:)  !< signed-permutation pairing (component indices)
     integer,  allocatable :: match_sign(:)           !< +1/-1
     real,     allocatable :: match_cos(:)            !< |cosine| of each matched pair
@@ -44,6 +43,8 @@ type crossfsc_record
     integer,  allocatable :: cnt(:)                  !< (filtsz) shared per-shell voxel counts
     real(dp), allocatable :: eigvals_a(:), eigvals_b(:)  !< latent variances (amplitude diagnostic)
     real(dp) :: s_stop = 0.d0   !< stopping statistic S(t) at khi_cmp, precomputed
+  contains
+    procedure :: kill => crossfsc_kill_record
 end type crossfsc_record
 
 !> The artifact: file header + all records so far. Full rewrite per iteration (status='replace',
@@ -59,6 +60,12 @@ type crossfsc_file
     integer :: khi_cmp    = 0   !< FIXED comparison band, frozen at first record
     integer :: nrec       = 0
     type(crossfsc_record), allocatable :: recs(:)
+  contains
+    procedure :: load        => crossfsc_load
+    procedure :: write       => crossfsc_write
+    procedure :: append      => crossfsc_append
+    procedure :: latest_upto => crossfsc_latest_upto
+    procedure :: kill        => crossfsc_kill
 end type crossfsc_file
 
 contains
@@ -68,11 +75,11 @@ contains
     !> Load flex_pca_crossfsc.bin from the working directory. found=.false. when absent (fresh run).
     !! Hard-fails on magic and version mismatch: any layout change bumps COV_XFSC_VERSION.
     subroutine crossfsc_load( self, found )
-        type(crossfsc_file), intent(inout) :: self
+        class(crossfsc_file), intent(inout) :: self
         logical,             intent(out)   :: found
         character(len=len(COV_XFSC_MAGIC)) :: magic
         integer :: funit, io_stat, ver, irec
-        call crossfsc_kill(self)
+        call self%kill
         found = .false.
         if( .not. file_exists(string(COV_XFSC_FNAME)) ) return
         call fopen(funit, file=string(COV_XFSC_FNAME), access='STREAM', action='READ', &
@@ -103,7 +110,7 @@ contains
         integer,               intent(in)    :: funit, filtsz
         type(crossfsc_record), intent(inout) :: rec
         integer :: io_stat
-        call crossfsc_kill_record(rec)
+        call rec%kill
         read(funit, iostat=io_stat) rec%it_eff, rec%ncomp_a, rec%ncomp_b, rec%kmatch, &
             &rec%khi_a, rec%khi_b, rec%khi_shared, rec%reg_mode, rec%march_on
         call fileiochk('crossfsc read_record; scalars', io_stat)
@@ -144,7 +151,7 @@ contains
     !> Full rewrite of the artifact (all records so far) + the human-greppable series mirror.
     !! Write-to-tmp-and-rename, so a reader never sees a torn file (the part-file idiom).
     subroutine crossfsc_write( self )
-        type(crossfsc_file), intent(in) :: self
+        class(crossfsc_file), intent(in) :: self
         type(string) :: fname, tmp_fname
         integer :: funit, io_stat, irec
         fname     = string(COV_XFSC_FNAME)
@@ -226,7 +233,7 @@ contains
     !! it_eff >= the new stamp are dropped first (a re-run over an existing artifact replaces
     !! from its own first iteration on, which is what makes the full-rewrite restart-complete).
     subroutine crossfsc_append( self, rec )
-        type(crossfsc_file),   intent(inout) :: self
+        class(crossfsc_file),  intent(inout) :: self
         type(crossfsc_record), intent(in)    :: rec
         type(crossfsc_record), allocatable   :: tmp(:)
         integer :: nkeep, irec
@@ -245,7 +252,7 @@ contains
         tmp(nkeep+1) = rec
         if( allocated(self%recs) )then
             do irec = 1, size(self%recs)
-                call crossfsc_kill_record(self%recs(irec))
+                call self%recs(irec)%kill
             end do
             deallocate(self%recs)
         endif
@@ -256,7 +263,7 @@ contains
     !> Index of the latest record with it_eff <= it (the timing rule: iteration t may
     !! consume only records stamped <= t-1, so callers pass it = t-1). 0 when none qualifies.
     integer function crossfsc_latest_upto( self, it ) result( irec )
-        type(crossfsc_file), intent(in) :: self
+        class(crossfsc_file), intent(in) :: self
         integer,             intent(in) :: it
         integer :: i
         irec = 0
@@ -266,7 +273,7 @@ contains
     end function crossfsc_latest_upto
 
     subroutine crossfsc_kill_record( rec )
-        type(crossfsc_record), intent(inout) :: rec
+        class(crossfsc_record), intent(inout) :: rec
         if( allocated(rec%match_a)    ) deallocate(rec%match_a, rec%match_b, rec%match_sign)
         if( allocated(rec%match_cos)  ) deallocate(rec%match_cos)
         if( allocated(rec%fsc_cross)  ) deallocate(rec%fsc_cross)
@@ -283,11 +290,11 @@ contains
     end subroutine crossfsc_kill_record
 
     subroutine crossfsc_kill( self )
-        type(crossfsc_file), intent(inout) :: self
+        class(crossfsc_file), intent(inout) :: self
         integer :: irec
         if( allocated(self%recs) )then
             do irec = 1, size(self%recs)
-                call crossfsc_kill_record(self%recs(irec))
+                call self%recs(irec)%kill
             end do
             deallocate(self%recs)
         endif

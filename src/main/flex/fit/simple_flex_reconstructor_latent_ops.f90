@@ -1,13 +1,17 @@
 !@descr: flex_pca projection-aware latent model: Fourier projection/backprojection helpers, particle prep, the coupled M-step solve
 module simple_flex_reconstructor_latent_ops
-use simple_flex_pca_plane_cache, only: plane_cache_fill
-use simple_core_module_api
-use simple_reconstructor, only: reconstructor
-use simple_builder,          only: builder
-use simple_image,            only: image
-use simple_linalg,           only: eigsrt, jacobi
-use simple_memoize_ft_maps,  only: memoize_ft_maps
-use simple_parameters,       only: parameters
+!$ use omp_lib, only: omp_get_thread_num
+use simple_flex_pca_planes,      only: flex_plane_store
+use simple_core_module_api, only: cmplx_zero, ctfparams, dcmplx_zero, dp, dtiny, eigsrt, fdim, fplane_type, jacobi, &
+    &kbalpha, kbinterpol, kbwinsz, nthr_glob, ori, osmpl_pad_fac, simple_exception, sp, sym, tic, timer_int_kind, &
+    &tiny, toc
+use simple_reconstructor,        only: reconstructor
+use simple_builder,              only: builder
+use simple_image,                only: image
+use simple_linalg,               only: eigsrt, jacobi, solve_real_spd_complex
+use simple_matcher_ptcl_io,      only: discrete_read_imgbatch
+use simple_memoize_ft_maps,      only: memoize_ft_maps
+use simple_parameters,           only: parameters
 implicit none
 
 public :: insert_planes_oversamp_multi_scaled_batch
@@ -17,15 +21,15 @@ public :: project_fplane_mean, project_fplanes_mean_basis
 !! weight normalisation as the Cartesian projector or the two paths cannot be compared
 public :: latent_projection_weights, weighted_expanded_cmat, LATENT_WDIM
 !> the projection-aware latent model (merged from simple_flex_projected_latent_model)
-public :: prep_imgs4projected_model, solve_coupled_basis_exp, projected_model_kfromto
+public :: planes_batch_load, prep_imgs4projected_model, solve_coupled_basis_exp, projected_model_kfromto
 public :: add_invtausq2rho_coupled, pair_index
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: LATENT_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
+integer, parameter :: LATENT_WDIM        = 2 * ceiling(KBWINSZ - 0.5) + 1
 ! cmat_exp stores h>=0 as the independent Friedel half; h<0 is only
 ! interpolation halo and must not receive independent projection samples.
-integer, parameter :: NONREDUNDANT_HMIN = 0
+integer, parameter :: NONREDUNDANT_HMIN  = 0
 ! Source h-lines in one OpenMP colour must map to non-overlapping 3-D
 ! interpolation windows for every rotation. A separation of LATENT_WDIM in
 ! the source plane is not sufficient after rotation; sqrt(3)*LATENT_WDIM
@@ -34,7 +38,7 @@ integer, parameter :: NONREDUNDANT_HMIN = 0
 integer, parameter :: LATENT_SAFE_STRIDE = ceiling(sqrt(3.0) * real(LATENT_WDIM))
 
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_REL = 1.0d-8
-real(dp), parameter :: COUPLED_DENSITY_FLOOR = 1.0d-6
+real(dp), parameter :: COUPLED_DENSITY_FLOOR   = 1.0d-6
 
 contains
 
@@ -228,7 +232,6 @@ contains
         end subroutine kb_apod_vecs_3d_fast_b
 
     end subroutine insert_planes_oversamp_multi_scaled_batch
-
 
     subroutine insert_planes_oversamp_coupled_batch_scaled( recs, rho_cross_exp, se, orientations, fpls, &
         &data_scales, density_scales, valid, nrecords )
@@ -827,61 +830,35 @@ contains
         !$omp end parallel do
     end subroutine add_invtausq2rho_coupled
 
-    subroutine solve_real_spd_complex( amat_in, rhs, sol, n, flag )
-        integer,     intent(in)  :: n
-        real(dp),    intent(in)  :: amat_in(n,n)
-        complex(dp), intent(in)  :: rhs(n)
-        complex(dp), intent(out) :: sol(n)
-        integer,     intent(out) :: flag
-        real(dp) :: chol(n,n), yr(n), yi(n), xr(n), xi(n)
-        real(dp) :: sumr, sumi, sumv, tol
-        integer  :: i, j, l
-        flag = 0
-        sol  = DCMPLX_ZERO
-        chol = 0.d0
-        tol  = max(DTINY, epsilon(1.d0) * max(1.d0, maxval(abs(amat_in))))
-        do j = 1, n
-            sumv = amat_in(j,j)
-            do l = 1, j - 1
-                sumv = sumv - chol(j,l) * chol(j,l)
-            end do
-            if( sumv <= tol )then
-                flag = 1
-                return
-            endif
-            chol(j,j) = sqrt(sumv)
-            do i = j + 1, n
-                sumv = amat_in(i,j)
-                do l = 1, j - 1
-                    sumv = sumv - chol(i,l) * chol(j,l)
-                end do
-                chol(i,j) = sumv / chol(j,j)
-            end do
-        end do
-        do i = 1, n
-            sumr = real(rhs(i), dp)
-            sumi = aimag(rhs(i))
-            do l = 1, i - 1
-                sumr = sumr - chol(i,l) * yr(l)
-                sumi = sumi - chol(i,l) * yi(l)
-            end do
-            yr(i) = sumr / chol(i,i)
-            yi(i) = sumi / chol(i,i)
-        end do
-        do i = n, 1, -1
-            sumr = yr(i)
-            sumi = yi(i)
-            do l = i + 1, n
-                sumr = sumr - chol(l,i) * xr(l)
-                sumi = sumi - chol(l,i) * xi(l)
-            end do
-            xr(i) = sumr / chol(i,i)
-            xi(i) = sumi / chol(i,i)
-        end do
-        do i = 1, n
-            sol(i) = cmplx(xr(i), xi(i), kind=dp)
-        end do
-    end subroutine solve_real_spd_complex
+    !> Serve a batch from the resident store when possible; otherwise read, prepare and retain it.
+    subroutine planes_batch_load( plane_store, params, build, n, pinds, batchlims, fpls, mskrad, cached, sec_read, sec_prep )
+        class(flex_plane_store),        intent(inout) :: plane_store
+        class(parameters),              intent(in)    :: params
+        class(builder),                 intent(inout) :: build
+        integer,                        intent(in)    :: n, pinds(n), batchlims(2)
+        type(fplane_type),              intent(inout) :: fpls(:)
+        real,                           intent(in)    :: mskrad
+        logical,                        intent(in)    :: cached
+        real(timer_int_kind), optional, intent(inout) :: sec_read, sec_prep
+        integer(timer_int_kind) :: t
+        integer :: batchsz
+        logical :: found
+        batchsz = batchlims(2) - batchlims(1) + 1
+        call plane_store%fetch(pinds(batchlims(1):batchlims(2)), fpls(:batchsz), cached, found, sec_read)
+        if( found ) return
+        t = tic()
+        if( cached )then
+            call plane_store%read_cache_batch(params, n, pinds, batchlims)
+        else
+            call discrete_read_imgbatch(params, build, n, pinds, batchlims)
+        endif
+        if( present(sec_read) ) sec_read = sec_read + toc(t)
+        t = tic()
+        call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
+            &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=mskrad, cached=cached, plane_store=plane_store)
+        if( present(sec_prep) ) sec_prep = sec_prep + toc(t)
+        call plane_store%store(pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+    end subroutine planes_batch_load
 
     !!  mskrad (optional, pixels at params%box): when present the particle is soft-masked to
     !!  that radius after noise normalization instead of edge-tapered. This is SIMPLE's
@@ -892,7 +869,7 @@ contains
     !!  noise in every per-image inner product drops by roughly the same factor. Left absent
     !!  the behaviour is exactly as before.
     subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, &
-        &mskrad, cached )
+        &mskrad, cached, plane_store )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls
@@ -901,6 +878,7 @@ contains
         type(fplane_type), intent(inout) :: fplanes(nptcls)
         real,              intent(in)    :: mskrad
         logical, optional, intent(in)    :: cached      !< serve reads from the downscaled cache
+        class(flex_plane_store), optional, intent(in) :: plane_store
         type(ctfparams) :: ctfparms(nthr_glob)
         real    :: shift(2), crop_factor
         integer :: iptcl, i, ithr, kfromto(2)
@@ -908,6 +886,9 @@ contains
         l_mask = mskrad > 0.0
         l_cached = .false.
         if( present(cached) ) l_cached = cached
+        if( l_cached .and. .not. present(plane_store) )then
+            THROW_HARD('cached particle preparation requested without its plane store')
+        endif
         ! A cache entry is the noise-normalised, Fourier-cropped particle at box_crop. That prefix
         ! is equivalent to the full-box path only for the TAPER variant, which is the one
         ! prep_imgs4rec certified: norm_noise_mask_pad_fft has no renorm= switch, so a masked run
@@ -920,7 +901,7 @@ contains
         else
             call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
         endif
-        kfromto = projected_model_kfromto(params)
+        kfromto = projected_model_kfromto(params%box_crop, params%smpd_crop, params%lp)
         if( l_cached ) kfromto(2) = min(kfromto(2), params%box_crop/2)
         crop_factor = real(params%box_crop) / real(params%box)
         !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
@@ -932,7 +913,7 @@ contains
             else if( l_cached )then
                 ! the plane cache holds the full-box prep's padded transform on this grid: load it
                 ! as the heap image's transform and continue exactly as the full-box path does
-                call plane_cache_fill(i, build%img_pad_heap(ithr))
+                call plane_store%fill_cached_image(i, build%img_pad_heap(ithr))
             else
                 call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
             endif
@@ -972,16 +953,17 @@ contains
         if( fpl%nyq > 0 ) fpl%nyq = min(fpl%nyq, nyq_eff)
     end subroutine cap_fplane_for_projected_model
 
-    function projected_model_kfromto( params ) result( kfromto )
-        class(parameters), intent(in) :: params
+    function projected_model_kfromto( box_crop, smpd_crop, lp ) result( kfromto )
+        integer, intent(in) :: box_crop
+        real,    intent(in) :: smpd_crop, lp
         integer :: kfromto(2), kto_full
         real    :: dstep_crop
-        kto_full = max(1, fdim(params%box_crop) - 1)
+        kto_full = max(1, fdim(box_crop) - 1)
         kfromto(1) = 1
         kfromto(2) = kto_full
-        if( params%lp > 2.0 * params%smpd_crop + TINY )then
-            dstep_crop = real(max(1, params%box_crop - 1)) * params%smpd_crop
-            kfromto(2) = max(1, min(kto_full, int(dstep_crop / params%lp)))
+        if( lp > 2.0 * smpd_crop + TINY )then
+            dstep_crop = real(max(1, box_crop - 1)) * smpd_crop
+            kfromto(2) = max(1, min(kto_full, int(dstep_crop / lp)))
         endif
     end function projected_model_kfromto
 

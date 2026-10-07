@@ -1,6 +1,8 @@
 !@descr: projection-aware covariance heterogeneity commander
 module simple_commanders_flex_pca
-use simple_commanders_api
+use simple_commanders_api, only: autoscale, builder, cmdline, commander_base, fdim, file_exists, &
+    &logfhandle, nthr_glob, OBJFUN_EUCLID, parameters, simple_end, simple_exception, sp_project, &
+    &simple_abspath, STDLEN, string
 implicit none
 
 #include "simple_local_flags.inc"

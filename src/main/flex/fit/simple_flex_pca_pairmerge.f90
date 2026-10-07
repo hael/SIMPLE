@@ -4,33 +4,30 @@
 !! summed, the cross-fit-FSC ridge is added with the summed H, and one joint coupled solve runs;
 !! deflation, orthonormalisation and a gauge fix to A's frame follow.
 module simple_flex_pca_pairmerge
-use simple_core_module_api
-use simple_flex_pca_records, only: flex_fit_model
-use simple_builder, only: builder
-use simple_image, only: image
-use simple_parameters, only: parameters
-use simple_reconstructor, only: reconstructor
-use simple_gridding, only: prep3D_inv_kbenvelope4mul
-use simple_linalg, only: jacobi, eigsrt
-use simple_flex_pca_crossfsc, only: crossfsc_to_invtau2, crossfsc_harvest_h, crossfsc_inband_mean
-use simple_flex_reconstructor_latent_ops, only: pair_index, solve_coupled_basis_exp, add_invtausq2rho_coupled
-use simple_flex_pca_pcg, only: flex_pcg_outcome_t, flex_window_apply, flex_pcg_install_window
-use simple_flex_pca_mstep, only: init_basis_reconstructor
-use simple_flex_pca_basis, only: save_probe_state, covariance_kfromto, orthonormalize_representatives,&
+use simple_core_module_api, only: del_file, dp, dtiny, eigsrt, fdim, file_exists, int2str_pad, jacobi, logfhandle, &
+    &mode, mrc_ext, simple_exception, string, tiny
+use simple_flex_pca_records,              only: flex_fit_model
+use simple_builder,                       only: builder
+use simple_image,                         only: image
+use simple_parameters,                    only: parameters
+use simple_reconstructor,                 only: reconstructor
+use simple_gridding,                      only: prep3D_inv_kbenvelope4mul
+use simple_linalg,                        only: jacobi, eigsrt
+use simple_flex_pca_crossfsc,             only: crossfsc_to_invtau2, crossfsc_harvest_h, crossfsc_inband_mean
+use simple_flex_reconstructor_latent_ops, only: pair_index, solve_coupled_basis_exp, add_invtausq2rho_coupled, &
+    &projected_model_kfromto
+use simple_flex_pca_pcg,                  only: flex_pcg_outcome_t
+use simple_flex_pca_mstep,                only: init_basis_reconstructor
+use simple_flex_pca_basis,                only: save_probe_state, covariance_kfromto, orthonormalize_representatives, &
     &align_basis_to_reference, basis_recs_from_images
-use simple_flex_pca_util, only: dilation_template
-use simple_flex_probe_fit, only: flex_probe_fit
+use simple_flex_pca_util,                 only: dilation_template
+use simple_flex_pca_artifacts,            only: MERGED_PC_FBODY, MERGED_META, MERGED_EIG_FNAME, PAIRED_MANIFEST
+use simple_flex_probe_fit,                only: flex_probe_fit
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: probe_paired_merge
-
-
-character(len=*), parameter :: MERGED_PC_FBODY  = 'flex_pca_merged_pc'
-character(len=*), parameter :: MERGED_META      = 'flex_pca_probe_merged.txt'
-character(len=*), parameter :: MERGED_EIG_FNAME = 'flex_pca_eigenvalues_merged.txt'
-character(len=*), parameter :: PAIRED_MANIFEST  = 'flex_pca_paired.txt'
 
 contains
 
@@ -39,11 +36,11 @@ contains
     !! cosine with the span where pa_cos >= thr), which sets the axis weights. ok=.false. without stamps.
     subroutine init_deflated_matchcos( imgsA, ncA, imgsB, ncB, pstar, defl_cos, ok, thr, sub_cos, pa_cos )
         use simple_linalg, only: jacobi, eigsrt
-        type(image), intent(in)  :: imgsA(:), imgsB(:)
-        integer,     intent(in)  :: ncA, ncB, pstar(:)
+        type(image),           intent(in)  :: imgsA(:), imgsB(:)
+        integer,               intent(in)  :: ncA, ncB, pstar(:)
         real(dp), allocatable, intent(out) :: defl_cos(:)
-        logical,     intent(out) :: ok
-        real(dp), optional, intent(in) :: thr
+        logical,               intent(out) :: ok
+        real(dp), optional,    intent(in)  :: thr
         real(dp), allocatable, optional, intent(out) :: sub_cos(:), pa_cos(:)
         type(image) :: ivol
         type(string) :: fn
@@ -163,13 +160,13 @@ contains
     !> The merge: consumes the two fits' stashes and delivered state; returns the merged model
     !! and the match cosines, and writes the merged eigenvolumes, meta and manifest lines.
     subroutine probe_paired_merge( params, build, fits, model, m_matchcos )
-        type(flex_fit_model), intent(inout) :: model   !< the merged basis, prior variances, rank and noise level
-        class(parameters),   intent(inout) :: params
-        type(builder),       intent(inout) :: build
-        type(flex_probe_fit),   intent(inout) :: fits(2)
+        type(flex_fit_model),  intent(inout) :: model   !< the merged basis, prior variances, rank and noise level
+        class(parameters),     intent(inout) :: params
+        type(builder),         intent(inout) :: build
+        type(flex_probe_fit),  intent(inout) :: fits(2)
         !> per merged component: the init-deflated subspace cosine (raw A<-B match |cos| when no
         !! it000 stamps exist); the caller turns it into axis weights
-        real(dp), allocatable, intent(out)            :: m_matchcos(:)
+        real(dp), allocatable, intent(out)   :: m_matchcos(:)
         type(reconstructor), allocatable :: Ymrg(:), utilde(:)
         type(image),         allocatable :: realvols(:), utilde_real(:)
         type(image)  :: mstep_gridcorr, imga, imgb
@@ -184,7 +181,7 @@ contains
         real,     pointer     :: rmatp(:,:,:)
         real(dp) :: rdev, gA, gB, paircos
         real     :: lp_m, fmean
-        integer  :: ncm, ncb, npairs_m, es(3), lb(3), nyq, filtsz, klo, kfr(2), khi_m
+        integer  :: ncm, ncb, npairs_m, es(3), lb(3), nyq, filtsz, klo, kfr(2), kfr_pcg(2), khi_m
         integer  :: q, p, d_new, ncA_del, ncB_del
         ! ---- gate-4 pair-algebra self-check: packed R^T rho R vs brute-force dense, K=2 and a
         ! rectangular 3->2 case, deterministic values; THROWs on mismatch ----
@@ -272,7 +269,7 @@ contains
                 end do
                 write(logfhandle,*)
                 call flush(logfhandle)
-                    ! the axis weights use the SUBSPACE cosine (rotation-insensitive, unlike the matched one)
+                ! the axis weights use the SUBSPACE cosine (rotation-insensitive, unlike the matched one)
                 m_matchcos(1:ncm) = scos(1:ncm)
                 deallocate(dcos, scos, pcos)
             else
@@ -308,9 +305,8 @@ contains
             if( .not. (allocated(fits(1)%mstep%mg_kpe) .and. allocated(fits(2)%mstep%mg_kpe)) ) &
                 &THROW_HARD('probe_paired_merge: PCG fits without stashed pair kernels')
             call fits(1)%mstep%pcg%new(params%box_crop, params%smpd_crop, ncm)
-            call fits(1)%mstep%pcg%set_verbose(fits(1)%spec%cfg%pcg_verbose)
-            if( fits(1)%spec%cfg%l_pcg_lambda_set ) call fits(1)%mstep%pcg%set_lambda_relative(fits(1)%spec%cfg%pcg_lambda_rel)
-            call flex_pcg_install_window(fits(1)%mstep%pcg, params)
+            kfr_pcg = projected_model_kfromto(params%box_crop, params%smpd_crop, params%lp)
+            call fits(1)%mstep%env%install_window(fits(1)%mstep%pcg, kfr_pcg(2), params%msk_crop)
             call fits(1)%mstep%pcg%alloc_packed(kpk_m)
             kpk_m = fits(1)%mstep%mg_kpe + fits(1)%mstep%mg_kpo
             call rotate_rho_packed_add(Rm, ncb, ncm, fits(2)%mstep%mg_kpe, kpk_m)
@@ -396,7 +392,7 @@ contains
             if( lp_m > 2.0*params%smpd_crop + TINY )then
                 call realvols(q)%fft; call realvols(q)%bp(0., lp_m); call realvols(q)%ifft
             endif
-            call flex_window_apply(realvols(q), params)
+            call fits(1)%mstep%env%apply(realvols(q), params%box_crop, params%msk_crop)
             call Ymrg(q)%dealloc_rho; call Ymrg(q)%kill
         end do
         call mstep_gridcorr%kill
@@ -457,14 +453,14 @@ contains
     subroutine merged_delivery( fits, mode, mimgs, nm, eigvals_m, sig2_m, &
         &Rm, Mba, sv_ab, pstar, psign, fscq, khi_m )
         type(flex_probe_fit), intent(inout) :: fits(2)
-        integer,           intent(in)    :: mode, nm
-        type(image),       intent(inout) :: mimgs(:)
-        real(dp),          intent(in)    :: eigvals_m(:)
-        real(dp),          intent(in)    :: sig2_m
-        real(dp), optional, intent(in)   :: Rm(:,:), Mba(:,:), sv_ab(:)
-        integer,  optional, intent(in)   :: pstar(:), psign(:)
-        real,     optional, intent(in)   :: fscq(:,:)
-        integer,  optional, intent(in)   :: khi_m
+        integer,              intent(in)    :: mode, nm
+        type(image),          intent(inout) :: mimgs(:)
+        real(dp),             intent(in)    :: eigvals_m(:)
+        real(dp),             intent(in)    :: sig2_m
+        real(dp), optional,   intent(in)    :: Rm(:,:), Mba(:,:), sv_ab(:)
+        integer,  optional,   intent(in)    :: pstar(:), psign(:)
+        real,     optional,   intent(in)    :: fscq(:,:)
+        integer,  optional,   intent(in)    :: khi_m
         integer,  allocatable :: ma(:), mb(:)
         real(dp), allocatable :: mcos_a(:), mcos_b(:)
         integer  :: q, p, u
@@ -526,10 +522,10 @@ contains
     !! matching, factored): my(i) is the y-component matched to x-component i, without
     !! replacement while y-components last, then best-|cos| with replacement.
     subroutine matched_abs_cos( ximgs, nx, yimgs, ny, my, mcos )
-        integer,     intent(in)    :: nx, ny
-        type(image), intent(inout) :: ximgs(:), yimgs(:)
-        integer,  allocatable, intent(out) :: my(:)
-        real(dp), allocatable, intent(out) :: mcos(:)
+        integer,               intent(in)    :: nx, ny
+        type(image),           intent(inout) :: ximgs(:), yimgs(:)
+        integer,  allocatable, intent(out)   :: my(:)
+        real(dp), allocatable, intent(out)   :: mcos(:)
         real,    pointer     :: prx(:,:,:), pry(:,:,:)
         real(dp), allocatable :: cosm(:,:)
         logical,  allocatable :: used_x(:), used_y(:)
@@ -625,8 +621,8 @@ contains
     !! Procrustes frame-rotation precedent (jacobi on M^T M, inverse-sqrt with a 1e-12 floor).
     !! Semi-orthogonal (columns orthonormal) when ncb >= ncm.
     subroutine polar_factor( Mba, ncb, ncm, Rm )
-        integer,  intent(in)  :: ncb, ncm
-        real(dp), intent(in)  :: Mba(ncb,ncm)
+        integer,               intent(in)  :: ncb, ncm
+        real(dp),              intent(in)  :: Mba(ncb,ncm)
         real(dp), allocatable, intent(out) :: Rm(:,:)
         real(dp) :: MtM(ncm,ncm), Vo(ncm,ncm), Wo(ncm,ncm), evo(ncm)
         integer  :: q, nrot
@@ -811,13 +807,13 @@ contains
     end subroutine merge_pair_algebra_selfcheck
 
     !> Mean-shaped deflation of the merged solve output, as fit_iter_finish applies it per fit: vdfl
-    !! consensus shells plus the background and dilation templates (always on here: SIMPLE_COV_DEFLATE_BG
-    !! and _DILATION are not read), modified Gram-Schmidt, then projection out of every merged component.
+    !! consensus shells plus the background and dilation templates, modified Gram-Schmidt, then
+    !! projection out of every merged component.
     subroutine merge_deflate_mean_shaped( params, fit, realvols, nvols )
-        class(parameters), intent(inout) :: params
-        type(flex_probe_fit), intent(in)    :: fit
-        type(image),       intent(inout) :: realvols(:)
-        integer,           intent(in)    :: nvols
+        class(parameters),    intent(inout) :: params
+        type(flex_probe_fit), intent(inout) :: fit
+        type(image),          intent(inout) :: realvols(:)
+        integer,              intent(in)    :: nvols
         type(image), allocatable :: dfl_basis(:)
         type(image) :: mvol_dfl
         real, pointer :: rm_dfl(:,:,:), rv_dfl(:,:,:)
@@ -844,12 +840,12 @@ contains
             call dfl_basis(ndfl_sh+1)%get_rmat_ptr(rm_dfl)
             rm_dfl = 0.
             rm_dfl(1:params%box_crop, 1:params%box_crop, 1:params%box_crop) = 1.
-            call flex_window_apply(dfl_basis(ndfl_sh+1), params)
+            call fit%mstep%env%apply(dfl_basis(ndfl_sh+1), params%box_crop, params%msk_crop)
         endif
         if( l_dfl_dil )then
             call dfl_basis(ndfl)%copy(mvol_dfl)
             call dilation_template(dfl_basis(ndfl), params%box_crop)
-            call flex_window_apply(dfl_basis(ndfl), params)
+            call fit%mstep%env%apply(dfl_basis(ndfl), params%box_crop, params%msk_crop)
         endif
         do idfl = 1, ndfl_sh
             call dfl_basis(idfl)%copy(mvol_dfl)
@@ -865,7 +861,7 @@ contains
                 call dfl_basis(idfl)%fft
                 call dfl_basis(idfl)%bp(res_lo, res_hi, width=1.0)
                 call dfl_basis(idfl)%ifft
-                call flex_window_apply(dfl_basis(idfl), params)
+                call fit%mstep%env%apply(dfl_basis(idfl), params%box_crop, params%msk_crop)
             endif
         end do
         call mvol_dfl%get_rmat_ptr(rv_dfl)

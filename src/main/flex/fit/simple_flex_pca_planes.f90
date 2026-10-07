@@ -1,141 +1,178 @@
-!@descr: flex_pca resident planes: prepped particle Fourier planes kept in memory across E-step passes
-!! Shared-memory runs with the plane cache in use only. planes_batch_load serves a fully held batch by copy
-!! (passes modify planes in place); otherwise it reads+preps and stores rows until 0.25*MemAvailable is used.
+!@descr: flex_pca plane store: application-owned resident planes and disk-cache session
+!! Shared-memory runs retain prepped Fourier planes when the disk cache is in use. Fetches return
+!! a held batch by copy because passes modify planes in place; rows fill 0.25*MemAvailable at most.
 module simple_flex_pca_planes
-use simple_core_module_api
-use simple_builder,                       only: builder
-use simple_parameters,                    only: parameters
-use simple_matcher_ptcl_io,               only: discrete_read_imgbatch
-use simple_flex_pca_plane_cache,          only: plane_cache_read_batch
-use simple_flex_reconstructor_latent_ops, only: prep_imgs4projected_model
+use simple_core_module_api, only: dp, fplane_type, logfhandle, simple_exception, tic, timer_int_kind, toc
+use simple_builder,              only: builder
+use simple_image,                only: image
+use simple_parameters,           only: parameters
+use simple_flex_pca_plane_cache, only: flex_pca_plane_cache
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: planes_enable, planes_kill, planes_batch_load, planes_enabled
+public :: flex_plane_store
 
-type(fplane_type), allocatable :: held(:)        !< by project row; held when cmplx_plane is allocated
-logical  :: l_on         = .false.
-logical  :: l_full       = .false.               !< budget reached: no more rows are stored
-logical  :: l_key_set    = .false.
-logical  :: l_cached_key = .false.               !< read path the held planes came from
-integer  :: nheld        = 0
-integer  :: nserved      = 0                     !< batches served from the store
-integer  :: nprepped     = 0                     !< batches read and prepped
-real(dp) :: gb_held      = 0.d0
-real(dp) :: gb_budget    = 0.d0
+type :: flex_plane_store
+    private
+    type(fplane_type), allocatable :: held(:)        !< by project row; held when cmplx_plane is allocated
+    type(flex_pca_plane_cache), allocatable :: cache
+    logical  :: l_on         = .false.
+    logical  :: l_full       = .false.               !< budget reached: no more rows are stored
+    logical  :: l_key_set    = .false.
+    logical  :: l_cached_key = .false.               !< read path the held planes came from
+    integer  :: nheld        = 0
+    integer  :: nserved      = 0                     !< batches served from the store
+    integer  :: nprepped     = 0                     !< batches read and prepped
+    real(dp) :: gb_held      = 0.d0
+    real(dp) :: gb_budget    = 0.d0
+  contains
+    procedure, public :: ensure_cache      => plane_store_ensure_cache
+    procedure, public :: adopt_cache       => plane_store_adopt_cache
+    procedure, public :: cache_in_use      => plane_store_cache_in_use
+    procedure, public :: read_cache_batch  => plane_store_read_cache_batch
+    procedure, public :: fill_cached_image => plane_store_fill_cached_image
+    procedure, public :: enable            => plane_store_enable
+    procedure, public :: fetch             => plane_store_fetch
+    procedure, public :: store             => plane_store_store
+    procedure, public :: kill              => plane_store_kill
+end type flex_plane_store
 
 contains
 
     !> Turn the store on for a project of nrows particle rows (shared-memory runs only). Only planes on
     !! the box_crop lattice are worth holding, so the store is tied to the plane cache being in use.
-    subroutine planes_enable( nrows, cropped )
+    subroutine plane_store_ensure_cache( self, params, build, pinds, nptcls )
+        class(flex_plane_store), intent(inout) :: self
+        class(parameters),       intent(inout) :: params
+        class(builder),          intent(inout) :: build
+        integer,                 intent(in)    :: pinds(:), nptcls
+        if( .not. allocated(self%cache) ) allocate(self%cache)
+        call self%cache%ensure(params, build, pinds, nptcls)
+    end subroutine plane_store_ensure_cache
+
+    subroutine plane_store_adopt_cache( self, params, build, pinds, nptcls )
+        class(flex_plane_store), intent(inout) :: self
+        class(parameters),       intent(in)    :: params
+        class(builder),          intent(inout) :: build
+        integer,                 intent(in)    :: pinds(:), nptcls
+        if( .not. allocated(self%cache) ) allocate(self%cache)
+        call self%cache%adopt(params, build, pinds, nptcls)
+    end subroutine plane_store_adopt_cache
+
+    logical function plane_store_cache_in_use( self )
+        class(flex_plane_store), intent(in) :: self
+        plane_store_cache_in_use = .false.
+        if( allocated(self%cache) ) plane_store_cache_in_use = self%cache%available()
+    end function plane_store_cache_in_use
+
+    subroutine plane_store_read_cache_batch( self, params, n, pinds, batchlims )
+        class(flex_plane_store), intent(inout) :: self
+        class(parameters),       intent(in)    :: params
+        integer,                 intent(in)    :: n, pinds(n), batchlims(2)
+        if( .not. allocated(self%cache) ) THROW_HARD('plane cache read requested before cache initialization')
+        call self%cache%read_batch(params, n, pinds, batchlims)
+    end subroutine plane_store_read_cache_batch
+
+    subroutine plane_store_fill_cached_image( self, i, img )
+        class(flex_plane_store), intent(in)    :: self
+        integer,                 intent(in)    :: i
+        class(image),            intent(inout) :: img
+        if( .not. allocated(self%cache) ) THROW_HARD('plane cache fill requested before cache initialization')
+        call self%cache%fill(i, img)
+    end subroutine plane_store_fill_cached_image
+
+    subroutine plane_store_enable( self, nrows )
+        class(flex_plane_store), intent(inout) :: self
         integer, intent(in) :: nrows
-        logical, intent(in) :: cropped
         real(dp) :: gb_avail
-        if( l_on ) return
-        if( .not. cropped )then
+        if( self%l_on ) return
+        if( .not. self%cache_in_use() )then
             write(logfhandle,'(A)') '>>> FLEX_PCA RESIDENT PLANES OFF: planes are held only on the cropped grid &
                 &(run with cache=yes to enable)'
             return
         endif
         gb_avail  = mem_available_gb()
-        gb_budget = 0.25d0 * gb_avail
-        if( gb_budget <= 0.d0 )then
+        self%gb_budget = 0.25d0 * gb_avail
+        if( self%gb_budget <= 0.d0 )then
             write(logfhandle,'(A)') '>>> FLEX_PCA RESIDENT PLANES OFF (no memory budget: MemAvailable &
                 &unreadable)'
             return
         endif
-        allocate(held(nrows))
-        l_on = .true.
+        allocate(self%held(nrows))
+        self%l_on = .true.
         write(logfhandle,'(A,I0,A,F8.1,A,F8.1,A)') '>>> FLEX_PCA RESIDENT PLANES ON: ', nrows, &
-            &' rows addressable, budget ', gb_budget, ' GB (MemAvailable ', gb_avail, ' GB)'
+            &' rows addressable, budget ', self%gb_budget, ' GB (MemAvailable ', gb_avail, ' GB)'
         call flush(logfhandle)
-    end subroutine planes_enable
+    end subroutine plane_store_enable
 
-    logical function planes_enabled()
-        planes_enabled = l_on
-    end function planes_enabled
-
-    !> Serve batchlims of the pinds list from the store when every row is held; otherwise read
-    !! (plane cache or stacks) and prep exactly as the passes always did, then store what fits.
-    subroutine planes_batch_load( params, build, n, pinds, batchlims, fpls, mskrad, cached, sec_read, sec_prep )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: n, pinds(n), batchlims(2)
-        type(fplane_type), intent(inout) :: fpls(:)
-        real,              intent(in)    :: mskrad
-        logical,           intent(in)    :: cached
-        real(timer_int_kind), optional, intent(inout) :: sec_read, sec_prep
+    !> Fetch rows when the whole batch is resident. The read-path key prevents reuse across
+    !! incompatible cached/native preparations.
+    subroutine plane_store_fetch( self, rows, fpls, cached, found, sec_read )
+        class(flex_plane_store),        intent(inout) :: self
+        integer,                        intent(in)    :: rows(:)
+        type(fplane_type),              intent(inout) :: fpls(:)
+        logical,                        intent(in)    :: cached
+        logical,                        intent(out)   :: found
+        real(timer_int_kind), optional, intent(inout) :: sec_read
         integer(timer_int_kind) :: t
-        integer :: i, batchsz
-        batchsz = batchlims(2) - batchlims(1) + 1
-        if( l_on )then
-            if( .not. l_key_set )then
-                l_cached_key = cached
-                l_key_set    = .true.
-            elseif( cached .neqv. l_cached_key )then
-                THROW_HARD('resident planes were prepared from a different read path than requested')
-            endif
-            if( all_held(batchsz, pinds(batchlims(1):batchlims(2))) )then
-                t = tic()
-                !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-                do i = 1, batchsz
-                    fpls(i) = held(pinds(batchlims(1)+i-1))
-                end do
-                !$omp end parallel do
-                if( present(sec_read) ) sec_read = sec_read + toc(t)
-                nserved = nserved + 1
-                return
-            endif
+        integer :: i
+        found = .false.
+        if( .not. self%l_on ) return
+        if( .not. self%l_key_set )then
+            self%l_cached_key = cached
+            self%l_key_set    = .true.
+        elseif( cached .neqv. self%l_cached_key )then
+            THROW_HARD('resident planes were prepared from a different read path than requested')
         endif
+        if( .not. all_held(self, size(rows), rows) ) return
         t = tic()
-        if( cached )then
-            call plane_cache_read_batch(params, n, pinds, batchlims)
-        else
-            call discrete_read_imgbatch(params, build, n, pinds, batchlims)
-        endif
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, size(rows)
+            fpls(i) = self%held(rows(i))
+        end do
+        !$omp end parallel do
         if( present(sec_read) ) sec_read = sec_read + toc(t)
-        t = tic()
-        call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-            &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=mskrad, cached=cached)
-        if( present(sec_prep) ) sec_prep = sec_prep + toc(t)
-        nprepped = nprepped + 1
-        if( l_on ) call store(batchsz, pinds(batchlims(1):batchlims(2)), fpls)
-    end subroutine planes_batch_load
+        self%nserved = self%nserved + 1
+        found = .true.
+    end subroutine plane_store_fetch
 
-    logical function all_held( batchsz, rows )
+    logical function all_held( self, batchsz, rows )
+        class(flex_plane_store), intent(in) :: self
         integer, intent(in) :: batchsz, rows(batchsz)
         integer :: i
         all_held = .false.
         do i = 1, batchsz
-            if( .not. allocated(held(rows(i))%cmplx_plane) ) return
+            if( .not. allocated(self%held(rows(i))%cmplx_plane) ) return
         end do
         all_held = .true.
     end function all_held
 
     !> Copy the freshly prepped planes of a batch into the store, stopping at the budget.
-    subroutine store( batchsz, rows, fpls )
-        integer,           intent(in) :: batchsz, rows(batchsz)
-        type(fplane_type), intent(in) :: fpls(:)
+    subroutine plane_store_store( self, rows, fpls )
+        class(flex_plane_store), intent(inout) :: self
+        integer,                 intent(in)    :: rows(:)
+        type(fplane_type),       intent(in)    :: fpls(:)
         real(dp) :: gb
         integer  :: i
-        if( l_full ) return
-        do i = 1, batchsz
-            if( allocated(held(rows(i))%cmplx_plane) ) cycle
+        if( .not. self%l_on ) return
+        self%nprepped = self%nprepped + 1
+        if( self%l_full ) return
+        do i = 1, size(rows)
+            if( allocated(self%held(rows(i))%cmplx_plane) ) cycle
             gb = plane_gb(fpls(i))
-            if( gb_held + gb > gb_budget )then
-                l_full = .true.
+            if( self%gb_held + gb > self%gb_budget )then
+                self%l_full = .true.
                 write(logfhandle,'(A,I0,A,F8.1,A)') '>>> FLEX_PCA RESIDENT PLANES budget reached: ', &
-                    &nheld, ' rows held, ', gb_held, ' GB; the remaining rows are read every pass'
+                    &self%nheld, ' rows held, ', self%gb_held, ' GB; the remaining rows are read every pass'
                 call flush(logfhandle)
                 return
             endif
-            held(rows(i)) = fpls(i)
-            nheld   = nheld + 1
-            gb_held = gb_held + gb
+            self%held(rows(i)) = fpls(i)
+            self%nheld   = self%nheld + 1
+            self%gb_held = self%gb_held + gb
         end do
-    end subroutine store
+    end subroutine plane_store_store
 
     real(dp) function plane_gb( fpl )
         type(fplane_type), intent(in) :: fpl
@@ -148,21 +185,27 @@ contains
     end function plane_gb
 
     !> Release the store and report what it did.
-    subroutine planes_kill()
+    subroutine plane_store_kill( self )
+        class(flex_plane_store), intent(inout) :: self
         integer :: i
-        if( .not. l_on ) return
-        write(logfhandle,'(A,I0,A,F8.1,A,I0,A,I0,A)') '>>> FLEX_PCA RESIDENT PLANES: held ', nheld, &
-            &' rows (', gb_held, ' GB), batches served=', nserved, ' read+prepped=', nprepped
-        call flush(logfhandle)
-        do i = 1, size(held)
-            if( allocated(held(i)%cmplx_plane) )    deallocate(held(i)%cmplx_plane)
-            if( allocated(held(i)%ctfsq_plane) )    deallocate(held(i)%ctfsq_plane)
-            if( allocated(held(i)%transfer_plane) ) deallocate(held(i)%transfer_plane)
-        end do
-        deallocate(held)
-        l_on = .false.; l_full = .false.; l_key_set = .false.
-        nheld = 0; nserved = 0; nprepped = 0; gb_held = 0.d0; gb_budget = 0.d0
-    end subroutine planes_kill
+        if( self%l_on )then
+            write(logfhandle,'(A,I0,A,F8.1,A,I0,A,I0,A)') '>>> FLEX_PCA RESIDENT PLANES: held ', self%nheld, &
+                &' rows (', self%gb_held, ' GB), batches served=', self%nserved, ' read+prepped=', self%nprepped
+            call flush(logfhandle)
+            do i = 1, size(self%held)
+                if( allocated(self%held(i)%cmplx_plane) )    deallocate(self%held(i)%cmplx_plane)
+                if( allocated(self%held(i)%ctfsq_plane) )    deallocate(self%held(i)%ctfsq_plane)
+                if( allocated(self%held(i)%transfer_plane) ) deallocate(self%held(i)%transfer_plane)
+            end do
+            deallocate(self%held)
+        endif
+        if( allocated(self%cache) )then
+            call self%cache%kill
+            deallocate(self%cache)
+        endif
+        self%l_on = .false.; self%l_full = .false.; self%l_key_set = .false.; self%l_cached_key = .false.
+        self%nheld = 0; self%nserved = 0; self%nprepped = 0; self%gb_held = 0.d0; self%gb_budget = 0.d0
+    end subroutine plane_store_kill
 
     !> MemAvailable from /proc/meminfo in GB; zero when unreadable (non-Linux).
     real(dp) function mem_available_gb()

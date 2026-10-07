@@ -1,26 +1,26 @@
-!@descr: flex_pca latent figures rendered in-engine (no external plotting): a three-panel JPEG with
+!@descr: flex_pca latent figures rendered from the delivered embedding and UMAP coordinates
 !! the log-density UMAP core, the UMAP coloured by label, and the latent z1 vs z2 plane coloured by
 !! label. Axis limits are the 0.5-99.5 percentiles of the points, so outliers never set the scale.
 module simple_flex_pca_plot
-use simple_core_module_api
+use simple_core_module_api, only: simple_exception
 use simple_math, only: gcd
-use simple_jpg, only: write_rgb_jpeg
+use simple_jpg,  only: write_rgb_jpeg
 implicit none
 private
 #include "simple_local_flags.inc"
 public :: flex_plot_latent_jpg
 
-integer, parameter :: PANEL   = 640     !< panel edge in pixels
-integer, parameter :: GUTTER  = 24      !< white margin around panels
-integer, parameter :: NBINS   = 160     !< density histogram bins per axis
-integer, parameter :: DOT     = 2       !< scatter dot edge in pixels
-integer, parameter :: LEGEND  = 14      !< legend square edge
-real,    parameter :: PCT     = 0.5     !< percentile clipped at each end
+integer, parameter :: PANEL        = 640     !< panel edge in pixels
+integer, parameter :: GUTTER       = 24      !< white margin around panels
+integer, parameter :: NBINS        = 160     !< density histogram bins per axis
+integer, parameter :: DOT          = 2       !< scatter dot edge in pixels
+integer, parameter :: LEGEND       = 14      !< legend square edge
+real,    parameter :: PCT          = 0.5     !< percentile clipped at each end
 !> matplotlib tab10
-real, parameter :: TAB10(3,10) = reshape([ &
+real,    parameter :: TAB10(3,10)  = reshape([ &
     &0.122,0.467,0.706,  1.000,0.498,0.055,  0.173,0.627,0.173,  0.839,0.153,0.157,  0.580,0.404,0.741, &
     &0.549,0.337,0.294,  0.890,0.467,0.761,  0.498,0.498,0.498,  0.737,0.741,0.133,  0.090,0.745,0.812 ], [3,10])
-real, parameter :: GREY_NONE(3) = [0.83, 0.83, 0.83]
+real,    parameter :: GREY_NONE(3) = [0.83, 0.83, 0.83]
 
 contains
 
@@ -199,4 +199,5 @@ contains
         end do
         val = a(k); deallocate(a)
     end function kth_smallest
+
 end module simple_flex_pca_plot

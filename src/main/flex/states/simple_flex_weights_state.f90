@@ -1,7 +1,7 @@
-!@descr: flex per-state weight files: identity, science validation, transactions, delivery and loading
+!@descr: flex persistence and project I/O: weights, embedding cache, state parts and gateway
 !! Builder-free layer over simple_flex_weights_file; row identity = canonical sigma2 layout digest of the same field.
-!! Producer: flex_weights_deliver (validate the set, then publish). Consumers: flex_weights_consumable +
-!! flex_weights_load_state / flex_weights_load_all. The range merge has no producer yet.
+!! `flex_weights_store` owns a validated set while loading and is the publication boundary while
+!! delivering. Naming and single-file validation remain stateless helpers.
 module simple_flex_weights_state
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int32, int64, real32, real64
@@ -13,31 +13,93 @@ use simple_syslib,            only: file_exists, del_file
 use simple_sigma2_state,      only: sigma2_state_project_layout_digest
 use simple_flex_weights_file, only: flex_weights_header, flex_weights_init_header, flex_weights_read_header, &
     &flex_weights_create_candidate, flex_weights_write_rows, flex_weights_read_rows, &
-    &flex_weights_write_scalars, flex_weights_read_scalars, flex_weights_read_local_range, &
+    &flex_weights_write_scalars, flex_weights_read_scalars, &
     &flex_weights_validate_file, flex_weights_publish, FLEX_WEIGHTS_FBODY, FLEX_WEIGHTS_EXT, &
-    &FLEX_WEIGHTS_KIND_PARTITION, FLEX_WEIGHTS_KIND_KERNEL, FLEX_WEIGHTS_CANDIDATE, FLEX_WEIGHTS_COMMITTED, &
+    &FLEX_WEIGHTS_KIND_PARTITION, FLEX_WEIGHTS_KIND_KERNEL, FLEX_WEIGHTS_COMMITTED, &
     &FLEX_WEIGHTS_SCALAR_MASS, FLEX_WEIGHTS_SCALAR_NEFF, FLEX_WEIGHTS_SCALAR_POP, FLEX_WEIGHTS_SCALAR_BW, &
     &FLEX_WEIGHTS_SCALAR_NFIELDS
 implicit none
 private
 
-public :: flex_weights_state_fname, flex_weights_candidate_path, flex_weights_range_path
-public :: flex_weights_next_generation, flex_weights_prepare_update, flex_weights_merge_local_ranges
-public :: flex_weights_validate_identity, flex_weights_validate_science, flex_weights_validate_set
-public :: flex_weights_commit, flex_weights_infer_kind, flex_weights_state_scalars
-public :: flex_weights_write_store, flex_weights_deliver
-public :: flex_weights_consumable, flex_weights_load_state, flex_weights_load_all
+public :: flex_weights_store, flex_weights_state_fname, flex_weights_candidate_path
 public :: FLEX_WEIGHTS_STALE_SCAN
 
-integer,        parameter :: ROW_BLOCK = 262144
+integer,      parameter :: ROW_BLOCK               = 262144
 !> a PARTITION row sums to one across the files within this (responsibilities are renormalised in
 !! double, then cast)
-real(real64),   parameter :: ROW_SUM_TOL = 1.0e-3_real64
-real(real64),   parameter :: MASS_TOL    = 1.0e-3_real64
+real(real64), parameter :: ROW_SUM_TOL             = 1.0e-3_real64
+real(real64), parameter :: MASS_TOL                = 1.0e-3_real64
 !> how many state indices past the delivered count a delivery clears of stale files
-integer,        parameter :: FLEX_WEIGHTS_STALE_SCAN = 64
+integer,      parameter :: FLEX_WEIGHTS_STALE_SCAN = 64
+
+!> One validated per-state weight delivery. Loading owns the complete set until `take`
+!! transfers it to a caller; publishing uses the same object boundary and leaves it empty.
+type :: flex_weights_store
+    private
+    integer :: nstates = 0
+    real(real32),   allocatable :: weights(:,:)
+    integer(int32), allocatable :: labels(:)
+    real(real64),   allocatable :: scalars(:,:)
+  contains
+    procedure :: new     => flex_weights_store_new
+    procedure :: deliver => flex_weights_store_deliver
+    procedure :: take    => flex_weights_store_take
+    procedure :: kill    => flex_weights_store_kill
+end type flex_weights_store
 
 contains
+
+    subroutine flex_weights_store_new( self, project, os, box, smpd, status, message )
+        class(flex_weights_store), intent(inout) :: self
+        class(sp_project),         intent(inout) :: project
+        class(oris),               intent(inout) :: os
+        integer,                   intent(in)    :: box
+        real,                      intent(in)    :: smpd
+        integer,                   intent(out)   :: status
+        character(len=*),          intent(out)   :: message
+        call self%kill
+        call flex_weights_load_all(project, os, box, smpd, self%nstates, self%weights, self%labels, &
+            &self%scalars, status, message)
+        if( status /= 0 ) call self%kill
+    end subroutine flex_weights_store_new
+
+    subroutine flex_weights_store_deliver( self, project, os, box, smpd, box_crop, smpd_crop, pinds, &
+        &weights_sel, labels_sel, targets, bandwidths, provenance, status, message )
+        class(flex_weights_store), intent(inout) :: self
+        class(sp_project),         intent(inout) :: project
+        class(oris),               intent(inout) :: os
+        integer,                   intent(in)    :: box, box_crop
+        real,                      intent(in)    :: smpd, smpd_crop
+        integer,                   intent(in)    :: pinds(:), labels_sel(:)
+        real,                      intent(in)    :: weights_sel(:,:), targets(:,:), bandwidths(:)
+        integer(int32),            intent(in)    :: provenance
+        integer,                   intent(out)   :: status
+        character(len=*),          intent(out)   :: message
+        call self%kill
+        call flex_weights_deliver(project, os, box, smpd, box_crop, smpd_crop, pinds, weights_sel, &
+            &labels_sel, targets, bandwidths, provenance, status, message)
+    end subroutine flex_weights_store_deliver
+
+    subroutine flex_weights_store_take( self, nstates, weights, labels, scalars )
+        class(flex_weights_store),       intent(inout) :: self
+        integer,                         intent(out)   :: nstates
+        real(real32),   allocatable,     intent(out)   :: weights(:,:)
+        integer(int32), allocatable,     intent(out)   :: labels(:)
+        real(real64),   allocatable,     intent(out)   :: scalars(:,:)
+        nstates = self%nstates
+        call move_alloc(self%weights, weights)
+        call move_alloc(self%labels, labels)
+        call move_alloc(self%scalars, scalars)
+        self%nstates = 0
+    end subroutine flex_weights_store_take
+
+    subroutine flex_weights_store_kill( self )
+        class(flex_weights_store), intent(inout) :: self
+        if( allocated(self%weights) ) deallocate(self%weights)
+        if( allocated(self%labels)  ) deallocate(self%labels)
+        if( allocated(self%scalars) ) deallocate(self%scalars)
+        self%nstates = 0
+    end subroutine flex_weights_store_kill
 
     ! ---- naming ----
 
@@ -70,16 +132,6 @@ contains
         candidate_path = transaction_stem(committed_path)//'.g'//int2str(int(generation))//'.next'
     end function flex_weights_candidate_path
 
-    !> <committed stem>.g<generation>.part<NN>.range
-    function flex_weights_range_path(committed_path, generation, part, numlen) result(range_path)
-        character(len=*), intent(in) :: committed_path
-        integer(int64),   intent(in) :: generation
-        integer,          intent(in) :: part, numlen
-        type(string) :: range_path
-        range_path = transaction_stem(committed_path)//'.g'//int2str(int(generation))//'.part'//&
-            &int2str_pad(part,max(1,numlen))//'.range'
-    end function flex_weights_range_path
-
     ! ---- transactions ----
 
     !> The generation the next update of a committed file will commit; 1 when there is none
@@ -100,86 +152,18 @@ contains
         generation = header%generation + 1_int64
     end subroutine flex_weights_next_generation
 
-    !> Candidate for the next generation, seeded with every committed row
-    subroutine flex_weights_prepare_update(committed_path, candidate_path, status, message)
-        character(len=*), intent(in)  :: committed_path, candidate_path
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        type(flex_weights_header) :: header
-        call flex_weights_validate_file(committed_path, status, message, deep=.true.)
-        if( status /= 0 ) return
-        call flex_weights_read_header(committed_path, header, status, message)
-        if( status /= 0 ) return
-        if( header%state /= FLEX_WEIGHTS_COMMITTED )then
-            status = 1; message = 'flex weights update source is not committed'; return
-        endif
-        header%generation = header%generation + 1_int64
-        call flex_weights_create_candidate(candidate_path, header, status, message, source_path=committed_path)
-    end subroutine flex_weights_prepare_update
-
-    !> Exact-coverage merge of worker range files into one state's candidate
-    subroutine flex_weights_merge_local_ranges(candidate_path, range_paths, scheduled_rows, status, message)
-        character(len=*), intent(in)  :: candidate_path
-        type(string),     intent(in)  :: range_paths(:)
-        logical,          intent(in)  :: scheduled_rows(:)
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        type(flex_weights_header) :: header
-        real(real32),   allocatable :: weights(:)
-        integer(int32), allocatable :: flags(:)
-        logical,        allocatable :: covered(:)
-        integer(int64) :: generation, layout_digest
-        integer :: i, state_index, first_row, last_row
-        call flex_weights_read_header(candidate_path, header, status, message)
-        if( status /= 0 ) return
-        if( header%state /= FLEX_WEIGHTS_CANDIDATE )then
-            status = 1; message = 'local ranges can only merge into a flex weights candidate'; return
-        endif
-        if( size(scheduled_rows) /= header%nptcls )then
-            status = 1; message = 'flex weights scheduled-row mask has the wrong size'; return
-        endif
-        allocate(covered(header%nptcls), source=.false.)
-        do i = 1, size(range_paths)
-            call flex_weights_read_local_range(range_paths(i)%to_char(), generation, layout_digest, &
-                &state_index, first_row, last_row, weights, flags, status, message)
-            if( status /= 0 ) return
-            if( generation /= header%generation .or. layout_digest /= header%layout_digest )then
-                status = 1; message = 'local flex weights range belongs to another generation'; return
-            endif
-            if( state_index /= header%state_index )then
-                status = 1; message = 'local flex weights range belongs to another state'; return
-            endif
-            if( first_row < 1 .or. last_row > header%nptcls )then
-                status = 1; message = 'local flex weights range lies outside the project'; return
-            endif
-            if( any(covered(first_row:last_row)) )then
-                status = 1; message = 'overlapping local flex weights ranges'; return
-            endif
-            if( .not. all(scheduled_rows(first_row:last_row)) )then
-                status = 1; message = 'local flex weights range contains unscheduled rows'; return
-            endif
-            call flex_weights_write_rows(candidate_path, first_row, weights, flags, status, message)
-            if( status /= 0 ) return
-            covered(first_row:last_row) = .true.
-            deallocate(weights, flags)
-        enddo
-        if( any(covered .neqv. scheduled_rows) )then
-            status = 1; message = 'local flex weights ranges do not exactly cover the schedule'; return
-        endif
-    end subroutine flex_weights_merge_local_ranges
-
     ! ---- validation ----
 
     subroutine flex_weights_validate_identity(path, box, smpd, nptcls, layout_digest, status, message, &
         &expected_state, expected_index, expected_nstates)
-        character(len=*), intent(in)  :: path
-        integer,          intent(in)  :: box, nptcls
-        real,             intent(in)  :: smpd
-        integer(int64),   intent(in)  :: layout_digest
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        integer(int32), optional, intent(in) :: expected_state
-        integer,        optional, intent(in) :: expected_index, expected_nstates
+        character(len=*),         intent(in)  :: path
+        integer,                  intent(in)  :: box, nptcls
+        real,                     intent(in)  :: smpd
+        integer(int64),           intent(in)  :: layout_digest
+        integer,                  intent(out) :: status
+        character(len=*),         intent(out) :: message
+        integer(int32), optional, intent(in)  :: expected_state
+        integer,        optional, intent(in)  :: expected_index, expected_nstates
         type(flex_weights_header) :: header
         call flex_weights_validate_file(path, status, message)
         if( status /= 0 ) return
@@ -356,16 +340,6 @@ contains
         deallocate(rowsum, nflag, seen)
     end subroutine flex_weights_validate_set
 
-    subroutine flex_weights_commit(candidate_path, committed_path, active, status, message)
-        character(len=*), intent(in)  :: candidate_path, committed_path
-        logical,          intent(in)  :: active(:)
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        call flex_weights_validate_science(candidate_path, active, status, message)
-        if( status /= 0 ) return
-        call flex_weights_publish(candidate_path, committed_path, status, message)
-    end subroutine flex_weights_commit
-
     ! ---- reductions ----
 
     !> PARTITION when every nonzero row of the (nstates, nrows) table sums to one, else KERNEL
@@ -386,9 +360,9 @@ contains
 
     !> One state's scalar section from its column: mass, effective size, hard population, bandwidth, target
     subroutine flex_weights_state_scalars(weights, flags, target, bandwidth, scalars)
-        real(real32), intent(in) :: weights(:)
-        integer(int32), intent(in) :: flags(:)
-        real,         intent(in) :: target(:), bandwidth
+        real(real32),              intent(in)  :: weights(:)
+        integer(int32),            intent(in)  :: flags(:)
+        real,                      intent(in)  :: target(:), bandwidth
         real(real64), allocatable, intent(out) :: scalars(:)
         real(real64) :: mass, sumsq
         allocate(scalars(FLEX_WEIGHTS_SCALAR_NFIELDS+size(target)), source=0.0_real64)
@@ -586,16 +560,16 @@ contains
     !> One state over the full layout: weights(nptcls), flags(nptcls), scalars and header
     subroutine flex_weights_load_state(project, os, box, smpd, state, header, weights, flags, scalars, &
         &status, message)
-        class(sp_project), intent(inout) :: project
-        class(oris),       intent(inout) :: os
-        integer,           intent(in)    :: box, state
-        real,              intent(in)    :: smpd
-        type(flex_weights_header),   intent(out) :: header
-        real(real32),   allocatable, intent(out) :: weights(:)
-        integer(int32), allocatable, intent(out) :: flags(:)
-        real(real64),   allocatable, intent(out) :: scalars(:)
-        integer,           intent(out)   :: status
-        character(len=*),  intent(out)   :: message
+        class(sp_project),           intent(inout) :: project
+        class(oris),                 intent(inout) :: os
+        integer,                     intent(in)    :: box, state
+        real,                        intent(in)    :: smpd
+        type(flex_weights_header),   intent(out)   :: header
+        real(real32),   allocatable, intent(out)   :: weights(:)
+        integer(int32), allocatable, intent(out)   :: flags(:)
+        real(real64),   allocatable, intent(out)   :: scalars(:)
+        integer,                     intent(out)   :: status
+        character(len=*),            intent(out)   :: message
         type(string) :: path
         logical      :: found
         status = 1
@@ -614,16 +588,16 @@ contains
     !> Every state of the registered delivery: weights(nstates,nptcls), labels(nptcls) from the
     !! flags, scalars(:,nstates); the files are checked as a set
     subroutine flex_weights_load_all(project, os, box, smpd, nstates, weights, labels, scalars, status, message)
-        class(sp_project), intent(inout) :: project
-        class(oris),       intent(inout) :: os
-        integer,           intent(in)    :: box
-        real,              intent(in)    :: smpd
-        integer,           intent(out)   :: nstates
-        real(real32),   allocatable, intent(out) :: weights(:,:)
-        integer(int32), allocatable, intent(out) :: labels(:)
-        real(real64),   allocatable, intent(out) :: scalars(:,:)
-        integer,           intent(out)   :: status
-        character(len=*),  intent(out)   :: message
+        class(sp_project),           intent(inout) :: project
+        class(oris),                 intent(inout) :: os
+        integer,                     intent(in)    :: box
+        real,                        intent(in)    :: smpd
+        integer,                     intent(out)   :: nstates
+        real(real32),   allocatable, intent(out)   :: weights(:,:)
+        integer(int32), allocatable, intent(out)   :: labels(:)
+        real(real64),   allocatable, intent(out)   :: scalars(:,:)
+        integer,                     intent(out)   :: status
+        character(len=*),            intent(out)   :: message
         type(flex_weights_header) :: header
         type(string),   allocatable :: paths(:)
         real(real32),   allocatable :: column(:)

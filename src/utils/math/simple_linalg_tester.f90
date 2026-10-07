@@ -43,6 +43,7 @@ contains
         call test_plane_fits()
         call test_vector_helpers()
         call test_gemm_tn()
+        call test_real_spd_complex_solve()
     end subroutine run_all_linalg_tests
 
     !---------------- fixtures ----------------
@@ -378,6 +379,25 @@ contains
         call gemm_tn(a, b, c)
         call assert_true(maxval(abs(c - matmul(transpose(a), b))) < 1.e-4, 'gemm_tn: C = A^T B')
     end subroutine test_gemm_tn
+
+    subroutine test_real_spd_complex_solve()
+        real(dp)    :: matrix(2,2)
+        complex(dp) :: rhs(2), solution(2), expected(2)
+        integer     :: flag
+        write(*,'(A)') 'test_real_spd_complex_solve'
+        matrix(:,1) = [4.d0, 1.d0]
+        matrix(:,2) = [1.d0, 3.d0]
+        expected    = [cmplx(1.d0, 2.d0, dp), cmplx(-0.5d0, 0.25d0, dp)]
+        rhs         = matmul(matrix, expected)
+        call solve_real_spd_complex(matrix, rhs, solution, 2, flag)
+        call assert_int(0, flag, 'real SPD/complex solve accepts a positive-definite matrix')
+        call assert_true(maxval(abs(solution-expected)) < 1.d-12, &
+            &'real SPD/complex solve recovers the complex solution')
+        matrix(:,1) = [1.d0, 2.d0]
+        matrix(:,2) = [2.d0, 1.d0]
+        call solve_real_spd_complex(matrix, rhs, solution, 2, flag)
+        call assert_int(1, flag, 'real SPD/complex solve rejects a non-positive pivot')
+    end subroutine test_real_spd_complex_solve
 
     !---------------- helpers ----------------
 

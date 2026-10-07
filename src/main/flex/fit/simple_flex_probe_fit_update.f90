@@ -1,28 +1,19 @@
-!@descr: flex_pca: the probe fit per-iteration update: iteration begin, the M-step tail (coupled solve, FSC-Wiener merge, re-orthonormalisation, deflation, mixture update), the merge snapshot
+!@descr: flex_pca probe-fit iteration setup and M-step update procedures
 submodule (simple_flex_probe_fit) simple_flex_probe_fit_update
-use simple_core_module_api
-use simple_builder, only: builder
-use simple_image, only: image
-use simple_parameters, only: parameters
-use simple_reconstructor, only: reconstructor
-use simple_gridding, only: prep3D_inv_kbenvelope4mul
-use simple_flex_pca_crossfsc, only: crossfsc_harvest_h
-use simple_flex_pca_pcg, only: flex_window_apply
+use simple_core_module_api, only: dtiny, fdim, int2str_pad, logfhandle, maximgbatchsz, mrc_ext, tiny
+use simple_defs_flex,          only: FLEX_FSC_SIGNAL_THRESHOLD
+use simple_image,              only: image
+use simple_gridding,           only: prep3D_inv_kbenvelope4mul
+use simple_flex_pca_crossfsc,  only: crossfsc_harvest_h
 use simple_flex_pca_posterior, only: mcfa_init
-use simple_flex_pca_mstep, only: init_basis_reconstructor
-use simple_flex_pca_basis, only: covariance_kfromto, orthonormalize_representatives,&
+use simple_flex_pca_mstep,     only: init_basis_reconstructor
+use simple_flex_pca_basis,     only: covariance_kfromto, orthonormalize_representatives, &
     &align_basis_to_reference, deflate_against_basis, cross_half_subspace_angles
-use simple_flex_pca_util, only: dilation_template
+use simple_flex_pca_util,      only: dilation_template
 use simple_flex_pca_fit_types, only: cleanup_plane
 use , intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 #include "simple_local_flags.inc"
-
-
-character(len=*), parameter :: MERGED_PC_FBODY  = 'flex_pca_merged_pc'
-character(len=*), parameter :: MERGED_META      = 'flex_pca_probe_merged.txt'
-character(len=*), parameter :: MERGED_EIG_FNAME = 'flex_pca_eigenvalues_merged.txt'
-character(len=*), parameter :: PAIRED_MANIFEST  = 'flex_pca_paired.txt'
 
 contains
 
@@ -30,10 +21,10 @@ contains
     !! exists), coupled per-half solve, FSC-Wiener merge, mean-shaped deflation, re-orthonormalisation and
     !! basis swap. Frees per-iteration fields only; mix_* persist (see probe_fit_t).
     module subroutine fit_iter_finish( params, build, fit, it_eff, nthr )
-        class(parameters),  intent(inout) :: params
-        type(builder),      intent(inout) :: build
-        class(flex_probe_fit),  intent(inout) :: fit
-        integer,            intent(in)    :: it_eff, nthr
+        class(parameters),     intent(inout) :: params
+        type(builder),         intent(inout) :: build
+        class(flex_probe_fit), intent(inout) :: fit
+        integer,               intent(in)    :: it_eff, nthr
         type(reconstructor), allocatable :: utilde(:)
         type(image), allocatable :: realvols(:), utilde_real(:), eimgs(:), oimgs(:), dfl_basis(:)
         type(image)  :: img_o, mstep_gridcorr, mvol_dfl
@@ -48,7 +39,7 @@ contains
         integer  :: q, ithr, sh, filtsz, d_new
         integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2)
         integer  :: khi_dg, nsig_dg, ntop_dg, sel_dg(4), tq_dg, bq_dg
-        logical  :: l_dfl_bg, l_dfl_dil, l_z_local
+        logical  :: l_z_local
         integer  :: iblk_dfl, nblk_dfl, qlo_dfl, qhi_dfl
         do q = 1, fit%model%ncomp
             fit%iter%gam_acc(q) = fit%iter%gam_sum(q) / real(max(1,fit%iter%nval),dp)
@@ -135,14 +126,14 @@ contains
             call realvols(q)%apply_filter(filt)
             if( fit%spec%lp_it > 2.0*params%smpd_crop + TINY ) call realvols(q)%bp(0., fit%spec%lp_it)
             call realvols(q)%ifft
-            call flex_window_apply(realvols(q), params)
+            call fit%mstep%env%apply(realvols(q), params%box_crop, params%msk_crop)
             ! stash both halves, filtered exactly as the merged basis is
             call eimgs(q)%copy(realvols(q))
             call img_o%ifft
             if( fit%spec%lp_it > 2.0*params%smpd_crop + TINY )then
                 call img_o%fft; call img_o%bp(0., fit%spec%lp_it); call img_o%ifft
             endif
-            call flex_window_apply(img_o, params)
+            call fit%mstep%env%apply(img_o, params%box_crop, params%msk_crop)
             call oimgs(q)%copy(img_o)
             call img_o%kill
         end do
@@ -157,7 +148,7 @@ contains
         nsig_dg = 0
         do q = 1, fit%model%ncomp
             fmean_dg(q) = sum(fscq_dg(1:khi_dg,q))/real(khi_dg)
-            if( fmean_dg(q) > 0.143 ) nsig_dg = nsig_dg + 1
+            if( fmean_dg(q) > real(FLEX_FSC_SIGNAL_THRESHOLD) ) nsig_dg = nsig_dg + 1
         end do
         ! heterogeneity resolution off the strongest components, ranked by in-band mean FSC:
         ! the EM basis is orthonormalised in fixed order and never variance-sorted
@@ -180,7 +171,7 @@ contains
                 fc = fc + fscq_dg(sh,sel_dg(tq_dg))
             end do
             fc = fc/real(ntop_dg)
-            if( fc < 0.143 )then
+            if( fc < real(FLEX_FSC_SIGNAL_THRESHOLD) )then
                 res_dg = fit%spec%dstep_ann/real(sh)
                 exit
             endif
@@ -224,117 +215,104 @@ contains
         ! Mean-shaped deflation: the scalar contrast a_i leaves any frequency-dependent per-image scale in the
         ! residual as a consensus-shaped term; vdfl resolution shells of the consensus (1 = the mean) remove it.
         if( fit%spec%l_deflate_mean )then
-            ndfl = max(1, fit%spec%vdfl)
-            ! the flat-in-mask background template is part of the deflation set by default (the
-            ! ice/background mode is not consensus-shaped, so the shells never remove it; the merge
-            ! step already had it baked on, the per-fit M-step read an env switch that the unified
-            ! recipe never exports); SIMPLE_COV_DEFLATE_BG=0 opts out
-            l_dfl_bg = fit%spec%cfg%l_deflate_bg
-            if( l_dfl_bg ) ndfl = ndfl + 1
-            ndfl_sh = ndfl
-            if( l_dfl_bg )   ndfl_sh = ndfl_sh - 1
-            ! the dilation of the consensus, (x-c).grad rho, is the breathing mode (magnification
-            ! and defocus scatter); deflated by default, SIMPLE_COV_DEFLATE_DILATION=0 opts out
-            l_dfl_dil = fit%spec%cfg%l_deflate_dilation
-            if( l_dfl_dil ) ndfl = ndfl + 1
+            ndfl_sh = max(1, fit%spec%vdfl)
+            ! The flat-in-mask background and consensus dilation are part of the production
+            ! deflation recipe in addition to the consensus shells.
+            ndfl = ndfl_sh + 2
             ! a single block spanning every component (nblk_dfl = 1, qlo_dfl:qhi_dfl = 1:ncomp)
             nblk_dfl = 1
             do iblk_dfl = 1, nblk_dfl
-            qlo_dfl = 1; qhi_dfl = fit%model%ncomp
-            allocate(dfl_basis(ndfl))
-            call mvol_dfl%read_and_crop(params%vols(1), params%smpd, params%box_crop, params%smpd_crop)
-            kfr_dfl = covariance_kfromto(params)
-            if( l_dfl_bg )then
+                qlo_dfl = 1; qhi_dfl = fit%model%ncomp
+                allocate(dfl_basis(ndfl))
+                call mvol_dfl%read_and_crop(params%vols(1), params%smpd, params%box_crop, params%smpd_crop)
+                kfr_dfl = covariance_kfromto(params)
                 ! after the shells: uniform density under the soft spherical mask
                 call dfl_basis(ndfl_sh+1)%copy(mvol_dfl)
                 call dfl_basis(ndfl_sh+1)%get_rmat_ptr(rm_dfl)
                 rm_dfl = 0.
                 rm_dfl(1:params%box_crop, 1:params%box_crop, 1:params%box_crop) = 1.
-                call flex_window_apply(dfl_basis(ndfl_sh+1), params)
+                call fit%mstep%env%apply(dfl_basis(ndfl_sh+1), params%box_crop, params%msk_crop)
                 write(logfhandle,'(A)') '>>> FLEX_PCA DEFLATE_BG: flat-in-mask background template &
                     &appended to the deflation set'
                 call flush(logfhandle)
-            endif
-            if( l_dfl_dil )then
                 call dfl_basis(ndfl)%copy(mvol_dfl)
                 call dilation_template(dfl_basis(ndfl), params%box_crop)
-                call flex_window_apply(dfl_basis(ndfl), params)
+                call fit%mstep%env%apply(dfl_basis(ndfl), params%box_crop, params%msk_crop)
                 write(logfhandle,'(A)') '>>> FLEX_PCA DEFLATE_DILATION: consensus dilation (breathing) template &
                     &appended to the deflation set'
                 call flush(logfhandle)
-            endif
-            do idfl = 1, ndfl_sh
-                call dfl_basis(idfl)%copy(mvol_dfl)
-                if( ndfl_sh > 1 )then
-                    ! shell idfl of ndfl in resolution (dstep/shell, covariance_kfromto's
-                    ! convention); the first shell is a pure low-pass so no high-pass edge at
-                    ! k~1 shaves the shells carrying most of the consensus power
-                    if( idfl == 1 )then
-                        res_lo = 0.
-                    else
-                        res_lo = fit%spec%dstep_ann / &
-                            &max(1., real(kfr_dfl(1)) + real(idfl-1)*real(max(1,kfr_dfl(2)-kfr_dfl(1)))/real(ndfl_sh))
+                do idfl = 1, ndfl_sh
+                    call dfl_basis(idfl)%copy(mvol_dfl)
+                    if( ndfl_sh > 1 )then
+                        ! shell idfl of ndfl in resolution (dstep/shell, covariance_kfromto's
+                        ! convention); the first shell is a pure low-pass so no high-pass edge at
+                        ! k~1 shaves the shells carrying most of the consensus power
+                        if( idfl == 1 )then
+                            res_lo = 0.
+                        else
+                            res_lo = fit%spec%dstep_ann / &
+                                &max(1., real(kfr_dfl(1)) + real(idfl-1)*real(max(1,kfr_dfl(2)-kfr_dfl(1)))/real(ndfl_sh))
+                        endif
+                        res_hi = fit%spec%dstep_ann / &
+                            &max(1., real(kfr_dfl(1)) + real(idfl)  *real(max(1,kfr_dfl(2)-kfr_dfl(1)))/real(ndfl_sh))
+                        call dfl_basis(idfl)%fft
+                        ! width=1: bp's default cosine edge is 10 shells per side, wider than a
+                        ! shell of the fitted band
+                        call dfl_basis(idfl)%bp(res_lo, res_hi, width=1.0)
+                        call dfl_basis(idfl)%ifft
+                        ! band-passing spreads density outside the particle and the deflated
+                        ! volumes are soft-masked, so the shells must be too; not applied at ndfl=1
+                        call fit%mstep%env%apply(dfl_basis(idfl), params%box_crop, params%msk_crop)
                     endif
-                    res_hi = fit%spec%dstep_ann / &
-                        &max(1., real(kfr_dfl(1)) + real(idfl)  *real(max(1,kfr_dfl(2)-kfr_dfl(1)))/real(ndfl_sh))
-                    call dfl_basis(idfl)%fft
-                    ! width=1: bp's default cosine edge is 10 shells per side, wider than a
-                    ! shell of the fitted band
-                    call dfl_basis(idfl)%bp(res_lo, res_hi, width=1.0)
-                    call dfl_basis(idfl)%ifft
-                    ! band-passing spreads density outside the particle and the deflated
-                    ! volumes are soft-masked, so the shells must be too; not applied at ndfl=1
-                    call flex_window_apply(dfl_basis(idfl), params)
+                end do
+                call mvol_dfl%get_rmat_ptr(rv_dfl)
+                mnorm_dfl = sqrt(sum(real(rv_dfl,dp)**2))
+                if( ndfl > 1 )then
+                    write(logfhandle,'(A)',advance='no') '>>> FLEX_PCA deflation shell norms / |consensus|:'
+                    do idfl = 1, ndfl
+                        call dfl_basis(idfl)%get_rmat_ptr(rm_dfl)
+                        write(logfhandle,'(A,ES9.2)',advance='no') ' ', &
+                            &sqrt(sum(real(rm_dfl,dp)**2))/max(mnorm_dfl,DTINY)
+                    end do
+                    write(logfhandle,*)
                 endif
-            end do
-            call mvol_dfl%get_rmat_ptr(rv_dfl)
-            mnorm_dfl = sqrt(sum(real(rv_dfl,dp)**2))
-            if( ndfl > 1 )then
-                write(logfhandle,'(A)',advance='no') '>>> FLEX_PCA deflation shell norms / |consensus|:'
+                ! modified Gram-Schmidt; a shell that the band edges or the mask emptied drops out
+                nkeep_dfl = 0
                 do idfl = 1, ndfl
                     call dfl_basis(idfl)%get_rmat_ptr(rm_dfl)
-                    write(logfhandle,'(A,ES9.2)',advance='no') ' ', &
-                        &sqrt(sum(real(rm_dfl,dp)**2))/max(mnorm_dfl,DTINY)
-                end do
-                write(logfhandle,*)
-            endif
-            ! modified Gram-Schmidt; a shell that the band edges or the mask emptied drops out
-            nkeep_dfl = 0
-            do idfl = 1, ndfl
-                call dfl_basis(idfl)%get_rmat_ptr(rm_dfl)
-                do jdfl = 1, nkeep_dfl
-                    call dfl_basis(jdfl)%get_rmat_ptr(rv_dfl)
-                    mv_dfl = sum(real(rm_dfl,dp)*real(rv_dfl,dp))
-                    rm_dfl = rm_dfl - real(mv_dfl)*rv_dfl
-                end do
-                mm_dfl = sqrt(sum(real(rm_dfl,dp)*real(rm_dfl,dp)))
-                if( mm_dfl <= 1.d-3*mnorm_dfl ) cycle
-                rm_dfl    = rm_dfl / real(mm_dfl)
-                nkeep_dfl = nkeep_dfl + 1
-                if( nkeep_dfl /= idfl ) call dfl_basis(nkeep_dfl)%copy(dfl_basis(idfl))
-            end do
-            if( nkeep_dfl > 0 )then
-                rem_dfl = 0.d0; tot_dfl = 0.d0
-                do q = qlo_dfl, qhi_dfl
-                    call realvols(q)%get_rmat_ptr(rv_dfl)
-                    tot_dfl = tot_dfl + sum(real(rv_dfl,dp)**2)
-                    do idfl = 1, nkeep_dfl
-                        call dfl_basis(idfl)%get_rmat_ptr(rm_dfl)
-                        mv_dfl  = sum(real(rm_dfl,dp)*real(rv_dfl,dp))   ! unit-norm already
-                        rem_dfl = rem_dfl + mv_dfl*mv_dfl
-                        rv_dfl  = rv_dfl - real(mv_dfl)*rm_dfl
+                    do jdfl = 1, nkeep_dfl
+                        call dfl_basis(jdfl)%get_rmat_ptr(rv_dfl)
+                        mv_dfl = sum(real(rm_dfl,dp)*real(rv_dfl,dp))
+                        rm_dfl = rm_dfl - real(mv_dfl)*rv_dfl
                     end do
+                    mm_dfl = sqrt(sum(real(rm_dfl,dp)*real(rm_dfl,dp)))
+                    if( mm_dfl <= 1.d-3*mnorm_dfl ) cycle
+                    rm_dfl    = rm_dfl / real(mm_dfl)
+                    nkeep_dfl = nkeep_dfl + 1
+                    if( nkeep_dfl /= idfl ) call dfl_basis(nkeep_dfl)%copy(dfl_basis(idfl))
                 end do
-                write(logfhandle,'(A,I0,A,I0,A,F6.2,A)') '>>> FLEX_PCA PROBE ITER ',it_eff, &
-                    &'  mean-shaped deflation (rank ',nkeep_dfl,') removed ', &
-                    &100.d0*rem_dfl/max(tot_dfl,DTINY),' % of basis energy'
-                call flush(logfhandle)
-            endif
-            do idfl = 1, ndfl
-                call dfl_basis(idfl)%kill
-            end do
-            deallocate(dfl_basis)
-            call mvol_dfl%kill
+                if( nkeep_dfl > 0 )then
+                    rem_dfl = 0.d0; tot_dfl = 0.d0
+                    do q = qlo_dfl, qhi_dfl
+                        call realvols(q)%get_rmat_ptr(rv_dfl)
+                        tot_dfl = tot_dfl + sum(real(rv_dfl,dp)**2)
+                        do idfl = 1, nkeep_dfl
+                            call dfl_basis(idfl)%get_rmat_ptr(rm_dfl)
+                            mv_dfl  = sum(real(rm_dfl,dp)*real(rv_dfl,dp))   ! unit-norm already
+                            rem_dfl = rem_dfl + mv_dfl*mv_dfl
+                            rv_dfl  = rv_dfl - real(mv_dfl)*rm_dfl
+                        end do
+                    end do
+                    write(logfhandle,'(A,I0,A,I0,A,F6.2,A)') '>>> FLEX_PCA PROBE ITER ',it_eff, &
+                        &'  mean-shaped deflation (rank ',nkeep_dfl,') removed ', &
+                        &100.d0*rem_dfl/max(tot_dfl,DTINY),' % of basis energy'
+                    call flush(logfhandle)
+                endif
+                do idfl = 1, ndfl
+                    call dfl_basis(idfl)%kill
+                end do
+                deallocate(dfl_basis)
+                call mvol_dfl%kill
             end do   ! iblk_dfl
         endif
         ! orthonormalize the probe volumes -> refined basis
@@ -431,22 +409,15 @@ contains
         class(parameters),     intent(inout) :: params
         integer,               intent(in)    :: nthr
         ! ---- POLAR E-STEP: in-batch-loop shared-direction bank (the E-step) ----
-        fit%estep%l_pol_es = .true.
-        ! hybrid/oversampling accuracy: the derived hybrid radius, no angular oversampling
-        fit%estep%rhyb_req   = 0
-        fit%estep%l_rhyb_off = .false.
-        fit%estep%osamp_pol  = 1
         fit%estep%l_pol_hyb  = .false.
         fit%estep%rhyb_es    = 0
         fit%estep%npos_es    = 0
         fit%estep%l_pol_grid    = .false.
         fit%estep%l_pol_bank_it = .false.
         fit%estep%sec_bank      = 0.
-        if( fit%estep%l_pol_es )then
-            write(logfhandle,'(A)') '>>> FLEX_PCA POLAR E-STEP ON (stage 1): shared-direction bank &
-                &supplies G/b/c; data-plane prep and M-step insertion stay Cartesian'
-            call flush(logfhandle)
-        endif
+        write(logfhandle,'(A)') '>>> FLEX_PCA POLAR E-STEP ON (stage 1): shared-direction bank &
+            &supplies G/b/c; data-plane prep and M-step insertion stay Cartesian'
+        call flush(logfhandle)
         ! MCFA: one basis, K latent Gaussians (Baek et al., IEEE TPAMI 2010); K=1 is plain PPCA EM.
         fit%spec%kmix   = COV_EM_MIX
         fit%spec%l_mix_req = fit%spec%kmix >= 1
@@ -458,23 +429,16 @@ contains
         fit%history%ldOm_used    = 0.d0
         if( fit%spec%l_mix_req ) write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA MIX requested: K=', &
             &fit%spec%kmix,'  (plain warm-up: ',fit%spec%n_mix_warm,' iterations)'
-        if( .not. allocated(fit%diag%sec_proj_thr) )then
-            allocate(fit%diag%sec_proj_thr(nthr), fit%diag%sec_gram_thr(nthr), source=0.d0)
+        if( .not. allocated(fit%diag%sec_ring_thr) )then
+            allocate(fit%diag%sec_bank_thr(nthr), fit%diag%sec_ring_thr(nthr), &
+                &fit%diag%sec_exact_thr(nthr), fit%diag%sec_solve_thr(nthr), source=0.d0)
         endif
         fit%history%nll_prev    = 0.d0
         ! mean-shaped deflation: the per-particle scalar contrast cannot absorb a frequency-dependent
         ! scale, which would otherwise take a whole consensus-shaped component
         fit%spec%vdfl           = COV_EM_DEFLATE
         fit%spec%l_deflate_mean = .true.
-        ! per-particle contrast a_i = <m,y>/||m||^2 (clamped to [0.1,5]) is held fixed: no ECM
-        ! refinement against the basis, no a-scaled M-step insertion
-        fit%spec%n_probe_cm  = 0
-        fit%spec%nml_plain   = 0
-        fit%spec%l_probe_mls = .false.
-        if( fit%spec%n_probe_cm > 0 ) write(logfhandle,'(A,I0,A)') &
-            &'>>> FLEX_PCA PROBE per-particle contrast ECM ON (', fit%spec%n_probe_cm, ' alternations)'
-        if( fit%spec%l_probe_mls ) write(logfhandle,'(A)') &
-            &'>>> FLEX_PCA PROBE ML-scaled M-step ON (a z insertion, a^2 density)'
+        ! Per-particle contrast is the clamped mean-only estimate and stays fixed in the posterior.
         fit%spec%kfr_ann   = covariance_kfromto(params)
         fit%spec%khi_full  = max(1, fit%spec%kfr_ann(2))
         fit%spec%dstep_ann = real(max(1, params%box_crop - 1)) * params%smpd_crop
@@ -485,70 +449,71 @@ contains
     !! rank-change resize, the per-iteration accumulators and thread scratch, and the
     !! projection-ready expansion of the fit's mean + basis.
     module subroutine fit_iter_begin( params, build, fit, mean_rec, it_eff, niters_eff, nthr )
-        class(parameters),   intent(inout) :: params
-        type(builder),       intent(inout) :: build
-        class(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        integer,             intent(in)    :: it_eff, niters_eff, nthr
+        class(parameters),     intent(inout) :: params
+        type(builder),         intent(inout) :: build
+        class(flex_probe_fit), intent(inout) :: fit
+        type(reconstructor),   intent(inout) :: mean_rec
+        integer,               intent(in)    :: it_eff, niters_eff, nthr
         integer :: q
-            fit%spec%lp_it  = params%lp
-            fit%diag%sec_proj_thr = 0.d0; fit%diag%sec_gram_thr = 0.d0
-            fit%estep%sec_bank = 0.; fit%estep%l_pol_bank_it = .false.   ! the polar E-step bank is rebuilt every iteration
-            write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA PROBE SUBSPACE ITERATION ',it_eff,' / ',niters_eff, &
-                &'  basis dim=',fit%model%ncomp
-            call flush(logfhandle)
-            allocate(fit%iter%prior(fit%model%ncomp))
-            do q = 1, fit%model%ncomp
-                fit%iter%prior(q) = 1.d0 / max(fit%model%eigvals(q), DTINY)
-            end do
-            ! MCFA bookkeeping. l_mix_used freezes which prior THIS iteration's E-step runs
-            ! under (the M-step hook below flips l_mix_active mid-iteration); a basis dimension
-            ! change invalidates xi/Omega, so the mixture re-warms and re-initialises.
-            fit%history%l_mix_used = fit%history%l_mix_active
-            fit%history%ldOm_used  = fit%history%ldOm_mix
-            if( fit%spec%l_mix_req )then
-                if( allocated(fit%history%rhs0th) )then
-                    if( size(fit%history%rhs0th,1) /= fit%model%ncomp )then
-                        deallocate(fit%history%rhs0th, fit%history%mkth, fit%history%lwth, fit%history%rkth, fit%history%mxa_sr, fit%history%mxa_sm, fit%history%mxa_smm, fit%history%mxa_sainv)
-                        if( allocated(fit%history%mix_xi) ) deallocate(fit%history%mix_xi, fit%history%mix_Om, fit%history%mix_Ominv, fit%history%mix_pi, &
-                            &fit%history%mix_Omxi, fit%history%mix_xiOx, fit%history%mix_lpi)
-                        if( fit%history%l_mix_active ) write(logfhandle,'(A)') &
-                            &'>>> FLEX_PCA MIX re-initialising: basis dimension changed'
-                        fit%history%l_mix_active = .false.
-                        fit%history%l_mix_used   = .false.
-                    endif
+        fit%spec%lp_it  = params%lp
+        fit%diag%sec_bank_thr  = 0.d0; fit%diag%sec_ring_thr = 0.d0
+        fit%diag%sec_exact_thr = 0.d0; fit%diag%sec_solve_thr = 0.d0
+        fit%estep%sec_bank = 0.; fit%estep%l_pol_bank_it = .false.   ! the polar E-step bank is rebuilt every iteration
+        write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA PROBE SUBSPACE ITERATION ',it_eff,' / ',niters_eff, &
+            &'  basis dim=',fit%model%ncomp
+        call flush(logfhandle)
+        allocate(fit%iter%prior(fit%model%ncomp))
+        do q = 1, fit%model%ncomp
+            fit%iter%prior(q) = 1.d0 / max(fit%model%eigvals(q), DTINY)
+        end do
+        ! MCFA bookkeeping. l_mix_used freezes which prior THIS iteration's E-step runs
+        ! under (the M-step hook below flips l_mix_active mid-iteration); a basis dimension
+        ! change invalidates xi/Omega, so the mixture re-warms and re-initialises.
+        fit%history%l_mix_used = fit%history%l_mix_active
+        fit%history%ldOm_used  = fit%history%ldOm_mix
+        if( fit%spec%l_mix_req )then
+            if( allocated(fit%history%rhs0th) )then
+                if( size(fit%history%rhs0th,1) /= fit%model%ncomp )then
+                    deallocate(fit%history%rhs0th, fit%history%mkth, fit%history%lwth, fit%history%rkth, fit%history%mxa_sr, fit%history%mxa_sm, fit%history%mxa_smm, fit%history%mxa_sainv)
+                    if( allocated(fit%history%mix_xi) ) deallocate(fit%history%mix_xi, fit%history%mix_Om, fit%history%mix_Ominv, fit%history%mix_pi, &
+                        &fit%history%mix_Omxi, fit%history%mix_xiOx, fit%history%mix_lpi)
+                    if( fit%history%l_mix_active ) write(logfhandle,'(A)') &
+                        &'>>> FLEX_PCA MIX re-initialising: basis dimension changed'
+                    fit%history%l_mix_active = .false.
+                    fit%history%l_mix_used   = .false.
                 endif
-                if( .not. allocated(fit%history%rhs0th) )then
-                    allocate(fit%history%rhs0th(fit%model%ncomp,nthr), fit%history%mkth(fit%model%ncomp,fit%spec%kmix,nthr), fit%history%lwth(fit%spec%kmix,nthr), &
-                        &fit%history%rkth(fit%spec%kmix,nthr), fit%history%mxa_sr(fit%spec%kmix,nthr), fit%history%mxa_sm(fit%model%ncomp,fit%spec%kmix,nthr), &
-                        &fit%history%mxa_smm(fit%model%ncomp,fit%model%ncomp,fit%spec%kmix,nthr), fit%history%mxa_sainv(fit%model%ncomp,fit%model%ncomp,nthr))
-                endif
-                fit%history%mxa_sr = 0.d0; fit%history%mxa_sm = 0.d0; fit%history%mxa_smm = 0.d0; fit%history%mxa_sainv = 0.d0
             endif
-            ! the M-step system at this rank: even/odd numerators, the coupled normal matrix and,
-            ! under rec_backend=pcg, the solver's lattice, support and packed kernel sums
-            call fit%mstep%begin_iteration(params, build, fit%spec%cfg, fit%model%ncomp)
-            allocate(fit%iter%Gth(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%Ath(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%bth(fit%model%ncomp,nthr), fit%iter%cth(fit%model%ncomp,nthr), fit%iter%zth(fit%model%ncomp,nthr))
-            allocate(fit%iter%Ainvth(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%Acpth(fit%model%ncomp,fit%model%ncomp,nthr))
-            allocate(fit%iter%basis_fpls(fit%model%ncomp,nthr), fit%iter%mean_fpl(nthr))
-            allocate(fit%iter%zbatch(fit%model%ncomp,MAXIMGBATCHSZ), fit%iter%dens(fit%model%ncomp,fit%model%ncomp,MAXIMGBATCHSZ))
-            allocate(fit%iter%valid(MAXIMGBATCHSZ), fit%iter%valid_e(MAXIMGBATCHSZ), fit%iter%valid_o(MAXIMGBATCHSZ))
-            allocate(fit%iter%gam_thr(fit%model%ncomp,nthr), source=0.d0)
-            allocate(fit%iter%gam_acc(fit%model%ncomp), source=0.d0)
-            allocate(fit%iter%nval_thr(nthr), source=0)
-            allocate(fit%iter%hth(fit%model%ncomp,nthr), source=0.d0)
-            allocate(fit%iter%nll_thr(nthr), source=0.d0)
-            allocate(fit%diag%gam_dbg(4,nthr), source=0.d0)
-            fit%iter%nll_tot = 0.d0
-            fit%iter%dens = 0.d0
-            ! the Gamma reduction target (filled by fit_iter_reduce or the distributed
-            ! master's part reduce; freed by fit_iter_finish at the gam_acc step)
-            allocate(fit%iter%gam_sum(fit%model%ncomp), source=0.d0)
-            fit%iter%nval = 0
-            call mean_rec%expand_exp
-            do q = 1, fit%model%ncomp
-                call fit%model%basis_recs(q)%expand_exp
-            end do
+            if( .not. allocated(fit%history%rhs0th) )then
+                allocate(fit%history%rhs0th(fit%model%ncomp,nthr), fit%history%mkth(fit%model%ncomp,fit%spec%kmix,nthr), fit%history%lwth(fit%spec%kmix,nthr), &
+                    &fit%history%rkth(fit%spec%kmix,nthr), fit%history%mxa_sr(fit%spec%kmix,nthr), fit%history%mxa_sm(fit%model%ncomp,fit%spec%kmix,nthr), &
+                    &fit%history%mxa_smm(fit%model%ncomp,fit%model%ncomp,fit%spec%kmix,nthr), fit%history%mxa_sainv(fit%model%ncomp,fit%model%ncomp,nthr))
+            endif
+            fit%history%mxa_sr = 0.d0; fit%history%mxa_sm = 0.d0; fit%history%mxa_smm = 0.d0; fit%history%mxa_sainv = 0.d0
+        endif
+        ! the M-step system at this rank: even/odd numerators, the coupled normal matrix and,
+        ! under rec_backend=pcg, the solver's lattice, support and packed kernel sums
+        call fit%mstep%begin_iteration(params, build, fit%model%ncomp)
+        allocate(fit%iter%Gth(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%Ath(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%bth(fit%model%ncomp,nthr), fit%iter%cth(fit%model%ncomp,nthr), fit%iter%zth(fit%model%ncomp,nthr))
+        allocate(fit%iter%Ainvth(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%Acpth(fit%model%ncomp,fit%model%ncomp,nthr))
+        allocate(fit%iter%basis_fpls(fit%model%ncomp,nthr), fit%iter%mean_fpl(nthr))
+        allocate(fit%iter%zbatch(fit%model%ncomp,MAXIMGBATCHSZ), fit%iter%dens(fit%model%ncomp,fit%model%ncomp,MAXIMGBATCHSZ))
+        allocate(fit%iter%valid(MAXIMGBATCHSZ), fit%iter%valid_e(MAXIMGBATCHSZ), fit%iter%valid_o(MAXIMGBATCHSZ))
+        allocate(fit%iter%gam_thr(fit%model%ncomp,nthr), source=0.d0)
+        allocate(fit%iter%gam_acc(fit%model%ncomp), source=0.d0)
+        allocate(fit%iter%nval_thr(nthr), source=0)
+        allocate(fit%iter%hth(fit%model%ncomp,nthr), source=0.d0)
+        allocate(fit%iter%nll_thr(nthr), source=0.d0)
+        allocate(fit%diag%gam_dbg(4,nthr), source=0.d0)
+        fit%iter%nll_tot = 0.d0
+        fit%iter%dens = 0.d0
+        ! the Gamma reduction target (filled by fit_iter_reduce or the distributed
+        ! master's part reduce; freed by fit_iter_finish at the gam_acc step)
+        allocate(fit%iter%gam_sum(fit%model%ncomp), source=0.d0)
+        fit%iter%nval = 0
+        call mean_rec%expand_exp
+        do q = 1, fit%model%ncomp
+            call fit%model%basis_recs(q)%expand_exp
+        end do
     end subroutine fit_iter_begin
 
     !> Snapshot one fit's LAST-iteration raw M-step sufficient statistics + entry frame.

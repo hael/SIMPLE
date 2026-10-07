@@ -1,18 +1,19 @@
-!@descr: flex_pca 3-D delivery: the latent readouts, the run's tables and manifest, and the consensus nonuniform filter
+!@descr: flex_pca 3-D delivery of latent readouts, figures, covariance tables, eigenvolumes and manifest
 !!
 !! Everything the run publishes besides the state maps themselves: the UMAP readouts of the
 !! embedding (kept so the state stage can colour the same figure by delivered state), the
 !! coordinate/weight/target/prior tables, the eigenvalue table, the manifest, and the optional
 !! nonuniform filtering of the delivered maps from the consensus half maps.
 module simple_flex_pca_delivery_3d
-use simple_core_module_api
+use simple_core_module_api, only: del_file, dp, file_exists, int2str_pad, logfhandle, mrc_ext, simple_exception, &
+    &string
 use simple_flex_pca_records, only: flex_latent_readout, flex_selection, flex_fit_model, flex_latent, flex_state_set
-use simple_builder,        only: builder
-use simple_image,          only: image
-use simple_parameters,     only: parameters
-use simple_reconstructor,  only: reconstructor
-use simple_umap,           only: umap_embed, umap_subsample
-use simple_flex_pca_plot,  only: flex_plot_latent_jpg
+use simple_builder,          only: builder
+use simple_image,            only: image
+use simple_parameters,       only: parameters
+use simple_reconstructor,    only: reconstructor
+use simple_umap,             only: umap_embed, umap_subsample
+use simple_flex_pca_plot,    only: flex_plot_latent_jpg
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -29,13 +30,13 @@ contains
     !! (flex_pca_umap.txt), opt-in through umap=yes. Dead axes (near-zero latent variance) are
     !! excluded, since whitening explodes them into pure noise.
     subroutine deliver_latent_readouts( readout, sel, model, latent, l_umap, tag, labels )
-        type(flex_selection), intent(in) :: sel
-        type(flex_fit_model),  intent(in) :: model
-        type(flex_latent),     intent(in) :: latent
-        type(flex_latent_readout), intent(inout) :: readout
-        logical,  intent(in) :: l_umap
-        character(len=*), optional, intent(in) :: tag   !< suffix on the output names (e.g. '_deconv')
-        integer,          optional, intent(in) :: labels(:) !< per-row labels (e.g. the deconvolution's mixture component) for the figure
+        type(flex_selection),       intent(in)    :: sel
+        type(flex_fit_model),       intent(in)    :: model
+        type(flex_latent),          intent(in)    :: latent
+        type(flex_latent_readout),  intent(inout) :: readout
+        logical,                    intent(in)    :: l_umap
+        character(len=*), optional, intent(in)    :: tag   !< suffix on the output names (e.g. '_deconv')
+        integer,          optional, intent(in)    :: labels(:) !< per-row labels (e.g. the deconvolution's mixture component) for the figure
         real,    allocatable :: pz1(:), pz2(:)
         integer, allocatable :: plab(:)
         character(len=:), allocatable :: sfx
@@ -109,9 +110,9 @@ contains
     !! deliver_latent_readouts of this process; a states-only worker that never ran it writes nothing.
     subroutine write_states_umap_figure( readout, pinds, z, weights )
         type(flex_latent_readout), intent(in) :: readout
-        integer,  intent(in) :: pinds(:)
-        real(dp), intent(in) :: z(:,:)
-        real,     intent(in) :: weights(:,:)
+        integer,                   intent(in) :: pinds(:)
+        real(dp),                  intent(in) :: z(:,:)
+        real,                      intent(in) :: weights(:,:)
         integer, allocatable :: lut(:), lab(:)
         real,    allocatable :: pz1(:), pz2(:)
         integer :: i, row, nsub, pmax, s, sbest
@@ -141,12 +142,12 @@ contains
     end subroutine write_states_umap_figure
 
     subroutine write_covariance_tables( readout, build, sel, model, latent, states )
-        type(flex_selection), intent(in) :: sel
-        type(flex_fit_model),  intent(in) :: model
-        type(flex_latent),     intent(in) :: latent
-        type(flex_state_set),  intent(in) :: states
-        type(flex_latent_readout), intent(in) :: readout
-        type(builder), intent(inout) :: build
+        type(flex_selection),      intent(in)    :: sel
+        type(flex_fit_model),      intent(in)    :: model
+        type(flex_latent),         intent(in)    :: latent
+        type(flex_state_set),      intent(in)    :: states
+        type(flex_latent_readout), intent(in)    :: readout
+        type(builder),             intent(inout) :: build
         integer :: u, i, q, state
         call del_file('flex_pca_coordinates.txt')
         open(newunit=u,file='flex_pca_coordinates.txt',status='replace',action='write')
@@ -201,8 +202,8 @@ contains
     end subroutine write_covariance_tables
 
     subroutine write_covariance_eigenvolumes( eigvals, ncomp )
-        real(dp),            intent(in)    :: eigvals(ncomp)
-        integer,             intent(in)    :: ncomp
+        real(dp), intent(in) :: eigvals(ncomp)
+        integer,  intent(in) :: ncomp
         character(len=:), allocatable :: fn
         integer :: q, u
         fn = 'flex_pca_eigenvalues.txt'
@@ -218,8 +219,8 @@ contains
 
     subroutine write_covariance_manifest( params, nptcls, ncomp, nstates, axis, min_neff, sigma_loaded )
         type(parameters), intent(in) :: params
-        integer, intent(in) :: nptcls, ncomp, nstates, axis, min_neff
-        logical, intent(in) :: sigma_loaded
+        integer,          intent(in) :: nptcls, ncomp, nstates, axis, min_neff
+        logical,          intent(in) :: sigma_loaded
         integer :: u
         call del_file('flex_pca_manifest.txt')
         open(newunit=u,file='flex_pca_manifest.txt',status='replace',action='write')

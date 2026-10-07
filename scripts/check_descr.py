@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import sys
 
 TARGET_DIRS = ["src", "production", "scripts"]
 EXCLUDED_DIR = os.path.join("src", "extlibs")
+MODULE_RE = re.compile(
+    r"^\s*module\s+(?!procedure\b|subroutine\b|function\b)(\w+)", re.IGNORECASE
+)
+SUBMODULE_RE = re.compile(r"^\s*submodule\s*\(", re.IGNORECASE)
+END_MODULE_RE = re.compile(r"^\s*end\s+(?:sub)?module\b", re.IGNORECASE)
 
 
 def file_has_descr_header(filepath):
@@ -41,6 +47,24 @@ def file_has_multiline_descr(filepath):
         return False
 
 
+def file_module_unit_count(filepath):
+    """Count top-level module/submodule units without counting module procedures."""
+    count = 0
+    inside_unit = False
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                code = line.split("!", 1)[0]
+                if not inside_unit and (MODULE_RE.match(code) or SUBMODULE_RE.match(code)):
+                    count += 1
+                    inside_unit = True
+                elif inside_unit and END_MODULE_RE.match(code):
+                    inside_unit = False
+    except Exception as e:
+        print(f"Error reading {filepath}: {e}")
+    return count
+
+
 def is_excluded(path, base_dir):
     """
     Returns True if path is inside the excluded directory.
@@ -53,6 +77,7 @@ def is_excluded(path, base_dir):
 def find_missing_descr(base_dir):
     missing = []
     multiline = []
+    multi_unit = []
 
     for dirname in TARGET_DIRS:
         search_path = os.path.join(base_dir, dirname)
@@ -76,14 +101,16 @@ def find_missing_descr(base_dir):
                             missing.append(full_path)
                         elif file_has_multiline_descr(full_path):
                             multiline.append(full_path)
+                        if file_module_unit_count(full_path) > 1:
+                            multi_unit.append(full_path)
 
-    return missing, multiline
+    return missing, multiline, multi_unit
 
 
 if __name__ == "__main__":
     base_directory = sys.argv[1] if len(sys.argv) > 1 else "."
 
-    results, multiline = find_missing_descr(base_directory)
+    results, multiline, multi_unit = find_missing_descr(base_directory)
 
     if results:
         print("Files missing a '!@descr:' header (or with an empty one):\n")
@@ -94,9 +121,12 @@ if __name__ == "__main__":
               " continue in plain '!' comments):\n")
         for path in multiline:
             print(path)
-    if results or multiline:
+    if multi_unit:
+        print("Files with more than one module or submodule unit:\n")
+        for path in multi_unit:
+            print(path)
+    if results or multiline or multi_unit:
         sys.exit(1)
     else:
-        print("All checked .f90 files contain a single '!@descr:' line at the beginning.")
+        print("All checked .f90 files have one leading '!@descr:' and at most one module/submodule.")
         sys.exit(0)
-

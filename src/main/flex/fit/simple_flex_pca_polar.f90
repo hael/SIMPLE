@@ -4,99 +4,100 @@
 ! Approximations: direction snap and radial |T|^2 (tazim). Quadrature measure, KB weights and CTF adjoint must
 ! match the Cartesian cov_herm_inner path.
 module simple_flex_pca_polar
-use simple_core_module_api
-use simple_reconstructor, only: reconstructor
-use simple_kbinterpol,    only: kbinterpol
-use simple_math,          only: ceil_div, floor_div
+use simple_core_module_api, only: cmplx_zero, dp, kbalpha, kbinterpol, kbwinsz, osmpl_pad_fac, pi, &
+    &simple_exception, tiny
+use simple_reconstructor,                 only: reconstructor
+use simple_kbinterpol,                    only: kbinterpol
+use simple_math,                          only: ceil_div, floor_div
 use simple_flex_reconstructor_latent_ops, only: latent_projection_weights, weighted_expanded_cmat, &
     &LATENT_WDIM
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: polar_grid_t, polar_grid_build, polar_grid_kill
-public :: polar_project_recs, polar_sample_particle, polar_relative_inplane
-public :: polar_assign_directions, polar_sample_at_pose, polar_apply_shift
-public :: polar_dir_neighbours, polar_sample_particle_fused
+public :: polar_grid_t, flex_polar_bank, polar_grid_build, polar_grid_kill
+public :: polar_project_recs, polar_relative_inplane
+public :: polar_assign_directions, polar_sample_particle_fused
 
-!> Angular sampling density relative to the Cartesian lattice. 1.0 puts `nint(PI*r)` angles on
-!! ring `r`, i.e. an arc spacing of one lattice unit -- the same sample density as the Cartesian
-!! half-plane. Raising it oversamples the ring and correlates neighbouring samples without adding
-!! information; the noise identity E[Re(b)Re(b)] = 0.5*sig2*G assumes uncorrelated samples, so
-!! 1.0 is the value that keeps the polar path on the same footing as the Cartesian one.
-real,    parameter, public :: POLAR_ANG_OVERSAMP = 1.0
-integer, parameter         :: POLAR_NANG_MIN     = 6
+integer, parameter :: POLAR_NANG_MIN = 6
 
 !> Polar sampling grid over the half-plane k<=0, ring by ring.
-!! `nsamp` band samples carry the model; `nsamp_n` noise-ring samples exist only so the whitened
-!! noise variance can be measured in the SAME representation the Gram is measured in (see
-!! polar_sample_particle).
+!! `nsamp` samples carry the model at one-lattice-unit angular spacing.
 type :: polar_grid_t
     integer :: kfrom = 0, kto = 0, nk = 0, nsamp = 0
-    integer :: knfrom = 0, knto = 0, nsamp_n = 0
     integer :: hlo = 0, hhi = 0, klo = 0                  !< particle-plane bounds, unpadded units
     integer :: ph0 = 0, pk0 = 0                           !< padded array lower bounds of cmplx_plane
     integer,  allocatable :: rbeg(:), rend(:)             !< (nk) sample range of each ring
-    !> First sample of the SECOND half within each ring. Angles are stored even-indices-first, so
-    !! [rbeg,rmid-1] and [rmid,rend] are two interleaved half-sets of the ring. Both are contiguous, so
-    !! the half-set Grams and b-vectors are still one BLAS call each, and the ring block as a whole
-    !! stays contiguous so nothing in the solve changes shape.
-    integer,  allocatable :: rmid(:)                      !< (nk)
-    !> (2*nsamp) half-set label of each INTERLEAVED row of the packed real representation, so a
-    !! split-half score can be accumulated in one pass without touching the ring bookkeeping.
-    integer,  allocatable :: hrow(:)
     real,     allocatable :: rad(:), cs(:), sn(:), wq(:)  !< (nsamp)
     real,     allocatable :: sqwq(:)                      !< (nsamp) sqrt(wq), hoisted out of the inner loop
     real,     allocatable :: wq_ring(:)                   !< (nk) per-sample weight of that ring
-    real,     allocatable :: nrad(:), ncs(:), nsn(:), nwq(:)  !< (nsamp_n)
     logical :: exists = .false.
+  contains
+    procedure :: build => polar_grid_build
+    procedure :: kill  => polar_grid_kill
 end type polar_grid_t
+
+!> One fit's polar E-step service. The fit owns this bank explicitly; no ring geometry,
+!! projected basis, direction assignment or thread scratch is shared through module state.
+type :: flex_polar_bank
+    logical :: l_pol_grid = .false.
+    logical :: l_pol_bank_it = .false., l_pol_hyb = .false.
+    integer :: ndir_es = 0, nsamp_es = 0, nsamp2_es = 0, nk_es = 0
+    integer :: ph0_es = 0, pk0_es = 0, hlo_es = 0, hhi_es = 0, klo_es = 0
+    integer :: nyqr_es = 0, nyqb_es = 0, rhyb_es = 0, npos_es = 0
+    integer,  allocatable :: hex_es(:), kex_es(:)
+    type(polar_grid_t) :: pg_es
+    real,     allocatable :: rmatb_es(:,:,:), nrmb_es(:,:)
+    real,     allocatable :: cae(:), sae(:)
+    integer,  allocatable :: dir_es(:)
+    logical,  allocatable :: dused_es(:)
+    real,     allocatable :: UsallE(:,:,:)
+    real(dp), allocatable :: CfE(:,:,:), Cm0E(:,:,:), c00E(:,:)
+    complex,  allocatable :: UbankE(:,:,:)
+    real,     allocatable :: CspE(:,:,:)
+    real,     allocatable :: xws_es(:,:), wr_es(:,:), Reb_es(:,:)
+    real(dp), allocatable :: wrd_es(:,:)
+    real :: sec_bank = 0.
+  contains
+    procedure :: kill => flex_polar_bank_kill
+end type flex_polar_bank
 
 contains
 
-    !> Ring-wise polar grid: band rings kfrom..kto (model planes vanish beyond kto) and pure-noise rings
-    !! [knfrom,knto] for sig2; ang_osamp multiplies the angles per ring. gate_lo makes the measure exclude
-    !! h^2+k^2 <= gate_lo (nint shells: above shell r starts at r*(r+1)+1) instead of h^2+k^2 < kfrom^2.
-    subroutine polar_grid_build( g, kfrom, kto, knfrom, knto, hlo, hhi, klo, ph0, pk0, &
-            &ang_osamp, gate_lo )
-        type(polar_grid_t), intent(inout) :: g
-        integer,            intent(in)    :: kfrom, kto, knfrom, knto, hlo, hhi, klo, ph0, pk0
-        integer,            intent(in)    :: ang_osamp
+    !> Ring-wise polar grid over kfrom..kto. gate_lo makes the measure exclude h^2+k^2 <= gate_lo
+    !! (nint shells: above shell r starts at r*(r+1)+1) instead of h^2+k^2 < kfrom^2.
+    subroutine polar_grid_build( g, kfrom, kto, hlo, hhi, klo, ph0, pk0, gate_lo )
+        class(polar_grid_t), intent(inout) :: g
+        integer,            intent(in)    :: kfrom, kto, hlo, hhi, klo, ph0, pk0
         integer, optional,  intent(in)    :: gate_lo
-        integer :: r, t, nang, j, ncart, h, k, nyq_disk, osamp, hk2
+        integer :: r, t, nang, j, ncart, h, k, nyq_disk, hk2
         real    :: phi, dphi, wtot, scal
         logical :: l_gate_lo
         call polar_grid_kill(g)
         if( kfrom < 1 .or. kto < kfrom ) THROW_HARD('invalid band; polar_grid_build')
-        osamp = 1
-        osamp = max(1, ang_osamp)
         l_gate_lo = present(gate_lo)
         g%kfrom = kfrom; g%kto = kto; g%nk = kto - kfrom + 1
-        g%knfrom = knfrom; g%knto = knto
         g%hlo = hlo; g%hhi = hhi; g%klo = klo
         g%ph0 = ph0; g%pk0 = pk0
         ! --- band rings
         g%nsamp = 0
         do r = kfrom, kto
-            g%nsamp = g%nsamp + osamp*polar_nang(r)
+            g%nsamp = g%nsamp + polar_nang(r)
         end do
-        allocate(g%rbeg(g%nk), g%rend(g%nk), g%rmid(g%nk), g%wq_ring(g%nk))
+        allocate(g%rbeg(g%nk), g%rend(g%nk), g%wq_ring(g%nk))
         allocate(g%rad(g%nsamp), g%cs(g%nsamp), g%sn(g%nsamp), g%wq(g%nsamp), g%sqwq(g%nsamp))
         j = 0
         do r = kfrom, kto
-            nang = osamp*polar_nang(r)
+            nang = polar_nang(r)
             dphi = PI / real(nang)
             g%rbeg(r-kfrom+1) = j + 1
-            ! even angle indices first, then odd: an interleaved half-set split that is contiguous in
-            ! storage. Splitting by a contiguous arc instead would correlate the halves with
-            ! orientation, which is exactly what a reliability estimate must not do.
+            ! Retain the established even-then-odd ring layout used by every bank consumer.
             do t = 1, nang, 2
                 phi = real(t-1) * dphi
                 j   = j + 1
                 g%rad(j) = real(r); g%cs(j) = cos(phi); g%sn(j) = sin(phi)
                 g%wq(j)  = PI * real(r) / real(nang)      ! half-annulus area / #samples
             end do
-            g%rmid(r-kfrom+1) = j + 1
             do t = 2, nang, 2
                 phi = real(t-1) * dphi
                 j   = j + 1
@@ -131,63 +132,56 @@ contains
             g%wq_ring  = g%wq_ring * scal
         endif
         g%sqwq = sqrt(g%wq)
-        allocate(g%hrow(2*g%nsamp))
-        do r = 1, g%nk
-            do j = g%rbeg(r), g%rend(r)
-                t = merge(1, 2, j < g%rmid(r))
-                g%hrow(2*j-1) = t
-                g%hrow(2*j)   = t
-            end do
-        end do
-        ! --- noise rings (particle only; every model plane is zero out here)
-        g%nsamp_n = 0
-        if( knto >= knfrom .and. knfrom >= 1 )then
-            do r = knfrom, knto
-                g%nsamp_n = g%nsamp_n + polar_nang(r)
-            end do
-            allocate(g%nrad(g%nsamp_n), g%ncs(g%nsamp_n), g%nsn(g%nsamp_n), g%nwq(g%nsamp_n))
-            j = 0
-            do r = knfrom, knto
-                nang = polar_nang(r)
-                dphi = PI / real(nang)
-                do t = 1, nang
-                    phi = real(t-1) * dphi
-                    j   = j + 1
-                    g%nrad(j) = real(r)
-                    g%ncs(j)  = cos(phi)
-                    g%nsn(j)  = sin(phi)
-                    g%nwq(j)  = PI * real(r) / real(nang)
-                end do
-            end do
-        else
-            allocate(g%nrad(0), g%ncs(0), g%nsn(0), g%nwq(0))
-        endif
         g%exists = .true.
     end subroutine polar_grid_build
 
     pure integer function polar_nang( r )
         integer, intent(in) :: r
-        polar_nang = max(POLAR_NANG_MIN, nint(PI * real(r) * POLAR_ANG_OVERSAMP))
+        polar_nang = max(POLAR_NANG_MIN, nint(PI * real(r)))
     end function polar_nang
 
     subroutine polar_grid_kill( g )
-        type(polar_grid_t), intent(inout) :: g
+        class(polar_grid_t), intent(inout) :: g
         if( allocated(g%rbeg)    ) deallocate(g%rbeg)
         if( allocated(g%rend)    ) deallocate(g%rend)
-        if( allocated(g%rmid)    ) deallocate(g%rmid)
-        if( allocated(g%hrow)    ) deallocate(g%hrow)
         if( allocated(g%wq_ring) ) deallocate(g%wq_ring)
         if( allocated(g%rad)     ) deallocate(g%rad)
         if( allocated(g%cs)      ) deallocate(g%cs)
         if( allocated(g%sn)      ) deallocate(g%sn)
         if( allocated(g%wq)      ) deallocate(g%wq)
         if( allocated(g%sqwq)    ) deallocate(g%sqwq)
-        if( allocated(g%nrad)    ) deallocate(g%nrad)
-        if( allocated(g%ncs)     ) deallocate(g%ncs)
-        if( allocated(g%nsn)     ) deallocate(g%nsn)
-        if( allocated(g%nwq)     ) deallocate(g%nwq)
         g%exists = .false.
     end subroutine polar_grid_kill
+
+    subroutine flex_polar_bank_kill( self )
+        class(flex_polar_bank), intent(inout) :: self
+        call self%pg_es%kill
+        if( allocated(self%UsallE) ) deallocate(self%UsallE)
+        if( allocated(self%CfE)    ) deallocate(self%CfE)
+        if( allocated(self%Cm0E)   ) deallocate(self%Cm0E)
+        if( allocated(self%c00E)   ) deallocate(self%c00E)
+        if( allocated(self%UbankE) ) deallocate(self%UbankE)
+        if( allocated(self%CspE)   ) deallocate(self%CspE)
+        if( allocated(self%xws_es) ) deallocate(self%xws_es)
+        if( allocated(self%wr_es)  ) deallocate(self%wr_es)
+        if( allocated(self%wrd_es) ) deallocate(self%wrd_es)
+        if( allocated(self%Reb_es) ) deallocate(self%Reb_es)
+        if( allocated(self%rmatb_es) ) deallocate(self%rmatb_es)
+        if( allocated(self%nrmb_es)  ) deallocate(self%nrmb_es)
+        if( allocated(self%dir_es) ) deallocate(self%dir_es)
+        if( allocated(self%cae)    ) deallocate(self%cae)
+        if( allocated(self%sae)    ) deallocate(self%sae)
+        if( allocated(self%dused_es) ) deallocate(self%dused_es)
+        if( allocated(self%hex_es) ) deallocate(self%hex_es)
+        if( allocated(self%kex_es) ) deallocate(self%kex_es)
+        self%l_pol_grid = .false.
+        self%l_pol_bank_it = .false.
+        self%l_pol_hyb = .false.
+        self%ndir_es = 0; self%nsamp_es = 0; self%nsamp2_es = 0; self%nk_es = 0
+        self%ph0_es = 0; self%pk0_es = 0; self%hlo_es = 0; self%hhi_es = 0; self%klo_es = 0
+        self%nyqr_es = 0; self%nyqb_es = 0; self%rhyb_es = 0; self%npos_es = 0
+        self%sec_bank = 0.
+    end subroutine flex_polar_bank_kill
 
     !> Polar central sections of `nrec` reconstructors at ONE direction, all at once. The sample
     !! geometry -- 3D location, KB window, weights, in/out-of-lattice test -- depends on the sample
@@ -270,66 +264,8 @@ contains
         endif
     end subroutine polar_relative_inplane
 
-    !> Polar-sample one particle plane at in-plane angle (ca,sa) from its bank direction: band rings give
-    !! xw = conj(T)*y and wr = ring mean |T|^2; noise rings give the weighted residual power (hfpw/hfcnt) for
-    !! sig2. tazim, the mean relative azimuthal spread of |T|^2 per ring, is 0 without astigmatism.
-    subroutine polar_sample_particle( cplane, tplane, g, ca, sa, xw, wr, hfpw, hfcnt, tazim, xw1, xw2 )
-        complex,            intent(in)  :: cplane(:,:)
-        complex,            intent(in)  :: tplane(:,:)
-        type(polar_grid_t), intent(in)  :: g
-        real,               intent(in)  :: ca, sa
-        complex,            intent(out) :: xw(:)
-        real,               intent(out) :: wr(:)
-        real(dp),           intent(out) :: hfpw, hfcnt
-        real,               intent(out) :: tazim
-        !> the two INDEPENDENT half-fields, by Cartesian lattice parity (see below)
-        complex, optional,  intent(out) :: xw1(:), xw2(:)
-        type(kbinterpol) :: kbwin
-        integer :: j, ir, nang
-        real    :: hu, ku, c1, s1, t2, tm, tv
-        complex :: yv, tv_c
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        tazim = 0.
-        do ir = 1, g%nk
-            tm = 0.; tv = 0.
-            do j = g%rbeg(ir), g%rend(ir)
-                c1 = g%cs(j)*ca - g%sn(j)*sa            ! cos(phi + alpha)
-                s1 = g%sn(j)*ca + g%cs(j)*sa            ! sin(phi + alpha)
-                hu =  g%rad(j) * c1
-                ku = -g%rad(j) * s1
-                yv   = polar_interp_plane(cplane, g, kbwin, hu, ku)
-                tv_c = polar_interp_plane(tplane, g, kbwin, hu, ku)
-                xw(j) = conjg(tv_c) * yv
-                ! half-split by LATTICE (hx+ky) parity, not by alternating ring samples: neighbours ~1 unit
-                ! apart share 3-tap KB taps and hence noise, while the parity halves use disjoint samples
-                if( present(xw1) ) xw1(j) = conjg(tv_c) * polar_interp_plane(cplane, g, kbwin, hu, ku, 1)
-                if( present(xw2) ) xw2(j) = conjg(tv_c) * polar_interp_plane(cplane, g, kbwin, hu, ku, 2)
-                t2    = real(tv_c*conjg(tv_c))
-                tm    = tm + t2
-                tv    = tv + t2*t2
-            end do
-            nang   = g%rend(ir) - g%rbeg(ir) + 1
-            tm     = tm / real(nang)
-            wr(ir) = tm
-            tv     = max(0., tv/real(nang) - tm*tm)
-            if( tm > TINY ) tazim = tazim + sqrt(tv)/tm
-        end do
-        tazim = tazim / real(max(1,g%nk))
-        hfpw = 0.d0; hfcnt = 0.d0
-        do j = 1, g%nsamp_n
-            c1 = g%ncs(j)*ca - g%nsn(j)*sa
-            s1 = g%nsn(j)*ca + g%ncs(j)*sa
-            hu =  g%nrad(j) * c1
-            ku = -g%nrad(j) * s1
-            yv = polar_interp_plane(cplane, g, kbwin, hu, ku)
-            hfpw  = hfpw  + real(g%nwq(j),dp) * real(yv*conjg(yv), dp)
-            hfcnt = hfcnt + real(g%nwq(j),dp)
-        end do
-    end subroutine polar_sample_particle
-
-    !> Allocation-free polar_sample_particle for the shared-direction E-step: one KB window per ring sample
-    !! serves the data and transfer gathers, xws is written sqrt(wq)-packed, and xws/wr/tazim match
-    !! polar_sample_particle_packed without halves bit for bit. No noise rings, no parity half-fields.
+    !> Allocation-free polar sampler for the shared-direction E-step: one KB window per ring sample
+    !! serves the data and transfer gathers, and xws is written sqrt(wq)-packed.
     subroutine polar_sample_particle_fused( cplane, tplane, g, ca, sa, xws, wr, tazim )
         complex,            intent(in)  :: cplane(:,:)
         complex,            intent(in)  :: tplane(:,:)
@@ -412,137 +348,6 @@ contains
         end do
         tazim = tazim / real(max(1,g%nk))
     end subroutine polar_sample_particle_fused
-
-    !> Polar-sample a particle at a TRIAL pose: in-plane angle (ca,sa) plus an extra Fourier-space
-    !! shift phase. The plane already carries the project's own shift, so (px,py) is the increment.
-    !!
-    !! This is the operation that makes pose refinement cheap in polar coordinates. The in-plane
-    !! angle is just a different set of sampling angles -- no interpolation of the model, no
-    !! re-projection of any volume -- and the shift is a phase multiply that needs no resampling at
-    !! all, so a whole shift grid can be scored from ONE angular resampling.
-    subroutine polar_sample_at_pose( cplane, tplane, g, ca, sa, px, py, xw )
-        complex,            intent(in)  :: cplane(:,:), tplane(:,:)
-        type(polar_grid_t), intent(in)  :: g
-        real,               intent(in)  :: ca, sa, px, py
-        complex,            intent(out) :: xw(:)
-        type(kbinterpol) :: kbwin
-        integer :: j
-        real    :: c1, s1, hu, ku, ph
-        complex :: yv, tv_c
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        do j = 1, g%nsamp
-            c1 = g%cs(j)*ca - g%sn(j)*sa
-            s1 = g%sn(j)*ca + g%cs(j)*sa
-            hu =  g%rad(j) * c1
-            ku = -g%rad(j) * s1
-            yv    = polar_interp_plane(cplane, g, kbwin, hu, ku)
-            tv_c  = polar_interp_plane(tplane, g, kbwin, hu, ku)
-            ph    = hu*px + ku*py
-            xw(j) = conjg(tv_c) * yv * cmplx(cos(ph), sin(ph))
-        end do
-    end subroutine polar_sample_at_pose
-
-    !> Apply only the shift phase increment to samples already taken at some angle. No resampling,
-    !! so an entire shift grid costs one complex multiply per sample per trial.
-    pure subroutine polar_apply_shift( g, ca, sa, px, py, xw_in, xw_out )
-        type(polar_grid_t), intent(in)  :: g
-        real,               intent(in)  :: ca, sa, px, py
-        complex,            intent(in)  :: xw_in(:)
-        complex,            intent(out) :: xw_out(:)
-        integer :: j
-        real    :: c1, s1, hu, ku, ph
-        do j = 1, g%nsamp
-            c1 = g%cs(j)*ca - g%sn(j)*sa
-            s1 = g%sn(j)*ca + g%cs(j)*sa
-            hu =  g%rad(j) * c1
-            ku = -g%rad(j) * s1
-            ph = hu*px + ku*py
-            xw_out(j) = xw_in(j) * cmplx(cos(ph), sin(ph))
-        end do
-    end subroutine polar_apply_shift
-
-    !> KB interpolation of a stored Fourier half-plane at continuous UNPADDED lattice coordinates.
-    !! gen_fplane4rec fills only indices that are multiples of OSMPL_PAD_FAC, so the data lattice is
-    !! the unpadded one; the Friedel mate is taken per tap, because a window centred near k=0
-    !! straddles the stored boundary.
-    !> `parity`: 0 uses every tap; 1 and 2 use only the taps whose UNPADDED lattice index has
-    !! (hx+ky) even / odd, renormalised. This is how an INDEPENDENT half-split is obtained in the
-    !! polar representation -- see polar_sample_particle for why alternating polar samples is not.
-    pure complex function polar_interp_plane( plane, g, kbwin, hu, ku, parity ) result( val )
-        complex,            intent(in) :: plane(:,:)
-        type(polar_grid_t), intent(in) :: g
-        type(kbinterpol),   intent(in) :: kbwin
-        real,               intent(in) :: hu, ku
-        integer, optional,  intent(in) :: parity
-        real    :: loc(3), wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM), w
-        integer :: win(2,3), ix, iy, hx, ky, pf, ipar
-        real    :: wsum
-        complex :: cv
-        pf     = OSMPL_PAD_FAC
-        ipar   = 0
-        if( present(parity) ) ipar = parity
-        loc    = [hu, ku, 0.]
-        call latent_projection_weights(kbwin, loc, win, wx, wy, wz)
-        val  = CMPLX_ZERO
-        wsum = 0.
-        do iy = 1, LATENT_WDIM
-            ky = win(1,2) + iy - 1
-            do ix = 1, LATENT_WDIM
-                hx = win(1,1) + ix - 1
-                w  = wx(ix) * wy(iy)
-                if( ipar /= 0 )then
-                    if( modulo(hx + ky, 2) + 1 /= ipar ) cycle
-                endif
-                if( ky > 0 )then
-                    ! Friedel mate, per tap: a window centred near k=0 straddles the stored half
-                    if( -hx < g%hlo .or. -hx > g%hhi .or. -ky < g%klo ) cycle
-                    cv = conjg(plane(pf*(-hx) - g%ph0 + 1, pf*(-ky) - g%pk0 + 1))
-                else
-                    if( hx < g%hlo .or. hx > g%hhi .or. ky < g%klo ) cycle
-                    cv = plane(pf*hx - g%ph0 + 1, pf*ky - g%pk0 + 1)
-                endif
-                val  = val + w * cv
-                wsum = wsum + w
-            end do
-        end do
-        ! renormalise so each parity sub-kernel is still a partition of unity: the two halves then
-        ! carry the same signal and independent noise, which is what a reliability split requires
-        if( ipar /= 0 .and. abs(wsum) > 1.e-12 ) val = val / wsum
-    end function polar_interp_plane
-
-    !> The `k` nearest bank directions to each bank direction, by plane-normal dot product. This is
-    !! the candidate set for the P2 direction search, and restricting to it IS the cone limit: this
-    !! is refinement, not global search -- a particle that wants to move across the sphere is telling
-    !! you about the consensus, not about conformation.
-    subroutine polar_dir_neighbours( ndir, k, nrm_b, nnmat )
-        integer, intent(in)  :: ndir, k
-        real,    intent(in)  :: nrm_b(3,ndir)
-        integer, intent(out) :: nnmat(k,ndir)
-        real,    allocatable :: d(:,:)
-        integer :: i, j, m, jbest, ithr
-        real    :: best
-        allocate(d(ndir, omp_get_max_threads()))
-        !$omp parallel do default(shared) private(i,j,m,jbest,best,ithr) schedule(static) proc_bind(close)
-        do i = 1, ndir
-            ithr = omp_get_thread_num() + 1
-            do j = 1, ndir
-                d(j,ithr) = nrm_b(1,i)*nrm_b(1,j) + nrm_b(2,i)*nrm_b(2,j) + nrm_b(3,i)*nrm_b(3,j)
-            end do
-            do m = 1, k
-                best = -2.0; jbest = 1
-                do j = 1, ndir
-                    if( d(j,ithr) > best )then
-                        best = d(j,ithr); jbest = j
-                    endif
-                end do
-                nnmat(m,i)   = jbest
-                d(jbest,ithr) = -3.0
-            end do
-        end do
-        !$omp end parallel do
-        deallocate(d)
-    end subroutine polar_dir_neighbours
-
 
     !> Nearest bank direction for every particle, by the plane normal (row 3 of the rotation
     !! matrix). Done as a BLAS-3 sweep because a per-particle scan over the direction grid is

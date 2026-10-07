@@ -5,7 +5,7 @@
 !! coordinates, precisions, mixture labels and noise scale as a trailing block. A states-only
 !! resume (infile=) reads the raw block and adopts the trailing block when present.
 module simple_flex_pca_embedding_io
-use simple_core_module_api
+use simple_core_module_api, only: del_file, dp, file_exists, logfhandle, simple_exception
 use simple_flex_pca_records, only: flex_selection, flex_fit_model, flex_latent
 implicit none
 private
@@ -27,11 +27,11 @@ contains
     !! be tried without re-fitting the basis and re-embedding every particle.
     subroutine write_embedding_cache( fname, box_crop, smpd_crop, sel, model, latent )
         type(flex_selection), intent(in) :: sel
-        type(flex_fit_model),  intent(in) :: model
-        type(flex_latent),     intent(in) :: latent
-        character(len=*), intent(in) :: fname
-        integer,          intent(in) :: box_crop          !< the working lattice the embedding was made on (provenance)
-        real,             intent(in) :: smpd_crop
+        type(flex_fit_model), intent(in) :: model
+        type(flex_latent),    intent(in) :: latent
+        character(len=*),     intent(in) :: fname
+        integer,              intent(in) :: box_crop          !< the working lattice the embedding was made on (provenance)
+        real,                 intent(in) :: smpd_crop
         integer :: u
         call del_file(fname)
         open(newunit=u, file=fname, status='replace', action='write', access='stream', form='unformatted')
@@ -54,11 +54,11 @@ contains
 
     subroutine read_embedding_cache( fname, box_crop, smpd_crop, sel, model, latent )
         type(flex_selection), intent(in)    :: sel
-        type(flex_fit_model),  intent(inout) :: model   !< ncomp, eigvals, sig2_eff read
-        type(flex_latent),     intent(inout) :: latent  !< z, contrast, residual energies, precision read
-        character(len=*), intent(in)    :: fname
-        integer,          intent(in)    :: box_crop        !< the run's working lattice; 0 skips the lattice check
-        real,             intent(in)    :: smpd_crop
+        type(flex_fit_model), intent(inout) :: model     !< ncomp, eigvals, sig2_eff read
+        type(flex_latent),    intent(inout) :: latent    !< z, contrast, residual energies, precision read
+        character(len=*),     intent(in)    :: fname
+        integer,              intent(in)    :: box_crop  !< the run's working lattice; 0 skips the lattice check
+        real,                 intent(in)    :: smpd_crop
         integer, allocatable :: pinds_cached(:)
         character(len=len(COV_CACHE_MAGIC)) :: magic
         integer :: u, ver, nptcls_c, i, box_c
@@ -115,10 +115,10 @@ contains
     !> Append the deconvolved block to an existing raw cache. Anything already after the raw block
     !! (an older deconvolved block) is overwritten: the file is truncated at the raw block's end.
     subroutine append_deconv_block( fname, nptcls, ncomp, z, precision, labels, noise_scale )
-        character(len=*),  intent(in) :: fname
-        integer,           intent(in) :: nptcls, ncomp
-        real(dp),          intent(in) :: z(:,:), precision(:,:,:)
-        integer, optional, intent(in) :: labels(:)
+        character(len=*),   intent(in) :: fname
+        integer,            intent(in) :: nptcls, ncomp
+        real(dp),           intent(in) :: z(:,:), precision(:,:,:)
+        integer,  optional, intent(in) :: labels(:)
         real(dp), optional, intent(in) :: noise_scale
         integer, allocatable :: lab(:)
         real(dp) :: ns

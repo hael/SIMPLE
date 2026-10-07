@@ -3,18 +3,18 @@
 !! Consumes what an E-step formulation produces for one particle -- the projected Gram G, the
 !! data and mean rows b and c, the mean/data scalars -- and returns the posterior: the MAP
 !! latent (or the mixture-weighted mean), its precision/covariance, log det, likelihood
-!! contribution and the fitted contrast (ECM/MCFA), plus the mixture M-step and its
+!! contribution at the fixed per-particle contrast, plus the mixture M-step and its
 !! initialisation and the estimator precision of the MAP embedding. Dense algebra on arrays;
 !! no projection code, no fit state, no file.
 module simple_flex_pca_posterior
-use simple_core_module_api
-use simple_linalg, only: jacobi, eigsrt
+use simple_core_module_api, only: dp, dtiny, eigsrt, jacobi, simple_exception
+use simple_linalg,             only: jacobi, eigsrt
 use simple_flex_pca_fit_types, only: flex_fit
 implicit none
 private
 
 public :: spd_logdet_dp, quad_form, spd_solve_dp, spd_inv_dp
-public :: probe_solve_ecm, probe_solve_mix
+public :: probe_solve_plain, probe_solve_mix
 public :: mcfa_init, mcfa_condition, mcfa_mstep
 public :: map_sampling_precision
 
@@ -51,7 +51,6 @@ contains
         ok = .true.
     end subroutine spd_logdet_dp
 
-
     !>  z' M z for symmetric M.
     pure module function quad_form( M, z, n ) result( val )
         integer,  intent(in) :: n
@@ -65,7 +64,6 @@ contains
             end do
         end do
     end function quad_form
-
 
     !> In-place symmetric positive-definite solve A x = b (b overwritten by x) via Cholesky. A is first
     !! scaled by its mean diagonal, so the retry ridge is RELATIVE: an absolute ridge either swamps a
@@ -112,7 +110,6 @@ contains
         end do
         b = 0.d0
     end subroutine spd_solve_dp
-
 
     !> SPD inverse by Cholesky, same rescaling and ridge escalation as spd_solve_dp; zeros if all
     !! attempts fail. A is overwritten.
@@ -166,25 +163,20 @@ contains
         end do
     end subroutine spd_inv_dp
 
-
-    !> One particle's MAP solve; nml>0 adds ECM contrast updates against the current basis,
-    !!   a <- (m'y + b'z) / (||m||^2 + 2c'z + z'Gz + tr(G A^-1)),  clamped to [0.1, 5].
-    !! tr(G A^-1) is the posterior variance; dropping it biases a high.
-    !> One particle's ECM posterior solve under the plain 1/Gamma prior: the fit's E-step
-    !! statistics of thread ithr in, the latent, its posterior covariance and the contrast out.
-    subroutine probe_solve_ecm( fit, ithr, myv, e_mm, a, ldA, lok, quad )
+    !> One particle's posterior solve under the plain 1/Gamma prior at fixed contrast: the
+    !! fit's E-step statistics of thread ithr in, the latent and its posterior covariance out.
+    subroutine probe_solve_plain( fit, ithr, a, ldA, lok, quad )
         class(flex_fit), intent(inout) :: fit
         integer,         intent(in)    :: ithr
-        real(dp),        intent(in)    :: myv, e_mm
-        real(dp),        intent(inout) :: a
+        real(dp),        intent(in)    :: a
         real(dp),        intent(out)   :: ldA
         logical,         intent(out)   :: lok
         real(dp),        intent(out)   :: quad
-        real(dp) :: Amat(fit%model%ncomp,fit%model%ncomp), Acp(fit%model%ncomp,fit%model%ncomp), h(fit%model%ncomp), aa, a_num, a_den
-        integer  :: q, icm
-        associate( n => fit%model%ncomp, nml => fit%spec%nml_plain, sig2 => fit%model%sig2, G => fit%iter%Gth(:,:,ithr), b => fit%iter%bth(:,ithr), &
+        real(dp) :: Amat(fit%model%ncomp,fit%model%ncomp)
+        real(dp) :: Acp(fit%model%ncomp,fit%model%ncomp), h(fit%model%ncomp), aa
+        integer  :: q
+        associate( n => fit%model%ncomp, sig2 => fit%model%sig2, G => fit%iter%Gth(:,:,ithr), b => fit%iter%bth(:,ithr), &
             &c => fit%iter%cth(:,ithr), prior_ => fit%iter%prior, z_ => fit%iter%zth(:,ithr), Ainv_ => fit%iter%Ainvth(:,:,ithr) )
-        do icm = 0, max(0, nml)
             aa   = a*a
             Amat = (aa/sig2)*G
             do q = 1, n
@@ -197,14 +189,8 @@ contains
             call spd_inv_dp(Acp, Ainv_, n)
             call spd_solve_dp(Amat, z_, n)
             quad = dot_product(h, z_)
-            if( icm >= max(0, nml) ) exit
-            a_num = myv + dot_product(b, z_)
-            a_den = e_mm + 2.d0*dot_product(c, z_) + quad_form(G, z_, n) + sum(G*Ainv_)
-            if( a_den > DTINY ) a = min(5.0d0, max(0.1d0, a_num/a_den))
-        end do
         end associate
-    end subroutine probe_solve_ecm
-
+    end subroutine probe_solve_plain
 
     !> Per-particle MCFA posterior from fetched sufficient statistics (G, b, c) -- the ONE
     !! source for the mixture E-step, shared by the plain CPU body and the fused device
@@ -214,22 +200,25 @@ contains
     !> One particle's posterior solve under the MCFA mixture prior: the fit's E-step statistics of
     !! thread ithr in; the latent mean, the second moment of batch row i, the thread's mixture
     !! accumulators and the likelihood term out.
-    subroutine probe_solve_mix( fit, ithr, i, myv, e_mm, a, ldA, lok, nll_add )
+    subroutine probe_solve_mix( fit, ithr, i, a, ldA, lok, nll_add )
         class(flex_fit), intent(inout) :: fit
         integer,         intent(in)    :: ithr, i
-        real(dp),        intent(in)    :: myv, e_mm
-        real(dp),        intent(inout) :: a
+        real(dp),        intent(in)    :: a
         real(dp),        intent(out)   :: ldA, nll_add
         logical,         intent(out)   :: lok
-        real(dp) :: Amat(fit%model%ncomp,fit%model%ncomp), Acp(fit%model%ncomp,fit%model%ncomp), rhs0(fit%model%ncomp), mk(fit%model%ncomp,fit%spec%kmix), lw(fit%spec%kmix), rk(fit%spec%kmix)
-        real(dp) :: aa, lwm, wsm, a_num, a_den
-        integer  :: q, r, kk, icm
-        associate( n => fit%model%ncomp, kmix => fit%spec%kmix, nml => fit%spec%nml_plain, sig2 => fit%model%sig2, &
+        real(dp) :: Amat(fit%model%ncomp,fit%model%ncomp), Acp(fit%model%ncomp,fit%model%ncomp)
+        real(dp) :: rhs0(fit%model%ncomp), mk(fit%model%ncomp,fit%spec%kmix)
+        real(dp) :: lw(fit%spec%kmix), rk(fit%spec%kmix)
+        real(dp) :: aa, lwm, wsm
+        integer  :: q, r, kk
+        associate( n => fit%model%ncomp, kmix => fit%spec%kmix, sig2 => fit%model%sig2, &
             &G => fit%iter%Gth(:,:,ithr), b => fit%iter%bth(:,ithr), c => fit%iter%cth(:,ithr), &
-            &Ominv => fit%history%mix_Ominv, Omxi => fit%history%mix_Omxi, lpi => fit%history%mix_lpi, xiOx => fit%history%mix_xiOx, &
+            &Ominv => fit%history%mix_Ominv, Omxi => fit%history%mix_Omxi, &
+            &lpi => fit%history%mix_lpi, xiOx => fit%history%mix_xiOx, &
             &zbar => fit%iter%zth(:,ithr), Ainv_ => fit%iter%Ainvth(:,:,ithr), dens_ => fit%iter%dens(:,:,i), &
-            &sr_acc => fit%history%mxa_sr(:,ithr), sm_acc => fit%history%mxa_sm(:,:,ithr), smm_acc => fit%history%mxa_smm(:,:,:,ithr), sainv_acc => fit%history%mxa_sainv(:,:,ithr) )
-        do icm = 0, max(0, nml)
+            &sr_acc => fit%history%mxa_sr(:,ithr), sm_acc => fit%history%mxa_sm(:,:,ithr), &
+            &smm_acc => fit%history%mxa_smm(:,:,:,ithr), &
+            &sainv_acc => fit%history%mxa_sainv(:,:,ithr) )
             aa   = a*a
             Amat = (aa/sig2)*G + Ominv
             Acp  = Amat
@@ -262,27 +251,18 @@ contains
                     end do
                 end do
             end do
-            if( icm >= max(0, nml) ) exit
-            ! ECM amplitude update under the mixture: the plain path's a-update with the
-            ! mixture posterior moments in place of the single-Gaussian ones. This is the
-            ! lever that separates on-particle amplitude (ice) from conformation.
-            a_num = myv + dot_product(b, zbar)
-            a_den = e_mm + 2.d0*dot_product(c, zbar) + sum(G*dens_)
-            if( a_den > DTINY ) a = min(5.0d0, max(0.1d0, a_num/a_den))
-        end do
-        ! mixture marginal, varying part; the N*logdet(Omega) term is added once globally
-        nll_add = ldA - 2.d0*(lwm + log(max(wsm, DTINY)))
-        sainv_acc = sainv_acc + Ainv_
-        do kk = 1, kmix
-            sr_acc(kk)   = sr_acc(kk)   + rk(kk)
-            sm_acc(:,kk) = sm_acc(:,kk) + rk(kk)*mk(:,kk)
-            do r = 1, n
-                smm_acc(:,r,kk) = smm_acc(:,r,kk) + rk(kk)*mk(:,kk)*mk(r,kk)
+            ! mixture marginal, varying part; the N*logdet(Omega) term is added once globally
+            nll_add = ldA - 2.d0*(lwm + log(max(wsm, DTINY)))
+            sainv_acc = sainv_acc + Ainv_
+            do kk = 1, kmix
+                sr_acc(kk)   = sr_acc(kk)   + rk(kk)
+                sm_acc(:,kk) = sm_acc(:,kk) + rk(kk)*mk(:,kk)
+                do r = 1, n
+                    smm_acc(:,r,kk) = smm_acc(:,r,kk) + rk(kk)*mk(:,kk)*mk(r,kk)
+                end do
             end do
-        end do
         end associate
     end subroutine probe_solve_mix
-
 
     !> MCFA initialisation. K=1 pins the single component at the origin over the current Gamma
     !! diagonal -- with the diagonal constraint in mcfa_condition this makes the mixture path
@@ -381,7 +361,6 @@ contains
         deallocate(rows, lab, cnt, d2min)
     end subroutine mcfa_init
 
-
     !> Symmetrise, eigen-floor and invert the tied prior covariance. diag_only enforces the
     !! K=1 reduction-test constraint (matching the plain path's diagonal Gamma exactly).
     subroutine mcfa_condition( ncomp, diag_only, Om, Ominv, ldOm )
@@ -423,7 +402,6 @@ contains
         end do
     end subroutine mcfa_condition
 
-
     !> MCFA M-step from REDUCED sufficient statistics (the thread reduction happens at
     !! the call site, so a rotated running-averaged history can be substituted for the
     !! this-iteration statistics transparently):
@@ -439,29 +417,27 @@ contains
         integer  :: k, r2
         associate( ncomp => fit%model%ncomp, kmix => fit%spec%kmix, nval => fit%iter%nval, pin_origin => (fit%spec%kmix == 1), &
             &ppi => fit%history%mix_pi, xi => fit%history%mix_xi, Om => fit%history%mix_Om, Ominv => fit%history%mix_Ominv, ldOm => fit%history%ldOm_mix )
-        do k = 1, kmix
-            ppi(k) = max(sr(k)/real(max(1,nval),dp), 1.d-4)
-        end do
-        ppi = ppi / sum(ppi)
-        if( .not. pin_origin )then
             do k = 1, kmix
-                ! a starved component keeps its old mean rather than dividing by ~0
-                if( sr(k) > 1.d-8*real(max(1,nval),dp) ) xi(:,k) = sm(:,k)/sr(k)
+                ppi(k) = max(sr(k)/real(max(1,nval),dp), 1.d-4)
             end do
-        endif
-        Om = sai
-        do k = 1, kmix
-            do r2 = 1, ncomp
-                Om(:,r2) = Om(:,r2) + smm(:,r2,k) - xi(:,k)*sm(r2,k) - sm(:,k)*xi(r2,k) &
-                    &+ sr(k)*xi(:,k)*xi(r2,k)
+            ppi = ppi / sum(ppi)
+            if( .not. pin_origin )then
+                do k = 1, kmix
+                    ! a starved component keeps its old mean rather than dividing by ~0
+                    if( sr(k) > 1.d-8*real(max(1,nval),dp) ) xi(:,k) = sm(:,k)/sr(k)
+                end do
+            endif
+            Om = sai
+            do k = 1, kmix
+                do r2 = 1, ncomp
+                    Om(:,r2) = Om(:,r2) + smm(:,r2,k) - xi(:,k)*sm(r2,k) - sm(:,k)*xi(r2,k) &
+                        &+ sr(k)*xi(:,k)*xi(r2,k)
+                end do
             end do
-        end do
-        Om = Om / real(max(1,nval),dp)
-        call mcfa_condition(ncomp, pin_origin, Om, Ominv, ldOm)
+            Om = Om / real(max(1,nval),dp)
+            call mcfa_condition(ncomp, pin_origin, Om, Ominv, ldOm)
         end associate
     end subroutine mcfa_mstep
-
-
 
     !> Sampling precision of the MAP latent estimate, Q = A*Gtil^+*A with A = Gtil + diag(prior). This is
     !! the precision of the ESTIMATOR z_hat, not the posterior precision A, so distances measured with it
@@ -491,6 +467,5 @@ contains
         Qout = matmul(Amat, matmul(Gpinv, Amat))
         Qout = 0.5d0*(Qout + transpose(Qout))      ! symmetrise away round-off
     end subroutine map_sampling_precision
-
 
 end module simple_flex_pca_posterior

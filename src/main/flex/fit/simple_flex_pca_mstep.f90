@@ -1,15 +1,14 @@
 !@descr: flex_pca: the M-step backend -- storage and lifecycle of one fit's coupled M-step system, gridding or PCG
 module simple_flex_pca_mstep
-use simple_core_module_api
-use simple_parameters,    only: parameters
-use simple_builder,       only: builder
-use simple_image,         only: image
-use simple_ori,           only: ori
-use simple_reconstructor, only: reconstructor
-use simple_flex_pca_pcg,  only: flex_pcg_t, flex_pcg_outcome_t, flex_pcg_install_window
-use simple_flex_pca_run_types, only: flex_run_settings
-use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled, solve_coupled_basis_exp,&
-    &add_invtausq2rho_coupled
+use simple_core_module_api, only: dp, fplane_type, logfhandle, ori, simple_exception
+use simple_parameters,                    only: parameters
+use simple_builder,                       only: builder
+use simple_image,                         only: image
+use simple_ori,                           only: ori
+use simple_reconstructor,                 only: reconstructor
+use simple_flex_pca_pcg,                  only: flex_pcg_t, flex_pcg_outcome_t, flex_pcg_environment
+use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled, solve_coupled_basis_exp, &
+    &add_invtausq2rho_coupled, projected_model_kfromto
 implicit none
 
 public :: flex_fit_mstep, init_basis_reconstructor
@@ -29,6 +28,7 @@ type :: flex_fit_mstep
     real,     allocatable :: mg_kpe(:,:), mg_kpo(:,:)  !< (npairs, npk) packed PCG pair kernels on the band list (rec_backend=pcg)
     complex,  allocatable :: mg_rpe(:,:), mg_rpo(:,:)  !< (ncomp, npk) packed PCG right-hand sides on the band list (rec_backend=pcg)
     logical :: l_pcg = .false.  !< this fit solves its M-step by PCG
+    type(flex_pcg_environment), allocatable :: env  !< support/window state owned by this fit
     type(flex_pcg_t) :: pcg  !< lattice, envelopes, support, finalized kernels
     real,     allocatable :: kacc_e(:,:), kacc_o(:,:)  !< expanded-lattice accumulators on the band list (inserting processes)
     real,     allocatable :: kpk_e(:,:), kpk_o(:,:)  !< packed pair kernels on the physical band list: transport, reduction and merge form
@@ -66,13 +66,12 @@ contains
     !! COUPLED latent normal matrix and, under rec_backend=pcg, the solver's lattice and support
     !! with the packed kernel sums zeroed (the full-range accumulators are allocated by the first
     !! batch insert of an inserting process).
-    subroutine mstep_begin_iteration( self, params, build, cfg, ncomp )
-        class(flex_fit_mstep),   intent(inout) :: self
-        class(parameters),       intent(inout) :: params
-        type(builder),           intent(inout) :: build
-        type(flex_run_settings), intent(in)    :: cfg
-        integer,                 intent(in)    :: ncomp
-        integer :: q
+    subroutine mstep_begin_iteration( self, params, build, ncomp )
+        class(flex_fit_mstep), intent(inout) :: self
+        class(parameters),     intent(inout) :: params
+        type(builder),         intent(inout) :: build
+        integer,               intent(in)    :: ncomp
+        integer :: q, kfr_pcg(2)
         ! even/odd Y_q accumulators (half-set FSC regularization) + the COUPLED latent normal matrix.
         ! rho carries one entry per (q,r) pair, not one shared density: the M-step below solves the
         ! components together at every grid point.
@@ -94,6 +93,11 @@ contains
         call flush(logfhandle)
         ! rec_backend=pcg: the solver's lattice and support at this rank, the packed kernel sums zeroed
         ! (the full-range accumulators are allocated by the first batch insert of an inserting process)
+        if( .not. allocated(self%env) )then
+            allocate(self%env)
+            call self%env%new(params%rec_backend, params%pcg_mskfile, params%box, params%smpd, &
+                &params%mskdiam, params%box_crop, params%smpd_crop)
+        endif
         self%l_pcg = trim(params%rec_backend) == 'pcg'
         if( allocated(self%kacc_e) ) deallocate(self%kacc_e)
         if( allocated(self%kacc_o) ) deallocate(self%kacc_o)
@@ -105,9 +109,8 @@ contains
         if( allocated(self%rpk_o) ) deallocate(self%rpk_o)
         if( self%l_pcg )then
             call self%pcg%new(params%box_crop, params%smpd_crop, ncomp)
-            call self%pcg%set_verbose(cfg%pcg_verbose)
-            if( cfg%l_pcg_lambda_set ) call self%pcg%set_lambda_relative(cfg%pcg_lambda_rel)
-            call flex_pcg_install_window(self%pcg, params)
+            kfr_pcg = projected_model_kfromto(params%box_crop, params%smpd_crop, params%lp)
+            call self%env%install_window(self%pcg, kfr_pcg(2), params%msk_crop)
             call self%pcg%alloc_packed(self%kpk_e)
             call self%pcg%alloc_packed(self%kpk_o)
             call self%pcg%alloc_rhs_packed(self%rpk_e)
@@ -204,7 +207,7 @@ contains
             call solve_coupled_basis_exp(self%Yodd,  self%rho_o, ncomp)
         endif
 
-      contains
+    contains
 
         subroutine log_pcg_outcome( half, res )
             character(len=*),         intent(in) :: half
@@ -336,6 +339,10 @@ contains
         if( allocated(self%mg_rpe) ) deallocate(self%mg_rpe)
         if( allocated(self%mg_rpo) ) deallocate(self%mg_rpo)
         call self%pcg%kill
+        if( allocated(self%env) )then
+            call self%env%kill
+            deallocate(self%env)
+        endif
         self%l_pcg = .false.; self%npairs = 0; self%es = 0
     end subroutine mstep_kill
 

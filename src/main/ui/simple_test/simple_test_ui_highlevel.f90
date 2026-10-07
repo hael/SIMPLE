@@ -16,6 +16,7 @@ type(ui_program), target :: rec3D_backends
 type(ui_program), target :: single_atoms_stats
 type(ui_program), target :: single_workflow
 type(ui_program), target :: stream_preproc
+type(ui_program), target :: flex_pca_blobs
 
 contains
 
@@ -33,6 +34,7 @@ contains
         call new_single_atoms_stats(tsttab)
         call new_single_workflow(tsttab)
         call new_stream_preproc(tsttab)
+        call new_flex_pca_blobs(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -50,6 +52,7 @@ contains
         write(logfhandle,'(A)') single_atoms_stats%name%to_char()
         write(logfhandle,'(A)') single_workflow%name%to_char()
         write(logfhandle,'(A)') stream_preproc%name%to_char()
+        write(logfhandle,'(A)') flex_pca_blobs%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -304,5 +307,18 @@ contains
             &'simple_test_exec', .false., display_name='Stream Preprocessing Validation')
         call add_ui_program('stream_preproc', stream_preproc, tsttab, UI_CATEGORY)
     end subroutine new_stream_preproc
+
+    subroutine new_flex_pca_blobs( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call flex_pca_blobs%new(&
+        &'flex_pca_blobs',&
+        &'FLEX PCA shared/distributed workflow validation',&
+        &'runs one deterministic two-state phantom through shared memory and two real local workers, '//&
+        &'then checks each result against truth and records cross-mode agreement',&
+        &'simple_test_exec',&
+        &.false., display_name='FLEX PCA Workflow Validation')
+        call flex_pca_blobs%add_input(UI_COMP, nthr)
+        call add_ui_program('flex_pca_blobs', flex_pca_blobs, tsttab, UI_CATEGORY)
+    end subroutine new_flex_pca_blobs
 
 end module simple_test_ui_highlevel

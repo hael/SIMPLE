@@ -6,19 +6,18 @@
 !! the fit's kill runs the pieces in dependency order. The EM engine (simple_flex_pca_em) extends
 !! this type with its iteration procedures; nothing here computes.
 module simple_flex_pca_fit_types
-use simple_core_module_api
-use simple_image,              only: image
-use simple_reconstructor,      only: reconstructor
-use simple_flex_pca_polar,     only: polar_grid_t, polar_grid_kill
-use simple_flex_pca_crossfsc,  only: crossfsc_file
-use simple_flex_pca_mstep,     only: flex_fit_mstep
-use simple_flex_pca_run_types, only: flex_run_settings
-use simple_flex_pca_records,   only: flex_fit_model, flex_selection
+use simple_core_module_api, only: dp, fplane_type, simple_exception, string
+use simple_image,             only: image
+use simple_reconstructor,     only: reconstructor
+use simple_flex_pca_polar,    only: flex_polar_bank
+use simple_flex_pca_crossfsc, only: crossfsc_file
+use simple_flex_pca_mstep,    only: flex_fit_mstep
+use simple_flex_pca_records,  only: flex_fit_model, flex_selection
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: flex_fit, flex_fit_spec, flex_fit_model, flex_fit_history, flex_fit_estep, flex_fit_mstep, flex_fit_diag, flex_fit_iter
+public :: flex_fit, flex_fit_spec, flex_fit_model, flex_fit_history, flex_fit_mstep, flex_fit_diag, flex_fit_iter
 public :: flex_probe_part, probe_part_borrow, probe_part_restore
 public :: xfsc_ctx_t
 public :: cleanup_plane
@@ -26,10 +25,9 @@ public :: cleanup_plane
 !> Per-fit EM state, owned by the driver so one loop can advance two resident fits.
 !! Lifecycle: mix_* and their work arrays (rhs0th, mkth, lwth, rkth, mxa_*) live across
 !! iterations; only kill_probe_fit or the rank-change resize in fit_iter_begin may free them.
-!> identity, selection, artifact namespaces and the resolved per-fit policy (never mutated by an iteration)
+!> identity, selection and artifact namespaces
 type :: flex_fit_spec
     integer :: id = 0  !< 1 = fit A, 2 = fit B, 0 = single fit
-    type(flex_run_settings) :: cfg  !< the run's resolved switches, stamped at construction
     type(string) :: fprefix  !< eigenvolume namespace (default 'flex_pca_pc')
     type(string) :: meta_fname  !< probe-state file (default COV_PROBE_META)
     type(flex_selection) :: sel  !< this fit's half of the master's selection
@@ -40,8 +38,6 @@ type :: flex_fit_spec
     integer :: kmix = 0, n_mix_warm = 3
     integer :: khi_full = 0, kfr_ann(2) = 0
     real :: dstep_ann = 0., lp_it = 0.
-    integer :: n_probe_cm = 0, nml_plain = 0
-    logical :: l_probe_mls = .false.
     logical :: l_deflate_mean = .false.
     integer :: vdfl = 0
   contains
@@ -66,35 +62,10 @@ type :: flex_fit_history
     procedure :: kill => flex_fit_history_kill
 end type flex_fit_history
 
-!> the polar E-step bank: grid geometry, pose-fixed direction assignment (per stage) and the per-iteration ring tables and thread scratch
-type :: flex_fit_estep
-    logical :: l_pol_es = .false., l_pol_grid = .false.
-    logical :: l_pol_bank_it = .false., l_pol_hyb = .false., l_rhyb_off = .false.
-    integer :: rhyb_req = 0, osamp_pol = 1
-    integer :: ndir_es = 0, nsamp_es = 0, nsamp2_es = 0, nk_es = 0
-    integer :: ph0_es = 0, pk0_es = 0, hlo_es = 0, hhi_es = 0, klo_es = 0
-    integer :: nyqr_es = 0, nyqb_es = 0, rhyb_es = 0, npos_es = 0
-    integer,  allocatable :: hex_es(:), kex_es(:)
-    type(polar_grid_t) :: pg_es
-    real,     allocatable :: rmatb_es(:,:,:), nrmb_es(:,:)
-    real,     allocatable :: cae(:), sae(:)
-    integer,  allocatable :: dir_es(:)
-    logical,  allocatable :: dused_es(:)
-    real,     allocatable :: UsallE(:,:,:)
-    real(dp), allocatable :: CfE(:,:,:), Cm0E(:,:,:), c00E(:,:)
-    complex,  allocatable :: UbankE(:,:,:)
-    real,     allocatable :: CspE(:,:,:)
-    real,     allocatable :: xws_es(:,:), wr_es(:,:), Reb_es(:,:)
-    real(dp), allocatable :: wrd_es(:,:)
-    real :: sec_bank = 0.
-  contains
-    procedure :: kill => flex_fit_estep_kill
-end type flex_fit_estep
-
 !> cross-fit-FSC payloads and ridge, and the per-thread timings
 type :: flex_fit_diag
     real(dp), allocatable :: gam_dbg(:,:)
-    real(dp), allocatable :: sec_proj_thr(:), sec_gram_thr(:)
+    real(dp), allocatable :: sec_bank_thr(:), sec_ring_thr(:), sec_exact_thr(:), sec_solve_thr(:)
     integer :: khi_fit = 0  !< per-fit band, written by the BAND/RANK diagnostic;
     ! ---- cross-fit-FSC (crossfsc) per-fit hooks; the driver (xfsc_ctx_t) owns every decision ----
     ! fit_iter_finish harvests the writer payloads when l_xf_harvest is set (H before any ridge touches rho)
@@ -158,7 +129,7 @@ type :: flex_fit
     type(flex_fit_spec)    :: spec
     type(flex_fit_model)   :: model
     type(flex_fit_history) :: history
-    type(flex_fit_estep)   :: estep
+    type(flex_polar_bank), allocatable :: estep
     type(flex_fit_mstep)   :: mstep
     type(flex_fit_diag)    :: diag
     type(flex_fit_iter)    :: iter
@@ -166,7 +137,6 @@ type :: flex_fit
     procedure, pass(fit) :: new  => flex_fit_new
     procedure, pass(fit) :: kill => flex_fit_kill
 end type flex_fit
-
 
 !> Cross-fit-FSC driver context, one per driver loop (fit_engine_iterate, entered through
 !! probe_subspace_iteration or run_flex_pca_paired): the paired master's per-iteration record
@@ -182,28 +152,46 @@ type :: xfsc_ctx_t
     integer  :: klo        = 6         !< low-resolution exemption index (reslim_ind analog)
     integer  :: filtsz     = 0
     integer  :: pairing_id = 0         !< balanced mod-4 pairing id (paired engine; header field)
-    type(crossfsc_file) :: xf
+    type(crossfsc_file), allocatable :: xf
+  contains
+    procedure :: new  => xfsc_ctx_new
+    procedure :: kill => xfsc_ctx_kill
 end type xfsc_ctx_t
 
 contains
 
+    subroutine xfsc_ctx_new( self )
+        class(xfsc_ctx_t), intent(inout) :: self
+        call self%kill
+        allocate(self%xf)
+    end subroutine xfsc_ctx_new
+
+    subroutine xfsc_ctx_kill( self )
+        class(xfsc_ctx_t), intent(inout) :: self
+        if( allocated(self%xf) )then
+            call self%xf%kill
+            deallocate(self%xf)
+        endif
+        self%l_writer = .false.; self%l_any = .false.; self%l_loaded = .false.
+        self%l_paired = .false.; self%v_reg = 0; self%reg_active = 0
+        self%klo = 6; self%filtsz = 0; self%pairing_id = 0
+    end subroutine xfsc_ctx_kill
+
     !> Construct a fit shell: identity, file namespaces and the fit's particle selection.
     !! Model handles (basis/eigvals/sig2), the stage subsample and all iteration state are
     !! populated by the driver, mirroring the single-fit initialisation order.
-    subroutine flex_fit_new( fit, cfg, id, fprefix, meta_fname, sel )
-        class(flex_fit), intent(inout) :: fit
-        type(flex_run_settings), intent(in) :: cfg
-        integer,           intent(in)    :: id
-        character(len=*),  intent(in)    :: fprefix, meta_fname
-        type(flex_selection), intent(in) :: sel
+    subroutine flex_fit_new( fit, id, fprefix, meta_fname, sel )
+        class(flex_fit),      intent(inout) :: fit
+        integer,              intent(in)    :: id
+        character(len=*),     intent(in)    :: fprefix, meta_fname
+        type(flex_selection), intent(in)    :: sel
         call fit%kill
-        fit%spec%cfg        = cfg
         fit%spec%id         = id
         fit%spec%fprefix    = fprefix
         fit%spec%meta_fname = meta_fname
         fit%spec%sel        = sel
+        allocate(fit%estep)
     end subroutine flex_fit_new
-
 
     !> Free everything a fit may hold, in dependency order: the per-iteration workspace first (in
     !! case a crash or early exit left it allocated), the diagnostics, the M-step system with its
@@ -215,12 +203,14 @@ contains
         call fit%iter%kill
         call fit%diag%kill
         call fit%mstep%kill
-        call fit%estep%kill
+        if( allocated(fit%estep) )then
+            call fit%estep%kill
+            deallocate(fit%estep)
+        endif
         call fit%history%kill
         call fit%model%kill
         call fit%spec%kill
     end subroutine flex_fit_kill
-
 
     subroutine flex_fit_spec_kill( self )
         class(flex_fit_spec), intent(inout) :: self
@@ -228,10 +218,8 @@ contains
         call self%sel%kill
         call self%fprefix%kill
         call self%meta_fname%kill
-        call self%cfg%kill
         self%id = 0; self%npp = 0
     end subroutine flex_fit_spec_kill
-
 
     subroutine flex_fit_history_kill( self )
         class(flex_fit_history), intent(inout) :: self
@@ -269,33 +257,6 @@ contains
         self%l_converged = .false.
     end subroutine flex_fit_history_kill
 
-
-    subroutine flex_fit_estep_kill( self )
-        class(flex_fit_estep), intent(inout) :: self
-        ! ---- polar E-step bank (grid via polar_grid_kill) ----
-        call polar_grid_kill(self%pg_es)
-        if( allocated(self%UsallE) ) deallocate(self%UsallE)
-        if( allocated(self%CfE)    ) deallocate(self%CfE)
-        if( allocated(self%Cm0E)   ) deallocate(self%Cm0E)
-        if( allocated(self%c00E)   ) deallocate(self%c00E)
-        if( allocated(self%UbankE) ) deallocate(self%UbankE)
-        if( allocated(self%CspE)   ) deallocate(self%CspE)
-        if( allocated(self%xws_es) ) deallocate(self%xws_es)
-        if( allocated(self%wr_es)  ) deallocate(self%wr_es)
-        if( allocated(self%wrd_es) ) deallocate(self%wrd_es)
-        if( allocated(self%Reb_es) ) deallocate(self%Reb_es)
-        if( allocated(self%rmatb_es) ) deallocate(self%rmatb_es)
-        if( allocated(self%nrmb_es)  ) deallocate(self%nrmb_es)
-        if( allocated(self%dir_es) ) deallocate(self%dir_es)
-        if( allocated(self%cae)    ) deallocate(self%cae)
-        if( allocated(self%sae)    ) deallocate(self%sae)
-        if( allocated(self%dused_es) ) deallocate(self%dused_es)
-        if( allocated(self%hex_es) ) deallocate(self%hex_es)
-        if( allocated(self%kex_es) ) deallocate(self%kex_es)
-        self%l_pol_grid = .false.; self%l_pol_bank_it = .false.
-    end subroutine flex_fit_estep_kill
-
-
     subroutine flex_fit_diag_kill( self )
         class(flex_fit_diag), intent(inout) :: self
         ! ---- cross-fit-FSC per-fit payloads (the artifact on disk is the persistent series) ----
@@ -306,12 +267,13 @@ contains
         if( allocated(self%xf_fscq)   ) deallocate(self%xf_fscq)
         if( allocated(self%xf_gam)    ) deallocate(self%xf_gam)
         if( allocated(self%xf_invtau2)) deallocate(self%xf_invtau2)
-        if( allocated(self%sec_proj_thr) ) deallocate(self%sec_proj_thr)
-        if( allocated(self%sec_gram_thr) ) deallocate(self%sec_gram_thr)
+        if( allocated(self%sec_bank_thr)  ) deallocate(self%sec_bank_thr)
+        if( allocated(self%sec_ring_thr)  ) deallocate(self%sec_ring_thr)
+        if( allocated(self%sec_exact_thr) ) deallocate(self%sec_exact_thr)
+        if( allocated(self%sec_solve_thr) ) deallocate(self%sec_solve_thr)
         if( allocated(self%gam_dbg)   ) deallocate(self%gam_dbg)
         self%khi_fit = 0
     end subroutine flex_fit_diag_kill
-
 
     subroutine flex_fit_iter_kill( self )
         class(flex_fit_iter), intent(inout) :: self
@@ -352,7 +314,6 @@ contains
         self%nll_tot = 0.d0; self%nval = 0
     end subroutine flex_fit_iter_kill
 
-
     !> Hand the fit's reducible accumulators to the payload value without copying: the coupled
     !! densities, Gamma, the PCG kernels and right-hand sides, the scalars, and (on a reducing
     !! master) the mixture reduce buffers. probe_part_restore gives them back.
@@ -381,7 +342,6 @@ contains
         endif
     end subroutine probe_part_borrow
 
-
     subroutine probe_part_restore( part, fit )
         type(flex_probe_part), intent(inout) :: part
         class(flex_fit),       intent(inout) :: fit
@@ -405,7 +365,6 @@ contains
         endif
     end subroutine probe_part_restore
 
-
     subroutine probe_part_kill( self )
         class(flex_probe_part), intent(inout) :: self
         if( self%l_mix_borrowed ) THROW_HARD('probe_part_kill: borrowed mixture buffers were never restored')
@@ -428,14 +387,11 @@ contains
         self%ncomp = 0; self%nval = 0; self%nll_sum = 0.d0; self%nz = 0
     end subroutine probe_part_kill
 
-
     subroutine cleanup_plane( fpl )
         type(fplane_type), intent(inout) :: fpl
         if( allocated(fpl%cmplx_plane)    ) deallocate(fpl%cmplx_plane)
         if( allocated(fpl%ctfsq_plane)    ) deallocate(fpl%ctfsq_plane)
         if( allocated(fpl%transfer_plane) ) deallocate(fpl%transfer_plane)
     end subroutine cleanup_plane
-
-
 
 end module simple_flex_pca_fit_types

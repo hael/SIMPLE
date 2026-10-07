@@ -175,10 +175,11 @@ combined with the merge or with external targets.
 
 ## Implementation
 
-- EM fit and initializer: `src/main/flex/simple_flex_pca_em*.f90`.
-- Driver, targets, kernel weights, merging: `src/main/flex/simple_flex_pca_model.f90`,
-  `src/main/flex/simple_flex_pca_merge.f90`.
-- Weighted reconstruction: `src/main/flex/simple_flex_pca_rec3D.f90`.
+- EM fit and initializer: `src/main/flex/fit/simple_flex_probe_fit*.f90`,
+  `simple_flex_pca_basis.f90` and `simple_flex_pca_posterior.f90`.
+- Driver, targets, kernel weights and merging: `src/main/flex/fit/simple_flex_pca_fit_driver.f90`
+  and `src/main/flex/states/simple_flex_pca_{targets,weights,merge}.f90`.
+- Weighted reconstruction: `src/main/flex/states/simple_flex_pca_rec3D.f90`.
 - Projection and backprojection operators:
-  `src/main/flex/simple_flex_reconstructor_latent_ops.f90`.
+  `src/main/flex/fit/simple_flex_reconstructor_latent_ops.f90`.
 - Subsystem overview: `src/main/flex/README.md`.

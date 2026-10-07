@@ -1,17 +1,17 @@
-!@descr: flex_pca latent targets: k-means, diffusion k-centre, FINCH, path and reliability-path placement; basis rotations
+!@descr: flex_pca latent targets and basis rotations for state placement
 module simple_flex_pca_targets
-use simple_core_module_api
-use simple_image, only: image
-use simple_parameters, only: parameters
+use simple_core_module_api, only: dp, dtiny, eigsrt, hpsort, jacobi, logfhandle, matinv, simple_exception
+use simple_image,         only: image
 use simple_srch_sort_loc, only: hpsort
-use simple_finch, only: finch_hierarchy, fit_finch, finch_representatives, select_finch_level, refine_finch_level
-use simple_kd_tree, only: kd_tree, knn_table
-use simple_linalg, only: jacobi, eigsrt, matinv
+use simple_finch,         only: finch_hierarchy, fit_finch, finch_representatives, select_finch_level, refine_finch_level
+use simple_kd_tree,       only: kd_tree, knn_table
+use simple_linalg,        only: jacobi, eigsrt, matinv
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: diffusion_kcenter_targets, kmeans_latent_targets, path_latent_targets, reliability_path_targets, component_reliability_proxy, invert_lower, orth_block, sort_block_desc
+public :: diffusion_kcenter_targets, kmeans_latent_targets, path_latent_targets
+public :: reliability_path_targets, component_reliability_proxy, orth_block, sort_block_desc
 
 
 contains
@@ -214,7 +214,7 @@ contains
         integer,  intent(in)  :: nptcls, ncomp, nstates
         real(dp), intent(in)  :: z(nptcls,ncomp), wcomp(ncomp)
         real(dp), intent(out) :: centroids(ncomp,nstates)
-        integer, parameter    :: MAXIT = 50
+        integer, parameter :: MAXIT = 50
         real(dp), allocatable :: mind(:), csum(:,:), zbar(:)
         integer,  allocatable :: cnt(:), memb(:)
         real(dp) :: d2, best, dmax
@@ -393,9 +393,9 @@ contains
         real(dp), intent(out) :: centroids(ncomp,nstates)
         ! coordinate ALONG the path. A full-rank Mahalanobis kernel also measures the off-path directions, so
         ! an on-path but noisy particle falls outside every support -- that is what strands the dataset.
-        real(dp),           intent(out) :: proj_out(nptcls), tproj_out(nstates)
-        integer,  parameter   :: NPOWER = 128
-        real(dp), parameter   :: RHO_PATH_FLOOR = 0.1d0
+        real(dp), intent(out) :: proj_out(nptcls), tproj_out(nstates)
+        integer,  parameter :: NPOWER         = 128
+        real(dp), parameter :: RHO_PATH_FLOOR = 0.1d0
         real(dp), allocatable :: zbar(:), u(:), unew(:), cov(:,:), proj(:), rw(:), zc(:,:), pedge(:)
         real,     allocatable :: sproj(:)
         integer,  allocatable :: cnt(:)
@@ -522,7 +522,7 @@ contains
         integer,  intent(in)  :: nptcls, ncomp
         real(dp), intent(in)  :: z(nptcls,ncomp), precision(ncomp,ncomp,nptcls)
         real(dp), intent(out) :: rho(ncomp)
-        integer,  parameter   :: NSAMPLE = 2000
+        integer, parameter :: NSAMPLE = 2000
         real(dp), allocatable :: cfull(:,:), pvar(:)
         real(dp) :: zbar, spread, ratio
         integer  :: i, q, errflg, stride, nused
@@ -547,27 +547,6 @@ contains
         deallocate(cfull, pvar)
     end subroutine component_reliability_proxy
 
-
-    subroutine invert_lower( L, n )
-        integer,  intent(in)    :: n
-        real(dp), intent(inout) :: L(n,n)
-        real(dp), allocatable :: X(:,:)
-        integer  :: i, j, k
-        real(dp) :: s
-        allocate(X(n,n), source=0.d0)
-        do j = 1, n
-            X(j,j) = 1.d0 / L(j,j)
-            do i = j+1, n
-                s = 0.d0
-                do k = j, i-1
-                    s = s + L(i,k)*X(k,j)
-                end do
-                X(i,j) = -s / L(i,i)
-            end do
-        end do
-        L = X
-        deallocate(X)
-    end subroutine invert_lower
 
     subroutine orth_block( V, n, m )
         integer,  intent(in)    :: n, m

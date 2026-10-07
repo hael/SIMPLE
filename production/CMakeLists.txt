@@ -241,9 +241,9 @@ if(BUILD_TESTS)
   # volumes and TSVs. Review verdict 2026-09-23 (plan, section 9.7, pose).
   simple_add_test(lib_cart_align3D library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_cart_align3D)
-  # lib_heterogeneity: flex_pca deconvolution of 20 000 particles at realistic
-  # noise, the PCG M-step operator at box 64 with 400 samples against the exact
-  # nonuniform-DFT Gram, and the twelve-setting PCG solve sweep at box 32.
+  # lib_heterogeneity: project-backed two-state flex_pca application phantom,
+  # deconvolution of 20 000 particles at realistic noise, the PCG M-step operator
+  # at box 64 against the exact Gram, and the twelve-setting PCG solve sweep.
   # Review verdict 2026-09-23 (plan, section 9.7, heterogeneity).
   simple_add_test(lib_heterogeneity library 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_heterogeneity)
@@ -310,6 +310,12 @@ if(BUILD_TESTS)
   # abinitio2D_stream was retired (plan, section 9.7, stream).
   simple_add_test(stream_preproc highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=stream_preproc)
+  # FLEX PCA end to end on one deterministic two-state phantom: shared memory
+  # versus two real local workers. Two workers times four threads fill the
+  # eight processors reserved by this serial CTest entry (D1 in
+  # doc/refactoring_notes/flex_refactoring_plan_2026_10_06.md).
+  simple_add_test(flex_pca_blobs highlevel 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_pca_blobs nthr=4)
 
   # ---- platform cases -------------------------------------------------------
   # Own process, own launcher; not part of the build gate.
@@ -341,7 +347,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 33)   # 15 fast + 1 platform + 12 highlevel + 5 library
+  set(SIMPLE_CTEST_BUDGET 34)   # 15 fast + 1 platform + 13 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

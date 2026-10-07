@@ -1,32 +1,36 @@
-!@descr: flex_pca: the probe fit -- the fit state with its E-step, per-iteration update, engine and cross-fit-FSC procedures bound (bodies in the _estep, _update, _engine and _crossfsc submodules)
+!@descr: flex_pca probe-fit parent; E-step, update, cross-FSC and engine bodies live in four submodule files
 module simple_flex_probe_fit
-use simple_core_module_api
-use simple_flex_pca_records, only: flex_fit_model, flex_selection
-use simple_builder, only: builder
-use simple_parameters, only: parameters
-use simple_reconstructor, only: reconstructor
-use simple_ori, only: ori
-use simple_flex_pca_rounds, only: flex_pca_rounds
-use simple_flex_pca_run_types, only: flex_run_settings
+use simple_core_module_api, only: dp, fplane_type, ori, simple_exception, string
+use simple_flex_pca_records,   only: flex_fit_model, flex_selection
+use simple_builder,            only: builder
+use simple_parameters,         only: parameters
+use simple_reconstructor,      only: reconstructor
+use simple_ori,                only: ori
+use simple_flex_pca_rounds,    only: flex_pca_rounds
 use simple_flex_pca_fit_types, only: flex_fit, flex_probe_part, xfsc_ctx_t
+use simple_flex_pca_planes,    only: flex_plane_store
+use simple_flex_pca_pcg,       only: flex_pcg_environment
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: flex_probe_fit, flex_mean_ref, probe_subspace_iteration, fit_engine_iterate
+! Narrow seams used by the adjacent tester.  The fixtures live in
+! simple_flex_pca_tester so test-only code is not part of these production submodules.
+public :: fit_estep_former_polar, polar_ring_gram, polar_ring_selfpower
+public :: write_probe_part, reduce_probe_parts, xfsc_paired_record
 
 !> Mean principal-angle cosine vs the previous basis at which a rank-1 fit stops early. Higher ranks
 !! run the full n_probe_iters budget (the paired merge needs the last two iterations' frames).
-real(dp), parameter :: COV_PROBE_CONV    = 0.999999d0
+real(dp), parameter :: COV_PROBE_CONV     = 0.999999d0
 !> mixture width of the MCFA E-step: the deconvolution picks the macro-clusters downstream, so this
 !> is only the E-step's flexibility budget
-integer,  parameter :: COV_EM_MIX        = 16
+integer,  parameter :: COV_EM_MIX         = 16
 !> consensus resolution shells deflated out of every basis volume each M-step (the background and
 !> dilation templates are added on top)
-integer,  parameter :: COV_EM_DEFLATE    = 4
-integer, parameter :: PROBE_PART_VERSION  = 12  ! rho rows are always the full packed triangle; trailing PCG kernel + rhs blocks on the shared band list (slot for slot, no per-part index list)
-integer, parameter :: PROBE_PART_VERSION5 = 10  ! v5 layout, payloads band-boxed (nonzero bounding box per lattice) + trailing PCG kernel + rhs blocks per fit
-integer, parameter :: MIX_ZSUB_MAX = 2000
+integer,  parameter :: COV_EM_DEFLATE     = 4
+integer,  parameter :: PROBE_PART_VERSION = 13
+integer,  parameter :: MIX_ZSUB_MAX       = 2000
 
 type, extends(flex_fit) :: flex_probe_fit
   contains
@@ -50,36 +54,27 @@ end type flex_mean_ref
 interface
 
     module subroutine fit_polar_bank_build( build, fit, mean_rec, fpl1, nthr )
-        type(builder),       intent(inout) :: build
-        type(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        type(fplane_type),   intent(in)    :: fpl1
-        integer,             intent(in)    :: nthr
+        type(builder),        intent(inout) :: build
+        type(flex_probe_fit), intent(inout) :: fit
+        type(reconstructor),  intent(inout) :: mean_rec
+        type(fplane_type),    intent(in)    :: fpl1
+        integer,              intent(in)    :: nthr
     end subroutine fit_polar_bank_build
 
-    module subroutine fit_estep_former_polar( fit, mean_rec, o, fpl, row, ithr, a, aa, e_mm, myv )
-        type(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        class(ori),          intent(inout) :: o
-        type(fplane_type),   intent(inout) :: fpl
-        integer,             intent(in)    :: row, ithr
-        real(dp),            intent(out)   :: a, aa, e_mm, myv
+    module subroutine fit_estep_former_polar( fit, mean_rec, o, fpl, row, ithr, a, e_mm, myv )
+        type(flex_probe_fit), intent(inout) :: fit
+        type(reconstructor),  intent(inout) :: mean_rec
+        class(ori),           intent(inout) :: o
+        type(fplane_type),    intent(inout) :: fpl
+        integer,              intent(in)    :: row, ithr
+        real(dp),             intent(out)   :: a, e_mm, myv
     end subroutine fit_estep_former_polar
 
-    module subroutine fit_estep_former_cart( fit, mean_rec, o, fpl, row, ithr, a, aa, e_mm, myv )
-        type(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        class(ori),          intent(inout) :: o
-        type(fplane_type),   intent(inout) :: fpl
-        integer,             intent(in)    :: row, ithr
-        real(dp),            intent(out)   :: a, aa, e_mm, myv
-    end subroutine fit_estep_former_cart
-
-    module subroutine fit_estep_solve_stats( fit, fpl, i, row, ithr, a, aa, e_mm, myv )
+    module subroutine fit_estep_solve_stats( fit, fpl, i, row, ithr, a )
         type(flex_probe_fit), intent(inout) :: fit
-        type(fplane_type), intent(inout) :: fpl
-        integer,           intent(in)    :: i, row, ithr
-        real(dp),          intent(inout) :: a, aa, e_mm, myv
+        type(fplane_type),    intent(inout) :: fpl
+        integer,              intent(in)    :: i, row, ithr
+        real(dp),             intent(in)    :: a
     end subroutine fit_estep_solve_stats
 
     module subroutine fit_estep_bank_prepare( fit, params, build, mean_rec, fpl1, nthr, it_eff, tag )
@@ -106,26 +101,27 @@ interface
     end subroutine fit_estep_particle
 
     module subroutine fit_batch_insert( build, fit, orientations, fpls, eo, batchsz )
-        type(builder),     intent(inout) :: build
+        type(builder),         intent(inout) :: build
         class(flex_probe_fit), intent(inout) :: fit
-        type(ori),         intent(inout) :: orientations(:)
-        type(fplane_type), intent(inout) :: fpls(:)
-        integer,           intent(in)    :: eo(:), batchsz
+        type(ori),             intent(inout) :: orientations(:)
+        type(fplane_type),     intent(inout) :: fpls(:)
+        integer,               intent(in)    :: eo(:), batchsz
     end subroutine fit_batch_insert
 
     module subroutine fit_iter_reduce( fit, it_eff, nthr , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
-        class(flex_probe_fit), intent(inout) :: fit
-        integer,           intent(in)    :: it_eff, nthr
+        class(flex_probe_fit),  intent(inout) :: fit
+        integer,                intent(in)    :: it_eff, nthr
     end subroutine fit_iter_reduce
 
-    module subroutine fit_estep_pass( params, build, fits, means, nfits, it_eff, nthr )
-        class(parameters), intent(inout) :: params
-        type(builder),     intent(inout) :: build
-        integer,           intent(in)    :: nfits
-        type(flex_probe_fit), intent(inout) :: fits(nfits)
-        type(flex_mean_ref),  intent(in)    :: means(nfits)
-        integer,           intent(in)    :: it_eff, nthr
+    module subroutine fit_estep_pass( params, build, plane_store, fits, means, nfits, it_eff, nthr )
+        class(parameters),       intent(inout) :: params
+        type(builder),           intent(inout) :: build
+        class(flex_plane_store), intent(inout) :: plane_store
+        integer,                 intent(in)    :: nfits
+        type(flex_probe_fit),    intent(inout) :: fits(nfits)
+        type(flex_mean_ref),     intent(in)    :: means(nfits)
+        integer,                 intent(in)    :: it_eff, nthr
     end subroutine fit_estep_pass
 
     logical module function cov_polar_enabled()
@@ -174,10 +170,10 @@ interface
     end subroutine subtract_mean_banded
 
     module subroutine fit_iter_finish( params, build, fit, it_eff, nthr )
-        class(parameters),  intent(inout) :: params
-        type(builder),      intent(inout) :: build
-        class(flex_probe_fit),  intent(inout) :: fit
-        integer,            intent(in)    :: it_eff, nthr
+        class(parameters),     intent(inout) :: params
+        type(builder),         intent(inout) :: build
+        class(flex_probe_fit), intent(inout) :: fit
+        integer,               intent(in)    :: it_eff, nthr
     end subroutine fit_iter_finish
 
     module subroutine fit_estep_begin_stage( fit, params, nthr )
@@ -187,105 +183,108 @@ interface
     end subroutine fit_estep_begin_stage
 
     module subroutine fit_iter_begin( params, build, fit, mean_rec, it_eff, niters_eff, nthr )
-        class(parameters),   intent(inout) :: params
-        type(builder),       intent(inout) :: build
-        class(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        integer,             intent(in)    :: it_eff, niters_eff, nthr
+        class(parameters),     intent(inout) :: params
+        type(builder),         intent(inout) :: build
+        class(flex_probe_fit), intent(inout) :: fit
+        type(reconstructor),   intent(inout) :: mean_rec
+        integer,               intent(in)    :: it_eff, niters_eff, nthr
     end subroutine fit_iter_begin
 
     module subroutine probe_fit_merge_stash( fit )
         class(flex_probe_fit), intent(inout) :: fit
     end subroutine probe_fit_merge_stash
 
-    module subroutine paired_reduce_parts_v5( params, fits , rounds)
+    module subroutine paired_reduce_parts( params, fits, rounds )
         class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters), intent(in)    :: params
-        type(flex_probe_fit), intent(inout) :: fits(2)
-    end subroutine paired_reduce_parts_v5
+        class(parameters),      intent(in)    :: params
+        type(flex_probe_fit),   intent(inout) :: fits(2)
+    end subroutine paired_reduce_parts
 
     module subroutine write_probe_part( fname, part )
-        class(string),          intent(in) :: fname
-        type(flex_probe_part),  intent(in) :: part
+        class(string),         intent(in) :: fname
+        type(flex_probe_part), intent(in) :: part
     end subroutine write_probe_part
 
-    module subroutine reduce_probe_parts( params, nparts, part )
+    module subroutine reduce_probe_parts( params, rounds, part )
         class(parameters),     intent(in)    :: params
-        integer,               intent(in)    :: nparts
+        class(flex_pca_rounds), intent(inout) :: rounds
         type(flex_probe_part), intent(inout) :: part
     end subroutine reduce_probe_parts
 
-    module subroutine open_probe_part_v5_write( fname, nfits, funit, tmp_fname )
+    module subroutine open_probe_part_write( fname, nfits, funit, tmp_fname )
         class(string), intent(in)  :: fname
         integer,       intent(in)  :: nfits
         integer,       intent(out) :: funit
         type(string),  intent(out) :: tmp_fname
-    end subroutine open_probe_part_v5_write
+    end subroutine open_probe_part_write
 
-    module subroutine write_probe_part_v5_fit( funit, part )
+    module subroutine write_probe_part_fit( funit, part )
         integer,               intent(in) :: funit
         type(flex_probe_part), intent(in) :: part
-    end subroutine write_probe_part_v5_fit
+    end subroutine write_probe_part_fit
 
-    module subroutine close_probe_part_v5_write( funit, tmp_fname, fname )
+    module subroutine close_probe_part_write( funit, tmp_fname, fname )
         integer,       intent(in)    :: funit
         type(string),  intent(inout) :: tmp_fname
         class(string), intent(in)    :: fname
-    end subroutine close_probe_part_v5_write
+    end subroutine close_probe_part_write
 
-    module subroutine open_probe_part_v5_read( fname, nfits, funit )
+    module subroutine open_probe_part_read( fname, nfits, funit )
         class(string), intent(in)  :: fname
         integer,       intent(in)  :: nfits
         integer,       intent(out) :: funit
-    end subroutine open_probe_part_v5_read
+    end subroutine open_probe_part_read
 
-    module subroutine fold_probe_part_v5_fit( funit, part )
+    module subroutine fold_probe_part_fit( funit, part )
         integer,               intent(in)    :: funit
         type(flex_probe_part), intent(inout) :: part
-    end subroutine fold_probe_part_v5_fit
+    end subroutine fold_probe_part_fit
 
-    module subroutine close_probe_part_v5_read( funit, fname )
+    module subroutine close_probe_part_read( funit, fname )
         integer,       intent(in) :: funit
         class(string), intent(in) :: fname
-    end subroutine close_probe_part_v5_read
+    end subroutine close_probe_part_read
 
-    module subroutine probe_subspace_iteration( params, cfg, build, model, sel, niters, it_glob, niters_glob, fprefix, meta_fname, rounds)
-        class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters),   intent(inout) :: params
-        type(flex_run_settings), intent(in)    :: cfg
-        type(builder),       intent(inout) :: build
-        type(flex_fit_model), intent(inout), target :: model
-        type(flex_selection), intent(in)            :: sel
-        integer,             intent(in)    :: niters
-        integer, optional,   intent(in)    :: it_glob, niters_glob
-        character(len=*), optional, intent(in) :: fprefix, meta_fname
+    module subroutine probe_subspace_iteration( params, build, plane_store, pcg_env, model, sel, niters, it_glob, &
+        &niters_glob, fprefix, meta_fname, rounds )
+        class(flex_pca_rounds),     intent(inout)         :: rounds
+        class(parameters),          intent(inout)         :: params
+        type(builder),              intent(inout)         :: build
+        class(flex_plane_store),    intent(inout)         :: plane_store
+        class(flex_pcg_environment), intent(in)           :: pcg_env
+        type(flex_fit_model),       intent(inout), target :: model
+        type(flex_selection),       intent(in)            :: sel
+        integer,                    intent(in)            :: niters
+        integer,          optional, intent(in)            :: it_glob, niters_glob
+        character(len=*), optional, intent(in)            :: fprefix, meta_fname
     end subroutine probe_subspace_iteration
 
-    module subroutine fit_engine_iterate( params, build, fits, means, nfits, niters, it_glob, niters_glob, l_merge_stash, rounds )
-        class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters),   intent(inout) :: params
-        type(builder),       intent(inout) :: build
-        integer,             intent(in)    :: nfits
-        type(flex_probe_fit), intent(inout) :: fits(nfits)
-        type(flex_mean_ref), intent(in)    :: means(nfits)
-        integer,             intent(in)    :: niters, it_glob, niters_glob
-        logical,             intent(in)    :: l_merge_stash
+    module subroutine fit_engine_iterate( params, build, plane_store, fits, means, nfits, niters, &
+        &it_glob, niters_glob, l_merge_stash, rounds )
+        class(flex_pca_rounds),  intent(inout) :: rounds
+        class(parameters),       intent(inout) :: params
+        type(builder),           intent(inout) :: build
+        class(flex_plane_store), intent(inout) :: plane_store
+        integer,                 intent(in)    :: nfits
+        type(flex_probe_fit),    intent(inout) :: fits(nfits)
+        type(flex_mean_ref),     intent(in)    :: means(nfits)
+        integer,                 intent(in)    :: niters, it_glob, niters_glob
+        logical,                 intent(in)    :: l_merge_stash
     end subroutine fit_engine_iterate
 
-    module subroutine xfsc_setup( ctx, params, cfg, kfr_ann, l_paired, l_master )
+    module subroutine xfsc_setup( ctx, params, kfr_ann, l_paired, l_master )
         type(xfsc_ctx_t),  intent(inout) :: ctx
         class(parameters), intent(in)    :: params
-        type(flex_run_settings), intent(in)    :: cfg
         integer,           intent(in)    :: kfr_ann(2)
         logical,           intent(in)    :: l_paired, l_master
     end subroutine xfsc_setup
 
     module subroutine xfsc_prep_iter( ctx, params, fit, it_eff, tag )
-        type(xfsc_ctx_t),  intent(inout) :: ctx
-        class(parameters), intent(in)    :: params
+        type(xfsc_ctx_t),     intent(inout) :: ctx
+        class(parameters),    intent(in)    :: params
         type(flex_probe_fit), intent(inout) :: fit
-        integer,           intent(in)    :: it_eff
-        character(len=*),  intent(in)    :: tag
+        integer,              intent(in)    :: it_eff
+        character(len=*),     intent(in)    :: tag
     end subroutine xfsc_prep_iter
 
     module subroutine xfsc_teardown( ctx )
@@ -293,10 +292,10 @@ interface
     end subroutine xfsc_teardown
 
     module subroutine xfsc_paired_record( ctx, params, fits, it_eff )
-        type(xfsc_ctx_t),  intent(inout) :: ctx
-        class(parameters), intent(in)    :: params
+        type(xfsc_ctx_t),     intent(inout) :: ctx
+        class(parameters),    intent(in)    :: params
         type(flex_probe_fit), intent(inout) :: fits(2)
-        integer,           intent(in)    :: it_eff
+        integer,              intent(in)    :: it_eff
     end subroutine xfsc_paired_record
 
 end interface

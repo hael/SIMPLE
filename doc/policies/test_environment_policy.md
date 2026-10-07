@@ -41,7 +41,8 @@ run overnight; high-level tests run only when explicitly selected with CTest.
 
 **The fast gate is part of the build.** Every `compile_*.sh` build
 runs `scripts/run_fast_gate.sh` between `make` and `make install`. It first
-runs `scripts/check_test_registry.py` (section 4.5), then
+runs `scripts/check_test_registry.py`, `scripts/check_descr.py` and
+`scripts/check_flex_dag.py` (section 4.5), then
 `ctest -L fast` with half the cores rounded up, then
 `scripts/ctest_budget.py`, which
 fails the build when an entry fails or the gate takes more than 30 s of real
@@ -59,8 +60,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 33: 15 fast,
-5 library, 12 highlevel, 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 34: 15 fast,
+5 library, 13 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -406,10 +407,13 @@ and the floor.
 Before asking for a build:
 
 - `python3 scripts/check_descr.py .` — every source file starts with a
-  one-line `!@descr:`.
+  one-line `!@descr:` and declares at most one module or submodule.
 - `python3 scripts/check_test_registry.py . --verbose` — the CTest
   registrations, the test UI programs, the router cases and the `suite=`
   lists agree. The fast gate runs it on every build.
+- `python3 scripts/check_flex_dag.py . --verbose` — each FLEX source declares
+  one module or submodule, and the production graph follows its declared layers
+  and remains acyclic. The fast gate runs it on every build.
 - The default CMake build regenerates the test inventory and code-base map
   when their source inputs change.
 - `./compile_debug.sh` — the build and the gate.

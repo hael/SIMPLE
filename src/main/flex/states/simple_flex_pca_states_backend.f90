@@ -1,11 +1,10 @@
-!@descr: flex_pca: the state-reconstruction backend contract (gridding or PCG), the map bundle it returns and the delivery policy it declares
+!@descr: flex_pca state-reconstruction contract, gridding/PCG backends, delivery and service
 module simple_flex_pca_states_backend
-use simple_core_module_api
-use simple_builder,            only: builder
-use simple_image,              only: image
-use simple_parameters,         only: parameters
-use simple_flex_pca_rounds,    only: flex_pca_rounds
-use simple_flex_pca_run_types, only: flex_run_settings
+use simple_core_module_api, only: simple_exception
+use simple_builder,         only: builder
+use simple_image,           only: image
+use simple_parameters,      only: parameters
+use simple_flex_pca_rounds, only: flex_pca_rounds
 implicit none
 
 public :: flex_states_backend, flex_state_maps, flex_state_delivery_policy
@@ -24,8 +23,6 @@ end type flex_state_maps
 !! differences (doc/refactoring_notes/completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18.md
 !! 6.7): each backend declares its own values, nothing is normalised between them.
 type :: flex_state_delivery_policy
-    logical :: l_state_eofilt = .false.   !< per-state eo-FSC optimal filter instead of the low-pass at eo-FSC(0.143)
-    logical :: l_state_filt   = .true.    !< any filter at all on the delivered maps
     logical :: l_mask         = .true.    !< background removal + soft spherical mask, on the FSC copies and the delivered views
     logical :: l_project_fsc_fallback = .true.  !< the project FSC low-pass when the state eo-FSC is unmeasurable, and on single-set rounds
     character(len=8) :: tag = ''          !< log tag after 'FLEX STATE'
@@ -82,10 +79,9 @@ abstract interface
         type(flex_state_maps),      intent(inout) :: maps
     end subroutine finalize_iface
 
-    function policy_iface( self, cfg ) result( policy )
-        import :: flex_states_backend, flex_state_delivery_policy, flex_run_settings
+    function policy_iface( self ) result( policy )
+        import :: flex_states_backend, flex_state_delivery_policy
         class(flex_states_backend), intent(in) :: self
-        type(flex_run_settings),    intent(in) :: cfg
         type(flex_state_delivery_policy) :: policy
     end function policy_iface
 

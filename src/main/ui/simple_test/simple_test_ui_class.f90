@@ -320,12 +320,17 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call lib_heterogeneity%new(&
         &'lib_heterogeneity',&
-        &'library tests: flex_pca deconvolution and PCG operator',&
-        &'is the nightly library suite for flex_pca: deconvolution of 20000 particles at realistic noise, the PCG M-step operator at box 64 against the exact Gram and the PCG solve sweep at box 32',&
+        &'library tests: flex_pca application, deconvolution and PCG operator',&
+        &'is the nightly library suite for flex_pca: a project-backed two-state application phantom &
+        &across the four basis/state backend combinations, deconvolution of 20000 particles at &
+        &realistic noise, the PCG M-step operator at box 64 against the exact Gram and the PCG solve &
+        &sweep at box 32',&
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Heterogeneity')
         call lib_heterogeneity%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (flex_pca_deconvolution_20k, flex_pcg_operator_64, flex_pcg_solve_sweep)', '', .false., '')
+            &'One sub-suite of this suite to run alone (flex_pca_two_state_phantom, &
+            &flex_pca_deconvolution_20k, flex_pcg_operator_64, flex_pcg_solve_sweep)', &
+            &'', .false., '')
         call add_ui_program('lib_heterogeneity', lib_heterogeneity, tsttab, UI_CATEGORY)
     end subroutine new_lib_heterogeneity
 

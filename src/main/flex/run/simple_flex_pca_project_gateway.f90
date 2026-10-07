@@ -6,7 +6,8 @@
 !! weight store registered in the out segment, and the hard state labels written into ptcl3D.
 module simple_flex_pca_project_gateway
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_core_module_api
+use simple_core_module_api, only: fclose, file2rarr, file_exists, fileiochk, fopen, fsc2optlp_sub, int2str_pad, &
+    &logfhandle, nlines, simple_exception, stdlen, string, tiny
 use simple_builder,            only: builder
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
@@ -14,8 +15,7 @@ use simple_sp_project,         only: sp_project
 use simple_sigma2_files,       only: load_sigma2_groups
 use simple_estimate_ssnr,      only: fsc2optlp_sub
 use simple_flex_pca_rounds,    only: flex_pca_rounds
-use simple_flex_pca_run_types, only: flex_run_settings
-use simple_flex_weights_state, only: flex_weights_deliver, flex_weights_state_fname, FLEX_WEIGHTS_STALE_SCAN
+use simple_flex_weights_state, only: flex_weights_store, flex_weights_state_fname, FLEX_WEIGHTS_STALE_SCAN
 use simple_flex_weights_file,  only: FLEX_WEIGHTS_PROV_FLEX_PCA, FLEX_WEIGHTS_PROV_MERGED
 implicit none
 private
@@ -52,23 +52,23 @@ contains
         nptcls = n
     end subroutine read_pind_list
 
-    subroutine validate_covariance_inputs( params, cfg, build, pinds, nptcls , rounds)
+    subroutine validate_covariance_inputs( params, l_vol1_explicit, l_pindfile, build, pinds, nptcls, rounds )
         class(flex_pca_rounds), intent(inout) :: rounds
-        type(parameters), intent(inout) :: params
-        type(flex_run_settings), intent(in) :: cfg
-        type(builder),    intent(inout) :: build
-        integer, allocatable, intent(out) :: pinds(:)
-        integer, intent(out) :: nptcls
+        type(parameters),       intent(inout) :: params
+        logical,                intent(in)    :: l_vol1_explicit, l_pindfile
+        type(builder),          intent(inout) :: build
+        integer, allocatable,   intent(out)   :: pinds(:)
+        integer,                intent(out)   :: nptcls
         integer :: q, i, cnt
         integer, allocatable :: sel(:)
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('flex_pca requires oritype=ptcl3D')
-        if( .not. cfg%l_vol1_explicit )then
+        if( .not. l_vol1_explicit )then
             THROW_HARD('flex_pca requires a consensus mean map: pass vol1 or register one in the project out segment')
         endif
         ! a run writes its state labels into its project copy, so a rerun must start from the original
         ! project (a subset is selected with pindfile=, never with the labels)
         if( build%spproj_field%get_n('state') /= 1 ) THROW_HARD('flex_pca works on one population but the project carries several state labels (a delivered copy): rerun from the original project, selecting particles with pindfile= if needed')
-        if( cfg%l_pindfile )then
+        if( l_pindfile )then
             ! a distributed worker takes the master's partition as it was planned: its own
             ! particle-index list, never a re-derivation of the selection from fromp/top
             call read_pind_list(params%pindfile%to_char(), pinds, nptcls)
@@ -116,11 +116,11 @@ contains
 
     subroutine load_and_validate_sigma( params, build, cline, pinds, loaded , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
-        integer,          intent(in)    :: pinds(:)
-        logical,          intent(out)   :: loaded
+        type(parameters),       intent(inout) :: params
+        type(builder),          intent(inout) :: build
+        class(cmdline),         intent(inout) :: cline
+        integer,                intent(in)    :: pinds(:)
+        logical,                intent(out)   :: loaded
         integer :: i, k, iptcl, noris, fromp_save, top_save
         ! The sigma table is allocated on params%fromp:top. A distributed worker's particle list is the
         ! master's partition (pindfile), not the fromp/top split of the project, so widen the range to
@@ -212,11 +212,13 @@ contains
         real,             intent(in)    :: weights(:,:), targets(:,:), bandwidths(:)
         logical,          intent(in)    :: l_merged
         character(len=STDLEN) :: message
+        type(flex_weights_store) :: store
         integer :: status, s, nstates
         nstates = size(weights,2)
-        call flex_weights_deliver(build%spproj, build%spproj_field, params%box, params%smpd, &
+        call store%deliver(build%spproj, build%spproj_field, params%box, params%smpd, &
             &params%box_crop, params%smpd_crop, pinds, weights, labels, targets, bandwidths, &
             &merge(FLEX_WEIGHTS_PROV_MERGED, FLEX_WEIGHTS_PROV_FLEX_PCA, l_merged), status, message)
+        call store%kill
         if( status /= 0 ) THROW_HARD('flex_pca could not deliver the state weights: '//trim(message))
         do s = 1, nstates
             call build%spproj%add_flex_weights2os_out(flex_weights_state_fname(s), s, params%box, params%smpd)
@@ -286,9 +288,9 @@ contains
     !> The project's state-1 FSC as a per-state low-pass filter sized to the delivered map
     !! (filtsz = fdim(box_rec)-1); has_filter false wherever the project cannot provide one.
     subroutine prepare_project_fsc_lowpass_filters( params, filtsz, nstates, lowpass_filters, has_filter, source_state )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: filtsz, nstates
-        real, allocatable, intent(out) :: lowpass_filters(:,:)
+        class(parameters),    intent(in)  :: params
+        integer,              intent(in)  :: filtsz, nstates
+        real,    allocatable, intent(out) :: lowpass_filters(:,:)
         logical, allocatable, intent(out) :: has_filter(:)
         integer, allocatable, intent(out) :: source_state(:)
         type(sp_project) :: spproj

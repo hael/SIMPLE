@@ -1,11 +1,11 @@
-!@descr: flex_pca: the state-reconstruction service -- selects the gridding or PCG backend, runs the state stage, and hands every state's maps to the common 3-D delivery
+!@descr: flex_pca state-reconstruction service.
+!! Selects the backend, runs the state stage and hands maps to common delivery.
 module simple_flex_pca_rec3D
-use simple_core_module_api
-use simple_builder,    only: builder
-use simple_parameters, only: parameters
+use simple_core_module_api, only: logfhandle, simple_exception, string
+use simple_builder,                  only: builder
+use simple_parameters,               only: parameters
 use simple_flex_pca_rounds,          only: flex_pca_rounds
 use simple_flex_pca_stages,          only: flex_stage_request, PCA_STAGE_STATES
-use simple_flex_pca_run_types,       only: flex_run_settings
 use simple_flex_pca_state_parts,     only: write_state_weights_round, read_state_weights_round
 use simple_flex_pca_states_backend,  only: flex_states_backend, flex_state_maps, flex_rec_box, flex_rec_smpd
 use simple_flex_pca_states_gridding, only: flex_states_gridding
@@ -26,20 +26,19 @@ contains
     !! round. The master ships the weight table and fans the particle range out; every backend then
     !! runs the same way (begin, accumulate or fold the parts, finalize per state, kill) and the
     !! common delivery applies the backend's declared policy.
-    subroutine reconstruct_flex_weighted_states( params, cfg, build, pinds, state_weights, nstates, &
+    subroutine reconstruct_flex_weighted_states( params, build, pinds, state_weights, nstates, &
         &floor_rho, outvol_even, outvol_odd, split_eo , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters), intent(inout) :: params
-        type(flex_run_settings), intent(in)    :: cfg
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: pinds(:), nstates
-        real,              intent(in)    :: state_weights(:,:)
+        class(parameters),      intent(inout) :: params
+        class(builder),         intent(inout) :: build
+        integer,                intent(in)    :: pinds(:), nstates
+        real,                   intent(in)    :: state_weights(:,:)
         ! shellwise rho floor before the divide (flex_pca opts in; the trial half maps too)
-        logical,                intent(in) :: floor_rho
-        type(string), optional, intent(in) :: outvol_even, outvol_odd
+        logical,                intent(in)    :: floor_rho
+        type(string), optional, intent(in)    :: outvol_even, outvol_odd
         !! worker-side halfset split flag, read from the round-weights table (a worker has no output
         !! names); both routes must set l_fuse identically or master and workers disagree on the halves
-        logical,      optional, intent(in) :: split_eo
+        logical,      optional, intent(in)    :: split_eo
         class(flex_states_backend), allocatable :: be
         type(flex_state_delivery) :: delivery
         type(flex_state_maps)     :: maps
@@ -85,7 +84,7 @@ contains
         else
             call be%accumulate_local_or_write_part(params, build, rounds)
         endif
-        call delivery%new(params, be%delivery_policy(cfg), nstates, l_fuse, box_rec, smpd_rec, &
+        call delivery%new(params, be%delivery_policy(), nstates, l_fuse, box_rec, smpd_rec, &
             &outvol_even=outvol_even, outvol_odd=outvol_odd)
         do state = 1, nstates
             call be%finalize_maps(params, build, rounds, state, maps)

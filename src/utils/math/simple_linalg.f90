@@ -10,6 +10,7 @@ public :: hyp, jacobi, matinv, myacos, norm_2
 public :: plane_from_points, projz, pythag, rad2deg, deg2rad
 public :: svbksb, svdcmp, svdfit, svd_multifit
 public :: qr_solve
+public :: solve_real_spd_complex
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
 public :: sparse_eigh
 public :: gemm_tn
@@ -870,6 +871,64 @@ subroutine qr_solve(m, n, a, b, x)
     if(info /= 0) call lapack_stop('QR_SOLVE', 'DGELSY', info)
     x = rhs(1:n,1)
 end subroutine qr_solve
+
+!> Solve a real symmetric-positive-definite system with a complex right-hand side.
+!! Returns flag=1 without a partial solution when a Cholesky pivot is numerically nonpositive.
+pure subroutine solve_real_spd_complex(amat_in, rhs, sol, n, flag)
+    integer,     intent(in)  :: n
+    real(dp),    intent(in)  :: amat_in(n,n)
+    complex(dp), intent(in)  :: rhs(n)
+    complex(dp), intent(out) :: sol(n)
+    integer,     intent(out) :: flag
+    real(dp) :: chol(n,n), yr(n), yi(n), xr(n), xi(n)
+    real(dp) :: sumr, sumi, sumv, tol
+    integer  :: i, j, l
+    flag = 0
+    sol  = DCMPLX_ZERO
+    chol = 0.d0
+    tol  = max(DTINY, epsilon(1.d0) * max(1.d0, maxval(abs(amat_in))))
+    do j = 1, n
+        sumv = amat_in(j,j)
+        do l = 1, j - 1
+            sumv = sumv - chol(j,l) * chol(j,l)
+        end do
+        if( sumv <= tol )then
+            flag = 1
+            return
+        endif
+        chol(j,j) = sqrt(sumv)
+        do i = j + 1, n
+            sumv = amat_in(i,j)
+            do l = 1, j - 1
+                sumv = sumv - chol(i,l) * chol(j,l)
+            end do
+            chol(i,j) = sumv / chol(j,j)
+        end do
+    end do
+    do i = 1, n
+        sumr = real(rhs(i), dp)
+        sumi = aimag(rhs(i))
+        do l = 1, i - 1
+            sumr = sumr - chol(i,l) * yr(l)
+            sumi = sumi - chol(i,l) * yi(l)
+        end do
+        yr(i) = sumr / chol(i,i)
+        yi(i) = sumi / chol(i,i)
+    end do
+    do i = n, 1, -1
+        sumr = yr(i)
+        sumi = yi(i)
+        do l = i + 1, n
+            sumr = sumr - chol(l,i) * xr(l)
+            sumi = sumi - chol(l,i) * xi(l)
+        end do
+        xr(i) = sumr / chol(i,i)
+        xi(i) = sumi / chol(i,i)
+    end do
+    do i = 1, n
+        sol(i) = cmplx(xr(i), xi(i), kind=dp)
+    end do
+end subroutine solve_real_spd_complex
 
 subroutine sparse_eigh(matvec, ctx, n, neigs, eigvals, eigvecs, tol, max_basis, info)
     procedure(sparse_matvec_sp_proc) :: matvec

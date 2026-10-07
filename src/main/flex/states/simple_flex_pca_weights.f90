@@ -1,24 +1,20 @@
-!@descr: flex_pca state weights: kernel/equal-mass/on-axis placement, bandwidth selection, half masks
+!@descr: flex_pca state weights: kernel/equal-mass/on-axis placement and bandwidth-CV numerics
 module simple_flex_pca_weights
-use simple_core_module_api
-use simple_flex_pca_records, only: flex_latent, flex_selection, flex_state_set
-use simple_builder, only: builder
-use simple_flex_pca_rec3D, only: reconstruct_flex_weighted_states, flex_rec_smpd
-use simple_flex_pca_rounds, only: flex_pca_rounds
-use simple_image, only: image
-use simple_parameters, only: parameters
-use simple_srch_sort_loc, only: hpsort
-use simple_linalg, only: matinv
-use simple_flex_pca_run_types, only: flex_run_settings
-use simple_flex_pca_util, only: chi2_median, &
-    &kernel_weights_at_bandwidth, project_onto_target_polyline, COV_MAX_BW_GROW
-use simple_flex_pca_gmm, only: gmm_state_weights, gmm_auto_state_weights
+use simple_core_module_api, only: dp, dtiny, hpsort, logfhandle, matinv, simple_exception, tiny
+use simple_defs_flex,        only: FLEX_MAX_BW_GROW
+use simple_flex_pca_records, only: flex_latent, flex_state_set
+use simple_srch_sort_loc,    only: hpsort
+use simple_linalg,           only: matinv
+use simple_flex_pca_util,    only: chi2_median, &
+    &kernel_weights_at_bandwidth, project_onto_target_polyline
+use simple_flex_pca_gmm,     only: gmm_state_weights, gmm_auto_state_weights
 use simple_flex_pca_targets, only: diffusion_kcenter_targets, kmeans_latent_targets, path_latent_targets, reliability_path_targets
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: build_covariance_state_weights, kernel_weights_at_bandwidth, cv_select_bandwidths, project_onto_target_polyline, mask_state_weights_by_half
+public :: build_covariance_state_weights, kernel_weights_at_bandwidth, project_onto_target_polyline
+public :: bandwidth_cv_grid, bandwidth_cv_error, bandwidth_cv_adopt
 
 
 contains
@@ -30,9 +26,9 @@ contains
         type(flex_latent),    intent(in)    :: latent  !< z, precision and (when allocated) comp_rho
         type(flex_state_set), intent(inout) :: states  !< nstates in: the requested count; weights, targets, bandwidths, neff, labels, kdist, kfloor out
         integer :: nptcls, ncomp, nstates
-        integer,  intent(in) :: nkern, axis, min_neff
+        integer,              intent(in)    :: nkern, axis, min_neff
         ! macro-cluster label per particle from the latent deconvolution's mixture; replaces GMM AUTO's discovery fit
-        integer,  optional,    intent(in) :: macro_in(:)
+        integer, optional,    intent(in)    :: macro_in(:)
         ! per-particle viewing AXIS; only needed for the GMM's orientation-coverage term
         real,     allocatable :: sorted(:)
         real(dp), allocatable :: wcomp(:), tvec(:), tcen(:,:), dist(:), dvec(:), mvec(:)
@@ -44,7 +40,7 @@ contains
         integer  :: i, q, r, state, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
         integer  :: nk, errflg
         !> state_placement=equal_occ: at axis=0 the reliability-ordered equal-occupancy path replaces diffusion k-center
-        logical,  optional, intent(in) :: equal_occ
+        logical, optional,    intent(in)    :: equal_occ
         logical  :: l_relpath, l_diffuse, l_gmm, l_gmm_auto, l_equal_occ
         character(len=12) :: bwsrc
         nptcls  = size(latent%z,1)
@@ -196,20 +192,20 @@ contains
                 end do
                 !$omp end parallel do
             else
-            !$omp parallel do default(shared) private(i,q,r,d2,dvec,mvec) schedule(static)
-            do i = 1, nptcls
-                do q = 1, nk
-                    dvec(q) = latent%z(i,q) - tvec(q)
-                end do
-                d2 = 0.d0
-                do q = 1, nk
-                    do r = 1, nk
-                        d2 = d2 + dvec(q)*pk(q,r,i)*dvec(r)
+                !$omp parallel do default(shared) private(i,q,r,d2,dvec,mvec) schedule(static)
+                do i = 1, nptcls
+                    do q = 1, nk
+                        dvec(q) = latent%z(i,q) - tvec(q)
                     end do
+                    d2 = 0.d0
+                    do q = 1, nk
+                        do r = 1, nk
+                            d2 = d2 + dvec(q)*pk(q,r,i)*dvec(r)
+                        end do
+                    end do
+                    dist(i) = max(d2, 0.d0)
                 end do
-                dist(i) = max(d2, 0.d0)
-            end do
-            !$omp end parallel do
+                !$omp end parallel do
             endif
             sorted = real(dist)
             call hpsort(sorted)
@@ -235,7 +231,7 @@ contains
                 &'  bandwidth floor from ', bwsrc
             ! Enclosed population grows like h^nk (a 1.3x step is ~190x at nk=20); the floor should make this a no-op
             nsupp = 0
-            do grow = 0, COV_MAX_BW_GROW
+            do grow = 0, FLEX_MAX_BW_GROW
                 sumw  = 0.d0
                 sumw2 = 0.d0
                 nsupp = 0
@@ -250,7 +246,7 @@ contains
                 end do
                 !$omp end parallel do
                 if( nsupp >= min(min_neff, nptcls) ) exit
-                if( grow >= COV_MAX_BW_GROW      ) exit
+                if( grow >= FLEX_MAX_BW_GROW      ) exit
                 h = 1.3d0*h                       ! safety only; should not fire
             end do
             if( nsupp < min(min_neff, nptcls) )then
@@ -329,31 +325,17 @@ contains
     end subroutine build_covariance_state_weights
 
 
-    !> Cross-validated bandwidth selection, scored against the NARROWEST bin's opposite-half map.
-    !! Plain even/odd agreement would rise monotonically with bandwidth and pick maximal smearing.
-    subroutine cv_select_bandwidths( params, cfg, build, sel, nbins, min_neff, states , rounds)
-        type(flex_selection), intent(in)    :: sel
-        type(flex_state_set), intent(inout) :: states  !< kdist/kfloor in; weights, bandwidths, neff re-selected
-        class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters), intent(inout) :: params
-        type(flex_run_settings), intent(in)    :: cfg
-        class(builder),    intent(inout) :: build
-        integer,           intent(in) :: nbins, min_neff
-        real,     allocatable :: wbin(:,:), whalf(:,:), sorted(:)
-        real(dp), allocatable :: bins(:,:), hbin(:,:), err(:,:)
-        real,     allocatable :: tgt_ev(:,:), tgt_od(:,:)     ! narrow-bin targets per state
-        real,     allocatable :: rmat(:,:,:)
-        type(image) :: ev, od
-        type(string):: fn
-        real(dp) :: b_lo, b_hi, t, h_used, e1, e2
-        real     :: neff_used
-        integer  :: state, ib, p95, nvox, ibest
-        character(len=3) :: bstr
-        allocate(wbin(sel%nptcls,states%nstates), whalf(sel%nptcls,states%nstates), bins(nbins,states%nstates), &
-            &hbin(nbins,states%nstates), err(nbins,states%nstates), sorted(sel%nptcls))
-        err = 0.d0
-        ! --- bin grid per state: from the bandwidth floor to the 95th distance percentile, linear in sqrt
-        p95 = max(1, min(sel%nptcls, nint(0.95*real(sel%nptcls))))
+    !> Per-state CV bins from the bandwidth floor to the 95th distance percentile, linear in sqrt.
+    subroutine bandwidth_cv_grid( states, nbins, bins )
+        type(flex_state_set), intent(in)  :: states
+        integer,              intent(in)  :: nbins
+        real(dp),             intent(out) :: bins(nbins,states%nstates)
+        real, allocatable :: sorted(:)
+        real(dp) :: b_lo, b_hi, t
+        integer :: state, ib, p95, nptcls
+        nptcls = size(states%kdist,1)
+        p95    = max(1, min(nptcls, nint(0.95*real(nptcls))))
+        allocate(sorted(nptcls))
         do state = 1, states%nstates
             sorted = real(states%kdist(:,state))
             call hpsort(sorted)
@@ -361,79 +343,43 @@ contains
             b_hi = max(real(sorted(p95),dp), b_lo*1.0001d0)
             do ib = 1, nbins
                 t = real(ib-1,dp)/real(max(1,nbins-1),dp)
-                bins(ib,state) = (sqrt(b_lo) + t*(sqrt(b_hi)-sqrt(b_lo)))**2   ! linear in sqrt
+                bins(ib,state) = (sqrt(b_lo) + t*(sqrt(b_hi)-sqrt(b_lo)))**2
             end do
         end do
-        write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA cross-validated bandwidth selection over ',nbins, &
-            &' bins per state'
-        call flush(logfhandle)
-        nvox = params%box_crop**3
-        allocate(tgt_ev(nvox,states%nstates), tgt_od(nvox,states%nstates), source=0.)
-        do ib = 1, nbins
-            do state = 1, states%nstates
-                call kernel_weights_at_bandwidth(states%kdist(:,state), sel%nptcls, sqrt(2.d0*bins(ib,state)), &
-                    &min_neff, wbin(:,state), h_used, neff_used)
-                hbin(ib,state) = h_used
-            end do
-            write(bstr,'(I3.3)') ib
-            whalf = wbin
-            call mask_state_weights_by_half(build, sel%pinds, 0, whalf)
-            params%outvol = 'flex_pca_cv'//bstr//'_even_state_001.mrc'
-            call reconstruct_flex_weighted_states(params, cfg, build, sel%pinds, whalf, states%nstates, floor_rho=.true., rounds=rounds)
-            whalf = wbin
-            call mask_state_weights_by_half(build, sel%pinds, 1, whalf)
-            params%outvol = 'flex_pca_cv'//bstr//'_odd_state_001.mrc'
-            call reconstruct_flex_weighted_states(params, cfg, build, sel%pinds, whalf, states%nstates, floor_rho=.true., rounds=rounds)
-            do state = 1, states%nstates
-                ! trial half maps are written at box_rec; the CV score is computed at box_crop
-                fn = 'flex_pca_cv'//bstr//'_even_state_'//int2str_pad(state,3)//MRC_EXT
-                call ev%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
-                call del_file(fn%to_char()); call fn%kill
-                fn = 'flex_pca_cv'//bstr//'_odd_state_'//int2str_pad(state,3)//MRC_EXT
-                call od%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
-                call del_file(fn%to_char()); call fn%kill
-                if( ib == 1 )then
-                    rmat = ev%get_rmat(); tgt_ev(:,state) = reshape(rmat, [nvox])
-                    rmat = od%get_rmat(); tgt_od(:,state) = reshape(rmat, [nvox])
-                endif
-                rmat = od%get_rmat()
-                e1 = sum((real(tgt_ev(:,state),dp) - real(reshape(rmat,[nvox]),dp))**2)
-                rmat = ev%get_rmat()
-                e2 = sum((real(reshape(rmat,[nvox]),dp) - real(tgt_od(:,state),dp))**2)
-                err(ib,state) = e1 + e2
-                call ev%kill; call od%kill
-            end do
-            write(logfhandle,'(A,I3,A,ES11.3,A,ES12.4,A,ES12.4)') '>>>   cv bin=',ib,' h(state1)=',hbin(ib,1), &
-                &'  cross-halfset error: min=',minval(err(ib,:)),' max=',maxval(err(ib,:))
-            call flush(logfhandle)
-        end do
+        deallocate(sorted)
+    end subroutine bandwidth_cv_grid
+
+    !> Score a trial pair against the narrowest-bin opposite-half maps.
+    !! Direct even/odd agreement would rise monotonically with bandwidth and select maximal smearing.
+    pure function bandwidth_cv_error( even_map, odd_map, target_even, target_odd ) result( err )
+        real, intent(in) :: even_map(:), odd_map(:), target_even(:), target_odd(:)
+        real(dp) :: err, e1, e2
+        e1  = sum((real(target_even,dp) - real(odd_map,dp))**2)
+        e2  = sum((real(even_map,dp) - real(target_odd,dp))**2)
+        err = e1 + e2
+    end function bandwidth_cv_error
+
+    !> Adopt each state's minimum-error CV bin and rebuild its final kernel weights.
+    subroutine bandwidth_cv_adopt( states, bins, errors, min_neff )
+        type(flex_state_set), intent(inout) :: states
+        real(dp),             intent(in)    :: bins(:,:), errors(:,:)
+        integer,              intent(in)    :: min_neff
+        real(dp) :: h_used
+        real :: neff_used
+        integer :: state, ibest, nbins, nptcls
+        nbins  = size(bins,1)
+        nptcls = size(states%kdist,1)
         write(logfhandle,'(A)') '>>> FLEX_PCA selected bandwidths (per state, argmin cross-halfset error):'
         do state = 1, states%nstates
-            ibest = minloc(err(:,state), dim=1)
-            call kernel_weights_at_bandwidth(states%kdist(:,state), sel%nptcls, sqrt(2.d0*bins(ibest,state)), &
+            ibest = minloc(errors(:,state), dim=1)
+            call kernel_weights_at_bandwidth(states%kdist(:,state), nptcls, sqrt(2.d0*bins(ibest,state)), &
                 &min_neff, states%weights(:,state), h_used, neff_used)
             states%bandwidths(state) = real(h_used)
             states%neff(state)       = neff_used
-            write(logfhandle,'(A,I3,A,I3,A,I0,A,ES11.3,A,ES12.4,A,F10.1)') '>>>   state=',state,'  bin=',ibest,'/',nbins, &
-                &'  h=',h_used,'  error=',err(ibest,state),'  neff=',neff_used
+            write(logfhandle,'(A,I3,A,I3,A,I0,A,ES11.3,A,ES12.4,A,F10.1)') '>>>   state=',state, &
+                &'  bin=',ibest,'/',nbins,'  h=',h_used,'  error=',errors(ibest,state),'  neff=',neff_used
         end do
         call flush(logfhandle)
-        deallocate(wbin, whalf, bins, hbin, err, sorted, tgt_ev, tgt_od)
-    end subroutine cv_select_bandwidths
-
-    !> Arc-length coordinate of every particle on the polyline through the supplied targets.
-    !! Projection is Euclidean in the raw latent (the units the targets are given in); each particle
-    !! takes the closest point over all segments, clamped to the segment ends, so particles beyond
-    !! either terminus map to the terminus and the end frames collect the tails.
-
-    subroutine mask_state_weights_by_half( build, pinds, wanted_eo, weights )
-        type(builder), intent(inout) :: build
-        integer,       intent(in)    :: pinds(:), wanted_eo
-        real,          intent(inout) :: weights(:,:)
-        integer :: i
-        do i = 1, size(pinds)
-            if( build%spproj_field%get_eo(pinds(i)) /= wanted_eo ) weights(i,:) = 0.
-        end do
-    end subroutine mask_state_weights_by_half
+    end subroutine bandwidth_cv_adopt
 
 end module simple_flex_pca_weights

@@ -1,39 +1,33 @@
 !@descr: flex_pca: the cross-fit-FSC driver context: setup, per-iteration ridge, paired records, teardown
 submodule (simple_flex_probe_fit) simple_flex_probe_fit_crossfsc
-use simple_core_module_api
-use simple_image, only: image
-use simple_parameters, only: parameters
-use simple_flex_pca_crossfsc, only: crossfsc_record, crossfsc_load, crossfsc_write, crossfsc_append,&
-    &crossfsc_latest_upto, crossfsc_kill, crossfsc_kill_record, crossfsc_to_invtau2, crossfsc_stop_stat,&
+use simple_core_module_api, only: dtiny, fdim, logfhandle
+use simple_defs_flex,          only: FLEX_FSC_SIGNAL_THRESHOLD
+use simple_image,              only: image
+use simple_flex_pca_crossfsc,  only: crossfsc_record, crossfsc_to_invtau2, crossfsc_stop_stat, &
     &crossfsc_khi_deepest, COV_XFSC_FNAME
-use simple_flex_pca_run_types, only: flex_run_settings
-use simple_flex_pca_basis, only: load_probe_state
-use simple_flex_pca_fit_types, only: xfsc_ctx_t
+use simple_flex_pca_stages,    only: FLEX_MOD4_PAIRING
+use simple_flex_pca_basis,     only: load_probe_state
 implicit none
 #include "simple_local_flags.inc"
-
-!> FSC criterion of the deepest-crossing per-fit internal-FSC bands recorded in the artifact
-real, parameter :: XFSC_CRIT = 0.143
 
 contains
 
     !> Arm the cross-fit FSC ridge (arm 1, hard-wired; no switch selects another arm), reload the
     !! artifact when the ridge or the paired writer is live, and fail fast on contract violations.
     !! Master-only: workers pass l_master=.false. and stay inert.
-    module subroutine xfsc_setup( ctx, params, cfg, kfr_ann, l_paired, l_master )
+    module subroutine xfsc_setup( ctx, params, kfr_ann, l_paired, l_master )
         type(xfsc_ctx_t),  intent(inout) :: ctx
         class(parameters), intent(in)    :: params
-        type(flex_run_settings), intent(in)    :: cfg
         integer,           intent(in)    :: kfr_ann(2)
         logical,           intent(in)    :: l_paired, l_master
+        call ctx%new
         ctx%v_reg      = 1     ! the cross-fit FSC ridge (the internal e/o arm was the scaffolding)
         ctx%l_paired   = l_paired
         ! the paired master writes honest paired=1 records EVERY iteration; the single-fit engine writes none
         ctx%l_writer   = l_paired .and. l_master
         ctx%pairing_id = 0
         if( l_paired )then
-            ! one-time env read (never mid-loop); the driver already validated 1|3
-            ctx%pairing_id = cfg%mod4_pairing
+            ctx%pairing_id = FLEX_MOD4_PAIRING
         endif
         ctx%l_any      = ctx%l_writer .or. ctx%v_reg > 0
         ctx%l_loaded   = .false.
@@ -47,7 +41,7 @@ contains
         endif
         if( ctx%l_any )then
             ! restart-complete series reload (the load_probe_state idiom, applied to the artifact)
-            call crossfsc_load(ctx%xf, ctx%l_loaded)
+            call ctx%xf%load(ctx%l_loaded)
             if( ctx%l_loaded )then
                 if( ctx%xf%box_crop /= params%box_crop .or. ctx%xf%filtsz /= ctx%filtsz ) &
                     &THROW_HARD('existing '//COV_XFSC_FNAME//' was written on a different lattice; delete it to restart the series')
@@ -71,18 +65,18 @@ contains
     !! scaffolding (paired=0) silently degrade to arm 0 for that iteration; the record's reg_mode
     !! field logs the degradation. Also sets l_xf_harvest when the writer needs the payloads.
     module subroutine xfsc_prep_iter( ctx, params, fit, it_eff, tag )
-        type(xfsc_ctx_t),  intent(inout) :: ctx
-        class(parameters), intent(in)    :: params
+        type(xfsc_ctx_t),     intent(inout) :: ctx
+        class(parameters),    intent(in)    :: params
         type(flex_probe_fit), intent(inout) :: fit
-        integer,           intent(in)    :: it_eff
-        character(len=*),  intent(in)    :: tag   !< '' single-fit; '  fit=A'/'  fit=B' paired
+        integer,              intent(in)    :: it_eff
+        character(len=*),     intent(in)    :: tag   !< '' single-fit; '  fit=A'/'  fit=B' paired
         logical :: l_fitb
         integer :: irec
         fit%diag%l_xf_harvest = ctx%l_writer
         if( allocated(fit%diag%xf_invtau2) ) deallocate(fit%diag%xf_invtau2)
         ctx%reg_active = 0
         if( ctx%v_reg <= 0 ) return
-        irec = crossfsc_latest_upto(ctx%xf, it_eff - 1)
+        irec = ctx%xf%latest_upto(it_eff - 1)
         if( irec < 1 )then
             write(logfhandle,'(A,I0,A,A)') '>>> FLEX_PCA XFSC REG it=',it_eff, &
                 &'  arm degraded to 0: no record stamped <= t-1',tag
@@ -159,18 +153,17 @@ contains
     !! payloads are freed by kill_probe_fit / scope exit.
     module subroutine xfsc_teardown( ctx )
         type(xfsc_ctx_t), intent(inout) :: ctx
-        if( .not. ctx%l_any ) return
-        call crossfsc_kill(ctx%xf)
+        call ctx%kill
     end subroutine xfsc_teardown
 
     !> Append one paired=1 crossfsc record per iteration, after both fits' tails: per-fit internal
     !! FSC, Gamma and own e+o H, plus greedy signed |cos| matching on the delivered bases (prev_real)
     !! and each matched pair's cross-fit FSC. Greedy, not varimax+Hungarian.
     module subroutine xfsc_paired_record( ctx, params, fits, it_eff )
-        type(xfsc_ctx_t),  intent(inout) :: ctx
-        class(parameters), intent(in)    :: params
+        type(xfsc_ctx_t),     intent(inout) :: ctx
+        class(parameters),    intent(in)    :: params
         type(flex_probe_fit), intent(inout) :: fits(2)
-        integer,           intent(in)    :: it_eff
+        integer,              intent(in)    :: it_eff
         type(crossfsc_record) :: rec
         type(image) :: imga, imgb
         real,     pointer     :: pra(:,:,:), prb(:,:,:)
@@ -204,8 +197,10 @@ contains
         rec%kmatch     = km
         ! per-fit internal-FSC bands (deepest crossing + 2 shells, clamped to the full band),
         ! recorded for offline rank/band diagnostics
-        rec%khi_a      = min(fits(1)%spec%khi_full, max(1, crossfsc_khi_deepest(fits(1)%diag%xf_fscq, nc_a, XFSC_CRIT) + 2))
-        rec%khi_b      = min(fits(2)%spec%khi_full, max(1, crossfsc_khi_deepest(fits(2)%diag%xf_fscq, nc_b, XFSC_CRIT) + 2))
+        rec%khi_a = min(fits(1)%spec%khi_full, &
+            &max(1, crossfsc_khi_deepest(fits(1)%diag%xf_fscq, nc_a, real(FLEX_FSC_SIGNAL_THRESHOLD)) + 2))
+        rec%khi_b = min(fits(2)%spec%khi_full, &
+            &max(1, crossfsc_khi_deepest(fits(2)%diag%xf_fscq, nc_b, real(FLEX_FSC_SIGNAL_THRESHOLD)) + 2))
         rec%khi_shared = fits(1)%spec%khi_full
         rec%reg_mode   = ctx%reg_active
         rec%march_on   = 0
@@ -269,9 +264,9 @@ contains
         rec%s_stop = crossfsc_stop_stat(rec, ctx%xf%khi_cmp)
         write(logfhandle,'(A,I0,A,I0,A,F6.3,A,F6.3)') '>>> FLEX_PCA XFSC PAIRED record it=', &
             &it_eff,'  matched pairs=',km,'  |cos| lead=',rec%match_cos(1),'  S(t)=',real(rec%s_stop)
-        call crossfsc_append(ctx%xf, rec)
-        call crossfsc_write(ctx%xf)
-        call crossfsc_kill_record(rec)
+        call ctx%xf%append(rec)
+        call ctx%xf%write
+        call rec%kill
     end subroutine xfsc_paired_record
 
 end submodule simple_flex_probe_fit_crossfsc

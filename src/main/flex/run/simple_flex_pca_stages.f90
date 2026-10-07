@@ -1,4 +1,4 @@
-!@descr: flex_pca stage protocol: the stage and fit identifiers a round carries, the typed stage request, the mod-4 half rule
+!@descr: flex_pca stage and fit identifiers, typed stage request and mod-4 half assignment
 !!
 !! What a distributable phase asks of the rounds object is a `flex_stage_request`: which stage
 !! body every worker runs, over which fit, at which global iteration and budget, and how many
@@ -13,26 +13,28 @@ private
 public :: flex_stage_request
 public :: PCA_STAGE_EMBED, PCA_STAGE_STATES, PCA_STAGE_PROBE, PCA_STAGE_POLISH
 public :: FLEX_FIT_ALL, FLEX_FIT_A, FLEX_FIT_B
+public :: FLEX_MOD4_PAIRING
 public :: flex_pca_half_of
 
-! Stage selector carried to the worker in params%stage. 1..3 were the moment estimator's SNR /
-! column / reduced-solve rounds; that path is gone and the numbering is kept so an old part file
-! cannot be mistaken for a current one.
-integer, parameter :: PCA_STAGE_EMBED  = 4
-integer, parameter :: PCA_STAGE_STATES = 5
+! Compact current stage protocol carried to workers in params%stage.
+integer, parameter :: PCA_STAGE_EMBED  = 1
+integer, parameter :: PCA_STAGE_STATES = 2
 ! One qsys round per probe EM iteration: the basis changes every iteration, so workers are
 ! re-launched against the master's refreshed flex_pca_pc*.mrc rather than looping locally.
-integer, parameter :: PCA_STAGE_PROBE  = 6
+integer, parameter :: PCA_STAGE_PROBE  = 3
 ! The joint (polish) fit after the paired merge: the same E-step pass over ALL particles against
 ! the merged basis under the polished namespace. A stage, not a string stamp: the stage says what
 ! to compute and which basis namespace to load.
-integer, parameter :: PCA_STAGE_POLISH = 7
+integer, parameter :: PCA_STAGE_POLISH = 4
 
 ! Which fit a round serves, carried to the worker in params%pcafit beside the stage: the stage
 ! says what to compute, this says over which particles.
 integer, parameter :: FLEX_FIT_ALL = 0
 integer, parameter :: FLEX_FIT_A   = 1
 integer, parameter :: FLEX_FIT_B   = 2
+
+! The supported balanced split: row residues {0,1} and {2,3}; both halves retain both eo classes.
+integer, parameter :: FLEX_MOD4_PAIRING = 1
 
 !> One round's control state. Constructed with keywords at the call site; every field has the
 !! value a round without that piece of state always carried.
@@ -47,18 +49,13 @@ end type flex_stage_request
 contains
 
     !> The ONE mod-4 split rule, shared by the paired engine's master driver and its workers so both
-    !! partition the selection identically. Pairing 1 (default) puts row residues {0,1} in half A; pairing 3 puts
-    !! {0,3}. Both pair one even-row residue with one odd-row residue, so each half keeps both
-    !! internal e/o classes under the row-alternating project eo split. Pairing 2 ({0,2}|{1,3})
-    !! is eo-degenerate by construction and is REFUSED where the pairing is validated --
-    !! never silently mapped here.
-    pure integer function flex_pca_half_of( pind, vpair ) result( ifit )
-        integer, intent(in) :: pind, vpair
-        integer :: r4, a2
-        a2 = 1
-        if( vpair == 3 ) a2 = 3
+    !! partition the selection identically. Row residues {0,1} form half A and {2,3} half B, so
+    !! each half keeps both internal e/o classes under the row-alternating project eo split.
+    pure integer function flex_pca_half_of( pind ) result( ifit )
+        integer, intent(in) :: pind
+        integer :: r4
         r4 = mod(pind, 4)
-        if( r4 == 0 .or. r4 == a2 )then
+        if( r4 == 0 .or. r4 == 1 )then
             ifit = FLEX_FIT_A
         else
             ifit = FLEX_FIT_B

@@ -20,10 +20,10 @@ integer,  parameter :: FLEX_CLS_NFOLD      = 5      !< cross-fitting folds (basi
 real(dp), parameter :: FLEX_CLS_RIDGE_REL  = 1.d-3  !< Tikhonov ridge on the basis block, relative to G(1,1)
 real(dp), parameter :: FLEX_CLS_CONV_TOL   = 1.d-3  !< relative latent change that stops the PPCA loop
 real(dp), parameter :: FLEX_CLS_WIENER_EPS = 0.1d0  !< sub-average denominator ctf^2 + eps, per member
-real(dp), parameter :: FLEX_CLS_NUIS_RIDGE  = 1.d-6  !< ridge on the free nuisance block of the E-step, relative to max A(q,q)
-real(dp), parameter :: FLEX_CLS_INV_RIDGE   = 1.d-12 !< ridge before inverting a small SPD matrix, relative to max |A|
-real(sp), parameter :: FLEX_CLS_W_CUTOFF    = 1.e-3  !< kernel weights below this are zero
-integer,  parameter :: FLEX_CLS_MIN_LEAF    = 8      !< a leaf is cut only when both halves can hold this many members
+real(dp), parameter :: FLEX_CLS_NUIS_RIDGE = 1.d-6  !< ridge on the free nuisance block of the E-step, relative to max A(q,q)
+real(dp), parameter :: FLEX_CLS_INV_RIDGE  = 1.d-12 !< ridge before inverting a small SPD matrix, relative to max |A|
+real(sp), parameter :: FLEX_CLS_W_CUTOFF   = 1.e-3  !< kernel weights below this are zero
+integer,  parameter :: FLEX_CLS_MIN_LEAF   = 8      !< a leaf is cut only when both halves can hold this many members
 
 type flex_cls_model
     integer :: nfit = 0, ncomp = 0, nptcls = 0
@@ -80,15 +80,15 @@ contains
 
     !> fits mean and basis on the coefficients in fitmask; leaves every member's latent and precision in the model
     subroutine flex_cls_fit( model, y, c, w, wq, fitmask, ncomp, verbose, nuis )
-        type(flex_cls_model), intent(inout) :: model
-        complex(sp),          intent(in)    :: y(:,:)      !< (ncoeff,nptcls) coefficients in the class frame
-        real(sp),             intent(in)    :: c(:,:)      !< (ncoeff,nptcls) CTF in the class frame
-        real(sp),             intent(in)    :: w(:,:)      !< (ncoeff,nptcls) inverse noise variance
-        real(sp),             intent(in)    :: wq(:)       !< (ncoeff) half-plane quadrature weight
-        logical,              intent(in)    :: fitmask(:)  !< (ncoeff) coefficient enters the fit
-        integer,              intent(in)    :: ncomp
-        logical,    optional, intent(in)    :: verbose
-        complex(sp), optional, intent(in)   :: nuis(:,:)  !< (ncoeff,nnuis) nuisance columns, fitted jointly, never placed on
+        type(flex_cls_model),  intent(inout) :: model
+        complex(sp),           intent(in)    :: y(:,:)      !< (ncoeff,nptcls) coefficients in the class frame
+        real(sp),              intent(in)    :: c(:,:)      !< (ncoeff,nptcls) CTF in the class frame
+        real(sp),              intent(in)    :: w(:,:)      !< (ncoeff,nptcls) inverse noise variance
+        real(sp),              intent(in)    :: wq(:)       !< (ncoeff) half-plane quadrature weight
+        logical,               intent(in)    :: fitmask(:)  !< (ncoeff) coefficient enters the fit
+        integer,               intent(in)    :: ncomp
+        logical,     optional, intent(in)    :: verbose
+        complex(sp), optional, intent(in)    :: nuis(:,:)   !< (ncoeff,nnuis) nuisance columns, fitted jointly, never placed on
         complex(sp), allocatable :: yf(:,:)
         real(sp),    allocatable :: cf(:,:), wf(:,:), wqf(:)
         real(dp),    allocatable :: ea(:,:), eaa(:,:,:), zprev(:,:), ubest(:,:), zbest(:,:)
@@ -664,13 +664,13 @@ contains
     !> CTF-corrected weighted sub-averages; without shell a constant eps regularises, with shell and tau2 den += 1/tau2,
     !! with shell alone unregularised (shell_den returns the mean den per shell)
     subroutine flex_cls_restore_states( y, c, w, weights, avgs, shell, tau2, shell_den )
-        complex(sp),        intent(in)  :: y(:,:)        !< (ncoeff,nptcls)
-        real(sp),           intent(in)  :: c(:,:)        !< (ncoeff,nptcls)
-        real(sp),           intent(in)  :: w(:,:)        !< (ncoeff,nptcls)
-        real(sp),           intent(in)  :: weights(:,:)  !< (nptcls,ncls)
-        complex(sp),        intent(out) :: avgs(:,:)     !< (ncoeff,ncls)
-        integer,  optional, intent(in)  :: shell(:)      !< (ncoeff) shell index of every coefficient
-        real(dp), optional, intent(in)  :: tau2(:,:)     !< (nsh,ncls) prior signal power per shell: den += 1/tau2
+        complex(sp),        intent(in)  :: y(:,:)         !< (ncoeff,nptcls)
+        real(sp),           intent(in)  :: c(:,:)         !< (ncoeff,nptcls)
+        real(sp),           intent(in)  :: w(:,:)         !< (ncoeff,nptcls)
+        real(sp),           intent(in)  :: weights(:,:)   !< (nptcls,ncls)
+        complex(sp),        intent(out) :: avgs(:,:)      !< (ncoeff,ncls)
+        integer,  optional, intent(in)  :: shell(:)       !< (ncoeff) shell index of every coefficient
+        real(dp), optional, intent(in)  :: tau2(:,:)      !< (nsh,ncls) prior signal power per shell: den += 1/tau2
         real(dp), optional, intent(out) :: shell_den(:,:) !< (nsh,ncls) mean of den over the shell (1/noise variance of the average)
         real(dp),    allocatable :: den0(:), rsum(:)
         complex(dp), allocatable :: num0(:)
@@ -786,12 +786,12 @@ contains
 
     !> even/odd sub-averages and, per subclass, the best cross-half correlation of its difference image to a sibling
     subroutine flex_cls_half_reproducibility( y, c, w, wq, fitmask, weights, repro, avgs_even, avgs_odd, shell, tau2, den_even, den_odd )
-        complex(sp), intent(in)  :: y(:,:)
-        real(sp),    intent(in)  :: c(:,:), w(:,:), wq(:)
-        logical,     intent(in)  :: fitmask(:)
-        real(sp),    intent(in)  :: weights(:,:)   !< (nptcls,ncls)
-        real(sp),    intent(out) :: repro(:)       !< (ncls)
-        complex(sp), intent(out) :: avgs_even(:,:), avgs_odd(:,:)   !< (ncoeff,ncls)
+        complex(sp),        intent(in)  :: y(:,:)
+        real(sp),           intent(in)  :: c(:,:), w(:,:), wq(:)
+        logical,            intent(in)  :: fitmask(:)
+        real(sp),           intent(in)  :: weights(:,:)   !< (nptcls,ncls)
+        real(sp),           intent(out) :: repro(:)       !< (ncls)
+        complex(sp),        intent(out) :: avgs_even(:,:), avgs_odd(:,:)   !< (ncoeff,ncls)
         integer,  optional, intent(in)  :: shell(:)
         real(dp), optional, intent(in)  :: tau2(:,:)
         real(dp), optional, intent(out) :: den_even(:,:), den_odd(:,:)   !< (nsh,ncls) mean den per shell of each half

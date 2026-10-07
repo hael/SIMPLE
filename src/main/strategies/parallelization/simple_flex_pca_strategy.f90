@@ -8,7 +8,9 @@
 !! cleanup, selected by the command-line shape (part= -> worker; nparts>1 -> master; else
 !! shared memory).
 module simple_flex_pca_strategy
-use simple_core_module_api
+use simple_core_module_api, only: arr2txtfile, chash, del_file, int2str, int2str_pad, L_USE_SLURM_ARR, &
+    &logfhandle, nthr_glob, simple_exception, simple_mkdir, simple_rmdir, string, tic, timer_int_kind, &
+    &toc, TXT_EXT
 use simple_builder,         only: builder
 use simple_cmdline,         only: cmdline
 use simple_parameters,      only: parameters
@@ -16,7 +18,7 @@ use simple_qsys_env,        only: qsys_env
 use simple_flex_pca_rounds,    only: flex_pca_rounds, flex_pca_rounds_shmem
 use simple_flex_pca_stages,    only: flex_stage_request, FLEX_FIT_ALL, &
     &PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED, PCA_STAGE_STATES
-use simple_flex_pca_artifacts, only: flex_pca_set_part_dir, flex_pca_local_part_dir
+use simple_flex_pca_artifacts, only: flex_pca_local_part_dir
 use simple_flex_pca_application, only: flex_pca_application
 implicit none
 private
@@ -211,7 +213,7 @@ contains
         self%part_dir = flex_pca_local_part_dir(params, self%rounds%nparts_run)
         if( len_trim(self%part_dir) > 0 )then
             call simple_mkdir(self%part_dir)
-            call flex_pca_set_part_dir(self%part_dir)
+            call self%rounds%set_part_dir(self%part_dir)
             write(logfhandle,'(A,A)') '>>> DISTRIBUTED FLEX_PCA: part files on local scratch ', trim(self%part_dir)
             call flush(logfhandle)
         endif
@@ -276,7 +278,7 @@ contains
         call qsys_cleanup(params)
         if( len_trim(self%part_dir) > 0 )then
             call simple_rmdir(self%part_dir)   ! consumers delete every part after the reduce; the directory is empty
-            call flex_pca_set_part_dir('')
+            call self%rounds%kill_artifacts
         endif
     end subroutine master_cleanup
 
@@ -360,7 +362,7 @@ contains
         self%rounds%l_worker = .true.
         self%rounds%fit_sel  = params%pcafit
         ! adopt the master's node-local part directory (same derivation, same node, same cwd)
-        call flex_pca_set_part_dir(flex_pca_local_part_dir(params, params%nparts))
+        call self%rounds%set_part_dir(flex_pca_local_part_dir(params, params%nparts))
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA (WORKER) part=',params%part, &
             &' stage=',params%stage,' fit=',self%rounds%fit_sel
         call flush(logfhandle)

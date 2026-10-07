@@ -1,4 +1,4 @@
-!@descr: unit test routines for the optimiser framework (opt_spec, opt_factory, L-BFGS-B, differential evolution, simplex)
+!@descr: unit tests for the optimiser framework and shared rank-1 PCG engine
 ! The three optimisers production builds through the factory: L-BFGS-B (shift searches, CTF estimation,
 ! cavg-quality learning) on a bounded quadratic, a direction-finding problem and Rosenbrock, differential
 ! evolution (CTF estimation) and the restarted simplex (volume symmetry search) on the quadratic, and the
@@ -10,6 +10,7 @@ use simple_string_utils,   only: int2str
 use simple_optimizer,      only: optimizer
 use simple_opt_factory,    only: opt_factory
 use simple_opt_spec,       only: opt_spec
+use simple_pcg_solver,     only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve
 implicit none
 private
 public :: run_all_opt_tests
@@ -18,6 +19,18 @@ public :: run_all_opt_tests
 real, parameter :: XMIN(2)   = [1.0, -2.0]
 real, parameter :: YDIR(2)   = [0.75, 0.25]
 real, parameter :: LIMS2(2,2) = reshape([-5., -5., 5., 5.], [2,2])
+
+type, extends(pcg_operator) :: dense_pcg_operator
+    real :: a(3,3) = 0.0
+    real :: minv(3) = 1.0
+    integer :: apply_count = 0
+    logical :: fail_warm_once = .false.
+  contains
+    procedure :: size    => dense_pcg_size
+    procedure :: apply   => dense_pcg_apply
+    procedure :: precond => dense_pcg_precond
+    procedure :: dot     => dense_pcg_dot
+end type dense_pcg_operator
 
 contains
 
@@ -30,6 +43,9 @@ contains
         call test_lbfgsb_rosenbrock()
         call test_de_quadratic()
         call test_simplex_quadratic()
+        call test_pcg_dense_spd()
+        call test_pcg_diagonal_one_step()
+        call test_pcg_cold_restart()
     end subroutine run_all_opt_tests
 
     !---------------- cost functions ----------------
@@ -297,5 +313,118 @@ contains
         deallocate(opt)
         call spec%kill
     end subroutine test_simplex_quadratic
+
+    !---------------- shared PCG engine ----------------
+
+    subroutine test_pcg_dense_spd()
+        type(dense_pcg_operator) :: op
+        type(pcg_solver_options) :: options
+        type(pcg_solver_outcome) :: outcome
+        real :: truth(3), b(3), x(3)
+        write(*,'(A)') 'test_pcg_dense_spd'
+        call set_spd_operator(op)
+        truth = [1.0, -2.0, 0.5]
+        b = matmul(op%a, truth)
+        x = 0.0
+        options%maxits = 3
+        options%rtol = 0.0
+        options%xtol = 0.0
+        call pcg_solve(op, b, x, options, outcome)
+        call assert_true(maxval(abs(x-truth)) < 2.e-5, 'PCG matches the independent dense SPD solution')
+        call assert_int(3, outcome%iteration_count, 'fixed three-dimensional PCG uses exactly three iterations')
+        call assert_char('fixed_iterations', trim(outcome%stop_reason), 'fixed-iteration stop reason')
+        call assert_real(1.0, outcome%initial_rel_residual, 1.e-6, 'zero start has unit relative residual')
+        call assert_true(outcome%final_rel_residual < 2.e-5, 'dense SPD final residual is small')
+        call assert_int(3, size(outcome%rel_residual_history), 'dense SPD residual history covers every iteration')
+        call outcome%kill
+    end subroutine test_pcg_dense_spd
+
+    subroutine test_pcg_diagonal_one_step()
+        type(dense_pcg_operator) :: op
+        type(pcg_solver_options) :: options
+        type(pcg_solver_outcome) :: outcome
+        real :: truth(3), b(3), x(3)
+        write(*,'(A)') 'test_pcg_diagonal_one_step'
+        op%a = 0.0
+        op%a(1,1) = 2.0
+        op%a(2,2) = 3.0
+        op%a(3,3) = 5.0
+        op%minv = [0.5, 1.0/3.0, 0.2]
+        truth = [0.25, -1.5, 2.0]
+        b = matmul(op%a, truth)
+        x = 0.0
+        options%maxits = 5
+        options%rtol = 1.e-6
+        call pcg_solve(op, b, x, options, outcome)
+        call assert_int(1, outcome%iteration_count, 'exact diagonal preconditioner converges in one step')
+        call assert_char('rtol', trim(outcome%stop_reason), 'one-step diagonal solve stops on residual')
+        call assert_true(outcome%converged, 'one-step diagonal solve reports convergence')
+        call assert_true(maxval(abs(x-truth)) < 2.e-6, 'one-step diagonal solution matches the oracle')
+        call assert_int(1, size(outcome%rel_update_history), 'one-step outcome records one update')
+        call outcome%kill
+    end subroutine test_pcg_diagonal_one_step
+
+    subroutine test_pcg_cold_restart()
+        type(dense_pcg_operator) :: op
+        type(pcg_solver_options) :: options
+        type(pcg_solver_outcome) :: outcome
+        real :: truth(3), b(3), x(3)
+        write(*,'(A)') 'test_pcg_cold_restart'
+        call set_spd_operator(op)
+        op%fail_warm_once = .true.
+        truth = [0.5, -0.25, 1.25]
+        b = matmul(op%a, truth)
+        x = [0.1, 0.1, 0.1]
+        options%maxits = 3
+        options%rtol = 0.0
+        options%cold_restart = .true.
+        call pcg_solve(op, b, x, options, outcome)
+        call assert_true(outcome%cold_restart_used, 'indefinite warm curvature triggers the one permitted cold restart')
+        call assert_int(1, outcome%restart_trigger_iteration, 'cold restart records the triggering iteration')
+        call assert_char('fixed_iterations', trim(outcome%stop_reason), 'successful cold retry reaches its fixed budget')
+        call assert_true(maxval(abs(x-truth)) < 2.e-5, 'cold retry recovers the dense SPD solution')
+        call outcome%kill
+    end subroutine test_pcg_cold_restart
+
+    subroutine set_spd_operator( op )
+        type(dense_pcg_operator), intent(inout) :: op
+        op%a = 0.0
+        op%a(1,:) = [4.0, 1.0, 0.0]
+        op%a(2,:) = [1.0, 3.0, 1.0]
+        op%a(3,:) = [0.0, 1.0, 2.0]
+        op%minv = [0.25, 1.0/3.0, 0.5]
+        op%apply_count = 0
+        op%fail_warm_once = .false.
+    end subroutine set_spd_operator
+
+    integer function dense_pcg_size( self ) result(n)
+        class(dense_pcg_operator), intent(in) :: self
+        n = 3
+    end function dense_pcg_size
+
+    subroutine dense_pcg_apply( self, x, y )
+        class(dense_pcg_operator), intent(inout) :: self
+        real, contiguous, target,  intent(in)    :: x(:)
+        real, contiguous, target,  intent(out)   :: y(:)
+        self%apply_count = self%apply_count + 1
+        if( self%fail_warm_once .and. self%apply_count == 2 )then
+            y = -x
+        else
+            y = matmul(self%a, x)
+        endif
+    end subroutine dense_pcg_apply
+
+    subroutine dense_pcg_precond( self, r, z )
+        class(dense_pcg_operator), intent(inout) :: self
+        real, contiguous, target,  intent(in)    :: r(:)
+        real, contiguous, target,  intent(out)   :: z(:)
+        z = self%minv * r
+    end subroutine dense_pcg_precond
+
+    real(dp) function dense_pcg_dot( self, a, b ) result(value)
+        class(dense_pcg_operator), intent(in) :: self
+        real, contiguous, target,  intent(in) :: a(:), b(:)
+        value = sum(real(a,dp) * real(b,dp))
+    end function dense_pcg_dot
 
 end module simple_opt_tester

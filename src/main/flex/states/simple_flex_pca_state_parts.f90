@@ -1,8 +1,11 @@
-!@descr: flex_pca: the state-reconstruction parts codec -- the per-round weight table and the per-part artifact names of both backends
+!@descr: flex_pca state-reconstruction parts codec.
+!! Owns the per-round weight table and both backends' part-artifact names.
 module simple_flex_pca_state_parts
-use simple_core_module_api
+use simple_core_module_api, only: fclose, file_exists, fileiochk, fopen, int2str, int2str_pad, mrc_ext, real2str, &
+    &simple_exception, simple_rename, string
 use simple_parameters,         only: parameters
-use simple_flex_pca_artifacts, only: FLEX_PCA_PART_MAGIC, flex_pca_part_path
+use simple_flex_pca_artifacts, only: FLEX_PCA_PART_MAGIC
+use simple_flex_pca_rounds,    only: flex_pca_rounds
 implicit none
 
 public :: write_state_weights_round, read_state_weights_round
@@ -104,14 +107,15 @@ contains
 
     !> Part-file body for one worker's partial reconstruction of one state; eo=0 is the even/single
     !! accumulator, eo=1 the odd one (a split round writes both per state).
-    function flex_state_part_fbody( params, part, state, eo ) result( fbody )
+    function flex_state_part_fbody( params, rounds, part, state, eo ) result( fbody )
         class(parameters), intent(in) :: params
+        class(flex_pca_rounds), intent(in) :: rounds
         integer,           intent(in) :: part, state, eo
         type(string) :: fbody
         fbody = string('flex_pca_statepart')//int2str_pad(part,max(1,params%numlen))// &
             &'_'//int2str_pad(state,2)
         if( eo == 1 ) fbody = fbody//'_o'
-        fbody = flex_pca_part_path(fbody%to_char())
+        fbody = rounds%part_path(fbody%to_char())
     end function flex_state_part_fbody
 
     !> rho companion of a state part: same directory, 'rho_' on the file name only
@@ -126,14 +130,15 @@ contains
     end function flex_pca_rho_part_name
 
     !> raw artifact of one worker's (state, half) accumulation, under the part directory
-    function flex_pcg_state_raw_fname( params, part, state, eo ) result( fname )
+    function flex_pcg_state_raw_fname( params, rounds, part, state, eo ) result( fname )
         class(parameters), intent(in) :: params
+        class(flex_pca_rounds), intent(in) :: rounds
         integer,           intent(in) :: part, state, eo
         type(string) :: fname
         character(len=2) :: half
         half = '_e'
         if( eo == 1 ) half = '_o'
-        fname = flex_pca_part_path('flex_pca_pcgraw_part'//int2str_pad(part,max(1,params%numlen))// &
+        fname = rounds%part_path('flex_pca_pcgraw_part'//int2str_pad(part,max(1,params%numlen))// &
             &'_'//int2str_pad(state,2)//half//'.bin')
     end function flex_pcg_state_raw_fname
 

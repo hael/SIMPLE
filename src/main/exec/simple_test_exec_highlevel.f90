@@ -5,7 +5,8 @@ use simple_commanders_test_highlevel, only: commander_test_mini_stream, commande
                                             commander_test_simulated_workflow, commander_test_pcg_recon, &
                                             commander_test_pcg_frac_update, commander_test_rec3D_backends, &
                                             commander_test_solve3D_addon, commander_test_cont_refine3D_1jxy, &
-                                            commander_generate_solve3D_addon_snapshots
+                                            commander_generate_solve3D_addon_snapshots, &
+                                            commander_test_flex_pca_blobs
 implicit none
 
 public :: exec_test_highlevel_commander
@@ -20,6 +21,7 @@ type(commander_test_cont_refine3D_1jxy)          :: xcont_refine3D_1jxy
 type(commander_test_pcg_recon)                   :: xpcg_recon
 type(commander_test_pcg_frac_update)             :: xpcg_frac_update
 type(commander_test_rec3D_backends)              :: xrec3D_backends
+type(commander_test_flex_pca_blobs)              :: xflex_pca_blobs
 
 contains
 
@@ -50,6 +52,8 @@ contains
                 call xpcg_frac_update%execute(cline)
             case( 'rec3D_backends' )
                 call xrec3D_backends%execute(cline)
+            case( 'flex_pca_blobs' )
+                call xflex_pca_blobs%execute(cline)
             case default
                 l_did_execute = .false.
         end select

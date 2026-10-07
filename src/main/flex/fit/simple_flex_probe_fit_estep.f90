@@ -1,23 +1,17 @@
-!@descr: flex_pca: the probe fit E-step: stage begin, polar bank, Cartesian/polar formers, per-particle solve, batch insert, thread reduce, the merged-list pass over one or two fits
+!@descr: flex_pca probe fit E-step: stage setup, polar bank/former, posterior solve, insertion and reduction
 submodule (simple_flex_probe_fit) simple_flex_probe_fit_estep
-use simple_core_module_api
-use simple_builder, only: builder
-use simple_parameters, only: parameters
-use simple_reconstructor, only: reconstructor
-use simple_kbinterpol, only: kbinterpol
-use simple_math, only: ceil_div, floor_div
-use simple_flex_pca_polar, only: polar_grid_build, polar_project_recs, polar_relative_inplane,&
+!$ use omp_lib, only: omp_get_thread_num, omp_get_wtime
+use simple_core_module_api, only: cmplx_zero, dtiny, kbalpha, kbinterpol, kbwinsz, logfhandle, &
+    &maximgbatchsz, oris, osmpl_pad_fac, tic, timer_int_kind, toc
+use simple_math,                          only: ceil_div, floor_div
+use simple_flex_pca_polar,                only: polar_grid_build, polar_project_recs, polar_relative_inplane, &
     &polar_assign_directions, polar_sample_particle_fused
-use simple_flex_reconstructor_latent_ops, only: project_fplanes_mean_basis, latent_projection_weights,&
-    &weighted_expanded_cmat, LATENT_WDIM
-use simple_ori, only: ori
-use simple_flex_pca_rounds, only: flex_pca_rounds
-use simple_flex_pca_posterior, only: probe_solve_ecm, probe_solve_mix, mcfa_init, mcfa_condition, mcfa_mstep
-use simple_flex_pca_basis, only: cov_herm_inner, cov_image_mask_radius
-use simple_matcher_3Drec, only: init_rec, cleanup_rec_buffers
-use simple_matcher_ptcl_io, only: prepimgbatch
-use simple_flex_pca_plane_cache, only: plane_cache_in_use
-use simple_flex_pca_planes, only: planes_batch_load
+use simple_flex_reconstructor_latent_ops, only: latent_projection_weights, &
+    &weighted_expanded_cmat, planes_batch_load, LATENT_WDIM
+use simple_flex_pca_posterior,            only: probe_solve_plain, probe_solve_mix, mcfa_init, mcfa_condition, mcfa_mstep
+use simple_flex_pca_basis,                only: cov_image_mask_radius
+use simple_matcher_3Drec,                 only: init_rec, cleanup_rec_buffers
+use simple_matcher_ptcl_io,               only: prepimgbatch
 implicit none
 #include "simple_local_flags.inc"
 
@@ -27,299 +21,256 @@ contains
     !! stage), then the per-iteration shared-direction bank + ring Gram tables at the fit's
     !! current rank, restricted to the directions the fit's current window touches.
     module subroutine fit_polar_bank_build( build, fit, mean_rec, fpl1, nthr )
-        type(builder),       intent(inout) :: build
-        type(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        type(fplane_type),   intent(in)    :: fpl1
-        integer,             intent(in)    :: nthr
+        type(builder),        intent(inout) :: build
+        type(flex_probe_fit), intent(inout) :: fit
+        type(reconstructor),  intent(inout) :: mean_rec
+        type(fplane_type),    intent(in)    :: fpl1
+        integer,              intent(in)    :: nthr
         type(oris) :: dirs_es
         type(ori)  :: o_es
         real,    allocatable :: rmatp_es(:,:,:), nrmp_es(:,:)
         real     :: ca1, sa1
+        real(dp) :: t_bank0, t_bank1
         integer  :: i, q, r, ir, id_es, ithr, jx_es, kx_es
-                    if( .not. fit%estep%l_pol_grid )then
-                        ! grid geometry from the first prepped plane: the identical derivation
-                        ! embed_accumulate_polar uses, so polar embed and polar E-step share
-                        ! band/quadrature conventions. No noise rings: sig2 arrives as sig2_eff.
-                        fit%estep%ph0_es  = lbound(fpl1%cmplx_plane,1)
-                        fit%estep%pk0_es  = lbound(fpl1%cmplx_plane,2)
-                        fit%estep%hlo_es  = ceil_div (lbound(fpl1%cmplx_plane,1), OSMPL_PAD_FAC)
-                        fit%estep%hhi_es  = floor_div(ubound(fpl1%cmplx_plane,1), OSMPL_PAD_FAC)
-                        fit%estep%klo_es  = ceil_div (lbound(fpl1%cmplx_plane,2), OSMPL_PAD_FAC)
-                        fit%estep%nyqr_es = mean_rec%get_lfny(1)
-                        fit%estep%nyqb_es = fit%estep%nyqr_es
-                        if( fpl1%nyq > 0 ) fit%estep%nyqb_es = min(fit%estep%nyqb_es, max(1, fpl1%nyq / OSMPL_PAD_FAC))
-                        ! hybrid split point: auto at 0.72*band -- the measured knee of the
-                        ! real-data ladder (10049 gate, band 11: rhyb 6 -> b err 8.9%, min z
-                        ! corr 0.949, lambda head 153/282/326; rhyb 8 -> b err 3.1%, min z
-                        ! corr 0.990, lambda 166/273/394 vs Cartesian 166/264/382). Env
-                        ! override; explicit 0 = pure rings (the pre-hybrid baseline).
-                        fit%estep%rhyb_es = nint(0.72*real(fit%estep%nyqb_es))
-                        if( fit%estep%rhyb_req > 0 ) fit%estep%rhyb_es = fit%estep%rhyb_req
-                        if( fit%estep%l_rhyb_off )    fit%estep%rhyb_es = 0
-                        fit%estep%rhyb_es   = max(0, min(fit%estep%rhyb_es, fit%estep%nyqb_es-1))
-                        fit%estep%l_pol_hyb = fit%estep%rhyb_es > 0
-                        if( fit%estep%l_pol_hyb )then
-                            call polar_grid_build(fit%estep%pg_es, fit%estep%rhyb_es+1, fit%estep%nyqb_es, fit%estep%nyqb_es+1, fit%estep%nyqb_es, &
-                                &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, fit%estep%ph0_es, fit%estep%pk0_es, ang_osamp=fit%estep%osamp_pol, &
-                                &gate_lo=fit%estep%rhyb_es*(fit%estep%rhyb_es+1))
-                            ! exact-part lattice positions, cov_herm_inner's half-plane rule
-                            ! (k<=0; on the k=0 line only h<=0), shells 0..rhyb by the nint
-                            ! convention: h^2+k^2 <= rhyb*(rhyb+1). Raster order k-outer.
-                            fit%estep%npos_es = 0
-                            do kx_es = -fit%estep%rhyb_es, 0
-                                do jx_es = -fit%estep%rhyb_es, merge(0, fit%estep%rhyb_es, kx_es == 0)
-                                    if( jx_es*jx_es + kx_es*kx_es > fit%estep%rhyb_es*(fit%estep%rhyb_es+1) ) cycle
-                                    fit%estep%npos_es = fit%estep%npos_es + 1
-                                end do
-                            end do
-                            allocate(fit%estep%hex_es(fit%estep%npos_es), fit%estep%kex_es(fit%estep%npos_es))
-                            fit%estep%npos_es = 0
-                            do kx_es = -fit%estep%rhyb_es, 0
-                                do jx_es = -fit%estep%rhyb_es, merge(0, fit%estep%rhyb_es, kx_es == 0)
-                                    if( jx_es*jx_es + kx_es*kx_es > fit%estep%rhyb_es*(fit%estep%rhyb_es+1) ) cycle
-                                    fit%estep%npos_es = fit%estep%npos_es + 1
-                                    fit%estep%hex_es(fit%estep%npos_es) = jx_es
-                                    fit%estep%kex_es(fit%estep%npos_es) = kx_es
-                                end do
-                            end do
-                            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> FLEX_PCA POLAR HYBRID: exact &
-                                &Cartesian statistics for shells 0..',fit%estep%rhyb_es,' (',fit%estep%npos_es,' lattice &
-                                &points/particle incl. DC), rings ',fit%estep%rhyb_es+1,'..',fit%estep%nyqb_es
-                            if( fit%estep%osamp_pol > 1 ) write(logfhandle,'(A,I0)') &
-                                &'>>> FLEX_PCA POLAR OSAMP: ring angular oversampling x', fit%estep%osamp_pol
-                            call flush(logfhandle)
-                        else
-                            call polar_grid_build(fit%estep%pg_es, 1, fit%estep%nyqb_es, fit%estep%nyqb_es+1, fit%estep%nyqb_es, fit%estep%hlo_es, fit%estep%hhi_es, &
-                                &fit%estep%klo_es, fit%estep%ph0_es, fit%estep%pk0_es, ang_osamp=fit%estep%osamp_pol)
-                            if( fit%estep%osamp_pol > 1 )then
-                                write(logfhandle,'(A,I0)') &
-                                    &'>>> FLEX_PCA POLAR OSAMP: ring angular oversampling x', fit%estep%osamp_pol
-                                call flush(logfhandle)
-                            endif
-                        endif
-                        fit%estep%nsamp_es = fit%estep%pg_es%nsamp; fit%estep%nsamp2_es = 2*fit%estep%nsamp_es; fit%estep%nk_es = fit%estep%pg_es%nk
-                        ! shared direction table: same refspiral + count derivation as the polar embed
-                        fit%estep%ndir_es = cov_polar_ndir(fit%spec%npp)
-                        call dirs_es%new(fit%estep%ndir_es, is_ptcl=.false.)
-                        call build%pgrpsyms%build_refspiral(dirs_es)
-                        allocate(fit%estep%rmatb_es(3,3,fit%estep%ndir_es), fit%estep%nrmb_es(3,fit%estep%ndir_es))
-                        do id_es = 1, fit%estep%ndir_es
-                            fit%estep%rmatb_es(:,:,id_es) = dirs_es%get_mat(id_es)
-                            fit%estep%nrmb_es(:,id_es)    = fit%estep%rmatb_es(3,:,id_es)
-                        end do
-                        call dirs_es%kill
-                        ! pose-fixed per-particle (direction, in-plane) assignment, once per stage
-                        allocate(rmatp_es(3,3,fit%spec%npp), nrmp_es(3,fit%spec%npp), fit%estep%dir_es(fit%spec%npp), fit%estep%cae(fit%spec%npp), fit%estep%sae(fit%spec%npp))
-                        do i = 1, fit%spec%npp
-                            call build%spproj_field%get_ori(fit%spec%ppinds(i), o_es)
-                            rmatp_es(:,:,i) = o_es%get_mat()
-                            nrmp_es(:,i)    = rmatp_es(3,:,i)
-                        end do
-                        call o_es%kill
-                        call polar_assign_directions(nrmp_es, fit%spec%npp, fit%estep%nrmb_es, fit%estep%ndir_es, fit%estep%dir_es)
-                        do i = 1, fit%spec%npp
-                            call polar_relative_inplane(rmatp_es(:,:,i), fit%estep%rmatb_es(:,:,fit%estep%dir_es(i)), ca1, sa1)
-                            fit%estep%cae(i) = ca1; fit%estep%sae(i) = sa1
-                        end do
-                        deallocate(rmatp_es, nrmp_es)
-                        allocate(fit%estep%dused_es(fit%estep%ndir_es))
-                        fit%estep%l_pol_grid = .true.
-                        write(logfhandle,'(A,I0,A,I0,A,I0,A,F8.1,A,F8.1,A)') &
-                            &'>>> FLEX_PCA POLAR ESTEP BANK: ',fit%model%ncomp+1,' volumes x ',fit%estep%ndir_es, &
-                            &' directions x ',fit%estep%nsamp_es,' ring samples = ', &
-                            &4.d0*real(fit%estep%nsamp2_es,dp)*real(fit%model%ncomp+1,dp)*real(fit%estep%ndir_es,dp)/1.d6, &
-                            &' MB (+ ring tables ', &
-                            &8.d0*real(fit%model%ncomp*fit%model%ncomp+fit%model%ncomp+1,dp)*real(fit%estep%nk_es,dp)*real(fit%estep%ndir_es,dp)/1.d6,' MB)'
-                        call flush(logfhandle)
-                    endif
-                    ! (re)allocate at this iteration's rank (ncomp can change between iterations)
-                    if( allocated(fit%estep%UsallE) )then
-                        if( size(fit%estep%UsallE,2) /= fit%model%ncomp+1 ) deallocate(fit%estep%UsallE, fit%estep%CfE, fit%estep%Cm0E, fit%estep%c00E, &
-                            &fit%estep%UbankE, fit%estep%CspE, fit%estep%xws_es, fit%estep%wr_es, fit%estep%wrd_es, fit%estep%Reb_es)
-                    endif
-                    if( .not. allocated(fit%estep%UsallE) )then
-                        allocate(fit%estep%UsallE(fit%estep%nsamp2_es,0:fit%model%ncomp,fit%estep%ndir_es), fit%estep%CfE(fit%model%ncomp*fit%model%ncomp,fit%estep%nk_es,fit%estep%ndir_es), &
-                            &fit%estep%Cm0E(fit%model%ncomp,fit%estep%nk_es,fit%estep%ndir_es), fit%estep%c00E(fit%estep%nk_es,fit%estep%ndir_es))
-                        allocate(fit%estep%UbankE(fit%estep%nsamp_es,0:fit%model%ncomp,nthr), fit%estep%CspE(0:fit%model%ncomp,0:fit%model%ncomp,nthr))
-                        allocate(fit%estep%xws_es(fit%estep%nsamp2_es,nthr), fit%estep%wr_es(fit%estep%nk_es,nthr), fit%estep%wrd_es(fit%estep%nk_es,nthr), &
-                            &fit%estep%Reb_es(0:fit%model%ncomp,nthr))
-                    endif
-                    ! only the directions this iteration's window touches
-                    fit%estep%dused_es = .false.
-                    do i = 1, fit%spec%npp
-                        if( fit%estep%dir_es(i) > 0 ) fit%estep%dused_es(fit%estep%dir_es(i)) = .true.
+        if( .not. fit%estep%l_pol_grid )then
+            ! grid geometry from the first prepped plane: the identical derivation
+            ! embed_accumulate_polar uses, so polar embed and polar E-step share
+            ! band/quadrature conventions. No noise rings: sig2 arrives as sig2_eff.
+            fit%estep%ph0_es  = lbound(fpl1%cmplx_plane,1)
+            fit%estep%pk0_es  = lbound(fpl1%cmplx_plane,2)
+            fit%estep%hlo_es  = ceil_div (lbound(fpl1%cmplx_plane,1), OSMPL_PAD_FAC)
+            fit%estep%hhi_es  = floor_div(ubound(fpl1%cmplx_plane,1), OSMPL_PAD_FAC)
+            fit%estep%klo_es  = ceil_div (lbound(fpl1%cmplx_plane,2), OSMPL_PAD_FAC)
+            fit%estep%nyqr_es = mean_rec%get_lfny(1)
+            fit%estep%nyqb_es = fit%estep%nyqr_es
+            if( fpl1%nyq > 0 ) fit%estep%nyqb_es = min(fit%estep%nyqb_es, max(1, fpl1%nyq / OSMPL_PAD_FAC))
+            ! hybrid split point: auto at 0.72*band -- the measured knee of the
+            ! real-data ladder (10049 gate, band 11: rhyb 6 -> b err 8.9%, min z
+            ! corr 0.949, lambda head 153/282/326; rhyb 8 -> b err 3.1%, min z
+            ! corr 0.990, lambda 166/273/394 vs Cartesian 166/264/382).
+            fit%estep%rhyb_es = nint(0.72*real(fit%estep%nyqb_es))
+            fit%estep%rhyb_es   = max(0, min(fit%estep%rhyb_es, fit%estep%nyqb_es-1))
+            fit%estep%l_pol_hyb = fit%estep%rhyb_es > 0
+            if( fit%estep%l_pol_hyb )then
+                call polar_grid_build(fit%estep%pg_es, fit%estep%rhyb_es+1, fit%estep%nyqb_es, &
+                    &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, fit%estep%ph0_es, fit%estep%pk0_es, &
+                    &gate_lo=fit%estep%rhyb_es*(fit%estep%rhyb_es+1))
+                ! exact-part lattice positions, cov_herm_inner's half-plane rule
+                ! (k<=0; on the k=0 line only h<=0), shells 0..rhyb by the nint
+                ! convention: h^2+k^2 <= rhyb*(rhyb+1). Raster order k-outer.
+                fit%estep%npos_es = 0
+                do kx_es = -fit%estep%rhyb_es, 0
+                    do jx_es = -fit%estep%rhyb_es, merge(0, fit%estep%rhyb_es, kx_es == 0)
+                        if( jx_es*jx_es + kx_es*kx_es > fit%estep%rhyb_es*(fit%estep%rhyb_es+1) ) cycle
+                        fit%estep%npos_es = fit%estep%npos_es + 1
                     end do
-                    !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
-                    !$omp& private(id_es,ithr,q,r,ir)
-                    do id_es = 1, fit%estep%ndir_es
-                        if( .not. fit%estep%dused_es(id_es) ) cycle
-                        ithr = omp_get_thread_num() + 1
-                        call polar_project_recs(mean_rec, fit%model%basis_recs, fit%model%ncomp, fit%estep%rmatb_es(:,:,id_es), &
-                            &fit%estep%pg_es, fit%estep%UbankE(:,:,ithr))
-                        do q = 0, fit%model%ncomp
-                            do r = 1, fit%estep%nsamp_es
-                                fit%estep%UsallE(2*r-1,q,id_es) = fit%estep%pg_es%sqwq(r)*real (fit%estep%UbankE(r,q,ithr))
-                                fit%estep%UsallE(2*r,  q,id_es) = fit%estep%pg_es%sqwq(r)*aimag(fit%estep%UbankE(r,q,ithr))
-                            end do
-                        end do
-                        do ir = 1, fit%estep%nk_es
-                            call polar_ring_gram(fit%estep%UsallE(1,0,id_es), fit%estep%nsamp2_es, fit%model%ncomp, fit%estep%pg_es%rbeg(ir), &
-                                &fit%estep%pg_es%rend(ir)-fit%estep%pg_es%rbeg(ir)+1, fit%estep%CspE(0,0,ithr), fit%estep%CfE(1,ir,id_es), &
-                                &fit%estep%Cm0E(1,ir,id_es))
-                            fit%estep%c00E(ir,id_es) = polar_ring_selfpower(fit%estep%UsallE(1,0,id_es), fit%estep%nsamp2_es, &
-                                &fit%estep%pg_es%rbeg(ir), fit%estep%pg_es%rend(ir)-fit%estep%pg_es%rbeg(ir)+1)
-                        end do
+                end do
+                allocate(fit%estep%hex_es(fit%estep%npos_es), fit%estep%kex_es(fit%estep%npos_es))
+                fit%estep%npos_es = 0
+                do kx_es = -fit%estep%rhyb_es, 0
+                    do jx_es = -fit%estep%rhyb_es, merge(0, fit%estep%rhyb_es, kx_es == 0)
+                        if( jx_es*jx_es + kx_es*kx_es > fit%estep%rhyb_es*(fit%estep%rhyb_es+1) ) cycle
+                        fit%estep%npos_es = fit%estep%npos_es + 1
+                        fit%estep%hex_es(fit%estep%npos_es) = jx_es
+                        fit%estep%kex_es(fit%estep%npos_es) = kx_es
                     end do
-                    !$omp end parallel do
+                end do
+                write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> FLEX_PCA POLAR HYBRID: exact &
+                    &Cartesian statistics for shells 0..',fit%estep%rhyb_es,' (',fit%estep%npos_es,' lattice &
+                    &points/particle incl. DC), rings ',fit%estep%rhyb_es+1,'..',fit%estep%nyqb_es
+                call flush(logfhandle)
+            else
+                call polar_grid_build(fit%estep%pg_es, 1, fit%estep%nyqb_es, &
+                    &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, &
+                    &fit%estep%ph0_es, fit%estep%pk0_es)
+            endif
+            fit%estep%nsamp_es = fit%estep%pg_es%nsamp; fit%estep%nsamp2_es = 2*fit%estep%nsamp_es; fit%estep%nk_es = fit%estep%pg_es%nk
+            ! shared direction table: same refspiral + count derivation as the polar embed
+            fit%estep%ndir_es = cov_polar_ndir(fit%spec%npp)
+            call dirs_es%new(fit%estep%ndir_es, is_ptcl=.false.)
+            call build%pgrpsyms%build_refspiral(dirs_es)
+            allocate(fit%estep%rmatb_es(3,3,fit%estep%ndir_es), fit%estep%nrmb_es(3,fit%estep%ndir_es))
+            do id_es = 1, fit%estep%ndir_es
+                fit%estep%rmatb_es(:,:,id_es) = dirs_es%get_mat(id_es)
+                fit%estep%nrmb_es(:,id_es)    = fit%estep%rmatb_es(3,:,id_es)
+            end do
+            call dirs_es%kill
+            ! pose-fixed per-particle (direction, in-plane) assignment, once per stage
+            allocate(rmatp_es(3,3,fit%spec%npp), nrmp_es(3,fit%spec%npp), fit%estep%dir_es(fit%spec%npp), fit%estep%cae(fit%spec%npp), fit%estep%sae(fit%spec%npp))
+            do i = 1, fit%spec%npp
+                call build%spproj_field%get_ori(fit%spec%ppinds(i), o_es)
+                rmatp_es(:,:,i) = o_es%get_mat()
+                nrmp_es(:,i)    = rmatp_es(3,:,i)
+            end do
+            call o_es%kill
+            call polar_assign_directions(nrmp_es, fit%spec%npp, fit%estep%nrmb_es, fit%estep%ndir_es, fit%estep%dir_es)
+            do i = 1, fit%spec%npp
+                call polar_relative_inplane(rmatp_es(:,:,i), fit%estep%rmatb_es(:,:,fit%estep%dir_es(i)), ca1, sa1)
+                fit%estep%cae(i) = ca1; fit%estep%sae(i) = sa1
+            end do
+            deallocate(rmatp_es, nrmp_es)
+            allocate(fit%estep%dused_es(fit%estep%ndir_es))
+            fit%estep%l_pol_grid = .true.
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,F8.1,A,F8.1,A)') &
+                &'>>> FLEX_PCA POLAR ESTEP BANK: ',fit%model%ncomp+1,' volumes x ',fit%estep%ndir_es, &
+                &' directions x ',fit%estep%nsamp_es,' ring samples = ', &
+                &4.d0*real(fit%estep%nsamp2_es,dp)*real(fit%model%ncomp+1,dp)*real(fit%estep%ndir_es,dp)/1.d6, &
+                &' MB (+ ring tables ', &
+                &8.d0*real(fit%model%ncomp*fit%model%ncomp+fit%model%ncomp+1,dp)*real(fit%estep%nk_es,dp)*real(fit%estep%ndir_es,dp)/1.d6,' MB)'
+            call flush(logfhandle)
+        endif
+        ! (re)allocate at this iteration's rank (ncomp can change between iterations)
+        if( allocated(fit%estep%UsallE) )then
+            if( size(fit%estep%UsallE,2) /= fit%model%ncomp+1 ) deallocate(fit%estep%UsallE, fit%estep%CfE, fit%estep%Cm0E, fit%estep%c00E, &
+                &fit%estep%UbankE, fit%estep%CspE, fit%estep%xws_es, fit%estep%wr_es, fit%estep%wrd_es, fit%estep%Reb_es)
+        endif
+        if( .not. allocated(fit%estep%UsallE) )then
+            allocate(fit%estep%UsallE(fit%estep%nsamp2_es,0:fit%model%ncomp,fit%estep%ndir_es), fit%estep%CfE(fit%model%ncomp*fit%model%ncomp,fit%estep%nk_es,fit%estep%ndir_es), &
+                &fit%estep%Cm0E(fit%model%ncomp,fit%estep%nk_es,fit%estep%ndir_es), fit%estep%c00E(fit%estep%nk_es,fit%estep%ndir_es))
+            allocate(fit%estep%UbankE(fit%estep%nsamp_es,0:fit%model%ncomp,nthr), fit%estep%CspE(0:fit%model%ncomp,0:fit%model%ncomp,nthr))
+            allocate(fit%estep%xws_es(fit%estep%nsamp2_es,nthr), fit%estep%wr_es(fit%estep%nk_es,nthr), fit%estep%wrd_es(fit%estep%nk_es,nthr), &
+                &fit%estep%Reb_es(0:fit%model%ncomp,nthr))
+        endif
+        ! only the directions this iteration's window touches
+        fit%estep%dused_es = .false.
+        do i = 1, fit%spec%npp
+            if( fit%estep%dir_es(i) > 0 ) fit%estep%dused_es(fit%estep%dir_es(i)) = .true.
+        end do
+        !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
+        !$omp& private(id_es,ithr,q,r,ir,t_bank0,t_bank1)
+        do id_es = 1, fit%estep%ndir_es
+            if( .not. fit%estep%dused_es(id_es) ) cycle
+            ithr = omp_get_thread_num() + 1
+            t_bank0 = omp_get_wtime()
+            call polar_project_recs(mean_rec, fit%model%basis_recs, fit%model%ncomp, fit%estep%rmatb_es(:,:,id_es), &
+                &fit%estep%pg_es, fit%estep%UbankE(:,:,ithr))
+            do q = 0, fit%model%ncomp
+                do r = 1, fit%estep%nsamp_es
+                    fit%estep%UsallE(2*r-1,q,id_es) = fit%estep%pg_es%sqwq(r)*real (fit%estep%UbankE(r,q,ithr))
+                    fit%estep%UsallE(2*r,  q,id_es) = fit%estep%pg_es%sqwq(r)*aimag(fit%estep%UbankE(r,q,ithr))
+                end do
+            end do
+            do ir = 1, fit%estep%nk_es
+                call polar_ring_gram(fit%estep%UsallE(1,0,id_es), fit%estep%nsamp2_es, fit%model%ncomp, fit%estep%pg_es%rbeg(ir), &
+                    &fit%estep%pg_es%rend(ir)-fit%estep%pg_es%rbeg(ir)+1, fit%estep%CspE(0,0,ithr), fit%estep%CfE(1,ir,id_es), &
+                    &fit%estep%Cm0E(1,ir,id_es))
+                fit%estep%c00E(ir,id_es) = polar_ring_selfpower(fit%estep%UsallE(1,0,id_es), fit%estep%nsamp2_es, &
+                    &fit%estep%pg_es%rbeg(ir), fit%estep%pg_es%rend(ir)-fit%estep%pg_es%rbeg(ir)+1)
+            end do
+            t_bank1 = omp_get_wtime()
+            fit%diag%sec_bank_thr(ithr) = fit%diag%sec_bank_thr(ithr) + (t_bank1 - t_bank0)
+        end do
+        !$omp end parallel do
     end subroutine fit_polar_bank_build
 
     !> Production polar shared-direction former for one particle: banded mean projection,
     !! fused polar sampling, bank GEMVs, hybrid low-k exact statistics, contrast fit.
-    module subroutine fit_estep_former_polar( fit, mean_rec, o, fpl, row, ithr, a, aa, e_mm, myv )
-        type(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        class(ori),          intent(inout) :: o
-        type(fplane_type),   intent(inout) :: fpl
-        integer,             intent(in)    :: row, ithr
-        real(dp),            intent(out)   :: a, aa, e_mm, myv
+    module subroutine fit_estep_former_polar( fit, mean_rec, o, fpl, row, ithr, a, e_mm, myv )
+        type(flex_probe_fit), intent(inout) :: fit
+        type(reconstructor),  intent(inout) :: mean_rec
+        class(ori),           intent(inout) :: o
+        type(fplane_type),    intent(inout) :: fpl
+        integer,              intent(in)    :: row, ithr
+        real(dp),             intent(out)   :: a, e_mm, myv
         integer  :: idp_es, q
         real     :: taz_es
-        real(dp) :: twp0, twp1
+        real(dp) :: twp0, twp1, twp2
         twp0 = omp_get_wtime()
-                        idp_es  = fit%estep%dir_es(row)
-                            ! mean only, in Cartesian: the M-step backprojects y - a*(T mu) and
-                            ! there is no polar->volume adjoint. Banded variant: identical
-                            ! interpolation, none of project_fplane's per-call full-plane
-                            ! zero-fill + ctfsq/transfer copies (measured as the bulk of the
-                            ! polar project bucket at the native padded plane).
-                            call project_fplane_mean_banded(mean_rec, o, fpl, &
-                                &fit%iter%mean_fpl(ithr))
-                        ! polar-sample the prepped data plane ONCE at (bank direction, relative
-                        ! in-plane angle): CTF amplitude, shift phase and per-shell whitening all
-                        ! ride in from the same cmplx/transfer planes the Cartesian former reads.
-                        ! Fused sampler: one KB geometry per ring sample shared by both plane
-                        ! gathers, packed output written in place, no per-call allocations --
-                        ! bit-identical statistics (see polar_sample_particle_fused).
-                        call polar_sample_particle_fused(fpl%cmplx_plane, fpl%transfer_plane, &
-                            &fit%estep%pg_es, fit%estep%cae(row), fit%estep%sae(row), fit%estep%xws_es(:,ithr), fit%estep%wr_es(:,ithr), taz_es)
-                        fit%estep%wrd_es(:,ithr) = real(fit%estep%wr_es(:,ithr), dp)
-                        ! b and the mean row, exact per-sample CTF: one GEMV against the bank
-                        call sgemv('T', fit%estep%nsamp2_es, fit%model%ncomp+1, 1.0, fit%estep%UsallE(1,0,idp_es), fit%estep%nsamp2_es, &
-                            &fit%estep%xws_es(1,ithr), 1, 0.0, fit%estep%Reb_es(0,ithr), 1)
-                        ! G, c, e_mm by the radial factorisation: ring Grams x per-ring mean |T|^2
-                        call dgemv('N', fit%model%ncomp*fit%model%ncomp, fit%estep%nk_es, 1.d0, fit%estep%CfE(1,1,idp_es), fit%model%ncomp*fit%model%ncomp, &
-                            &fit%estep%wrd_es(1,ithr), 1, 0.d0, fit%iter%Gth(1,1,ithr), 1)
-                        call dgemv('N', fit%model%ncomp, fit%estep%nk_es, 1.d0, fit%estep%Cm0E(1,1,idp_es), fit%model%ncomp, &
-                            &fit%estep%wrd_es(1,ithr), 1, 0.d0, fit%iter%cth(1,ithr), 1)
-                        e_mm = dot_product(fit%estep%c00E(:,idp_es), fit%estep%wrd_es(:,ithr))
-                        myv  = real(fit%estep%Reb_es(0,ithr), dp)
-                        do q = 1, fit%model%ncomp
-                            fit%iter%bth(q,ithr) = real(fit%estep%Reb_es(q,ithr), dp)
-                        end do
-                        ! hybrid: the low-k shells enter as exact Cartesian statistics
-                        if( fit%estep%l_pol_hyb ) call polar_hybrid_exact_accum(mean_rec, fit%model%basis_recs, &
-                            &fit%model%ncomp, o, fpl, fit%estep%hex_es, fit%estep%kex_es, fit%estep%npos_es, &
-                            &fit%iter%Gth(:,:,ithr), fit%iter%bth(:,ithr), fit%iter%cth(:,ithr), e_mm, myv)
-                        a    = max(0.1d0, min(5.0d0, myv / max(e_mm, DTINY)))
-                        aa   = a*a
-                        twp1 = omp_get_wtime()
-                        fit%diag%sec_proj_thr(ithr) = fit%diag%sec_proj_thr(ithr) + (twp1 - twp0)
+        idp_es  = fit%estep%dir_es(row)
+        ! mean only, in Cartesian: the M-step backprojects y - a*(T mu) and
+        ! there is no polar->volume adjoint. Banded variant: identical
+        ! interpolation, none of project_fplane's per-call full-plane
+        ! zero-fill + ctfsq/transfer copies (measured as the bulk of the
+        ! polar project bucket at the native padded plane).
+        call project_fplane_mean_banded(mean_rec, o, fpl, &
+            &fit%iter%mean_fpl(ithr))
+        ! polar-sample the prepped data plane ONCE at (bank direction, relative
+        ! in-plane angle): CTF amplitude, shift phase and per-shell whitening all
+        ! ride in from the same cmplx/transfer planes the Cartesian former reads.
+        ! Fused sampler: one KB geometry per ring sample shared by both plane
+        ! gathers, packed output written in place, no per-call allocations --
+        ! bit-identical statistics (see polar_sample_particle_fused).
+        call polar_sample_particle_fused(fpl%cmplx_plane, fpl%transfer_plane, &
+            &fit%estep%pg_es, fit%estep%cae(row), fit%estep%sae(row), fit%estep%xws_es(:,ithr), fit%estep%wr_es(:,ithr), taz_es)
+        fit%estep%wrd_es(:,ithr) = real(fit%estep%wr_es(:,ithr), dp)
+        ! b and the mean row, exact per-sample CTF: one GEMV against the bank
+        call sgemv('T', fit%estep%nsamp2_es, fit%model%ncomp+1, 1.0, fit%estep%UsallE(1,0,idp_es), fit%estep%nsamp2_es, &
+            &fit%estep%xws_es(1,ithr), 1, 0.0, fit%estep%Reb_es(0,ithr), 1)
+        ! G, c, e_mm by the radial factorisation: ring Grams x per-ring mean |T|^2
+        call dgemv('N', fit%model%ncomp*fit%model%ncomp, fit%estep%nk_es, 1.d0, fit%estep%CfE(1,1,idp_es), fit%model%ncomp*fit%model%ncomp, &
+            &fit%estep%wrd_es(1,ithr), 1, 0.d0, fit%iter%Gth(1,1,ithr), 1)
+        call dgemv('N', fit%model%ncomp, fit%estep%nk_es, 1.d0, fit%estep%Cm0E(1,1,idp_es), fit%model%ncomp, &
+            &fit%estep%wrd_es(1,ithr), 1, 0.d0, fit%iter%cth(1,ithr), 1)
+        e_mm = dot_product(fit%estep%c00E(:,idp_es), fit%estep%wrd_es(:,ithr))
+        myv  = real(fit%estep%Reb_es(0,ithr), dp)
+        do q = 1, fit%model%ncomp
+            fit%iter%bth(q,ithr) = real(fit%estep%Reb_es(q,ithr), dp)
+        end do
+        twp1 = omp_get_wtime()
+        fit%diag%sec_ring_thr(ithr) = fit%diag%sec_ring_thr(ithr) + (twp1 - twp0)
+        ! hybrid: the low-k shells enter as exact Cartesian statistics
+        if( fit%estep%l_pol_hyb )then
+            call polar_hybrid_exact_accum(mean_rec, fit%model%basis_recs, &
+                &fit%model%ncomp, o, fpl, fit%estep%hex_es, fit%estep%kex_es, fit%estep%npos_es, &
+                &fit%iter%Gth(:,:,ithr), fit%iter%bth(:,ithr), fit%iter%cth(:,ithr), e_mm, myv)
+        endif
+        twp2 = omp_get_wtime()
+        fit%diag%sec_exact_thr(ithr) = fit%diag%sec_exact_thr(ithr) + (twp2 - twp1)
+        a    = max(0.1d0, min(5.0d0, myv / max(e_mm, DTINY)))
     end subroutine fit_estep_former_polar
-
-    !> Production Cartesian former for one particle: mean + basis central sections, exact
-    !! Hermitian inner products.
-    module subroutine fit_estep_former_cart( fit, mean_rec, o, fpl, row, ithr, a, aa, e_mm, myv )
-        type(flex_probe_fit),   intent(inout) :: fit
-        type(reconstructor), intent(inout) :: mean_rec
-        class(ori),          intent(inout) :: o
-        type(fplane_type),   intent(inout) :: fpl
-        integer,             intent(in)    :: row, ithr   !< row: the particle's row in the fit's window (unused by this former)
-        real(dp),            intent(out)   :: a, aa, e_mm, myv
-        integer  :: q, r
-        real(dp) :: twp0, twp1
-        twp0 = omp_get_wtime()
-                    call project_fplanes_mean_basis(mean_rec, fit%model%basis_recs, o, fpl, &
-                        &fit%iter%mean_fpl(ithr), fit%iter%basis_fpls(:,ithr), apply_ctf_amp=.true.)
-                    twp1 = omp_get_wtime()
-                    fit%diag%sec_proj_thr(ithr) = fit%diag%sec_proj_thr(ithr) + (twp1 - twp0)
-                    e_mm = real(cov_herm_inner(fit%iter%mean_fpl(ithr), fit%iter%mean_fpl(ithr)), dp)
-                    myv  = real(cov_herm_inner(fit%iter%mean_fpl(ithr), fpl), dp)
-                    a    = max(0.1d0, min(5.0d0, myv / max(e_mm, DTINY)))
-                    aa   = a*a
-                    do q = 1, fit%model%ncomp
-                        fit%iter%bth(q,ithr) = real(cov_herm_inner(fit%iter%basis_fpls(q,ithr), fpl), dp)
-                        fit%iter%cth(q,ithr) = real(cov_herm_inner(fit%iter%basis_fpls(q,ithr), fit%iter%mean_fpl(ithr)), dp)
-                        do r = q, fit%model%ncomp
-                            fit%iter%Gth(q,r,ithr) = real(cov_herm_inner(fit%iter%basis_fpls(q,ithr), fit%iter%basis_fpls(r,ithr)), dp)
-                            fit%iter%Gth(r,q,ithr) = fit%iter%Gth(q,r,ithr)
-                        end do
-                    end do
-    end subroutine fit_estep_former_cart
 
     !> Shared per-particle tail of every CPU former: posterior solve (plain or mixture), latent
     !! and density batch rows, Gamma/likelihood accumulation, and the in-place mean-subtracted
     !! residual the M-step backprojects.
-    module subroutine fit_estep_solve_stats( fit, fpl, i, row, ithr, a, aa, e_mm, myv )
+    module subroutine fit_estep_solve_stats( fit, fpl, i, row, ithr, a )
         type(flex_probe_fit), intent(inout) :: fit
-        type(fplane_type), intent(inout) :: fpl
-        integer,           intent(in)    :: i, row, ithr
-        real(dp),          intent(inout) :: a, aa, e_mm, myv
+        type(fplane_type),    intent(inout) :: fpl
+        integer,              intent(in)    :: i, row, ithr
+        real(dp),             intent(in)    :: a
         integer  :: q, r
         logical  :: lok
         real(dp) :: ldA, qml, nll_mix_add, twp1, twp2
         twp1 = omp_get_wtime()
-                    ! Posterior precision A = (a^2/sig2) G + Gamma^-1. The whole normal system is already
-                    ! scaled by 1/sig2, so Cov[z|y] = A^-1 exactly -- no further sig2 factor.
-                    if( fit%history%l_mix_used )then
-                        ! ---- MCFA E-step via the ONE shared solver (probe_solve_mix) ----
-                        call probe_solve_mix(fit, ithr, i, myv, e_mm, a, ldA, lok, nll_mix_add)
-                        if( lok ) fit%iter%nll_thr(ithr) = fit%iter%nll_thr(ithr) + nll_mix_add
-                    else
-                        call probe_solve_ecm(fit, ithr, myv, e_mm, a, ldA, lok, qml)
-                        if( lok ) fit%iter%nll_thr(ithr) = fit%iter%nll_thr(ithr) + ldA - qml
-                    endif
-                    aa = a*a
-                    fit%model%z(row,:)          = fit%iter%zth(:,ithr)
-                    fit%iter%zbatch(:,i)       = fit%iter%zth(:,ithr)
-                    ! EM sufficient statistic E[z z'|y] = z z' + Cov[z|y]. BOTH the coupled M-step normal
-                    ! matrix and the Gamma update below need it. Dropping Cov underestimates Gamma, which
-                    ! tightens the prior, which shrinks z further: the bias compounds across iterations.
-                    ! Under the mixture E[zz'|y] = A^-1 + sum_k r_k m_k m_k', NOT A^-1 + E[z]E[z]'
-                    ! -- the between-component spread is real posterior variance; probe_solve_mix
-                    ! has already written dens(:,:,i) in that case.
-                    if( .not. fit%history%l_mix_used )then
-                        do r = 1, fit%model%ncomp
-                            do q = 1, fit%model%ncomp
-                                fit%iter%dens(q,r,i) = fit%iter%zth(q,ithr)*fit%iter%zth(r,ithr) + fit%iter%Ainvth(q,r,ithr)
-                            end do
-                        end do
-                    endif
-                    do q = 1, fit%model%ncomp
-                        fit%iter%gam_thr(q,ithr) = fit%iter%gam_thr(q,ithr) + fit%iter%dens(q,q,i)
-                    end do
-                    if( fit%spec%l_probe_mls )then
-                        fit%iter%zbatch(:,i) = a*fit%iter%zbatch(:,i)
-                        fit%iter%dens(:,:,i) = aa*fit%iter%dens(:,:,i)
-                    endif
-                    fit%iter%nval_thr(ithr)    = fit%iter%nval_thr(ithr) + 1
-                    fit%iter%valid(i)          = .true.
-                    fit%diag%gam_dbg(1,ithr) = fit%diag%gam_dbg(1,ithr) + sum([(fit%iter%Gth(q,q,ithr), q=1,fit%model%ncomp)])
-                    fit%diag%gam_dbg(2,ithr) = fit%diag%gam_dbg(2,ithr) + dot_product(fit%iter%bth(:,ithr), fit%iter%bth(:,ithr))
-                    fit%diag%gam_dbg(3,ithr) = fit%diag%gam_dbg(3,ithr) + dot_product(fit%iter%cth(:,ithr), fit%iter%cth(:,ithr))
-                    fit%diag%gam_dbg(4,ithr) = fit%diag%gam_dbg(4,ithr) + a
-                    ! residual observation r_i = y - a*(T mu) in place (transfer/ctfsq intact for backprojection)
-                    if( fit%estep%l_pol_es )then
-                        ! banded: the mean plane is zero outside the working disc (both formers
-                        ! write the same disc), so the full-array statement only rewrote
-                        ! unchanged values there -- at the native padded lattice that traffic
-                        ! was most of the polar path's gram+solve bucket
-                        call subtract_mean_banded(fpl, fit%iter%mean_fpl(ithr), real(a), fit%estep%nyqr_es)
-                    else
-                        fpl%cmplx_plane = fpl%cmplx_plane - real(a)*fit%iter%mean_fpl(ithr)%cmplx_plane
-                    endif
-                    twp2 = omp_get_wtime()
-                    fit%diag%sec_gram_thr(ithr) = fit%diag%sec_gram_thr(ithr) + (twp2 - twp1)
+        ! Posterior precision A = (a^2/sig2) G + Gamma^-1. The whole normal system is already
+        ! scaled by 1/sig2, so Cov[z|y] = A^-1 exactly -- no further sig2 factor.
+        if( fit%history%l_mix_used )then
+            ! ---- MCFA E-step via the ONE shared solver (probe_solve_mix) ----
+            call probe_solve_mix(fit, ithr, i, a, ldA, lok, nll_mix_add)
+            if( lok ) fit%iter%nll_thr(ithr) = fit%iter%nll_thr(ithr) + nll_mix_add
+        else
+            call probe_solve_plain(fit, ithr, a, ldA, lok, qml)
+            if( lok ) fit%iter%nll_thr(ithr) = fit%iter%nll_thr(ithr) + ldA - qml
+        endif
+        fit%model%z(row,:)          = fit%iter%zth(:,ithr)
+        fit%iter%zbatch(:,i)       = fit%iter%zth(:,ithr)
+        ! EM sufficient statistic E[z z'|y] = z z' + Cov[z|y]. BOTH the coupled M-step normal
+        ! matrix and the Gamma update below need it. Dropping Cov underestimates Gamma, which
+        ! tightens the prior, which shrinks z further: the bias compounds across iterations.
+        ! Under the mixture E[zz'|y] = A^-1 + sum_k r_k m_k m_k', NOT A^-1 + E[z]E[z]'
+        ! -- the between-component spread is real posterior variance; probe_solve_mix
+        ! has already written dens(:,:,i) in that case.
+        if( .not. fit%history%l_mix_used )then
+            do r = 1, fit%model%ncomp
+                do q = 1, fit%model%ncomp
+                    fit%iter%dens(q,r,i) = fit%iter%zth(q,ithr)*fit%iter%zth(r,ithr) + fit%iter%Ainvth(q,r,ithr)
+                end do
+            end do
+        endif
+        do q = 1, fit%model%ncomp
+            fit%iter%gam_thr(q,ithr) = fit%iter%gam_thr(q,ithr) + fit%iter%dens(q,q,i)
+        end do
+        fit%iter%nval_thr(ithr)    = fit%iter%nval_thr(ithr) + 1
+        fit%iter%valid(i)          = .true.
+        fit%diag%gam_dbg(1,ithr) = fit%diag%gam_dbg(1,ithr) + sum([(fit%iter%Gth(q,q,ithr), q=1,fit%model%ncomp)])
+        fit%diag%gam_dbg(2,ithr) = fit%diag%gam_dbg(2,ithr) + dot_product(fit%iter%bth(:,ithr), fit%iter%bth(:,ithr))
+        fit%diag%gam_dbg(3,ithr) = fit%diag%gam_dbg(3,ithr) + dot_product(fit%iter%cth(:,ithr), fit%iter%cth(:,ithr))
+        fit%diag%gam_dbg(4,ithr) = fit%diag%gam_dbg(4,ithr) + a
+        ! residual observation r_i = y - a*(T mu) in place (transfer/ctfsq intact for backprojection)
+        call subtract_mean_banded(fpl, fit%iter%mean_fpl(ithr), real(a), fit%estep%nyqr_es)
+        twp2 = omp_get_wtime()
+        ! This bucket is the complete per-particle tail: posterior solve,
+        ! posterior moments, accumulation bookkeeping and residual subtraction.
+        fit%diag%sec_solve_thr(ithr) = fit%diag%sec_solve_thr(ithr) + (twp2 - twp1)
     end subroutine fit_estep_solve_stats
 
     !> Per-iteration bank of a polar fit, built at the first prepped batch of the iteration
@@ -335,7 +286,7 @@ contains
         integer,               intent(in)    :: nthr, it_eff
         character(len=*),      intent(in)    :: tag   !< ' ' single fit; '  fit=A' / '  fit=B' paired
         integer(timer_int_kind) :: t_bank
-        if( .not. (fit%estep%l_pol_es .and. .not. fit%estep%l_pol_bank_it) ) return
+        if( fit%estep%l_pol_bank_it ) return
         t_bank = tic()
         call fit_polar_bank_build(build, fit, mean_rec, fpl1, nthr)
         fit%estep%sec_bank      = fit%estep%sec_bank + real(toc(t_bank))
@@ -364,22 +315,18 @@ contains
         class(ori),            intent(inout) :: o
         type(fplane_type),     intent(inout) :: fpl
         integer,               intent(in)    :: row, i, ithr
-        real(dp) :: a, aa, e_mm, myv
-        if( fit%estep%l_pol_es )then
-            call fit_estep_former_polar(fit, mean_rec, o, fpl, row, ithr, a, aa, e_mm, myv)
-        else
-            call fit_estep_former_cart(fit, mean_rec, o, fpl, row, ithr, a, aa, e_mm, myv)
-        endif
-        call fit_estep_solve_stats(fit, fpl, i, row, ithr, a, aa, e_mm, myv)
+        real(dp) :: a, e_mm, myv
+        call fit_estep_former_polar(fit, mean_rec, o, fpl, row, ithr, a, e_mm, myv)
+        call fit_estep_solve_stats(fit, fpl, i, row, ithr, a)
     end subroutine fit_estep_particle
 
     !> Halfset masks + the CPU coupled M-step insertion for one batch of one fit.
     module subroutine fit_batch_insert( build, fit, orientations, fpls, eo, batchsz )
-        type(builder),     intent(inout) :: build
+        type(builder),         intent(inout) :: build
         class(flex_probe_fit), intent(inout) :: fit
-        type(ori),         intent(inout) :: orientations(:)
-        type(fplane_type), intent(inout) :: fpls(:)
-        integer,           intent(in)    :: eo(:), batchsz
+        type(ori),             intent(inout) :: orientations(:)
+        type(fplane_type),     intent(inout) :: fpls(:)
+        integer,               intent(in)    :: eo(:), batchsz
         integer :: i
         do i = 1, batchsz
             fit%iter%valid_e(i) = fit%iter%valid(i) .and. eo(i)==0
@@ -394,11 +341,11 @@ contains
     !! takes its sums from reduce_probe_parts.
     module subroutine fit_iter_reduce( fit, it_eff, nthr , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
-        class(flex_probe_fit), intent(inout) :: fit
-        integer,           intent(in)    :: it_eff, nthr
+        class(flex_probe_fit),  intent(inout) :: fit
+        integer,                intent(in)    :: it_eff, nthr
         integer :: q, kk2
-            ! reduce the EM Gamma accumulator before ncomp is replaced below; Gamma travels between
-            ! parts as a sum and is divided by the reduced nval
+        ! reduce the EM Gamma accumulator before ncomp is replaced below; Gamma travels between
+        ! parts as a sum and is divided by the reduced nval
         fit%iter%nval = sum(fit%iter%nval_thr)
         ! E-step statistics summary: the polar and Cartesian formers must agree on G, b, c
         if( fit%iter%nval > 0 )then
@@ -478,13 +425,14 @@ contains
     !! what the paired engine doubles is basis memory, the per-fit accumulators, the master's
     !! per-voxel solves and the per-iteration bank build). Owns its read/prep buffers; the caller
     !! owns the fits' accumulators (iter_begin / iter_reduce).
-    module subroutine fit_estep_pass( params, build, fits, means, nfits, it_eff, nthr )
-        class(parameters), intent(inout) :: params
-        type(builder),     intent(inout) :: build
-        integer,           intent(in)    :: nfits
+    module subroutine fit_estep_pass( params, build, plane_store, fits, means, nfits, it_eff, nthr )
+        class(parameters),    intent(inout) :: params
+        type(builder),        intent(inout) :: build
+        class(flex_plane_store), intent(inout) :: plane_store
+        integer,              intent(in)    :: nfits
         type(flex_probe_fit), intent(inout) :: fits(nfits)
         type(flex_mean_ref),  intent(in)    :: means(nfits)
-        integer,           intent(in)    :: it_eff, nthr
+        integer,              intent(in)    :: it_eff, nthr
         type(fplane_type), allocatable :: fpls(:)
         type(ori),         allocatable :: orientations(:)
         integer,           allocatable :: eo(:)
@@ -520,7 +468,7 @@ contains
         ! downscaled-particle cache (cache=yes): a cache-served batch is read at box_crop into
         ! cropped planes (init_rec cropped=, prepimgbatch at box_crop) and prepped with
         ! cached=.true. (already noise-normalised when the entry was written)
-        l_pcache = plane_cache_in_use(params, build)
+        l_pcache = plane_store%cache_in_use()
         call init_rec(params, build, MAXIMGBATCHSZ, fpls, cropped=l_pcache)
         if( l_pcache )then
             call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
@@ -530,7 +478,7 @@ contains
         do ibatch = 1, nmrg, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nmrg, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call planes_batch_load(params, build, nmrg, mrg_pinds, batchlims, fpls, &
+            call planes_batch_load(plane_store, params, build, nmrg, mrg_pinds, batchlims, fpls, &
                 &cov_image_mask_radius(params), l_pcache, sec_read, sec_prep)
             do i = 1, batchsz
                 call build%spproj_field%get_ori(mrg_pinds(batchlims(1)+i-1), orientations(i))
@@ -569,19 +517,20 @@ contains
                 call flush(logfhandle)
             endif
         end do
-        write(logfhandle,'(A,F7.1,A,F7.1,A,F7.1,A,F7.1)') '>>> FLEX_PCA '//pfx//' E-STEP SPLIT &
-            &(seconds): read=', sec_read, '  prep=', sec_prep, '  project+solve=', sec_estep, &
+        write(logfhandle,'(A,F7.1,A,F7.1,A,F7.1,A,F7.1)') '>>> FLEX_PCA '//pfx//' E-STEP WALL &
+            &(wall-seconds): read=', sec_read, '  prep=', sec_prep, '  project+solve=', sec_estep, &
             &'  insert=', sec_ins
         do f = 1, nfits
             ftag = ''
             if( nfits == 2 ) ftag = merge('  fit=A','  fit=B', f==1)
-            write(logfhandle,'(A,A,A,F7.1,A,F7.1)') '>>> FLEX_PCA '//pfx//' E-STEP INNER', ftag, &
-                &' (thread-seconds): project=', sum(fits(f)%diag%sec_proj_thr),'  gram+solve=', sum(fits(f)%diag%sec_gram_thr)
-            if( fits(f)%estep%l_pol_es )then
-                ! the two numbers the polar A/B reads from run.log
-                write(logfhandle,'(A,I0,A,A,F7.1,A,F7.1)') '>>> FLEX_PCA POLAR ESTEP it=', it_eff, ftag, &
-                    &'  bank build seconds=', fits(f)%estep%sec_bank, '  estep seconds=', sec_estep
-            endif
+            write(logfhandle,'(A,A,A,F7.1,A,F7.1,A,F7.1,A,F7.1)') &
+                &'>>> FLEX_PCA '//pfx//' E-STEP BUCKETS', ftag, &
+                &' (thread-seconds): bank=', sum(fits(f)%diag%sec_bank_thr), &
+                &'  ring=', sum(fits(f)%diag%sec_ring_thr), &
+                &'  exact_lowk=', sum(fits(f)%diag%sec_exact_thr), &
+                &'  solve+moments+residual=', sum(fits(f)%diag%sec_solve_thr)
+            write(logfhandle,'(A,I0,A,A,F7.1,A,F7.1)') '>>> FLEX_PCA POLAR ESTEP it=', it_eff, ftag, &
+                &'  bank build seconds=', fits(f)%estep%sec_bank, '  estep seconds=', sec_estep
         end do
         call flush(logfhandle)
         do i = 1, size(orientations)

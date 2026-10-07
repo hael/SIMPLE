@@ -1,6 +1,6 @@
 !@descr: UMAP projection of a high-dimensional embedding, for plotting it
 module simple_umap
-use simple_core_module_api
+use simple_core_module_api, only: dp, eigsrt, hpsort, jacobi, logfhandle, longer, simple_exception, sp, tiny
 use simple_kd_tree, only: kd_tree, knn_table
 implicit none
 private
@@ -8,14 +8,14 @@ private
 
 public :: umap_embed, umap_subsample
 
-integer, parameter :: NDIM         = 2      !< output dimensionality
-integer, parameter :: NNN          = 15     !< neighbourhood size
-integer, parameter :: SMALL_N      = 10000  !< below this, more epochs (UMAP's own heuristic)
+integer, parameter :: NDIM       = 2      !< output dimensionality
+integer, parameter :: NNN        = 15     !< neighbourhood size
+integer, parameter :: SMALL_N    = 10000  !< below this, more epochs (UMAP's own heuristic)
 integer, parameter :: NEPOCH_SMALL = 500, NEPOCH_LARGE = 200
-integer, parameter :: NBISECT      = 64     !< bandwidth bisection steps
-real,    parameter :: NEG_RATE     = 5.     !< negative samples per positive
-real,    parameter :: CLIP         = 4.     !< SGD displacement clamp; without it coincident pairs diverge
-real,    parameter :: INIT_SCALE   = 10.    !< coordinate spread of the initialisation
+integer, parameter :: NBISECT    = 64     !< bandwidth bisection steps
+real,    parameter :: NEG_RATE   = 5.     !< negative samples per positive
+real,    parameter :: CLIP       = 4.     !< SGD displacement clamp; without it coincident pairs diverge
+real,    parameter :: INIT_SCALE = 10.    !< coordinate spread of the initialisation
 !> a and b of the 1/(1 + a d^2b) output kernel, least-squares fitted to UMAP's defaults
 !! min_dist=0.1, spread=1.0. Constants because nothing here varies them.
 real,    parameter :: KERN_A = 1.577, KERN_B = 0.895

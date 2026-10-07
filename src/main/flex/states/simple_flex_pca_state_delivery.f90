@@ -1,11 +1,13 @@
-!@descr: flex_pca: the common 3-D delivery of reconstructed state maps -- eo-FSC, filtering/masking per the backend's policy, naming, publication and the project update
+!@descr: common 3-D delivery of reconstructed flex_pca state maps.
+!! Owns eo-FSC, filtering/masking, naming, publication and the project update.
 module simple_flex_pca_state_delivery
-use simple_core_module_api
-use simple_builder,       only: builder
-use simple_parameters,    only: parameters
-use simple_image,         only: image
-use simple_estimate_ssnr, only: fsc2optlp_sub, get_resolution
-use simple_flex_pca_util, only: flex_pca_write_state
+use simple_core_module_api, only: cosmskhalfwidth, fdim, get_resolution, logfhandle, simple_exception, string
+use simple_defs_flex,                only: FLEX_FSC_SIGNAL_THRESHOLD
+use simple_builder,                  only: builder
+use simple_parameters,               only: parameters
+use simple_image,                    only: image
+use simple_estimate_ssnr,            only: get_resolution
+use simple_flex_pca_util,            only: flex_pca_write_state
 use simple_flex_pca_project_gateway, only: prepare_project_fsc_lowpass_filters, publish_state_volume, write_out_segment
 use simple_flex_pca_states_backend,  only: flex_state_maps, flex_state_delivery_policy
 implicit none
@@ -24,7 +26,7 @@ type :: flex_state_delivery
     integer :: box_rec = 0, filtsz = 0
     real    :: smpd_rec = 0., mskrad = 0.
     type(string) :: outvol_bak, outvol_even, outvol_odd, state_vol_fname
-    real,    allocatable :: lowpass_filters(:,:), fsc_eo(:), filt_half(:), filt_merged(:)
+    real,    allocatable :: lowpass_filters(:,:), fsc_eo(:), filt_merged(:)
     logical, allocatable :: has_lowpass_filter(:)
     integer, allocatable :: lowpass_source_state(:)
   contains
@@ -61,7 +63,7 @@ contains
             if( .not. (present(outvol_even) .and. present(outvol_odd)) ) &
                 &THROW_HARD('flex halfset state delivery needs outvol_even/outvol_odd')
         endif
-        allocate(self%fsc_eo(self%filtsz), self%filt_half(self%filtsz), self%filt_merged(self%filtsz), source=0.)
+        allocate(self%fsc_eo(self%filtsz), self%filt_merged(self%filtsz), source=0.)
         if( self%policy%l_project_fsc_fallback )then
             call prepare_project_fsc_lowpass_filters(params, self%filtsz, nstates, self%lowpass_filters, &
                 &self%has_lowpass_filter, self%lowpass_source_state)
@@ -72,10 +74,9 @@ contains
         endif
     end subroutine delivery_new
 
-    !> Deliver one state: with halves, the eo-FSC decides the filter (per-state optimal filter or
-    !! the 8th-order Butterworth low-pass at eo-FSC(0.143), the same for the combined map and both
-    !! halves), then the three views are written and the combined one published; a single-set
-    !! state takes the project-FSC fallback where the policy allows it.
+    !> Deliver one state: with halves, the eo-FSC sets the 8th-order Butterworth low-pass at
+    !! eo-FSC(0.143) for the combined map and both halves. A single-set state takes the
+    !! project-FSC fallback where the policy allows it.
     subroutine delivery_deliver( self, params, build, state, maps )
         class(flex_state_delivery), intent(inout) :: self
         class(parameters),          intent(inout) :: params
@@ -102,27 +103,16 @@ contains
             call msk_e%fsc(msk_o, self%fsc_eo)
             call msk_e%kill
             call msk_o%kill
-            l_eo_fsc = any(self%fsc_eo > 0.143)
+            l_eo_fsc = any(self%fsc_eo > real(FLEX_FSC_SIGNAL_THRESHOLD))
             if( l_eo_fsc )then
                 res_arr = maps%even%get_res()
                 call get_resolution(self%fsc_eo, res_arr, fsc05, fsc0143)
-                if( self%policy%l_state_eofilt )then
-                    ! per-state eo-FSC optimal filter
-                    call fsc2optlp_sub(self%filtsz, self%fsc_eo, self%filt_half,   merged=.false.)
-                    call fsc2optlp_sub(self%filtsz, self%fsc_eo, self%filt_merged, merged=.true.)
-                    write(logfhandle,'(A,I3,A,F7.2,A,F7.2,A)') '>>> FLEX STATE'//trim(self%policy%tag)//' eo-FSC state=', &
-                        &state,'  res(0.143)=',fsc0143,' A  res(0.5)=',fsc05,' A -- per-state optimal filter applied'
-                else
-                    ! default: 8th-order Butterworth low-pass at this state's eo-FSC(0.143) resolution,
-                    ! the same filter for the combined map and both halves
-                    kc_lp = real(self%box_rec) * self%smpd_rec / fsc0143
-                    do k_lp = 1, self%filtsz
-                        self%filt_merged(k_lp) = 1.0 / (1.0 + (real(k_lp)/max(kc_lp,1.0))**8)
-                    end do
-                    self%filt_half = self%filt_merged
-                    write(logfhandle,'(A,I3,A,F7.2,A,F7.2,A)') '>>> FLEX STATE'//trim(self%policy%tag)//' eo-FSC state=', &
-                        &state,'  res(0.143)=',fsc0143,' A  res(0.5)=',fsc05,' A -- low-pass at the state eo-FSC(0.143) applied'
-                endif
+                kc_lp = real(self%box_rec) * self%smpd_rec / fsc0143
+                do k_lp = 1, self%filtsz
+                    self%filt_merged(k_lp) = 1.0 / (1.0 + (real(k_lp)/max(kc_lp,1.0))**8)
+                end do
+                write(logfhandle,'(A,I3,A,F7.2,A,F7.2,A)') '>>> FLEX STATE'//trim(self%policy%tag)//' eo-FSC state=', &
+                    &state,'  res(0.143)=',fsc0143,' A  res(0.5)=',fsc05,' A -- low-pass at the state eo-FSC(0.143) applied'
                 deallocate(res_arr)
             else
                 if( self%policy%l_project_fsc_fallback )then
@@ -136,18 +126,12 @@ contains
             call flush(logfhandle)
             do iv = 1, 3
                 select case(iv)
-                case(1); call state_img%copy(maps%combined); params%outvol = self%outvol_bak
-                case(2); call state_img%copy(maps%even);     params%outvol = self%outvol_even
-                case(3); call state_img%copy(maps%odd);      params%outvol = self%outvol_odd
+                    case(1); call state_img%copy(maps%combined); params%outvol = self%outvol_bak
+                    case(2); call state_img%copy(maps%even);     params%outvol = self%outvol_even
+                    case(3); call state_img%copy(maps%odd);      params%outvol = self%outvol_odd
                 end select
-                if( .not. self%policy%l_state_filt )then
-                    ! no filter on the delivered maps
-                else if( l_eo_fsc )then
-                    if( iv == 1 )then
-                        call state_img%apply_filter(self%filt_merged)
-                    else
-                        call state_img%apply_filter(self%filt_half)
-                    endif
+                if( l_eo_fsc )then
+                    call state_img%apply_filter(self%filt_merged)
                 else if( self%policy%l_project_fsc_fallback .and. self%has_lowpass_filter(state) )then
                     call state_img%apply_filter(self%lowpass_filters(:,state))
                 endif
@@ -156,7 +140,7 @@ contains
         else
             params%outvol = self%outvol_bak
             call state_img%copy(maps%combined)
-            if( self%policy%l_state_filt .and. self%policy%l_project_fsc_fallback .and. self%has_lowpass_filter(state) )then
+            if( self%policy%l_project_fsc_fallback .and. self%has_lowpass_filter(state) )then
                 call state_img%apply_filter(self%lowpass_filters(:,state))
                 write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC low-pass filter to state=',state, &
                     &' using_source_state=',self%lowpass_source_state(state)
@@ -183,7 +167,7 @@ contains
             call state_img%zero_background
             call state_img%mask3D_soft(self%mskrad, backgr=0.)
         endif
-        call flex_pca_write_state(params, state_img, state, self%state_vol_fname)
+        call flex_pca_write_state(params%outvol, state_img, state, self%state_vol_fname)
         if( l_publish ) call publish_state_volume(build, self%state_vol_fname, state_img%get_smpd(), state, state_img%get_box())
         call state_img%kill
     end subroutine write_view
@@ -207,7 +191,6 @@ contains
         if( allocated(self%has_lowpass_filter) )   deallocate(self%has_lowpass_filter)
         if( allocated(self%lowpass_source_state) ) deallocate(self%lowpass_source_state)
         if( allocated(self%fsc_eo) )      deallocate(self%fsc_eo)
-        if( allocated(self%filt_half) )   deallocate(self%filt_half)
         if( allocated(self%filt_merged) ) deallocate(self%filt_merged)
         self%l_fuse = .false.; self%box_rec = 0; self%filtsz = 0; self%smpd_rec = 0.; self%mskrad = 0.
     end subroutine delivery_kill

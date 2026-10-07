@@ -1,18 +1,19 @@
-!@descr: flex_pca: the gridding state-reconstruction backend -- kernel-weighted backprojection of every state in one pass
+!@descr: flex_pca gridding state-reconstruction backend.
+!! Kernel-weighted backprojection of every state runs in one pass.
 module simple_flex_pca_states_gridding
-use simple_core_module_api
-use simple_builder,         only: builder
-use simple_parameters,      only: parameters
-use simple_image,           only: image
-use simple_reconstructor,   only: reconstructor
-use simple_gridding,        only: prep3D_inv_kbenvelope4mul
-use simple_matcher_3Drec,   only: init_rec, prep_imgs4rec, cleanup_rec_buffers
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
+use simple_core_module_api, only: del_file, dp, file_exists, fplane_type, logfhandle, maximgbatchsz, mrc_ext, ori, &
+    &simple_exception, string, tic, timer_int_kind, toc
+use simple_builder,                       only: builder
+use simple_parameters,                    only: parameters
+use simple_image,                         only: image
+use simple_reconstructor,                 only: reconstructor
+use simple_gridding,                      only: prep3D_inv_kbenvelope4mul
+use simple_matcher_3Drec,                 only: init_rec, prep_imgs4rec, cleanup_rec_buffers
+use simple_matcher_ptcl_io,               only: discrete_read_imgbatch, prepimgbatch
 use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_multi_scaled_batch
-use simple_flex_pca_rounds,         only: flex_pca_rounds
-use simple_flex_pca_run_types,      only: flex_run_settings
-use simple_flex_pca_state_parts,    only: flex_state_part_fbody, flex_pca_rho_part_name
-use simple_flex_pca_states_backend, only: flex_states_backend, flex_state_maps, flex_state_delivery_policy, &
+use simple_flex_pca_rounds,               only: flex_pca_rounds
+use simple_flex_pca_state_parts,          only: flex_state_part_fbody, flex_pca_rho_part_name
+use simple_flex_pca_states_backend,       only: flex_states_backend, flex_state_maps, flex_state_delivery_policy, &
     &flex_rec_box, flex_rec_smpd
 implicit none
 
@@ -153,13 +154,13 @@ contains
         if( rounds%is_worker() )then
             do state=1,self%nstates
                 call self%state_recs(state)%compress_exp
-                pf = flex_state_part_fbody(params, params%part, state, 0)
+                pf = flex_state_part_fbody(params, rounds, params%part, state, 0)
                 call self%state_recs(state)%write(pf//MRC_EXT, del_if_exists=.true.)
                 call self%state_recs(state)%write_rho(flex_pca_rho_part_name(pf))
                 call pf%kill
                 if( self%l_fuse )then
                     call self%recs_o(state)%compress_exp
-                    pf = flex_state_part_fbody(params, params%part, state, 1)
+                    pf = flex_state_part_fbody(params, rounds, params%part, state, 1)
                     call self%recs_o(state)%write(pf//MRC_EXT, del_if_exists=.true.)
                     call self%recs_o(state)%write_rho(flex_pca_rho_part_name(pf))
                     call pf%kill
@@ -186,7 +187,7 @@ contains
                 ! on a split round each part carries both halfsets; reduce each into its own
                 ! accumulator so combined = even + odd below sums two populated halves
                 do eo_i = 0, merge(1, 0, self%l_fuse)
-                    pf = flex_state_part_fbody(params, ipart, state, eo_i)
+                    pf = flex_state_part_fbody(params, rounds, ipart, state, eo_i)
                     if( .not. file_exists(pf//MRC_EXT) ) THROW_HARD('missing states part: '//pf%to_char())
                     call rec_read%read(pf//MRC_EXT)
                     call rec_read%read_rho(flex_pca_rho_part_name(pf))
@@ -243,14 +244,10 @@ contains
     end subroutine gridding_finalize_maps
 
     !> The gridding delivery: low-pass at the state's own eo-FSC(0.143), background removal + soft
-    !! mask on every delivered view, the project FSC low-pass as the fallback. The run settings'
-    !! eofilt/filt switches are the PCG backend's; here the values are fixed (user decision 2026-09-16).
-    function gridding_delivery_policy( self, cfg ) result( policy )
+    !! mask on every delivered view, the project FSC low-pass as the fallback.
+    function gridding_delivery_policy( self ) result( policy )
         class(flex_states_gridding), intent(in) :: self
-        type(flex_run_settings),     intent(in) :: cfg
         type(flex_state_delivery_policy) :: policy
-        policy%l_state_eofilt = .false.
-        policy%l_state_filt   = .true.
         policy%l_mask         = .true.
         policy%l_project_fsc_fallback = .true.
         policy%tag = ''
@@ -291,8 +288,8 @@ contains
     end subroutine finalize_state_rec
 
     subroutine init_state_reconstructor( params, build, state_rec )
-        class(parameters), intent(inout) :: params
-        class(builder), intent(inout) :: build
+        class(parameters),   intent(inout) :: params
+        class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: state_rec
         integer :: box_rec
         box_rec = flex_rec_box(params)

@@ -1,10 +1,10 @@
 !@descr: flex_pca state placement: tied-covariance GMM and the hierarchical GMM AUTO weights
 module simple_flex_pca_gmm
-use simple_core_module_api
-use simple_reconstructor, only: reconstructor
-use simple_srch_sort_loc, only: hpsort
-use simple_linalg, only: jacobi, eigsrt, matinv
-use simple_flex_pca_util, only: two_gauss_unimodal
+use simple_core_module_api, only: dp, dtiny, eigsrt, hpsort, jacobi, logfhandle, matinv, simple_exception
+use simple_reconstructor,    only: reconstructor
+use simple_srch_sort_loc,    only: hpsort
+use simple_linalg,           only: jacobi, eigsrt, matinv
+use simple_flex_pca_util,    only: two_gauss_unimodal
 use simple_flex_pca_targets, only: kmeans_latent_targets
 implicit none
 private
@@ -20,33 +20,33 @@ contains
     !!  spread is shared measurement error.
     subroutine gmm_state_weights( z, nptcls, ncomp, nk, nstates, tcen, wcomp, weights, neff, &
         &bandwidths, labels, pairsep, piout, maxit, respawn, pimin )
-        integer,  intent(in)    :: nptcls, ncomp, nk, nstates
-        real(dp), intent(in)    :: z(nptcls,ncomp), wcomp(nk)
+        integer,            intent(in)    :: nptcls, ncomp, nk, nstates
+        real(dp),           intent(in)    :: z(nptcls,ncomp), wcomp(nk)
         !> in: placed targets. out: FITTED means, so the reported table describes the delivered maps
-        real(dp), intent(inout) :: tcen(nk,nstates)
-        real,     intent(inout) :: weights(nptcls,nstates), neff(nstates), bandwidths(nstates)
-        integer,  intent(inout) :: labels(nptcls)
+        real(dp),           intent(inout) :: tcen(nk,nstates)
+        real,               intent(inout) :: weights(nptcls,nstates), neff(nstates), bandwidths(nstates)
+        integer,            intent(inout) :: labels(nptcls)
         !> pairwise Mahalanobis separation of the FITTED means under the tied covariance;
         !! left at the -1 sentinel when the fit bails out on a singular covariance
-        real(dp), optional, intent(out) :: pairsep(nstates,nstates)
+        real(dp), optional, intent(out)   :: pairsep(nstates,nstates)
         !> fitted mixing proportions
-        real(dp), optional, intent(out) :: piout(nstates)
+        real(dp), optional, intent(out)   :: piout(nstates)
         !> EM iteration cap override; the tolerance still exits early on convergence
-        integer,  optional, intent(in)  :: maxit
+        integer,  optional, intent(in)    :: maxit
         !> disable the redundant-pair respawn (the discovery fit must: a respawned component
         !! lands on the worst-explained particle, an outlier in the gap BETWEEN clusters, and
         !! bridges the unimodality merge so everything chains into one macro-cluster)
-        logical,  optional, intent(in)  :: respawn
+        logical,  optional, intent(in)    :: respawn
         !> mixing-weight floor (constrained MLE); keeps components from starving below a
         !! deliverable occupancy. Inactive when the unconstrained fit already exceeds it.
-        real(dp), optional, intent(in)  :: pimin
+        real(dp), optional, intent(in)    :: pimin
         real(dp), parameter :: GMM_REG = 1.d-6, GMM_TOL = 1.d-5
         !> responsibilities below this are zeroed so the reconstructor's live-state compaction works
-        real(dp), parameter :: RESP_FLOOR = 1.d-3
+        real(dp), parameter :: RESP_FLOOR      = 1.d-3
         !> two means closer than this in the tied-covariance metric describe the same state
-        real(dp), parameter :: GMM_MERGE_D2   = 1.0d0
+        real(dp), parameter :: GMM_MERGE_D2    = 1.0d0
         integer,  parameter :: GMM_MAX_RESPAWN = 8
-        integer,  parameter :: GMM_MAXIT = 60
+        integer,  parameter :: GMM_MAXIT       = 60
         real(dp), allocatable :: y(:,:), mu(:,:), S(:,:), Sinv(:,:), Syy(:,:), resp(:,:)
         real(dp), allocatable :: Smu(:,:), mSm(:), pival(:), nresp(:), evwork(:,:), ev(:), evec(:,:)
         real(dp), allocatable :: ybar(:)
@@ -120,33 +120,33 @@ contains
                 mSm(state) = sum(mu(:,state)*Smu(:,state))
             end do
             ll = 0.d0
-        !$omp parallel do default(shared) private(i,q,r,state,ySy,ySm,lmax,lsum) &
-        !$omp& schedule(static) reduction(+:ll)
-        do i = 1, nptcls
-            ySy = 0.d0
-            do q = 1, nk
-                do r = 1, nk
-                    ySy = ySy + y(i,q)*Sinv(q,r)*y(i,r)
-                end do
-            end do
-            do state = 1, nstates
-                ySm = 0.d0
+            !$omp parallel do default(shared) private(i,q,r,state,ySy,ySm,lmax,lsum) &
+            !$omp& schedule(static) reduction(+:ll)
+            do i = 1, nptcls
+                ySy = 0.d0
                 do q = 1, nk
-                    ySm = ySm + y(i,q)*Smu(q,state)
+                    do r = 1, nk
+                        ySy = ySy + y(i,q)*Sinv(q,r)*y(i,r)
+                    end do
                 end do
-                resp(i,state) = -0.5d0*(ySy - 2.d0*ySm + mSm(state)) - 0.5d0*logdet &
-                    &+ log(max(pival(state), DTINY))
+                do state = 1, nstates
+                    ySm = 0.d0
+                    do q = 1, nk
+                        ySm = ySm + y(i,q)*Smu(q,state)
+                    end do
+                    resp(i,state) = -0.5d0*(ySy - 2.d0*ySm + mSm(state)) - 0.5d0*logdet &
+                        &+ log(max(pival(state), DTINY))
+                end do
+                lmax = maxval(resp(i,:))
+                lsum = 0.d0
+                do state = 1, nstates
+                    resp(i,state) = exp(resp(i,state) - lmax)
+                    lsum       = lsum + resp(i,state)
+                end do
+                resp(i,:) = resp(i,:) / max(lsum, DTINY)
+                ll     = ll + (log(max(lsum, DTINY)) + lmax)
             end do
-            lmax = maxval(resp(i,:))
-            lsum = 0.d0
-            do state = 1, nstates
-                resp(i,state) = exp(resp(i,state) - lmax)
-                lsum       = lsum + resp(i,state)
-            end do
-            resp(i,:) = resp(i,:) / max(lsum, DTINY)
-            ll     = ll + (log(max(lsum, DTINY)) + lmax)
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
             ll = ll / real(nptcls,dp)
             do state = 1, nstates
                 nresp(state) = sum(resp(:,state))
@@ -156,19 +156,19 @@ contains
                 pival = max(pival, pimin)
                 pival = pival / sum(pival)
             endif
-        do state = 1, nstates
-            do q = 1, nk
-                mu(q,state) = sum(resp(:,state)*y(:,q)) / max(nresp(state), DTINY)
-            end do
-        end do
-        S = Syy
-        do state = 1, nstates
-            do q = 1, nk
-                do r = 1, nk
-                    S(q,r) = S(q,r) - nresp(state)*mu(q,state)*mu(r,state)
+            do state = 1, nstates
+                do q = 1, nk
+                    mu(q,state) = sum(resp(:,state)*y(:,q)) / max(nresp(state), DTINY)
                 end do
             end do
-        end do
+            S = Syy
+            do state = 1, nstates
+                do q = 1, nk
+                    do r = 1, nk
+                        S(q,r) = S(q,r) - nresp(state)*mu(q,state)*mu(r,state)
+                    end do
+                end do
+            end do
             S = S / real(nptcls,dp)
             do q = 1, nk
                 S(q,q) = S(q,q) + GMM_REG
@@ -310,20 +310,20 @@ contains
     !! gets exactly one state and the continuum keeps the rest of the budget.
     subroutine gmm_auto_state_weights( z, nptcls, ncomp, nk, nstates, tcen, wcomp, min_neff, weights, &
         &neff, bandwidths, labels, macro_in )
-        integer,  intent(in)    :: nptcls, ncomp, nk, nstates, min_neff
+        integer,           intent(in)    :: nptcls, ncomp, nk, nstates, min_neff
         !> macro-cluster per particle supplied by the latent deconvolution's mixture (full
         !! covariances, per-particle noise, held-out K): the discovery fit and the tied-covariance
         !! unimodality merge are skipped; too-small clusters still fold into their nearest, and
         !! clusters beyond the state budget fold smallest-first
-        integer,  optional, intent(in) :: macro_in(:)
-        real(dp), intent(in)    :: z(nptcls,ncomp), wcomp(nk)
-        real(dp), intent(inout) :: tcen(nk,nstates)
-        real,     intent(inout) :: weights(nptcls,nstates), neff(nstates), bandwidths(nstates)
-        integer,  intent(inout) :: labels(nptcls)
-        integer,  parameter   :: KFIT_MAX = 24
+        integer, optional, intent(in)    :: macro_in(:)
+        real(dp),          intent(in)    :: z(nptcls,ncomp), wcomp(nk)
+        real(dp),          intent(inout) :: tcen(nk,nstates)
+        real,              intent(inout) :: weights(nptcls,nstates), neff(nstates), bandwidths(nstates)
+        integer,           intent(inout) :: labels(nptcls)
+        integer, parameter :: KFIT_MAX    = 24
         !> minimum deliverable state occupancy: below this a map is noise, so no macro-cluster
         !! or seat allocation may create one
-        integer,  parameter   :: GMM_MIN_OCC = 5000
+        integer, parameter :: GMM_MIN_OCC = 5000
         real(dp), allocatable :: tcen_d(:,:), sep(:,:), pifit(:), mass(:)
         real(dp), allocatable :: zsub(:,:), tcen_m(:,:), ysub(:,:), C(:,:), ev(:), evec(:,:)
         real,     allocatable :: w_d(:,:), neff_d(:), bw_d(:), w_m(:,:), neff_m(:), bw_m(:)
@@ -468,8 +468,7 @@ contains
             end do
             macro(s) = max(mbest, 1)
         end do
-100     continue
-        allocate(mass(nmac), cnt(nmac))
+100     allocate(mass(nmac), cnt(nmac))
         mass = 0.d0
         cnt  = 0
         do s = 1, kfit

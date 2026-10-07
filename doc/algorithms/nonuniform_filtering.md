@@ -2,12 +2,16 @@
 
 ## Problem
 
-A single FSC-derived low-pass cutoff filters the whole map at the resolution
-of its *average* voxel. A well-ordered core is then over-smoothed and a
-flexible periphery is left with noise. Nonuniform filtering estimates a
-spatially varying cutoff `c(v)` from the data themselves, so that each voxel
-is filtered at the resolution at which the two independent half maps still
-agree there.
+A single FSC-derived low-pass cutoff filters the whole map at one
+resolution. The global FSC sums the cross-half correlation over the whole
+map, so at each shell it is carried by the regions that still hold signal
+there: the reported resolution reflects the best-ordered parts of the map,
+diluted somewhat by the rest. A cutoff at that resolution therefore leaves
+noise in flexible or poorly ordered regions, which are resolved much worse,
+while the best-ordered core may still be filtered slightly too hard.
+Nonuniform filtering estimates a spatially varying cutoff `c(v)` from the
+data themselves, so that each voxel is filtered at the resolution at which
+the two independent half maps still agree there.
 
 The input is an unfiltered even/odd half pair on one grid. The output is a
 label field `c(v)` over a candidate bank of cutoffs, the filtered halves and
@@ -22,10 +26,10 @@ candidate cutoff `c` from the static bank
 20, 15, 12, 10, 8, 6, 5, 4 A,
 ```
 
-capped at FSC0.143/1.5 of the raw pair (only members coarser than that are
-retained, never fewer than two); when ML regularization is active the
-regularized half pair is one more member beside the finest retained one,
-at the same Potts coordinate, so the unary alone decides between them.
+keeping only the members coarser than the raw pair's FSC 0.143 resolution
+divided by 1.5, and never fewer than two. With ML regularization, the
+regularized half pair can join the bank as one more member; when it does and
+how it competes is described after the algorithm.
 
 If the true local resolution at voxel `v` is `c`, then `E_c(v)` predicts
 `O(v)` up to noise, and vice versa; filtering finer than `c` lets through
@@ -77,7 +81,10 @@ population that later serves as a noise reference.
    which a cutoff of `c` is meaningful; voxels outside the support never
    influence in-support costs.
 2. **Initial labels.** `c(v) = argmin_c C_c^smoothed(v)`.
-3. **Ordered-label Potts smoothing.** Minimize over the 26-neighbor lattice
+3. **Ordered-label Potts smoothing.** A Potts model is a Markov random field
+   that adds a penalty for every pair of neighboring voxels with different
+   labels; here the penalty grows with how far apart the two labels are.
+   Minimize over the 26-neighbor lattice
 
    ```text
    E(c) = sum_v C_{c(v)}(v) + sum_{v~w} phi( |rank(c(v)) - rank(c(w))| ) / deg(v),
@@ -93,16 +100,18 @@ population that later serves as a noise reference.
    merged map is their average; the local-resolution map stores `c(v)` in
    Angstrom inside the support and zero outside or beyond Nyquist.
 
-When ML regularization is active, the regularized half pair (the
-closed-form voxelwise Wiener shrinkage of the raw pair) joins the bank as
-one more member beside the finest retained rung, at that rung's prior
-coordinate, and competes for every voxel like a hard rung: its cost is the
-cross-half prediction error of the regularized halves. Where it wins, the
-map keeps the estimator's own high-resolution content; where a hard rung
-wins, the estimator over-reached there. Its label resolution is the raw
-pair's FSC=0.143, and it joins the bank the moment that is at or beyond the
-ladder's finest rung; within the ladder the rungs compete alone (the cut at
-`fsc/1.5` always keeps a rung finer than the FSC).
+**The regularized member.** With ML regularization, the regularized half
+pair (the closed-form voxelwise Wiener shrinkage of the raw pair) joins the
+bank once the raw pair's FSC 0.143 resolution is at or beyond the finest
+kept member; before that, the low-pass members compete alone. Because the
+cut keeps members up to 1.5 times finer than the FSC, this happens only once
+the FSC is finer than the finest member of the static bank (4 A). The
+regularized member takes the same rank as the finest kept member in the
+ordered prior of step 3, so the prior treats the two alike and only their
+costs decide between them. Its cost is the cross-half prediction error of the
+regularized halves, and its label resolution is the raw pair's FSC 0.143.
+Where it wins, the map keeps the estimator's own high-resolution content;
+where a low-pass member wins, the estimator over-reached there.
 
 ## High-resolution extension (retired 2026-09-16)
 
@@ -117,12 +126,12 @@ competition for every workflow.
 
 ## Handoff to matching
 
-The FSC and the NU filter answer different questions: the FSC reports the
-average resolution, the NU field reports where the map is better than
-average. The matching low-pass for the next iteration is the finest member
-of the bank: the finest rung of the ladder cut at `fsc/1.5`, or the
-regularized pair once its FSC=0.143 is at or beyond the ladder's finest
-rung, bounded by any explicit `lp` and by `lpstop`. The same rule serves
+The FSC and the NU filter answer different questions: the FSC reports one
+global resolution, carried by the best-ordered regions; the NU field reports,
+voxel by voxel, the resolution each region actually supports. The matching
+low-pass for the next iteration is the finest member of the bank: the finest
+kept low-pass member, or the regularized member once it has joined, bounded
+by any explicit `lp` and by `lpstop`. The same rule serves
 every workflow, and which labels won voxels decides the filter, never the
 band. In plain `nonuniform` mode the even and odd NU halves stay separate
 references; in `nonuniform_lpset` the merged NU map is used with a single

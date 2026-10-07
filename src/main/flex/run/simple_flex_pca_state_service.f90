@@ -1,33 +1,39 @@
-!@descr: flex_pca state inference: latent deconvolution, state placement, occupancy pruning and the derived state settings
+!@descr: flex_pca state inference and bandwidth-CV reconstruction orchestration
 !!
 !! Everything between the delivered embedding and the weight table the reconstruction consumes:
 !! the measurement-error deconvolution of the latents (and its resume adoption), placement of
 !! the state kernels (population-floor variant here; the kernel/GMM placement in
-!! simple_flex_pca_weights), the occupancy floor, and the derived box/neff/state-count rules.
-!! Pure functions of arrays and files: no project, no builder, no rounds.
+!! simple_flex_pca_weights), the occupancy floor, derived settings, and trial-map bandwidth CV.
 module simple_flex_pca_state_service
-use simple_core_module_api
-use simple_flex_pca_records, only: flex_selection, flex_fit_model, flex_latent, flex_state_set
-use simple_parameters,           only: parameters
-use simple_srch_sort_loc,        only: hpsort
-use simple_flex_pca_deconv,      only: calibrate_noise_scale, deconvolve_latent
+use simple_core_module_api, only: del_file, dp, dtiny, file_exists, hpsort, int2str_pad, irnd_uni, logfhandle, &
+    &mrc_ext, simple_exception, string
+use simple_builder,               only: builder
+use simple_image,                 only: image
+use simple_flex_pca_records,      only: flex_selection, flex_fit_model, flex_latent, flex_state_set
+use simple_parameters,            only: parameters
+use simple_srch_sort_loc,         only: hpsort
+use simple_flex_pca_deconv,       only: calibrate_noise_scale, deconvolve_latent
 use simple_flex_pca_embedding_io, only: read_deconv_block, append_deconv_block
-use simple_flex_pca_weights,     only: build_covariance_state_weights
+use simple_flex_pca_rec3D,        only: reconstruct_flex_weighted_states, flex_rec_smpd
+use simple_flex_pca_rounds,       only: flex_pca_rounds
+use simple_flex_pca_weights,      only: build_covariance_state_weights, kernel_weights_at_bandwidth, &
+    &bandwidth_cv_grid, bandwidth_cv_error, bandwidth_cv_adopt
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: apply_latent_deconvolution, prune_underpopulated_states, place_states_with_population_floor
+public :: cv_select_bandwidths
 public :: auto_box_crop, auto_min_neff, auto_state_count
 public :: infile_path, infile_dir
 public :: FLEX_AUTO_K_START, FLEX_AUTO_K_MIN, AUTO_NSTATES
 
 !> Cap and floor of auto_state_count (tester only; preimage_auto's ceiling is AUTO_NSTATES). The cap
 !! is bounded by cost: gate 2 of the state merge compares K(K-1)/2 map pairs.
-integer, parameter :: FLEX_AUTO_K_START = 32
-integer, parameter :: FLEX_AUTO_K_MIN   = 8
+integer, parameter :: FLEX_AUTO_K_START        = 32
+integer, parameter :: FLEX_AUTO_K_MIN          = 8
 !> Nyquist margin for a derived box_crop; columns are selected inside that band.
-real,    parameter :: FLEX_AUTO_BOX_SAFETY = 1.25
+real,    parameter :: FLEX_AUTO_BOX_SAFETY     = 1.25
 !> Occupancy share of an equal split. Paired with an SNR term because neither alone reproduces both
 !! validation datasets.
 real,    parameter :: FLEX_AUTO_NEFF_OCCUPANCY = 0.10
@@ -36,11 +42,80 @@ real,    parameter :: FLEX_AUTO_NEFF_OCCUPANCY = 0.10
 ! preimage_auto=yes raises that ceiling to AUTO_NSTATES and turns the merge on, since over-provisioning
 ! is the only regime in which the merge can recover K at all.
 !> provision cap of the population floor (min_state_frac > 0, refine3D_states flex initialization); independent of AUTO_NSTATES
-integer, parameter :: AUTO_NSTATES = 8
+integer, parameter :: AUTO_NSTATES             = 8
 !> provision cap of the population floor (min_state_frac > 0, refine3D_states flex initialization); independent of AUTO_NSTATES
-integer, parameter :: POP_FLOOR_MAX_NSTATES = 32
+integer, parameter :: POP_FLOOR_MAX_NSTATES    = 32
 
 contains
+
+    !> Reconstruct each trial half-map pair; weights owns the CV grid, score and final adoption.
+    subroutine cv_select_bandwidths( params, build, sel, nbins, min_neff, states, rounds )
+        type(flex_selection),   intent(in)    :: sel
+        type(flex_state_set),   intent(inout) :: states
+        class(flex_pca_rounds), intent(inout) :: rounds
+        class(parameters),      intent(inout) :: params
+        class(builder),         intent(inout) :: build
+        integer,                intent(in)    :: nbins, min_neff
+        real,     allocatable :: wbin(:,:), whalf(:,:), tgt_ev(:,:), tgt_od(:,:)
+        real,     allocatable :: rmat(:,:,:), ev_flat(:), od_flat(:)
+        real(dp), allocatable :: bins(:,:), hbin(:,:), err(:,:)
+        type(image) :: ev, od
+        type(string):: fn
+        real(dp) :: h_used
+        real     :: neff_used
+        integer  :: state, ib, nvox
+        character(len=3) :: bstr
+        allocate(wbin(sel%nptcls,states%nstates), whalf(sel%nptcls,states%nstates))
+        allocate(bins(nbins,states%nstates), hbin(nbins,states%nstates), err(nbins,states%nstates), source=0.d0)
+        call bandwidth_cv_grid(states, nbins, bins)
+        write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA cross-validated bandwidth selection over ',nbins, &
+            &' bins per state'
+        call flush(logfhandle)
+        nvox = params%box_crop**3
+        allocate(tgt_ev(nvox,states%nstates), tgt_od(nvox,states%nstates), source=0.)
+        allocate(ev_flat(nvox), od_flat(nvox))
+        do ib = 1, nbins
+            do state = 1, states%nstates
+                call kernel_weights_at_bandwidth(states%kdist(:,state), sel%nptcls, sqrt(2.d0*bins(ib,state)), &
+                    &min_neff, wbin(:,state), h_used, neff_used)
+                hbin(ib,state) = h_used
+            end do
+            write(bstr,'(I3.3)') ib
+            whalf = wbin
+            call mask_state_weights_by_half(build, sel%pinds, 0, whalf)
+            params%outvol = 'flex_pca_cv'//bstr//'_even_state_001.mrc'
+            call reconstruct_flex_weighted_states(params, build, sel%pinds, whalf, states%nstates, &
+                &floor_rho=.true., rounds=rounds)
+            whalf = wbin
+            call mask_state_weights_by_half(build, sel%pinds, 1, whalf)
+            params%outvol = 'flex_pca_cv'//bstr//'_odd_state_001.mrc'
+            call reconstruct_flex_weighted_states(params, build, sel%pinds, whalf, states%nstates, &
+                &floor_rho=.true., rounds=rounds)
+            do state = 1, states%nstates
+                fn = 'flex_pca_cv'//bstr//'_even_state_'//int2str_pad(state,3)//MRC_EXT
+                call ev%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
+                call del_file(fn%to_char()); call fn%kill
+                fn = 'flex_pca_cv'//bstr//'_odd_state_'//int2str_pad(state,3)//MRC_EXT
+                call od%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
+                call del_file(fn%to_char()); call fn%kill
+                rmat    = ev%get_rmat()
+                ev_flat = reshape(rmat, [nvox])
+                rmat    = od%get_rmat()
+                od_flat = reshape(rmat, [nvox])
+                if( ib == 1 )then
+                    tgt_ev(:,state) = ev_flat
+                    tgt_od(:,state) = od_flat
+                endif
+                err(ib,state) = bandwidth_cv_error(ev_flat, od_flat, tgt_ev(:,state), tgt_od(:,state))
+                call ev%kill; call od%kill
+            end do
+            write(logfhandle,'(A,I3,A,ES11.3,A,ES12.4,A,ES12.4)') '>>>   cv bin=',ib, &
+                &' h(state1)=',hbin(ib,1),'  cross-halfset error: min=',minval(err(ib,:)),' max=',maxval(err(ib,:))
+            call flush(logfhandle)
+        end do
+        call bandwidth_cv_adopt(states, bins, err, min_neff)
+        deallocate(wbin, whalf, bins, hbin, err, tgt_ev, tgt_od, ev_flat, od_flat)
+    end subroutine cv_select_bandwidths
 
     !> Calibrate the per-particle noise (from the even/odd half solutions when the run has them,
     !! else from the scale file the original run wrote) and replace z / precision by the posterior
@@ -50,14 +125,14 @@ contains
         type(flex_fit_model), intent(in)    :: model
         type(flex_selection), intent(in)    :: sel
         integer, allocatable, intent(inout) :: labels(:)   !< mixture component per particle
-        logical,  intent(in)    :: resume
-        logical,  intent(out)   :: adopted
+        logical,              intent(in)    :: resume
+        logical,              intent(out)   :: adopted
         !> directory of the embedding a resume was given (infile): the deconvolved cache and the labels are
         !! looked up there when the run directory has none, so a states-only resume in a fresh directory
         !! adopts the original run's deconvolution instead of re-running the K ladder
-        character(len=*), intent(in) :: srcdir
-        character(len=*), intent(in) :: srcfile   !< the infile itself: its trailing deconvolved block is adopted first
-        logical,  intent(out)   :: applied
+        character(len=*),     intent(in)    :: srcdir
+        character(len=*),     intent(in)    :: srcfile   !< the infile itself: its trailing deconvolved block is adopted first
+        logical,              intent(out)   :: applied
         real(dp) :: prior(model%ncomp), a_comp(model%ncomp), noise_scale
         integer :: q, k_deconv, u_ns, io_ns
         logical  :: l_resume
@@ -145,7 +220,7 @@ contains
     subroutine prune_underpopulated_states( min_neff, states )
         type(flex_state_set), intent(inout) :: states
         integer :: nptcls
-        integer,              intent(in) :: min_neff
+        integer,              intent(in)    :: min_neff
         logical,  allocatable :: keep(:)
         integer,  allocatable :: map(:), occ(:), ord(:)
         real,     allocatable :: w2(:,:), t2(:,:), b2(:), n2(:)
@@ -283,13 +358,13 @@ contains
         type(flex_latent),    intent(in)    :: latent
         type(flex_fit_model), intent(in)    :: model
         type(flex_state_set), intent(inout) :: states  !< nstates in: the requested count; the delivered set out
-        logical,  optional,   intent(in)    :: equal_occ
+        logical, optional,    intent(in)    :: equal_occ
         type(flex_latent)    :: lat_r
         type(flex_state_set) :: st_r
         integer :: nptcls, ncomp, nstates_req
-        integer,  intent(in) :: nkern, axis, min_neff
-        real,     intent(in) :: min_state_frac
-        integer,  parameter :: ROUND_CAP = 8
+        integer,              intent(in)    :: nkern, axis, min_neff
+        real,                 intent(in)    :: min_state_frac
+        integer, parameter :: ROUND_CAP = 8
         real(dp), allocatable :: sdv(:)
         integer,  allocatable :: idx(:), occ(:), order(:), kept(:), deliver(:)
         logical,  allocatable :: retained(:), qualifies(:)
@@ -454,6 +529,16 @@ contains
         deallocate(retained, idx, occ, qualifies, order, kept, deliver, sdv)
         call st_r%kill; call lat_r%kill
     end subroutine place_states_with_population_floor
+
+    subroutine mask_state_weights_by_half( build, pinds, wanted_eo, weights )
+        class(builder), intent(inout) :: build
+        integer,        intent(in)    :: pinds(:), wanted_eo
+        real,           intent(inout) :: weights(:,:)
+        integer :: i
+        do i = 1, size(pinds)
+            if( build%spproj_field%get_eo(pinds(i)) /= wanted_eo ) weights(i,:) = 0.
+        end do
+    end subroutine mask_state_weights_by_half
 
     !> The resume embedding path itself ('' when not resuming)
     function infile_path( params, l_resume ) result( f )

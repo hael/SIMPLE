@@ -1,5 +1,5 @@
 !@descr: unit and library tests of the flex_pca PCG M-step operator (simple_flex_pca_pcg)
-! Asserts by name the four checks (A-D) of test_flex_pcg_operator, a white-box self-test that stays
+! Asserts by name the six checks (A-F) of test_flex_pcg_operator, a white-box self-test that stays
 ! in simple_flex_pca_pcg because it needs flex_pcg_t's private components and kernels. The fast gate
 ! runs box 32, 200 samples and the clean baseline solve; nightly runs box 64, 400 samples (no solve)
 ! and the twelve-setting solve sweep at box 32.
@@ -33,7 +33,7 @@ contains
     subroutine check_operator( box, nsamples, with_solve, sweep )
         integer, intent(in) :: box, nsamples
         logical, intent(in) :: with_solve, sweep
-        logical :: l_pass, passes(4)
+        logical :: l_pass, passes(6)
         character(len=32) :: tag
         write(tag,'(A,I0,A,I0,A)') 'box ', box, ', ', nsamples, ' samples: '
         call test_flex_pcg_operator(box, nsamples, l_pass, passes=passes, sweep=sweep)
@@ -47,7 +47,9 @@ contains
             endif
         endif
         call assert_true(passes(4), trim(tag)//' (D) band-list kernels and rhs equal the dense fold')
-        call assert_true(l_pass .eqv. all(passes), trim(tag)//' the overall verdict is the conjunction of the four')
+        call assert_true(passes(5), trim(tag)//' (E) the unregularised operator is symmetric')
+        call assert_true(passes(6), trim(tag)//' (F) the unregularised operator is PSD and the ridged operator is PD')
+        call assert_true(l_pass .eqv. all(passes), trim(tag)//' the overall verdict is the conjunction of the six')
     end subroutine check_operator
 
 end module simple_flex_pcg_tester

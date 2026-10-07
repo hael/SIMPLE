@@ -1,28 +1,22 @@
 !@descr: flex_pca shared helpers: chi-squared median, unimodality test, kernel weights, delivery naming
 module simple_flex_pca_util
-use simple_core_module_api
-use simple_image, only: image
-use simple_parameters, only: parameters
-use simple_builder, only: builder
+use simple_core_module_api, only: dp, dtiny, fname2ext, get_fbody, hpsort, logfhandle, mrc_ext, oris, &
+    &simple_exception, string, tiny
+use simple_defs_flex, only: FLEX_MAX_BW_GROW, FLEX_ACCUM_BYTE_BUDGET
+use simple_image,     only: image
+use simple_oris,      only: oris
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: chi2_median, punit, two_gauss_unimodal
+public :: chi2_median, two_gauss_unimodal
 public :: kernel_weights_at_bandwidth, project_onto_target_polyline, dilation_template
 public :: flex_pca_write_state
-public :: COV_MAX_BW_GROW, COV_SIGNAL_FACTOR, COV_ATHR_BUDGET
 public :: corr_dp, cov_signal_rank, cov_stage_subsample, cov_accum_bytes, cov_dim_budget
 
-!> safety cap on kernel bandwidth growth when a state's support falls below min_neff
-integer, parameter :: COV_MAX_BW_GROW = 4
 real(dp), parameter :: COV_SIGNAL_FACTOR = 4.0d0
-! Byte budget behind the d_tilde memory cap (cov_dim_budget); no current solve allocates the modelled array.
-real(dp), parameter :: COV_ATHR_BUDGET   = 8.0d9
-
 
 contains
-
 
     !> Median of chi-squared with k dof, Wilson-Hilferty: k*(1 - 2/(9k))^3. Good to 3 % at k=1, which is
     !! far inside the tolerance of a bandwidth FLOOR and needs no gamma inverse.
@@ -32,15 +26,6 @@ contains
         kk = real(max(k,1),dp)
         chi2_median = kk * (1.d0 - 2.d0/(9.d0*kk))**3
     end function chi2_median
-
-    !> deterministic centred unit-variance pseudo-random draw, so the tests do not depend on an RNG
-    real(dp) function punit( n ) result( u )
-        integer, intent(in) :: n
-        real(dp) :: t
-        t = sin(real(n,dp)*12.9898d0)*43758.5453d0
-        u = t - floor(t)                               ! uniform(0,1)
-        u = (2.d0*u - 1.d0)*sqrt(3.d0)                 ! centred, unit variance
-    end function punit
 
     !> Unimodality of the 1-D two-component equal-variance mixture p1*N(0,1) + p2*N(d,1).
     !! With a tied covariance the density along the line between two component means IS this
@@ -81,7 +66,7 @@ contains
         integer  :: i, grow, nsupp
         h = h_in
         nsupp = 0
-        do grow = 0, COV_MAX_BW_GROW
+        do grow = 0, FLEX_MAX_BW_GROW
             sumw = 0.d0; sumw2 = 0.d0; nsupp = 0
             !$omp parallel do default(shared) private(i,u2) schedule(static) &
             !$omp& reduction(+:sumw,sumw2,nsupp)
@@ -94,7 +79,7 @@ contains
             end do
             !$omp end parallel do
             if( nsupp >= min(min_neff, nptcls) ) exit
-            if( grow >= COV_MAX_BW_GROW      ) exit
+            if( grow >= FLEX_MAX_BW_GROW      ) exit
             h = 1.3d0*h
         end do
         if( maxval(w) > TINY ) w = w / maxval(w)
@@ -174,20 +159,20 @@ contains
         deallocate(d)
     end subroutine dilation_template
 
-    !> delivered state map name from params%outvol: state 1 keeps the name, others get _NNN
-    subroutine flex_pca_write_state( params, img, state, vol_fname )
-        class(parameters), intent(in)    :: params
-        class(image),      intent(inout) :: img
-        integer,           intent(in)    :: state
-        class(string),     intent(inout) :: vol_fname
+    !> delivered state map name from outvol: state 1 keeps the name, others get _NNN
+    subroutine flex_pca_write_state( outvol, img, state, vol_fname )
+        type(string),  intent(in)    :: outvol
+        class(image),  intent(inout) :: img
+        integer,       intent(in)    :: state
+        class(string), intent(inout) :: vol_fname
         type(string) :: prefix, ext
         character(len=:), allocatable :: stem
         character(len=3) :: tag
         if( state==1 )then
-            vol_fname = params%outvol
+            vol_fname = outvol
         else
-            ext=fname2ext(params%outvol)
-            prefix=get_fbody(params%outvol,ext)
+            ext=fname2ext(outvol)
+            prefix=get_fbody(outvol,ext)
             stem=prefix%to_char()
             if( len_trim(stem)>4 )then
                 if( stem(len_trim(stem)-3:len_trim(stem))=='_001' ) stem=stem(:len_trim(stem)-4)
@@ -250,12 +235,12 @@ contains
     ! and the even/odd FSC that regularises every M-step is then computed against nothing; stride
     ! WITHIN each halfset instead. `maxtot` is a total across processes, so only a WORKER passes
     ! nparts -- the master holds every particle and dividing there inflates the stride by nparts.
-    subroutine cov_stage_subsample( build, pinds, nptcls, nparts, maxtot, label, spinds, nsel )
-        type(builder),        intent(inout) :: build
-        integer,              intent(in)    :: pinds(:), nptcls, nparts, maxtot
-        character(len=*),     intent(in)    :: label
-        integer, allocatable, intent(out)   :: spinds(:)
-        integer,              intent(out)   :: nsel
+    subroutine cov_stage_subsample( proj_field, pinds, nptcls, nparts, maxtot, label, spinds, nsel )
+        class(oris),          intent(in)  :: proj_field
+        integer,              intent(in)  :: pinds(:), nptcls, nparts, maxtot
+        character(len=*),     intent(in)  :: label
+        integer, allocatable, intent(out) :: spinds(:)
+        integer,              intent(out) :: nsel
         integer :: nmax_tot, nmax_part, ihalf, i, nkept, n_half, ntgt
         nmax_tot = maxtot
         ! cap off (the default): hand back every particle, in project order
@@ -271,14 +256,14 @@ contains
         do ihalf = 0, 1
             n_half = 0
             do i = 1, nptcls
-                if( build%spproj_field%get_eo(pinds(i)) == ihalf ) n_half = n_half + 1
+                if( proj_field%get_eo(pinds(i)) == ihalf ) n_half = n_half + 1
             end do
             if( n_half < 1 ) cycle
             ! split the per-part budget evenly between halfsets, never starving one
             ntgt  = min(n_half, max(1, (nmax_part + 1 - ihalf)/2))
             nkept = 0
             do i = 1, nptcls
-                if( build%spproj_field%get_eo(pinds(i)) /= ihalf ) cycle
+                if( proj_field%get_eo(pinds(i)) /= ihalf ) cycle
                 ! real(dp) rather than integer products: nkept*ntgt overflows int32 at these sizes
                 if( int(real(nkept+1,dp)*real(ntgt,dp)/real(n_half,dp)) > &
                    &int(real(nkept,  dp)*real(ntgt,dp)/real(n_half,dp)) )then
@@ -305,10 +290,10 @@ contains
         nbytes = 8.d0*n*n
     end function cov_accum_bytes
 
-    !>  Largest d with cov_accum_bytes(d) <= COV_ATHR_BUDGET.
+    !> Largest d with cov_accum_bytes(d) <= FLEX_ACCUM_BYTE_BUDGET.
     pure integer function cov_dim_budget() result( d )
         ! d(d+1)/2 = sqrt(BUDGET/8)  =>  d = (-1 + sqrt(1 + 8*sqrt(BUDGET/8)))/2
-        d = max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*sqrt(COV_ATHR_BUDGET/8.d0)))/2.d0))
+        d = max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*sqrt(FLEX_ACCUM_BYTE_BUDGET/8.d0)))/2.d0))
     end function cov_dim_budget
 
 end module simple_flex_pca_util

@@ -79,6 +79,7 @@ use simple_cartesian_fourier_tester,         only: run_all_cartesian_fourier_tes
 use simple_cartft_calc_tester,               only: run_all_cartft_calc_tests
 use simple_cartft_pose_opt_tester,           only: run_all_cartft_pose_opt_tests
 use simple_flex_pca_tester,                  only: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
+use simple_flex_pca_application_tester,      only: run_all_flex_pca_application_tests
 use simple_flex_pcg_tester,                  only: run_all_flex_pcg_tests, run_all_flex_pcg_lib_tests, &
     &run_all_flex_pcg_sweep_tests
 use simple_ipc_tcp_socket_tester,            only: run_all_ipc_tcp_socket_tests
@@ -498,11 +499,12 @@ contains
         call add_suite(s, n, 'flex PCG operator', run_all_flex_pcg_tests)
     end subroutine suites_heterogeneity
 
-    !> nightly: deconvolution of 20000 particles at realistic noise, the PCG M-step operator at
-    !! box 64 against the exact Gram, and the twelve-setting PCG solve sweep at box 32
+    !> nightly: application-level two-state phantom, deconvolution of 20000 particles at realistic
+    !! noise, the PCG M-step operator at box 64, and the twelve-setting PCG solve sweep at box 32
     subroutine suites_lib_heterogeneity( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
+        call add_suite(s, n, 'flex PCA two-state phantom', run_all_flex_pca_application_tests)
         call add_suite(s, n, 'flex PCA deconvolution 20k', run_all_flex_pca_lib_tests)
         call add_suite(s, n, 'flex PCG operator 64',       run_all_flex_pcg_lib_tests)
         call add_suite(s, n, 'flex PCG solve sweep',       run_all_flex_pcg_sweep_tests)

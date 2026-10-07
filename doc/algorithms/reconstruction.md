@@ -96,9 +96,11 @@ Two solves are made from one accumulation: a base solve producing
 unfiltered halves, whose FSC remains the resolution authority, and an ML
 replay that adds the FSC-derived `1/tau2` shell prior and warm-starts from the
 previous same-half solution. PCG maps receive no gridding correction and no
-second density division. The backend currently excludes trailing
-reconstruction and conical regularization; those requests are rejected rather
-than silently rerouted.
+second density division. Trailing reconstruction runs on the distributed
+path, which keeps its own chain of raw `(B, D)` accumulators and blends it
+with the population rule of [sampling](sampling_and_fractional_updates.md)
+before any prior is applied; the shared-memory path rejects fractional and
+trailing requests rather than silently rerouting them.
 
 ## Weighted and sparse variants
 

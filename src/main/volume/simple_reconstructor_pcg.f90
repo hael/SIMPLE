@@ -13,6 +13,8 @@ use simple_ctf,               only: ctf
 use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d, &
     &extract_native_fourier_plane, gather_packed_window
 use simple_gridding,          only: kb_stencil_envelope_1d, kb_stencil_centered_crop_inv_envelope_1d
+use simple_pcg_solver,        only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve, &
+    &PCG_STOP_INDEFINITE, PCG_XTOL, PCG_RESID_REPLACE, PCG_RHO_FLOOR_FRAC
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
@@ -32,44 +34,11 @@ real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< window floor of the x/window 
 logical, parameter :: PCG_HARD_SOLVE_SUPPORT = .true. !< solve on the hard domain window > 0 and window the output; .false. = soft P H P, see install_support
 character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW01'
 
-!> stop_reason when dot(p,Hp) is non-positive or non-finite: the iterate is
-!! returned as it stood before that step and the caller decides (restart or fail)
-character(len=*), parameter, public :: PCG_STOP_INDEFINITE = 'indefinite'
 real,             parameter, public :: PCG_LAMBDA = 1.0e-3 !< the Tikhonov coefficient of production reconstructions
+public :: PCG_STOP_INDEFINITE, PCG_XTOL, PCG_RESID_REPLACE, PCG_RHO_FLOOR_FRAC
 !> a nonzero start whose initial relative residual exceeds this is discarded
 !! for a zero start (which has exactly 1.0) before iterating
 real,             parameter         :: PCG_START_MAX_REL_RESID = 1.0
-
-type :: pcg_solver_outcome
-    character(len=24) :: stop_reason          = 'not_started'
-    integer           :: iteration_count      = 0
-    integer           :: requested_maxits     = 0
-    real              :: initial_rel_residual = 0.0
-    real              :: final_rel_residual   = 0.0
-    real              :: final_rel_residual_m = 0.0         !< final relative residual in the preconditioned norm (-1: none)
-    real              :: final_rel_update     = 0.0
-    real(dp)          :: failure_curvature    = 0.0_dp      !< curvature of this attempt's indefinite stop
-    integer           :: failure_iteration    = 0           !< iteration of this attempt's indefinite stop
-    real(dp)          :: restart_trigger_curvature = 0.0_dp !< warm-attempt curvature that caused a cold restart
-    integer           :: restart_trigger_iteration = 0      !< warm-attempt iteration that caused a cold restart
-    logical           :: cold_restart_used    = .false.     !< outcome is from the one permitted cold retry
-    logical           :: start_rejected       = .false.     !< the nonzero start was worse than zero and was discarded before iterating
-    real              :: rejected_start_initial = 0.0       !< initial relative residual of the discarded start
-    logical           :: converged            = .false.
-    ! the regularized solve starts from the closed-form Wiener shrink of the
-    ! base solution; its residuals against the coupled system and
-    ! the agreement of the solved map with it are kept for the sidecar
-    real              :: closed_form_rel_residual   = -1.0 !< L2 relative residual of the closed-form start (-1: no closed form)
-    real              :: closed_form_rel_residual_m = -1.0 !< preconditioned relative residual of the closed-form start
-    real              :: closed_form_fsc05_res      = 0.0  !< FSC=0.5 crossing (A) between the closed form and the solved map (0: not measured)
-    real              :: closed_form_fsc0143_res    = 0.0  !< FSC=0.143 crossing (A) between them
-    real              :: closed_form_min_fsc_inband = 0.0  !< minimum FSC between them over the pair's FSC>0.143 band
-    integer           :: closed_form_band_shell     = 0    !< last shell of that band
-    real, allocatable  :: rel_residual_history(:)
-    real, allocatable  :: rel_update_history(:)
-    real, allocatable  :: preconditioned_residual_history(:)
-    real, allocatable  :: iteration_seconds(:)
-end type pcg_solver_outcome
 
 type :: reconstructor_pcg
     private
@@ -260,6 +229,16 @@ type :: reconstructor_pcg
     procedure, private :: apply_fourier_diagonal
     procedure, private :: fold_solvent_ridge_into_precond
 end type reconstructor_pcg
+
+!> Rank-1 view of a reconstruction operator for the shared PCG engine.
+type, extends(pcg_operator) :: reconstructor_pcg_adapter
+    class(reconstructor_pcg), pointer :: client => null()
+  contains
+    procedure :: size    => reconstruction_vector_size
+    procedure :: apply   => reconstruction_vector_apply
+    procedure :: precond => reconstruction_vector_precond
+    procedure :: dot     => reconstruction_vector_dot
+end type reconstructor_pcg_adapter
 
 contains
 
@@ -1786,7 +1765,7 @@ contains
     !> sampling-density preconditioner M(k) = rho(k) + floor(shell), rho =
     !! sum_i G_i^dagger |T_i|^2 (the gridding density); cuts the iteration count that
     !! heterogeneous CTFs would otherwise inflate. The floor is a fraction of the
-    !! shell-mean rho (RHO_FLOOR_FRAC), never an absolute constant: rho spans many
+    !! shell-mean rho (PCG_RHO_FLOOR_FRAC), never an absolute constant: rho spans many
     !! orders of magnitude and is zero between rotated planes, so 1/(rho+lambda)
     !! would amplify the least-constrained modes by orders of magnitude and fill the
     !! map with noise. Scale-invariant (rho lacks the padsc factors of apply_normal)
@@ -2014,7 +1993,6 @@ contains
                                                             &self%lims3(2,1):self%lims3(2,2),&
                                                             &self%lims3(3,1):self%lims3(3,2))
         logical,                  intent(in)    :: l_precond, l_kernel
-        real, parameter :: RHO_FLOOR_FRAC = 1.0e-2
         real(dp), allocatable :: shsum(:), shsum_thr(:,:)
         integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
         real,     allocatable :: shfloor(:)
@@ -2079,7 +2057,7 @@ contains
             allocate(shfloor(0:rho_lim), source=0.0)
             do sh = 0, rho_lim
                 if( shcnt(sh) > 0 )then
-                    shfloor(sh) = RHO_FLOOR_FRAC * real(shsum(sh) / real(shcnt(sh),dp))
+                    shfloor(sh) = PCG_RHO_FLOOR_FRAC * real(shsum(sh) / real(shcnt(sh),dp))
                 endif
             end do
             deallocate(shsum, shcnt)
@@ -2763,148 +2741,76 @@ contains
     !> the solver proper. Reads the RHS from self%b_rhs: passing a component of
     !! intent(inout) self as a separate dummy is an aliasing hazard, copying it costs 67 MB at box 256
     subroutine solve_core( self, x, maxits, rtol, rel_res_hist, niters, outcome, start_max_rel_resid )
-        class(reconstructor_pcg),           intent(inout) :: self
-        real,                               intent(inout) :: x(self%box,self%box,self%box)
+        class(reconstructor_pcg), target,   intent(inout) :: self
+        real, target,                       intent(inout) :: x(self%box,self%box,self%box)
         integer,                  optional, intent(in)    :: maxits
         real,                     optional, intent(in)    :: rtol
         real, allocatable,        optional, intent(out)   :: rel_res_hist(:)
         integer,                  optional, intent(out)   :: niters
         type(pcg_solver_outcome), optional, intent(out)   :: outcome
         real,                     optional, intent(in)    :: start_max_rel_resid
-        ! the reported and tested residual is the true ||r||_2/||b||_2 (the
-        ! preconditioned M-norm is not monotone in PCG and wanders with a singular M;
-        ! kept in the outcome as a diagnostic of how well M models H). The recurrence
-        ! residual is audited against b - Hx every RESID_REPLACE iterations
-        integer, parameter :: RESID_REPLACE = 25
-        ! diminishing-returns stop on the relative update dx/x, which is what ends a
-        ! real solve (|r|/|b| plateaus above rtol on noisy data); rtol <= 0 disables
-        ! both early exits (exactly maxits iterations, needed for solver comparisons)
-        real, parameter :: PCG_XTOL = 1.5e-2
-        real, allocatable :: r(:,:,:), p(:,:,:), hp(:,:,:), z(:,:,:), hist(:)
-        real, allocatable :: update_hist(:), mnorm_hist(:), iteration_times(:)
-        real(dp)                 :: rho, rho_new, rho0, alpha, beta, pHp
-        real(dp)                 :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx
-        integer                  :: mmaxits, iter, n_done
-        real                     :: rrtol
-        logical                  :: stop_rtol, stop_xtol
+        real, pointer :: x_flat(:), b_flat(:)
+        type(reconstructor_pcg_adapter) :: op
+        type(pcg_solver_options) :: options
         type(pcg_solver_outcome) :: result
-        integer(timer_int_kind)  :: t_it
-        mmaxits = 50
-        if( present(maxits) ) mmaxits = maxits
-        if( mmaxits < 1 ) THROW_HARD('maxits must be at least 1; solve')
-        rrtol = 1.0e-4
-        if( present(rtol) ) rrtol = rtol
-        if( .not. ieee_is_finite(rrtol) ) THROW_HARD('rtol must be finite; solve')
-        result%requested_maxits = mmaxits
-        if( rrtol <= 0.0 ) result%stop_reason = 'fixed_iterations'
-        if( rrtol > 0.0 )  result%stop_reason = 'maxits'
-        allocate(hist(mmaxits), update_hist(mmaxits), iteration_times(mmaxits))
-        allocate(mnorm_hist(mmaxits), source=-1.0)
-        ! profile the iterations only; forming the RHS is a one-off setup cost
+        options%maxits = 50
+        if( present(maxits) ) options%maxits = maxits
+        options%rtol = 1.0e-4
+        if( present(rtol) ) options%rtol = rtol
+        options%xtol = PCG_XTOL
+        options%residual_replace = PCG_RESID_REPLACE
+        options%track_preconditioned_residual = .true.
+        options%record_history = .true.
+        options%tag = 'RECONSTRUCTOR PCG'
+        if( present(start_max_rel_resid) ) options%start_max_rel_residual = start_max_rel_resid
+        op%client => self
+        x_flat(1:self%box**3) => x
+        b_flat(1:self%box**3) => self%b_rhs
         call self%reset_profile
-        bnorm = sqrt(self%dot_real_volume(self%b_rhs,self%b_rhs))
-        if( bnorm <= 0.0_dp ) THROW_HARD('zero right-hand side; nothing to reconstruct; solve')
-        if( all(x == 0.0) )then
-            ! zero initialization: skip the operator application known to return zero
-            allocate(hp(self%box,self%box,self%box), source=0.0)
-        else
-            hp = self%apply_normal(x)
-        endif
-        r  = self%b_rhs - hp
-        rnorm = sqrt(self%dot_real_volume(r,r))
-        result%initial_rel_residual = real(rnorm / bnorm)
-        if( present(start_max_rel_resid) )then
-            if( result%initial_rel_residual > start_max_rel_resid .and. any(x /= 0.0) )then
-                ! the start is worse than nothing: discard it before the first
-                ! iteration; the zero start's residual is b, no operator applied
-                result%start_rejected         = .true.
-                result%rejected_start_initial = result%initial_rel_residual
-                x     = 0.0
-                r     = self%b_rhs
-                rnorm = bnorm
-                result%initial_rel_residual = 1.0
-            endif
-        endif
-        z  = self%apply_precond(r)
-        p  = z
-        rho  = self%dot_real_volume(r,z)
-        rho0 = rho
-        if( rho0 <= 0.0_dp ) THROW_HARD('non-positive initial dot(r,z); preconditioner is not positive definite; solve')
-        n_done = 0
-        dxx = 0.0_dp
-        do iter = 1, mmaxits
-            t_it = pcg_tic()
-            hp  = self%apply_normal(p)
-            pHp = self%dot_real_volume(p,hp)
-            if( .not. ieee_is_finite(pHp) .or. pHp <= 0.0_dp )then
-                ! lost positive-definiteness: hand the decision to the caller with the previous iterate
-                if( .not. present(outcome) )then
-                    THROW_HARD('non-positive/non-finite dot(p,Hp); PCG lost positive-definiteness; solve')
-                endif
-                result%stop_reason       = PCG_STOP_INDEFINITE
-                result%failure_curvature = real(pHp)
-                result%failure_iteration = iter
-                result%converged         = .false.
-                exit
-            endif
-            alpha = rho / pHp
-            x  = x + real(alpha) * p
-            r  = r - real(alpha) * hp
-            if( mod(iter, RESID_REPLACE) == 0 ) r = self%b_rhs - self%apply_normal(x)
-            n_done  = iter
-            ! headline: true relative residual; dx/x says how much the map still moves
-            rnorm      = sqrt(self%dot_real_volume(r,r))
-            xnorm      = sqrt(self%dot_real_volume(x,x))
-            dxnorm     = abs(alpha) * sqrt(self%dot_real_volume(p,p))
-            dxx        = dxnorm / max(xnorm, epsilon(1.0_dp))
-            hist(iter) = real(rnorm / bnorm)
-            update_hist(iter) = real(dxx)
-            stop_rtol  = rrtol > 0.0 .and. rnorm / bnorm <= real(rrtol,dp)
-            stop_xtol  = rrtol > 0.0 .and. dxx <= real(PCG_XTOL,dp)
-            if( stop_rtol .or. stop_xtol .or. iter == mmaxits )then
-                ! the final preconditioned residual is not on the recurrence
-                ! path (the last z is never formed): one extra preconditioner
-                ! application so the summary can report the norm CG drives
-                z       = self%apply_precond(r)
-                rho_new = self%dot_real_volume(r,z)
-                mnorm   = sqrt(abs(rho_new)/rho0)
-                mnorm_hist(iter) = real(mnorm)
-                iteration_times(iter) = real(pcg_toc(t_it))
-                if( stop_rtol )then
-                    result%stop_reason = 'rtol'
-                    result%converged   = .true.
-                else if( stop_xtol )then
-                    result%stop_reason = 'xtol'
-                    result%converged   = .true.
-                endif
-                exit
-            endif
-            z       = self%apply_precond(r)
-            rho_new = self%dot_real_volume(r,z)
-            mnorm   = sqrt(abs(rho_new)/rho0)
-            mnorm_hist(iter) = real(mnorm)
-            iteration_times(iter) = real(pcg_toc(t_it))
-            beta = rho_new / rho
-            p    = z + real(beta) * p
-            rho  = rho_new
-        end do
-        ! x = window*u: u lives on the solve domain (P H P and the projected
-        ! preconditioner never leave it); the window makes the output the shipped map
+        call pcg_solve(op, b_flat, x_flat, options, result)
+        if( trim(result%stop_reason) == PCG_STOP_INDEFINITE .and. .not. present(outcome) ) &
+            &THROW_HARD('non-positive/non-finite dot(p,Hp); PCG lost positive-definiteness; solve')
         call self%window_mul(x)
-        result%iteration_count  = n_done
-        result%final_rel_update = real(dxx)
-        result%final_rel_residual_m = -1.0
-        if( n_done > 0 ) result%final_rel_residual = hist(n_done)
-        if( n_done > 0 ) result%final_rel_residual_m = mnorm_hist(n_done)
-        allocate(result%rel_residual_history(n_done), source=hist(1:n_done))
-        allocate(result%rel_update_history(n_done), source=update_hist(1:n_done))
-        allocate(result%preconditioned_residual_history(n_done), source=mnorm_hist(1:n_done))
-        allocate(result%iteration_seconds(n_done), source=iteration_times(1:n_done))
-        if( present(niters) ) niters = n_done
-        if( present(rel_res_hist) ) allocate(rel_res_hist(n_done), source=hist(1:n_done))
+        if( present(niters) ) niters = result%iteration_count
+        if( present(rel_res_hist) ) allocate(rel_res_hist(result%iteration_count), &
+            &source=result%rel_residual_history)
         if( present(outcome) ) outcome = result
         self%l_profile = .false.
     end subroutine solve_core
+
+    integer function reconstruction_vector_size( self ) result(n)
+        class(reconstructor_pcg_adapter), intent(in) :: self
+        n = self%client%box**3
+    end function reconstruction_vector_size
+
+    subroutine reconstruction_vector_apply( self, x, y )
+        class(reconstructor_pcg_adapter), intent(inout) :: self
+        real, contiguous, target,         intent(in)    :: x(:)
+        real, contiguous, target,         intent(out)   :: y(:)
+        real, pointer :: x3(:,:,:), y3(:,:,:)
+        x3(1:self%client%box,1:self%client%box,1:self%client%box) => x
+        y3(1:self%client%box,1:self%client%box,1:self%client%box) => y
+        y3 = self%client%apply_normal(x3)
+    end subroutine reconstruction_vector_apply
+
+    subroutine reconstruction_vector_precond( self, r, z )
+        class(reconstructor_pcg_adapter), intent(inout) :: self
+        real, contiguous, target,         intent(in)    :: r(:)
+        real, contiguous, target,         intent(out)   :: z(:)
+        real, pointer :: r3(:,:,:), z3(:,:,:)
+        r3(1:self%client%box,1:self%client%box,1:self%client%box) => r
+        z3(1:self%client%box,1:self%client%box,1:self%client%box) => z
+        z3 = self%client%apply_precond(r3)
+    end subroutine reconstruction_vector_precond
+
+    real(dp) function reconstruction_vector_dot( self, a, b ) result(value)
+        class(reconstructor_pcg_adapter), intent(in) :: self
+        real, contiguous, target,         intent(in) :: a(:), b(:)
+        real, pointer :: a3(:,:,:), b3(:,:,:)
+        a3(1:self%client%box,1:self%client%box,1:self%client%box) => a
+        b3(1:self%client%box,1:self%client%box,1:self%client%box) => b
+        value = self%client%dot_real_volume(a3,b3)
+    end function reconstruction_vector_dot
 
     !> Closed-form regularized map: the base solution's padded Fourier coefficients scaled voxelwise by
     !! (rho+floor)/(rho+floor+P_tau) = 1 - P_tau*precond, the diagonal model's optimum. The residuals against the

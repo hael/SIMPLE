@@ -1,8 +1,8 @@
-!@descr: flex_pca: the value records every service takes whole -- the particle selection, the model handles, the latent product and the state set
+!@descr: flex_pca value records shared across fitting, state inference and delivery
 module simple_flex_pca_records
-use simple_core_module_api
-use simple_image,         only: image
-use simple_reconstructor, only: reconstructor
+use simple_core_module_api, only: dp, simple_exception
+use simple_image,           only: image
+use simple_reconstructor,   only: reconstructor
 implicit none
 
 public :: flex_selection, flex_fit_model, flex_latent, flex_state_set, flex_latent_readout

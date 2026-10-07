@@ -60,6 +60,11 @@ type, extends(commander_base) :: commander_test_cont_refine3D_1jxy
     procedure :: execute      => exec_test_cont_refine3D_1jxy
 end type commander_test_cont_refine3D_1jxy
 
+type, extends(commander_base) :: commander_test_flex_pca_blobs
+  contains
+    procedure :: execute      => exec_test_flex_pca_blobs
+end type commander_test_flex_pca_blobs
+
 interface
 
     module subroutine exec_test_mini_stream_quantitative( self, cline )
@@ -106,6 +111,11 @@ interface
         class(commander_test_cont_refine3D_1jxy), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
     end subroutine exec_test_cont_refine3D_1jxy
+
+    module subroutine exec_test_flex_pca_blobs( self, cline )
+        class(commander_test_flex_pca_blobs), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_flex_pca_blobs
 
 end interface
 

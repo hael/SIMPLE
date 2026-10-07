@@ -4,21 +4,22 @@
 !! deconvolution (Bovy, Hogg & Roweis 2011). K is chosen by particle-half held-out log-likelihood on a strided
 !! subsample of ~XD_CV_MAX particles; the final fit uses all. z/precision become posterior means/precisions.
 module simple_flex_pca_deconv
-use simple_core_module_api
+!$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
+use simple_core_module_api, only: dp, dpi, dtiny, hpsort, jacobi, logfhandle, simple_exception, tic, &
+    &timer_int_kind, toc
 use simple_srch_sort_loc, only: hpsort
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: calibrate_noise_scale, deconvolve_latent
-public :: noise_and_projection, signal_subspace
 
-integer,  parameter :: XD_MAXIT   = 150
-real(dp), parameter :: XD_TOL     = 1.d-6      !< relative log-likelihood change
-real(dp), parameter :: XD_CV_MAX  = 20000       !< particles in the K-selection ladder (both halves together)
-real(dp), parameter :: XD_RIDGE   = 1.d-6      !< Sigma_k ridge, relative to tr(C_obs)/d
-real(dp), parameter :: XD_PI_MIN  = 1.d-4
-integer,  parameter :: XD_KMAX    = 16
+integer,  parameter :: XD_MAXIT  = 150
+real(dp), parameter :: XD_TOL    = 1.d-6      !< relative log-likelihood change
+real(dp), parameter :: XD_CV_MAX = 20000      !< particles in the K-selection ladder (both halves together)
+real(dp), parameter :: XD_RIDGE  = 1.d-6      !< Sigma_k ridge, relative to tr(C_obs)/d
+real(dp), parameter :: XD_PI_MIN = 1.d-4
+integer,  parameter :: XD_KMAX   = 16
 
 contains
 
@@ -79,16 +80,16 @@ contains
     !> Fit the mixture prior through the calibrated noise, choose K by particle-half cross-validation,
     !! and replace z by the posterior means and precision by the posterior precisions.
     subroutine deconvolve_latent( z, precision, prior, nptcls, ncomp, a, kmax_in, k_out, prior_fname, labels_fname, pinds, labels_out )
-        integer,  intent(in)    :: nptcls, ncomp
-        real(dp), intent(inout) :: z(nptcls,ncomp)
-        real(dp), intent(inout) :: precision(ncomp,ncomp,nptcls)
-        real(dp), intent(in)    :: prior(ncomp), a
-        integer,  intent(in)    :: kmax_in
-        integer,  intent(out)   :: k_out
-        character(len=*), optional, intent(in) :: prior_fname
-        character(len=*), optional, intent(in) :: labels_fname   !< per-particle argmax component + its responsibility
-        integer,          optional, intent(in) :: pinds(:)        !< project rows for that file
-        integer, allocatable, optional, intent(out) :: labels_out(:)  !< argmax component per particle
+        integer,                    intent(in)    :: nptcls, ncomp
+        real(dp),                   intent(inout) :: z(nptcls,ncomp)
+        real(dp),                   intent(inout) :: precision(ncomp,ncomp,nptcls)
+        real(dp),                   intent(in)    :: prior(ncomp), a
+        integer,                    intent(in)    :: kmax_in
+        integer,                    intent(out)   :: k_out
+        character(len=*), optional, intent(in)    :: prior_fname
+        character(len=*), optional, intent(in)    :: labels_fname   !< per-particle argmax component + its responsibility
+        integer,          optional, intent(in)    :: pinds(:)        !< project rows for that file
+        integer, allocatable, optional, intent(out)   :: labels_out(:)  !< argmax component per particle
         real(dp), allocatable :: R(:,:,:), Nz(:,:,:), mu(:,:), Sig(:,:,:), pik(:), xhat(:,:), xcov(:,:,:)
         real(dp), allocatable :: mu_h(:,:), Sig_h(:,:,:), pik_h(:), score(:), resp(:,:)
         real(dp) :: ll, ll_h, cobs(ncomp,ncomp), zmean(ncomp), vpop(ncomp), vobs(ncomp), mbar(ncomp)
@@ -208,8 +209,8 @@ contains
 
         !> fit nk components on the particles flagged in sel, return the held-out log-likelihood of those in tst
         subroutine fit_half( nk, sel, tst, ll_held )
-            integer, intent(in)  :: nk
-            logical, intent(in)  :: sel(nptcls), tst(nptcls)
+            integer,  intent(in)  :: nk
+            logical,  intent(in)  :: sel(nptcls), tst(nptcls)
             real(dp), intent(out) :: ll_held
             real(dp), allocatable :: zs(:,:), Rs(:,:,:), Nsel(:,:,:), zt(:,:), Rt(:,:,:), Ntst(:,:,:)
             real(dp) :: llfit, cs(ncomp,ncomp), ms(ncomp)
@@ -274,10 +275,10 @@ contains
 
     !> fit nk components from the equal-mass quantile init (xd_init)
     subroutine xd_ladder( z, R, Nz, n, d, nk, cobs, zmean, mu, Sig, pik, ll )
-        integer,  intent(in)  :: n, d, nk
-        real(dp), intent(in)  :: z(n,d), R(d,d,n), Nz(d,d,n), cobs(d,d), zmean(d)
+        integer,               intent(in)  :: n, d, nk
+        real(dp),              intent(in)  :: z(n,d), R(d,d,n), Nz(d,d,n), cobs(d,d), zmean(d)
         real(dp), allocatable, intent(out) :: mu(:,:), Sig(:,:,:), pik(:)
-        real(dp), intent(out) :: ll
+        real(dp),              intent(out) :: ll
         allocate(mu(d,nk), Sig(d,d,nk), pik(nk))
         call xd_init(z, n, d, nk, cobs, Nz, mu, Sig, pik)
         call xd_fit(z, R, Nz, n, d, nk, mu, Sig, pik, ll)
@@ -415,9 +416,9 @@ contains
 
     !> posterior mean and covariance of every particle under the fitted prior
     subroutine xd_posterior( z, R, Nz, n, d, nk, mu, Sig, pik, xhat, xcov, resp )
-        integer,  intent(in)  :: n, d, nk
-        real(dp), intent(in)  :: z(n,d), R(d,d,n), Nz(d,d,n), mu(d,nk), Sig(d,d,nk), pik(nk)
-        real(dp), intent(out) :: xhat(n,d), xcov(d,d,n)
+        integer,            intent(in)  :: n, d, nk
+        real(dp),           intent(in)  :: z(n,d), R(d,d,n), Nz(d,d,n), mu(d,nk), Sig(d,d,nk), pik(nk)
+        real(dp),           intent(out) :: xhat(n,d), xcov(d,d,n)
         real(dp), optional, intent(out) :: resp(n,nk)
         real(dp) :: L(d,d), RS(d,d), y(d), b(d,nk), Bk(d,d,nk), logp(nk), lmax, lse, rk(nk), zi(d)
         integer  :: i, k
@@ -552,9 +553,9 @@ contains
 
     !> inverse of an SPD matrix by Cholesky; ok=.false. (and identity-scaled fallback) when not SPD
     subroutine spd_inverse( A, Ainv, d, ok )
-        integer,  intent(in)  :: d
-        real(dp), intent(in)  :: A(d,d)
-        real(dp), intent(out) :: Ainv(d,d)
+        integer,           intent(in)  :: d
+        real(dp),          intent(in)  :: A(d,d)
+        real(dp),          intent(out) :: Ainv(d,d)
         logical, optional, intent(out) :: ok
         real(dp) :: L(d,d), Linv(d,d), s
         logical  :: lok
@@ -583,58 +584,6 @@ contains
         Ainv = matmul(transpose(Linv), Linv)
         if( present(ok) ) ok = .true.
     end subroutine spd_inverse
-
-    !> Directions of the deconvolved population that carry signal: S_pop = sum_k pi_k (Sig_k + mu_k mu_k') - m m'
-    !! against the mean measurement noise Nbar; whiten by Nbar^-1/2, diagonalise, keep eigenvalues > thresh
-    !! (default 1: population variance above noise). W = U_kept' Nbar^-1/2, so W z has unit noise per axis.
-    subroutine signal_subspace( mu, Sig, pik, nk, Nz, nptcls, d, thresh, W, k )
-        use simple_linalg, only: jacobi, eigsrt
-        integer,  intent(in)  :: nk, nptcls, d
-        real(dp), intent(in)  :: mu(d,nk), Sig(d,d,nk), pik(nk), Nz(d,d,nptcls)
-        real(dp), optional, intent(in) :: thresh
-        real(dp), allocatable, intent(out) :: W(:,:)
-        integer,  intent(out) :: k
-        real(dp) :: S(d,d), Nbar(d,d), Nh(d,d), Mw(d,d), mvec(d), ev(d), evec(d,d), evn(d), evecn(d,d), thr, floor_ev
-        integer  :: i, q, kk, nrot
-        thr = 1.d0
-        if( present(thresh) ) thr = thresh
-        mvec = 0.d0
-        do kk = 1, nk
-            mvec = mvec + pik(kk)*mu(:,kk)
-        end do
-        S = 0.d0
-        do kk = 1, nk
-            S = S + pik(kk)*(Sig(:,:,kk) + outer(mu(:,kk), mu(:,kk), d))
-        end do
-        S = S - outer(mvec, mvec, d)
-        S = 0.5d0*(S + transpose(S))
-        Nbar = 0.d0
-        do i = 1, nptcls
-            Nbar = Nbar + Nz(:,:,i)
-        end do
-        Nbar = Nbar/real(nptcls,dp)
-        Nbar = 0.5d0*(Nbar + transpose(Nbar))
-        call jacobi(Nbar, d, d, evn, evecn, nrot)
-        floor_ev = 1.d-8*max(maxval(evn), DTINY)
-        Nh = 0.d0
-        do q = 1, d
-            Nh = Nh + outer(evecn(:,q), evecn(:,q), d)/sqrt(max(evn(q), floor_ev))
-        end do
-        Mw = matmul(Nh, matmul(S, Nh))
-        Mw = 0.5d0*(Mw + transpose(Mw))
-        call jacobi(Mw, d, d, ev, evec, nrot)
-        call eigsrt(ev, evec, d, d)
-        k = count(ev > thr)
-        k = max(1, k)
-        allocate(W(k,d))
-        do q = 1, k
-            W(q,:) = matmul(evec(:,q), Nh)
-        end do
-        write(logfhandle,'(A,I0,A,I0,A,F5.2,A)') '>>> FLEX_PCA SIGNAL SUBSPACE: ', k, ' of ', d, &
-            &' noise-whitened directions carry population variance above ', thr, ' x noise'
-        write(logfhandle,'(A,20(1X,F8.2))') '>>>   signal/noise per direction:', (ev(q), q=1,min(d,20))
-        call flush(logfhandle)
-    end subroutine signal_subspace
 
     !> clip a symmetric matrix to eigenvalues >= ridge (Jacobi)
     subroutine psd_clip( S, d, ridge )

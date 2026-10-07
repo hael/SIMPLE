@@ -4,9 +4,10 @@
 !! strategies extend it: the master implements rounds on its qsys context, shared memory and workers
 !! refuse them. Part naming lives in simple_flex_pca_artifacts.
 module simple_flex_pca_rounds
-use simple_core_module_api
-use simple_parameters,      only: parameters
-use simple_flex_pca_stages, only: flex_stage_request, FLEX_FIT_ALL
+use simple_core_module_api,    only: simple_exception, string
+use simple_parameters,         only: parameters
+use simple_flex_pca_stages,    only: flex_stage_request, FLEX_FIT_ALL
+use simple_flex_pca_artifacts, only: flex_pca_artifact_catalog
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -18,18 +19,23 @@ type, abstract :: flex_pca_rounds
     logical :: l_worker   = .false.
     integer :: nparts_run = 1
     integer :: fit_sel    = FLEX_FIT_ALL   !< the fit every scheduled round serves (two-fit harnesses)
-contains
+    type(flex_pca_artifact_catalog), private :: artifacts
+  contains
     procedure(plan_iface), deferred :: plan_partitions
     procedure(run_iface),  deferred :: run_stage
     procedure :: is_master   => rounds_is_master
     procedure :: is_worker   => rounds_is_worker
     procedure :: nparts      => rounds_nparts
     procedure :: distributed => rounds_distributed
+    procedure :: part_fname  => rounds_part_fname
+    procedure :: part_path   => rounds_part_path
+    procedure :: set_part_dir => rounds_set_part_dir
+    procedure :: kill_artifacts => rounds_kill_artifacts
 end type flex_pca_rounds
 
 !> Shared memory and workers: no partitions, no rounds. Workers set l_worker.
 type, extends(flex_pca_rounds) :: flex_pca_rounds_shmem
-contains
+  contains
     procedure :: plan_partitions => shmem_plan_partitions
     procedure :: run_stage       => shmem_run_stage
 end type flex_pca_rounds_shmem
@@ -74,6 +80,32 @@ contains
         class(flex_pca_rounds), intent(in) :: self
         rounds_distributed = self%l_master .and. self%nparts_run > 1
     end function rounds_distributed
+
+    function rounds_part_fname( self, prefix, part, numlen ) result( fname )
+        class(flex_pca_rounds), intent(in) :: self
+        character(len=*),       intent(in) :: prefix
+        integer,                intent(in) :: part, numlen
+        type(string) :: fname
+        fname = self%artifacts%part_fname(prefix, part, numlen)
+    end function rounds_part_fname
+
+    function rounds_part_path( self, name ) result( path )
+        class(flex_pca_rounds), intent(in) :: self
+        character(len=*),       intent(in) :: name
+        type(string) :: path
+        path = self%artifacts%part_path(name)
+    end function rounds_part_path
+
+    subroutine rounds_set_part_dir( self, dir )
+        class(flex_pca_rounds), intent(inout) :: self
+        character(len=*),       intent(in)    :: dir
+        call self%artifacts%new(dir)
+    end subroutine rounds_set_part_dir
+
+    subroutine rounds_kill_artifacts( self )
+        class(flex_pca_rounds), intent(inout) :: self
+        call self%artifacts%kill
+    end subroutine rounds_kill_artifacts
 
     subroutine shmem_plan_partitions( self, params, pinds )
         class(flex_pca_rounds_shmem), intent(inout) :: self
