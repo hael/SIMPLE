@@ -255,7 +255,9 @@ if(BUILD_TESTS)
   # arguments the stream gives them (Ruben's stream tests): optics assignment
   # (a minute: the stream watcher waits LONGTIME = 60 s), picking references,
   # pick and extract. Review verdict 2026-09-24 (plan, section 9.7, stream).
-  simple_add_test(lib_stream library 1800 1
+  # The hosted Linux runner exceeded the former 1800 s limit while the final
+  # movies-to-3D sub-suite was still making progress (owner decision 2026-10-07).
+  simple_add_test(lib_stream library 3600 1
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_stream)
 
   # ---- high-level gates (explicit CTest runs only) --------------------------
