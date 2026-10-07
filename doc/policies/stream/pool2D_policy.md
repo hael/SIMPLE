@@ -47,7 +47,7 @@ Each pass of p06 runs, in this order:
    `EXPORT_START_ITER` (25) or a later one, or iteration `FIRST_EXPORT_ITER` (10, the
    `MSKDIAM_SWITCH_ITER`) in a pool that has published nothing yet (`exports_after`), before
    anything new is imported or dispatched (the 3D ingestion policy). The iteration-10 publication
-   is 3D's first set and carries the sieve's mask diameter, which the pool took when it dispatched
+   is the first 3D takes and carries the sieve's mask diameter, which the pool took when it dispatched
    iteration 10; a restarted pool with publications on disk skips it and resumes at 25. The final
    run stops at `FINAL_ITER` (25), so a short session still publishes its last iteration (until 5
    October 2026 the publications started after iteration 25, and a session whose final set came

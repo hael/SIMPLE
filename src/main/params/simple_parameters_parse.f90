@@ -427,6 +427,7 @@ contains
         call reg%add_int('npix', self%npix)
         call reg%add_int('nptcls', self%nptcls)
         call reg%add_int('nptcls_base', self%nptcls_base)
+        call reg%add_int('nptcls3D_max', self%nptcls3D_max)
         call reg%add_int('nptcls_per_cls', self%nptcls_per_cls)
         call reg%add_int('nptcls_per_part', self%nptcls_per_part)
         call reg%add_int('nquanta', self%nquanta)

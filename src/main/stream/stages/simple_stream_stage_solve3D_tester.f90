@@ -4,9 +4,10 @@
 ! and carries qsys_name=local for the stage project's computing environment. The upstream is a pool
 ! 2D directory whose completed folder holds exports. The class-average selection and the 3D jobs
 ! (which need a queue) are left to the high-level stream tests; the import is tested on sets made
-! in memory, the class averages a publication brings on fixture stacks, and the volume messages
-! on a fixture project with a volume and an FSC; a 3D snapshot is written from a fixture result
-! project, on a request sent through the stage's update pipe.
+! in memory, the class averages a publication brings on fixture stacks, the first run's draw and
+! queue on fixture rows, and the volume messages on a fixture project with a volume and an FSC; a
+! 3D snapshot is written from a fixture result project, on a request sent through the stage's
+! update pipe.
 module simple_stream_stage_solve3D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
@@ -53,8 +54,8 @@ contains
         call test_watch_order_and_mskdiam()
         call test_merge_publications()
         call test_take_cavgs()
-        call test_first_set()
-        call test_first_set_fallback()
+        call test_first_publication()
+        call test_first_run_draw()
         call test_mskdiam_from_each_publication()
         call test_rows_problem()
         call test_rules()
@@ -246,7 +247,7 @@ contains
         call enter_fixture('a3_stage_take_cavgs', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
-        ! the stage's earlier class averages and FRCs (a solve2D's), and a state volume
+        ! the stage's earlier class averages and FRCs, and a state volume
         call write_stack(string('old_cavgs.mrcs'), NCLS_OLD)
         call simple_touch('old_frcs.bin')
         call stage%spproj%add_cavgs2os_out(string('old_cavgs.mrcs'), VOL_SMPD, 'cavg')
@@ -304,90 +305,138 @@ contains
 
     end subroutine test_take_cavgs
 
-    !> the first publication into a stage without rows is the first set: the particles it selects
-    !! are due for solve2D, and the pool model's selection is kept for a failed one; later
-    !! publications change the first set's 2D parameters but not its selection, also when they
-    !! lack its stack, and select every other row as before
-    subroutine test_first_set()
-        class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)                 :: cline
-        type(sp_project)              :: set
-        type(string)                  :: cwd_saved, root
-        integer                       :: nfail0, i
-        allocate(stage)
-        write(*,'(A)') 'test_first_set'
-        nfail0 = tests_failed
-        call enter_fixture('a3_stage_first_set', cwd_saved, root)
-        call set_test_cline(cline)
-        call make_test_stage(stage, cline)
-        ! publication 1: stacks A (3) and B (2), the first particle never updated (deselected);
-        ! the pool model would keep particles 2 and 4
-        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
-        call stage%merge_first_set(set, 1, [.false., .true., .false., .true., .false.])
-        call set%kill
-        call assert_true(stage%l_solve2D_due,           'the first set is due for solve2D')
-        call assert_int(4, count(stage%first_set),      'every particle the publication selects is in it')
-        call assert_false(stage%in_first_set(1),        'a particle never updated is not')
-        call assert_int(4, stage%nptcls_selected,       'the rows take the publication''s own selection')
-        call assert_int(2, count(stage%first_fallback), 'the pool model''s selection is kept for a failed solve2D')
-        ! as solve2D and its selection leave them: rows 2 and 4 selected, rows 3 and 5 rejected
-        do i = 3,5,2
-            call stage%spproj%os_ptcl2D%set_state(i, 0)
-            call stage%spproj%os_ptcl3D%set_state(i, 0)
-        enddo
-        stage%l_solve2D_due = .false.
-        ! publication 2 selects every particle, in class 2, with the new stack C (2)
-        call make_set(set, ['A', 'B', 'C'], [3, 2, 2], 5, icls=2)
-        call stage%merge_publication(set, 2)
-        call set%kill
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(3), 'a first-set row its selection rejected stays rejected')
-        call assert_int(0, stage%spproj%os_ptcl2D%get_state(5), 'in both segments')
-        call assert_int(2, stage%spproj%os_ptcl2D%get_class(3), 'and takes the publication''s 2D parameters')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(2), 'a first-set row it selected stays selected')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'a row outside the first set takes the publication''s selection')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(6), 'as do the new stack''s rows')
-        call assert_false(stage%in_first_set(6),                'which are not in the first set')
-        call assert_int(5, stage%nptcls_selected,               'the selected rows are counted')
-        ! publication 3 lacks stack B (rows 4 and 5)
-        call make_set(set, ['A', 'C'], [3, 2], 5, icls=2)
-        call stage%merge_publication(set, 3)
-        call set%kill
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(4), 'a first-set row keeps its selection when its stack is missing')
-        call assert_int(5, stage%nptcls_selected,               'so the count is unchanged')
-        call stage%kill
-        call cline%kill
-        call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_first_set
-
-    !> a failed solve2D: the first set's rows take the pool model's selection of the first
-    !! publication and are no longer the first set
-    subroutine test_first_set_fallback()
+    !> the first publication is merged as every later one: a later publication's selection applies
+    !! to its rows
+    subroutine test_first_publication()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(sp_project)              :: set
         type(string)                  :: cwd_saved, root
         integer                       :: nfail0
         allocate(stage)
-        write(*,'(A)') 'test_first_set_fallback'
+        write(*,'(A)') 'test_first_publication'
         nfail0 = tests_failed
-        call enter_fixture('a3_stage_first_set_fallback', cwd_saved, root)
+        call enter_fixture('a3_stage_first_publication', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
+        ! publication 1: stacks A (3) and B (2), the first particle deselected
         call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
-        call stage%merge_first_set(set, 1, [.false., .true., .false., .true., .false.])
+        call stage%merge_publication(set, 1)
         call set%kill
-        call stage%fallback_first_set()
-        call assert_int(2, stage%nptcls_selected,               'the pool model''s selection applies')
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(3), 'which deselects what it rejected')
-        call assert_int(1, stage%spproj%os_ptcl2D%get_state(4), 'and keeps what it selected')
-        call assert_false(allocated(stage%first_set),           'no row is the first set any more')
-        call assert_false(stage%l_solve2D_due,                  'no solve2D is due')
-        call assert_int(PHASE_IMPORTING, stage%phase,           'solve3D waits for its particles as before')
+        call assert_int(5, stage%spproj%os_ptcl3D%get_noris(), 'the first publication''s rows')
+        call assert_int(4, stage%nptcls_selected,              'as it selects them')
+        call assert_int(PHASE_IMPORTING, stage%phase,          'no job is due but solve3D''s')
+        ! publication 2 deselects the first two particles
+        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=2, icls=2)
+        call stage%merge_publication(set, 2)
+        call set%kill
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(2), 'a row of the first publication follows a later one')
+        call assert_int(0, stage%spproj%os_ptcl2D%get_state(2), 'in both segments')
+        call assert_int(2, stage%spproj%os_ptcl2D%get_class(3), 'with its 2D parameters')
+        call assert_int(3, stage%nptcls_selected,               'the selected rows are counted')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_first_set_fallback
+    end subroutine test_first_publication
 
+    !> the first solve3D takes at most nptcls3D_max of the selected particles: an equal share per
+    !! selected class, capped at a small class's population, best 2D scores first, trimmed to the
+    !! cap, without touching the rows' update counts; the others are queued, and once the run is
+    !! done they are selected again as the first addon run's cohort. A selection within the cap
+    !! queues nothing.
+    subroutine test_first_run_draw()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)      :: cline
+        type(string)       :: cwd_saved, root
+        integer            :: nfail0, i
+        integer, parameter :: N = 23 ! classes 1 (rows 1-10), 2 (11-12), 3 (13-22); row 23 deselected
+        allocate(stage)
+        write(*,'(A)') 'test_first_run_draw'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_first_run_draw', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call make_rows()
+        ! within the cap
+        stage%params%nptcls3D_max = 22
+        call stage%draw_first_run()
+        call assert_false(allocated(stage%queued), 'a selection within the cap queues nothing')
+        ! a cap of 12: 5, 2 and 5 particles of the three classes
+        stage%params%nptcls3D_max = 12
+        call stage%draw_first_run()
+        call assert_true(allocated(stage%queued), 'a selection over the cap queues the rest')
+        if( allocated(stage%queued) )then
+            call assert_int(10, count(stage%queued),        'the run takes exactly the cap')
+            call assert_false(any(stage%queued(11:12)),     'a class smaller than its share is taken whole')
+            call assert_int(5, count(stage%queued(1:10)),   'the others share the rest equally')
+            call assert_false(any(stage%queued(6:10)),      'best 2D scores first')
+            call assert_true(all(stage%queued(13:17)),      'the lowest ones are queued')
+            call assert_false(stage%queued(23),             'a deselected row is not queued')
+        endif
+        call assert_int(3, stage%spproj%os_ptcl2D%get_int(10, 'updatecnt'), 'the rows'' update counts stay')
+        call assert_int(0, stage%spproj%os_ptcl2D%get_int(10, 'sampled'),    'and they are not marked sampled')
+        ! the run's result has the queued rows deselected; once it is done they are the cohort
+        call stage%set_queued_states(0)
+        allocate(stage%frozen_active(N))
+        do i = 1,N
+            stage%frozen_active(i) = stage%spproj%os_ptcl3D%get_state(i) > 0
+        enddo
+        call stage%release_queue()
+        call assert_false(allocated(stage%queued),               'the queue is released')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1),  'its rows are selected again')
+        call assert_int(1, stage%spproj%os_ptcl2D%get_state(13), 'in both segments')
+        call assert_int(12, stage%count_frozen(),                'the run''s particles are frozen')
+        call assert_int(10, stage%count_cohort(),                'the queued ones are the first addon run''s cohort')
+        call assert_int(22, stage%nptcls_selected,               'and the selection is whole again')
+        ! a cap of 13 draws one particle over (6, 2 and 6): the lowest score of them goes
+        deallocate(stage%frozen_active)
+        stage%params%nptcls3D_max = 13
+        call stage%draw_first_run()
+        if( allocated(stage%queued) )then
+            call assert_int(9, count(stage%queued), 'an overshoot is trimmed to the cap')
+            call assert_true(stage%queued(17),      'by the lowest score drawn')
+            call assert_false(stage%queued(5),      'not by a higher one')
+        endif
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+
+    contains
+
+        ! class 1: scores 0.1 to 1.0 (row 10 best); class 2: 0.9; class 3: 0.05 to 0.5 (row 22
+        ! best); every row with update count 3; class 4 deselected and empty
+        subroutine make_rows()
+            integer :: iptcl, icls
+            real    :: corr
+            call stage%spproj%os_ptcl2D%new(N, is_ptcl=.true.)
+            call stage%spproj%os_ptcl3D%new(N, is_ptcl=.true.)
+            call stage%spproj%os_cls2D%new(4, is_ptcl=.false.)
+            do icls = 1,4
+                call stage%spproj%os_cls2D%set_state(icls, merge(1, 0, icls < 4))
+            enddo
+            do iptcl = 1,N
+                if( iptcl <= 10 )then
+                    icls = 1
+                    corr = 0.1 * real(iptcl)
+                else if( iptcl <= 12 )then
+                    icls = 2
+                    corr = 0.9
+                else if( iptcl <= 22 )then
+                    icls = 3
+                    corr = 0.05 * real(iptcl - 12)
+                else
+                    icls = 1
+                    corr = 0.95
+                endif
+                call stage%spproj%os_ptcl2D%set_class(iptcl, icls)
+                call stage%spproj%os_ptcl2D%set(iptcl, 'corr',      corr)
+                call stage%spproj%os_ptcl2D%set(iptcl, 'updatecnt', 3)
+                call stage%spproj%os_ptcl2D%set_state(iptcl, merge(1, 0, iptcl < N))
+                call stage%spproj%os_ptcl3D%set_state(iptcl, merge(1, 0, iptcl < N))
+            enddo
+        end subroutine make_rows
+
+    end subroutine test_first_run_draw
     !> the mask diameter comes from every publication taken; a change is taken for the next run, and
     !! a publication without one leaves it
     subroutine test_mskdiam_from_each_publication()

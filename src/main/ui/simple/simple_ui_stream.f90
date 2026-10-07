@@ -131,6 +131,9 @@ subroutine new_pool2D( prgtab )
         call solve3D_stream%add_input(UI_SRCH, 'nstages', 'num', 'Number of solve3D stages', &
         &'Number of low-pass limit stages of each streaming solve3D run{5}', '# stages', .false., 5., group="search", &
         &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call solve3D_stream%add_input(UI_SRCH, 'nptcls3D_max', 'num', 'Particles of the first solve3D', &
+        &'Maximum number of particles of the first streaming solve3D run, drawn class-balanced; the others go to the first solve3D_addon run{100000}', &
+        &'max # particles', .false., 100000., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         ! filter controls
         call solve3D_stream%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', &
         &'Low-pass limit of the first stage of each streaming solve3D run (in Angstroms){50}', 'low-pass limit in Angstroms', &

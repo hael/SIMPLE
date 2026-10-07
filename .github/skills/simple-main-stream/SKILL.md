@@ -28,7 +28,7 @@ Pipeline stages (one forked process each, launched by p00); commanders in `src/m
   - p04 `simple_stream_stage_refpick`: reference-based picking and extraction
   - p05 `simple_stream_stage_sieve`: continuous particle sieving via `ptcl_sieve`
   - p06 `simple_stream_stage_pool2D`: global 2D pool classification by the pool object it holds (`stream_pool2D`), snapshots, publication of the classified pool state for 3D
-  - p07 `simple_stream_stage_solve3D`: solve3D, then solve3D_addon runs, on the classified pool states p06 publishes (`doc/policies/stream/stream_3D_ingestion_policy.md`), merged into rows that only grow; it reads GUI updates and writes 3D snapshots of selected states (merged into state 1, with their volumes)
+  - p07 `simple_stream_stage_solve3D`: solve3D, then solve3D_addon runs, on the classified pool states p06 publishes (`doc/policies/stream/stream_3D_ingestion_policy.md`), merged into rows that only grow; its first solve3D takes at most `nptcls3D_max` of the selected particles, drawn class-balanced, and queues the rest for the first addon run; it reads GUI updates and writes 3D snapshots of selected states (merged into state 1, with their volumes)
 
 Shared pieces in `src/main/stream/shared`: `simple_stream_pipe` (framing), `simple_stream_state` (pipe descriptors), `simple_stream_sigterm`, `simple_stream_gui_senders`, `simple_stream_job_sets`, `simple_optics_maps`, `simple_optics_groups`, `simple_mic_import`, `simple_mic_selection`, `simple_stream_meta_plots`.
 

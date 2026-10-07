@@ -11,9 +11,10 @@
 ! 3D JOBS:
 !   The settings of the solve3D and solve3D_addon runs are the named
 !   constants below; a command line overrides them with nstates, nstages,
-!   lpstart, lpstop (passed on to solve3D as they are), and nparts3D and
-!   nthr3D (the jobs' parts and threads; the stage's own nparts and nthr are
-!   the master's settings for the stage).
+!   lpstart, lpstop (passed on to solve3D as they are), nptcls3D_max (the
+!   first solve3D's particles at most; the others go to the first addon run),
+!   and nparts3D and nthr3D (the jobs' parts and threads; the stage's own
+!   nparts and nthr are the master's settings for the stage).
 !
 ! ENTRY POINT:
 !   commander_stream_p07_solve3D_multistate%execute(cline)
@@ -30,7 +31,7 @@ use simple_defs_fname,              only: METADATA_EXT
 use simple_jiffys,                  only: simple_end
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
-use simple_stream_stage_solve3D, only: stream_stage_solve3D
+use simple_stream_stage_solve3D, only: stream_stage_solve3D, MIN_PTCLS_PER_STATE
 use simple_stream_sigterm,          only: install_sigterm_handler, restore_sigterm_handler, sigterm_received
 use simple_gui_metadata_stream_solve3D_multistate, only: MAX_STATES_SOLVE3D_MULTISTATE
 implicit none
@@ -40,12 +41,13 @@ public :: commander_stream_p07_solve3D_multistate
 public :: set_solve3D_cline ! the stage's command-line defaults, for the chained stream tests
 private
 
-integer, parameter :: NSTATES3D = 3   ! states of the 3D
-integer, parameter :: NSTAGES3D = 5   ! solve3D stages
-real,    parameter :: LPSTART3D = 50. ! solve3D low-pass limits (A)
-real,    parameter :: LPSTOP3D  = 10.
-integer, parameter :: NPARTS3D  = 8   ! parts and threads of each 3D job
-integer, parameter :: NTHR3D    = 8
+integer, parameter :: NSTATES3D    = 3      ! states of the 3D
+integer, parameter :: NSTAGES3D    = 5      ! solve3D stages
+real,    parameter :: LPSTART3D    = 50.    ! solve3D low-pass limits (A)
+real,    parameter :: LPSTOP3D     = 10.
+integer, parameter :: NPARTS3D     = 8      ! parts and threads of each 3D job
+integer, parameter :: NTHR3D       = 8
+integer, parameter :: NPTCLS3D_MAX = 100000 ! the first solve3D's particles at most
 
 type, extends(commander_base) :: commander_stream_p07_solve3D_multistate
   contains
@@ -78,7 +80,8 @@ contains
 
     ! Everything the stage needs on its command line before params%new: the 3D job settings
     ! unless given, and the project name when none is. The states are checked: a multistate run
-    ! needs two at least, and the GUI's status holds MAX_STATES_SOLVE3D_MULTISTATE (20).
+    ! needs two at least, and the GUI's status holds MAX_STATES_SOLVE3D_MULTISTATE (20). So is
+    ! the first solve3D's cap: it must allow the run's minimum, MIN_PTCLS_PER_STATE per state.
     subroutine set_solve3D_cline( cline )
         class(cmdline), intent(inout) :: cline
         call cline%set('oritype', 'mic')
@@ -91,6 +94,8 @@ contains
         if( .not. cline%defined('lpstop')   ) call cline%set('lpstop',   LPSTOP3D)
         if( .not. cline%defined('nparts3D') ) call cline%set('nparts3D', NPARTS3D)
         if( .not. cline%defined('nthr3D')   ) call cline%set('nthr3D',   NTHR3D)
+        if( .not. cline%defined('nptcls3D_max') ) call cline%set('nptcls3D_max', NPTCLS3D_MAX)
+        if( cline%get_iarg('nptcls3D_max') < MIN_PTCLS_PER_STATE * cline%get_iarg('nstates') ) THROW_HARD('nptcls3D_max is below the first solve3D''s minimum of 5 particles per state')
         if( .not. cline%defined('projfile') )then
             call cline%set('projname', 'stream_3Dmultistate')
             call cline%set('projfile', 'stream_3Dmultistate'//METADATA_EXT)

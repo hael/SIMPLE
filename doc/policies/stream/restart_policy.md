@@ -44,7 +44,7 @@ exist, and then removes `dir_exec` from the command lines it passes on.
 | p04 reference picking | A stop cancels the jobs in flight. Its job sets are restored: the completed sets are imported again, and the upstream projects they were made from go into the watcher's history, so none is picked twice. Set numbering continues after the highest set, completed or left unfinished; the job folder with the unfinished sets is set aside and their inputs submitted again. A leftover `TERM_STREAM` is removed. The picking templates are made again from the published references when the first new set arrives. |
 | p05 particle sieving | A stop cancels the 2D jobs of the running chunks. The sieve restores its chunks from their folders and marker files (`doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`, section 4), including a chunk final ingestion staged; an unfinished chunk whose job recorded itself and wrote no exit status has that job cancelled and its folder set aside (`<folder>_unfinished<k>`), and is made afresh from its project as made. Every set the sieve chunked from (its `chunked_mics.txt`, one line per chunked micrograph) is imported again with those micrographs marked chunked, so the rest of a partly chunked set is still sieved, and goes into the watcher's history; sets imported but not chunked from are imported again. The sieve is made as soon as the upstream folder is attached, with nothing new to import. A leftover `TERM_STREAM` is removed. |
 | p06 pool 2D | A stop cancels the running pool iteration. A restart cancels an iteration a crashed stage left running, then removes the previous pool's files from its folder (`cleanup_root_folder`: images, text, STAR, JPEG, binary and data files, the chunk folders, `TERM_STREAM`), and `REFINE2D_FINISHED`, the iteration's exit status and its project as made. The pool starts again from every set the sieve has handed off. Snapshots are kept. Publications for 3D continue their numbering (`restore_export_id`). |
-| p07 multistate 3D | A stop cancels the running job. A leftover `TERM_STREAM` is removed and the stage starts again from the newest publication not listed in `rejected_publications.txt`, which is its first set: `solve2D` and `solve3D` run again in their folders. A run folder (`solve2D`, `solve3D`, `solve3D_addon/it_<n>`) whose job recorded itself and wrote no exit status is first moved aside to `<folder>_unfinished<k>` (`fresh_job_dir`), so a run never shares a folder with a job that may still be running. |
+| p07 multistate 3D | A stop cancels the running job. A leftover `TERM_STREAM` is removed and the stage starts again from the newest publication not listed in `rejected_publications.txt`, taken as every publication is: `solve3D` runs again in its folder, on at most `nptcls3D_max` of its selected particles, the others queued for the first addon run. A run folder (`solve3D`, `solve3D_addon/it_<n>`) whose job recorded itself and wrote no exit status is first moved aside to `<folder>_unfinished<k>` (`fresh_job_dir`), so a run never shares a folder with a job that may still be running. |
 
 ## 4. What carries state across a restart
 
@@ -133,8 +133,8 @@ Every queued job of the stream (follow-up plan, decisions 28-30):
   - Proposal: start a stage by fork and `exec` of `simple_stream prg=<stage>`, with the pipe
     descriptors on its command line.
 - **p06 starts the pool from scratch.** A restart repeats every iteration. Until the restarted
-  pool has classified a stack again, p07 holds its rows deselected (the first set's keep their
-  selection). With publications on disk, the restarted pool publishes from iteration 25 only.
-- **p07 runs `solve2D` and `solve3D` again** on everything, the newest publication being its
-  first set.
+  pool has classified a stack again, p07 holds its rows deselected. With publications on disk,
+  the restarted pool publishes from iteration 25 only.
+- **p07 runs `solve3D` again** on the newest publication, at most `nptcls3D_max` of its selected
+  particles, and the first addon run on the rest.
 - **p03 repeats its plan** when it stopped before publishing references.

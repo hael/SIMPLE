@@ -408,6 +408,7 @@ type :: parameters
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_base=0       !< # particles in the initial solve3D snapshot
+    integer :: nptcls3D_max=0      !< # particles of stream 3D's first solve3D at most (0: no cap; the stage's commander sets one)
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
     integer :: npreimages=0        !< # state volumes; 0 = DISCOVER it (over-provision, then two-gate merge)
