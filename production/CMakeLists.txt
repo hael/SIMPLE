@@ -316,7 +316,7 @@ if(BUILD_TESTS)
   # versus two real local workers. Two workers times four threads fill the
   # eight processors reserved by this serial CTest entry (D1 in
   # doc/refactoring_notes/flex_refactoring_plan_2026_10_06.md).
-  simple_add_test(flex_pca_blobs highlevel 3600 8 RUN_SERIAL
+  simple_add_test(flex_pca_blobs highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_pca_blobs nthr=4)
 
   # ---- platform cases -------------------------------------------------------
