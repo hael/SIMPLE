@@ -67,8 +67,8 @@ particles that the frozen accumulators never receive.
 ## 3. The Frozen Input
 
 The run manifest is the only route into the add-on. `exec_solve3D` writes
-`solve3D_manifest.txt` at the end of every completed run (final
-reconstruction or `refine3D_states` handoff) and registers it in `projinfo`;
+`solve3D_manifest.txt` at the end of every completed run (after the final
+reconstruction) and registers it in `projinfo`;
 an early-stopped run writes none and is not a frozen input. The frozen project
 must be an eligible `solve3D` or `solve3D_addon` output whose manifest
 validates against the project that registered it:

@@ -951,7 +951,7 @@ contains
             THROW_HARD('nstages must be >= first executable solve3D stage')
         endif
         l_run_final_rec = nstages_refine3D == solve3D_nstages() .or. params%nstates > 1
-        ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
+        ! automasking is per state (state-specific masks), single or multi-state alike
         l_automsk     = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! l_automsk_off (the EXPLICIT automsk=no veto of the pcg-backend
         ! automasking default) is set where the workflow defaults are

@@ -307,12 +307,10 @@ The pose policy controls how much orientation can change while states compete:
 
 - `global` is the default and performs a full orientation search.
 - `local` permits a limited change around each consensus direction.
-- `fixed` keeps the projection direction fixed while optimizing state,
-  in-plane angle, and shift.
 
 Start with `global` unless the consensus orientations are already trusted and
 the scientific question specifically calls for more constrained
-classification.
+classification. Fixed-pose classification is `flex_pca` itself.
 
 **Checkpoint:** useful states should contain enough particles, retain broad
 view coverage, show interpretable structural differences, and remain similar

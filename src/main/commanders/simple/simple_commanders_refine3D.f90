@@ -905,7 +905,9 @@ contains
             nsample_target = params%nsample
             if( nsample_target < 1 ) THROW_HARD('nsample must be >= 1 for '//WORKFLOW_LABEL)
             call sampling_proj%read(params%projfile)
-            nptcls_eff = sampling_proj%count_state_gt_zero()
+            ! the ptcl3D states are this workflow's own (flex drops particles to state 0 there) and the
+            ! sampling units leave those rows out; the project-level count reads the ptcl2D states
+            nptcls_eff = sampling_proj%os_ptcl3D%count_state_gt_zero()
             call sampling_proj%kill
             if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//WORKFLOW_LABEL)
             nptcls_per_iter = min(nptcls_eff, nsample_target)
@@ -1813,9 +1815,23 @@ contains
         class(refine3D_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
-        type(string)     :: filt_mode_arg
+        type(string)     :: filt_mode_arg, refine_arg
+        character(len=STDLEN) :: errmsg
         logical          :: converged
         integer          :: niters
+        ! the modes the 3D matcher implements, refused here so that a distributed master never
+        ! waits for workers that stop on an unknown mode
+        if( cline%defined('refine') )then
+            refine_arg = cline%get_carg('refine')
+            select case(trim(refine_arg%to_char()))
+                case('shc','neigh','greedy','greedy_inpl','eval','prob','prob_neigh','sigma','cont')
+                case DEFAULT
+                    errmsg = 'refine3D refine='//trim(refine_arg%to_char())//&
+                        &' unsupported; one of shc|neigh|greedy|greedy_inpl|eval|prob|prob_neigh|sigma|cont'
+                    THROW_HARD(trim(errmsg))
+            end select
+            call refine_arg%kill
+        endif
         ! sanity check: multiple input volumes require nstates > 1
         if( cline%defined('vol2') )then
             if( .not. cline%defined('nstates') )then
