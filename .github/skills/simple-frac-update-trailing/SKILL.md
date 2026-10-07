@@ -46,6 +46,10 @@ Then inspect the current code in this order:
 ## Working Rules
 
 - `volassemble` consumes the realized fractional update; it does not choose the subset.
+- `volassemble` (gridding) rereads the project file, so the iteration strategy
+  writes the particle field before it (`publish_before_file_assembly`); the
+  sample, `updatecnt`, poses, states and partial reconstructions of an assembly
+  belong to one iteration.
 - Do not move current partial reconstruction into a separate full particle pass
   that re-reads stacks to reduce peak memory; that is a workflow-policy change.
 - The selected subset is represented by `sampled`; persistent coverage is

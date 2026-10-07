@@ -64,7 +64,7 @@ type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(refine3D_bench_state), private :: bench
     type(cmdline)     :: cline_calc_group_sigmas
     type(convergence) :: conv
-    type(parameters)  :: params_polish   !< the parameters of the polish pass (pose_cont=yes)
+    type(parameters), allocatable :: params_polish !< the parameters of the polish pass (pose_cont=yes)
     logical :: l_sigma
 contains
     procedure :: initialize         => inmem_initialize
@@ -164,6 +164,15 @@ contains
                 polish_follows = .false.
         end select
     end function polish_follows
+
+    !> Gridding volassemble rereads the project file, so this iteration's particle field goes to
+    !! disk first; the polish branch publishes its own and a sigma pass writes no orientations.
+    logical function publish_before_file_assembly( params, l_write_partial_recs, l_polish ) result( l_publish )
+        type(parameters), intent(in) :: params
+        logical,          intent(in) :: l_write_partial_recs, l_polish
+        l_publish = l_write_partial_recs .and. .not. l_polish .and. trim(params%refine) /= 'sigma' .and. &
+            &(params%l_cart_refine .or. trim(params%rec_backend) == 'gridding')
+    end function publish_before_file_assembly
 
     !> Remove refine3D matcher-only options before invoking child workflows.
     !! The parent and distributed matcher workers retain these options.
@@ -754,10 +763,8 @@ contains
         ! poses: the discrete pass writes no partial reconstructions
         l_polish = polish_follows(params)
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_polish)
-        ! a Cartesian pass draws its particle sample in the matcher (no prob_align child writes it),
-        ! and the assembly reads the sample of the iteration (trailing update fractions) from the
-        ! project file, so the matcher's field goes to disk before the assembly
-        if( params%l_cart_refine .and. l_write_partial_recs ) call build%spproj%write_segment_inside(params%oritype)
+        if( publish_before_file_assembly(params, l_write_partial_recs, l_polish) ) &
+            &call build%spproj%write_segment_inside(params%oritype)
         if( l_polish )then
             ! the polish pass (C8, C19): refine=cont over the discrete pass's particle sample, from
             ! the poses it committed, against the Cartesian references this iteration materialized;
@@ -768,6 +775,7 @@ contains
             call cline_polish%set('pose_cont', 'yes')
             call build%kill_strategy3D_tbox
             call build%kill_general_tbox
+            if( .not. allocated(self%params_polish) ) allocate(self%params_polish)
             call build%init_params_and_build_strategy3D_tbox(cline_polish, self%params_polish)
             self%params_polish%which_iter = iter
             self%params_polish%extr_iter  = extr_iter
@@ -884,7 +892,7 @@ contains
     subroutine inmem_cleanup(self, params)
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
-        ! no-op
+        if( allocated(self%params_polish) ) deallocate(self%params_polish)
     end subroutine inmem_cleanup
 
     ! ======================================================================

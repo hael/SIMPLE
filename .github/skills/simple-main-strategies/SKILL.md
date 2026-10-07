@@ -21,6 +21,12 @@ This folder is the execution-policy and search-engine layer.
 - `parallelization/` handles shared-memory vs distributed policy and workflow iteration
 - `search/` holds 2D/3D alignment strategy families, matchers, batching, and search helpers
 
+## Continuous Pose Refinement
+
+- `search/simple_strategy3D_cont.f90` is the Cartesian 3D strategy of `refine=cont` (one `cartft_pose_opt` transaction per particle; `athres_cont` bounds the rotation).
+- `parallelization/simple_refine3D_strategy.f90` schedules the polish (`pose_cont=yes`): a `refine=cont` pass after each discrete pass over the same sample, with the project written before and after it. `cont_route` is an internal test seam.
+- Before a gridding assembly the shared-memory strategy writes the particle field (`publish_before_file_assembly`): `volassemble` rereads the project file.
+
 ## Working Rule
 
 This folder is usually the right home for “how a workflow runs” but not “what the raw data structure means.”

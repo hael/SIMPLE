@@ -1,31 +1,9 @@
 !@descr: bounded Levenberg-Marquardt optimizer of one five-parameter Cartesian particle pose (refine=cont)
-!
-! The role pftc_shsrch_grad has for the polar branch. One optimizer belongs to one particle
-! search: built in new, released in kill, used by the one thread running that search. It holds
-! fixed-size state only (policy, the last solve's record), allocates nothing during a solve,
-! and evaluates through a cartft_calc passed intent(in) to every solve. It imports no
-! matcher, commander, UI, project or parallelization module.
-!
-! Coordinates: a pose is the particle rotation matrix and a 2D shift. Project orientations
-! (ori) carry native-box pixels; the calculator works on the cropped box, so refine converts
-! by box_crop/box on the way out. The rotation is updated on the right, R exp([omega]x)
-! (right_increment_rotation); omega in radians. As in the polar branch (prepimg4align and
-! assign_ori, O4), refine solves for the shift increment from the stored shift: the particle
-! slot holds the observation centred on the stored shift, the solve starts from a zero
-! increment and the committed shift is the stored shift plus the increment.
-!
-! Transaction (refine, refine_pose): evaluate the seed, run the joint five-parameter stage
-! (preceded by the shift-only stage on the shift-then-joint route), bounded per step and
-! cumulatively from the seed, and commit the staged pose only if its objective is finite and below the
-! seed's; every other outcome returns the seed bit for bit (rollback). The objective is the
-! one the calculator's particle slot was prepared for.
-!
-! Bounds (O6): the total shift from the seed is bounded by trs and the total rotation by
-! athres_cont (the capture range for wrongly assigned orientations, independent of the polar
-! searches' athres and prob_athres); trs = 0 freezes the shifts as l_doshift=.false. does in
-! the polar branch. Route (C16, ruling of 2026-10-02): the joint stage alone in production,
-! about a third faster per transaction; shift then joint (the route of the E25 floors) when
-! new is asked for it. Step and iteration caps are private defaults the tester may override.
+! One bounded Levenberg-Marquardt transaction per particle (refine): evaluate the seed, run the
+! joint five-parameter stage (after a shift-only stage on the shift_then_joint test route) within
+! trs and athres_cont of the seed, and commit only a finite, lower objective; any other outcome
+! returns the seed bit for bit with a typed status (CARTFT_*). Rotations update on the right,
+! R exp([omega]x); shifts are increments from the stored shift, committed in native-box pixels.
 module simple_cartft_pose_opt
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api, only: dp, PI, ori, dm2euler, simple_exception

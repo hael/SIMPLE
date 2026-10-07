@@ -44,7 +44,7 @@ enum, bind(c)
     enumerator :: I_NPEAKS      = 39
     enumerator :: I_LP_EST      = 40
     enumerator :: I_PIND_PREV   = 41
-    ! slot 42 is spare (see N_PTCL_ORIPARAMS)
+    enumerator :: I_POSE_CONT_STATUS = 42 ! typed outcome (CARTFT_*) of the last Cartesian transaction
     enumerator :: I_FRAC_GREEDY = 43
     enumerator :: I_BETTER_L    = 44
     enumerator :: I_SAMPLED     = 45
@@ -58,7 +58,7 @@ enum, bind(c)
     enumerator :: I_CFAR                = 53 ! conical FSC area ratio of the state's latest half-map pair
 end enum
 
-! A particle carries the named slots 1-53 in memory (ori%pparms; slot 42 is spare).
+! A particle carries the named slots 1-53 in memory (ori%pparms).
 ! On disk its record is N_PTCL_RECORD_REALS wide: slots 54-64 are zero padding reserved
 ! for later fields, so adding a field does not change the project file's record width,
 ! while resident particles pay only for the named slots. Projects written by earlier
@@ -67,7 +67,6 @@ end enum
 integer, parameter :: N_PTCL_ORIPARAMS      = 53
 integer, parameter :: N_PTCL_RECORD_REALS   = 64
 integer, parameter :: I_LAST_NAMED_ORIPARAM = I_CFAR
-integer, parameter :: I_SPARE_ORIPARAM42    = 42
 
 contains
 
@@ -177,6 +176,8 @@ contains
                 get_oriparam_ind = I_CORR_CART
             case('pose_cont_improved')
                 get_oriparam_ind = I_POSE_CONT_IMPROVED
+            case('pose_cont_status')
+                get_oriparam_ind = I_POSE_CONT_STATUS
         end select
     end function get_oriparam_ind
 
@@ -282,6 +283,8 @@ contains
                 flag = 'corr_cart'
             case(I_POSE_CONT_IMPROVED)
                 flag = 'pose_cont_improved'
+            case(I_POSE_CONT_STATUS)
+                flag = 'pose_cont_status'
             case(I_RES05)
                 flag = 'res05'
             case(I_CFAR)
@@ -352,6 +355,8 @@ contains
                 oriparam_isthere = abs(val) > TINY
             case(I_POSE_CONT_IMPROVED)
                 oriparam_isthere = abs(val) > TINY
+            case(I_POSE_CONT_STATUS)
+                oriparam_isthere = abs(val) > TINY
             case DEFAULT
                 ! default case is defined
                 oriparam_isthere = .true.
@@ -361,7 +366,7 @@ contains
     !> a spare slot of the particle record (no field yet)
     pure logical function oriparam_is_spare( ind )
         integer, intent(in) :: ind
-        oriparam_is_spare = ind == I_SPARE_ORIPARAM42 .or. ind > I_LAST_NAMED_ORIPARAM
+        oriparam_is_spare = ind > I_LAST_NAMED_ORIPARAM
     end function oriparam_is_spare
 
 end module simple_defs_ori

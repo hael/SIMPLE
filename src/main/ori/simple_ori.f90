@@ -1056,8 +1056,7 @@ contains
         character(len=XLONGSTRLEN)    :: str_tmp
         character(len=:), allocatable :: str
         integer :: i, cnt, n
-        write(str_tmp, *)(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=1,I_SPARE_ORIPARAM42-1), &
-            &(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=I_SPARE_ORIPARAM42+1,I_LAST_NAMED_ORIPARAM)
+        write(str_tmp, *)(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=1,I_LAST_NAMED_ORIPARAM)
         n   = len_trim(str_tmp)
         str = repeat(' ',n)
         cnt = 0
@@ -1077,9 +1076,8 @@ contains
          character(len=XLONGSTRLEN) :: str_tmp
         integer :: i, n
         pparms_strlen = 0
-        n = I_LAST_NAMED_ORIPARAM - 1 ! named slots (the spare slots are not written)
-        write(str_tmp,*)(trim(get_oriparam_flag(i)), self%pparms(i), i=1,I_SPARE_ORIPARAM42-1), &
-            &(trim(get_oriparam_flag(i)), self%pparms(i), i=I_SPARE_ORIPARAM42+1,I_LAST_NAMED_ORIPARAM)
+        n = I_LAST_NAMED_ORIPARAM ! named slots (the padding slots are not written)
+        write(str_tmp,*)(trim(get_oriparam_flag(i)), self%pparms(i), i=1,I_LAST_NAMED_ORIPARAM)
         do i=1,len_trim(str_tmp)
             if( str_tmp(i:i) == ' ' ) cycle
             pparms_strlen = pparms_strlen + 1

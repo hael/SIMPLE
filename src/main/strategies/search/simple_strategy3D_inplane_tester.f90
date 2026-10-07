@@ -1,14 +1,9 @@
 !@descr: unit tests for the continuous in-plane state of the refine3D search (simple_strategy3D_srch, _alloc, _utils)
-! The search-state contract behind inpl_cont in refine3D, with no fixture: the grid seed
-! of a continuous candidate, candidate storage with and without the continuous arrays
-! (a rejected candidate leaves an accepted continuous result alone, an improving grid
-! candidate resets it), the joint and the discrete-seed storage routes, the invalid
-! joint-evaluation predicate, resolve_inplane_e3, and the inpl_cont policy: internal,
-! default yes, not a command-line key (no refine program exposes it), and pose_cont
-! stripped from the child command line. Phase 5 of the pose_cont refactoring: the search object's previous
-! shift is the shift stored in the project before the search, the origin the matcher now
-! takes the shift increment from (N10; a small phantom written to the run directory and
-! removed).
+! The search-state contract behind inpl_cont: the grid seed of a continuous candidate, candidate
+! storage with and without the continuous arrays, the joint and discrete-seed routes, the invalid
+! joint-evaluation predicate, resolve_inplane_e3, the inpl_cont policy (internal, default yes, no
+! under refine=cont, never a command-line key) and the stored shift as the search's previous
+! shift (N10; a small phantom written to the run directory and removed).
 module simple_strategy3D_inplane_tester
 use simple_core_module_api,   only: dp
 use simple_cmdline,           only: cmdline
@@ -41,6 +36,7 @@ contains
         call test_discrete_seed_storage_and_invalid_predicate()
         call test_resolve_inplane_e3()
         call test_inpl_cont_policy()
+        call test_inpl_cont_derivation()
         call test_previous_shift_is_stored_shift()
     end subroutine run_all_strategy3D_inplane_tests
 
@@ -189,6 +185,39 @@ contains
         call child_cline%kill
         call cline%kill
     end subroutine test_inpl_cont_policy
+
+    !> the phase derivation: refine=cont turns inpl_cont off and is a Cartesian pass, the polish
+    !! with pose_cont=yes; a discrete mode keeps the internal default
+    subroutine test_inpl_cont_derivation()
+        class(parameters), allocatable :: params
+        type(cmdline) :: cline
+        write(*,'(A)') 'test_inpl_cont_derivation'
+        call cline%set('smpd',    1.5)
+        call cline%set('box',     32)
+        call cline%set('mskdiam', 36.)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'cc')
+        call cline%set('nthr',    1)
+        call cline%set('refine',  'cont')
+        allocate(params)
+        call params%new(cline)
+        call assert_char('no', trim(params%inpl_cont), 'refine=cont turns inpl_cont off')
+        call assert_true(params%l_cart_refine .and. .not. params%l_cont_polish, 'refine=cont is a Cartesian pass')
+        deallocate(params)
+        call cline%set('pose_cont', 'yes')
+        allocate(params)
+        call params%new(cline)
+        call assert_true(params%l_cart_refine .and. params%l_cont_polish, 'refine=cont pose_cont=yes is the polish')
+        deallocate(params)
+        call cline%delete('pose_cont')
+        call cline%set('refine', 'shc')
+        allocate(params)
+        call params%new(cline)
+        call assert_char('yes', trim(params%inpl_cont), 'a discrete mode keeps inpl_cont=yes')
+        call assert_false(params%l_cart_refine .or. params%l_cont_polish, 'a discrete mode is not a Cartesian pass')
+        deallocate(params)
+        call cline%kill
+    end subroutine test_inpl_cont_derivation
 
     !> a search control of the named UI program; with expected_default, one with that default
     logical function has_search_input( program_name, key, expected_default ) result( found )

@@ -5,7 +5,7 @@
 module simple_binoris_tester
 use simple_test_utils    ! assertions etc.
 use simple_defs_ori,     only: N_PTCL_ORIPARAMS, N_PTCL_RECORD_REALS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR, &
-    &I_LAST_NAMED_ORIPARAM, oriparam_is_spare, oriparam_isthere
+    &I_POSE_CONT_STATUS, I_LAST_NAMED_ORIPARAM, oriparam_is_spare, oriparam_isthere
 use simple_type_defs,    only: MIC_SEG, STK_SEG, PTCL2D_SEG
 use simple_string,       only: string
 use simple_string_utils, only: int2str
@@ -177,7 +177,7 @@ contains
         call os3%kill
     end subroutine test_particle_segment_roundtrip
 
-    !> A particle holds the named slots 1-53 in memory (42 spare); its record on disk is 64
+    !> A particle holds the named slots 1-53 in memory; its record on disk is 64
     !! reals, slots 54-64 being zero padding. The record round-trips the Cartesian diagnostic
     !! slots; spare slots are never "there".
     subroutine test_cartesian_record_slots()
@@ -191,15 +191,18 @@ contains
         call assert_int(51, I_CORR_CART, 'corr_cart sits in slot 51 (O8)')
         call assert_int(52, I_POSE_CONT_IMPROVED, 'the improved flag sits in slot 52 (O8)')
         call assert_int(53, I_CFAR, 'cfar sits in slot 53')
-        call assert_true(oriparam_is_spare(42) .and. oriparam_is_spare(54) .and. oriparam_is_spare(64), &
-            &'slot 42 and the padding slots 54-64 are spare')
-        call assert_false(oriparam_is_spare(41) .or. oriparam_is_spare(43) .or. oriparam_is_spare(53), &
-            &'slots 41, 43 and 53 are named')
-        call assert_false(oriparam_isthere(42, 1.0) .or. oriparam_isthere(60, 1.0), 'a spare slot is never there')
+        call assert_int(42, I_POSE_CONT_STATUS, 'the Cartesian transaction status sits in slot 42')
+        call assert_true(oriparam_is_spare(54) .and. oriparam_is_spare(64), 'the padding slots 54-64 are spare')
+        call assert_false(oriparam_is_spare(41) .or. oriparam_is_spare(42) .or. oriparam_is_spare(53), &
+            &'slots 41, 42 and 53 are named')
+        call assert_false(oriparam_isthere(54, 1.0) .or. oriparam_isthere(60, 1.0), 'a spare slot is never there')
+        call assert_true(oriparam_isthere(42, 4.0) .and. .not. oriparam_isthere(42, 0.0), &
+            &'the status is there when a transaction ran')
         call make_ptcl_oris(os, NPTCLS)
         do i = 1,NPTCLS
             call os%set(i, 'corr_cart',          0.25 + 0.1*real(i))
             call os%set(i, 'pose_cont_improved', real(mod(i,2)))
+            call os%set(i, 'pose_cont_status',   real(mod(i,7) - 1))
             call os%set(i, 'cfar',               0.1*real(i))
         enddo
         call bos%open(string(BIN_FILE), del_if_exists=.true.)
@@ -214,6 +217,7 @@ contains
         do i = 1,NPTCLS
             call assert_real(0.25 + 0.1*real(i), os2%get(i,'corr_cart'), TOL, 'slot 51 (corr_cart) round-trips')
             call assert_real(real(mod(i,2)), os2%get(i,'pose_cont_improved'), TOL, 'slot 52 (improved flag) round-trips')
+            call assert_real(real(mod(i,7) - 1), os2%get(i,'pose_cont_status'), TOL, 'slot 42 (status) round-trips')
             call assert_real(0.1*real(i), os2%get(i,'cfar'), TOL, 'slot 53 (cfar) round-trips')
             call assert_real(os%get(i,'corr'), os2%get(i,'corr'), TOL, 'corr is untouched by the Cartesian slots')
         enddo

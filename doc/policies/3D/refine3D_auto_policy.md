@@ -247,8 +247,11 @@ as `refine3D_states` derives `multivol_mode` from `pose_policy`.
   reconstruction, NU low-pass seeding and the final reconstruction are
   unchanged; when the final reconstruction must rebuild sigma2 at native
   sampling, its `bootstrap_rec3D` residual pass still runs through the polar
-  matcher. No convergence is declared in a continuous pass, so the run goes
-  to `maxits`.
+  matcher. The continuous pass converges by the `refine=cont` rule of
+  `refine3D_policy.md` (motion of most sampled particles below 0.5 degrees
+  and 1 A); with an automatic `maxits` the run can therefore stop before the
+  update budget, and an explicit `maxits` also sets `minits`, so it runs to
+  `maxits`.
 
 `objfun` stays `euclid`; `objfun=cc` with `refine=cont` is available through
 `refine3D`.

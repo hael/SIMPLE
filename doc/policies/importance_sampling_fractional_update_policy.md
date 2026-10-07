@@ -500,6 +500,10 @@ are separate workflow stages and may perform their own reads.
   final class-average generation.
 - `volassemble` and the classaverager remain consumers of sampled-update state,
   not producers of particle-selection policy.
+- Before an assembly that rereads the project file (gridding `volassemble`),
+  the iteration strategy writes the particle field the matcher left: pose,
+  state, `sampled`, `updatecnt` and the partial reconstructions describe one
+  iteration (`publish_before_file_assembly` in `simple_refine3D_strategy`).
 - Online matcher restoration/reconstruction reuses the particle images already
   read for the current batch.
 

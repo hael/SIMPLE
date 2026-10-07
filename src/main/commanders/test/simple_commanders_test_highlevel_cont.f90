@@ -42,7 +42,7 @@ end subroutine exec_test_cont_refine3D_1jxy
 !  per-particle rotation and shift error, fraction inside the basin width, and the frame- and
 !  hand-independent pair metric where a run builds its own reference.
 !  a  refine3D refine=cont objfun=euclid, shared memory, one pass against the truth reference
-!     at lp 8 A with the E25 bounds (trs 5, athres_cont 15)
+!     at lp 8 A with the E25 bounds (trs 5, athres_cont 15); no polar in-plane route runs
 !  b  the same with objfun=cc
 !  c  stage a distributed over two parts: poses agree with stage a
 !  d  a-c (and e): no polar reprojection model or probability table in the run directory, and
@@ -51,9 +51,10 @@ end subroutine exec_test_cont_refine3D_1jxy
 !     particles per iteration, runs no pose initialization or registration pass, and reduces
 !     the pose error
 !  f  refine3D refine=neigh against the truth reference with pose_cont=yes and with no, two
-!     iterations over 30% samples: with the polish the error over the updated particles is no
-!     worse; the polish refines exactly the sample (corr_cart on the updated particles only, the
-!     others keep their seeds); the discrete iteration after a polish scores finite
+!     trailing iterations over 30% samples: with the polish the error over the updated particles
+!     is no worse; the polish refines exactly the sample (corr_cart on the updated particles only,
+!     the others keep their seeds) after the discrete pass's polar in-plane route; the discrete
+!     iteration after a polish scores finite; the last assembly represents the final project's N
 !  g  refine3D_auto pose_cont=yes from the perturbed project (ref_pose_init=cc as in h):
 !     completes, the polish follows the last main-loop iteration over its whole sample, and the
 !     error is no worse than h's polar run without the polish
@@ -73,7 +74,8 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     use simple_image,              only: image
     use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_auto
     use simple_cartft_pose_opt,    only: right_increment_rotation
-    use simple_refine3D_fnames,    only: refine3D_reproj_model_fname
+    use simple_refine3D_fnames,    only: refine3D_reproj_model_fname, refine3D_trail_manifest_fname
+    use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
     use simple_test_gate,          only: test_gate, NO_FLOOR
     use simple_test_truth_metrics, only: pair_pose_error
     integer, intent(in)    :: nthr
@@ -233,6 +235,8 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     ! ---- a, b, c: refine3D refine=cont against the truth reference ----
     call run_refine3D_cont('a_euclid', 'euclid', 0, out_a)
     call gate_e25('a', out_a)
+    ! a pure Cartesian pass runs no separate polar in-plane refinement (inpl_cont=no)
+    call gate%check('a_no_polar_inplane_route', .not. any(out_a%os_ptcl3D%get_all('cont_inpl_attempted') > 0.5))
     call run_refine3D_cont('b_cc', 'cc', 0, run_proj)
     call gate_e25('b', run_proj)
     call run_refine3D_cont('c_distr', 'euclid', 2, out_c)
@@ -263,6 +267,8 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call gate%check('e_ran_to_maxits', nint(stats%get(1, 'ITERATION')) == AUTO_MAXITS)
     call gate%check('e_nsample_particles_per_iteration', &
         &abs(stats%get(1, 'PERCEN_PARTICLES_SAMPLED') - 100.*real(AUTO_NSAMPLE)/real(NPTCLS)) < 0.01)
+    ! the refine=cont convergence rule's stable fraction of the last iteration (maxits sets minits here)
+    call gate%report('e_cont_stable_pct', stats%get(1, 'CONT_STABLE_PCT'))
     call stats%kill
     call check_no_polar('e', run_proj)
     call pose_errors(run_proj%os_ptcl3D, med_rot, med_sh, basin)
@@ -294,6 +300,10 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
         endif
     enddo
     call gate%check('f_polish_refines_exactly_the_sample', l_sample_ok)
+    ! the discrete pass before the polish ran its polar in-plane route (inpl_cont=yes); the
+    ! polish runs with inpl_cont=no and leaves cont_inpl_attempted as the discrete pass set it
+    call gate%check('f_discrete_pass_ran_the_polar_inplane_route', &
+        &any(out_f%os_ptcl3D%get_all('cont_inpl_attempted') > 0.5 .and. updated))
     ! the discrete iteration after a polish ran and scored its particles
     l_finite  = .true.
     corr_mean = 0.
@@ -540,11 +550,14 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
         call simple_chdir(gate_root, status)
     end subroutine run_refine3D_cont
 
-    !> two refine3D refine=neigh iterations against the truth reference over 30% samples, with
-    !! or without the polish (stage f)
+    !> two trailing refine3D refine=neigh iterations over 30% samples, with or without the polish
+    !! (stage f); the last assembly must represent the N of the final project (C1 of the aftermath)
     subroutine run_refine3D_discrete( dir, pose_cont, out )
         character(len=*), intent(in)    :: dir, pose_cont
         type(sp_project), intent(inout) :: out
+        type(trail_chain_manifest) :: manifest
+        integer, allocatable :: nrep(:), nsmp(:)
+        integer :: mstatus
         call enter_stage(dir)
         call cl%set('prg',         'refine3D')
         call cl%set('projfile',    simple_abspath(string(PROJNAME//'.simple')))
@@ -559,11 +572,18 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
         call cl%set('trs',         TRS)
         call cl%set('athres_cont', ATHRES_CONT)
         call cl%set('update_frac', POLISH_UPDATE_FRAC)
+        call cl%set('trail_rec',   'yes')
         call cl%set('maxits',      POLISH_MAXITS)
         call cl%set('nthr',        nthr)
         call xrefine3D%execute(cl)
         call cl%kill
         call out%read(simple_abspath(string(PROJNAME//'.simple')))
+        call manifest%read(refine3D_trail_manifest_fname(1), mstatus)
+        call out%os_ptcl3D%get_group_update_counts('state', 1, nrep, nsmp)
+        call gate%check(dir//'_trailing_population_of_the_current_sample', &
+            &mstatus == TRAIL_MANIFEST_OK .and. nint(manifest%get_mrep()) == nrep(1))
+        call gate%report(dir//'_trailing_represented_population', manifest%get_mrep())
+        call manifest%kill
         call simple_chdir(gate_root, status)
     end subroutine run_refine3D_discrete
 

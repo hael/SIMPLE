@@ -1,15 +1,9 @@
 !@descr: Cartesian continuous-pose refinement of one particle (refine=cont), the 3D strategy of a Cartesian pass
-! The Cartesian child of strategy3D (plan section 6.3): it extends the representation-neutral
-! base directly and carries no polar search state. One particle per object: seed from the stored
-! ptcl3D pose, one transaction of the pose optimizer (cartft_pose_opt) against the particle's
-! state and half reference in build%cftc, on the particle slot the batch preparation filled
-! (prep_cart_batch; the observation is centred on the stored shift, so the solve is for the shift
-! increment). oris_assign commits pose and score together: the pose only when the solve was
-! accepted, corr_cart (the Cartesian score, cc or exp(-L)) always, at the seed when the solve was
-! rejected (C14); corr is never written. The improved flag records acceptance; a Cartesian pass
-! attempts every particle it samples, so attempted needs no field (C15, O8). Under objfun=euclid
-! the sigma owner records the residual at the committed pose (C5). The convergence fields (dist,
-! dist_inpl, shincarg, mi_proj, mi_state, frac) are written from the seed-to-result motion.
+! One particle per object: seed from the stored ptcl3D pose, one cartft_pose_opt transaction
+! against the particle's state and half reference in build%cftc, on the slot prep_cart_batch
+! filled. oris_assign commits the pose only when accepted, and always corr_cart, the improved
+! flag and the transaction status; a refine=cont pass also writes the convergence fields of the
+! seed-to-result motion, a polish pass leaves those of its discrete search.
 module simple_strategy3D_cont
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_builder,          only: builder
@@ -164,7 +158,7 @@ contains
         call self%oris_assign
     end subroutine srch_cont
 
-    !> Commit the pose (when accepted) and corr_cart together with the improved flag and, in a
+    !> Commit the pose (when accepted), corr_cart, the improved flag and the status and, in a
     !! refine=cont pass, the convergence fields of the seed-to-result motion; a polish pass
     !! leaves those of the discrete search. corr stays as the last polar pass left it.
     subroutine oris_assign_cont( self )
@@ -176,6 +170,7 @@ contains
             if( self%status == CARTFT_ACCEPTED ) call field%set_ori(iptcl, self%result_ori)
             call field%set(iptcl, 'corr_cart', self%score)
             call field%set(iptcl, 'pose_cont_improved', merge(1., 0., self%status == CARTFT_ACCEPTED))
+            call field%set(iptcl, 'pose_cont_status',   real(self%status))
             ! the polish pass leaves the convergence fields of the discrete search it follows, so
             ! the main-loop rule keeps measuring that search (C8, C19; the committed record is the
             ! seed's, which carries them)

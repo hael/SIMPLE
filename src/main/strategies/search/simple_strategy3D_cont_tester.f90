@@ -1,17 +1,9 @@
 !@descr: unit tests for the Cartesian 3D strategy of a Cartesian pass (simple_strategy3D_cont)
-! A small fixture with no file and no polar calculator: a one-state Cartesian calculator in a
-! builder whose ptcl3D field holds the seeds, each particle's slot holding the noise-free truth
-! prediction centred on its stored shift (as the batch preparation centres it). Pinned: the seed
-! validity contract (moved from the pose_cont strategy tester with E19), the lifecycle through a
-! class(strategy3D) pointer with build%pftc never constructed, an identity seed accepted and a
-! state-zero particle rejected (N15); an accepted solve committing pose, corr_cart, the improved
-! flag and the convergence fields of the seed-to-result motion, and a rejected solve leaving the
-! pose bit-identical with corr_cart written at the seed, corr unchanged in both (N16); under
-! euclid the sigma owner receiving the residual at the committed pose; and a batch run by a team
-! of three threads giving the serial poses, scores and flags (N27); a particle outside the
-! pass's sample left bit-identical (N22); a polish pass (pose_cont=yes) leaving the convergence
-! fields of the discrete search while a refine=cont pass writes them from the seed-to-result
-! motion (N23); the rotation bound taken from athres_cont, not the polar athres.
+! A one-state Cartesian calculator in a builder whose ptcl3D field holds the seeds, each slot the
+! noise-free truth prediction centred on its stored shift; no files, no polar calculator. Pinned:
+! the seed contract, the lifecycle, accepted and rejected commits (pose, corr_cart, improved flag,
+! status, convergence fields), the euclid sigma2 residual at the committed pose, threaded batches
+! equal to serial, particles outside the sample untouched, polish fields, the athres_cont bound.
 module simple_strategy3D_cont_tester
 use simple_core_module_api, only: dp, euler2m, string, rad2deg
 use simple_defs_ori,        only: N_PTCL_ORIPARAMS
@@ -22,6 +14,7 @@ use simple_cartft_calc,     only: cartft_calc
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
 use simple_strategy3D_cont, only: strategy3D_cont, cont_seed_is_valid
+use simple_cartft_pose_opt, only: CARTFT_ACCEPTED
 use simple_type_defs,       only: ctfparams, CTFFLAG_NO, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
 implicit none
@@ -232,6 +225,7 @@ contains
             call b%spproj_field%get_ori(3, after)
             truth = real(euler2m([19., 37., truth_e3(3)]), dp)
             call assert_true(after%get('pose_cont_improved') == 1., 'an improving solve was not flagged improved')
+            call assert_true(after%get('pose_cont_status') == real(CARTFT_ACCEPTED), 'an accepted solve did not record its status')
             call assert_true(rotation_distance(real(after%get_mat(), dp), truth) < ROTATION_TOL .and. &
                 &all(abs(after%get_2Dshift() - ([0.31, -0.24] + 0.15)) < SHIFT_TOL), 'an accepted solve did not commit the pose')
             islot = b%cftc%get_ptcl_slot(3)
@@ -268,6 +262,8 @@ contains
             call b%spproj_field%get_ori(4, after)
             call assert_true(after%get('pose_cont_improved') == 0. .and. all(after%get_euler() == before%get_euler()) .and. &
                 &all(after%get_2Dshift() == native_before), 'a rejected solve changed the pose')
+            ! the rejection outcomes are the codes above CARTFT_ACCEPTED
+            call assert_true(after%get('pose_cont_status') > real(CARTFT_ACCEPTED), 'a rejected solve did not record its status')
             islot = b%cftc%get_ptcl_slot(4)
             call b%cftc%objective_gradient(1, .true., islot, real(before%get_mat(), dp), [0._dp, 0._dp], objective, gradient)
             call assert_true(abs(after%get('corr_cart') - real(b%cftc%score(islot, objective))) < 1.e-4, &

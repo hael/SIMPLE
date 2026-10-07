@@ -496,7 +496,8 @@ Ownership:
 - `src/main/cftc`: `cartft_calc` (reference slots per state and half,
   particle slots of the batch, objective, gradient, normal terms, residual)
   and `cartft_pose_opt` (one bounded Levenberg-Marquardt transaction per
-  particle, shift stage then joint stage; the only route, C16).
+  particle: the joint five-parameter stage; `cont_route=shift_then_joint` is an
+  internal test seam, C16).
 - `simple_strategy3D_cont`: `strategy3D_cont`, the matcher's only
   continuous-pose symbol; it extends `strategy3D` beside the polar parent
   `strategy3D_pftc`.
@@ -524,13 +525,24 @@ restores for the single-pass capture tests (E25, N20 a-c); repeated passes
 supply what one joint pass misses. `inpl_cont` is overridden to `no` (the
 in-plane angle is part of the solve).
 
-Scores: a Cartesian pass writes `corr_cart` (slot 51 of the particle record)
-and the improved flag (slot 52) for every particle it processes and never
-writes `corr`, which keeps the value of the last polar pass. The two are not
+Scores: a Cartesian pass writes `corr_cart` (slot 51 of the particle record),
+the improved flag (slot 52) and the transaction status (`pose_cont_status`,
+slot 42, a `CARTFT_*` code) for every particle it processes and never writes
+`corr`, which keeps the value of the last polar pass. The two are not
 comparable (C9). The convergence report of a Cartesian pass shows the mean
-`corr_cart`, the attempts (the sampled particles) and the improved fraction;
-no convergence is declared under `refine=cont` (interim rule): the run goes to
-`maxits`.
+`corr_cart`, the attempts (the sampled particles) and the improved fraction.
+
+Convergence under `refine=cont` (`check_cont_conv` in `simple_convergence`,
+constants in `simple_defs_conv`): a sampled particle is stable when its
+transaction ended accepted or with a finite no-improvement and it moved by at
+most 0.5 degrees (`dist + dist_inpl`, an upper bound on the rotation angle)
+and 1 A (`shincarg * smpd`). An iteration passes when 90% of the sampled
+particles of every populated state are stable. The run converges when
+consecutive passing iterations have together sampled 90% of the active
+particles (`sampled` at or above the generation the streak began with); a
+failing iteration resets the streak, and `minits` and `maxits` apply as for
+every mode. A rejected transaction keeps the seed, so zero motion alone never
+counts as convergence.
 
 Polish: `pose_cont=yes` in a discrete mode makes the iteration strategy follow
 every discrete pass with a `refine=cont` pass over the same particle sample

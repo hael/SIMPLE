@@ -1,35 +1,9 @@
 !@descr: Cartesian Fourier calculator of continuous pose refinement: references, prepared particles, objectives
-!
-! The Cartesian counterpart of polarft_calc (plan section 6.2). It holds the state-by-half
-! references and the prepared particles of the current batch. The evaluation methods
-! (predict, objective_gradient, shift_normal_terms, pose_normal_terms, sigma_contribution)
-! take the calculator intent(in), so concurrent evaluation on different particles cannot
-! write shared state. set_ref runs serially before the particle loop; set_ptcl writes only
-! the slot it is given, so one thread per slot may run it concurrently.
-!
-! Objectives (Phase 3, plan section 5; C4-C6). A particle slot is prepared for one objective
-! and every evaluation on it uses that objective, so the objective follows the caller's
-! params%cc_objfun at preparation:
-!  - OBJFUN_CC, set_ptcl without sigma2 (C5: sigma2 cannot enter): 1 - cc with
-!    cc = sum Re(conjg(X) C M) / sqrt(sum |X|^2 sum |C M|^2), a uniform weight per Cartesian
-!    pixel, the weighting of the continuous polar stages;
-!  - OBJFUN_EUCLID, set_ptcl with sigma2: the polar loss L = sum |X - C M|^2/sigma2 /
-!    sum |X|^2/sigma2 (per-pixel weight 1/sigma2 of the pixel's shell), score exp(-L) (C6).
-! X is the observation as prepimg4align prepares it up to the mask (centred on the stored
-! shift, phase-flipped for CTFFLAG_YES, masked) times the stencil's taper (O4, O5 (a),
-! get_ptcl_taper); C = abs(CTF) for CTFFLAG_YES and CTFFLAG_FLIP, 1 without CTF; M = S(t) G(R) V
-! the gathered reference with the shift phase S(t). A pixel belongs to shell nint(|(h,k)|)
-! and is used when that shell lies in the slot's range, the polar ring membership, and the
-! pixel lies inside the Nyquist circle.
-! References reach the matcher as a file of prepared real-space volumes, one per half (plan
-! section 6.6, C22): the reference materializer stages the volumes it has prepared
-! (set_refvol) and writes them (write); every matcher reads them back (read), which pads and
-! transforms each once (set_ref). The header carries the band limit of the iteration, which
-! the reader returns for the caller to adopt.
-! The particle slots are those of the current batch (new_ptcls sizes them; Phase 6): the batch
-! preparation of the matcher (prep_cart_batch) fills slot i with the i-th particle of the batch,
-! one particle per iteration of its parallel loop, and the sigma owner reads the residual of a
-! slot (sigma_contribution).
+! The Cartesian counterpart of polarft_calc: state-by-half references and the prepared particle
+! slots of the current batch. Evaluation methods take the calculator intent(in); set_ref runs
+! serially, set_ptcl writes only its own slot. A slot is prepared for one objective: OBJFUN_CC
+! (1 - cc, uniform pixel weight, no sigma2) or OBJFUN_EUCLID (sigma2-weighted loss L, score exp(-L)).
+! The objectives and the reference file are specified in refine3D_policy.md (Cartesian section).
 module simple_cartft_calc
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, ieee_value
 use simple_core_module_api,   only: dp, sp, PI, KBWINSZ, KBALPHA, OSMPL_PAD_FAC, CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP, &

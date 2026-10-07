@@ -1,31 +1,9 @@
 !@descr: library test of Cartesian pose refinement on simulated 1JYX particles (simple_strategy3D_cont)
-! A long-running quality gate for the five-parameter LM: 1JYX from the embedded
-! coordinates at box 144, 1 000 reproducible projections with varying CTF and finite
-! noise (5 000 until ruling R2), every starting pose perturbed by exactly 15 degrees and two pixels, no PFTC
-! search. Refines every particle through the Cartesian 3D strategy (strategy3D_cont, since
-! Phase 7 of the pose_cont refactoring) as the matcher runs it: the observations prepared
-! by prepimg4align_cart into the slots of the builder's Cartesian calculator, the seeds in
-! its ptcl3D field, one strategy per particle; reconstructs the truth, perturbed
-! and refined pose sets and scores them by FSC and truth-map correlation. Since Phase 3 of
-! the pose_cont refactoring the recipe runs under both objectives (objfun=cc on the truth
-! reference without sigma2; objfun=euclid on the truth reference scaled to the data by one
-! least-squares gain, with the per-shell sigma2 of the production definition, both measured
-! at the truth poses as at convergence) at the band limit of lp 8 A and at the
-! high-resolution lp 4 A, where the CTF displacement (74 A) exceeds the 60 A mask radius, so
-! the observation must be centred and phase-flipped before its mask (O4); the 4 A case starts
-! from the poses the same objective refined at 8 A (coarse to fine, ruling R1). The observation is
-! centred on the stored (perturbed) shift and the solve is for the shift increment; the
-! bounds are trs = 5 px and athres_cont = 15 deg and the LM route shift_then_joint, those of
-! the Phase 0 baseline (O6, C16). Pinned per
-! case: the aggregate objective, rotation error and shift error fall, the refined
-! reconstruction correlates better with the truth than the perturbed one, and the floors of
-! section 10.1, declared before the first run: truth (median rotation and shift errors at most
-! a tenth of the injected 15 deg and 2 px of the 8 A start), analytic (the fraction inside the basin width
-! lp/(mskdiam/2) at least 0.95 at 8 A, 0.90 at 4 A), truth map (refined correlation within
-! 0.01 of the exact-pose map), Phase 0 with margins for cc at 8 A (median rotation error at
-! most twice 0.194 deg, basin fraction at least 0.9870 - 0.01, map correlation at least
-! 0.96888 - 0.005, measured at 1 000 particles), and the 4 A median rotation error below the 8 A one per objective. The
-! generated fixture files are removed before the test returns. Nightly (lib_cart_align3D).
+! Nightly gate (lib_cart_align3D): 1 000 simulated 1JYX particles at box 144 with varying CTF and
+! noise, every pose perturbed by 15 deg and 2 px, refined through strategy3D_cont as the matcher
+! runs it (shift_then_joint, trs 5 px, athres_cont 15 deg) under objfun=cc and euclid at lp 8 A,
+! then at 4 A from the 8 A poses. Pinned: objective, rotation and shift errors fall, the refined
+! map beats the perturbed one, and the floors declared below. Fixture files are removed.
 module simple_strategy3D_cont_1jyx_tester
 use ieee_arithmetic, only: ieee_is_finite
 !$  use omp_lib, only: omp_get_max_threads, omp_get_thread_num
