@@ -6,10 +6,31 @@ use simple_eer_factory, only: eer_decoder
 implicit none
 
 public :: correct_gain, flip_gain, calc_eer_fraction, pix2polycoords, patch_poly, apply_patch_poly
+public :: eer_scale_movie_convention
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    !> Return decoded EER sampling and dimensions from physical input values.
+    ! Mode 1 leaves both unchanged; mode 2 doubles X/Y and halves sampling.
+    subroutine eer_scale_movie_convention( smpd, ldim, eer_upsampling, smpd_out, ldim_out )
+        real,    intent(in)  :: smpd
+        integer, intent(in)  :: ldim(2), eer_upsampling
+        real,    intent(out) :: smpd_out
+        integer, intent(out) :: ldim_out(2)
+        if( any(ldim < 1) .or. smpd <= 0. ) THROW_HARD('Invalid movie dimensions or sampling!')
+        select case(eer_upsampling)
+        case(1)
+            ldim_out = ldim
+            smpd_out = smpd
+        case(2)
+            ldim_out = 2 * ldim
+            smpd_out = smpd / 2.
+        case DEFAULT
+            THROW_HARD('Unsupported EER up-sampling: '//int2str(eer_upsampling))
+        end select
+    end subroutine eer_scale_movie_convention
 
     !> Converts a pixel coordinate to the normalized stage coordinate
     pure real(dp) function pix2polycoords( pixel_coord, image_dim )

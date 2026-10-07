@@ -10,6 +10,7 @@ type(ui_program), target :: unit_ori
 type(ui_program), target :: unit_image
 type(ui_program), target :: unit_numerics
 type(ui_program), target :: unit_project
+type(ui_program), target :: unit_motion
 type(ui_program), target :: unit_ui
 type(ui_program), target :: unit_ipc
 type(ui_program), target :: unit_reconstruction
@@ -37,6 +38,7 @@ contains
         call new_unit_image(tsttab)
         call new_unit_numerics(tsttab)
         call new_unit_project(tsttab)
+        call new_unit_motion(tsttab)
         call new_unit_ui(tsttab)
         call new_unit_ipc(tsttab)
         call new_unit_reconstruction(tsttab)
@@ -122,14 +124,27 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call unit_project%new(&
         &'unit_project',&
-        &'unit tests: projects, STAR files, class compatibility, sieving, motion gain, motion model',&
-        &'is the fast-gate unit suite for projects, STAR files, class compatibility, sieving, motion gain, motion model',&
+        &'unit tests: projects, STAR files, class compatibility, sieving',&
+        &'is the fast-gate unit suite for projects, STAR files, class compatibility, sieving',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Projects')
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, optics_groups, optics_maps, motion_gain, motion_model, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, optics_groups, optics_maps, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
+
+    subroutine new_unit_motion( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call unit_motion%new(&
+        &'unit_motion',&
+        &'unit tests: motion gain, motion model and particle extraction',&
+        &'is the fast-gate unit suite for motion gain helpers, motion model persistence and geometry, and particle extractor initialization',&
+        &'simple_test_exec',&
+        &.false., display_name='Unit Tests: Motion')
+        call unit_motion%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
+            &'One sub-suite of this area to run alone (motion_gain, motion_model, particle_extractor)', '', .false., '')
+        call add_ui_program('unit_motion', unit_motion, tsttab, UI_CATEGORY)
+    end subroutine new_unit_motion
 
     subroutine new_unit_ui( tsttab )
         class(ui_hash), intent(inout) :: tsttab

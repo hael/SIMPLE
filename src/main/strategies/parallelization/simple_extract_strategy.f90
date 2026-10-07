@@ -204,13 +204,12 @@ contains
         integer                                :: ldim(3), lfoo(3), fromto(2)
         integer                                :: nframes, imic, iptcl, nptcls,nmics,nmics_here,box, i, iptcl_g
         integer                                :: cnt, nmics_tot, ifoo, state, iptcl_glob, nptcls2extract
-        logical                                :: l_ctfpatch, l_gid_present, l_ogid_present, prog_write, prog_part
+        logical                                :: l_ctfpatch, l_gid_present, l_ogid_present, prog_write
         ! init
         output_dir = PATH_HERE
         fromto(:)  = [params%fromp, params%top]
         nmics_here = fromto(2)-fromto(1)+1
         prog_write = .false.
-        prog_part  = .false.
         if( params%stream.eq.'yes' )then
             output_dir = DIR_EXTRACT
             if( cline%defined('dir') ) output_dir = params%dir//'/'
@@ -239,7 +238,6 @@ contains
                 call spproj%os_mic%set_ori(cnt, o_tmp)
             enddo
             prog_write = .true.
-            prog_part  = cline%defined('part')
             call spproj_in%kill
         endif
         ! input boxes
@@ -363,9 +361,11 @@ contains
                 call prepimgbatch(nptcls2extract)
                 if( trim(params%extractfrommov).eq.'yes' )then
                     if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
-                        THROW_HARD('extractfrommov=yes does not support ctf=flip yet')
+                        THROW_HARD('extractfrommov=yes does not support ctf=flip')
                     endif
-                    call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))
+                    call extractor%init_mov(o_mic, params)
+                endif
+                if( extractor%from_mov() )then
                     call extractor%extract_particles(ptcl_inds, nint(boxdata), imgs, stk_min,stk_max,stk_mean,stk_sdev)
                 else
                     call micrograph%read(mic_name, 1)
@@ -428,11 +428,6 @@ contains
                 if(prog_write) then
                     if( (real(imic) / real(nmics_here)) > prog + 0.05 ) then
                         prog = real(imic) / real(nmics_here)
-                        if(prog_part) then
-                            ! call progressfile_update_part(cline%get_iarg('part'), prog)
-                        else
-                            ! call progressfile_update(prog)
-                        endif
                         write(logfhandle,'(f4.0,1x,a)') 100.*prog, 'percent of the micrographs processed'
                     endif
                 endif

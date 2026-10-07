@@ -19,7 +19,7 @@ public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_corre
 public :: motion_correct_with_patched
 ! Common & convenience
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
-public :: motion_correct_write_poly, motion_correct_calc_bid, motion_correct_write_docs
+public :: motion_correct_calc_bid, motion_correct_write_docs
 private
 #include "simple_local_flags.inc"
 
@@ -46,7 +46,6 @@ integer :: nframes        = 0                             !< number of frames us
 integer :: total_nframes  = 0                             !< total number of frames in movie
 integer :: fixed_frame    = 0                             !< fixed frame of reference for isotropic alignment (0,0)
 integer :: ldim(3)        = [0,0,0]                       !< logical dimension of frame
-integer :: ldim_orig(3)   = [0,0,0]                       !< logical dimension of frame (original, for use in motion_correct_iter)
 integer :: ldim_scaled(3) = [0,0,0]                       !< shrunken logical dimension of frame
 integer :: eer_fraction   = 0                             !< number of EER frames within a movie fraction
 real    :: total_dose     = 0.                            !< total dose in e/A2
@@ -82,6 +81,7 @@ contains
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
 
     subroutine motion_correct_init( params, movie_stack_fname, ctfvars, movie_sum, gainref )
+        use simple_motion_correct_utils, only: eer_scale_movie_convention
         class(parameters), target, intent(in)    :: params
         class(string),             intent(in)    :: movie_stack_fname !< input filename of stack
         type(ctfparams),           intent(in)    :: ctfvars           !< CTF parameters
@@ -89,9 +89,8 @@ contains
         class(string), optional,   intent(in)    :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
         real     :: dimo4
-        integer  :: shp(3), iframe, n_eer_frames
+        integer  :: shp(3), iframe, n_eer_frames, ldim_input(2)
         p_ptr => params
-        smpd       = ctfvars%smpd ! un-scaled pixel size
         total_dose = p_ptr%total_dose
         ! get number of frames & dim from stack
         select case(fname2format(movie_stack_fname))
@@ -112,22 +111,15 @@ contains
             endif
             write(logfhandle,'(A,2I6)')'>>> NUMBER OF FRACTIONS; EER FRAMES PER FRACTION: ', nframes, eer_fraction
             if( p_ptr%l_dose_weight )write(logfhandle,'(A,F8.2)')'>>> EFFECTIVE TOTAL DOSE:', total_dose
-            select case(p_ptr%eer_upsampling)
-            case(1)
-                ! 4K x 4K, default movie pixel size
-            case(2)
-                ldim    = 2 * ldim
-                ldim(3) = 1
-                smpd    = smpd / 2. ! x2 upsampling to 8K x 8K pixel size
-            case DEFAULT
-                THROW_HARD('Unsupported up-sampling: '//int2str(p_ptr%eer_upsampling)//'; motion_correct_init')
-            end select
         case DEFAULT
             call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
             l_eer = .false.
         end select
+        ! The model constructor and decoder require the original input values.
+        ldim_input = ldim(1:2)
+        smpd = ctfvars%smpd
+        if( l_eer ) call eer_scale_movie_convention(ctfvars%smpd, ldim_input, p_ptr%eer_upsampling, smpd, ldim(1:2))
         total_nframes = nframes
-        ldim_orig     = ldim
         if( nframes < 2 ) THROW_HARD('fewer than 2 frames in movie: '//movie_stack_fname%to_char())
         ldim(3) = 1
         ! dose weighting prep
@@ -247,7 +239,7 @@ contains
         if( l_BENCH ) rt_fft_clip = toc(t_fft_clip)
         deallocate(movie_frames)
         ! deformation model object
-        call mmodel%new(p_ptr, movie_stack_fname, ldim_orig, smpd, movie_frames_scaled,&
+        call mmodel%new(p_ptr, movie_stack_fname, ldim_input, ctfvars%smpd, movie_frames_scaled,&
             &total_nframes, fixed_frame, kv, dose_per_frame,eer_fraction, gain=gainref)
         call mmodel%set_outlier_coords(pos_outliers)
         if( L_BENCH )then
@@ -395,18 +387,6 @@ contains
         logical,       intent(in) :: write_poly
         call mmodel%write(star_fname, bin_fname, write_poly)
     end subroutine motion_correct_write_docs
-
-    ! write polynomial coefficients
-    subroutine motion_correct_write_poly( fname )
-        class(string),  intent(in) :: fname
-        real(dp), allocatable :: polycoeffs(:)
-        if( trim(p_ptr%extractfrommov).eq.'yes' )then
-            call motion_patch%get_poly_coeffs(polycoeffs)
-            if( do_scale ) polycoeffs = polycoeffs / real(p_ptr%scale_movies,dp)
-            call arr2file(polycoeffs, fname)
-            deallocate(polycoeffs)
-        endif
-    end subroutine motion_correct_write_poly
 
     subroutine motion_correct_iso_kill
         if (allocated(opt_shifts)) deallocate(opt_shifts)

@@ -43,7 +43,7 @@ contains
         class(string),              intent(in)    :: moviename, fbody, dir_out
         class(string),    optional, intent(in)    :: gainref_fname
         character(len=*), optional, intent(in)    :: tseries
-        type(string) :: fbody_here, ext, star_fname, poly_fname, model_fname
+        type(string) :: fbody_here, ext, star_fname, model_fname
         real         :: goodnessoffit(2), scale, bfac_here, bid
         integer      :: ldim(3), ldim_thumb(3), nxpatch, nypatch
         logical      :: patch_success, l_tseries
@@ -75,7 +75,6 @@ contains
         ! shifts & star output
         patched_shift_fname = dir_out%to_char()//fbody_here%to_char()//'_shifts.eps'
         star_fname          = dir_out%to_char()//fbody_here%to_char()//STAR_EXT
-        poly_fname          = dir_out%to_char()//fbody_here%to_char()//'.poly'
         model_fname         = dir_out%to_char()//fbody_here%to_char()//'.mmodel'
         ! isotropic ones
         self%moviename_intg   = dir_out%to_char()//fbody_here%to_char()//INTGMOV_SUFFIX//MRC_EXT
@@ -156,7 +155,6 @@ contains
         endif
         ! STAR & model output
         if( .not. l_tseries )then
-            call motion_correct_write_poly(poly_fname)
             call motion_correct_write_docs(star_fname, model_fname, patch_success)
             call motion_correct_calc_bid(patch_success, bid)
         endif
@@ -209,7 +207,6 @@ contains
         call fbody_here%kill
         call ext%kill
         call star_fname%kill
-        call poly_fname%kill
         call model_fname%kill
     end subroutine iterate
 

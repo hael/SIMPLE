@@ -3,7 +3,8 @@ module simple_test_exec_class
 use simple_cmdline,               only: cmdline
 use simple_commanders_test_class, only: commander_test_units, &
                                         commander_test_unit_core, commander_test_unit_ori, commander_test_unit_image, &
-                                        commander_test_unit_numerics, commander_test_unit_project, commander_test_unit_ui, &
+                                        commander_test_unit_numerics, commander_test_unit_project, commander_test_unit_motion, &
+                                        commander_test_unit_ui, &
                                         commander_test_unit_ipc, commander_test_forked_process, &
                                         commander_test_unit_reconstruction, commander_test_lib_reconstruction, &
                                         commander_test_unit_pftc_align2D3D, &
@@ -23,6 +24,7 @@ type(commander_test_unit_ori)       :: xunit_ori
 type(commander_test_unit_image)     :: xunit_image
 type(commander_test_unit_numerics)  :: xunit_numerics
 type(commander_test_unit_project)   :: xunit_project
+type(commander_test_unit_motion)    :: xunit_motion
 type(commander_test_unit_ui)        :: xunit_ui
 type(commander_test_unit_ipc)       :: xunit_ipc
 type(commander_test_unit_reconstruction) :: xunit_reconstruction
@@ -63,6 +65,8 @@ contains
                 call xunit_numerics%execute(cline)
             case( 'unit_project' )
                 call xunit_project%execute(cline)
+            case( 'unit_motion' )
+                call xunit_motion%execute(cline)
             case( 'unit_ui' )
                 call xunit_ui%execute(cline)
             case( 'unit_ipc' )

@@ -31,7 +31,7 @@ labels.
 
 | label | entries | when | what |
 |---|---|---|---|
-| `fast` | 14 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
+| `fast` | 15 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
 | `highlevel` | 12 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process`, plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
@@ -59,9 +59,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 31: 13 fast,
-5 library, 12 highlevel, 1 platform; 30 until the `cont_refine3D_1jxy` entry of the
-pose_cont refactoring, an owner decision, contract C18) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 33: 15 fast,
+5 library, 12 highlevel, 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -83,7 +82,8 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, average linkage, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
-| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, motion gain, motion model, solve3D manifest, project superset, solve3D addon report |
+| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report |
+| `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, volume pair metrics, nonuniform filtering |
@@ -94,7 +94,7 @@ tester module (section 4.1).
 | `unit_single` | atoms, cif2mrc, C-alpha finder |
 | `unit_stream` | preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D, solve 3D (the steps of the stream stages, without a queue or waits), job sets, stream master, stream watcher |
 
-`simple_test_exec test=units` runs all fourteen in one process. It is a
+`simple_test_exec test=units` runs all fifteen in one process. It is a
 convenience and deliberately not a CTest entry.
 
 ### 1.2 Long-running CTest entries
@@ -227,7 +227,7 @@ Answer these in order.
 2. **Which area does it test?** A test goes to the area of the code it
    tests, not the area of its author or of the workflow that uses the code.
    The areas are named after the machinery and kept short: `core`, `ori`,
-   `image`, `numerics`, `project`, `ui`, `ipc`, `reconstruction`,
+   `image`, `numerics`, `project`, `motion`, `ui`, `ipc`, `reconstruction`,
    `pftc_align2D3D` (everything on the polar Fourier transform, 2D and 3D),
    `cart_align3D` (Cartesian continuous registration), `heterogeneity`,
    `parallel`, `single`, and `stream` for the stream stages.
@@ -723,7 +723,7 @@ written as `sub-suite` (entry).
 | `continuous_inplane_refine3D` | `refine3D in-plane state` and `continuous in-plane` (`unit_pftc_align2D3D`) |
 | `continuous_inplane_rotation2D`, `continuous_inplane_rotation2D_metadata` | deleted (a shell driver; a post-run scan of a user project) |
 | `corrs2weights`, `corrs2weights_test`, `rank_weights` | `statistics` (`unit_numerics`) |
-| `create_gain`, `search_gain_flips` | `motion gain` (`unit_project`) |
+| `create_gain`, `search_gain_flips` | `motion gain` (`unit_motion`) |
 | `ctf`, `ctf_test` | `CTF` (`unit_image`) |
 | `detect_atoms`, `simulate_nanoparticle` | `nanoparticle atoms` (`lib_single`) |
 | `detect_calpha` | `C-alpha finder` (`unit_single`) |
@@ -795,5 +795,5 @@ written as `sub-suite` (entry).
 | `subproject_distr`, `ptcls_ppca_subproject_distr` | deleted with the subproject scheduling code, which had no other caller |
 | `trail_rec_blend` | `trailing-reconstruction blend` (`unit_image`) |
 | `ui_hash_test` | `UI hash` (`unit_ui`) |
-| `units` | `simple_test_exec test=units` (all fourteen area suites, not a CTest entry) |
+| `units` | `simple_test_exec test=units` (all fifteen area suites, not a CTest entry) |
 | the `unit_<area>` suites | unchanged names, CTest label `fast` |

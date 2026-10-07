@@ -1,4 +1,4 @@
-!@descr: unit tests for binary persistence and polynomial refitting of simple_motion_model
+!@descr: unit tests for geometry, binary persistence and polynomial refitting of simple_motion_model
 module simple_motion_model_tester
 use, intrinsic :: iso_fortran_env, only: int8, int32, int64
 use simple_core_module_api
@@ -19,6 +19,7 @@ contains
     subroutine run_all_motion_model_tests()
         write(*,'(A)') '**** running all motion model tests ****'
         call test_flipgain_lifecycle()
+        call test_movie_geometry()
         call test_binary_roundtrip_with_optional_arrays()
         call test_binary_roundtrip_with_rejected_patch()
         call test_binary_roundtrip_without_optional_arrays()
@@ -62,6 +63,109 @@ contains
         deallocate(frames)
         call del_file(movie)
     end subroutine test_flipgain_lifecycle
+
+    subroutine test_movie_geometry()
+        use simple_image, only: image
+        use simple_motion_correct_utils, only: eer_scale_movie_convention
+        use simple_starfile_wrappers, only: starfile_table_type, starfile_table__new, starfile_table__delete,&
+            &starfile_table__read, starfile_table__firstobject, starfile_table__nextobject,&
+            &starfile_table__getValue_int, starfile_table__getValue_double, EMDL_IMAGE_SIZE_X, EMDL_IMAGE_SIZE_Y,&
+            &EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, EMDL_MICROGRAPH_BINNING, EMDL_MICROGRAPH_SHIFT_X
+        integer, parameter :: INPUT_DIMS(2) = [8,4], MODES(4) = [1,2,2,2]
+        integer, parameter :: MOVIE_X(4) = [8,16,16,8], MOVIE_Y(4) = [4,8,8,4]
+        integer, parameter :: OUTPUT_X(4) = [8,8,4,8], OUTPUT_Y(4) = [4,4,2,4]
+        real, parameter :: PHYSICAL_SMPD = 1.5, MOVIE_SMPD(4) = [1.5,0.75,0.75,1.5]
+        real, parameter :: OUTPUT_SMPD(4) = [1.5,1.5,3.,1.5], BINNING(4) = [1.,2.,4.,1.]
+        class(motion_model), allocatable :: model, reread
+        class(parameters), allocatable, target :: params
+        class(image), pointer :: frames(:)
+        type(starfile_table_type) :: table
+        type(string) :: movie, binfile, starfile
+        real(dp) :: value
+        real :: smpd_decoded
+        integer :: icase, iframe, funit, ios, ivalue, iobject, ldim_decoded(2)
+        logical :: ok
+        write(*,'(A)') 'test_movie_geometry'
+        allocate(model, reread, params, frames(2))
+        params%fraction_dose_target = 1.
+        params%total_dose = 2.
+        binfile  = 'tmp_motion_model_geometry.bin'
+        starfile = 'tmp_motion_model_geometry.star'
+        call eer_scale_movie_convention(PHYSICAL_SMPD, INPUT_DIMS, 1, smpd_decoded, ldim_decoded)
+        call assert_true(all(ldim_decoded == [8,4]), 'EER mode one preserves dimensions')
+        call assert_real(1.5, smpd_decoded, 0., 'EER mode one preserves sampling')
+        call eer_scale_movie_convention(PHYSICAL_SMPD, INPUT_DIMS, 2, smpd_decoded, ldim_decoded)
+        call assert_true(all(ldim_decoded == [16,8]), 'EER mode two doubles both dimensions')
+        call assert_real(0.75, smpd_decoded, 0., 'EER mode two halves sampling')
+        do icase = 1,size(MODES)
+            if( icase < 4 )then
+                movie = 'tmp_motion_model_geometry.eer'
+            else
+                movie = 'tmp_motion_model_geometry.mrc'
+            endif
+            ! Constructor metadata only: no EER decoder reads this placeholder.
+            open(newunit=funit, file=movie%to_char(), status='replace', action='write', iostat=ios)
+            if( ios /= 0 ) THROW_HARD('cannot create motion model geometry fixture')
+            close(funit)
+            do iframe = 1,2
+                call frames(iframe)%new([OUTPUT_X(icase),OUTPUT_Y(icase),1], OUTPUT_SMPD(icase), wthreads=.false.)
+            enddo
+            params%eer_upsampling = MODES(icase)
+            call model%new(params, movie, INPUT_DIMS, PHYSICAL_SMPD, frames, 2, 1, 300., 1., 1)
+            call assert_true(model%eer .eqv. (icase < 4), 'only EER movie geometry uses the upsampling mode')
+            call assert_true(all(model%ldim_movie == [MOVIE_X(icase),MOVIE_Y(icase)]),&
+                &'constructor stores decoded dimensions after exactly one EER conversion')
+            call assert_real(MOVIE_SMPD(icase), model%smpd_movie, 0., 'constructor stores decoded movie sampling')
+            call assert_true(all(model%ldim == [OUTPUT_X(icase),OUTPUT_Y(icase)]),&
+                &'scaled dimensions come from the prepared frames')
+            call assert_real(OUTPUT_SMPD(icase), model%smpd, 0., 'scaled sampling comes from the prepared frames')
+            call assert_real(BINNING(icase), model%binning, 0., 'binning is relative to the decoded movie grid')
+            call model%set_drift_offsets([0.,1.], [0.,-0.5])
+            call model%write(starfile, binfile, .false.)
+            params%eer_upsampling = 1
+            call reread%read(binfile, params)
+            call assert_true(all(reread%ldim_movie == [MOVIE_X(icase),MOVIE_Y(icase)]),&
+                &'binary reading does not upsample saved movie dimensions again')
+            call assert_real(MOVIE_SMPD(icase), reread%smpd_movie, 0., 'binary reading preserves decoded sampling')
+            call assert_real(BINNING(icase), reread%binning, 0., 'binary reading preserves decoded-grid binning')
+            call assert_int(MODES(icase), reread%eer_upsampling, 'binary reading preserves the saved EER mode')
+            call starfile_table__new(table)
+            call starfile_table__read(table, starfile, 'general')
+            iobject = int(starfile_table__firstobject(table))
+            call assert_true(iobject >= 0, 'geometry STAR output contains a general record')
+            ok = starfile_table__getValue_int(table, EMDL_IMAGE_SIZE_X, ivalue)
+            call assert_true(ok, 'STAR stores the decoded movie width')
+            if( ok ) call assert_int(MOVIE_X(icase), ivalue, 'STAR width remains on the decoded grid')
+            ok = starfile_table__getValue_int(table, EMDL_IMAGE_SIZE_Y, ivalue)
+            call assert_true(ok, 'STAR stores the decoded movie height')
+            if( ok ) call assert_int(MOVIE_Y(icase), ivalue, 'STAR height remains on the decoded grid')
+            ok = starfile_table__getValue_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, value)
+            call assert_true(ok, 'STAR stores decoded movie sampling')
+            if( ok ) call assert_double(real(MOVIE_SMPD(icase),dp), value, 'STAR sampling matches its decoded dimensions')
+            ok = starfile_table__getValue_double(table, EMDL_MICROGRAPH_BINNING, value)
+            call assert_true(ok, 'STAR stores decoded-grid binning')
+            if( ok ) call assert_double(real(BINNING(icase),dp), value, 'STAR binning retains its decoded-grid meaning')
+            call starfile_table__delete(table)
+            call starfile_table__new(table)
+            call starfile_table__read(table, starfile, 'global_shift')
+            iobject = int(starfile_table__firstobject(table))
+            iobject = int(starfile_table__nextobject(table))
+            call assert_true(iobject >= 0, 'geometry STAR output contains the second frame')
+            ok = starfile_table__getValue_double(table, EMDL_MICROGRAPH_SHIFT_X, value)
+            call assert_true(ok, 'STAR stores the second frame drift')
+            if( ok ) call assert_double(real(BINNING(icase),dp), value, 'STAR drift remains in decoded movie pixels')
+            call starfile_table__delete(table)
+            call model%kill()
+            call reread%kill()
+            call del_file(movie)
+            call del_file(binfile)
+            call del_file(starfile)
+        enddo
+        do iframe = 1,2
+            call frames(iframe)%kill()
+        enddo
+        deallocate(frames)
+    end subroutine test_movie_geometry
 
     subroutine test_refit_polynomial_known_coefficients()
         integer, parameter :: NFRAMES_TEST = 7, NGRID = 3, REF_FRAMES(2) = [1,4]

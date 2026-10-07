@@ -178,7 +178,6 @@ contains
         integer :: i, nframes, imic, iptcl, nmics, prev_box, box_foo, cnt, nmics_tot, stk_ind
         integer :: fromp, top, istk, nptcls2extract, nptcls
         logical :: l_3d, l_scale_particles, l_movie_frames
-        ! worker logic copied from your exec_reextract (minus simple_end)
         l_movie_frames    = trim(params%extractfrommov).eq.'yes'
         l_scale_particles = cline%defined('osmpd')
         if( l_scale_particles )then
@@ -347,8 +346,8 @@ contains
                     enddo
                     ptcl_inds = ptcl_inds - fromp + 1
                     call prepimgbatch_local(nptcls2extract, l_scale_particles)
-                    if( l_movie_frames )then
-                        call extractor%init_mov(o_mic, params%box, (params%pcontrast .eq. 'black'))
+                    if( l_movie_frames ) call extractor%init_mov(o_mic, params)
+                    if( extractor%from_mov() )then
                         call extractor%extract_particles(ptcl_inds, boxcoords, build%imgbatch, stk_min,stk_max,stk_mean,stk_sdev)
                     else
                         call micrograph%read(mic_name)

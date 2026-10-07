@@ -22,7 +22,7 @@ type :: motion_model
     type(string)         :: movie
     type(string)         :: gain
     character(len=STDLEN) :: flipgain = 'no'
-    ! Images dimensions
+    ! Decoded movie geometry and scaled motion-correction geometry
     real                 :: smpd_movie
     integer              :: ldim_movie(2)
     real                 :: smpd
@@ -77,8 +77,10 @@ end type motion_model
 
 contains
 
+    !> Movie inputs describe the original grid and physical sampling, before EER upsampling.
     subroutine new( self, params, movie, ldim_movie, smpd_movie, scaled_frames,&
             &total_nframes, fixed_frame, voltage, dose_per_frame, eer_fraction, gain )
+        use simple_motion_correct_utils, only: eer_scale_movie_convention
         class(motion_model), intent(inout) :: self
         class(parameters), target, intent(in) :: params
         class(string),             intent(in) :: movie
@@ -98,8 +100,13 @@ contains
         if( present(gain) ) self%gain = gain
         self%flipgain   = uppercase(self%p_ptr%flipgain)
         self%eer        = fname2format(self%movie) == 'K'
+        self%eer_upsampling = self%p_ptr%eer_upsampling
+        ! Stored dimensions and sampling describe the decoded grid.
         self%ldim_movie = ldim_movie
         self%smpd_movie = smpd_movie
+        if( self%eer )then
+            call eer_scale_movie_convention(smpd_movie, ldim_movie, self%eer_upsampling, self%smpd_movie, self%ldim_movie)
+        endif
         self%nframes    = size(scaled_frames)
         self%total_nframes = total_nframes
         ldim             = scaled_frames(1)%get_ldim()
@@ -114,7 +121,6 @@ contains
         self%accumulated_dose = real(self%nframes) * self%dose_per_frame
         self%total_dose       = self%p_ptr%total_dose
         self%eer_fraction     = eer_fraction
-        self%eer_upsampling   = self%p_ptr%eer_upsampling
         if( self%nframes < 0 .or. self%nx_patch < 0 .or. self%ny_patch < 0 )then
             THROW_HARD('invalid motion model array dimensions')
         endif
@@ -371,9 +377,6 @@ contains
             call starfile_table__setValue_int(table, EMDL_MICROGRAPH_EER_GROUPING,       self%eer_fraction)
         endif
         call starfile_table__setValue_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION,   motion_model_version)
-        if( motion_model_version==1 .and. trim(self%p_ptr%extractfrommov).eq.'yes')then
-            call starfile_table__setValue_int(table, SMPL_MOVIE_FRAME_ALIGN,             self%fixed_frame)
-        endif
         call starfile_table__write_ofile(table)
         ! stage drift
         call starfile_table__clear(table)

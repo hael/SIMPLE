@@ -1,11 +1,9 @@
-
-!@descr: core functionality for extracting particles from micrographs
+!@descr: particle extraction from micrographs and motion-corrected movie frames
 module simple_particle_extractor
 use simple_core_module_api
 use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
 use simple_motion_correct_utils, only: correct_gain, pix2polycoords, apply_patch_poly
-use simple_starfile_wrappers
 use simple_motion_model,         only: motion_model
 implicit none
 private
@@ -21,6 +19,7 @@ logical, parameter :: DEBUG_HERE = .false.
 type(image), allocatable :: particles_frames(:,:)
 
 type :: ptcl_extractor
+    private
     type(image),      allocatable :: frames(:)
     type(image),      allocatable :: particle(:), frame_particle(:)
     type(motion_model)            :: mmodel
@@ -31,7 +30,8 @@ type :: ptcl_extractor
     type(image)                   :: gain
     type(eer_decoder)             :: eer
     real(dp)                      :: polyx(POLYDIM), polyy(POLYDIM)
-    real                          :: smpd, smpd_out
+    real                          :: smpd_physical = 0. ! original input sampling, before any EER upsampling or Fourier cropping
+    real                          :: smpd_out
     real                          :: scale
     real                          :: total_dose, doseperframe, preexposure, kv
     integer                       :: ldim(3), ldim_sc(3), box, box_pd
@@ -51,7 +51,9 @@ type :: ptcl_extractor
     procedure          :: init_mov
     procedure          :: init_mic
     procedure, private :: init_mask
-    procedure, private :: parse_movie_metadata
+    procedure, private :: load_model_metadata, prepare_motion
+    procedure, private :: read_movie_frames, apply_gain_correction, prepare_frames
+    procedure, private :: init_particle_buffers
     procedure          :: display
     procedure          :: extract_particles
     procedure          :: extract_particles_from_mic
@@ -65,6 +67,15 @@ type :: ptcl_extractor
     procedure, private :: cure_outliers_from_coords, cure_outlier_coords
     procedure, private :: evaluate_local_shift
     procedure          :: get_nframes
+    procedure          :: get_box
+    procedure          :: from_mov, from_model
+    procedure          :: get_l_neg
+    procedure          :: does_exist
+    procedure          :: get_particle_mask
+    procedure          :: has_frames, has_isoshifts
+    procedure          :: has_weights, has_model_frameweights
+    procedure          :: has_hotpix_coords
+    procedure          :: set_test_movie_state
     ! Destructor
     procedure :: kill
 end type ptcl_extractor
@@ -77,265 +88,71 @@ contains
         class(ptcl_extractor),     intent(inout) :: self
         class(ori),                intent(in)    :: omov
         class(parameters), target, intent(in)    :: params
-        integer :: i, iframe
         call self%kill
         if( .not. omov%isthere('mcmodel') ) THROW_HARD('Motion model entry is absent!')
         call omov%getter('mcmodel',self%docname)
         if( .not.file_exists(self%docname) ) THROW_HARD('Motion model doc is absent!')
-        call self%mmodel%read(self%docname, params)
-        if( .not.file_exists(self%mmodel%movie) ) THROW_HARD('Movie is absent!')
-        if( self%mmodel%nframes < 1 ) THROW_HARD('Motion model contains no movie frames!')
-        self%l_model = .true.
-        self%l_mov   = .false.
-        self%l_neg   = (params%pcontrast .eq. 'black')
-        self%box     = params%box
-        ! Movie and image geometry
-        self%moviename = self%mmodel%movie
-        self%smpd      = self%mmodel%smpd_movie
-        self%smpd_out  = self%mmodel%smpd
-        self%scale     = 1. / self%mmodel%binning
-        self%l_scale   = abs(self%scale - 1.) > 0.001
-        self%ldim      = [self%mmodel%ldim_movie, 1]
-        self%ldim_sc   = [self%mmodel%ldim,       1]
-        self%nframes   = self%mmodel%nframes
-        self%start_frame = 1
-        if( params%tof > self%nframes) THROW_HARD('TOF is large than the number of frames!')
-        ! Dose and detector metadata
-        self%kv              = self%mmodel%voltage
-        self%doseperframe    = self%mmodel%dose_per_frame
-        self%total_dose      = self%mmodel%accumulated_dose
-        self%preexposure     = 0.
-        self%l_doseweighing  = self%mmodel%dw
-        self%l_eer           = self%mmodel%eer
-        self%eer_fraction    = self%mmodel%eer_fraction
-        self%eer_upsampling  = self%mmodel%eer_upsampling
-        ! Global and local motion
-        allocate(self%isoshifts(2,self%nframes), self%weights(self%nframes), source=0.)
-        if( allocated(self%mmodel%drift_offsets_x) .and. allocated(self%mmodel%drift_offsets_y) )then
-            if( size(self%mmodel%drift_offsets_x) /= self%nframes .or.&
-                &size(self%mmodel%drift_offsets_y) /= self%nframes )then
-                THROW_HARD('Motion model drift-offset dimensions do not match!')
-            endif
-            self%isoshifts(1,:) = self%mmodel%drift_offsets_x
-            self%isoshifts(2,:) = self%mmodel%drift_offsets_y
-        endif
-        if( allocated(self%mmodel%frameweights) )then
-            if( size(self%mmodel%frameweights) /= self%nframes )then
-                THROW_HARD('Motion model frame-weight dimensions do not match!')
-            endif
-            self%weights = self%mmodel%frameweights
-        else
-            self%weights = 1. / real(self%nframes)
-        endif
-        self%l_poly = self%mmodel%npatch > 0 .and. allocated(self%mmodel%local_offsets_x) .and.&
-            &allocated(self%mmodel%local_offsets_y) .and.self%mmodel%patch_accepted
-        self%align_frame = self%mmodel%fixed_frame
-        self%polyx = 0.d0
-        self%polyy = 0.d0
-        if( self%l_poly )then
-            if( self%align_frame < 1 .or. self%align_frame > self%nframes )then
-                THROW_HARD('Motion model reference frame is out of range!')
-            endif
-            call self%mmodel%refit_polynomial( self%align_frame )
-            self%polyx = self%mmodel%model_coeffs_x
-            self%polyy = self%mmodel%model_coeffs_y
-        endif
+        self%l_mov = .false.
+        self%l_neg = (params%pcontrast .eq. 'black')
+        self%box   = params%box
+        call self%load_model_metadata(params)
+        if( .not.file_exists(self%moviename) ) THROW_HARD('Movie is absent!')
+        if( params%tof > self%nframes ) THROW_HARD('TOF is large than the number of frames!')
+        self%total_dose = self%mmodel%accumulated_dose
+        call self%prepare_motion(self%mmodel%fixed_frame)
         write(logfhandle,'(A,A)')'>> PARSED MODEL: ',self%docname%to_char()
-        ! Standardize offsets. No scaling need be applied as stage drift and local
-        ! offsets are determined and written as scaled, unlike in the star format.
-        self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
-        self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
-        ! Gain reference and known detector outliers
-        self%gainrefname = self%mmodel%gain
-        self%l_gain      = .not.self%gainrefname%is_blank()
-        if( allocated(self%mmodel%outlier_coords) )then
-            self%nhotpix = size(self%mmodel%outlier_coords, dim=2)
-            self%hotpix_coords = self%mmodel%outlier_coords
-        endif
-        ! Allocate and read frames
-        allocate(self%frames(self%nframes))
-        if( self%l_eer )then
-            call self%eer%new(self%moviename, self%smpd, self%eer_upsampling)
-            call self%eer%decode(self%frames, self%eer_fraction)
-        else
-            !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-            do iframe = 1,self%nframes
-                call self%frames(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
-            enddo
-            !$omp end parallel do
-            do iframe = 1,self%nframes
-                call self%frames(iframe)%read(self%moviename, iframe)
-            enddo
-        endif
+        call self%read_movie_frames
         write(logfhandle,'(A,A)')'>> PARSED MOVIE: ',self%moviename%to_char()
-        ! Gain correction and outlier curation
-        if( self%l_gain )then
-            if( .not.file_exists(self%gainrefname) )then
-                THROW_HARD('gain reference: '//self%gainrefname%to_char()//' not found')
-            endif
-            if( self%l_eer )then
-                call correct_gain(self%frames, self%gainrefname, self%gain,&
-                    &eerdecoder=self%eer, flipgain=self%mmodel%flipgain)
-                call self%add_eer_gain_defects
-            else
-                call correct_gain(self%frames, self%gainrefname, self%gain, flipgain=self%mmodel%flipgain)
-            endif
-        endif
-        if( self%nhotpix > 0 )then
-            call self%cure_outliers_from_coords(self%hotpix_coords)
-        endif
+        call self%apply_gain_correction
+        ! Model extraction repairs recorded defects, including zeros in the oriented EER gain.
+        if( self%l_gain .and. self%l_eer ) call self%add_eer_gain_defects
+        if( self%nhotpix > 0 ) call self%cure_outliers_from_coords(self%hotpix_coords)
         call self%gain%kill
         write(logfhandle,'(A,A)')'>> CORRECTED FOR GAIN AND OUTLIERS: ',self%moviename%to_char()
-        ! Downscale frames
-        if( any(self%ldim /= self%ldim_sc ) )then
-            !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-            do iframe = 1,self%nframes
-                call self%frames(iframe)%fft
-                call self%frames(iframe)%clip_inplace(self%ldim_sc)
-                call self%frames(iframe)%ifft
-            enddo
-            !$omp end parallel do
-        endif
-        ! dose weighing, dev only
-        ! call self%frames(1)%apply_dose_weighing(self%nframes, self%frames,&
-        !         & [1,self%nframes], self%total_dose, self%kv)
-        ! Per-thread particle buffers and normalization mask
-        self%box_pd = find_larger_magic_box(self%box+1)
-        allocate(self%frame_particle(nthr_glob), self%particle(nthr_glob))
-        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
-        do i = 1,nthr_glob
-            call self%particle(i)%new(      [self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
-            call self%frame_particle(i)%new([self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
-        enddo
-        !$omp end parallel do
-        call self%init_mask
-        ! all done
+        call self%prepare_frames(apply_dose_weighting=.false.)
+        call self%init_particle_buffers
         call self%eer%kill
         self%exists = .true.
     end subroutine init_model
 
     !>  Constructor
-    subroutine init_mov( self, omic, box, neg )
-        use simple_ori, only: ori
-        class(ptcl_extractor), intent(inout) :: self
-        class(ori),            intent(in)    :: omic
-        integer,               intent(in)    :: box
-        logical,               intent(in)    :: neg
-        real(dp), allocatable :: poly(:)
-        type(string) :: poly_fname
-        integer      :: i,iframe
+    subroutine init_mov( self, omic, params )
+        use simple_ori,        only: ori
+        use simple_parameters, only: parameters
+        class(ptcl_extractor),     intent(inout) :: self
+        class(ori),                intent(in)    :: omic
+        class(parameters), target, intent(in)    :: params
+        integer :: reference_frame
         call self%kill
-        if( .not. omic%isthere('mc_starfile') )then
-            THROW_HARD('Movie star doc is absent 1, reverting to micrograph extraction')
-            self%l_mov = .false.
+        self%l_mov = .false.
+        if( omic%isthere('mcmodel') )then
+            call omic%getter('mcmodel', self%docname)
+            if( .not.self%docname%is_blank() ) self%l_mov = file_exists(self%docname)
         endif
-        self%l_mov   = .true.
-        self%docname = omic%get('mc_starfile')
-        self%l_neg   = neg
-        self%box     = box
-        if( .not.file_exists(self%docname) )then
-            THROW_HARD('Movie star doc is absent 2, reverting to micrograph extraction')
-            ! revert to mic extraction
-            self%l_mov = .false.
+        if( .not.self%l_mov )then
+            THROW_WARN('Motion model absent; extracting from the integrated micrograph')
+            call self%init_mic(params%box, (params%pcontrast .eq. 'black'))
+            self%exists = .true.
+            return
         endif
-        if( self%l_mov )then
-            ! get movie info
-            call self%parse_movie_metadata
-            if( .not.file_exists(self%moviename) )then
-                THROW_HARD('Movie is absent, reverting to micrograph extraction')
-                ! revert to mic extraction
-                self%l_mov = .false.
-            else
-                ! frame of reference
-                self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
-                self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
-                ! downscaling shifts
-                self%isoshifts = self%isoshifts * self%scale
-                ! polynomial coefficients
-                poly_fname = fname_new_ext(self%docname,string('poly'))
-                if( file_exists(poly_fname) )then
-                    poly = file2drarr(poly_fname)
-                    self%polyx = poly(:POLYDIM)
-                    self%polyy = poly(POLYDIM+1:)
-                endif
-                self%polyx = self%polyx * real(self%scale,dp)
-                self%polyy = self%polyy * real(self%scale,dp)
-                ! dose-weighing
-                self%total_dose = real(self%nframes) * self%doseperframe
-                ! updates dimensions and pixel size
-                if( self%l_eer )then
-                    select case(self%eer_upsampling)
-                        case(1)
-                            ! 4K
-                        case(2)
-                            ! 8K: no updates to dimensions and pixel size are required
-                            ! unlike in motion correction to accomodate relion convention
-                        case DEFAULT
-                            THROW_HARD('Unsupported up-sampling: '//int2str(self%eer_upsampling))
-                    end select
-                endif
-                self%smpd_out   = self%smpd / self%scale
-                self%ldim_sc    = round2even(real(self%ldim)*self%scale)
-                self%ldim_sc(3) = 1
-                ! allocate & read frames
-                allocate(self%frames(self%nframes))
-                if( self%l_eer )then
-                    call self%eer%new(self%moviename, self%smpd, self%eer_upsampling)
-                    call self%eer%decode(self%frames, self%eer_fraction)
-                else
-                    !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-                    do iframe=1,self%nframes
-                        call self%frames(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
-                    enddo
-                    !$omp end parallel do
-                    do iframe=1,self%nframes
-                        call self%frames(iframe)%read(self%moviename, iframe)
-                    end do
-                endif
-                ! gain correction
-                if( self%l_gain )then
-                    if( .not.file_exists(self%gainrefname) )then
-                        THROW_HARD('gain reference: '//self%gainrefname%to_char()//' not found')
-                    endif
-                    if( self%l_eer )then
-                        call correct_gain(self%frames, self%gainrefname, self%gain, eerdecoder=self%eer)
-                    else
-                        call correct_gain(self%frames, self%gainrefname, self%gain)
-                    endif
-                endif
-                ! outliers curation
-                if( self%nhotpix > 0 ) call self%cure_outliers
-                call self%gain%kill
-                ! downscale frames & dose-weighing
-                !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-                do iframe=1,self%nframes
-                    call self%frames(iframe)%fft
-                    call self%frames(iframe)%clip_inplace(self%ldim_sc)
-                enddo
-                !$omp end parallel do
-                call self%frames(1)%apply_dose_weighing(self%nframes, self%frames,&
-                    &[1,self%nframes], self%total_dose, self%kv)
-                !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
-                do iframe=1,self%nframes
-                    call self%frames(iframe)%ifft
-                enddo
-                !$omp end parallel do
-                ! dimensions of the particle & frame particle
-                self%box_pd = find_larger_magic_box(self%box+1) ! subpixel shift & fftw friendly
-                allocate(self%frame_particle(nthr_glob),self%particle(nthr_glob))
-                !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
-                do i = 1,nthr_glob
-                    call self%particle(i)%new(      [self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
-                    call self%frame_particle(i)%new([self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
-                enddo
-                !$omp end parallel do
-                ! mask for post-extraction normalizations
-                call self%init_mask
-            endif
+        self%l_neg = (params%pcontrast .eq. 'black')
+        self%box   = params%box
+        call self%load_model_metadata(params)
+        if( .not.file_exists(self%moviename) )then
+            THROW_HARD('Motion model movie is absent: '//self%moviename%to_char())
         endif
-        ! micrograph init
-        if( .not.self%l_mov ) call self%init_mic( self%box, self%l_neg)
-        ! all done
+        ! Global-only movie extraction retains its first-frame reference.
+        reference_frame = 1
+        if( self%l_poly ) reference_frame = self%mmodel%fixed_frame
+        call self%prepare_motion(reference_frame)
+        self%total_dose = real(self%nframes) * self%doseperframe
+        call self%read_movie_frames
+        call self%apply_gain_correction
+        ! Movie extraction re-detects defects when the model recorded outliers.
+        if( self%nhotpix > 0 ) call self%cure_outliers
+        call self%gain%kill
+        call self%prepare_frames(apply_dose_weighting=.true.)
+        call self%init_particle_buffers
         call self%eer%kill
         self%exists = .true.
     end subroutine init_mov
@@ -346,6 +163,7 @@ contains
         logical,               intent(in)    :: neg
         self%box   = box
         self%l_neg = neg
+        self%l_mov = .false.
         call self%init_mask
     end subroutine init_mic
 
@@ -360,99 +178,163 @@ contains
         call tmp%kill
     end subroutine init_mask
 
-    subroutine parse_movie_metadata( self )
+    subroutine load_model_metadata( self, params )
+        use simple_parameters, only: parameters
+        class(ptcl_extractor),     intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        call self%mmodel%read(self%docname, params)
+        if( self%mmodel%nframes < 1 ) THROW_HARD('Motion model contains no movie frames!')
+        if( self%mmodel%binning <= 0. ) THROW_HARD('Invalid motion model binning!')
+        self%l_model       = .true.
+        self%moviename     = self%mmodel%movie
+        self%gainrefname   = self%mmodel%gain
+        self%l_gain        = .not.self%gainrefname%is_blank()
+        self%ldim          = [self%mmodel%ldim_movie, 1]
+        self%ldim_sc       = [self%mmodel%ldim,       1]
+        self%smpd_out      = self%mmodel%smpd
+        self%scale         = 1. / self%mmodel%binning
+        self%l_scale       = abs(self%scale - 1.) > 0.001
+        self%nframes       = self%mmodel%nframes
+        self%doseperframe  = self%mmodel%dose_per_frame
+        self%l_doseweighing = self%mmodel%dw
+        self%preexposure   = 0.
+        self%kv            = self%mmodel%voltage
+        self%start_frame   = 1
+        self%l_eer         = self%mmodel%eer
+        self%eer_upsampling = self%mmodel%eer_upsampling
+        self%eer_fraction   = self%mmodel%eer_fraction
+        ! The EER decoder needs physical sampling, not the saved decoded sampling.
+        self%smpd_physical = self%mmodel%smpd_movie
+        if( self%l_eer )then
+            if( self%eer_upsampling /= 1 .and. self%eer_upsampling /= 2 ) THROW_HARD('Unsupported EER up-sampling!')
+            if( self%eer_upsampling == 2 ) self%smpd_physical = 2. * self%smpd_physical
+        endif
+        allocate(self%weights(self%nframes))
+        if( allocated(self%mmodel%frameweights) )then
+            if( size(self%mmodel%frameweights) /= self%nframes )then
+                THROW_HARD('Motion model frame-weight dimensions do not match!')
+            endif
+            self%weights = self%mmodel%frameweights
+        else
+            self%weights = 1. / real(self%nframes)
+        endif
+        self%l_poly = self%mmodel%npatch > 0 .and. allocated(self%mmodel%local_offsets_x) .and.&
+            &allocated(self%mmodel%local_offsets_y) .and. self%mmodel%patch_accepted
+        self%nhotpix = 0
+        if( allocated(self%mmodel%outlier_coords) )then
+            self%nhotpix = size(self%mmodel%outlier_coords, dim=2)
+            self%hotpix_coords = self%mmodel%outlier_coords
+        endif
+        if( DEBUG_HERE ) print *,'movie model parsed'
+    end subroutine load_model_metadata
+
+    subroutine prepare_motion( self, reference_frame )
         class(ptcl_extractor), intent(inout) :: self
-        type(string), allocatable     :: names(:)
-        type(starfile_table_type)     :: table
-        character(len=:), allocatable :: buffer
-        integer(C_long) :: num_objs, object_id
-        integer         :: i,j,iframe,n,ind, motion_model
-        logical         :: err
-        ! parsing individual movie meta-data
-        call starfile_table__new(table)
-        call starfile_table__getnames(table, self%docname, names)
-        n = size(names)
-        do i = 1,n
-            call starfile_table__read(table, self%docname, names(i)%to_char() )
-            select case(trim(names(i)%to_char()))
-            case('general')
-                ! global variables, movie at original size
-                self%ldim(1)        = parse_int(table, EMDL_IMAGE_SIZE_X, err)
-                self%ldim(2)        = parse_int(table, EMDL_IMAGE_SIZE_Y, err)
-                self%ldim(3)        = 1
-                self%nframes        = parse_int(table, EMDL_IMAGE_SIZE_Z, err)
-                call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, buffer, err)
-                self%moviename      = buffer
-                self%l_eer          = fname2format(self%moviename) == 'K'
-                call parse_string(table, EMDL_MICROGRAPH_GAIN_NAME, buffer, err)
-                self%gainrefname    = buffer
-                self%l_gain         = .not.err
-                self%scale          = 1./ parse_double(table, EMDL_MICROGRAPH_BINNING, err)
-                self%l_scale        = (.not.err) .and. (abs(self%scale - 1.0) > 0.001)
-                self%smpd           = parse_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, err)
-                self%doseperframe   = parse_double(table, EMDL_MICROGRAPH_DOSE_RATE, err)
-                self%l_doseweighing = (.not.err) .and. (self%doseperframe > 0.0001)
-                self%preexposure    = parse_double(table, EMDL_MICROGRAPH_PRE_EXPOSURE, err)
-                self%kv             = parse_double(table, EMDL_CTF_VOLTAGE, err)
-                self%start_frame    = parse_int(table, EMDL_MICROGRAPH_START_FRAME, err)
-                if( self%l_eer )then
-                    self%eer_upsampling = parse_int(table, EMDL_MICROGRAPH_EER_UPSAMPLING, err)
-                    self%eer_fraction   = parse_int(table, EMDL_MICROGRAPH_EER_GROUPING, err)
-                endif
-                motion_model     = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, err)
-                self%l_poly      = motion_model == 1
-                self%align_frame = 1
-                if( self%l_poly ) self%align_frame = parse_int(table, SMPL_MOVIE_FRAME_ALIGN, err)
-            case('global_shift')
-                ! parse isotropic shifts
-                object_id  = starfile_table__firstobject(table)
-                num_objs   = starfile_table__numberofobjects(table)
-                if( int(num_objs - object_id) /= self%nframes ) THROW_HARD('Inconsistent # of shift entries and frames')
-                allocate(self%isoshifts(2,self%nframes),self%weights(self%nframes),source=0.)
-                iframe = 0
-                do while( (object_id < num_objs) .and. (object_id >= 0) )
-                    iframe = iframe + 1
-                    self%isoshifts(1,iframe) = parse_double(table, EMDL_MICROGRAPH_SHIFT_X, err)
-                    self%isoshifts(2,iframe) = parse_double(table, EMDL_MICROGRAPH_SHIFT_Y, err)
-                    self%weights(iframe)     = parse_double(table, SMPL_MOVIE_FRAME_WEIGHT, err)
-                    if( err ) self%weights(iframe) = 1./real(self%nframes)
-                    object_id = starfile_table__nextobject(table)
-                end do
-            case('local_motion_model')
-                ! parse polynomial coefficients
-                object_id  = starfile_table__firstobject(table)
-                num_objs   = starfile_table__numberofobjects(table)
-                if( int(num_objs - object_id) /= 2*POLYDIM ) THROW_HARD('Inconsistent # polynomial coefficient')
-                ind = 0
-                do while( (object_id < num_objs) .and. (object_id >= 0) )
-                    ind = ind+1
-                    j = parse_int(table, EMDL_MICROGRAPH_MOTION_COEFFS_IDX, err)
-                    if( j < POLYDIM)then
-                        self%polyx(j+1) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF, err)
-                    else
-                        self%polyy(j-POLYDIM+1) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF, err)
-                    endif
-                    object_id = starfile_table__nextobject(table)
-                end do
-            case('hot_pixels')
-                object_id  = starfile_table__firstobject(table)
-                num_objs   = starfile_table__numberofobjects(table)
-                self%nhotpix = int(num_objs)
-                allocate(self%hotpix_coords(2,int(self%nhotpix)),source=-1)
-                j = 0
-                do while( (object_id < num_objs) .and. (object_id >= 0) )
-                    j = j+1
-                    self%hotpix_coords(1,j) = nint(parse_double(table, EMDL_IMAGE_COORD_X, err))
-                    self%hotpix_coords(2,j) = nint(parse_double(table, EMDL_IMAGE_COORD_Y, err))
-                    object_id = starfile_table__nextobject(table)
-                end do
-            case DEFAULT
-                THROW_HARD('Invalid table: '//trim(names(i)%to_char()))
-            end select
+        integer,               intent(in)    :: reference_frame
+        if( reference_frame < 1 .or. reference_frame > self%nframes )then
+            THROW_HARD('Motion model reference frame is out of range!')
+        endif
+        self%align_frame = reference_frame
+        allocate(self%isoshifts(2,self%nframes), source=0.)
+        if( allocated(self%mmodel%drift_offsets_x) .and. allocated(self%mmodel%drift_offsets_y) )then
+            if( size(self%mmodel%drift_offsets_x) /= self%nframes .or.&
+                &size(self%mmodel%drift_offsets_y) /= self%nframes )then
+                THROW_HARD('Motion model drift-offset dimensions do not match!')
+            endif
+            self%isoshifts(1,:) = self%mmodel%drift_offsets_x
+            self%isoshifts(2,:) = self%mmodel%drift_offsets_y
+        endif
+        self%polyx = 0.d0
+        self%polyy = 0.d0
+        if( self%l_poly )then
+            call self%mmodel%refit_polynomial(self%align_frame)
+            self%polyx = self%mmodel%model_coeffs_x
+            self%polyy = self%mmodel%model_coeffs_y
+        endif
+        ! Shifts and refitted coefficients already use scaled pixels.
+        self%isoshifts(1,:) = self%isoshifts(1,:) - self%isoshifts(1,self%align_frame)
+        self%isoshifts(2,:) = self%isoshifts(2,:) - self%isoshifts(2,self%align_frame)
+    end subroutine prepare_motion
+
+    subroutine read_movie_frames( self )
+        class(ptcl_extractor), intent(inout) :: self
+        integer :: iframe
+        allocate(self%frames(self%nframes))
+        if( self%l_eer )then
+            call self%eer%new(self%moviename, self%smpd_physical, self%eer_upsampling)
+            if( any(self%eer%get_ldim() /= self%ldim) ) THROW_HARD('EER dimensions do not match the motion model!')
+            if( .not.is_equal(self%eer%get_smpd_out(), self%mmodel%smpd_movie) )then
+                THROW_HARD('EER sampling does not match the motion model!')
+            endif
+            call self%eer%decode(self%frames, self%eer_fraction)
+        else
+            !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
+            do iframe = 1,self%nframes
+                call self%frames(iframe)%new(self%ldim, self%smpd_physical, wthreads=.false.)
+            enddo
+            !$omp end parallel do
+            do iframe = 1,self%nframes
+                call self%frames(iframe)%read(self%moviename, iframe)
+            enddo
+        endif
+    end subroutine read_movie_frames
+
+    ! Keep the oriented gain alive until the constructor has repaired detector defects.
+    subroutine apply_gain_correction( self )
+        class(ptcl_extractor), intent(inout) :: self
+        if( .not.self%l_gain ) return
+        if( .not.file_exists(self%gainrefname) )then
+            THROW_HARD('gain reference: '//self%gainrefname%to_char()//' not found')
+        endif
+        if( self%l_eer )then
+            call correct_gain(self%frames, self%gainrefname, self%gain,&
+                &eerdecoder=self%eer, flipgain=self%mmodel%flipgain)
+        else
+            call correct_gain(self%frames, self%gainrefname, self%gain, flipgain=self%mmodel%flipgain)
+        endif
+    end subroutine apply_gain_correction
+
+    subroutine prepare_frames( self, apply_dose_weighting )
+        class(ptcl_extractor), intent(inout) :: self
+        logical,               intent(in)    :: apply_dose_weighting
+        integer :: iframe
+        if( .not.apply_dose_weighting .and. all(self%ldim == self%ldim_sc) ) return
+        !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
+        do iframe = 1,self%nframes
+            call self%frames(iframe)%fft
+            call self%frames(iframe)%clip_inplace(self%ldim_sc)
+            if( .not.apply_dose_weighting ) call self%frames(iframe)%ifft
         enddo
-        call starfile_table__delete(table)
-        if( DEBUG_HERE ) print *,'movie doc parsed'
-    end subroutine parse_movie_metadata
+        !$omp end parallel do
+        if( self%l_eer )then
+            if( .not.is_equal(self%frames(1)%get_smpd(), self%smpd_out) )then
+                THROW_HARD('Scaled EER sampling does not match the motion model!')
+            endif
+        endif
+        if( apply_dose_weighting )then
+            call self%frames(1)%apply_dose_weighing(self%nframes, self%frames,&
+                &[1,self%nframes], self%total_dose, self%kv)
+            !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
+            do iframe = 1,self%nframes
+                call self%frames(iframe)%ifft
+            enddo
+            !$omp end parallel do
+        endif
+    end subroutine prepare_frames
+
+    subroutine init_particle_buffers( self )
+        class(ptcl_extractor), intent(inout) :: self
+        integer :: i
+        self%box_pd = find_larger_magic_box(self%box+1)
+        allocate(self%frame_particle(nthr_glob), self%particle(nthr_glob))
+        !$omp parallel do schedule(static) default(shared) private(i) proc_bind(close)
+        do i = 1,nthr_glob
+            call self%particle(i)%new(      [self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
+            call self%frame_particle(i)%new([self%box_pd,self%box_pd,1], self%smpd_out, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        call self%init_mask
+    end subroutine init_particle_buffers
 
     subroutine display( self )
         class(ptcl_extractor), intent(in) :: self
@@ -460,7 +342,8 @@ contains
         print *, 'docname        ', self%docname%to_char()
         print *, 'nframes        ', self%nframes
         print *, 'dimensions     ', self%ldim
-        print *, 'smpd           ', self%smpd
+        print *, 'smpd_movie     ', self%mmodel%smpd_movie
+        print *, 'smpd_physical  ', self%smpd_physical
         print *, 'smpd_out       ', self%smpd_out
         print *, 'box            ', self%box
         print *, 'box_pd         ', self%box_pd
@@ -958,30 +841,82 @@ contains
         get_nframes = self%nframes
     end function get_nframes
 
-    integer function parse_int( table, emdl_id, err )
-        class(starfile_table_type) :: table
-        integer, intent(in)        :: emdl_id
-        logical, intent(out)       :: err
-        err = .not.starfile_table__getValue_int(table, emdl_id, parse_int)
-    end function parse_int
+    pure integer function get_box(self)
+        class(ptcl_extractor), intent(in) :: self
+        get_box = self%box
+    end function get_box
 
-    real function parse_double( table, emdl_id, err )
-        class(starfile_table_type) :: table
-        integer, intent(in)        :: emdl_id
-        logical, intent(out)       :: err
-        real(dp) :: v
-        err = .not.starfile_table__getValue_double(table, emdl_id, v)
-        parse_double = real(v)
-    end function parse_double
+    pure logical function from_mov(self)
+        class(ptcl_extractor), intent(in) :: self
+        from_mov = self%l_mov
+    end function from_mov
 
-    subroutine parse_string( table, emdl_id, string, err )
-        class(starfile_table_type)                 :: table
-        integer,                       intent(in)  :: emdl_id
-        character(len=:), allocatable, intent(out) :: string
-        logical,                       intent(out) :: err
-        err = .not.starfile_table__getValue_string(table, emdl_id, string)
-    end subroutine parse_string
-    
+    pure logical function from_model(self)
+        class(ptcl_extractor), intent(in) :: self
+        from_model = self%l_model
+    end function from_model
+
+    pure logical function get_l_neg(self)
+        class(ptcl_extractor), intent(in) :: self
+        get_l_neg = self%l_neg
+    end function get_l_neg
+
+    pure logical function does_exist(self)
+        class(ptcl_extractor), intent(in) :: self
+        does_exist = self%exists
+    end function does_exist
+
+    pure subroutine get_particle_mask(self, mask)
+        class(ptcl_extractor), intent(in) :: self
+        logical, allocatable, intent(out) :: mask(:,:,:)
+        if( allocated(self%particle_mask) ) mask = self%particle_mask
+    end subroutine get_particle_mask
+
+    pure logical function has_frames(self)
+        class(ptcl_extractor), intent(in) :: self
+        has_frames = allocated(self%frames)
+    end function has_frames
+
+    pure logical function has_isoshifts(self)
+        class(ptcl_extractor), intent(in) :: self
+        has_isoshifts = allocated(self%isoshifts)
+    end function has_isoshifts
+
+    pure logical function has_weights(self)
+        class(ptcl_extractor), intent(in) :: self
+        has_weights = allocated(self%weights)
+    end function has_weights
+
+    pure logical function has_hotpix_coords(self)
+        class(ptcl_extractor), intent(in) :: self
+        has_hotpix_coords = allocated(self%hotpix_coords)
+    end function has_hotpix_coords
+
+    pure logical function has_model_frameweights(self)
+        class(ptcl_extractor), intent(in) :: self
+        has_model_frameweights = allocated(self%mmodel%frameweights)
+    end function has_model_frameweights
+
+    ! Allocation-only fixture for lifecycle tests; not a movie extraction initializer.
+    subroutine set_test_movie_state(self, nframes)
+        class(ptcl_extractor), intent(inout) :: self
+        integer,               intent(in)    :: nframes
+        if( nframes < 1 ) THROW_HARD('Invalid frame count for particle extractor test fixture')
+        call self%kill
+        self%nframes = nframes
+        self%l_mov   = .true.
+        self%l_model = .true.
+        self%exists  = .true.
+        allocate(self%frames(nframes))
+        allocate(self%isoshifts(2,nframes), source=0.)
+        allocate(self%weights(nframes), source=1./real(nframes))
+        allocate(self%hotpix_coords(2,1), source=1)
+        self%nhotpix = 1
+        self%mmodel%exists  = .true.
+        self%mmodel%nframes = nframes
+        allocate(self%mmodel%frameweights(nframes), source=1./real(nframes))
+    end subroutine set_test_movie_state
+
     subroutine kill(self)
         class(ptcl_extractor), intent(inout) :: self
         integer :: i
@@ -1015,6 +950,7 @@ contains
         self%scale          = 1.
         self%align_frame    = 0
         self%eer_upsampling = 1
+        self%smpd_physical  = 0.
         call self%mmodel%kill
         call self%moviename%kill
         call self%docname%kill

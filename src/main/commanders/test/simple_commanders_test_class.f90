@@ -45,6 +45,7 @@ use simple_optics_groups_tester,             only: run_all_optics_groups_tests
 use simple_optics_maps_tester,               only: run_all_optics_maps_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
 use simple_motion_model_tester,              only: run_all_motion_model_tests
+use simple_particle_extractor_tester,        only: run_all_particle_extractor_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
 use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests
 use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
@@ -124,7 +125,7 @@ use simple_ui,                               only: validate_ui_json
 implicit none
 #include "simple_local_flags.inc"
 
-! Fast gate: the fourteen test=unit_<area> suites, one CTest entry each, label `fast`
+! Fast gate: the fifteen test=unit_<area> suites, one CTest entry each, label `fast`
 ! (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md, section 5.1): assertions
 ! through simple_test_utils, localhost only, no downloads or user data, one OpenMP thread.
 ! suite=<name> runs one sub-suite (suite=list names them); test=units runs every area (not the gate);
@@ -161,6 +162,11 @@ type, extends(commander_base) :: commander_test_unit_project
   contains
     procedure :: execute      => exec_test_unit_project
 end type commander_test_unit_project
+
+type, extends(commander_base) :: commander_test_unit_motion
+  contains
+    procedure :: execute      => exec_test_unit_motion
+end type commander_test_unit_motion
 
 type, extends(commander_base) :: commander_test_unit_ui
   contains
@@ -342,12 +348,18 @@ contains
         call add_suite(s, n, 'micrograph selection',    run_all_mic_selection_tests)
         call add_suite(s, n, 'optics groups',           run_all_optics_groups_tests)
         call add_suite(s, n, 'optics maps',             run_all_optics_maps_tests)
-        call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
-        call add_suite(s, n, 'motion model',            run_all_motion_model_tests)
         call add_suite(s, n, 'solve3D manifest',        run_all_solve3D_manifest_tests)
         call add_suite(s, n, 'project superset',        run_all_project_superset_tests)
         call add_suite(s, n, 'solve3D addon report', run_all_solve3D_addon_report_tests)
     end subroutine suites_project
+
+    subroutine suites_motion( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
+        call add_suite(s, n, 'motion model',            run_all_motion_model_tests)
+        call add_suite(s, n, 'particle extractor',      run_all_particle_extractor_tests)
+    end subroutine suites_motion
 
     subroutine suites_ui( s, n )
         type(unit_suite), intent(inout) :: s(:)
@@ -528,6 +540,7 @@ contains
         call suites_image(s, n)
         call suites_numerics(s, n)
         call suites_project(s, n)
+        call suites_motion(s, n)
         call suites_ui(s, n)
         call suites_ipc(s, n)
         call suites_reconstruction(s, n)
@@ -589,6 +602,16 @@ contains
         call suites_project(s, n)
         call run_unit_suites('unit_project', cline, s(1:n))
     end subroutine exec_test_unit_project
+
+    subroutine exec_test_unit_motion( self, cline )
+        class(commander_test_unit_motion), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(unit_suite) :: s(MAX_SUITES)
+        integer :: n
+        n = 0
+        call suites_motion(s, n)
+        call run_unit_suites('unit_motion', cline, s(1:n))
+    end subroutine exec_test_unit_motion
 
     subroutine exec_test_unit_ui( self, cline )
         class(commander_test_unit_ui), intent(inout) :: self
