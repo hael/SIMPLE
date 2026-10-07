@@ -26,6 +26,7 @@ from django.contrib.auth.decorators import login_required
 
 # local imports
 from ..models                    import WorkspaceModel
+from ..compress_volume           import volume_cache_version
 from ..data_structures.batchjob  import BatchJob
 from ..data_structures.project   import Project
 from ..data_structures.streamjob import StreamJob, snapshot_stage_dir
@@ -102,6 +103,7 @@ def _state_volume_outputs(jobstats):
                 continue
             outputs.append({
                 "path": path,
+                "cache_version": volume_cache_version(path),
                 "kind": kind,
                 "state": entry.get("state"),
                 "width": box,

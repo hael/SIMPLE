@@ -316,8 +316,10 @@ class BatchJobLifecycleTests(TestCase):
         reader.assert_called_once_with(project_path)
         reader.return_value.read_records.assert_called_once_with("out")
         read_volume_info.assert_called_once_with(volume_path)
+        source_stat = os.stat(volume_path)
         self.assertEqual(outputs, [{
             "path": volume_path,
+            "cache_version": f"{source_stat.st_mtime_ns}-{source_stat.st_size}",
             "name": "recvol_state01.mrc",
             "state": 1,
             "population": 5542,

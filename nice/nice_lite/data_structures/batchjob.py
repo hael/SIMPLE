@@ -18,6 +18,7 @@ from django.utils import timezone
 # local imports
 from ..helpers import directory_exists, ensure_directory, analyse_heartbeat, print_error
 from ..models import JobModel, WorkspaceModel
+from ..compress_volume import volume_cache_version
 from .class_selection import ClassSelectionError, SIMPLEProjectFileReader
 from .simple import SIMPLEBatch, SIMPLEProjFile
 from .job import Job
@@ -751,6 +752,7 @@ class BatchJob(Job):
             seen_paths.add(safe_path)
             outputs.append({
                 "path": safe_path,
+                "cache_version": volume_cache_version(safe_path),
                 "name": volume_name,
                 "state": state,
                 "population": population,
@@ -830,6 +832,7 @@ class BatchJob(Job):
                     seen.add(dedupe_key)
                     outputs.append({
                         "path": safe_path,
+                        "cache_version": volume_cache_version(safe_path),
                         "name": volume_name,
                         "stage": stage_key,
                         "state": state,

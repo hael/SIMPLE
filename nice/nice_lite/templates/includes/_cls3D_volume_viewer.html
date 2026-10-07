@@ -21,7 +21,7 @@
 <div data-volume-viewer class="flex min-h-0 flex-1 flex-col">
     <select data-volume-source hidden aria-label="volume source">
         {% for volume in volume_outputs %}
-            <option value="{% url 'nice_lite:volume' volume.path %}"
+            <option value="{% url 'nice_lite:volume' volume.path %}{% if volume.cache_version %}?v={{ volume.cache_version }}{% endif %}"
                     data-volume-state="{{ volume.state }}"
                     data-volume-kind="{{ volume.kind }}"
                     data-volume-name="state {{ volume.state }} ({{ volume.kind }})"

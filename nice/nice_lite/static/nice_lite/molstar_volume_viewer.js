@@ -23,6 +23,15 @@ function volumeDensityRange(option) {
         : null;
 }
 
+function densityToInt8(option, value) {
+    const range = volumeDensityRange(option);
+    // Match the server's linear conversion while keeping controls in source units.
+    return range
+        ? Math.max(-128, Math.min(127,
+            -128 + 255 * (value - range.minimum) / (range.maximum - range.minimum)))
+        : value;
+}
+
 function initialIsovalue(option) {
     const range = volumeDensityRange(option);
     if (range) {
@@ -202,9 +211,10 @@ async function initializeMolstarVolumeViewer(root) {
     let isovalueUpdateTimer = null;
     let isovalueUpdatePromise = Promise.resolve();
     const applyIsovalue = (value) => {
+        const int8Value = densityToInt8(selectedVolumeOption(sourceSelect), value);
         isovalueUpdatePromise = isovalueUpdatePromise
             .catch(() => {})
-            .then(() => updateMolstarIsovalue(viewer, value));
+            .then(() => updateMolstarIsovalue(viewer, int8Value));
         return isovalueUpdatePromise;
     };
 
@@ -245,7 +255,9 @@ async function initializeMolstarVolumeViewer(root) {
             await viewer.plugin.clear();
             await viewer.loadVolumeFromUrl(
                 {url: option.value, format: "ccp4", isBinary: true},
-                [isovalue],
+                [isovalue.type === "absolute"
+                    ? {...isovalue, value: densityToInt8(option, isovalue.value)}
+                    : isovalue],
                 {entryId: option.dataset.volumeName || "solve3D"},
             );
             applyBackground();

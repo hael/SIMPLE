@@ -1,4 +1,6 @@
+import gzip
 import os
+import struct
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -6,8 +8,11 @@ from unittest.mock import Mock, patch
 from django.http import HttpResponse, HttpResponseRedirect
 from django.test import RequestFactory, SimpleTestCase
 from django.urls import resolve, reverse
+import mrcfile
+import numpy as np
 
 from ..views import batch_views
+from ..compress_volume import volume_cache_version
 
 
 class _AuthUser:
@@ -383,16 +388,16 @@ class BatchViewTests(SimpleTestCase):
         self.assertFalse(wrong_program_context["volume_viewer_requested"])
         self.assertEqual(wrong_program_context["volume_outputs"], [])
 
-    def test_batch_volume_data_streams_the_owned_mrc_file(self):
+    def test_batch_volume_data_serves_compressed_owned_mrc_file(self):
         temporary_job_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temporary_job_dir.cleanup)
         volume_path = os.path.join(
             temporary_job_dir.name,
             "recvol_state01.mrc",
         )
-        volume_bytes = b"MRC volume bytes"
-        with open(volume_path, "wb") as volume_file:
-            volume_file.write(volume_bytes)
+        with mrcfile.new(volume_path) as volume_file:
+            volume_file.set_data(np.arange(64, dtype=np.float32).reshape(4, 4, 4))
+            volume_file.voxel_size = 1.5
 
         jobmodel = SimpleNamespace(
             status="finished",
@@ -416,28 +421,50 @@ class BatchViewTests(SimpleTestCase):
                 7,
                 "recvol_state01.mrc",
             )
+            version = volume_cache_version(volume_path)
+            cached_response = batch_views.view_batch_volume_data(
+                self._get_request(f"/batchvolume/7/recvol_state01.mrc?v={version}"),
+                7,
+                "recvol_state01.mrc",
+            )
+            source_stat = os.stat(volume_path)
+            os.utime(volume_path, ns=(source_stat.st_atime_ns,
+                                      source_stat.st_mtime_ns + 1_000_000_000))
+            stale_response = batch_views.view_batch_volume_data(
+                self._get_request(f"/batchvolume/7/recvol_state01.mrc?v={version}"),
+                7,
+                "recvol_state01.mrc",
+            )
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.streaming)
+        self.assertFalse(response.streaming)
         self.assertEqual(response["Content-Type"], "application/octet-stream")
-        self.assertEqual(response["Content-Length"], str(len(volume_bytes)))
-        self.assertIn(
-            "recvol_state01.mrc",
-            response["Content-Disposition"],
-        )
-        self.assertEqual(b"".join(response.streaming_content), volume_bytes)
-        response.close()
+        self.assertEqual(response["Content-Encoding"], "gzip")
+        self.assertIn("no-store", response["Cache-Control"])
+        self.assertIn("private", cached_response["Cache-Control"])
+        self.assertIn("max-age=86400", cached_response["Cache-Control"])
+        self.assertNotIn("no-store", cached_response["Cache-Control"])
+        self.assertNotEqual(version, volume_cache_version(volume_path))
+        self.assertIn("no-store", stale_response["Cache-Control"])
+        wire_data = response.content
+        decoded = gzip.decompress(wire_data)
+        self.assertEqual(struct.unpack_from("<i", decoded, 12)[0], 0)
+        converted = np.frombuffer(decoded, dtype=np.int8, offset=1024).reshape(4, 4, 4)
+        self.assertEqual(converted[0, 0, 0], -128)
+        # The retained source value 21 maps through the header range 0..63.
+        self.assertEqual(converted[1, 1, 1], -43)
+        self.assertEqual(struct.unpack_from("<f", decoded, 40)[0], 6.0)
+        self.assertEqual(os.listdir(temporary_job_dir.name), ["recvol_state01.mrc"])
 
-    def test_batch_volume_data_streams_running_refine3d_states_stage(self):
+    def test_batch_volume_data_serves_running_refine3d_states_stage(self):
         temporary_job_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temporary_job_dir.cleanup)
         volume_path = os.path.join(
             temporary_job_dir.name,
             "recvol_state01_stage01_lp.mrc",
         )
-        volume_bytes = b"running stage MRC volume bytes"
-        with open(volume_path, "wb") as volume_file:
-            volume_file.write(volume_bytes)
+        with mrcfile.new(volume_path) as volume_file:
+            volume_file.set_data(np.arange(64, dtype=np.float32).reshape(4, 4, 4))
 
         jobmodel = SimpleNamespace(
             status="running",
@@ -469,8 +496,9 @@ class BatchViewTests(SimpleTestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(b"".join(response.streaming_content), volume_bytes)
-        response.close()
+        self.assertEqual(response["Content-Encoding"], "gzip")
+        self.assertEqual(struct.unpack_from("<i", gzip.decompress(
+            response.content), 12)[0], 0)
 
         self.assertEqual(queued_response.status_code, 404)
 

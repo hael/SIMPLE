@@ -14,7 +14,6 @@ import json
 import os
 
 # django imports
-from django.http                    import FileResponse
 from django.http                    import HttpResponse
 from django.http                    import JsonResponse
 from django.views.decorators.http   import require_GET
@@ -31,6 +30,7 @@ from .data_structures.batchjob      import BatchJob
 from .data_structures.project       import Project
 from .data_structures.streamjob     import StreamJob
 from .models                        import ProjectModel
+from .compress_volume               import compressed_volume_response
 
 
 # ------------------------------------------------------------------
@@ -250,9 +250,8 @@ def image(request, src):
 
 @login_required(login_url="/login")
 @require_GET
-@cache_control(private=True, max_age=300, no_transform=True)
 def volume(request, src):
-    """Stream a supported MRC density map constrained to the selected project root."""
+    """Serve a compact MRC density map constrained to the selected project root."""
     safe_path = _resolve_safe_image_path(request, src)
     if safe_path is None:
         print_error("invalid volume path request")
@@ -262,16 +261,7 @@ def volume(request, src):
         return HttpResponse(status=404)
 
     try:
-        volume_file = open(safe_path, "rb")
-    except OSError:
+        return compressed_volume_response(safe_path, request.GET.get('v'))
+    except (OSError, ValueError):
         print_error("volume IO error")
         return HttpResponse(status=404)
-
-    response = FileResponse(
-        volume_file,
-        as_attachment=False,
-        filename=os.path.basename(safe_path),
-        content_type="application/octet-stream",
-    )
-    response["X-Content-Type-Options"] = "nosniff"
-    return response

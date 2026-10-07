@@ -8,14 +8,14 @@ import struct
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.views.decorators.cache import cache_control
 from django.views.decorators.http import require_GET, require_POST
 
 from ..data_structures.batchjob import BatchJob
+from ..compress_volume import compressed_volume_response
 from ..data_structures.class_selection import (
     ClassSelectionError,
     load_batch_class_selection,
@@ -547,9 +547,8 @@ def view_batch_manual_picker(request, jobid):
 
 @login_required(login_url="/login")
 @require_GET
-@cache_control(private=True, max_age=300, no_transform=True)
 def view_batch_volume_data(request, jobid, volume_name):
-    """Stream one declared, owned 3D MRC output for Mol*."""
+    """Serve one declared, owned 3D MRC output in compact form for Mol*."""
     batch_job, jobmodel = _get_accessible_batch_job(
         request,
         "view_batch_volume_data",
@@ -579,18 +578,9 @@ def view_batch_volume_data(request, jobid, volume_name):
         return HttpResponse(status=404)
 
     try:
-        volume_file = open(volume["path"], "rb")
-    except OSError:
+        return compressed_volume_response(volume["path"], request.GET.get("v"))
+    except (OSError, ValueError):
         return HttpResponse(status=404)
-
-    response = FileResponse(
-        volume_file,
-        as_attachment=False,
-        filename=volume["name"],
-        content_type="application/octet-stream",
-    )
-    response["X-Content-Type-Options"] = "nosniff"
-    return response
 
 
 @login_required(login_url="/login")

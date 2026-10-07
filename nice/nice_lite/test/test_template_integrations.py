@@ -1125,6 +1125,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         volume_viewer = self._read_template("includes/_cls3D_volume_viewer.html")
         volume_output = {
             "path": "/workspace/9_solve3D/recvol_state01.mrc",
+            "cache_version": "123-456",
             "name": "recvol_state01.mrc",
             "stage": "stage1",
             "state": 1,
@@ -1164,6 +1165,10 @@ class TemplateIntegrationTests(SimpleTestCase):
         }
 
         rendered = render_to_string("nice_batch/batchview.html", context)
+        basic_viewer = render_to_string(
+            "includes/_3D_viewer.html",
+            {"jobid": 7, "volume_outputs": [volume_output]},
+        )
 
         self.assertIn("{% include 'includes/_cls3D_viewer.html'", batch_view)
         self.assertIn(
@@ -1180,6 +1185,8 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('data-panel="volume3D"', rendered)
         self.assertIn("data-basic-3d-viewer", volume_viewer)
         self.assertIn("data-volume-molstar", rendered)
+        self.assertIn("recvol_state01.mrc?v=123-456", rendered)
+        self.assertIn("/batchvolume/7/recvol_state01.mrc?v=123-456", basic_viewer)
         self.assertIn("data-volume-isovalue", rendered)
         self.assertIn("data-volume-isovalue-text", rendered)
         self.assertIn("molstar@5.11.0/build/viewer/molstar.css", rendered)

@@ -11,7 +11,7 @@
 
 <select data-volume-source hidden aria-label="volume source">
     {% for volume in volume_outputs %}
-        <option value="{% url 'nice_lite:batch_volume_data' jobid volume.name %}"
+        <option value="{% url 'nice_lite:batch_volume_data' jobid volume.name %}{% if volume.cache_version %}?v={{ volume.cache_version }}{% endif %}"
                 data-volume-name="{{ volume.name }}"
                 data-volume-width="{{ volume.width }}"
                 data-volume-height="{{ volume.height }}"
