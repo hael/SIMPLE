@@ -134,7 +134,7 @@ contains
         !$omp end parallel workshare
     end subroutine zero
 
-    ! Accumulate a padded particle Fourier plane into one compact 2D
+    ! Accumulate a particle Fourier plane (padded samples, native lattice) into one compact 2D
     ! numerator/CTF^2 sum.  This is the common KB interpolation primitive used
     ! by both class averaging and projection-direction reconstruction.
     module subroutine stack_accumulate_fplane( self, e3, fpl, islice, weight )
@@ -147,7 +147,7 @@ contains
         real    :: loc(2), mat(2,2), hrow(2), wx(CAVG_KB_WDIM), wy(CAVG_KB_WDIM), base(2)
         real    :: m11, m12, m21, m22, tvalsq, w, w_particle, rh, rk, h_sq, sx, sy
         integer :: flims(3,2), cyc_lims(3,2), cyc_lims_r(2,2)
-        integer :: win(2,2), phys(2), hh, kk, hp, kp, l, m, h, k, iapod
+        integer :: win(2,2), phys(2), hh, kk, l, m, h, k, iapod
         integer :: iwinsz, wdim, nyq, nyq_disk
         if( islice < 1 .or. islice > self%nslices ) THROW_HARD('invalid slice; stack_accumulate_fplane')
         if( .not. allocated(fpl%cmplx_plane) .or. .not. allocated(fpl%ctfsq_plane) ) return
@@ -169,13 +169,11 @@ contains
             rh   = real(h)
             h_sq = rh * rh
             if( h_sq > real(nyq_disk) ) cycle
-            hp = h * OSMPL_PAD_FAC
             hrow(1) = rh * m11
             hrow(2) = rh * m12
             do k = flims(2,1), flims(2,2)
                 rk = real(k)
                 if( h_sq + rk*rk > real(nyq_disk) ) cycle
-                kp = k * OSMPL_PAD_FAC
                 loc(1) = hrow(1) + rk * m21
                 loc(2) = hrow(2) + rk * m22
                 win(1,:) = nint(loc) - iwinsz
@@ -191,14 +189,14 @@ contains
                 end do
                 if( abs(sx) > epsilon(1.0) ) wx = wx / sx
                 if( abs(sy) > epsilon(1.0) ) wy = wy / sy
-                ! gen_fplane4rec stores k<=0.  The factor accounts for the
+                ! gen_fplane4rec stores k<=0 on the native lattice.  The factor accounts for the
                 ! padded FFT normalization when accumulating on the native 2D grid.
-                if( kp <= 0 )then
-                    fcomp  = KBALPHA**2 * fpl%cmplx_plane(hp,kp)
-                    tvalsq =              fpl%ctfsq_plane(hp,kp)
+                if( k <= 0 )then
+                    fcomp  = KBALPHA**2 * fpl%cmplx_plane(h,k)
+                    tvalsq =              fpl%ctfsq_plane(h,k)
                 else
-                    fcomp  = KBALPHA**2 * conjg(fpl%cmplx_plane(-hp,-kp))
-                    tvalsq =              fpl%ctfsq_plane(-hp,-kp)
+                    fcomp  = KBALPHA**2 * conjg(fpl%cmplx_plane(-h,-k))
+                    tvalsq =              fpl%ctfsq_plane(-h,-k)
                 endif
                 fcomp  = w_particle * fcomp
                 tvalsq = w_particle * tvalsq

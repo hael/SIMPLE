@@ -67,7 +67,7 @@ contains
         real      :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM), ww
         real      :: r11, r12, r13, r21, r22, r23
         integer   :: win(2,3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3,2)
-        integer   :: hp, kp, pf, ix, iy, iz, hx, ky, mz, q, iq, ncomp, i, nact
+        integer   :: pf, ix, iy, iz, hx, ky, mz, q, iq, ncomp, i, nact
         integer   :: nyq_eff, h_sq, k_max_h, k_lo, k_hi, exp_lb(3), exp_ub(3)
         real      :: pf2, eps_norm, inv_wdim
         ncomp = size(recs)
@@ -128,7 +128,7 @@ contains
         end do
         call o_sym%kill
         !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,&
-        !$omp& ctfsq_raw,comp_base,wx,wy,wz,ww,win,loc,hrow,hp,kp,r11,r12,r13,r21,r22,r23,&
+        !$omp& ctfsq_raw,comp_base,wx,wy,wz,ww,win,loc,hrow,r11,r12,r13,r21,r22,r23,&
         !$omp& isym,ix,iy,iz,hx,ky,mz,q,iq,nact) proc_bind(close)
         do i = 1, nrecords
             if( .not. valid(i) ) cycle
@@ -145,18 +145,17 @@ contains
                         k_max_h = int(sqrt(real(nyq_disks(i) - h_sq)))
                         k_lo    = max(fpllims(2,1,i), -k_max_h)
                         k_hi    = min(fpllims(2,2,i),  k_max_h)
-                        hp      = h * pf
                         hrow(1) = real(h) * r11
                         hrow(2) = real(h) * r12
                         hrow(3) = real(h) * r13
                         do k = k_lo, k_hi
-                            kp = k * pf
-                            if( kp <= 0 )then
-                                cmplx_raw = fpls(i)%cmplx_plane(hp,kp)
-                                ctfsq_raw = fpls(i)%ctfsq_plane(hp,kp)
+                            ! planes are stored on the native lattice, k<=0 only; Friedel symmetry for k>0
+                            if( k <= 0 )then
+                                cmplx_raw = fpls(i)%cmplx_plane(h,k)
+                                ctfsq_raw = fpls(i)%ctfsq_plane(h,k)
                             else
-                                cmplx_raw = conjg(fpls(i)%cmplx_plane(-hp,-kp))
-                                ctfsq_raw = fpls(i)%ctfsq_plane(-hp,-kp)
+                                cmplx_raw = conjg(fpls(i)%cmplx_plane(-h,-k))
+                                ctfsq_raw = fpls(i)%ctfsq_plane(-h,-k)
                             endif
                             if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
                                 &ctfsq_raw <= TINY ) cycle
@@ -253,7 +252,7 @@ contains
         real      :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM), ww
         real      :: r11, r12, r13, r21, r22, r23
         integer   :: win(2,3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3,2)
-        integer   :: hp, kp, pf, ix, iy, iz, hx, ky, mz, q, r, i, ncomp, ipair
+        integer   :: pf, ix, iy, iz, hx, ky, mz, q, r, i, ncomp, ipair
         integer   :: h_sq, k_max_h, k_lo, k_hi, ih, ik, im, nyq_eff
         integer   :: exp_lb(3), exp_ub(3), exp_shape(3), npairs
         logical   :: shared_density, diagonal_density
@@ -329,7 +328,7 @@ contains
         end do
         call o_sym%kill
         !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,ctfsq_raw,&
-        !$omp& comp_base,wx,wy,wz,ww,win,loc,hrow,hp,kp,r11,r12,r13,r21,r22,r23,isym,&
+        !$omp& comp_base,wx,wy,wz,ww,win,loc,hrow,r11,r12,r13,r21,r22,r23,isym,&
         !$omp& ix,iy,iz,hx,ky,mz,ih,ik,im,q,ipair) proc_bind(close)
         do i = 1, nrecords
             if( .not.valid(i) ) cycle
@@ -344,18 +343,17 @@ contains
                         k_max_h = int(sqrt(real(nyq_disks(i)-h_sq)))
                         k_lo = max(fpllims(2,1,i),-k_max_h)
                         k_hi = min(fpllims(2,2,i), k_max_h)
-                        hp = h*pf
                         hrow = real(h)*[r11,r12,r13]
                         loc = hrow + real(k_lo-1)*[r21,r22,r23]
                         do k = k_lo, k_hi
                             loc = loc + [r21,r22,r23]
-                            kp = k*pf
-                            if( kp<=0 )then
-                                cmplx_raw = conjg(fpls(i)%transfer_plane(hp,kp))*fpls(i)%cmplx_plane(hp,kp)
-                                ctfsq_raw = fpls(i)%ctfsq_plane(hp,kp)
+                            ! native lattice, k<=0 stored; Friedel symmetry for k>0
+                            if( k<=0 )then
+                                cmplx_raw = conjg(fpls(i)%transfer_plane(h,k))*fpls(i)%cmplx_plane(h,k)
+                                ctfsq_raw = fpls(i)%ctfsq_plane(h,k)
                             else
-                                cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-hp,-kp))*fpls(i)%cmplx_plane(-hp,-kp))
-                                ctfsq_raw = fpls(i)%ctfsq_plane(-hp,-kp)
+                                cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-h,-k))*fpls(i)%cmplx_plane(-h,-k))
+                                ctfsq_raw = fpls(i)%ctfsq_plane(-h,-k)
                             endif
                             if( abs(real(cmplx_raw))+abs(aimag(cmplx_raw))<=TINY .and. ctfsq_raw<=TINY ) cycle
                             win(1,:) = nint(loc)-iwinsz
@@ -456,11 +454,11 @@ contains
         complex :: transfer, mean_val, basis_val
         real    :: rotmat(3,3), loc(3), hrow(3), ctfamp
         real    :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf, q, ncomp
+        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, pf, q, ncomp
         integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff, win(2,3)
         logical :: l_apply_ctf_amp, l_conjg
         ! per-sample geometry, so the volume loop can be hoisted out of the (h,k) sweep
-        integer,     allocatable :: swin(:,:,:), shp(:), skp(:)
+        integer,     allocatable :: swin(:,:,:), s_h(:), s_k(:)
         real,        allocatable :: swx(:,:), swy(:,:), swz(:,:)
         complex,     allocatable :: stf(:)
         logical,     allocatable :: scj(:)
@@ -507,7 +505,7 @@ contains
         ! Bit-exact: every output element is an independent expression of its own sample and volume.
         nsmax = (fpllims(1,2) - fpllims(1,1) + 1) * (nyq_eff + 1)
         allocate(swin(2,3,nsmax), swx(LATENT_WDIM,nsmax), swy(LATENT_WDIM,nsmax), &
-            &swz(LATENT_WDIM,nsmax), stf(nsmax), shp(nsmax), skp(nsmax), scj(nsmax))
+            &swz(LATENT_WDIM,nsmax), stf(nsmax), s_h(nsmax), s_k(nsmax), scj(nsmax))
         ns = 0
         do h = fpllims(1,1), fpllims(1,2)
             h_sq = h*h
@@ -515,12 +513,10 @@ contains
             k_max_h = int(sqrt(real(nyq_disk - h_sq)))
             k_lo    = max(fpllims(2,1), -k_max_h)
             k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hp      = h * pf
             hrow(1) = real(h) * rotmat(1,1)
             hrow(2) = real(h) * rotmat(1,2)
             hrow(3) = real(h) * rotmat(1,3)
             do k = k_lo, k_hi
-                kp     = k * pf
                 loc(1) = hrow(1) + real(k) * rotmat(2,1)
                 loc(2) = hrow(2) + real(k) * rotmat(2,2)
                 loc(3) = hrow(3) + real(k) * rotmat(2,3)
@@ -530,9 +526,9 @@ contains
                 transfer = cmplx(1., 0.)
                 if( l_apply_ctf_amp )then
                     if( allocated(fpl_ref%transfer_plane) )then
-                        transfer = fpl_ref%transfer_plane(hp,kp)
+                        transfer = fpl_ref%transfer_plane(h,k)
                     else
-                        ctfamp   = sqrt(max(0., fpl_ref%ctfsq_plane(hp,kp)))
+                        ctfamp   = sqrt(max(0., fpl_ref%ctfsq_plane(h,k)))
                         transfer = cmplx(ctfamp, 0.)
                     endif
                 endif
@@ -542,8 +538,8 @@ contains
                 swy(:,ns)    = wy
                 swz(:,ns)    = wz
                 stf(ns)      = transfer
-                shp(ns)      = hp
-                skp(ns)      = kp
+                s_h(ns)      = h
+                s_k(ns)      = k
                 scj(ns)      = l_conjg
             end do
         end do
@@ -570,25 +566,25 @@ contains
             j = jok(jj)
             mean_val = weighted_expanded_cmat(mean_rec, swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
             if( scj(j) ) mean_val = conjg(mean_val)
-            mean_fpl%cmplx_plane(shp(j),skp(j)) = stf(j) * mean_val
+            mean_fpl%cmplx_plane(s_h(j),s_k(j)) = stf(j) * mean_val
         end do
         do jj = 1, ns_bad
             j = jbad(jj)
-            mean_fpl%cmplx_plane(shp(j),skp(j)) = CMPLX_ZERO
+            mean_fpl%cmplx_plane(s_h(j),s_k(j)) = CMPLX_ZERO
         end do
         do q = 1, ncomp
             do jj = 1, ns_ok
                 j = jok(jj)
                 basis_val = weighted_expanded_cmat(basis_recs(q), swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
                 if( scj(j) ) basis_val = conjg(basis_val)
-                basis_fpls(q)%cmplx_plane(shp(j),skp(j)) = stf(j) * basis_val
+                basis_fpls(q)%cmplx_plane(s_h(j),s_k(j)) = stf(j) * basis_val
             end do
             do jj = 1, ns_bad
                 j = jbad(jj)
-                basis_fpls(q)%cmplx_plane(shp(j),skp(j)) = CMPLX_ZERO
+                basis_fpls(q)%cmplx_plane(s_h(j),s_k(j)) = CMPLX_ZERO
             end do
         end do
-        deallocate(swin, swx, swy, swz, stf, shp, skp, scj, jok, jbad)
+        deallocate(swin, swx, swy, swz, stf, s_h, s_k, scj, jok, jbad)
 
     end subroutine project_fplanes_mean_basis
 

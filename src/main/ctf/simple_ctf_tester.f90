@@ -292,7 +292,6 @@ contains
         ! the intent(out) dummy of gen_fplane4rec as uninitialized (a -Wuninitialized false positive)
         type(fplane_type), allocatable :: fplane
         real              :: actual
-        integer           :: hp, kp
         write(*,'(A)') 'test_restoration_contracts'
         allocate(fplane)
         call img%new(LDIM, SMPD)
@@ -308,16 +307,16 @@ contains
         ctfparms%phshift     = PI/4.
         ctfparms%ctfflag     = CTFFLAG_YES
         call img%gen_fplane4rec([0,LDIM(1)/(2*OSMPL_PAD_FAC)], SMPD, ctfparms, [0.,0.], fplane)
-        hp = OSMPL_PAD_FAC*H
-        kp = -OSMPL_PAD_FAC*K
-        actual = real(fplane%cmplx_plane(hp,kp))
-        call assert_real(actual*actual, fplane%ctfsq_plane(hp,kp), 5.e-6, &
+        ! the planes are stored on the native lattice: (H,-K) holds the padded sample
+        ! (OSMPL_PAD_FAC*H, -OSMPL_PAD_FAC*K)
+        actual = real(fplane%cmplx_plane(H,-K))
+        call assert_real(actual*actual, fplane%ctfsq_plane(H,-K), 5.e-6, &
             &'raw 3D restoration stores H*y over H^2')
         ctfparms%ctfflag = CTFFLAG_FLIP
         call img%gen_fplane4rec([0,LDIM(1)/(2*OSMPL_PAD_FAC)], SMPD, ctfparms, [0.,0.], fplane)
-        actual = real(fplane%cmplx_plane(hp,kp))
+        actual = real(fplane%cmplx_plane(H,-K))
         call assert_true(actual >= 0., 'phase-flipped 3D restoration uses nonnegative |H|')
-        call assert_real(actual*actual, fplane%ctfsq_plane(hp,kp), 5.e-6, &
+        call assert_real(actual*actual, fplane%ctfsq_plane(H,-K), 5.e-6, &
             &'phase-flipped 3D restoration stores |H|*y over H^2')
         deallocate(fplane)
         call img%kill

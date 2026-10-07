@@ -410,7 +410,7 @@ contains
         real      :: wx(self%wdim), wy(self%wdim), wz(self%wdim), ww, ctfsq_raw
         real      :: r11, r12, r13, r21, r22, r23
         integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
-        integer   :: fpllims(3, 2), hp, kp, pf, ix, iy, iz, hx, ky, mz
+        integer   :: fpllims(3, 2), pf, ix, iy, iz, hx, ky, mz
         integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
         real      :: source_scale, eps_norm, inv_wdim
         ! window size
@@ -428,7 +428,7 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        ! Native (unpadded) iteration limits so that hp=h*pf and kp=k*pf are in-bounds
+        ! Native iteration limits: the planes are stored on the native lattice
         fpllims_pd      = fpl%frlims
         pf           = OSMPL_PAD_FAC
         source_scale = real(pf*pf)
@@ -443,7 +443,7 @@ contains
         nyq_disk = self%nyq * (self%nyq + 1)
         ! KB interpolation / insertion
         !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,cmplx_raw,&
-        !$omp& ctfsq_raw,ctfval,wx,wy,wz,ww,win,loc,hrow,hp,kp,r11,r12,r13,r21,r22,r23,&
+        !$omp& ctfsq_raw,ctfval,wx,wy,wz,ww,win,loc,hrow,r11,r12,r13,r21,r22,r23,&
         !$omp& isym,ix,iy,iz,hx,ky,mz) proc_bind(close)
         do isym = 1, nsym
             r11 = rotmats(isym,1,1); r12 = rotmats(isym,1,2); r13 = rotmats(isym,1,3)
@@ -456,19 +456,17 @@ contains
                     k_max_h = int(sqrt(real(nyq_disk - h_sq)))
                     k_lo    = max(fpllims(2,1), -k_max_h)
                     k_hi    = min(fpllims(2,2),  k_max_h)
-                    hp      = h * pf
                     hrow(1) = real(h) * r11
                     hrow(2) = real(h) * r12
                     hrow(3) = real(h) * r13
                     do k = k_lo, k_hi
-                        kp = k * pf
-                        ! gen_fplane4rec stores only k<=0; use Friedel symmetry for kp>0.
-                        if( kp <= 0 )then
-                            cmplx_raw = fpl%cmplx_plane(hp,kp)
-                            ctfsq_raw = fpl%ctfsq_plane(hp,kp)
+                        ! gen_fplane4rec stores only k<=0, on the native lattice; Friedel symmetry for k>0.
+                        if( k <= 0 )then
+                            cmplx_raw = fpl%cmplx_plane(h,k)
+                            ctfsq_raw = fpl%ctfsq_plane(h,k)
                         else
-                            cmplx_raw = conjg(fpl%cmplx_plane(-hp,-kp))
-                            ctfsq_raw = fpl%ctfsq_plane(-hp,-kp)
+                            cmplx_raw = conjg(fpl%cmplx_plane(-h,-k))
+                            ctfsq_raw = fpl%ctfsq_plane(-h,-k)
                         endif
                         if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
                             ctfsq_raw <= TINY ) cycle
@@ -573,7 +571,7 @@ contains
             end do
         endif
         call o_sym%kill
-        ! Native iteration limits so that hp=h*pf and kp=k*pf are in-bounds
+        ! Native iteration limits: the planes are stored on the native lattice
         fpllims_pd   = fpl%frlims
         pf2          = real(OSMPL_PAD_FAC**2)
         fpllims      = fpllims_pd
@@ -601,12 +599,12 @@ contains
                 complex(sp) :: comp
                 real    :: wx(WDIM), wy(WDIM), wz(WDIM), base(3), loc(3)
                 real    :: r21, r22, r23, sx, sy, sz, comp_scale, ctfsq, wyz
-                integer :: h,k,l, h_sq, k_max_h, k_lo,k_hi, hp,kp,hpb,kpb, iy,iz, ky,mz, i
+                integer :: h,k,l, h_sq, k_max_h, k_lo,k_hi, hb,kb, iy,iz, ky,mz, i
                 integer :: win(3, 2), isym
                 comp_scale = pf2
                 !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,&
                 !$omp& ctfsq,wx,wy,wz,sx,sy,sz,i,win,loc,r21,r22,r23,isym,iy,iz,ky,mz,wyz,&
-                !$omp& base,hp,kp,hpb,kpb) proc_bind(close)
+                !$omp& base,hb,kb) proc_bind(close)
                 do isym = 1, nsym
                     r21 = rotmats(2,1,isym); r22 = rotmats(2,2,isym); r23 = rotmats(2,3,isym)
                     do l = 0, STRIDE-1
@@ -619,8 +617,6 @@ contains
                             k_hi    = min(fpllims(2,2),  k_max_h)
                             loc     = real(h) * rotmats(1,1:3,isym)
                             loc     = loc + real(k_lo-1) * [r21, r22, r23]
-                            ! padded h coordinate
-                            hp = h * OSMPL_PAD_FAC
                             do k = k_lo, k_hi
                                 ! rotation
                                 loc(1) = loc(1) + r21
@@ -631,19 +627,17 @@ contains
                                 win(:,1) = win(:,1) - iwinsz
                                 ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                                 if( win(1,2) < self%lims(1,1) ) cycle
-                                ! padded coordinate
-                                kp = k * OSMPL_PAD_FAC
-                                ! gen_fplane4rec stores only k<=0; use Friedel symmetry for kp>0.
-                                if( kp <= 0 )then
-                                    hpb   = hp - clb2D(1) + 1
-                                    kpb   = kp - clb2D(2) + 1
-                                    comp  = fcomp_plane(hpb,kpb)
-                                    ctfsq = ctfsq_plane(hpb,kpb)
+                                ! gen_fplane4rec stores only k<=0, on the native lattice; Friedel symmetry for k>0.
+                                if( k <= 0 )then
+                                    hb    = h - clb2D(1) + 1
+                                    kb    = k - clb2D(2) + 1
+                                    comp  = fcomp_plane(hb,kb)
+                                    ctfsq = ctfsq_plane(hb,kb)
                                 else
-                                    hpb   = -hp - clb2D(1) + 1
-                                    kpb   = -kp - clb2D(2) + 1
-                                    comp  = conjg(fcomp_plane(hpb,kpb))
-                                    ctfsq =       ctfsq_plane(hpb,kpb)
+                                    hb    = -h - clb2D(1) + 1
+                                    kb    = -k - clb2D(2) + 1
+                                    comp  = conjg(fcomp_plane(hb,kb))
+                                    ctfsq =       ctfsq_plane(hb,kb)
                                 endif
                                 if( abs(real(comp)) + abs(aimag(comp)) <= TINY .and. ctfsq <= TINY ) cycle
                                 ! FFTW padding scaling
@@ -876,7 +870,7 @@ contains
         type(fplane_type),    intent(inout) :: fpl_out
         logical, optional,    intent(in)    :: apply_ctf_amp
         real    :: rotmat(3,3), loc(3), hrow(3), ctfamp
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf
+        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, pf
         integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff
         logical :: l_apply_ctf_amp, l_realloc
         if( .not. allocated(self%cmat_exp) .or. .not. allocated(self%rho_exp) )then
@@ -947,22 +941,20 @@ contains
             k_max_h = int(sqrt(real(nyq_disk - h_sq)))
             k_lo    = max(fpllims(2,1), -k_max_h)
             k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hp      = h * pf
             hrow(1) = real(h) * rotmat(1,1)
             hrow(2) = real(h) * rotmat(1,2)
             hrow(3) = real(h) * rotmat(1,3)
             do k = k_lo, k_hi
-                kp     = k * pf
                 loc(1) = hrow(1) + real(k) * rotmat(2,1)
                 loc(2) = hrow(2) + real(k) * rotmat(2,2)
                 loc(3) = hrow(3) + real(k) * rotmat(2,3)
-                fpl_out%cmplx_plane(hp,kp) = interp_cmat_exp(self, loc)
+                fpl_out%cmplx_plane(h,k) = interp_cmat_exp(self, loc)
                 if( l_apply_ctf_amp )then
                     if( allocated(fpl_ref%transfer_plane) )then
-                        fpl_out%cmplx_plane(hp,kp) = fpl_ref%transfer_plane(hp,kp) * fpl_out%cmplx_plane(hp,kp)
+                        fpl_out%cmplx_plane(h,k) = fpl_ref%transfer_plane(h,k) * fpl_out%cmplx_plane(h,k)
                     else
-                        ctfamp = sqrt(max(0., fpl_ref%ctfsq_plane(hp,kp)))
-                        fpl_out%cmplx_plane(hp,kp) = ctfamp * fpl_out%cmplx_plane(hp,kp)
+                        ctfamp = sqrt(max(0., fpl_ref%ctfsq_plane(h,k)))
+                        fpl_out%cmplx_plane(h,k) = ctfamp * fpl_out%cmplx_plane(h,k)
                     endif
                 endif
             end do

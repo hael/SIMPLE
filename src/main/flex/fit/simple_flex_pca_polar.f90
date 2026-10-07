@@ -4,8 +4,7 @@
 ! Approximations: direction snap and radial |T|^2 (tazim). Quadrature measure, KB weights and CTF adjoint must
 ! match the Cartesian cov_herm_inner path.
 module simple_flex_pca_polar
-use simple_core_module_api, only: cmplx_zero, dp, kbalpha, kbinterpol, kbwinsz, osmpl_pad_fac, pi, &
-    &simple_exception, tiny
+use simple_core_module_api, only: cmplx_zero, dp, kbalpha, kbinterpol, kbwinsz, pi, simple_exception, tiny
 use simple_reconstructor,                 only: reconstructor
 use simple_kbinterpol,                    only: kbinterpol
 use simple_math,                          only: ceil_div, floor_div
@@ -25,8 +24,7 @@ integer, parameter :: POLAR_NANG_MIN = 6
 !! `nsamp` samples carry the model at one-lattice-unit angular spacing.
 type :: polar_grid_t
     integer :: kfrom = 0, kto = 0, nk = 0, nsamp = 0
-    integer :: hlo = 0, hhi = 0, klo = 0                  !< particle-plane bounds, unpadded units
-    integer :: ph0 = 0, pk0 = 0                           !< padded array lower bounds of cmplx_plane
+    integer :: hlo = 0, hhi = 0, klo = 0                  !< particle-plane bounds (native lattice, as stored)
     integer,  allocatable :: rbeg(:), rend(:)             !< (nk) sample range of each ring
     real,     allocatable :: rad(:), cs(:), sn(:), wq(:)  !< (nsamp)
     real,     allocatable :: sqwq(:)                      !< (nsamp) sqrt(wq), hoisted out of the inner loop
@@ -43,7 +41,7 @@ type :: flex_polar_bank
     logical :: l_pol_grid = .false.
     logical :: l_pol_bank_it = .false., l_pol_hyb = .false.
     integer :: ndir_es = 0, nsamp_es = 0, nsamp2_es = 0, nk_es = 0
-    integer :: ph0_es = 0, pk0_es = 0, hlo_es = 0, hhi_es = 0, klo_es = 0
+    integer :: hlo_es = 0, hhi_es = 0, klo_es = 0
     integer :: nyqr_es = 0, nyqb_es = 0, rhyb_es = 0, npos_es = 0
     integer,  allocatable :: hex_es(:), kex_es(:)
     type(polar_grid_t) :: pg_es
@@ -66,9 +64,9 @@ contains
 
     !> Ring-wise polar grid over kfrom..kto. gate_lo makes the measure exclude h^2+k^2 <= gate_lo
     !! (nint shells: above shell r starts at r*(r+1)+1) instead of h^2+k^2 < kfrom^2.
-    subroutine polar_grid_build( g, kfrom, kto, hlo, hhi, klo, ph0, pk0, gate_lo )
+    subroutine polar_grid_build( g, kfrom, kto, hlo, hhi, klo, gate_lo )
         class(polar_grid_t), intent(inout) :: g
-        integer,            intent(in)    :: kfrom, kto, hlo, hhi, klo, ph0, pk0
+        integer,            intent(in)    :: kfrom, kto, hlo, hhi, klo
         integer, optional,  intent(in)    :: gate_lo
         integer :: r, t, nang, j, ncart, h, k, nyq_disk, hk2
         real    :: phi, dphi, wtot, scal
@@ -78,7 +76,6 @@ contains
         l_gate_lo = present(gate_lo)
         g%kfrom = kfrom; g%kto = kto; g%nk = kto - kfrom + 1
         g%hlo = hlo; g%hhi = hhi; g%klo = klo
-        g%ph0 = ph0; g%pk0 = pk0
         ! --- band rings
         g%nsamp = 0
         do r = kfrom, kto
@@ -178,7 +175,7 @@ contains
         self%l_pol_bank_it = .false.
         self%l_pol_hyb = .false.
         self%ndir_es = 0; self%nsamp_es = 0; self%nsamp2_es = 0; self%nk_es = 0
-        self%ph0_es = 0; self%pk0_es = 0; self%hlo_es = 0; self%hhi_es = 0; self%klo_es = 0
+        self%hlo_es = 0; self%hhi_es = 0; self%klo_es = 0
         self%nyqr_es = 0; self%nyqb_es = 0; self%rhyb_es = 0; self%npos_es = 0
         self%sec_bank = 0.
     end subroutine flex_polar_bank_kill
@@ -275,12 +272,11 @@ contains
         real,               intent(out) :: wr(:)
         real,               intent(out) :: tazim
         type(kbinterpol) :: kbwin
-        integer :: j, ir, nang, i, iwinsz, wlox, wloy, ix, iy, hx, ky, pf
+        integer :: j, ir, nang, i, iwinsz, wlox, wloy, ix, iy, hx, ky
         real    :: hu, ku, c1, s1, t2, tm, tv, bx, by, sx, sy, w, wyy, inv_wdim, eps_norm
         real    :: wx(LATENT_WDIM), wy(LATENT_WDIM)
         complex :: yv, tv_c, xwj
         kbwin    = kbinterpol(KBWINSZ, KBALPHA)
-        pf       = OSMPL_PAD_FAC
         iwinsz   = ceiling(KBWINSZ - 0.5)
         inv_wdim = 1.0 / real(LATENT_WDIM)
         eps_norm = epsilon(1.0)
@@ -313,7 +309,8 @@ contains
                 else
                     wy = inv_wdim
                 endif
-                ! fused gather: both planes through the one tap set, per-tap Friedel as before
+                ! fused gather: both planes through the one tap set, per-tap Friedel as before;
+                ! the planes are on the native lattice with lower bounds (hlo,klo)
                 yv   = CMPLX_ZERO
                 tv_c = CMPLX_ZERO
                 do iy = 1, LATENT_WDIM
@@ -324,12 +321,12 @@ contains
                         w  = wx(ix) * wyy
                         if( ky > 0 )then
                             if( -hx < g%hlo .or. -hx > g%hhi .or. -ky < g%klo ) cycle
-                            yv   = yv   + w * conjg(cplane(pf*(-hx) - g%ph0 + 1, pf*(-ky) - g%pk0 + 1))
-                            tv_c = tv_c + w * conjg(tplane(pf*(-hx) - g%ph0 + 1, pf*(-ky) - g%pk0 + 1))
+                            yv   = yv   + w * conjg(cplane(-hx - g%hlo + 1, -ky - g%klo + 1))
+                            tv_c = tv_c + w * conjg(tplane(-hx - g%hlo + 1, -ky - g%klo + 1))
                         else
                             if( hx < g%hlo .or. hx > g%hhi .or. ky < g%klo ) cycle
-                            yv   = yv   + w * cplane(pf*hx - g%ph0 + 1, pf*ky - g%pk0 + 1)
-                            tv_c = tv_c + w * tplane(pf*hx - g%ph0 + 1, pf*ky - g%pk0 + 1)
+                            yv   = yv   + w * cplane(hx - g%hlo + 1, ky - g%klo + 1)
+                            tv_c = tv_c + w * tplane(hx - g%hlo + 1, ky - g%klo + 1)
                         endif
                     end do
                 end do

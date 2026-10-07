@@ -298,14 +298,13 @@ contains
         type(fplane_type), intent(in)    :: mean_fpl, fpl
         integer,           intent(in)    :: nyq
         real(dp),          intent(inout) :: my_sh(0:), mm_sh(0:)
-        integer     :: pf, h, k, hmin, hmax, kmin, kmax, sh
+        integer     :: h, k, hmin, hmax, kmin, kmax, sh
         complex(dp) :: m, y
-        pf   = OSMPL_PAD_FAC
-        hmin = pf*ceil_div(lbound(fpl%cmplx_plane,1),pf); hmax = pf*floor_div(ubound(fpl%cmplx_plane,1),pf)
-        kmin = pf*ceil_div(lbound(fpl%cmplx_plane,2),pf); kmax = min(0, pf*floor_div(ubound(fpl%cmplx_plane,2),pf))
-        do k = kmin, kmax, pf
-            do h = hmin, hmax, pf
-                sh = nint(sqrt(real((h/pf)**2 + (k/pf)**2)))
+        hmin = lbound(fpl%cmplx_plane,1); hmax = ubound(fpl%cmplx_plane,1)
+        kmin = lbound(fpl%cmplx_plane,2); kmax = min(0, ubound(fpl%cmplx_plane,2))
+        do k = kmin, kmax
+            do h = hmin, hmax
+                sh = nint(sqrt(real(h**2 + k**2)))
                 if( sh > nyq ) cycle
                 m = cmplx(mean_fpl%cmplx_plane(h,k), kind=dp)
                 y = cmplx(fpl%cmplx_plane(h,k),      kind=dp)
@@ -373,28 +372,29 @@ contains
         if( present(half) ) hlf = half
         acc = cmplx(0.d0,0.d0,dp)
         pf  = OSMPL_PAD_FAC
+        ! the planes are on the native lattice, (h,k) holding padded sample (pf*h,pf*k); nyq is padded
         nyq_eff = lhs%nyq
         if( rhs%nyq > 0 ) nyq_eff = min(nyq_eff, rhs%nyq)
-        if( nyq_eff <= 0 ) nyq_eff = ubound(lhs%cmplx_plane,1)
-        hmin = max(pf*ceil_div(lbound(lhs%cmplx_plane,1),pf), pf*ceil_div(-nyq_eff,pf))
-        hmax = min(pf*floor_div(ubound(lhs%cmplx_plane,1),pf), pf*floor_div(nyq_eff,pf))
-        kmin = max(pf*ceil_div(lbound(lhs%cmplx_plane,2),pf), pf*ceil_div(-nyq_eff,pf))
-        kmax = min(0, pf*floor_div(nyq_eff,pf))
+        if( nyq_eff <= 0 ) nyq_eff = lhs%frlims(1,2)
+        hmin = max(lbound(lhs%cmplx_plane,1), ceil_div(-nyq_eff,pf))
+        hmax = min(ubound(lhs%cmplx_plane,1), floor_div(nyq_eff,pf))
+        kmin = max(lbound(lhs%cmplx_plane,2), ceil_div(-nyq_eff,pf))
+        kmax = min(0, floor_div(nyq_eff,pf))
         ! Integer form of the shell test below. For integer x >= 0 and integer n >= 0,
         ! nint(sqrt(x)) > n  <=>  sqrt(x) >= n+0.5  <=>  x >= n^2+n+0.25  <=>  x > n*(n+1),
         ! so the disc gate selects exactly the same samples without a square root and a round per
         ! element. The embedding Gram alone calls this routine ncomp*(ncomp+1)/2 times per particle.
         nyq_disk = nyq_eff * (nyq_eff + 1)
-        do k = kmin, kmax, pf
+        do k = kmin, kmax
             ! the k=0 line is its own Friedel mate, so only h<=0 there, or it is counted twice
             h_hi = hmax
             if( k == 0 ) h_hi = 0
-            k_sq = k*k
+            k_sq = (pf*k)**2
             if( k_sq > nyq_disk ) cycle
-            do h = hmin, h_hi, pf
-                if( h*h + k_sq > nyq_disk ) cycle
+            do h = hmin, h_hi
+                if( (pf*h)**2 + k_sq > nyq_disk ) cycle
                 if( hlf /= 0 )then
-                    par = cov_half_parity(h/pf, k/pf)
+                    par = cov_half_parity(h, k)
                     if( par /= hlf ) cycle
                 endif
                 acc = acc + conjg(cmplx(lhs%cmplx_plane(h,k),kind=dp)) * cmplx(rhs%cmplx_plane(h,k),kind=dp)
@@ -426,19 +426,19 @@ contains
         pf  = OSMPL_PAD_FAC
         pw  = 0.d0; cnt = 0.d0
         nyq_eff = fpl%nyq
-        if( nyq_eff <= 0 ) nyq_eff = ubound(fpl%cmplx_plane,1)
-        hmin = max(pf*ceil_div(lbound(fpl%cmplx_plane,1),pf), pf*ceil_div(-nyq_eff,pf))
-        hmax = min(pf*floor_div(ubound(fpl%cmplx_plane,1),pf), pf*floor_div(nyq_eff,pf))
-        kmin = max(pf*ceil_div(lbound(fpl%cmplx_plane,2),pf), pf*ceil_div(-nyq_eff,pf))
-        kmax = min(0, pf*floor_div(nyq_eff,pf))
+        if( nyq_eff <= 0 ) nyq_eff = fpl%frlims(1,2)
+        hmin = max(lbound(fpl%cmplx_plane,1), ceil_div(-nyq_eff,pf))
+        hmax = min(ubound(fpl%cmplx_plane,1), floor_div(nyq_eff,pf))
+        kmin = max(lbound(fpl%cmplx_plane,2), ceil_div(-nyq_eff,pf))
+        kmax = min(0, floor_div(nyq_eff,pf))
         nyq_disk = nyq_eff * (nyq_eff + 1)   ! see cov_herm_inner for why this replaces nint(sqrt(.))
-        do k = kmin, kmax, pf
+        do k = kmin, kmax
             h_hi = hmax
             if( k == 0 ) h_hi = 0
-            k_sq = k*k
+            k_sq = (pf*k)**2
             if( k_sq > nyq_disk ) cycle
-            do h = hmin, h_hi, pf
-                if( h*h + k_sq > nyq_disk ) cycle
+            do h = hmin, h_hi
+                if( (pf*h)**2 + k_sq > nyq_disk ) cycle
                 c  = cmplx(fpl%cmplx_plane(h,k), kind=dp)
                 pw = pw + real(c*conjg(c), dp)
                 cnt= cnt + 1.d0
@@ -453,16 +453,15 @@ contains
         integer,           intent(in)  :: nyq
         real,              intent(in)  :: frac
         real(dp),          intent(out) :: pw, cnt
-        integer  :: pf, h, k, hmin, hmax, kmin, kmax, sh_lo, sh
+        integer  :: h, k, hmin, hmax, kmin, kmax, sh_lo, sh
         complex(dp) :: c
-        pf   = OSMPL_PAD_FAC
         sh_lo= nint(frac*real(nyq))
         pw   = 0.d0; cnt = 0.d0
-        hmin = pf*ceil_div(lbound(fpl%cmplx_plane,1),pf); hmax = pf*floor_div(ubound(fpl%cmplx_plane,1),pf)
-        kmin = pf*ceil_div(lbound(fpl%cmplx_plane,2),pf); kmax = min(0, pf*floor_div(nyq,pf))
-        do k = kmin, kmax, pf
-            do h = hmin, hmax, pf
-                sh = nint(sqrt(real((h/pf)**2 + (k/pf)**2)))
+        hmin = lbound(fpl%cmplx_plane,1); hmax = ubound(fpl%cmplx_plane,1)
+        kmin = lbound(fpl%cmplx_plane,2); kmax = min(0, ubound(fpl%cmplx_plane,2))
+        do k = kmin, kmax
+            do h = hmin, hmax
+                sh = nint(sqrt(real(h**2 + k**2)))
                 if( sh < sh_lo .or. sh > nyq ) cycle
                 c  = cmplx(fpl%cmplx_plane(h,k), kind=dp)
                 pw = pw + real(c*conjg(c), dp)

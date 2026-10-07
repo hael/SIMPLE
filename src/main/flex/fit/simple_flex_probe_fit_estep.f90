@@ -36,11 +36,9 @@ contains
             ! grid geometry from the first prepped plane: the identical derivation
             ! embed_accumulate_polar uses, so polar embed and polar E-step share
             ! band/quadrature conventions. No noise rings: sig2 arrives as sig2_eff.
-            fit%estep%ph0_es  = lbound(fpl1%cmplx_plane,1)
-            fit%estep%pk0_es  = lbound(fpl1%cmplx_plane,2)
-            fit%estep%hlo_es  = ceil_div (lbound(fpl1%cmplx_plane,1), OSMPL_PAD_FAC)
-            fit%estep%hhi_es  = floor_div(ubound(fpl1%cmplx_plane,1), OSMPL_PAD_FAC)
-            fit%estep%klo_es  = ceil_div (lbound(fpl1%cmplx_plane,2), OSMPL_PAD_FAC)
+            fit%estep%hlo_es  = lbound(fpl1%cmplx_plane,1)
+            fit%estep%hhi_es  = ubound(fpl1%cmplx_plane,1)
+            fit%estep%klo_es  = lbound(fpl1%cmplx_plane,2)
             fit%estep%nyqr_es = mean_rec%get_lfny(1)
             fit%estep%nyqb_es = fit%estep%nyqr_es
             if( fpl1%nyq > 0 ) fit%estep%nyqb_es = min(fit%estep%nyqb_es, max(1, fpl1%nyq / OSMPL_PAD_FAC))
@@ -53,7 +51,7 @@ contains
             fit%estep%l_pol_hyb = fit%estep%rhyb_es > 0
             if( fit%estep%l_pol_hyb )then
                 call polar_grid_build(fit%estep%pg_es, fit%estep%rhyb_es+1, fit%estep%nyqb_es, &
-                    &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, fit%estep%ph0_es, fit%estep%pk0_es, &
+                    &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, &
                     &gate_lo=fit%estep%rhyb_es*(fit%estep%rhyb_es+1))
                 ! exact-part lattice positions, cov_herm_inner's half-plane rule
                 ! (k<=0; on the k=0 line only h<=0), shells 0..rhyb by the nint
@@ -81,8 +79,7 @@ contains
                 call flush(logfhandle)
             else
                 call polar_grid_build(fit%estep%pg_es, 1, fit%estep%nyqb_es, &
-                    &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, &
-                    &fit%estep%ph0_es, fit%estep%pk0_es)
+                    &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es)
             endif
             fit%estep%nsamp_es = fit%estep%pg_es%nsamp; fit%estep%nsamp2_es = 2*fit%estep%nsamp_es; fit%estep%nk_es = fit%estep%pg_es%nk
             ! shared direction table: same refspiral + count derivation as the polar embed
@@ -181,7 +178,7 @@ contains
         ! there is no polar->volume adjoint. Banded variant: identical
         ! interpolation, none of project_fplane's per-call full-plane
         ! zero-fill + ctfsq/transfer copies (measured as the bulk of the
-        ! polar project bucket at the native padded plane).
+        ! polar project bucket when the planes were stored padded).
         call project_fplane_mean_banded(mean_rec, o, fpl, &
             &fit%iter%mean_fpl(ithr))
         ! polar-sample the prepped data plane ONCE at (bank direction, relative
@@ -601,7 +598,7 @@ contains
         type(kbinterpol) :: kbwin
         real    :: rotmat(3,3), loc(3), loc_friedel(3), hrow(3)
         real    :: w3(LATENT_WDIM,LATENT_WDIM,LATENT_WDIM)
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf, iwinsz, win(2,3)
+        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, pf, iwinsz, win(2,3)
         integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff
         logical :: l_conjg, l_realloc
         complex :: comp
@@ -638,12 +635,10 @@ contains
             k_max_h = int(sqrt(real(nyq_disk - h_sq)))
             k_lo    = max(fpllims(2,1), -k_max_h)
             k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hp      = h * pf
             hrow(1) = real(h) * rotmat(1,1)
             hrow(2) = real(h) * rotmat(1,2)
             hrow(3) = real(h) * rotmat(1,3)
             do k = k_lo, k_hi
-                kp     = k * pf
                 loc(1) = hrow(1) + real(k) * rotmat(2,1)
                 loc(2) = hrow(2) + real(k) * rotmat(2,2)
                 loc(3) = hrow(3) + real(k) * rotmat(2,3)
@@ -659,9 +654,9 @@ contains
                 if( l_conjg ) comp = conjg(comp)
                 ! apply_ctf_amp=.true. semantics of project_fplane
                 if( allocated(fpl_ref%transfer_plane) )then
-                    fpl_out%cmplx_plane(hp,kp) = fpl_ref%transfer_plane(hp,kp) * comp
+                    fpl_out%cmplx_plane(h,k) = fpl_ref%transfer_plane(h,k) * comp
                 else
-                    fpl_out%cmplx_plane(hp,kp) = sqrt(max(0., fpl_ref%ctfsq_plane(hp,kp))) * comp
+                    fpl_out%cmplx_plane(h,k) = sqrt(max(0., fpl_ref%ctfsq_plane(h,k))) * comp
                 endif
             end do
         end do
@@ -682,14 +677,13 @@ contains
         real(dp),            intent(inout) :: e_mm, myv
         type(kbinterpol) :: kbwin
         real        :: rotmat(3,3), loc(3), wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-        integer     :: j, q, r, win(2,3), hp, kp, exp_lb(3), exp_ub(3), pf
+        integer     :: j, q, r, win(2,3), exp_lb(3), exp_ub(3)
         logical     :: l_conjg, l_tf
         complex     :: tf, yv, u0, val
         complex     :: uq(ncomp)
         complex(dp) :: u0d, yd
         kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         rotmat = o%get_mat()
-        pf     = OSMPL_PAD_FAC
         exp_lb = lbound(rec0%cmat_exp)
         exp_ub = ubound(rec0%cmat_exp)
         l_tf   = allocated(fpl%transfer_plane)
@@ -701,14 +695,13 @@ contains
             if( l_conjg ) loc = -loc
             call latent_projection_weights(kbwin, loc, win, wx, wy, wz)
             if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
-            hp = pf*hex(j)
-            kp = pf*kex(j)
+            ! (hex,kex) are native lattice positions, the planes' own indices
             if( l_tf )then
-                tf = fpl%transfer_plane(hp,kp)
+                tf = fpl%transfer_plane(hex(j),kex(j))
             else
-                tf = cmplx(sqrt(max(0., fpl%ctfsq_plane(hp,kp))), 0.)
+                tf = cmplx(sqrt(max(0., fpl%ctfsq_plane(hex(j),kex(j)))), 0.)
             endif
-            yv  = fpl%cmplx_plane(hp,kp)
+            yv  = fpl%cmplx_plane(hex(j),kex(j))
             val = weighted_expanded_cmat(rec0, win, wx, wy, wz)
             if( l_conjg ) val = conjg(val)
             u0 = tf * val
@@ -741,7 +734,7 @@ contains
     !> Banded residual subtraction, fpl = fpl - a*mean over EXACTLY the disc the banded (or any
     !! full-plane) mean projection wrote. Everywhere outside that disc the mean plane is
     !! identically zero, so the full-array statement this replaces only rewrote unchanged values
-    !! there -- another few MB of per-particle traffic at the native padded lattice for no effect.
+    !! there -- per-particle memory traffic for no effect.
     !! The loop bounds are the same expressions as project_fplane_mean_banded's, so written and
     !! subtracted sample sets coincide by construction.
     module subroutine subtract_mean_banded( fpl, mean_fpl, a, rec_nyq )
@@ -749,7 +742,7 @@ contains
         type(fplane_type), intent(in)    :: mean_fpl
         real,              intent(in)    :: a
         integer,           intent(in)    :: rec_nyq
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf
+        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, pf
         integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff
         pf          = OSMPL_PAD_FAC
         fpllims_pd  = fpl%frlims
@@ -767,10 +760,8 @@ contains
             k_max_h = int(sqrt(real(nyq_disk - h_sq)))
             k_lo    = max(fpllims(2,1), -k_max_h)
             k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hp      = h * pf
             do k = k_lo, k_hi
-                kp = k * pf
-                fpl%cmplx_plane(hp,kp) = fpl%cmplx_plane(hp,kp) - a*mean_fpl%cmplx_plane(hp,kp)
+                fpl%cmplx_plane(h,k) = fpl%cmplx_plane(h,k) - a*mean_fpl%cmplx_plane(h,k)
             end do
         end do
     end subroutine subtract_mean_banded

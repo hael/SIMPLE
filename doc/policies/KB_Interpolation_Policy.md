@@ -67,9 +67,9 @@ Scale factor = pf³
 
 ## 5\. 3D Reconstruction (Plane Insertion)
 
-Fourier planes are padded before insertion. Sampling from the padded plane uses indices (pf·h, pf·k).
+Fourier planes are padded before insertion. Only the padded samples at (pf·h, pf·k) are used, so the plane is stored on the native lattice: F_plane(h,k) holds the padded sample (pf·h, pf·k). Only k ≤ 0 is stored; Friedel symmetry gives k > 0. The plane's frlims and nyq keep their padded meaning.
 
-comp = pwght · pf² · F_plane(pf·h, pf·k)
+comp = pwght · pf² · F_plane(h,k)
 
 Non-uniform sampling location is computed in native units and converted to padded units:
 

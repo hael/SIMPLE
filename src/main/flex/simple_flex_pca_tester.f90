@@ -14,7 +14,6 @@ use simple_image,                         only: image
 use simple_ori,                           only: ori
 use simple_sym,                           only: sym
 use simple_kbinterpol,                    only: kbinterpol
-use simple_math,                          only: ceil_div, floor_div
 use simple_linalg,                        only: jacobi
 use simple_gridding,                      only: prep3D_inv_kbenvelope4mul
 use simple_rnd,                           only: seed_rnd_fixed
@@ -554,13 +553,13 @@ contains
         call o%new(.false.)
         call o%set_euler([0.0, 0.0, 0.0])
 
-        ! A no-CTF padded plane carrying exactly mean + U*COEFF.  Only the native-grid
-        ! multiples of OSMPL_PAD_FAC are consumed by either path.
+        ! A no-CTF plane carrying exactly mean + U*COEFF, stored as gen_fplane4rec stores
+        ! it: native lattice, k<=0; frlims and nyq keep their padded meaning.
         pf  = OSMPL_PAD_FAC
         lim = pf*(BOX/2)
-        allocate(fpl%cmplx_plane(-lim:lim,-lim:lim), source=CMPLX_ZERO)
-        allocate(fpl%transfer_plane(-lim:lim,-lim:lim), source=cmplx(1.0,0.0))
-        allocate(fpl%ctfsq_plane(-lim:lim,-lim:lim), source=1.0)
+        allocate(fpl%cmplx_plane(-BOX/2:BOX/2,-BOX/2:0), source=CMPLX_ZERO)
+        allocate(fpl%transfer_plane(-BOX/2:BOX/2,-BOX/2:0), source=cmplx(1.0,0.0))
+        allocate(fpl%ctfsq_plane(-BOX/2:BOX/2,-BOX/2:0), source=1.0)
         fpl%frlims = 0
         fpl%frlims(1,:) = [-lim,lim]
         fpl%frlims(2,:) = [-lim,lim]
@@ -578,14 +577,11 @@ contains
         fit%estep%rhyb_es   = RHYB
         fit%estep%nyqb_es   = BAND
         fit%estep%nyqr_es   = BAND
-        fit%estep%ph0_es    = lbound(fpl%cmplx_plane,1)
-        fit%estep%pk0_es    = lbound(fpl%cmplx_plane,2)
-        fit%estep%hlo_es    = ceil_div (lbound(fpl%cmplx_plane,1), pf)
-        fit%estep%hhi_es    = floor_div(ubound(fpl%cmplx_plane,1), pf)
-        fit%estep%klo_es    = ceil_div (lbound(fpl%cmplx_plane,2), pf)
+        fit%estep%hlo_es    = lbound(fpl%cmplx_plane,1)
+        fit%estep%hhi_es    = ubound(fpl%cmplx_plane,1)
+        fit%estep%klo_es    = lbound(fpl%cmplx_plane,2)
         call polar_grid_build(fit%estep%pg_es, RHYB+1, BAND, &
-            &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, &
-            &fit%estep%ph0_es, fit%estep%pk0_es, gate_lo=RHYB*(RHYB+1))
+            &fit%estep%hlo_es, fit%estep%hhi_es, fit%estep%klo_es, gate_lo=RHYB*(RHYB+1))
         fit%estep%nsamp_es  = fit%estep%pg_es%nsamp
         fit%estep%nsamp2_es = 2*fit%estep%nsamp_es
         fit%estep%nk_es     = fit%estep%pg_es%nk
@@ -756,7 +752,7 @@ contains
             real(dp),            intent(out)   :: Go(NC,NC), bo(NC), co(NC), eo, myo
             type(kbinterpol) :: kb
             real :: rmat(3,3), loc(3), wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-            integer :: h, kk, iq, jq, win(2,3), lb(3), ub(3), hp, kp
+            integer :: h, kk, iq, jq, win(2,3), lb(3), ub(3)
             logical :: l_conjg
             complex :: u0, uq(NC), val, tf, yv
             complex(dp) :: u0d, yd
@@ -772,9 +768,8 @@ contains
                     if( l_conjg ) loc = -loc
                     call oracle_weights(kb, loc, win, wx, wy, wz)
                     if( any(win(1,:) < lb) .or. any(win(2,:) > ub) ) cycle
-                    hp = OSMPL_PAD_FAC*h; kp = OSMPL_PAD_FAC*kk
-                    tf = plane%transfer_plane(hp,kp)
-                    yv = plane%cmplx_plane(hp,kp)
+                    tf = plane%transfer_plane(h,kk)
+                    yv = plane%cmplx_plane(h,kk)
                     val = oracle_gather(rec0, win, wx, wy, wz)
                     if( l_conjg ) val = conjg(val)
                     u0 = tf*val
@@ -1274,12 +1269,16 @@ contains
             call rec%reset_exp
         end subroutine new_empty_reconstructor
 
+        !> native lattice, k<=0, as gen_fplane4rec stores it; bound (a multiple of OSMPL_PAD_FAC),
+        !! frlims and nyq are padded
         subroutine init_reference_plane( plane, bound )
             type(fplane_type), intent(inout) :: plane
             integer,           intent(in)    :: bound
-            allocate(plane%cmplx_plane(-bound:bound,-bound:bound), source=CMPLX_ZERO)
-            allocate(plane%transfer_plane(-bound:bound,-bound:bound), source=cmplx(1.0,0.0))
-            allocate(plane%ctfsq_plane(-bound:bound,-bound:bound), source=1.0)
+            integer :: nb
+            nb = bound / OSMPL_PAD_FAC
+            allocate(plane%cmplx_plane(-nb:nb,-nb:0), source=CMPLX_ZERO)
+            allocate(plane%transfer_plane(-nb:nb,-nb:0), source=cmplx(1.0,0.0))
+            allocate(plane%ctfsq_plane(-nb:nb,-nb:0), source=1.0)
             plane%frlims = 0
             plane%frlims(1,:) = [-bound,bound]
             plane%frlims(2,:) = [-bound,bound]

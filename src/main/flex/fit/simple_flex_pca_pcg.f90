@@ -567,7 +567,7 @@ contains
         real,    allocatable :: rotmats(:,:,:,:), dpack(:,:)
         integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3), ctfsq_raw
-        integer :: i, isym, nsym, l, h, k, hp, kp, q, r, pf, i0(3), nyq_eff, fpllims_pd(3,2)
+        integer :: i, isym, nsym, l, h, k, q, r, pf, i0(3), nyq_eff, fpllims_pd(3,2)
         integer :: h_sq, k_max_h, k_lo, k_hi
         if( nrecords < 1 ) return
         if( size(kacc,1) /= self%npairs ) THROW_HARD('pair kernel accumulator has the wrong leading extent; accumulate')
@@ -602,7 +602,7 @@ contains
             end do
         end do
         call o_sym%kill
-        !$omp parallel default(shared) private(i,isym,l,h,k,hp,kp,h_sq,k_max_h,k_lo,k_hi,ctfsq_raw,loc,i0,w,rot) &
+        !$omp parallel default(shared) private(i,isym,l,h,k,h_sq,k_max_h,k_lo,k_hi,ctfsq_raw,loc,i0,w,rot) &
         !$omp proc_bind(close)
         do i = 1, nrecords
             if( .not. valid(i) ) cycle
@@ -616,13 +616,11 @@ contains
                         k_max_h = int(sqrt(real(nyq_disks(i)-h_sq)))
                         k_lo = max(fpllims(2,1,i),-k_max_h)
                         k_hi = min(fpllims(2,2,i), k_max_h)
-                        hp   = h*pf
                         do k = k_lo, k_hi
-                            kp = k*pf
-                            if( kp <= 0 )then
-                                ctfsq_raw = fpls(i)%ctfsq_plane(hp,kp)
+                            if( k <= 0 )then
+                                ctfsq_raw = fpls(i)%ctfsq_plane(h,k)
                             else
-                                ctfsq_raw = fpls(i)%ctfsq_plane(-hp,-kp)
+                                ctfsq_raw = fpls(i)%ctfsq_plane(-h,-k)
                             endif
                             if( ctfsq_raw <= TINY ) cycle
                             loc = real(pf) * matmul(real([h,k,0]), rot)
@@ -642,14 +640,12 @@ contains
                     k_max_h = int(sqrt(real(nyq_disks(i)-h_sq)))
                     k_lo = max(fpllims(2,1,i),-k_max_h)
                     k_hi = min(fpllims(2,2,i), k_max_h)
-                    hp   = h*pf
                     do k = k_lo, k_hi
                         if( h_sq + k*k <= self%sq_rim ) cycle   ! provably cannot wrap
-                        kp = k*pf
-                        if( kp <= 0 )then
-                            ctfsq_raw = fpls(i)%ctfsq_plane(hp,kp)
+                        if( k <= 0 )then
+                            ctfsq_raw = fpls(i)%ctfsq_plane(h,k)
                         else
-                            ctfsq_raw = fpls(i)%ctfsq_plane(-hp,-kp)
+                            ctfsq_raw = fpls(i)%ctfsq_plane(-h,-k)
                         endif
                         if( ctfsq_raw <= TINY ) cycle
                         loc = real(pf) * matmul(real([h,k,0]), rot)
@@ -684,7 +680,7 @@ contains
         integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
         complex :: cmplx_raw, vals(self%ncomp)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3), pf2
-        integer :: i, isym, nsym, l, h, k, hp, kp, pf, i0(3), nyq_eff, fpllims_pd(3,2)
+        integer :: i, isym, nsym, l, h, k, pf, i0(3), nyq_eff, fpllims_pd(3,2)
         integer :: h_sq, k_max_h, k_lo, k_hi
         if( nrecords < 1 ) return
         if( size(racc,1) /= self%ncomp ) THROW_HARD('rhs accumulator has the wrong leading extent; accumulate_rhs')
@@ -716,7 +712,7 @@ contains
             dsc(:,i) = real(data_scales(1:self%ncomp,i))
         end do
         call o_sym%kill
-        !$omp parallel default(shared) private(i,isym,l,h,k,hp,kp,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,vals,loc,i0,w,rot) &
+        !$omp parallel default(shared) private(i,isym,l,h,k,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,vals,loc,i0,w,rot) &
         !$omp proc_bind(close)
         do i = 1, nrecords
             if( .not. valid(i) ) cycle
@@ -730,13 +726,11 @@ contains
                         k_max_h = int(sqrt(real(nyq_disks(i)-h_sq)))
                         k_lo = max(fpllims(2,1,i),-k_max_h)
                         k_hi = min(fpllims(2,2,i), k_max_h)
-                        hp   = h*pf
                         do k = k_lo, k_hi
-                            kp = k*pf
-                            if( kp <= 0 )then
-                                cmplx_raw = conjg(fpls(i)%transfer_plane(hp,kp))*fpls(i)%cmplx_plane(hp,kp)
+                            if( k <= 0 )then
+                                cmplx_raw = conjg(fpls(i)%transfer_plane(h,k))*fpls(i)%cmplx_plane(h,k)
                             else
-                                cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-hp,-kp))*fpls(i)%cmplx_plane(-hp,-kp))
+                                cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-h,-k))*fpls(i)%cmplx_plane(-h,-k))
                             endif
                             if( abs(real(cmplx_raw))+abs(aimag(cmplx_raw)) <= TINY ) cycle
                             loc = real(pf) * matmul(real([h,k,0]), rot)
@@ -756,14 +750,12 @@ contains
                     k_max_h = int(sqrt(real(nyq_disks(i)-h_sq)))
                     k_lo = max(fpllims(2,1,i),-k_max_h)
                     k_hi = min(fpllims(2,2,i), k_max_h)
-                    hp   = h*pf
                     do k = k_lo, k_hi
                         if( h_sq + k*k <= self%sq_rim ) cycle
-                        kp = k*pf
-                        if( kp <= 0 )then
-                            cmplx_raw = conjg(fpls(i)%transfer_plane(hp,kp))*fpls(i)%cmplx_plane(hp,kp)
+                        if( k <= 0 )then
+                            cmplx_raw = conjg(fpls(i)%transfer_plane(h,k))*fpls(i)%cmplx_plane(h,k)
                         else
-                            cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-hp,-kp))*fpls(i)%cmplx_plane(-hp,-kp))
+                            cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-h,-k))*fpls(i)%cmplx_plane(-h,-k))
                         endif
                         if( abs(real(cmplx_raw))+abs(aimag(cmplx_raw)) <= TINY ) cycle
                         loc = real(pf) * matmul(real([h,k,0]), rot)

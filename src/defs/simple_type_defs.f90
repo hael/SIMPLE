@@ -90,11 +90,13 @@ type stats_struct
     real :: minv = 0.
 end type stats_struct
 
+!> Planes are stored on the native lattice, k<=0 only: index (h,k) holds the padded sample
+!! (h*OSMPL_PAD_FAC, k*OSMPL_PAD_FAC); frlims are the padded limits the samples were taken from.
 type fplane_type
     complex, allocatable :: cmplx_plane(:,:)    !< Reconstruction numerator or whitened observation
     real,    allocatable :: ctfsq_plane(:,:)    !< CTF normalization or squared forward transfer
     complex, allocatable :: transfer_plane(:,:) !< Optional forward transfer applied to model projections
-    integer              :: frlims(3,2) = 0     !< Redundant Fourier limits
+    integer              :: frlims(3,2) = 0     !< Redundant (padded) Fourier limits
     real                 :: shconst(3)  = 0.    !< memoized constants for origin shifting
     integer              :: nyq         = 0     !< Nyqvist Fourier index
 end type fplane_type

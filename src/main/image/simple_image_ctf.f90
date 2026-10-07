@@ -250,6 +250,7 @@ contains
         integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax,  sigma_nyq
         integer :: box_croppd, box_crop
         integer :: hloop_min, hloop_max, kloop_min, sample_stride
+        integer :: hlo_nat, hhi_nat, klo_nat
         logical :: l_ctf, l_flip
         ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
         integer, allocatable :: shell_lut(:)
@@ -278,12 +279,17 @@ contains
         if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
         if( allocated(fplane%ctfsq_plane) ) deallocate(fplane%ctfsq_plane)
         if( allocated(fplane%transfer_plane) ) deallocate(fplane%transfer_plane)
-        ! allocate only k<=0 due to Friedel symmetry; the rest will be filled in by conjugation
+        ! Only every OSMPL_PAD_FAC-th padded sample is used, so the planes are stored on the native
+        ! lattice: index (h,k) holds padded sample (h*OSMPL_PAD_FAC, k*OSMPL_PAD_FAC). Only k<=0 is
+        ! stored (Friedel symmetry gives the rest).
         hmin = fplane%frlims(1,1); hmax = fplane%frlims(1,2)
         kmin = fplane%frlims(2,1); kmax = fplane%frlims(2,2)
-        allocate(fplane%cmplx_plane(hmin:hmax, kmin:0), &
-        fplane%ctfsq_plane(hmin:hmax, kmin:0))
-        if( l_store_transfer ) allocate(fplane%transfer_plane(hmin:hmax, kmin:0))
+        hlo_nat = ceil_div (hmin, OSMPL_PAD_FAC)
+        hhi_nat = floor_div(hmax, OSMPL_PAD_FAC)
+        klo_nat = ceil_div (kmin, OSMPL_PAD_FAC)
+        allocate(fplane%cmplx_plane(hlo_nat:hhi_nat, klo_nat:0), &
+        fplane%ctfsq_plane(hlo_nat:hhi_nat, klo_nat:0))
+        if( l_store_transfer ) allocate(fplane%transfer_plane(hlo_nat:hhi_nat, klo_nat:0))
         fplane%cmplx_plane = cmplx(0.,0.)
         fplane%ctfsq_plane = 0.
         if( l_store_transfer ) fplane%transfer_plane = cmplx(0.,0.)
@@ -405,9 +411,9 @@ contains
                         tvalsq   = tvalsq   / sigma2_noise(shell)
                     end if
                 end if
-                fplane%cmplx_plane(h,k) = c
-                fplane%ctfsq_plane(h,k) = tvalsq
-                if( l_store_transfer ) fplane%transfer_plane(h,k) = transfer
+                fplane%cmplx_plane(h/sample_stride,k/sample_stride) = c
+                fplane%ctfsq_plane(h/sample_stride,k/sample_stride) = tvalsq
+                if( l_store_transfer ) fplane%transfer_plane(h/sample_stride,k/sample_stride) = transfer
                 ph_h = ph_h * w1
             end do
             ph_k = ph_k * w2

@@ -259,7 +259,7 @@ contains
         real    :: loc(3), base(3), wx(WDIM), wy(WDIM), wz(WDIM), w_ctfsq
         real    :: pf2, r11, r12, r13, r21, r22, r23, sumx, sumy, sumz, ctfsq, wyz
         integer :: win(3,2), nyqsq, iwinsz, h, i, k, l, m, isym, iy, iz, ky, mz
-        integer :: h_sq, k_max_h, k_lo, k_hi, hp, kp, hpb, kpb
+        integer :: h_sq, k_max_h, k_lo, k_hi, hb, kb
         iwinsz = ceiling(KBWINSZ - 0.5)
         nyqsq  = nyq * (nyq + 1)
         pf2    = real(OSMPL_PAD_FAC**2)
@@ -269,7 +269,7 @@ contains
         !$omp& has_device_addr(even, rotmats, symmats, fplanes,&
         !$omp& ctfsqplanes, cmatexp_e, cmatexp_o, rhoexp_e, rhoexp_o)&
         !$omp& default(shared) private(h,i,k,l,m,isym,r11,r12,r13,r21,r22,r23,ctfsq,&
-        !$omp& win,sumx,sumy,sumz,ky,mz,wx,wy,wz,wyz,base,hp,kp,hpb,kpb,comp,&
+        !$omp& win,sumx,sumy,sumz,ky,mz,wx,wy,wz,wyz,base,hb,kb,comp,&
         !$omp& loc,w_ctfsq,h_sq,k_max_h,k_lo,k_hi,cmat,rho,w_comp)
         do i = 1, sz
             do isym = 1, nsym
@@ -296,7 +296,6 @@ contains
                         loc(1)  = real(h) * r11 + real(k_lo-1) * r21
                         loc(2)  = real(h) * r12 + real(k_lo-1) * r22
                         loc(3)  = real(h) * r13 + real(k_lo-1) * r23
-                        hp      = h * OSMPL_PAD_FAC
                         do k = k_lo, k_hi
                             loc(1) = loc(1) + r21
                             loc(2) = loc(2) + r22
@@ -305,17 +304,17 @@ contains
                             win(:,2) = win(:,1) + iwinsz
                             win(:,1) = win(:,1) - iwinsz
                             if( win(1,2) < h_edge ) cycle
-                            kp = k * OSMPL_PAD_FAC
-                            if( kp <= 0 )then
-                                hpb   = hp - clb2D(1) + 1
-                                kpb   = kp - clb2D(2) + 1
-                                comp  = fplanes(hpb,kpb,i)
-                                ctfsq = ctfsqplanes(hpb,kpb,i)
+                            ! planes are stored on the native lattice, k<=0 only; Friedel symmetry for k>0
+                            if( k <= 0 )then
+                                hb    = h - clb2D(1) + 1
+                                kb    = k - clb2D(2) + 1
+                                comp  = fplanes(hb,kb,i)
+                                ctfsq = ctfsqplanes(hb,kb,i)
                             else
-                                hpb   = -hp - clb2D(1) + 1
-                                kpb   = -kp - clb2D(2) + 1
-                                comp  = conjg(fplanes(hpb,kpb,i))
-                                ctfsq = ctfsqplanes(hpb,kpb,i)
+                                hb    = -h - clb2D(1) + 1
+                                kb    = -k - clb2D(2) + 1
+                                comp  = conjg(fplanes(hb,kb,i))
+                                ctfsq = ctfsqplanes(hb,kb,i)
                             endif
                             if( abs(real(comp)) + abs(aimag(comp)) <= TINY .and. ctfsq <= TINY ) cycle
                             comp = pf2 * comp

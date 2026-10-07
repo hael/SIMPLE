@@ -142,7 +142,7 @@ contains
     end function fdim
 
     !=============================================================
-    ! Accessors for half-plane stored fplane (k<=0 stored)
+    ! Accessors for half-plane stored fplane (native lattice, k<=0 stored)
     !=============================================================
     pure function fplane_get_cmplx( fpl, h, k ) result(c)
         use, intrinsic :: iso_c_binding, only: c_float_complex
