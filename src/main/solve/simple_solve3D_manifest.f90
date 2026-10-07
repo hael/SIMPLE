@@ -1,7 +1,9 @@
 !@descr: the typed, versioned run manifest of solve3D: identity, solution, ladder, inputs and artifact digests of a completed run
 ! Written last, atomically and never fatally by exec_solve3D (write_run_manifest),
 ! then registered in projinfo by bare name. It is the only route into solve3D_addon:
-! read_registered, validate_frozen against the frozen project, then replay.
+! read_registered, validate_frozen against the frozen project, then replay. The replayed inputs are
+! the add-on's defaults; the overridable ones (balance, nclust, mskdiam: how the cohort is sampled and
+! masked, nothing the frozen term was built with) yield to the add-on's own command line.
 ! Plain key-value text with a schema line, a completion status and an FNV-1a checksum over
 ! every preceding line; read refuses unknown fields, a bad checksum, truncation and other versions.
 module simple_solve3D_manifest
@@ -14,7 +16,7 @@ use simple_sigma2_state_file, only: sigma2_state_digest_begin, sigma2_state_dige
     &sigma2_state_digest_integer, sigma2_state_digest_file
 implicit none
 
-public :: solve3D_manifest, solve3D_stage_record, MANIFEST_FNAME, manifest_records_input
+public :: solve3D_manifest, solve3D_stage_record, MANIFEST_FNAME, manifest_records_input, manifest_overridable_input
 private
 #include "simple_local_flags.inc"
 
@@ -36,7 +38,8 @@ character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(33) = [character(len=KLEN)
     &'lpstart_ini3D', 'lpstop_ini3D', 'center', 'cenlp', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'vol1']
 
 !> The subset solve3D_addon replays as given: everything that describes the
-!! model the cohort is aligned to. Entry routes and their controls, the state
+!! model the cohort is aligned to, plus the overridable keys below as the
+!! add-on's defaults. Entry routes and their controls, the state
 !! layout (derived from the completed solution), the stage range
 !! (from the ladder), centring (forced off) and the compute/convergence keys
 !! the add-on accepts from its own command line are not replayed.
@@ -45,6 +48,14 @@ character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(25) = [character(len=KLEN
     &'filt_mode', 'automsk', 'envfsc', 'envmsklp', 'objfun', 'sigma_est', 'hp', &
     &'lp', 'lpstart', 'lpstop', 'force_lp_range', &
     &'prob_athres', 'bfac', 'gauref', 'balance', 'nclust', 'lpstart_ini3D', 'lpstop_ini3D']
+
+!> Replayed keys the add-on may override from its own command line: they
+!! govern how the cohort is sampled (balance, nclust) and masked (mskdiam),
+!! which depends on the particles being added, not on the frozen solution.
+!! The frozen accumulators are mask-free raw sums; the mask enters at
+!! restoration, in the solve support and in matching, all on the union.
+character(len=KLEN), parameter :: MANIFEST_OVERRIDABLE_KEYS(3) = [character(len=KLEN) :: &
+    &'balance', 'nclust', 'mskdiam']
 
 !> one stage of the ladder: the planned record and the limits actually
 !! emitted (0 = not on the stage line, -1 = a stage the run never ran)
@@ -134,6 +145,13 @@ contains
         character(len=*), intent(in) :: key
         l_recorded = any(MANIFEST_INPUT_KEYS == key)
     end function manifest_records_input
+
+    !> key is a replayed input solve3D_addon may override from its own
+    !! command line (MANIFEST_OVERRIDABLE_KEYS); the replayed value is its default
+    logical function manifest_overridable_input( key ) result( l_overridable )
+        character(len=*), intent(in) :: key
+        l_overridable = any(MANIFEST_OVERRIDABLE_KEYS == key)
+    end function manifest_overridable_input
 
     ! CONSTRUCTION
 

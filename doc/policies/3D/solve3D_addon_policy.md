@@ -34,8 +34,10 @@ an ini3D phase.
 
 ## 2. Command Line
 
-The add-on runs with the frozen run's settings; its command line carries only
-what governs compute, convergence and diagnostics. The contract is the
+The add-on runs with the frozen run's settings; its command line carries
+what governs compute, convergence and diagnostics, plus three settings of the
+frozen run it may override because they describe the particles being added
+rather than the solution. The contract is the
 program's UI entry (`new_solve3D_addon` in `simple_ui_solve3D.f90`),
 checked by the wrapper through `ui_program%accepts`
 ([ui_layer_policy.md](../ui_layer_policy.md)); there is no second key list:
@@ -46,6 +48,7 @@ checked by the wrapper through `ui_program%accepts`
 | Compute | `nparts`, `nthr` |
 | Sampling and convergence | `nsample` (default: the frozen run's effective value), `overlap` (default 0.95 at stage 3) |
 | PCG solve budget and checks | `maxits_pcg`, `maxits_ml`, `pcg_solvent_check` |
+| Overridable settings of the frozen run | `balance`, `nclust`, `mskdiam` (default: the frozen run's value, replayed from its manifest) |
 | Diagnostics | `addon_diag` |
 
 The execution environment every program accepts from its launcher passes
@@ -56,8 +59,22 @@ forwarded as given.
 Refusal is by key, so an inherited value cannot be confirmed silently. A key
 the frozen run's manifest records as one of its inputs
 (`manifest_records_input`: the solution, reconstruction and search policy, and
-the entry routes as provenance) is refused as set by the frozen run; any
-other key the UI entry does not accept is refused as not an input.
+the entry routes as provenance) is refused as set by the frozen run, except
+the overridable keys (`manifest_overridable_input`: `balance`, `nclust`,
+`mskdiam`), which the UI entry accepts: the replayed value is their default,
+a value on the add-on command line replaces it, and the wrapper logs the
+replacement against the frozen run's value. They govern how the cohort is
+sampled and masked, which depends on the particles being added: the frozen
+accumulators are mask-free raw sums, and the mask enters at restoration, in
+the solve support and in matching, on the union. The add-on's own manifest
+records the values it ran with, so a chained add-on inherits the override.
+Any other key the UI entry does not accept is refused as not an input.
+
+A superset project without a 2D solution (its `ptcl2D` never searched) runs
+under `balance=none` only, given on the add-on command line when the frozen
+run used `class` or `cavg`; the selection is still its `ptcl2D` state flags
+and the ladder is the frozen run's, so nothing else changes
+([solve3D_policy.md](solve3D_policy.md), "Without a 2D solution").
 Ordinary `solve3D` and `solve3D_cavgs` refuse `projfile_frozen` and
 `addon_diag`.
 

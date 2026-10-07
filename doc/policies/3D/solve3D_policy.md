@@ -45,7 +45,8 @@ When unset, it supplies:
 - `automsk=no`
 - `gauref=yes`
 - `balance=cavg` (`class` with input volumes, which bring random classes and
-  no class averages; `cavg` is rejected there)
+  no class averages, `cavg` being rejected there; `none` for a project
+  without a 2D solution)
 
 For a multi-state run (`nstates > 1`), it also supplies conservative
 inspection defaults when the user has not overridden them:
@@ -140,6 +141,23 @@ sampler never uses 3D maps, poses or projection directions. The details are in
 
 The emitted child command line owns `startit` and `which_iter` for the current
 stage. `refine3D` then treats `maxits` as the run length for that stage.
+
+### Without a 2D solution
+
+`solve3D` and `solve3D_addon` run on a project whose `ptcl2D` was never
+searched (no classes, no class averages, no class FRCs) under `balance=none`
+only; `class` and `cavg` are refused with a message naming `balance=none`, as
+are `cavg_ini` and `cavg_ini_ext`. `balance` then defaults to `none`. The
+selection is unchanged: `ptcl3D%state` is reset from the `ptcl2D` state flags
+(set at import or by a selection), but no 2D shifts are transferred, so the
+shifts `ptcl3D` holds stay. No class sampling file is written; the initial
+greedy draw and every stage sample the global lowest `updatecnt` tiers
+(`sample4update_cnt`), as every `balance=none` stage does. The ladder cannot
+be planned from class FRCs: `lpstart`/`lpstop` are taken from the command line
+and otherwise from `mskdiam` (`mskdiam2lplimits`), as on the input-volume
+route; an add-on takes its ladder from the frozen run's manifest regardless.
+Input volumes on such a project no longer need the random classes the
+`class` default fabricates.
 
 ### Stage-start sigma bootstrap (ini3D routes)
 

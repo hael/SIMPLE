@@ -16,7 +16,7 @@ use simple_refine3D_fnames,                        only: refine3D_startvol_fname
 use simple_halfmap_diagnostics,                    only: rename_support_provenance
 use simple_gui_communicator,                       only: gui_communicator
 use simple_solve3D_manifest,                       only: solve3D_manifest, solve3D_stage_record, MANIFEST_FNAME, &
-    &manifest_records_input
+    &manifest_records_input, manifest_overridable_input
 use simple_project_superset,                       only: project_superset, COHORT_WARN_FRAC
 use simple_frozen_accum,                           only: frozen_accum
 use simple_solve3D_addon_report,                   only: solve3D_addon_report, ADDON_REPORT_FNAME
@@ -47,7 +47,9 @@ end type commander_solve3D
 !> solve3D_addon: a thin wrapper that validates both projects and the base
 !! run's manifest before any write, turns the manifest and the add-on's own
 !! inputs into a fresh command line and enters exec_solve3D through the
-!! internal addon_manifest handshake, which no command line can set
+!! internal addon_manifest handshake, which no command line can set. The
+!! replayed inputs are defaults; balance, nclust and mskdiam (how the cohort
+!! is sampled and masked) yield to the add-on's own command line.
 type, extends(commander_base) :: commander_solve3D_addon
     contains
     procedure :: execute => exec_solve3D_addon
@@ -668,13 +670,16 @@ contains
         ! the base run's replayed inputs, stage-line shape and solution
         call man%replay(cline_run)
         call cline_run%set('center', 'no')  ! a centring shift would never reach the frozen term
-        ! the add-on's own inputs and the execution environment, as given
+        ! the add-on's own inputs and the execution environment, as given; an
+        ! overridable replayed key (balance, nclust, mskdiam) yields to the
+        ! command line, and the override is logged against the frozen run's value
         do i = 1, size(keys)
             key = trim(keys(i)%to_char())
             select case(key)
                 case('prg', 'projfile', 'projfile_frozen', 'mkdir')
                     cycle
             end select
+            if( manifest_overridable_input(key) ) call log_override(key)
             call cline_run%copy_arg(cline, key)
         enddo
         call cline_run%set('addon_manifest', man%get_fname())
@@ -688,6 +693,38 @@ contains
         call simple_touch(TASK_FINISHED)
 
     contains
+
+        !> one overridable key given on the add-on command line: the frozen
+        !! run's replayed value (or none) and the value that replaces it
+        subroutine log_override( key )
+            character(len=*), intent(in) :: key
+            type(string) :: base, given
+            character(len=32) :: buf
+            select case(key)
+                case('balance')
+                    base  = 'none recorded'
+                    if( cline_run%defined(key) ) base = cline_run%get_carg(key)
+                    given = cline%get_carg(key)
+                case('nclust')
+                    base  = 'none recorded'
+                    if( cline_run%defined(key) ) base = int2str(cline_run%get_iarg(key))
+                    given = int2str(cline%get_iarg(key))
+                case('mskdiam')
+                    base  = 'none recorded'
+                    if( cline_run%defined(key) )then
+                        write(buf,'(F0.1)') cline_run%get_rarg(key)
+                        base = trim(buf)
+                    endif
+                    write(buf,'(F0.1)') cline%get_rarg(key)
+                    given = trim(buf)
+                case DEFAULT
+                    return
+            end select
+            write(logfhandle,'(A,A,A,A,A,A)') '>>> SOLVE3D_ADDON OVERRIDES ', key, ': frozen run ', &
+                &base%to_char(), ' -> ', given%to_char()
+            call base%kill
+            call given%kill
+        end subroutine log_override
 
         !> The finished working project (frozen rows restored, the cohort
         !! refined) replaces the original project file: written beside it under
@@ -747,6 +784,7 @@ contains
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
         logical :: l_force_full_sampling
+        logical :: l_no2D   !< the project carries no 2D solution (ptcl2D never searched): balance=none only
         integer :: nthr_view
         character(len=5) :: smpl_units
         real    :: sampled_active_frac
@@ -807,14 +845,9 @@ contains
         l_automsk_off = (cline%defined('automsk') .and. cline%get_carg('automsk') .eq. 'no')
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
-        if( .not. cline%defined('balance') )then
-            ! external volumes come with random classes and no class averages to group
-            if( cline%defined('vol1') )then
-                call cline%set('balance', 'class')
-            else
-                call cline%set('balance', 'cavg')
-            endif
-        endif
+        ! balance defaults once the project is read (set_balance_default):
+        ! cavg with a 2D solution (class with input volumes, which bring random
+        ! classes and no class averages to group), none without one
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
         if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
@@ -868,6 +901,22 @@ contains
                 call spproj%write_segment_inside('projinfo', params%projfile)
                 write(logfhandle,'(A)') '>>> SOLVE3D: dropped an inherited canonical sigma2 registration; sigmas are seeded here'
             endif
+        endif
+        ! a project without a 2D solution runs under balance=none only: the
+        ! selection is still the ptcl2D state flags (set at import), but no
+        ! class exists to balance over and no class FRC to plan the ladder from
+        l_no2D = spproj%is_virgin_field('ptcl2D')
+        call set_balance_default
+        if( l_no2D )then
+            select case(trim(params%balance))
+                case('none')
+                case DEFAULT
+                    THROW_HARD('balance='//trim(params%balance)//' needs a 2D solution (classes in ptcl2D); the project has none: run with balance=none')
+            end select
+            if( trim(params%cavg_ini).eq.'yes' .or. trim(params%cavg_ini_ext).eq.'yes' )then
+                THROW_HARD('cavg_ini/cavg_ini_ext need class averages; the project has no 2D solution')
+            endif
+            write(logfhandle,'(A)') '>>> SOLVE3D: NO 2D SOLUTION IN THE PROJECT; balance=none, ladder from lpstart/lpstop'
         endif
         ! add-on prologue: frozen copy, physical identity, frozen-row mask; the
         ! mask precedes every count below, so the established sampling
@@ -938,11 +987,13 @@ contains
             params%pgrp_start = params%pgrp
             start_stage = solve3D_symsrch_stage() + 1
             ! CC pose initialization below owns the external-reference route.
-            ! setting up random classes for particles sampling
-            call spproj%os_ptcl2D%rnd_cls(100)
-            call spproj%write_segment_inside('ptcl2D', params%projfile)
-            call spproj%os_cls2D%new(100, is_ptcl=.false.)
-            call spproj%os_cls2D%set_all2single('state', 1)
+            ! setting up random classes for class-balanced particle sampling
+            if( trim(params%balance) /= 'none' )then
+                call spproj%os_ptcl2D%rnd_cls(100)
+                call spproj%write_segment_inside('ptcl2D', params%projfile)
+                call spproj%os_cls2D%new(100, is_ptcl=.false.)
+                call spproj%os_cls2D%set_all2single('state', 1)
+            endif
         endif
         ! set class global filtering flags for staged refine3D policy
         l_nonuniform = params%l_nonuniform
@@ -962,9 +1013,12 @@ contains
         call set_symmetry_class_vars(params)
         ! fall over if there are no particles
         if( spproj%os_ptcl3D%get_noris() < 1 ) THROW_HARD('Particles could not be found in the project')
-        ! take care of class-biased particle sampling
-        if( spproj%is_virgin_field('ptcl2D') )then
-            THROW_HARD('Prior 2D clustering required for solve3D')
+        ! take care of class-biased particle sampling; without a 2D solution
+        ! (balance=none) the selection is the ptcl2D state flags and no class
+        ! units are formed: the initial draw and every stage sample the global
+        ! lowest update-count tiers
+        if( l_no2D .and. trim(params%balance) /= 'none' )then
+            THROW_HARD('Prior 2D clustering required for solve3D with balance='//trim(params%balance))
         else
             update_frac = 1.0
             nptcls_eff  = spproj%count_state_gt_zero()
@@ -981,21 +1035,23 @@ contains
             else
                 update_frac = real(params%nsample * params%nstates) / real(nptcls_eff)
                 update_frac = min(solve3D_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
-                ! the sampling units on disk: the run's under balance=class|cavg, class units under none,
-                ! which the initial greedy sample draws from
-                smpl_units = 'class'
-                if( trim(params%balance) == 'cavg' ) smpl_units = 'cavg'
-                ! workers are idle before the first stage: nparts*nthr threads on local execution
-                nthr_view = params%nthr
-                if( trim(params%qsys_name) == 'local' .and. cline%defined('nparts') )then
-                    nthr_view = max(1, params%nparts) * params%nthr
-                    !$ nthr_view = min(omp_get_num_procs(), nthr_view)
-                    nthr_view = max(params%nthr, nthr_view)
+                if( .not. l_no2D )then
+                    ! the sampling units on disk: the run's under balance=class|cavg, class units under none,
+                    ! which the initial greedy sample draws from
+                    smpl_units = 'class'
+                    if( trim(params%balance) == 'cavg' ) smpl_units = 'cavg'
+                    ! workers are idle before the first stage: nparts*nthr threads on local execution
+                    nthr_view = params%nthr
+                    if( trim(params%qsys_name) == 'local' .and. cline%defined('nparts') )then
+                        nthr_view = max(1, params%nparts) * params%nthr
+                        !$ nthr_view = min(omp_get_num_procs(), nthr_view)
+                        nthr_view = max(params%nthr, nthr_view)
+                    endif
+                    call make_class_samples(params, spproj, smpl_units, nthr_view, .false., clssmp)
+                    call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
+                    if( trim(params%balance) /= 'none' ) call report_class_sample_coverage(clssmp, params%balance, &
+                        &nint(update_frac * real(nptcls_eff)), solve3D_remaining_niters(start_stage, nstages_refine3D), 'iteration')
                 endif
-                call make_class_samples(params, spproj, smpl_units, nthr_view, .false., clssmp)
-                call write_class_samples(clssmp, string(CLASS_SAMPLING_FILE))
-                if( trim(params%balance) /= 'none' ) call report_class_sample_coverage(clssmp, params%balance, &
-                    &nint(update_frac * real(nptcls_eff)), solve3D_remaining_niters(start_stage, nstages_refine3D), 'iteration')
             endif
             if( spproj%os_ptcl3D%has_been_sampled() )then
                 ! the ptcl3D field should be clean of sampling at this stage
@@ -1008,8 +1064,8 @@ contains
         if( l_addon )then
             ! the base run's ladder at the limits it emitted; never planned from class FRCs
             call set_lplims_from_manifest(man_addon)
-        else if( l_vol_ini_ext )then
-            ! limits based on dimensions or input
+        else if( l_vol_ini_ext .or. l_no2D )then
+            ! limits based on dimensions or input: no class FRCs to plan from
             call mskdiam2lplimits( params%mskdiam, lprange(1), lprange(2), params%cenlp )
             if( .not.cline%defined('lpstart') ) params%lpstart = lprange(1)
             if( .not.cline%defined('lpstop')  )then
@@ -1090,6 +1146,9 @@ contains
             noris = spproj%os_ptcl3D%get_noris()
             if( l_force_full_sampling )then
                 call spproj%os_ptcl3D%sample4update_all([1,noris], nptcls2update, pinds, .true.)
+            else if( l_no2D )then
+                ! no class units: the global lowest update-count tiers, as the stages sample under balance=none
+                call spproj%os_ptcl3D%sample4update_cnt([1,noris], update_frac, nptcls2update, pinds, .true.)
             else
                 call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true., .true.)
             endif
@@ -1631,6 +1690,22 @@ contains
             call work_projname%kill
         end subroutine prepare_state_continue_project
 
+        !> balance default when the command line leaves it open: none without
+        !! a 2D solution, class with input volumes (random classes, no class
+        !! averages to group), cavg otherwise; an add-on replays the frozen
+        !! run's value when that run gave one, so this acts on its silence too
+        subroutine set_balance_default
+            if( cline%defined('balance') ) return
+            if( l_no2D )then
+                params%balance = 'none'
+            else if( cline%defined('vol1') )then
+                params%balance = 'class'
+            else
+                params%balance = 'cavg'
+            endif
+            call cline%set('balance', trim(params%balance))
+        end subroutine set_balance_default
+
         subroutine reset_ptcl3D_from_ptcl2D_selection
             integer :: iptcl, nptcls2D, nptcls3D, state2D, nactive
             nptcls2D = spproj%os_ptcl2D%get_noris()
@@ -1647,7 +1722,9 @@ contains
             ! earlier refinement of this project may promote the first stage
             call spproj%os_ptcl3D%delete_entry('res')
             call spproj%os_ptcl3D%delete_entry('res05')
-            call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+            ! without a 2D solution there are no 2D shifts to transfer: the
+            ! shifts ptcl3D holds (kept above) stay
+            if( .not. l_no2D ) call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
             nactive = 0
             do iptcl = 1,nptcls3D
                 state2D = spproj%os_ptcl2D%get_state(iptcl)

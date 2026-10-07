@@ -202,6 +202,22 @@ contains
         call solve3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of the searched particles'' assignments for early stopping in stage 3{0.95}', &
         &'overlap fraction', .false., .95, group="search", visibility=UI_VIS_ADVANCED)
+        ! overridable settings of the frozen run: how the added particles are sampled and masked
+        call solve3D_addon%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
+        &'Units every fractional-update sample of the searched particles is balanced over (see solve3D); '//&
+        &'default is the frozen run''s value; none needs no 2D solution in the superset project, class and cavg '//&
+        &'need its 2D classes(none|class|cavg)', &
+        &'', .false., 'cavg', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
+        &visibility=UI_VIS_ADVANCED)
+        call solve3D_addon%add_input(UI_SRCH, 'nclust', 'num', 'Number of class-average groups', &
+        &'Number of groups of similar class averages formed with balance=cavg; default is the frozen run''s value', &
+        &'# groups', .false., 20., group="search", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('balance', [character(len=4) :: 'cavg']))
+        ! mask controls
+        call solve3D_addon%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &help_override='Mask diameter in A of the searched particles and the union maps; default is the frozen run''s '//&
+        &'value (the frozen accumulators are mask-free, so it may differ from the frozen run''s)', &
+        &group="mask", visibility=UI_VIS_ADVANCED)
         ! computer controls
         call solve3D_addon%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call solve3D_addon%add_input(UI_COMP, nthr,                                 group="compute", visibility=UI_VIS_STANDARD)

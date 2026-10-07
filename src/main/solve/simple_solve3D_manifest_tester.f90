@@ -12,7 +12,8 @@ use simple_image,               only: image
 use simple_cmdline,             only: cmdline
 use simple_sp_project,          only: sp_project
 use simple_sigma2_state_file,   only: sigma2_state_digest_begin, sigma2_state_digest_text
-use simple_solve3D_manifest, only: solve3D_manifest, solve3D_stage_record
+use simple_solve3D_manifest, only: solve3D_manifest, solve3D_stage_record, manifest_records_input, &
+    &manifest_overridable_input
 use simple_test_utils
 implicit none
 private
@@ -36,6 +37,7 @@ contains
         call test_registration()
         call test_long_paths()
         call test_replay()
+        call test_overridable_inputs()
         call test_frozen_validation()
         call del_file(VOL_FNAME)
         call del_file(SIGMA_FNAME)
@@ -77,6 +79,8 @@ contains
         call cl%set('pgrp',        'c3')
         call cl%set('rec_backend', 'pcg')
         call cl%set('lpstop',      6.)
+        call cl%set('balance',     'cavg')
+        call cl%set('nclust',      12)
         if( present(vol1) )then
             call cl%set('vol1',    vol1)
         else
@@ -474,6 +478,42 @@ contains
         call spproj%kill
         call cl%kill
     end subroutine test_replay
+
+    !> balance, nclust and mskdiam are replayed as the add-on's defaults and
+    !! may be overridden from its command line; nothing else is overridable
+    subroutine test_overridable_inputs()
+        type(solve3D_manifest) :: man
+        type(sp_project) :: spproj
+        type(cmdline)    :: cl, given
+        write(*,'(A)') 'test_overridable_inputs'
+        call assert_true(manifest_overridable_input('balance'), 'balance is overridable')
+        call assert_true(manifest_overridable_input('nclust'),  'nclust is overridable')
+        call assert_true(manifest_overridable_input('mskdiam'), 'mskdiam is overridable')
+        call assert_false(manifest_overridable_input('pgrp'),        'the point group is not overridable')
+        call assert_false(manifest_overridable_input('rec_backend'), 'the backend is not overridable')
+        call assert_false(manifest_overridable_input('nstates'),     'the state layout is not overridable')
+        call assert_true(manifest_records_input('balance') .and. manifest_records_input('nclust') .and. &
+            &manifest_records_input('mskdiam'), 'every overridable key is a recorded input')
+        call make_project(spproj)
+        call make_manifest(man, spproj, 2)
+        call man%replay(cl)
+        call assert_string_eq('cavg', cl%get_carg('balance'), 'the frozen run''s sampling units are the default')
+        call assert_int(12, cl%get_iarg('nclust'), 'the frozen run''s group count is the default')
+        call assert_real(180., cl%get_rarg('mskdiam'), 0., 'the frozen run''s mask diameter is the default')
+        ! the wrapper copies the add-on's own arguments over the replayed ones
+        call given%set('balance', 'none')
+        call given%set('mskdiam', 200.)
+        call cl%copy_arg(given, 'balance')
+        call cl%copy_arg(given, 'mskdiam')
+        call cl%copy_arg(given, 'nclust')
+        call assert_string_eq('none', cl%get_carg('balance'), 'balance given on the add-on command line wins')
+        call assert_real(200., cl%get_rarg('mskdiam'), 0., 'mskdiam given on the add-on command line wins')
+        call assert_int(12, cl%get_iarg('nclust'), 'an overridable key not given keeps the replayed value')
+        call man%kill
+        call spproj%kill
+        call cl%kill
+        call given%kill
+    end subroutine test_overridable_inputs
 
     subroutine test_frozen_validation()
         type(sp_project)          :: spproj, altered
