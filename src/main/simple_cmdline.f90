@@ -152,6 +152,10 @@ contains
             call ptr2prg%print_cmdline()
             stop
         endif
+        if( self%argcnt == 1 .and. executable%to_char() /= 'simple_test_exec' )then
+            call ptr2prg%print_cmdline()
+            stop
+        endif
         ! get required keys
         skip_required_keys = skip_mode_required_keys(prgname%to_char(), self%entire_line)
         if( skip_required_keys )then
@@ -226,6 +230,10 @@ contains
                 return
             case DEFAULT
                 if( associated(ptr2prg) )then
+                    if( self%argcnt == 1 )then
+                        call ptr2prg%print_cmdline()
+                        stop
+                    endif
                     ! get required keys
                     skip_required_keys = skip_mode_required_keys(trim(arg(pos+1:)), self%entire_line)
                     if( skip_required_keys )then
