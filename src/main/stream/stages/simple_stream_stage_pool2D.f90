@@ -7,9 +7,10 @@
 !   sieve has handed off since the last pass, adds them to the pool when it is
 !   free, lets the pool run its next 2D iteration (or pauses it while too few
 !   new particles arrive), answers the GUI (mask diameter, snapshots) and
-!   publishes the pool's classified state for 3D: once after iteration
-!   MSKDIAM_SWITCH_ITER in a pool that has published nothing yet, then after each
-!   completed iteration from EXPORT_START_ITER
+!   publishes the pool's classified state for 3D: once in a pool that has
+!   published nothing yet, after the first iteration that leaves NPTCLS_FIRST3D
+!   particles selected or after FIRST_EXPORT_ITER, whichever comes first, then
+!   after each completed iteration from EXPORT_START_ITER
 !   (doc/policies/stream/stream_3D_ingestion_policy.md). The commander
 !   (simple_commanders_stream_p06_pool2D) only normalises the command line and loops over
 !   iterate() until finished().
@@ -47,7 +48,7 @@ module simple_stream_stage_pool2D
 use simple_defs,                                only: logfhandle, PATH_HERE, COSMSKHALFWIDTH
 use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, DIR_SNAPSHOT, REFINE2D_FINISHED, JOB_INFO_EXT
 use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME, POOL_EXIT_CODE, POOL_INPUT_PROJFILE,&
-                                                     &OPTICS_ID_DELTA, SIEVE_FINAL_SET_FBODY
+                                                     &OPTICS_ID_DELTA, SIEVE_FINAL_SET_FBODY, NPTCLS_FIRST3D
 use simple_srch_sort_loc,                       only: hpsort
 use simple_error,                               only: simple_exception
 use simple_string,                              only: string
@@ -87,7 +88,8 @@ integer, parameter :: LATE_ITER             = 20  ! last iteration of the early 
 integer, parameter :: FINAL_ITER            = 25  ! the final sieve set runs the pool uninterrupted to here
 integer, parameter :: MSKDIAM_SWITCH_ITER   = 10  ! iteration from which the sieve's mask diameter applies
 integer, parameter :: FIRST_EXPORT_ITER     = MSKDIAM_SWITCH_ITER ! a fresh pool's first publication for 3D, after this
-                                                   ! iteration: it carries the sieve's mask diameter, set when it was dispatched
+                                                   ! iteration at the latest (earlier once NPTCLS_FIRST3D are selected): at
+                                                   ! this iteration it carries the sieve's mask diameter, set when it was dispatched
 integer, parameter :: EXPORT_START_ITER     = 25  ! the pool is published for 3D after each iteration from this one on
                                                    ! (the final run's last iteration, FINAL_ITER, among them)
 integer, parameter :: NPUBLICATIONS_KEPT    = 2   ! the newest publications kept on disk; older ones are removed
@@ -821,7 +823,7 @@ contains
         if( .not. self%pool%available() ) return
         if( self%pool%iteration() <= self%last_export_iteration ) return
         ! no publication on disk yet (restore_export_id found none): a fresh pool
-        if( .not. exports_after(self%pool%iteration(), self%last_export_id == 1) ) return
+        if( .not. exports_after(self%pool%iteration(), self%last_export_id == 1, self%pool%npublishable()) ) return
         call simple_getcwd(cwd)
         call self%pool%publish(publication_fname(cwd, self%last_export_id), nstks, self%params%optics_dir,&
             &publishes_final(self%pool%iteration(), self%l_sieve_final))
@@ -921,13 +923,21 @@ contains
     end function publishes_final
 
     !> Whether the pool publishes for 3D after iteration @p iter: after every iteration from
-    !! EXPORT_START_ITER, and once after FIRST_EXPORT_ITER when it has published nothing yet
-    !! (@p l_none_yet). A restarted pool with publications on disk resumes from EXPORT_START_ITER,
-    !! so 3D never takes the early classification of a restarted pool as a later publication.
-    pure logical function exports_after( iter, l_none_yet )
+    !! EXPORT_START_ITER; and once when it has published nothing yet (@p l_none_yet), after the
+    !! first iteration whose publication would select NPTCLS_FIRST3D particles (@p nselected) or
+    !! after FIRST_EXPORT_ITER, whichever comes first. Iterations from FIRST_EXPORT_ITER + 1 to
+    !! EXPORT_START_ITER - 1 publish nothing. A restarted pool with publications on disk resumes
+    !! from EXPORT_START_ITER, so 3D never takes the early classification of a restarted pool as a
+    !! later publication.
+    pure logical function exports_after( iter, l_none_yet, nselected )
         integer, intent(in) :: iter
         logical, intent(in) :: l_none_yet
-        exports_after = iter >= EXPORT_START_ITER .or. (iter == FIRST_EXPORT_ITER .and. l_none_yet)
+        integer, intent(in) :: nselected
+        exports_after = iter >= EXPORT_START_ITER
+        if( l_none_yet )then
+            if( iter == FIRST_EXPORT_ITER ) exports_after = .true.
+            if( iter <  FIRST_EXPORT_ITER .and. nselected >= NPTCLS_FIRST3D ) exports_after = .true.
+        endif
     end function exports_after
 
     !> The mask diameter (A) when none is given: the box less the soft edge and a pixel. The stage

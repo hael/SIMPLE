@@ -9,6 +9,7 @@ implicit none
 public :: cleanup_root_folder
 public :: tidy_2Dstream_iter
 public :: build_pool_publication
+public :: pool_publication_nselected
 public :: delete_pool_publication
 public :: pool_publication_names
 public :: snapshot_cavgs_meta
@@ -130,6 +131,18 @@ contains
     !! counts), and with @p optics_dir the newest optics map's groups and optics table are applied
     !! (the pool keeps no optics table of its own). @p nstks is the number of stacks published
     !! (0: nothing to publish, @p pub is empty).
+    !> The particles a publication of @p src selects (build_pool_publication): those an iteration
+    !! has updated and the pool keeps (state > 0).
+    integer function pool_publication_nselected( src ) result( n )
+        class(sp_project), intent(in) :: src
+        integer :: iptcl
+        n = 0
+        do iptcl = 1,src%os_ptcl2D%get_noris()
+            if( src%os_ptcl2D%get_state(iptcl) <= 0 ) cycle
+            if( src%os_ptcl2D%get_updatecnt(iptcl) > 0 ) n = n + 1
+        enddo
+    end function pool_publication_nselected
+
     subroutine build_pool_publication( src, pub, nstks, optics_dir )
         class(sp_project),       intent(inout) :: src
         class(sp_project),       intent(inout) :: pub

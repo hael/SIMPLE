@@ -23,8 +23,9 @@
 !     sieve finished -> solve2D -> select classes -> balance classes
 !     -> solve3D_cavgs -> reprojections of the best state as references
 !
-!   Cycle 1 and the sieve mask with the box's default diameter; cycle 2 and
-!   3D with the one estimated from cycle 1's selected class averages
+!   Cycle 1, the sieve and the 3D route (the multistate solve3D_cavgs, the
+!   volume vetoes and the reprojection) mask with the box's default diameter;
+!   cycle 2 with the one estimated from cycle 1's selected class averages
 !   (estimate_mskdiam), generous and never larger than the default.
 !
 !   The picking references are published once per run, as INITIAL_ANALYSIS_PICKREFS
@@ -199,8 +200,8 @@ type :: stream_stage_initial_analysis
     integer :: n_extract_started = 0
     integer :: n_extract_done    = 0
     integer :: box               = 0       ! picking and extraction box (px)
-    real    :: mskdiam_box       = 0.      ! the box's default mask diameter (A): cycle 1 and the sieve
-    real    :: mskdiam           = 0.      ! mask diameter (A) of cycle 2 and 3D, from cycle 1's selection
+    real    :: mskdiam_box       = 0.      ! the box's default mask diameter (A): cycle 1, the sieve and the 3D route
+    real    :: mskdiam           = 0.      ! mask diameter (A) of cycle 2, from cycle 1's selection
     integer :: vis_cycle         = 0
     logical :: l_attached        = .false.
     logical :: l_restart         = .false. ! the output directory existed before params%new
@@ -867,7 +868,8 @@ contains
             select case( self%job%status() )
                 case( ASYNC_JOB_IDLE )
                     call self%send_initial_analysis_status(string('solve3D and reproject'), self%box, self%vis_cycle)
-                    call start_solve3D(self%qenv, self%job, self%params, projfile_3D, string('solve3D/all'), nint(self%mskdiam))
+                    ! the multistate 3D masks with the box's default, not the estimate
+                    call start_solve3D(self%qenv, self%job, self%params, projfile_3D, string('solve3D/all'), nint(self%mskdiam_box))
                 case( ASYNC_JOB_DONE )
                     call self%job%kill()
                     ! the state's reprojection job is started
@@ -973,9 +975,9 @@ contains
             call vol_shape%new(ldim, find_img_smpd(volpath))
             call vol_shape%read(volpath)
             write(logfhandle,'(A,I0)') '>>> VOLUME SHAPE DESCRIPTORS FOR STATE=', ivol
-            ! the mask radius in the volume's voxels
-            call mskvol_shape%vol_shape_descr(vol_shape, 20.0, self%mskdiam / (2. * vol_shape%get_smpd()), nccs(ivol),&
-                &tag='_state'//int2str_pad(ivol,2), dominant_frac=dominant(ivol))
+            ! the mask radius in the volume's voxels: the box's default, as solve3D_cavgs masked
+            call mskvol_shape%vol_shape_descr(vol_shape, 20.0, vol_mskdiam(ldim(1), vol_shape%get_smpd()) /&
+                &(2. * vol_shape%get_smpd()), nccs(ivol), tag='_state'//int2str_pad(ivol,2), dominant_frac=dominant(ivol))
             call mskvol_shape%kill_bimg
             res(ivol) = state_fsc_res(ivol, ldim(1), vol_shape%get_smpd())
             call vol_shape%kill
@@ -1027,10 +1029,19 @@ contains
         call simple_chdir(cwd)
         call self%spproj_all%kill()
         call self%spproj_all%read(projfile)
-        call start_reproject(self%qenv_local, self%job, self%params, self%reproj_vol, vol_smpd, nint(self%mskdiam),&
-            &self%reproj_dir//'/reproject')
+        ! the box's default mask, as solve3D_cavgs masked
+        call start_reproject(self%qenv_local, self%job, self%params, self%reproj_vol, vol_smpd,&
+            &nint(vol_mskdiam(ldim(1), vol_smpd)), self%reproj_dir//'/reproject')
 
     contains
+
+        ! The box's default mask diameter (A) for a volume of @p box voxels at @p smpd: mskdiam_box,
+        ! capped at the volume's own default when it is sampled more coarsely than the particles
+        real function vol_mskdiam( box, smpd )
+            integer, intent(in) :: box
+            real,    intent(in) :: smpd
+            vol_mskdiam = min(self%mskdiam_box, (real(box) - COSMSKHALFWIDTH) * smpd)
+        end function vol_mskdiam
 
         ! the FSC 0.143 resolution (A) of state @p istate from its FSC file in the result folder (the
         ! working directory here), for a volume of @p box voxels at @p smpd; 0 when there is none
@@ -1334,7 +1345,7 @@ contains
     end subroutine start_solve2D
 
     ! The 3D route's solve3D_cavgs, with its settings from @p params (the master's or the
-    ! commander's defaults, decision 20).
+    ! commander's defaults, decision 20) and mask diameter @p mskdiam (A), the box's default.
     subroutine start_solve3D( qenv, job, params, projfile, outdir, mskdiam )
         class(qsys_env),      intent(inout) :: qenv
         type(qsys_async_job), intent(inout) :: job

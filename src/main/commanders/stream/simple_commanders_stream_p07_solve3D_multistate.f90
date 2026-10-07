@@ -11,10 +11,10 @@
 ! 3D JOBS:
 !   The settings of the solve3D and solve3D_addon runs are the named
 !   constants below; a command line overrides them with nstates, nstages,
-!   lpstart, lpstop (passed on to solve3D as they are), nptcls3D_max (the
-!   first solve3D's particles at most; the others go to the first addon run),
+!   nptcls3D_max (the first set's particles at most, whole stacks in order),
 !   and nparts3D and nthr3D (the jobs' parts and threads; the stage's own
-!   nparts and nthr are the master's settings for the stage).
+!   nparts and nthr are the master's settings for the stage). The 3D jobs set
+!   their own low-pass limits.
 !
 ! ENTRY POINT:
 !   commander_stream_p07_solve3D_multistate%execute(cline)
@@ -28,6 +28,7 @@ module simple_commanders_stream_p07_solve3D_multistate
 use simple_defs,                    only: logfhandle
 use simple_error,                   only: simple_exception
 use simple_defs_fname,              only: METADATA_EXT
+use simple_defs_stream,             only: NPTCLS_FIRST3D
 use simple_jiffys,                  only: simple_end
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
@@ -43,11 +44,9 @@ private
 
 integer, parameter :: NSTATES3D    = 3      ! states of the 3D
 integer, parameter :: NSTAGES3D    = 5      ! solve3D stages
-real,    parameter :: LPSTART3D    = 50.    ! solve3D low-pass limits (A)
-real,    parameter :: LPSTOP3D     = 10.
 integer, parameter :: NPARTS3D     = 8      ! parts and threads of each 3D job
 integer, parameter :: NTHR3D       = 8
-integer, parameter :: NPTCLS3D_MAX = 100000 ! the first solve3D's particles at most
+integer, parameter :: NPTCLS3D_MAX = NPTCLS_FIRST3D ! the first solve3D's particles at most, as many as p06's first publication waits for
 
 type, extends(commander_base) :: commander_stream_p07_solve3D_multistate
   contains
@@ -90,8 +89,6 @@ contains
         if( cline%get_iarg('nstates') < 2 ) THROW_HARD('multistate 3D needs nstates of 2 at least')
         if( cline%get_iarg('nstates') > MAX_STATES_SOLVE3D_MULTISTATE ) THROW_HARD('multistate 3D takes nstates of 20 at most')
         if( .not. cline%defined('nstages')  ) call cline%set('nstages',  NSTAGES3D)
-        if( .not. cline%defined('lpstart')  ) call cline%set('lpstart',  LPSTART3D)
-        if( .not. cline%defined('lpstop')   ) call cline%set('lpstop',   LPSTOP3D)
         if( .not. cline%defined('nparts3D') ) call cline%set('nparts3D', NPARTS3D)
         if( .not. cline%defined('nthr3D')   ) call cline%set('nthr3D',   NTHR3D)
         if( .not. cline%defined('nptcls3D_max') ) call cline%set('nptcls3D_max', NPTCLS3D_MAX)

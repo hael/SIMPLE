@@ -44,11 +44,13 @@ Each pass of p06 runs, in this order:
    completed iteration, whose particle parameters, classes and resolution come back into the
    pool, with a dimension update (section 7);
 3. publish the pool's classified state for 3D when the refresh brought back iteration
-   `EXPORT_START_ITER` (25) or a later one, or iteration `FIRST_EXPORT_ITER` (10, the
-   `MSKDIAM_SWITCH_ITER`) in a pool that has published nothing yet (`exports_after`), before
-   anything new is imported or dispatched (the 3D ingestion policy). The iteration-10 publication
-   is the first 3D takes and carries the sieve's mask diameter, which the pool took when it dispatched
-   iteration 10; a restarted pool with publications on disk skips it and resumes at 25. The final
+   `EXPORT_START_ITER` (25) or a later one; and, in a pool that has published nothing yet, an
+   iteration whose publication would select `NPTCLS_FIRST3D` (100,000) particles or iteration
+   `FIRST_EXPORT_ITER` (10, the `MSKDIAM_SWITCH_ITER`), whichever comes first (`exports_after`),
+   before anything new is imported or dispatched (the 3D ingestion policy). That first
+   publication is the one 3D takes as the pool selects it. At iteration 10 it carries the sieve's
+   mask diameter, which the pool took when it dispatched iteration 10; earlier, the pool's starting
+   one. A restarted pool with publications on disk skips it and resumes at 25. The final
    run stops at `FINAL_ITER` (25), so a short session still publishes its last iteration (until 5
    October 2026 the publications started after iteration 25, and a session whose final set came
    before it never reached 3D);

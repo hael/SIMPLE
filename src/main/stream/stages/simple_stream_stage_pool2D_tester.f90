@@ -11,7 +11,7 @@ use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
 use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, USER_PARAMS2D, REFINE2D_FINISHED
-use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, POOL_EXIT_CODE, POOL_INPUT_PROJFILE
+use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, POOL_EXIT_CODE, POOL_INPUT_PROJFILE, NPTCLS_FIRST3D
 use simple_string,                              only: string
 use simple_string_utils,                        only: int2str_pad
 use simple_fileio,                              only: basename, del_file, file_exists, simple_getcwd, simple_touch
@@ -27,7 +27,7 @@ use simple_gui_metadata_stream_snapshot,        only: gui_metadata_stream_snapsh
 use simple_gui_metadata_stream_update,          only: gui_metadata_stream_update
 use simple_stream_pipe,                         only: stream_pipe
 use simple_stream_stage_pool2D,                 only: stream_stage_pool2D
-use simple_stream_refine2D_utils,              only: build_pool_publication
+use simple_stream_refine2D_utils,              only: build_pool_publication, pool_publication_nselected
 use simple_optics_maps,                         only: publish_optics_map
 implicit none
 private
@@ -188,6 +188,8 @@ contains
         call pool%os_ptcl2D%set(8, 'updatecnt', 1)
         call build_pool_publication(pool, pub, nstks)
         call assert_int(2, nstks,                        'the classified stacks are published')
+        call assert_int(4, pool_publication_nselected(pool), 'the particles it selects are counted')
+        call assert_int(pub%os_ptcl2D%count_state_gt_zero(), pool_publication_nselected(pool), 'as the publication selects them')
         call assert_int(2, pub%os_stk%get_noris(),       'stacks 1 and 3')
         call assert_int(2, pub%os_mic%get_noris(),       'with their micrographs')
         call assert_int(6, pub%os_ptcl2D%get_noris(),    'and particles; the just-imported stack is left out')
@@ -460,13 +462,15 @@ contains
         call assert_true(stage%publishes_final(31, .true.),  'as is one after a later iteration')
         call assert_false(stage%publishes_final(24, .true.), 'not before iteration 25')
         call assert_false(stage%publishes_final(30, .false.), 'nor without the final set')
-        call assert_true(stage%exports_after(10, .true.),   'a fresh pool publishes after iteration 10')
-        call assert_false(stage%exports_after(10, .false.), 'a pool with publications on disk does not')
-        call assert_false(stage%exports_after(9, .true.),   'nor before iteration 10')
-        call assert_false(stage%exports_after(11, .true.),  'nor between 10 and 25')
-        call assert_false(stage%exports_after(24, .true.),  'up to iteration 24')
-        call assert_true(stage%exports_after(25, .false.),  'from iteration 25 every pool publishes')
-        call assert_true(stage%exports_after(31, .true.),   'after each iteration')
+        call assert_true(stage%exports_after(10, .true., 0),   'a fresh pool publishes after iteration 10')
+        call assert_false(stage%exports_after(10, .false., 0), 'a pool with publications on disk does not')
+        call assert_false(stage%exports_after(9, .true., NPTCLS_FIRST3D - 1), 'nor before it, with fewer selected than the first 3D takes')
+        call assert_true(stage%exports_after(4, .true., NPTCLS_FIRST3D),  'but before it, once as many are selected')
+        call assert_false(stage%exports_after(4, .false., NPTCLS_FIRST3D), 'only when it has published nothing yet')
+        call assert_false(stage%exports_after(11, .true., NPTCLS_FIRST3D), 'nothing between 10 and 25')
+        call assert_false(stage%exports_after(24, .true., 0),  'up to iteration 24')
+        call assert_true(stage%exports_after(25, .false., 0),  'from iteration 25 every pool publishes')
+        call assert_true(stage%exports_after(31, .true., 0),   'after each iteration')
         call assert_real(100., stage%default_mskdiam(64, 2.0), 1.e-4, 'the default mask diameter is in Angstroms')
     end subroutine test_pause_rules
 

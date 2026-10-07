@@ -36,7 +36,8 @@ use simple_qsys_async_job,        only: qsys_async_job, ASYNC_JOB_DONE, ASYNC_JO
 use simple_imgarr_utils,          only: rank_cavgs_stk
 use simple_optics_maps,           only: import_latest_optics_map
 use simple_stream_refine2D_utils, only: tidy_2Dstream_iter, build_pool_publication, pool_publication_names,&
-                                       &snapshot_cavgs_meta, log_rss, draw_new_classes, append_project_sets
+                                       &snapshot_cavgs_meta, log_rss, draw_new_classes, append_project_sets,&
+                                       &pool_publication_nselected
 implicit none
 
 public :: stream_pool2D, stream_pool2D_stats
@@ -136,6 +137,7 @@ contains
     procedure          :: finalise
     procedure          :: iteration
     procedure          :: available
+    procedure          :: npublishable
     procedure          :: failed
     procedure          :: stats
     ! the state part of start, public for simple_stream_pool2D_tester (a pool without a queue)
@@ -1421,6 +1423,13 @@ contains
         class(stream_pool2D), intent(in) :: self
         available = self%l_available
     end function available
+
+    !> The particles a publication would select now (pool_publication_nselected)
+    integer function npublishable( self )
+        class(stream_pool2D), intent(in) :: self
+        npublishable = 0
+        if( allocated(self%proj) ) npublishable = pool_publication_nselected(self%proj)
+    end function npublishable
 
     !> .true. once an iteration has failed twice: the pool stops
     logical function failed( self )

@@ -4,7 +4,7 @@
 ! and carries qsys_name=local for the stage project's computing environment. The upstream is a pool
 ! 2D directory whose completed folder holds exports. The class-average selection and the 3D jobs
 ! (which need a queue) are left to the high-level stream tests; the import is tested on sets made
-! in memory, the class averages a publication brings on fixture stacks, the first run's draw and
+! in memory, the class averages a publication brings on fixture stacks, the first run's cap and
 ! queue on fixture rows, and the volume messages on a fixture project with a volume and an FSC; a
 ! 3D snapshot is written from a fixture result project, on a request sent through the stage's
 ! update pipe.
@@ -56,7 +56,7 @@ contains
         call test_merge_publications()
         call test_take_cavgs()
         call test_first_publication()
-        call test_first_run_draw()
+        call test_first_run_cap()
         call test_mskdiam_from_each_publication()
         call test_rows_problem()
         call test_rules()
@@ -307,8 +307,10 @@ contains
 
     end subroutine test_take_cavgs
 
-    !> the first publication is merged as every later one: a later publication's selection applies
-    !! to its rows
+    !> the first publication is taken as the pool selects it: at most nptcls3D_max of its
+    !! particles, whole stacks in order, the others deselected. The rows kept are the first set,
+    !! whose selection later publications do not change (also when they lack its stack); the
+    !! deselected rows follow them.
     subroutine test_first_publication()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
@@ -321,62 +323,82 @@ contains
         call enter_fixture('a3_stage_first_publication', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
-        ! publication 1: stacks A (3) and B (2), the first particle deselected
+        ! publication 1: stacks A (3) and B (2), the first particle never updated (deselected), and
+        ! a cap of 3: stack A's two selected particles fit, stack B's two would not
         call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
-        call stage%merge_publication(set, 1)
+        stage%params%nptcls3D_max = 3
+        call stage%take_first_publication(set, 1)
         call set%kill
         call assert_int(5, stage%spproj%os_ptcl3D%get_noris(), 'the first publication''s rows')
-        call assert_int(4, stage%nptcls_selected,              'as it selects them')
+        call assert_int(2, stage%nptcls_selected,              'whole stacks in order under the cap')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(4), 'the stack that no longer fits is deselected')
+        call assert_int(0, stage%spproj%os_ptcl2D%get_state(5), 'in both segments')
+        call assert_true(allocated(stage%first_set),           'the rows kept are the first set')
+        if( allocated(stage%first_set) )then
+            call assert_true(all(stage%first_set .eqv. [.false., .true., .true., .false., .false.]), 'rows 2 and 3')
+        endif
+        call assert_false(allocated(stage%queued),             'nothing is queued')
         call assert_int(PHASE_IMPORTING, stage%phase,          'no job is due but solve3D''s')
-        ! publication 2 deselects the first two particles
-        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=2, icls=2)
+        ! publication 2 selects every particle, in class 2
+        call make_set(set, ['A', 'B'], [3, 2], 2, icls=2)
         call stage%merge_publication(set, 2)
         call set%kill
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(2), 'a row of the first publication follows a later one')
-        call assert_int(0, stage%spproj%os_ptcl2D%get_state(2), 'in both segments')
-        call assert_int(2, stage%spproj%os_ptcl2D%get_class(3), 'with its 2D parameters')
-        call assert_int(3, stage%nptcls_selected,               'the selected rows are counted')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(4), 'a row deselected over the cap follows a later publication')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'as does one the first never updated')
+        call assert_int(2, stage%spproj%os_ptcl2D%get_class(3), 'a first-set row takes the 2D parameters')
+        call assert_int(5, stage%nptcls_selected,               'the selected rows are counted')
+        ! publication 3 deselects the first three particles
+        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=3, icls=2)
+        call stage%merge_publication(set, 3)
+        call set%kill
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(2), 'a first-set row keeps its selection')
+        call assert_int(1, stage%spproj%os_ptcl2D%get_state(3), 'in both segments')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(1), 'the other rows follow the publication')
+        call assert_int(4, stage%nptcls_selected,               'so four rows stay selected')
+        ! publication 4 lacks stack A (rows 1 to 3)
+        call make_set(set, ['B'], [2], 2, icls=2)
+        call stage%merge_publication(set, 4)
+        call set%kill
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(3), 'a first-set row keeps its selection when its stack is missing')
+        call assert_int(4, stage%nptcls_selected,               'and the count is unchanged')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_first_publication
 
-    !> the first solve3D takes at most nptcls3D_max of the selected particles: an equal share per
-    !! selected class, capped at a small class's population, best 2D scores first, trimmed to the
-    !! cap, without touching the rows' update counts; the others are queued, and once the run is
+    !> the first run takes at most nptcls3D_max of the selected particles: whole stacks in row
+    !! order up to the first that no longer fits, so it may hold fewer than the cap (the first
+    !! stack's first particles when not even it fits); the others are queued, and once the run is
     !! done they are selected again as the first addon run's cohort. A selection within the cap
     !! queues nothing.
-    subroutine test_first_run_draw()
+    subroutine test_first_run_cap()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)      :: cline
         type(string)       :: cwd_saved, root
         integer            :: nfail0, i
-        integer, parameter :: N = 23 ! classes 1 (rows 1-10), 2 (11-12), 3 (13-22); row 23 deselected
+        integer, parameter :: N = 23 ! stacks of rows 1-5, 6-10, 11-12, 13-22 and 23; rows 7 and 23 deselected
         allocate(stage)
-        write(*,'(A)') 'test_first_run_draw'
+        write(*,'(A)') 'test_first_run_cap'
         nfail0 = tests_failed
-        call enter_fixture('a3_stage_first_run_draw', cwd_saved, root)
+        call enter_fixture('a3_stage_first_run_cap', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
         call make_rows()
         ! within the cap
-        stage%params%nptcls3D_max = 22
-        call stage%draw_first_run()
+        stage%params%nptcls3D_max = 21
+        call stage%cap_first_run()
         call assert_false(allocated(stage%queued), 'a selection within the cap queues nothing')
-        ! a cap of 12: 5, 2 and 5 particles of the three classes
-        stage%params%nptcls3D_max = 12
-        call stage%draw_first_run()
+        ! a cap of 11: the first three stacks' 5 + 4 + 2 selected particles
+        stage%params%nptcls3D_max = 11
+        call stage%cap_first_run()
         call assert_true(allocated(stage%queued), 'a selection over the cap queues the rest')
         if( allocated(stage%queued) )then
-            call assert_int(10, count(stage%queued),        'the run takes exactly the cap')
-            call assert_false(any(stage%queued(11:12)),     'a class smaller than its share is taken whole')
-            call assert_int(5, count(stage%queued(1:10)),   'the others share the rest equally')
-            call assert_false(any(stage%queued(6:10)),      'best 2D scores first')
-            call assert_true(all(stage%queued(13:17)),      'the lowest ones are queued')
-            call assert_false(stage%queued(23),             'a deselected row is not queued')
+            call assert_int(10, count(stage%queued),     'the run takes whole stacks in order')
+            call assert_false(any(stage%queued(1:12)),   'the first three')
+            call assert_true(all(stage%queued(13:22)),   'up to the one that no longer fits')
+            call assert_false(stage%queued(7),           'a deselected row is not queued')
+            call assert_false(stage%queued(23),          'nor one in a later stack')
         endif
-        call assert_int(3, stage%spproj%os_ptcl2D%get_int(10, 'updatecnt'), 'the rows'' update counts stay')
-        call assert_int(0, stage%spproj%os_ptcl2D%get_int(10, 'sampled'),    'and they are not marked sampled')
         ! the run's result has the queued rows deselected; once it is done they are the cohort
         call stage%set_queued_states(0)
         allocate(stage%frozen_active(N))
@@ -385,19 +407,25 @@ contains
         enddo
         call stage%release_queue()
         call assert_false(allocated(stage%queued),               'the queue is released')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1),  'its rows are selected again')
-        call assert_int(1, stage%spproj%os_ptcl2D%get_state(13), 'in both segments')
-        call assert_int(12, stage%count_frozen(),                'the run''s particles are frozen')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(13), 'its rows are selected again')
+        call assert_int(1, stage%spproj%os_ptcl2D%get_state(22), 'in both segments')
+        call assert_int(11, stage%count_frozen(),                'the run''s particles are frozen')
         call assert_int(10, stage%count_cohort(),                'the queued ones are the first addon run''s cohort')
-        call assert_int(22, stage%nptcls_selected,               'and the selection is whole again')
-        ! a cap of 13 draws one particle over (6, 2 and 6): the lowest score of them goes
+        call assert_int(21, stage%nptcls_selected,               'and the selection is whole again')
         deallocate(stage%frozen_active)
-        stage%params%nptcls3D_max = 13
-        call stage%draw_first_run()
+        ! a cap of 12: the fourth stack does not fit, so the run holds fewer than the cap
+        stage%params%nptcls3D_max = 12
+        call stage%cap_first_run()
         if( allocated(stage%queued) )then
-            call assert_int(9, count(stage%queued), 'an overshoot is trimmed to the cap')
-            call assert_true(stage%queued(17),      'by the lowest score drawn')
-            call assert_false(stage%queued(5),      'not by a higher one')
+            call assert_int(10, count(stage%queued), 'no stack is split to fill the cap')
+        endif
+        ! a cap of 3, below the first stack's 5: its first three particles
+        stage%params%nptcls3D_max = 3
+        call stage%cap_first_run()
+        if( allocated(stage%queued) )then
+            call assert_int(18, count(stage%queued),   'a first stack over the cap is cut to it')
+            call assert_false(any(stage%queued(1:3)),  'at its first particles')
+            call assert_true(stage%queued(4),          'and no further')
         endif
         call stage%kill
         call cline%kill
@@ -405,40 +433,24 @@ contains
 
     contains
 
-        ! class 1: scores 0.1 to 1.0 (row 10 best); class 2: 0.9; class 3: 0.05 to 0.5 (row 22
-        ! best); every row with update count 3; class 4 deselected and empty
         subroutine make_rows()
-            integer :: iptcl, icls
-            real    :: corr
+            integer, parameter :: FROMP(5) = [1, 6, 11, 13, 23], TOP(5) = [5, 10, 12, 22, 23]
+            integer :: iptcl, istk, s
+            call stage%spproj%os_stk%new(size(FROMP), is_ptcl=.false.)
+            do istk = 1,size(FROMP)
+                call stage%spproj%os_stk%set(istk, 'fromp', FROMP(istk))
+                call stage%spproj%os_stk%set(istk, 'top',   TOP(istk))
+            enddo
             call stage%spproj%os_ptcl2D%new(N, is_ptcl=.true.)
             call stage%spproj%os_ptcl3D%new(N, is_ptcl=.true.)
-            call stage%spproj%os_cls2D%new(4, is_ptcl=.false.)
-            do icls = 1,4
-                call stage%spproj%os_cls2D%set_state(icls, merge(1, 0, icls < 4))
-            enddo
             do iptcl = 1,N
-                if( iptcl <= 10 )then
-                    icls = 1
-                    corr = 0.1 * real(iptcl)
-                else if( iptcl <= 12 )then
-                    icls = 2
-                    corr = 0.9
-                else if( iptcl <= 22 )then
-                    icls = 3
-                    corr = 0.05 * real(iptcl - 12)
-                else
-                    icls = 1
-                    corr = 0.95
-                endif
-                call stage%spproj%os_ptcl2D%set_class(iptcl, icls)
-                call stage%spproj%os_ptcl2D%set(iptcl, 'corr',      corr)
-                call stage%spproj%os_ptcl2D%set(iptcl, 'updatecnt', 3)
-                call stage%spproj%os_ptcl2D%set_state(iptcl, merge(1, 0, iptcl < N))
-                call stage%spproj%os_ptcl3D%set_state(iptcl, merge(1, 0, iptcl < N))
+                s = merge(0, 1, iptcl == 7 .or. iptcl == 23)
+                call stage%spproj%os_ptcl2D%set_state(iptcl, s)
+                call stage%spproj%os_ptcl3D%set_state(iptcl, s)
             enddo
         end subroutine make_rows
 
-    end subroutine test_first_run_draw
+    end subroutine test_first_run_cap
     !> the mask diameter comes from every publication taken; a change is taken for the next run, and
     !! a publication without one leaves it
     subroutine test_mskdiam_from_each_publication()

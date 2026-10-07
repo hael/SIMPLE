@@ -72,9 +72,9 @@ the defaults below and checks `nstates_pickrefs` ≥ 2, `lpstart_ini3D` > `lpsto
 | `solve2D` (both cycles) | `ncls` = particles / `nptcls_per_cls`, clamped to 10..100; `nsample` = max(2000, particles/5 rounded up to 1000); `lpstop=8`; `mskdiam`: `mskdiam_box` in cycle 1, the estimate in cycle 2 (section 3.1); `center=yes`; `autoscale=yes`; `sigma_est=global`; `nthr2D` (16) threads, `nparts` (1) |
 | sieve of the "all" set | coarse only (`single_pass=yes`); `nchunks` (4) chunks of `nthr2D` (16) threads, on `SIMPLE_STREAM_REFGEN_PARTITION`; `mskdiam_box`, also as the scoring mask; no starting low-pass (the chunks' `solve2D` derives it) |
 | class balancing | the selected class averages replicated in proportion to population up to `TARGET_NCLS` (501) rows, written to a project of its own (`balance_classes/all/all_balanced.simple`) on which `solve3D_cavgs` runs; the cycle 2 project keeps the class averages the GUI shows, so a selection of cycle 2 is read against them |
-| `solve3D_cavgs` | `nstates_pickrefs` (3), `nstages_pickrefs` (3), `nrestarts_collapse` (3), `lpstart_ini3D` (100), `lpstop_ini3D` (20), `lpstop_pickrefs` (8), `pgrp=c1`, `prune=no`, the estimated mask diameter, `nthr3D_pickrefs` (16) threads, `nparts` only when above 1: `nparts` on the command line makes refine3D distributed even at 1, and a distributed iteration that empties a state stops the next one, while in shared memory `solve3D_cavgs` handles the collapse after the stage. Its restart driver names the run whose result stands in `SOLVE3D_CAVGS_FINAL_DIR`, which p03 reads |
+| `solve3D_cavgs` | `nstates_pickrefs` (3), `nstages_pickrefs` (3), `nrestarts_collapse` (3), `lpstart_ini3D` (100), `lpstop_ini3D` (20), `lpstop_pickrefs` (8), `pgrp=c1`, `prune=no`, `mskdiam_box` (the box's default, not the estimate), `nthr3D_pickrefs` (16) threads, `nparts` only when above 1: `nparts` on the command line makes refine3D distributed even at 1, and a distributed iteration that empties a state stops the next one, while in shared memory `solve3D_cavgs` handles the collapse after the stage. Its restart driver names the run whose result stands in `SOLVE3D_CAVGS_FINAL_DIR`, which p03 reads |
 | state choice | among the populated states with a volume (`choose_state`, `state_vetoes`; follow-up plan, decisions 11-14). Each binarised volume (low-passed to 20 Å, Otsu twice with both thresholds from the voxels inside the mask, so the solvent outside does not drive them; `vol_shape_descr`) gives its largest component's share of the foreground inside the mask. A state passes the vetoes when it is one object (that share at least `STATE_DOMINANT_FRAC`, 0.8, so a speck or a small split does not fail it), holds at least `STATE_POP_FLOOR` (10%) of the candidates' population, and its FSC 0.143 resolution (its FSC file in the 3D result) is within `STATE_RES_FACTOR` (1.5) times the best candidate's; a state without an FSC file is not vetoed on resolution. Among those, the most distinct projection directions of its classes (`os_cls3D` `proj`), then the largest population, then the lowest state. When none passes, the same order over every candidate, with a warning to the log and the GUI (the 3 October order, fewest components first, preferred compact junk and is gone). When the directions cannot be counted, the population breaks the ties. Every key of every state is logged. The three constants are provisional until a validation run on datasets with a known answer sets them. Each state's binarised volume and components are written as `vol_binarized_stateNN.mrc` and `vol_cc_stateNN.mrc` |
-| reprojection | `nspace_pickrefs` (50), `pgrp=c1`, the estimated mask diameter, `nthr3D_pickrefs` threads; a job on the local queue |
+| reprojection | `nspace_pickrefs` (50), `pgrp=c1`, `mskdiam_box` (capped at the volume's own box default when the volume is sampled more coarsely), `nthr3D_pickrefs` threads; a job on the local queue |
 
 Class-average selection in both cycles is the chunk quality model (`score_project_cavgs`)
 followed by the class compatibility filter, trained and applied on the same selection. Its mask
@@ -103,13 +103,18 @@ diameter is the one of the cycle's `solve2D`.
 3. **When cycle 1 selects no class, the estimate is `mskdiam_box`**, with a warning. A selected
    class whose automask finds no object counts as a disc nearly the size of the box
    (`automask2D`'s fallback). That puts the estimate at or near the box default.
-4. **Cycle 2 and 3D use the estimate.** That covers cycle 2's `solve2D` and class-average
-   selection, `solve3D_cavgs`, the volume shape descriptors and the reprojection.
-5. **The sieve of the "all" set masks with `mskdiam_box`.** It starts as soon as the bins are
+4. **Cycle 2 uses the estimate:** its `solve2D` and class-average selection.
+5. **The 3D route masks with `mskdiam_box`,** the box's default, whatever the estimate, so its
+   states are not cut by a mask fitted to cycle 1's largest class. That covers the multistate
+   `solve3D_cavgs`, the volume shape descriptors of the vetoes and the reprojection of the chosen
+   state. The descriptors and the reprojection cap it at the volume's own box default,
+   `(box − COSMSKHALFWIDTH) · smpd` at the volume's sampling, when `solve3D_cavgs` wrote its
+   volumes more coarsely than the particles.
+6. **The sieve of the "all" set masks with `mskdiam_box`.** It starts as soon as the bins are
    known, before cycle 1 has selected classes.
-6. **A restart estimates again.** A restarted p03 without published references clears its working
+7. **A restart estimates again.** A restarted p03 without published references clears its working
    folders and runs its plan from cycle 1 (`doc/policies/stream/restart_policy.md`).
-7. **Particle sieving (p05) does not use this estimate.** It reads the mask diameter that
+8. **Particle sieving (p05) does not use this estimate.** It reads the mask diameter that
    `make_pickrefs` (p04) writes to `moldiam.txt`, measured on the published references by the
    same rule.
 
@@ -163,8 +168,9 @@ diameter is the one of the cycle's `solve2D`.
   for the sets submitted afterwards, and must say how particles picked with the old references
   are treated downstream.
 - A change of the plan or the job settings updates section 3.
-- Cycle 1 and the sieve mask with `mskdiam_box`. The mask of cycle 2 and 3D comes only from
-  cycle 1's selected class averages and never exceeds `mskdiam_box`.
+- Cycle 1, the sieve and the 3D route (`solve3D_cavgs`, the volume vetoes, the reprojection)
+  mask with `mskdiam_box`. The mask of cycle 2 comes only from cycle 1's selected class averages
+  and never exceeds `mskdiam_box`.
 - p03 and `make_pickrefs` measure with `automask2D` (p03 with `gen_pickrefs`' automasking
   inputs, defaulted to `make_pickrefs`' values), and widen with one routine,
   `automask2D_mskdiam`. A change of the rule changes both and updates section 3.1.

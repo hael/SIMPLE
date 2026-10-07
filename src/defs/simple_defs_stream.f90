@@ -61,6 +61,7 @@ integer,          parameter :: STREAM_DEFAULT_KV          = 300
 integer,          parameter :: STREAM_NMOVS_SET           = 5                         !< number of movies processed at once (>1)
 integer,          parameter :: STREAM_NMOVS_SET_TIFF      = 3                         !< number of TIFF movies processed at once (>1)
 integer,          parameter :: OPTICS_ID_DELTA            = 500                       ! optics group ids of the snapshots' STAR files, per GUI display
+integer,          parameter :: NPTCLS_FIRST3D             = 100000                    ! p06 publishes for 3D once it selects as many (or at iteration 10); p07's first solve3D takes at most as many
 integer,          parameter :: STREAM_NPTCLS_MAX          = 500000                    !< 2D analysis: cap for adjusting update_frac in 2D streaming
 integer,          parameter :: STREAM_SRCHLIM             = 5                         !< 2D analysis: maximum # of systematic iterations for streaming 2D pool
 integer,          parameter :: WAITTIME                   = 10                        ! movie folder watched every WAITTIME seconds
