@@ -128,6 +128,12 @@ type, extends(pcg_lattice) :: flex_pcg_t
     procedure :: bytes_rhs_accum
     procedure :: bytes_rhs_packed
     procedure, private :: win_wraps
+    ! the scatters are called directly in this module; the bindings give them external linkage for the
+    ! self-test submodule (gfortran may link private module procedures internally)
+    procedure, private :: scatter_pairs_nowrap
+    procedure, private :: scatter_pairs_wrap
+    procedure, private :: scatter_rhs_nowrap
+    procedure, private :: scatter_rhs_wrap
     procedure, private :: build_lists
     procedure, private :: require_lists
     procedure, private :: dot_all

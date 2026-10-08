@@ -103,10 +103,10 @@ contains
                 i0   = nint(loc2) - iwinsz
                 call op%kbwin%apod_mat_3d_fast(loc2, iwinsz, wdim, w)
                 if( op%win_wraps(i0) )then
-                    call scatter_pairs_wrap(op, i0, w, [wts(s)], 1.0, kacc)
+                    call op%scatter_pairs_wrap(i0, w, [wts(s)], 1.0, kacc)
                     call scatter_pairs_wrap_dense(op, i0, w, [wts(s)], 1.0, kacc4)
                 else
-                    call scatter_pairs_nowrap(op, i0, w, [wts(s)], 1.0, kacc)
+                    call op%scatter_pairs_nowrap(i0, w, [wts(s)], 1.0, kacc)
                     call scatter_pairs_nowrap_dense(op, i0, w, [wts(s)], 1.0, kacc4)
                 endif
                 call deposit_density(real(sgn)*locs(:,s), wts(s), rho_t)
@@ -205,10 +205,10 @@ contains
                 cv(1) = cmplx(real(real(fval)*real(wts(s),dp), sp), real(aimag(fval)*real(wts(s),dp), sp))
                 call op%kbwin%apod_mat_3d_fast(loc2, iwinsz, wdim, w)
                 if( op%win_wraps(i0) )then
-                    call scatter_rhs_wrap(op, i0, w, cv, racc)
+                    call op%scatter_rhs_wrap(i0, w, cv, racc)
                     call scatter_rhs_wrap_dense(op, i0, w, cv, racc4)
                 else
-                    call scatter_rhs_nowrap(op, i0, w, cv, racc)
+                    call op%scatter_rhs_nowrap(i0, w, cv, racc)
                     call scatter_rhs_nowrap_dense(op, i0, w, cv, racc4)
                 endif
                 ! exact adjoint of the same sample
@@ -289,9 +289,9 @@ contains
                 i0   = nint(loc2) - iwinsz
                 call op%kbwin%apod_mat_3d_fast(loc2, iwinsz, wdim, w)
                 if( op%win_wraps(i0) )then
-                    call scatter_pairs_wrap(op, i0, w, [1.0], 1.0, kacc)
+                    call op%scatter_pairs_wrap(i0, w, [1.0], 1.0, kacc)
                 else
-                    call scatter_pairs_nowrap(op, i0, w, [1.0], 1.0, kacc)
+                    call op%scatter_pairs_nowrap(i0, w, [1.0], 1.0, kacc)
                 endif
                 call deposit_density(loc, 1.0, rho_t)
             end do
@@ -319,9 +319,9 @@ contains
                     if( nlev > 0.0 ) fval = fval + real(nlev,dp)*yrms*cmplx(gasdev(), gasdev(), kind=dp)/sqrt(2.0_dp)
                     cv(1) = cmplx(real(real(fval), sp), real(aimag(fval), sp))
                     if( op%win_wraps(i0) )then
-                        call scatter_rhs_wrap(op, i0, w, cv, racc)
+                        call op%scatter_rhs_wrap(i0, w, cv, racc)
                     else
-                        call scatter_rhs_nowrap(op, i0, w, cv, racc)
+                        call op%scatter_rhs_nowrap(i0, w, cv, racc)
                     endif
                 end do
                 call op%alloc_rhs_packed(rpk)
