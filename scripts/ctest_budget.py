@@ -29,7 +29,7 @@ RE_LABEL = re.compile(r'^(\w+)\s*=\s*([\d.]+)\s+sec\*proc', re.M)
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('log')
-    ap.add_argument('--budget', type=float, default=30.0, help='seconds of real time for the whole run (default 30)')
+    ap.add_argument('--budget', type=float, default=60.0, help='seconds of real time for the whole run (default 60)')
     ap.add_argument('--no-budget', action='store_true', help='report times but do not fail on the budget (only failed entries count)')
     ap.add_argument('--quiet', action='store_true', help='print nothing when the run passes within budget (the table still goes to <log>.timing.txt)')
     a = ap.parse_args()

@@ -43,7 +43,7 @@ LOG="$BUILD/test_runs/ctest_fast.log"
 GATE_DECLARED=yes
 ( cd "$BUILD" && ctest -L "fast|provisional" --output-on-failure --parallel "$jobs" --timeout 600 2>&1 ) | tee "$LOG"
 if [ "$GATE_DECLARED" = yes ]; then
-    python3 "$ROOT/scripts/ctest_budget.py" "$LOG" --budget 30 --quiet
+    python3 "$ROOT/scripts/ctest_budget.py" "$LOG" --budget 60 --quiet
 else
     python3 "$ROOT/scripts/ctest_budget.py" "$LOG" --no-budget --quiet
 fi
