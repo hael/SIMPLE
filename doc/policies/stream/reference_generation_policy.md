@@ -78,7 +78,16 @@ the defaults below and checks `nstates_pickrefs` ≥ 2, `lpstart_ini3D` > `lpsto
 
 Class-average selection in both cycles is the chunk quality model (`score_project_cavgs`)
 followed by the class compatibility filter, trained and applied on the same selection. Its mask
-diameter is the one of the cycle's `solve2D`.
+diameter is the one of the cycle's `solve2D`. A selection is never left empty while a class is
+populated (decided 8 October 2026), so cycle 2 always reaches balancing and `solve3D_cavgs`:
+- **The filter rejects every class the model kept:** the model's selection stands. Its
+  particles are selected again from their states before the selection
+  (`restore_cavgs_selection`), since mapping a class selection only deselects.
+- **The model keeps no class:** every populated class (`pop` > 0) is used, without the filter.
+- Either case is logged as a warning. Particles deselected before the selection, such as those
+  the sieve rejected, stay deselected. The selected and rejected stacks
+  (`quality_selected_cavgs`, `quality_rejected_cavgs`) keep the model's verdict; the GUI's
+  class averages and the project follow the classes in use.
 
 ### 3.1 The mask diameter
 
@@ -86,7 +95,8 @@ diameter is the one of the cycle's `solve2D`.
    the picker's box and the micrographs' pixel size: the value `parameters` derives when no mask
    is given. It is passed explicitly, since `solve2D` requires `mskdiam`.
 2. **Cycle 1's selected class averages give the estimate.** These are the classes that the
-   quality model and the compatibility filter keep. The estimate is generous, and it uses the
+   quality model and the compatibility filter keep, or the fallback's (section 3). The estimate is
+   generous, and it uses the
    measure and the rule `make_pickrefs` applies to its references:
    - each selected class average is automasked (`automask2D` with `gen_pickrefs`' `ngrow`,
      `winsz`, `amsklp` and `edge`, which its commander defaults to `make_pickrefs`' 3, 5, 20 Å
@@ -100,7 +110,8 @@ diameter is the one of the cycle's `solve2D`.
    mask of 200 Å. The box default is usually wider, because the picker makes the box 1.0 to 1.5
    times the largest diameter of its accepted bins. For large particles, where the factor nears
    1.0, the cap applies. The estimate is logged and sent to the GUI as the mask diameter.
-3. **When cycle 1 selects no class, the estimate is `mskdiam_box`**, with a warning. A selected
+3. **When cycle 1 selects no class, the estimate is `mskdiam_box`**, with a warning: with the
+   fallback, only when no class is populated. A selected
    class whose automask finds no object counts as a disc nearly the size of the box
    (`automask2D`'s fallback). That puts the estimate at or near the box default.
 4. **Cycle 2 uses the estimate:** its `solve2D` and class-average selection.
@@ -175,7 +186,7 @@ diameter is the one of the cycle's `solve2D`.
   inputs, defaulted to `make_pickrefs`' values), and widen with one routine,
   `automask2D_mskdiam`. A change of the rule changes both and updates section 3.1.
 - Tests: `test_gui_selection_ends_stage`, `test_published_pickrefs_are_final`,
-  `test_estimate_mskdiam` and `test_choose_state` in
+  `test_estimate_mskdiam`, `test_restore_cavgs_selection` and `test_choose_state` in
   `src/main/stream/stages/simple_stream_stage_initial_analysis_tester.f90`
   (`unit_stream`, "initial analysis"); `test_automask2D_mskdiam` in
   `src/main/image/simple_image_msk_tester.f90` (sub-suite "masks").
@@ -198,6 +209,9 @@ diameter is the one of the cycle's `solve2D`.
   each) wait for a validation run; a speck larger than 10% of the particle still makes a second
   object.
 - **The quality selection is fitted and applied on the same classes** (M5).
+- **The empty-selection fallback trusts every class.** When the quality model keeps none,
+  junk classes go to balancing and `solve3D_cavgs` with the rest, and the GUI does not say the
+  fallback was taken; only the log does.
 - **Jobs left running after a user selection** run until the stage stops, when they are
   cancelled; a job still queued then, or on another host without a scheduler id, is not
   (`simple_qsys_job_record`).

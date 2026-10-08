@@ -28,6 +28,12 @@
 !   cycle 2 with the one estimated from cycle 1's selected class averages
 !   (estimate_mskdiam), generous and never larger than the default.
 !
+!   Class selection in both cycles is the chunk quality model, then the class
+!   compatibility filter. It is never left empty while a class is populated:
+!   when the filter rejects every class the model kept, the model's selection
+!   stands; when the model keeps none, every populated class is used,
+!   unfiltered. Particles deselected before the selection stay deselected.
+!
 !   The picking references are published once per run, as INITIAL_ANALYSIS_PICKREFS
 !   in the stage directory, the file the master points reference picking at:
 !   written in full under another name and renamed into place, so reference
@@ -73,8 +79,9 @@
 !   simple_stream_stage_initial_analysis_tester (unit_stream, "initial
 !   analysis"). Components and steps are public for it; the waits (settle_s,
 !   wait_s) are components it sets, and balance_classes,
-!   find_final_solve3D_cavgs_dir, estimate_mskdiam and choose_state, which
-!   use no stage state, are bound with nopass so it can call them.
+!   find_final_solve3D_cavgs_dir, estimate_mskdiam, restore_cavgs_selection
+!   and choose_state, which use no stage state, are bound with nopass so it
+!   can call them.
 !
 ! METHOD:
 !   Unchanged from the stage this replaces. balance_classes replicates class
@@ -258,6 +265,7 @@ contains
     procedure, nopass :: balance_classes
     procedure, nopass :: find_final_solve3D_cavgs_dir
     procedure, nopass :: estimate_mskdiam
+    procedure, nopass :: restore_cavgs_selection
     procedure, nopass :: choose_state
     procedure, nopass :: state_vetoes
 end type stream_stage_initial_analysis
@@ -1408,10 +1416,13 @@ contains
 
     ! Scores the class averages of @p spproj (chunk model, with their pixel size for the mask
     ! radius of the relational feature), maps the selection to the particles, filters by class
-    ! compatibility, and writes the project; returns the selected classes' indices, stack and
-    ! sprite-sheet layout for the GUI. With @p mskdiam_est and @p msk_settings, also the mask
-    ! diameter estimated from the selected classes (estimate_mskdiam, capped at @p mskdiam);
-    ! @p mskdiam when there are none.
+    ! compatibility, and writes the project; returns the number of selected classes, their
+    ! indices, stack and sprite-sheet layout for the GUI. A selection is never left empty while a
+    ! class is populated: when the filter rejects every class the model kept, the model's selection
+    ! stands (restore_cavgs_selection); when the model keeps none, every populated class is used,
+    ! unfiltered. With @p mskdiam_est and @p msk_settings, also the mask diameter estimated from
+    ! the selected classes (estimate_mskdiam, capped at @p mskdiam); @p mskdiam when there are
+    ! none.
     subroutine select_project_cavgs( spproj, projfile, outdir, mskdiam, n_selected, cavg_inds, cavgs_stk, xtiles, ytiles,&
             &mskdiam_est, msk_settings )
         type(sp_project),     intent(inout) :: spproj
@@ -1428,6 +1439,7 @@ contains
         type(class_compatibility)   :: compatibility
         type(support_model_metrics) :: metrics
         type(string)                :: cwd
+        integer, allocatable        :: states(:), ptcl_states2D(:), ptcl_states3D(:)
         integer :: ncls, nrejected
         real    :: smpd
         n_selected = 0
@@ -1448,22 +1460,39 @@ contains
         call model%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
         call score_project_cavgs(spproj, model, mskdiam, cavg_imgs, quality, smpd=smpd)
         call model%kill()
-        n_selected = count(quality%states > 0)
         call write_cavg_selection_stacks(cavg_imgs, quality%states, string('quality_selected_cavgs'//MRC_EXT),&
             &string('quality_rejected_cavgs'//MRC_EXT))
-        call spproj%map_cavgs_selection(quality%states)
-        call compatibility%new()
-        call compatibility%train(spproj)
-        call compatibility%get_support_model_metrics(metrics)
-        write(logfhandle,'(A,3(F10.4,1X),A,3(F10.4,1X),A,L1,A,L1,A,L1)') '>>> COARSE COMPAT METRICS a/b/c=',&
-            &metrics%axis_a, metrics%axis_b, metrics%axis_c, ' da/db/dc=', metrics%delta_a, metrics%delta_b, metrics%delta_c,&
-            &' valid=', metrics%valid, ' delta_valid=', metrics%delta_valid, ' converged=', metrics%converged
-        call compatibility%infer(spproj)
-        call compatibility%kill()
+        if( count(quality%states > 0) == 0 )then
+            ! the model kept no class: every populated class, without the compatibility filter
+            states = merge(1, 0, spproj%os_cls2D%get_all_asint('pop') > 0)
+            write(logfhandle,'(A,I0,A)') '>>> WARNING: THE QUALITY MODEL SELECTED NO CLASS AVERAGE; USING ALL ',&
+                &count(states > 0), ' POPULATED CLASSES'
+            call spproj%map_cavgs_selection(states)
+        else
+            ! the particles' states before any class selection, should the filter reject every class
+            ptcl_states2D = spproj%os_ptcl2D%get_all_asint('state')
+            ptcl_states3D = spproj%os_ptcl3D%get_all_asint('state')
+            call spproj%map_cavgs_selection(quality%states)
+            call compatibility%new()
+            call compatibility%train(spproj)
+            call compatibility%get_support_model_metrics(metrics)
+            write(logfhandle,'(A,3(F10.4,1X),A,3(F10.4,1X),A,L1,A,L1,A,L1)') '>>> COARSE COMPAT METRICS a/b/c=',&
+                &metrics%axis_a, metrics%axis_b, metrics%axis_c, ' da/db/dc=', metrics%delta_a, metrics%delta_b,&
+                &metrics%delta_c, ' valid=', metrics%valid, ' delta_valid=', metrics%delta_valid, ' converged=',&
+                &metrics%converged
+            call compatibility%infer(spproj)
+            call compatibility%kill()
+            if( count(spproj%os_cls2D%get_all_asint('state') > 0) == 0 )then
+                write(logfhandle,'(A,I0,A)') '>>> WARNING: THE COMPATIBILITY FILTER REJECTED EVERY CLASS AVERAGE; KEEPING THE ',&
+                    &count(quality%states > 0), ' CLASSES THE QUALITY MODEL SELECTED'
+                call restore_cavgs_selection(spproj, quality%states, ptcl_states2D, ptcl_states3D)
+            endif
+        endif
+        n_selected = count(spproj%os_cls2D%get_all_asint('state') > 0)
         call reject_mics_without_particles(spproj%os_mic, nrejected)
         call spproj%cavgs2jpg(cavg_inds, string('quality_cavgs')//JPG_EXT, xtiles, ytiles, ignore_states=.false.)
         if( allocated(cavg_inds) ) cavg_inds = pack(cavg_inds, cavg_inds > 0) ! unselected classes are 0
-        ! the classes left after the quality model and the compatibility filter
+        ! the classes in use: those left by the quality model and the compatibility filter, or the fallback's
         if( present(mskdiam_est) )then
             if( .not. present(msk_settings) ) THROW_HARD('a mask estimate needs its automasking settings')
             mskdiam_est = estimate_mskdiam(cavg_imgs, spproj%os_cls2D%get_all_asint('state'), mskdiam, msk_settings)
@@ -1472,6 +1501,20 @@ contains
         call spproj%write(projfile)
         call simple_chdir(cwd)
     end subroutine select_project_cavgs
+
+    ! Selects the classes @p states of @p spproj again, after a selection that deselected their
+    ! particles: puts back @p ptcl_states2D and @p ptcl_states3D, the particle segments' states
+    ! from before any class selection was mapped, then maps @p states (map_cavgs_selection). A
+    ! particle deselected before then, such as one the sieve rejected, stays deselected.
+    subroutine restore_cavgs_selection( spproj, states, ptcl_states2D, ptcl_states3D )
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: states(:), ptcl_states2D(:), ptcl_states3D(:)
+        if( size(ptcl_states2D) /= spproj%os_ptcl2D%get_noris() ) THROW_HARD('# ptcl2D states /= # particles; restore_cavgs_selection')
+        if( size(ptcl_states3D) /= spproj%os_ptcl3D%get_noris() ) THROW_HARD('# ptcl3D states /= # particles; restore_cavgs_selection')
+        call spproj%os_ptcl2D%set_all('state', ptcl_states2D)
+        call spproj%os_ptcl3D%set_all('state', ptcl_states3D)
+        call spproj%map_cavgs_selection(states)
+    end subroutine restore_cavgs_selection
 
     ! The mask diameter (A) for the particle of the selected (@p states > 0) class averages
     ! @p cavg_imgs, generous: measured as make_pickrefs measures its references (automask2D with

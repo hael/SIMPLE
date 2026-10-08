@@ -69,6 +69,7 @@ contains
         call test_commander_defaults()
         call test_clear_previous_run()
         call test_estimate_mskdiam()
+        call test_restore_cavgs_selection()
         call test_choose_state()
         call test_finished()
     end subroutine run_all_stream_stage_initial_analysis_tests
@@ -747,6 +748,53 @@ contains
         call unmemoize_mask_coords ! leave no module state behind
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_estimate_mskdiam
+
+    !> a filter that rejects every class leaves no particle selected, and mapping the model's
+    !! selection again cannot bring them back (map_cavgs_selection only deselects): the restore
+    !! puts back the particles' states from before the selection, then maps the model's. A
+    !! particle deselected before then stays so
+    subroutine test_restore_cavgs_selection()
+        integer, parameter :: NCLS = 3, NPTCLS = 6
+        integer, parameter :: CLASSES(NPTCLS) = [1, 1, 2, 2, 3, 3]
+        integer, parameter :: QUALITY(NCLS)   = [1, 1, 0]
+        class(stream_stage_initial_analysis), allocatable :: stage
+        type(sp_project)     :: proj
+        integer, allocatable :: states2D(:), states3D(:)
+        integer :: icls, iptcl
+        allocate(stage)
+        write(*,'(A)') 'test_restore_cavgs_selection'
+        call proj%os_cls2D%new(NCLS, is_ptcl=.false.)
+        do icls = 1, NCLS
+            call proj%os_cls2D%set(icls, 'class', icls)
+            call proj%os_cls2D%set_state(icls, 1)
+            call proj%os_cls2D%set(icls, 'pop', 2)
+        enddo
+        call proj%os_ptcl2D%new(NPTCLS, is_ptcl=.true.)
+        call proj%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
+        do iptcl = 1, NPTCLS
+            call proj%os_ptcl2D%set_class(iptcl, CLASSES(iptcl))
+            call proj%os_ptcl2D%set_state(iptcl, merge(0, 1, iptcl == 2)) ! particle 2: rejected by the sieve
+            call proj%os_ptcl3D%set_state(iptcl, merge(0, 1, iptcl == 2))
+        enddo
+        states2D = proj%os_ptcl2D%get_all_asint('state')
+        states3D = proj%os_ptcl3D%get_all_asint('state')
+        ! the model's selection, then a filter that rejects every class
+        call proj%map_cavgs_selection(QUALITY)
+        call proj%map_cavgs_selection([0, 0, 0])
+        call assert_int(0, proj%os_ptcl2D%count_state_gt_zero(), 'the filter leaves no particle selected')
+        call proj%map_cavgs_selection(QUALITY)
+        call assert_int(0, proj%os_ptcl2D%count_state_gt_zero(), 'mapping the selection again brings none back')
+        call stage%restore_cavgs_selection(proj, QUALITY, states2D, states3D)
+        call assert_true(all(proj%os_cls2D%get_all_asint('state') == QUALITY), 'the classes are the model''s selection')
+        call assert_true(all(proj%os_ptcl2D%get_all_asint('state') == [1, 0, 1, 1, 0, 0]),&
+            &'their particles are selected again, not the sieve''s rejected one, nor those of the rejected class')
+        call assert_true(all(proj%os_ptcl3D%get_all_asint('state') == [1, 0, 1, 1, 0, 0]), 'ptcl3D follows')
+        ! a restore starts from the states before the selection, whatever was mapped since
+        call stage%restore_cavgs_selection(proj, [1, 1, 1], states2D, states3D)
+        call assert_true(all(proj%os_ptcl2D%get_all_asint('state') == [1, 0, 1, 1, 1, 1]),&
+            &'every class: every particle selected before the selection')
+        call proj%kill
+    end subroutine test_restore_cavgs_selection
 
     subroutine test_finished()
         class(stream_stage_initial_analysis), allocatable :: stage
