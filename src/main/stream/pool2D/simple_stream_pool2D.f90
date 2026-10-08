@@ -36,8 +36,9 @@ use simple_qsys_async_job,        only: qsys_async_job, ASYNC_JOB_DONE, ASYNC_JO
 use simple_imgarr_utils,          only: rank_cavgs_stk
 use simple_optics_maps,           only: import_latest_optics_map
 use simple_stream_refine2D_utils, only: tidy_2Dstream_iter, build_pool_publication, pool_publication_names,&
-                                       &snapshot_cavgs_meta, log_rss, draw_new_classes, append_project_sets,&
+                                       &snapshot_cavgs_meta, draw_new_classes, append_project_sets,&
                                        &pool_publication_nselected
+use simple_stream_utils,          only: log_rss
 implicit none
 
 public :: stream_pool2D, stream_pool2D_stats
@@ -1122,12 +1123,22 @@ contains
 
     !> Ends the pool and writes its final project (pool2D_policy.md section 10): from the last
     !! complete iteration, or, before the first, the raw project of every imported particle, both
-    !! with the newest optics map's groups (with @p optics_dir); then cleans up.
+    !! with the newest optics map's groups (with @p optics_dir); then cleans up. The history of
+    !! completed iterations, a full copy of the pool each, serves only snapshots and goes first, so
+    !! the final write does not hold it too. The resident memory is logged at each step.
     subroutine finalise( self, params, optics_dir )
         class(stream_pool2D),    intent(inout) :: self
         class(parameters),       intent(inout) :: params
         class(string), optional, intent(in)    :: optics_dir
-        integer      :: ipart, lastmap
+        integer      :: ipart, lastmap, i
+        call log_rss('finalise/start')
+        if( allocated(self%history) )then
+            do i = 1,size(self%history)
+                call self%history(i)%kill
+            enddo
+        endif
+        self%history_iter = 0
+        call log_rss('finalise/history freed')
         if( self%iter <= 0 )then
             ! no 2D yet
             call write_raw_project
@@ -1149,9 +1160,11 @@ contains
             endif
             if( self%iter >= 1 )then
                 call self%write_project(params, write_star=.true., clspath=.true., optics_dir=optics_dir)
+                call log_rss('finalise/project written')
                 call self%rank_cavgs()
             endif
         endif
+        call log_rss('finalise/done')
         ! cleanup
         call del_file(POOL_DIR//POOL_PROJFILE)
         if( .not. DEBUG_HERE )then
@@ -1174,6 +1187,7 @@ contains
                 call self%proj%projinfo%set(1, 'projfile', projfile)
                 call self%starproj_stream%stream_export_micrographs(params, self%proj, params%cwd, optics_set=.true.)
                 call self%starproj_stream%stream_export_particles_2D(params, self%proj, params%cwd, optics_set=.true.)
+                call log_rss('finalise/raw STAR written')
                 call self%proj%write(projfile)
                 write(logfhandle,'(A,A,A,I8,A)') '>>> NO COMPLETE POOL ITERATION; RAW PROJECT ', projfile%to_char(), ' WITH ',&
                     &self%proj%os_ptcl2D%count_state_gt_zero(), ' SELECTED PARTICLES'
@@ -1242,7 +1256,9 @@ contains
         self%proj%os_ptcl3D = self%proj%os_ptcl2D
         call self%proj%os_ptcl3D%delete_2Dclustering
         call self%proj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
+        call log_rss('write project/ptcl3D made')
         call self%proj%write(projfile)
+        call log_rss('write project/project written')
         ! write starfiles
         call starproj%export_cls2D(self%proj)
         call starproj%kill
@@ -1252,6 +1268,7 @@ contains
             if( DEBUG_HERE ) print *,'ms_export  : ', toc(t); call flush(6); t = tic()
             call self%starproj_stream%stream_export_particles_2D(params, self%proj, params%cwd, optics_set=.true.)
             if( DEBUG_HERE ) print *,'ptcl_export  : ', toc(t); call flush(6)
+            call log_rss('write project/STAR written')
         end if
         call self%proj%os_ptcl3D%kill
         call self%proj%os_cls2D%delete_entry('stk')

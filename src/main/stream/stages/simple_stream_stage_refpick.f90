@@ -67,7 +67,7 @@ use simple_qsys_funs,                   only: qsys_cleanup
 use simple_starproject_stream,          only: starproject_stream
 use simple_stream_watcher,              only: stream_watcher
 use simple_stream_state,                only: ipc_pipe_refpick_in
-use simple_stream_utils,                only: create_stream_project, upstream_done
+use simple_stream_utils,                only: create_stream_project, upstream_done, log_rss
 use simple_ptcl_sieve,                  only: DEFAULT_COARSE_BOX
 use simple_gui_utils,                   only: mrc2jpeg_tiled
 use simple_gui_metadata_utils,          only: max_metadata_size
@@ -356,9 +356,12 @@ contains
     !! finished marker: nothing more is handed on.
     subroutine finalize( self )
         class(stream_stage_refpick), intent(inout) :: self
+        call log_rss('finalize/start')
         call self%pickrefs_job%cancel()
         call self%sets%cancel(self%qenv) ! a restart sets the folder of unfinished sets aside
+        call log_rss('finalize/jobs cancelled')
         if( self%spproj%os_mic%get_noris() > 0 ) call self%write_project()
+        call log_rss('finalize/done')
         call qsys_cleanup(self%params)
         call simple_touch(STREAM_FINISHED_MARKER)
     end subroutine finalize
@@ -835,6 +838,7 @@ contains
             call set_proj%kill
         enddo
         write(logfhandle,'(A,I8)') '>>> # PARTICLES EXTRACTED:          ', self%spproj%os_ptcl2D%get_noris()
+        call log_rss('write project/particles rebuilt')
         self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
         call self%spproj%os_ptcl3D%delete_2Dclustering
         ! optics groups on every segment, then the segments
@@ -844,6 +848,7 @@ contains
         call self%spproj%write_segment_inside('ptcl2D', self%params%projfile)
         call self%spproj%write_segment_inside('ptcl3D', self%params%projfile)
         if( l_optics ) call self%spproj%write_segment_inside('optics', self%params%projfile)
+        call log_rss('write project/segments written')
         call self%spproj%os_ptcl3D%kill
         call self%spproj%write_non_data_segments(self%params%projfile)
     end subroutine write_project

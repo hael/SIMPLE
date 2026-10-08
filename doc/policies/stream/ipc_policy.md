@@ -139,10 +139,18 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
 3. **The master's stop:**
    - optics assignment is asked first, with up to `OPTICS_STOP_TIMEOUT_S` (60 s), during which
      the heartbeat goes on (restart requests are ignored from the stop on);
-   - then every running stage is asked on each pass;
-   - a stage still running after `STOP_TIMEOUT_S` (600 s) is killed (SIGKILL), and the master
-     cancels the jobs recorded in its folder that wrote no exit status
-     (`cancel_unfinished_jobs`), which the killed stage can no longer cancel.
+   - then every other stage but the large ones (`STOP_ONE_BY_ONE`: multistate 3D, pool 2D,
+     reference picking) is asked together;
+   - the large ones are asked one after another, downstream first, each once the one before has
+     stopped (or been killed), so their final writes do not hold their memory at the same time;
+     one waiting its turn runs on;
+   - a stage asked and still running is asked again on each pass;
+   - a stage still running `STOP_TIMEOUT_S` (600 s) after it was asked is killed (SIGKILL), and
+     the master cancels the jobs recorded in its folder that wrote no exit status
+     (`cancel_unfinished_jobs`), which the killed stage can no longer cancel. The large stages
+     each get their own 600 s, so a stop can take up to their sum.
+   - Reference picking and pool 2D log their resident memory and the time at each step of their
+     final write (`log_rss`, ">>> RSS ..."), so a stop that runs out of time shows where.
 4. **A start-up failure** once stages are forked (a stage not running, the listener thread not
    made) stops them before the master stops: asked, then killed with their jobs cancelled after
    `STARTUP_STOP_TIMEOUT_S` (60 s). The persistent-worker server ends with the master's process;

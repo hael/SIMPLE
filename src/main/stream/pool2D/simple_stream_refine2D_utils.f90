@@ -3,7 +3,6 @@ module simple_stream_refine2D_utils
 use simple_core_module_api
 use simple_sp_project,           only: sp_project
 use simple_optics_maps,          only: import_latest_optics_map
-use simple_syslib,               only: get_current_rss_bytes, get_peak_rss_bytes
 implicit none
 
 public :: cleanup_root_folder
@@ -13,7 +12,6 @@ public :: pool_publication_nselected
 public :: delete_pool_publication
 public :: pool_publication_names
 public :: snapshot_cavgs_meta
-public :: log_rss
 public :: draw_new_classes
 public :: append_project_sets
 private
@@ -104,21 +102,6 @@ contains
             cls_res(thumbidx) = proj%os_cls2D%get(iori,'res')
         enddo
     end subroutine snapshot_cavgs_meta
-
-    ! The process's resident memory, logged at @p phase.
-    subroutine log_rss( phase )
-        use, intrinsic :: iso_c_binding, only: c_int64_t, c_double
-        character(len=*), intent(in) :: phase
-        integer(c_int64_t) :: current_rss, peak_rss
-        real(c_double)     :: current_mib, peak_mib
-        current_rss = get_current_rss_bytes()
-        peak_rss    = get_peak_rss_bytes()
-        if( current_rss < 0_c_int64_t .or. peak_rss < 0_c_int64_t ) return
-        current_mib = real(current_rss, c_double) / 1048576.0_c_double
-        peak_mib    = real(peak_rss,    c_double) / 1048576.0_c_double
-        write(logfhandle,'(A,A,A,F10.1,A,F10.1,A)') '>>> RSS ', trim(phase), ': current=', current_mib, ' MiB peak=', peak_mib, ' MiB'
-        call flush(logfhandle)
-    end subroutine log_rss
 
     !> The pool's classified state as a project for 3D: the stacks whose particles have been
     !! through an iteration (updatecnt > 0), with their micrographs and particles (2D and 3D, the

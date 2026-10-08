@@ -6,10 +6,28 @@ use simple_qsys_env,            only: qsys_env
 use simple_rec_list,            only: rec_list, project_rec
 use simple_sp_project,          only: sp_project
 use simple_parameters,          only: parameters
+use simple_syslib,              only: get_current_rss_bytes, get_peak_rss_bytes
 implicit none
 #include "simple_local_flags.inc"
 
 contains
+
+    ! The process's resident memory, logged at @p phase with the time, so a log shows both what a
+    ! step holds and how long it took.
+    subroutine log_rss( phase )
+        use, intrinsic :: iso_c_binding, only: c_int64_t, c_double
+        character(len=*), intent(in) :: phase
+        integer(c_int64_t) :: current_rss, peak_rss
+        real(c_double)     :: current_mib, peak_mib
+        current_rss = get_current_rss_bytes()
+        peak_rss    = get_peak_rss_bytes()
+        if( current_rss < 0_c_int64_t .or. peak_rss < 0_c_int64_t ) return
+        current_mib = real(current_rss, c_double) / 1048576.0_c_double
+        peak_mib    = real(peak_rss,    c_double) / 1048576.0_c_double
+        write(logfhandle,'(A,A,A,F10.1,A,F10.1,A,A)') '>>> RSS ', trim(phase), ': current=', current_mib, ' MiB peak=',&
+            &peak_mib, ' MiB AT: ', cast_time_char(simple_gettime())
+        call flush(logfhandle)
+    end subroutine log_rss
 
     subroutine terminate_stream( params, msg )
         class(parameters), intent(in) :: params

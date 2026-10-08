@@ -17,9 +17,12 @@
 ! STOPPING:
 !   The GUI's 'terminate', SIGTERM or Ctrl-C stop the stream in order: the
 !   optics assignment first (waited for up to a minute, so the other stages
-!   see its last map), then every other stage; a stage still running
-!   STOP_TIMEOUT_S after the stop is killed. The master exits once all have
-!   stopped, after a last heartbeat.
+!   see its last map), then every other stage but the large ones together,
+!   then the large ones (STOP_ONE_BY_ONE: multistate 3D, pool 2D, reference
+!   picking) one after another, each asked once the one before has stopped, so
+!   their final writes do not hold their memory at the same time. A stage still
+!   running STOP_TIMEOUT_S after it was asked is killed. The master exits once
+!   all have stopped, after a last heartbeat.
 !==============================================================================
 module simple_commanders_stream_p00_master
 use, intrinsic :: iso_c_binding,                        only: c_ptr, c_null_ptr, c_loc, c_f_pointer, c_funloc
@@ -71,7 +74,9 @@ integer, parameter :: MASTER_QSYS_NTHR      = 16
 integer, parameter :: HEARTBEAT_S           = 5     ! between heartbeats
 integer, parameter :: MEMLOG_EVERY          = 12    ! heartbeats between memory logs
 integer, parameter :: OPTICS_STOP_TIMEOUT_S = 60    ! optics assignment stops first, waited for up to this
-integer, parameter :: STOP_TIMEOUT_S        = 600   ! a stage still running this long after the stop is killed
+integer, parameter :: STOP_TIMEOUT_S        = 600   ! a stage still running this long after it was asked to stop is killed
+! the large stages, stopped one after another (downstream first), each when the one before has stopped
+integer, parameter :: STOP_ONE_BY_ONE(3)    = [STAGE_SOLVE3D, STAGE_POOL2D, STAGE_REFERENCE_PICKING]
 integer, parameter :: STARTUP_STOP_TIMEOUT_S = 60   ! after a start-up failure, the stages are killed after this
 integer, parameter :: LISTENER_SLEEP_US     = 10000 ! the listener's pause between drains
 
@@ -109,7 +114,8 @@ contains
         logical :: l_existing_pickrefs, l_existing_box, l_existing_preprocess, l_updates, l_linked
         logical :: l_stop, l_stopping, l_last_loop
         logical :: l_restart_seen(NSTAGES) ! a restart request in the last answer, acted on once
-        integer :: id, nmics_stop, loop_counter, rc, max_frame_bytes, stop_time
+        integer :: id, nmics_stop, loop_counter, rc, max_frame_bytes
+        integer :: stop_times(NSTAGES) ! when each stage was asked to stop (0: not yet)
         ! the command line
         l_existing_pickrefs = cline%defined('pickrefs')
         l_existing_box      = cline%defined('box_extract')
@@ -199,7 +205,7 @@ contains
         l_stopping   = .false.
         l_last_loop  = .false.
         l_restart_seen = .false.
-        stop_time    = 0
+        stop_times   = 0
         do
             loop_counter = loop_counter + 1
             call send_heartbeat()
@@ -333,33 +339,53 @@ contains
             endif
         end subroutine apply_commands
 
-        ! One step of the stop: the first time, the optics assignment and then the others are asked
-        ! to stop; every time, the stages still running are asked again and listed, and killed once
-        ! STOP_TIMEOUT_S has passed. l_last_loop once none runs.
+        ! One step of the stop: the first time, the optics assignment and then every other stage but
+        ! the large ones (STOP_ONE_BY_ONE) are asked to stop; every time, the first large stage still
+        ! running is asked once those before it have stopped, the stages asked and still running are
+        ! asked again and listed, and each is killed once STOP_TIMEOUT_S has passed since it was
+        ! asked. A large stage waiting its turn runs on. l_last_loop once none runs.
         subroutine stop_stages()
+            integer :: k
             if( .not. l_stopping )then
                 write(logfhandle,'(A)') 'TERMINATE '
                 ! stopping from here on: the heartbeats of the wait act on no restart request
                 l_stopping = .true.
                 if( shared%stages(STAGE_ASSIGN_OPTICS)%is_running() )then
                     call shared%stages(STAGE_ASSIGN_OPTICS)%request_stop()
+                    stop_times(STAGE_ASSIGN_OPTICS) = simple_gettime()
                     call wait_for_stop(shared%stages(STAGE_ASSIGN_OPTICS), OPTICS_STOP_TIMEOUT_S)
                 endif
-                stop_time  = simple_gettime()
+                do id = 1,NSTAGES
+                    if( any(STOP_ONE_BY_ONE == id) ) cycle
+                    call ask_to_stop(id)
+                enddo
             endif
+            ! the large stages one after another: the first still running is asked, the later wait
+            do k = 1,size(STOP_ONE_BY_ONE)
+                if( .not. shared%stages(STOP_ONE_BY_ONE(k))%is_running() ) cycle
+                call ask_to_stop(STOP_ONE_BY_ONE(k))
+                exit
+            enddo
             l_last_loop = .true.
             do id = 1,NSTAGES
                 if( .not. shared%stages(id)%is_running() ) cycle
+                l_last_loop = .false.
+                if( stop_times(id) == 0 ) cycle ! a large stage waiting its turn
                 call shared%stages(id)%request_stop()
                 write(logfhandle,'(A)') shared%stages(id)%get_label()//' STILL RUNNING. WAITING FOR TERMINATION'
-                l_last_loop = .false.
+                if( simple_gettime() - stop_times(id) > STOP_TIMEOUT_S ) call shared%stages(id)%force_stop()
             enddo
-            if( .not. l_last_loop .and. simple_gettime() - stop_time > STOP_TIMEOUT_S )then
-                do id = 1,NSTAGES
-                    call shared%stages(id)%force_stop()
-                enddo
-            endif
         end subroutine stop_stages
+
+        ! Asks stage @p id to stop, once, when it runs, and records when.
+        subroutine ask_to_stop( id )
+            integer, intent(in) :: id
+            if( stop_times(id) > 0 ) return
+            if( .not. shared%stages(id)%is_running() ) return
+            call shared%stages(id)%request_stop()
+            stop_times(id) = simple_gettime()
+            write(logfhandle,'(A)') shared%stages(id)%get_label()//' ASKED TO STOP'
+        end subroutine ask_to_stop
 
         ! Waits for @p stage to stop, for up to @p timeout_s, with a heartbeat every HEARTBEAT_S so
         ! the GUI does not lose the master meanwhile.

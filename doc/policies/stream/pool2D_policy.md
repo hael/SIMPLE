@@ -172,7 +172,10 @@ in 3D, and in snapshots by the user's selection.
 
 ## 10. The final project
 
-When p06 stops, the pool's last complete iteration is written as the stage's project:
+When p06 stops, the history of completed iterations (`POOL_NHISTORY` full copies of the pool,
+kept for snapshots) is freed first, so the final write does not hold it too, and the resident
+memory is logged at each step (`log_rss`). The pool's last complete iteration is then written as
+the stage's project:
 - the class averages and FRCs at the native sampling; when the stop came mid-iteration, the
   previous iteration's class averages go with its own FRCs (`frcs_iterNNN.bin`), not with
   `frcs.bin`, which the cancelled iteration was rewriting;
