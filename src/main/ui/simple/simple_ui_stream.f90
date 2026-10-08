@@ -321,6 +321,11 @@ subroutine new_pool2D( prgtab )
         call master%add_input(UI_PARM, 'tilt_thres',     'float',         'Beam-shift clustering threshold', &
         &'Distance threshold of the hierarchical clustering of the beam-image shifts into optics groups', '0.05', .false., '', &
         &visibility=UI_VIS_DEVELOPER)
+        ! the first 3D's route, forwarded by the master to pool 2D
+        call master%add_input(UI_PARM, 'sieve_ini3D',    'binary',        'Initial 3D from the sieve''s class averages', &
+        &'Publish the first particle set for 3D with the sieve''s combined class averages; multistate 3D then runs &
+        &solve3D_cavgs for the initial volumes and solve3D at the particle level(yes|no){no}', &
+        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! the 3D route of the initial analysis (picking references), forwarded by the master; 0 keeps the
         ! initial analysis' default. preserve_default: the defaults of nrestarts_collapse, lpstart_ini3D and

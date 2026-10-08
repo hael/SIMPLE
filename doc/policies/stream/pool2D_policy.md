@@ -172,6 +172,10 @@ in 3D, and in snapshots by the user's selection.
 
 ## 10. The final project
 
+With `sieve_ini3D=yes`, the first publication for 3D is the sieve's own 2D instead of the pool's
+(`stream_3D_ingestion_policy.md`, section 9): p06 keeps the imported sets' class averages and FRCs
+in `sieve_cavgs/` until it, and removes them after.
+
 When p06 stops, the history of completed iterations (`POOL_NHISTORY` full copies of the pool,
 kept for snapshots) is freed first, so the final write does not hold it too, and the resident
 memory is logged at each step (`log_rss`). The pool's last complete iteration is then written as

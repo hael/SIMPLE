@@ -14,7 +14,7 @@ use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT,
 use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, POOL_EXIT_CODE, POOL_INPUT_PROJFILE, NPTCLS_FIRST3D
 use simple_string,                              only: string
 use simple_string_utils,                        only: int2str_pad
-use simple_fileio,                              only: basename, del_file, file_exists, simple_getcwd, simple_touch
+use simple_fileio,                              only: basename, del_file, file_exists, simple_getcwd, simple_touch, add2fbody
 use simple_rec_list,                            only: rec_iterator, chunk_rec
 use simple_syslib,                              only: dir_exists, simple_mkdir
 use simple_cmdline,                             only: cmdline
@@ -27,7 +27,11 @@ use simple_gui_metadata_stream_snapshot,        only: gui_metadata_stream_snapsh
 use simple_gui_metadata_stream_update,          only: gui_metadata_stream_update
 use simple_stream_pipe,                         only: stream_pipe
 use simple_stream_stage_pool2D,                 only: stream_stage_pool2D
-use simple_stream_refine2D_utils,              only: build_pool_publication, pool_publication_nselected
+use simple_stream_refine2D_utils,              only: build_pool_publication, pool_publication_nselected,&
+                                                     &build_sieve_publication, combine_sieve_classes
+use simple_image,                               only: image
+use simple_class_frcs,                          only: class_frcs
+use simple_imghead,                             only: find_ldim_nptcls
 use simple_optics_maps,                         only: publish_optics_map
 implicit none
 private
@@ -45,6 +49,7 @@ contains
         call test_restart_cleans()
         call test_export_numbering()
         call test_publication_holds_classified_stacks()
+        call test_sieve_publication()
         call test_attach_and_watch()
         call test_sets_taken_in_order()
         call test_transfer_sets()
@@ -231,6 +236,121 @@ contains
         call pub%kill
         call pool%kill
     end subroutine test_publication_holds_classified_stacks
+
+    !> the first publication from the sieve's own 2D (sieve_ini3D): the sets' stacks and particles
+    !! with their class labels offset per set and the sieve's selection, the class tables
+    !! concatenated with their states and the populations of the selected particles; and the sets'
+    !! class averages, halves and FRCs concatenated in set order, refused when a half is missing or
+    !! the boxes differ
+    subroutine test_sieve_publication()
+        integer, parameter :: BOX = 8
+        real,    parameter :: SMPD = 2.0
+        type(sp_project) :: sets(3), pub
+        type(class_frcs) :: frcs_chk
+        type(string)     :: cwd_saved, root, stks(3), frcs(3), stk_wide, frcs_wide
+        integer          :: nfail0, nstks, ncls, ldim(3), n
+        write(*,'(A)') 'test_sieve_publication'
+        nfail0 = tests_failed
+        call enter_fixture('p2_sieve_publication', cwd_saved, root)
+        ! set A: a stack of three particles in classes 1, 2 and 2, its class 2 rejected by the sieve
+        ! with its particles; set B: two particles, the second in a class outside its table; set C:
+        ! the sieve's empty final set
+        call make_sieve_set(sets(1), 'A', [1, 2, 2], [1, 0, 0], [1, 0])
+        call make_sieve_set(sets(2), 'B', [1, 5],    [1, 1],    [1])
+        call build_sieve_publication(sets, pub, nstks, ncls)
+        call assert_int(2, nstks,                            'the sets'' stacks are published')
+        call assert_int(3, ncls,                             'with their classes')
+        call assert_int(5, pub%os_ptcl2D%get_noris(),        'and their particles')
+        call assert_int(2, pub%os_ptcl2D%get_class(2),       'set A''s classes keep their labels')
+        call assert_int(3, pub%os_ptcl2D%get_class(4),       'set B''s are offset by set A''s classes')
+        call assert_int(0, pub%os_ptcl2D%get_state(2),       'the sieve''s selection is kept')
+        call assert_int(0, pub%os_ptcl2D%get_state(5),       'a particle outside its set''s classes is deselected')
+        call assert_int(4, pub%os_stk%get_fromp(2),          'the second stack''s range follows the first''s')
+        call assert_int(1, pub%os_ptcl2D%get_int(4, 'indstk'), 'each particle with its image index in its stack')
+        call assert_int(0, pub%os_cls2D%get_state(2),        'the sieve''s class states are kept')
+        call assert_int(1, pub%os_cls2D%get_int(1, 'pop'),   'a population counts the selected particles')
+        call assert_int(0, pub%os_cls2D%get_int(2, 'pop'),   'none in a rejected class')
+        call assert_int(1, pub%os_cls2D%get_int(3, 'pop'),   'set B''s class counts its own')
+        call assert_int(0, pub%os_ptcl3D%get_class(1),       'the 3D particles carry no 2D clustering')
+        ! the class averages: set A's two, set B's one, with halves and FRCs
+        call write_class_files('setA', 2, BOX, stks(1), frcs(1))
+        call write_class_files('setB', 1, BOX, stks(2), frcs(2))
+        stks(3) = ''
+        frcs(3) = ''
+        call assert_true(combine_sieve_classes(stks, frcs, [2, 1, 0], SMPD, string('pub_cavgs.mrcs'),&
+            &string('pub_frcs.bin')), 'the class averages are combined')
+        call find_ldim_nptcls(string('pub_cavgs.mrcs'), ldim, n)
+        call assert_int(3, n, 'every class in set order')
+        call find_ldim_nptcls(string('pub_cavgs_odd.mrcs'), ldim, n)
+        call assert_int(3, n, 'with its halves')
+        call frcs_chk%read(string('pub_frcs.bin'))
+        call assert_int(3, frcs_chk%get_ncls(), 'and its FRCs')
+        call frcs_chk%kill
+        ! a set of another box
+        call write_class_files('setW', 1, BOX + 2, stk_wide, frcs_wide)
+        call assert_false(combine_sieve_classes([stks(1), stk_wide], [frcs(1), frcs_wide], [2, 1], SMPD,&
+            &string('wide_cavgs.mrcs'), string('wide_frcs.bin')), 'sets of other boxes are refused')
+        ! a set whose odd half is missing
+        call del_file(add2fbody(stks(2), string('.mrc'), string('_odd')))
+        call assert_false(combine_sieve_classes(stks, frcs, [2, 1, 0], SMPD, string('next_cavgs.mrcs'),&
+            &string('next_frcs.bin')), 'a missing half is refused')
+        call assert_false(file_exists(string('next_cavgs.mrcs')), 'and nothing is written')
+        call pub%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+
+    contains
+
+        ! a sieve set: one micrograph and stack of particles with @p classes and @p states, and a
+        ! class table of @p cls_states
+        subroutine make_sieve_set( set, name, classes, states, cls_states )
+            type(sp_project), intent(inout) :: set
+            character(len=*), intent(in)    :: name
+            integer,          intent(in)    :: classes(:), states(:), cls_states(:)
+            integer :: iptcl, n, icls
+            n = size(classes)
+            call set%os_mic%new(1, is_ptcl=.false.)
+            call set%os_stk%new(1, is_ptcl=.false.)
+            call set%os_mic%set(1, 'intg', 'mic_'//name//'.mrc')
+            call set%os_stk%set(1, 'stk',  'stk_'//name//'.mrcs')
+            call set%os_stk%set(1, 'fromp', 1)
+            call set%os_stk%set(1, 'top',   n)
+            call set%os_stk%set(1, 'nptcls_stk', n)
+            call set%os_ptcl2D%new(n, is_ptcl=.true.)
+            do iptcl = 1,n
+                call set%os_ptcl2D%set_stkind(iptcl, 1)
+                call set%os_ptcl2D%set(iptcl, 'indstk', iptcl)
+                call set%os_ptcl2D%set_class(iptcl, classes(iptcl))
+                call set%os_ptcl2D%set_state(iptcl, states(iptcl))
+            enddo
+            call set%os_cls2D%new(size(cls_states), is_ptcl=.false.)
+            do icls = 1,size(cls_states)
+                call set%os_cls2D%set_state(icls, cls_states(icls))
+            enddo
+        end subroutine make_sieve_set
+
+        ! @p n class averages of @p box pixels, their halves and their FRCs
+        subroutine write_class_files( fbody, n, box, stk, frcs )
+            character(len=*), intent(in)    :: fbody
+            integer,          intent(in)    :: n, box
+            type(string),     intent(inout) :: stk, frcs
+            type(image)      :: img
+            type(class_frcs) :: clsfrcs
+            integer :: i
+            stk  = fbody//'.mrc'
+            frcs = fbody//'_frcs.bin'
+            call img%new([box, box, 1], SMPD)
+            do i = 1,n
+                call img%write(stk, i)
+                call img%write(string(fbody//'_even.mrc'), i)
+                call img%write(string(fbody//'_odd.mrc'),  i)
+            enddo
+            call img%kill
+            call clsfrcs%new(n, box, SMPD)
+            call clsfrcs%write(frcs)
+            call clsfrcs%kill
+        end subroutine write_class_files
+
+    end subroutine test_sieve_publication
 
     !> the sets present are taken in the order the sieve handed them off, by the number ending
     !! their name (10 after 2), with the final set last, whatever order the folder lists them in

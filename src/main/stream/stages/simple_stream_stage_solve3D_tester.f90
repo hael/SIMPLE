@@ -18,7 +18,7 @@ use simple_refine3D_fnames,                           only: refine3D_reprojs_fna
 use simple_defs_stream,                               only: DIR_STREAM_COMPLETED
 use simple_string,                                    only: string
 use simple_string_utils,                              only: int2str, int2str_pad
-use simple_fileio,                                    only: arr2file, del_file, file_exists, simple_getcwd, simple_touch
+use simple_fileio,                                    only: arr2file, del_file, file_exists, simple_getcwd, simple_touch, add2fbody
 use simple_syslib,                                    only: simple_mkdir, dir_exists
 use simple_math_ft,                                   only: get_resarr
 use simple_cmdline,                                   only: cmdline
@@ -57,6 +57,7 @@ contains
         call test_take_cavgs()
         call test_first_publication()
         call test_first_run_cap()
+        call test_cavgs3D()
         call test_mskdiam_from_each_publication()
         call test_rows_problem()
         call test_rules()
@@ -232,6 +233,74 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_merge_publications
 
+    !> the route from the sieve's class averages (sieve_ini3D): the marker of the first
+    !! publication; the states renumbered from 1; and solve3D_cavgs' classes mapped onto the first
+    !! set, the states its particles hold becoming the stage's, so solve3D starts from them
+    subroutine test_cavgs3D()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)        :: cline
+        type(sp_project)     :: set, res
+        type(string)         :: cwd_saved, root
+        integer, allocatable :: states(:), newind(:)
+        integer              :: nfail0, nstates, i
+        allocate(stage)
+        write(*,'(A)') 'test_cavgs3D'
+        nfail0 = tests_failed
+        ! the states renumbered from 1
+        states = [0, 3, 1, 3, 0]
+        call stage%compact_states(states, newind, nstates)
+        call assert_int(2, nstates, 'two states are held')
+        call assert_true(all(states == [0, 2, 1, 2, 0]), 'renumbered from 1 in order')
+        call assert_true(all(newind == [1, 0, 2]),        'state 2, held by none, gets no number')
+        states = [0, 0]
+        call stage%compact_states(states, newind, nstates)
+        call assert_int(0, nstates, 'none when no state is held')
+        ! the marker
+        call add_cavgs_entry(set, 150.)
+        call assert_false(stage%is_sieve_publication(set), 'a publication without the marker is the pool''s')
+        call set%os_out%set(1, 'sieve_ini3D', 'yes')
+        call assert_true(stage%is_sieve_publication(set),  'one with sieve_ini3D=yes is the sieve''s 2D')
+        call set%kill
+        ! a first set of rows 2 to 5 (row 1 never updated), classes 1 (rows 1 to 3) and 2 (rows 4, 5)
+        call enter_fixture('a3_stage_cavgs3D', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
+        call set%os_ptcl2D%set_class(4, 2)
+        call set%os_ptcl2D%set_class(5, 2)
+        ! the sieve's 2D alignment, without which map2ptcls maps nothing
+        do i = 1,5
+            call set%os_ptcl2D%set(i, 'corr', 0.5)
+        enddo
+        call stage%take_first_publication(set, 1)
+        call set%kill
+        ! no class with a state: nothing changes
+        call res%os_cls3D%new(2, is_ptcl=.false.)
+        do i = 1,2
+            call res%os_cls3D%set(i, 'e1', 30.)
+            call res%os_cls3D%set_state(i, 0)
+        enddo
+        call assert_false(stage%take_cavgs3D_result(res), 'a result without states is not taken')
+        call assert_false(stage%l_cavg_ini_ext,            'and solve3D does not start from it')
+        call assert_int(3, stage%params%nstates,           'nor do the stage''s states change')
+        ! class 1 in state 3, class 2 in state 1: two states, renumbered
+        call res%os_cls3D%set_state(1, 3)
+        call res%os_cls3D%set_state(2, 1)
+        call assert_true(stage%take_cavgs3D_result(res),        'the classes are mapped onto the first set')
+        call assert_int(2, stage%spproj%os_ptcl3D%get_state(2), 'class 1''s particles in state 3, renumbered 2')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(4), 'class 2''s in state 1')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(1), 'a deselected row stays deselected')
+        call assert_false(stage%spproj%is_virgin_field('ptcl3D'), 'the particles carry the classes'' poses')
+        call assert_int(2, stage%params%nstates,                'the states held are the stage''s')
+        call assert_int(2, stage%spproj%os_cls3D%get_state(1),  'the classes'' states are renumbered too')
+        call assert_int(4, stage%nptcls_selected,               'the first set stays selected')
+        call assert_true(stage%l_cavg_ini_ext,                  'solve3D starts from them')
+        call res%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_cavgs3D
+
     !> a publication's class averages and FRCs are copied into its quality folder and replace the
     !! stage's earlier ones, whose state volume stays; a publication without FRCs cannot be used
     subroutine test_take_cavgs()
@@ -261,6 +330,8 @@ contains
         ! a publication with more classes
         call simple_mkdir('pub')
         call write_stack(string('pub/00003_cavgs.mrcs'), NCLS_PUB)
+        call write_stack(string('pub/00003_cavgs_even.mrcs'), NCLS_PUB)
+        call write_stack(string('pub/00003_cavgs_odd.mrcs'),  NCLS_PUB)
         call set%add_cavgs2os_out(string('pub/00003_cavgs.mrcs'), VOL_SMPD, 'cavg', mskdiam=150.)
         problem = stage%publication_problem(set)
         call assert_char('its FRCs are missing', problem%to_char(), 'a publication without FRCs cannot be used')
@@ -282,6 +353,8 @@ contains
         call assert_real(150., mskdiam, 1.e-4, 'with its mask diameter')
         call assert_int(NCLS_PUB, stage%spproj%os_cls2D%get_noris(), 'the classes stay the publication''s')
         call assert_true(stage%spproj%isthere_in_osout('vol', 1), 'the state volume stays')
+        call assert_true(file_exists(add2fbody(stk, '.mrcs', '_even')), 'the even half is copied beside them')
+        call assert_true(file_exists(add2fbody(stk, '.mrcs', '_odd')),  'and the odd half')
         ! pool 2D removes its older publications
         call del_file('pub/00003_cavgs.mrcs')
         call del_file('pub/00003_frcs.bin')

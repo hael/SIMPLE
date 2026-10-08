@@ -10,7 +10,9 @@
 !   publishes the pool's classified state for 3D: once in a pool that has
 !   published nothing yet, after the first iteration that leaves NPTCLS_FIRST3D
 !   particles selected or after FIRST_EXPORT_ITER, whichever comes first, then
-!   after each completed iteration from EXPORT_START_ITER
+!   after each completed iteration from EXPORT_START_ITER. With sieve_ini3D=yes the
+!   first publication is built from the sieve's own 2D instead (the imported sets,
+!   their class averages and FRCs combined; publish_sieve_set)
 !   (doc/policies/stream/stream_3D_ingestion_policy.md). The commander
 !   (simple_commanders_stream_p06_pool2D) only normalises the command line and loops over
 !   iterate() until finished().
@@ -46,7 +48,8 @@
 !==============================================================================
 module simple_stream_stage_pool2D
 use simple_defs,                                only: logfhandle, PATH_HERE, COSMSKHALFWIDTH
-use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, DIR_SNAPSHOT, REFINE2D_FINISHED, JOB_INFO_EXT
+use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, DIR_SNAPSHOT, REFINE2D_FINISHED, JOB_INFO_EXT,&
+                                                     &MRC_EXT
 use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, SHORTWAIT, WAITTIME, POOL_EXIT_CODE, POOL_INPUT_PROJFILE,&
                                                      &OPTICS_ID_DELTA, SIEVE_FINAL_SET_FBODY, NPTCLS_FIRST3D
 use simple_srch_sort_loc,                       only: hpsort
@@ -54,8 +57,10 @@ use simple_error,                               only: simple_exception
 use simple_string,                              only: string
 use simple_string_utils,                        only: int2str, int2str_pad, str2int
 use simple_fileio,                              only: basename, del_file, file_exists, get_fbody, simple_abspath, simple_getcwd,&
-                                                     &simple_list_files_regexp, swap_suffix
-use simple_syslib,                              only: dir_exists, simple_mkdir
+                                                     &simple_list_files_regexp, swap_suffix, simple_copy_file, add2fbody,&
+                                                     &fname2ext
+use simple_syslib,                              only: dir_exists, simple_mkdir, simple_rmdir
+use simple_optics_maps,                         only: import_latest_optics_map
 use simple_cmdline,                             only: cmdline
 use simple_parameters,                          only: parameters
 use simple_sp_project,                          only: sp_project
@@ -63,7 +68,8 @@ use simple_rec_list,                            only: rec_list, rec_iterator, ch
 use simple_stream_watcher,                      only: stream_watcher
 use simple_stream_state,                        only: ipc_pipe_pool2D_in, ipc_pipe_pool2D_out
 use simple_stream_utils,                        only: create_stream_project
-use simple_stream_refine2D_utils,              only: cleanup_root_folder, delete_pool_publication
+use simple_stream_refine2D_utils,              only: cleanup_root_folder, delete_pool_publication, build_sieve_publication,&
+                                                     &combine_sieve_classes, pool_publication_names
 use simple_stream_pool2D,                       only: stream_pool2D, stream_pool2D_stats
 use simple_gui_metadata_utils,                  only: max_metadata_size
 use simple_gui_metadata_types,                  only: GUI_METADATA_STREAM_POOL2D_TYPE, GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE,&
@@ -91,6 +97,8 @@ integer, parameter :: FIRST_EXPORT_ITER     = MSKDIAM_SWITCH_ITER ! a fresh pool
                                                    ! iteration at the latest (earlier once NPTCLS_FIRST3D are selected): at
                                                    ! this iteration it carries the sieve's mask diameter, set when it was dispatched
 integer, parameter :: EXPORT_START_ITER     = 25  ! the pool is published for 3D after each iteration from this one on
+! sieve_ini3D: the imported sets' class averages (main, halves) and FRCs, kept until the first publication
+character(len=*), parameter :: SIEVE_CAVGS_DIR = 'sieve_cavgs'
                                                    ! (the final run's last iteration, FINAL_ITER, among them)
 integer, parameter :: NPUBLICATIONS_KEPT    = 2   ! the newest publications kept on disk; older ones are removed
 
@@ -129,6 +137,8 @@ type :: stream_stage_pool2D
     integer :: last_export_id            = 1
     integer :: optics_id_offset          = 0
     real    :: final_mskdiam             = 0. ! the sieve's mask diameter (A), applied from MSKDIAM_SWITCH_ITER
+    real    :: sieve_mskdiam             = 0. ! sieve_ini3D: the sieve's mask diameter (A) for the first publication
+    real    :: sieve_smpd                = 0. ! sieve_ini3D: the pixel size (A) of the sieve's class averages
     real    :: mskdiam                   = 0. ! the pool's mask diameter (A): given, the default, or updated
     real    :: smpd                      = 0. ! the pool's native pixel size (A), from the first set imported
     integer :: box                       = 0  ! the pool's native box (px), from the first set imported
@@ -173,6 +183,9 @@ contains
     procedure :: apply_gui_updates
     procedure :: write_snapshot
     procedure :: export_pool_state
+    procedure :: collects_sieve_sets
+    procedure :: collect_sieve_set
+    procedure :: publish_sieve_set
     ! GUI
     procedure :: send_status
     procedure :: send_pool_cavgs
@@ -257,6 +270,8 @@ contains
         call del_file(POOL_EXIT_CODE)
         call del_file(POOL_EXIT_CODE//JOB_INFO_EXT)
         call del_file(POOL_INPUT_PROJFILE)
+        ! the sieve sets' files of a previous run: a fresh pool collects them again
+        if( dir_exists(SIEVE_CAVGS_DIR) ) call simple_rmdir(SIEVE_CAVGS_DIR)
     end subroutine clean_previous_run
 
     !> The next publication number, one past the highest in the completed folder: after a restart
@@ -388,6 +403,8 @@ contains
         self%last_export_id           = 1
         self%optics_id_offset         = 0
         self%final_mskdiam            = 0.
+        self%sieve_mskdiam            = 0.
+        self%sieve_smpd               = 0.
         self%mskdiam                  = 0.
         self%smpd                     = 0.
         self%box                      = 0
@@ -530,6 +547,7 @@ contains
             call sets(nsets)%read_segment('stk',    crec%projfile)
             call sets(nsets)%read_segment('ptcl2D', crec%projfile)
             call sets(nsets)%read_segment('out',    crec%projfile)
+            if( self%collects_sieve_sets() ) call self%collect_sieve_set(sets(nsets), crec%projfile)
             if( is_final_set(sets(nsets)) )then
                 self%l_sieve_final = .true.
                 write(logfhandle,'(A,I3)') '>>> FINAL SIEVE SET DETECTED - RUNNING UNINTERRUPTED TO ITERATION ', FINAL_ITER
@@ -825,7 +843,14 @@ contains
         ! no publication on disk yet (restore_export_id found none): a fresh pool
         if( .not. exports_after(self%pool%iteration(), self%last_export_id == 1, self%pool%npublishable()) ) return
         call simple_getcwd(cwd)
-        call self%pool%publish(publication_fname(cwd, self%last_export_id), nstks, self%params%optics_dir,&
+        nstks = 0
+        if( self%collects_sieve_sets() )then
+            ! the first publication from the sieve's own 2D; the pool's when it cannot be built
+            call self%publish_sieve_set(publication_fname(cwd, self%last_export_id), nstks)
+            if( nstks == 0 ) write(logfhandle,'(A)') '>>> WARNING: NO PUBLICATION FROM THE SIEVE''S CLASS AVERAGES; THE POOL''S INSTEAD'
+            if( dir_exists(SIEVE_CAVGS_DIR) ) call simple_rmdir(SIEVE_CAVGS_DIR)
+        endif
+        if( nstks == 0 ) call self%pool%publish(publication_fname(cwd, self%last_export_id), nstks, self%params%optics_dir,&
             &publishes_final(self%pool%iteration(), self%l_sieve_final))
         if( nstks > 0 )then
             if( self%last_export_id > NPUBLICATIONS_KEPT )then
@@ -835,6 +860,114 @@ contains
         endif
         self%last_export_iteration = self%pool%iteration()
     end subroutine export_pool_state
+
+    !> .true. while the first publication is to come from the sieve's own 2D (sieve_ini3D=yes and
+    !! no publication yet: a restarted pool with publications on disk collects nothing).
+    logical function collects_sieve_sets( self )
+        class(stream_stage_pool2D), intent(in) :: self
+        collects_sieve_sets = self%params%sieve_ini3D == 'yes' .and. self%last_export_id == 1
+    end function collects_sieve_sets
+
+    !> The class averages (main, _even, _odd) and FRCs of the sieve set @p set (read from @p projfile),
+    !! copied into SIEVE_CAVGS_DIR/<set stem>/ as cavgs.mrc, cavgs_even.mrc, cavgs_odd.mrc and
+    !! frcs.bin, so the first publication does not rely on the sieve's chunk folders. The first mask
+    !! diameter and pixel size the sets' class averages carry are kept. A set without class
+    !! averages (the sieve's empty final set) copies nothing.
+    subroutine collect_sieve_set( self, set, projfile )
+        class(stream_stage_pool2D), intent(inout) :: self
+        class(sp_project),          intent(inout) :: set
+        class(string),              intent(in)    :: projfile
+        type(string) :: stk, frcs, ext, dir
+        real         :: smpd, mskdiam
+        integer      :: ncls
+        call set%get_cavgs_stk(stk, ncls, smpd, fail=.false.)
+        if( ncls <= 0 ) return
+        if( .not. file_exists(stk) ) return
+        dir = string(SIEVE_CAVGS_DIR//'/')//get_fbody(basename(projfile), METADATA_EXT, separator=.false.)
+        call simple_mkdir(SIEVE_CAVGS_DIR)
+        call simple_mkdir(dir)
+        ext = string('.')//fname2ext(stk)
+        call simple_copy_file(stk, dir//'/cavgs'//MRC_EXT)
+        if( file_exists(add2fbody(stk, ext%to_char(), '_even')) ) call simple_copy_file(add2fbody(stk, ext%to_char(), '_even'), dir//'/cavgs_even'//MRC_EXT)
+        if( file_exists(add2fbody(stk, ext%to_char(), '_odd'))  ) call simple_copy_file(add2fbody(stk, ext%to_char(), '_odd'),  dir//'/cavgs_odd'//MRC_EXT)
+        call set%get_frcs(frcs, 'frc2D', fail=.false.)
+        if( file_exists(frcs) ) call simple_copy_file(frcs, dir//'/frcs.bin')
+        if( self%sieve_smpd <= 0. ) self%sieve_smpd = smpd
+        if( self%sieve_mskdiam <= 0. )then
+            mskdiam = 0.
+            call set%get_mskdiam('cavg', mskdiam)
+            if( mskdiam > 0. ) self%sieve_mskdiam = mskdiam
+        endif
+    end subroutine collect_sieve_set
+
+    !> The first publication from the sieve's own 2D (sieve_ini3D) as @p projfile: every set the
+    !! pool has imported, read whole, combined (build_sieve_publication) with their collected class
+    !! averages and FRCs (combine_sieve_classes), the newest optics map's groups, and
+    !! sieve_ini3D=yes in its out segment, the marker multistate 3D follows. Written under a
+    !! temporary name and renamed, as every publication. @p nstks is the number of stacks published;
+    !! 0, with nothing written, when a set's files are missing or disagree.
+    subroutine publish_sieve_set( self, projfile, nstks )
+        class(stream_stage_pool2D), intent(inout) :: self
+        class(string),              intent(in)    :: projfile
+        integer,                    intent(out)   :: nstks
+        type(sp_project), allocatable :: sets(:)
+        type(string),     allocatable :: stks(:), frcs(:)
+        integer,          allocatable :: ncls_sets(:)
+        type(sp_project)   :: pub
+        type(rec_iterator) :: it
+        type(chunk_rec)    :: crec
+        type(string)       :: dir, cavgsfname, frcsfname
+        integer            :: nsets, iset, irec, ncls, lastmap
+        nstks = 0
+        if( self%sieve_smpd <= 0. ) return
+        nsets = count(self%setslist%get_included_flags())
+        if( nsets == 0 ) return
+        allocate(sets(nsets), stks(nsets), frcs(nsets), ncls_sets(nsets))
+        iset = 0
+        it   = self%setslist%begin()
+        do irec = 1,self%setslist%size()
+            call it%get(crec)
+            call it%next()
+            if( .not. crec%included ) cycle
+            iset = iset + 1
+            if( .not. file_exists(crec%projfile) ) return
+            call sets(iset)%read(crec%projfile)
+            ncls_sets(iset) = sets(iset)%os_cls2D%get_noris()
+            dir         = string(SIEVE_CAVGS_DIR//'/')//get_fbody(basename(crec%projfile), METADATA_EXT, separator=.false.)
+            stks(iset)  = ''
+            frcs(iset)  = dir//'/frcs.bin'
+            if( file_exists(dir//'/cavgs'//MRC_EXT) ) stks(iset) = dir//'/cavgs'//MRC_EXT
+        enddo
+        call build_sieve_publication(sets, pub, nstks, ncls)
+        if( nstks == 0 .or. ncls == 0 )then
+            nstks = 0
+            call pub%kill
+            return
+        endif
+        call pool_publication_names(projfile, cavgsfname, frcsfname)
+        if( .not. combine_sieve_classes(stks, frcs, ncls_sets, self%sieve_smpd, cavgsfname, frcsfname) )then
+            nstks = 0
+            call pub%kill
+            return
+        endif
+        if( self%params%optics_dir%strlen() > 0 ) lastmap = import_latest_optics_map(pub, self%params%optics_dir)
+        call pub%os_out%kill
+        if( self%sieve_mskdiam > 0. )then
+            call pub%add_cavgs2os_out(cavgsfname, self%sieve_smpd, 'cavg', mskdiam=self%sieve_mskdiam)
+        else
+            call pub%add_cavgs2os_out(cavgsfname, self%sieve_smpd, 'cavg')
+        endif
+        call pub%add_frcs2os_out(frcsfname, 'frc2D')
+        call pub%os_out%set(1, 'sieve_ini3D', 'yes')
+        if( publishes_final(self%pool%iteration(), self%l_sieve_final) ) call pub%os_out%set(1, 'pool_final', 'yes')
+        call pub%write(projfile, tempfile=.true.)
+        write(logfhandle,'(A,A,A,I8,A,I6,A,I8,A)') '>>> PUBLISHED THE SIEVE''S 2D FOR 3D: ', projfile%to_char(), ', ', nstks,&
+            &' STACK(S), ', ncls, ' CLASSES, ', pub%os_ptcl2D%count_state_gt_zero(), ' PARTICLE(S)'
+        call pub%kill
+        do iset = 1,nsets
+            call sets(iset)%kill
+        enddo
+    end subroutine publish_sieve_set
 
     !---------------- GUI ----------------
 

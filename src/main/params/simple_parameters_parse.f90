@@ -201,6 +201,7 @@ contains
         call reg%add_char('roavg', self%roavg)
         call reg%add_char('script', self%script)
         call reg%add_char('score_states', self%score_states)
+        call reg%add_char('sieve_ini3D', self%sieve_ini3D)
         call reg%add_char('single_pass', self%single_pass)
         call reg%add_char('select_flag', self%select_flag)
         call reg%add_char('skip_rejection', self%skip_rejection)

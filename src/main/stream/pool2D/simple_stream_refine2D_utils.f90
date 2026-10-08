@@ -3,12 +3,16 @@ module simple_stream_refine2D_utils
 use simple_core_module_api
 use simple_sp_project,           only: sp_project
 use simple_optics_maps,          only: import_latest_optics_map
+use simple_class_frcs,           only: class_frcs
+use simple_image,                only: image
 implicit none
 
 public :: cleanup_root_folder
 public :: tidy_2Dstream_iter
 public :: build_pool_publication
 public :: pool_publication_nselected
+public :: build_sieve_publication
+public :: combine_sieve_classes
 public :: delete_pool_publication
 public :: pool_publication_names
 public :: snapshot_cavgs_meta
@@ -125,6 +129,191 @@ contains
             if( src%os_ptcl2D%get_updatecnt(iptcl) > 0 ) n = n + 1
         enddo
     end function pool_publication_nselected
+
+    !> The first publication for 3D built from the sieve's own 2D (sieve_ini3D), from the sieve's
+    !! sets @p sets, each read whole (micrographs, stacks, particles, classes): their stacks
+    !! renumbered from 1 and their particles with their image index in the stack (indstk), as
+    !! build_pool_publication sets them; the sieve's 2D parameters and selection, each set's class
+    !! labels offset by the classes of the sets before it (a particle without a class of its set is
+    !! deselected); and the sets' class tables concatenated in set order, the sieve's states kept and
+    !! each population counted from the selected particles. The 3D particles are prepared as
+    !! build_pool_publication prepares them. @p nstks is the number of stacks published (0:
+    !! nothing), @p ncls the classes. The class averages go with it through combine_sieve_classes.
+    subroutine build_sieve_publication( sets, pub, nstks, ncls )
+        class(sp_project), intent(inout) :: sets(:)
+        class(sp_project), intent(inout) :: pub
+        integer,           intent(out)   :: nstks, ncls
+        integer, allocatable :: pops(:)
+        integer :: iset, ifirst, istk, jstk, iptcl, jptcl, nptcls, fromp, top, stkind, ind_in_stk
+        integer :: offset, ncls_set, icls
+        call pub%kill
+        nstks  = 0
+        ncls   = 0
+        nptcls = 0
+        ifirst = 0
+        do iset = 1,size(sets)
+            ncls = ncls + sets(iset)%os_cls2D%get_noris()
+            if( sets(iset)%os_stk%get_noris() == 0 ) cycle
+            if( sets(iset)%os_mic%get_noris() /= sets(iset)%os_stk%get_noris() ) THROW_HARD('build_sieve_publication: # micrographs /= # stacks')
+            if( ifirst == 0 ) ifirst = iset
+            nstks  = nstks  + sets(iset)%os_stk%get_noris()
+            nptcls = nptcls + sets(iset)%os_ptcl2D%get_noris()
+        enddo
+        if( nstks == 0 )then
+            ncls = 0
+            return
+        endif
+        pub%projinfo  = sets(ifirst)%projinfo
+        pub%compenv   = sets(ifirst)%compenv
+        pub%jobproc   = sets(ifirst)%jobproc
+        pub%os_optics = sets(ifirst)%os_optics
+        call pub%os_mic%new(nstks,    is_ptcl=.false.)
+        call pub%os_stk%new(nstks,    is_ptcl=.false.)
+        call pub%os_ptcl2D%new(nptcls, is_ptcl=.true.)
+        if( ncls > 0 ) call pub%os_cls2D%new(ncls, is_ptcl=.false.)
+        jstk   = 0
+        jptcl  = 0
+        offset = 0
+        do iset = 1,size(sets)
+            ncls_set = sets(iset)%os_cls2D%get_noris()
+            do icls = 1,ncls_set
+                call pub%os_cls2D%transfer_ori(offset + icls, sets(iset)%os_cls2D, icls)
+            enddo
+            do istk = 1,sets(iset)%os_stk%get_noris()
+                jstk  = jstk + 1
+                fromp = sets(iset)%os_stk%get_fromp(istk)
+                top   = sets(iset)%os_stk%get_top(istk)
+                call pub%os_mic%transfer_ori(jstk, sets(iset)%os_mic, istk)
+                call pub%os_stk%transfer_ori(jstk, sets(iset)%os_stk, istk)
+                call pub%os_stk%set(jstk, 'fromp', jptcl + 1)
+                call pub%os_stk%set(jstk, 'top',   jptcl + top - fromp + 1)
+                do iptcl = fromp,top
+                    jptcl = jptcl + 1
+                    ! the image index in the stack, as the set maps it, before the ranges change
+                    call sets(iset)%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, ind_in_stk)
+                    call pub%os_ptcl2D%transfer_ori(jptcl, sets(iset)%os_ptcl2D, iptcl)
+                    call pub%os_ptcl2D%set_stkind(jptcl, jstk)
+                    call pub%os_ptcl2D%set(jptcl, 'indstk', ind_in_stk)
+                    icls = pub%os_ptcl2D%get_class(jptcl)
+                    if( icls >= 1 .and. icls <= ncls_set )then
+                        call pub%os_ptcl2D%set_class(jptcl, offset + icls)
+                    else
+                        call pub%os_ptcl2D%set_class(jptcl, 0)
+                        call pub%os_ptcl2D%set_state(jptcl, 0)
+                    endif
+                enddo
+            enddo
+            offset = offset + ncls_set
+        enddo
+        ! the populations of the selected particles
+        if( ncls > 0 )then
+            allocate(pops(ncls), source=0)
+            do jptcl = 1,nptcls
+                if( pub%os_ptcl2D%get_state(jptcl) <= 0 ) cycle
+                icls = pub%os_ptcl2D%get_class(jptcl)
+                if( icls >= 1 .and. icls <= ncls ) pops(icls) = pops(icls) + 1
+            enddo
+            do icls = 1,ncls
+                call pub%os_cls2D%set(icls, 'class', icls)
+                call pub%os_cls2D%set(icls, 'pop',   pops(icls))
+            enddo
+        endif
+        pub%os_ptcl3D = pub%os_ptcl2D
+        call pub%os_ptcl3D%delete_2Dclustering
+        call pub%os_ptcl3D%clean_entry('updatecnt', 'sampled')
+    end subroutine build_sieve_publication
+
+    !> The sieve sets' class averages, their even and odd halves and their FRCs, concatenated in set
+    !! order into @p cavgsfname (its halves beside it) and @p frcsfname, the files of the publication
+    !! build_sieve_publication builds. @p stks(i) is set i's class-average stack ('' for a set
+    !! without classes) with its halves beside it (_even, _odd), @p frcs(i) its FRCs and @p ncls(i)
+    !! its classes; @p smpd is the class averages' pixel size. .false., with nothing written, when a
+    !! file is missing, a stack does not hold its set's classes, or the sets' boxes or FRC sizes
+    !! differ.
+    function combine_sieve_classes( stks, frcs, ncls, smpd, cavgsfname, frcsfname ) result( l_ok )
+        class(string), intent(in) :: stks(:), frcs(:)
+        integer,       intent(in) :: ncls(:)
+        real,          intent(in) :: smpd
+        class(string), intent(in) :: cavgsfname, frcsfname
+        logical :: l_ok
+        type(class_frcs)  :: frcs_set, frcs_all
+        type(image)       :: img
+        type(string)      :: src(3), dst(3), ext, dst_ext
+        real, allocatable :: frc(:)
+        integer :: iset, ldim(3), n, ntot, box, frc_box, filtsz, ihalf, icls, k
+        l_ok    = .false.
+        ntot    = 0
+        box     = 0
+        frc_box = 0
+        filtsz  = 0
+        do iset = 1,size(stks)
+            if( stks(iset)%strlen() == 0 )then
+                if( ncls(iset) > 0 ) return
+                cycle
+            endif
+            ext = string('.')//fname2ext(stks(iset))
+            if( .not. file_exists(stks(iset)) ) return
+            if( .not. file_exists(add2fbody(stks(iset), ext%to_char(), '_even')) ) return
+            if( .not. file_exists(add2fbody(stks(iset), ext%to_char(), '_odd'))  ) return
+            if( .not. file_exists(frcs(iset)) ) return
+            call find_ldim_nptcls(stks(iset), ldim, n)
+            if( n /= ncls(iset) ) return
+            if( box == 0 ) box = ldim(1)
+            if( ldim(1) /= box ) return
+            call frcs_set%read(frcs(iset))
+            if( frcs_set%get_ncls() /= n ) return
+            if( frc_box == 0 )then
+                frc_box = frcs_set%get_box()
+                filtsz  = frcs_set%get_filtsz()
+            endif
+            if( frcs_set%get_box() /= frc_box .or. frcs_set%get_filtsz() /= filtsz ) return
+            call frcs_set%kill
+            ntot = ntot + n
+        enddo
+        if( ntot == 0 ) return
+        ! the stacks, main and halves, in set order
+        dst_ext = string('.')//fname2ext(cavgsfname)
+        dst(1)  = cavgsfname
+        dst(2)  = add2fbody(cavgsfname, dst_ext%to_char(), '_even')
+        dst(3)  = add2fbody(cavgsfname, dst_ext%to_char(), '_odd')
+        do ihalf = 1,3
+            if( file_exists(dst(ihalf)) ) call del_file(dst(ihalf))
+        enddo
+        call img%new([box, box, 1], smpd)
+        k = 0
+        do iset = 1,size(stks)
+            if( stks(iset)%strlen() == 0 ) cycle
+            ext    = string('.')//fname2ext(stks(iset))
+            src(1) = stks(iset)
+            src(2) = add2fbody(stks(iset), ext%to_char(), '_even')
+            src(3) = add2fbody(stks(iset), ext%to_char(), '_odd')
+            do icls = 1,ncls(iset)
+                do ihalf = 1,3
+                    call img%read(src(ihalf), icls)
+                    call img%write(dst(ihalf), k + icls)
+                enddo
+            enddo
+            k = k + ncls(iset)
+        enddo
+        call img%kill
+        ! the FRCs, class by class, at the sets' FRC box (its pixel size follows from the averages')
+        call frcs_all%new(ntot, frc_box, smpd * real(box) / real(frc_box))
+        allocate(frc(filtsz))
+        k = 0
+        do iset = 1,size(stks)
+            if( stks(iset)%strlen() == 0 ) cycle
+            call frcs_set%read(frcs(iset))
+            do icls = 1,ncls(iset)
+                call frcs_set%frc_getter(icls, frc)
+                call frcs_all%set_frc(k + icls, frc)
+            enddo
+            call frcs_set%kill
+            k = k + ncls(iset)
+        enddo
+        call frcs_all%write(frcsfname)
+        call frcs_all%kill
+        l_ok = .true.
+    end function combine_sieve_classes
 
     subroutine build_pool_publication( src, pub, nstks, optics_dir )
         class(sp_project),       intent(inout) :: src

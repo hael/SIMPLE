@@ -439,6 +439,7 @@ contains
                 call c%delete('box_extract')
                 call c%delete('pickrefs')
                 call c%delete('nthr3D_pickrefs')
+                call c%delete('sieve_ini3D')
                 do ikey = 1,size(PICKREFS_3D_KEYS)
                     call c%delete(trim(PICKREFS_3D_KEYS(ikey)))
                 enddo
@@ -525,6 +526,8 @@ contains
                 call c%set('ncls',            POOL2D_NCLS)
                 call c%set('mkdir',           'yes')
                 call c%set('nicedispid',      params%nicedispid)
+                ! the first publication from the sieve's class averages (multistate 3D follows its marker)
+                if( params%sieve_ini3D == 'yes' ) call c%set('sieve_ini3D', 'yes')
                 call c%set('worker_priority', 'high')
                 if( server_address%strlen() > 0 ) call c%set('worker_server', server_address)
             end associate

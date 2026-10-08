@@ -8,8 +8,9 @@ preserve.
 - The pool's publications (p06): `export_pool_state` in
   `src/main/stream/stages/simple_stream_stage_pool2D.f90`, the pool's `publish` in
   `src/main/stream/pool2D/simple_stream_pool2D.f90`, and `build_pool_publication`,
-  `pool_publication_nselected` and `delete_pool_publication` in
-  `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`.
+  `pool_publication_nselected`, `build_sieve_publication`, `combine_sieve_classes` and
+  `delete_pool_publication` in `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`; with
+  `sieve_ini3D`, the stage's `collect_sieve_set` and `publish_sieve_set` (section 9).
 - Their import (p07): `import_sets`, `take_first_publication`, `select_cavgs`,
   `merge_publication` and `take_cavgs` in `src/main/stream/stages/simple_stream_stage_solve3D.f90`.
 - p07's runs: when it starts `solve3D` and `solve3D_addon` (`next_job`), the first `solve3D`'s
@@ -18,6 +19,8 @@ preserve.
   governed by `doc/policies/3D/solve3D_addon_policy.md`; this policy relies on its row contract
   (section 4 there) and its report (section 11 there).
 - p07's 3D snapshots (section 8): `apply_gui_updates` and `write_snapshot` in the same file.
+- The optional first 3D from the sieve's class averages (section 9): p06's sieve publication and
+  p07's `start_cavgs3D`, `finish_cavgs3D` and `take_cavgs3D_result`.
 
 ## 2. What the pool publishes
 
@@ -304,3 +307,49 @@ and is disabled after one click.
    folder or STAR files.
 7. **Tests:** `test_snapshot3D` in p07's tester: before a result; from a fixture result with
    three states, two of them selected; the same request again.
+
+## 9. The first 3D from the sieve's class averages (`sieve_ini3D`)
+
+An optional route for the first 3D, off unless the stream master's `sieve_ini3D=yes`, which the
+master passes to p06 only (`doc/refactoring_notes/planned/stream_sieve_ini3D_plan_2026-10-08.md`).
+
+1. **p06 collects the sieve's 2D.** While it has published nothing, each set it imports has its
+   class averages (main, `_even`, `_odd`) and FRCs copied into `sieve_cavgs/<set stem>/`
+   (`collect_sieve_set`), with the first mask diameter and pixel size the sets carry. A restarted
+   pool with publications on disk collects nothing.
+2. **The first publication is the sieve's 2D** (`publish_sieve_set`), at the usual trigger
+   (section 3, item 1):
+   - every set the pool has imported, re-read whole, combined (`build_sieve_publication`): the
+     stacks renumbered with each particle's image index, the sieve's 2D parameters and selection,
+     each set's class labels offset by the classes of the sets before it, the class tables
+     concatenated with the sieve's states and the populations of the selected particles;
+   - the class averages, halves and FRCs concatenated in set order beside the publication under
+     the usual names (`combine_sieve_classes`), refused when a file is missing, a stack does not
+     hold its set's classes, or the boxes or FRC sizes differ;
+   - the newest optics map's groups, the sieve's mask diameter, and `sieve_ini3D=yes` in the out
+     segment, the marker p07 follows.
+
+   When it cannot be built, the pool's publication goes instead, with a warning. `sieve_cavgs/`
+   is removed after either. Later publications are the pool's.
+3. **p07 takes it as any first publication** (section 4, item 3: the first set, at most
+   `nptcls3D_max`, whole stacks in order), with `take_cavgs` copying the halves too. On the marker
+   (`is_sieve_publication`), `solve3D_cavgs` runs instead of the first `solve3D`
+   (`PHASE_CAVGS3D`, `solve3D_cavgs/`): `nstates` volumes from every class the sieve accepted
+   (`pgrp=c1`, `prune=no`, the mask diameter, the 3D jobs' parts and threads, its own low-pass
+   limits; one run, no collapse restarts). No publication is taken while it runs.
+4. **Its result** (`take_cavgs3D_result`): each class's pose and state is mapped to its selected
+   particles (`map2ptcls`); the states the selected particles hold are renumbered from 1
+   (`compact_states`) in both particle segments and the classes, and become the stage's states
+   (`params%nstates`) for the session, addon runs and the final run included. The first set keeps
+   the rows still selected.
+5. **solve3D starts in the same pass** from those poses and states (`cavg_ini_ext=yes`, after the
+   symmetry stage, which needs every state populated), with the cap, the queue and
+   `balance=none` as always. A failed `solve3D_cavgs`, or one that leaves no class with a state,
+   starts `solve3D` as without it, with a warning.
+6. **The GUI** shows "running solve3D_cavgs" with the solve3D progress of 1.
+7. **Restart:** a p07 restart that takes the marked publication takes the route again; any later
+   one is the pool's.
+8. **Tests:** `test_sieve_publication` in p06's tester (the offsets, selection, class tables and
+   populations; the combined files; a box mismatch and a missing half refused); `test_cavgs3D` and
+   `test_take_cavgs` in p07's (the marker, the compaction, the mapping onto the first set, the
+   halves copied). The two jobs themselves run only in a stream.
