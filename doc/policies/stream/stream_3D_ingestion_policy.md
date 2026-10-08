@@ -159,6 +159,15 @@ completed iteration left it.
    `ADDON_COHORT_FRAC` (10%) of the frozen particles). The first bound is the addon's own floor
    (its refusals of an empty or small cohort cannot happen); the second bounds the total cost,
    since every run accumulates all frozen particles.
+   - **The cohort cap:** a run aligns at most `nptcls_addon_max` (`NPTCLS_ADDON_MAX`, 60,000) of
+     its cohort (`cap_addon_cohort`, through the same whole-stacks rule as the first run's cap,
+     `cap_rows`): the oldest stacks first, up to the first whose cohort rows no longer fit, so no
+     micrograph is split and a run may hold fewer. The frozen particles are always in the run.
+     The cohort left out is deselected in the job's project only and selected again when the run
+     is done (`release_queue`), so it is the next run's cohort, which starts by the usual rule; a
+     backlog drains one capped run after another. A failed or rolled-back run drops the queue
+     (the stage's rows are unchanged). `nptcls_addon_max` is p07's own, checked to be at least
+     `MIN_PTCLS_PER_STATE` × nstates by the commander; the master does not set it.
 8. **Failures:** a failed `solve3D` stops the stage (`THROW_HARD`). A failed addon run (refused,
    for example for a state without frozen particles, or crashed) leaves the latest result the
    base, and the next run waits for a cohort larger than the one that failed.
@@ -242,7 +251,8 @@ completed iteration left it.
     publications and a missing stack, the deselected rows following them) and
     `test_first_run_cap` (nothing queued within the cap; whole stacks in order, deselected rows
     skipped, fewer than the cap rather than a split stack, a first stack over the cap cut to it;
-    the queue released as the first addon run's cohort).
+    the queue released as the first addon run's cohort) and `test_addon_cohort_cap` (an addon
+    run's cohort capped in whole stacks, the oldest first, frozen particles never queued).
   - The class-average selection of a publication has no unit test, and neither has the first
     `solve3D`'s job project with its queued rows deselected.
 
@@ -261,8 +271,9 @@ completed iteration left it.
 - **A p07 restart** takes the newest publication first, as the pool selects it, so after a
   restart past iteration 25 the first set is that publication's earliest stacks (at most
   `nptcls3D_max`), again without the pool model.
-- **The first addon run's cohort is not capped:** it holds every particle the first `solve3D`
-  queued, however many.
+- **A large backlog takes several addon runs:** with `nptcls_addon_max` (60,000), the particles
+  the first `solve3D` queued, or a large publication, are aligned over successive capped runs, the
+  oldest first; the failure and rollback rules count the whole cohort, not the capped one.
 - **No rebase during a session** (decided): the addon runs never realign frozen particles; only
   the final run does (section 4, items 10 and 13).
 - **The final run's command line** (`refine3D` with `vol<s>`) relies on refine3D's own

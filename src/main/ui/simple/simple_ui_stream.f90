@@ -134,6 +134,10 @@ subroutine new_pool2D( prgtab )
         call solve3D_stream%add_input(UI_SRCH, 'nptcls3D_max', 'num', 'Particles of the first solve3D', &
         &'Maximum number of particles of the first streaming solve3D run, whole stacks in order; the others wait for later publications{100000}', &
         &'max # particles', .false., 100000., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call solve3D_stream%add_input(UI_SRCH, 'nptcls_addon_max', 'num', 'Cohort particles of each addon run', &
+        &'Maximum number of new particles each streaming solve3D_addon run aligns, the oldest whole stacks first; the &
+        &others wait for the next run{60000}', 'max # particles', .false., 60000., group="search", &
+        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         ! filter controls
         ! <empty>: the 3D jobs set their own low-pass limits
         ! mask controls

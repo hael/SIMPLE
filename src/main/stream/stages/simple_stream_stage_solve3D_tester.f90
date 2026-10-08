@@ -57,6 +57,7 @@ contains
         call test_take_cavgs()
         call test_first_publication()
         call test_first_run_cap()
+        call test_addon_cohort_cap()
         call test_cavgs3D()
         call test_mskdiam_from_each_publication()
         call test_rows_problem()
@@ -232,6 +233,66 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_merge_publications
+
+    !> an addon run takes at most nptcls_addon_max of its cohort (the selected rows not frozen):
+    !! whole stacks in row order, the oldest first, up to the first that no longer fits; the
+    !! frozen particles are never queued, and a cohort within the cap queues nothing
+    subroutine test_addon_cohort_cap()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)      :: cline
+        type(string)       :: cwd_saved, root
+        integer            :: nfail0, i, istk
+        integer, parameter :: N = 12, FROMP(4) = [1, 5, 9, 11], TOP(4) = [4, 8, 10, 12]
+        ! stack 1 frozen, stack 2 half frozen (rows 5, 6 selected again since), stacks 3 and 4 new
+        logical, parameter :: FROZEN(N) = [.true., .true., .true., .true., .false., .false., .true., .true.,&
+            &.false., .false., .false., .false.]
+        allocate(stage)
+        write(*,'(A)') 'test_addon_cohort_cap'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_addon_cap', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call stage%spproj%os_stk%new(size(FROMP), is_ptcl=.false.)
+        do istk = 1,size(FROMP)
+            call stage%spproj%os_stk%set(istk, 'fromp', FROMP(istk))
+            call stage%spproj%os_stk%set(istk, 'top',   TOP(istk))
+        enddo
+        call stage%spproj%os_ptcl2D%new(N, is_ptcl=.true.)
+        call stage%spproj%os_ptcl3D%new(N, is_ptcl=.true.)
+        do i = 1,N
+            call stage%spproj%os_ptcl2D%set_state(i, 1)
+            call stage%spproj%os_ptcl3D%set_state(i, 1)
+        enddo
+        allocate(stage%frozen_active(N), source=FROZEN)
+        ! no cap
+        stage%params%nptcls_addon_max = 0
+        call stage%cap_addon_cohort()
+        call assert_false(allocated(stage%queued), 'without a cap nothing is queued')
+        ! the cohort of six within a cap of six
+        stage%params%nptcls_addon_max = 6
+        call stage%cap_addon_cohort()
+        call assert_false(allocated(stage%queued), 'a cohort within the cap queues nothing')
+        ! a cap of four: stack 2's two and stack 3's two cohort rows; stack 4 waits
+        stage%params%nptcls_addon_max = 4
+        call stage%cap_addon_cohort()
+        call assert_true(allocated(stage%queued), 'a cohort over the cap queues the rest')
+        if( allocated(stage%queued) )then
+            call assert_int(2, count(stage%queued),      'the run takes whole stacks of its cohort in order')
+            call assert_true(all(stage%queued(11:12)),   'the newest stack waits')
+            call assert_false(any(stage%queued(1:10)),   'the older ones are taken')
+            call assert_false(any(stage%queued .and. FROZEN), 'no frozen particle is ever queued')
+        endif
+        ! a cap of three: stack 3 no longer fits, so the run takes fewer than the cap
+        stage%params%nptcls_addon_max = 3
+        call stage%cap_addon_cohort()
+        if( allocated(stage%queued) )then
+            call assert_int(4, count(stage%queued),    'no stack is split to fill the cap')
+            call assert_true(all(stage%queued(9:12)),  'stacks 3 and 4 wait')
+        endif
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_addon_cohort_cap
 
     !> the route from the sieve's class averages (sieve_ini3D): the marker of the first
     !! publication; the states renumbered from 1; and solve3D_cavgs' classes mapped onto the first

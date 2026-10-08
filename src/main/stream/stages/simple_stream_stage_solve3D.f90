@@ -211,6 +211,8 @@ contains
     procedure :: finish_cavgs3D
     procedure :: take_cavgs3D_result
     procedure :: cap_first_run
+    procedure :: cap_addon_cohort
+    procedure :: cap_rows
     procedure :: set_queued_states
     procedure :: release_queue
     procedure :: start_solve3D
@@ -980,6 +982,7 @@ contains
                     self%ncohort_refused = self%count_cohort()
                     write(logfhandle,'(A,A,A,I8,A)') '>>> WARNING: THE ADDON RUN FAILED (SEE ', logfile%to_char(),&
                         &'); THE NEXT WAITS FOR A COHORT LARGER THAN ', self%ncohort_refused, ' PARTICLES'
+                    call self%release_queue()
                     call self%job%kill()
                     self%phase = PHASE_IDLE
                 case(ASYNC_JOB_DONE)
@@ -1126,56 +1129,82 @@ contains
         l_ok = .true.
     end function take_cavgs3D_result
 
-    ! At most nptcls3D_max of the selected particles (none below 1 caps them), when more are
-    ! selected: whole stacks in row order (the pool's stack order, the earliest imported first),
-    ! up to the first whose selected particles no longer fit under the cap, so that no micrograph
-    ! is split and the run may hold fewer than the cap. When not even the first stack fits, its
-    ! first selected particles up to the cap. The selected rows left out are marked in queued
-    ! (unallocated when none is); the caller deselects them (take_first_publication) or leaves
-    ! them to the first addon run (start_solve3D).
+    ! The first run's particles: at most nptcls3D_max of the selected ones (cap_rows). The caller
+    ! deselects the rows left out (take_first_publication) or leaves them to the first addon run
+    ! (start_solve3D).
     subroutine cap_first_run( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        logical, allocatable :: l_taken(:)
-        integer :: n, nsel, ncap, ntaken, nstk_sel, istk, fromp, top, iptcl
-        if( allocated(self%queued) ) deallocate(self%queued)
-        ncap = self%params%nptcls3D_max
-        nsel = self%spproj%os_ptcl3D%count_state_gt_zero()
-        if( ncap < 1 .or. nsel <= ncap ) return
+        logical, allocatable :: l_cand(:)
+        integer :: i, n
         n = self%spproj%os_ptcl3D%get_noris()
+        allocate(l_cand(n))
+        do i = 1,n
+            l_cand(i) = self%spproj%os_ptcl3D%get_state(i) > 0
+        enddo
+        call self%cap_rows(self%params%nptcls3D_max, l_cand, 'FIRST RUN')
+    end subroutine cap_first_run
+
+    ! An addon run's cohort: at most nptcls_addon_max of the selected rows not frozen (cap_rows);
+    ! the frozen particles are always in the run. The rows left out wait for the next run.
+    subroutine cap_addon_cohort( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        logical, allocatable :: l_cand(:)
+        integer :: i, n, nfrozen_rows
+        n = self%spproj%os_ptcl3D%get_noris()
+        nfrozen_rows = 0
+        if( allocated(self%frozen_active) ) nfrozen_rows = size(self%frozen_active)
+        allocate(l_cand(n))
+        do i = 1,n
+            l_cand(i) = self%spproj%os_ptcl3D%get_state(i) > 0
+            if( i <= nfrozen_rows ) l_cand(i) = l_cand(i) .and. .not. self%frozen_active(i)
+        enddo
+        call self%cap_rows(self%params%nptcls_addon_max, l_cand, 'ADDON COHORT')
+    end subroutine cap_addon_cohort
+
+    ! At most @p ncap of the candidate rows @p l_cand (none below 1 caps them), when there are
+    ! more: whole stacks in row order (the pool's stack order, the earliest imported first), up to
+    ! the first whose candidates no longer fit under the cap, so that no micrograph is split and
+    ! the run may hold fewer than the cap. When not even the first stack fits, its first
+    ! candidates up to the cap. The candidates left out are marked in queued (unallocated when
+    ! none is); @p label names the run in the log.
+    subroutine cap_rows( self, ncap, l_cand, label )
+        class(stream_stage_solve3D), intent(inout) :: self
+        integer,                     intent(in)    :: ncap
+        logical,                     intent(in)    :: l_cand(:)
+        character(len=*),            intent(in)    :: label
+        logical, allocatable :: l_taken(:)
+        integer :: n, ncand, ntaken, nstk_cand, istk, fromp, top, iptcl
+        if( allocated(self%queued) ) deallocate(self%queued)
+        n     = size(l_cand)
+        ncand = count(l_cand)
+        if( ncap < 1 .or. ncand <= ncap ) return
         allocate(l_taken(n), source=.false.)
         ntaken = 0
         do istk = 1,self%spproj%os_stk%get_noris()
-            fromp    = self%spproj%os_stk%get_fromp(istk)
-            top      = self%spproj%os_stk%get_top(istk)
-            nstk_sel = 0
-            do iptcl = fromp,top
-                if( self%spproj%os_ptcl3D%get_state(iptcl) > 0 ) nstk_sel = nstk_sel + 1
-            enddo
-            if( nstk_sel == 0 ) cycle
-            if( ntaken + nstk_sel > ncap )then
+            fromp     = self%spproj%os_stk%get_fromp(istk)
+            top       = min(self%spproj%os_stk%get_top(istk), n)
+            nstk_cand = count(l_cand(fromp:top))
+            if( nstk_cand == 0 ) cycle
+            if( ntaken + nstk_cand > ncap )then
                 if( ntaken == 0 )then
-                    ! not even the first stack fits: its first selected particles up to the cap
+                    ! not even the first stack fits: its first candidates up to the cap
                     do iptcl = fromp,top
                         if( ntaken == ncap ) exit
-                        if( self%spproj%os_ptcl3D%get_state(iptcl) <= 0 ) cycle
+                        if( .not. l_cand(iptcl) ) cycle
                         l_taken(iptcl) = .true.
                         ntaken = ntaken + 1
                     enddo
                 endif
                 exit
             endif
-            do iptcl = fromp,top
-                if( self%spproj%os_ptcl3D%get_state(iptcl) > 0 ) l_taken(iptcl) = .true.
-            enddo
-            ntaken = ntaken + nstk_sel
+            l_taken(fromp:top) = l_cand(fromp:top)
+            ntaken = ntaken + nstk_cand
         enddo
         allocate(self%queued(n))
-        do iptcl = 1,n
-            self%queued(iptcl) = self%spproj%os_ptcl3D%get_state(iptcl) > 0 .and. .not. l_taken(iptcl)
-        enddo
-        write(logfhandle,'(A,I8,A,I8,A,I8,A)') '>>> FIRST RUN: ', ntaken, ' OF ', nsel, ' SELECTED PARTICLES, WHOLE STACKS IN ORDER (CAP ',&
-            &ncap, ')'
-    end subroutine cap_first_run
+        self%queued = l_cand .and. .not. l_taken
+        write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A)') '>>> ', label, ': ', ntaken, ' OF ', ncand,&
+            &' PARTICLES, WHOLE STACKS IN ORDER (CAP ', ncap, ')'
+    end subroutine cap_rows
 
     ! State @p s for the queued rows, in both particle segments.
     subroutine set_queued_states( self, s )
@@ -1190,15 +1219,16 @@ contains
         enddo
     end subroutine set_queued_states
 
-    ! After the first solve3D, whose result has them deselected: the queued rows are selected
-    ! again, with state 1 as merge_publication gives a selected row without a multistate label.
-    ! They are not among the result's active rows (frozen_active), so they are the cohort of the
-    ! first addon run.
+    ! After a run that left them queued (the first solve3D, or a capped addon run), whose result
+    ! has them deselected: the queued rows are selected again, with state 1 as merge_publication
+    ! gives a selected row without a multistate label. They are not among the result's active rows
+    ! (frozen_active), so they are the next addon run's cohort. After a failed or rolled-back run,
+    ! which leaves the stage's rows as they were, the queue is only dropped.
     subroutine release_queue( self )
         class(stream_stage_solve3D), intent(inout) :: self
         if( .not. allocated(self%queued) ) return
         call self%set_queued_states(1)
-        write(logfhandle,'(A,I8,A)') '>>> ', count(self%queued), ' QUEUED PARTICLES ARE THE FIRST ADDON RUN''S COHORT'
+        write(logfhandle,'(A,I8,A)') '>>> ', count(self%queued), ' QUEUED PARTICLES ARE THE NEXT ADDON RUN''S COHORT'
         deallocate(self%queued)
         self%nptcls_selected = self%spproj%os_ptcl3D%count_state_gt_zero()
     end subroutine release_queue
@@ -1248,8 +1278,9 @@ contains
         call cline_job%kill
     end subroutine start_solve3D
 
-    ! solve3D_addon on the grown pool, from the latest result, in solve3D_addon/it_<n>/. The base
-    ! run's settings (balance=none among them) come from its manifest, not this command line.
+    ! solve3D_addon on the grown pool, from the latest result, in solve3D_addon/it_<n>/, on at
+    ! most nptcls_addon_max of the cohort (cap_addon_cohort). The base run's settings
+    ! (balance=none among them) come from its manifest, not this command line.
     subroutine start_addon( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job
@@ -1260,7 +1291,15 @@ contains
         call simple_mkdir(cwd//'/'//ADDON_DIR)
         dir = cwd//'/'//ADDON_DIR//'/it_'//int2str(self%naddon_runs)
         call fresh_job_dir(dir, ADDON_DIR) ! never the directory of a job left unfinished
+        ! at most nptcls_addon_max of the cohort, deselected in the job's project only; the rest
+        ! wait for the next run
+        call self%cap_addon_cohort()
+        if( allocated(self%queued) ) write(logfhandle,'(A,I8,A)') '>>> ', count(self%queued),&
+            &' COHORT PARTICLES WAIT FOR THE NEXT ADDON RUN'
+        call self%set_queued_states(0)
+        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
         call self%spproj%write(dir//'/'//ADDON_DIR//METADATA_EXT)
+        call self%set_queued_states(1)
         call cline_job%set('prg',             'solve3D_addon')
         call cline_job%set('mkdir',           'no')
         call cline_job%set('projfile',        ADDON_DIR//METADATA_EXT)
@@ -1272,7 +1311,6 @@ contains
         if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
         if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
         call cline_job%printline()
-        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
         call self%record_run_publication()
         call self%job%start(self%qenv, cline_job, dir, ADDON_DIR, exec_bin=string('simple_exec'))
         self%phase = PHASE_ADDON
@@ -1398,6 +1436,7 @@ contains
         self%addon_verdict   = self%addon_verdict//' - rolled back ('//int2str(self%n_rollbacks)//' in a row)'
         write(logfhandle,'(A,I3,A,I8,A)') '>>> THE ADDON RUN REGRESSED A STATE AND IS ROLLED BACK (', self%n_rollbacks,&
             &' IN A ROW); THE NEXT WAITS FOR A COHORT LARGER THAN ', self%ncohort_refused, ' PARTICLES'
+        call self%release_queue()
         call self%job%kill
         self%phase = PHASE_IDLE
     end subroutine roll_back_addon
