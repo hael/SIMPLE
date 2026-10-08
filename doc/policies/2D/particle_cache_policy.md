@@ -51,6 +51,8 @@ preparation, and reconstruction all read the full-size originals; the
 starting-volume `reconstruct3D`, `volassemble` (no particle reads), streaming
 2D variants (long-lived processes over changing particle sets would thrash
 the validity fingerprint), and the flex / offload reconstruction paths.
+`flex_pca` keeps a cache of its own that shares this module's machinery
+(Section 9).
 
 ## 4. Validity Contract
 
@@ -133,7 +135,44 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   parity with uncached execution, not bit equality; the alignment paths are
   bit-exact.
 
-## 9. Future Extensions
+## 9. Shared Machinery
+
+`simple_ptcl_cache` exports three helpers for other disk caches:
+
+- `ptcl_cache_dir`: the location rule of Section 2;
+- `ptcl_cache_run_token`: the hash of the execution directory used in the
+  cache names;
+- `ptcl_cache_space_ok`: the budget of Section 6, at most a quarter of the free
+  space at the destination; an unknown free space does not block the build.
+
+Their only other user is the `flex_pca` plane cache
+(`src/main/flex/fit/simple_flex_pca_plane_cache.f90`). It holds each selected
+particle's prepared, padded Fourier transform on the `box_crop` grid, and is
+used with `cache=yes` when `box_crop < box`.
+
+Both caches follow the same rules:
+
+- they live where `ptcl_cache_dir` says, and the directory is created when
+  missing;
+- a stale cache is deleted before the budget check, so the check measures the
+  space the rebuild can use;
+- over budget, the run reads its particles without the cache;
+- the cache is built under a temporary name that contains the run token and
+  `_part`, and its commit record is written last. The particle cache renames
+  its stack and index into place and then writes the key. The plane cache
+  writes its header record into the finished file and then renames the file. A
+  reader therefore finds either no cache or a complete one.
+
+The plane cache differs in its lifetime and validation. Its published name
+carries `box_crop` and a hash of the absolute project path, not the run token.
+The run that built it deletes it once the master has its embedding, because
+nothing after the embedding reads planes (and with `mkdir=yes` every run works
+on its own project copy, so no later run could adopt it). The header records the project path and modification
+time, the geometry and a hash of the master's particle selection. The master
+accepts only the exact selection. A worker accepts the cache when its partition
+lies within it, and otherwise reads its particles natively.
+
+## 10. Future Extensions
 
 - **Orphan scavenger**: sweep stale `ptcl_cache_*` file sets in `cache_dir`
   at `ptcl_cache_ensure` time (age- or dead-key-based) to reclaim

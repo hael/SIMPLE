@@ -1,48 +1,35 @@
 !@descr: versioned cross-fit-FSC artifact (flex_pca_crossfsc.bin): writer, reader, SSNR conversion, series restart
 !! The paired flex_pca engine persists the per-component, per-shell cross-fit FSC between its two
-!! half-fits every iteration. Its only consumer is the SSNR/tau^2 ridge (crossfsc_to_invtau2);
-!! `paired`, `khi_shared`, `march_on` (always 0) and `s_stop` stay in the layout as file-format fields.
+!! half-fits every iteration. Its only consumer is the SSNR/tau^2 ridge (crossfsc_to_invtau2), so a
+!! record holds what that ridge reads: the pairing, the cross-fit FSC curves and each fit's sampling H.
 module simple_flex_pca_crossfsc
-use simple_core_module_api, only: del_file, dp, fclose, file_exists, fileiochk, find, fopen, logfhandle, &
-    &simple_exception, simple_rename, string, tiny
+use simple_core_module_api, only: dp, fclose, file_exists, fileiochk, fopen, logfhandle, simple_exception, &
+    &simple_rename, string, tiny
 use simple_flex_reconstructor_latent_ops, only: pair_index
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: crossfsc_record, crossfsc_file
-public :: crossfsc_to_invtau2, crossfsc_harvest_h, crossfsc_stop_stat
-public :: crossfsc_inband_mean, crossfsc_khi_deepest
+public :: crossfsc_to_invtau2, crossfsc_harvest_h, crossfsc_inband_mean
 public :: COV_XFSC_FNAME
 
 character(len=8), parameter :: COV_XFSC_MAGIC        = 'SIMPLFXF'
-integer,          parameter :: COV_XFSC_VERSION      = 1
+integer,          parameter :: COV_XFSC_VERSION      = 2   ! 2: only what the ridge reads
 character(len=*), parameter :: COV_XFSC_FNAME        = 'flex_pca_crossfsc.bin'
-character(len=*), parameter :: COV_XFSC_SERIES_FNAME = 'flex_pca_crossfsc_series.txt'
 !> per-shell sampling below this is a dead shell, matching add_invtausq2rho's rsum floor
 real(dp),         parameter :: COV_XFSC_H_FLOOR      = 1.0d-10
 
 !> One per-iteration record (layout COV_XFSC_VERSION). Unmatched components appear in the per-fit
-!! blocks (fsc_int/h/eigvals) but not in the matched blocks (match_*/fsc_cross).
+!! sampling blocks (h_a/h_b) but not in the matched blocks (match_*/fsc_cross).
 type crossfsc_record
-    integer :: it_eff     = 0                !< global iteration stamp (never a worker-local counter)
-    integer :: ncomp_a    = 0, ncomp_b = 0   !< per-fit delivered ranks
-    integer :: kmatch     = 0                !< number of matched pairs
-    integer :: khi_a      = 0, khi_b = 0     !< each fit's internal-FSC band (deepest-crossing criterion)
-    integer :: khi_shared = 0                !< the shared band in force (written as khi_full)
-    integer :: reg_mode   = 0                !< the ridge arm ACTIVE this iteration (0 when degraded)
-    integer :: march_on   = 0                !< band-marching flag, written as 0
-    integer,  allocatable :: match_a(:), match_b(:)  !< signed-permutation pairing (component indices)
-    integer,  allocatable :: match_sign(:)           !< +1/-1
-    real,     allocatable :: match_cos(:)            !< |cosine| of each matched pair
-    real,     allocatable :: fsc_cross(:,:)          !< (filtsz,kmatch) cross-fit FSC curves
-    real,     allocatable :: fsc_int_a(:,:)          !< (filtsz,ncomp_a) fit A internal e/o FSC
-    real,     allocatable :: fsc_int_b(:,:)          !< (filtsz,ncomp_b)
-    real,     allocatable :: h_a(:,:)                !< (filtsz,ncomp_a) fit A sampling profiles
-    real,     allocatable :: h_b(:,:)                !< (filtsz,ncomp_b)
-    integer,  allocatable :: cnt(:)                  !< (filtsz) shared per-shell voxel counts
-    real(dp), allocatable :: eigvals_a(:), eigvals_b(:)  !< latent variances (amplitude diagnostic)
-    real(dp) :: s_stop = 0.d0   !< stopping statistic S(t) at khi_cmp, precomputed
+    integer :: it_eff  = 0                   !< global iteration stamp (never a worker-local counter)
+    integer :: ncomp_a = 0, ncomp_b = 0      !< per-fit delivered ranks
+    integer :: kmatch  = 0                   !< number of matched pairs
+    integer, allocatable :: match_a(:), match_b(:)  !< pairing (component indices)
+    real,    allocatable :: fsc_cross(:,:)          !< (filtsz,kmatch) cross-fit FSC curves (sign resolved)
+    real,    allocatable :: h_a(:,:)                !< (filtsz,ncomp_a) fit A sampling profiles
+    real,    allocatable :: h_b(:,:)                !< (filtsz,ncomp_b)
   contains
     procedure :: kill => crossfsc_kill_record
 end type crossfsc_record
@@ -51,14 +38,9 @@ end type crossfsc_record
 !! stream unformatted -- the write_embedding_cache idiom), so the artifact is restart-complete:
 !! on master restart the series reloads exactly.
 type crossfsc_file
-    integer :: paired     = 0   !< 1 = honest paired fits; 0 = scaffolding (internal e/o)
-    integer :: pairing_id = 0   !< balanced mod-4 pairing id (1..3); 0 = no pairing (scaffolding)
-    integer :: box_crop   = 0
-    integer :: filtsz     = 0   !< fdim(box_crop)-1
-    real    :: smpd_crop  = 0.
-    integer :: khi_full   = 0   !< full band cap (covariance_kfromto at the production lp)
-    integer :: khi_cmp    = 0   !< FIXED comparison band, frozen at first record
-    integer :: nrec       = 0
+    integer :: box_crop = 0
+    integer :: filtsz   = 0   !< fdim(box_crop)-1
+    integer :: nrec     = 0
     type(crossfsc_record), allocatable :: recs(:)
   contains
     procedure :: load        => crossfsc_load
@@ -94,8 +76,7 @@ contains
             THROW_HARD('flex_pca crossfsc artifact version mismatch; any layout change bumps the &
                 &version -- delete '//COV_XFSC_FNAME//' to restart the series')
         endif
-        read(funit, iostat=io_stat) self%paired, self%pairing_id, self%box_crop, self%filtsz, &
-            &self%smpd_crop, self%khi_full, self%khi_cmp, self%nrec
+        read(funit, iostat=io_stat) self%box_crop, self%filtsz, self%nrec
         call fileiochk('crossfsc_load; header', io_stat)
         if( self%filtsz < 1 .or. self%nrec < 0 ) THROW_HARD('corrupt crossfsc header: '//COV_XFSC_FNAME)
         allocate(self%recs(max(1,self%nrec)))
@@ -111,45 +92,28 @@ contains
         type(crossfsc_record), intent(inout) :: rec
         integer :: io_stat
         call rec%kill
-        read(funit, iostat=io_stat) rec%it_eff, rec%ncomp_a, rec%ncomp_b, rec%kmatch, &
-            &rec%khi_a, rec%khi_b, rec%khi_shared, rec%reg_mode, rec%march_on
+        read(funit, iostat=io_stat) rec%it_eff, rec%ncomp_a, rec%ncomp_b, rec%kmatch
         call fileiochk('crossfsc read_record; scalars', io_stat)
         if( rec%kmatch < 0 .or. rec%ncomp_a < 0 .or. rec%ncomp_b < 0 ) &
             &THROW_HARD('corrupt crossfsc record')
-        allocate(rec%match_a(rec%kmatch), rec%match_b(rec%kmatch), rec%match_sign(rec%kmatch))
-        allocate(rec%match_cos(rec%kmatch), rec%fsc_cross(filtsz,rec%kmatch))
-        allocate(rec%fsc_int_a(filtsz,rec%ncomp_a), rec%fsc_int_b(filtsz,rec%ncomp_b))
+        allocate(rec%match_a(rec%kmatch), rec%match_b(rec%kmatch), rec%fsc_cross(filtsz,rec%kmatch))
         allocate(rec%h_a(filtsz,rec%ncomp_a), rec%h_b(filtsz,rec%ncomp_b))
-        allocate(rec%cnt(filtsz), rec%eigvals_a(rec%ncomp_a), rec%eigvals_b(rec%ncomp_b))
         if( rec%kmatch > 0 )then
-            read(funit, iostat=io_stat) rec%match_a, rec%match_b, rec%match_sign, rec%match_cos, &
-                &rec%fsc_cross
+            read(funit, iostat=io_stat) rec%match_a, rec%match_b, rec%fsc_cross
             call fileiochk('crossfsc read_record; matched blocks', io_stat)
         endif
         if( rec%ncomp_a > 0 )then
-            read(funit, iostat=io_stat) rec%fsc_int_a, rec%h_a
-            call fileiochk('crossfsc read_record; fit A blocks', io_stat)
+            read(funit, iostat=io_stat) rec%h_a
+            call fileiochk('crossfsc read_record; fit A sampling', io_stat)
         endif
         if( rec%ncomp_b > 0 )then
-            read(funit, iostat=io_stat) rec%fsc_int_b, rec%h_b
-            call fileiochk('crossfsc read_record; fit B blocks', io_stat)
+            read(funit, iostat=io_stat) rec%h_b
+            call fileiochk('crossfsc read_record; fit B sampling', io_stat)
         endif
-        read(funit, iostat=io_stat) rec%cnt
-        call fileiochk('crossfsc read_record; cnt', io_stat)
-        if( rec%ncomp_a > 0 )then
-            read(funit, iostat=io_stat) rec%eigvals_a
-            call fileiochk('crossfsc read_record; eigvals_a', io_stat)
-        endif
-        if( rec%ncomp_b > 0 )then
-            read(funit, iostat=io_stat) rec%eigvals_b
-            call fileiochk('crossfsc read_record; eigvals_b', io_stat)
-        endif
-        read(funit, iostat=io_stat) rec%s_stop
-        call fileiochk('crossfsc read_record; s_stop', io_stat)
     end subroutine read_record
 
-    !> Full rewrite of the artifact (all records so far) + the human-greppable series mirror.
-    !! Write-to-tmp-and-rename, so a reader never sees a torn file (the part-file idiom).
+    !> Full rewrite of the artifact (all records so far). Write-to-tmp-and-rename, so a reader never
+    !! sees a torn file (the part-file idiom).
     subroutine crossfsc_write( self )
         class(crossfsc_file), intent(in) :: self
         type(string) :: fname, tmp_fname
@@ -161,8 +125,7 @@ contains
         call fileiochk('crossfsc_write; open', io_stat)
         write(funit, iostat=io_stat) COV_XFSC_MAGIC, COV_XFSC_VERSION
         call fileiochk('crossfsc_write; magic', io_stat)
-        write(funit, iostat=io_stat) self%paired, self%pairing_id, self%box_crop, self%filtsz, &
-            &self%smpd_crop, self%khi_full, self%khi_cmp, self%nrec
+        write(funit, iostat=io_stat) self%box_crop, self%filtsz, self%nrec
         call fileiochk('crossfsc_write; header', io_stat)
         do irec = 1, self%nrec
             call write_record(funit, self%recs(irec))
@@ -170,64 +133,27 @@ contains
         call fclose(funit)
         call simple_rename(tmp_fname, fname)
         call fname%kill; call tmp_fname%kill
-        call write_series_mirror(self)
     end subroutine crossfsc_write
 
     subroutine write_record( funit, rec )
         integer,               intent(in) :: funit
         type(crossfsc_record), intent(in) :: rec
         integer :: io_stat
-        write(funit, iostat=io_stat) rec%it_eff, rec%ncomp_a, rec%ncomp_b, rec%kmatch, &
-            &rec%khi_a, rec%khi_b, rec%khi_shared, rec%reg_mode, rec%march_on
+        write(funit, iostat=io_stat) rec%it_eff, rec%ncomp_a, rec%ncomp_b, rec%kmatch
         call fileiochk('crossfsc write_record; scalars', io_stat)
         if( rec%kmatch > 0 )then
-            write(funit, iostat=io_stat) rec%match_a, rec%match_b, rec%match_sign, rec%match_cos, &
-                &rec%fsc_cross
+            write(funit, iostat=io_stat) rec%match_a, rec%match_b, rec%fsc_cross
             call fileiochk('crossfsc write_record; matched blocks', io_stat)
         endif
         if( rec%ncomp_a > 0 )then
-            write(funit, iostat=io_stat) rec%fsc_int_a, rec%h_a
-            call fileiochk('crossfsc write_record; fit A blocks', io_stat)
+            write(funit, iostat=io_stat) rec%h_a
+            call fileiochk('crossfsc write_record; fit A sampling', io_stat)
         endif
         if( rec%ncomp_b > 0 )then
-            write(funit, iostat=io_stat) rec%fsc_int_b, rec%h_b
-            call fileiochk('crossfsc write_record; fit B blocks', io_stat)
+            write(funit, iostat=io_stat) rec%h_b
+            call fileiochk('crossfsc write_record; fit B sampling', io_stat)
         endif
-        write(funit, iostat=io_stat) rec%cnt
-        call fileiochk('crossfsc write_record; cnt', io_stat)
-        if( rec%ncomp_a > 0 )then
-            write(funit, iostat=io_stat) rec%eigvals_a
-            call fileiochk('crossfsc write_record; eigvals_a', io_stat)
-        endif
-        if( rec%ncomp_b > 0 )then
-            write(funit, iostat=io_stat) rec%eigvals_b
-            call fileiochk('crossfsc write_record; eigvals_b', io_stat)
-        endif
-        write(funit, iostat=io_stat) rec%s_stop
-        call fileiochk('crossfsc write_record; s_stop', io_stat)
     end subroutine write_record
-
-    !> Human-greppable mirror of the stopping series only; the .bin is authoritative.
-    subroutine write_series_mirror( self )
-        type(crossfsc_file), intent(in) :: self
-        integer :: u, irec, k
-        call del_file(COV_XFSC_SERIES_FNAME)
-        open(newunit=u, file=COV_XFSC_SERIES_FNAME, status='replace', action='write')
-        write(u,'(A,I0,A,I0,A,I0,A,I0)') '# flex_pca crossfsc series  paired=',self%paired, &
-            &'  pairing_id=',self%pairing_id,'  khi_cmp=',self%khi_cmp,'  khi_full=',self%khi_full
-        write(u,'(A)') '# it  S(t)  khi_a  khi_b  khi_shared  reg_mode  march_on  inband_mean_per_matched_component'
-        do irec = 1, self%nrec
-            write(u,'(I6,1X,ES14.6,5(1X,I5))', advance='no') self%recs(irec)%it_eff, &
-                &self%recs(irec)%s_stop, self%recs(irec)%khi_a, self%recs(irec)%khi_b, &
-                &self%recs(irec)%khi_shared, self%recs(irec)%reg_mode, self%recs(irec)%march_on
-            do k = 1, self%recs(irec)%kmatch
-                write(u,'(1X,F8.4)', advance='no') &
-                    &crossfsc_inband_mean(self%recs(irec)%fsc_cross(:,k), self%khi_cmp)
-            end do
-            write(u,*)
-        end do
-        close(u)
-    end subroutine write_series_mirror
 
     !> Append one record, keeping the series stamp-monotonic: any trailing records with
     !! it_eff >= the new stamp are dropped first (a re-run over an existing artifact replaces
@@ -274,19 +200,11 @@ contains
 
     subroutine crossfsc_kill_record( rec )
         class(crossfsc_record), intent(inout) :: rec
-        if( allocated(rec%match_a)    ) deallocate(rec%match_a, rec%match_b, rec%match_sign)
-        if( allocated(rec%match_cos)  ) deallocate(rec%match_cos)
-        if( allocated(rec%fsc_cross)  ) deallocate(rec%fsc_cross)
-        if( allocated(rec%fsc_int_a)  ) deallocate(rec%fsc_int_a)
-        if( allocated(rec%fsc_int_b)  ) deallocate(rec%fsc_int_b)
-        if( allocated(rec%h_a)        ) deallocate(rec%h_a)
-        if( allocated(rec%h_b)        ) deallocate(rec%h_b)
-        if( allocated(rec%cnt)        ) deallocate(rec%cnt)
-        if( allocated(rec%eigvals_a)  ) deallocate(rec%eigvals_a)
-        if( allocated(rec%eigvals_b)  ) deallocate(rec%eigvals_b)
+        if( allocated(rec%match_a)   ) deallocate(rec%match_a, rec%match_b)
+        if( allocated(rec%fsc_cross) ) deallocate(rec%fsc_cross)
+        if( allocated(rec%h_a)       ) deallocate(rec%h_a)
+        if( allocated(rec%h_b)       ) deallocate(rec%h_b)
         rec%it_eff = 0; rec%ncomp_a = 0; rec%ncomp_b = 0; rec%kmatch = 0
-        rec%khi_a = 0; rec%khi_b = 0; rec%khi_shared = 0
-        rec%reg_mode = 0; rec%march_on = 0; rec%s_stop = 0.d0
     end subroutine crossfsc_kill_record
 
     subroutine crossfsc_kill( self )
@@ -298,8 +216,7 @@ contains
             end do
             deallocate(self%recs)
         endif
-        self%paired = 0; self%pairing_id = 0; self%box_crop = 0; self%filtsz = 0
-        self%smpd_crop = 0.; self%khi_full = 0; self%khi_cmp = 0; self%nrec = 0
+        self%box_crop = 0; self%filtsz = 0; self%nrec = 0
     end subroutine crossfsc_kill
 
     ! ============ the S.11/S.13 conversion ============
@@ -346,14 +263,14 @@ contains
     !! the exact analog of the rsum/cnt pass in add_invtausq2rho, run over pair_index(q,q).
     !! `lb` are the frequency-space lower bounds of the exp lattice (lbound(cmat_exp)) and
     !! `nyq` its spherical Nyquist (get_lfny(1)): the shell convention and support rule of
-    !! solve_coupled_basis_exp itself. `cnt` is shared across components (stored once per record).
-    !! Harvest BEFORE any invtau2 is added: H is the fit's own ACCUMULATED sampling.
-    subroutine crossfsc_harvest_h( rho, npairs, ncomp, lb, nyq, filtsz, h, cnt )
+    !! solve_coupled_basis_exp itself. Harvest BEFORE any invtau2 is added: H is the fit's own
+    !! ACCUMULATED sampling.
+    subroutine crossfsc_harvest_h( rho, npairs, ncomp, lb, nyq, filtsz, h )
         real,    intent(in)  :: rho(:,:,:,:)     !< packed coupled density (npairs, nh, nk, nm)
         integer, intent(in)  :: npairs, ncomp, lb(3), nyq, filtsz
         real,    intent(out) :: h(filtsz,ncomp)
-        integer, intent(out) :: cnt(filtsz)
         real(dp) :: rsum(filtsz,ncomp)
+        integer  :: cnt(filtsz)
         integer  :: nh, nk, nm, ih, ik, im, hf, kf, mf, sh, q, shmax
         if( size(rho,1) /= npairs ) THROW_HARD('crossfsc_harvest_h: rho leading extent /= npairs')
         nh = size(rho,2); nk = size(rho,3); nm = size(rho,4)
@@ -391,8 +308,7 @@ contains
 
     ! ============ aggregations ============
 
-    !> Mean FSC over shells 2..khi (the fmean_dg aggregation shape applied from shell 2,
-    !! matching the stopping statistic's support).
+    !> Mean FSC over shells 2..khi (the fmean_dg aggregation shape applied from shell 2).
     real function crossfsc_inband_mean( fsc, khi ) result( fmean )
         real,    intent(in) :: fsc(:)
         integer, intent(in) :: khi
@@ -400,53 +316,5 @@ contains
         k_hi  = max(2, min(khi, size(fsc)))
         fmean = sum(fsc(2:k_hi)) / real(k_hi - 1)
     end function crossfsc_inband_mean
-
-    !> The stopping statistic S(t) at the FIXED comparison band khi_cmp:
-    !! mean over matched pairs of the in-band mean cross-fit FSC. Computed over shells up to
-    !! khi_cmp even while the working band is below it (those shells score ~0, honestly).
-    real(dp) function crossfsc_stop_stat( rec, khi_cmp ) result( s )
-        type(crossfsc_record), intent(in) :: rec
-        integer,               intent(in) :: khi_cmp
-        integer :: k
-        s = 0.d0
-        if( rec%kmatch < 1 ) return
-        do k = 1, rec%kmatch
-            s = s + real(crossfsc_inband_mean(rec%fsc_cross(:,k), khi_cmp), dp)
-        end do
-        s = s / real(rec%kmatch, dp)
-    end function crossfsc_stop_stat
-
-    !> Criterion crossing of one FSC curve -- the simple_math_ft::get_find_at_crit analog:
-    !! first shell h >= 3 with fsc(h) < crit returns h-1; a curve that never crosses returns size-1.
-    integer function crossfsc_find_at_crit( fsc, crit ) result( find )
-        real, intent(in) :: fsc(:)
-        real, intent(in) :: crit
-        integer :: n, h
-        n    = size(fsc)
-        find = n - 1
-        do h = 3, n - 1
-            if( fsc(h) >= crit )then
-                cycle
-            else
-                find = h - 1
-                exit
-            endif
-        end do
-        find = max(1, min(find, n - 1))
-    end function crossfsc_find_at_crit
-
-    !> The band driver over a set of curves: the DEEPEST-crossing component (the "best resolved
-    !! state drives" analog). Not the mean: one honest component earning band
-    !! is the point of marching.
-    integer function crossfsc_khi_deepest( curves, ncurves, crit ) result( khi )
-        real,    intent(in) :: curves(:,:)   !< (filtsz, ncurves)
-        integer, intent(in) :: ncurves
-        real,    intent(in) :: crit
-        integer :: k
-        khi = 1
-        do k = 1, ncurves
-            khi = max(khi, crossfsc_find_at_crit(curves(:,k), crit))
-        end do
-    end function crossfsc_khi_deepest
 
 end module simple_flex_pca_crossfsc

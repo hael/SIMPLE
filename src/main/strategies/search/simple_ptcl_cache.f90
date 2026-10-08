@@ -17,6 +17,8 @@ implicit none
 
 public :: ptcl_cache_in_use, ptcl_cache_assert_ready, ptcl_cache_ensure
 public :: ptcl_cache_read_batch, ptcl_cache_reset, ptcl_cache_cleanup
+! the cache machinery other disk caches share (the FLEX plane cache): location, run token, space budget
+public :: ptcl_cache_dir, ptcl_cache_run_token, ptcl_cache_space_ok
 private
 
 character(len=*), parameter :: CACHE_FBODY   = 'ptcl_cache_'
@@ -44,7 +46,7 @@ contains
 
     !>  Where the cache lives: cache_dir, else $SIMPLE_PTCL_CACHE_DIR, else the execution directory (empty result).
     !!  It is large (nsel * box_crop^2 * 4 bytes), so a project on a slow disk wants it somewhere faster.
-    function cache_dir( params ) result( dirname )
+    function ptcl_cache_dir( params ) result( dirname )
         class(parameters), intent(in) :: params
         type(string)          :: dirname
         character(len=STDLEN) :: envdir
@@ -59,19 +61,36 @@ contains
         else
             dirname = string('')
         endif
-    end function cache_dir
+    end function ptcl_cache_dir
 
     !>  Per-run token in the cache basename: a hash of the execution directory, so concurrent runs sharing cache_dir
     !!  stay apart. Every rank recomputes it (workers cd into the master's directory, simple_qsys_ctrl), and unlike a
     !!  PID it survives a restart: a rerun in the same directory adopts or rebuilds what a killed run left.
-    function cache_run_token( ) result( tok )
+    function ptcl_cache_run_token( ) result( tok )
         type(string) :: tok
         integer(kind=8) :: h1, h2
         h1 = 1_8
         h2 = 1_8
         if( allocated(CWD_GLOB) ) call fold_str(h1, h2, CWD_GLOB)
         tok = string(int2str(int(h1))//'-'//int2str(int(h2)))
-    end function cache_run_token
+    end function ptcl_cache_run_token
+
+    !>  Space budget: a cache may claim at most 1/FREE_SPACE_DENOM of the free space at its destination
+    !!  dirname. Over budget the caller runs without its cache; an unknown free space (fs_avail_bytes < 0)
+    !!  is no verdict, not zero. label prefixes the log lines.
+    logical function ptcl_cache_space_ok( dirname, want_bytes, label ) result( l_ok )
+        class(string),    intent(in) :: dirname
+        integer(kind=8),  intent(in) :: want_bytes
+        character(len=*), intent(in) :: label
+        integer(kind=8) :: avail_bytes
+        avail_bytes = fs_avail_bytes(dirname)
+        l_ok = .not. (avail_bytes >= 0_8 .and. want_bytes > avail_bytes / FREE_SPACE_DENOM)
+        if( l_ok ) return
+        write(logfhandle,'(A,F12.2,A,F12.2,A)') '>>> '//label//': needs ', &
+            &real(want_bytes)/real(1024**3), ' GB, more than 25% of the ', &
+            &real(avail_bytes)/real(1024**3), ' GB free at its destination'
+        write(logfhandle,'(A)') '>>> '//label//': running without cache; point cache_dir at more storage to enable it'
+    end function ptcl_cache_space_ok
 
     !>  Cache file name from projname (for listings), box_crop (no stale crop) and the run token; a same-name leftover
     !!  is validated against the key by ptcl_cache_ensure, then adopted or rebuilt. tmp=.true. gives the name used while
@@ -87,7 +106,7 @@ contains
             if( tmp ) deallocate(tag)
             if( tmp ) allocate(tag, source=TMP_TAG)
         endif
-        token = cache_run_token()
+        token = ptcl_cache_run_token()
         if( params%projname%is_blank() )then
             basename_here = string(CACHE_FBODY//int2str(params%box_crop)//&
                 &'_'//token%to_char()//tag//ext)
@@ -96,7 +115,7 @@ contains
                 &'_'//int2str(params%box_crop)//'_'//token%to_char()//tag//ext)
         endif
         call token%kill
-        dirname = cache_dir(params)
+        dirname = ptcl_cache_dir(params)
         if( dirname%is_blank() )then
             fname = basename_here
         else
@@ -460,7 +479,7 @@ contains
         type(image)     :: mskimg
         type(stack_io)  :: stkio_w
         type(string)    :: stkname, dirname, keyfile, idxname, tmpstk, tmpidx
-        integer(kind=8) :: want_bytes, avail_bytes
+        integer(kind=8) :: want_bytes
         logical, allocatable :: lmsk(:,:,:)
         integer, allocatable :: pinds(:)
         integer :: batchsz, nbatches, ibatch, batch_start, batch_end, nbatch, i, iptcl, nptcls, nsel
@@ -507,7 +526,7 @@ contains
         endif
         call stkname%kill
         ! the cache directory may well be on another device, so it need not exist yet
-        dirname = cache_dir(params)
+        dirname = ptcl_cache_dir(params)
         if( .not. dirname%is_blank() )then
             if( .not. dir_exists(dirname) ) call simple_mkdir(dirname)
         endif
@@ -551,15 +570,10 @@ contains
         ! uniformly. An unknown free space (fs_avail_bytes < 0) is no verdict, not zero.
         want_bytes = int(nsel,8) * int(params%box_crop,8)**2 * 4_8 &
             &+ 1024_8 + 4_8 * int(nptcls + 1, 8)
-        dirname = cache_dir(params)
+        dirname = ptcl_cache_dir(params)
         if( dirname%is_blank() ) dirname = string('.')
-        avail_bytes = fs_avail_bytes(dirname)
-        call dirname%kill
-        if( avail_bytes >= 0_8 .and. want_bytes > avail_bytes / FREE_SPACE_DENOM )then
-            write(logfhandle,'(A,F12.2,A,F12.2,A)') '>>> PARTICLE CACHE: needs ', &
-                &real(want_bytes)/real(1024**3), ' GB, more than 25% of the ', &
-                &real(avail_bytes)/real(1024**3), ' GB free at its destination'
-            write(logfhandle,'(A)') '>>> PARTICLE CACHE: running without cache; point cache_dir at more storage to enable it'
+        if( .not. ptcl_cache_space_ok(dirname, want_bytes, 'PARTICLE CACHE') )then
+            call dirname%kill
             call disable_cache(params, cline)
             ! releases any previous stage's cache and deallocates cache_ind via reset
             call ptcl_cache_cleanup
@@ -570,6 +584,7 @@ contains
             call tmpidx%kill
             return
         endif
+        call dirname%kill
         ! own the files from here on: an exception at any point during the build must
         ! sweep the temporaries as well as the published names
         call ptcl_cache_own(params)

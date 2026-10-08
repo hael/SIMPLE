@@ -10,7 +10,8 @@ use simple_parameters,           only: parameters
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
     &refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname, refine3D_reprojs_fname
-use simple_sigma2_state,         only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
+use simple_ptcl_layout,          only: ptcl_layout_digest
+use simple_sigma2_state,         only: sigma2_state_validate_identity
 use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_halfmap_diagnostics,  only: copy_support_provenance, rename_support_provenance, &

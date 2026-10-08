@@ -1,18 +1,17 @@
-!@descr: flex_pca shared helpers: chi-squared median, unimodality test, kernel weights, delivery naming
+!@descr: flex_pca shared helpers: chi-squared median, unimodality test, kernel weights, covariance budgets
 module simple_flex_pca_util
-use simple_core_module_api, only: dp, dtiny, fname2ext, get_fbody, hpsort, logfhandle, mrc_ext, oris, &
-    &simple_exception, string, tiny
+use simple_core_module_api, only: dp, dtiny, hpsort, logfhandle, oris, simple_exception, tiny
 use simple_defs_flex, only: FLEX_MAX_BW_GROW, FLEX_ACCUM_BYTE_BUDGET
 use simple_image,     only: image
 use simple_oris,      only: oris
+use simple_stat,      only: kish_ess
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: chi2_median, two_gauss_unimodal
 public :: kernel_weights_at_bandwidth, project_onto_target_polyline, dilation_template
-public :: flex_pca_write_state
-public :: corr_dp, cov_signal_rank, cov_stage_subsample, cov_accum_bytes, cov_dim_budget
+public :: cov_signal_rank, cov_stage_subsample, cov_accum_bytes, cov_dim_budget
 
 real(dp), parameter :: COV_SIGNAL_FACTOR = 4.0d0
 
@@ -62,19 +61,16 @@ contains
         real,     intent(out) :: w(nptcls)
         real(dp), intent(out) :: h_out
         real,     intent(out) :: neff_out
-        real(dp) :: h, u2, sumw, sumw2
+        real(dp) :: h, u2
         integer  :: i, grow, nsupp
         h = h_in
         nsupp = 0
         do grow = 0, FLEX_MAX_BW_GROW
-            sumw = 0.d0; sumw2 = 0.d0; nsupp = 0
-            !$omp parallel do default(shared) private(i,u2) schedule(static) &
-            !$omp& reduction(+:sumw,sumw2,nsupp)
+            nsupp = 0
+            !$omp parallel do default(shared) private(i,u2) schedule(static) reduction(+:nsupp)
             do i = 1, nptcls
                 u2 = dist(i) / (h*h)
                 w(i) = real(max(0.d0, 1.d0 - u2))
-                sumw  = sumw  + real(w(i),dp)
-                sumw2 = sumw2 + real(w(i),dp)**2
                 if( w(i) > 0. ) nsupp = nsupp + 1
             end do
             !$omp end parallel do
@@ -83,10 +79,8 @@ contains
             h = 1.3d0*h
         end do
         if( maxval(w) > TINY ) w = w / maxval(w)
-        sumw  = sum(real(w,dp))
-        sumw2 = sum(real(w,dp)**2)
         h_out    = h
-        neff_out = real(sumw*sumw/max(sumw2,DTINY))
+        neff_out = real(kish_ess(real(w,dp)))
     end subroutine kernel_weights_at_bandwidth
 
     !> Arc-length coordinate of every particle along the polyline through the ordered targets,
@@ -158,53 +152,6 @@ contains
         r(1:box,1:box,1:box) = d
         deallocate(d)
     end subroutine dilation_template
-
-    !> delivered state map name from outvol: state 1 keeps the name, others get _NNN
-    subroutine flex_pca_write_state( outvol, img, state, vol_fname )
-        type(string),  intent(in)    :: outvol
-        class(image),  intent(inout) :: img
-        integer,       intent(in)    :: state
-        class(string), intent(inout) :: vol_fname
-        type(string) :: prefix, ext
-        character(len=:), allocatable :: stem
-        character(len=3) :: tag
-        if( state==1 )then
-            vol_fname = outvol
-        else
-            ext=fname2ext(outvol)
-            prefix=get_fbody(outvol,ext)
-            stem=prefix%to_char()
-            if( len_trim(stem)>4 )then
-                if( stem(len_trim(stem)-3:len_trim(stem))=='_001' ) stem=stem(:len_trim(stem)-4)
-            endif
-            prefix=string(stem)
-            write(tag,'(I3.3)') state
-            vol_fname = prefix//'_'//tag//MRC_EXT
-        endif
-        call img%write(vol_fname,del_if_exists=.true.)
-        write(logfhandle,'(A,I0,A,A)') '>>> FLEX DIFFMAP NYSTROM PRE-IMAGE ',state,': ',vol_fname%to_char()
-        call prefix%kill
-        call ext%kill
-    end subroutine flex_pca_write_state
-
-    !> Pearson correlation of two double vectors.
-    real(dp) function corr_dp( a, b, n ) result( r )
-        integer,  intent(in) :: n
-        real(dp), intent(in) :: a(n), b(n)
-        real(dp) :: ma, mb, sa, sb, sab
-        integer  :: i
-        r  = 0.d0
-        if( n < 3 ) return
-        ma = sum(a)/real(n,dp); mb = sum(b)/real(n,dp)
-        sa = 0.d0; sb = 0.d0; sab = 0.d0
-        do i = 1, n
-            sa  = sa  + (a(i)-ma)**2
-            sb  = sb  + (b(i)-mb)**2
-            sab = sab + (a(i)-ma)*(b(i)-mb)
-        end do
-        if( sa <= DTINY .or. sb <= DTINY ) return
-        r = sab / sqrt(sa*sb)
-    end function corr_dp
 
     ! Rank at which the Gram spectrum enters its noise bulk. Noise level = median of the lower half,
     ! so the leading signal directions cannot inflate it. Scale-free.

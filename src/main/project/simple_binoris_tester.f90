@@ -44,6 +44,7 @@ contains
         call test_write_segment_inside()
         call test_write_segment_inside_strings()
         call test_project_write_segment_inside()
+        call test_project_clear_segment_inside()
         call test_binoris_io_text_dispatch()
         call test_binoris_io_project_dispatch()
         call cleanup()
@@ -443,6 +444,36 @@ contains
         call fallback%kill
         call stk_new%kill
     end subroutine test_project_write_segment_inside
+
+    !> emptying a segment in place: the stk segment between mic and the particle segments goes, every other
+    !! segment reads back unchanged; emptying a segment that is already empty changes nothing
+    subroutine test_project_clear_segment_inside()
+        type(sp_project) :: proj, before, after
+        integer :: i
+        write(*,'(A)') 'test_project_clear_segment_inside'
+        call del_file(string(PROJ_FILE))
+        call make_project(proj, string(PROJ_FILE))
+        call proj%write(string(PROJ_FILE))
+        call before%read(string(PROJ_FILE))
+        call proj%clear_segment_inside('stk', string(PROJ_FILE))
+        call after%read(string(PROJ_FILE))
+        call assert_int(0, after%os_stk%get_noris(), 'cleared segment: stk is empty on disk')
+        call assert_records_equal(before%os_mic,   after%os_mic,   1, NMICS, 'cleared segment: mic segment untouched')
+        call assert_records_equal(before%projinfo, after%projinfo, 1, 1,     'cleared segment: projinfo untouched')
+        call assert_int(NPTCLS, after%os_ptcl3D%get_noris(), 'cleared segment: ptcl3D keeps its records')
+        do i = 1,NPTCLS
+            call assert_ptcl_equal(before%os_ptcl2D, after%os_ptcl2D, i, 'cleared segment: ptcl2D untouched')
+            call assert_ptcl_equal(before%os_ptcl3D, after%os_ptcl3D, i, 'cleared segment: ptcl3D untouched')
+        enddo
+        call after%kill
+        call proj%clear_segment_inside('stk', string(PROJ_FILE))
+        call after%read(string(PROJ_FILE))
+        call assert_int(0, after%os_stk%get_noris(), 'clearing an empty segment keeps it empty')
+        call assert_records_equal(before%os_mic, after%os_mic, 1, NMICS, 'clearing an empty segment changes nothing else')
+        call proj%kill
+        call before%kill
+        call after%kill
+    end subroutine test_project_clear_segment_inside
 
     !---------------- binoris_io: format dispatch ----------------
 

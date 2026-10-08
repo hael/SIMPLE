@@ -1,11 +1,11 @@
 !@descr: flex_pca probe-fit iteration setup and M-step update procedures
 submodule (simple_flex_probe_fit) simple_flex_probe_fit_update
-use simple_core_module_api, only: dtiny, fdim, int2str_pad, logfhandle, maximgbatchsz, mrc_ext, tiny
+use simple_core_module_api, only: dtiny, fdim, get_resarr, get_resolution_at_fsc, int2str_pad, logfhandle, &
+    &maximgbatchsz, mrc_ext, tiny
 use simple_defs_flex,          only: FLEX_FSC_SIGNAL_THRESHOLD
 use simple_image,              only: image
 use simple_gridding,           only: prep3D_inv_kbenvelope4mul
 use simple_flex_pca_crossfsc,  only: crossfsc_harvest_h
-use simple_flex_pca_posterior, only: mcfa_init
 use simple_flex_pca_mstep,     only: init_basis_reconstructor
 use simple_flex_pca_basis,     only: covariance_kfromto, orthonormalize_representatives, &
     &align_basis_to_reference, deflate_against_basis, cross_half_subspace_angles
@@ -36,6 +36,7 @@ contains
         real(dp) :: mm_dfl, mv_dfl, rem_dfl, tot_dfl, mnorm_dfl
         real(dp) :: fmean_dg(512), fbest_dg
         real     :: fc, res_lo, res_hi, res_dg
+        real,     allocatable :: fcurve_dg(:), resarr_dg(:)
         integer  :: q, ithr, sh, filtsz, d_new
         integer  :: ndfl, ndfl_sh, idfl, jdfl, nkeep_dfl, kfr_dfl(2)
         integer  :: khi_dg, nsig_dg, ntop_dg, sel_dg(4), tq_dg, bq_dg
@@ -72,13 +73,11 @@ contains
                 xf_fsz = max(1, fdim(params%box_crop) - 1)
                 if( allocated(fit%diag%xf_h_e) ) deallocate(fit%diag%xf_h_e)
                 if( allocated(fit%diag%xf_h_o) ) deallocate(fit%diag%xf_h_o)
-                if( allocated(fit%diag%xf_cnt) ) deallocate(fit%diag%xf_cnt)
-                allocate(fit%diag%xf_h_e(xf_fsz,fit%model%ncomp), fit%diag%xf_h_o(xf_fsz,fit%model%ncomp), &
-                    &fit%diag%xf_cnt(xf_fsz))
+                allocate(fit%diag%xf_h_e(xf_fsz,fit%model%ncomp), fit%diag%xf_h_o(xf_fsz,fit%model%ncomp))
                 call crossfsc_harvest_h(fit%mstep%rho_e, fit%mstep%npairs, fit%model%ncomp, xf_lb, xf_nyq, &
-                    &xf_fsz, fit%diag%xf_h_e, fit%diag%xf_cnt)
+                    &xf_fsz, fit%diag%xf_h_e)
                 call crossfsc_harvest_h(fit%mstep%rho_o, fit%mstep%npairs, fit%model%ncomp, xf_lb, xf_nyq, &
-                    &xf_fsz, fit%diag%xf_h_o, fit%diag%xf_cnt)
+                    &xf_fsz, fit%diag%xf_h_o)
             end block
         endif
         ! Cross-FSC SSNR ridge (flex analog of add_invtausq2rho): invtau2 from record t-1, built by
@@ -144,7 +143,6 @@ contains
         khi_dg = filtsz
         if( params%lp > 2.0*params%smpd_crop + TINY ) &
             &khi_dg = max(2, min(filtsz, int(fit%spec%dstep_ann/params%lp)))
-        fit%diag%khi_fit = khi_dg   ! per-fit band record
         nsig_dg = 0
         do q = 1, fit%model%ncomp
             fmean_dg(q) = sum(fscq_dg(1:khi_dg,q))/real(khi_dg)
@@ -164,30 +162,19 @@ contains
             end do
             sel_dg(tq_dg) = bq_dg
         end do
-        res_dg  = fit%spec%dstep_ann/real(khi_dg)
-        do sh = 2, filtsz
-            fc = 0.
-            do tq_dg = 1, ntop_dg
-                fc = fc + fscq_dg(sh,sel_dg(tq_dg))
-            end do
-            fc = fc/real(ntop_dg)
-            if( fc < real(FLEX_FSC_SIGNAL_THRESHOLD) )then
-                res_dg = fit%spec%dstep_ann/real(sh)
-                exit
-            endif
+        ! the resolution where the mean curve of the strongest components last passes 0.143
+        allocate(fcurve_dg(filtsz), source=0.)
+        do tq_dg = 1, ntop_dg
+            fcurve_dg = fcurve_dg + fscq_dg(:,sel_dg(tq_dg))
         end do
+        fcurve_dg = fcurve_dg/real(ntop_dg)
+        resarr_dg = get_resarr(params%box_crop, params%smpd_crop)
+        call get_resolution_at_fsc(fcurve_dg, resarr_dg, real(FLEX_FSC_SIGNAL_THRESHOLD), res_dg)
+        deallocate(fcurve_dg, resarr_dg)
         write(logfhandle,'(A,I0,A,F7.2,A,I0,A,I0,A)') '>>> FLEX_PCA BAND/RANK it=',it_eff, &
             &'  het-resolution(FSC 0.143)=',res_dg,' A   components with in-band FSC>0.143: ', &
             &nsig_dg,' of ',fit%model%ncomp,'   (auto-lp / auto-neigs candidates)'
         call flush(logfhandle)
-        ! cross-FSC writer payloads: the internal e/o FSC curves and this iteration's Gamma,
-        ! stashed for the driver's writer
-        if( fit%diag%l_xf_harvest )then
-            if( allocated(fit%diag%xf_fscq) ) deallocate(fit%diag%xf_fscq)
-            allocate(fit%diag%xf_fscq(filtsz,fit%model%ncomp), source=fscq_dg)
-            if( allocated(fit%diag%xf_gam) ) deallocate(fit%diag%xf_gam)
-            allocate(fit%diag%xf_gam(fit%model%ncomp), source=fit%iter%gam_acc(1:fit%model%ncomp))
-        endif
         deallocate(fscq_dg)
         deallocate(filt, corrs)
         ! Even/odd update agreement: both half-bases inherit the current basis, so comparing them
@@ -385,6 +372,7 @@ contains
         fit%model%ncomp = d_new
         do ithr = 1, nthr
             call cleanup_plane(fit%iter%mean_fpl(ithr))
+            call fit%iter%mean_es(ithr)%kill
             do q = 1, size(fit%iter%basis_fpls,1); call cleanup_plane(fit%iter%basis_fpls(q,ithr)); end do
         end do
         call fit%mstep%kill_iteration
@@ -392,7 +380,7 @@ contains
         do q = 1, size(realvols); call realvols(q)%kill; end do
         deallocate(utilde, utilde_real, realvols)
         deallocate(fit%iter%prior)
-        deallocate(fit%iter%Gth, fit%iter%Ath, fit%iter%bth, fit%iter%cth, fit%iter%zth, fit%iter%basis_fpls, fit%iter%mean_fpl, fit%iter%zbatch, fit%iter%dens, fit%iter%valid, fit%iter%valid_e, fit%iter%valid_o)
+        deallocate(fit%iter%Gth, fit%iter%Ath, fit%iter%bth, fit%iter%cth, fit%iter%zth, fit%iter%basis_fpls, fit%iter%mean_fpl, fit%iter%mean_es, fit%iter%zbatch, fit%iter%dens, fit%iter%valid, fit%iter%valid_e, fit%iter%valid_o)
         deallocate(fit%iter%Ainvth, fit%iter%Acpth, fit%iter%gam_thr, fit%iter%gam_acc, fit%iter%nval_thr, fit%iter%hth, fit%iter%nll_thr)
         ! The mixture state (mix_*) and its work arrays are not freed here: they must survive
         ! from one iteration's M-step to the next E-step, and are freed only by kill_probe_fit
@@ -440,7 +428,6 @@ contains
         fit%spec%l_deflate_mean = .true.
         ! Per-particle contrast is the clamped mean-only estimate and stays fixed in the posterior.
         fit%spec%kfr_ann   = covariance_kfromto(params)
-        fit%spec%khi_full  = max(1, fit%spec%kfr_ann(2))
         fit%spec%dstep_ann = real(max(1, params%box_crop - 1)) * params%smpd_crop
         fit%spec%conv_thresh = COV_PROBE_CONV
     end subroutine fit_estep_begin_stage
@@ -495,7 +482,7 @@ contains
         call fit%mstep%begin_iteration(params, build, fit%model%ncomp)
         allocate(fit%iter%Gth(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%Ath(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%bth(fit%model%ncomp,nthr), fit%iter%cth(fit%model%ncomp,nthr), fit%iter%zth(fit%model%ncomp,nthr))
         allocate(fit%iter%Ainvth(fit%model%ncomp,fit%model%ncomp,nthr), fit%iter%Acpth(fit%model%ncomp,fit%model%ncomp,nthr))
-        allocate(fit%iter%basis_fpls(fit%model%ncomp,nthr), fit%iter%mean_fpl(nthr))
+        allocate(fit%iter%basis_fpls(fit%model%ncomp,nthr), fit%iter%mean_fpl(nthr), fit%iter%mean_es(nthr))
         allocate(fit%iter%zbatch(fit%model%ncomp,MAXIMGBATCHSZ), fit%iter%dens(fit%model%ncomp,fit%model%ncomp,MAXIMGBATCHSZ))
         allocate(fit%iter%valid(MAXIMGBATCHSZ), fit%iter%valid_e(MAXIMGBATCHSZ), fit%iter%valid_o(MAXIMGBATCHSZ))
         allocate(fit%iter%gam_thr(fit%model%ncomp,nthr), source=0.d0)

@@ -5,6 +5,7 @@ use simple_defs_flex,        only: FLEX_MAX_BW_GROW
 use simple_flex_pca_records, only: flex_latent, flex_state_set
 use simple_srch_sort_loc,    only: hpsort
 use simple_linalg,           only: matinv
+use simple_stat,             only: kish_ess
 use simple_flex_pca_util,    only: chi2_median, &
     &kernel_weights_at_bandwidth, project_onto_target_polyline
 use simple_flex_pca_gmm,     only: gmm_state_weights, gmm_auto_state_weights
@@ -35,7 +36,7 @@ contains
         real(dp), allocatable :: pk(:,:,:), cfull(:,:), cblk(:,:), edges(:)
         real(dp), allocatable :: ppath(:), tpath(:)   ! per-particle / per-target coordinate along the path
         integer,  allocatable :: occ(:)
-        real(dp) :: h, d2, u2, sumw, sumw2, best, zspread, bmin, chi2med
+        real(dp) :: h, d2, u2, best, zspread, bmin, chi2med
         integer  :: ispace
         integer  :: i, q, r, state, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
         integer  :: nk, errflg
@@ -232,16 +233,11 @@ contains
             ! Enclosed population grows like h^nk (a 1.3x step is ~190x at nk=20); the floor should make this a no-op
             nsupp = 0
             do grow = 0, FLEX_MAX_BW_GROW
-                sumw  = 0.d0
-                sumw2 = 0.d0
                 nsupp = 0
-                !$omp parallel do default(shared) private(i,u2) schedule(static) &
-                !$omp& reduction(+:sumw,sumw2,nsupp)
+                !$omp parallel do default(shared) private(i,u2) schedule(static) reduction(+:nsupp)
                 do i = 1, nptcls
                     u2 = dist(i) / (h*h)
                     states%weights(i,state) = real(max(0.d0, 1.d0 - u2))   ! Epanechnikov, compact support
-                    sumw  = sumw  + real(states%weights(i,state),dp)
-                    sumw2 = sumw2 + real(states%weights(i,state),dp)**2
                     if( states%weights(i,state) > 0. ) nsupp = nsupp + 1
                 end do
                 !$omp end parallel do
@@ -254,15 +250,13 @@ contains
                     &' raw kernel support ',nsupp,' below min_neff after safety growth; requested ',min_neff
             endif
             if( maxval(states%weights(:,state)) > TINY ) states%weights(:,state)=states%weights(:,state)/maxval(states%weights(:,state))
-            sumw  = sum(real(states%weights(:,state),dp))
-            sumw2 = sum(real(states%weights(:,state),dp)**2)
             ! targets is reported over the FULL component set for the manifest
             states%targets(1:nk,state) = real(tcen(:,state))
             do q = nk+1, ncomp
                 states%targets(q,state) = real(sum(latent%z(:,q)) / real(nptcls,dp))
             end do
             states%bandwidths(state) = real(h)
-            states%neff(state)       = real(sumw*sumw/max(sumw2,DTINY))
+            states%neff(state)       = real(kish_ess(real(states%weights(:,state),dp)))
         end do
         ! Tied-covariance mixture unless the targets are equal-mass (below). The kernel loop above
         ! still runs: dist_out feeds cv_select_bandwidths and its quantiles diagnose the chi2 scale.

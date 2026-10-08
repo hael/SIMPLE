@@ -17,6 +17,8 @@ type(ui_program), target :: single_atoms_stats
 type(ui_program), target :: single_workflow
 type(ui_program), target :: stream_preproc
 type(ui_program), target :: flex_pca_blobs
+type(ui_program), target :: write_state_weights_labels
+type(ui_program), target :: write_state_weights_mixed
 
 contains
 
@@ -35,6 +37,7 @@ contains
         call new_single_workflow(tsttab)
         call new_stream_preproc(tsttab)
         call new_flex_pca_blobs(tsttab)
+        call new_write_state_weights(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -53,6 +56,8 @@ contains
         write(logfhandle,'(A)') single_workflow%name%to_char()
         write(logfhandle,'(A)') stream_preproc%name%to_char()
         write(logfhandle,'(A)') flex_pca_blobs%name%to_char()
+        write(logfhandle,'(A)') write_state_weights_labels%name%to_char()
+        write(logfhandle,'(A)') write_state_weights_mixed%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -159,11 +164,13 @@ contains
         ! image input/output
         !call simulated_workflow%add_input(UI_IO, )
         ! parameter input/output
-        call simulated_workflow%add_input(UI_PARM, 'suite', 'str', 'Run one molecular suite', &
-            &'Choose 6vxx or 1jxy; use list to print the accepted names', '', .true., '')
+        call simulated_workflow%add_input(UI_PARM, 'suite', 'multi', 'Molecular suite', &
+            &'The simulated system: 6vxx (SARS-CoV-2 spike, c3) or 1jxy (beta-galactosidase, d2); '//&
+            &'list prints the accepted names(6vxx|1jxy|list)', '', .true., '', &
+            &choices=ui_choices([character(len=4) :: '6vxx', '1jxy', 'list']))
         call simulated_workflow%add_input(UI_PARM, 'picker', 'multi', 'Picker under test', &
             &'Particle picker used by the simulated workflow(segdiam|new){segdiam}','', .false., 'segdiam', &
-        &choices=ui_choices([character(len=7) :: 'segdiam', 'new']))
+        &choices=ui_choices([character(len=7) :: 'segdiam', 'new']), preserve_default=.true.)
         ! <no additional inputs>
         !call simulated_workflow%add_input(UI_PARM, )
         ! search controls
@@ -292,9 +299,10 @@ contains
         &'runs focused Pt and CdSeW nanoparticle suites and validates each final map against its known truth',&
         &'simple_test_exec',&
         &.false., display_name='SINGLE Workflow Validation')
-        call single_workflow%add_input(UI_PARM, 'suite', 'str', 'Run one nanoparticle suite', &
-        &'Choose fcc (platinum) or wurtzite (CdSe); use list to print the accepted names', &
-        &'', .true., '')
+        call single_workflow%add_input(UI_PARM, 'suite', 'multi', 'Nanoparticle suite', &
+        &'The simulated nanoparticle: fcc (platinum) or wurtzite (CdSe); list prints the accepted '//&
+        &'names(fcc|wurtzite|list)', '', .true., '', &
+        &choices=ui_choices([character(len=8) :: 'fcc', 'wurtzite', 'list']))
         call single_workflow%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
         &'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms{0.358}', .false., 0.358)
         call add_ui_program('single_workflow', single_workflow, tsttab, UI_CATEGORY)
@@ -314,11 +322,35 @@ contains
         &'flex_pca_blobs',&
         &'FLEX PCA shared/distributed workflow validation',&
         &'runs one deterministic two-state phantom through shared memory and two real local workers, '//&
-        &'then checks each result against truth and records cross-mode agreement',&
+        &'then checks each result against truth and records cross-mode agreement; then refines each '//&
+        &'truth-matched state with refine3D_auto state=X, with the frozen FLEX weights and with the hard labels',&
         &'simple_test_exec',&
         &.false., display_name='FLEX PCA Workflow Validation')
         call flex_pca_blobs%add_input(UI_COMP, nthr)
         call add_ui_program('flex_pca_blobs', flex_pca_blobs, tsttab, UI_CATEGORY)
     end subroutine new_flex_pca_blobs
+
+    !> manual test tools (not registered with CTest): state weight sets for weighted reconstruct3D runs
+    subroutine new_write_state_weights( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call write_state_weights_labels%new(&
+        &'write_state_weights_labels',&
+        &'state weight set equal to the hard labels',&
+        &'publishes a 0/1 state weight set equal to the project''s hard state labels, for weighted '//&
+        &'reconstruct3D comparisons against hard runs',&
+        &'simple_test_exec',&
+        &.true., display_name='Write Hard-Label State Weights')
+        call write_state_weights_labels%add_input(UI_SRCH, nstates)
+        call add_ui_program('write_state_weights_labels', write_state_weights_labels, tsttab, UI_CATEGORY)
+        call write_state_weights_mixed%new(&
+        &'write_state_weights_mixed',&
+        &'fractional state weight set from the hard labels',&
+        &'publishes a fractional state weight set: 0.7 on each particle''s labelled state and 0.3 spread over '//&
+        &'the other states, for fractional reconstruct3D tests',&
+        &'simple_test_exec',&
+        &.true., display_name='Write Mixed State Weights')
+        call write_state_weights_mixed%add_input(UI_SRCH, nstates)
+        call add_ui_program('write_state_weights_mixed', write_state_weights_mixed, tsttab, UI_CATEGORY)
+    end subroutine new_write_state_weights
 
 end module simple_test_ui_highlevel

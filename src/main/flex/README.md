@@ -30,17 +30,17 @@ the production-module layers, and runs before the fast test gate.
   `delivery_3d`, `state_service`).
 - `fit/`: the probe fit (`simple_flex_probe_fit` and its four submodule files),
   its state (`fit_types`), backends and kernels (`mstep`, `posterior`,
-  `pcg`, `polar`, `reconstructor_latent_ops`, `plane_cache`, `planes`,
-  `crossfsc`), and the services around it (`basis`, `embed`, `pairmerge`,
-  `fit_driver`).
-- `states/`: state inference and reconstruction (`weights`, `gmm`, `targets`,
-  `deconv`, `merge`, `rec3D`, `states_backend`, `states_gridding`, `states_pcg`,
-  `state_delivery`, `state_parts`, `weights_state`).
+  `pcg` with its self-test submodule `pcg_tester`, `polar`,
+  `reconstructor_latent_ops`, `plane_cache`, `planes`, `crossfsc`), and the
+  services around it (`basis`, `embed`, `pairmerge`, `fit_driver`).
+- `states/`: state inference (`weights`, `gmm`, `targets`, `deconv`, `merge`).
+  The maps are SIMPLE's: FLEX has no reconstruction backend (module 5).
 - the folder root: shared helpers (`util`), figures (`plot`, `umap`) and the
   fast-gate testers.
 
-There are 46 scoped source files, including the application tester. The 42
-production modules retain their established names. `scripts/check_flex_dag.py`
+There are 41 source files: 32 production modules, the probe fit's four
+submodule files, the PCG self-test submodule, three testers and
+`cls_expansion` (outside the layering). `scripts/check_flex_dag.py`
 rejects multiple module units in one source as well as layering violations and
 cycles. CMake discovers `src/main` through a recursive glob without
 `CONFIGURE_DEPENDS`; reconfigure once before building after adding or restoring
@@ -49,11 +49,11 @@ source files.
 ## Ownership
 
 The strategy owns roles, partitions and rounds; each producing module owns its
-part I/O; the commander owns the defaults. The current architecture and its
-refactoring ledger are recorded in
-`doc/refactoring_notes/flex_refactoring_plan_2026_10_06.md`; the prior audit is
-retained under `doc/refactoring_notes/completed/` (there is no
-`doc/policies/flex_pca_policy.md`).
+part I/O; the commander owns the defaults. The refactorings that shaped it are
+recorded under `doc/refactoring_notes/`: `completed/flex_refactoring_plan_2026_10_06.md`,
+the earlier audit beside it, and `completed/flex_on_simple_machinery.md` with its report
+`completed/flex_on_simple_machinery_report.md` (FLEX on SIMPLE's reconstruction, weight set and
+clustering). There is no `doc/policies/flex_pca_policy.md`.
 
 - `../strategies/parallelization/simple_flex_pca_strategy.f90`: shared-memory,
   distributed-master and worker strategies and the factory (`part=` is a
@@ -80,18 +80,24 @@ retained under `doc/refactoring_notes/completed/` (there is no
    application reads command-line definedness only where it changes workflow
    ownership (resume, worker partition, explicit state ceiling). Services the application composes:
    `simple_flex_pca_project_gateway` (input validation, sigma, the project
-   FSC read, weight-store and project writes, out-segment publication),
+   FSC read, the state weight set and hard labels, the delivered maps,
+   out-segment publication of the maps and the embedding artifact),
    `simple_flex_pca_state_service` (latent deconvolution, auto settings,
-   state placement with the population floor, bandwidth-CV trial reconstruction), `simple_flex_pca_embedding_io`
-   (the embedding cache and deconvolution block), `simple_flex_pca_delivery_3d`
+   state placement with the population floor, bandwidth-CV trial maps),
+   `simple_flex_pca_embedding_io` (the embedding artifact: latents,
+   precisions, noise scale and deconvolution block, written atomically), `simple_flex_pca_delivery_3d`
    (latent readouts, UMAP figures, covariance tables, eigenvolumes, manifest).
    Their helpers: `simple_flex_pca_util` (chi-squared median, unimodality,
-   state-map naming), `simple_flex_pca_gmm` (the tied-covariance GMM and GMM
-   AUTO weights), `simple_flex_pca_weights` (kernel/equal-mass/on-axis
-   placement and bandwidth-CV numerics, with no project or reconstruction ownership), `simple_flex_pca_targets`
-   (k-means, diffusion k-centre, FINCH, path and reliability-path targets,
-   basis rotations), `simple_flex_pca_deconv` (the latent measurement-error
-   mixture).
+   state-map naming), `simple_flex_pca_gmm` (state weights from a
+   tied-covariance mixture, `simple_gmm`, and the GMM AUTO placement),
+   `simple_flex_pca_weights` (kernel/equal-mass/on-axis placement and
+   bandwidth-CV numerics, with no project or reconstruction ownership),
+   `simple_flex_pca_targets` (k-means targets in the latent metric,
+   `simple_kmeans`; the diffusion embedding whose k-center cells,
+   `simple_kcenter`, give targets; path and reliability-path targets; basis
+   rotations), `simple_flex_pca_deconv` (the noise calibration and the
+   latent mixture prior by extreme deconvolution, `simple_xd_gmm`). The
+   clustering itself is in `../../utils/clustering`.
 2. The distribution contract has one source per module:
    `simple_flex_pca_rounds.f90` (`flex_pca_rounds`: master/worker/nparts,
    `plan_partitions`, `run_stage(params, request)`),
@@ -131,67 +137,60 @@ retained under `doc/refactoring_notes/completed/` (there is no
    mod-4 halves and the worker stage bodies). `simple_flex_pca_crossfsc.f90`
    is the cross-fit FSC series and its ridge. Its file, record and driver
    context are lifecycle-owned objects rather than free persistent records.
-5. State reconstruction keeps each role in its own source.
-   `simple_flex_pca_rec3D.f90` is the service
-   (`reconstruct_flex_weighted_states`: selects the backend, runs the state
-   stage, hands every state's maps to the delivery). The backends extend
-   `flex_states_backend` from `simple_flex_pca_states_backend.f90` (begin /
-   accumulate_local_or_write_part / fold_parts / finalize_maps /
-   delivery_policy / kill, and the `flex_state_maps` bundle) --
-   `simple_flex_pca_states_gridding.f90` is the gridding backend (kernel-weighted backprojection of
-   every state in one pass; `floor_rho` applies a shellwise density floor
-   before the gridding divide because kernel weights in `[0,1]` make `rho`
-   small where occupancy is low), and `simple_flex_pca_states_pcg.f90` is the
-   PCG backend (one cold PCG solve per state and half on the spherical support).
-   `simple_flex_pca_state_delivery.f90` is the common delivery (per-state
-   eo-FSC, filtering and masking per the backend's declared policy, naming,
-   publication and project update). `simple_flex_pca_state_parts.f90` is the
-   state-parts codec.
-6. `simple_flex_pca_merge.f90` is the two-gate state merge; the UMAP readout
+5. State maps come from SIMPLE's reconstruction service
+   (`../strategies/parallelization/simple_rec3D_service.f90`). The state service's
+   `reconstruct_state_halves` calls it in the FLEX process with the weight
+   columns as a caller-owned table, at the covariance box, raw (shell density
+   floor, no filter, mask, prior or trailing chain); the bandwidth
+   cross-validation and the merge read these trial halves. The delivered
+   weights are published as the project's state weight set
+   (`../project/simple_state_weight_set.f90`: one file per state and a manifest
+   published last, registered in the out segment as imgkind `state_weights`),
+   and the project gateway's `deliver_state_maps` runs `reconstruct3D
+   m_estimator=flex` from it at the native box and registers each state's map
+   and FSC as ordinary `vol` and `fsc` entries.
+6. `simple_flex_pca_merge.f90` is the two-gate state merge (the map gate by
+   complete linkage, `simple_hac`); the UMAP readout
    (`umap=yes`, the default) is in `simple_umap.f90`.
 7. Part-file protocols live next to their producers: probe parts in
    `simple_flex_probe_fit_engine` (the `flex_probe_part` codec), embedding
    statistics in `simple_flex_pca_embed`, the mean scale in
-   `simple_flex_pca_basis`, the sigma decision in the project gateway,
-   state-weight rounds and state parts in `simple_flex_pca_state_parts`; the
+   `simple_flex_pca_basis`, the sigma decision in the project gateway; the
    magic and part naming are in `simple_flex_pca_artifacts.f90`.
-8. `simple_flex_weights_state.f90` is the delivered state-weight store:
-   the state stage publishes one `flex_weights_state_NNN.bin` per delivered
-   state (that state's weight over every physical project row, zero outside
-   the selection, a flag marking its hard-labelled particles, and its
-   mass/neff/population/bandwidth/target scalars) and registers each in the
-   out segment of the run's project copy as imgkind `flex_weights`, state
-   `NNN`, beside `vol_flex` state `NNN`, so per-state selection and removal
-   apply to weights and maps alike. The files follow the canonical sigma2
-   store's rules (layout digest, generation-scoped candidate, atomic
-   publish; bytes in `../../fileio/simple_flex_weights_file.f90`) and share
-   generation, digest and `nstates` across one delivery. The
-   `flex_weights_store` type validates and owns a complete loaded set until
-   it transfers the arrays to a caller, and is also the publication boundary
-   for a delivery; stateless helpers retain single-state validation and naming.
+8. The embedding artifact (`simple_flex_pca_embedding_io`) is written to a
+   `.part` name and renamed into place, and registered in the out segment of
+   the run's project copy as imgkind `flex_embedding`; a resumed run reads its
+   noise scale from the artifact.
 9. `simple_flex_pca_polar.f90` (the allocatable per-fit polar E-step bank),
-   `simple_flex_pca_pcg.f90` (the coupled PCG operator of the M-step and the
-   application-owned, once-resampled support environment copied into resident fits) and
+   `simple_flex_pca_pcg.f90` (the coupled PCG operator of the M-step, on the
+   padded-lattice geometry and support it shares with `simple_reconstructor_pcg`,
+   `../volume/simple_pcg_lattice.f90`, and the application-owned, once-resampled
+   support environment copied into resident fits) and
    `simple_flex_reconstructor_latent_ops.f90` (the projection-aware latent
-   model: Fourier projection/backprojection, particle read/prep orchestration,
-   the coupled M-step solve). `simple_flex_pca_plane_cache.f90` owns the disk
-   cache; `simple_flex_pca_planes.f90` owns the application-owned
-   `flex_plane_store`, which fetches and
-   retains already prepared resident planes and owns one allocatable disk-cache
-   object. The cache versions its payload against the absolute project
-   path and modification stamp, geometry and master selection. Probe, polish and embed
-   workers adopt it only when their partition lies within the completed cache; state
-   workers do not allocate it because their reconstruction path does not consume planes.
-   The store is passed explicitly
-   through particle-read paths and its `kill` resets both resident and disk-cache state;
-   neither module retains run state at module scope. The application allocates its
-   session, and all stateful FLEX objects have explicit lifecycle ownership; the scoped
-   production tree retains no mutable run state at module scope.
+   model: the projected mean and basis through `simple_reconstructor`'s
+   projection and multi-volume gather, particle preparation through
+   `prep_imgs4rec`, the coupled M-step solve; insertion is
+   `simple_reconstructor`'s `insert_planes_multi`).
+   `simple_flex_pca_plane_cache.f90` owns the disk cache (directory, run token
+   and space budget shared with the particle cache; built under a temporary
+   name and renamed into place); `simple_flex_pca_planes.f90` owns the
+   application-owned `flex_plane_store`, which fetches and retains already
+   prepared resident planes and owns one allocatable disk-cache object. The
+   cache versions its payload against the absolute project path and
+   modification stamp, geometry and master selection. Probe, polish and embed
+   workers adopt it only when their partition lies within the completed cache;
+   once the master has the embedding, `release` frees the resident planes and
+   deletes the cache.
+   The store is passed explicitly through particle-read paths and its `kill`
+   resets both resident and disk-cache state; neither module retains run state
+   at module scope. The application allocates its session, and all stateful
+   FLEX objects have explicit lifecycle ownership; the scoped production tree
+   retains no mutable run state at module scope.
    Both the coupled rank-4 solve and `simple_reconstructor_pcg` use the rank-1
    recurrence and outcome in `../opt/simple_pcg_solver.f90`; small client adapters
    remap contiguous storage and retain each domain's operator and preconditioner.
 
-Alongside the state maps, the state stage writes the hard state label of every
+Alongside the state weight set, the application writes the hard state label of every
 embedded particle into `ptcl3D/state` of the run's own project, leaving
 unassigned particles at state 0. `mkdir=yes` already gave the master a private
 copy of the project, so this rewrites that copy inside the job directory and
@@ -200,7 +199,8 @@ for `nstates>1`. This lets the embedding and its state assignment be judged with
 plain `simple_exec prg=reconstruct3D projfile=<projfile> nstates=<n>`.
 
 Self-contained tests live in `simple_flex_pca_tester.f90`,
-`simple_flex_pcg_tester.f90` and `run/simple_flex_pca_application_tester.f90`
+`simple_flex_pcg_tester.f90` (asserting the checks of the white-box self-test in
+`fit/simple_flex_pca_pcg_tester.f90`) and `run/simple_flex_pca_application_tester.f90`
 (suites registered in
 `../commanders/test/simple_commanders_test_class.f90`) and require no data.
 

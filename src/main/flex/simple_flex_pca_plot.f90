@@ -4,6 +4,7 @@
 module simple_flex_pca_plot
 use simple_core_module_api, only: simple_exception
 use simple_math, only: gcd
+use simple_srch_sort_loc, only: selec
 use simple_jpg,  only: write_rgb_jpeg
 implicit none
 private
@@ -164,40 +165,10 @@ contains
         end do
         if( m < 2 )then; lo = -1.0; hi = 1.0; return; endif
         klo = max(1, nint(real(m)*PCT/100.0)); khi = min(m, nint(real(m)*(100.0-PCT)/100.0))
-        lo = kth_smallest(w(1:m), klo); hi = kth_smallest(w(1:m), khi)
+        lo = selec(klo, m, w(1:m)); hi = selec(khi, m, w(1:m))
         if( hi <= lo )then; lo = lo - 1.0; hi = hi + 1.0; endif
         pad = 0.02*(hi-lo); lo = lo - pad; hi = hi + pad
         deallocate(w)
     end subroutine limits
-
-    !> quickselect on a copy (Hoare partition), O(n) expected
-    function kth_smallest( arr, k ) result( val )
-        real,    intent(in) :: arr(:)
-        integer, intent(in) :: k
-        real :: val
-        real, allocatable :: a(:)
-        real    :: piv, tmp
-        integer :: lo, hi, i, j, m
-        allocate(a, source=arr); lo = 1; hi = size(a)
-        do while( lo < hi )
-            m = (lo + hi)/2; piv = a(m); i = lo; j = hi
-            do
-                do while( a(i) < piv ); i = i + 1; end do
-                do while( a(j) > piv ); j = j - 1; end do
-                if( i <= j )then
-                    tmp = a(i); a(i) = a(j); a(j) = tmp; i = i + 1; j = j - 1
-                endif
-                if( i > j ) exit
-            end do
-            if( k <= j )then
-                hi = j
-            else if( k >= i )then
-                lo = i
-            else
-                exit
-            endif
-        end do
-        val = a(k); deallocate(a)
-    end function kth_smallest
 
 end module simple_flex_pca_plot

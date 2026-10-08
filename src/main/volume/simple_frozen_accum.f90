@@ -1,7 +1,8 @@
 !@descr: frozen accumulator store of one solve3D_addon run: run context, per-box sets, writers and validated adds into a reduction
 ! Raw frozen-particle accumulators (gridding even/odd S/rho, PCG B/D per half), one set per state
 ! and box, added with coefficient one before any restoration or prior; nothing here scales or restores.
-! Sets are bound to the run context (run id, backend, states, row counts, weighting) and
+! Sets are bound to the run context (run id, backend, states, row counts, weighting, and the state
+! weight set identity of the loading reconstruction, zero under hard labels) and
 ! validated against it and the consumer grid before any payload is read; defects are fatal.
 ! Contract: doc/policies/3D/solve3D_addon_policy.md sec. 5 and 7.
 module simple_frozen_accum
@@ -18,7 +19,7 @@ private
 
 character(len=*), parameter :: FROZEN_CONTEXT_SCHEMA = 'solve3D_addon_frozen_context'
 character(len=*), parameter :: FROZEN_SET_SCHEMA     = 'solve3D_addon_frozen_set'
-integer,          parameter :: FROZEN_SCHEMA_VERSION = 2
+integer,          parameter :: FROZEN_SCHEMA_VERSION = 3   ! 3: sets record the state weight set identity
 real,             parameter :: SMPD_RELTOL           = 1.e-5
 
 !> one add-on run's frozen contribution: its identity (the run context) and
@@ -33,6 +34,7 @@ type :: frozen_accum
     integer :: nfrozen      = 0 !< frozen particles (state > 0 and updatecnt > 0 in the frozen project)
     integer, allocatable :: nfrozen_state(:)
     character(len=8)  :: weighting = '' !< the loading run's reconstruction weighting (euclid|cc)
+    integer(kind=8)   :: wset_id(2) = 0_8 !< the loading run's state weight set identity (0 under hard labels)
   contains
     ! the run context
     procedure          :: new
@@ -246,12 +248,13 @@ contains
     !! a consumer never falls back to a reconstruction without its frozen term.
     !! cc_objfun is the loading run's reconstruction weighting; producer is
     !! true for the frozen_seed handshake, false for frozen_rec.
-    subroutine load( self, fname, backend, nstates, nrows, cc_objfun, producer )
+    subroutine load( self, fname, backend, nstates, nrows, cc_objfun, producer, wset_id )
         class(frozen_accum), intent(inout) :: self
         class(string),       intent(in)    :: fname
         character(len=*),    intent(in)    :: backend
         integer,             intent(in)    :: nstates, nrows, cc_objfun
         logical,             intent(in)    :: producer
+        integer(kind=8),     intent(in)    :: wset_id(2)
         character(len=STDLEN) :: msg
         integer :: status
         call self%read(fname, status, msg)
@@ -259,6 +262,7 @@ contains
         call self%validate(backend, nstates, nrows, producer, status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
         self%weighting = trim(merge('euclid', 'cc    ', cc_objfun == OBJFUN_EUCLID))
+        self%wset_id   = wset_id
     end subroutine load
 
     !> frozen particles of one inherited state
@@ -279,6 +283,7 @@ contains
         self%nfrozen = 0
         if( allocated(self%nfrozen_state) ) deallocate(self%nfrozen_state)
         self%weighting = ''
+        self%wset_id   = 0_8
     end subroutine kill
 
     ! GRIDDING SETS
@@ -345,6 +350,7 @@ contains
         write(funit,'(A,1X,I0)')     'nrows',   self%nrows
         write(funit,'(A,1X,I0)')     'nfrozen_state', self%nfrozen_state(state)
         write(funit,'(A,1X,A)')      'weighting', trim(merge(self%weighting, 'none    ', len_trim(self%weighting) > 0))
+        write(funit,'(A,2(1X,I0))')  'wset',    self%wset_id
         write(funit,'(A,4(1X,I0))')  'sizes',   sizes
         write(funit,'(A)')           'end'
         call fclose(funit)
@@ -366,7 +372,7 @@ contains
         character(len=XLONGSTRLEN) :: line
         character(len=64)  :: key, schema, run_id, backend, weighting
         type(string)       :: manifest
-        integer(kind=8)    :: sizes(4)
+        integer(kind=8)    :: sizes(4), wset_set(2)
         integer :: funit, io_stat, version, state_set, nstates_set, box_set, nrows_set, nfrozen_set, ifile
         real    :: smpd_set
         logical :: l_end
@@ -375,6 +381,7 @@ contains
         l_end  = .false.
         run_id = ''; backend = ''; weighting = ''
         state_set = -1; nstates_set = -1; box_set = -1; nrows_set = -1; nfrozen_set = -1; smpd_set = -1.; sizes = -2
+        wset_set = -1_8
         manifest = refine3D_frozen_manifest_fname(state, box)
         if( .not. file_exists(manifest) )then
             msg = 'frozen gridding set is missing: '//manifest%to_char()
@@ -411,6 +418,7 @@ contains
                 case('nrows');         read(line,*,iostat=io_stat) key, nrows_set
                 case('nfrozen_state'); read(line,*,iostat=io_stat) key, nfrozen_set
                 case('weighting');     read(line,*,iostat=io_stat) key, weighting
+                case('wset');          read(line,*,iostat=io_stat) key, wset_set
                 case('sizes');         read(line,*,iostat=io_stat) key, sizes
                 case('end')
                     l_end = .true.
@@ -440,6 +448,8 @@ contains
             msg = 'frozen gridding set frozen count differs from the run context'
         else if( trim(weighting) /= trim(merge(self%weighting, 'none    ', len_trim(self%weighting) > 0)) )then
             msg = 'frozen gridding set was accumulated with another objective-function weighting'
+        else if( any(wset_set /= self%wset_id) )then
+            msg = 'frozen gridding set was accumulated under another state weight set'
         else
             status = 0
             do ifile = 1, 4
@@ -503,8 +513,9 @@ contains
     function pcg_provenance( self ) result( provenance )
         class(frozen_accum), intent(in) :: self
         character(len=256) :: provenance
-        write(provenance,'(A,A,A,I0,A,I0,A,A)') 'frozen run=', trim(self%run_id), ' rows=', self%nrows, &
-            &' nstates=', self%nstates, ' weighting=', trim(merge(self%weighting, 'none    ', len_trim(self%weighting) > 0))
+        write(provenance,'(A,A,A,I0,A,I0,A,A,A,I0,A,I0)') 'frozen run=', trim(self%run_id), ' rows=', self%nrows, &
+            &' nstates=', self%nstates, ' weighting=', trim(merge(self%weighting, 'none    ', len_trim(self%weighting) > 0)), &
+            &' wset=', self%wset_id(1), ':', self%wset_id(2)
     end function pcg_provenance
 
     !> Publish the open raw accumulator of one frozen (state,half) at box; the

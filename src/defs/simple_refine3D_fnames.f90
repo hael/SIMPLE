@@ -24,7 +24,7 @@ public :: refine3D_partial_rec_fbody
 public :: refine3D_partial_rec_fname
 public :: refine3D_partial_rho_fname
 public :: refine3D_pcg_raw_accum_fname
-public :: refine3D_pcg_trail_accum_fname
+public :: refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
 public :: refine3D_trail_rec_fbody
 public :: refine3D_trail_rec_fname
 public :: refine3D_trail_rho_fname
@@ -192,6 +192,13 @@ contains
         character(len=*), intent(in) :: half
         fname = string('pcg_trail_state')//state_tag(state)//half_suffix(half)//BIN_EXT
     end function refine3D_pcg_trail_accum_fname
+
+    ! Manifest of a state's PCG trailing chain pair (represented mass, contributor
+    ! count, weight-set identity, component sizes)
+    type(string) function refine3D_pcg_trail_manifest_fname( state ) result(fname)
+        integer, intent(in) :: state
+        fname = string('pcg_trail_state')//state_tag(state)//TXT_EXT
+    end function refine3D_pcg_trail_manifest_fname
 
     ! Persistent trailing-reconstruction accumulator chain (blended, unregularized
     ! e/o Fourier sums + sampling densities). Deliberately does not contain the

@@ -116,7 +116,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Numerics')
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, average_linkage, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
@@ -129,7 +129,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Projects')
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, optics_groups, optics_maps, solve3d_manifest, project_superset, solve3d_addon_report)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, optics_groups, optics_maps, solve3d_manifest, project_superset, solve3d_addon_report, state_weight_set)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -181,7 +181,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Reconstruction')
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, trailing_chain_identity, frozen_accumulator, volume_pair_metrics, nonuniform_filtering)', '', .false., '')
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, trailing_chain_identity, frozen_accumulator, weighted_insertion, volume_pair_metrics, nonuniform_filtering)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
 
@@ -194,7 +194,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set, addon_report_docking)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, addon_report_docking, fractional_reconstruction)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 

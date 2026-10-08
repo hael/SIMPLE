@@ -1681,6 +1681,10 @@ contains
             call spproj%read(params%projfile)
             call spproj%update_projinfo(params%projfile)
             call spproj%write(params%projfile)
+            ! the work project holds the state alone, as state 1: state= would now restrict every
+            ! reconstruction of the run to a state the work project does not have
+            call cline%delete('state')
+            params%l_state_defined = .false.
             write(logfhandle,'(A,I0,A,I0,A,A)') &
                 &'>>> SOLVE3D STATE CONTINUATION STATE/PARTICLES: ', params%state, &
                 &' / ', nselected, ' TEMP PROJECT: ', params%projfile%to_char()

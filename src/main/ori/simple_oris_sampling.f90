@@ -75,11 +75,25 @@ contains
         end do
     end subroutine get_state_rec_pops
 
+    !> Population rule of one group with integer populations (row counts); see population_blend_weights_mass
+    elemental module subroutine population_blend_weights_counts( nrep, nsmp, mrep, s, w, mnew, ufrac )
+        integer,        intent(in)  :: nrep, nsmp
+        real,           intent(in)  :: mrep
+        real,           intent(out) :: s, w, mnew
+        real, optional, intent(in)  :: ufrac
+        if( present(ufrac) )then
+            call population_blend_weights_mass(real(nrep), real(nsmp), mrep, s, w, mnew, ufrac)
+        else
+            call population_blend_weights_mass(real(nrep), real(nsmp), mrep, s, w, mnew)
+        endif
+    end subroutine population_blend_weights_counts
+
     !> Population-rule weights of one group: new = s*current + w*previous, f = n/N, u = ufrac (in [0,1]) or f,
     !! s = u/f, w = (1-u)*N/M (0 if M = 0), mnew = s*n + w*M (= N when M > 0). n = 0 keeps the previous sums
-    !! (s = 0, w = N/M); N = 0 gives zeros. nrep = N active updated rows, nsmp = n sampled, mrep = M stored mass.
-    elemental module subroutine population_blend_weights( nrep, nsmp, mrep, s, w, mnew, ufrac )
-        integer,        intent(in)  :: nrep, nsmp
+    !! (s = 0, w = N/M); N = 0 gives zeros. N = applied mass of the active updated rows (their count under
+    !! hard labels), n = that of the sampled rows, mrep = M the mass the stored sums represent.
+    elemental module subroutine population_blend_weights_mass( nrep, nsmp, mrep, s, w, mnew, ufrac )
+        real,           intent(in)  :: nrep, nsmp
         real,           intent(in)  :: mrep
         real,           intent(out) :: s, w, mnew
         real, optional, intent(in)  :: ufrac
@@ -87,19 +101,19 @@ contains
         s    = 0.
         w    = 0.
         mnew = 0.
-        if( nrep <= 0 ) return
-        if( nsmp <= 0 )then
+        if( nrep <= 0. ) return
+        if( nsmp <= 0. )then
             ! nothing sampled in the group: keep the previous sums at mass N
-            if( mrep > 0. ) w = real(nrep) / mrep
+            if( mrep > 0. ) w = nrep / mrep
         else
-            f = real(min(nsmp, nrep)) / real(nrep)
+            f = min(nsmp, nrep) / nrep
             u = f
             if( present(ufrac) ) u = max(0., min(1., ufrac))
             s = u / f
-            if( mrep > 0. ) w = (1. - u) * real(nrep) / mrep
+            if( mrep > 0. ) w = (1. - u) * nrep / mrep
         endif
-        mnew = s * real(min(nsmp, nrep)) + w * mrep
-    end subroutine population_blend_weights
+        mnew = s * min(nsmp, nrep) + w * mrep
+    end subroutine population_blend_weights_mass
 
     ! whether any active row of the project has been updated (sample4rec's coverage decision)
     logical function any_active_updated( self )

@@ -94,7 +94,22 @@ legacy global summary.
 `N(g)` active rows of the group with `updatecnt > 0`, and `n(g)` those carrying
 the latest `sampled` marker. `get_state_update_fracs` is `n/N` per state. The
 assembly owners (2D class-average owner, `volassemble`, the distributed PCG
-master) compute them from the merged project; workers never do.
+(preconditioned conjugate gradients) master) compute them from the merged
+project; workers never do.
+
+A 3D reconstruction with `m_estimator=flex` reads the project's state weight
+set: a weight for every particle and state, published by `flex_pca`. A particle
+can then contribute to several states, so the per-state quantities are applied
+masses, not row counts. `get_update_rows` returns the rows behind
+`get_group_update_counts`: the active updated rows, those of the current sample,
+and the rows `sample4rec` reconstructs. `N(s)` and `n(s)` are the sums of the
+state's weights over the first two. Only weights above the backend's membership
+threshold count: zero for gridding, `PCG_WEIGHT_THRESHOLD`
+(`simple_reconstructor_pcg`, 0.01) for PCG. The realized fractions `f = n/N`,
+the population a seed represents, the counts the PCG master checks its parts
+against and records for each chain half, and the mass a trailing chain
+represents are all such masses. Under hard labels every mass is the former
+integer count.
 
 `sample4rec` decides "nothing updated yet" over the whole project: when any
 active row has `updatecnt > 0`, every range reconstructs only its updated rows.
@@ -358,7 +373,8 @@ assembly then restores volumes, calculates FSCs, postprocesses references, and
 applies trailing reconstruction when requested. Trailing uses an explicit
 `ufrac_trec` only when the parsed `params%l_ufrac_trec_defined` flag is true
 and the run is single-state; otherwise it consumes realized per-state fractions
-from `get_state_update_fracs`. The numeric `params%ufrac_trec` field has a
+from `get_state_update_fracs`, or under a state weight set the mass fractions of
+Section 3. The numeric `params%ufrac_trec` field has a
 default value and must not be interpreted as an active override by itself.
 Multi-state convergence reporting records those effective state-local fractions
 as `TRAIL_REC_UPDATE_FRAC_STATE01`, `TRAIL_REC_UPDATE_FRAC_STATE02`, and so on.
@@ -403,6 +419,11 @@ exact sum over the current class or state members. Classes or states with no
 active updated particles carry nothing; full sampled participation replaces the
 previous sums.
 
+`population_blend_weights` (`simple_oris`) computes these weights. It is
+generic over integer counts and real masses; integer counts go through the mass
+version with identical arithmetic. A state weight set (Section 3) therefore
+changes the inputs `N`, `n` and `M`, not the rule.
+
 2D class-average restoration applies the rule per class at the assembly owner
 (Section 4); the restored averages use the represented even/odd populations.
 
@@ -413,7 +434,8 @@ e/o Fourier sums and sampling densities at the mass of the population it
 represents, `M(s)`, which the manifest records. Two fractions govern the blend:
 
 - `f` — the realized state-local fraction that produced the current partials
-  (`get_state_update_fracs`); always computed
+  (`get_state_update_fracs`, or the mass fraction under a state weight set);
+  always computed
 - `u` — the applied map-update weight; equals `f` unless a single-state
   `ufrac_trec` override is provided
 
@@ -449,16 +471,24 @@ Stage-boundary full reconstructions
 seed the chain at full-dataset weight through the internal `trail_seed`
 handshake, but only when the consuming stage actually trails. Every seed records
 the population it represents: `N` for the chain-start seed (`1/f` scaling), and the
-rows `sample4rec` reconstructs for a stage-boundary seed. The distributed PCG
-chain applies the same weights; its represented population is the particle
-count in the raw header of each half (chain identity `pcgtrail-v3`).
+rows `sample4rec` reconstructs for a stage-boundary seed (their applied mass
+under a state weight set). The distributed PCG chain applies the same weights.
+Its two halves share a manifest of the same kind, `pcg_trail_stateNN.txt`, and
+the represented population is read from it. The raw header of each half also
+carries its contributor count, applied mass and weight-set identity (chain
+identity `pcgtrail-v3`).
 
 The four accumulator files plus manifest form one artifact set. The manifest is
 deleted before and rewritten after the data files with per-component byte
 sizes, generation counter, provenance (box, sampling, particle population,
-state layout), a format version and the represented population `M(s)`, so
-interrupted writes never validate. A chain written by an older build, whose
-manifest has no represented population, is discarded and re-seeded. Readers accept a chain
+state layout), a format version, the represented population `M(s)`, the
+contributor count and the state weight set identity (its generation and layout
+digest; zero under hard labels), so interrupted writes never validate. The PCG
+manifest follows the same order: it is deleted before the first half is
+written, written after both, and checked (identity, sizes, state layout) before
+use. A chain whose manifest has an older format version is discarded and
+re-seeded. A chain built under another weight-set identity is re-seeded, never
+blended; this holds for both backends. Readers accept a chain
 only when the manifest parses, provenance matches the current project, every
 component size matches, and the grid is not larger than the current one with
 the same physical extent; smaller grids are zero-padded on read (downsampling

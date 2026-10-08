@@ -53,6 +53,27 @@ indistinct states and its population floors may drop states. The run
 continues with the number of states flex delivers and stops with an error
 when fewer than two remain.
 
+The handoff from `flex_pca` uses ordinary project entries. `flex_pca` publishes
+a state weight set: one weight per particle and state, in one file per state
+with a manifest registered in the project's `out` segment. It labels each
+particle with its largest-weight state, or state 0 when the particle has no
+weight. It reconstructs each state's map from the weight set at native sampling
+(`reconstruct3D m_estimator=flex`) and registers the maps and their FSCs as
+ordinary `vol` and `fsc` entries. `refine3D_states` reads those entries as its
+starting state maps. `vol_flex` is retired and no code writes it; a project of
+an earlier release that holds a state map only as `vol_flex` still loads,
+because a `vol` lookup falls back to it, read-only.
+
+`refine3D_states` has no weighted mode. It turns the `flex_pca` solution into a
+hard assignment for its initialization, so it keeps no weights: once it has
+read the labels and the state maps it withdraws the weight set (the `out`
+segment entry, then its files). Its user interface has no `m_estimator` input,
+`m_estimator=flex` on its command line is refused, and its iterations and final
+reconstruction follow the hard labels. A single state of a standalone
+`flex_pca` run is refined with its frozen weights by
+`refine3D_auto state=X m_estimator=flex` (per-state M-estimation in the
+[refine3D policy](../3D/refine3D_policy.md)).
+
 `vol1..volN` input is rejected: starting state maps must come from the project
 lineage. Classification against supplied references belongs to
 `classify3D_refs`. Existing multi-state labels determine the effective state
@@ -163,6 +184,8 @@ User-side validation must cover:
 - both pose policies and the `global` default;
 - `flex_pca` initialization of state-0/1 input, the `nstates >= 3` rule, and
   continuation with fewer delivered states;
+- the `flex_pca` handoff through `vol` and `fsc` entries, and the read-only
+  `vol_flex` fallback for projects of earlier releases;
 - automatic and overridden local bounds;
 - monotonic common frequency marching through `lpstop`;
 - stochastic/full sampling and final update coverage;

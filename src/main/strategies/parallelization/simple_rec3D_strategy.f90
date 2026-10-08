@@ -1,72 +1,60 @@
-!@descr: reconstruct3D execution strategies (shared memory, kernel PCG, distributed master) and the reconstruction backend selector
+!@descr: reconstruct3D execution strategies (shared memory, kernel PCG, distributed master) around the reconstruction service
+! A strategy parses the parameters, partitions even/odd, prepares the canonical sigma2 state, samples
+! the particle rows and hands them to simple_rec3D_service, which reconstructs, assembles, post-processes
+! and registers the state maps.
 module simple_rec3D_strategy
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
-use simple_builder,              only: builder
-use simple_parameters,           only: parameters
-use simple_cmdline,              only: cmdline
-use simple_qsys_env,             only: qsys_env
-use simple_matcher_3Drec,        only: calc_3Drec
-use simple_commanders_rec_distr, only: commander_volassemble, filter_pcg_nonuniform_maps
-use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, &
-    &refine3D_pcg_raw_accum_fname
-use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
-use simple_sigma2_files,         only: load_sigma2_groups
-use simple_sigma2_state,         only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
-use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
+use simple_builder,           only: builder
+use simple_parameters,        only: parameters
+use simple_cmdline,           only: cmdline
+use simple_rec3D_service,     only: rec3D_service, rec3D_request, rec3D_backend_id, REC3D_BACKEND_GRIDDING, &
+    &REC3D_BACKEND_PCG, REC3D_DISPATCH_INPROC, REC3D_DISPATCH_QUEUE, REC3D_WEIGHTS_HARD, REC3D_WEIGHTS_SET
+use simple_ptcl_layout,       only: ptcl_layout_digest
+use simple_sigma2_state,      only: sigma2_state_validate_identity
+use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
     &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
 public :: rec3D_pcg_inmem_strategy
-public :: rec3D_backend_id, rec3D_backend_is_wired
-public :: REC3D_BACKEND_INVALID, REC3D_BACKEND_GRIDDING, REC3D_BACKEND_PCG
 private
 #include "simple_local_flags.inc"
-
-integer, parameter :: REC3D_BACKEND_INVALID  = 0
-integer, parameter :: REC3D_BACKEND_GRIDDING = 1
-integer, parameter :: REC3D_BACKEND_PCG      = 2
 
 ! --------------------------------------------------------------------
 ! Strategy interface
 ! --------------------------------------------------------------------
 
 type, abstract :: rec3D_strategy
+    type(rec3D_service), allocatable :: service
 contains
-    procedure(init_interface),     deferred :: initialize
-    procedure(exec_interface),     deferred :: execute
-    procedure(finalize_interface), deferred :: finalize_run
-    procedure(cleanup_interface),  deferred :: cleanup
+    procedure(init_interface),    deferred :: initialize
+    procedure(exec_interface),    deferred :: execute
+    procedure(cleanup_interface), deferred :: cleanup
 end type rec3D_strategy
 
-! Shared-memory
+! Shared-memory gridding
 type, extends(rec3D_strategy) :: rec3D_inmem_strategy
 contains
-    procedure :: initialize   => inmem_initialize
-    procedure :: execute      => inmem_execute
-    procedure :: finalize_run => inmem_finalize_run
-    procedure :: cleanup      => inmem_cleanup
+    procedure :: initialize => inmem_initialize
+    procedure :: execute    => inmem_execute
+    procedure :: cleanup    => inmem_cleanup
 end type rec3D_inmem_strategy
 
 ! Shared-memory kernel PCG: the distributed route in one process (this
 ! process is the only worker, then the master), on the in-memory lifecycle
 type, extends(rec3D_inmem_strategy) :: rec3D_pcg_inmem_strategy
 contains
-    procedure :: execute      => pcg_inmem_execute
-    procedure :: finalize_run => pcg_inmem_finalize_run
+    procedure :: execute => pcg_inmem_execute
 end type rec3D_pcg_inmem_strategy
 
-! Distributed-memory
+! Distributed-memory master (gridding or kernel PCG)
 type, extends(rec3D_strategy) :: rec3D_distr_strategy
-    type(qsys_env) :: qenv
-    type(chash)    :: job_descr
-    integer        :: nthr_master = 1
+    integer :: nthr_master = 1
 contains
-    procedure :: initialize   => distr_initialize
-    procedure :: execute      => distr_execute
-    procedure :: finalize_run => distr_finalize_run
-    procedure :: cleanup      => distr_cleanup
+    procedure :: initialize => distr_initialize
+    procedure :: execute    => distr_execute
+    procedure :: cleanup    => distr_cleanup
 end type rec3D_distr_strategy
 
 abstract interface
@@ -86,14 +74,6 @@ abstract interface
         class(cmdline),        intent(inout) :: cline
     end subroutine exec_interface
 
-    subroutine finalize_interface(self, params, build, cline)
-        import :: rec3D_strategy, parameters, builder, cmdline
-        class(rec3D_strategy), intent(inout) :: self
-        type(parameters),      intent(in)    :: params
-        type(builder),         intent(inout) :: build
-        class(cmdline),        intent(inout) :: cline
-    end subroutine finalize_interface
-
     subroutine cleanup_interface(self, params, build, cline)
         import :: rec3D_strategy, parameters, builder, cmdline
         class(rec3D_strategy), intent(inout) :: self
@@ -104,23 +84,6 @@ abstract interface
 end interface
 
 contains
-
-    pure integer function rec3D_backend_id(name) result(backend_id)
-        character(len=*), intent(in) :: name
-        select case(trim(name))
-            case('gridding')
-                backend_id = REC3D_BACKEND_GRIDDING
-            case('pcg')
-                backend_id = REC3D_BACKEND_PCG
-            case DEFAULT
-                backend_id = REC3D_BACKEND_INVALID
-        end select
-    end function rec3D_backend_id
-
-    pure logical function rec3D_backend_is_wired(backend_id) result(l_wired)
-        integer, intent(in) :: backend_id
-        l_wired = backend_id == REC3D_BACKEND_GRIDDING .or. backend_id == REC3D_BACKEND_PCG
-    end function rec3D_backend_is_wired
 
     ! --------------------------------------------------------------------
     ! Strategy selection
@@ -172,9 +135,9 @@ contains
 
     subroutine inmem_initialize(self, params, build, cline)
         class(rec3D_inmem_strategy), intent(inout) :: self
-        type(parameters),                   intent(inout) :: params
-        type(builder),                      intent(inout) :: build
-        class(cmdline),                     intent(inout) :: cline
+        type(parameters),            intent(inout) :: params
+        type(builder),               intent(inout) :: build
+        class(cmdline),              intent(inout) :: cline
         call build%init_params_and_build_general_tbox(cline, params)
         call sync_resolved_rec_params(params, cline)
         call build%build_strategy3D_tbox(params)
@@ -183,90 +146,39 @@ contains
         ! Update eo flags in project
         call build%spproj%write_segment_inside(params%oritype)
         call ensure_canonical_sigma_state(params, build, cline)
+        if( .not. allocated(self%service) ) allocate(self%service)
+        call self%service%new(params, build, cline, REC3D_DISPATCH_INPROC, params%nthr)
     end subroutine inmem_initialize
 
+    !> gridding in this process; the outputs are not registered in the project
     subroutine inmem_execute(self, params, build, cline)
         class(rec3D_inmem_strategy), intent(inout) :: self
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(commander_volassemble) :: xvolassemble
-        type(cmdline)               :: cline_volassemble
-        type(string)                :: volname, vol_in
-        integer, allocatable :: pinds(:)
-        integer              :: nptcls2update, state
-        logical              :: l_sigma_loaded
-        ! Sampling
-        if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
-        else
-            ! Sample all state > 0 and updatecnt > 0
-            call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
-        endif
-        ! Sigma weighting belongs to the Euclidean data objective. ML
-        ! regularization is a separate FSC/SSNR prior applied by volassemble.
-        if( params%cc_objfun == OBJFUN_EUCLID )then
-            call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
-                &l_sigma_loaded)
-            if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
-        endif
-        call calc_3Drec(params, build, nptcls2update, pinds)
-        cline_volassemble = cline
-        call cline_volassemble%set('prg',  'volassemble')
-        call cline_volassemble%set('nthr', params%nthr)
-        do state = 1, params%nstates
-            volname = refine3D_state_vol_fname(state)
-            if( cline_volassemble%defined('vol'//int2str(state)) )then
-                vol_in = cline_volassemble%get_carg('vol'//int2str(state))
-                if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
-                    if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
-                endif
-            endif
-        end do
-        call xvolassemble%execute(cline_volassemble)
-        do state = 1, params%nstates
-            volname = refine3D_state_vol_fname(state)
-            params%vols(state) = volname
-            call cline%set('vol'//int2str(state), volname)
-        end do
-        call cline_volassemble%kill
-        if( allocated(pinds) ) deallocate(pinds)
+        type(rec3D_request) :: request
+        call sample_rows(params, build, [params%fromp,params%top], request%pinds)
+        request%backend  = REC3D_BACKEND_GRIDDING
+        request%weights  = merge(REC3D_WEIGHTS_SET, REC3D_WEIGHTS_HARD, params%l_m_estimator_flex)
+        request%dispatch = REC3D_DISPATCH_INPROC
+        request%register = .false.
+        call self%service%execute(params, build, cline, request)
     end subroutine inmem_execute
 
+    !> kernel PCG in this process; the outputs are registered when the run has its own directory
     subroutine pcg_inmem_execute(self, params, build, cline)
         class(rec3D_pcg_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         class(cmdline),                  intent(inout) :: cline
-        integer, allocatable :: pinds(:)
-        integer              :: nptcls2update
-        if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
-        else
-            call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
-        endif
-        call remove_pcg_raw_files(params)
-        call execute_rec3D_pcg_worker(params, build, cline, pinds)
-        call assemble_pcg(params, build, cline)
-        deallocate(pinds)
+        type(rec3D_request) :: request
+        call sample_rows(params, build, [params%fromp,params%top], request%pinds)
+        request%backend  = REC3D_BACKEND_PCG
+        request%weights  = merge(REC3D_WEIGHTS_SET, REC3D_WEIGHTS_HARD, params%l_m_estimator_flex)
+        request%dispatch = REC3D_DISPATCH_INPROC
+        request%register = params%mkdir.eq.'yes'
+        call self%service%execute(params, build, cline, request)
     end subroutine pcg_inmem_execute
-
-    subroutine pcg_inmem_finalize_run(self, params, build, cline)
-        class(rec3D_pcg_inmem_strategy), intent(inout) :: self
-        type(parameters),                intent(in)    :: params
-        type(builder),                   intent(inout) :: build
-        class(cmdline),                  intent(inout) :: cline
-        call register_rec3D_outputs(params, build)
-        call maybe_postprocess_reconstruct3D(params, build, cline)
-    end subroutine pcg_inmem_finalize_run
-
-    subroutine inmem_finalize_run(self, params, build, cline)
-        class(rec3D_inmem_strategy), intent(inout) :: self
-        type(parameters),            intent(in)    :: params
-        type(builder),               intent(inout) :: build
-        class(cmdline),              intent(inout) :: cline
-        call maybe_postprocess_reconstruct3D(params, build, cline)
-    end subroutine inmem_finalize_run
 
     subroutine inmem_cleanup(self, params, build, cline)
         use simple_qsys_funs, only: qsys_declare_part_finished
@@ -274,6 +186,10 @@ contains
         type(parameters),            intent(in)    :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
+        if( allocated(self%service) )then
+            call self%service%kill
+            deallocate(self%service)
+        endif
         call build%esig%kill
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
@@ -316,111 +232,26 @@ contains
         ! Update eo flags in project
         call build%spproj%write_segment_inside(params%oritype)
         call ensure_canonical_sigma_state(params, build, cline)
-        ! setup distributed execution: partitions balance the particles with state > 0
-        call self%qenv%new(params, params%nparts, l_active=build%spproj_field%included())
-        call cline%gen_job_descr(self%job_descr)
+        ! the queue rounds: partitions balance the particles with state > 0
+        if( .not. allocated(self%service) ) allocate(self%service)
+        call self%service%new(params, build, cline, REC3D_DISPATCH_QUEUE, self%nthr_master)
     end subroutine distr_initialize
 
+    !> the parts reconstruct their range of the sampled rows; the outputs are registered when the run
+    !! has its own directory
     subroutine distr_execute(self, params, build, cline)
         class(rec3D_distr_strategy), intent(inout) :: self
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        type(commander_volassemble) :: xvolassemble
-        type(cmdline)               :: cline_volassemble
-        type(string)                :: volname, vol_in
-        integer                     :: state
-        if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
-        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        if( trim(params%rec_backend) == 'pcg' )then
-            call assemble_pcg(params, build, cline)
-            return
-        endif
-        ! Assemble volumes on master
-        cline_volassemble = cline
-        call cline_volassemble%set('prg',  'volassemble')
-        call cline_volassemble%set('nthr', self%nthr_master)
-        do state = 1, params%nstates
-            volname = refine3D_state_vol_fname(state)
-            if( cline_volassemble%defined('vol'//int2str(state)) )then
-                vol_in = cline_volassemble%get_carg('vol'//int2str(state))
-                if( trim(vol_in%to_char()) == trim(volname%to_char()) )then
-                    if( .not. file_exists(volname) ) call cline_volassemble%delete('vol'//int2str(state))
-                endif
-            endif
-        end do
-        call xvolassemble%execute(cline_volassemble)
-        call cline_volassemble%kill
+        type(rec3D_request) :: request
+        call sample_rows(params, build, [1,build%spproj_field%get_noris()], request%pinds)
+        request%backend  = rec3D_backend_id(params%rec_backend)
+        request%weights  = merge(REC3D_WEIGHTS_SET, REC3D_WEIGHTS_HARD, params%l_m_estimator_flex)
+        request%dispatch = REC3D_DISPATCH_QUEUE
+        request%register = params%mkdir.eq.'yes'
+        call self%service%execute(params, build, cline, request)
     end subroutine distr_execute
-
-    subroutine distr_finalize_run(self, params, build, cline)
-        class(rec3D_distr_strategy), intent(inout) :: self
-        type(parameters),            intent(in)    :: params
-        type(builder),               intent(inout) :: build
-        class(cmdline),              intent(inout) :: cline
-        call register_rec3D_outputs(params, build)
-        call maybe_postprocess_reconstruct3D(params, build, cline)
-    end subroutine distr_finalize_run
-
-    !> The state maps and FSCs registered in the project (mkdir=yes only)
-    subroutine register_rec3D_outputs(params, build)
-        type(parameters), intent(in)    :: params
-        type(builder),    intent(inout) :: build
-        type(string) :: fsc_file
-        integer      :: state
-        if( params%mkdir.ne.'yes' ) return
-        do state = 1, params%nstates
-            fsc_file = refine3D_fsc_fname(state)
-            call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
-            if( trim(params%oritype).eq.'cls3D' )then
-                call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
-                    &params%smpd_crop, state, 'vol_cavg')
-            else
-                call build%spproj%add_vol2os_out(refine3D_state_vol_fname(state), &
-                    &params%smpd_crop, state, 'vol')
-            endif
-            call fsc_file%kill
-        enddo
-        call build%spproj%write_segment_inside('out', params%projfile)
-    end subroutine register_rec3D_outputs
-
-    !> A stale raw accumulator must never pass for a completed worker of this
-    !! launch; workers publish through .tmp and an atomic rename
-    subroutine remove_pcg_raw_files(params)
-        type(parameters), intent(in) :: params
-        type(string) :: raw_fname
-        integer      :: state, part, eo
-        do state = 1, params%nstates
-            do eo = 0, 1
-                do part = 1, params%nparts
-                    raw_fname = refine3D_pcg_raw_accum_fname(state, part, params%numlen, &
-                        &merge('odd ', 'even', eo == 1))
-                    call del_file(raw_fname)
-                    call del_file(raw_fname//'.tmp')
-                enddo
-            enddo
-        enddo
-        call raw_fname%kill
-    end subroutine remove_pcg_raw_files
-
-    !> The PCG master: reduce the parts' raw accumulators and solve; with
-    !! nonuniform filtering also the NU competition and the matching low-pass
-    !! handoff, so reconstruct3D leaves the same _nu_filt references as a
-    !! refinement iteration
-    subroutine assemble_pcg(params, build, cline)
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
-        real, allocatable :: nu_align_lps(:)
-        if( params%l_nonuniform )then
-            allocate(nu_align_lps(params%nstates), source=0.0)
-            call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps)
-            call filter_pcg_nonuniform_maps(params, build, cline%defined('frozen_rec'), nu_align_lps)
-            deallocate(nu_align_lps)
-        else
-            call execute_rec3D_pcg_distributed_master(params, build, cline)
-        endif
-    end subroutine assemble_pcg
 
     subroutine distr_cleanup(self, params, build, cline)
         use simple_qsys_funs, only: qsys_cleanup
@@ -429,12 +260,40 @@ contains
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
         call qsys_cleanup(params)
+        if( allocated(self%service) )then
+            call self%service%kill
+            deallocate(self%service)
+        endif
         call build%spproj_field%kill
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
-        call self%qenv%kill
-        call self%job_descr%kill
     end subroutine distr_cleanup
+
+    !> The rows a reconstruct3D run inserts: the previous sampling (update_frac) or every particle with
+    !! state > 0 (and updatecnt > 0 once any was updated); a row filter, so a part's range of the master's
+    !! rows equals the part's own sampling
+    subroutine sample_rows(params, build, fromto, pinds)
+        type(parameters),     intent(in)    :: params
+        type(builder),        intent(inout) :: build
+        integer,              intent(in)    :: fromto(2)
+        integer, allocatable, intent(inout) :: pinds(:)
+        integer, allocatable :: labels(:)
+        integer :: nptcls2update, i
+        if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
+            call build%spproj_field%sample4update_reprod(fromto, nptcls2update, pinds)
+        else
+            call build%spproj_field%sample4rec(fromto, nptcls2update, pinds)
+        endif
+        ! state= with hard labels: only the rows labelled with that state (weighted runs select by weight)
+        if( params%l_state_defined .and. .not. params%l_m_estimator_flex )then
+            allocate(labels(size(pinds)))
+            do i = 1, size(pinds)
+                labels(i) = build%spproj_field%get_state(pinds(i))
+            enddo
+            pinds = pack(pinds, labels == params%state)
+            deallocate(labels)
+        endif
+    end subroutine sample_rows
 
     subroutine ensure_canonical_sigma_state(params, build, cline)
         use simple_commanders_euclid, only: commander_calc_pspec
@@ -456,7 +315,7 @@ contains
         if( found )then
             call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
             if( status == 0 )then
-                layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
+                layout_digest = ptcl_layout_digest(build%spproj, build%spproj_field)
                 if( params%l_sigma_glob )then
                     call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
                         &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
@@ -506,40 +365,5 @@ contains
             call cline%delete('mskdiam')
         endif
     end subroutine sync_resolved_rec_params
-
-    subroutine maybe_postprocess_reconstruct3D(params, build, cline)
-        use simple_commanders_volops, only: postprocess_volume_from_files
-        type(parameters), intent(in)    :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
-        type(parameters) :: params_pp
-        type(string)     :: fname_vol, fname_fsc
-        real             :: smpd
-        integer          :: state, nptcls, ldim(3)
-        if( trim(params%postprocess) /= 'yes' )return
-        if( cline%defined('part') )return
-        if( params%l_nonuniform )then
-            write(logfhandle,'(A)') &
-                &'>>> reconstruct3D postprocess: using classical postprocessing'
-        endif
-        do state = 1, params%nstates
-            if( .not. cline%defined('frozen_rec') )then
-                if( build%spproj_field%get_pop(state, 'state') == 0 ) cycle
-            endif
-            params_pp = params
-            fname_vol = refine3D_state_vol_fname(state)
-            fname_fsc = refine3D_fsc_fname(state)
-            if( .not. file_exists(fname_vol) )then
-                call fname_vol%kill
-                call fname_fsc%kill
-                cycle
-            endif
-            call find_ldim_nptcls(fname_vol, ldim, nptcls)
-            smpd = params%smpd_crop
-            call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline, state)
-            call fname_vol%kill
-            call fname_fsc%kill
-        enddo
-    end subroutine maybe_postprocess_reconstruct3D
 
 end module simple_rec3D_strategy

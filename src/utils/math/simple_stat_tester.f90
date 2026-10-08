@@ -4,7 +4,8 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! TINY
 use simple_type_defs  ! weighting criteria enumerators
 use simple_stat,      only: corrs2weights, conv2rank_weights, rank_sum_weights, rank_centroid_weights,&
-                           &rank_exponent_weights, rank_inverse_weights, median, median_nocopy, calc_stats
+                           &rank_exponent_weights, rank_inverse_weights, median, median_nocopy, calc_stats,&
+                           &logsumexp
 implicit none
 private
 public :: run_all_stat_tests
@@ -21,6 +22,7 @@ contains
         call test_corrs2weights_other_criteria()
         call test_median()
         call test_calc_stats()
+        call test_logsumexp()
     end subroutine run_all_stat_tests
 
     !---------------- median ----------------
@@ -62,6 +64,20 @@ contains
         call assert_real(3.,       st%minv, 0.,    'calc_stats with mask: minimum')
         call assert_real(35.,      st%maxv, 0.,    'calc_stats with mask: maximum')
     end subroutine test_calc_stats
+
+    !> logsumexp of log(1), log(2), log(3) is log(6) with weights 1/6, 2/6, 3/6; shifting every entry by
+    !! 1000 (exp would overflow) shifts the result by 1000 and leaves the weights
+    subroutine test_logsumexp()
+        real(dp) :: x(3), w(3), lse
+        write(*,'(A)') 'test_logsumexp'
+        x   = log([1._dp, 2._dp, 3._dp])
+        lse = logsumexp(x, w)
+        call assert_true(abs(lse - log(6._dp)) < 1.e-14_dp, 'logsumexp of log(1,2,3) is log(6)')
+        call assert_true(maxval(abs(w - [1._dp, 2._dp, 3._dp]/6._dp)) < 1.e-14_dp, 'logsumexp weights are the softmax')
+        lse = logsumexp(x + 1000._dp, w)
+        call assert_true(abs(lse - (1000._dp + log(6._dp))) < 1.e-10_dp, 'logsumexp does not overflow')
+        call assert_true(maxval(abs(w - [1._dp, 2._dp, 3._dp]/6._dp)) < 1.e-12_dp, 'logsumexp weights are shift invariant')
+    end subroutine test_logsumexp
 
     !---------------- the four rank-weight kernels ----------------
 

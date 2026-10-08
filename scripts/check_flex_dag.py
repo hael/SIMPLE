@@ -29,9 +29,6 @@ LAYERS = {
     "simple_umap": 1,
     "simple_flex_pca_project_gateway": 1,
     "simple_flex_pca_embedding_io": 1,
-    "simple_flex_pca_state_parts": 1,
-    "simple_flex_weights_state": 1,
-    "simple_flex_weights_file": 1,
     # L2: probe-fit state and services.
     "simple_flex_pca_fit_types": 2,
     "simple_flex_pca_mstep": 2,
@@ -42,11 +39,6 @@ LAYERS = {
     "simple_flex_pca_pairmerge": 2,
     "simple_flex_pca_fit_driver": 2,
     # L3: state inference and reconstruction.
-    "simple_flex_pca_states_backend": 3,
-    "simple_flex_pca_states_gridding": 3,
-    "simple_flex_pca_states_pcg": 3,
-    "simple_flex_pca_state_delivery": 3,
-    "simple_flex_pca_rec3d": 3,
     "simple_flex_pca_weights": 3,
     "simple_flex_pca_merge": 3,
     # L4-L6: application services, application and strategy.
@@ -188,7 +180,6 @@ def main():
     paths = sorted((root / "src/main/flex").rglob("*.f90"))
     paths += [
         root / "src/defs/simple_defs_flex.f90",
-        root / "src/fileio/simple_flex_weights_file.f90",
         root / "src/main/strategies/parallelization/simple_flex_pca_strategy.f90",
     ]
     problems = []

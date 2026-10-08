@@ -6,6 +6,7 @@ use simple_rnd,                only: ran3
 use simple_flex_pca_targets,   only: kmeans_latent_targets
 use simple_flex_pca_gmm,       only: gmm_state_weights
 use simple_flex_pca_posterior, only: spd_inv_dp
+use simple_stat,               only: kish_ess
 implicit none
 
 public :: flex_cls_model, flex_cls_fit, flex_cls_place_states, flex_cls_restore_states, flex_cls_shell_noise, flex_cls_half_reproducibility
@@ -478,7 +479,7 @@ contains
         integer,  intent(in)  :: nptcls, nd, ncls, labels(:)
         real(dp), intent(in)  :: z(nptcls,nd), prec(nd,nd,nptcls)
         real(sp), intent(out) :: weights(:,:), neff(:)
-        real(dp) :: cen(nd), d(nd), q, sw, sw2
+        real(dp) :: cen(nd), d(nd), q
         integer  :: s, i, n
         do s = 1, ncls
             n = count(labels == s)
@@ -496,8 +497,7 @@ contains
             end do
             where( weights(:,s) < FLEX_CLS_W_CUTOFF ) weights(:,s) = 0.
             where( labels == s ) weights(:,s) = max(weights(:,s), 1.)
-            sw = sum(real(weights(:,s),dp)); sw2 = sum(real(weights(:,s),dp)**2)
-            neff(s) = real(sw * sw / max(sw2, 1.d-300), sp)
+            neff(s) = real(kish_ess(real(weights(:,s),dp)), sp)
         end do
     end subroutine posterior_kernel_weights
 

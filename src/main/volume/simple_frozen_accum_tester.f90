@@ -171,7 +171,7 @@ contains
         character(len=64)     :: good(10)
         integer :: status
         write(*,'(A)') 'test_context_refusals'
-        good = [character(len=64) :: 'solve3D_addon_frozen_context 2', 'run_id r1', 'backend pcg', &
+        good = [character(len=64) :: 'solve3D_addon_frozen_context 3', 'run_id r1', 'backend pcg', &
             &'nstates 2', 'nrows 30', 'nrows_frozen 25', 'nfrozen 7', 'nfrozen_state 1 3', 'nfrozen_state 2 4', 'end']
         call write_text(CTX_FNAME, good)
         call ctx%read(string(CTX_FNAME), status, msg)
@@ -179,7 +179,7 @@ contains
         call del_file(CTX_FNAME)
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'a missing context is refused')
-        call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_context 1', good(2:)])
+        call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_context 2', good(2:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'an unsupported schema version is refused')
         call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_set 1', good(2:)])
@@ -336,7 +336,7 @@ contains
         call assert_true(status /= 0, 'no set is found for a state that was not written')
         ! a consumer of another reconstruction weighting, another frozen count
         call ctx%write(string(CTX_FNAME))
-        call weighted%load(string(CTX_FNAME), 'gridding', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false.)
+        call weighted%load(string(CTX_FNAME), 'gridding', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false., wset_id=[0_8, 0_8])
         call weighted%gridding_set_status(1, BOX, SMPD, status, msg)
         call assert_true(status /= 0 .and. index(msg, 'weighting') > 0, 'a set of another weighting is refused')
         call recount%new(RUN_ID, 'gridding', NFROZEN+NCOHORT+3, NFROZEN+NCOHORT, [NFROZEN-1, 2])
@@ -487,7 +487,7 @@ contains
         call ctx%pcg_half_status(1, 0, BOX, 1.1*SMPD, status, msg)
         call assert_true(status /= 0, 'a PCG half at another sampling is refused')
         call ctx%write(string(CTX_FNAME))
-        call weighted%load(string(CTX_FNAME), 'pcg', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false.)
+        call weighted%load(string(CTX_FNAME), 'pcg', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false., wset_id=[0_8, 0_8])
         call weighted%pcg_half_status(1, 0, BOX, SMPD, status, msg)
         call assert_true(status /= 0, 'a PCG half of another weighting is refused')
         call del_file(CTX_FNAME)

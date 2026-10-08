@@ -251,11 +251,11 @@ module subroutine exec_test_pcg_recon( self, cline )
             write(logfhandle,'(a)') '    PASS: normal operator is positive-definite'
         endif
         ! P H P with the support mask ACTIVE -- the operator production solves
-        ! with (see set_mask: x = P u gives (P H P) u = P b). The soft edge
+        ! with (see set_window_sphere: x = P u gives (P H P) u = P b). The soft edge
         ! makes P non-idempotent, so a one-sided or asymmetric mask application
         ! breaks the dot-product identity where the unmasked check cannot see it.
         write(logfhandle,'(a)') '>>> STAGE 3b: masked-operator (P H P) symmetry and positive-definiteness'
-        call pcgop%set_mask(real(BOX)/3.0)
+        call pcgop%set_window_sphere(real(BOX)/3.0)
         hp = pcgop%apply_normal(p_probe)
         hq = pcgop%apply_normal(q_probe)
         dp_p_hq = pcgop%dot_real_volume(p_probe, hq)
@@ -279,7 +279,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: masked normal operator is positive-definite'
         endif
-        call pcgop%set_mask(0.0)   ! stages 4+ assert on the unmasked operator
+        call pcgop%set_window_sphere(0.0)   ! stages 4+ assert on the unmasked operator
     else
         write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
     endif
@@ -1061,7 +1061,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 14: support semantics and warm-start band stability'
         call pcg_c%new(BOX, SMPD, LAMBDA)
         call pcg_c%set_deapod(.false.)
-        call pcg_c%set_mask(SUPPORT_MSKRAD)
+        call pcg_c%set_window_sphere(SUPPORT_MSKRAD)
         call pcg_c%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
         call pcg_c%begin_accum
         call pcg_c%accumulate_batch(y_planes, NPROJS, 1)
@@ -1075,7 +1075,7 @@ module subroutine exec_test_pcg_recon( self, cline )
             write(logfhandle,'(a)') '    FAIL: the constrained solve lost positive-definiteness'
             all_ok = .false.
         endif
-        ! the window itself, by the set_mask recipe
+        ! the window itself, by the set_window_sphere recipe
         allocate(window(BOX,BOX,BOX), source=1.0)
         call wimg%new([BOX,BOX,BOX], SMPD)
         call wimg%set_rmat(window, .false.)

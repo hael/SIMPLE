@@ -2,8 +2,9 @@
 module simple_commanders_euclid
 use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_commanders_api
+use simple_ptcl_layout, only: ptcl_layout_digest
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
-    &sigma2_state_merge_local_ranges, sigma2_state_project_layout_digest, &
+    &sigma2_state_merge_local_ranges, &
     &sigma2_state_range_path, sigma2_state_reduce_groups, sigma2_state_validate_identity, &
     &sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
@@ -140,7 +141,7 @@ contains
         if( nptcls < 1 ) THROW_HARD('sigma2_convert requires a populated particle field')
         box = project%get_box()
         if( box < 2 ) THROW_HARD('sigma2_convert requires valid project dimensions')
-        layout_digest = sigma2_state_project_layout_digest(project, particles)
+        layout_digest = ptcl_layout_digest(project, particles)
         if( layout_digest == 0_int64 ) THROW_HARD('cannot derive canonical sigma2 particle layout identity')
         project_ngroups = 0
         do iptcl = 1, nptcls

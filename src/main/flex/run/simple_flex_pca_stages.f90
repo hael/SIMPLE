@@ -11,14 +11,13 @@ implicit none
 private
 
 public :: flex_stage_request
-public :: PCA_STAGE_EMBED, PCA_STAGE_STATES, PCA_STAGE_PROBE, PCA_STAGE_POLISH
+public :: PCA_STAGE_EMBED, PCA_STAGE_PROBE, PCA_STAGE_POLISH
 public :: FLEX_FIT_ALL, FLEX_FIT_A, FLEX_FIT_B
 public :: FLEX_MOD4_PAIRING
 public :: flex_pca_half_of
 
 ! Compact current stage protocol carried to workers in params%stage.
 integer, parameter :: PCA_STAGE_EMBED  = 1
-integer, parameter :: PCA_STAGE_STATES = 2
 ! One qsys round per probe EM iteration: the basis changes every iteration, so workers are
 ! re-launched against the master's refreshed flex_pca_pc*.mrc rather than looping locally.
 integer, parameter :: PCA_STAGE_PROBE  = 3

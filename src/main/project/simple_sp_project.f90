@@ -139,7 +139,8 @@ contains
     procedure          :: add_cavgs2os_out
     procedure          :: add_frcs2os_out
     procedure          :: add_fsc2os_out
-    procedure          :: add_flex_weights2os_out
+    procedure          :: add_state_weights2os_out
+    procedure          :: remove_state_weights_from_osout
     procedure          :: add_vol2os_out
     procedure          :: add_entry2os_out
     procedure, private :: get_os_out_entry_index
@@ -151,7 +152,7 @@ contains
     procedure          :: get_all_fscs
     procedure          :: get_vol
     procedure          :: get_fsc
-    procedure          :: get_flex_weights
+    procedure          :: get_state_weights
     procedure          :: get_frcs
     procedure          :: get_mskdiam
     procedure          :: get_imginfo_from_osout
@@ -177,6 +178,7 @@ contains
     ! I/O – Writers
     procedure          :: write
     procedure          :: write_segment_inside
+    procedure          :: clear_segment_inside
     procedure          :: write_non_data_segments
     procedure          :: write_mics_star
     procedure          :: write_ptcl2D_star
@@ -641,20 +643,23 @@ interface
         integer,           intent(in)    :: state, box
     end subroutine add_fsc2os_out
 
-    module subroutine add_flex_weights2os_out( self, weights, state, box, smpd )
+    module subroutine remove_state_weights_from_osout( self )
         class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: weights
-        integer,           intent(in)    :: state, box
-        real,              intent(in)    :: smpd
-    end subroutine add_flex_weights2os_out
+    end subroutine remove_state_weights_from_osout
 
-    module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop )
+    module subroutine add_state_weights2os_out( self, manifest )
+        class(sp_project), intent(inout) :: self
+        class(string),     intent(in)    :: manifest
+    end subroutine add_state_weights2os_out
+
+    module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop, mass, ess )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: vol
         character(len=*),  intent(in)    :: which_imgkind
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: state
         integer, optional, intent(in)    :: box, pop
+        real,    optional, intent(in)    :: mass, ess
     end subroutine add_vol2os_out
 
     module subroutine add_entry2os_out( self, which_imgkind, ind )
@@ -720,12 +725,11 @@ interface
         integer,           intent(out)   :: box
     end subroutine get_fsc
 
-    module subroutine get_flex_weights( self, state, weights_fname, found )
+    module subroutine get_state_weights( self, manifest, found )
         class(sp_project), intent(in)    :: self
-        integer,           intent(in)    :: state
-        class(string),     intent(inout) :: weights_fname
+        class(string),     intent(inout) :: manifest
         logical,           intent(out)   :: found
-    end subroutine get_flex_weights
+    end subroutine get_state_weights
 
     module subroutine get_all_fscs( self, orisout )
         class(sp_project), intent(in)    :: self
@@ -858,6 +862,12 @@ interface
         integer(kind(ENUM_ORISEG)), optional, intent(in)    :: isegment
         logical,                    optional, intent(in)    :: tempfile
     end subroutine write
+
+    module subroutine clear_segment_inside( self, oritype, fname )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: oritype
+        class(string),     intent(in)    :: fname
+    end subroutine clear_segment_inside
 
     module subroutine write_segment_inside( self, oritype, fname, fromto )
         class(sp_project),          intent(inout) :: self

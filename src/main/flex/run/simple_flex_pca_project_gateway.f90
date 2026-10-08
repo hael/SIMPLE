@@ -2,28 +2,26 @@
 !!
 !! Selection and validation of the run's particles (a worker's partition list, the master's state>0
 !! rows), the even/odd repair the master persists for its workers, the canonical sigma2 load with
-!! the master/worker pin, and the two deliveries that mutate the run's project copy: the per-state
-!! weight store registered in the out segment, and the hard state labels written into ptcl3D.
+!! the master/worker pin, and the deliveries that mutate the run's project copy: the state weight set
+!! registered in the out segment, the hard state labels written into ptcl3D, and the state maps
+!! reconstructed from that set and registered as vol and FSC entries.
 module simple_flex_pca_project_gateway
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_core_module_api, only: fclose, file2rarr, file_exists, fileiochk, fopen, fsc2optlp_sub, int2str_pad, &
-    &logfhandle, nlines, simple_exception, stdlen, string, tiny
+use simple_core_module_api, only: fclose, file_exists, fileiochk, fopen, logfhandle, nlines, simple_exception, string, tiny
 use simple_builder,            only: builder
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_sp_project,         only: sp_project
 use simple_sigma2_files,       only: load_sigma2_groups
-use simple_estimate_ssnr,      only: fsc2optlp_sub
 use simple_flex_pca_rounds,    only: flex_pca_rounds
-use simple_flex_weights_state, only: flex_weights_store, flex_weights_state_fname, FLEX_WEIGHTS_STALE_SCAN
-use simple_flex_weights_file,  only: FLEX_WEIGHTS_PROV_FLEX_PCA, FLEX_WEIGHTS_PROV_MERGED
+use simple_state_weight_set,   only: state_weight_set, STATE_WEIGHTS_KIND_PARTITION
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: validate_covariance_inputs, load_and_validate_sigma
-public :: write_flex_weights_store, write_discrete_state_project
-public :: prepare_project_fsc_lowpass_filters, publish_state_volume, write_out_segment
+public :: validate_covariance_inputs, ensure_canonical_sigma_state, load_and_validate_sigma
+public :: write_state_weight_set, write_discrete_state_project, register_embedding_artifact
+public :: deliver_state_maps
 
 character(len=*), parameter :: SIGMA_STATE_FNAME = 'flex_pca_sigma_state.txt'
 
@@ -114,6 +112,63 @@ contains
             &THROW_HARD('flex_pca requires populated even and odd halfsets')
     end subroutine validate_covariance_inputs
 
+    !> The canonical sigma2 state, validated (canonical_sigma2_consumable) or seeded from particle
+    !! power (simple_sigma2_bootstrap) before any part command line is generated; the master and
+    !! shared-memory roles only, workers consume what it committed. Per-stack (group) sigma2 needs
+    !! particles in both halves of every stack: a 2D selection deselects whole stacks, and the
+    !! canonical reduce then refuses ("empty even/odd half"), so a selection with such a stack falls
+    !! back to the pooled spectrum here and sigma_est=global never has to be typed for a subset.
+    subroutine ensure_canonical_sigma_state( params, build, cline )
+        use simple_core_module_api,  only: OBJFUN_EUCLID
+        use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        class(cmdline),   intent(inout) :: cline
+        integer, allocatable :: cnt(:,:)
+        integer :: iptcl, ngroups, g, e, nempty
+        logical :: l_bootstrapped
+        if( params%cc_objfun /= OBJFUN_EUCLID ) return
+        if( .not. params%l_sigma_glob )then
+            ngroups = 0
+            do iptcl = 1, params%nptcls
+                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                ngroups = max(ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
+            enddo
+            if( ngroups > 0 )then
+                allocate(cnt(0:1,ngroups), source=0)
+                do iptcl = 1, params%nptcls
+                    if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                    g = build%spproj_field%get_int(iptcl, 'stkind')
+                    e = build%spproj_field%get_eo(iptcl)
+                    if( g < 1 .or. g > ngroups .or. e < 0 .or. e > 1 ) cycle
+                    cnt(e,g) = cnt(e,g) + 1
+                enddo
+                nempty = 0
+                do g = 1, ngroups
+                    if( cnt(0,g) == 0 .or. cnt(1,g) == 0 ) nempty = nempty + 1
+                enddo
+                if( nempty > 0 )then
+                    if( sum(cnt(0,:)) == 0 .or. sum(cnt(1,:)) == 0 )then
+                        write(logfhandle,'(A)') '>>> FLEX_PCA SIGMA: the project carries no even/odd assignment, so &
+                            &per-stack sigma2 halves cannot be formed; using the pooled (global) noise spectrum &
+                            &(sigma_est=global)'
+                    else
+                        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA SIGMA: ', nempty, ' of ', ngroups, &
+                            &' sigma2 groups (stacks) have no particles in one half after the selection; &
+                            &using the pooled (global) noise spectrum (sigma_est=global)'
+                    endif
+                    params%sigma_est   = 'global'
+                    params%l_sigma_glob = .true.
+                    call cline%set('sigma_est', 'global')
+                endif
+                deallocate(cnt)
+            endif
+        endif
+        call ensure_sigma2_for_iteration(cline, params%projfile, 1, params%box, params%smpd, params%l_sigma_glob, &
+            &'FLEX_PCA SIGMA', l_bootstrapped, sigma_est=merge('global', 'group ', params%l_sigma_glob))
+        if( l_bootstrapped ) call build%spproj%read_segment('projinfo', params%projfile)
+    end subroutine ensure_canonical_sigma_state
+
     subroutine load_and_validate_sigma( params, build, cline, pinds, loaded , rounds)
         class(flex_pca_rounds), intent(inout) :: rounds
         type(parameters),       intent(inout) :: params
@@ -200,39 +255,43 @@ contains
         endif
     end subroutine check_sigma_state
 
-    !>  The delivered weight table into one file per state (flex_weights_state_NNN.bin: every physical
-    !!  row, rows outside the selection zero, that state's scalars alongside), each registered in the
-    !!  out segment of the run's own project copy as imgkind flex_weights, state NNN, beside vol_flex
-    !!  state NNN. The files validate their rows against the field's `state` as the run saw it, so
-    !!  this runs BEFORE write_discrete_state_project overwrites those labels.
-    subroutine write_flex_weights_store( params, build, pinds, weights, labels, targets, bandwidths, l_merged )
+    !>  The delivered weight table as the project's state weight set (simple_state_weight_set): one
+    !!  file per state over every project row (zero outside the selection) with the hard labels, a
+    !!  manifest published last, registered in the out segment of the run's own project copy.
+    subroutine write_state_weight_set( params, build, pinds, weights, labels, l_merged )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         integer,          intent(in)    :: pinds(:), labels(:)
-        real,             intent(in)    :: weights(:,:), targets(:,:), bandwidths(:)
+        real,             intent(in)    :: weights(:,:)
         logical,          intent(in)    :: l_merged
-        character(len=STDLEN) :: message
-        type(flex_weights_store) :: store
-        integer :: status, s, nstates
-        nstates = size(weights,2)
-        call store%deliver(build%spproj, build%spproj_field, params%box, params%smpd, &
-            &params%box_crop, params%smpd_crop, pinds, weights, labels, targets, bandwidths, &
-            &merge(FLEX_WEIGHTS_PROV_MERGED, FLEX_WEIGHTS_PROV_FLEX_PCA, l_merged), status, message)
-        call store%kill
-        if( status /= 0 ) THROW_HARD('flex_pca could not deliver the state weights: '//trim(message))
-        do s = 1, nstates
-            call build%spproj%add_flex_weights2os_out(flex_weights_state_fname(s), s, params%box, params%smpd)
-        end do
-        ! entries of a previous delivery with more states would point at files the delivery removed
-        do s = nstates+1, nstates+FLEX_WEIGHTS_STALE_SCAN
-            if( build%spproj%isthere_in_osout('flex_weights', s) ) call build%spproj%remove_entry_from_osout('flex_weights', s)
-        end do
-        call build%spproj%write_segment_inside('out', params%projfile)
-        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA STATE WEIGHTS WRITTEN: flex_weights_state_001..'// &
-            &int2str_pad(nstates,3)//'.bin (', size(weights,1), ' particles x ', nstates, &
-            &' states; registered in the out segment as flex_weights per state)'
+        type(state_weight_set) :: weight_set
+        call weight_set%publish(build%spproj, build%spproj_field, params%projfile, pinds, weights, labels, &
+            &merge('flex_pca_merged', 'flex_pca       ', l_merged))
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,A)') '>>> FLEX_PCA STATE WEIGHT SET PUBLISHED: generation ', &
+            &weight_set%get_generation(), ', ', weight_set%get_nptcls(), ' particles x ', weight_set%get_nstates(), &
+            &' states, kind ', merge('partition', 'kernel   ', weight_set%get_kind() == STATE_WEIGHTS_KIND_PARTITION)
         call flush(logfhandle)
-    end subroutine write_flex_weights_store
+        call weight_set%kill
+    end subroutine write_state_weight_set
+
+    !>  The run's embedding artifact as the project's out-segment entry flex_embedding (absolute path), so
+    !!  consumers find it through the project; written with the out segment. No artifact, no entry.
+    subroutine register_embedding_artifact( params, build, fname )
+        use simple_syslib, only: simple_abspath
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        character(len=*),  intent(in)    :: fname
+        type(string) :: path
+        integer :: ind
+        if( .not. file_exists(fname) ) return
+        path = simple_abspath(fname)
+        call build%spproj%add_entry2os_out('flex_embedding', ind)
+        call build%spproj%os_out%set(ind, 'imgkind',        'flex_embedding')
+        call build%spproj%os_out%set(ind, 'flex_embedding', path%to_char())
+        call build%spproj%write_segment_inside('out', params%projfile)
+        write(logfhandle,'(A,A)') '>>> FLEX_PCA EMBEDDING ARTIFACT REGISTERED: ', path%to_char()
+        call path%kill
+    end subroutine register_embedding_artifact
 
     !>  Write the hard state assignment INTO the run's own project: ptcl3D/state carries each embedded
     !!  particle's label, 0 elsewhere. Judge the clusters independently of the kernel-weighted backend with
@@ -285,105 +344,63 @@ contains
         deallocate(assigned)
     end subroutine write_discrete_state_project
 
-    !> The project's state-1 FSC as a per-state low-pass filter sized to the delivered map
-    !! (filtsz = fdim(box_rec)-1); has_filter false wherever the project cannot provide one.
-    subroutine prepare_project_fsc_lowpass_filters( params, filtsz, nstates, lowpass_filters, has_filter, source_state )
-        class(parameters),    intent(in)  :: params
-        integer,              intent(in)  :: filtsz, nstates
-        real,    allocatable, intent(out) :: lowpass_filters(:,:)
-        logical, allocatable, intent(out) :: has_filter(:)
-        integer, allocatable, intent(out) :: source_state(:)
-        type(sp_project) :: spproj
-        type(string) :: fsc_fname, imgkind_here, proj_for_fsc
-        real, allocatable :: fsc(:)
-        integer :: state, fsc_box, i, state1_fsc_count
-        logical :: out_loaded
-        allocate(lowpass_filters(filtsz,nstates),has_filter(nstates),source_state(nstates))
-        lowpass_filters=0.
-        has_filter=.false.
-        source_state=0
-        if( filtsz<1 ) return
-        proj_for_fsc=params%projfile
-        if( .not.file_exists(proj_for_fsc) )then
-            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC low-pass unavailable (projfile not found); states rely on their own eo-FSC'
-            has_filter = .false.   ! the state's own eo-FSC decides
-            call proj_for_fsc%kill
-            return
-        endif
-        call spproj%read_segment('out',proj_for_fsc)
-        out_loaded=spproj%os_out%get_noris()>0
-        if( .not.out_loaded )then
-            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC low-pass unavailable (empty out segment); states rely on their own eo-FSC'
-            has_filter = .false.   ! the state's own eo-FSC decides
-            call proj_for_fsc%kill
-            call spproj%kill
-            return
-        endif
-        state1_fsc_count=0
-        do i=1,spproj%os_out%get_noris()
-            if( .not.spproj%os_out%isthere(i,'imgkind') ) cycle
-            call spproj%os_out%getter(i,'imgkind',imgkind_here)
-            if( imgkind_here%to_char()/='fsc' ) cycle
-            if( spproj%os_out%get_state(i)==1 ) state1_fsc_count=state1_fsc_count+1
+    !> The delivered state maps (box decision D9: the native box, as reconstruct3D does): reconstruct3D
+    !! with m_estimator=flex from the weight set just published, in this process and directory, then
+    !! registered as the project's ordinary vol and FSC entries of every state (ruling 5); the vol and FSC
+    !! entries of states it does not deliver, and an earlier release's vol_flex entries, are removed
+    subroutine deliver_state_maps( params, build, nstates )
+        use simple_commanders_rec,  only: commander_rec3D
+        use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_fsc_fname
+        use simple_syslib,          only: simple_abspath
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nstates
+        type(commander_rec3D) :: xrec3D
+        type(cmdline)         :: cline_rec
+        type(string)          :: vol_fname, fsc_fname
+        integer :: state, nstates_out
+        call cline_rec%set('prg',         'reconstruct3D')
+        call cline_rec%set('projfile',    params%projfile%to_char())
+        call cline_rec%set('mkdir',       'no')
+        call cline_rec%set('oritype',     'ptcl3D')
+        call cline_rec%set('nstates',     nstates)
+        call cline_rec%set('m_estimator', 'flex')
+        call cline_rec%set('rec_backend', trim(params%rec_states_backend))
+        call cline_rec%set('mskdiam',     params%mskdiam)
+        call cline_rec%set('pgrp',        trim(params%pgrp))
+        call cline_rec%set('objfun',      trim(params%objfun))
+        call cline_rec%set('sigma_est',   trim(params%sigma_est))
+        call cline_rec%set('nthr',        params%nthr)
+        ! the run's solver controls carry over to its delivered maps
+        call cline_rec%set('maxits_pcg',  params%maxits_pcg)
+        call cline_rec%set('rtol',        params%rtol)
+        write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA DELIVERED STATE MAPS: reconstruct3D m_estimator=flex nstates=', nstates, &
+            &' from the published state weight set'
+        call flush(logfhandle)
+        call xrec3D%execute(cline_rec)
+        call cline_rec%kill
+        ! the reconstruction updated the project file: register on top of what it holds
+        call build%spproj%read_segment('out', params%projfile)
+        nstates_out = 0
+        if( build%spproj%os_out%get_noris() > 0 ) nstates_out = build%spproj%os_out%get_n('state')
+        do state = 1, max(nstates, nstates_out)
+            call build%spproj%remove_entry_from_osout('vol_flex', state)
+            vol_fname = refine3D_state_vol_fname(state)
+            fsc_fname = refine3D_fsc_fname(state)
+            if( state > nstates .or. .not. file_exists(vol_fname) .or. .not. file_exists(fsc_fname) )then
+                call build%spproj%remove_entry_from_osout('vol', state)
+                call build%spproj%remove_entry_from_osout('fsc', state)
+                if( state <= nstates ) write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA state ', state, &
+                    &' has no delivered map; not registered'
+                cycle
+            endif
+            vol_fname = simple_abspath(vol_fname)
+            call build%spproj%add_vol2os_out(vol_fname, params%smpd, state, 'vol', box=params%box)
+            call build%spproj%add_fsc2os_out(fsc_fname, state, params%box)
         end do
-        if( state1_fsc_count/=1 )then
-            write(logfhandle,'(A,I0)') '>>> FLEX PRE-IMAGE project-FSC low-pass unavailable (state=1 FSC count=', &
-                &state1_fsc_count
-            write(logfhandle,'(A)') '>>>   ); states rely on their own eo-FSC'
-            has_filter = .false.   ! the state's own eo-FSC decides
-            call imgkind_here%kill
-            call proj_for_fsc%kill
-            call spproj%kill
-            return
-        endif
-        call spproj%get_fsc(1,fsc_fname,fsc_box)
-        if( .not.file_exists(fsc_fname) )then
-            write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE project-FSC low-pass unavailable (state=1 FSC file missing); states rely on their own eo-FSC'
-            has_filter = .false.   ! the state's own eo-FSC decides
-            call imgkind_here%kill
-            call proj_for_fsc%kill
-            call spproj%kill
-            return
-        endif
-        fsc=file2rarr(fsc_fname)
-        if( size(fsc)/=filtsz )then
-            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE project-FSC low-pass unavailable (state=1 FSC size mismatch; fsc_nyq=', &
-                &size(fsc),' model_nyq=',filtsz
-            write(logfhandle,'(A)') '>>>   ); states rely on their own eo-FSC'
-            has_filter = .false.   ! the state's own eo-FSC decides
-            deallocate(fsc)
-            call fsc_fname%kill
-            call imgkind_here%kill
-            call proj_for_fsc%kill
-            call spproj%kill
-            return
-        endif
-        do state=1,nstates
-            call fsc2optlp_sub(filtsz,fsc,lowpass_filters(:,state),merged=.false.)
-            has_filter(state)=any(lowpass_filters(:,state)>0.)
-            source_state(state)=1
-        end do
-        deallocate(fsc)
+        call build%spproj%write_segment_inside('out', params%projfile)
+        call vol_fname%kill
         call fsc_fname%kill
-        call imgkind_here%kill
-        call proj_for_fsc%kill
-        call spproj%kill
-    end subroutine prepare_project_fsc_lowpass_filters
-
-    !> Register one delivered state map in the project's out segment (imgkind vol_flex).
-    subroutine publish_state_volume( build, vol_fname, smpd, state, box )
-        class(builder), intent(inout) :: build
-        class(string),  intent(in)    :: vol_fname
-        real,           intent(in)    :: smpd
-        integer,        intent(in)    :: state, box
-        call build%spproj%add_vol2os_out(vol_fname, smpd, state, 'vol_flex', box=box)
-    end subroutine publish_state_volume
-
-    !> Write the out segment back to the project file.
-    subroutine write_out_segment( build, projfile )
-        class(builder), intent(inout) :: build
-        class(string),  intent(in)    :: projfile
-        call build%spproj%write_segment_inside('out', projfile)
-    end subroutine write_out_segment
+    end subroutine deliver_state_maps
 
 end module simple_flex_pca_project_gateway

@@ -1,7 +1,7 @@
-!@descr: unit tests for the identity of the 3D trailing chains: gridding manifest and PCG chain header
-! Both chains record the population they represent, M(s): the gridding manifest in a versioned
-! field, the PCG chain in the particle count of each half's raw header. A chain of any other
-! version is refused and re-seeded.
+!@descr: unit tests for the identity of the 3D trailing chains: the chain manifest and the PCG raw header
+! Both backends publish a chain with a manifest recording the applied mass it represents, M(s), its
+! contributor count and the state weight set identity; the PCG raw header carries the mass and the
+! identity of each half. A manifest or header of any other version is refused and re-seeded.
 module simple_trail_chain_manifest_tester
 use simple_core_module_api
 use simple_test_utils
@@ -28,7 +28,7 @@ contains
         write(*,'(A)') 'test_gridding_manifest'
         fname = 'trail_chain_manifest_test.txt'
         sizes = [1024_8, 2048_8, 1025_8, 2049_8]
-        call man%new(88, 2.9464285, 33016, 3, 2, 7, sizes, 10815.)
+        call man%new(88, 2.9464285, 33016, 3, 2, 7, sizes, 10815.25, 10900, [5_8, -77123456789_8])
         call man%write(fname, status)
         call assert_int(0, status, 'manifest: write status')
         call back%read(fname, status)
@@ -40,10 +40,12 @@ contains
         call assert_int(2,     back%get_state(),   'manifest round trip: state')
         call assert_int(7,     back%get_gen(),     'manifest round trip: generation')
         call assert_true(back%get_size(3) == 1025_8, 'manifest round trip: component size')
-        call assert_real(10815., back%get_mrep(), 1.e-3, 'manifest round trip: represented population M(s)')
-        ! a manifest of another version (here the version-1 layout) is unreadable
+        call assert_real(10815.25, back%get_mrep(), 1.e-3, 'manifest round trip: represented mass M(s)')
+        call assert_int(10900, back%get_ncontrib(), 'manifest round trip: contributor count')
+        call assert_true(all(back%get_wset_id() == [5_8, -77123456789_8]), 'manifest round trip: weight set identity')
+        ! a manifest of another version (here the version-2 layout, without contributors and identity) is unreadable
         open(newunit=funit, file=fname%to_char(), status='replace', action='write')
-        write(funit,*) 88, 2.9464285, 33016, 3, 2, 7, sizes
+        write(funit,*) 2, 88, 2.9464285, 33016, 3, 2, 7, sizes, 10815.
         close(funit)
         call back%read(fname, status)
         call assert_int(TRAIL_MANIFEST_UNREADABLE, status, 'manifest: another version is refused (re-seeded)')
@@ -60,9 +62,9 @@ contains
         call back%kill
     end subroutine test_gridding_manifest
 
-    ! The PCG chain's represented population is the header particle count of each half; the
-    ! chain identity (provenance) carries a version, so a chain of an older version is not
-    ! compatible and the master re-seeds it
+    ! The PCG raw header carries the contributor count, the applied mass and the weight set identity
+    ! of each half; the chain identity (provenance) carries a version, so a chain of an older version
+    ! is not compatible and the master re-seeds it
     subroutine test_pcg_chain_header()
         integer,          parameter :: BOX  = 16
         real,             parameter :: SMPD = 2.0
@@ -73,6 +75,8 @@ contains
         type(oris)              :: os
         type(string)            :: fname
         character(len=256)      :: prov
+        real(dp)       :: mass
+        integer(int64) :: wset_id(2)
         real    :: smpd_file
         integer :: state, eo, part, nparts, nptcls, box_file, status
         write(*,'(A)') 'test_pcg_chain_header'
@@ -81,10 +85,18 @@ contains
         call op%new(BOX, SMPD, 1.e-2)
         call op%prep_particles(os, use_ctf=.false.)
         call op%begin_accum
-        call op%write_raw_accum(fname, 1, 0, 1, 1, MREP_HALF, PROV_NEW)
-        call read_pcg_raw_accum_header(fname, state, eo, part, nparts, nptcls, box_file, smpd_file, prov, status)
+        call op%write_raw_accum(fname, 1, 0, 1, 1, MREP_HALF, PROV_NEW, mass=12.75_dp, wset_id=[3_int64, 99_int64])
+        call read_pcg_raw_accum_header(fname, state, eo, part, nparts, nptcls, box_file, smpd_file, prov, status, &
+            &mass=mass, wset_id=wset_id)
         call assert_int(0, status, 'PCG chain header: read status')
-        call assert_int(MREP_HALF, nptcls, 'PCG chain header: represented population round trip')
+        call assert_int(MREP_HALF, nptcls, 'PCG chain header: contributor count round trip')
+        call assert_true(mass == 12.75_dp, 'PCG chain header: applied mass round trip')
+        call assert_true(all(wset_id == [3_int64, 99_int64]), 'PCG chain header: weight set identity round trip')
+        call op%write_raw_accum(fname, 1, 0, 1, 1, MREP_HALF, PROV_NEW)
+        call read_pcg_raw_accum_header(fname, state, eo, part, nparts, nptcls, box_file, smpd_file, prov, status, &
+            &mass=mass, wset_id=wset_id)
+        call assert_true(mass == real(MREP_HALF,dp) .and. all(wset_id == 0_int64), &
+            &'PCG chain header: hard labels record the count as mass and a zero identity')
         call assert_true(pcg_raw_accum_compatible(fname, BOX, SMPD, PROV_NEW), 'PCG chain: same identity is compatible')
         call op%write_raw_accum(fname, 1, 0, 1, 1, MREP_HALF, PROV_OLD)
         call assert_false(pcg_raw_accum_compatible(fname, BOX, SMPD, PROV_NEW), 'PCG chain: an older chain version is re-seeded')

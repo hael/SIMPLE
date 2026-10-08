@@ -192,7 +192,7 @@ contains
         integer,           intent(out)   :: niters
         type(reconstructor_pcg) :: pcgop
         call pcgop%new(BOX, SMPD, lambda)
-        if( mskrad > 0. ) call pcgop%set_mask(mskrad)
+        if( mskrad > 0. ) call pcgop%set_window_sphere(mskrad)
         call pcgop%prep_particles(orientations, use_ctf=.false.)
         call pcgop%build_operators(.false.)
         allocate(reconstruction(BOX,BOX,BOX), source=0.)
@@ -212,7 +212,7 @@ contains
         real(dp),          intent(out)   :: residuals(2)
         type(reconstructor_pcg) :: pcgop
         call pcgop%new(BOX, SMPD, lambda)
-        call pcgop%set_mask(MSKRAD)
+        call pcgop%set_window_sphere(MSKRAD)
         call pcgop%prep_particles(orientations, use_ctf=.false.)
         call pcgop%build_operators(.false.)
         allocate(clean_rec(BOX,BOX,BOX), source=0.)
@@ -266,7 +266,7 @@ contains
         type(reconstructor_pcg) :: pcgop
         integer :: i
         call pcgop%new(BOX, SMPD, LAMBDA)
-        if( mskrad > 0. ) call pcgop%set_mask(mskrad)
+        if( mskrad > 0. ) call pcgop%set_window_sphere(mskrad)
         call pcgop%prep_particles(orientations, use_ctf=.false.)
         call pcgop%build_operators(.false.)
         allocate(recs(BOX,BOX,BOX,size(its)), source=0.)

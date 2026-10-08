@@ -151,14 +151,6 @@ contains
             &than the data, floor 64); set it only to pin a box for tests', &
             'pixels', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_PARM, 'box_rec', 'num', &
-            'State-map reconstruction box (default: native project box)', &
-            'Even box for the delivered state maps; decoupled from box_crop so the maps are not &
-            &limited to the covariance Nyquist. The commander resolves it to the native project box, &
-            &so the maps come out at the native sampling; it falls back to box_crop only when the &
-            &project geometry cannot be read. Capped at the native box', &
-            'pixels', .false., 0.0, &
-        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'oritype', 'str', &
             'Particle orientation segment', 'Fixed to ptcl3D', 'ptcl3D', .false., 'ptcl3D', &
         &visibility=UI_VIS_ADVANCED)

@@ -11,19 +11,17 @@ use simple_core_module_api, only: del_file, dp, dtiny, fdim, int2str_pad, kbwins
 use simple_flex_pca_records,         only: flex_fit_model, flex_selection
 use simple_builder,                  only: builder
 use simple_cmdline,                  only: cmdline
-use simple_flex_pca_rec3D,           only: reconstruct_flex_weighted_states, flex_rec_box, flex_rec_smpd, &
-    &read_state_weights_round
 use simple_flex_pca_planes,          only: flex_plane_store
 use simple_flex_pca_rounds,          only: flex_pca_rounds
 use simple_flex_pca_embedding_io,    only: write_embedding_cache, read_embedding_cache
 use simple_flex_pca_state_service,   only: apply_latent_deconvolution, prune_underpopulated_states, &
-    &place_states_with_population_floor, cv_select_bandwidths, infile_path, infile_dir, AUTO_NSTATES
+    &place_states_with_population_floor, cv_select_bandwidths, infile_path, AUTO_NSTATES, &
+    &reconstruct_state_halves, delete_state_halves
 use simple_flex_pca_delivery_3d,     only: deliver_latent_readouts, write_covariance_tables, &
-    &write_covariance_eigenvolumes, write_covariance_manifest, apply_consensus_nu_filter
+    &write_covariance_eigenvolumes, write_covariance_manifest
 use simple_flex_pca_project_gateway, only: validate_covariance_inputs, load_and_validate_sigma, &
-    &write_flex_weights_store, write_discrete_state_project
-use simple_flex_pca_stages,          only: flex_stage_request, PCA_STAGE_STATES, PCA_STAGE_EMBED, PCA_STAGE_PROBE, &
-    &PCA_STAGE_POLISH
+    &write_state_weight_set, write_discrete_state_project, deliver_state_maps, register_embedding_artifact
+use simple_flex_pca_stages,          only: flex_stage_request, PCA_STAGE_EMBED, PCA_STAGE_PROBE, PCA_STAGE_POLISH
 use simple_flex_pca_run_types,       only: flex_run_session
 use simple_flex_pca_pcg,             only: flex_pcg_environment
 use simple_flex_pca_mstep,           only: init_basis_reconstructor
@@ -43,7 +41,9 @@ private
 
 public :: flex_pca_application
 
-integer, parameter :: MIN_NSTATES = 3
+integer,          parameter :: MIN_NSTATES = 3
+!> the raw state half maps the merge gate reads (simple_flex_pca_state_service: <prefix>_stateNN_{even,odd}.mrc)
+character(len=*), parameter :: TRIAL_PREFIX = 'flex_pca_trial'
 
 type :: flex_pca_application
     type(flex_run_session), allocatable :: sess
@@ -73,8 +73,8 @@ contains
             &params%mskdiam, params%box_crop, params%smpd_crop)
         call self%prepare(params, build, cline, rounds)
         call self%obtain_embedding(params, build, rounds)
-        call self%infer_states(params, build, cline, rounds)
-        call self%reconstruct_states(params, build, rounds)
+        call self%infer_states(params, build, cline)
+        call self%reconstruct_states(params, build, cline)
         call self%publish(params, build, rounds)
         call self%kill
     end subroutine app_run
@@ -136,7 +136,6 @@ contains
                 write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA preimage_auto=yes: state count is a CEILING of ', &
                     &sess%states%nstates, '; the two-gate merge collapses these to the recovered count'
             endif
-            call report_state_memory(params, sess%states%nstates)
             ! the minimum effective sample size of a delivered state: the kernel bandwidth floor AND
             ! the occupancy floor that decides whether a state is reconstructed at all
             sess%min_neff = max(20, min(sess%sel%nptcls, params%min_neff))
@@ -194,6 +193,8 @@ contains
                 sess%l_paired_states = .true.
                 call sess%clamp_state_axis
                 call self%embed_all(params, build, rounds)
+                ! nothing after the embedding reads planes: free the resident ones, delete the disk cache
+                call self%plane_store%release
             endif
             ! resuming skips the split-half solve: fall back to the spread-over-posterior-variance proxy
             if( .not. allocated(sess%latent%comp_rho) )then
@@ -206,7 +207,7 @@ contains
             ! resume never deconvolves twice.
             call apply_latent_deconvolution(sess%latent, sess%model, sess%sel, &
                 &sess%l_deconv_applied, sess%deconv_labels, sess%l_resume, sess%l_deconv_adopted, &
-                &infile_dir(params, sess%l_resume), infile_path(params, sess%l_resume))
+                &infile_path(params, sess%l_resume))
             if( sess%l_deconv_applied )then
                 ! a resume that adopted the cache already has the readouts from the original run
                 if( .not. sess%l_deconv_adopted )then
@@ -299,9 +300,8 @@ contains
     end subroutine embed_all
 
     !> State placement on the (deconvolved) embedding, the occupancy floor, the reconstruction band and the bandwidth CV
-    subroutine infer_states( self, params, build, cline, rounds )
+    subroutine infer_states( self, params, build, cline )
         class(flex_pca_application), intent(inout) :: self
-        class(flex_pca_rounds),      intent(inout) :: rounds
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
@@ -329,20 +329,15 @@ contains
             endif
             ! Drop states below min_neff before reconstruction (they gave artefact maps).
             call prune_underpopulated_states(sess%min_neff, sess%states)
-            ! MUST precede cv_select_bandwidths, which reconstructs trial half maps through the same backend.
+            ! MUST precede cv_select_bandwidths, whose trial half maps take ml_reg from this command line.
             params%l_ml_reg = .false.
             params%ml_reg   = 'no'
             call cline%set('ml_reg','no')
-            ! The reconstruction backend (prep_imgs4rec) reads its Fourier band from build%esig%get_kfromto().
-            call build%esig%set_kfromto([1, max(1, fdim(flex_rec_box(params)) - 1)])
-            if( flex_rec_box(params) /= params%box_crop )then
-                write(logfhandle,'(A,I0,A,F6.3,A,I0,A,F6.3,A)') '>>> FLEX_PCA state maps decoupled from covariance box: &
-                    &box_rec=',flex_rec_box(params),' smpd_rec=',flex_rec_smpd(params),' A vs box_crop=',params%box_crop, &
-                    &' smpd_crop=',params%smpd_crop,' A'
-            endif
-
+            ! The reconstruction (prep_imgs4rec) reads its Fourier band from build%esig%get_kfromto():
+            ! the trial maps live on the covariance box (D9)
+            call build%esig%set_kfromto([1, max(1, fdim(params%box_crop) - 1)])
             if( params%nbins > 1 .and. .not. sess%l_pop_floor )then
-                call cv_select_bandwidths(params, build, sess%sel, params%nbins, sess%min_neff, sess%states, rounds=rounds)
+                call cv_select_bandwidths(params, build, cline, sess%sel, params%nbins, sess%min_neff, sess%states)
             endif
             ! rec_states=no: deliver the placement, labels and readouts without reconstructing any
             ! map -- the states stage is then seconds instead of minutes
@@ -355,12 +350,13 @@ contains
         end associate
     end subroutine infer_states
 
-    !> The state maps (combined and per halfset), the two-gate merge and the re-reconstruction at the merged count
-    subroutine reconstruct_states( self, params, build, rounds )
+    !> The raw state half maps (the service, D11) for the two-gate merge, and the merge itself; the
+    !! delivered maps are reconstructed by publish from the published weight set
+    subroutine reconstruct_states( self, params, build, cline )
         class(flex_pca_application), intent(inout) :: self
-        class(flex_pca_rounds),      intent(inout) :: rounds
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
+        class(cmdline),              intent(in)    :: cline
         integer :: i, r, s, nstates_merged
         integer, allocatable :: merge_label(:)
         real,    allocatable :: merged_weights(:,:), merged_targets(:,:), merged_bw(:)
@@ -368,83 +364,71 @@ contains
         real(dp) :: sumw_s, sumw2_s
         integer(timer_int_kind) :: t_blk
         associate( sess => self%sess )
-            if( sess%l_state_rec )then
-                ! combined states and both halfsets in ONE pass; combined == even + odd exactly
-                params%outvol = 'flex_pca_state_001.mrc'
+            ! the merge needs at least two states and the half maps of each
+            if( sess%l_state_rec .and. params%l_preimage_auto .and. sess%states%nstates > 1 )then
                 t_blk = tic()
-                ! states of one macro-cluster share a delivery pool (per-shell adaptive kernel in rec3D)
-                call reconstruct_flex_weighted_states(params, build, sess%sel%pinds, sess%states%weights, sess%states%nstates, &
-                    &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
-                    &outvol_odd=string('flex_pca_odd_state_001.mrc'), rounds=rounds)
-                write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE states_combined_eo seconds=', toc(t_blk)
-                ! Collapse indistinct states and reconstruct once at the surviving count. Needs the half maps above.
-                if( params%l_preimage_auto .and. sess%states%nstates > 1 )then
-                    t_blk = tic()
-                    allocate(merge_label(sess%states%nstates))
-                    call two_gate_state_merge(params, self%pcg_env, sess%pviews, sess%states, merge_label, nstates_merged)
-                    if( nstates_merged < sess%states%nstates )then
-                        allocate(state_mass(sess%states%nstates))
-                        do s = 1, sess%states%nstates
-                            state_mass(s) = sum(real(sess%states%weights(:,s), dp))
-                        end do
-                        allocate(merged_weights(sess%sel%nptcls,nstates_merged), source=0.)
-                        do s = 1, sess%states%nstates
-                            merged_weights(:,merge_label(s)) = merged_weights(:,merge_label(s)) + sess%states%weights(:,s)
-                        end do
-                        call move_alloc(merged_weights, sess%states%weights)
-                        ! RECOMPUTE the label, do not remap it: the merge SUMS columns, and the pre-merge argmax
-                        ! can lose to a combined rival it beat individually (0.40 vs 0.35+0.25). Remapping would
-                        ! label the particle to a map it is no longer the largest contributor to, so the hard
-                        ! assignment and the delivered maps would describe different partitions. 0 is preserved:
-                        ! summing cannot lift a particle that was outside every kernel support.
-                        do i = 1, sess%sel%nptcls
-                            if( sess%states%labels(i) >= 1 ) sess%states%labels(i) = maxloc(sess%states%weights(i,:), dim=1)
-                        end do
-                        ! collapse the per-state tables by the same mass, else they still describe the pre-merge nstates
-                        allocate(merged_targets(size(sess%states%targets,1),nstates_merged), source=0.)
-                        allocate(merged_bw(nstates_merged), source=0.)
-                        allocate(merged_mass(nstates_merged), source=0.d0)
-                        do s = 1, sess%states%nstates
-                            r = merge_label(s)
-                            merged_targets(:,r) = merged_targets(:,r) + real(state_mass(s))*sess%states%targets(:,s)
-                            merged_bw(r)        = merged_bw(r)        + real(state_mass(s))*sess%states%bandwidths(s)
-                            merged_mass(r)      = merged_mass(r)      + state_mass(s)
-                        end do
-                        do r = 1, nstates_merged
-                            if( merged_mass(r) > DTINY )then
-                                merged_targets(:,r) = merged_targets(:,r) / real(merged_mass(r))
-                                merged_bw(r)        = merged_bw(r)        / real(merged_mass(r))
-                            endif
-                        end do
-                        call move_alloc(merged_targets, sess%states%targets)
-                        call move_alloc(merged_bw,      sess%states%bandwidths)
-                        deallocate(sess%states%neff); allocate(sess%states%neff(nstates_merged))
-                        do r = 1, nstates_merged
-                            sumw_s  = sum(real(sess%states%weights(:,r), dp))
-                            sumw2_s = sum(real(sess%states%weights(:,r), dp)**2)
-                            sess%states%neff(r) = real(sumw_s*sumw_s / max(sumw2_s, DTINY))
-                        end do
-                        deallocate(state_mass, merged_mass)
-                        ! downstream addresses the maps as a contiguous run, so the stale tail would deliver merged-away states
-                        do s = nstates_merged + 1, sess%states%nstates
-                            call del_file('flex_pca_state_'     //int2str_pad(s,3)//MRC_EXT)
-                            call del_file('flex_pca_even_state_'//int2str_pad(s,3)//MRC_EXT)
-                            call del_file('flex_pca_odd_state_' //int2str_pad(s,3)//MRC_EXT)
-                        end do
-                        sess%states%nstates  = nstates_merged
-                        sess%l_merged = .true.
-                        call reconstruct_flex_weighted_states(params, build, sess%sel%pinds, sess%states%weights, sess%states%nstates, &
-                            &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
-                            &outvol_odd=string('flex_pca_odd_state_001.mrc'), rounds=rounds)
-                    endif
-                    deallocate(merge_label)
-                    write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE two_gate_merge seconds=', toc(t_blk)
+                call reconstruct_state_halves(params, build, cline, sess%sel%pinds, sess%states%weights, TRIAL_PREFIX)
+                write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE state_half_maps seconds=', toc(t_blk)
+                ! Collapse indistinct states. Needs the half maps above.
+                t_blk = tic()
+                allocate(merge_label(sess%states%nstates))
+                call two_gate_state_merge(params, self%pcg_env, sess%pviews, sess%states, TRIAL_PREFIX, merge_label, &
+                    &nstates_merged)
+                call delete_state_halves(TRIAL_PREFIX, sess%states%nstates)
+                if( nstates_merged < sess%states%nstates )then
+                    allocate(state_mass(sess%states%nstates))
+                    do s = 1, sess%states%nstates
+                        state_mass(s) = sum(real(sess%states%weights(:,s), dp))
+                    end do
+                    allocate(merged_weights(sess%sel%nptcls,nstates_merged), source=0.)
+                    do s = 1, sess%states%nstates
+                        merged_weights(:,merge_label(s)) = merged_weights(:,merge_label(s)) + sess%states%weights(:,s)
+                    end do
+                    call move_alloc(merged_weights, sess%states%weights)
+                    ! RECOMPUTE the label, do not remap it: the merge SUMS columns, and the pre-merge argmax
+                    ! can lose to a combined rival it beat individually (0.40 vs 0.35+0.25). Remapping would
+                    ! label the particle to a map it is no longer the largest contributor to, so the hard
+                    ! assignment and the delivered maps would describe different partitions. 0 is preserved:
+                    ! summing cannot lift a particle that was outside every kernel support.
+                    do i = 1, sess%sel%nptcls
+                        if( sess%states%labels(i) >= 1 ) sess%states%labels(i) = maxloc(sess%states%weights(i,:), dim=1)
+                    end do
+                    ! collapse the per-state tables by the same mass, else they still describe the pre-merge nstates
+                    allocate(merged_targets(size(sess%states%targets,1),nstates_merged), source=0.)
+                    allocate(merged_bw(nstates_merged), source=0.)
+                    allocate(merged_mass(nstates_merged), source=0.d0)
+                    do s = 1, sess%states%nstates
+                        r = merge_label(s)
+                        merged_targets(:,r) = merged_targets(:,r) + real(state_mass(s))*sess%states%targets(:,s)
+                        merged_bw(r)        = merged_bw(r)        + real(state_mass(s))*sess%states%bandwidths(s)
+                        merged_mass(r)      = merged_mass(r)      + state_mass(s)
+                    end do
+                    do r = 1, nstates_merged
+                        if( merged_mass(r) > DTINY )then
+                            merged_targets(:,r) = merged_targets(:,r) / real(merged_mass(r))
+                            merged_bw(r)        = merged_bw(r)        / real(merged_mass(r))
+                        endif
+                    end do
+                    call move_alloc(merged_targets, sess%states%targets)
+                    call move_alloc(merged_bw,      sess%states%bandwidths)
+                    deallocate(sess%states%neff); allocate(sess%states%neff(nstates_merged))
+                    do r = 1, nstates_merged
+                        sumw_s  = sum(real(sess%states%weights(:,r), dp))
+                        sumw2_s = sum(real(sess%states%weights(:,r), dp)**2)
+                        sess%states%neff(r) = real(sumw_s*sumw_s / max(sumw2_s, DTINY))
+                    end do
+                    deallocate(state_mass, merged_mass)
+                    sess%states%nstates  = nstates_merged
+                    sess%l_merged = .true.
                 endif
-            endif   ! l_state_rec
+                deallocate(merge_label)
+                write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE two_gate_merge seconds=', toc(t_blk)
+            endif
         end associate
     end subroutine reconstruct_states
 
-    !> Tables, the weight store and hard labels into the project, the consensus nonuniform filter and the manifest
+    !> Tables, the state weight set and hard labels into the project, the delivered state maps from
+    !! the published set, and the manifest
     subroutine publish( self, params, build, rounds )
         class(flex_pca_application), intent(inout) :: self
         class(flex_pca_rounds),      intent(inout) :: rounds
@@ -452,19 +436,16 @@ contains
         type(builder),               intent(inout) :: build
         associate( sess => self%sess )
             call write_covariance_tables(sess%readout, build, sess%sel, sess%model, sess%latent, sess%states)
-            ! The delivered weight table into the project-registered store, then the hard labels into
+            ! The delivered weight table as the project's state weight set, then the hard labels into
             ! the project itself, so the assignment can be judged by an INDEPENDENT reconstructor. Every
             ! non-worker delivers (shared memory, nparts=1 and the distributed master alike); a worker
-            ! shares the master's projfile and must not write it. The store goes first: it validates
-            ! against the field's activity as the run saw it, before the labels overwrite `state`.
+            ! shares the master's projfile and must not write it.
             if( .not. rounds%is_worker() )then
-                call write_flex_weights_store(params, build, sess%sel%pinds, sess%states%weights, sess%states%labels, sess%states%targets, sess%states%bandwidths, &
-                    &sess%l_merged)
+                call write_state_weight_set(params, build, sess%sel%pinds, sess%states%weights, sess%states%labels, sess%l_merged)
+                call register_embedding_artifact(params, build, 'flex_pca_embedding.bin')
                 call write_discrete_state_project(build%spproj, sess%sel%pinds, sess%states%labels, sess%states%nstates, params%projfile)
+                if( sess%l_state_rec ) call deliver_state_maps(params, build, sess%states%nstates)
             endif
-            allocate(sess%states%half_weights(sess%sel%nptcls,sess%states%nstates), source=sess%states%weights)
-            ! nonuniform filtering LAST, so every delivered map is filtered the same way
-            if( sess%l_state_rec .and. trim(params%nufilt) == 'yes' ) call apply_consensus_nu_filter(params, sess%states%nstates)
             call write_covariance_manifest(params, sess%sel%nptcls, sess%model%ncomp, sess%states%nstates, sess%state_axis, sess%min_neff, sess%sigma_loaded)
         end associate
     end subroutine publish
@@ -481,25 +462,12 @@ contains
         type(parameters),            intent(inout) :: params
         type(builder),               intent(inout) :: build
         class(cmdline),              intent(inout) :: cline
-        real,     allocatable :: state_weights(:,:)
-        integer :: nstates
-        logical :: sigma_loaded, l_split_eo
+        logical :: sigma_loaded
         if( .not. allocated(self%plane_store) ) allocate(self%plane_store)
         call validate_covariance_inputs(params, cline%defined('vol1'), cline%defined('pindfile'), &
             &build, sel%pinds, sel%nptcls, rounds=rounds)
         call load_and_validate_sigma(params, build, cline, sel%pinds, sigma_loaded, rounds=rounds)
         select case(params%stage)
-            case(PCA_STAGE_STATES)
-                ! the master produced the weight table; replicate its operator setup (ml_reg off,
-                ! reconstruction Fourier band) and accumulate this part
-                params%l_ml_reg = .false.
-                params%ml_reg   = 'no'
-                call cline%set('ml_reg','no')
-                call build%esig%set_kfromto([1, max(1, fdim(flex_rec_box(params)) - 1)])
-                call read_state_weights_round(sel%pinds, sel%nptcls, state_weights, nstates, l_split_eo)
-                call reconstruct_flex_weighted_states(params, build, sel%pinds, state_weights, &
-                    &nstates, floor_rho=.true., split_eo=l_split_eo, rounds=rounds)
-                deallocate(state_weights)
             case(PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED)
                 call self%plane_store%adopt_cache(params, build, sel%pinds, sel%nptcls)
                 ! the mean's scale comes from the master's cache
@@ -520,28 +488,5 @@ contains
         deallocate(sel%pinds)
         call self%kill
     end subroutine execute_worker_stage
-
-    !> Cost of the requested state count in resident reconstructors. REPORT ONLY.
-    subroutine report_state_memory( params, nstates )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: nstates
-        real(dp) :: gb, gb_proc, nexp
-        integer  :: box_rec, dim_exp, nproc
-        box_rec = flex_rec_box(params)
-        ! expanded grid half-width, as reconstructor::alloc_rho derives it: |lims| + ceiling(KBWINSZ)
-        dim_exp = box_rec/2 + ceiling(KBWINSZ) + 1
-        nexp    = (2.d0*real(dim_exp,dp) + 1.d0)**3
-        ! complex cmat_exp (8 B) + real rho_exp (4 B) per grid point, x2 when even and odd coexist
-        gb_proc = 2.d0 * real(nstates,dp) * nexp * 12.d0 / 1.d9
-        ! every process pays this, so the machine-wide peak is nparts+1 times the per-process figure
-        nproc   = max(1, params%nparts) + 1
-        gb      = gb_proc * real(nproc,dp)
-        write(logfhandle,'(A,I0,A,I0,A,F8.2,A,I0,A,F8.2,A)') '>>> FLEX_PCA states=',nstates, &
-            &' at reconstruction box ',box_rec,' -> approx ',gb_proc,' GB of reconstructors per &
-            &process x ',nproc,' processes = ',gb,' GB machine-wide'
-        write(logfhandle,'(A)') '>>> FLEX_PCA the knobs that move it are npreimages (linear) and &
-            &box_crop (cubic)'
-        call flush(logfhandle)
-    end subroutine report_state_memory
 
 end module simple_flex_pca_application

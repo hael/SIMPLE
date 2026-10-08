@@ -5,7 +5,6 @@ use simple_core_module_api, only: del_file, dtiny, fclose, file_exists, fileioch
     &simple_rename, tic, timer_int_kind, toc
 use simple_flex_pca_stages,      only: flex_stage_request, PCA_STAGE_PROBE, PCA_STAGE_POLISH
 use simple_flex_pca_artifacts,   only: FLEX_PCA_PART_MAGIC
-use simple_flex_pca_posterior,   only: mcfa_init
 use simple_flex_pca_basis,       only: save_probe_state, COV_PROBE_META
 use simple_flex_pca_util,        only: cov_stage_subsample
 use simple_flex_pca_fit_types,   only: probe_part_borrow, probe_part_restore

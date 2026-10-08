@@ -622,7 +622,8 @@ contains
 
         subroutine ensure_resume_sigma_state
             use, intrinsic :: iso_fortran_env, only: int64
-            use simple_sigma2_state, only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
+            use simple_ptcl_layout,  only: ptcl_layout_digest
+            use simple_sigma2_state, only: sigma2_state_validate_identity
             use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
                 &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
             type(string) :: state_path
@@ -636,7 +637,7 @@ contains
             if( found )then
                 call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
                 if( status == 0 )then
-                    layout_digest = sigma2_state_project_layout_digest(spproj, spproj_field)
+                    layout_digest = ptcl_layout_digest(spproj, spproj_field)
                     if( params%l_sigma_glob )then
                         call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, &
                             &1, fdim(params%box)-1, params%nptcls, layout_digest, status, message, &

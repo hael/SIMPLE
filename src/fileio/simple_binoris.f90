@@ -48,6 +48,7 @@ type binoris
     procedure, private :: write_segment_inside_1
     procedure, private :: write_segment_inside_2
     generic            :: write_segment_inside => write_segment_inside_1, write_segment_inside_2
+    procedure          :: empty_segment_inside
     procedure, private :: byte_manager4seg_inside_1
     procedure, private :: byte_manager4seg_inside_2
     procedure, private :: write_segment_1
@@ -298,6 +299,27 @@ contains
         write(unit=self%funit,pos=1) self%header
         ! so no need to update header in file after this operation
     end subroutine write_segment_inside_2
+
+    !> Drop the records of one segment from the open file, in place: the segments behind it move forward and
+    !! the header marks the segment empty. write_segment_inside leaves the file alone for an empty table,
+    !! because an unread segment looks the same in memory, so emptying a segment is this explicit call.
+    !! Bytes behind the new end of the data are ignored by every reader, as after a shrinking write.
+    subroutine empty_segment_inside( self, isegment )
+        class(binoris),             intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        character(len=1), allocatable :: bytearr_part3(:)
+        integer(kind=8) :: end_part1, start_part3, end_part3
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
+        if( isegment < 1 .or. isegment > self%n_segments ) return
+        if( self%header(isegment)%n_records <= 0 ) return
+        call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        self%header(isegment) = binoris_seginfo()
+        call self%update_byte_ranges
+        if( allocated(bytearr_part3) )then
+            if( size(bytearr_part3) > 0 ) write(unit=self%funit,pos=end_part1+1) bytearr_part3
+        endif
+        write(unit=self%funit,pos=1) self%header
+    end subroutine empty_segment_inside
 
     subroutine byte_manager4seg_inside_1( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
         class(binoris),                intent(inout) :: self

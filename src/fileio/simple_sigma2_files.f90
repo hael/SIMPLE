@@ -10,7 +10,8 @@ use simple_euclid_sigma2, only: euclid_sigma2
 use simple_parameters,    only: parameters
 use simple_polarft_calc,  only: polarft_calc
 use simple_sp_project,    only: sp_project
-use simple_sigma2_state,  only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
+use simple_ptcl_layout,   only: ptcl_layout_digest
+use simple_sigma2_state,  only: sigma2_state_validate_identity
 use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, &
     &SIGMA2_STATE_COMMITTED
 implicit none
@@ -51,7 +52,7 @@ contains
             return
         endif
         noris         = os%get_noris()
-        layout_digest = sigma2_state_project_layout_digest(project, os)
+        layout_digest = ptcl_layout_digest(project, os)
         if( layout_digest == 0_int64 )then
             message = 'canonical sigma2 layout digest is undefined for this project'
             call state_path%kill

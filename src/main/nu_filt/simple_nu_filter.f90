@@ -38,7 +38,7 @@ private
 #include "simple_local_flags.inc"
 
 ! Static-bank cap: with fsc_res, keep rungs at or coarser than fsc_res/NU_BANK_FSC_HEADROOM (>= 2);
-! without it (nu_filt3D, flex_pca) the bank is uncapped. Above the two-rung floor the cap bounds the
+! without it (nu_filt3D) the bank is uncapped. Above the two-rung floor the cap bounds the
 ! handoff's lead over the FSC; rationale in doc/policies/NU/nonuniform_filtering_policy.md sections 8, 12.
 real,             parameter   :: NU_BANK_FSC_HEADROOM = 1.5
 ! Hard cap on mask-packed distance-matrix columns retained for NU optimization.
@@ -111,7 +111,7 @@ real,             parameter   :: NU_EVIDENCE_BAND_RATIO      = 0.64 !< geometric
 !> an appended band is kept only if its mean support reaches this fraction (pruned finest-first)
 real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
 !> Default gate of get_nu_filtmap_finest_selected_lp: the finest cutoff selected (it or finer) by at
-!! least this percentage of the assigned voxels. Diagnostic; the flex_pca nufilt report uses this default.
+!! least this percentage of the assigned voxels. Diagnostic.
 real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
 ! Diagnostic only: finest label whose cumulative population reaches this % of the signal voxels
 ! (mask minus the background clamp), quoted on the NU MATCHING LOW-PASS HANDOFF line.

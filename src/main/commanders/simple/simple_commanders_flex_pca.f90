@@ -1,8 +1,7 @@
 !@descr: projection-aware covariance heterogeneity commander
 module simple_commanders_flex_pca
-use simple_commanders_api, only: autoscale, builder, cmdline, commander_base, fdim, file_exists, &
-    &logfhandle, nthr_glob, OBJFUN_EUCLID, parameters, simple_end, simple_exception, sp_project, &
-    &simple_abspath, STDLEN, string
+use simple_commanders_api, only: autoscale, builder, cmdline, commander_base, file_exists, logfhandle, &
+    &parameters, simple_end, simple_exception, sp_project, simple_abspath, string
 implicit none
 
 #include "simple_local_flags.inc"
@@ -14,7 +13,8 @@ real,    parameter :: COV_LP_DEFAULT = 16.0   !< default lp (A); smpd_target = l
 integer, parameter :: COV_MINBOX = 64
 
 !> rec_backend=pcg defaults: fixed 4-iteration budget of the warm-started basis M-step (rtol=0 disarms the rtol
-!! and FLEX_PCG_XTOL stops). Matches the flex_pca UI declaration. State solves use FLEX_PCG_STATE_MAXITS.
+!! and FLEX_PCG_XTOL stops). Matches the flex_pca UI declaration. State maps are reconstructed by the
+!! reconstruction service (reconstruct3D) with the run's maxits_pcg.
 integer, parameter :: FLEX_PCG_MAXITS_DEFAULT = 4
 real,    parameter :: FLEX_PCG_RTOL_DEFAULT   = 0.0
 
@@ -23,43 +23,50 @@ type, extends(commander_base) :: commander_flex_pca
     procedure :: execute => exec_flex_pca
 end type commander_flex_pca
 
+!> one part of a distributed run (simple_private_exec prg=flex_pca part=N), launched by the master
+type, extends(commander_base) :: commander_flex_pca_worker
+  contains
+    procedure :: execute => exec_flex_pca_worker
+end type commander_flex_pca_worker
+
 contains
 
     subroutine exec_flex_pca( self, cline )
         use simple_flex_pca_strategy, only: flex_pca_strategy, create_flex_pca_strategy
-        use omp_lib, only: omp_set_num_threads
         class(commander_flex_pca), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(flex_pca_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
-        ! defaults are the commander's; role logic is the strategy's (part= -> worker, nparts>1 ->
-        ! master, else shared memory), exactly as rec3D/refine3D
+        ! defaults are the commander's; role logic is the strategy's (nparts>1 -> master, else shared
+        ! memory), exactly as rec3D/refine3D; the canonical sigma2 state is settled in initialize
         call apply_flex_pca_defaults(cline)
         strategy = create_flex_pca_strategy(cline)
         call strategy%initialize(params, build, cline)
-        ! canonical sigma state: validated or rebuilt from particle power before any sigma read;
-        ! the master process only, workers consume the state it wrote
-        if( .not. cline%defined('part') )then
-            call ensure_canonical_sigma_state(params, build, cline)
-            ! the fallback's decision travels to the part scripts (job_descr was captured at initialize)
-            if( params%l_sigma_glob ) call strategy%set_worker_key('sigma_est', 'global')
-            ! the nested calc_pspec runs its own params%new, which resets the OpenMP budget and
-            ! nthr_glob to the command line's per-worker nthr; restore the strategy's decision
-            ! (the master thread boost) so the master tails keep their combined budget
-            call omp_set_num_threads(params%nthr)
-            nthr_glob = params%nthr
-        endif
         call strategy%execute(params, build, cline)
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params, build, cline)
         call build%kill_general_tbox
-        if( cline%defined('part') )then
-            call simple_end('**** SIMPLE_FLEX_PCA WORKER NORMAL STOP ****',print_simple=.false.)
-        else
-            call simple_end('**** SIMPLE_FLEX_PCA NORMAL STOP ****')
-        endif
+        call simple_end('**** SIMPLE_FLEX_PCA NORMAL STOP ****')
     end subroutine exec_flex_pca
+
+    !> One part: the stage the master's job description names, over the part's particle list
+    subroutine exec_flex_pca_worker( self, cline )
+        use simple_flex_pca_strategy, only: flex_pca_worker_strategy
+        class(commander_flex_pca_worker), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(flex_pca_worker_strategy) :: strategy
+        type(parameters) :: params
+        type(builder)    :: build
+        if( .not. cline%defined('part') ) THROW_HARD('a flex_pca worker needs part=')
+        call apply_flex_pca_defaults(cline)
+        call strategy%initialize(params, build, cline)
+        call strategy%execute(params, build, cline)
+        call strategy%finalize_run(params, build, cline)
+        call strategy%cleanup(params, build, cline)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_FLEX_PCA WORKER NORMAL STOP ****',print_simple=.false.)
+    end subroutine exec_flex_pca_worker
 
     !> Command-line defaults (a worker keeps mkdir=no: it runs in the master's directory and must
     !! not descend into one of its own). NOT merge('no ','yes',..): merge pads the shorter branch.
@@ -89,7 +96,6 @@ contains
         call derive_flex_pca_sampling(cline)
         call derive_flex_pca_band(cline)
         if( .not.cline%defined('objfun') )      call cline%set('objfun','euclid')
-        if( .not.cline%defined('outvol') )      call cline%set('outvol','flex_pca_state_001.mrc')
         call apply_flex_pca_pcg_defaults(cline)
     end subroutine apply_flex_pca_defaults
 
@@ -115,101 +121,6 @@ contains
         if( .not.cline%defined('rtol') )       call cline%set('rtol', FLEX_PCG_RTOL_DEFAULT)
     end subroutine apply_flex_pca_pcg_defaults
 
-
-    subroutine ensure_canonical_sigma_state( params, build, cline )
-        use, intrinsic :: iso_fortran_env, only: int64
-        use simple_commanders_euclid, only: commander_calc_pspec
-        use simple_sigma2_state, only: sigma2_state_project_layout_digest, sigma2_state_validate_identity
-        use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
-            &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
-        type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline) :: cline_pspec
-        type(string) :: state_path
-        integer(int64) :: layout_digest
-        integer, allocatable :: cnt(:,:)
-        integer :: iptcl, ngroups, status, g, e, nempty
-        logical :: found, rebuild
-        character(len=STDLEN) :: message
-        if( params%cc_objfun /= OBJFUN_EUCLID ) return
-        ! Per-stack (group) sigma2 needs particles in BOTH halves of every stack. A 2D selection deselects
-        ! whole stacks, and the canonical reduce then refuses ("empty even/odd half"). Decide that here
-        ! and fall back to the pooled spectrum, so sigma_est=global never has to be typed for a subset.
-        if( .not. params%l_sigma_glob )then
-            ngroups = 0
-            do iptcl = 1, params%nptcls
-                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                ngroups = max(ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
-            enddo
-            if( ngroups > 0 )then
-                allocate(cnt(0:1,ngroups), source=0)
-                do iptcl = 1, params%nptcls
-                    if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                    g = build%spproj_field%get_int(iptcl, 'stkind')
-                    e = build%spproj_field%get_eo(iptcl)
-                    if( g < 1 .or. g > ngroups .or. e < 0 .or. e > 1 ) cycle
-                    cnt(e,g) = cnt(e,g) + 1
-                enddo
-                nempty = 0
-                do g = 1, ngroups
-                    if( cnt(0,g) == 0 .or. cnt(1,g) == 0 ) nempty = nempty + 1
-                enddo
-                if( nempty > 0 )then
-                    if( sum(cnt(0,:)) == 0 .or. sum(cnt(1,:)) == 0 )then
-                        write(logfhandle,'(A)') '>>> FLEX_PCA SIGMA: the project carries no even/odd assignment, so &
-                            &per-stack sigma2 halves cannot be formed; using the pooled (global) noise spectrum &
-                            &(sigma_est=global)'
-                    else
-                        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA SIGMA: ', nempty, ' of ', ngroups, &
-                            &' sigma2 groups (stacks) have no particles in one half after the selection; &
-                            &using the pooled (global) noise spectrum (sigma_est=global)'
-                    endif
-                    params%sigma_est   = 'global'
-                    params%l_sigma_glob = .true.
-                    call cline%set('sigma_est', 'global')
-                endif
-                deallocate(cnt)
-            endif
-        endif
-        rebuild = .true.
-        call build%spproj%get_sigma2_state_path(state_path, found)
-        if( found )then
-            call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
-            if( status == 0 )then
-                layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
-                if( params%l_sigma_glob )then
-                    call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
-                        &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                        &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_GLOBAL, &
-                        &expected_ngroups=1)
-                else
-                    ngroups = 0
-                    do iptcl = 1, params%nptcls
-                        if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                        ngroups = max(ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
-                    enddo
-                    call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
-                        &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                        &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_STACK, &
-                        &expected_ngroups=ngroups)
-                endif
-                rebuild = status /= 0
-            endif
-        endif
-        if( rebuild )then
-            write(logfhandle,'(A)') '>>> FLEX_PCA SIGMA: initializing missing or stale canonical state from particle power'
-            cline_pspec = cline
-            call cline_pspec%set('prg', 'calc_pspec')
-            call cline_pspec%set('mkdir', 'no')
-            call cline_pspec%delete('part')
-            call xcalc_pspec%execute(cline_pspec)
-            call build%spproj%read_segment('projinfo', params%projfile)
-            call cline_pspec%kill
-        endif
-        call state_path%kill
-    end subroutine ensure_canonical_sigma_state
 
     !> Whether this run lets the data set the state count. Read straight off the cmdline because it
     !! is needed before params%new.
@@ -309,7 +220,7 @@ contains
         call flush(logfhandle)
     end subroutine derive_flex_pca_sampling
 
-    ! Resolve lp and box_rec from project geometry; neither overrides an explicit command-line value.
+    ! Resolve lp from project geometry; it never overrides an explicit command-line value.
     ! Called on the master before params%new so the workers inherit the resolved numbers.
     subroutine derive_flex_pca_band( cline )
         class(cmdline), intent(inout) :: cline
@@ -317,7 +228,7 @@ contains
         type(string)     :: projfile
         real             :: smpd, smpd_crop, lp_here
         integer          :: box, box_crop
-        if( cline%defined('lp') .and. cline%defined('box_rec') ) return
+        if( cline%defined('lp') ) return
         projfile = cline%get_carg('projfile')
         call spproj%read_segment('stk', projfile)
         box  = spproj%get_box()
@@ -333,12 +244,6 @@ contains
             call cline%set('lp', lp_here)
             write(logfhandle,'(A,F7.3,A,F6.3,A,I0,A)') '>>> FLEX_PCA derived lp=', lp_here, &
                 &' A from smpd_crop=', smpd_crop, ' A (box ', box, ' -> box_crop)'
-        endif
-        ! the covariance is fitted at box_crop, but the state maps need not inherit that limit
-        if( .not. cline%defined('box_rec') )then
-            call cline%set('box_rec', box)
-            write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA derived box_rec=', box, &
-                &' (native box; state maps not capped at the covariance Nyquist)'
         endif
         call projfile%kill
     end subroutine derive_flex_pca_band

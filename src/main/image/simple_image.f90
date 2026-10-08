@@ -113,7 +113,6 @@ contains
     procedure          :: pad_fft
     procedure          :: norm_noise_fft
     procedure          :: norm_noise_taper_edge_pad_fft
-    procedure          :: norm_noise_mask_pad_fft
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_fft_clip_shift_ctf_flip
     procedure          :: fft_clip_shift
@@ -849,13 +848,6 @@ interface
         class(image),      intent(inout) :: self_out
         logical, optional, intent(in)    :: renorm
     end subroutine norm_noise_taper_edge_pad_fft
-
-    module subroutine norm_noise_mask_pad_fft(self, lmsk, mskrad, self_out)
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
-        real,         intent(in)    :: mskrad
-        class(image), intent(inout) :: self_out
-    end subroutine norm_noise_mask_pad_fft
 
     module subroutine norm_noise_fft_clip_shift_ctf_flip( self, lmsk, self_out, shvec, tfun, ctfparms )
         class(image),    intent(inout) :: self

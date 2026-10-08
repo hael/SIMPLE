@@ -1093,6 +1093,19 @@ contains
         if( l_tmp ) call simple_rename(tmpfile, projfile)
     end subroutine write
 
+    !> Empty segment oritype in the project file fname, in place (the in-memory table is not changed).
+    !! write_segment_inside does nothing for an empty table, so a caller that removes the last entry of a
+    !! segment empties it on disk with this call
+    module subroutine clear_segment_inside( self, oritype, fname )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: oritype
+        class(string),     intent(in)    :: fname
+        if( .not. file_exists(fname) ) return
+        call self%bos%open(fname)
+        call self%bos%empty_segment_inside(oritype2segment(oritype))
+        call self%bos%close
+    end subroutine clear_segment_inside
+
     module subroutine write_segment_inside( self, oritype, fname, fromto )
         class(sp_project),          intent(inout) :: self
         character(len=*),           intent(in)    :: oritype

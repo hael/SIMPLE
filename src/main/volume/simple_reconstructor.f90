@@ -7,7 +7,7 @@ use simple_parameters, only: parameters
 use simple_gridding,   only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 implicit none
 
-public :: reconstructor, gridding_half_restore
+public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi
 private
 #include "simple_local_flags.inc"
 
@@ -23,6 +23,28 @@ type :: gridding_half_restore
     procedure :: finalize_from_base => finalize_gridding_half_restore
     procedure :: kill               => kill_gridding_half_restore
 end type gridding_half_restore
+
+!> The KB sample geometry of points on an expanded Fourier lattice (window corners, normalized separable
+!! weights, Friedel flags), built once and gathered from any number of volumes on the lattice; a plane
+!! set (new_plane) also holds the plane positions its samples are written back to (put_plane)
+type :: exp_samples
+    private
+    integer :: n    = 0
+    integer :: wdim = 0
+    integer, allocatable :: win(:,:)    !< (3,n) window lower corners
+    real,    allocatable :: w(:,:,:)    !< (wdim,3,n) normalized separable KB weights
+    logical, allocatable :: l_conj(:)   !< (n) the point was reflected into h >= 0
+    integer, allocatable :: hk(:,:)     !< (2,n) plane positions (new_plane)
+    complex, allocatable :: vbuf(:)     !< gathered values of project_fplane, kept with the sample set
+    logical :: l_plane = .false.
+  contains
+    procedure :: new       => exp_samples_new
+    procedure :: new_plane => exp_samples_new_plane
+    procedure :: gather    => exp_samples_gather
+    procedure :: put_plane => exp_samples_put_plane
+    procedure :: get_n     => exp_samples_get_n
+    procedure :: kill      => exp_samples_kill
+end type exp_samples
 
 type, extends(image) :: reconstructor
     private
@@ -64,7 +86,6 @@ type, extends(image) :: reconstructor
     procedure          :: read_rho, read_raw_rho
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane_oversamp
-    procedure          :: insert_plane_oversamp_opt
     procedure          :: sampl_dens_correct
     procedure          :: deapodize => deapodize_self
     procedure          :: deapodize_volume
@@ -73,7 +94,6 @@ type, extends(image) :: reconstructor
     procedure          :: floor_rho_shellwise
     procedure          :: compress_exp
     procedure          :: expand_exp
-    procedure          :: project_polar
     procedure          :: project_fplane
     ! SUMMATION
     procedure          :: sum_reduce
@@ -394,16 +414,16 @@ contains
         if( any(vol%get_ldim() /= self%ldim_img) ) THROW_HARD('gridding restoration target has incompatible dimensions')
     end subroutine validate_restore_target
 
-    !> Experimental variant of insert_plane_oversamp for benchmarking.
-    !! It preserves the original h-strided OpenMP race-avoidance scheme, but
-    !! scalarizes rotation, inlines fplane access, and updates the two expanded
-    !! matrices in one explicit separable-KB stencil pass.
-    subroutine insert_plane_oversamp( self, se, o, fpl )
+    !> KB gridding of one prepared plane into the expanded accumulators (h-strided OpenMP race
+    !! avoidance, separable-KB stencil). The optional weight w scales the data and the density terms
+    !! alike (a fractional state weight); without it the plane enters with weight one.
+    subroutine insert_plane_oversamp( self, se, o, fpl, w )
         use simple_math, only: ceil_div, floor_div
         class(reconstructor), intent(inout) :: self
         class(sym),           intent(inout) :: se
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl
+        real, optional,       intent(in)    :: w
         type(ori) :: o_sym
         complex   :: comp, cmplx_raw
         real      :: rotmats(se%get_nsym(),3,3), loc(3), hrow(3), ctfval
@@ -412,7 +432,8 @@ contains
         integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
         integer   :: fpllims(3, 2), pf, ix, iy, iz, hx, ky, mz
         integer   :: nyq_disk, h_sq, k_max_h, k_lo, k_hi
-        real      :: source_scale, eps_norm, inv_wdim
+        real      :: source_scale, eps_norm, inv_wdim, dens_w
+        logical   :: l_weighted
         ! window size
         iwinsz = ceiling(KBWINSZ - 0.5)
         ! After rotation, source h-lines separated by only wdim can still
@@ -432,6 +453,12 @@ contains
         fpllims_pd      = fpl%frlims
         pf           = OSMPL_PAD_FAC
         source_scale = real(pf*pf)
+        l_weighted   = present(w)
+        dens_w       = 1.0
+        if( l_weighted )then
+            source_scale = source_scale * w
+            dens_w       = w
+        endif
         fpllims      = fpllims_pd
         fpllims(1,1) = ceil_div (fpllims_pd(1,1), pf)
         fpllims(1,2) = floor_div(fpllims_pd(1,2), pf)
@@ -484,6 +511,7 @@ contains
                         comp   = source_scale * cmplx_raw
                         ! CTF values are calculated analytically, no FFTW/padding scaling to account for
                         ctfval = ctfsq_raw
+                        if( l_weighted ) ctfval = dens_w * ctfval
                         call kb_apod_vecs_3d_fast(loc, wx, wy, wz)
                         do iz = 1, self%wdim
                             mz = win(1,3) + iz - 1
@@ -541,141 +569,6 @@ contains
         end subroutine kb_apod_vecs_3d_fast
 
     end subroutine insert_plane_oversamp
-
-    subroutine insert_plane_oversamp_opt( self, se, o, fpl )
-        use simple_math,       only: ceil_div, floor_div
-        use simple_kbinterpol, only: apod_kb15_a2
-        class(reconstructor), intent(inout) :: self
-        class(sym),           intent(inout) :: se
-        class(ori),           intent(inout) :: o
-        class(fplane_type),   intent(in)    :: fpl
-        integer, parameter :: WDIM   = 3
-        integer, parameter :: STRIDE = WDIM
-        type(ori) :: o_sym
-        real      :: rotmats(3,3,se%get_nsym()), pf2
-        integer   :: fpllims(3, 2), fpllims_pd(3, 2)
-        integer   :: clb3D(3), cdim3D(3), clb2D(2), cdim2D(2)
-        integer   :: nyq_disk, jsym, nsym, iwinsz
-        if( self%wdim /= WDIM ) then
-            THROW_HARD('insert_plane_oversamp_opt only implemented for wdim=3!')
-        endif
-        ! window size
-        iwinsz = ceiling(KBWINSZ - 0.5)
-        ! Setup rotation matrices
-        nsym = se%get_nsym()
-        rotmats(:,:,1) = o%get_mat()
-        if( nsym > 1 ) then
-            do jsym = 2, nsym
-                call se%apply(o, jsym, o_sym)
-                rotmats(:,:,jsym) = o_sym%get_mat()
-            end do
-        endif
-        call o_sym%kill
-        ! Native iteration limits: the planes are stored on the native lattice
-        fpllims_pd   = fpl%frlims
-        pf2          = real(OSMPL_PAD_FAC**2)
-        fpllims      = fpllims_pd
-        fpllims(1,1) = ceil_div (fpllims_pd(1,1), OSMPL_PAD_FAC)
-        fpllims(1,2) = floor_div(fpllims_pd(1,2), OSMPL_PAD_FAC)
-        fpllims(2,1) = ceil_div (fpllims_pd(2,1), OSMPL_PAD_FAC)
-        fpllims(2,2) = floor_div(fpllims_pd(2,2), OSMPL_PAD_FAC)
-        ! bit-equivalent to nint(sqrt(h*h+k*k)) > nyq
-        nyq_disk = self%nyq * (self%nyq + 1)
-        ! 3D arrays boundaries
-        clb3D  = lbound(self%cmat_exp)
-        cdim3D = ubound(self%cmat_exp) - clb3D + 1
-        ! 2D planes boundaries
-        clb2D  = lbound(fpl%cmplx_plane)
-        cdim2D = ubound(fpl%cmplx_plane) - clb2D + 1
-        ! KB interpolation / insertion with KB interpolation
-        call kernel(self%cmat_exp, self%rho_exp, fpl%cmplx_plane, fpl%ctfsq_plane)
-        contains
-
-            subroutine kernel( cmatexp, rhoexp, fcomp_plane, ctfsq_plane )
-                complex(sp),      intent(inout) :: cmatexp(cdim3D(1),cdim3D(2),cdim3D(3))
-                real(sp),         intent(inout) :: rhoexp(cdim3D(1),cdim3D(2),cdim3D(3))
-                complex(sp),      intent(in)    :: fcomp_plane(cdim2D(1), cdim2D(2))
-                real(sp),         intent(in)    :: ctfsq_plane(cdim2D(1), cdim2D(2))
-                complex(sp) :: comp
-                real    :: wx(WDIM), wy(WDIM), wz(WDIM), base(3), loc(3)
-                real    :: r21, r22, r23, sx, sy, sz, comp_scale, ctfsq, wyz
-                integer :: h,k,l, h_sq, k_max_h, k_lo,k_hi, hb,kb, iy,iz, ky,mz, i
-                integer :: win(3, 2), isym
-                comp_scale = pf2
-                !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,comp,&
-                !$omp& ctfsq,wx,wy,wz,sx,sy,sz,i,win,loc,r21,r22,r23,isym,iy,iz,ky,mz,wyz,&
-                !$omp& base,hb,kb) proc_bind(close)
-                do isym = 1, nsym
-                    r21 = rotmats(2,1,isym); r22 = rotmats(2,2,isym); r23 = rotmats(2,3,isym)
-                    do l = 0, STRIDE-1
-                        !$omp do schedule(static,1)
-                        do h = fpllims(1,1)+l, fpllims(1,2), STRIDE
-                            h_sq = h*h
-                            if( h_sq > nyq_disk ) cycle
-                            k_max_h = int(sqrt(real(nyq_disk - h_sq)))
-                            k_lo    = max(fpllims(2,1), -k_max_h)
-                            k_hi    = min(fpllims(2,2),  k_max_h)
-                            loc     = real(h) * rotmats(1,1:3,isym)
-                            loc     = loc + real(k_lo-1) * [r21, r22, r23]
-                            do k = k_lo, k_hi
-                                ! rotation
-                                loc(1) = loc(1) + r21
-                                loc(2) = loc(2) + r22
-                                loc(3) = loc(3) + r23
-                                win(:,1) = nint(loc)
-                                win(:,2) = win(:,1) + iwinsz
-                                win(:,1) = win(:,1) - iwinsz
-                                ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
-                                if( win(1,2) < self%lims(1,1) ) cycle
-                                ! gen_fplane4rec stores only k<=0, on the native lattice; Friedel symmetry for k>0.
-                                if( k <= 0 )then
-                                    hb    = h - clb2D(1) + 1
-                                    kb    = k - clb2D(2) + 1
-                                    comp  = fcomp_plane(hb,kb)
-                                    ctfsq = ctfsq_plane(hb,kb)
-                                else
-                                    hb    = -h - clb2D(1) + 1
-                                    kb    = -k - clb2D(2) + 1
-                                    comp  = conjg(fcomp_plane(hb,kb))
-                                    ctfsq =       ctfsq_plane(hb,kb)
-                                endif
-                                if( abs(real(comp)) + abs(aimag(comp)) <= TINY .and. ctfsq <= TINY ) cycle
-                                ! FFTW padding scaling
-                                comp  = comp_scale * comp
-                                ! precompute and normalize weights
-                                base = real(win(:,1)) - loc
-                                sx = 0.0; sy = 0.0; sz = 0.0
-                                do i = 1, WDIM
-                                    wx(i) = apod_kb15_a2(base(1) + real(i-1))
-                                    wy(i) = apod_kb15_a2(base(2) + real(i-1))
-                                    wz(i) = apod_kb15_a2(base(3) + real(i-1))
-                                    sx = sx + wx(i)
-                                    sy = sy + wy(i)
-                                    sz = sz + wz(i)
-                                end do
-                                wx = wx / sx; wy = wy / sy; wz = wz / sz
-                                ! Arrays updates
-                                win(:,1) = win(:,1) - clb3D ! adjust for 1-based indexing
-                                do iz = 1, WDIM
-                                    mz = win(3,1) + iz
-                                    do iy = 1, WDIM
-                                        ky  = win(2,1) + iy
-                                        wyz = wy(iy) * wz(iz)
-                                        cmatexp(win(1,1)+1:win(1,1)+WDIM, ky, mz) = &
-                                            &cmatexp(win(1,1)+1:win(1,1)+WDIM, ky, mz) + (wyz*comp) * wx(:WDIM)
-                                        rhoexp(win(1,1)+1:win(1,1)+WDIM, ky, mz)  = &
-                                            &rhoexp(win(1,1)+1:win(1,1)+WDIM, ky, mz)  + (wyz*ctfsq) * wx(:WDIM)
-                                    end do
-                                end do
-                            end do
-                        end do
-                        !$omp end do
-                    end do
-                end do
-                !$omp end parallel
-            end subroutine kernel
-
-    end subroutine insert_plane_oversamp_opt
 
     !>  Floor rho at its shell mean / frac (default 1000, RELION-style; clamped >= 1) before
     !!  sampl_dens_correct, which divides unfloored. Needed for kernel-weighted (flex) state maps,
@@ -809,191 +702,458 @@ contains
         !$omp end parallel do
     end subroutine expand_exp
 
-    subroutine project_polar( self, eulspace, nspace, kfromto, polar_x, polar_y, pfts_state, ctf2_state )
-        class(reconstructor), intent(inout) :: self
-        class(oris),          intent(inout) :: eulspace
-        integer,              intent(in)    :: nspace, kfromto(2)
-        real(sp),             intent(in)    :: polar_x(:,:), polar_y(:,:)
-        complex(dp),          intent(out)   :: pfts_state(:,:,:)
-        real(dp),             intent(out)   :: ctf2_state(:,:,:)
-        integer :: iproj, irot, k, kloc, kfrom, kto, pftsz, noris
-        real    :: e_rotmat(3,3), loc(3), px, py
-        kfrom = kfromto(1)
-        kto   = kfromto(2)
-        pftsz = size(polar_x,1)
-        noris = eulspace%get_noris()
-        if( .not. allocated(self%cmat_exp) .or. .not. allocated(self%rho_exp) )then
-            THROW_HARD('expanded matrices do not exist; reconstructor project_polar')
-        endif
-        if( kfrom < 1 .or. kfrom > kto ) THROW_HARD('invalid kfromto; reconstructor project_polar')
-        if( noris < nspace )             THROW_HARD('eulspace smaller than nspace; reconstructor project_polar')
-        if( size(polar_x,2) /= (kto-kfrom+1) ) THROW_HARD('polar_x k-span mismatch; reconstructor project_polar')
-        if( size(polar_y,1) /= pftsz .or. size(polar_y,2) /= size(polar_x,2) )then
-            THROW_HARD('polar coordinate shape mismatch; reconstructor project_polar')
-        endif
-        if( size(pfts_state,1) /= pftsz .or. size(pfts_state,2) /= size(polar_x,2) .or. &
-            &size(pfts_state,3) /= nspace )then
-            THROW_HARD('pfts_state shape mismatch; reconstructor project_polar')
-        endif
-        if( any(shape(ctf2_state) /= shape(pfts_state)) )then
-            THROW_HARD('ctf2_state shape mismatch; reconstructor project_polar')
-        endif
-        call self%expand_exp
-        !$omp parallel do default(shared) private(iproj,e_rotmat,irot,k,kloc,loc,px,py) schedule(static) proc_bind(close)
-        do iproj = 1, nspace
-            e_rotmat = eulspace%get_mat(iproj)
-            do k = kfrom, kto
-                kloc = k - kfrom + 1
-                do irot = 1, pftsz
-                    px     = real(polar_x(irot,kloc))
-                    py     = real(polar_y(irot,kloc))
-                    loc(1) = px*e_rotmat(1,1) + py*e_rotmat(2,1)
-                    loc(2) = px*e_rotmat(1,2) + py*e_rotmat(2,2)
-                    loc(3) = px*e_rotmat(1,3) + py*e_rotmat(2,3)
-                    pfts_state(irot,kloc,iproj) = cmplx(interp_cmat_exp(self, loc), kind=dp)
-                    ctf2_state(irot,kloc,iproj) = real(max(0., interp_rho_exp(self, loc)), kind=dp)
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine project_polar
+    ! ---------------------------------------------------------------- multi-volume gather
 
-    !> Project this volume into the same Cartesian Fourier-plane storage used
-    !! by gen_fplane4rec.  If apply_ctf_amp is true, the model is multiplied by
-    !! the stored forward transfer plane when available, falling back to
-    !! sqrt(ctf^2) for planes generated without it (gen_fplane4rec store_transfer=.false.).
-    subroutine project_fplane( self, o, fpl_ref, fpl_out, apply_ctf_amp )
+    !> The KB sample geometry of n native Fourier locations on an expanded lattice: per point the window's
+    !! lower corner, the normalized separable weights and whether the point was Friedel-reflected into
+    !! h >= 0. Built once, it reads any number of expanded volumes on the lattice (gather). The arrays keep
+    !! their capacity across calls, so a sample set reused particle by particle does not reallocate.
+    subroutine exp_samples_new( self, rec, locs )
+        class(exp_samples),   intent(inout) :: self
+        class(reconstructor), intent(in)    :: rec
+        real,                 intent(in)    :: locs(:,:)   !< (3,n) native Fourier locations
+        integer :: j, n
+        n = size(locs,2)
+        call alloc_exp_samples(self, n, rec%wdim)
+        do j = 1, n
+            call exp_samples_set(self, rec, j, locs(:,j))
+        end do
+    end subroutine exp_samples_new
+
+    !> sample j at the native location loc: Friedel reflection into h >= 0, window lower corner and
+    !! normalized separable KB weights
+    subroutine exp_samples_set( self, rec, j, loc_in )
+        class(exp_samples),   intent(inout) :: self
+        class(reconstructor), intent(in)    :: rec
+        integer,              intent(in)    :: j
+        real,                 intent(in)    :: loc_in(3)
+        real    :: loc(3), base(3), ww3(3), s
+        integer :: i, ax
+        loc = loc_in
+        self%l_conj(j) = loc(1) < 0.
+        if( self%l_conj(j) ) loc = -loc
+        self%win(:,j) = nint(loc) - ceiling(KBWINSZ - 0.5)
+        base = real(self%win(:,j)) - loc
+        do i = 1, self%wdim
+            ww3 = rec%kbwin%apod(base + real(i-1))
+            self%w(i,:,j) = ww3
+        end do
+        do ax = 1, 3
+            s = sum(self%w(:,ax,j))
+            if( abs(s) > epsilon(1.0) )then
+                self%w(:,ax,j) = self%w(:,ax,j) * (1.0 / s)
+            else
+                self%w(:,ax,j) = 1.0 / real(self%wdim)
+            endif
+        end do
+    end subroutine exp_samples_set
+
+    !> The central-section samples of the plane fpl_ref at orientation o, on the native lattice, k <= 0,
+    !! inside the disc of the volume's and the plane's Nyquist (the planes of gen_fplane4rec)
+    subroutine exp_samples_new_plane( self, rec, o, fpl_ref )
         use simple_math, only: ceil_div, floor_div
-        class(reconstructor), intent(in)    :: self
+        class(exp_samples),   intent(inout) :: self
+        class(reconstructor), intent(in)    :: rec
         class(ori),           intent(inout) :: o
         class(fplane_type),   intent(in)    :: fpl_ref
-        type(fplane_type),    intent(inout) :: fpl_out
-        logical, optional,    intent(in)    :: apply_ctf_amp
-        real    :: rotmat(3,3), loc(3), hrow(3), ctfamp
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, pf
-        integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff
-        logical :: l_apply_ctf_amp, l_realloc
-        if( .not. allocated(self%cmat_exp) .or. .not. allocated(self%rho_exp) )then
-            THROW_HARD('expanded matrices do not exist; reconstructor project_fplane')
+        real    :: rotmat(3,3), hrow(3), loc(3)
+        integer :: fpllims(2,2), h, k, h_sq, k_max_h, k_lo, k_hi, nyq_eff, nyq_disk, ns, ipass
+        rotmat       = o%get_mat()
+        fpllims(1,1) = ceil_div (fpl_ref%frlims(1,1), OSMPL_PAD_FAC)
+        fpllims(1,2) = floor_div(fpl_ref%frlims(1,2), OSMPL_PAD_FAC)
+        fpllims(2,1) = ceil_div (fpl_ref%frlims(2,1), OSMPL_PAD_FAC)
+        fpllims(2,2) = floor_div(fpl_ref%frlims(2,2), OSMPL_PAD_FAC)
+        nyq_eff = rec%nyq
+        if( fpl_ref%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl_ref%nyq / OSMPL_PAD_FAC))
+        nyq_disk = nyq_eff * (nyq_eff + 1)
+        ! pass 1 counts the disc samples, pass 2 fills the (grow-only) sample arrays in place: a sample
+        ! set kept across particles allocates nothing per particle
+        do ipass = 1, 2
+            ns = 0
+            do h = fpllims(1,1), fpllims(1,2)
+                h_sq = h*h
+                if( h_sq > nyq_disk ) cycle
+                k_max_h = int(sqrt(real(nyq_disk - h_sq)))
+                k_lo    = max(fpllims(2,1), -k_max_h)
+                k_hi    = min(0, min(fpllims(2,2), k_max_h))
+                if( ipass == 1 )then
+                    ns = ns + max(0, k_hi - k_lo + 1)
+                    cycle
+                endif
+                hrow(1) = real(h) * rotmat(1,1)
+                hrow(2) = real(h) * rotmat(1,2)
+                hrow(3) = real(h) * rotmat(1,3)
+                do k = k_lo, k_hi
+                    ns = ns + 1
+                    loc(1) = hrow(1) + real(k) * rotmat(2,1)
+                    loc(2) = hrow(2) + real(k) * rotmat(2,2)
+                    loc(3) = hrow(3) + real(k) * rotmat(2,3)
+                    call exp_samples_set(self, rec, ns, loc)
+                    self%hk(:,ns) = [h, k]
+                end do
+            end do
+            if( ipass == 1 )then
+                call alloc_exp_samples(self, ns, rec%wdim)
+                if( allocated(self%hk) )then
+                    if( size(self%hk,2) < ns ) deallocate(self%hk)
+                endif
+                if( .not. allocated(self%hk) ) allocate(self%hk(2,max(1,ns)))
+            endif
+        end do
+        self%l_plane = .true.
+    end subroutine exp_samples_new_plane
+
+    !> vals(j) is the volume at point j, conjugated where the point was reflected; a point whose window
+    !! leaves this volume's expanded lattice reads zero
+    subroutine exp_samples_gather( self, rec, vals )
+        class(exp_samples),   intent(in)  :: self
+        class(reconstructor), intent(in)  :: rec
+        complex,              intent(out) :: vals(:)
+        call gather_samples(self%n, self%wdim, self%win, self%w, self%l_conj, rec, vals)
+    end subroutine exp_samples_gather
+
+    !> exp_samples_gather into the set's own grow-only buffer (project_fplane)
+    subroutine exp_samples_gather_vbuf( self, rec )
+        class(exp_samples),   intent(inout) :: self
+        class(reconstructor), intent(in)    :: rec
+        if( allocated(self%vbuf) )then
+            if( size(self%vbuf) < self%n ) deallocate(self%vbuf)
         endif
+        if( .not. allocated(self%vbuf) ) allocate(self%vbuf(max(1,self%n)))
+        call gather_samples(self%n, self%wdim, self%win, self%w, self%l_conj, rec, self%vbuf)
+    end subroutine exp_samples_gather_vbuf
+
+    !> the KB-window gather of n samples from rec%cmat_exp; a sample whose window leaves the lattice reads zero
+    subroutine gather_samples( n, wdim, win, w, l_conj, rec, vals )
+        integer,              intent(in)  :: n, wdim
+        integer,              intent(in)  :: win(3,n)
+        real,                 intent(in)  :: w(wdim,3,n)
+        logical,              intent(in)  :: l_conj(n)
+        class(reconstructor), intent(in)  :: rec
+        complex,              intent(out) :: vals(:)
+        complex :: val
+        real    :: wyz
+        integer :: lb(3), ub(3), j, ix, iy, iz, hx, ky, mz
+        lb = lbound(rec%cmat_exp)
+        ub = ubound(rec%cmat_exp)
+        do j = 1, n
+            if( any(win(:,j) < lb) .or. any(win(:,j) + wdim - 1 > ub) )then
+                vals(j) = CMPLX_ZERO
+                cycle
+            endif
+            val = CMPLX_ZERO
+            do iz = 1, wdim
+                mz = win(3,j) + iz - 1
+                do iy = 1, wdim
+                    ky  = win(2,j) + iy - 1
+                    wyz = w(iy,2,j) * w(iz,3,j)
+                    do ix = 1, wdim
+                        hx  = win(1,j) + ix - 1
+                        val = val + rec%cmat_exp(hx,ky,mz) * (w(ix,1,j) * wyz)
+                    end do
+                end do
+            end do
+            if( l_conj(j) ) val = conjg(val)
+            vals(j) = val
+        end do
+    end subroutine gather_samples
+
+    !> Write the gathered plane samples vals into fpl_out at the plane positions of new_plane. fpl_out takes
+    !! the reference plane's geometry and carries no ctfsq or transfer plane; it is zeroed only when that
+    !! geometry (bounds, Nyquist) changes, so the out-of-disc remainder stays zero. With apply_ctf_amp the
+    !! samples are multiplied by the reference plane's forward transfer, or sqrt(ctf^2) without one.
+    subroutine exp_samples_put_plane( self, vals, fpl_ref, fpl_out, apply_ctf_amp )
+        class(exp_samples), intent(in)    :: self
+        complex,            intent(in)    :: vals(:)
+        class(fplane_type), intent(in)    :: fpl_ref
+        type(fplane_type),  intent(inout) :: fpl_out
+        logical,            intent(in)    :: apply_ctf_amp
+        logical :: l_realloc
+        integer :: j, h, k
+        if( .not. self%l_plane ) THROW_HARD('sample set has no plane positions; exp_samples_put_plane')
+        l_realloc = .not. allocated(fpl_out%cmplx_plane)
+        if( .not. l_realloc )then
+            l_realloc = any(lbound(fpl_out%cmplx_plane) /= lbound(fpl_ref%cmplx_plane)) .or. &
+                &any(ubound(fpl_out%cmplx_plane) /= ubound(fpl_ref%cmplx_plane)) .or. fpl_out%nyq /= fpl_ref%nyq
+        endif
+        if( l_realloc )then
+            if( allocated(fpl_out%cmplx_plane) ) deallocate(fpl_out%cmplx_plane)
+            allocate(fpl_out%cmplx_plane(lbound(fpl_ref%cmplx_plane,1):ubound(fpl_ref%cmplx_plane,1), &
+                &lbound(fpl_ref%cmplx_plane,2):ubound(fpl_ref%cmplx_plane,2)), source=CMPLX_ZERO)
+        endif
+        if( allocated(fpl_out%ctfsq_plane)    ) deallocate(fpl_out%ctfsq_plane)
+        if( allocated(fpl_out%transfer_plane) ) deallocate(fpl_out%transfer_plane)
+        fpl_out%frlims  = fpl_ref%frlims
+        fpl_out%shconst = fpl_ref%shconst
+        fpl_out%nyq     = fpl_ref%nyq
+        do j = 1, self%n
+            h = self%hk(1,j)
+            k = self%hk(2,j)
+            if( apply_ctf_amp )then
+                if( allocated(fpl_ref%transfer_plane) )then
+                    fpl_out%cmplx_plane(h,k) = fpl_ref%transfer_plane(h,k) * vals(j)
+                else
+                    fpl_out%cmplx_plane(h,k) = sqrt(max(0., fpl_ref%ctfsq_plane(h,k))) * vals(j)
+                endif
+            else
+                fpl_out%cmplx_plane(h,k) = vals(j)
+            endif
+        end do
+    end subroutine exp_samples_put_plane
+
+    integer pure function exp_samples_get_n( self ) result( n )
+        class(exp_samples), intent(in) :: self
+        n = self%n
+    end function exp_samples_get_n
+
+    subroutine alloc_exp_samples( self, n, wdim )
+        class(exp_samples), intent(inout) :: self
+        integer,            intent(in)    :: n, wdim
+        if( allocated(self%win) )then
+            if( size(self%win,2) < n .or. size(self%w,1) /= wdim ) deallocate(self%win, self%w, self%l_conj)
+        endif
+        if( .not. allocated(self%win) ) allocate(self%win(3,max(1,n)), self%w(wdim,3,max(1,n)), self%l_conj(max(1,n)))
+        self%n       = n
+        self%wdim    = wdim
+        self%l_plane = .false.
+    end subroutine alloc_exp_samples
+
+    subroutine exp_samples_kill( self )
+        class(exp_samples), intent(inout) :: self
+        if( allocated(self%win)    ) deallocate(self%win)
+        if( allocated(self%w)      ) deallocate(self%w)
+        if( allocated(self%l_conj) ) deallocate(self%l_conj)
+        if( allocated(self%hk)     ) deallocate(self%hk)
+        if( allocated(self%vbuf)   ) deallocate(self%vbuf)
+        self%n       = 0
+        self%wdim    = 0
+        self%l_plane = .false.
+    end subroutine exp_samples_kill
+
+    !> Project this volume (cmat_exp current) into the Cartesian Fourier-plane storage of gen_fplane4rec:
+    !! the central-section samples of fpl_ref (exp_samples new_plane) gathered and written into fpl_out
+    !! (put_plane: no ctfsq or transfer plane; zeroed only when the geometry changes). samples is optional
+    !! work storage a caller reuses particle by particle.
+    subroutine project_fplane( self, o, fpl_ref, fpl_out, apply_ctf_amp, samples )
+        class(reconstructor),        intent(in)    :: self
+        class(ori),                  intent(inout) :: o
+        class(fplane_type),          intent(in)    :: fpl_ref
+        type(fplane_type),           intent(inout) :: fpl_out
+        logical,           optional, intent(in)    :: apply_ctf_amp
+        type(exp_samples), optional, intent(inout) :: samples
+        type(exp_samples) :: work
+        logical :: l_apply_ctf_amp
+        if( .not. allocated(self%cmat_exp) ) THROW_HARD('expanded matrix does not exist; reconstructor project_fplane')
         if( .not. allocated(fpl_ref%cmplx_plane) .or. .not. allocated(fpl_ref%ctfsq_plane) )then
             THROW_HARD('reference Fourier plane does not exist; reconstructor project_fplane')
         endif
         l_apply_ctf_amp = .false.
         if( present(apply_ctf_amp) ) l_apply_ctf_amp = apply_ctf_amp
-        fpl_out%frlims  = fpl_ref%frlims
-        fpl_out%shconst = fpl_ref%shconst
-        fpl_out%nyq     = fpl_ref%nyq
-        l_realloc = .not. allocated(fpl_out%cmplx_plane)
-        if( .not. l_realloc )then
-            l_realloc = any(lbound(fpl_out%cmplx_plane) /= lbound(fpl_ref%cmplx_plane)) .or. &
-                &any(ubound(fpl_out%cmplx_plane) /= ubound(fpl_ref%cmplx_plane))
-        endif
-        if( l_realloc )then
-            if( allocated(fpl_out%cmplx_plane) ) deallocate(fpl_out%cmplx_plane)
-            allocate(fpl_out%cmplx_plane(lbound(fpl_ref%cmplx_plane,1):ubound(fpl_ref%cmplx_plane,1), &
-                &lbound(fpl_ref%cmplx_plane,2):ubound(fpl_ref%cmplx_plane,2)))
-        endif
-        fpl_out%cmplx_plane = CMPLX_ZERO
-        l_realloc = .not. allocated(fpl_out%ctfsq_plane)
-        if( .not. l_realloc )then
-            l_realloc = any(lbound(fpl_out%ctfsq_plane) /= lbound(fpl_ref%ctfsq_plane)) .or. &
-                &any(ubound(fpl_out%ctfsq_plane) /= ubound(fpl_ref%ctfsq_plane))
-        endif
-        if( l_realloc )then
-            if( allocated(fpl_out%ctfsq_plane) ) deallocate(fpl_out%ctfsq_plane)
-            allocate(fpl_out%ctfsq_plane(lbound(fpl_ref%ctfsq_plane,1):ubound(fpl_ref%ctfsq_plane,1), &
-                &lbound(fpl_ref%ctfsq_plane,2):ubound(fpl_ref%ctfsq_plane,2)))
-        endif
-        fpl_out%ctfsq_plane = fpl_ref%ctfsq_plane
-        if( allocated(fpl_ref%transfer_plane) )then
-            l_realloc = .not. allocated(fpl_out%transfer_plane)
-            if( .not. l_realloc )then
-                l_realloc = any(lbound(fpl_out%transfer_plane) /= lbound(fpl_ref%transfer_plane)) .or. &
-                    &any(ubound(fpl_out%transfer_plane) /= ubound(fpl_ref%transfer_plane))
-            endif
-            if( l_realloc )then
-                if( allocated(fpl_out%transfer_plane) ) deallocate(fpl_out%transfer_plane)
-                allocate(fpl_out%transfer_plane(lbound(fpl_ref%transfer_plane,1):ubound(fpl_ref%transfer_plane,1), &
-                    &lbound(fpl_ref%transfer_plane,2):ubound(fpl_ref%transfer_plane,2)))
-            endif
-            fpl_out%transfer_plane = fpl_ref%transfer_plane
+        ! callers keep cmat_exp current: expanding here would refresh the whole 3D lattice per particle.
+        ! A caller-held sample set (one per thread) is reused across particles and allocates nothing
+        if( present(samples) )then
+            call samples%new_plane(self, o, fpl_ref)
+            call exp_samples_gather_vbuf(samples, self)
+            call samples%put_plane(samples%vbuf, fpl_ref, fpl_out, l_apply_ctf_amp)
         else
-            if( allocated(fpl_out%transfer_plane) ) deallocate(fpl_out%transfer_plane)
+            call work%new_plane(self, o, fpl_ref)
+            call exp_samples_gather_vbuf(work, self)
+            call work%put_plane(work%vbuf, fpl_ref, fpl_out, l_apply_ctf_amp)
+            call work%kill
         endif
-        ! Callers using this per-particle projector must keep cmat_exp current.
-        ! Expanding here would refresh the full 3D Fourier lattice for every
-        ! particle projection.
-        rotmat      = o%get_mat()
-        pf          = OSMPL_PAD_FAC
-        fpllims_pd  = fpl_ref%frlims
-        fpllims     = fpllims_pd
-        fpllims(1,1)= ceil_div (fpllims_pd(1,1), pf)
-        fpllims(1,2)= floor_div(fpllims_pd(1,2), pf)
-        fpllims(2,1)= ceil_div (fpllims_pd(2,1), pf)
-        fpllims(2,2)= floor_div(fpllims_pd(2,2), pf)
-        nyq_eff = self%nyq
-        if( fpl_ref%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl_ref%nyq / pf))
-        nyq_disk = nyq_eff * (nyq_eff + 1)
-        do h = fpllims(1,1), fpllims(1,2)
-            h_sq = h*h
-            if( h_sq > nyq_disk ) cycle
-            k_max_h = int(sqrt(real(nyq_disk - h_sq)))
-            k_lo    = max(fpllims(2,1), -k_max_h)
-            k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hrow(1) = real(h) * rotmat(1,1)
-            hrow(2) = real(h) * rotmat(1,2)
-            hrow(3) = real(h) * rotmat(1,3)
-            do k = k_lo, k_hi
-                loc(1) = hrow(1) + real(k) * rotmat(2,1)
-                loc(2) = hrow(2) + real(k) * rotmat(2,2)
-                loc(3) = hrow(3) + real(k) * rotmat(2,3)
-                fpl_out%cmplx_plane(h,k) = interp_cmat_exp(self, loc)
-                if( l_apply_ctf_amp )then
-                    if( allocated(fpl_ref%transfer_plane) )then
-                        fpl_out%cmplx_plane(h,k) = fpl_ref%transfer_plane(h,k) * fpl_out%cmplx_plane(h,k)
-                    else
-                        ctfamp = sqrt(max(0., fpl_ref%ctfsq_plane(h,k)))
-                        fpl_out%cmplx_plane(h,k) = ctfamp * fpl_out%cmplx_plane(h,k)
-                    endif
-                endif
-            end do
-        end do
     end subroutine project_fplane
 
-    pure function interp_cmat_exp( self, loc ) result( comp )
-        class(reconstructor), intent(in) :: self
-        real,                 intent(in) :: loc(3)
-        complex :: comp
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), loc_friedel(3)
-        integer :: iwinsz, win(2,3)
-        logical :: l_conjg
-        l_conjg    = loc(1) < 0.
-        loc_friedel = loc
-        if( l_conjg ) loc_friedel = -loc_friedel
-        iwinsz   = ceiling(KBWINSZ - 0.5)
-        win(1,:) = nint(loc_friedel)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
-        call self%kbwin%apod_mat_3d(loc_friedel, iwinsz, self%wdim, w)
-        comp = sum(w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)))
-        if( l_conjg ) comp = conjg(comp)
-    end function interp_cmat_exp
+    ! ---------------------------------------------------------------- multi-target insertion
 
-    pure real function interp_rho_exp( self, loc ) result( rho )
-        class(reconstructor), intent(in) :: self
-        real,                 intent(in) :: loc(3)
-        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim), loc_friedel(3)
-        integer :: iwinsz, win(2,3)
-        loc_friedel = loc
-        if( loc_friedel(1) < 0. ) loc_friedel = -loc_friedel
+    !> Batch KB insertion of nrecords observation-model planes (gen_fplane4rec observation_model) into
+    !! K expanded numerators: target q receives conj(T)y of plane i scaled by data_w(q,i). The density is
+    !! one array rho(P,lattice) beside the targets: P=1 shared (|T|^2), P=K diagonal (dens_w(q,q,i)|T|^2),
+    !! P=K(K+1)/2 the packed upper triangle (dens_w(q,r,i)|T|^2 at (r(r-1))/2+q). Per-record geometry is
+    !! derived serially (se%apply is not guaranteed thread-safe); the h-line sweep is threaded with a
+    !! stride that keeps concurrent lines off any one interpolation cell. insert_plane_oversamp stays the
+    !! single-target path of refinement.
+    subroutine insert_planes_multi( recs, rho, se, orientations, fpls, data_w, dens_w, valid, nrecords )
+        use simple_math, only: ceil_div, floor_div
+        type(reconstructor), intent(inout) :: recs(:)
+        real,                intent(inout) :: rho(:,:,:,:)
+        class(sym),          intent(inout) :: se
+        type(ori),           intent(inout) :: orientations(:)
+        type(fplane_type),   intent(in)    :: fpls(:)
+        real(dp),            intent(in)    :: data_w(:,:), dens_w(:,:,:)
+        logical,             intent(in)    :: valid(:)
+        integer,             intent(in)    :: nrecords
+        type(ori) :: o_sym
+        type(kbinterpol) :: kbwin
+        complex   :: comp_base, cmplx_raw
+        real, allocatable :: rotmats(:,:,:,:), data_w_sp(:,:), dens_w_packed(:,:)
+        integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
+        integer, parameter :: WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
+        real      :: loc(3), hrow(3), ctfsq_raw, ww, r2(3), pf2, eps_norm, inv_wdim
+        real      :: wx(WDIM), wy(WDIM), wz(WDIM)
+        integer   :: win(3,2), h, k, l, nsym, isym, iwinsz, stride
+        integer   :: ix, iy, iz, hx, ky, mz, q, r, i, ncomp, ipair
+        integer   :: h_sq, k_max_h, k_lo, k_hi, ih, ik, im, nyq_eff
+        integer   :: exp_lb(3), exp_ub(3), exp_shape(3), npairs
+        logical   :: l_shared, l_diagonal
+        ncomp = size(recs)
+        if( ncomp <= 0 .or. nrecords <= 0 ) return
+        npairs     = (ncomp * (ncomp + 1)) / 2
+        l_diagonal = size(rho,1) == ncomp
+        l_shared   = size(rho,1) == 1 .and. .not. l_diagonal
+        if( size(orientations) < nrecords .or. size(fpls) < nrecords .or. size(valid) < nrecords )then
+            THROW_HARD('record array smaller than batch; insert_planes_multi')
+        endif
+        if( size(data_w,1) < ncomp .or. size(data_w,2) < nrecords .or. size(dens_w,1) < ncomp .or. &
+            &size(dens_w,2) < ncomp .or. size(dens_w,3) < nrecords )then
+            THROW_HARD('weight array smaller than batch; insert_planes_multi')
+        endif
+        if( .not. allocated(recs(1)%cmat_exp) ) THROW_HARD('expanded matrix does not exist; insert_planes_multi')
+        exp_lb    = lbound(recs(1)%cmat_exp)
+        exp_ub    = ubound(recs(1)%cmat_exp)
+        exp_shape = shape(recs(1)%cmat_exp)
+        if( (.not. l_shared .and. .not. l_diagonal .and. size(rho,1) < npairs) .or. size(rho,2) < exp_shape(1) .or. &
+            &size(rho,3) < exp_shape(2) .or. size(rho,4) < exp_shape(3) )then
+            THROW_HARD('density array shape mismatch; insert_planes_multi')
+        endif
+        if( recs(1)%wdim /= WDIM ) THROW_HARD('unexpected KB window dimension; insert_planes_multi')
+        kbwin    = recs(1)%kbwin
+        nsym     = se%get_nsym()
         iwinsz   = ceiling(KBWINSZ - 0.5)
-        win(1,:) = nint(loc_friedel)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
-        call self%kbwin%apod_mat_3d(loc_friedel, iwinsz, self%wdim, w)
-        rho = sum(w * self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)))
-    end function interp_rho_exp
+        ! source h-lines in one colour must map to non-overlapping windows for every rotation:
+        ! sqrt(3)*WDIM guarantees a full window width along at least one target axis
+        stride   = ceiling(sqrt(3.0) * real(WDIM))
+        pf2      = real(OSMPL_PAD_FAC*OSMPL_PAD_FAC)
+        eps_norm = epsilon(1.0)
+        inv_wdim = 1.0 / real(WDIM)
+        allocate(rotmats(3,3,nsym,nrecords), data_w_sp(ncomp,nrecords), source=0.)
+        if( .not. l_shared .and. .not. l_diagonal ) allocate(dens_w_packed(npairs,nrecords), source=0.)
+        allocate(fpllims(2,2,nrecords), nyq_disks(nrecords), source=0)
+        do i = 1, nrecords
+            if( .not. valid(i) ) cycle
+            if( .not. allocated(fpls(i)%transfer_plane) )then
+                THROW_HARD('forward transfer plane does not exist; insert_planes_multi')
+            endif
+            rotmats(:,:,1,i) = orientations(i)%get_mat()
+            do isym = 2, nsym
+                call se%apply(orientations(i), isym, o_sym)
+                rotmats(:,:,isym,i) = o_sym%get_mat()
+            end do
+            fpllims(1,1,i) = ceil_div (fpls(i)%frlims(1,1), OSMPL_PAD_FAC)
+            fpllims(1,2,i) = floor_div(fpls(i)%frlims(1,2), OSMPL_PAD_FAC)
+            fpllims(2,1,i) = ceil_div (fpls(i)%frlims(2,1), OSMPL_PAD_FAC)
+            fpllims(2,2,i) = floor_div(fpls(i)%frlims(2,2), OSMPL_PAD_FAC)
+            nyq_eff = recs(1)%nyq
+            if( fpls(i)%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpls(i)%nyq / OSMPL_PAD_FAC))
+            nyq_disks(i) = nyq_eff * (nyq_eff + 1)
+            do q = 1, ncomp
+                data_w_sp(q,i) = real(data_w(q,i))
+            end do
+            if( .not. l_shared .and. .not. l_diagonal )then
+                do r = 1, ncomp
+                    do q = 1, r
+                        dens_w_packed((r*(r-1))/2 + q,i) = real(dens_w(q,r,i))
+                    end do
+                end do
+            endif
+        end do
+        call o_sym%kill
+        !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,ctfsq_raw,&
+        !$omp& comp_base,wx,wy,wz,ww,win,loc,hrow,r2,isym,ix,iy,iz,hx,ky,mz,ih,ik,im,q,ipair) proc_bind(close)
+        do i = 1, nrecords
+            if( .not. valid(i) ) cycle
+            do isym = 1, nsym
+                r2 = rotmats(2,:,isym,i)
+                do l = 0, stride-1
+                    !$omp do schedule(static,1)
+                    do h = fpllims(1,1,i)+l, fpllims(1,2,i), stride
+                        h_sq = h*h
+                        if( h_sq > nyq_disks(i) ) cycle
+                        k_max_h = int(sqrt(real(nyq_disks(i) - h_sq)))
+                        k_lo = max(fpllims(2,1,i), -k_max_h)
+                        k_hi = min(fpllims(2,2,i),  k_max_h)
+                        hrow = real(h) * rotmats(1,:,isym,i)
+                        do k = k_lo, k_hi
+                            loc = hrow + real(k) * r2
+                            ! native lattice, k<=0 stored; Friedel symmetry for k>0
+                            if( k <= 0 )then
+                                cmplx_raw = conjg(fpls(i)%transfer_plane(h,k)) * fpls(i)%cmplx_plane(h,k)
+                                ctfsq_raw = fpls(i)%ctfsq_plane(h,k)
+                            else
+                                cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-h,-k)) * fpls(i)%cmplx_plane(-h,-k))
+                                ctfsq_raw = fpls(i)%ctfsq_plane(-h,-k)
+                            endif
+                            if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. ctfsq_raw <= TINY ) cycle
+                            win(:,1) = nint(loc) - iwinsz
+                            win(:,2) = nint(loc) + iwinsz
+                            ! cmat_exp stores h>=0 as the independent Friedel half
+                            if( win(1,2) < 0 ) cycle
+                            if( any(win(:,1) < exp_lb) .or. any(win(:,2) > exp_ub) ) cycle
+                            comp_base = pf2 * cmplx_raw
+                            call kb_weights(loc, win(:,1), wx, wy, wz)
+                            do iz = 1, WDIM
+                                mz = win(3,1) + iz - 1
+                                im = mz - exp_lb(3) + 1
+                                do iy = 1, WDIM
+                                    ky = win(2,1) + iy - 1
+                                    ik = ky - exp_lb(2) + 1
+                                    do ix = 1, WDIM
+                                        hx = win(1,1) + ix - 1
+                                        ih = hx - exp_lb(1) + 1
+                                        ww = wx(ix) * (wy(iy) * wz(iz))
+                                        do q = 1, ncomp
+                                            recs(q)%cmat_exp(hx,ky,mz) = recs(q)%cmat_exp(hx,ky,mz) + &
+                                                &(data_w_sp(q,i) * comp_base) * ww
+                                        end do
+                                        if( l_shared )then
+                                            rho(1,ih,ik,im) = rho(1,ih,ik,im) + ctfsq_raw * ww
+                                        else if( l_diagonal )then
+                                            do q = 1, ncomp
+                                                rho(q,ih,ik,im) = rho(q,ih,ik,im) + real(dens_w(q,q,i)) * ctfsq_raw * ww
+                                            end do
+                                        else
+                                            !$omp simd
+                                            do ipair = 1, npairs
+                                                rho(ipair,ih,ik,im) = rho(ipair,ih,ik,im) + &
+                                                    &(dens_w_packed(ipair,i) * ctfsq_raw) * ww
+                                            end do
+                                        endif
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$omp end do
+                end do
+            end do
+        end do
+        !$omp end parallel
+        deallocate(rotmats, data_w_sp, fpllims, nyq_disks)
+        if( allocated(dens_w_packed) ) deallocate(dens_w_packed)
+
+    contains
+
+        !> normalized separable KB weights at loc from the window's lower corner (apod_fast, as the
+        !! refinement's insert_plane_oversamp)
+        subroutine kb_weights( loc, win_lo, wx, wy, wz )
+            real,    intent(in)  :: loc(3)
+            integer, intent(in)  :: win_lo(3)
+            real,    intent(out) :: wx(:), wy(:), wz(:)
+            integer :: j
+            real    :: base(3), ww3(3), sx, sy, sz
+            base = real(win_lo) - loc
+            do j = 1, WDIM
+                ww3   = kbwin%apod_fast(base + real(j-1))
+                wx(j) = ww3(1)
+                wy(j) = ww3(2)
+                wz(j) = ww3(3)
+            end do
+            sx = sum(wx); sy = sum(wy); sz = sum(wz)
+            if( abs(sx) > eps_norm )then; wx = wx/sx; else; wx = inv_wdim; endif
+            if( abs(sy) > eps_norm )then; wy = wy/sy; else; wy = inv_wdim; endif
+            if( abs(sz) > eps_norm )then; wz = wz/sz; else; wz = inv_wdim; endif
+        end subroutine kb_weights
+
+    end subroutine insert_planes_multi
 
     subroutine write_rho_as_mrc( self, fname )
         class(reconstructor), intent(inout) :: self

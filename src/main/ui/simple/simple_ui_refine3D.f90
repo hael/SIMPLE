@@ -180,6 +180,16 @@ contains
         &'bootstrap/final reconstructions(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_PARM, 'state', 'num', 'State to refine', &
+        &'Refine this state alone, on a copy of the project that holds it as its only state; the project '//&
+        &'itself is not written. With m_estimator=flex the copy holds every particle with a positive weight '//&
+        &'for the state, otherwise the particles labelled with it{all particles}', 'state index{none}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_PARM, 'm_estimator', 'multi', 'Particle weighting', &
+        &'flex weighs every particle of the refined state by its frozen weight in the project''s state weight set '//&
+        &'(written by flex_pca) in every reconstruction; requires state. no reconstructs from the hard state '//&
+        &'labels(no|flex){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=4) :: 'no', 'flex']), visibility=UI_VIS_ADVANCED)
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., group="search", &
         &visibility=UI_VIS_ADVANCED)

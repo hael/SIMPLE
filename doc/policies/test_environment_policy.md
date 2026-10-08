@@ -82,7 +82,7 @@ tester module (section 4.1).
 | `unit_core` | ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line |
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
-| `unit_numerics` | online variance, random draws, affinity propagation, average linkage, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
+| `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
 | `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report |
 | `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
@@ -380,16 +380,19 @@ A unit test is a subroutine in a tester module next to the code it tests.
 
 ### 4.3 White-box self-tests
 
-A self-test that must read private components of a type may stay inside the
-production module. It then takes an out-argument per check, and a tester
-asserts those by name (`test_flex_pcg_operator` in `simple_flex_pca_pcg` is
-the model). Every other self-test belongs in a tester module: the review
-moved the self-tests of `image`, `imghead`, `atoms`, `oris`, `ftiter`,
-`ftexp_shsrch`, `bspline_smoother`, `online_var` and `aff_prop`, the flex
-PCA, UI hash, cavg-quality and class-average registration self-tests out of
-their production modules, and deleted those of unused code (`hclust`,
-`srchspace_map2D_io`) and the dead ones (`CPlot2D`, `jpg`). The only self-test
-left in production modules is this white-box one.
+A self-test that must read private components of a type goes in a submodule
+of the production module, in a file named `*_tester.f90` (so it is built only
+with `BUILD_TESTS=ON`); the module declares its interface. It takes an
+out-argument per check, and a tester asserts those by name
+(`test_flex_pcg_operator`, declared in `simple_flex_pca_pcg` and implemented
+in its submodule `simple_flex_pca_pcg_tester`, is the model). Every other
+self-test belongs in a tester module: the review moved the self-tests of
+`image`, `imghead`, `atoms`, `oris`, `ftiter`, `ftexp_shsrch`,
+`bspline_smoother`, `online_var` and `aff_prop`, the flex PCA, UI hash,
+cavg-quality and class-average registration self-tests out of their
+production modules, and deleted those of unused code (`hclust`,
+`srchspace_map2D_io`) and the dead ones (`CPlot2D`, `jpg`). No self-test is
+left in a production module.
 
 ### 4.4 A workflow or platform test
 

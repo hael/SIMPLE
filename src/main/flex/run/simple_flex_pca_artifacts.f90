@@ -1,6 +1,6 @@
 !@descr: flex_pca artifact catalog: where part files live and how they are named
 !!
-!! Every part file (probe/embed parts, state part volumes, PCG raw accumulations) lives under one
+!! Every part file (probe and embedding parts, PCG raw accumulations) lives under one
 !! directory: the run directory by default, or a node-local scratch directory when the master
 !! decided so (flex_pca_local_part_dir). One catalog value is owned by the run's rounds object;
 !! producers and consumers receive that object explicitly. The part-file contract shared by

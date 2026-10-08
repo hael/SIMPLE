@@ -34,23 +34,30 @@ once into its state/half accumulation and is never reread during PCG iterations.
 
 In distributed execution, each worker atomically publishes one versioned raw
 artifact per `(state,half,part)`. It contains the unfolded complex `B`, real
-`D`, particle count, geometry, and provenance. The master validates and adds
-these artifacts in ascending part-number order. Only after the complete
-state/half reduction does it fold the RHS, calculate rho floors, finalize
-`Khat`, or solve. Empty partitions publish a valid header-only artifact so the
+`D`, contributor count, applied weight mass, weight-set identity, geometry, and
+provenance. The format is version 2 (magic `SIMPLE_PCG_RAW02`, 2026-10-07). Its
+header carries the applied mass as a 64-bit real beside the integer contributor
+count; under hard labels the mass is the count. It also carries the identity of
+the state weight set the part was built under, its generation and layout
+digest, both zero under hard labels. The payload is unchanged and is present
+only when the contributor count is positive. No reader of version 1 is kept.
+The master validates and adds these artifacts in ascending part-number order,
+and stops when a part's weight-set identity differs from its own. Only after
+the complete state/half reduction does it fold the RHS, calculate rho floors,
+finalize `Khat`, or solve. Empty partitions publish a valid header-only artifact so the
 association order and completeness check do not depend on particle balance.
 
 Box cropping is supported under the constant-field-of-view contract
-(`box*smpd == box_crop*smpd_crop`, enforced at entry). The shared-memory path
-deliberately rejects fractional/trailing reconstruction;
-those cases must not silently fall back to
-gridding or matrix-free PCG. The distributed master integrates the
-fractional/trailing algebra — raw `(B,D)` chains blended under the population
-rule as `(u/f) current + (1-u)(N/M) previous`, where `M(s)` is the population
-the chain represents (the header particle counts of its two halves) and `N(s)`
-the state's active updated rows, so the chain keeps the mass of the represented
-population; priors are applied only after the blend (`test=pcg_frac_update` is
-the equivalence gate). A chain of an older identity version (before
+(`box*smpd == box_crop*smpd_crop`, enforced at entry). Fractional and trailing
+reconstruction run in both execution modes through the one master route
+(section 1); they must not silently fall back to gridding or matrix-free PCG.
+The master integrates the fractional/trailing algebra — raw `(B,D)` chains
+blended under the population rule as `(u/f) current + (1-u)(N/M) previous`,
+where `M(s)` is the population the chain represents (read from the chain's
+manifest, below) and `N(s)` the state's active updated rows, so the chain keeps
+the mass of the represented population. Under a state weight set these
+populations are applied masses, not row counts (section 1). Priors are applied
+only after the blend (`test=pcg_frac_update` is the equivalence gate). A chain of an older identity version (before
 `pcgtrail-v3`) is discarded and re-seeded. The persisted chain is
 continuous across constant-FOV crop growth: consecutive padded lattices share
 their frequency step, so the smaller previous grid is an index-aligned central
@@ -64,6 +71,34 @@ around the old period leave aliased mass in the outermost old shells, at or
 beyond the producing stage's matching band and decaying as `(1-u)^k` — the
 same approximation the gridding ramp accepts.
 
+The chain pair is one artifact set, published by its manifest
+`pcg_trail_stateNN.txt` (2026-10-07). The manifest is the gridding chain's
+format (`simple_trail_chain_manifest`, version 3). The master deletes it before
+it writes the first half and writes it after both halves, so an interrupted
+write never validates. It records the crop box and sampling, the project row
+count, the state and the state count, a generation count, the byte sizes of both
+halves, the represented mass `M`, the contributor count and the weight-set
+identity. Before a chain is used, the master validates the manifest: it must
+parse at this version and match the current weight-set identity, the state, the
+state count and the sizes of both halves. A missing or invalid manifest makes
+the pair stale, as does a raw header that fails the format, provenance or
+geometry check. A stale pair is discarded and re-seeded from the current
+sample. A chain built under another weight-set identity is therefore re-seeded,
+never blended. A blend continues the generation count; a re-seed restarts it at
+one. A failed manifest write is a warning, and the next iteration re-seeds.
+
+Each chain half is written at the full population of its state half: the rows
+of that half that belong to the state (by label, or by weight above the
+membership threshold of section 1) and, once any row has been updated, were
+updated at least once. The master checks that a half's current contributors do
+not exceed this full population only where a chain is written or blended:
+under `trail_rec`, or on a seed request (`trail_seed=yes`). This population is
+what the chain records, and nothing else uses it. A caller-owned weight
+table reconstructs without a chain, and the project cannot count its
+population. Under `trail_rec` the master also checks the reduced sample against
+the latest sampled cohort: the contributor count under hard labels, the applied
+mass to a relative 1e-3 under a weight set.
+
 ## 1. Production scope and fixed inputs
 
 For each populated state and halfset, the backend solves a CTF- and
@@ -74,6 +109,30 @@ The Euclidean objective uses per-particle `sigma2`; correlation is unweighted.
 `mskdiam` supplies the spherical fallback support and `pgrp` is applied by
 coordinate replication. `automsk=yes` and `automsk=nu` replace it with density
 support; the NU-evidence envelope is never a solve support.
+
+Under `m_estimator=flex` the project's state weight set replaces the hard state
+labels (2026-10-07). A particle is a member of a state when its weight for that
+state exceeds 0.01 (`PCG_WEIGHT_THRESHOLD` in `simple_reconstructor_pcg`), so
+one particle can enter several states. The worker divides a member's noise
+spectrum by its weight before `prep_particles`. That weighs both the
+right-hand side `B` and the density `D` by the weight, so `H` and `b` carry
+`w_i` beside `1/sigma2_i`. With `objfun=cc` the spectrum is one and the weight
+alone enters. Populations are applied masses of the members, summed after the
+threshold: the raw header mass, the trailing populations `N(s)` and `M(s)`, and
+the sampled mass behind `f`. Under hard labels they are row counts. The project
+handoff of the nonuniform-filter matching low-pass counts a weighted state as
+populated by the effective sample size (ESS, `(sum w)^2 / sum w^2`) of its
+members' weights. `state=X` reconstructs state X
+alone: under hard labels the rows labelled X, under a weight set every row whose
+weight for X exceeds the threshold.
+
+The reconstruction service (`simple_rec3D_service`) hands the backend one of
+three weight sources: the hard labels, the project's state weight set
+(distributed workers open it themselves), or a weight table the caller owns.
+The table is a transient source for the caller's own process. FLEX (`flex_pca`)
+reconstructs its trial maps from it, one state per column, without a trailing
+chain. Membership is the same as under a weight set, and the parts carry the
+zero identity. The service refuses a table for the queue.
 
 Both execution modes run one route: workers publish raw accumulators and the
 master reduces, finalizes and solves them. Shared-memory execution runs it in
@@ -113,9 +172,14 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 
 | File | Contents |
 | --- | --- |
-| `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type |
+| `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type, raw accumulator format, `PCG_WEIGHT_THRESHOLD` |
+| `src/main/volume/simple_pcg_lattice.f90` | `pcg_lattice`, which `reconstructor_pcg` extends: padded-lattice geometry, KB window, wrap table and solve support (`set_window_sphere`, `set_window_volume`), shared with the FLEX PCG operator |
+| `src/main/opt/simple_pcg_solver.f90` | the preconditioned conjugate-gradient engine and `pcg_solver_outcome` |
 | `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | PCG worker accumulation and master reduction and solve, for both execution modes |
-| `src/defs/simple_refine3D_fnames.f90` | raw `(state,half,part)` artifact names |
+| `src/main/strategies/parallelization/simple_rec3D_service.f90` | reconstruction service: weight source, dispatch, naming, registration |
+| `src/main/project/simple_state_weight_set.f90` | state weight set: members above a threshold, applied mass, ESS, identity |
+| `src/main/volume/simple_trail_chain_manifest.f90` | trailing-chain manifest, shared with gridding |
+| `src/defs/simple_refine3D_fnames.f90` | raw `(state,half,part)` artifact, chain pair and chain manifest names |
 | `src/main/commanders/simple/simple_commanders_rec.f90` | `reconstruct3D` commander and backend default |
 | `src/main/ui/simple/simple_ui_refine3D.f90` | `reconstruct3D` UI and backend selector |
 | `src/main/strategies/parallelization/simple_rec3D_strategy.f90` | backend dispatch |
@@ -128,7 +192,8 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 For volume `x` and 3-D transform `F`: `G_i` extracts an oriented Cartesian
 Fourier plane by Kaiser-Bessel (KB) interpolation, `S_i` is the shift phase,
 `C_i` the complex CTF (including the phase-flip convention), `N_i` the diagonal
-noise covariance from the particle's `sigma2`. With
+noise covariance from the particle's `sigma2` (divided by its state weight `w_i`
+under a weight set, section 1). With
 `K_i = N_i^{-1/2} C_i S_i G_i F`, the solver targets
 
 ```text
@@ -496,11 +561,14 @@ Gated on `objfun`, matching `reconstruct3D`: `objfun=cc` runs unweighted
 (`sigma2 = 1`), `objfun=euclid` requires sigma2 files and weights the fit by
 them. A missing sigma2 file under `objfun=euclid` is a hard error, never a silent
 unweighted fallback — that would quietly change which objective is minimised.
+Under a state weight set the worker divides each member's spectrum by its
+state weight, under `objfun=cc` too (section 1).
 
 Sigma2 is per-particle-per-shell, read via `euclid_sigma2` from the canonical state
-file (as `flex_analysis` does), then upsampled to the operator's shell range.
-Discovery/carry-over/loading lives once in `src/fileio/simple_sigma2_files.f90`,
-called by both `flex_analysis` and the `reconstruct3D` PCG strategy. That module is
+file, then upsampled to the operator's shell range.
+Validation and group loading (`load_sigma2_groups`) live once in
+`src/fileio/simple_sigma2_files.f90`, called by the `reconstruct3D` commander,
+the reconstruction service, the PCG strategy and `flex_pca`. That module is
 deliberately builder-free: `builder` depends on `euclid_sigma2`, so the sigma2
 side must not depend back on `builder`; callers pass `pftc`, `esig` and
 orientations explicitly.
@@ -539,6 +607,20 @@ preconditioning, or box conversion must add or extend a deterministic
 kernel-versus-matrix-free gate. Production-sized runs exercise kernel only;
 they do not establish correctness by comparing kernel output with another
 kernel output.
+
+Weighted reconstruction is gated outside `test=pcg_recon` (2026-10-07). The
+`fractional_reconstruction` sub-suite of `lib_reconstruction`
+(`simple_rec3D_service_tester.f90`) runs both backends through `reconstruct3D`
+on a two-conformer phantom. Under fractional weights each state map must match
+the weight mixture of the truth maps at least as well as the hard map matches
+its truth, minus 0.01 in correlation. 0/1 weights equal to the labels must
+reproduce the hard maps and half maps byte for byte. The PCG and gridding
+trailing seeds must represent the same applied mass. A chain of another
+weight-set generation must be re-seeded at generation one, and a chain of the
+same generation blended. The `trailing_chain_identity` sub-suite of
+`unit_reconstruction` (`simple_trail_chain_manifest_tester.f90`) covers the
+manifest round trip, the refusal of other manifest versions, and the raw
+header's mass and identity.
 
 Not covered, and worth remembering before trusting a change: the backend's own
 particle I/O loop, and replicated symmetry through the matrix-free operator
@@ -645,16 +727,18 @@ it ships. The one-mask contract that came with it:
   (previously PCG-only by backend name; an imported map without the
   sidecar still gets the classical spherical/envelope mask);
 - the PCG support is a hard solve domain plus one soft window (review
-  2026-09-09, finding 4.2): `set_mask` builds the window with `mask3D_soft`,
-  the solve runs on the domain `window > 0` (`P^2 = P`, exact projections in
-  operator, RHS and preconditioner) and the shipped map is `window * u`. That
+  2026-09-09, finding 4.2): `set_window_sphere` (in `simple_pcg_lattice`, the
+  geometry and support layer shared with the FLEX PCG operator) builds the
+  window with `mask3D_soft`, the solve runs on the domain `window > 0`
+  (`P^2 = P`, exact projections in operator, RHS and preconditioner) and the
+  shipped map is `window * u`. That
   is the same "estimate times one soft window" the gridding restoration
   ships, so the two backends' band treatment is identical and the only
   estimator difference is that the PCG estimate is zero outside the domain.
   The soft `P H P` formulation was not equivalent: where `0 < P < 1` the
   solved variable compensates for `P`, so the band was a solver-state
-  dependent mixture (`PCG_HARD_SOLVE_SUPPORT` in the solver restores it for
-  experiments). Output-space maps entering the solver (nonzero starts, and
+  dependent mixture; the experiment toggle that restored it was removed
+  in October 2026. Output-space maps entering the solver (nonzero starts, and
   the base map the closed-form regularized pair is derived from) are never
   re-masked: the entry converts them back to `u = x / window` where
   `window >= PCG_SUPPORT_DIV_MIN` (zero below) instead of projecting again;

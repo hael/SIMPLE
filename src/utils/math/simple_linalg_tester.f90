@@ -1,6 +1,6 @@
-!@descr: unit test routines for simple_linalg (eigensolvers, SVD, inversion, least-squares fits, vector helpers)
-! Symmetric eigensolvers (dense, sparse, Jacobi), SVD, inversion, least-squares fits and the small vector
-! helpers, pinned on matrices with independently computed answers.
+!@descr: unit test routines for simple_linalg (eigensolvers, SVD, inversion, Cholesky, least-squares fits, vector helpers)
+! Symmetric eigensolvers (dense, sparse, Jacobi), SVD, inversion, the double-precision Cholesky family,
+! least-squares fits and the small vector helpers, pinned on matrices with independently computed answers.
 module simple_linalg_tester
 use simple_test_utils    ! assertions etc.
 use simple_defs          ! sp, dp, PI
@@ -44,6 +44,7 @@ contains
         call test_vector_helpers()
         call test_gemm_tn()
         call test_real_spd_complex_solve()
+        call test_spd_cholesky()
     end subroutine run_all_linalg_tests
 
     !---------------- fixtures ----------------
@@ -398,6 +399,42 @@ contains
         call solve_real_spd_complex(matrix, rhs, solution, 2, flag)
         call assert_int(1, flag, 'real SPD/complex solve rejects a non-positive pivot')
     end subroutine test_real_spd_complex_solve
+
+    !> the double-precision Cholesky family on the example matrix: L L' = A with L lower triangular, the
+    !! two triangular solves recover x from A x, the inverse is symmetric and A A^-1 = I, log det A is the
+    !! sum of the log eigenvalues; an indefinite matrix is refused
+    subroutine test_spd_cholesky()
+        real(dp) :: a(N,N), l(N,N), ainv(N,N), x(N), y(N), xref(N), logdet, b2(2,2), l2(2,2)
+        logical  :: ok, l_upper_zero
+        integer  :: i, j
+        write(*,'(A)') 'test_spd_cholesky'
+        a = real(example_matrix(), dp)
+        call cholesky(a, l, N, ok)
+        call assert_true(ok, 'cholesky: factors the positive-definite example')
+        call assert_true(maxval(abs(matmul(l, transpose(l)) - a)) < 1.e-12_dp, 'cholesky: L L^T = A')
+        l_upper_zero = .true.
+        do j = 2, N
+            do i = 1, j-1
+                if( l(i,j) /= 0._dp ) l_upper_zero = .false.
+            enddo
+        enddo
+        call assert_true(l_upper_zero, 'cholesky: L is lower triangular')
+        xref = [1._dp, -2._dp, 0.5_dp, 3._dp, -1._dp]
+        call chol_forward(l, matmul(a, xref), y, N)
+        call chol_backward(l, y, x, N)
+        call assert_true(maxval(abs(x - xref)) < 1.e-12_dp, 'chol_forward and chol_backward solve A x = b')
+        call spd_inverse(a, ainv, N, ok)
+        call assert_true(ok, 'spd_inverse: inverts the positive-definite example')
+        call assert_true(all(ainv == transpose(ainv)), 'spd_inverse: the inverse is assembled symmetric')
+        call assert_true(maxval(abs(matmul(a, ainv) - real(identity(N),dp))) < 1.e-12_dp, 'spd_inverse: A A^-1 = I')
+        call spd_logdet(a, N, logdet, ok)
+        call assert_true(ok .and. abs(logdet - sum(log(real(EIGVALS_ASC,dp)))) < 1.e-5_dp, &
+            &'spd_logdet: log det A is the sum of the log eigenvalues')
+        b2(:,1) = [1._dp, 2._dp]
+        b2(:,2) = [2._dp, 1._dp]
+        call cholesky(b2, l2, 2, ok)
+        call assert_true(.not. ok, 'cholesky: refuses an indefinite matrix')
+    end subroutine test_spd_cholesky
 
     !---------------- helpers ----------------
 

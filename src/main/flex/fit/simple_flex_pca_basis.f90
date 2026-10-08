@@ -1,24 +1,23 @@
 !@descr: flex_pca: the mean and its scale, the data-free basis initialiser and its calibration, probe-state and basis I/O, basis pooling, deflation and cross-half angles
 module simple_flex_pca_basis
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num, omp_set_max_active_levels
-use simple_core_module_api, only: cosmskhalfwidth, dp, dtiny, eigsrt, fclose, fdim, file_exists, fileiochk, fopen, &
-    &fplane_type, int2str_pad, jacobi, logfhandle, maximgbatchsz, mrc_ext, ori, osmpl_pad_fac, simple_exception, &
-    &simple_rename, string, tic, timer_int_kind, tiny, toc
+use simple_core_module_api, only: arr2file, dp, dtiny, eigsrt, fclose, fdim, file2rarr, file_exists, fileiochk, &
+    &fopen, fplane_type, int2str_pad, jacobi, logfhandle, maximgbatchsz, mrc_ext, ori, osmpl_pad_fac, &
+    &simple_exception, simple_rename, string, tic, timer_int_kind, tiny, toc
 use simple_defs_flex,                     only: FLEX_ACCUM_BYTE_BUDGET
 use simple_flex_pca_records,              only: flex_fit_model, flex_selection
 use simple_builder,                       only: builder
 use simple_image,                         only: image
 use simple_parameters,                    only: parameters
-use simple_reconstructor,                 only: reconstructor
+use simple_reconstructor,                 only: reconstructor, exp_samples
 use simple_gridding,                      only: prep3D_inv_kbenvelope4mul
 use simple_linalg,                        only: jacobi, eigsrt
 use simple_math,                          only: ceil_div, floor_div
-use simple_flex_reconstructor_latent_ops, only: project_fplane_mean, project_fplanes_mean_basis, &
-    &prep_imgs4projected_model, planes_batch_load
+use simple_flex_reconstructor_latent_ops, only: project_fplanes_mean_basis, prep_imgs4projected_model, &
+    &planes_batch_load
 use simple_flex_pca_pcg,                  only: flex_pcg_environment
 use simple_ori,                           only: ori
 use simple_flex_pca_rounds,               only: flex_pca_rounds
-use simple_flex_pca_artifacts,            only: FLEX_PCA_PART_MAGIC
 use simple_flex_pca_mstep,                only: init_basis_reconstructor
 use simple_flex_pca_util,                 only: cov_signal_rank, cov_stage_subsample, cov_accum_bytes, &
     &cov_dim_budget
@@ -32,10 +31,9 @@ private
 
 public :: estimate_covariance_mean, apply_cached_mean_scale, estimate_mean_scale, init_mean_reconstructor, cov_herm_inner
 public :: init_basis_datafree, save_probe_state, load_probe_state, load_probe_basis
-public :: covariance_kfromto, cov_image_mask_radius, orthonormalize_representatives, align_basis_to_reference
+public :: covariance_kfromto, orthonormalize_representatives, align_basis_to_reference
 public :: basis_recs_from_images, deflate_against_basis, cross_half_subspace_angles, COV_EIG_REL_FLOOR, COV_MAX_DTILDE
-public :: COV_DEFAULT_DTILDE, COV_SAMPLES_PER_PARAM, COV_UNIT_CONTRAST, COV_MEAN_FROM_DATA, COV_MASK_IMAGES
-public :: COV_MASK_MARGIN, COV_PROBE_META
+public :: COV_DEFAULT_DTILDE, COV_SAMPLES_PER_PARAM, COV_UNIT_CONTRAST, COV_MEAN_FROM_DATA, COV_PROBE_META
 
 real(dp),         parameter :: COV_EIG_REL_FLOOR     = 1.0d-6
 ! Calibration estimates two global scalars; 20k particles keeps the master-only pass bounded.
@@ -48,8 +46,6 @@ integer,          parameter :: COV_DEFAULT_DTILDE    = 128
 real(dp),         parameter :: COV_SAMPLES_PER_PARAM = 10.0d0
 logical,          parameter :: COV_UNIT_CONTRAST     = .true.
 logical,          parameter :: COV_MEAN_FROM_DATA    = .false.
-logical,          parameter :: COV_MASK_IMAGES       = .false.
-real,             parameter :: COV_MASK_MARGIN       = 1.4
 character(len=*), parameter :: COV_PROBE_META        = 'flex_pca_probe.txt'
 
 character(len=*), parameter :: MEAN_SCALE_FNAME      = 'flex_pca_mean_scale.bin'
@@ -111,8 +107,7 @@ contains
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call planes_batch_load(plane_store, params, build, nptcls, pinds, batchlims, fpls, &
-                &cov_image_mask_radius(params), l_pcache)
+            call planes_batch_load(plane_store, params, build, nptcls, pinds, batchlims, fpls, l_pcache)
             do i = 1, batchsz
                 iptcl = pinds(batchlims(1)+i-1)
                 call build%spproj_field%get_ori(iptcl, orientation)
@@ -152,12 +147,14 @@ contains
         !> per-fit namespace (paired engine); default flex_pca_mean_scale.bin
         character(len=*), optional, intent(in)    :: cache_fname
         real, allocatable :: filt(:)
+        type(string) :: fname
         integer :: nyq
-        logical :: ok
-        nyq = max(1, fdim(params%box_crop) - 1)
-        allocate(filt(nyq))
-        call read_mean_scale(nyq, filt, ok, cache_fname=cache_fname)
-        if( .not. ok ) THROW_HARD('flex_pca worker found no mean-scale cache from the master')
+        nyq   = max(1, fdim(params%box_crop) - 1)
+        fname = mean_scale_cache_fname(cache_fname)
+        if( .not. file_exists(fname) ) THROW_HARD('flex_pca worker found no mean-scale cache from the master')
+        filt = file2rarr(fname)
+        if( size(filt) /= nyq ) THROW_HARD('mean-scale band mismatch; master and worker disagree on box_crop')
+        call fname%kill
         call mean_rec%apply_filter(filt)
         call mean_rec%expand_exp
         deallocate(filt)
@@ -178,6 +175,7 @@ contains
         integer, parameter :: NSAMPLE = 4000
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type), allocatable :: mean_fpl_t(:)
+        type(exp_samples), allocatable :: es_t(:)
         type(ori),         allocatable :: ori_t(:)
         integer  :: batchlims(2), batchsz, ibatch, i, iptcl, stride, used, nyq, sh, j, nsub
         integer  :: nthr_here, ithr, t
@@ -195,7 +193,7 @@ contains
         ! Reproducible at a given nthr; changing nthr moves the fitted scale only at rounding level.
         !$ call omp_set_max_active_levels(1)
         nthr_here = max(1, omp_get_max_threads())
-        allocate(mean_fpl_t(nthr_here), ori_t(nthr_here), used_t(nthr_here))
+        allocate(mean_fpl_t(nthr_here), es_t(nthr_here), ori_t(nthr_here), used_t(nthr_here))
         allocate(s_my_t(nthr_here), s_mm_t(nthr_here), source=0.d0)
         allocate(smy_sh_t(0:nyq,nthr_here), smm_sh_t(0:nyq,nthr_here), source=0.d0)
         used_t = 0
@@ -224,16 +222,15 @@ contains
         do ibatch = 1, nsub, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nsub, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call planes_batch_load(plane_store, params, build, nsub, sub_pinds, batchlims, fpls, &
-                &cov_image_mask_radius(params), l_pcache)
+            call planes_batch_load(plane_store, params, build, nsub, sub_pinds, batchlims, fpls, l_pcache)
             !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
             do i = 1, batchsz
                 ithr  = omp_get_thread_num() + 1
                 iptcl = sub_pinds(batchlims(1)+i-1)
                 call build%spproj_field%get_ori(iptcl, ori_t(ithr))
                 if( ori_t(ithr)%isstatezero() ) cycle
-                call project_fplane_mean(mean_rec, ori_t(ithr), fpls(i), mean_fpl_t(ithr), &
-                    &apply_ctf_amp=.true.)
+                call mean_rec%project_fplane(ori_t(ithr), fpls(i), mean_fpl_t(ithr), apply_ctf_amp=.true., &
+                    &samples=es_t(ithr))
                 s_my_t(ithr) = s_my_t(ithr) + real(cov_herm_inner(mean_fpl_t(ithr), fpls(i)), dp)
                 s_mm_t(ithr) = s_mm_t(ithr) + real(cov_herm_inner(mean_fpl_t(ithr), mean_fpl_t(ithr)), dp)
                 call plane_shell_cross_accum(mean_fpl_t(ithr), fpls(i), nyq, smy_sh_t(:,ithr), smm_sh_t(:,ithr))
@@ -249,9 +246,10 @@ contains
             smm_sh = smm_sh + smm_sh_t(:,t)
             used   = used + used_t(t)
             call ori_t(t)%kill
+            call es_t(t)%kill
             call cleanup_plane(mean_fpl_t(t))
         end do
-        deallocate(mean_fpl_t, ori_t, used_t, s_my_t, s_mm_t, smy_sh_t, smm_sh_t)
+        deallocate(mean_fpl_t, es_t, ori_t, used_t, s_my_t, s_mm_t, smy_sh_t, smm_sh_t)
         call cleanup_rec_buffers(build, fpls)
         if( s_mm > DTINY )then
             s = s_my / s_mm
@@ -287,7 +285,7 @@ contains
         end do
         call mean_rec%apply_filter(filt)
         call mean_rec%expand_exp
-        if( rounds%is_master() ) call write_mean_scale(nyq, filt, cache_fname=cache_fname)
+        if( rounds%is_master() ) call write_mean_scale(filt, cache_fname=cache_fname)
         deallocate(smy_sh, smm_sh, sprof, filt)
     end subroutine estimate_mean_scale
 
@@ -475,53 +473,24 @@ contains
     !! fraction of the particles would sample a different subset and fit a different scale. Shipping
     !! the nyq-length filter instead of the scaled volume keeps the handoff exact and tiny -- the
     !! worker rebuilds the mean deterministically from vol1 and applies the same array.
-    subroutine write_mean_scale( nyq, filt, cache_fname )
-        integer,                    intent(in) :: nyq
-        real,                       intent(in) :: filt(nyq)
+    subroutine write_mean_scale( filt, cache_fname )
+        real,                       intent(in) :: filt(:)
         !> per-fit namespace (paired engine); default MEAN_SCALE_FNAME
         character(len=*), optional, intent(in) :: cache_fname
         type(string) :: fname, tmp_fname
-        integer :: funit, io_stat
-        fname     = string(MEAN_SCALE_FNAME)
-        if( present(cache_fname) ) fname = trim(cache_fname)
+        fname     = mean_scale_cache_fname(cache_fname)
         tmp_fname = fname//'.tmp'
-        call fopen(funit, file=tmp_fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk('write_mean_scale; open', io_stat)
-        write(funit, iostat=io_stat) FLEX_PCA_PART_MAGIC, nyq
-        call fileiochk('write_mean_scale; header', io_stat)
-        write(funit, iostat=io_stat) filt
-        call fileiochk('write_mean_scale; payload', io_stat)
-        call fclose(funit)
+        call arr2file(filt, tmp_fname)
         call simple_rename(tmp_fname, fname)
         call fname%kill; call tmp_fname%kill
     end subroutine write_mean_scale
 
-    subroutine read_mean_scale( nyq, filt, ok, cache_fname )
-        integer,                    intent(in)  :: nyq
-        real,                       intent(out) :: filt(nyq)
-        logical,                    intent(out) :: ok
-        character(len=*), optional, intent(in)  :: cache_fname
+    function mean_scale_cache_fname( cache_fname ) result( fname )
+        character(len=*), optional, intent(in) :: cache_fname
         type(string) :: fname
-        integer :: funit, io_stat, magic, nyq_in
-        ok    = .false.
         fname = string(MEAN_SCALE_FNAME)
         if( present(cache_fname) ) fname = trim(cache_fname)
-        if( .not. file_exists(fname) )then
-            call fname%kill
-            return
-        endif
-        call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('read_mean_scale; open', io_stat)
-        read(funit, iostat=io_stat) magic, nyq_in
-        call fileiochk('read_mean_scale; header', io_stat)
-        if( magic /= FLEX_PCA_PART_MAGIC ) THROW_HARD('bad mean-scale magic')
-        if( nyq_in /= nyq ) THROW_HARD('mean-scale band mismatch; master and worker disagree on box_crop')
-        read(funit, iostat=io_stat) filt
-        call fileiochk('read_mean_scale; payload', io_stat)
-        call fclose(funit)
-        ok = .true.
-        call fname%kill
-    end subroutine read_mean_scale
+    end function mean_scale_cache_fname
 
     !> Data-free EM start: lowest-|k| band lattice points (col_sep apart) realised as masked cos/sin
     !! pairs and orthonormalised; deterministic. One capped data pass calibrates sig2 and Gamma^0;
@@ -648,7 +617,7 @@ contains
             batchsz   = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
             call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=cov_image_mask_radius(params))
+                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
             do i = 1, batchsz
                 call build%spproj_field%get_ori(pinds(batchlims(1)+i-1), orientations(i))
             end do
@@ -866,22 +835,6 @@ contains
             kfromto(2) = max(1, min(kto_full, int(dstep_crop / params%lp)))
         endif
     end function covariance_kfromto
-
-    !> Particle-image mask radius in pixels at params%box, or 0 to disable.
-    function cov_image_mask_radius( params ) result( r )
-        class(parameters), intent(in) :: params
-        real :: r
-        ! The compile-time default (COV_MASK_IMAGES) is OFF, which is
-        ! safe ONLY when the solvent is pure noise -- true for synthetic data, FALSE for real data,
-        ! where the region outside the envelope carries ice-thickness gradients, neighbouring
-        ! particles and carbon edges. Those are low-frequency AND reproducible between halfsets, so
-        ! they enter the covariance as apparent signal and can dominate the leading eigenvectors.
-        r = 0.
-        if( .not. COV_MASK_IMAGES ) return
-        if( params%msk_crop <= 0. .or. params%box_crop <= 0 ) return
-        r = COV_MASK_MARGIN * params%msk_crop * real(params%box) / real(params%box_crop)
-        r = min(r, 0.5*real(params%box) - COSMSKHALFWIDTH - 1.)
-    end function cov_image_mask_radius
 
     !> Convert each merged complex column C_q into its two real spatial representatives Re(ifft
     !! C_q)=Sigma*cos_q and Im(ifft C_q)=Sigma*sin_q.

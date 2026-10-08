@@ -11,6 +11,7 @@ public :: plane_from_points, projz, pythag, rad2deg, deg2rad
 public :: svbksb, svdcmp, svdfit, svd_multifit
 public :: qr_solve
 public :: solve_real_spd_complex
+public :: cholesky, chol_forward, chol_backward, spd_inverse, spd_logdet
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
 public :: sparse_eigh
 public :: gemm_tn
@@ -881,30 +882,17 @@ pure subroutine solve_real_spd_complex(amat_in, rhs, sol, n, flag)
     complex(dp), intent(out) :: sol(n)
     integer,     intent(out) :: flag
     real(dp) :: chol(n,n), yr(n), yi(n), xr(n), xi(n)
-    real(dp) :: sumr, sumi, sumv, tol
-    integer  :: i, j, l
+    real(dp) :: sumr, sumi, tol
+    integer  :: i, l
+    logical  :: ok
     flag = 0
     sol  = DCMPLX_ZERO
-    chol = 0.d0
     tol  = max(DTINY, epsilon(1.d0) * max(1.d0, maxval(abs(amat_in))))
-    do j = 1, n
-        sumv = amat_in(j,j)
-        do l = 1, j - 1
-            sumv = sumv - chol(j,l) * chol(j,l)
-        end do
-        if( sumv <= tol )then
-            flag = 1
-            return
-        endif
-        chol(j,j) = sqrt(sumv)
-        do i = j + 1, n
-            sumv = amat_in(i,j)
-            do l = 1, j - 1
-                sumv = sumv - chol(i,l) * chol(j,l)
-            end do
-            chol(i,j) = sumv / chol(j,j)
-        end do
-    end do
+    call cholesky(amat_in, chol, n, ok, tol)
+    if( .not. ok )then
+        flag = 1
+        return
+    endif
     do i = 1, n
         sumr = real(rhs(i), dp)
         sumi = aimag(rhs(i))
@@ -929,6 +917,121 @@ pure subroutine solve_real_spd_complex(amat_in, rhs, sol, n, flag)
         sol(i) = cmplx(xr(i), xi(i), kind=dp)
     end do
 end subroutine solve_real_spd_complex
+
+!> Cholesky factor A = L L' of a real symmetric positive-definite matrix, from its lower triangle.
+!! ok=.false. (L partial) when a pivot is at or below tol (default 0).
+pure subroutine cholesky( A, L, n, ok, tol )
+    integer,            intent(in)  :: n
+    real(dp),           intent(in)  :: A(n,n)
+    real(dp),           intent(out) :: L(n,n)
+    logical,            intent(out) :: ok
+    real(dp), optional, intent(in)  :: tol
+    real(dp) :: s, piv_tol
+    integer  :: i, j, k
+    piv_tol = 0.d0
+    if( present(tol) ) piv_tol = tol
+    L  = 0.d0
+    ok = .false.
+    do j = 1, n
+        s = A(j,j)
+        do k = 1, j-1
+            s = s - L(j,k)*L(j,k)
+        end do
+        if( s <= piv_tol ) return
+        L(j,j) = sqrt(s)
+        do i = j+1, n
+            s = A(i,j)
+            do k = 1, j-1
+                s = s - L(i,k)*L(j,k)
+            end do
+            L(i,j) = s/L(j,j)
+        end do
+    end do
+    ok = .true.
+end subroutine cholesky
+
+!> y = L^-1 b for the Cholesky factor L
+pure subroutine chol_forward( L, b, y, n )
+    integer,  intent(in)  :: n
+    real(dp), intent(in)  :: L(n,n), b(n)
+    real(dp), intent(out) :: y(n)
+    integer :: i, k
+    do i = 1, n
+        y(i) = b(i)
+        do k = 1, i-1
+            y(i) = y(i) - L(i,k)*y(k)
+        end do
+        y(i) = y(i)/L(i,i)
+    end do
+end subroutine chol_forward
+
+!> x = L'^-1 y for the Cholesky factor L
+pure subroutine chol_backward( L, y, x, n )
+    integer,  intent(in)  :: n
+    real(dp), intent(in)  :: L(n,n), y(n)
+    real(dp), intent(out) :: x(n)
+    integer :: i, k
+    do i = n, 1, -1
+        x(i) = y(i)
+        do k = i+1, n
+            x(i) = x(i) - L(k,i)*x(k)
+        end do
+        x(i) = x(i)/L(i,i)
+    end do
+end subroutine chol_backward
+
+!> A^-1 = L'^-1 L^-1 for symmetric positive-definite A, assembled symmetric; ok=.false. and Ainv=0
+!! when A is not SPD
+pure subroutine spd_inverse( A, Ainv, n, ok )
+    integer,  intent(in)  :: n
+    real(dp), intent(in)  :: A(n,n)
+    real(dp), intent(out) :: Ainv(n,n)
+    logical,  intent(out) :: ok
+    real(dp) :: L(n,n), Linv(n,n), s
+    integer  :: i, j, k
+    Ainv = 0.d0
+    call cholesky(A, L, n, ok)
+    if( .not. ok ) return
+    ! L^-1, lower triangular, by forward substitution on the identity
+    Linv = 0.d0
+    do j = 1, n
+        Linv(j,j) = 1.d0/L(j,j)
+        do i = j+1, n
+            s = 0.d0
+            do k = j, i-1
+                s = s - L(i,k)*Linv(k,j)
+            end do
+            Linv(i,j) = s/L(i,i)
+        end do
+    end do
+    ! A^-1 = (L^-1)'(L^-1); both factors lower triangular, so the sum starts at max(i,j)
+    do i = 1, n
+        do j = 1, i
+            s = 0.d0
+            do k = i, n
+                s = s + Linv(k,i)*Linv(k,j)
+            end do
+            Ainv(i,j) = s
+            Ainv(j,i) = s
+        end do
+    end do
+end subroutine spd_inverse
+
+!> log(det A) for symmetric positive-definite A, from its Cholesky factor; ok=.false. when not SPD
+pure subroutine spd_logdet( A, n, logdet, ok )
+    integer,  intent(in)  :: n
+    real(dp), intent(in)  :: A(n,n)
+    real(dp), intent(out) :: logdet
+    logical,  intent(out) :: ok
+    real(dp) :: L(n,n)
+    integer  :: j
+    logdet = 0.d0
+    call cholesky(A, L, n, ok)
+    if( .not. ok ) return
+    do j = 1, n
+        logdet = logdet + 2.d0*log(L(j,j))
+    end do
+end subroutine spd_logdet
 
 subroutine sparse_eigh(matvec, ctx, n, neigs, eigvals, eigvecs, tol, max_basis, info)
     procedure(sparse_matvec_sp_proc) :: matvec

@@ -24,6 +24,10 @@ interface reorder
     module procedure reorder_1, reorder_2
 end interface
 
+interface selec
+    module procedure selec_sp, selec_dp
+end interface
+
 contains
 
     !>   for finding closest element in an ordered list
@@ -597,64 +601,137 @@ contains
     end subroutine reverse_f
 
     !>   for selecting the kth smallest (Numerical Recipes select), array is modified
-    real function selec(k,n,arr)
+    real function selec_sp(k,n,arr)
         integer, intent(in)    :: k,n
         real,    intent(inout) :: arr(:)
         integer :: i,ir,j,l,mid
-        real    :: a,temp
-        l = 1
+        real :: a,temp
+        l  = 1
         ir = n
-    22  if (ir-l.le.1) then
-            if (ir-l.eq.1) then ! was ir-1: a two-element final partition with l > 1 was left unsorted
-                if (arr(ir).lt.arr(l)) then
-                    temp = arr(l)
-                    arr(l) = arr(ir)
-                    arr(ir) = temp
+        do
+            if( ir-l <= 1 )then
+                ! one or two elements left; was ir-1: a two-element final partition with l > 1 was left unsorted
+                if( ir-l == 1 )then
+                    if( arr(ir) < arr(l) )then
+                        temp    = arr(l)
+                        arr(l)  = arr(ir)
+                        arr(ir) = temp
+                    endif
                 endif
+                selec_sp = arr(k)
+                return
             endif
-            selec = arr(k)
-            return
-        else
-            mid = (l+ir)/2
-            temp = arr(mid)
+            ! median of three, arr(l) <= arr(l+1) <= arr(ir), with the pivot at l+1
+            mid      = (l+ir)/2
+            temp     = arr(mid)
             arr(mid) = arr(l+1)
             arr(l+1) = temp
-            if (arr(l).gt.arr(ir)) then
-                temp = arr(l)
-                arr(l) = arr(ir)
+            if( arr(l) > arr(ir) )then
+                temp    = arr(l)
+                arr(l)  = arr(ir)
                 arr(ir) = temp
             endif
-            if (arr(l+1).gt.arr(ir)) then
-                temp = arr(l+1)
+            if( arr(l+1) > arr(ir) )then
+                temp     = arr(l+1)
                 arr(l+1) = arr(ir)
-                arr(ir) = temp
+                arr(ir)  = temp
             endif
-            if (arr(l).gt.arr(l+1)) then
-                temp = arr(l)
-                arr(l) = arr(l+1)
+            if( arr(l) > arr(l+1) )then
+                temp     = arr(l)
+                arr(l)   = arr(l+1)
                 arr(l+1) = temp
             endif
+            ! partition around the pivot a
             i = l+1
             j = ir
             a = arr(l+1)
-    23      continue
-            i = i+1
-            if (arr(i).lt.a) goto 23
-    24      continue
-            j = j-1
-            if (arr(j).gt.a) goto 24
-            if (j.lt.i)      goto 25
-            temp = arr(i)
-            arr(i) = arr(j)
-            arr(j) = temp
-            goto 23
-    25      arr(l+1) = arr(j)
-            arr(j) = a
-            if (j.ge.k) ir = j-1
-            if (j.le.k) l = i
-        endif
-        goto 22
-    end function selec
+            do
+                i = i+1
+                do while( arr(i) < a )
+                    i = i+1
+                end do
+                j = j-1
+                do while( arr(j) > a )
+                    j = j-1
+                end do
+                if( j < i ) exit
+                temp   = arr(i)
+                arr(i) = arr(j)
+                arr(j) = temp
+            end do
+            arr(l+1) = arr(j)
+            arr(j)   = a
+            ! keep the side that holds k
+            if( j >= k ) ir = j-1
+            if( j <= k ) l  = i
+        end do
+    end function selec_sp
+
+    real(dp) function selec_dp(k,n,arr)
+        integer, intent(in)    :: k,n
+        real(dp), intent(inout) :: arr(:)
+        integer :: i,ir,j,l,mid
+        real(dp) :: a,temp
+        l  = 1
+        ir = n
+        do
+            if( ir-l <= 1 )then
+                ! one or two elements left; was ir-1: a two-element final partition with l > 1 was left unsorted
+                if( ir-l == 1 )then
+                    if( arr(ir) < arr(l) )then
+                        temp    = arr(l)
+                        arr(l)  = arr(ir)
+                        arr(ir) = temp
+                    endif
+                endif
+                selec_dp = arr(k)
+                return
+            endif
+            ! median of three, arr(l) <= arr(l+1) <= arr(ir), with the pivot at l+1
+            mid      = (l+ir)/2
+            temp     = arr(mid)
+            arr(mid) = arr(l+1)
+            arr(l+1) = temp
+            if( arr(l) > arr(ir) )then
+                temp    = arr(l)
+                arr(l)  = arr(ir)
+                arr(ir) = temp
+            endif
+            if( arr(l+1) > arr(ir) )then
+                temp     = arr(l+1)
+                arr(l+1) = arr(ir)
+                arr(ir)  = temp
+            endif
+            if( arr(l) > arr(l+1) )then
+                temp     = arr(l)
+                arr(l)   = arr(l+1)
+                arr(l+1) = temp
+            endif
+            ! partition around the pivot a
+            i = l+1
+            j = ir
+            a = arr(l+1)
+            do
+                i = i+1
+                do while( arr(i) < a )
+                    i = i+1
+                end do
+                j = j-1
+                do while( arr(j) > a )
+                    j = j-1
+                end do
+                if( j < i ) exit
+                temp   = arr(i)
+                arr(i) = arr(j)
+                arr(j) = temp
+            end do
+            arr(l+1) = arr(j)
+            arr(j)   = a
+            ! keep the side that holds k
+            if( j >= k ) ir = j-1
+            if( j <= k ) l  = i
+        end do
+    end function selec_dp
 
     ! Returns the sorted unique values of input vector
     subroutine unique( vec, vec_unique )

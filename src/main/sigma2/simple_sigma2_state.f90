@@ -4,22 +4,17 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int32, int64, real32, real64
 use simple_defs,              only: logfhandle
 use simple_fileio,            only: get_fpath
-use simple_oris,              only: oris
-use simple_sp_project,        only: sp_project
 use simple_string,            only: string
 use simple_string_utils,      only: int2str, int2str_pad
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, &
     &sigma2_state_read_particles, sigma2_state_read_groups, sigma2_state_write_particles, &
     &sigma2_state_write_groups, sigma2_state_read_local_range, sigma2_state_validate_file, &
-    &sigma2_state_publish, sigma2_state_digest_begin, &
-    &sigma2_state_digest_text, sigma2_state_digest_integer, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, &
+    &sigma2_state_publish, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, &
     &SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_CANDIDATE, &
     &SIGMA2_STATE_COMMITTED, sigma2_state_create_candidate
 implicit none
 private
 
-public :: sigma2_state_layout_digest
-public :: sigma2_state_project_layout_digest
 public :: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_next_generation
 public :: sigma2_state_prepare_update
 public :: sigma2_state_merge_local_ranges, sigma2_state_reduce_groups
@@ -29,73 +24,6 @@ integer, parameter :: REDUCE_BLOCK_ROWS = 4096
 character(len=*), parameter :: SIGMA2_RANGE_FBODY = 'sigma2_state_range_part'
 
 contains
-
-    function sigma2_state_layout_digest(lineage, stack_refs, stack_ids, stack_indices, nrows) result(digest)
-        character(len=*), intent(in) :: lineage
-        type(string),     intent(in) :: stack_refs(:)
-        integer,          intent(in) :: stack_ids(:), stack_indices(:)
-        integer, optional, intent(in) :: nrows
-        integer(int64) :: digest
-        integer :: i, n
-        n = size(stack_ids)
-        if( present(nrows) ) n = nrows
-        if( n < 0 .or. n > size(stack_ids) .or. n > size(stack_indices) )then
-            digest = 0_int64
-            return
-        endif
-        digest = sigma2_state_digest_begin()
-        call sigma2_state_digest_text(digest, trim(lineage))
-        do i = 1, n
-            if( stack_ids(i) < 1 .or. stack_ids(i) > size(stack_refs) )then
-                digest = 0_int64
-                return
-            endif
-            call sigma2_state_digest_text(digest, trim(stack_refs(stack_ids(i))%to_char()))
-            call sigma2_state_digest_integer(digest, stack_indices(i))
-        enddo
-        if( digest == 0_int64 ) digest = 1_int64
-    end function sigma2_state_layout_digest
-
-    function sigma2_state_project_layout_digest(project, particles, nrows) result(digest)
-        type(sp_project), intent(in) :: project
-        class(oris),      intent(in) :: particles
-        integer, optional, intent(in) :: nrows
-        integer(int64) :: digest
-        type(string), allocatable :: stack_refs(:)
-        integer, allocatable :: stack_ids(:), stack_indices(:)
-        type(string) :: lineage, stack_ref
-        integer :: i, nptcls, nstks
-        digest = 0_int64
-        nptcls = particles%get_noris(consider_state=.false.)
-        nstks  = project%os_stk%get_noris(consider_state=.false.)
-        if( nptcls < 1 .or. nstks < 1 ) return
-        if( project%projinfo%get_noris() /= 1 ) return
-        if( project%projinfo%isthere(1, 'projname') )then
-            lineage = project%projinfo%get_str(1, 'projname')
-        else if( project%projinfo%isthere(1, 'projfile') )then
-            lineage = project%projinfo%get_str(1, 'projfile')
-        else
-            return
-        endif
-        allocate(stack_refs(nstks), stack_ids(nptcls), stack_indices(nptcls))
-        do i = 1, nstks
-            stack_ref = project%os_stk%get_str(i, 'stk')
-            stack_refs(i) = trim(adjustl(stack_ref%to_char()))
-        enddo
-        do i = 1, nptcls
-            stack_ids(i)     = particles%get_int(i, 'stkind')
-            stack_indices(i) = particles%get_int(i, 'indstk')
-        enddo
-        if( present(nrows) )then
-            digest = sigma2_state_layout_digest(lineage%to_char(), stack_refs, stack_ids, stack_indices, nrows)
-        else
-            digest = sigma2_state_layout_digest(lineage%to_char(), stack_refs, stack_ids, stack_indices)
-        endif
-        call lineage%kill
-        call stack_ref%kill
-        call stack_refs(:)%kill
-        deallocate(stack_refs, stack_ids, stack_indices)
-    end function sigma2_state_project_layout_digest
 
     !> Transaction-scoped name of the candidate that will commit the given
     !! generation: <committed stem>.g<generation>.next. Candidate and range

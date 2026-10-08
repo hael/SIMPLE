@@ -939,6 +939,34 @@ contains
         deallocate(updatecnts, sampled, states, groups)
     end subroutine get_group_update_counts
 
+    ! The rows behind those counts, for reductions over state weights instead of labels:
+    !   rep_rows: active rows with updatecnt > 0 (empty before any sampling or update)
+    !   smp_rows: those carrying the current sampling marker
+    !   rec_rows: the rows sample4rec reconstructs over the whole project (a seed's population)
+    module subroutine get_update_rows( self, rep_rows, smp_rows, rec_rows )
+        class(oris),          intent(inout) :: self
+        integer, allocatable, intent(inout) :: rep_rows(:), smp_rows(:), rec_rows(:)
+        integer, allocatable :: updatecnts(:), sampled(:), states(:), rows(:)
+        logical, allocatable :: l_rep(:), l_smp(:), l_rec(:)
+        integer :: sampled_max, i
+        logical :: l_any_updated
+        updatecnts = self%get_all_asint('updatecnt')
+        sampled    = self%get_all_asint('sampled')
+        states     = nint(self%get_all('state'))
+        sampled_max   = maxval(sampled)
+        l_any_updated = any(states > 0 .and. updatecnts > 0)
+        allocate(l_rep(self%n), l_smp(self%n), l_rec(self%n))
+        l_rep = states > 0 .and. updatecnts > 0 .and. sampled_max > 0
+        l_smp = l_rep .and. sampled == sampled_max
+        l_rec = states > 0
+        if( l_any_updated ) l_rec = l_rec .and. updatecnts > 0
+        rows  = [(i, i = 1, self%n)]
+        rep_rows = pack(rows, l_rep)
+        smp_rows = pack(rows, l_smp)
+        rec_rows = pack(rows, l_rec)
+        deallocate(updatecnts, sampled, states, rows, l_rep, l_smp, l_rec)
+    end subroutine get_update_rows
+
     module subroutine get_state_update_fracs( self, nstates, rho )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: nstates

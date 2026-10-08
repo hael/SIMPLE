@@ -4,8 +4,9 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_commanders_api
 use simple_sigma2_binfile, only: sigma2_binfile
+use simple_ptcl_layout, only: ptcl_layout_digest
 use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
-    &sigma2_state_project_layout_digest, sigma2_state_reduce_groups
+    &sigma2_state_reduce_groups
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
     &sigma2_state_init_header, sigma2_state_read_header, sigma2_state_read_particles, &
     &sigma2_state_write_particles, sigma2_state_validate_file, &
@@ -148,7 +149,7 @@ contains
             if( state_status == 0 )then
                 generation = previous_header%generation + 1_int64
                 if( previous_header%nptcls > 0 .and. previous_header%nptcls < nptcls )then
-                    prefix_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field, &
+                    prefix_digest = ptcl_layout_digest(build%spproj, build%spproj_field, &
                         &int(previous_header%nptcls))
                     preserve_prefix = prefix_digest == previous_header%layout_digest .and. &
                         &previous_header%box == params%box .and. &
@@ -162,7 +163,7 @@ contains
                 endif
             endif
         endif
-        layout_digest = sigma2_state_project_layout_digest(build%spproj, build%spproj_field)
+        layout_digest = ptcl_layout_digest(build%spproj, build%spproj_field)
         if( layout_digest == 0_int64 ) THROW_HARD('cannot derive canonical sigma2 particle layout identity')
         if( params%l_sigma_glob )then
             call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &

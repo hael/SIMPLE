@@ -848,8 +848,9 @@ contains
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(string) :: fsc_file, vol, vol_iter
-        integer      :: state
+        type(string)         :: fsc_file, vol, vol_iter
+        integer, allocatable :: state_pops(:)
+        integer              :: state
         ! report last iteration
         call cline%delete( 'startit' )
         call cline%set('endit', real(params%which_iter))
@@ -859,8 +860,9 @@ contains
         if( trim(params%refine) /= 'sigma' ) call build%spproj%write_segment_inside(params%oritype)
         call del_file(params%outfile)
         if( trim(params%volrec) .eq. 'yes' )then
+            call get_state_pops(params, build, state_pops)
             do state = 1, params%nstates
-                if( build%spproj_field%get_pop(state, 'state') == 0 )then
+                if( state_pops(state) == 0 )then
                     ! cleanup empty state
                     if( trim(params%oritype).eq.'cls3D' )then
                         call build%spproj%remove_entry_from_osout('vol_cavg', state)
@@ -888,6 +890,33 @@ contains
         call vol%kill
         call vol_iter%kill
     end subroutine inmem_finalize_run
+
+    !> Per-state populations that decide whether a state's map is registered or carried forward: the
+    !! hard labels, or with m_estimator=flex whether the state's frozen weights have applied mass (the
+    !! states the reconstruction assembled); a weighted populated state reports its rounded effective
+    !! sample size, at least 1
+    subroutine get_state_pops( params, build, state_pops )
+        use simple_state_weight_set, only: state_weight_set
+        class(parameters),    intent(in)    :: params
+        class(builder),       intent(inout) :: build
+        integer, allocatable, intent(inout) :: state_pops(:)
+        type(state_weight_set) :: wset
+        integer :: state
+        if( allocated(state_pops) ) deallocate(state_pops)
+        allocate(state_pops(params%nstates), source=0)
+        if( params%l_m_estimator_flex )then
+            call wset%new(build%spproj, build%spproj_field)
+            if( wset%get_nstates() /= params%nstates ) THROW_HARD('state weight set and nstates disagree; get_state_pops')
+            do state = 1, params%nstates
+                if( wset%get_mass(state) > 0.d0 ) state_pops(state) = max(1, nint(wset%get_ess(state)))
+            enddo
+            call wset%kill
+        else
+            do state = 1, params%nstates
+                state_pops(state) = build%spproj_field%get_pop(state, 'state')
+            enddo
+        endif
+    end subroutine get_state_pops
 
     subroutine inmem_cleanup(self, params)
         class(refine3D_inmem_strategy), intent(inout) :: self
@@ -1302,7 +1331,7 @@ contains
                     call report_rec_master_phase(params, t_recphase, rec3D_master_nthr(params, self%nthr_master))
                     if( trim(params%volrec).eq.'yes' )then
                         ! rename & add volumes to project & update job_descr
-                        call build%spproj_field%get_pops(state_pops, 'state')
+                        call get_state_pops(params, build, state_pops)
                         do state = 1,params%nstates
                             if( state_pops(state) == 0 )then
                                 vol_iter = refine3D_state_vol_fname(state)

@@ -133,22 +133,33 @@ that the effective sample size `(sum w)^2 / sum w^2` reaches a minimum
 (default at least 20, and by default the count needed for a stable map), and
 grown by 30 percent steps if the support is still too small.
 
-**State maps.** Each state's even and odd accumulators are reconstructed in
-one weighted pass through the gridding reconstructor. Because weights in
-`[0, 1]` make the sampling density sparse and irregular, a shell-relative
-density floor is applied before division. FSC-compatible half maps and merged
-maps are written, and the maximum-weight state becomes each particle's hard
-label (unweighted particles stay at state 0), so the initializer can be judged
-with an ordinary multi-state reconstruction.
+**State maps.** FLEX has no reconstruction code of its own. Trial maps (the
+bandwidth cross-validation and the merge) come from SIMPLE's reconstruction
+service, called in the FLEX process with the weight columns as a caller-owned
+table, at the covariance box, raw (no filter, mask or trailing chain).
+Because weights in `[0, 1]` make the sampling density sparse and irregular,
+the service applies a shell-relative density floor before the gridding
+division. The delivered weights are published as the project's state weight
+set, the maximum-weight state becomes each particle's hard label (unweighted
+particles stay at state 0), and the delivered maps are an ordinary
+`reconstruct3D m_estimator=flex` from that set at the native box, registered
+as the project's `vol` and `fsc` entries of every state.
 
-**Merging.** Over-provisioned states are merged only when two independent
-gates agree: a view-coverage gate (a state whose viewing-direction second
-moment is an outlier relative to the others, chi-square with 5 degrees of
-freedom on the effect size `chi2/n_eff`, robustly compared by median and MAD)
-and a map-similarity gate (a disattenuated FSC-type ratio between the states'
-deviations from the ensemble mean above 0.98 by default). Latent distance
-alone never triggers a merge, since it is a property of the embedding, not
-of the maps.
+**Merging.** With `preimage_auto=yes`, over-provisioned states are merged
+through two gates on their trial half maps. The map gate joins states whose
+deviations from the ensemble mean agree within their own half-map
+reproducibility: a disattenuated FSC-type ratio of at least 0.98, by
+complete-linkage agglomeration on one minus the ratio, so a group merges only
+if every pair across it clears the gate. The view gate flags a state whose
+viewing-direction second moment departs from the global one both
+significantly (chi-square with 5 degrees of freedom, p = 0.001) and by an
+outlying effect size (`chi2/n_eff` above the median plus three robust standard
+deviations of the states), and folds it into the state its map most
+resembles, when that ratio is at least 0.8; it stands down when more
+than a third of the states are flagged, the signature of compositional
+heterogeneity. States without weight take part in neither gate. Latent
+distance alone never triggers a merge, since it is a property of the
+embedding, not of the maps.
 
 **Population floor.** With `min_state_frac > 0` every delivered state must
 hold at least that fraction of the embedded particles. Targets are placed on
@@ -178,8 +189,14 @@ combined with the merge or with external targets.
 - EM fit and initializer: `src/main/flex/fit/simple_flex_probe_fit*.f90`,
   `simple_flex_pca_basis.f90` and `simple_flex_pca_posterior.f90`.
 - Driver, targets, kernel weights and merging: `src/main/flex/fit/simple_flex_pca_fit_driver.f90`
-  and `src/main/flex/states/simple_flex_pca_{targets,weights,merge}.f90`.
-- Weighted reconstruction: `src/main/flex/states/simple_flex_pca_rec3D.f90`.
+  and `src/main/flex/states/simple_flex_pca_{targets,weights,gmm,deconv,merge}.f90`, on the
+  clustering modules of `src/utils/clustering` (`simple_kmeans`, `simple_kcenter`,
+  `simple_gmm`, `simple_xd_gmm`, `simple_hac`).
+- State maps: the reconstruction service
+  (`src/main/strategies/parallelization/simple_rec3D_service.f90`), called by
+  `src/main/flex/run/simple_flex_pca_state_service.f90` (trial maps) and
+  `src/main/flex/run/simple_flex_pca_project_gateway.f90` (the delivered maps); the state
+  weight set is `src/main/project/simple_state_weight_set.f90`.
 - Projection and backprojection operators:
   `src/main/flex/fit/simple_flex_reconstructor_latent_ops.f90`.
 - Subsystem overview: `src/main/flex/README.md`.

@@ -374,10 +374,54 @@ the recovered number can be smaller. The project consensus map is used when
 components: excess components tend to describe fitting noise and make the
 state analysis less stable.
 
+The output project holds the result in two forms. Each particle gets a hard
+state label in `ptcl3D`; particles assigned to no state get label 0. Each
+particle also gets a weight for every state. These weights form the project's
+state weight set, registered in the project's out segment (imgkind
+`state_weights`). Unless `rec_states=no` is given, each state's map,
+`recvol_stateNN.mrc`, and its Fourier shell correlation (FSC) are registered
+as ordinary `vol` and `fsc` entries, like the maps of any multi-state run. The
+state 1 map then takes the place of the consensus map in the output project.
+To run `flex_pca` again, start from its input project or pass `vol1`.
+
 Interpret a motion only when it is supported by reproducible components,
 adequate particles and views across the trajectory, and coherent changes in
 the reconstructed volumes. A smooth-looking sequence by itself is not proof
 of continuous biology.
+
+### Optional: refine one state with its flex_pca weights
+
+A state found by `flex_pca` can be refined on its own, with every particle
+weighted by its state weight:
+
+```bash
+simple_exec prg=refine3D_auto \
+  projfile=<FLEX_PCA_PROJECT.simple> \
+  state=<STATE_NUMBER> m_estimator=flex \
+  pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
+  nparts=<PARTITIONS> nthr=<THREADS>
+```
+
+With `state=`, `refine3D_auto` copies the project into its new execution
+directory as a work project, `refine3D_auto_stateNN.simple`, that holds the
+chosen state alone. It refines that copy and does not write the `flex_pca`
+project. The copy keeps every particle with a positive weight for the state.
+Every reconstruction weighs each particle by its weight. The weights stay as
+`flex_pca` computed them, and alignment and particle sampling do not use them.
+The state's map from the `flex_pca` project is the starting reference, so
+`vol1` is not needed. The run needs its own directory: keep the default
+`mkdir=yes`. Run one command per state, each from the `flex_pca` project.
+
+For comparison, run the same command without `m_estimator=flex`. The default
+`m_estimator=no` with `state=` refines only the particles labelled with the
+state. `reconstruct3D` reads the weights in the same way: with
+`m_estimator=flex` it reconstructs every state from the weight set, and adding
+`state=<STATE_NUMBER>` reconstructs that state alone.
+
+This weighted route is new. It has been validated on simulated data. Whether
+the weights give better maps than the hard labels on real data has not been
+tested yet, so compare the two refinements of a state before relying on the
+weighted one.
 
 ## 8. A minimal command worksheet
 

@@ -14,8 +14,8 @@ use simple_flex_pca_rounds,               only: flex_pca_rounds
 use simple_flex_pca_stages,               only: flex_stage_request, PCA_STAGE_EMBED
 use simple_flex_pca_artifacts,            only: FLEX_PCA_PART_MAGIC
 use simple_flex_pca_posterior,            only: quad_form, spd_solve_dp, map_sampling_precision
-use simple_flex_pca_basis,                only: cov_herm_inner, cov_image_mask_radius
-use simple_flex_pca_util,                 only: corr_dp
+use simple_flex_pca_basis,                only: cov_herm_inner
+use simple_stat,                          only: pearsn_serial_8
 use simple_flex_pca_fit_types,            only: cleanup_plane
 use simple_matcher_3Drec,                 only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io,               only: prepimgbatch
@@ -146,141 +146,139 @@ contains
             ! reads them one part at a time.
             call reduce_embed_zhalf_parts(params, rounds, sel%pinds, latent%contrast, latent%resid_energy, &
                 &latent%resid_mean_energy, zhalf, sel%nptcls, model%ncomp)
-            goto 200
-        endif
-        write(logfhandle,'(A)') '>>> FLEX_PCA CONTRAST-AWARE EMBEDDING'
-        call flush(logfhandle)
-        do ibatch = 1, sel%nptcls, MAXIMGBATCHSZ
-            batchlims = [ibatch, min(sel%nptcls, ibatch + MAXIMGBATCHSZ - 1)]
-            batchsz   = batchlims(2) - batchlims(1) + 1
-            call planes_batch_load(plane_store, params, build, sel%nptcls, sel%pinds, batchlims, fpls, &
-                &cov_image_mask_radius(params), l_pcache)
-            do i = 1, batchsz
-                call build%spproj_field%get_ori(sel%pinds(batchlims(1)+i-1), orientations(i))
-            end do
-            !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
-            !$omp& private(i,ithr,q,r,ia,a,a_best,a_keep,a_num,a_den,icm,aa,e_yy,e_mm,best_res,res,row,ah,aah)
-            do i = 1, batchsz
-                if( orientations(i)%isstatezero() ) cycle
-                ithr = omp_get_thread_num() + 1
-                row  = batchlims(1) + i - 1
-                call project_fplanes_mean_basis(model%mean_rec, model%basis_recs, orientations(i), fpls(i), &
-                    &mean_fpl(ithr), basis_fpls(:,ithr), apply_ctf_amp=.true.)
-                ! data plane = whitened observation (fpls(i)); mean_fpl = T mu ; basis = T U
-                e_yy = real(cov_herm_inner(fpls(i), fpls(i)), dp)
-                e_mm = real(cov_herm_inner(mean_fpl(ithr), mean_fpl(ithr)), dp)
-                myth(ithr) = real(cov_herm_inner(mean_fpl(ithr), fpls(i)), dp)
-                do q = 1, model%ncomp
-                    bth(q,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), fpls(i)), dp)      ! (TU)* y
-                    cth(q,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), mean_fpl(ithr)), dp) ! (TU)* T mu
-                    do r = q, model%ncomp
-                        Gth(q,r,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), basis_fpls(r,ithr)), dp)
-                        Gth(r,q,ithr) = Gth(q,r,ithr)
-                    end do
+        else
+            write(logfhandle,'(A)') '>>> FLEX_PCA CONTRAST-AWARE EMBEDDING'
+            call flush(logfhandle)
+            do ibatch = 1, sel%nptcls, MAXIMGBATCHSZ
+                batchlims = [ibatch, min(sel%nptcls, ibatch + MAXIMGBATCHSZ - 1)]
+                batchsz   = batchlims(2) - batchlims(1) + 1
+                call planes_batch_load(plane_store, params, build, sel%nptcls, sel%pinds, batchlims, fpls, l_pcache)
+                do i = 1, batchsz
+                    call build%spproj_field%get_ori(sel%pinds(batchlims(1)+i-1), orientations(i))
                 end do
-                ! split-half sufficient statistics, for the reliability-weighted prior below and for
-                ! the deconvolution's noise calibration (a worker always forms them: its part may be
-                ! reduced by a master that needs either)
-                if( l_cache_stats )then
-                    do ihf = 1, 2
-                        myhf(ihf,ithr)  = real(cov_herm_inner(mean_fpl(ithr), fpls(i), ihf), dp)
-                        emmhf(ihf,ithr) = real(cov_herm_inner(mean_fpl(ithr), mean_fpl(ithr), ihf), dp)
-                        do q = 1, model%ncomp
-                            bhf(q,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), fpls(i), ihf), dp)
-                            chf(q,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), mean_fpl(ithr), ihf), dp)
-                            do r = q, model%ncomp
-                                Ghf(q,r,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), basis_fpls(r,ithr), ihf), dp)
-                                Ghf(r,q,ihf,ithr) = Ghf(q,r,ihf,ithr)
+                !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
+                !$omp& private(i,ithr,q,r,ia,a,a_best,a_keep,a_num,a_den,icm,aa,e_yy,e_mm,best_res,res,row,ah,aah)
+                do i = 1, batchsz
+                    if( orientations(i)%isstatezero() ) cycle
+                    ithr = omp_get_thread_num() + 1
+                    row  = batchlims(1) + i - 1
+                    call project_fplanes_mean_basis(model%mean_rec, model%basis_recs, orientations(i), fpls(i), &
+                        &mean_fpl(ithr), basis_fpls(:,ithr), apply_ctf_amp=.true.)
+                    ! data plane = whitened observation (fpls(i)); mean_fpl = T mu ; basis = T U
+                    e_yy = real(cov_herm_inner(fpls(i), fpls(i)), dp)
+                    e_mm = real(cov_herm_inner(mean_fpl(ithr), mean_fpl(ithr)), dp)
+                    myth(ithr) = real(cov_herm_inner(mean_fpl(ithr), fpls(i)), dp)
+                    do q = 1, model%ncomp
+                        bth(q,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), fpls(i)), dp)      ! (TU)* y
+                        cth(q,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), mean_fpl(ithr)), dp) ! (TU)* T mu
+                        do r = q, model%ncomp
+                            Gth(q,r,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), basis_fpls(r,ithr)), dp)
+                            Gth(r,q,ithr) = Gth(q,r,ithr)
+                        end do
+                    end do
+                    ! split-half sufficient statistics, for the reliability-weighted prior below and for
+                    ! the deconvolution's noise calibration (a worker always forms them: its part may be
+                    ! reduced by a master that needs either)
+                    if( l_cache_stats )then
+                        do ihf = 1, 2
+                            myhf(ihf,ithr)  = real(cov_herm_inner(mean_fpl(ithr), fpls(i), ihf), dp)
+                            emmhf(ihf,ithr) = real(cov_herm_inner(mean_fpl(ithr), mean_fpl(ithr), ihf), dp)
+                            do q = 1, model%ncomp
+                                bhf(q,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), fpls(i), ihf), dp)
+                                chf(q,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), mean_fpl(ithr), ihf), dp)
+                                do r = q, model%ncomp
+                                    Ghf(q,r,ihf,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), basis_fpls(r,ithr), ihf), dp)
+                                    Ghf(r,q,ihf,ithr) = Ghf(q,r,ihf,ithr)
+                                end do
                             end do
                         end do
-                    end do
-                endif
-                latent%resid_mean_energy(row) = e_yy - 2.d0*myth(ithr) + e_mm                       ! contrast=1 mean residual
-                ! Contrast (S.E): for each a on the grid solve the fixed-a MAP
-                ! (a^2 G/sig2 + Gamma^-1) z = (a b - a^2 c)/sig2 and keep the a with the lowest residual.
-                ! With COV_EMBED_CONTRAST_GRID off this is a single pass at a = 1.
-                best_res = huge(1.d0)
-                a_best   = 1.d0
-                a_keep   = 1.d0     ! a NaN residual would leave this unset and hand garbage downstream
-                aa = a_best*a_best
-                Ath(:,:,ithr) = (aa/sig2)*Gth(:,:,ithr)
-                do q = 1, model%ncomp
-                    Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
-                    zth(q,ithr)   = (a_best*bth(q,ithr) - aa*cth(q,ithr))/sig2
-                end do
-                call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), model%ncomp)
-                a = a_best
-                aa  = a*a
-                res = e_yy + aa*e_mm - 2.d0*a*myth(ithr) + quad_form(Gth(:,:,ithr), zth(:,ithr), model%ncomp)*aa
-                do q = 1, model%ncomp
-                    res = res + 2.d0*aa*zth(q,ithr)*cth(q,ithr) - 2.d0*a*zth(q,ithr)*bth(q,ithr)
-                end do
-                res = res/sig2
-                do q = 1, model%ncomp
-                    res = res + prior(q)*zth(q,ithr)*zth(q,ithr)
-                end do
-                if( res < best_res )then
-                    best_res      = res
-                    a_keep        = a
-                    zbest(:,ithr) = zth(:,ithr)
-                endif
-                a_best = a_keep
-                ! projected-Gram spectrum on a subsample, for the conditioning report below
-                if( mod(row, GRAM_DIAG_STRIDE) == 0 )then
-                    gwork(:,:,ithr) = Gth(:,:,ithr)
-                    call jacobi(gwork(:,:,ithr), model%ncomp, model%ncomp, gev(:,ithr), gvec(:,:,ithr), nrot_t)
-                    call eigsrt(gev(:,ithr), gvec(:,:,ithr), model%ncomp, model%ncomp)
+                    endif
+                    latent%resid_mean_energy(row) = e_yy - 2.d0*myth(ithr) + e_mm                       ! contrast=1 mean residual
+                    ! Contrast (S.E): for each a on the grid solve the fixed-a MAP
+                    ! (a^2 G/sig2 + Gamma^-1) z = (a b - a^2 c)/sig2 and keep the a with the lowest residual.
+                    ! With COV_EMBED_CONTRAST_GRID off this is a single pass at a = 1.
+                    best_res = huge(1.d0)
+                    a_best   = 1.d0
+                    a_keep   = 1.d0     ! a NaN residual would leave this unset and hand garbage downstream
+                    aa = a_best*a_best
+                    Ath(:,:,ithr) = (aa/sig2)*Gth(:,:,ithr)
                     do q = 1, model%ncomp
-                        gspec_thr(q,ithr) = gspec_thr(q,ithr) + max(gev(q,ithr), 0.d0)
+                        Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
+                        zth(q,ithr)   = (a_best*bth(q,ithr) - aa*cth(q,ithr))/sig2
                     end do
-                    gcnt_thr(ithr) = gcnt_thr(ithr) + 1
-                endif
-                ! count the particles whose projected basis or rhs came out numerically dead
-                if( maxval(abs(Gth(:,:,ithr))) <= 0.d0 ) nzeroG_thr(ithr) = nzeroG_thr(ithr) + 1
-                if( maxval(abs(bth(:,ithr) - cth(:,ithr))) <= 0.d0 ) nzeroR_thr(ithr) = nzeroR_thr(ithr) + 1
-                if( maxval(abs(zbest(:,ithr))) <= 0.d0 ) nzeroZ_thr(ithr) = nzeroZ_thr(ithr) + 1
-                latent%contrast(row)     = a_best
-                latent%z(row,:)          = zbest(:,ithr)
-                latent%resid_energy(row) = best_res
-                aa = latent%contrast(row)*latent%contrast(row)
-                Gtilth(:,:,ithr) = (aa/sig2)*Gth(:,:,ithr)
-                call map_sampling_precision(Gtilth(:,:,ithr), prior, model%ncomp, latent%precision(:,:,row))
-                if( l_cache_stats )then
-                    ! cache the sufficient statistics so the master's re-solve can run in closed
-                    ! form with no second pass over the images. Cached whenever stats FLOW
-                    ! (reliability prior on, or distributed either side): with RELPRIOR=0 under
-                    ! distribution the master re-solves with the PLAIN prior, so skipping the
-                    ! cache here would ship all-zero blocks and silently zero every latent.
-                    Gcache(:,:,row) = Gth(:,:,ithr)
-                    bcache(:,row)   = bth(:,ithr)
-                    ccache(:,row)   = cth(:,ithr)
-                    ! and the two half-data solves, each at its OWN fitted contrast (the delivered z keeps a=1):
-                    ! at a=1 the residual (a_i-1)*Tmu enters the halves with opposite signs (basis deflated vs the mean)
-                    do ihf = 1, 2
-                        ah = myhf(ihf,ithr) / max(emmhf(ihf,ithr), DTINY)
-                        ah = max(0.1d0, min(5.d0, ah))
-                        aah = ah*ah
-                        Ath(:,:,ithr) = (aah/sig2)*Ghf(:,:,ihf,ithr)
+                    call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), model%ncomp)
+                    a = a_best
+                    aa  = a*a
+                    res = e_yy + aa*e_mm - 2.d0*a*myth(ithr) + quad_form(Gth(:,:,ithr), zth(:,ithr), model%ncomp)*aa
+                    do q = 1, model%ncomp
+                        res = res + 2.d0*aa*zth(q,ithr)*cth(q,ithr) - 2.d0*a*zth(q,ithr)*bth(q,ithr)
+                    end do
+                    res = res/sig2
+                    do q = 1, model%ncomp
+                        res = res + prior(q)*zth(q,ithr)*zth(q,ithr)
+                    end do
+                    if( res < best_res )then
+                        best_res      = res
+                        a_keep        = a
+                        zbest(:,ithr) = zth(:,ithr)
+                    endif
+                    a_best = a_keep
+                    ! projected-Gram spectrum on a subsample, for the conditioning report below
+                    if( mod(row, GRAM_DIAG_STRIDE) == 0 )then
+                        gwork(:,:,ithr) = Gth(:,:,ithr)
+                        call jacobi(gwork(:,:,ithr), model%ncomp, model%ncomp, gev(:,ithr), gvec(:,:,ithr), nrot_t)
+                        call eigsrt(gev(:,ithr), gvec(:,:,ithr), model%ncomp, model%ncomp)
                         do q = 1, model%ncomp
-                            Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
-                            zth(q,ithr)   = (ah*bhf(q,ihf,ithr) - aah*chf(q,ihf,ithr))/sig2
+                            gspec_thr(q,ithr) = gspec_thr(q,ithr) + max(gev(q,ithr), 0.d0)
                         end do
-                        ! the half solves: their disagreement calibrates the DATA noise
-                        call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), model%ncomp)
-                        zhalf(row,:,ihf) = zth(:,ithr)
-                    end do
+                        gcnt_thr(ithr) = gcnt_thr(ithr) + 1
+                    endif
+                    ! count the particles whose projected basis or rhs came out numerically dead
+                    if( maxval(abs(Gth(:,:,ithr))) <= 0.d0 ) nzeroG_thr(ithr) = nzeroG_thr(ithr) + 1
+                    if( maxval(abs(bth(:,ithr) - cth(:,ithr))) <= 0.d0 ) nzeroR_thr(ithr) = nzeroR_thr(ithr) + 1
+                    if( maxval(abs(zbest(:,ithr))) <= 0.d0 ) nzeroZ_thr(ithr) = nzeroZ_thr(ithr) + 1
+                    latent%contrast(row)     = a_best
+                    latent%z(row,:)          = zbest(:,ithr)
+                    latent%resid_energy(row) = best_res
+                    aa = latent%contrast(row)*latent%contrast(row)
+                    Gtilth(:,:,ithr) = (aa/sig2)*Gth(:,:,ithr)
+                    call map_sampling_precision(Gtilth(:,:,ithr), prior, model%ncomp, latent%precision(:,:,row))
+                    if( l_cache_stats )then
+                        ! cache the sufficient statistics so the master's re-solve can run in closed
+                        ! form with no second pass over the images. Cached whenever stats FLOW
+                        ! (reliability prior on, or distributed either side): with RELPRIOR=0 under
+                        ! distribution the master re-solves with the PLAIN prior, so skipping the
+                        ! cache here would ship all-zero blocks and silently zero every latent.
+                        Gcache(:,:,row) = Gth(:,:,ithr)
+                        bcache(:,row)   = bth(:,ithr)
+                        ccache(:,row)   = cth(:,ithr)
+                        ! and the two half-data solves, each at its OWN fitted contrast (the delivered z keeps a=1):
+                        ! at a=1 the residual (a_i-1)*Tmu enters the halves with opposite signs (basis deflated vs the mean)
+                        do ihf = 1, 2
+                            ah = myhf(ihf,ithr) / max(emmhf(ihf,ithr), DTINY)
+                            ah = max(0.1d0, min(5.d0, ah))
+                            aah = ah*ah
+                            Ath(:,:,ithr) = (aah/sig2)*Ghf(:,:,ihf,ithr)
+                            do q = 1, model%ncomp
+                                Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
+                                zth(q,ithr)   = (ah*bhf(q,ihf,ithr) - aah*chf(q,ihf,ithr))/sig2
+                            end do
+                            ! the half solves: their disagreement calibrates the DATA noise
+                            call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), model%ncomp)
+                            zhalf(row,:,ihf) = zth(:,ithr)
+                        end do
+                    endif
+                end do
+                !$omp end parallel do
+                if( batchlims(2) == sel%nptcls .or. mod(batchlims(2), 5*MAXIMGBATCHSZ) == 0 )then
+                    write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA CONTRAST EMBED PARTICLES: ',batchlims(2),' / ',sel%nptcls
+                    call flush(logfhandle)
                 endif
             end do
-            !$omp end parallel do
-            if( batchlims(2) == sel%nptcls .or. mod(batchlims(2), 5*MAXIMGBATCHSZ) == 0 )then
-                write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA CONTRAST EMBED PARTICLES: ',batchlims(2),' / ',sel%nptcls
-                call flush(logfhandle)
-            endif
-        end do
-        ! the reducing master lands here rather than after the diagnostics, so it still frees the
-        ! per-thread Gram workspace; gcnt_thr is all zero when no batch loop ran, so the per-particle
-        ! spectrum report below skips itself
-200     allocate(gspec(model%ncomp), source=0.d0)
+        endif
+        ! both branches continue here, so the reducing master still frees the per-thread Gram workspace;
+        ! gcnt_thr is all zero when no batch loop ran, so the per-particle spectrum report below skips itself
+        allocate(gspec(model%ncomp), source=0.d0)
         gcnt = sum(gcnt_thr)
         if( gcnt > 0 )then
             do q = 1, model%ncomp
@@ -320,100 +318,100 @@ contains
                 &sel%nptcls, model%ncomp)
             call part_fname%kill
             latent%comp_rho = 1.d0
-            goto 900
-        endif
-        ! ---- RELIABILITY-WEIGHTED PRIOR ---- The plain prior precision sig2/Gamma_q hands the LARGEST
-        ! eigenvalue the WEAKEST prior, so a high-variance but poorly measured component becomes
-        ! near-unregularized least squares. Rescale each prior by the component's split-half reliability.
-        if( l_cache_stats )then
-            if( l_relprior )then
-                allocate(rho(model%ncomp))
-                do q = 1, model%ncomp
-                    rho(q) = corr_dp(zhalf(:,q,1), zhalf(:,q,2), sel%nptcls)
-                    rho(q) = max(0.d0, rho(q))
-                    rho(q) = 2.d0*rho(q) / (1.d0 + rho(q))            ! Spearman-Brown to full length
-                end do
-                ! Scale rho RELATIVE to the most reliable component, not absolutely: an absolute rho^2 shrinks
-                ! the informative components as well and compresses the latent spread state placement needs.
-                rho_max = maxval(rho)
-                if( rho_max <= DTINY ) rho_max = 1.d0
-                do q = 1, model%ncomp
-                    rrel = (rho(q)*rho(q)) / (rho_max*rho_max)
-                    prior(q) = 1.d0 / max(max(rrel, RHO_FLOOR) * model%eigvals(q), DTINY)
-                end do
-                ! all components, not the leading 10: rho drives state-target placement via comp_rho, so
-                ! its ranking has to be checkable over the whole basis
-                write(logfhandle,'(A)') '>>> FLEX_PCA split-half reliability per component (rho, corrected):'
-                do q = 1, model%ncomp
-                    write(logfhandle,'(A,I3,A,F7.4,A,ES11.3,A,ES11.3)') '>>>   z',q,'  rho=',rho(q), &
-                        &'  eigval=',model%eigvals(q),'  prior_precision=',prior(q)
-                end do
-                call flush(logfhandle)
-            else
-                write(logfhandle,'(A)') '>>> FLEX_PCA re-solving with the PLAIN prior &
-                    &(RELPRIOR=0, distributed): rho not computed, no rescaling'
-                call flush(logfhandle)
-            endif
-            ! re-solve every particle in closed form from the cached sufficient statistics. Two
-            ! routes to the same arithmetic: in process the blocks are already in Gcache, while a
-            ! reducing master streams them back one part at a time to keep its footprint flat.
-            if( l_from_parts )then
-                do ipart = 1, rounds%nparts()
-                    call read_embed_stats_part(params, rounds, ipart, sel%pinds, prows, Gpart, bpart, cpart, &
-                        &pn_part, sel%nptcls, model%ncomp)
-                    !$omp parallel do default(shared) private(i,row,q,aa,ithr) schedule(static) proc_bind(close)
-                    do i = 1, pn_part
+        else
+            ! ---- RELIABILITY-WEIGHTED PRIOR ---- The plain prior precision sig2/Gamma_q hands the LARGEST
+            ! eigenvalue the WEAKEST prior, so a high-variance but poorly measured component becomes
+            ! near-unregularized least squares. Rescale each prior by the component's split-half reliability.
+            if( l_cache_stats )then
+                if( l_relprior )then
+                    allocate(rho(model%ncomp))
+                    do q = 1, model%ncomp
+                        rho(q) = real(pearsn_serial_8(sel%nptcls, zhalf(:,q,1), zhalf(:,q,2)), dp)
+                        rho(q) = max(0.d0, rho(q))
+                        rho(q) = 2.d0*rho(q) / (1.d0 + rho(q))            ! Spearman-Brown to full length
+                    end do
+                    ! Scale rho RELATIVE to the most reliable component, not absolutely: an absolute rho^2 shrinks
+                    ! the informative components as well and compresses the latent spread state placement needs.
+                    rho_max = maxval(rho)
+                    if( rho_max <= DTINY ) rho_max = 1.d0
+                    do q = 1, model%ncomp
+                        rrel = (rho(q)*rho(q)) / (rho_max*rho_max)
+                        prior(q) = 1.d0 / max(max(rrel, RHO_FLOOR) * model%eigvals(q), DTINY)
+                    end do
+                    ! all components, not the leading 10: rho drives state-target placement via comp_rho, so
+                    ! its ranking has to be checkable over the whole basis
+                    write(logfhandle,'(A)') '>>> FLEX_PCA split-half reliability per component (rho, corrected):'
+                    do q = 1, model%ncomp
+                        write(logfhandle,'(A,I3,A,F7.4,A,ES11.3,A,ES11.3)') '>>>   z',q,'  rho=',rho(q), &
+                            &'  eigval=',model%eigvals(q),'  prior_precision=',prior(q)
+                    end do
+                    call flush(logfhandle)
+                else
+                    write(logfhandle,'(A)') '>>> FLEX_PCA re-solving with the PLAIN prior &
+                        &(RELPRIOR=0, distributed): rho not computed, no rescaling'
+                    call flush(logfhandle)
+                endif
+                ! re-solve every particle in closed form from the cached sufficient statistics. Two
+                ! routes to the same arithmetic: in process the blocks are already in Gcache, while a
+                ! reducing master streams them back one part at a time to keep its footprint flat.
+                if( l_from_parts )then
+                    do ipart = 1, rounds%nparts()
+                        call read_embed_stats_part(params, rounds, ipart, sel%pinds, prows, Gpart, bpart, cpart, &
+                            &pn_part, sel%nptcls, model%ncomp)
+                        !$omp parallel do default(shared) private(i,row,q,aa,ithr) schedule(static) proc_bind(close)
+                        do i = 1, pn_part
+                            ithr = omp_get_thread_num() + 1
+                            row  = prows(i)
+                            aa   = latent%contrast(row)*latent%contrast(row)
+                            Ath(:,:,ithr) = (aa/sig2)*Gpart(:,:,i)
+                            do q = 1, model%ncomp
+                                Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
+                                zth(q,ithr)   = (latent%contrast(row)*bpart(q,i) - aa*cpart(q,i))/sig2
+                            end do
+                            call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), model%ncomp)
+                            latent%z(row,:) = zth(:,ithr)
+                            Gtilth(:,:,ithr) = (aa/sig2)*Gpart(:,:,i)
+                            call map_sampling_precision(Gtilth(:,:,ithr), prior, model%ncomp, latent%precision(:,:,row))
+                        end do
+                        !$omp end parallel do
+                        deallocate(prows, Gpart, bpart, cpart)
+                    end do
+                else
+                    !$omp parallel do default(shared) private(row,q,aa,ithr) schedule(static) proc_bind(close)
+                    do row = 1, sel%nptcls
                         ithr = omp_get_thread_num() + 1
-                        row  = prows(i)
                         aa   = latent%contrast(row)*latent%contrast(row)
-                        Ath(:,:,ithr) = (aa/sig2)*Gpart(:,:,i)
+                        Ath(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
                         do q = 1, model%ncomp
                             Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
-                            zth(q,ithr)   = (latent%contrast(row)*bpart(q,i) - aa*cpart(q,i))/sig2
+                            zth(q,ithr)   = (latent%contrast(row)*bcache(q,row) - aa*ccache(q,row))/sig2
                         end do
                         call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), model%ncomp)
                         latent%z(row,:) = zth(:,ithr)
-                        Gtilth(:,:,ithr) = (aa/sig2)*Gpart(:,:,i)
+                        Gtilth(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
                         call map_sampling_precision(Gtilth(:,:,ithr), prior, model%ncomp, latent%precision(:,:,row))
                     end do
                     !$omp end parallel do
-                    deallocate(prows, Gpart, bpart, cpart)
-                end do
+                endif
+                write(logfhandle,'(A)') '>>> FLEX_PCA latents re-solved from the cached statistics'
+                call flush(logfhandle)
+                if( l_relprior )then
+                    latent%comp_rho = rho
+                else
+                    latent%comp_rho = 1.d0
+                endif
+                if( allocated(rho) ) deallocate(rho)
+                if( l_zhalf )then
+                    if( allocated(latent%zhalf) ) deallocate(latent%zhalf)
+                    allocate(latent%zhalf(sel%nptcls,model%ncomp,2)); latent%zhalf = zhalf
+                endif
+                deallocate(Gcache, bcache, ccache, zhalf, Ghf, bhf, chf, myhf, emmhf)
             else
-                !$omp parallel do default(shared) private(row,q,aa,ithr) schedule(static) proc_bind(close)
-                do row = 1, sel%nptcls
-                    ithr = omp_get_thread_num() + 1
-                    aa   = latent%contrast(row)*latent%contrast(row)
-                    Ath(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
-                    do q = 1, model%ncomp
-                        Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
-                        zth(q,ithr)   = (latent%contrast(row)*bcache(q,row) - aa*ccache(q,row))/sig2
-                    end do
-                    call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), model%ncomp)
-                    latent%z(row,:) = zth(:,ithr)
-                    Gtilth(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
-                    call map_sampling_precision(Gtilth(:,:,ithr), prior, model%ncomp, latent%precision(:,:,row))
-                end do
-                !$omp end parallel do
-            endif
-            write(logfhandle,'(A)') '>>> FLEX_PCA latents re-solved from the cached statistics'
-            call flush(logfhandle)
-            if( l_relprior )then
-                latent%comp_rho = rho
-            else
+                ! no split-half statistics available; treat every component as equally measured
                 latent%comp_rho = 1.d0
             endif
-            if( allocated(rho) ) deallocate(rho)
-            if( l_zhalf )then
-                if( allocated(latent%zhalf) ) deallocate(latent%zhalf)
-                allocate(latent%zhalf(sel%nptcls,model%ncomp,2)); latent%zhalf = zhalf
-            endif
-            deallocate(Gcache, bcache, ccache, zhalf, Ghf, bhf, chf, myhf, emmhf)
-        else
-            ! no split-half statistics available; treat every component as equally measured
-            latent%comp_rho = 1.d0
         endif
-900     do i = 1, size(orientations)
+        do i = 1, size(orientations)
             call orientations(i)%kill
         end do
         do ithr = 1, nthr

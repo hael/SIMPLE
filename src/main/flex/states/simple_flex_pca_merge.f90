@@ -1,7 +1,8 @@
 !@descr: Two-gate agglomerative merge of over-provisioned flex_pca states.
 !        Gate 1 (orientation): a state whose viewing-axis distribution stands out from its peers is a view
 !        cluster, folded into a sufficiently similar map. Gate 2 (volume): pairs whose deviation maps agree within
-!        their own half-map reproducibility fuse under complete linkage. Latent distance never merges.
+!        their own half-map reproducibility fuse under complete linkage (simple_hac on 1 - ratio). Latent
+!        distance never merges.
 !        Invoked by the application when preimage_auto=yes.
 module simple_flex_pca_merge
 use simple_core_module_api, only: dp, dtiny, file_exists, int2str_pad, logfhandle, mrc_ext, simple_exception, string
@@ -9,8 +10,9 @@ use simple_defs_flex,        only: FLEX_FSC_SIGNAL_THRESHOLD
 use simple_flex_pca_records, only: flex_state_set
 use simple_image,            only: image
 use simple_parameters,       only: parameters
-use simple_flex_pca_rec3D,   only: flex_rec_smpd
 use simple_flex_pca_pcg,     only: flex_pcg_environment
+use simple_stat,             only: median, mad
+use simple_hac,              only: hac
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -180,26 +182,27 @@ contains
     end subroutine pair_map_ratio
 
     !> Two-gate merge. Returns the state each input state was merged into (1..nstates_out).
-    subroutine two_gate_state_merge( params, env, views, states, label_out, nstates_out )
+    subroutine two_gate_state_merge( params, env, views, states, half_prefix, label_out, nstates_out )
         class(flex_pcg_environment), intent(inout) :: env
         type(flex_state_set),        intent(in)    :: states
         integer :: nptcls
         class(parameters),    intent(in)  :: params
         real(dp),             intent(in)  :: views(:,:)
+        character(len=*),     intent(in)  :: half_prefix  !< raw state half maps <half_prefix>_stateNN_{even,odd}.mrc
         integer,              intent(out) :: label_out(:)
         integer,              intent(out) :: nstates_out
         type(image), allocatable :: evols(:), ovols(:)
         type(image) :: mskwarm
         real(dp),    allocatable :: chi2(:), neff(:), effsz(:), work(:), R(:,:), Rmin(:,:)
-        real(dp),    allocatable :: mass(:)
+        real(dp),    allocatable :: mass(:), dmerge(:,:), heights(:)
         logical,     allocatable :: view_bad(:), l_live(:)
-        integer,     allocatable :: parent(:), remap(:)
+        integer,     allocatable :: lab(:), remap(:), medoids(:), pairs(:,:)
+        type(hac)    :: hc
         type(string) :: fn
-        real(dp) :: rbest, rlink, eff_med, eff_mad, eff_cut, rloc
+        real(dp) :: rbest, eff_med, eff_mad, eff_cut
         real     :: mskrad
-        integer  :: s, t, u, w, nshell, tbest, nfail, nmerge, npair, kmin_a, kmin_b, aloc, bloc, nnear
+        integer  :: s, t, m, nshell, tbest, nfail, nmerge, npair, nnear, lold, lnew
         integer  :: nlive
-        logical  :: l_gate1
         nptcls = size(states%weights,1)
         nstates_out = states%nstates
         do s = 1, states%nstates
@@ -220,8 +223,8 @@ contains
             deallocate(mass, l_live)
             return
         endif
-        if( .not. file_exists('flex_pca_even_state_'//int2str_pad(1,3)//MRC_EXT) .or. &
-           &.not. file_exists('flex_pca_odd_state_' //int2str_pad(1,3)//MRC_EXT) )then
+        if( .not. file_exists(half_prefix//'_state'//int2str_pad(1,2)//'_even'//MRC_EXT) .or. &
+           &.not. file_exists(half_prefix//'_state'//int2str_pad(1,2)//'_odd' //MRC_EXT) )then
             write(logfhandle,'(A)') '>>> FLEX_PCA merge skipped: no half maps on disk'
             call flush(logfhandle)
             return
@@ -240,16 +243,8 @@ contains
                 t = t + 1; work(t) = effsz(s)
             endif
         end do
-        call sort_dp(work, nlive)
-        eff_med = median_of_sorted(work, nlive)
-        t = 0
-        do s = 1, states%nstates
-            if( l_live(s) )then
-                t = t + 1; work(t) = abs(effsz(s) - eff_med)
-            endif
-        end do
-        call sort_dp(work, nlive)
-        eff_mad = median_of_sorted(work, nlive)
+        eff_med = median(work)
+        eff_mad = mad(work, eff_med)
         eff_cut = eff_med + VIEW_MAD_K*MAD2SIGMA*eff_mad
         deallocate(work)
         do s = 1, states%nstates
@@ -284,11 +279,11 @@ contains
         ! Reads stay serial: image::new builds this instance's FFTW plans and plan creation is not
         ! thread-safe (only execution is), so read_and_crop cannot run concurrently.
         do s = 1, states%nstates
-            fn = 'flex_pca_even_state_'//int2str_pad(s,3)//MRC_EXT
-            call evols(s)%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
+            fn = half_prefix//'_state'//int2str_pad(s,2)//'_even'//MRC_EXT
+            call evols(s)%read_and_crop(fn, params%smpd_crop, params%box_crop, params%smpd_crop)
             call fn%kill
-            fn = 'flex_pca_odd_state_'//int2str_pad(s,3)//MRC_EXT
-            call ovols(s)%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
+            fn = half_prefix//'_state'//int2str_pad(s,2)//'_odd'//MRC_EXT
+            call ovols(s)%read_and_crop(fn, params%smpd_crop, params%box_crop, params%smpd_crop)
             call fn%kill
         end do
         ! Warm the module-level mask coordinate memoization on a throwaway of the same box before
@@ -359,10 +354,9 @@ contains
                 work(npair) = R(s,t)
             end do
         end do
-        call sort_dp(work, npair)
         write(logfhandle,'(A,I0,A,F7.4,A,F7.4,A,F7.4,A,F6.3,A)') &
-            &'>>> FLEX_PCA MERGE gate 2 (volume): ',npair,' pairs, disattenuated ratio min=',work(1), &
-            &'  median=',median_of_sorted(work, npair),'  max=',work(npair),'  (merge at ',MERGE_R_DEFAULT,')'
+            &'>>> FLEX_PCA MERGE gate 2 (volume): ',npair,' pairs, disattenuated ratio min=',minval(work), &
+            &'  median=',median(work),'  max=',maxval(work),'  (merge at ',MERGE_R_DEFAULT,')'
         deallocate(work)
         ! Near-gate visibility: any pair within 0.01 of the gate, or whose halfset estimates
         ! straddle it, makes the delivered K sensitive to epsilon-level perturbation. Say so.
@@ -384,68 +378,22 @@ contains
             &nnear-5, ' more pairs suppressed'
         call flush(logfhandle)
         ! ---- AGGLOMERATE ----
-        ! COMPLETE linkage: a group merges only if EVERY cross pair clears the threshold — the
-        ! transitive closure this replaces let one borderline pair chain unlike groups.
-        allocate(parent(states%nstates))
+        ! COMPLETE linkage on 1 - R: a group merges only if EVERY cross pair clears the gate (the transitive
+        ! closure this replaced let one borderline pair chain unlike groups); the closest qualifying pair,
+        ! the one with the strongest weakest link, merges first. Zero-mass states stay singletons.
+        allocate(dmerge(states%nstates,states%nstates))
+        dmerge = 1.d0 - R
         do s = 1, states%nstates
-            parent(s) = s                              ! parent doubles as the cluster id
+            dmerge(s,s) = 0.d0
         end do
-        nmerge = 0
-        ! greedily merge the qualifying cluster pair with the STRONGEST weakest link, repeat.
-        ! The candidate scan is O(nstates^2) cluster pairs x O(|a|*|b|) cross pairs per merge and
-        ! runs once per merge, so it is threaded over the outer representative. Each thread keeps
-        ! its own best and the winners are combined under a critical section; both the local and
-        ! the combining test break ties on the LOWEST (s,t), so the pair chosen is independent of
-        ! thread count and schedule and matches the serial scan exactly.
-        do
-            rbest = -1.d0; kmin_a = 0; kmin_b = 0
-            !$omp parallel default(shared) private(s,t,u,w,rlink,rloc,aloc,bloc) proc_bind(close)
-            rloc = -1.d0; aloc = 0; bloc = 0
-            !$omp do schedule(dynamic)
-            do s = 1, states%nstates - 1
-                if( parent(s) /= s .or. .not. l_live(s) ) cycle   ! only LIVE cluster representatives
-                do t = s + 1, states%nstates
-                    if( parent(t) /= t .or. .not. l_live(t) ) cycle
-                    rlink = huge(1.d0)
-                    do u = 1, states%nstates
-                        if( parent(u) /= s ) cycle
-                        do w = 1, states%nstates
-                            if( parent(w) /= t ) cycle
-                            rlink = min(rlink, R(u,w))
-                        end do
-                    end do
-                    if( rlink >= MERGE_R_DEFAULT )then
-                        if( aloc == 0 )then
-                            rloc = rlink; aloc = s; bloc = t
-                        else if( rlink > rloc )then
-                            rloc = rlink; aloc = s; bloc = t
-                        else if( rlink == rloc .and. (s < aloc .or. (s == aloc .and. t < bloc)) )then
-                            rloc = rlink; aloc = s; bloc = t
-                        endif
-                    endif
-                end do
-            end do
-            !$omp end do
-            !$omp critical (flex_pca_merge_best)
-            if( aloc > 0 )then
-                if( kmin_a == 0 )then
-                    rbest = rloc; kmin_a = aloc; kmin_b = bloc
-                else if( rloc > rbest )then
-                    rbest = rloc; kmin_a = aloc; kmin_b = bloc
-                else if( rloc == rbest .and. (aloc < kmin_a .or. &
-                    &(aloc == kmin_a .and. bloc < kmin_b)) )then
-                    rbest = rloc; kmin_a = aloc; kmin_b = bloc
-                endif
-            endif
-            !$omp end critical (flex_pca_merge_best)
-            !$omp end parallel
-            if( kmin_a < 1 ) exit
-            do u = 1, states%nstates                      ! fold b's members into a
-                if( parent(u) == kmin_b ) parent(u) = kmin_a
-            end do
-            nmerge = nmerge + 1
-            write(logfhandle,'(A,I3,A,I3,A,F7.4,A)') '>>> FLEX_PCA MERGE gate 2: states ',kmin_a, &
-                &' + ',kmin_b,'  weakest cross ratio=',rbest,' -> indistinguishable within their own noise'
+        call hc%new(states%nstates, dmerge, 'complete', thres=1.d0 - MERGE_R_DEFAULT, mask=l_live)
+        call hc%cluster(medoids, lab)
+        call hc%get_history(pairs, heights)
+        call hc%kill
+        nmerge = size(heights)
+        do m = 1, nmerge
+            write(logfhandle,'(A,I3,A,I3,A,F7.4,A)') '>>> FLEX_PCA MERGE gate 2: states ',pairs(1,m), &
+                &' + ',pairs(2,m),'  weakest cross ratio=',1.d0 - heights(m),' -> indistinguishable within their own noise'
         end do
         ! fold each view-contaminated state into the state its map most resembles, rather than
         ! deleting it, so its particles keep contributing somewhere
@@ -466,24 +414,24 @@ contains
                     &' (floor ',VIEW_FOLD_MIN_R,') -- KEPT, inspect it: view-driven and unlike every other state'
                 cycle
             endif
-            l_gate1 = uf_find(parent, s) /= uf_find(parent, tbest)
-            if( l_gate1 )then
-                call uf_union(parent, s, tbest, nmerge)
+            if( lab(s) /= lab(tbest) )then
+                lold = max(lab(s), lab(tbest))
+                lnew = min(lab(s), lab(tbest))
+                where( lab == lold ) lab = lnew
+                nmerge = nmerge + 1
                 write(logfhandle,'(A,I3,A,I3,A,F7.4)') '>>> FLEX_PCA MERGE gate 1: state ',s, &
                     &' is view-clustered, folded into ',tbest,'  ratio=',rbest
             endif
         end do
-        ! relabel the surviving roots 1..nstates_out, preserving input order
+        ! number the surviving groups 1..nstates_out in order of their smallest member, preserving input order
         allocate(remap(states%nstates), source=0)
         nstates_out = 0
         do s = 1, states%nstates
-            if( uf_find(parent, s) == s )then
-                nstates_out = nstates_out + 1
-                remap(s)    = nstates_out
+            if( remap(lab(s)) == 0 )then
+                nstates_out    = nstates_out + 1
+                remap(lab(s))  = nstates_out
             endif
-        end do
-        do s = 1, states%nstates
-            label_out(s) = remap(uf_find(parent, s))
+            label_out(s) = remap(lab(s))
         end do
         write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA MERGE result: ',states%nstates,' -> ',nstates_out, &
             &' states (',nmerge,' merges)'
@@ -491,63 +439,8 @@ contains
         do s = 1, states%nstates
             call evols(s)%kill; call ovols(s)%kill
         end do
-        deallocate(evols, ovols, chi2, neff, effsz, view_bad, R, Rmin, parent, remap, mass, l_live)
+        deallocate(evols, ovols, chi2, neff, effsz, view_bad, R, Rmin, dmerge, lab, remap, medoids, pairs, heights, &
+            &mass, l_live)
     end subroutine two_gate_state_merge
-
-    !> Ascending insertion sort. n is the state count, so the O(n^2) is irrelevant and this avoids
-    !! converting to the single precision the shared hpsort generics cover.
-    pure subroutine sort_dp( x, n )
-        integer,  intent(in)    :: n
-        real(dp), intent(inout) :: x(n)
-        real(dp) :: key
-        integer  :: i, j
-        do i = 2, n
-            key = x(i)
-            j   = i - 1
-            do while( j >= 1 )
-                if( x(j) <= key ) exit
-                x(j+1) = x(j)
-                j      = j - 1
-            end do
-            x(j+1) = key
-        end do
-    end subroutine sort_dp
-
-    !> Median of an ASCENDING array; even n averages the two central values.
-    pure real(dp) function median_of_sorted( x, n ) result( med )
-        integer,  intent(in) :: n
-        real(dp), intent(in) :: x(n)
-        if( n < 1 )then
-            med = 0.d0
-        else if( mod(n,2) == 1 )then
-            med = x((n+1)/2)
-        else
-            med = 0.5d0*(x(n/2) + x(n/2+1))
-        endif
-    end function median_of_sorted
-
-    recursive integer function uf_find( parent, i ) result( root )
-        integer, intent(inout) :: parent(:)
-        integer, intent(in)    :: i
-        if( parent(i) == i )then
-            root = i
-        else
-            root      = uf_find(parent, parent(i))
-            parent(i) = root         ! path compression
-        endif
-    end function uf_find
-
-
-    subroutine uf_union( parent, i, j, nmerge )
-        integer, intent(inout) :: parent(:)
-        integer, intent(in)    :: i, j
-        integer, intent(inout) :: nmerge
-        integer :: ri, rj
-        ri = uf_find(parent, i)
-        rj = uf_find(parent, j)
-        if( ri == rj ) return
-        parent(max(ri,rj)) = min(ri,rj)   ! keep the lower index as the root, so labels stay ordered
-        nmerge = nmerge + 1
-    end subroutine uf_union
 
 end module simple_flex_pca_merge

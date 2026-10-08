@@ -225,7 +225,7 @@ contains
         type(commander_prob_align_neigh)        :: xprob_align_neigh
         type(commander_prob_tab2D)              :: xprob_tab2D
         type(commander_prob_align2D)            :: xprob_align2D
-        type(commander_flex_pca)                  :: xflex_pca
+        type(commander_flex_pca_worker)           :: xflex_pca
         ! RECONSTRUCTION PROGRAMS
         type(commander_volassemble)             :: xvolassemble
         type(commander_rec3D_worker)            :: xrec3D

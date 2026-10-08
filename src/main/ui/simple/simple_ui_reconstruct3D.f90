@@ -41,6 +41,14 @@ contains
         call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, visibility=UI_VIS_ADVANCED)
+        call reconstruct3D%add_input(UI_PARM, 'm_estimator', 'multi', 'Particle weighting', &
+        &'flex weighs every particle of a state by its weight in the project''s state weight set (written by flex_pca); '//&
+        &'no reconstructs from the hard state labels(no|flex){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=4) :: 'no', 'flex']), visibility=UI_VIS_ADVANCED)
+        call reconstruct3D%add_input(UI_PARM, 'state', 'num', 'State to reconstruct', &
+        &'Reconstruct only this state: with m_estimator=flex from every particle with a positive weight for it, '//&
+        &'otherwise from the particles labelled with it{all states}', 'state index{all}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

@@ -177,7 +177,7 @@ contains
         type(flex_pcg_outcome_t) :: pcg_out
         logical  :: l_pcg_m
         real,     allocatable :: h_e(:,:), h_o(:,:), h_sum(:,:), invtau2(:,:), fscq(:,:), corrs(:)
-        integer,  allocatable :: cnt(:), pstar(:), psign(:)
+        integer,  allocatable :: pstar(:), psign(:)
         real,     pointer     :: rmatp(:,:,:)
         real(dp) :: rdev, gA, gB, paircos
         real     :: lp_m, fmean
@@ -327,9 +327,9 @@ contains
         ! consumes the summed H (h_e + h_o), equivalent to per-half addition
         lb  = lbound(Ymrg(1)%cmat_exp)
         nyq = Ymrg(1)%get_lfny(1)
-        allocate(h_e(filtsz,ncm), h_o(filtsz,ncm), h_sum(filtsz,ncm), cnt(filtsz))
-        call crossfsc_harvest_h(rho_me, npairs_m, ncm, lb, nyq, filtsz, h_e, cnt)
-        call crossfsc_harvest_h(rho_mo, npairs_m, ncm, lb, nyq, filtsz, h_o, cnt)
+        allocate(h_e(filtsz,ncm), h_o(filtsz,ncm), h_sum(filtsz,ncm))
+        call crossfsc_harvest_h(rho_me, npairs_m, ncm, lb, nyq, filtsz, h_e)
+        call crossfsc_harvest_h(rho_mo, npairs_m, ncm, lb, nyq, filtsz, h_o)
         h_sum = h_e + h_o
         ! step 2c: cross-fit FSC per merged axis (fit A entry component q vs sign * fit B entry
         ! component pstar(q)) -> sampling-aware ridge
@@ -445,7 +445,7 @@ contains
             call utilde_real(q)%kill
         end do
         deallocate(realvols, utilde_real, Mba, Rm, sv_ab, pstar, psign)
-        deallocate(h_e, h_o, h_sum, cnt, fscq, invtau2, corrs)
+        deallocate(h_e, h_o, h_sum, fscq, invtau2, corrs)
     end subroutine probe_paired_merge
 
     !> Merged delivery: merged probe meta + eigenvalue table, the merged-vs-fitA / merged-vs-fitB

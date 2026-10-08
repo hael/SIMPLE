@@ -2,7 +2,9 @@
 
 This document records the current policy for the base `refine3D` command. It
 does not describe the staged `solve3D` controller, the class-average
-`solve3D_cavgs` initializer, or the automated wrapper `refine3D_auto`.
+`solve3D_cavgs` initializer, or the automated wrapper `refine3D_auto`. The one
+exception is the per-state M-estimation of `refine3D_auto state=X` (section 8),
+because its weighted reconstruction runs in the base matcher and assembly.
 
 Related workflow policies:
 
@@ -328,7 +330,11 @@ volume assembly.
 
 The current workflow is probabilistic pre-alignment followed by hard particle
 assignment. It is not a monolithic soft-assignment volume-integrated EM
-implementation.
+implementation. Every particle gets one pose and one state label, and
+reconstruction follows the labels. The one exception is the per-state
+M-estimation below: there reconstruction weighs each particle by a frozen
+weight that `flex_pca` computed before the run. The refinement never computes
+these weights from its own scores, and alignment never reads them.
 
 Use the terms "probabilistic pre-alignment" and "hard-assignment particle
 update" unless the ownership, artifacts, and update model actually change.
@@ -564,6 +570,85 @@ particles through `strategy3D_cont`), and the high-level gate
 `cont_refine3D_1jxy` (shared memory, distributed, `refine3D_auto`, the polish),
 all gated on the simulation's ground-truth orientations.
 
+### Per-state M-estimation
+
+`refine3D_auto state=X` refines state X of a multi-state project alone, as a
+single-state refinement. `m_estimator=no|flex {no}` selects how particles enter
+its reconstructions. With `m_estimator=flex` the run is a per-state
+M-estimation: state X's map is estimated from every particle with a positive
+weight for X in the project's state weight set, and each particle contributes
+with that weight. The state weight set holds one weight per particle and state;
+`flex_pca` publishes it (refine3D states policy). The weights are frozen:
+nothing in the run recomputes them. With `m_estimator=no` the run refines the
+particles labelled X from their hard labels, the hard comparison.
+`m_estimator=flex` without `state=` is refused, and so is `m_estimator=flex`
+on a multi-state `refine3D` or on `refine3D_states`: a search over states moves
+the labels the frozen weights were computed for.
+
+**Work project.** `prepare_state_work_project`
+(`simple_commanders_refine3D.f90`) builds it right after the parameters are
+built. `state=` requires `mkdir=yes`, so the work project and its weight set
+live in the run's own directory.
+
+- The project is copied to `refine3D_auto_stateXX.simple`, and the selection
+  program runs on the copy with pruning. The selected rows are those with a
+  positive weight for X (`m_estimator=flex`) or those labelled X
+  (`m_estimator=no`); they reach the selection program as its per-row selection
+  file. The copy holds them alone, as state 1. Each work row is checked against
+  its parent row by stack and index in the stack.
+- State X's map and FSC, read from the parent, become state 1's in the copy,
+  where `refine3D_auto` finds them as its project volume. Every other state's
+  map and FSC entries are removed, as are the parent's weight-set entry and its
+  canonical sigma2 registration. The copy's sigmas are seeded in this run, as
+  for any project.
+- With `m_estimator=flex` the copy gets its own single-state weight set
+  (`publish_work_state` in `simple_state_weight_set`): X's column at the work
+  rows, the parent's hard-label flags for X, and the parent's producer and kind.
+  Its manifest records the parent set's generation, layout digest and state as
+  provenance. Publishing it over the parent's manifest is refused.
+- The run continues on the copy as an ordinary single-state `refine3D_auto`.
+  `state=` leaves the command line; `m_estimator` stays. The run directory's
+  copy of the parent is deleted, so the work project is the directory's only
+  project. The project given on the command line is never written.
+
+**Reconstruction.** With `m_estimator=flex`, every reconstruction of the run
+reads the work project's weight set, from the startup reconstruction to the
+final native one. In each iteration the matcher's `write_partial_recs`
+(`simple_strategy3D_matcher`) passes the set to `calc_3Drec` on gridding, or to
+the PCG (preconditioned conjugate gradients) worker. A particle enters with its
+weight when the weight is above zero on gridding, and above 0.01
+(`PCG_WEIGHT_THRESHOLD`) on PCG. Volume assembly, update fractions and trailing
+reconstruction count applied mass (the sum of the weights as the backend
+applies them) instead of rows; see the
+[importance-sampling and fractional-update policy](../importance_sampling_fractional_update_policy.md).
+
+**Alignment and sampling are unchanged.** Every selected particle is aligned
+against state 1's reference and gets one pose, as in a hard run. The sampler
+never reads the weights; it chooses among the work project's rows by its usual
+rule.
+
+**Population gates** use the effective sample size (ESS: the squared sum of a
+state's weights divided by the sum of their squares), not row counts. The
+probability table treats a state as present when the ESS of its weights exceeds
+the table's minimum population (`simple_eul_prob_tab`). The per-iteration
+registration and carry-forward decision (`get_state_pops` in
+`simple_refine3D_strategy`) treats a weighted state as populated when its
+weights carry applied mass, which is exactly when it has partial
+reconstructions.
+
+**Final native reconstruction.** `calc_final_rec` (`simple_final_rec`) puts
+`m_estimator`, and `state` when the refinement command line has one, on the
+child command line it builds. That line drives both of its routes, the direct
+`reconstruct3D` and `bootstrap_rec3D`. It records the weight set's identity
+(generation and layout digest) before reconstructing, and stops if the identity
+has changed when it registers. The `vol` entry of each weighted map carries
+three separate numbers: the hard population `pop` (the parent's label count of
+X, for reporting), the applied mass `mass` and the ESS `ess`. Mass and ESS are
+computed over the reconstructed rows, from the weights as the backend applied
+them.
+
+The refined map of X, its FSC and the refined poses live in the work project.
+
 ## 9. Volume Assembly
 
 When `volrec=yes`, matcher workers write partition-local Cartesian partials and
@@ -738,7 +823,8 @@ On finalization:
 - `endit` is written to the command line
 - `startit` is removed from the command line
 - active state volumes and FSCs are registered in `os_out`
-- empty states are removed from `os_out`
+- empty states are removed from `os_out`; under per-state M-estimation a state
+  is empty when its weights carry no applied mass
 - `cls3D` distributed runs map class-orientation output back to particles
 - `JOB_FINISHED` is touched by the shared-memory path
 
@@ -824,3 +910,6 @@ handoff artifacts for a later `refine3D` execution.
   refinement only after final hard assignment.
 - Keep `inpl_cont` internal: no UI input, no command-line key, `no` only under
   `refine=cont`.
+- Keep state weights out of alignment and sampling: they enter only
+  reconstruction, its mass bookkeeping and its population gates, and no
+  refinement step recomputes or changes them.

@@ -311,7 +311,7 @@ contains
         real                 :: shift(2), crop_factor
         call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
         call op%set_sym(build%pgrpsyms)
-        call op%set_mask(params%msk_crop)
+        call op%set_window_sphere(params%msk_crop)
         lims2 = op%get_lims2()
         R = lims2(1,2)
         allocate(sig2(0:R,size(pinds)), source=1.0)
@@ -360,7 +360,7 @@ contains
     subroutine new_reduction( op )
         type(reconstructor_pcg), intent(inout) :: op
         call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-        call op%set_mask(params%msk_crop)
+        call op%set_window_sphere(params%msk_crop)
         call op%begin_reduction
     end subroutine new_reduction
 

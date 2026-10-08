@@ -64,6 +64,14 @@ interface merge_dmats
     module procedure merge_dmats_2
 end interface
 
+interface median
+    module procedure median_sp, median_dp
+end interface
+
+interface mad
+    module procedure mad_sp, mad_dp
+end interface
+
 real, parameter :: NNET_CONST = exp(1.)-1.
 
 contains
@@ -1341,7 +1349,7 @@ contains
     ! ROBUST STATISTICS
 
     !>   for calculating the median
-    function median( arr ) result( val )
+    function median_sp( arr ) result( val )
         real, intent(in)  :: arr(:)
         real              :: copy(size(arr))
         real    :: val, val1, val2
@@ -1362,7 +1370,31 @@ contains
             val2 = selec(pos2,n,copy)
             val  = (val1+val2)/2.
         endif
-    end function median
+    end function median_sp
+
+    !>   the median in double precision; even n averages the two central values
+    function median_dp( arr ) result( val )
+        real(dp), intent(in) :: arr(:)
+        real(dp) :: copy(size(arr))
+        real(dp) :: val, val1, val2
+        integer  :: n, pos1, pos2
+        n = size(arr)
+        if( is_even(n) )then
+            pos1 = n/2
+            pos2 = pos1+1
+        else
+            pos1 = nint(real(n)/2.)
+            pos2 = pos1
+        endif
+        copy = arr
+        if( pos1 == pos2 )then
+            val  = selec(pos1,n,copy)
+        else
+            val1 = selec(pos1,n,copy)
+            val2 = selec(pos2,n,copy)
+            val  = (val1+val2)/2.d0
+        endif
+    end function median_dp
 
     !>   for calculating the median
     function median_nocopy( arr ) result( val )
@@ -1388,13 +1420,38 @@ contains
 
     ! median absolute deviation
     ! calculated as the median of absolute deviations of the data points
-    real function mad( x, med )
+    real function mad_sp( x, med )
         real, intent(in) :: x(:) ! data points
         real, intent(in) :: med  ! median of data points
         real, allocatable :: absdevs(:)
         allocate(absdevs(size(x)), source=abs(x - med))
-        mad = median_nocopy(absdevs)
-    end function mad
+        mad_sp = median_nocopy(absdevs)
+    end function mad_sp
+
+    ! median absolute deviation in double precision
+    real(dp) function mad_dp( x, med )
+        real(dp), intent(in) :: x(:) ! data points
+        real(dp), intent(in) :: med  ! median of data points
+        mad_dp = median_dp(abs(x - med))
+    end function mad_dp
+
+    !> Kish effective sample size (sum w)^2 / sum w^2 of non-negative weights; the denominator is floored
+    !! at DTINY, so all-zero weights give 0
+    pure real(dp) function kish_ess( w ) result( ess )
+        real(dp), intent(in) :: w(:)
+        ess = sum(w)**2 / max(sum(w**2), DTINY)
+    end function kish_ess
+
+    !> log(sum(exp(x))) without overflow, max(x) + log(sum(exp(x - max(x)))); w, when present, returns the
+    !! normalized weights exp(x - logsumexp) (the softmax of x). x must hold at least one finite entry
+    real(dp) function logsumexp( x, w ) result( lse )
+        real(dp),           intent(in)  :: x(:)
+        real(dp), optional, intent(out) :: w(:)
+        real(dp) :: xmax
+        xmax = maxval(x)
+        lse  = xmax + log(sum(exp(x - xmax)))
+        if( present(w) ) w = exp(x - lse)
+    end function logsumexp
 
     ! median absolute deviation, assuming underlying Gaussian distribution
     real function mad_gau( x, med )

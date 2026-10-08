@@ -315,7 +315,11 @@ if(BUILD_TESTS)
   # FLEX PCA end to end on one deterministic two-state phantom: shared memory
   # versus two real local workers. Two workers times four threads fill the
   # eight processors reserved by this serial CTest entry (D1 in
-  # doc/refactoring_notes/flex_refactoring_plan_2026_10_06.md).
+  # doc/refactoring_notes/flex_refactoring_plan_2026_10_06.md). Then the
+  # per-state refinement of the shared run's truth-matched states
+  # (refine3D_auto state=X with the frozen FLEX weights against the hard labels,
+  # flex_on_simple plan, sections 6 and 9) on eight threads: checks added to
+  # this suite rather than a new process.
   simple_add_test(flex_pca_blobs highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_pca_blobs nthr=4)
 

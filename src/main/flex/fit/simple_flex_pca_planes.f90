@@ -36,6 +36,7 @@ type :: flex_plane_store
     procedure, public :: fetch             => plane_store_fetch
     procedure, public :: store             => plane_store_store
     procedure, public :: kill              => plane_store_kill
+    procedure, public :: release           => plane_store_release
 end type flex_plane_store
 
 contains
@@ -206,6 +207,14 @@ contains
         self%l_on = .false.; self%l_full = .false.; self%l_key_set = .false.; self%l_cached_key = .false.
         self%nheld = 0; self%nserved = 0; self%nprepped = 0; self%gb_held = 0.d0; self%gb_budget = 0.d0
     end subroutine plane_store_kill
+
+    !> Release the store once the embedding exists: the resident planes are freed and the disk cache this
+    !! run built is deleted (the caller owns the cache: the master or the shared-memory run)
+    subroutine plane_store_release( self )
+        class(flex_plane_store), intent(inout) :: self
+        if( allocated(self%cache) ) call self%cache%delete
+        call self%kill
+    end subroutine plane_store_release
 
     !> MemAvailable from /proc/meminfo in GB; zero when unreadable (non-Linux).
     real(dp) function mem_available_gb()

@@ -1,15 +1,13 @@
 !@descr: flex_pca probe fit E-step: stage setup, polar bank/former, posterior solve, insertion and reduction
 submodule (simple_flex_probe_fit) simple_flex_probe_fit_estep
 !$ use omp_lib, only: omp_get_thread_num, omp_get_wtime
-use simple_core_module_api, only: cmplx_zero, dtiny, kbalpha, kbinterpol, kbwinsz, logfhandle, &
-    &maximgbatchsz, oris, osmpl_pad_fac, tic, timer_int_kind, toc
+use simple_core_module_api, only: dtiny, logfhandle, maximgbatchsz, oris, osmpl_pad_fac, tic, timer_int_kind, toc
 use simple_math,                          only: ceil_div, floor_div
 use simple_flex_pca_polar,                only: polar_grid_build, polar_project_recs, polar_relative_inplane, &
     &polar_assign_directions, polar_sample_particle_fused
-use simple_flex_reconstructor_latent_ops, only: latent_projection_weights, &
-    &weighted_expanded_cmat, planes_batch_load, LATENT_WDIM
+use simple_flex_reconstructor_latent_ops, only: planes_batch_load
+use simple_reconstructor,                 only: exp_samples
 use simple_flex_pca_posterior,            only: probe_solve_plain, probe_solve_mix, mcfa_init, mcfa_condition, mcfa_mstep
-use simple_flex_pca_basis,                only: cov_image_mask_radius
 use simple_matcher_3Drec,                 only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io,               only: prepimgbatch
 implicit none
@@ -175,12 +173,11 @@ contains
         twp0 = omp_get_wtime()
         idp_es  = fit%estep%dir_es(row)
         ! mean only, in Cartesian: the M-step backprojects y - a*(T mu) and
-        ! there is no polar->volume adjoint. Banded variant: identical
-        ! interpolation, none of project_fplane's per-call full-plane
-        ! zero-fill + ctfsq/transfer copies (measured as the bulk of the
-        ! polar project bucket when the planes were stored padded).
-        call project_fplane_mean_banded(mean_rec, o, fpl, &
-            &fit%iter%mean_fpl(ithr))
+        ! there is no polar->volume adjoint. project_fplane writes only the
+        ! samples of the disc and zeroes the plane only when its geometry changes;
+        ! the thread's sample set is reused across particles
+        call mean_rec%project_fplane(o, fpl, fit%iter%mean_fpl(ithr), apply_ctf_amp=.true., &
+            &samples=fit%iter%mean_es(ithr))
         ! polar-sample the prepped data plane ONCE at (bank direction, relative
         ! in-plane angle): CTF amplitude, shift phase and per-shell whitening all
         ! ride in from the same cmplx/transfer planes the Cartesian former reads.
@@ -476,7 +473,7 @@ contains
             batchlims = [ibatch, min(nmrg, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
             call planes_batch_load(plane_store, params, build, nmrg, mrg_pinds, batchlims, fpls, &
-                &cov_image_mask_radius(params), l_pcache, sec_read, sec_prep)
+                &l_pcache, sec_read, sec_prep)
             do i = 1, batchsz
                 call build%spproj_field%get_ori(mrg_pinds(batchlims(1)+i-1), orientations(i))
                 eo(i) = build%spproj_field%get_eo(mrg_pinds(batchlims(1)+i-1))
@@ -587,81 +584,6 @@ contains
         end do
     end function polar_ring_selfpower
 
-    !> project_fplane(apply_ctf_amp=.true.) for the mean, cmplx_plane only, same interpolation; the plane
-    !! is zeroed only at (re)allocation and no ctfsq/transfer copies are made, so out-of-disc samples stay
-    !! zero only while the disc (frlims/nyq) is fixed. subtract_mean_banded sweeps the same disc.
-    module subroutine project_fplane_mean_banded( rec, o, fpl_ref, fpl_out )
-        type(reconstructor), intent(in)    :: rec
-        class(ori),          intent(inout) :: o
-        type(fplane_type),   intent(in)    :: fpl_ref
-        type(fplane_type),   intent(inout) :: fpl_out
-        type(kbinterpol) :: kbwin
-        real    :: rotmat(3,3), loc(3), loc_friedel(3), hrow(3)
-        real    :: w3(LATENT_WDIM,LATENT_WDIM,LATENT_WDIM)
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, pf, iwinsz, win(2,3)
-        integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff
-        logical :: l_conjg, l_realloc
-        complex :: comp
-        kbwin  = kbinterpol(KBWINSZ, KBALPHA)
-        iwinsz = ceiling(KBWINSZ - 0.5)
-        fpl_out%frlims  = fpl_ref%frlims
-        fpl_out%shconst = fpl_ref%shconst
-        fpl_out%nyq     = fpl_ref%nyq
-        l_realloc = .not. allocated(fpl_out%cmplx_plane)
-        if( .not. l_realloc )then
-            l_realloc = any(lbound(fpl_out%cmplx_plane) /= lbound(fpl_ref%cmplx_plane)) .or. &
-                &any(ubound(fpl_out%cmplx_plane) /= ubound(fpl_ref%cmplx_plane))
-        endif
-        if( l_realloc )then
-            if( allocated(fpl_out%cmplx_plane) ) deallocate(fpl_out%cmplx_plane)
-            allocate(fpl_out%cmplx_plane(lbound(fpl_ref%cmplx_plane,1):ubound(fpl_ref%cmplx_plane,1), &
-                &lbound(fpl_ref%cmplx_plane,2):ubound(fpl_ref%cmplx_plane,2)))
-            fpl_out%cmplx_plane = CMPLX_ZERO
-        endif
-        rotmat      = o%get_mat()
-        pf          = OSMPL_PAD_FAC
-        fpllims_pd  = fpl_ref%frlims
-        fpllims     = fpllims_pd
-        fpllims(1,1)= ceil_div (fpllims_pd(1,1), pf)
-        fpllims(1,2)= floor_div(fpllims_pd(1,2), pf)
-        fpllims(2,1)= ceil_div (fpllims_pd(2,1), pf)
-        fpllims(2,2)= floor_div(fpllims_pd(2,2), pf)
-        nyq_eff = rec%get_lfny(1)
-        if( fpl_ref%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl_ref%nyq / pf))
-        nyq_disk = nyq_eff * (nyq_eff + 1)
-        do h = fpllims(1,1), fpllims(1,2)
-            h_sq = h*h
-            if( h_sq > nyq_disk ) cycle
-            k_max_h = int(sqrt(real(nyq_disk - h_sq)))
-            k_lo    = max(fpllims(2,1), -k_max_h)
-            k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hrow(1) = real(h) * rotmat(1,1)
-            hrow(2) = real(h) * rotmat(1,2)
-            hrow(3) = real(h) * rotmat(1,3)
-            do k = k_lo, k_hi
-                loc(1) = hrow(1) + real(k) * rotmat(2,1)
-                loc(2) = hrow(2) + real(k) * rotmat(2,2)
-                loc(3) = hrow(3) + real(k) * rotmat(2,3)
-                ! interp_cmat_exp, verbatim (it is private to simple_reconstructor)
-                l_conjg     = loc(1) < 0.
-                loc_friedel = loc
-                if( l_conjg ) loc_friedel = -loc_friedel
-                win(1,:) = nint(loc_friedel)
-                win(2,:) = win(1,:) + iwinsz
-                win(1,:) = win(1,:) - iwinsz
-                call kbwin%apod_mat_3d(loc_friedel, iwinsz, LATENT_WDIM, w3)
-                comp = sum(w3 * rec%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)))
-                if( l_conjg ) comp = conjg(comp)
-                ! apply_ctf_amp=.true. semantics of project_fplane
-                if( allocated(fpl_ref%transfer_plane) )then
-                    fpl_out%cmplx_plane(h,k) = fpl_ref%transfer_plane(h,k) * comp
-                else
-                    fpl_out%cmplx_plane(h,k) = sqrt(max(0., fpl_ref%ctfsq_plane(h,k))) * comp
-                endif
-            end do
-        end do
-    end subroutine project_fplane_mean_banded
-
     !> Exact Cartesian G/b/c/e_mm/myv increments over the hybrid E-step's low-k positions (hex,kex), equal
     !! to what project_fplanes_mean_basis + cov_herm_inner add there, DC included; one KB window per position
     !! serves all ncomp+1 volumes. Rings sample these few, steep shells worst and would bias the latent scale.
@@ -675,40 +597,39 @@ contains
         integer,             intent(in)    :: hex(npos), kex(npos)
         real(dp),            intent(inout) :: Gd(ncomp,ncomp), bd(ncomp), cd(ncomp)
         real(dp),            intent(inout) :: e_mm, myv
-        type(kbinterpol) :: kbwin
-        real        :: rotmat(3,3), loc(3), wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-        integer     :: j, q, r, win(2,3), exp_lb(3), exp_ub(3)
-        logical     :: l_conjg, l_tf
-        complex     :: tf, yv, u0, val
-        complex     :: uq(ncomp)
+        type(exp_samples) :: samples
+        real        :: rotmat(3,3), locs(3,npos)
+        integer     :: j, q, r
+        logical     :: l_tf
+        complex     :: tf, yv, u0
+        complex     :: uq(ncomp), v0(npos), vq(npos,ncomp)
         complex(dp) :: u0d, yd
-        kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         rotmat = o%get_mat()
-        exp_lb = lbound(rec0%cmat_exp)
-        exp_ub = ubound(rec0%cmat_exp)
         l_tf   = allocated(fpl%transfer_plane)
         do j = 1, npos
-            loc(1) = real(hex(j))*rotmat(1,1) + real(kex(j))*rotmat(2,1)
-            loc(2) = real(hex(j))*rotmat(1,2) + real(kex(j))*rotmat(2,2)
-            loc(3) = real(hex(j))*rotmat(1,3) + real(kex(j))*rotmat(2,3)
-            l_conjg = loc(1) < 0.
-            if( l_conjg ) loc = -loc
-            call latent_projection_weights(kbwin, loc, win, wx, wy, wz)
-            if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
+            locs(1,j) = real(hex(j))*rotmat(1,1) + real(kex(j))*rotmat(2,1)
+            locs(2,j) = real(hex(j))*rotmat(1,2) + real(kex(j))*rotmat(2,2)
+            locs(3,j) = real(hex(j))*rotmat(1,3) + real(kex(j))*rotmat(2,3)
+        end do
+        ! one window per position serves all ncomp+1 volumes; a position outside the lattice reads
+        ! zero in every volume and adds nothing
+        call samples%new(rec0, locs)
+        call samples%gather(rec0, v0)
+        do q = 1, ncomp
+            call samples%gather(recs(q), vq(:,q))
+        end do
+        call samples%kill
+        do j = 1, npos
             ! (hex,kex) are native lattice positions, the planes' own indices
             if( l_tf )then
                 tf = fpl%transfer_plane(hex(j),kex(j))
             else
                 tf = cmplx(sqrt(max(0., fpl%ctfsq_plane(hex(j),kex(j)))), 0.)
             endif
-            yv  = fpl%cmplx_plane(hex(j),kex(j))
-            val = weighted_expanded_cmat(rec0, win, wx, wy, wz)
-            if( l_conjg ) val = conjg(val)
-            u0 = tf * val
+            yv = fpl%cmplx_plane(hex(j),kex(j))
+            u0 = tf * v0(j)
             do q = 1, ncomp
-                val = weighted_expanded_cmat(recs(q), win, wx, wy, wz)
-                if( l_conjg ) val = conjg(val)
-                uq(q) = tf * val
+                uq(q) = tf * vq(j,q)
             end do
             u0d  = cmplx(u0, kind=dp)
             yd   = cmplx(yv, kind=dp)
@@ -731,12 +652,11 @@ contains
         end do
     end subroutine polar_hybrid_exact_accum
 
-    !> Banded residual subtraction, fpl = fpl - a*mean over EXACTLY the disc the banded (or any
-    !! full-plane) mean projection wrote. Everywhere outside that disc the mean plane is
-    !! identically zero, so the full-array statement this replaces only rewrote unchanged values
-    !! there -- per-particle memory traffic for no effect.
-    !! The loop bounds are the same expressions as project_fplane_mean_banded's, so written and
-    !! subtracted sample sets coincide by construction.
+    !> Banded residual subtraction, fpl = fpl - a*mean over EXACTLY the disc the mean projection
+    !! (reconstructor project_fplane) wrote. Everywhere outside that disc the mean plane is
+    !! identically zero, so a full-array statement would only rewrite unchanged values there.
+    !! The loop bounds are the same expressions as the plane sample set's (exp_samples new_plane),
+    !! so written and subtracted sample sets coincide by construction.
     module subroutine subtract_mean_banded( fpl, mean_fpl, a, rec_nyq )
         type(fplane_type), intent(inout) :: fpl
         type(fplane_type), intent(in)    :: mean_fpl

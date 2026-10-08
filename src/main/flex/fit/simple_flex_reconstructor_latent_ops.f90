@@ -2,447 +2,37 @@
 module simple_flex_reconstructor_latent_ops
 !$ use omp_lib, only: omp_get_thread_num
 use simple_flex_pca_planes,      only: flex_plane_store
-use simple_core_module_api, only: cmplx_zero, ctfparams, dcmplx_zero, dp, dtiny, eigsrt, fdim, fplane_type, jacobi, &
-    &kbalpha, kbinterpol, kbwinsz, nthr_glob, ori, osmpl_pad_fac, simple_exception, sp, sym, tic, timer_int_kind, &
-    &tiny, toc
-use simple_reconstructor,        only: reconstructor
+use simple_core_module_api, only: cmplx_zero, dcmplx_zero, dp, dtiny, fdim, fplane_type, kbwinsz, ori, &
+    &simple_exception, sp, tic, timer_int_kind, tiny, toc
+use simple_reconstructor,        only: reconstructor, exp_samples
 use simple_builder,              only: builder
 use simple_image,                only: image
-use simple_linalg,               only: eigsrt, jacobi, solve_real_spd_complex
+use simple_linalg,               only: solve_real_spd_complex
 use simple_matcher_ptcl_io,      only: discrete_read_imgbatch
+use simple_matcher_3Drec,        only: prep_imgs4rec, gen_rec_plane
 use simple_memoize_ft_maps,      only: memoize_ft_maps
 use simple_parameters,           only: parameters
 implicit none
 
-public :: insert_planes_oversamp_multi_scaled_batch
-public :: insert_planes_oversamp_coupled_batch_scaled
-public :: project_fplane_mean, project_fplanes_mean_basis
-!> exported for the polar (G,b) former, which must use the SAME interpolation kernel and the SAME
-!! weight normalisation as the Cartesian projector or the two paths cannot be compared
-public :: latent_projection_weights, weighted_expanded_cmat, LATENT_WDIM
+public :: project_fplanes_mean_basis, LATENT_WDIM
 !> the projection-aware latent model (merged from simple_flex_projected_latent_model)
 public :: planes_batch_load, prep_imgs4projected_model, solve_coupled_basis_exp, projected_model_kfromto
 public :: add_invtausq2rho_coupled, pair_index
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: LATENT_WDIM        = 2 * ceiling(KBWINSZ - 0.5) + 1
-! cmat_exp stores h>=0 as the independent Friedel half; h<0 is only
-! interpolation halo and must not receive independent projection samples.
-integer, parameter :: NONREDUNDANT_HMIN  = 0
-! Source h-lines in one OpenMP colour must map to non-overlapping 3-D
-! interpolation windows for every rotation. A separation of LATENT_WDIM in
-! the source plane is not sufficient after rotation; sqrt(3)*LATENT_WDIM
-! guarantees that at least one target-grid coordinate differs by a full
-! window width.
-integer, parameter :: LATENT_SAFE_STRIDE = ceiling(sqrt(3.0) * real(LATENT_WDIM))
+!> the KB window width of the particle-plane samplers (the polar bank's 2D gather)
+integer, parameter :: LATENT_WDIM = 2 * ceiling(KBWINSZ - 0.5) + 1
 
 real(dp), parameter :: COUPLED_MSTEP_RIDGE_REL = 1.0d-8
 real(dp), parameter :: COUPLED_DENSITY_FLOOR   = 1.0d-6
 
 contains
 
-    ! Batched insert_plane_oversamp_multi_scaled: identical arithmetic, one OpenMP region per batch
-    ! instead of one per particle. Same shape as insert_planes_oversamp_coupled_batch_scaled -- every
-    ! per-record quantity is derived serially up front (se%apply goes through oris%get_ori, not
-    ! guaranteed thread-safe) and only the h-line sweep is threaded, with the stride keeping
-    ! concurrent lines off any one interpolation cell, so no privatisation and no atomics. Bit-for-bit
-    ! identical to calling the per-particle routine in a loop.
-    subroutine insert_planes_oversamp_multi_scaled_batch( recs, se, orientations, fpls, &
-        &data_scales, density_scales, valid, nrecords )
-        use simple_math, only: ceil_div, floor_div
-        type(reconstructor), intent(inout) :: recs(:)
-        class(sym),          intent(inout) :: se
-        type(ori),           intent(inout) :: orientations(:)
-        type(fplane_type),   intent(in)    :: fpls(:)
-        real(dp),            intent(in)    :: data_scales(:,:), density_scales(:,:)
-        logical,             intent(in)    :: valid(:)
-        integer,             intent(in)    :: nrecords
-        type(kbinterpol) :: kbwin
-        type(ori) :: o_sym
-        complex   :: comp_base, cmplx_raw
-        real, allocatable :: rotmats(:,:,:,:), dscale(:,:), rscale(:,:)
-        integer, allocatable :: fpllims(:,:,:), nyq_disks(:), act_all(:,:), nact_all(:)
-        real      :: loc(3), hrow(3), ctfsq_raw
-        real      :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM), ww
-        real      :: r11, r12, r13, r21, r22, r23
-        integer   :: win(2,3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3,2)
-        integer   :: pf, ix, iy, iz, hx, ky, mz, q, iq, ncomp, i, nact
-        integer   :: nyq_eff, h_sq, k_max_h, k_lo, k_hi, exp_lb(3), exp_ub(3)
-        real      :: pf2, eps_norm, inv_wdim
-        ncomp = size(recs)
-        if( ncomp <= 0 .or. nrecords <= 0 ) return
-        if( size(orientations) < nrecords .or. size(fpls) < nrecords .or. size(valid) < nrecords )then
-            THROW_HARD('record array smaller than batch; insert_planes_oversamp_multi_scaled_batch')
-        endif
-        if( size(data_scales,1) < ncomp .or. size(data_scales,2) < nrecords .or. &
-            &size(density_scales,1) < ncomp .or. size(density_scales,2) < nrecords )then
-            THROW_HARD('scale array smaller than batch; insert_planes_oversamp_multi_scaled_batch')
-        endif
-        if( .not. allocated(recs(1)%cmat_exp) )then
-            THROW_HARD('expanded matrix does not exist; insert_planes_oversamp_multi_scaled_batch')
-        endif
-        kbwin    = kbinterpol(KBWINSZ, KBALPHA)
-        iwinsz   = ceiling(KBWINSZ - 0.5)
-        stride   = LATENT_SAFE_STRIDE
-        exp_lb   = lbound(recs(1)%cmat_exp)
-        exp_ub   = ubound(recs(1)%cmat_exp)
-        nsym     = se%get_nsym()
-        pf       = OSMPL_PAD_FAC
-        pf2      = real(pf*pf)
-        eps_norm = epsilon(1.0)
-        inv_wdim = 1.0 / real(LATENT_WDIM)
-        allocate(rotmats(3,3,nsym,nrecords), source=0.)
-        allocate(dscale(ncomp,nrecords), rscale(ncomp,nrecords), source=0.)
-        allocate(fpllims(3,2,nrecords), nyq_disks(nrecords), nact_all(nrecords), source=0)
-        allocate(act_all(ncomp,nrecords), source=0)
-        do i = 1, nrecords
-            if( .not. valid(i) ) cycle
-            ! live components only -- the kernel state weights have compact support, so a particle
-            ! typically sits inside one or two of the nstates targets and the rest are exact zeros
-            nact = 0
-            do q = 1, ncomp
-                dscale(q,i) = real(data_scales(q,i))
-                rscale(q,i) = real(max(0.d0, density_scales(q,i)))
-                if( dscale(q,i) /= 0. .or. rscale(q,i) /= 0. )then
-                    nact = nact + 1
-                    act_all(nact,i) = q
-                endif
-            end do
-            nact_all(i) = nact
-            if( nact == 0 ) cycle
-            rotmats(:,:,1,i) = orientations(i)%get_mat()
-            do isym = 2, nsym
-                call se%apply(orientations(i), isym, o_sym)
-                rotmats(:,:,isym,i) = o_sym%get_mat()
-            end do
-            fpllims_pd     = fpls(i)%frlims
-            fpllims(:,:,i) = fpllims_pd
-            fpllims(1,1,i) = ceil_div (fpllims_pd(1,1), pf)
-            fpllims(1,2,i) = floor_div(fpllims_pd(1,2), pf)
-            fpllims(2,1,i) = ceil_div (fpllims_pd(2,1), pf)
-            fpllims(2,2,i) = floor_div(fpllims_pd(2,2), pf)
-            nyq_eff = recs(1)%get_lfny(1)
-            if( fpls(i)%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpls(i)%nyq / pf))
-            nyq_disks(i) = nyq_eff * (nyq_eff + 1)
-        end do
-        call o_sym%kill
-        !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,&
-        !$omp& ctfsq_raw,comp_base,wx,wy,wz,ww,win,loc,hrow,r11,r12,r13,r21,r22,r23,&
-        !$omp& isym,ix,iy,iz,hx,ky,mz,q,iq,nact) proc_bind(close)
-        do i = 1, nrecords
-            if( .not. valid(i) ) cycle
-            nact = nact_all(i)
-            if( nact == 0 ) cycle
-            do isym = 1, nsym
-                r11 = rotmats(1,1,isym,i); r12 = rotmats(1,2,isym,i); r13 = rotmats(1,3,isym,i)
-                r21 = rotmats(2,1,isym,i); r22 = rotmats(2,2,isym,i); r23 = rotmats(2,3,isym,i)
-                do l = 0, stride-1
-                    !$omp do schedule(static,1)
-                    do h = fpllims(1,1,i)+l, fpllims(1,2,i), stride
-                        h_sq = h*h
-                        if( h_sq > nyq_disks(i) ) cycle
-                        k_max_h = int(sqrt(real(nyq_disks(i) - h_sq)))
-                        k_lo    = max(fpllims(2,1,i), -k_max_h)
-                        k_hi    = min(fpllims(2,2,i),  k_max_h)
-                        hrow(1) = real(h) * r11
-                        hrow(2) = real(h) * r12
-                        hrow(3) = real(h) * r13
-                        do k = k_lo, k_hi
-                            ! planes are stored on the native lattice, k<=0 only; Friedel symmetry for k>0
-                            if( k <= 0 )then
-                                cmplx_raw = fpls(i)%cmplx_plane(h,k)
-                                ctfsq_raw = fpls(i)%ctfsq_plane(h,k)
-                            else
-                                cmplx_raw = conjg(fpls(i)%cmplx_plane(-h,-k))
-                                ctfsq_raw = fpls(i)%ctfsq_plane(-h,-k)
-                            endif
-                            if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
-                                &ctfsq_raw <= TINY ) cycle
-                            loc(1) = hrow(1) + real(k) * r21
-                            loc(2) = hrow(2) + real(k) * r22
-                            loc(3) = hrow(3) + real(k) * r23
-                            win(1,:) = nint(loc)
-                            win(2,:) = win(1,:) + iwinsz
-                            win(1,:) = win(1,:) - iwinsz
-                            if( win(2,1) < NONREDUNDANT_HMIN ) cycle
-                            if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
-                            comp_base = pf2 * cmplx_raw
-                            call kb_apod_vecs_3d_fast_b(loc, wx, wy, wz)
-                            do iz = 1, LATENT_WDIM
-                                mz = win(1,3) + iz - 1
-                                do iy = 1, LATENT_WDIM
-                                    ky = win(1,2) + iy - 1
-                                    do ix = 1, LATENT_WDIM
-                                        hx = win(1,1) + ix - 1
-                                        ww = wx(ix) * (wy(iy) * wz(iz))
-                                        do iq = 1, nact
-                                            q = act_all(iq,i)
-                                            recs(q)%cmat_exp(hx,ky,mz) = recs(q)%cmat_exp(hx,ky,mz) + &
-                                                &(dscale(q,i) * comp_base) * ww
-                                            recs(q)%rho_exp(hx,ky,mz) = recs(q)%rho_exp(hx,ky,mz) + &
-                                                &(rscale(q,i) * ctfsq_raw) * ww
-                                        end do
-                                    end do
-                                end do
-                            end do
-                        end do
-                    end do
-                    !$omp end do
-                end do
-            end do
-        end do
-        !$omp end parallel
-        deallocate(rotmats, dscale, rscale, fpllims, nyq_disks, act_all, nact_all)
-
-    contains
-
-        subroutine kb_apod_vecs_3d_fast_b( loc, wx, wy, wz )
-            real, intent(in)  :: loc(3)
-            real, intent(out) :: wx(:), wy(:), wz(:)
-            integer :: i2, win_lo(3)
-            real    :: base(3), ww3(3), sx, sy, sz
-            win_lo = nint(loc) - iwinsz
-            base   = real(win_lo) - loc
-            do i2 = 1, LATENT_WDIM
-                ww3    = kbwin%apod_fast(base + real(i2-1))
-                wx(i2) = ww3(1)
-                wy(i2) = ww3(2)
-                wz(i2) = ww3(3)
-            end do
-            sx = sum(wx)
-            sy = sum(wy)
-            sz = sum(wz)
-            if( abs(sx) > eps_norm )then
-                wx = wx * (1.0 / sx)
-            else
-                wx = inv_wdim
-            endif
-            if( abs(sy) > eps_norm )then
-                wy = wy * (1.0 / sy)
-            else
-                wy = inv_wdim
-            endif
-            if( abs(sz) > eps_norm )then
-                wz = wz * (1.0 / sz)
-            else
-                wz = inv_wdim
-            endif
-        end subroutine kb_apod_vecs_3d_fast_b
-
-    end subroutine insert_planes_oversamp_multi_scaled_batch
-
-    subroutine insert_planes_oversamp_coupled_batch_scaled( recs, rho_cross_exp, se, orientations, fpls, &
-        &data_scales, density_scales, valid, nrecords )
-        use simple_math, only: ceil_div, floor_div
-        type(reconstructor), intent(inout) :: recs(:)
-        real,                intent(inout) :: rho_cross_exp(:,:,:,:)
-        class(sym),          intent(inout) :: se
-        type(ori),           intent(inout) :: orientations(:)
-        type(fplane_type),   intent(in)    :: fpls(:)
-        real(dp),            intent(in)    :: data_scales(:,:), density_scales(:,:,:)
-        logical,             intent(in)    :: valid(:)
-        integer,             intent(in)    :: nrecords
-        type(ori) :: o_sym
-        type(kbinterpol) :: kbwin
-        complex   :: comp_base, cmplx_raw
-        real, allocatable :: rotmats(:,:,:,:), data_scale_sp(:,:), density_scale_packed(:,:)
-        integer, allocatable :: fpllims(:,:,:), nyq_disks(:)
-        real      :: loc(3), hrow(3), ctfsq_raw
-        real      :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM), ww
-        real      :: r11, r12, r13, r21, r22, r23
-        integer   :: win(2,3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3,2)
-        integer   :: pf, ix, iy, iz, hx, ky, mz, q, r, i, ncomp, ipair
-        integer   :: h_sq, k_max_h, k_lo, k_hi, ih, ik, im, nyq_eff
-        integer   :: exp_lb(3), exp_ub(3), exp_shape(3), npairs
-        logical   :: shared_density, diagonal_density
-        real      :: pf2, eps_norm, inv_wdim
-        ncomp = size(recs)
-        if( ncomp <= 0 .or. nrecords <= 0 ) return
-        npairs = (ncomp * (ncomp + 1)) / 2
-        diagonal_density = size(rho_cross_exp,1) == ncomp
-        shared_density = size(rho_cross_exp,1) == 1 .and. .not.diagonal_density
-        if( size(orientations)<nrecords .or. size(fpls)<nrecords .or. size(valid)<nrecords )then
-            THROW_HARD('record array smaller than batch; insert_planes_oversamp_coupled_batch_scaled')
-        endif
-        if( size(data_scales,1)<ncomp .or. size(data_scales,2)<nrecords .or. &
-            &size(density_scales,1)<ncomp .or. size(density_scales,2)<ncomp .or. &
-            &size(density_scales,3)<nrecords )then
-            THROW_HARD('scale array smaller than batch; insert_planes_oversamp_coupled_batch_scaled')
-        endif
-        if( .not.allocated(recs(1)%cmat_exp) )then
-            THROW_HARD('expanded matrix does not exist; insert_planes_oversamp_coupled_batch_scaled')
-        endif
-        exp_lb    = lbound(recs(1)%cmat_exp)
-        exp_ub    = ubound(recs(1)%cmat_exp)
-        exp_shape = shape(recs(1)%cmat_exp)
-        if( (.not.shared_density .and. .not.diagonal_density .and. size(rho_cross_exp,1)<npairs) .or. &
-            &size(rho_cross_exp,2)<exp_shape(1) .or. &
-            &size(rho_cross_exp,3)<exp_shape(2) .or. size(rho_cross_exp,4)<exp_shape(3) )then
-            THROW_HARD('cross-density array shape mismatch; insert_planes_oversamp_coupled_batch_scaled')
-        endif
-        nsym     = se%get_nsym()
-        iwinsz   = ceiling(KBWINSZ - 0.5)
-        stride   = LATENT_SAFE_STRIDE
-        pf       = OSMPL_PAD_FAC
-        pf2      = real(pf*pf)
-        eps_norm = epsilon(1.0)
-        inv_wdim = 1.0 / real(LATENT_WDIM)
-        ! Use the reconstructor's own interpolation window.  The previous
-        ! hand-inlined approximation is close in raw accumulation, but its
-        ! small differences become large after density correction in weakly
-        ! sampled Fourier cells.
-        kbwin = recs(1)%get_kbwin()
-        allocate(rotmats(3,3,nsym,nrecords), data_scale_sp(ncomp,nrecords), source=0.)
-        if( .not.shared_density .and. .not.diagonal_density ) allocate(density_scale_packed(npairs,nrecords), source=0.)
-        allocate(fpllims(3,2,nrecords), nyq_disks(nrecords), source=0)
-        do i = 1, nrecords
-            if( .not.valid(i) ) cycle
-            if( .not.allocated(fpls(i)%transfer_plane) )then
-                THROW_HARD('forward transfer plane does not exist; insert_planes_oversamp_coupled_batch_scaled')
-            endif
-            rotmats(:,:,1,i) = orientations(i)%get_mat()
-            do isym = 2, nsym
-                call se%apply(orientations(i), isym, o_sym)
-                rotmats(:,:,isym,i) = o_sym%get_mat()
-            end do
-            fpllims_pd = fpls(i)%frlims
-            fpllims(:,:,i) = fpllims_pd
-            fpllims(1,1,i) = ceil_div (fpllims_pd(1,1), pf)
-            fpllims(1,2,i) = floor_div(fpllims_pd(1,2), pf)
-            fpllims(2,1,i) = ceil_div (fpllims_pd(2,1), pf)
-            fpllims(2,2,i) = floor_div(fpllims_pd(2,2), pf)
-            nyq_eff = recs(1)%get_lfny(1)
-            if( fpls(i)%nyq>0 ) nyq_eff = min(nyq_eff, max(1, fpls(i)%nyq/pf))
-            nyq_disks(i) = nyq_eff * (nyq_eff + 1)
-            do q = 1, ncomp
-                data_scale_sp(q,i) = real(data_scales(q,i))
-            end do
-            if( .not.shared_density .and. .not.diagonal_density )then
-                do r = 1, ncomp
-                    do q = 1, r
-                        density_scale_packed(pair_index(q,r),i) = real(density_scales(q,r,i))
-                    end do
-                end do
-            endif
-        end do
-        call o_sym%kill
-        !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,ctfsq_raw,&
-        !$omp& comp_base,wx,wy,wz,ww,win,loc,hrow,r11,r12,r13,r21,r22,r23,isym,&
-        !$omp& ix,iy,iz,hx,ky,mz,ih,ik,im,q,ipair) proc_bind(close)
-        do i = 1, nrecords
-            if( .not.valid(i) ) cycle
-            do isym = 1, nsym
-                r11 = rotmats(1,1,isym,i); r12 = rotmats(1,2,isym,i); r13 = rotmats(1,3,isym,i)
-                r21 = rotmats(2,1,isym,i); r22 = rotmats(2,2,isym,i); r23 = rotmats(2,3,isym,i)
-                do l = 0, stride-1
-                    !$omp do schedule(static,1)
-                    do h = fpllims(1,1,i)+l, fpllims(1,2,i), stride
-                        h_sq = h*h
-                        if( h_sq>nyq_disks(i) ) cycle
-                        k_max_h = int(sqrt(real(nyq_disks(i)-h_sq)))
-                        k_lo = max(fpllims(2,1,i),-k_max_h)
-                        k_hi = min(fpllims(2,2,i), k_max_h)
-                        hrow = real(h)*[r11,r12,r13]
-                        loc = hrow + real(k_lo-1)*[r21,r22,r23]
-                        do k = k_lo, k_hi
-                            loc = loc + [r21,r22,r23]
-                            ! native lattice, k<=0 stored; Friedel symmetry for k>0
-                            if( k<=0 )then
-                                cmplx_raw = conjg(fpls(i)%transfer_plane(h,k))*fpls(i)%cmplx_plane(h,k)
-                                ctfsq_raw = fpls(i)%ctfsq_plane(h,k)
-                            else
-                                cmplx_raw = conjg(conjg(fpls(i)%transfer_plane(-h,-k))*fpls(i)%cmplx_plane(-h,-k))
-                                ctfsq_raw = fpls(i)%ctfsq_plane(-h,-k)
-                            endif
-                            if( abs(real(cmplx_raw))+abs(aimag(cmplx_raw))<=TINY .and. ctfsq_raw<=TINY ) cycle
-                            win(1,:) = nint(loc)-iwinsz
-                            win(2,:) = nint(loc)+iwinsz
-                            if( win(2,1) < NONREDUNDANT_HMIN ) cycle
-                            if( any(win(1,:)<exp_lb) .or. any(win(2,:)>exp_ub) ) cycle
-                            comp_base = pf2*cmplx_raw
-                            call kb_apod_vecs_3d_fast(loc,wx,wy,wz)
-                            do iz = 1, LATENT_WDIM
-                                mz = win(1,3)+iz-1
-                                im = mz-exp_lb(3)+1
-                                do iy = 1, LATENT_WDIM
-                                    ky = win(1,2)+iy-1
-                                    ik = ky-exp_lb(2)+1
-                                    do ix = 1, LATENT_WDIM
-                                        hx = win(1,1)+ix-1
-                                        ih = hx-exp_lb(1)+1
-                                        ww = wx(ix)*(wy(iy)*wz(iz))
-                                        do q = 1, ncomp
-                                            recs(q)%cmat_exp(hx,ky,mz) = recs(q)%cmat_exp(hx,ky,mz) + &
-                                                &(data_scale_sp(q,i)*comp_base)*ww
-                                        end do
-                                        if( shared_density )then
-                                            rho_cross_exp(1,ih,ik,im) = rho_cross_exp(1,ih,ik,im) + ctfsq_raw*ww
-                                        else if( diagonal_density )then
-                                            do q = 1, ncomp
-                                                rho_cross_exp(q,ih,ik,im) = rho_cross_exp(q,ih,ik,im) + &
-                                                    &real(density_scales(q,q,i))*ctfsq_raw*ww
-                                            end do
-                                        else
-                                            !$omp simd
-                                            do ipair = 1, npairs
-                                                rho_cross_exp(ipair,ih,ik,im) = rho_cross_exp(ipair,ih,ik,im) + &
-                                                    &(density_scale_packed(ipair,i)*ctfsq_raw)*ww
-                                            end do
-                                        endif
-                                    end do
-                                end do
-                            end do
-                        end do
-                    end do
-                    !$omp end do
-                end do
-            end do
-        end do
-        !$omp end parallel
-        deallocate(rotmats,data_scale_sp,fpllims,nyq_disks)
-        if( allocated(density_scale_packed) ) deallocate(density_scale_packed)
-
-    contains
-
-        integer pure function pair_index( q, r ) result( ipair )
-            integer, intent(in) :: q, r
-            ipair = (r*(r-1))/2+q
-        end function pair_index
-
-        subroutine kb_apod_vecs_3d_fast( loc, wx, wy, wz )
-            real, intent(in)  :: loc(3)
-            real, intent(out) :: wx(:), wy(:), wz(:)
-            integer :: j, win_lo(3)
-            real :: base(3), ww3(3), sx, sy, sz
-            win_lo = nint(loc)-iwinsz
-            base = real(win_lo)-loc
-            do j = 1, LATENT_WDIM
-                ww3=kbwin%apod_fast(base+real(j-1))
-                wx(j)=ww3(1)
-                wy(j)=ww3(2)
-                wz(j)=ww3(3)
-            end do
-            sx=sum(wx); sy=sum(wy); sz=sum(wz)
-            if( abs(sx)>eps_norm )then; wx=wx/sx; else; wx=inv_wdim; endif
-            if( abs(sy)>eps_norm )then; wy=wy/sy; else; wy=inv_wdim; endif
-            if( abs(sz)>eps_norm )then; wz=wz/sz; else; wz=inv_wdim; endif
-        end subroutine kb_apod_vecs_3d_fast
-
-    end subroutine insert_planes_oversamp_coupled_batch_scaled
-
-
-    subroutine project_fplane_mean( mean_rec, o, fpl_ref, mean_fpl, apply_ctf_amp )
-        type(reconstructor), intent(in)    :: mean_rec
-        class(ori),          intent(inout) :: o
-        class(fplane_type),  intent(in)    :: fpl_ref
-        type(fplane_type),   intent(inout) :: mean_fpl
-        logical,             intent(in)    :: apply_ctf_amp
-        call mean_rec%project_fplane(o, fpl_ref, mean_fpl, apply_ctf_amp)
-    end subroutine project_fplane_mean
-
+    !> The mean's and the basis volumes' central sections at the samples of plane fpl_ref (orientation o),
+    !! times the forward transfer with apply_ctf_amp: one sample set (window geometry once per sample),
+    !! gathered from every volume. All volumes share the mean's expanded lattice.
     subroutine project_fplanes_mean_basis( mean_rec, basis_recs, o, fpl_ref, mean_fpl, basis_fpls, apply_ctf_amp )
-        use simple_math, only: ceil_div, floor_div
         type(reconstructor), intent(in)    :: mean_rec
         type(reconstructor), intent(in)    :: basis_recs(:)
         class(ori),          intent(inout) :: o
@@ -450,22 +40,9 @@ contains
         type(fplane_type),   intent(inout) :: mean_fpl
         type(fplane_type),   intent(inout) :: basis_fpls(:)
         logical,             intent(in)    :: apply_ctf_amp
-        type(kbinterpol) :: kbwin
-        complex :: transfer, mean_val, basis_val
-        real    :: rotmat(3,3), loc(3), hrow(3), ctfamp
-        real    :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-        integer :: fpllims_pd(3,2), fpllims(3,2), h, k, pf, q, ncomp
-        integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff, win(2,3)
-        logical :: l_apply_ctf_amp, l_conjg
-        ! per-sample geometry, so the volume loop can be hoisted out of the (h,k) sweep
-        integer,     allocatable :: swin(:,:,:), s_h(:), s_k(:)
-        real,        allocatable :: swx(:,:), swy(:,:), swz(:,:)
-        complex,     allocatable :: stf(:)
-        logical,     allocatable :: scj(:)
-        ! in-bounds samples first, so the volume loops carry no per-tap window test
-        integer,     allocatable :: jok(:), jbad(:)
-        integer :: exp_lb(3), exp_ub(3), ns_ok, ns_bad, jj
-        integer :: ns, nsmax, j
+        type(exp_samples)    :: samples
+        complex, allocatable :: vals(:)
+        integer :: q, ncomp
         if( .not. allocated(mean_rec%cmat_exp) )then
             THROW_HARD('expanded mean matrix does not exist; project_fplanes_mean_basis')
         endif
@@ -481,207 +58,17 @@ contains
                 THROW_HARD('expanded basis matrix does not exist; project_fplanes_mean_basis')
             endif
         end do
-        l_apply_ctf_amp = apply_ctf_amp
-        kbwin = kbinterpol(KBWINSZ, KBALPHA)
-        call ensure_latent_projection_plane(fpl_ref, mean_fpl)
+        call samples%new_plane(mean_rec, o, fpl_ref)
+        allocate(vals(samples%get_n()))
+        call samples%gather(mean_rec, vals)
+        call samples%put_plane(vals, fpl_ref, mean_fpl, apply_ctf_amp)
         do q = 1, ncomp
-            call ensure_latent_projection_plane(fpl_ref, basis_fpls(q))
+            call samples%gather(basis_recs(q), vals)
+            call samples%put_plane(vals, fpl_ref, basis_fpls(q), apply_ctf_amp)
         end do
-        rotmat      = o%get_mat()
-        pf          = OSMPL_PAD_FAC
-        fpllims_pd  = fpl_ref%frlims
-        fpllims     = fpllims_pd
-        fpllims(1,1)= ceil_div (fpllims_pd(1,1), pf)
-        fpllims(1,2)= floor_div(fpllims_pd(1,2), pf)
-        fpllims(2,1)= ceil_div (fpllims_pd(2,1), pf)
-        fpllims(2,2)= floor_div(fpllims_pd(2,2), pf)
-        nyq_eff = mean_rec%get_lfny(1)
-        if( fpl_ref%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl_ref%nyq / pf))
-        nyq_disk = nyq_eff * (nyq_eff + 1)
-        ! The sample geometry -- location, KB window, interpolation weights, CTF transfer -- depends on
-        ! (h,k) and the orientation ALONE; the ncomp+1 volumes differ only in what is read through it.
-        ! Interleaving volumes inside the (h,k) loop leaves none of them resident, so essentially every
-        ! gather is a cold miss: build the sample list once, then hoist the volume loop outside it.
-        ! Bit-exact: every output element is an independent expression of its own sample and volume.
-        nsmax = (fpllims(1,2) - fpllims(1,1) + 1) * (nyq_eff + 1)
-        allocate(swin(2,3,nsmax), swx(LATENT_WDIM,nsmax), swy(LATENT_WDIM,nsmax), &
-            &swz(LATENT_WDIM,nsmax), stf(nsmax), s_h(nsmax), s_k(nsmax), scj(nsmax))
-        ns = 0
-        do h = fpllims(1,1), fpllims(1,2)
-            h_sq = h*h
-            if( h_sq > nyq_disk ) cycle
-            k_max_h = int(sqrt(real(nyq_disk - h_sq)))
-            k_lo    = max(fpllims(2,1), -k_max_h)
-            k_hi    = min(0, min(fpllims(2,2), k_max_h))
-            hrow(1) = real(h) * rotmat(1,1)
-            hrow(2) = real(h) * rotmat(1,2)
-            hrow(3) = real(h) * rotmat(1,3)
-            do k = k_lo, k_hi
-                loc(1) = hrow(1) + real(k) * rotmat(2,1)
-                loc(2) = hrow(2) + real(k) * rotmat(2,2)
-                loc(3) = hrow(3) + real(k) * rotmat(2,3)
-                l_conjg = loc(1) < 0.
-                if( l_conjg ) loc = -loc
-                call latent_projection_weights(kbwin, loc, win, wx, wy, wz)
-                transfer = cmplx(1., 0.)
-                if( l_apply_ctf_amp )then
-                    if( allocated(fpl_ref%transfer_plane) )then
-                        transfer = fpl_ref%transfer_plane(h,k)
-                    else
-                        ctfamp   = sqrt(max(0., fpl_ref%ctfsq_plane(h,k)))
-                        transfer = cmplx(ctfamp, 0.)
-                    endif
-                endif
-                ns = ns + 1
-                swin(:,:,ns) = win
-                swx(:,ns)    = wx
-                swy(:,ns)    = wy
-                swz(:,ns)    = wz
-                stf(ns)      = transfer
-                s_h(ns)      = h
-                s_k(ns)      = k
-                scj(ns)      = l_conjg
-            end do
-        end do
-        ! The window-in-lattice test depends on the SAMPLE alone, not on the volume: every
-        ! reconstructor here shares one expanded lattice (the same assumption
-        ! insert_planes_oversamp_coupled_batch_scaled makes when it reads recs(1)'s bounds for all).
-        ! Testing it inside the volume loop re-evaluates lbound/ubound and two any() temporaries
-        ! ncomp+1 times per sample; partitioning it out once is bit-identical -- an out-of-bounds
-        ! sample contributed CMPLX_ZERO before and is written as zero below.
-        exp_lb = lbound(mean_rec%cmat_exp)
-        exp_ub = ubound(mean_rec%cmat_exp)
-        allocate(jok(ns), jbad(ns))
-        ns_ok = 0; ns_bad = 0
-        do j = 1, ns
-            if( any(swin(1,:,j) < exp_lb) .or. any(swin(2,:,j) > exp_ub) )then
-                ns_bad = ns_bad + 1
-                jbad(ns_bad) = j
-            else
-                ns_ok = ns_ok + 1
-                jok(ns_ok) = j
-            endif
-        end do
-        do jj = 1, ns_ok
-            j = jok(jj)
-            mean_val = weighted_expanded_cmat(mean_rec, swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
-            if( scj(j) ) mean_val = conjg(mean_val)
-            mean_fpl%cmplx_plane(s_h(j),s_k(j)) = stf(j) * mean_val
-        end do
-        do jj = 1, ns_bad
-            j = jbad(jj)
-            mean_fpl%cmplx_plane(s_h(j),s_k(j)) = CMPLX_ZERO
-        end do
-        do q = 1, ncomp
-            do jj = 1, ns_ok
-                j = jok(jj)
-                basis_val = weighted_expanded_cmat(basis_recs(q), swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
-                if( scj(j) ) basis_val = conjg(basis_val)
-                basis_fpls(q)%cmplx_plane(s_h(j),s_k(j)) = stf(j) * basis_val
-            end do
-            do jj = 1, ns_bad
-                j = jbad(jj)
-                basis_fpls(q)%cmplx_plane(s_h(j),s_k(j)) = CMPLX_ZERO
-            end do
-        end do
-        deallocate(swin, swx, swy, swz, stf, s_h, s_k, scj, jok, jbad)
-
+        deallocate(vals)
+        call samples%kill
     end subroutine project_fplanes_mean_basis
-
-    subroutine ensure_latent_projection_plane( fpl_in, fpl_out )
-        type(fplane_type), intent(in)    :: fpl_in
-        type(fplane_type), intent(inout) :: fpl_out
-        logical :: l_realloc
-        l_realloc = .not. allocated(fpl_out%cmplx_plane)
-        if( .not. l_realloc )then
-            ! nyq is part of the test, not just the bounds: the projection writes only inside the disc
-            ! that nyq defines, and every consumer reads a disc derived from the same nyq. While the
-            ! geometry is unchanged the written set is identical for every particle, so the out-of-disc
-            ! remainder keeps the zeros it was given at allocation, and re-zeroing the whole plane once
-            ! per particle per basis volume is pure memory traffic -- at d_tilde=128, the plane, 129
-            ! times, for every particle. Worth ~35 % of the projection stage.
-            l_realloc = any(lbound(fpl_out%cmplx_plane) /= lbound(fpl_in%cmplx_plane)) .or. &
-                &any(ubound(fpl_out%cmplx_plane) /= ubound(fpl_in%cmplx_plane)) .or. &
-                &fpl_out%nyq /= fpl_in%nyq
-        endif
-        if( l_realloc )then
-            if( allocated(fpl_out%cmplx_plane) ) deallocate(fpl_out%cmplx_plane)
-            allocate(fpl_out%cmplx_plane(lbound(fpl_in%cmplx_plane,1):ubound(fpl_in%cmplx_plane,1), &
-                &lbound(fpl_in%cmplx_plane,2):ubound(fpl_in%cmplx_plane,2)))
-            fpl_out%cmplx_plane = CMPLX_ZERO
-        endif
-        if( allocated(fpl_out%ctfsq_plane) ) deallocate(fpl_out%ctfsq_plane)
-        if( allocated(fpl_out%transfer_plane) ) deallocate(fpl_out%transfer_plane)
-        fpl_out%frlims  = fpl_in%frlims
-        fpl_out%shconst = fpl_in%shconst
-        fpl_out%nyq     = fpl_in%nyq
-    end subroutine ensure_latent_projection_plane
-
-    pure subroutine latent_projection_weights( kbwin, loc, win, wx, wy, wz )
-        type(kbinterpol), intent(in)  :: kbwin
-        real,             intent(in)  :: loc(3)
-        integer,          intent(out) :: win(2,3)
-        real,             intent(out) :: wx(:), wy(:), wz(:)
-        integer :: i, iwinsz, win_lo(3)
-        real    :: base(3), ww3(3), sx, sy, sz, inv_wdim, eps_norm
-        iwinsz   = ceiling(KBWINSZ - 0.5)
-        win(1,:) = nint(loc)
-        win(2,:) = win(1,:) + iwinsz
-        win(1,:) = win(1,:) - iwinsz
-        win_lo   = win(1,:)
-        base     = real(win_lo) - loc
-        do i = 1, LATENT_WDIM
-            ww3   = kbwin%apod(base + real(i-1))
-            wx(i) = ww3(1)
-            wy(i) = ww3(2)
-            wz(i) = ww3(3)
-        end do
-        sx        = sum(wx)
-        sy        = sum(wy)
-        sz        = sum(wz)
-        inv_wdim  = 1.0 / real(LATENT_WDIM)
-        eps_norm  = epsilon(1.0)
-        if( abs(sx) > eps_norm )then
-            wx = wx * (1.0 / sx)
-        else
-            wx = inv_wdim
-        endif
-        if( abs(sy) > eps_norm )then
-            wy = wy * (1.0 / sy)
-        else
-            wy = inv_wdim
-        endif
-        if( abs(sz) > eps_norm )then
-            wz = wz * (1.0 / sz)
-        else
-            wz = inv_wdim
-        endif
-    end subroutine latent_projection_weights
-
-    ! Out-of-lattice windows return zero. Keep this test INSIDE: bounds are per volume, and callers
-    ! pass volumes (utilde) that need not share mean_rec's lattice, so hoisting it to the caller and
-    ! testing once against mean_rec is an out-of-bounds read.
-    pure function weighted_expanded_cmat( rec, win, wx, wy, wz ) result( val )
-        type(reconstructor), intent(in) :: rec
-        integer,             intent(in) :: win(2,3)
-        real,                intent(in) :: wx(:), wy(:), wz(:)
-        complex :: val
-        integer :: ix, iy, iz, hx, ky, mz
-        real    :: wyz
-        val = CMPLX_ZERO
-        do iz = 1, LATENT_WDIM
-            mz = win(1,3) + iz - 1
-            do iy = 1, LATENT_WDIM
-                ky  = win(1,2) + iy - 1
-                wyz = wy(iy) * wz(iz)
-                do ix = 1, LATENT_WDIM
-                    hx  = win(1,1) + ix - 1
-                    val = val + rec%cmat_exp(hx,ky,mz) * (wx(ix) * wyz)
-                end do
-            end do
-        end do
-    end function weighted_expanded_cmat
-
 
     subroutine solve_coupled_basis_exp( basis_recs, rho_cross_exp, ncomp )
         integer,             intent(in)    :: ncomp
@@ -692,7 +79,7 @@ contains
         real(dp)    :: diag_sum, diag_max, ridge, denom
         integer     :: lb(3), ub(3), h, k, m, ih, ik, im, q, r, flag, shell, nyq
         logical     :: diagonal_density
-        ! Same shape convention insert_planes_oversamp_coupled_batch_scaled uses to pick its
+        ! Same shape convention insert_planes_multi (simple_reconstructor) uses to pick its
         ! accumulation mode: a leading extent of ncomp means only the diagonal of the coupled normal
         ! matrix was accumulated, so the per-voxel system decouples into ncomp scalar divisions.
         diagonal_density = size(rho_cross_exp,1) == ncomp .and. ncomp /= (ncomp*(ncomp+1))/2
@@ -827,13 +214,12 @@ contains
     end subroutine add_invtausq2rho_coupled
 
     !> Serve a batch from the resident store when possible; otherwise read, prepare and retain it.
-    subroutine planes_batch_load( plane_store, params, build, n, pinds, batchlims, fpls, mskrad, cached, sec_read, sec_prep )
+    subroutine planes_batch_load( plane_store, params, build, n, pinds, batchlims, fpls, cached, sec_read, sec_prep )
         class(flex_plane_store),        intent(inout) :: plane_store
         class(parameters),              intent(in)    :: params
         class(builder),                 intent(inout) :: build
         integer,                        intent(in)    :: n, pinds(n), batchlims(2)
         type(fplane_type),              intent(inout) :: fpls(:)
-        real,                           intent(in)    :: mskrad
         logical,                        intent(in)    :: cached
         real(timer_int_kind), optional, intent(inout) :: sec_read, sec_prep
         integer(timer_int_kind) :: t
@@ -851,103 +237,51 @@ contains
         if( present(sec_read) ) sec_read = sec_read + toc(t)
         t = tic()
         call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-            &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=mskrad, cached=cached, plane_store=plane_store)
+            &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), cached=cached, plane_store=plane_store)
         if( present(sec_prep) ) sec_prep = sec_prep + toc(t)
         call plane_store%store(pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
     end subroutine planes_batch_load
 
-    !!  mskrad (optional, pixels at params%box): when present the particle is soft-masked to
-    !!  that radius after noise normalization instead of edge-tapered. This is SIMPLE's
-    !!  equivalent of the reference's mask_images_in_H_B/mask_images_in_proj (covariance_estimation
-    !!  options, both default True), which masks each image to the projected molecular
-    !!  envelope before the covariance accumulation. Solvent outside the particle contributes
-    !!  only noise, and at box_crop=64/mskdiam=200 the disc keeps ~21% of the frame, so the
-    !!  noise in every per-image inner product drops by roughly the same factor. Left absent
-    !!  the behaviour is exactly as before.
-    subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, &
-        &mskrad, cached, plane_store )
+    !> The projected model's particle planes, prepared as the reconstruction prepares them (prep_imgs4rec):
+    !! on the projected model's band, as observation-model planes (whitened observation and forward
+    !! transfer), whitened when ML regularization is on. cached: the batch comes from the plane cache, which
+    !! holds the full-box preparation's padded transform on the box_crop grid, so only the plane generation
+    !! (gen_rec_plane) runs, on the cropped grid.
+    subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, cached, plane_store )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls
         class(image),      intent(inout) :: ptcl_imgs(nptcls)
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), intent(inout) :: fplanes(nptcls)
-        real,              intent(in)    :: mskrad
         logical, optional, intent(in)    :: cached      !< serve reads from the downscaled cache
         class(flex_plane_store), optional, intent(in) :: plane_store
-        type(ctfparams) :: ctfparms(nthr_glob)
-        real    :: shift(2), crop_factor
-        integer :: iptcl, i, ithr, kfromto(2)
-        logical :: l_mask, l_cached
-        l_mask = mskrad > 0.0
+        integer :: i, ithr, kfromto(2)
+        logical :: l_cached
         l_cached = .false.
         if( present(cached) ) l_cached = cached
-        if( l_cached .and. .not. present(plane_store) )then
-            THROW_HARD('cached particle preparation requested without its plane store')
-        endif
-        ! A cache entry is the noise-normalised, Fourier-cropped particle at box_crop. That prefix
-        ! is equivalent to the full-box path only for the TAPER variant, which is the one
-        ! prep_imgs4rec certified: norm_noise_mask_pad_fft has no renorm= switch, so a masked run
-        ! would noise-normalise a second time. Refuse rather than change the numerics silently.
-        if( l_cached .and. l_mask ) THROW_HARD('particle cache is incompatible with image masking (COV_MASK_IMAGES); prep_imgs4projected_model')
-        ! logical/physical address mapping for padded Fourier planes: a cached particle already
-        ! lives on the cropped grid, so the pad heap and the map must both be box_croppd
-        if( l_cached )then
-            call memoize_ft_maps([params%box_croppd, params%box_croppd, 1], params%smpd_crop)
-        else
-            call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
-        endif
         kfromto = projected_model_kfromto(params%box_crop, params%smpd_crop, params%lp)
-        if( l_cached ) kfromto(2) = min(kfromto(2), params%box_crop/2)
-        crop_factor = real(params%box_crop) / real(params%box)
-        !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
+        if( .not. l_cached )then
+            call prep_imgs4rec(params, build, nptcls, ptcl_imgs, pinds, fplanes, kfromto=kfromto, &
+                &observation_model=.true., whiten=params%l_ml_reg)
+            return
+        endif
+        if( .not. present(plane_store) ) THROW_HARD('cached particle preparation requested without its plane store')
+        if( params%l_ml_reg .and. .not. allocated(build%esig%sigma2_noise) )then
+            THROW_HARD('projected covariance model requested whitening without loaded sigma2 spectra')
+        endif
+        ! a cached particle already lives on the cropped grid, so the pad heap and the map are box_croppd
+        call memoize_ft_maps([params%box_croppd, params%box_croppd, 1], params%smpd_crop)
+        kfromto(2) = min(kfromto(2), params%box_crop/2)
+        !$omp parallel do default(shared) private(i,ithr) schedule(static) proc_bind(close)
         do i = 1, nptcls
-            ithr   = omp_get_thread_num() + 1
-            iptcl  = pinds(i)
-            if( l_mask )then
-                call ptcl_imgs(i)%norm_noise_mask_pad_fft(build%lmsk, mskrad, build%img_pad_heap(ithr))
-            else if( l_cached )then
-                ! the plane cache holds the full-box prep's padded transform on this grid: load it
-                ! as the heap image's transform and continue exactly as the full-box path does
-                call plane_store%fill_cached_image(i, build%img_pad_heap(ithr))
-            else
-                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
-            endif
-            ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
-            shift = build%spproj_field%get_2Dshift(iptcl)
-            if( l_cached )then
-                ! shconst is in pixels of the padded box the image actually has, and the CTF kernel
-                ! reads cycles/pixel of the current grid -- both must move to the cropped grid
-                ctfparms(ithr)%smpd = ctfparms(ithr)%smpd / crop_factor   ! = smpd_crop
-                shift               = shift * crop_factor
-            endif
-            if( params%l_ml_reg )then
-                if( .not. allocated(build%esig%sigma2_noise) )then
-                    THROW_HARD('projected covariance model requested whitening without loaded sigma2 spectra')
-                endif
-                if( iptcl < lbound(build%esig%sigma2_noise,2) .or. &
-                    &iptcl > ubound(build%esig%sigma2_noise,2) )then
-                    THROW_HARD('projected covariance particle index is outside the sigma2 table')
-                endif
-                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr), &
-                    &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl), &
-                    &store_transfer=.true., observation_model=.true.)
-            else
-                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr), &
-                    &shift, fplanes(i), store_transfer=.true., observation_model=.true.)
-            endif
-            call cap_fplane_for_projected_model(fplanes(i), kfromto)
+            ithr = omp_get_thread_num() + 1
+            call plane_store%fill_cached_image(i, build%img_pad_heap(ithr))
+            call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), .true., kfromto, &
+                &params%l_ml_reg, .true., .true., fplanes(i))
         end do
         !$omp end parallel do
     end subroutine prep_imgs4projected_model
-
-    subroutine cap_fplane_for_projected_model( fpl, kfromto )
-        type(fplane_type), intent(inout) :: fpl
-        integer,           intent(in)    :: kfromto(2)
-        integer :: nyq_eff
-        nyq_eff = max(OSMPL_PAD_FAC, OSMPL_PAD_FAC * kfromto(2))
-        if( fpl%nyq > 0 ) fpl%nyq = min(fpl%nyq, nyq_eff)
-    end subroutine cap_fplane_for_projected_model
 
     function projected_model_kfromto( box_crop, smpd_crop, lp ) result( kfromto )
         integer, intent(in) :: box_crop

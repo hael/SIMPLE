@@ -1,11 +1,10 @@
-!@descr: manifest of a gridding trailing-reconstruction chain: provenance, generation, component sizes and represented population
-! The four chain components (even/odd Fourier sums and densities of one state) are one artifact
-! set; its manifest is deleted first and written last. It records the crop box and sampling,
-! the project row count, the state layout, a generation counter, the byte size of each
-! component and M, the population the chain represents (population rule:
-! population_blend_weights in simple_oris).
-! A manifest of any other version is unreadable, so the chain is discarded and re-seeded.
-! Validation policy stays with the owner (volassemble).
+!@descr: manifest of a trailing-reconstruction chain (gridding or PCG): provenance, generation, component sizes and represented mass
+! A chain's components (gridding: even/odd Fourier sums and densities; PCG: the even/odd raw pair)
+! are one artifact set; its manifest is deleted first and written last. It records the crop box and
+! sampling, the project row count, the state layout, a generation counter, the component byte sizes
+! (unused ones zero), M, the applied mass the chain represents (population_blend_weights), the
+! contributor count and the state weight set identity (zero under hard labels). A chain of another
+! identity or version is discarded and re-seeded, never blended; the owners validate.
 module simple_trail_chain_manifest
 use simple_core_module_api
 implicit none
@@ -18,7 +17,7 @@ private
 integer, parameter :: TRAIL_MANIFEST_OK         = 0
 integer, parameter :: TRAIL_MANIFEST_MISSING    = 1
 integer, parameter :: TRAIL_MANIFEST_UNREADABLE = 2
-integer, parameter :: MANIFEST_VERSION          = 2   ! 2: records the represented population
+integer, parameter :: MANIFEST_VERSION          = 3   ! 3: contributor count and weight-set identity
 
 type :: trail_chain_manifest
     private
@@ -30,6 +29,8 @@ type :: trail_chain_manifest
     integer         :: gen      = 0
     integer(kind=8) :: sizes(4) = 0_8
     real            :: mrep     = 0.
+    integer         :: ncontrib = 0
+    integer(kind=8) :: wset_id(2) = 0_8
     logical         :: exists   = .false.
   contains
     procedure :: new
@@ -43,16 +44,18 @@ type :: trail_chain_manifest
     procedure :: get_gen
     procedure :: get_size
     procedure :: get_mrep
+    procedure :: get_ncontrib
+    procedure :: get_wset_id
     procedure :: kill
 end type trail_chain_manifest
 
 contains
 
-    subroutine new( self, box, smpd, nptcls, nstates, state, gen, sizes, mrep )
+    subroutine new( self, box, smpd, nptcls, nstates, state, gen, sizes, mrep, ncontrib, wset_id )
         class(trail_chain_manifest), intent(inout) :: self
-        integer,                     intent(in)    :: box, nptcls, nstates, state, gen
+        integer,                     intent(in)    :: box, nptcls, nstates, state, gen, ncontrib
         real,                        intent(in)    :: smpd, mrep
-        integer(kind=8),             intent(in)    :: sizes(4)
+        integer(kind=8),             intent(in)    :: sizes(4), wset_id(2)
         call self%kill
         if( mrep < 0. ) THROW_HARD('negative represented population; trail_chain_manifest%new')
         self%box     = box
@@ -63,6 +66,8 @@ contains
         self%gen     = gen
         self%sizes   = sizes
         self%mrep    = mrep
+        self%ncontrib = ncontrib
+        self%wset_id  = wset_id
         self%exists  = .true.
     end subroutine new
 
@@ -76,7 +81,7 @@ contains
         call fopen(funit, file=fname, status='REPLACE', action='WRITE', iostat=status)
         if( status /= 0 ) return
         write(funit,*,iostat=status) MANIFEST_VERSION, self%box, self%smpd, self%nptcls, self%nstates, &
-            &self%state, self%gen, self%sizes, self%mrep
+            &self%state, self%gen, self%sizes, self%mrep, self%ncontrib, self%wset_id
         call fclose(funit)
     end subroutine write
 
@@ -98,12 +103,12 @@ contains
         call fclose(funit)
         if( io_stat /= 0 ) return
         read(line,*,iostat=io_stat) version, self%box, self%smpd, self%nptcls, self%nstates, &
-            &self%state, self%gen, self%sizes, self%mrep
+            &self%state, self%gen, self%sizes, self%mrep, self%ncontrib, self%wset_id
         if( io_stat /= 0 .or. version /= MANIFEST_VERSION )then
             call self%kill
             return
         endif
-        if( self%mrep < 0. )then
+        if( self%mrep < 0. .or. self%ncontrib < 0 )then
             call self%kill
             return
         endif
@@ -153,6 +158,18 @@ contains
         get_mrep = self%mrep
     end function get_mrep
 
+    integer function get_ncontrib( self )
+        class(trail_chain_manifest), intent(in) :: self
+        get_ncontrib = self%ncontrib
+    end function get_ncontrib
+
+    !> generation and layout digest of the state weight set the chain was built under (0 for hard labels)
+    function get_wset_id( self ) result( id )
+        class(trail_chain_manifest), intent(in) :: self
+        integer(kind=8) :: id(2)
+        id = self%wset_id
+    end function get_wset_id
+
     subroutine kill( self )
         class(trail_chain_manifest), intent(inout) :: self
         self%box     = 0
@@ -163,6 +180,8 @@ contains
         self%gen     = 0
         self%sizes   = 0_8
         self%mrep    = 0.
+        self%ncontrib = 0
+        self%wset_id  = 0_8
         self%exists  = .false.
     end subroutine kill
 

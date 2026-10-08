@@ -319,15 +319,6 @@ contains
                 self%smpd_crop = self%smpd
             endif
         endif
-        ! box_rec decouples the flex state-map reconstruction box from the covariance box.
-        ! The conformational covariance is low-frequency, so box_crop is chosen for the
-        ! basis/embedding; the delivered state maps are ordinary backprojections of the
-        ! same particles and need not inherit that Nyquist. Defaults to box_crop, i.e. the
-        ! previous coupled behaviour.
-        if( .not. cline%defined('box_rec') ) self%box_rec = self%box_crop
-        if( self%box_rec < 1          ) self%box_rec = self%box_crop
-        if( self%box_rec > self%box   ) self%box_rec = self%box
-        self%smpd_rec = real(self%box)/real(self%box_rec) * self%smpd
         call check_file_formats
         call double_check_file_formats
         call mkfnames
@@ -501,6 +492,7 @@ contains
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         self%l_ufrac_trec_defined = cline%defined('ufrac_trec')
+        self%l_state_defined      = cline%defined('state')
         if( self%update_frac <= .99 )then
             self%l_update_frac = .true.
             self%l_trail_rec   = trim(self%trail_rec).eq.'yes'
@@ -770,6 +762,12 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
+        select case(trim(self%m_estimator))
+            case('no','flex')
+            case DEFAULT
+                THROW_HARD('m_estimator must be no or flex')
+        end select
+        self%l_m_estimator_flex = trim(self%m_estimator) == 'flex'
         select case(trim(self%rec_states_backend))
             case('gridding','pcg')
             case DEFAULT

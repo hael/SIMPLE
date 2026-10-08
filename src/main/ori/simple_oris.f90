@@ -91,6 +91,7 @@ type :: oris
     procedure          :: any_state_zero
     procedure          :: get_update_frac
     procedure          :: get_group_update_counts
+    procedure          :: get_update_rows
     procedure          :: get_state_update_fracs
     procedure          :: get_class_sample_stats
     !======================================================================
@@ -753,6 +754,11 @@ interface
         real :: update_frac
     end function get_update_frac
 
+    module subroutine get_update_rows( self, rep_rows, smp_rows, rec_rows )
+        class(oris),          intent(inout) :: self
+        integer, allocatable, intent(inout) :: rep_rows(:), smp_rows(:), rec_rows(:)
+    end subroutine get_update_rows
+
     module subroutine get_group_update_counts( self, label, ngroups, nrep, nsmp )
         class(oris),          intent(inout) :: self
         character(len=*),     intent(in)    :: label
@@ -1366,13 +1372,21 @@ interface
     end subroutine clean_entry
 
     ! Population rule of the fractional blends (2D class sums, 3D trailing chains). Not
-    ! type-bound: it acts on the counts of get_group_update_counts, not on rows.
-    elemental module subroutine population_blend_weights( nrep, nsmp, mrep, s, w, mnew, ufrac )
+    ! type-bound: it acts on the counts of get_group_update_counts (or on applied weight masses),
+    ! not on rows.
+    elemental module subroutine population_blend_weights_counts( nrep, nsmp, mrep, s, w, mnew, ufrac )
         integer,        intent(in)  :: nrep, nsmp
         real,           intent(in)  :: mrep
         real,           intent(out) :: s, w, mnew
         real, optional, intent(in)  :: ufrac
-    end subroutine population_blend_weights
+    end subroutine population_blend_weights_counts
+
+    elemental module subroutine population_blend_weights_mass( nrep, nsmp, mrep, s, w, mnew, ufrac )
+        real,           intent(in)  :: nrep, nsmp
+        real,           intent(in)  :: mrep
+        real,           intent(out) :: s, w, mnew
+        real, optional, intent(in)  :: ufrac
+    end subroutine population_blend_weights_mass
 
     ! Expected particles per iteration of every sampling unit under the nested equal quota of
     ! sample4update_class (equal over groups, then over the units of a group, capped at populations)
@@ -1732,5 +1746,10 @@ interface
     end function overlap
 
 end interface
+
+! the population rule on row counts or on applied weight masses (same result for integer masses)
+interface population_blend_weights
+    module procedure population_blend_weights_counts, population_blend_weights_mass
+end interface population_blend_weights
 
 end module simple_oris

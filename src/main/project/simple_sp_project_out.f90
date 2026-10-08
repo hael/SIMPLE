@@ -102,49 +102,39 @@ contains
         call self%os_out%set(ind, 'box',     box)
     end subroutine add_fsc2os_out
 
-    !> One flex per-state weight file (flex_weights_state_NNN.bin), one entry per state like vol_flex
-    module subroutine add_flex_weights2os_out( self, weights, state, box, smpd )
+    !> The manifest of the project's state weight set (simple_state_weight_set); one entry per project
+    module subroutine add_state_weights2os_out( self, manifest )
         class(sp_project), intent(inout) :: self
-        class(string),     intent(in)    :: weights
-        integer,           intent(in)    :: state, box
-        real,              intent(in)    :: smpd
-        type(string) :: abspath
-        integer      :: ind, n_os_out
-        ! full path and existence check
-        abspath = simple_abspath(weights)
-        ! check if field is empty
-        n_os_out = self%os_out%get_noris()
-        if( n_os_out == 0 )then
-            n_os_out = 1
-            ind      = 1
-            call self%os_out%new(n_os_out, is_ptcl=.false.)
-        else
-            ind = self%get_os_out_entry_index('flex_weights', state)
-            if( ind == 0 )then
-                n_os_out = n_os_out + 1
-                call self%os_out%reallocate(n_os_out)
-                ind = n_os_out
-            endif
-        endif
-        ! fill-in field
-        call self%os_out%set(ind, 'flex_weights', abspath)
-        call self%os_out%set(ind, 'imgkind',      'flex_weights')
-        call self%os_out%set(ind, 'state',        state)
-        call self%os_out%set(ind, 'box',          box)
-        call self%os_out%set(ind, 'smpd',         smpd)
-    end subroutine add_flex_weights2os_out
+        class(string),     intent(in)    :: manifest
+        integer :: ind
+        call self%add_entry2os_out('state_weights', ind)
+        call self%os_out%set(ind, 'state_weights', simple_abspath(manifest))
+        call self%os_out%set(ind, 'imgkind',       'state_weights')
+    end subroutine add_state_weights2os_out
 
-    module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop )
+    !> a work project derived from another holds its own set or none
+    module subroutine remove_state_weights_from_osout( self )
+        class(sp_project), intent(inout) :: self
+        integer :: ind
+        if( self%os_out%get_noris() == 0 ) return
+        ind = self%get_os_out_entry_index('state_weights')
+        if( ind > 0 ) call self%os_out%delete(ind)
+    end subroutine remove_state_weights_from_osout
+
+    !> pop is the hard population; a weighted map adds the applied mass and the effective sample size
+    !! of its state's weights (mass, ess), which an entry registered without them does not keep
+    module subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box, pop, mass, ess )
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: vol
         character(len=*),  intent(in)    :: which_imgkind
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: state
         integer, optional, intent(in)    :: box, pop
+        real,    optional, intent(in)    :: mass, ess
         type(string) :: abspath
         integer                       :: n_os_out, ind, ldim(3), ifoo
         select case(trim(which_imgkind))
-            case('vol_cavg','vol','vol_msk','vol_flex')
+            case('vol_cavg','vol','vol_msk')
                 ! find_dimension of inputted volume
                 call find_ldim_nptcls(vol, ldim, ifoo)
                 if(present(box))then
@@ -190,6 +180,16 @@ contains
         call self%os_out%set(ind, 'imgkind', which_imgkind)
         call self%os_out%set(ind, 'state',   state)
         if(present(pop)) call self%os_out%set(ind, 'pop', pop)
+        if( present(mass) )then
+            call self%os_out%set(ind, 'mass', mass)
+        else
+            call self%os_out%delete_entry(ind, 'mass')
+        endif
+        if( present(ess) )then
+            call self%os_out%set(ind, 'ess', ess)
+        else
+            call self%os_out%delete_entry(ind, 'ess')
+        endif
     end subroutine add_vol2os_out
 
     module subroutine add_entry2os_out( self, which_imgkind, ind )
@@ -259,14 +259,13 @@ contains
         call self%os_out%delete(ind)
     end subroutine remove_entry_from_osout
 
-    ! removes only the artifacts that are state-associated: vol, vol_cavg, vol_flex, flex_weights & fsc
+    ! removes only the artifacts that are state-associated: vol, vol_cavg, fsc and the legacy vol_flex
     module subroutine remove_state_artifacts_from_osout( self, state )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: state
         call self%remove_entry_from_osout('vol',          state)
         call self%remove_entry_from_osout('vol_cavg',     state)
         call self%remove_entry_from_osout('vol_flex',     state)
-        call self%remove_entry_from_osout('flex_weights', state)
         call self%remove_entry_from_osout('fsc',          state)
     end subroutine remove_state_artifacts_from_osout
 
@@ -281,6 +280,8 @@ contains
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 ) return
         ind = self%get_os_out_entry_index(which_imgkind, state)
+        ! read-only fallback: a state map an earlier release's flex_pca registered as vol_flex
+        if( ind == 0 .and. trim(which_imgkind) == 'vol' ) ind = self%get_os_out_entry_index('vol_flex', state)
         if( ind > 0 ) isthere_in_osout = .true.
     end function isthere_in_osout
 
@@ -294,7 +295,7 @@ contains
         type(string) :: imgkind_here
         integer      :: i, ind, cnt
         select case(trim(imgkind))
-            case('vol_cavg','vol','vol_msk','vol_flex')
+            case('vol_cavg','vol','vol_msk')
                 ! all good
             case DEFAULT
                 THROW_HARD('invalid VOL kind: '//trim(imgkind)//'; get_vol')
@@ -331,6 +332,11 @@ contains
                     endif
                 enddo
         end select
+        if( cnt == 0 .and. trim(imgkind).eq.'vol' )then
+            ! read-only fallback: a state map an earlier release's flex_pca registered as vol_flex
+            ind = self%get_os_out_entry_index('vol_flex', state)
+            if( ind > 0 ) cnt = 1
+        endif
         if( cnt == 0 )then
             if( trim(imgkind).eq.'vol_msk')then
                 ! we do not fall over if the volume mask is absent
@@ -403,22 +409,22 @@ contains
         box = self%os_out%get_int(ind, 'box')
     end subroutine get_fsc
 
-    !> The registered flex weight file of one state; found=.false. when the state has none
-    module subroutine get_flex_weights( self, state, weights_fname, found )
+    !> The manifest of the registered state weight set; found=.false. when the project has none.
+    !! Entries of earlier releases (imgkind flex_weights) are not read.
+    module subroutine get_state_weights( self, manifest, found )
         class(sp_project), intent(in)    :: self
-        integer,           intent(in)    :: state
-        class(string),     intent(inout) :: weights_fname
+        class(string),     intent(inout) :: manifest
         logical,           intent(out)   :: found
         integer :: ind
-        call weights_fname%kill
+        call manifest%kill
         found = .false.
         if( self%os_out%get_noris() == 0 ) return
-        ind = self%get_os_out_entry_index('flex_weights', state)
+        ind = self%get_os_out_entry_index('state_weights')
         if( ind == 0 ) return
-        if( .not. self%os_out%isthere(ind, 'flex_weights') ) return
-        call self%os_out%getter(ind, 'flex_weights', weights_fname)
+        if( .not. self%os_out%isthere(ind, 'state_weights') ) return
+        call self%os_out%getter(ind, 'state_weights', manifest)
         found = .true.
-    end subroutine get_flex_weights
+    end subroutine get_state_weights
 
     module subroutine get_all_fscs( self, orisout )
         class(sp_project), intent(in)    :: self

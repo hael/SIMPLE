@@ -64,6 +64,17 @@ type, extends(commander_base) :: commander_test_flex_pca_blobs
   contains
     procedure :: execute      => exec_test_flex_pca_blobs
 end type commander_test_flex_pca_blobs
+!> test tools: publish a state weight set from the project's hard labels (0/1, equal to the labels;
+!! or mixed, 0.7 on the labelled state and 0.3 spread over the others), for weighted reconstruct3D runs
+type, extends(commander_base) :: commander_test_write_state_weights_labels
+  contains
+    procedure :: execute      => exec_test_write_state_weights_labels
+end type commander_test_write_state_weights_labels
+
+type, extends(commander_base) :: commander_test_write_state_weights_mixed
+  contains
+    procedure :: execute      => exec_test_write_state_weights_mixed
+end type commander_test_write_state_weights_mixed
 
 interface
 
@@ -116,6 +127,15 @@ interface
         class(commander_test_flex_pca_blobs), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
     end subroutine exec_test_flex_pca_blobs
+    module subroutine exec_test_write_state_weights_labels( self, cline )
+        class(commander_test_write_state_weights_labels), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_write_state_weights_labels
+
+    module subroutine exec_test_write_state_weights_mixed( self, cline )
+        class(commander_test_write_state_weights_mixed), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_write_state_weights_mixed
 
 end interface
 

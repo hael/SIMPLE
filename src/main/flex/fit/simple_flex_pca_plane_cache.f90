@@ -2,15 +2,21 @@
 !! cache=yes and box_crop<box only. Record 1 is the validated contract; record p+1 is project row p.
 !! The master requires the exact selection. A worker requires matching provenance/geometry and rows covered
 !! by the completed master cache. The payload is the box_croppd Fourier block used before gen_fplane4rec.
+!! Location, space budget and publication follow the particle cache (simple_ptcl_cache): cache_dir, at most a
+!! quarter of the free space, built under a run-token name with the contract written last, then atomically
+!! renamed into place. The run that built it deletes it once the master has its embedding, since nothing
+!! after the embedding reads planes (with mkdir=yes no later run could adopt it).
 module simple_flex_pca_plane_cache
 !$ use omp_lib, only: omp_get_thread_num
-use simple_core_module_api, only: dp, fclose, file_exists, fopen, fplane_type, int2str, logfhandle, maximgbatchsz, &
-    &simple_abspath, simple_exception, simple_file_stat, simple_mkdir, stdlen, string, tic, timer_int_kind, toc
+use simple_core_module_api, only: del_file, dp, fclose, file_exists, filepath, fopen, fplane_type, int2str, logfhandle, &
+    &maximgbatchsz, simple_abspath, simple_exception, simple_file_stat, simple_mkdir, string, tic, timer_int_kind, toc
+use simple_syslib,          only: simple_atomic_replace
 use simple_builder,         only: builder
 use simple_parameters,      only: parameters
 use simple_image,           only: image
 use simple_matcher_3Drec,   only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
+use simple_ptcl_cache,      only: ptcl_cache_dir, ptcl_cache_run_token, ptcl_cache_space_ok
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -18,11 +24,10 @@ private
 public :: flex_pca_plane_cache
 public :: plane_cache_contract_header, plane_cache_master_matches, plane_cache_worker_matches
 
-integer(8),       parameter :: PLANE_CACHE_MAGIC   = 7134151962_8
-integer(8),       parameter :: PLANE_CACHE_VERSION = 2_8
-integer,          parameter :: NHEAD               = 11
-integer,          parameter :: IH_NROWS = 5, IH_SMPD = 8, IH_NSEL = 9, IH_HIGHROW = 11
-character(len=*), parameter :: CACHE_DIR_ENV       = 'SIMPLE_PTCL_CACHE_DIR'
+integer(8), parameter :: PLANE_CACHE_MAGIC   = 7134151962_8
+integer(8), parameter :: PLANE_CACHE_VERSION = 3_8   ! 3: FNV-1a project-path hash (string%to_fnv1a_hash64)
+integer,    parameter :: NHEAD               = 11
+integer,    parameter :: IH_NROWS = 5, IH_SMPD = 8, IH_NSEL = 9, IH_HIGHROW = 11
 
 type :: flex_pca_plane_cache
     private
@@ -37,6 +42,7 @@ type :: flex_pca_plane_cache
   contains
     procedure, public :: new      => cache_new
     procedure, public :: kill     => cache_kill
+    procedure, public :: delete   => cache_delete
     procedure, public :: pristine => cache_pristine
     procedure, public :: available => cache_available
     procedure, public :: ensure    => plane_cache_ensure
@@ -65,6 +71,22 @@ contains
         self%l_probed = .false.; self%l_avail = .false.
     end subroutine cache_kill
 
+    !> Close and delete the published cache file, then kill: the run that built the cache removes it once
+    !! the master has its embedding (nothing after the embedding reads planes)
+    subroutine cache_delete( self )
+        class(flex_pca_plane_cache), intent(inout) :: self
+        if( self%funit /= 0 ) call fclose(self%funit)
+        self%funit = 0
+        if( self%l_avail .and. .not. self%fname%is_blank() )then
+            if( file_exists(self%fname) )then
+                call del_file(self%fname)
+                write(logfhandle,'(A)') '>>> FLEX_PCA PLANE CACHE DELETED: '//self%fname%to_char()
+                call flush(logfhandle)
+            endif
+        endif
+        call self%kill
+    end subroutine cache_delete
+
     logical function cache_pristine( self )
         class(flex_pca_plane_cache), intent(in) :: self
         cache_pristine = self%funit == 0 .and. self%nph == 0 .and. self%npd == 0 .and. &
@@ -79,46 +101,50 @@ contains
 
     ! ---------------------------------------------------------------- naming and key
 
-    function plane_cache_dir( params ) result( dir )
+    !> The published name: box_crop and a hash of the project path, in the particle cache's directory
+    !! (cache_dir, else $SIMPLE_PTCL_CACHE_DIR, else the execution directory). tmp=.true. gives the name it
+    !! is built under, which adds the run token, so concurrent runs on one project never write one file.
+    function plane_cache_fname( params, tmp ) result( fname )
         class(parameters), intent(in) :: params
-        type(string)          :: dir
-        character(len=STDLEN) :: envdir
-        integer               :: envlen, envstat
-        if( .not. params%cache_dir%is_blank() )then
-            dir = params%cache_dir
-        else
-            call get_environment_variable(CACHE_DIR_ENV, envdir, envlen, envstat)
-            if( envstat == 0 .and. envlen > 0 )then
-                dir = string(envdir(:envlen))
-            else
-                dir = string('.')
+        logical, optional, intent(in) :: tmp
+        type(string) :: fname, dir, project_path, hex, basename_here, token
+        project_path  = simple_abspath(params%projfile)
+        hex           = project_path%to_fnv1a_hash64()
+        basename_here = string('flex_pca_planes_b'//int2str(params%box_crop)//'_'//hex%to_char())
+        if( present(tmp) )then
+            if( tmp )then
+                token         = ptcl_cache_run_token()
+                basename_here = string(basename_here%to_char()//'_'//token%to_char()//'_part')
+                call token%kill
             endif
         endif
-    end function plane_cache_dir
-
-    function plane_cache_fname( params ) result( fname )
-        class(parameters), intent(in) :: params
-        type(string) :: fname, dir, project_path
-        integer(8)   :: h
-        dir = plane_cache_dir(params)
-        project_path = simple_abspath(params%projfile)
-        h = 1469598103934665603_8
-        call fold_str(h, project_path%to_char())
-        fname = string(dir%to_char()//'/flex_pca_planes_b'//int2str(params%box_crop)//'_'//&
-            &int2str(int(abs(mod(h, 1000000007_8))))//'.bin')
+        basename_here = string(basename_here%to_char()//'.bin')
+        dir = ptcl_cache_dir(params)
+        if( dir%is_blank() )then
+            fname = basename_here
+        else
+            fname = filepath(dir, basename_here)
+        endif
+        call dir%kill
         call project_path%kill
+        call hex%kill
+        call basename_here%kill
     end function plane_cache_fname
 
-    !> FNV-1a style fold of a string into a 64-bit hash
-    pure subroutine fold_str( h, s )
-        integer(8),       intent(inout) :: h
-        character(len=*), intent(in)    :: s
-        integer :: i
-        do i = 1, len_trim(s)
-            h = ieor(h, int(ichar(s(i:i)), 8))
-            h = h * 1099511628211_8
-        end do
-    end subroutine fold_str
+    !> The project path's FNV-1a hash (string%to_fnv1a_hash64) as a header field: its low 60 bits, so the
+    !! value read back from the hexadecimal digits is never negative
+    function path_hash( project_path ) result( h )
+        character(len=*), intent(in) :: project_path
+        integer(8)        :: h
+        type(string)      :: path, hex
+        character(len=16) :: digits
+        path   = string(project_path)
+        hex    = path%to_fnv1a_hash64()
+        digits = hex%to_char()
+        read(digits(2:16), '(Z15)') h
+        call path%kill
+        call hex%kill
+    end function path_hash
 
     pure integer(8) function selection_hash( pinds ) result( h )
         integer, intent(in) :: pinds(:)
@@ -139,14 +165,11 @@ contains
         real,             intent(in) :: smpd
         integer,          intent(in) :: pinds(:)
         integer(8), allocatable :: key(:)
-        integer(8) :: path_hash
         integer :: highrow
-        path_hash = 1469598103934665603_8
-        call fold_str(path_hash, project_path)
         highrow = 0
         if( size(pinds) > 0 ) highrow = maxval(pinds)
         allocate(key(NHEAD))
-        key = [PLANE_CACHE_MAGIC, PLANE_CACHE_VERSION, path_hash, project_mtime, int(project_rows,8), &
+        key = [PLANE_CACHE_MAGIC, PLANE_CACHE_VERSION, path_hash(project_path), project_mtime, int(project_rows,8), &
             &int(box,8), int(box_crop,8), int(nint(smpd * 1.e6),8), int(size(pinds),8), &
             &selection_hash(pinds), int(highrow,8)]
     end function plane_cache_contract_header
@@ -303,37 +326,54 @@ contains
 
     ! ---------------------------------------------------------------- build
 
-    !> Build the cache for the run's selection unless a valid one is already there.
+    !> Build the cache for the run's selection unless a valid one is already there. Over the space budget
+    !! the run reads its particles natively, as without cache=yes.
     subroutine plane_cache_ensure( self, params, build, pinds, nptcls )
         class(flex_pca_plane_cache), intent(inout) :: self
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: pinds(:), nptcls
         type(fplane_type), allocatable :: fpls(:)
-        type(image) :: probe_img, tmp_img
+        type(image)  :: probe_img, tmp_img
+        type(string) :: dirname, tmpname
         complex, allocatable :: blk1(:,:,:)
-        integer(8)  :: key(NHEAD)
+        integer(8)  :: key(NHEAD), want_bytes
         integer(timer_int_kind) :: t0
         integer :: ibatch, batchlims(2), batchsz, i, ithr, h, k, kp, io, u
         real    :: maxdiff
         if( .not. plane_cache_applicable(params) ) return
+        if( nptcls < 1 .or. nptcls > size(pinds) ) return
         if( plane_cache_probe(self, params, build, pinds, nptcls) )then
             write(logfhandle,'(A)') '>>> FLEX_PCA PLANE CACHE adopted: '//self%fname%to_char()
             call flush(logfhandle)
             return
         endif
-        t0 = tic()
+        call self%new(plane_cache_fname(params))
         call set_geometry(self, params)
+        ! the directory may be on another device, so it need not exist yet
+        dirname = ptcl_cache_dir(params)
+        if( dirname%is_blank() ) dirname = string('.')
+        call simple_mkdir(dirname)
+        ! a stale cache of this project goes first, so the budget measures what the rebuild can use;
+        ! records are project rows, so the file is as long as the highest selected row
+        call del_file(self%fname)
+        want_bytes = (int(maxval(pinds(1:nptcls)),8) + 1_8) * int(self%reclen,8)
+        if( .not. ptcl_cache_space_ok(dirname, want_bytes, 'FLEX_PCA PLANE CACHE') )then
+            call dirname%kill
+            return
+        endif
+        call dirname%kill
+        t0 = tic()
         write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA BUILDING PLANE CACHE: ', nptcls, &
             &' particles, box ', params%box, ' -> padded transform block on the box_crop grid (', self%npd, ')'
         call flush(logfhandle)
         ! full-box prep buffers: padded heap at boxpd, raw image batch at box
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        call simple_mkdir(plane_cache_dir(params))
-        call fopen(u, self%fname, 'replace', 'readwrite', iostat=io, access='direct', &
+        tmpname = plane_cache_fname(params, tmp=.true.)
+        call fopen(u, tmpname, 'replace', 'readwrite', iostat=io, access='direct', &
             &form='unformatted', recl=self%reclen)
-        if( io /= 0 ) THROW_HARD('could not create the plane cache: '//self%fname%to_char())
+        if( io /= 0 ) THROW_HARD('could not create the plane cache: '//tmpname%to_char())
         key = 0_8
         write(u, rec=1) key          ! placeholder: the real header is written when every record is in
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
@@ -371,7 +411,7 @@ contains
             !$omp parallel do default(shared) private(i,ithr,h,k,kp) schedule(static) proc_bind(close)
             do i = 1, batchsz
                 ithr = omp_get_thread_num() + 1
-                ! the full-box prep, exactly as prep_imgs4projected_model runs it
+                ! the full-box prep, exactly as prep_imgs4rec runs it
                 call build%imgbatch(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
                 ! the box_croppd block, laid out as that grid's own cmat (h >= 0 first index,
                 ! negative k wrapped to the top)
@@ -391,9 +431,12 @@ contains
                 call flush(logfhandle)
             endif
         end do
+        ! publication: the contract last, then the rename, so a reader finds either no cache or a complete one
         key = header_key(params, build, pinds, nptcls)
         write(u, rec=1) key
         call fclose(u)
+        call simple_atomic_replace(tmpname, self%fname)
+        call tmpname%kill
         call cleanup_rec_buffers(build, fpls)
         self%l_probed = .true.
         self%l_avail  = .true.

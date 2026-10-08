@@ -5,8 +5,9 @@ use simple_core_module_api
 use simple_image,             only: image
 use simple_sp_project,        only: sp_project
 use simple_oris,              only: oris
+use simple_ptcl_layout,       only: ptcl_layout_digest
 use simple_sigma2_state,      only: sigma2_state_candidate_path, sigma2_state_commit, &
-    &sigma2_state_project_layout_digest, sigma2_state_reduce_groups
+    &sigma2_state_reduce_groups
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
     &sigma2_state_init_header, sigma2_state_read_header, sigma2_state_read_particles, &
     &sigma2_state_validate_file, sigma2_state_write_particles, SIGMA2_GROUP_GLOBAL, &
@@ -295,7 +296,7 @@ contains
             else if( target_header%grouping /= SIGMA2_GROUP_STACK )then
                 THROW_HARD('unsupported canonical sigma2 grouping in chunk merge')
             endif
-            layout_digest = sigma2_state_project_layout_digest(merged_proj, merged_proj%os_ptcl2D)
+            layout_digest = ptcl_layout_digest(merged_proj, merged_proj%os_ptcl2D)
             if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
             target_path = dir//'sigma2_state.bin'
             candidate_path = sigma2_state_candidate_path(target_path%to_char(), generation)
@@ -338,7 +339,7 @@ contains
             if( status /= 0 ) THROW_HARD(trim(message))
             call sigma2_state_read_header(chunks_sigma2_state(ichunk)%to_char(), source_header, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
-            source_digest = sigma2_state_project_layout_digest(chunks(ichunk), chunks(ichunk)%os_ptcl2D)
+            source_digest = ptcl_layout_digest(chunks(ichunk), chunks(ichunk)%os_ptcl2D)
             if( source_digest == 0_int64 .or. source_digest /= source_header%layout_digest .or. &
                 &source_header%nptcls /= chunks(ichunk)%os_ptcl2D%get_noris(consider_state=.false.) ) &
                 &THROW_HARD('canonical sigma2 chunk state does not match its project layout')
@@ -792,9 +793,9 @@ contains
                 if( source_header%state /= SIGMA2_STATE_COMMITTED ) &
                     &THROW_HARD('merge_projects requires committed canonical sigma2 input')
                 if( int(source_header%nptcls) == nptcl3Ds(isource) .and. nptcl3Ds(isource) > 0 )then
-                    source_digest = sigma2_state_project_layout_digest(projects(isource), projects(isource)%os_ptcl3D)
+                    source_digest = ptcl_layout_digest(projects(isource), projects(isource)%os_ptcl3D)
                 else if( int(source_header%nptcls) == nptcl2Ds(isource) .and. nptcl2Ds(isource) > 0 )then
-                    source_digest = sigma2_state_project_layout_digest(projects(isource), projects(isource)%os_ptcl2D)
+                    source_digest = ptcl_layout_digest(projects(isource), projects(isource)%os_ptcl2D)
                 else
                     THROW_HARD('canonical sigma2 rows do not match a particle field in merge_projects input')
                 endif
@@ -854,7 +855,7 @@ contains
                 else if( target_header%grouping /= SIGMA2_GROUP_STACK )then
                     THROW_HARD('unsupported canonical sigma2 grouping in merge_projects')
                 endif
-                layout_digest = sigma2_state_project_layout_digest(merged_proj, target_particles)
+                layout_digest = ptcl_layout_digest(merged_proj, target_particles)
                 if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
                 target_dir = get_fpath(projfile_out)
                 target_path = target_dir//'sigma2_state.bin'

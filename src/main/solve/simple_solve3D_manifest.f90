@@ -11,7 +11,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_cmdline,           only: cmdline
 use simple_sp_project,        only: sp_project
-use simple_sigma2_state,      only: sigma2_state_project_layout_digest
+use simple_ptcl_layout,       only: ptcl_layout_digest
 use simple_sigma2_state_file, only: sigma2_state_digest_begin, sigma2_state_digest_text, &
     &sigma2_state_digest_integer, sigma2_state_digest_file
 implicit none
@@ -171,7 +171,7 @@ contains
         self%complete      = .true.
         self%eligible      = eligible
         self%nrows         = spproj%os_ptcl3D%get_noris()
-        self%layout_digest = sigma2_state_project_layout_digest(spproj, spproj%os_ptcl3D)
+        self%layout_digest = ptcl_layout_digest(spproj, spproj%os_ptcl3D)
         self%stack_digest  = stack_table_digest(spproj)
         self%optics_digest = optics_ctf_digest(spproj)
     end subroutine new
@@ -739,7 +739,7 @@ contains
             msg = 'the frozen project particle count differs from its manifest'
             return
         endif
-        if( self%layout_digest /= sigma2_state_project_layout_digest(spproj, spproj%os_ptcl3D) )then
+        if( self%layout_digest /= ptcl_layout_digest(spproj, spproj%os_ptcl3D) )then
             msg = 'the frozen project particle layout differs from its manifest'
             return
         endif

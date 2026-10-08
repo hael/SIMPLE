@@ -5,26 +5,28 @@
 !! worker's stage dispatch. Domain modules (model, em, rec3D) own the numerics; they receive the
 !! strategy as a `flex_pca_rounds` (simple_flex_pca_rounds) and never query their role
 !! otherwise. Same lifecycle as rec3D/refine3D: initialize -> execute -> finalize_run ->
-!! cleanup, selected by the command-line shape (part= -> worker; nparts>1 -> master; else
-!! shared memory).
+!! cleanup. The flex_pca commander selects shared memory or the distributed master
+!! (nparts>1); the worker commander runs the worker strategy. The master and shared-memory
+!! roles settle the canonical sigma2 state before any part command line exists.
 module simple_flex_pca_strategy
 use simple_core_module_api, only: arr2txtfile, chash, del_file, int2str, int2str_pad, L_USE_SLURM_ARR, &
-    &logfhandle, nthr_glob, simple_exception, simple_mkdir, simple_rmdir, string, tic, timer_int_kind, &
-    &toc, TXT_EXT
+    &logfhandle, simple_exception, simple_mkdir, simple_rmdir, string, tic, timer_int_kind, toc, TXT_EXT
 use simple_builder,         only: builder
 use simple_cmdline,         only: cmdline
 use simple_parameters,      only: parameters
 use simple_qsys_env,        only: qsys_env
 use simple_flex_pca_rounds,    only: flex_pca_rounds, flex_pca_rounds_shmem
 use simple_flex_pca_stages,    only: flex_stage_request, FLEX_FIT_ALL, &
-    &PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED, PCA_STAGE_STATES
+    &PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED
 use simple_flex_pca_artifacts, only: flex_pca_local_part_dir
 use simple_flex_pca_application, only: flex_pca_application
+use simple_flex_pca_project_gateway, only: ensure_canonical_sigma_state
+use simple_exec_helpers,         only: set_master_num_threads
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: flex_pca_strategy, create_flex_pca_strategy
+public :: flex_pca_strategy, flex_pca_worker_strategy, create_flex_pca_strategy
 
 !> The lifecycle. Every strategy is also a flex_pca_rounds, which is what the domain code sees.
 type, abstract :: flex_pca_strategy
@@ -33,9 +35,6 @@ contains
     procedure(exec_interface),     deferred :: execute
     procedure(finalize_interface), deferred :: finalize_run
     procedure(cleanup_interface),  deferred :: cleanup
-    !> a key the master decided after initialize (the sigma fallback) that every worker must carry;
-    !! a no-op for the shared-memory and worker roles
-    procedure :: set_worker_key => strategy_set_worker_key_noop
 end type flex_pca_strategy
 
 type, extends(flex_pca_strategy) :: flex_pca_shmem_strategy
@@ -62,8 +61,8 @@ type, extends(flex_pca_rounds) :: flex_pca_master_rounds
     type(qsys_env)           :: qenv
     type(chash)              :: job_descr
     type(chash), allocatable :: part_params(:)
-    integer                  :: nthr_master = 1
-    integer                  :: nthr_worker = 1   !< the per-worker nthr of the command line (part headers request THIS, never the boosted master budget)
+    integer                  :: nthr_master = 1   !< the master process's shared-memory budget (set_master_num_threads)
+    integer                  :: nthr_worker = 1   !< the per-worker nthr of the command line, which the part headers request
 contains
     procedure :: plan_partitions => master_plan_partitions
     procedure :: run_stage       => master_run_stage
@@ -77,7 +76,6 @@ contains
     procedure :: execute      => master_execute
     procedure :: finalize_run => master_finalize_run
     procedure :: cleanup      => master_cleanup
-    procedure :: set_worker_key => master_set_worker_key
 end type flex_pca_master_strategy
 
 abstract interface
@@ -113,21 +111,17 @@ end interface
 
 contains
 
-    !> Role from the command-line shape, as the July flex_analysis factory: part= makes a worker;
-    !! nparts>1 without part= makes a master; anything else runs in shared memory.
+    !> The flex_pca commander's role from the command-line shape: nparts>1 makes the distributed
+    !! master, anything else runs in shared memory (a part is the worker commander's)
     function create_flex_pca_strategy( cline ) result( strategy )
         class(cmdline), intent(in) :: cline
         class(flex_pca_strategy), allocatable :: strategy
         integer :: nparts
-        logical :: is_worker, is_master
+        if( cline%defined('part') ) THROW_HARD('a flex_pca part runs through the worker commander (simple_private_exec)')
         nparts = 1
         if( cline%defined('nparts') ) nparts = max(1, cline%get_iarg('nparts'))
-        is_worker = cline%defined('part')
-        is_master = nparts > 1 .and. .not. is_worker
-        if( is_master )then
+        if( nparts > 1 )then
             allocate(flex_pca_master_strategy :: strategy)
-        else if( is_worker )then
-            allocate(flex_pca_worker_strategy :: strategy)
         else
             allocate(flex_pca_shmem_strategy :: strategy)
         endif
@@ -141,6 +135,7 @@ contains
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call ensure_canonical_sigma_state(params, build, cline)
         ! a command-line pcafit pins the whole job to one independent half (two-job halfset fits)
         self%rounds%fit_sel = params%pcafit
     end subroutine shmem_initialize
@@ -170,28 +165,18 @@ contains
 
     ! ------------------------------------------------------------------ distributed master
 
-    subroutine strategy_set_worker_key_noop( self, key, val )
-        class(flex_pca_strategy), intent(inout) :: self
-        character(len=*),         intent(in)    :: key, val
-    end subroutine strategy_set_worker_key_noop
-
-    !> the part scripts are generated from job_descr, captured from the command line at initialize;
-    !! a decision the master takes later (sigma_est=global by the fallback) has to be written here or
-    !! the workers load the canonical state under the wrong grouping policy and die at once
-    subroutine master_set_worker_key( self, key, val )
-        class(flex_pca_master_strategy), intent(inout) :: self
-        character(len=*),                intent(in)    :: key, val
-        call self%rounds%job_descr%set(key, val)
-    end subroutine master_set_worker_key
-
     subroutine master_initialize( self, params, build, cline )
-        use omp_lib, only: omp_set_num_threads, omp_get_num_procs
         class(flex_pca_master_strategy), intent(inout) :: self
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        integer :: fromp_glob, top_glob, nsel, vovr, ncpu_own
+        integer :: fromp_glob, top_glob, nsel
+        ! the master's budget is reported as every distributed master's; the master's own stages run
+        ! at params%nthr, which FLEX sizes its per-thread scratch from
+        call set_master_num_threads(self%rounds%nthr_master, string('FLEX_PCA'))
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        ! the canonical sigma2 state, and the grouping the workers load it under, before job_descr
+        call ensure_canonical_sigma_state(params, build, cline)
         self%rounds%l_master   = .true.
         self%rounds%nparts_run = max(1, params%nparts)
         ! a command-line pcafit pins the whole job to one independent half; every scheduled
@@ -222,23 +207,7 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> DISTRIBUTED FLEX_PCA (MASTER), nparts=', &
             &self%rounds%nparts_run,' over project rows ',fromp_glob,'-',top_glob
         call flush(logfhandle)
-        ! Master thread boost: master and worker phases never overlap, so master-only stages use nparts*nthr threads,
-        ! capped at owned cores (SLURM_CPUS_PER_TASK, else omp_get_num_procs); params%nthr follows (scratch is sized from it).
         self%rounds%nthr_worker = params%nthr
-        self%rounds%nthr_master = max(params%nthr, self%rounds%nparts_run*params%nthr)
-        ncpu_own = omp_get_num_procs()
-        vovr = 0
-        call get_env_int_local('SLURM_CPUS_PER_TASK', vovr)
-        if( vovr > 0 ) ncpu_own = vovr
-        self%rounds%nthr_master = max(params%nthr, min(self%rounds%nthr_master, ncpu_own))
-        call omp_set_num_threads(self%rounds%nthr_master)
-        if( self%rounds%nthr_master > params%nthr )then
-            params%nthr = self%rounds%nthr_master
-            nthr_glob   = self%rounds%nthr_master
-            write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA MASTER THREAD BOOST: master-only stages run at ', &
-                &self%rounds%nthr_master, ' threads (worker phases never overlap)'
-            call flush(logfhandle)
-        endif
     end subroutine master_initialize
 
     subroutine master_execute( self, params, build, cline )
@@ -294,7 +263,7 @@ contains
         nsel = size(pinds)
         if( nsel < 1 ) THROW_HARD('flex_pca plan_partitions: empty particle selection')
         self%nparts_run = min(self%nparts_run, nsel)
-        ! qsys_nthr: the part scripts request the worker thread count, never the boosted master params%nthr,
+        ! qsys_nthr: the part scripts request the worker thread count, never the master's budget,
         ! which would inflate every part's CPU request against the scheduler's per-user cap
         call self%qenv%new(params, self%nparts_run, numlen=params%numlen, nptcls=nsel, qsys_nthr=self%nthr_worker)
         numlen = max(params%numlen, len(int2str(self%nparts_run)))
@@ -355,7 +324,7 @@ contains
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         select case(params%stage)
-            case(PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED, PCA_STAGE_STATES)
+            case(PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED)
             case default
                 THROW_HARD('invalid flex_pca worker stage')
         end select
@@ -392,16 +361,5 @@ contains
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
     end subroutine worker_cleanup
-
-    subroutine get_env_int_local( name, val )
-        character(len=*), intent(in)    :: name
-        integer,          intent(inout) :: val
-        character(len=32) :: envval
-        integer :: stat, ln, ival
-        call get_environment_variable(name, envval, ln, stat)
-        if( stat /= 0 .or. ln < 1 ) return
-        read(envval(:ln), *, iostat=stat) ival
-        if( stat == 0 ) val = ival
-    end subroutine get_env_int_local
 
 end module simple_flex_pca_strategy

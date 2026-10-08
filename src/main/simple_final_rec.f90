@@ -1,12 +1,15 @@
 !@descr: the shared final all-particle reconstruction at native sampling
 module simple_final_rec
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
-use simple_parameters,       only: parameters
-use simple_solve3D_utils,    only: configure_final_pcg_solve_budget, write_final_rec_outputs, &
+use simple_parameters,        only: parameters
+use simple_solve3D_utils,     only: configure_final_pcg_solve_budget, write_final_rec_outputs, &
     &gen_ortho_reprojs4viz
-use simple_refine3D_fnames,  only: refine3D_fsc_fname, refine3D_state_vol_fname
-use simple_vol_pproc_policy, only: state_mask_is_compatible
-use simple_sigma2_files,     only: canonical_sigma2_consumable
+use simple_refine3D_fnames,   only: refine3D_fsc_fname, refine3D_state_vol_fname
+use simple_vol_pproc_policy,  only: state_mask_is_compatible
+use simple_sigma2_files,      only: canonical_sigma2_consumable
+use simple_state_weight_set,  only: state_weight_set
+use simple_reconstructor_pcg, only: PCG_WEIGHT_THRESHOLD
 implicit none
 #include "simple_local_flags.inc"
 
@@ -18,6 +21,9 @@ contains
     !> The final all-particle reconstruction at native sampling shared by solve3D, refine3D_auto,
     !! refine3D_states and classify3D_refs, driven by the refinement command line it continues from. Sigmas
     !! not consumable at the native box are rebuilt by bootstrap_rec3D; without ML regularization it ships a cc map.
+    !! With m_estimator=flex both routes reconstruct from the project's state weight set, whose identity must
+    !! not change while they run, and every weighted map is registered with its hard population, applied
+    !! mass and effective sample size.
     subroutine calc_final_rec( params, spproj, projfile, cline_refine, xrec3D, xbootstrap_rec3D, &
         &l_postprocess, lp_snapshot )
         class(parameters),     intent(in)    :: params
@@ -28,11 +34,16 @@ contains
         class(commander_base), intent(inout) :: xbootstrap_rec3D
         logical,               intent(in)    :: l_postprocess
         real,                  intent(in)    :: lp_snapshot   !< planned low-pass fallback for the diagnostic snapshot
-        type(cmdline) :: cline_final
-        type(string)  :: str_state, vol_name, stkname, vol_pproc, vol_mirr, vol_envmsk
-        integer       :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, bootstrap_sigma_iter
-        real          :: smpd
-        logical       :: l_bootstrap_sigmas, l_mask_exists, l_mask_compatible
+        type(cmdline)          :: cline_final
+        type(state_weight_set) :: wset
+        type(string)           :: str_state, vol_name, stkname, vol_pproc, vol_mirr, vol_envmsk
+        integer, allocatable   :: rec_rows(:)
+        integer(int64)         :: wset_generation, wset_digest
+        real                   :: smpd, wthres, mass, ess
+        integer                :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, bootstrap_sigma_iter, iptcl
+        logical                :: l_bootstrap_sigmas, l_mask_exists, l_mask_compatible
+        wset_generation = 0_int64
+        wset_digest     = 0_int64
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
@@ -42,6 +53,16 @@ contains
         call find_ldim_nptcls(stkname, ldim, nptcls)
         smpd = spproj%os_stk%get(stkind, 'smpd')
         write(logfhandle,'(A,I0,A,F8.4)') '>>> FINAL RECONSTRUCTION SAMPLING: box=', ldim(1), ' smpd=', smpd
+        if( params%l_m_estimator_flex )then
+            ! the frozen weights the final map is reconstructed from
+            call wset%new(spproj, spproj%os_ptcl3D)
+            wset_generation = wset%get_generation()
+            wset_digest     = wset%get_layout_digest()
+            write(logfhandle,'(A,I0,A,I0,A,A,A,I0)') '>>> FINAL RECONSTRUCTION WEIGHTS: state weight set generation ', &
+                &wset_generation, ', layout digest ', wset_digest, ', producer ', wset%get_producer(), &
+                &', parent state ', wset%get_parent_state()
+            call wset%kill
+        endif
         call prep_final_rec_cline(cline_final, 'reconstruct3D')
         l_bootstrap_sigmas = .false.
         if( final_stage_uses_ml_reg() )then
@@ -84,16 +105,42 @@ contains
         endif
         call spproj%read_segment('out', projfile)
         call spproj%read_segment('ptcl3D', projfile)
+        if( params%l_m_estimator_flex )then
+            call wset%new(spproj, spproj%os_ptcl3D)
+            if( wset%get_generation() /= wset_generation .or. wset%get_layout_digest() /= wset_digest ) &
+                &THROW_HARD('the state weight set changed during the final reconstruction; calc_final_rec')
+            if( wset%get_nstates() /= params%nstates ) THROW_HARD('state weight set and nstates disagree; calc_final_rec')
+            ! the weights as the backend applied them, over the reconstructed rows
+            wthres = 0.
+            if( trim(params%rec_backend) == 'pcg' ) wthres = PCG_WEIGHT_THRESHOLD
+            rec_rows = pack([(iptcl, iptcl = 1, spproj%os_ptcl3D%get_noris())], spproj%os_ptcl3D%get_all_asint('state') > 0)
+        endif
         do state = 1, params%nstates
-            pop = spproj%os_ptcl3D%get_pop(state, 'state')
-            if( pop == 0 )then
-                call spproj%remove_state_artifacts_from_osout(state)
-                cycle
+            if( params%l_m_estimator_flex )then
+                pop  = wset%get_pop(state)
+                mass = real(wset%applied_mass(state, wthres, rec_rows))
+                ess  = real(wset%applied_ess(state, wthres, rec_rows))
+                if( mass <= 0. )then
+                    call spproj%remove_state_artifacts_from_osout(state)
+                    cycle
+                endif
+            else
+                pop = spproj%os_ptcl3D%get_pop(state, 'state')
+                if( pop == 0 )then
+                    call spproj%remove_state_artifacts_from_osout(state)
+                    cycle
+                endif
             endif
             str_state = int2str_pad(state,2)
             vol_name  = refine3D_state_vol_fname(state)
             if( .not. file_exists(vol_name) )cycle
-            call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
+            if( params%l_m_estimator_flex )then
+                call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop, mass=mass, ess=ess)
+                write(logfhandle,'(A,I0,A,I0,A,F12.3,A,F12.3)') '>>> FINAL RECONSTRUCTION REGISTERED STATE ', state, &
+                    &': hard population ', pop, ', applied mass ', mass, ', effective sample size ', ess
+            else
+                call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
+            endif
             call spproj%add_fsc2os_out(refine3D_fsc_fname(state), state, ldim(1))
             if( params%l_envfsc )then
                 if( trim(params%automsk) == 'nu' )then
@@ -116,6 +163,7 @@ contains
             endif
         enddo
         call spproj%write_segment_inside('out', projfile)
+        call wset%kill
         if( l_postprocess )then
             ! final raw and low-pass diagnostic outputs, then the orthogonal
             ! reprojections for visualization
@@ -189,6 +237,10 @@ contains
                 if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
                 if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)
+                ! the reconstruction's particle weighting and state restriction follow the refinement
+                if( cline_refine%defined('m_estimator') ) &
+                    &call child_cline%set('m_estimator', cline_refine%get_carg('m_estimator'))
+                if( cline_refine%defined('state') ) call child_cline%set('state', cline_refine%get_iarg('state'))
                 ! automsk is inherited on BOTH routes: the shipped PCG map is estimated on the same
                 ! density/NU support, with the same estimator-constrained FSC, as every refinement iteration.
                 if( cline_refine%defined('automsk') ) &

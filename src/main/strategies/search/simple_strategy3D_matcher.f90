@@ -122,7 +122,7 @@ contains
             endif
             call maybe_write_orientations()
             if( ctrl%do_write_partial_recs .and. trim(params%rec_backend) == 'pcg' ) &
-                &call execute_rec3D_pcg_worker(params, build, cline, pinds)
+                &call write_partial_recs(params, build, cline, 0, pinds)
             converged = .true.
             call b_ptr%cftc%kill
             call qsys_declare_part_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
@@ -222,11 +222,7 @@ contains
         if( ctrl%do_bench ) rss_after_teardown = get_current_rss_bytes()
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
-            if( trim(params%rec_backend) == 'pcg' )then
-                call execute_rec3D_pcg_worker(params, build, cline, pinds)
-            else
-                call calc_3Drec(params, build, nptcls2update, pinds)
-            endif
+            call write_partial_recs(params, build, cline, nptcls2update, pinds)
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
         call b_ptr%esig%kill
@@ -473,5 +469,31 @@ contains
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
     end subroutine print_flags
+
+    !> This part's partial reconstructions of the updated particles: by hard state labels, or with
+    !! m_estimator=flex by the frozen weights of the project's state weight set
+    subroutine write_partial_recs( params, build, cline, nptcls, pinds )
+        use simple_state_weight_set, only: state_weight_set
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: nptcls, pinds(:)
+        type(state_weight_set) :: wset
+        if( params%l_m_estimator_flex )then
+            call wset%new(build%spproj, build%spproj_field)
+            if( trim(params%rec_backend) == 'pcg' )then
+                call execute_rec3D_pcg_worker(params, build, cline, pinds, wset)
+            else
+                call calc_3Drec(params, build, nptcls, pinds, wset)
+            endif
+            call wset%kill
+        else
+            if( trim(params%rec_backend) == 'pcg' )then
+                call execute_rec3D_pcg_worker(params, build, cline, pinds)
+            else
+                call calc_3Drec(params, build, nptcls, pinds)
+            endif
+        endif
+    end subroutine write_partial_recs
 
 end module simple_strategy3D_matcher

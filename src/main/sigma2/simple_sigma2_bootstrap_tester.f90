@@ -72,6 +72,11 @@ contains
         call assert_false(cl%defined('update_frac') .or. cl%defined('trail_rec') .or. cl%defined('trail_seed') &
             &.or. cl%defined('frozen_rec') .or. cl%defined('rec_backend') .or. cl%defined('vol1') &
             &.or. cl%defined('box_crop') .or. cl%defined('lp'), 'no sampling, trailing, frozen, backend or map key')
+        ! a consumer that keeps per-stack sigma2 groups asks for them
+        call prepare_pspec_cline(tmpl, string('/abs/run/run.simple'), 0, cl, sigma_est='group')
+        sval = cl%get_carg('sigma_est')
+        call assert_string_eq('group', sval, 'per-stack sigma2 when asked for')
+        call assert_int(12,   cl%get_argcnt(),         'the same twelve keys')
         call tmpl%kill
         call cl%kill
         call sval%kill

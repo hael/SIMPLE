@@ -811,42 +811,43 @@ contains
             call classproj%os_cls3D%set(state, 'fsc05',    maxres05(state))
             call classproj%os_cls3D%set(state, 'fsc0128',  maxres0128(state))
         end do
-        if(maxval(maxres0128) .eq. 0.0) GO TO 10
-        self%starfile%filename ="class3D_iter"//trim(str_iter)//".star"
-        ex = file_exists(self%starfile%filename)
-        if (ex) then
-            call fopen(fhandle,file=self%starfile%filename, position='append', iostat=ok)
-        else
-            call fopen(fhandle,file=self%starfile%filename, status='new', iostat=ok)
-        endif
-        write(fhandle, *) ""
-        write(fhandle, *) "data_model_general"
-        write(fhandle, *) ""
-        write(fhandle, "(A)")        "_rlnReferenceDimensionality       3"
-        write(fhandle, "(A)")        "_rlnDataDimensionality            2"
-        write(fhandle, "(A)")        "_rlnNrClasses                     " // int2str(states)
-        write(fhandle, "(A,F12.4)")  "_rlnEstimatedResolution           ", minval(maxres0128)
-        call fclose(fhandle)
-        call enable_splflags(classproj%os_cls3D, self%starfile%class3D%flags)
-        call self%export_stardata(classproj, self%starfile%class3D%flags, classproj%os_cls3D, "model_classes", mapstks=.false.)
-        do state = 1, states
-            call fscproj%os_cls3D%new(i, is_ptcl=.false.)
-            do j = 1, i
-                call fscproj%os_cls3D%set_state(j, 1)
-                call fscproj%os_cls3D%set(j, "specind", j - 1)
-                if( j > 1) then
-                    call fscproj%os_cls3D%set(j, "specres", 1.0/(real(j) - 1.0))
-                else
-                    call fscproj%os_cls3D%set(j, "specres", 999.99)
-                end if 
-                call fscproj%os_cls3D%set(j, "specares", fscs(state, j, 1))
-                call fscproj%os_cls3D%set(j, "specfsc",  fscs(state, j, 2))
+        ! no class resolution recorded: nothing to export for the model
+        if( maxval(maxres0128) /= 0.0 )then
+            self%starfile%filename ="class3D_iter"//trim(str_iter)//".star"
+            ex = file_exists(self%starfile%filename)
+            if (ex) then
+                call fopen(fhandle,file=self%starfile%filename, position='append', iostat=ok)
+            else
+                call fopen(fhandle,file=self%starfile%filename, status='new', iostat=ok)
+            endif
+            write(fhandle, *) ""
+            write(fhandle, *) "data_model_general"
+            write(fhandle, *) ""
+            write(fhandle, "(A)")        "_rlnReferenceDimensionality       3"
+            write(fhandle, "(A)")        "_rlnDataDimensionality            2"
+            write(fhandle, "(A)")        "_rlnNrClasses                     " // int2str(states)
+            write(fhandle, "(A,F12.4)")  "_rlnEstimatedResolution           ", minval(maxres0128)
+            call fclose(fhandle)
+            call enable_splflags(classproj%os_cls3D, self%starfile%class3D%flags)
+            call self%export_stardata(classproj, self%starfile%class3D%flags, classproj%os_cls3D, "model_classes", mapstks=.false.)
+            do state = 1, states
+                call fscproj%os_cls3D%new(i, is_ptcl=.false.)
+                do j = 1, i
+                    call fscproj%os_cls3D%set_state(j, 1)
+                    call fscproj%os_cls3D%set(j, "specind", j - 1)
+                    if( j > 1) then
+                        call fscproj%os_cls3D%set(j, "specres", 1.0/(real(j) - 1.0))
+                    else
+                        call fscproj%os_cls3D%set(j, "specres", 999.99)
+                    end if 
+                    call fscproj%os_cls3D%set(j, "specares", fscs(state, j, 1))
+                    call fscproj%os_cls3D%set(j, "specfsc",  fscs(state, j, 2))
+                end do
+                call enable_splflags(fscproj%os_cls3D, self%starfile%class3D%flags)
+                call self%export_stardata(fscproj, self%starfile%class3D%flags, fscproj%os_cls3D, "model_class_"//int2str(state), mapstks=.false.)
+                call fscproj%kill()
             end do
-            call enable_splflags(fscproj%os_cls3D, self%starfile%class3D%flags)
-            call self%export_stardata(fscproj, self%starfile%class3D%flags, fscproj%os_cls3D, "model_class_"//int2str(state), mapstks=.false.)
-            call fscproj%kill()
-        end do
-        10 CONTINUE
+        endif
         if(allocated(fscs))       deallocate(fscs)
         if(allocated(maxres05))   deallocate(maxres05)
         if(allocated(maxres0128)) deallocate(maxres0128)

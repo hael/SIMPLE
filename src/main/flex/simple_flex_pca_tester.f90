@@ -4,12 +4,12 @@
 ! compact numerical fixtures; the library suite deconvolves 20000 particles at realistic noise.
 module simple_flex_pca_tester
 use simple_core_module_api,               only: dp, DPI, CMPLX_ZERO, OSMPL_PAD_FAC, KBWINSZ, KBALPHA, &
-    &fdim, fplane_type, string
+    &fdim, file_exists, fplane_type, string
 use simple_defs_flex,                     only: FLEX_MAX_BW_GROW
 use simple_syslib,                        only: del_file
 use simple_parameters,                    only: parameters
 use simple_sp_project,                    only: sp_project
-use simple_reconstructor,                 only: reconstructor
+use simple_reconstructor,                 only: reconstructor, insert_planes_multi
 use simple_image,                         only: image
 use simple_ori,                           only: ori
 use simple_sym,                           only: sym
@@ -17,9 +17,10 @@ use simple_kbinterpol,                    only: kbinterpol
 use simple_linalg,                        only: jacobi
 use simple_gridding,                      only: prep3D_inv_kbenvelope4mul
 use simple_rnd,                           only: seed_rnd_fixed
-use simple_flex_pca_embedding_io,         only: write_embedding_cache, read_embedding_cache
+use simple_flex_pca_embedding_io,         only: write_embedding_cache, read_embedding_cache, write_noise_scale, &
+    &read_noise_scale, write_deconv_block, read_deconv_block
 use simple_flex_pca_records,              only: flex_selection, flex_fit_model, flex_latent, flex_state_set
-use simple_flex_pca_state_service,        only: place_states_with_population_floor, &
+use simple_flex_pca_state_service,        only: place_states_with_population_floor, prune_underpopulated_states, &
     &auto_box_crop, auto_min_neff, auto_state_count, FLEX_AUTO_K_MIN, FLEX_AUTO_K_START
 use simple_flex_pca_util,                 only: kernel_weights_at_bandwidth
 use simple_flex_pca_weights,              only: build_covariance_state_weights
@@ -30,7 +31,7 @@ use simple_flex_pca_polar,                only: polar_grid_build, polar_project_
 use simple_flex_pca_plane_cache,          only: flex_pca_plane_cache, plane_cache_contract_header, &
     &plane_cache_master_matches, plane_cache_worker_matches
 use simple_flex_reconstructor_latent_ops, only: project_fplanes_mean_basis, &
-    &insert_planes_oversamp_coupled_batch_scaled, solve_coupled_basis_exp, LATENT_WDIM
+    &solve_coupled_basis_exp, LATENT_WDIM
 use simple_flex_pca_pcg,                  only: flex_pcg_t, flex_pcg_outcome_t
 use simple_flex_pca_basis,                only: cross_half_subspace_angles
 use simple_flex_pca_rounds,               only: flex_pca_rounds_shmem
@@ -54,6 +55,7 @@ contains
         call test_plane_cache_contract()
         call test_auto_settings()
         call test_population_floor()
+        call test_prune_states()
         call test_kernel_bandwidth()
         call test_state_weights()
         call test_deconvolution(4000, 0.5d0, 5.d0)
@@ -192,20 +194,25 @@ contains
         end do
     end function diagonal
 
-    !> the resume path: every payload survives a write/read round trip bit for bit
+    !> the resume path: every payload survives a write/read round trip bit for bit, and the trailing
+    !! block (noise scale, then the deconvolution) replaces itself without touching the raw block
     subroutine test_embedding_cache_io()
         integer,          parameter :: NP = 37, NC = 4
         character(len=*), parameter :: FN = 'test_flex_pca_cache.bin'
-        integer  :: pinds(NP), i, q, r, ncomp_rd
+        integer  :: pinds(NP), lab(NP), i, q, r, ncomp_rd
         real(dp) :: z(NP,NC), eigvals(NC), contrast(NP), re(NP), rme(NP)
-        real(dp) :: prec(NC,NC,NP), sig2, sig2_rd
+        real(dp) :: prec(NC,NC,NP), sig2, sig2_rd, ns_rd
         real(dp), allocatable :: z_rd(:,:), eig_rd(:), con_rd(:), re_rd(:), rme_rd(:), prec_rd(:,:,:)
+        real(dp), allocatable :: zd_rd(:,:), pd_rd(:,:,:)
+        integer,  allocatable :: lab_rd(:)
+        logical  :: l_found
         type(flex_selection) :: sel
         type(flex_fit_model) :: model, model_rd
         type(flex_latent)    :: latent, latent_rd
         write(*,'(A)') 'test_embedding_cache_io'
         do i = 1, NP
             pinds(i)    = 3*i + 1                   ! non-contiguous, as a real selection is
+            lab(i)      = 1 + mod(i, 3)
             contrast(i) = 0.5d0 + 0.01d0*real(i,dp)
             re(i)       = real(i,dp)
             rme(i)      = 2.d0*real(i,dp)
@@ -236,6 +243,26 @@ contains
         call assert_true(all(rme == rme_rd),         'cache round trip: mean residual energy bit-exact')
         call assert_true(all(prec == prec_rd),       'cache round trip: precision bit-exact')
         call assert_true(sig2 == sig2_rd,            'cache round trip: sig2_eff bit-exact')
+        call read_noise_scale(FN, NP, NC, ns_rd, l_found)
+        call assert_false(l_found, 'a fresh artifact has no trailing block')
+        call write_noise_scale(FN, NP, NC, 1.75d0)
+        call read_noise_scale(FN, NP, NC, ns_rd, l_found)
+        call assert_true(l_found, 'the noise scale is found')
+        call assert_true(ns_rd == 1.75d0, 'noise scale round trip')
+        call read_deconv_block(FN, NP, NC, zd_rd, pd_rd, lab_rd, ns_rd, l_found)
+        call assert_false(l_found, 'a noise scale alone is no deconvolution')
+        call write_deconv_block(FN, NP, NC, 2.d0*z, prec, labels=lab, noise_scale=1.5d0)
+        call read_deconv_block(FN, NP, NC, zd_rd, pd_rd, lab_rd, ns_rd, l_found)
+        call assert_true(l_found, 'the deconvolution is found')
+        if( l_found )then
+            call assert_true(all(zd_rd == 2.d0*z), 'deconvolution round trip: coordinates bit-exact')
+            call assert_true(all(pd_rd == prec),   'deconvolution round trip: precisions bit-exact')
+            call assert_true(all(lab_rd == lab),   'deconvolution round trip: labels')
+            call assert_true(ns_rd == 1.5d0,       'deconvolution round trip: noise scale')
+        endif
+        call read_embedding_cache(FN, 0, 0., sel, model_rd, latent_rd)
+        call assert_true(all(latent_rd%z == z), 'the raw block survives the trailing writes')
+        call assert_false(file_exists(FN//'.part'), 'no temporary artifact is left behind')
         call del_file(FN)
     end subroutine test_embedding_cache_io
 
@@ -358,6 +385,48 @@ contains
         call assert_true(floor_met,  'every delivered state is at or above the population floor')
         call assert_true(neff_match, 'neff reports the delivered population')
     end subroutine test_population_floor
+
+    !> pruning ruling: after the occupancy floor drops a state, a row's label is its argmax over the
+    !! kept states, PARTITION rows are renormalized over them, a row without kept weight is unassigned
+    subroutine test_prune_states()
+        integer, parameter :: NP = 6, NST = 3
+        type(flex_state_set) :: st
+        real    :: w0(NP,NST)
+        integer :: i
+        logical :: l_agree, l_unit
+        write(*,'(A)') 'test_prune_states'
+        ! rows 1-2 belong to state 1, rows 3-4 to state 2, row 5 to the small state 3 with some weight in
+        ! state 2, row 6 to state 3 only
+        w0(1,:) = [0.8, 0.2, 0.0]
+        w0(2,:) = [0.6, 0.3, 0.1]
+        w0(3,:) = [0.1, 0.9, 0.0]
+        w0(4,:) = [0.2, 0.7, 0.1]
+        w0(5,:) = [0.0, 0.4, 0.6]
+        w0(6,:) = [0.0, 0.0, 1.0]
+        st%nstates = NST
+        allocate(st%weights(NP,NST), source=w0)
+        allocate(st%targets(2,NST), source=0.)
+        allocate(st%bandwidths(NST), source=1.)
+        allocate(st%neff(NST))
+        st%neff = [3000., 2500., 10.]
+        allocate(st%labels(NP))
+        st%labels = [1, 1, 2, 2, 3, 3]
+        call prune_underpopulated_states(2000, st)
+        call assert_int(2, st%nstates, 'the state below min_neff is dropped')
+        call assert_int(2, st%labels(5), 'a row of the dropped state is relabelled by its largest kept weight')
+        call assert_int(0, st%labels(6), 'a row without kept weight is unassigned')
+        call assert_true(all(st%labels(1:4) == [1, 1, 2, 2]), 'rows of kept states keep their labels')
+        l_agree = .true.
+        l_unit  = .true.
+        do i = 1, NP
+            l_agree = l_agree .and. ((st%labels(i) > 0) .eqv. (sum(st%weights(i,:)) > 0.))
+            if( sum(st%weights(i,:)) > 0. ) l_unit = l_unit .and. abs(sum(st%weights(i,:)) - 1.) < 1.e-5
+        end do
+        call assert_true(l_agree, 'a row is labelled exactly when it carries kept weight')
+        call assert_true(l_unit, 'PARTITION rows are renormalized over the kept states')
+        call assert_real(1., st%weights(5,2), 1.e-6, 'the relabelled row carries its whole mass in the kept state')
+        call st%kill
+    end subroutine test_prune_states
 
     !> compact support, unit peak, neff bounds and bounded widening towards min_neff
     subroutine test_kernel_bandwidth()
@@ -564,7 +633,7 @@ contains
         fpl%frlims(1,:) = [-lim,lim]
         fpl%frlims(2,:) = [-lim,lim]
         fpl%nyq = pf*BAND
-        allocate(fit%iter%mean_fpl(NTHR), fit%iter%basis_fpls(NC,NTHR))
+        allocate(fit%iter%mean_fpl(NTHR), fit%iter%basis_fpls(NC,NTHR), fit%iter%mean_es(NTHR))
         call project_fplanes_mean_basis(fit%model%mean_rec, fit%model%basis_recs, o, fpl, &
             &fit%iter%mean_fpl(1), fit%iter%basis_fpls(:,1), apply_ctf_amp=.true.)
         fpl%cmplx_plane = fit%iter%mean_fpl(1)%cmplx_plane
@@ -876,15 +945,10 @@ contains
         params%smpd_crop = 1.0
         do f = 1, 2
             fits(f)%model%ncomp = NC
-            fits(f)%spec%khi_full = fsz
             allocate(fits(f)%history%prev_real(NC))
-            allocate(fits(f)%diag%xf_fscq(fsz,NC), fits(f)%diag%xf_h_e(fsz,NC), &
-                &fits(f)%diag%xf_h_o(fsz,NC), fits(f)%diag%xf_cnt(fsz), fits(f)%diag%xf_gam(NC))
-            fits(f)%diag%xf_fscq = 1.0
+            allocate(fits(f)%diag%xf_h_e(fsz,NC), fits(f)%diag%xf_h_o(fsz,NC))
             fits(f)%diag%xf_h_e  = 1.0
             fits(f)%diag%xf_h_o  = 1.0
-            fits(f)%diag%xf_cnt  = 1
-            fits(f)%diag%xf_gam  = 1.d0
             do q = 1, NC
                 call fits(f)%history%prev_real(q)%new([BOX,BOX,BOX], 1.0)
             end do
@@ -903,10 +967,9 @@ contains
         call xfsc_paired_record(ctx, params, fits, 1)
         signed_pass = ctx%xf%nrec == 1
         if( signed_pass )then
+            ! B's second component is -A's first: the FSC near 1 proves the sign was resolved
             signed_pass = all(ctx%xf%recs(1)%match_a == [1,2]) .and. &
                 &all(ctx%xf%recs(1)%match_b == [2,1]) .and. &
-                &all(ctx%xf%recs(1)%match_sign == [1,-1]) .and. &
-                &all(ctx%xf%recs(1)%match_cos > 1.0 - 2.0e-6) .and. &
                 &all(abs(ctx%xf%recs(1)%fsc_cross - 1.0) < 2.0e-5)
         endif
         call ctx%kill
@@ -939,7 +1002,6 @@ contains
 
         call ctx%kill
         call del_file(COV_XFSC_FNAME)
-        call del_file('flex_pca_crossfsc_series.txt')
         do f = 1, 2
             call fits(f)%kill
         end do
@@ -962,8 +1024,6 @@ contains
             integer,          intent(in)    :: filtsz
             call ctx_%new
             ctx_%l_loaded   = .false.
-            ctx_%pairing_id = 1
-            ctx_%reg_active = 1
             ctx_%filtsz     = filtsz
         end subroutine init_context
 
@@ -1157,7 +1217,7 @@ contains
 
         allocate(rho(NPAIRS,size(grid_recs(1)%cmat_exp,1),size(grid_recs(1)%cmat_exp,2), &
             &size(grid_recs(1)%cmat_exp,3)), source=0.0)
-        call insert_planes_oversamp_coupled_batch_scaled(grid_recs, rho, c1, orientations, fpls, &
+        call insert_planes_multi(grid_recs, rho, c1, orientations, fpls, &
             &z, dens, valid, NPROJ)
         do q = 1, NC
             pcg_recs(q)%cmat_exp = grid_recs(q)%cmat_exp

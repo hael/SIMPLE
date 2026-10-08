@@ -1,6 +1,7 @@
 !@descr: unit and library tests of the flex_pca PCG M-step operator (simple_flex_pca_pcg)
-! Asserts by name the six checks (A-F) of test_flex_pcg_operator, a white-box self-test that stays
-! in simple_flex_pca_pcg because it needs flex_pcg_t's private components and kernels. The fast gate
+! Asserts by name the six checks (A-F) of test_flex_pcg_operator, a white-box self-test in the
+! submodule simple_flex_pca_pcg_tester of simple_flex_pca_pcg because it needs flex_pcg_t's private
+! components and kernels. The fast gate
 ! runs box 32, 200 samples and the clean baseline solve; nightly runs box 64, 400 samples (no solve)
 ! and the twelve-setting solve sweep at box 32.
 module simple_flex_pcg_tester

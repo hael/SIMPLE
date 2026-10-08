@@ -159,6 +159,14 @@ contains
         endif
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
+        ! state=X: that state alone, refined on a work project (per-state M-estimation with m_estimator=flex);
+        ! before this run's GUI communicator starts, since the selection program runs its own, whose end
+        ! releases the process-wide communicator state
+        if( cline%defined('state') )then
+            call prepare_state_work_project()
+        else if( params%l_m_estimator_flex )then
+            THROW_HARD(WORKFLOW_LABEL//' m_estimator=flex refines one state of the project''s state weight set; give state=')
+        endif
         call gui_comm%new(params)
         l_ref_pose_init_requested = trim(params%ref_pose_init).eq.'cc'
         if( l_ref_pose_init_requested .and. .not. l_external_input )then
@@ -467,6 +475,137 @@ contains
                 &abs(init_smpd - params%smpd) <= 1.e-6
         end function project_init_vol_compatible
 
+        !> state=X, as solve3D's state continuation: a copy of the project holding state X alone, as state 1,
+        !! which the run refines; the project it was copied from is not written. With m_estimator=flex the
+        !! rows are those with a positive weight for X in the project's state weight set, and the copy gets
+        !! that state's single-state set (rows remapped, the parent set's identity as provenance); otherwise
+        !! the rows labelled X. Either selection reaches the selection program as its per-row selection file
+        !! (the parent's set opens only under the parent's name). The copy keeps state X's map and FSC as
+        !! state 1's.
+        subroutine prepare_state_work_project()
+            use, intrinsic :: iso_fortran_env,  only: real32
+            use simple_commanders_project_core, only: commander_selection
+            use simple_state_weight_set,        only: state_weight_set
+            type(commander_selection) :: xselection
+            type(cmdline)             :: cline_sel
+            type(sp_project)          :: parent, work
+            type(state_weight_set)    :: parent_set, work_set
+            type(string)              :: src_projfile, work_projfile, work_projname, selfile
+            type(string)              :: vol_fname, fsc_fname, pstk, wstk
+            real(real32), allocatable :: wcol(:)
+            integer,      allocatable :: parent_rows(:)
+            logical,      allocatable :: l_sel(:)
+            real    :: vol_smpd
+            integer :: state, nparent, nwork, i, funit, vol_box, fsc_box, nstates_out, pstkind, wstkind, pind, wind
+            logical :: l_vol, l_fsc
+            state = params%state
+            if( state < 1 ) THROW_HARD(WORKFLOW_LABEL//' state= must be at least 1')
+            ! the copy and its single-state set live in this run's own directory, beside a copy of the parent
+            ! that is removed below: never in the parent's directory, nor beside another state's work project
+            if( cline%get_carg('mkdir') /= 'yes' ) THROW_HARD(WORKFLOW_LABEL//' state= runs in its own directory: mkdir=yes')
+            src_projfile  = params%projfile
+            work_projfile = 'refine3D_auto_state'//int2str_pad(state,2)//'.simple'
+            work_projname = get_fbody(work_projfile, 'simple')
+            ! the parent opens under its own name: its state weight set is tied to it
+            call parent%read(src_projfile)
+            nparent = parent%os_ptcl3D%get_noris()
+            if( nparent < 1 .or. parent%is_virgin_field('ptcl3D') ) &
+                &THROW_HARD(WORKFLOW_LABEL//' state= requires existing ptcl3D orientations')
+            if( file_exists(work_projfile) ) call del_file(work_projfile)
+            call simple_copy_file(src_projfile, work_projfile)
+            call cline_sel%set('prg',      'selection')
+            call cline_sel%set('projfile', work_projfile)
+            call cline_sel%set('projname', work_projname)
+            call cline_sel%set('oritype',  'ptcl3D')
+            call cline_sel%set('prune',    'yes')
+            call cline_sel%set('append',   'no')
+            call cline_sel%set('mkdir',    'no')
+            allocate(l_sel(nparent))
+            if( params%l_m_estimator_flex )then
+                call parent_set%new(parent, parent%os_ptcl3D)
+                if( state > parent_set%get_nstates() ) &
+                    &THROW_HARD(WORKFLOW_LABEL//' state= lies outside the project''s state weight set')
+                call parent_set%get_applied_weights(state, 0., wcol)
+                l_sel = wcol > 0._real32
+                if( .not. any(l_sel) ) THROW_HARD(WORKFLOW_LABEL//' no particle has weight for this state')
+            else
+                do i = 1, nparent
+                    l_sel(i) = parent%os_ptcl3D%get_state(i) == state
+                enddo
+                if( .not. any(l_sel) ) THROW_HARD(WORKFLOW_LABEL//' state= is absent from ptcl3D')
+            endif
+            ! the rows, as the selection program's per-row selection file
+            selfile = 'refine3D_auto_state'//int2str_pad(state,2)//'_rows.txt'
+            call fopen(funit, file=selfile, status='REPLACE', action='WRITE')
+            do i = 1, nparent
+                write(funit,'(I1)') merge(1, 0, l_sel(i))
+            enddo
+            call fclose(funit)
+            call cline_sel%set('infile', selfile)
+            call xselection%execute(cline_sel)
+            call work%read(work_projfile)
+            nwork = work%os_ptcl3D%get_noris()
+            if( nwork < 1 ) THROW_HARD(WORKFLOW_LABEL//' the work project selected no particle')
+            ! work row i is the i-th selected parent row: check it by stack and index in stack
+            parent_rows = pack([(i, i = 1, nparent)], l_sel)
+            if( size(parent_rows) /= nwork ) THROW_HARD(WORKFLOW_LABEL//' work project rows disagree with the selection')
+            do i = 1, nwork
+                call parent%map_ptcl_ind2stk_ind('ptcl3D', parent_rows(i), pstkind, pind)
+                call work%map_ptcl_ind2stk_ind('ptcl3D', i, wstkind, wind)
+                pstk = parent%os_stk%get_str(pstkind, 'stk')
+                wstk = work%os_stk%get_str(wstkind, 'stk')
+                if( pind /= wind .or. pstk /= wstk ) &
+                    &THROW_HARD(WORKFLOW_LABEL//' a work project row is not the parent row it was selected from')
+            enddo
+            ! state X's map and FSC (the parent's: the selection drops the entries of states none of its rows
+            ! is labelled with) become state 1's; every other state's map and FSC go
+            l_vol = parent%isthere_in_osout('vol', state)
+            if( l_vol ) call parent%get_vol('vol', state, vol_fname, vol_smpd, vol_box)
+            if( l_vol ) l_vol = file_exists(vol_fname)
+            l_fsc = parent%isthere_in_osout('fsc', state)
+            if( l_fsc ) call parent%get_fsc(state, fsc_fname, fsc_box)
+            if( l_fsc ) l_fsc = file_exists(fsc_fname)
+            nstates_out = 0
+            if( work%os_out%get_noris() > 0 ) nstates_out = work%os_out%get_n('state')
+            do i = 1, max(state, nstates_out)
+                call work%remove_state_artifacts_from_osout(i)
+            enddo
+            if( l_vol ) call work%add_vol2os_out(vol_fname, vol_smpd, 1, 'vol', box=vol_box)
+            if( l_fsc ) call work%add_fsc2os_out(fsc_fname, 1, fsc_box)
+            ! the parent's set does not describe the copy's rows; the copy gets its own below
+            call work%remove_state_weights_from_osout
+            ! the copy's sigmas are seeded in this run, as in solve3D's state continuation
+            if( work%projinfo%get_noris() == 1 )then
+                if( work%projinfo%isthere(1, 'sigma2_state') ) call work%projinfo%delete_entry('sigma2_state')
+            endif
+            call work%update_projinfo(work_projfile)
+            call work%write(work_projfile)
+            if( params%l_m_estimator_flex )then
+                call work_set%publish_work_state(parent_set, state, parent_rows, work, work%os_ptcl3D, work_projfile)
+                write(logfhandle,'(A,I0,A,I0,A,F12.3,A,F12.3,A,I0)') '>>> '//WORKFLOW_LABEL//' STATE ', state, &
+                    &' WEIGHT SET: particles ', nwork, ', applied mass ', work_set%get_mass(1), &
+                    &', effective sample size ', work_set%get_ess(1), ', hard population ', work_set%get_pop(1)
+                call work_set%kill
+                call parent_set%kill
+            endif
+            ! the run continues on the copy, whose only state is 1; this directory's copy of the parent goes,
+            ! so that the work project is the run directory's only project
+            call del_file(src_projfile)
+            call cline%set('projfile', work_projfile)
+            call cline%set('projname', work_projname)
+            params%projfile = simple_abspath(work_projfile)
+            params%projname = work_projname
+            params%nptcls   = nwork
+            call cline%delete('state')
+            params%l_state_defined = .false.
+            params%state           = 1
+            write(logfhandle,'(A,I0,A,I0,A,A)') '>>> '//WORKFLOW_LABEL//' STATE/PARTICLES: ', state, ' / ', nwork, &
+                &' WORK PROJECT: ', params%projfile%to_char()
+            call parent%kill
+            call work%kill
+            call cline_sel%kill
+        end subroutine prepare_state_work_project
+
         subroutine set_refine3D_auto_sampling()
             type(sp_project) :: sampling_proj
             integer :: maxits_auto, nptcls_per_iter
@@ -630,7 +769,7 @@ contains
         type(gui_communicator)    :: gui_comm
         type(lp_crop_inf)         :: lpinfo_multi(2)
         type(string), allocatable :: init_vols(:)
-        type(string)              :: pose_policy_arg
+        type(string)              :: pose_policy_arg, m_estimator_arg
         type(class_sample), allocatable :: clssmp_units(:)
         integer, parameter :: NSAMPLE_PER_STATE_REFINE3D_STATES = 10000
         integer, parameter :: NSAMPLE_REFINE3D_STATES_CAP       = 100000
@@ -666,6 +805,13 @@ contains
         local_inpl_bound          = -1.
         local_shift_bound         = -1.
         call cline%set('prg', 'refine3D_states')
+        ! no weighted mode: the refinement moves the labels the frozen flex_pca weights were computed for;
+        ! one state is refined with its weights by refine3D_auto state=X m_estimator=flex
+        if( cline%defined('m_estimator') )then
+            m_estimator_arg = cline%get_carg('m_estimator')
+            if( m_estimator_arg%to_char() /= 'no' ) THROW_HARD(WORKFLOW_LABEL//' has no weighted mode; use refine3D_auto state=X m_estimator=flex')
+            call m_estimator_arg%kill
+        endif
         call reject_input_volumes()
         l_nstates_on_cline = cline%defined('nstates')
         if( cline%defined('multivol_mode') ) THROW_HARD(WORKFLOW_LABEL//' uses pose_policy, not multivol_mode')
@@ -1041,6 +1187,7 @@ contains
 
         subroutine run_flex_pca()
             use simple_commanders_flex_pca, only: commander_flex_pca
+            use simple_state_weight_set,    only: discard_state_weight_set
             type(commander_flex_pca) :: xflex
             type(cmdline)            :: cline_flex
             type(sp_project)         :: flex_proj
@@ -1084,10 +1231,10 @@ contains
             allocate(init_vols(nstates_flex))
             call flex_proj%read_segment('out', params%projfile)
             do state = 1,nstates_flex
-                if( .not. flex_proj%isthere_in_osout('vol_flex', state) )then
+                if( .not. flex_proj%isthere_in_osout('vol', state) )then
                     THROW_HARD(WORKFLOW_LABEL//' flex_pca did not write every state volume')
                 endif
-                call flex_proj%get_vol('vol_flex', state, init_vols(state), flex_smpd, flex_box)
+                call flex_proj%get_vol('vol', state, init_vols(state), flex_smpd, flex_box)
                 if( .not. file_exists(init_vols(state)) )then
                     THROW_HARD(WORKFLOW_LABEL//' flex_pca state volume does not exist')
                 endif
@@ -1099,6 +1246,8 @@ contains
                 call cline%set('vol'//int2str(state), init_vols(state))
             enddo
             call cline%delete('neigs')
+            ! the flex solution enters as hard labels only: its state weight set is not kept
+            call discard_state_weight_set(flex_proj, params%projfile)
             call flex_proj%kill
             write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' FLEX_PCA INITIALIZED NSTATES: ', nstates_flex
             call cline_flex%kill
@@ -1857,6 +2006,11 @@ contains
         call strategy%initialize(params, build, cline)
         if( params%nstates > 1 .and. trim(params%filt_mode).eq.'uniform' )then
             THROW_HARD('filt_mode=uniform is disabled for multi-state refine3D search')
+        endif
+        ! per-state M-estimation refines one state on its work project; a multi-state search moves the
+        ! labels the frozen weights were computed for
+        if( params%l_m_estimator_flex .and. params%nstates > 1 )then
+            THROW_HARD('m_estimator=flex refines one state; use refine3D_auto state=X m_estimator=flex')
         endif
         ! Main loop counter semantics:
         !   - params%maxits is the *number of iterations to run* in this invocation.

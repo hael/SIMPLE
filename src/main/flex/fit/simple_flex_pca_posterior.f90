@@ -7,13 +7,15 @@
 !! initialisation and the estimator precision of the MAP embedding. Dense algebra on arrays;
 !! no projection code, no fit state, no file.
 module simple_flex_pca_posterior
-use simple_core_module_api, only: dp, dtiny, eigsrt, jacobi, simple_exception
-use simple_linalg,             only: jacobi, eigsrt
+use simple_core_module_api,    only: dp, dtiny, simple_exception
+use simple_linalg,             only: jacobi, cholesky, chol_forward, chol_backward, spd_inverse, spd_logdet
 use simple_flex_pca_fit_types, only: flex_fit
+use simple_kmeans,             only: kmeans
 implicit none
 private
+#include "simple_local_flags.inc"
 
-public :: spd_logdet_dp, quad_form, spd_solve_dp, spd_inv_dp
+public :: quad_form, spd_solve_dp, spd_inv_dp
 public :: probe_solve_plain, probe_solve_mix
 public :: mcfa_init, mcfa_condition, mcfa_mstep
 public :: map_sampling_precision
@@ -22,37 +24,8 @@ real(dp), parameter :: COV_PINV_RCOND = 1.0d-6
 
 contains
 
-    !> log(det A) for symmetric positive-definite A, by Cholesky on a private copy.
-    !!
-    !! This is the term the probe's `resid_energy` has always been missing. resid_energy is the JOINT
-    !! MAP objective ||.||^2/sig2 + z'Gamma^-1 z evaluated at zhat, which decreases by construction and
-    !! therefore says nothing about convergence. The MARGINAL likelihood needs log det A_i and
-    !! log det Gamma as well, and without them the EM has no objective to watch -- which is why the
-    !! iteration count was a tuned constant standing in for a stopping rule.
-    pure module subroutine spd_logdet_dp( A, n, logdet, ok )
-        integer,  intent(in)  :: n
-        real(dp), intent(in)  :: A(n,n)
-        real(dp), intent(out) :: logdet
-        logical,  intent(out) :: ok
-        real(dp) :: L(n,n), s
-        integer  :: i, j
-        L      = 0.d0
-        logdet = 0.d0
-        ok     = .false.
-        do j = 1, n
-            s = A(j,j) - sum(L(j,1:j-1)**2)
-            if( s <= 0.d0 ) return
-            L(j,j) = sqrt(s)
-            logdet = logdet + 2.d0*log(L(j,j))
-            do i = j+1, n
-                L(i,j) = (A(i,j) - sum(L(i,1:j-1)*L(j,1:j-1))) / L(j,j)
-            end do
-        end do
-        ok = .true.
-    end subroutine spd_logdet_dp
-
     !>  z' M z for symmetric M.
-    pure module function quad_form( M, z, n ) result( val )
+    pure function quad_form( M, z, n ) result( val )
         integer,  intent(in) :: n
         real(dp), intent(in) :: M(n,n), z(n)
         real(dp) :: val
@@ -65,42 +38,26 @@ contains
         end do
     end function quad_form
 
-    !> In-place symmetric positive-definite solve A x = b (b overwritten by x) via Cholesky. A is first
-    !! scaled by its mean diagonal, so the retry ridge is RELATIVE: an absolute ridge either swamps a
-    !! small-diagonal system or fails to rescue a large one, and the b=0 fallback then collapses the
-    !! latents of essentially every particle.
+    !> In-place symmetric positive-definite solve A x = b (b overwritten by x) via Cholesky (simple_linalg).
+    !! A is first scaled by its mean diagonal, so the retry ridge is RELATIVE: an absolute ridge either
+    !! swamps a small-diagonal system or fails to rescue a large one, and the b=0 fallback then collapses
+    !! the latents of essentially every particle. A is overwritten.
     subroutine spd_solve_dp( A, b, n )
         integer,  intent(in)    :: n
         real(dp), intent(inout) :: A(n,n), b(n)
-        real(dp) :: L(n,n), s, y(n), ridge, dscale
-        integer  :: i, j, attempt
-        dscale = 0.d0
-        do i = 1, n
-            dscale = dscale + abs(A(i,i))
-        end do
-        dscale = dscale / real(n,dp)
+        real(dp) :: L(n,n), y(n), ridge, dscale
+        integer  :: i, attempt
+        logical  :: ok
+        dscale = mean_abs_diag(A, n)
         if( dscale > 0.d0 )then
             A = A / dscale
             b = b / dscale
         endif
         do attempt = 1, 3
-            L = 0.d0
-            do j = 1, n
-                s = A(j,j) - sum(L(j,1:j-1)**2)
-                if( s <= 0.d0 ) exit
-                L(j,j) = sqrt(s)
-                do i = j+1, n
-                    L(i,j) = (A(i,j) - sum(L(i,1:j-1)*L(j,1:j-1))) / L(j,j)
-                end do
-            end do
-            if( j > n )then
-                ! forward/back substitution
-                do i = 1, n
-                    y(i) = (b(i) - sum(L(i,1:i-1)*y(1:i-1))) / L(i,i)
-                end do
-                do i = n, 1, -1
-                    b(i) = (y(i) - sum(L(i+1:n,i)*b(i+1:n))) / L(i,i)
-                end do
+            call cholesky(A, L, n, ok)
+            if( ok )then
+                call chol_forward(L, b, y, n)
+                call chol_backward(L, y, b, n)
                 return
             endif
             ridge = 1.d-8 * (abs(A(1,1))+1.d0) * (10.d0**(attempt-1))
@@ -111,47 +68,21 @@ contains
         b = 0.d0
     end subroutine spd_solve_dp
 
-    !> SPD inverse by Cholesky, same rescaling and ridge escalation as spd_solve_dp; zeros if all
-    !! attempts fail. A is overwritten.
+    !> SPD inverse by Cholesky (simple_linalg), same rescaling and ridge escalation as spd_solve_dp;
+    !! zeros if all attempts fail. A is overwritten.
     subroutine spd_inv_dp( A, Ainv, n )
         integer,  intent(in)    :: n
         real(dp), intent(inout) :: A(n,n)
         real(dp), intent(out)   :: Ainv(n,n)
-        real(dp) :: L(n,n), Linv(n,n), s, ridge, dscale
-        integer  :: i, j, attempt
+        real(dp) :: ridge, dscale
+        integer  :: i, attempt
+        logical  :: ok
         Ainv   = 0.d0
-        dscale = 0.d0
-        do i = 1, n
-            dscale = dscale + abs(A(i,i))
-        end do
-        dscale = dscale / real(n,dp)
+        dscale = mean_abs_diag(A, n)
         if( dscale > 0.d0 ) A = A / dscale
         do attempt = 1, 3
-            L = 0.d0
-            do j = 1, n
-                s = A(j,j) - sum(L(j,1:j-1)**2)
-                if( s <= 0.d0 ) exit
-                L(j,j) = sqrt(s)
-                do i = j+1, n
-                    L(i,j) = (A(i,j) - sum(L(i,1:j-1)*L(j,1:j-1))) / L(j,j)
-                end do
-            end do
-            if( j > n )then
-                ! Linv = L^-1 by forward substitution on the identity, column by column
-                Linv = 0.d0
-                do j = 1, n
-                    Linv(j,j) = 1.d0 / L(j,j)
-                    do i = j+1, n
-                        Linv(i,j) = -sum(L(i,j:i-1)*Linv(j:i-1,j)) / L(i,i)
-                    end do
-                end do
-                ! A = L L' => A^-1 = (L^-1)' (L^-1), lower-triangular so the sum starts at max(i,j)
-                do i = 1, n
-                    do j = 1, i
-                        Ainv(i,j) = sum(Linv(i:n,i)*Linv(i:n,j))
-                        Ainv(j,i) = Ainv(i,j)
-                    end do
-                end do
+            call spd_inverse(A, Ainv, n, ok)
+            if( ok )then
                 ! undo the rescaling: A_orig = dscale*A_scaled, so A_orig^-1 = A_scaled^-1 / dscale
                 if( dscale > 0.d0 ) Ainv = Ainv / dscale
                 return
@@ -162,6 +93,17 @@ contains
             end do
         end do
     end subroutine spd_inv_dp
+
+    pure real(dp) function mean_abs_diag( A, n ) result( dscale )
+        integer,  intent(in) :: n
+        real(dp), intent(in) :: A(n,n)
+        integer :: i
+        dscale = 0.d0
+        do i = 1, n
+            dscale = dscale + abs(A(i,i))
+        end do
+        dscale = dscale / real(n,dp)
+    end function mean_abs_diag
 
     !> One particle's posterior solve under the plain 1/Gamma prior at fixed contrast: the
     !! fit's E-step statistics of thread ithr in, the latent and its posterior covariance out.
@@ -184,7 +126,7 @@ contains
                 z_(q)     = (a*b(q) - aa*c(q))/sig2
             end do
             Acp = Amat
-            call spd_logdet_dp(Amat, n, ldA, lok)
+            call spd_logdet(Amat, n, ldA, lok)
             h = z_
             call spd_inv_dp(Acp, Ainv_, n)
             call spd_solve_dp(Amat, z_, n)
@@ -222,7 +164,7 @@ contains
             aa   = a*a
             Amat = (aa/sig2)*G + Ominv
             Acp  = Amat
-            call spd_logdet_dp(Amat, n, ldA, lok)
+            call spd_logdet(Amat, n, ldA, lok)
             call spd_inv_dp(Acp, Ainv_, n)
             do q = 1, n
                 rhs0(q) = (a*b(q) - aa*c(q))/sig2
@@ -266,17 +208,18 @@ contains
 
     !> MCFA initialisation. K=1 pins the single component at the origin over the current Gamma
     !! diagonal -- with the diagonal constraint in mcfa_condition this makes the mixture path
-    !! reproduce the plain PPCA EM exactly (the regression test). K>=2 seeds by deterministic
-    !! farthest-point selection on the current latents and polishes with Lloyd iterations;
-    !! nothing here is random, so a rerun reproduces bit-for-bit.
+    !! reproduce the plain PPCA EM exactly (the regression test). K>=2 clusters the current latents
+    !! by deterministic k-means (simple_kmeans: seeded at the point nearest the mean, then
+    !! farthest-point, Lloyd to convergence, empty clusters recovered); nothing here is random, so a
+    !! rerun reproduces bit-for-bit.
     subroutine mcfa_init( z, nptcls, ncomp, kmix, gam_sum, nval, xi, ppi, Om )
         integer,  intent(in)  :: nptcls, ncomp, kmix, nval
         real(dp), intent(in)  :: z(nptcls,ncomp), gam_sum(ncomp)
         real(dp), intent(out) :: xi(ncomp,kmix), ppi(kmix), Om(ncomp,ncomp)
-        integer,  allocatable :: rows(:), lab(:), cnt(:)
-        real(dp), allocatable :: d2min(:)
-        real(dp) :: best, dd
-        integer  :: n, i, j, k, kbest, it2
+        type(kmeans)          :: km
+        real(dp), allocatable :: zrows(:,:)
+        integer,  allocatable :: lab(:), cnt(:)
+        integer  :: n, i, j, k
         if( kmix == 1 )then
             xi  = 0.d0
             ppi = 1.d0
@@ -287,65 +230,29 @@ contains
             return
         endif
         ! particles the E-step skipped (state zero) keep z = 0 and must not seed a component
-        allocate(rows(nptcls))
+        n = 0
+        do i = 1, nptcls
+            if( any(z(i,1:ncomp) /= 0.d0) ) n = n + 1
+        end do
+        if( n < kmix ) THROW_HARD('fewer latents with signal than mixture components; mcfa_init')
+        allocate(zrows(n,ncomp), lab(n), cnt(kmix))
         n = 0
         do i = 1, nptcls
             if( any(z(i,1:ncomp) /= 0.d0) )then
                 n = n + 1
-                rows(n) = i
+                zrows(n,:) = z(i,1:ncomp)
             endif
         end do
-        allocate(lab(n), cnt(kmix), d2min(n))
-        best = -1.d0
-        j = 1
+        call km%new(zrows, kmix)
+        call km%cluster(lab, xi)
+        call km%kill
+        cnt = 0
         do i = 1, n
-            dd = sum(z(rows(i),1:ncomp)**2)
-            if( dd > best )then
-                best = dd
-                j = i
-            endif
-        end do
-        xi(:,1) = z(rows(j),1:ncomp)
-        d2min = huge(0.d0)
-        do k = 2, kmix
-            best  = -1.d0
-            kbest = 1
-            do i = 1, n
-                dd = sum((z(rows(i),1:ncomp) - xi(:,k-1))**2)
-                if( dd < d2min(i) ) d2min(i) = dd
-                if( d2min(i) > best )then
-                    best  = d2min(i)
-                    kbest = i
-                endif
-            end do
-            xi(:,k) = z(rows(kbest),1:ncomp)
-        end do
-        do it2 = 1, 12
-            cnt = 0
-            do i = 1, n
-                best  = huge(0.d0)
-                kbest = 1
-                do k = 1, kmix
-                    dd = sum((z(rows(i),1:ncomp) - xi(:,k))**2)
-                    if( dd < best )then
-                        best  = dd
-                        kbest = k
-                    endif
-                end do
-                lab(i) = kbest
-            end do
-            xi = 0.d0
-            do i = 1, n
-                xi(:,lab(i)) = xi(:,lab(i)) + z(rows(i),1:ncomp)
-                cnt(lab(i))  = cnt(lab(i)) + 1
-            end do
-            do k = 1, kmix
-                if( cnt(k) > 0 ) xi(:,k) = xi(:,k)/real(cnt(k),dp)
-            end do
+            cnt(lab(i)) = cnt(lab(i)) + 1
         end do
         ! mixing proportions floored so no component is born dead
         do k = 1, kmix
-            ppi(k) = max(real(cnt(k),dp)/real(max(1,n),dp), 0.25d0/real(kmix,dp))
+            ppi(k) = max(real(cnt(k),dp)/real(n,dp), 0.25d0/real(kmix,dp))
         end do
         ppi = ppi / sum(ppi)
         ! tied Omega from the pooled within-cluster scatter of the POINT latents; the M-step
@@ -354,11 +261,11 @@ contains
         Om = 0.d0
         do i = 1, n
             do j = 1, ncomp
-                Om(:,j) = Om(:,j) + (z(rows(i),1:ncomp) - xi(:,lab(i)))*(z(rows(i),j) - xi(j,lab(i)))
+                Om(:,j) = Om(:,j) + (zrows(i,:) - xi(:,lab(i)))*(zrows(i,j) - xi(j,lab(i)))
             end do
         end do
-        Om = Om / real(max(1,n),dp)
-        deallocate(rows, lab, cnt, d2min)
+        Om = Om / real(n,dp)
+        deallocate(zrows, lab, cnt)
     end subroutine mcfa_init
 
     !> Symmetrise, eigen-floor and invert the tied prior covariance. diag_only enforces the

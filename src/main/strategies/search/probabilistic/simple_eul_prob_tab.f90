@@ -111,6 +111,8 @@ contains
         self%b_ptr  => build
         self%nptcls       = size(pinds)
         self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
+        ! weighted: a state is populated by the effective sample size of its frozen weights
+        if( self%p_ptr%l_m_estimator_flex ) call weighted_states_exist
         self%nstates      = count(self%state_exists .eqv. .true.)
         self%nrefs = self%p_ptr%nspace * self%nstates
         allocate(self%ssinds(self%nstates), self%state_to_active_rank(self%p_ptr%nstates), source=0)
@@ -124,6 +126,20 @@ contains
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%seed_shifts(2,self%nptcls), source=0.)
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
+
+    contains
+
+        subroutine weighted_states_exist
+            use simple_state_weight_set, only: state_weight_set
+            type(state_weight_set) :: wset
+            call wset%new(self%b_ptr%spproj, self%b_ptr%spproj_field)
+            if( wset%get_nstates() /= self%p_ptr%nstates ) THROW_HARD('state weight set and nstates disagree; eul_prob_tab')
+            do istate = 1, self%p_ptr%nstates
+                self%state_exists(istate) = wset%get_ess(istate) > real(MIN_POP)
+            enddo
+            call wset%kill
+        end subroutine weighted_states_exist
+
     end subroutine new_common
 
     subroutine initialize_storage( self )

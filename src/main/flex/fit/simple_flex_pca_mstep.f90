@@ -5,10 +5,9 @@ use simple_parameters,                    only: parameters
 use simple_builder,                       only: builder
 use simple_image,                         only: image
 use simple_ori,                           only: ori
-use simple_reconstructor,                 only: reconstructor
+use simple_reconstructor,                 only: reconstructor, insert_planes_multi
 use simple_flex_pca_pcg,                  only: flex_pcg_t, flex_pcg_outcome_t, flex_pcg_environment
-use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled, solve_coupled_basis_exp, &
-    &add_invtausq2rho_coupled, projected_model_kfromto
+use simple_flex_reconstructor_latent_ops, only: solve_coupled_basis_exp, add_invtausq2rho_coupled, projected_model_kfromto
 implicit none
 
 public :: flex_fit_mstep, init_basis_reconstructor
@@ -133,10 +132,10 @@ contains
         real(dp),              intent(in)    :: zbatch(:,:), dens(:,:,:)
         logical,               intent(in)    :: valid_e(:), valid_o(:)
         integer,               intent(in)    :: batchsz
-        call insert_planes_oversamp_coupled_batch_scaled(self%Yeven, self%rho_e, build%pgrpsyms, &
+        call insert_planes_multi(self%Yeven, self%rho_e, build%pgrpsyms, &
             &orientations(:batchsz), fpls(:batchsz), zbatch(:,:batchsz), dens(:,:,:batchsz), &
             &valid_e(:batchsz), batchsz)
-        call insert_planes_oversamp_coupled_batch_scaled(self%Yodd, self%rho_o, build%pgrpsyms, &
+        call insert_planes_multi(self%Yodd, self%rho_o, build%pgrpsyms, &
             &orientations(:batchsz), fpls(:batchsz), zbatch(:,:batchsz), dens(:,:,:batchsz), &
             &valid_o(:batchsz), batchsz)
         ! rec_backend=pcg: the pair-weighted Gram kernels of the same batch at doubled coordinates

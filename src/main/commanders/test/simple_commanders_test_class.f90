@@ -37,6 +37,7 @@ use simple_starproject_stream_tester,        only: run_all_starproject_stream_te
 use simple_binoris_tester,                   only: run_all_binoris_tests
 use simple_sp_project_tester,                only: run_all_sp_project_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
+use simple_state_weight_set_tester,          only: run_all_state_weight_set_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
 use simple_mic_import_tester,                only: run_all_mic_import_tests
@@ -63,6 +64,8 @@ use simple_trail_chain_manifest_tester,      only: run_all_trail_chain_manifest_
 use simple_gauran_tester,                    only: run_all_gauran_tests
 use simple_rec3D_strategy_tester,            only: run_all_rec3D_strategy_tests
 use simple_frozen_accum_tester,              only: run_all_frozen_accum_tests
+use simple_reconstructor_tester,             only: run_all_reconstructor_tests
+use simple_rec3D_service_tester,             only: run_all_rec3D_service_lib_tests
 use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_tests
 use simple_project_superset_tester,          only: run_all_project_superset_tests
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
@@ -98,7 +101,11 @@ use simple_ftexp_shsrch_tester,              only: run_all_ftexp_shsrch_tests
 use simple_bspline_smoother_tester,          only: run_all_bspline_smoother_tests
 use simple_online_var_tester,                only: run_all_online_var_tests
 use simple_aff_prop_tester,                  only: run_all_aff_prop_tests
-use simple_avg_linkage_tester,               only: run_all_avg_linkage_tests
+use simple_hac_tester,                       only: run_all_hac_tests
+use simple_kmeans_tester,                    only: run_all_kmeans_tests
+use simple_kcenter_tester,                   only: run_all_kcenter_tests
+use simple_gmm_tester,                       only: run_all_gmm_tests
+use simple_xd_gmm_tester,                    only: run_all_xd_gmm_tests
 use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
@@ -319,7 +326,11 @@ contains
         call add_suite(s, n, 'online variance',         run_all_online_var_tests)
         call add_suite(s, n, 'random draws',            run_all_rnd_tests)
         call add_suite(s, n, 'affinity propagation',    run_all_aff_prop_tests)
-        call add_suite(s, n, 'average linkage',         run_all_avg_linkage_tests)
+        call add_suite(s, n, 'hierarchical clustering', run_all_hac_tests)
+        call add_suite(s, n, 'k-means',                 run_all_kmeans_tests)
+        call add_suite(s, n, 'k-center',                run_all_kcenter_tests)
+        call add_suite(s, n, 'Gaussian mixture',        run_all_gmm_tests)
+        call add_suite(s, n, 'extreme deconvolution',   run_all_xd_gmm_tests)
         call add_suite(s, n, 'statistics',              run_all_stat_tests)
         call add_suite(s, n, 'linear algebra',          run_all_linalg_tests)
         call add_suite(s, n, 'Kaiser-Bessel kernel',    run_all_kbinterpol_tests)
@@ -352,6 +363,7 @@ contains
         call add_suite(s, n, 'solve3D manifest',        run_all_solve3D_manifest_tests)
         call add_suite(s, n, 'project superset',        run_all_project_superset_tests)
         call add_suite(s, n, 'solve3D addon report', run_all_solve3D_addon_report_tests)
+        call add_suite(s, n, 'state weight set',        run_all_state_weight_set_tests)
     end subroutine suites_project
 
     subroutine suites_motion( s, n )
@@ -391,6 +403,7 @@ contains
         call add_suite(s, n, 'class-average carry-over',  run_all_cavg_sums_tests)
         call add_suite(s, n, 'trailing chain identity',   run_all_trail_chain_manifest_tests)
         call add_suite(s, n, 'frozen accumulator',        run_all_frozen_accum_tests)
+        call add_suite(s, n, 'weighted insertion',        run_all_reconstructor_tests)
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
         call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
     end subroutine suites_reconstruction
@@ -516,6 +529,7 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'PCG half-set',         run_all_pcg_halfset_tests)
         call add_suite(s, n, 'addon report docking', run_all_solve3D_addon_dock_tests)
+        call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
     end subroutine suites_lib_reconstruction
 
     subroutine add_suite( s, n, name, proc )

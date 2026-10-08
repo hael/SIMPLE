@@ -5,7 +5,7 @@ use simple_core_module_api
 use simple_builder,             only: builder
 use simple_cmdline,             only: cmdline
 use simple_parameters,          only: parameters
-use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_LAMBDA, &
+use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_LAMBDA, PCG_WEIGHT_THRESHOLD, &
     &pcg_raw_accum_compatible, measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, &
     &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map, read_pcg_raw_accum_header
 use simple_matcher_ptcl_io,     only: prepimgbatch, discrete_read_imgbatch, killimgbatch, prep_rec_observation
@@ -20,9 +20,11 @@ use simple_pcg_solvent_sidecar, only: solvent_prior_cross_half_objective, PCG_SO
 use simple_nu_state_filter,     only: nonuniform_filter_state, nu_aux_member
 use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
-    &refine3D_pcg_trail_accum_fname
+    &refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
 use simple_frozen_accum,        only: frozen_accum
+use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
 use simple_oris,                only: population_blend_weights
+use simple_state_weight_set,    only: state_weight_set
 !$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_max_active_levels, &
 !$     &omp_set_max_active_levels, omp_set_num_threads
 implicit none
@@ -112,7 +114,7 @@ contains
         if( params%pcg_mskfile%is_allocated() )then
             if( len_trim(params%pcg_mskfile%to_char()) > 0 )then
                 call mskvol%read_and_crop(params%pcg_mskfile, params%smpd, params%box_crop, params%smpd_crop)
-                call pcgop%set_mask_volume(mskvol)
+                call pcgop%set_window_volume(mskvol)
                 call mskvol%kill
                 return
             endif
@@ -120,10 +122,10 @@ contains
         l_state = .false.
         if( present(l_state_support) ) l_state = l_state_support
         if( l_state .and. present(state_support) )then
-            call pcgop%set_mask_volume(state_support)
+            call pcgop%set_window_volume(state_support)
             return
         endif
-        call pcgop%set_mask(params%msk_crop)
+        call pcgop%set_window_sphere(params%msk_crop)
     end subroutine set_pcg_solve_support
 
     !> The state's solve support: an explicit pcg_mskfile, else under automsk
@@ -226,13 +228,20 @@ contains
     !> Distributed worker: accumulate and atomically publish raw full-range B
     !! and real D for every local (state,half). Workers never call end_accum;
     !! folding and every nonlinear finalization step belong to the master.
-    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds )
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
-        integer,          intent(in)    :: selected_pinds(:)
+    !! With a state weight set, a particle is a member of every state it weighs
+    !! into above PCG_WEIGHT_THRESHOLD and enters with its noise spectrum over w.
+    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds, wset, wtab )
+        type(parameters),                  intent(inout) :: params
+        type(builder),                     intent(inout) :: build
+        class(cmdline),                    intent(inout) :: cline
+        integer,                           intent(in)    :: selected_pinds(:)
+        class(state_weight_set), optional, intent(inout) :: wset
+        real,                    optional, intent(in)    :: wtab(:,:)   !< caller's weight table, rows of selected_pinds
         integer, allocatable :: half_pinds(:)
+        real,    allocatable :: half_w(:)
+        logical :: l_weighted
         character(len=256) :: provenance
+        integer(int64)     :: wset_id(2)
         integer :: state, eo, n_half
         logical :: l_sigma_loaded
 
@@ -249,12 +258,26 @@ contains
         if( size(selected_pinds) > 0 )then
             call prepimgbatch(params, build, MAXIMGBATCHSZ)
         endif
+        wset_id = 0_int64
+        if( present(wset) )then
+            if( wset%get_nstates() /= params%nstates ) THROW_HARD('nstates differs from the state weight set; PCG worker')
+            wset_id = [wset%get_generation(), wset%get_layout_digest()]
+        endif
+        if( present(wtab) )then
+            if( size(wtab,1) /= size(selected_pinds) .or. size(wtab,2) /= params%nstates ) THROW_HARD('weight table shape; PCG worker')
+        endif
+        l_weighted = present(wset) .or. present(wtab)
         do state = 1, params%nstates
             do eo = 0, 1
-                call collect_worker_state_half(state, eo, selected_pinds, half_pinds)
+                if( l_weighted )then
+                    call collect_weighted_state_half(state, eo, selected_pinds, half_pinds, half_w)
+                else
+                    call collect_worker_state_half(state, eo, selected_pinds, half_pinds)
+                endif
                 n_half = size(half_pinds)
                 call accumulate_worker_state_half(state, eo, half_pinds, provenance)
                 deallocate(half_pinds)
+                if( allocated(half_w) ) deallocate(half_w)
                 if( DEBUG )then
                     write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> PCG RAW WORKER: PART ', params%part, &
                         &' STATE ', state, ' HALF ', eo, ' PARTICLES ', n_half
@@ -287,6 +310,34 @@ contains
             enddo
         end subroutine collect_worker_state_half
 
+        !> the state's weighted members of one half (only params%state when state= was given)
+        subroutine collect_weighted_state_half( state_here, eo_here, pinds, selected, weights )
+            integer,              intent(in)  :: state_here, eo_here, pinds(:)
+            integer, allocatable, intent(out) :: selected(:)
+            real,    allocatable, intent(out) :: weights(:)
+            integer, allocatable :: members(:)
+            real,    allocatable :: wmem(:)
+            logical, allocatable :: l_half(:)
+            integer :: i
+            if( params%l_state_defined .and. state_here /= params%state )then
+                allocate(selected(0), weights(0))
+                return
+            endif
+            if( present(wset) )then
+                call wset%get_members(state_here, PCG_WEIGHT_THRESHOLD, pinds, members, wmem)
+            else
+                members = pack(pinds,              wtab(:,state_here) > PCG_WEIGHT_THRESHOLD)
+                wmem    = pack(wtab(:,state_here), wtab(:,state_here) > PCG_WEIGHT_THRESHOLD)
+            endif
+            allocate(l_half(size(members)))
+            do i = 1, size(members)
+                l_half(i) = build%spproj_field%get_eo(members(i)) == eo_here
+            enddo
+            selected = pack(members, l_half)
+            weights  = pack(wmem,    l_half)
+            deallocate(members, wmem, l_half)
+        end subroutine collect_weighted_state_half
+
         subroutine accumulate_worker_state_half( state_here, eo_here, pinds, provenance_here )
             integer,          intent(in) :: state_here, eo_here, pinds(:)
             character(len=*), intent(in) :: provenance_here
@@ -307,7 +358,7 @@ contains
                 &merge('odd ', 'even', eo_here == 1))
             if( size(pinds) == 0 )then
                 call pcgop%write_raw_accum(fname, state_here, eo_here, params%part, &
-                    &params%nparts, 0, provenance_here)
+                    &params%nparts, 0, provenance_here, mass=0._dp, wset_id=wset_id)
                 call pcgop%kill
                 call fname%kill
                 return
@@ -321,6 +372,12 @@ contains
                 do i = 1, size(pinds)
                     call resample_sigma2(kfromto(1), kfromto(2), &
                         &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, 1.0, sig2(0:R,i))
+                enddo
+            endif
+            if( l_weighted )then
+                ! the state weight as an inverse noise scale: it multiplies the B term and |T|^2 alike
+                do i = 1, size(pinds)
+                    sig2(:,i) = sig2(:,i) / half_w(i)
                 enddo
             endif
             call selection%new(size(pinds), .true.)
@@ -353,8 +410,13 @@ contains
                 call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
             enddo
             call obs%kill
-            call pcgop%write_raw_accum(fname, state_here, eo_here, params%part, &
-                &params%nparts, size(pinds), provenance_here)
+            if( l_weighted )then
+                call pcgop%write_raw_accum(fname, state_here, eo_here, params%part, &
+                    &params%nparts, size(pinds), provenance_here, mass=sum(real(half_w,dp)), wset_id=wset_id)
+            else
+                call pcgop%write_raw_accum(fname, state_here, eo_here, params%part, &
+                    &params%nparts, size(pinds), provenance_here)
+            endif
             call pcgop%kill
             call selection%kill
             call orientation%kill
@@ -374,6 +436,7 @@ contains
             type(pcg_solver_outcome) :: result
             real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
             integer :: state = 0, eo = 0, nptcls = 0, niters = 0
+            real(dp) :: mass = 0.0_dp  !< applied weight mass of the reduction (nptcls under hard labels)
             integer :: nfrozen = 0     !< frozen particles added to the reduction (solve3D_addon)
             integer :: band_shell = 0 !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
             integer :: prior_npositive = 0
@@ -394,12 +457,18 @@ contains
         type(halfmap_diagnostics_result) :: hm_diag
         real, allocatable :: fsc(:), res0143s(:), res05s(:), cfars(:), align_lps(:)
         real, allocatable :: realized_fractions(:), update_weights(:), chain_weights(:), current_scales(:)
-        integer, allocatable :: nrep(:), nsmp(:)
+        integer, allocatable :: nrep(:), nsmp(:), rep_rows(:), smp_rows(:), rec_rows(:)
+        real,    allocatable :: rnrep(:), rnsmp(:) !< N(s), n(s) of the population rule: applied masses
         logical, allocatable :: state_written(:), state_carried(:)
+        type(state_weight_set) :: wset
+        integer(int64) :: wset_id(2)
+        real(dp)       :: chain_mass(2)
+        integer        :: chain_contrib(2), chain_gen_prev
+        logical        :: chain_written(2), l_weighted
         character(len=:), allocatable :: errmsg
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
-        integer :: n_active_state, n_sampled_state
+        real    :: n_active_state, n_sampled_state
         integer :: pcg_master_nthreads, pcg_half_nthreads
         type(distributed_half_job) :: even_job, odd_job
         type(image_msk) :: state_support_msk
@@ -420,13 +489,21 @@ contains
         solvent_lambda_eff = 0.
         ! solve3D_addon handshakes (in-process only): the master owns every
         ! frozen read and write; workers only ever see their own particles
+        ! m_estimator=flex: masses come from the state weight set (membership above PCG_WEIGHT_THRESHOLD)
+        l_weighted = params%l_m_estimator_flex
+        wset_id    = 0_int64
+        if( l_weighted )then
+            call wset%new(build%spproj, build%spproj_field)
+            if( wset%get_nstates() /= params%nstates ) THROW_HARD('nstates differs from the state weight set; PCG master')
+            wset_id = [wset%get_generation(), wset%get_layout_digest()]
+        endif
         l_frozen_rec  = cline%defined('frozen_rec')
         l_frozen_seed = cline%defined('frozen_seed')
         if( l_frozen_rec .and. l_frozen_seed ) THROW_HARD('a reconstruction cannot both produce and consume a frozen set')
         if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), 'pcg', &
-            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.false.)
+            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.false., wset_id=wset_id)
         if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), 'pcg', &
-            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.true.)
+            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.true., wset_id=wset_id)
         ! master phase: the full local allocation while the workers are idle
         ! (rec3D_master_nthr), restored to nthr before returning
         !$ if( trim(params%qsys_name) == 'local' ) &
@@ -457,10 +534,23 @@ contains
         allocate(update_weights(params%nstates), source=1.0)
         allocate(chain_weights(params%nstates),  source=0.0)
         allocate(current_scales(params%nstates), source=1.0)
+        allocate(rnrep(params%nstates), rnsmp(params%nstates), source=0.)
         if( params%l_trail_rec )then
             ! N(s) and n(s) of the population rule; f = n/N
-            call build%spproj%os_ptcl3D%get_group_update_counts('state', params%nstates, nrep, nsmp)
-            call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, realized_fractions)
+            if( l_weighted )then
+                call build%spproj%os_ptcl3D%get_update_rows(rep_rows, smp_rows, rec_rows)
+                do istate = 1, params%nstates
+                    rnrep(istate) = real(wset%applied_mass(istate, PCG_WEIGHT_THRESHOLD, rep_rows))
+                    rnsmp(istate) = real(wset%applied_mass(istate, PCG_WEIGHT_THRESHOLD, smp_rows))
+                    realized_fractions(istate) = 0.
+                    if( rnrep(istate) > 0. ) realized_fractions(istate) = rnsmp(istate) / rnrep(istate)
+                enddo
+            else
+                call build%spproj%os_ptcl3D%get_group_update_counts('state', params%nstates, nrep, nsmp)
+                call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, realized_fractions)
+                rnrep = real(nrep)
+                rnsmp = real(nsmp)
+            endif
             update_weights = realized_fractions
             if( params%l_ufrac_trec_defined )then
                 if( params%nstates == 1 )then
@@ -476,12 +566,15 @@ contains
         allocate(state_written(params%nstates), source=.false.)
         allocate(state_carried(params%nstates), source=.false.)
         do state = 1, params%nstates
+            ! state= reconstructs that state alone: the other states' parts are empty by construction
+            if( params%l_state_defined .and. state /= params%state ) cycle
             ! l_sample_seed: no chain yet, so the chain is seeded from the current
             ! sample at full mass and this iteration ships the current sample's map;
             ! l_chain_carry: a sample below 0.001 of the state, so the chain carries
             ! unchanged and this iteration is solved from it (gridding volassemble)
             l_sample_seed = .false.
             l_chain_carry = .false.
+            chain_gen_prev = 0
             if( params%l_trail_rec )then
                 ! a chain pair of another identity is discarded and re-seeded
                 call discard_stale_trail_chain_pair(state)
@@ -494,7 +587,8 @@ contains
                 ! add-on mode never seeds from its cohort sample
                 if( l_sample_seed .and. l_frozen_rec ) &
                     &THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
-                call count_state_sampling(state, n_active_state, n_sampled_state)
+                n_active_state  = rnrep(state)
+                n_sampled_state = rnsmp(state)
                 if( .not. l_frozen_rec .and. n_sampled_state > 0 .and. realized_fractions(state) < 0.001 )then
                     if( .not. l_sample_seed )then
                         l_chain_carry = .true.
@@ -516,9 +610,9 @@ contains
                     call set_chain_blend_weights(state)
                 endif
                 if( l_sample_seed .and. n_sampled_state > 0 )then
-                    write(logfhandle,'(A,I0,A,I0,A)') &
+                    write(logfhandle,'(A,I0,A,F12.2,A)') &
                         &'>>> PCG DISTRIBUTED: SEEDED FULL-MASS TRAILING CHAIN, STATE ', state, &
-                        &', REPRESENTED POPULATION ', nrep(state), '; THIS ITERATION USES THE CURRENT SAMPLE ONLY'
+                        &', REPRESENTED POPULATION ', rnrep(state), '; THIS ITERATION USES THE CURRENT SAMPLE ONLY'
                 endif
             endif
             ! one solve support per state (build_pcg_state_support)
@@ -527,15 +621,25 @@ contains
             l_base_support_constrained = l_state_support
             base_support_kind = 'sphere'
             if( l_base_support_constrained ) base_support_kind = state_support_kind
+            chain_written = .false.
+            chain_mass    = 0.0_dp
+            chain_contrib = 0
             call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base', &
                 &solvent_even=solvent_even, solvent_odd=solvent_odd)
+            ! the chain pair written by the base reductions is published by its manifest, last
+            if( all(chain_written) ) call write_chain_manifest(state)
             nfz_even = even_job%nfrozen
             nfz_odd  = odd_job%nfrozen
             if( params%l_trail_rec .and. .not. l_chain_carry )then
-                if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
-                if( n_active_state > 0 )then
-                    if( abs(real(n_sampled_state)/real(n_active_state)-realized_fractions(state)) > 1.0e-6 )then
-                        THROW_HARD('PCG realized fraction disagrees with gridding sampling bookkeeping')
+                if( l_weighted )then
+                    if( abs(real(even_job%mass+odd_job%mass) - n_sampled_state) > 1.0e-3*max(1.,n_sampled_state) ) &
+                        &THROW_HARD('PCG raw applied mass does not match the latest sampled cohort')
+                else
+                    if( real(n_even+n_odd) /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
+                    if( n_active_state > 0. )then
+                        if( abs(n_sampled_state/n_active_state-realized_fractions(state)) > 1.0e-6 )then
+                            THROW_HARD('PCG realized fraction disagrees with gridding sampling bookkeeping')
+                        endif
                     endif
                 endif
             endif
@@ -715,6 +819,7 @@ contains
         call raw_fname%kill
         call state_support_msk%kill_bimg
         call frozen_ctx%kill
+        call wset%kill
         deallocate(res0143s, res05s, cfars, state_written, state_carried, realized_fractions, update_weights, align_lps)
         deallocate(chain_weights, current_scales)
         if( allocated(nrep) ) deallocate(nrep, nsmp)
@@ -724,35 +829,32 @@ contains
 
         !> Population-rule weights of one state's chain pair (class-average and
         !! reconstruct3D partials note, Section 4.1). The chain's represented
-        !! population M(s) is the sum of the particle counts in its two headers,
-        !! written as the represented population of each half; with N(s) active
+        !! population M(s) is read from the pair's manifest (a mass under a state
+        !! weight set); with N(s) active
         !! updated rows and n(s) in the current sample, current *= s = u/f and
         !! chain *= w = (1-u)*N/M, so the blended mass is N whatever joined or left
         !! the state, and the current-map coefficient stays u. With N = M this is
         !! the former chain weight 1 - u.
         subroutine set_chain_blend_weights( state_here )
             integer, intent(in) :: state_here
-            type(string) :: chain_fname
-            character(len=256) :: prov_here
-            real    :: smpd_here, mnew
-            integer :: ieo, st_here, eo_here, part_here, nparts_here, npop, box_here, status, mrep, nnew
-            character(len=4), parameter :: HALVES(2) = ['even', 'odd ']
-            mrep = 0
-            do ieo = 1, 2
-                chain_fname = refine3D_pcg_trail_accum_fname(state_here, trim(HALVES(ieo)))
-                call read_pcg_raw_accum_header(chain_fname, st_here, eo_here, part_here, nparts_here, npop, &
-                    &box_here, smpd_here, prov_here, status)
-                if( status /= 0 ) THROW_HARD('unreadable PCG trailing chain header')
-                mrep = mrep + npop
-                call chain_fname%kill
-            enddo
-            call population_blend_weights(nrep(state_here), nsmp(state_here), real(mrep), &
+            type(trail_chain_manifest) :: man
+            type(string) :: manifest
+            real    :: mnew, mrep
+            integer :: status, nnew
+            ! M: the mass the chain pair represents, from its manifest (validated by discard_stale_trail_chain_pair)
+            manifest = refine3D_pcg_trail_manifest_fname(state_here)
+            call man%read(manifest, status)
+            if( status /= TRAIL_MANIFEST_OK ) THROW_HARD('unreadable PCG trailing chain manifest')
+            mrep = man%get_mrep()
+            call man%kill
+            call manifest%kill
+            call population_blend_weights(rnrep(state_here), rnsmp(state_here), mrep, &
                 &current_scales(state_here), chain_weights(state_here), mnew, ufrac=update_weights(state_here))
             nnew = count_first_time(state_here)
-            write(logfhandle,'(A,I0,A,F8.4,A,F8.4,A,F8.4,A,4I9,A,I9)') '>>> PCG TRAILING BLEND, STATE ', state_here, &
+            write(logfhandle,'(A,I0,A,F8.4,A,F8.4,A,F8.4,A,4F12.2,A,I9)') '>>> PCG TRAILING BLEND, STATE ', state_here, &
                 &', PREVIOUS-CHAIN WEIGHT ', chain_weights(state_here), ', CURRENT SCALE ', current_scales(state_here), &
-                &', FORMER WEIGHT 1-U ', 1.0 - update_weights(state_here), ', N n M MNEW', nrep(state_here), &
-                &nsmp(state_here), mrep, nint(mnew), ', FIRST-TIME', nnew
+                &', FORMER WEIGHT 1-U ', 1.0 - update_weights(state_here), ', N n M MNEW', rnrep(state_here), &
+                &rnsmp(state_here), mrep, mnew, ', FIRST-TIME', nnew
         end subroutine set_chain_blend_weights
 
         !> first-time rows (updatecnt = 1) of the current sample of a state
@@ -771,26 +873,6 @@ contains
             enddo
         end function count_first_time
 
-        subroutine count_state_sampling( state_here, n_active, n_sampled )
-            integer, intent(in)  :: state_here
-            integer, intent(out) :: n_active, n_sampled
-            integer :: p, sample_ind
-            n_active  = 0
-            n_sampled = 0
-            ! Match get_state_update_fracs without reaching into the private
-            ! sampling API: the current cohort is the largest sampled index.
-            sample_ind = 0
-            do p = 1, build%spproj_field%get_noris()
-                sample_ind = max(sample_ind, build%spproj_field%get_sampled(p))
-            enddo
-            do p = 1, build%spproj_field%get_noris()
-                if( build%spproj_field%get_state(p) /= state_here ) cycle
-                if( build%spproj_field%get_updatecnt(p) < 1 ) cycle
-                n_active = n_active + 1
-                if( build%spproj_field%get_sampled(p) == sample_ind ) n_sampled = n_sampled + 1
-            enddo
-        end subroutine count_state_sampling
-
         !> Discard a chain pair of another identity: provenance, field of view, a
         !! larger crop than the current, or an unreadable or old format; constant-
         !! FOV crop growth is not stale (zero-extension on read). Both halves go
@@ -808,9 +890,13 @@ contains
                 &params%box_crop, params%smpd_crop, chain_provenance)
             if( .not. l_stale .and. l_odd_here ) l_stale = .not. pcg_raw_accum_compatible(odd_fname, &
                 &params%box_crop, params%smpd_crop, chain_provenance)
+            ! the manifest publishes the pair: missing, unreadable, of another weight set or of other sizes = stale
+            if( .not. l_stale .and. (l_even_here .or. l_odd_here) ) l_stale = .not. chain_manifest_valid(state_here)
             if( l_stale )then
                 if( l_even_here ) call del_file(even_fname)
                 if( l_odd_here  ) call del_file(odd_fname)
+                even_fname = refine3D_pcg_trail_manifest_fname(state_here)
+                call del_file(even_fname)
                 write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: DISCARDING STALE TRAILING CHAIN, STATE ', &
                     &state_here, ' (GEOMETRY/IDENTITY CHANGE); RE-SEEDING FROM THE CURRENT SAMPLE'
             endif
@@ -827,17 +913,118 @@ contains
                 &file_exists(refine3D_fsc_fname(state_here))
         end function previous_state_maps_exist
 
+        !> contributors of the full population of a state half (the rows a chain represents)
         integer function count_full_state_half( state_here, eo_here ) result(n)
             integer, intent(in) :: state_here, eo_here
+            real(dp) :: mass
+            call full_state_half(state_here, eo_here, n, mass)
+        end function count_full_state_half
+
+        !> contributors and applied mass of the full population of a state half: the rows of the half with
+        !! the state (label, or weight above PCG_WEIGHT_THRESHOLD), updated once any row was updated
+        subroutine full_state_half( state_here, eo_here, n, mass )
+            integer,  intent(in)  :: state_here, eo_here
+            integer,  intent(out) :: n
+            real(dp), intent(out) :: mass
+            integer, allocatable :: rows(:), members(:)
+            real,    allocatable :: wmem(:)
+            logical, allocatable :: l_row(:)
             integer :: p
-            n = 0
+            n    = 0
+            mass = 0.0_dp
+            if( l_weighted )then
+                allocate(l_row(params%fromp:params%top), source=.false.)
+                do p = params%fromp, params%top
+                    if( build%spproj_field%get_state(p) <= 0 ) cycle
+                    if( build%spproj_field%get_eo(p) /= eo_here ) cycle
+                    if( l_has_updates .and. build%spproj_field%get_updatecnt(p) < 1 ) cycle
+                    l_row(p) = .true.
+                enddo
+                rows = pack([(p, p = params%fromp, params%top)], l_row)
+                call wset%get_members(state_here, PCG_WEIGHT_THRESHOLD, rows, members, wmem)
+                n    = size(members)
+                mass = sum(real(wmem,dp))
+                deallocate(rows, members, wmem, l_row)
+                return
+            endif
             do p = params%fromp, params%top
                 if( build%spproj_field%get_state(p) /= state_here ) cycle
                 if( build%spproj_field%get_eo(p) /= eo_here ) cycle
                 if( l_has_updates .and. build%spproj_field%get_updatecnt(p) < 1 ) cycle
                 n = n + 1
             enddo
-        end function count_full_state_half
+            mass = real(n, dp)
+        end subroutine full_state_half
+
+        !> write one half of the chain pair at the full population's contributors and mass; the first half
+        !! deletes the pair's manifest so an interrupted write never validates
+        subroutine write_chain_half( pcgop, fname, state_here, eo_here )
+            class(reconstructor_pcg), intent(inout) :: pcgop
+            class(string),            intent(in)    :: fname
+            integer,                  intent(in)    :: state_here, eo_here
+            type(string) :: manifest
+            integer  :: n
+            real(dp) :: mass
+            if( .not. any(chain_written) )then
+                manifest = refine3D_pcg_trail_manifest_fname(state_here)
+                call del_file(manifest)
+                call manifest%kill
+            endif
+            call full_state_half(state_here, eo_here, n, mass)
+            call pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n, chain_provenance, mass=mass, wset_id=wset_id)
+            chain_written(eo_here+1) = .true.
+            chain_contrib(eo_here+1) = n
+            chain_mass(eo_here+1)    = mass
+        end subroutine write_chain_half
+
+        !> publish the chain pair of a state: represented mass, contributors, identity and component sizes
+        subroutine write_chain_manifest( state_here )
+            integer, intent(in) :: state_here
+            type(trail_chain_manifest) :: man
+            type(string)    :: manifest, half_fname
+            integer(int64)  :: sizes(4)
+            integer         :: io_stat, gen
+            sizes = 0_int64
+            half_fname = refine3D_pcg_trail_accum_fname(state_here, 'even')
+            inquire(file=half_fname%to_char(), size=sizes(1))
+            half_fname = refine3D_pcg_trail_accum_fname(state_here, 'odd')
+            inquire(file=half_fname%to_char(), size=sizes(2))
+            call half_fname%kill
+            manifest = refine3D_pcg_trail_manifest_fname(state_here)
+            gen = chain_gen_prev + 1
+            call man%new(params%box_crop, params%smpd_crop, build%spproj_field%get_noris(), params%nstates, state_here, &
+                &gen, sizes, real(sum(chain_mass)), sum(chain_contrib), wset_id)
+            call man%write(manifest, io_stat)
+            if( io_stat /= 0 ) THROW_WARN('failed to write the PCG trailing chain manifest; the chain will be re-seeded')
+            call man%kill
+            call manifest%kill
+        end subroutine write_chain_manifest
+
+        !> the pair's manifest exists, parses, belongs to this weight set and state layout, and matches both sizes
+        logical function chain_manifest_valid( state_here ) result( l_valid )
+            integer, intent(in) :: state_here
+            type(trail_chain_manifest) :: man
+            type(string)   :: manifest, half_fname
+            integer(int64) :: sz_even, sz_odd
+            integer        :: status
+            l_valid  = .false.
+            manifest = refine3D_pcg_trail_manifest_fname(state_here)
+            call man%read(manifest, status)
+            call manifest%kill
+            if( status /= TRAIL_MANIFEST_OK ) return
+            sz_even = -1_int64
+            sz_odd  = -1_int64
+            half_fname = refine3D_pcg_trail_accum_fname(state_here, 'even')
+            if( file_exists(half_fname) ) inquire(file=half_fname%to_char(), size=sz_even)
+            half_fname = refine3D_pcg_trail_accum_fname(state_here, 'odd')
+            if( file_exists(half_fname) ) inquire(file=half_fname%to_char(), size=sz_odd)
+            call half_fname%kill
+            l_valid = all(man%get_wset_id() == wset_id) .and. man%get_state() == state_here .and. &
+                &man%get_nstates() == params%nstates .and. man%get_size(1) == sz_even .and. man%get_size(2) == sz_odd
+            ! a blended chain continues the generation count of the chain it replaces; a re-seed restarts at one
+            if( l_valid ) chain_gen_prev = man%get_gen()
+            call man%kill
+        end function chain_manifest_valid
 
         !> check_solvent_lambda_by_resolve through the prepared half jobs, which
         !! are left zeroed with the production strength installed
@@ -976,6 +1163,8 @@ contains
             type(image), optional, intent(in) :: warm_start
             type(string) :: fname
             integer :: part_here, n_part, n_full_half
+            real(dp) :: part_mass
+            integer(int64) :: part_wset_id(2)
             integer(timer_int_kind) :: t_phase
             real :: realized_fraction, update_weight, current_scale
             logical :: l_chain_exists, l_seed_chain
@@ -985,6 +1174,7 @@ contains
             job%half = half
             job%solve_kind = solve_kind
             job%nptcls = 0
+            job%mass = 0.0_dp
             job%nfrozen = 0
             job%niters = 0
             job%ready = .false.
@@ -1005,7 +1195,7 @@ contains
                 ! carried chain is the whole of this iteration's data
                 fname = refine3D_pcg_trail_accum_fname(state_here, half)
                 call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
-                    &chain_provenance, 1.0, job%nptcls)
+                    &chain_provenance, 1.0, job%nptcls, mass=job%mass)
                 call fname%kill
                 ! a full-mass chain written this iteration (seed or u ~ 1) is scaled
                 ! back by f to the current sample the base pair was solved from
@@ -1016,8 +1206,10 @@ contains
                 do part_here = 1, params%nparts
                     fname = refine3D_pcg_raw_accum_fname(state_here, part_here, params%numlen, half)
                     call job%pcgop%add_raw_accum(fname, state_here, eo_here, part_here, params%nparts, &
-                        &provenance, n_part)
+                        &provenance, n_part, mass=part_mass, wset_id=part_wset_id)
+                    if( any(part_wset_id /= wset_id) ) THROW_HARD('a raw PCG part belongs to another state weight set')
                     job%nptcls = job%nptcls + n_part
+                    job%mass   = job%mass   + part_mass
                     call fname%kill
                 enddo
             endif
@@ -1041,22 +1233,24 @@ contains
                             if( 1.0-update_weights(state_here) > 0.01 ) &
                                 &call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
                                 &chain_provenance, chain_weights(state_here), n_part)
-                            call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, &
-                                &count_full_state_half(state_here, eo_here), chain_provenance)
+                            call write_chain_half(job%pcgop, fname, state_here, eo_here)
                         endif
                     else if( pcg_trail_seed_requested(cline) )then
-                        call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, &
-                            &count_full_state_half(state_here, eo_here), chain_provenance)
+                        call write_chain_half(job%pcgop, fname, state_here, eo_here)
                     endif
                     call fname%kill
                 endif
             else if( .not. job%l_ml_solve .and. .not. l_chain_carry )then
-                n_full_half = count_full_state_half(state_here, eo_here)
-                if( n_full_half < job%nptcls ) &
-                    &THROW_HARD('PCG current half population exceeds its full population')
                 realized_fraction = realized_fractions(state_here)
                 update_weight = update_weights(state_here)
                 l_seed_chain = pcg_trail_seed_requested(cline)
+                ! the full population is what a chain represents: checked where a chain is written (a
+                ! caller-owned weight table reconstructs without one, and the project cannot count it)
+                if( params%l_trail_rec .or. l_seed_chain )then
+                    n_full_half = count_full_state_half(state_here, eo_here)
+                    if( n_full_half < job%nptcls ) &
+                        &THROW_HARD('PCG current half population exceeds its full population')
+                endif
                 fname = refine3D_pcg_trail_accum_fname(state_here, half)
                 l_chain_exists = file_exists(fname)
                 if( params%l_trail_rec )then
@@ -1072,15 +1266,13 @@ contains
                         current_scale = 1.0 / realized_fraction
                         call job%pcgop%scale_raw_accum(current_scale)
                     endif
-                    call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, &
-                        &chain_provenance)
+                    call write_chain_half(job%pcgop, fname, state_here, eo_here)
                     if( .not. l_chain_exists .or. 1.0-update_weight <= 0.01 ) &
                         &call job%pcgop%scale_raw_accum(realized_fraction)
                     write(logfhandle,'(A,I0,A,A,A,F8.4,A,F8.4)') '>>> PCG TRAIL | STATE=', state_here, &
                         &' | HALF=', trim(half), ' | F=', realized_fraction, ' | U=', update_weight
                 else if( l_seed_chain )then
-                    call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, &
-                        &chain_provenance)
+                    call write_chain_half(job%pcgop, fname, state_here, eo_here)
                 endif
                 call fname%kill
                 ! solve3D_addon producer: the frozen particles' raw pair at this box
@@ -1414,8 +1606,8 @@ contains
 
     !> Chain identity: native geometry and objective; neither
     !! the iteration nor the crop, so the chain survives stage transitions.
-    !! v3: the header particle count of each half is its represented population,
-    !! the M(s) of the population rule; an older chain is discarded and re-seeded
+    !! The represented population M(s) of the population rule is in the pair's
+    !! manifest; an older chain is discarded and re-seeded
     function pcg_chain_provenance( params ) result(provenance)
         type(parameters), intent(in) :: params
         character(len=256) :: provenance

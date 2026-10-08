@@ -1,25 +1,29 @@
-!@descr: flex_pca embedding persistence: the resume cache and its deconvolved block
+!@descr: flex_pca embedding artifact: the raw embedding and the state stage's trailing block, published atomically
 !!
 !! One binary file per run (flex_pca_embedding.bin): the raw MAP embedding with its posterior
-!! moments and provenance (the working lattice), optionally followed by the deconvolved
-!! coordinates, precisions, mixture labels and noise scale as a trailing block. A states-only
-!! resume (infile=) reads the raw block and adopts the trailing block when present.
+!! moments and provenance (the working lattice), followed by a trailing block once the state stage
+!! has calibrated the noise scale: the noise scale and, after the latent deconvolution, the
+!! deconvolved coordinates, precisions and mixture labels. Every write goes to a temporary name that
+!! is flushed and then atomically renamed over the artifact (the destination is never deleted first),
+!! so a crash leaves the previous complete artifact, never a torn one. A states-only resume (infile=) reads the raw block and adopts the trailing block when present.
 module simple_flex_pca_embedding_io
-use simple_core_module_api, only: del_file, dp, file_exists, logfhandle, simple_exception
+use simple_core_module_api, only: del_file, dp, file_exists, logfhandle, simple_copy_file, simple_exception, string
+use simple_syslib,          only: simple_atomic_replace, simple_sync_file
 use simple_flex_pca_records, only: flex_selection, flex_fit_model, flex_latent
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: write_embedding_cache, read_embedding_cache
-public :: append_deconv_block, read_deconv_block
+public :: write_noise_scale, read_noise_scale, write_deconv_block, read_deconv_block
 
 character(len=8), parameter :: COV_CACHE_MAGIC   = 'SIMPLFXC'
-! Bump whenever the cache layout changes; read_embedding_cache rejects any other version.
-integer,          parameter :: COV_CACHE_VERSION = 4   ! 4: box_crop/smpd_crop provenance after (nptcls, ncomp)
-!> optional trailing block of the SAME file: the deconvolved coordinates and precisions, the mixture
-!! labels and the noise scale; a resume adopts it from infile, so no second cache file and no K ladder
-character(len=8), parameter :: COV_DECONV_MAGIC  = 'SIMPLFXD'
+! Bump whenever the artifact layout changes; read_embedding_cache rejects any other version.
+integer,          parameter :: COV_CACHE_VERSION = 5   ! 5: trailing block = noise scale, then the optional deconvolution
+!> trailing block of the SAME file: the noise scale, then (flag 1) the deconvolved coordinates and
+!! precisions and the mixture labels; a resume adopts it from infile, so no second file and no K ladder
+character(len=8), parameter :: COV_TRAIL_MAGIC   = 'SIMPLFXD'
+character(len=*), parameter :: PART_SUFFIX       = '.part'
 
 contains
 
@@ -32,9 +36,11 @@ contains
         character(len=*),     intent(in) :: fname
         integer,              intent(in) :: box_crop          !< the working lattice the embedding was made on (provenance)
         real,                 intent(in) :: smpd_crop
+        character(len=:), allocatable :: tmp
         integer :: u
-        call del_file(fname)
-        open(newunit=u, file=fname, status='replace', action='write', access='stream', form='unformatted')
+        tmp = trim(fname)//PART_SUFFIX
+        call del_file(tmp)
+        open(newunit=u, file=tmp, status='replace', action='write', access='stream', form='unformatted')
         write(u) COV_CACHE_MAGIC, COV_CACHE_VERSION
         write(u) sel%nptcls, model%ncomp
         write(u) box_crop, smpd_crop
@@ -47,6 +53,8 @@ contains
         write(u) latent%precision
         write(u) model%sig2_eff
         close(u)
+        call simple_sync_file(tmp)
+        call simple_atomic_replace(tmp, fname)
         write(logfhandle,'(A,A,A,F8.1,A)') '>>> FLEX_PCA embedding cached to ',trim(fname), &
             &' (',real(8*(sel%nptcls*model%ncomp + model%ncomp*model%ncomp*sel%nptcls))/1048576.0,' MB); reuse with infile=<path>'
         call flush(logfhandle)
@@ -102,7 +110,7 @@ contains
         deallocate(pinds_cached)
     end subroutine read_embedding_cache
 
-    !> Byte offset of the first byte after the raw block of a cache written by write_embedding_cache
+    !> Byte offset of the first byte after the raw block of an artifact written by write_embedding_cache
     !! (stream access: magic(8) ver(4) nptcls(4) ncomp(4) box(4) smpd(4) pinds(4n) z(8nk) eigvals(8k)
     !! contrast(8n) resid(8n) resid_mean(8n) precision(8kkn) sig2(8)).
     pure function raw_block_end( nptcls, ncomp ) result( pos )
@@ -112,9 +120,18 @@ contains
         pos = 8_8 + 4_8 + 4_8 + 4_8 + 4_8 + 4_8 + 4_8*n + 8_8*n*k + 8_8*k + 3_8*8_8*n + 8_8*k*k*n + 8_8 + 1_8
     end function raw_block_end
 
-    !> Append the deconvolved block to an existing raw cache. Anything already after the raw block
-    !! (an older deconvolved block) is overwritten: the file is truncated at the raw block's end.
-    subroutine append_deconv_block( fname, nptcls, ncomp, z, precision, labels, noise_scale )
+    !> The calibrated noise scale as the artifact's trailing block, replacing any earlier one; a resume
+    !! that finds no deconvolution re-runs it at this scale
+    subroutine write_noise_scale( fname, nptcls, ncomp, noise_scale )
+        character(len=*), intent(in) :: fname
+        integer,          intent(in) :: nptcls, ncomp
+        real(dp),         intent(in) :: noise_scale
+        call write_trailing_block(fname, nptcls, ncomp, noise_scale)
+    end subroutine write_noise_scale
+
+    !> The deconvolved coordinates, precisions, mixture labels (0 when absent) and noise scale (1 when
+    !! absent) as the artifact's trailing block, replacing any earlier one
+    subroutine write_deconv_block( fname, nptcls, ncomp, z, precision, labels, noise_scale )
         character(len=*),   intent(in) :: fname
         integer,            intent(in) :: nptcls, ncomp
         real(dp),           intent(in) :: z(:,:), precision(:,:,:)
@@ -122,29 +139,97 @@ contains
         real(dp), optional, intent(in) :: noise_scale
         integer, allocatable :: lab(:)
         real(dp) :: ns
-        integer  :: u, io
-        integer(kind=8) :: pos
         allocate(lab(nptcls), source=0)
         if( present(labels) ) lab(1:nptcls) = labels(1:nptcls)
-        ns = 1.d0; if( present(noise_scale) ) ns = noise_scale
-        pos = raw_block_end(nptcls, ncomp)
-        open(newunit=u, file=fname, status='old', action='readwrite', access='stream', form='unformatted', iostat=io)
-        if( io /= 0 ) THROW_HARD('append_deconv_block: cannot open '//trim(fname))
-        write(u, pos=pos) COV_DECONV_MAGIC
-        write(u) nptcls, ncomp
-        write(u) z(1:nptcls,1:ncomp)
-        write(u) precision(1:ncomp,1:ncomp,1:nptcls)
-        write(u) lab
-        write(u) ns
-        endfile(u)
-        close(u)
-        write(logfhandle,'(A,A)') '>>> FLEX_PCA deconvolved coordinates, precisions and labels appended to ', trim(fname)
+        ns = 1.d0
+        if( present(noise_scale) ) ns = noise_scale
+        call write_trailing_block(fname, nptcls, ncomp, ns, z, precision, lab)
+        write(logfhandle,'(A,A)') '>>> FLEX_PCA deconvolved coordinates, precisions and labels added to ', trim(fname)
         call flush(logfhandle)
         deallocate(lab)
-    end subroutine append_deconv_block
+    end subroutine write_deconv_block
 
-    !> Read the deconvolved block of a cache if present and consistent with (nptcls, ncomp); found=.false.
-    !! otherwise (older caches end after the raw block).
+    !> A copy of the artifact with the new trailing block after its raw block, renamed over the artifact
+    subroutine write_trailing_block( fname, nptcls, ncomp, noise_scale, z, precision, labels )
+        character(len=*),   intent(in) :: fname
+        integer,            intent(in) :: nptcls, ncomp
+        real(dp),           intent(in) :: noise_scale
+        real(dp), optional, intent(in) :: z(:,:), precision(:,:,:)
+        integer,  optional, intent(in) :: labels(:)
+        character(len=:), allocatable :: tmp
+        integer :: u, io, l_deconv
+        if( .not. file_exists(fname) ) THROW_HARD('no flex_pca embedding artifact to extend: '//trim(fname))
+        tmp = trim(fname)//PART_SUFFIX
+        call simple_copy_file(string(fname), string(tmp))
+        open(newunit=u, file=tmp, status='old', action='readwrite', access='stream', form='unformatted', iostat=io)
+        if( io /= 0 ) THROW_HARD('cannot open the flex_pca embedding artifact copy '//tmp)
+        l_deconv = 0
+        if( present(z) .and. present(precision) .and. present(labels) ) l_deconv = 1
+        write(u, pos=raw_block_end(nptcls, ncomp)) COV_TRAIL_MAGIC
+        write(u) noise_scale, l_deconv
+        if( l_deconv == 1 )then
+            write(u) nptcls, ncomp
+            write(u) z(1:nptcls,1:ncomp)
+            write(u) precision(1:ncomp,1:ncomp,1:nptcls)
+            write(u) labels(1:nptcls)
+        endif
+        endfile(u)
+        close(u)
+        call simple_sync_file(tmp)
+        call simple_atomic_replace(tmp, fname)
+    end subroutine write_trailing_block
+
+    !> Open the artifact and position it at its trailing block: found=.false. when the file is absent,
+    !! of another layout or (nptcls, ncomp), or has no trailing block yet
+    subroutine open_trailing_block( fname, nptcls, ncomp, u, found )
+        character(len=*), intent(in)  :: fname
+        integer,          intent(in)  :: nptcls, ncomp
+        integer,          intent(out) :: u
+        logical,          intent(out) :: found
+        character(len=len(COV_CACHE_MAGIC)) :: magic0
+        character(len=len(COV_TRAIL_MAGIC)) :: magic
+        integer :: io, ver, n_c, k_c
+        found = .false.
+        u     = 0
+        ver   = 0
+        n_c   = -1
+        k_c   = -1
+        if( .not. file_exists(fname) ) return
+        open(newunit=u, file=fname, status='old', action='read', access='stream', form='unformatted', iostat=io)
+        if( io /= 0 )then
+            u = 0
+            return
+        endif
+        read(u, iostat=io) magic0, ver
+        if( io == 0 ) found = magic0 == COV_CACHE_MAGIC .and. ver == COV_CACHE_VERSION
+        if( found ) read(u, iostat=io) n_c, k_c
+        if( found ) found = io == 0 .and. n_c == nptcls .and. k_c == ncomp
+        if( found ) read(u, pos=raw_block_end(nptcls, ncomp), iostat=io) magic
+        if( found ) found = io == 0 .and. magic == COV_TRAIL_MAGIC
+        if( .not. found )then
+            close(u)
+            u = 0
+        endif
+    end subroutine open_trailing_block
+
+    !> The noise scale of the artifact's trailing block; found=.false. (and 1.0) when it has none
+    subroutine read_noise_scale( fname, nptcls, ncomp, noise_scale, found )
+        character(len=*), intent(in)  :: fname
+        integer,          intent(in)  :: nptcls, ncomp
+        real(dp),         intent(out) :: noise_scale
+        logical,          intent(out) :: found
+        integer :: u, io
+        noise_scale = 1.d0
+        call open_trailing_block(fname, nptcls, ncomp, u, found)
+        if( .not. found ) return
+        read(u, iostat=io) noise_scale
+        close(u)
+        found = io == 0
+        if( .not. found ) noise_scale = 1.d0
+    end subroutine read_noise_scale
+
+    !> The deconvolution of the artifact's trailing block if present and consistent with (nptcls, ncomp);
+    !! found=.false. otherwise (no trailing block, or the noise scale alone)
     subroutine read_deconv_block( fname, nptcls, ncomp, z, precision, labels, noise_scale, found )
         character(len=*),      intent(in)  :: fname
         integer,               intent(in)  :: nptcls, ncomp
@@ -152,31 +237,28 @@ contains
         integer,  allocatable, intent(out) :: labels(:)
         real(dp),              intent(out) :: noise_scale
         logical,               intent(out) :: found
-        character(len=len(COV_DECONV_MAGIC)) :: magic
-        character(len=len(COV_CACHE_MAGIC))  :: magic0
-        integer :: u, io, ver, n_c, k_c, n_b, k_b
-        integer(kind=8) :: pos
-        found = .false.; noise_scale = 1.d0
-        if( .not. file_exists(fname) ) return
-        open(newunit=u, file=fname, status='old', action='read', access='stream', form='unformatted', iostat=io)
-        if( io /= 0 ) return
-        read(u, iostat=io) magic0, ver
-        if( io /= 0 .or. magic0 /= COV_CACHE_MAGIC .or. ver /= COV_CACHE_VERSION )then; close(u); return; endif
-        read(u, iostat=io) n_c, k_c
-        if( io /= 0 .or. n_c /= nptcls .or. k_c /= ncomp )then; close(u); return; endif
-        pos = raw_block_end(nptcls, ncomp)
-        read(u, pos=pos, iostat=io) magic
-        if( io /= 0 .or. magic /= COV_DECONV_MAGIC )then; close(u); return; endif
-        read(u, iostat=io) n_b, k_b
-        if( io /= 0 .or. n_b /= nptcls .or. k_b /= ncomp )then; close(u); return; endif
+        integer :: u, io, l_deconv, n_b, k_b
+        noise_scale = 1.d0
+        l_deconv    = 0
+        n_b         = -1
+        k_b         = -1
+        call open_trailing_block(fname, nptcls, ncomp, u, found)
+        if( .not. found ) return
+        found = .false.
+        read(u, iostat=io) noise_scale, l_deconv
+        if( io == 0 .and. l_deconv == 1 ) read(u, iostat=io) n_b, k_b
+        if( io /= 0 .or. l_deconv /= 1 .or. n_b /= nptcls .or. k_b /= ncomp )then
+            close(u)
+            return
+        endif
         allocate(z(nptcls,ncomp), precision(ncomp,ncomp,nptcls), labels(nptcls))
         read(u, iostat=io) z
         if( io == 0 ) read(u, iostat=io) precision
         if( io == 0 ) read(u, iostat=io) labels
-        if( io == 0 ) read(u, iostat=io) noise_scale
         close(u)
         if( io /= 0 )then
-            deallocate(z, precision, labels); return
+            deallocate(z, precision, labels)
+            return
         endif
         found = .true.
     end subroutine read_deconv_block

@@ -5,11 +5,8 @@
 ! match the Cartesian cov_herm_inner path.
 module simple_flex_pca_polar
 use simple_core_module_api, only: cmplx_zero, dp, kbalpha, kbinterpol, kbwinsz, pi, simple_exception, tiny
-use simple_reconstructor,                 only: reconstructor
-use simple_kbinterpol,                    only: kbinterpol
-use simple_math,                          only: ceil_div, floor_div
-use simple_flex_reconstructor_latent_ops, only: latent_projection_weights, weighted_expanded_cmat, &
-    &LATENT_WDIM
+use simple_reconstructor,                 only: reconstructor, exp_samples
+use simple_flex_reconstructor_latent_ops, only: LATENT_WDIM
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -180,10 +177,9 @@ contains
         self%sec_bank = 0.
     end subroutine flex_polar_bank_kill
 
-    !> Polar central sections of `nrec` reconstructors at ONE direction, all at once. The sample
-    !! geometry -- 3D location, KB window, weights, in/out-of-lattice test -- depends on the sample
-    !! and the orientation alone, so it is built once and the volume loop is hoisted outside it,
-    !! exactly as project_fplanes_mean_basis does for the Cartesian sweep.
+    !> Polar central sections of `nrec` reconstructors at ONE direction, all at once: one sample set
+    !! (window geometry once per sample, exp_samples), gathered from every volume; a sample outside the
+    !! lattice reads zero.
     subroutine polar_project_recs( rec0, recs, nrec, rotmat, g, out )
         type(reconstructor), intent(in)  :: rec0        !< slot 0 (the mean)
         type(reconstructor), intent(in)  :: recs(nrec)  !< slots 1..nrec (the basis)
@@ -191,55 +187,25 @@ contains
         real,                intent(in)  :: rotmat(3,3)
         type(polar_grid_t),  intent(in)  :: g
         complex,             intent(out) :: out(:,0:)   !< (nsamp, 0:nrec)
-        type(kbinterpol) :: kbwin
-        integer, allocatable :: swin(:,:,:), jok(:)
-        real,    allocatable :: swx(:,:), swy(:,:), swz(:,:)
-        logical, allocatable :: scj(:)
-        integer :: ns_ok
-        integer :: exp_lb(3), exp_ub(3), j, jj, q, win(2,3)
-        real    :: loc(3), hb, kb, wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM)
-        complex :: val
-        kbwin  = kbinterpol(KBWINSZ, KBALPHA)
-        exp_lb = lbound(rec0%cmat_exp)
-        exp_ub = ubound(rec0%cmat_exp)
-        allocate(swin(2,3,g%nsamp), jok(g%nsamp), scj(g%nsamp))
-        allocate(swx(LATENT_WDIM,g%nsamp), swy(LATENT_WDIM,g%nsamp), swz(LATENT_WDIM,g%nsamp))
-        ns_ok  = 0
+        type(exp_samples) :: samples
+        real, allocatable :: locs(:,:)
+        real    :: hb, kb
+        integer :: j, q
+        allocate(locs(3,g%nsamp))
         do j = 1, g%nsamp
-            hb     =  g%rad(j) * g%cs(j)
-            kb     = -g%rad(j) * g%sn(j)
-            loc(1) = hb*rotmat(1,1) + kb*rotmat(2,1)
-            loc(2) = hb*rotmat(1,2) + kb*rotmat(2,2)
-            loc(3) = hb*rotmat(1,3) + kb*rotmat(2,3)
-            scj(j) = loc(1) < 0.
-            if( scj(j) ) loc = -loc
-            call latent_projection_weights(kbwin, loc, win, wx, wy, wz)
-            if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) )then
-                out(j,:) = CMPLX_ZERO
-                cycle
-            endif
-            ns_ok         = ns_ok + 1
-            jok(ns_ok)    = j
-            swin(:,:,j)   = win
-            swx(:,j)      = wx
-            swy(:,j)      = wy
-            swz(:,j)      = wz
+            hb        =  g%rad(j) * g%cs(j)
+            kb        = -g%rad(j) * g%sn(j)
+            locs(1,j) = hb*rotmat(1,1) + kb*rotmat(2,1)
+            locs(2,j) = hb*rotmat(1,2) + kb*rotmat(2,2)
+            locs(3,j) = hb*rotmat(1,3) + kb*rotmat(2,3)
         end do
-        do jj = 1, ns_ok
-            j   = jok(jj)
-            val = weighted_expanded_cmat(rec0, swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
-            if( scj(j) ) val = conjg(val)
-            out(j,0) = val
-        end do
+        call samples%new(rec0, locs)
+        call samples%gather(rec0, out(1:g%nsamp,0))
         do q = 1, nrec
-            do jj = 1, ns_ok
-                j   = jok(jj)
-                val = weighted_expanded_cmat(recs(q), swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
-                if( scj(j) ) val = conjg(val)
-                out(j,q) = val
-            end do
+            call samples%gather(recs(q), out(1:g%nsamp,q))
         end do
-        deallocate(swin, jok, scj, swx, swy, swz)
+        call samples%kill
+        deallocate(locs)
     end subroutine polar_project_recs
 
     !> Relative in-plane angle alpha between a particle orientation and a bank direction, defined by
@@ -288,7 +254,7 @@ contains
                 s1 = g%sn(j)*ca + g%cs(j)*sa            ! sin(phi + alpha)
                 hu =  g%rad(j) * c1
                 ku = -g%rad(j) * s1
-                ! window geometry once per sample (latent_projection_weights' x/y axes verbatim)
+                ! window geometry once per sample (the x/y axes of the reconstructor's exp_samples weights)
                 wlox = nint(hu) - iwinsz
                 wloy = nint(ku) - iwinsz
                 bx   = real(wlox) - hu
@@ -379,7 +345,5 @@ contains
         end do
         deallocate(dots)
     end subroutine polar_assign_directions
-
-
 
 end module simple_flex_pca_polar

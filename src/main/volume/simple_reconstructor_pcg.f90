@@ -12,7 +12,8 @@ use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d, &
     &extract_native_fourier_plane, gather_packed_window
-use simple_gridding,          only: kb_stencil_envelope_1d, kb_stencil_centered_crop_inv_envelope_1d
+use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
+use simple_pcg_lattice,       only: pcg_lattice
 use simple_pcg_solver,        only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve, &
     &PCG_STOP_INDEFINITE, PCG_XTOL, PCG_RESID_REPLACE, PCG_RHO_FLOOR_FRAC
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
@@ -28,36 +29,26 @@ private
 
 integer, parameter :: PCG_OP_MATRIXFREE = 0 !< reference operator: exact, cost ~ nptcls per iteration
 integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cost independent of nptcls
-integer, parameter :: PCG_RAW_ACCUM_VERSION = 1
+!> 2: the header carries the applied weight mass and the state weight set identity beside the count
+integer, parameter :: PCG_RAW_ACCUM_VERSION = 2
 integer, parameter :: PCG_RAW_PROV_LEN = 256
 real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< window floor of the x/window warm-start conversion, see window_div
-logical, parameter :: PCG_HARD_SOLVE_SUPPORT = .true. !< solve on the hard domain window > 0 and window the output; .false. = soft P H P, see install_support
-character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW01'
+character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW02'
 
 real,             parameter, public :: PCG_LAMBDA = 1.0e-3 !< the Tikhonov coefficient of production reconstructions
+!> a particle is a PCG member of a state when its state weight exceeds this (the sig2/w conditioning floor)
+real,             parameter, public :: PCG_WEIGHT_THRESHOLD = 1.0e-2
 public :: PCG_STOP_INDEFINITE, PCG_XTOL, PCG_RESID_REPLACE, PCG_RHO_FLOOR_FRAC
 !> a nonzero start whose initial relative residual exceeds this is discarded
 !! for a zero start (which has exactly 1.0) before iterating
 real,             parameter         :: PCG_START_MAX_REL_RESID = 1.0
 
-type :: reconstructor_pcg
+!> the padded-lattice geometry, KB window, wrap table and solve support come from pcg_lattice
+type, extends(pcg_lattice) :: reconstructor_pcg
     private
-    integer          :: box        = 0   !< native box: the solver unknown lives here
-    integer          :: boxpd      = 0   !< padf*box: every Fourier operation happens here
-    integer          :: padf       = 1   !< oversampling factor, OSMPL_PAD_FAC
-    integer          :: pad_off    = 0   !< centred pad/crop offset, (boxpd-box)/2
-    integer          :: Rnat       = 0   !< native Nyquist radius, box/2
     real             :: padsc      = 1.0 !< padf**3, undoes fwd_ft's 1/product(ldim)
-    real             :: smpd       = 1.0
-    type(kbinterpol) :: kbwin
-    integer          :: iwinsz     = 0
-    integer          :: wdim       = 0
-    integer          :: stride     = 0  !< OpenMP colouring stride for the scatter, see apply_normal
     integer          :: lims2(2,2) = 0  !< (h/k, lo/hi) plane bounds, full symmetric disk
-    integer          :: lims3(3,2) = 0  !< (h/k/m, lo/hi) volume array bounds
-    integer          :: wlims(2)   = 0  !< [lo,hi] canonical period-box wrap range
     integer          :: sqlp       = 0  !< squared Nyquist radius
-    integer          :: sq_rim     = 0  !< below this h^2+k^2 a KB window cannot wrap, see new
     real             :: lambda     = 0.0 !< effective absolute coefficient used by apply_normal
     real             :: lambda_rel = 0.0 !< coefficient relative to the weighted data-operator scale
     real             :: data_scale = 0.0 !< deterministic scale derived from raw data-only D
@@ -73,7 +64,6 @@ type :: reconstructor_pcg
     real,            allocatable  :: shifts(:,:)     !< (2,nptcls), pixels
     real,            allocatable  :: sig2(:,:)       !< (0:R,nptcls) per-particle noise power
     ! ---- lookup tables / work buffers ----
-    integer, allocatable :: wrap(:)                  !< precomputed cyci_1d over the whole reachable range
     ! (h,k)-only lookup tables over the fixed lims2 disk, see build_hk_luts
     real,    allocatable :: spafreqsq_lut(:,:)       !< spatial frequency squared
     real,    allocatable :: ang_lut(:,:)             !< atan2(k,h) astigmatism angle
@@ -81,9 +71,6 @@ type :: reconstructor_pcg
     real,    allocatable :: env(:,:,:)               !< measured KB instrument envelope, see build_env
     real,    allocatable :: invenv(:,:,:)            !< its guarded reciprocal, for deapodization
     logical              :: l_deapod = .true.        !< correct the KB roll-off, see deapod_mul
-    real,    allocatable :: mask(:,:,:)              !< solve support P (hard: window > 0), see install_support
-    real,    allocatable :: window(:,:,:)            !< soft output window; the shipped map is window*u, see set_mask
-    logical              :: l_mask = .false.
     type(image)          :: wimg                     !< persistent box^3 work image (keeps its FFTW plans)
     logical              :: wimg_exists = .false.
     integer              :: fft_nthreads = 1         !< threads owned by each persistent FFTW plan
@@ -133,7 +120,6 @@ type :: reconstructor_pcg
     real(dp) :: t_fin_rhs = 0.0_dp  !< RHS fold, deapodization and support
     real(dp) :: t_fin_rho = 0.0_dp  !< deterministic rho shell statistics
     real(dp) :: t_fin_fold = 0.0_dp !< fused reciprocal and packed-Khat pass
-    real(dp) :: t_fin_dep = 0.0_dp  !< deposition-envelope construction
     real(dp) :: t_fin_kernel = 0.0_dp !< kernel correction, FFT and calibration
     logical  :: exists = .false.
   contains
@@ -161,8 +147,6 @@ type :: reconstructor_pcg
     procedure, private :: finalize_density_accum
     procedure, private :: finalize_khat
     procedure :: set_deapod
-    procedure :: set_mask
-    procedure :: set_mask_volume
     procedure :: set_lambda_relative
     procedure :: set_ml_prior
     procedure :: set_solvent_prior
@@ -171,8 +155,6 @@ type :: reconstructor_pcg
     procedure, private :: build_env
     procedure, private :: build_hk_luts
     procedure, private :: deapod_mul
-    procedure, private :: install_support
-    procedure, private :: mask_mul
     procedure, private :: window_mul
     procedure, private :: window_div
     procedure, private :: calibrate_kernel
@@ -262,58 +244,24 @@ contains
         real,                               intent(in)    :: smpd
         real,                     optional, intent(in)    :: lambda
         integer,                  optional, intent(in)    :: fft_nthreads
-        type(image) :: tmp
-        integer     :: R, lo, hi, i
-        real        :: rlim
+        integer :: R
         call self%kill
-        self%box    = box
-        self%smpd   = smpd
         self%lambda = 0.0
         if( present(lambda) ) self%lambda = lambda
         self%fft_nthreads = nthr_glob
         if( present(fft_nthreads) ) self%fft_nthreads = max(1, fft_nthreads)
-        self%kbwin  = kbinterpol(KBWINSZ, KBALPHA)
-        self%iwinsz = ceiling(self%kbwin%get_winsz() - 0.5)
-        ! odd width centred on nint(loc): negating loc negates the window as a set,
-        ! which the h>=0 fold in fold_and_ifft relies on
-        self%wdim   = 2*self%iwinsz + 1
-        ! same-colour h-lines stay a full window apart along one axis after rotation
-        ! (max-norm >= Euclidean norm / sqrt(3)), as in reconstructor%insert_plane_oversamp
-        self%stride = ceiling(sqrt(3.0) * real(self%wdim))
-        ! oversampling: the unknown lives on the native box, every Fourier operation
-        ! on the padf-times padded lattice (centre-pad in, centre-crop out), as in
-        ! Fourier gridding; native-lattice KB interpolation is only percent-accurate
-        self%padf    = OSMPL_PAD_FAC
-        self%boxpd   = self%padf * box
-        self%pad_off = (self%boxpd - box) / 2
-        self%Rnat    = box / 2
+        ! the native box holds the unknown, the padf-times padded lattice every Fourier operation
+        ! (centre-pad in, centre-crop out), as in Fourier gridding; native-lattice KB interpolation
+        ! is only percent-accurate
+        call self%new_lattice(box, smpd, self%fft_nthreads)
         ! fwd_ft divides by product(ldim): restores the native scale at coincident frequencies
-        self%padsc   = real(self%padf)**3
-        call tmp%new([self%boxpd,self%boxpd,self%boxpd], smpd, &
-            &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads)
-        call tmp%fft()
-        self%lims3 = tmp%loop_lims(3)
-        ! true period-box wrap range: lims3(1,:) spans both Friedel Nyquist mates
-        ! (one longer than the period), axes 2/3 do not
-        self%wlims = self%lims3(2,:)
+        self%padsc = real(self%padf)**3
         ! full symmetric (both-sign h) NATIVE disk: forward_plane/adjoint_plane_add
         ! are then an exact adjoint pair for any orientation; padded loc = padf*loc
         R = self%Rnat
         self%lims2(1,:) = [-R, R]
         self%lims2(2,:) = [-R, R]
         self%sqlp       = R*R
-        ! squared plane radius below which a KB window cannot reach the wrap boundary;
-        ! |loc| = padf*sqrt(h^2+k^2) is rotation-independent, so (h,k) decides (conservative)
-        rlim = real(min(self%wlims(2) - self%iwinsz, -self%wlims(1) - self%iwinsz)) - 0.5
-        self%sq_rim = max(0, int((rlim / real(self%padf))**2) - 1)
-        call tmp%kill
-        ! precomputed cyci_1d over every index the KB window can reach
-        lo = self%wlims(1) - self%iwinsz - 1
-        hi = self%wlims(2) + self%iwinsz + 1
-        allocate(self%wrap(lo:hi))
-        do i = lo, hi
-            self%wrap(i) = cyci_1d(self%wlims, i)
-        end do
         call self%build_hk_luts
         call self%build_env
         ! c1 default: a single identity operator, replaced by set_sym
@@ -350,25 +298,14 @@ contains
     subroutine build_env( self )
         class(reconstructor_pcg), intent(inout) :: self
         real, parameter :: EPS_DIV = 1.0e-8
-        real, allocatable :: env1d(:), env1d_padded(:), inv1d(:)
+        real, allocatable :: inv1d(:)
         real    :: ctrval
         integer :: c, i, j, k
         if( allocated(self%env)    ) deallocate(self%env)
         if( allocated(self%invenv) ) deallocate(self%invenv)
-        call kb_stencil_envelope_1d(self%kbwin,self%boxpd,env1d_padded)
         call kb_stencil_centered_crop_inv_envelope_1d(self%kbwin,self%boxpd,self%box,inv1d)
-        allocate(env1d(self%box),source=env1d_padded(self%pad_off+1:self%pad_off+self%box))
-        allocate(self%env(self%box,self%box,self%box))
-        !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
-        do k = 1, self%box
-            do j = 1, self%box
-                do i = 1, self%box
-                    self%env(i,j,k) = env1d(i)*env1d(j)*env1d(k)
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        deallocate(env1d,env1d_padded)
+        ! the padded-period envelope cropped to the native box
+        self%env = self%native_deposition_envelope()
         ! normalize so the envelope is unity at the box centre
         c      = self%box/2 + 1
         ctrval = self%env(c,c,c)
@@ -617,74 +554,6 @@ contains
         v = v * self%invenv
     end subroutine deapod_mul
 
-    !> spherical support as a CONSTRAINT ON THE SOLVE: the window is image%mask3D_soft
-    !! on a unit volume (backgr=0.), the same soft mask the gridding restoration
-    !! applies; the solve runs on the domain window > 0 (install_support) and the
-    !! shipped map is window*u. Removes the solvent, where deapodization amplifies
-    !! hardest, and shrinks the problem (~18% of the box at mskdiam 180 in a 256 box).
-    !! No consumer masks a second time; warm starts return to u through window_div
-    subroutine set_mask( self, mskrad )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                     intent(in)    :: mskrad
-        type(image) :: mimg
-        real, allocatable :: ones(:,:,:)
-        if( allocated(self%mask)   ) deallocate(self%mask)
-        if( allocated(self%window) ) deallocate(self%window)
-        self%l_mask = .false.
-        if( mskrad <= 0.0 ) return
-        allocate(ones(self%box,self%box,self%box), source=1.0)
-        call mimg%new([self%box,self%box,self%box], self%smpd)
-        call mimg%set_rmat(ones, .false.)
-        call mimg%mask3D_soft(mskrad, backgr=0.)
-        self%window = mimg%get_rmat()
-        call mimg%kill
-        deallocate(ones)
-        call self%install_support
-    end subroutine set_mask
-
-    !> caller-supplied real-space [0,1] volume as the support P (clipped); same
-    !! contract as set_mask. Experimental focused support (pcg_priors_history.md dev item 5)
-    subroutine set_mask_volume( self, mskvol )
-        class(reconstructor_pcg), intent(inout) :: self
-        class(image),             intent(in)    :: mskvol
-        integer :: mdim(3)
-        mdim = mskvol%get_ldim()
-        if( any(mdim /= self%box) )then
-            THROW_HARD('support mask volume dimensions differ from the solve box; set_mask_volume')
-        endif
-        if( mskvol%is_ft() ) THROW_HARD('support mask volume must be in real space; set_mask_volume')
-        if( allocated(self%mask)   ) deallocate(self%mask)
-        if( allocated(self%window) ) deallocate(self%window)
-        self%window = mskvol%get_rmat()
-        self%window = min(1.0, max(0.0, self%window))
-        if( .not. any(self%window > 0.0) ) THROW_HARD('support mask volume is empty; set_mask_volume')
-        call self%install_support
-    end subroutine set_mask_volume
-
-    !> solve support from the window. With PCG_HARD_SOLVE_SUPPORT the domain is
-    !! window > 0: P^2 = P, so the projections in operator, RHS and preconditioner
-    !! are exact, u is the estimate on that domain and the shipped map window*u is
-    !! one estimate times one soft window, exactly what the gridding restoration
-    !! ships. The soft alternative (P = window) leaves the band a solver-state
-    !! dependent mixture of P*u and u that no windowed estimate reproduces
-    subroutine install_support( self )
-        class(reconstructor_pcg), intent(inout) :: self
-        if( allocated(self%mask) ) deallocate(self%mask)
-        if( PCG_HARD_SOLVE_SUPPORT )then
-            allocate(self%mask(self%box,self%box,self%box), source=merge(1.0, 0.0, self%window > 0.0))
-        else
-            allocate(self%mask(self%box,self%box,self%box), source=self%window)
-        endif
-        self%l_mask = .true.
-    end subroutine install_support
-
-    pure subroutine mask_mul( self, v )
-        class(reconstructor_pcg), intent(in)    :: self
-        real,                     intent(inout) :: v(self%box,self%box,self%box)
-        if( .not. self%l_mask ) return
-        v = v * self%mask
-    end subroutine mask_mul
-
     !> x = window*u, the shipped map
     pure subroutine window_mul( self, v )
         class(reconstructor_pcg), intent(in)    :: self
@@ -728,14 +597,11 @@ contains
         if( allocated(self%shifts)   ) deallocate(self%shifts)
         if( allocated(self%sig2)     ) deallocate(self%sig2)
         if( allocated(self%symmats)  ) deallocate(self%symmats)
-        if( allocated(self%wrap)     ) deallocate(self%wrap)
         if( allocated(self%spafreqsq_lut) ) deallocate(self%spafreqsq_lut)
         if( allocated(self%ang_lut)  ) deallocate(self%ang_lut)
         if( allocated(self%shell_lut)) deallocate(self%shell_lut)
         if( allocated(self%env)      ) deallocate(self%env)
         if( allocated(self%invenv)   ) deallocate(self%invenv)
-        if( allocated(self%mask)     ) deallocate(self%mask)
-        if( allocated(self%window)   ) deallocate(self%window)
         if( allocated(self%precond)  ) deallocate(self%precond)
         if( allocated(self%Khat)     ) deallocate(self%Khat)
         if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
@@ -746,11 +612,9 @@ contains
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
         self%l_accum = .false.
         self%l_rhs   = .false.
-        self%box    = 0
+        call self%kill_lattice
         self%lims2  = 0
-        self%lims3  = 0
         self%sqlp   = 0
-        self%sq_rim = 0
         self%lambda = 0.0
         self%lambda_rel = 0.0
         self%data_scale = 0.0
@@ -759,7 +623,6 @@ contains
         self%nptcls = 0
         self%nsym   = 1
         self%l_use_ctf   = .false.
-        self%l_mask      = .false.
         self%l_precond   = .false.
         self%l_kernel    = .false.
         self%ml_tau      = 1.0
@@ -1036,7 +899,7 @@ contains
 
     ! HIGH-LEVEL OPERATOR
 
-    !> the operator the solver sees: P H P with a support (set_mask), H otherwise.
+    !> the operator the solver sees: P H P with a support (set_window_sphere), H otherwise.
     !! The two concrete operators stay unmasked so the tests compare them fully
     function apply_normal( self, p ) result( hp )
         class(reconstructor_pcg), intent(inout) :: self
@@ -1324,20 +1187,30 @@ contains
     end subroutine accumulate_batch
 
     !> atomically publishes one worker's raw full-range B and D (no folding,
-    !! deapodization, flooring or solve before this); header = manifest, .tmp promoted after close
-    subroutine write_raw_accum( self, fname, state, eo, part, nparts, nptcls, provenance )
-        class(reconstructor_pcg), intent(in) :: self
-        class(string),            intent(in) :: fname
-        integer,                  intent(in) :: state, eo, part, nparts, nptcls
-        character(len=*),         intent(in) :: provenance
+    !! deapodization, flooring or solve before this); header = manifest, .tmp promoted after close.
+    !! nptcls counts the contributors; mass is their applied weight mass (nptcls under hard labels)
+    !! and wset_id the generation and layout digest of the state weight set (zero under hard labels)
+    subroutine write_raw_accum( self, fname, state, eo, part, nparts, nptcls, provenance, mass, wset_id )
+        class(reconstructor_pcg),  intent(in) :: self
+        class(string),             intent(in) :: fname
+        integer,                   intent(in) :: state, eo, part, nparts, nptcls
+        character(len=*),          intent(in) :: provenance
+        real(dp),        optional, intent(in) :: mass
+        integer(int64),  optional, intent(in) :: wset_id(2)
         type(string)                    :: tmpfname
         character(len=PCG_RAW_PROV_LEN) :: prov_fixed
         integer                         :: funit, ierr, m
-        integer(int64)                  :: file_size
+        integer(int64)                  :: file_size, id(2)
+        real(dp)                        :: mass_here
         if( state < 1 .or. eo < 0 .or. eo > 1 ) THROW_HARD('invalid raw PCG state or half')
         if( part < 1 .or. nparts < part ) THROW_HARD('invalid raw PCG part index')
         if( nptcls < 0 ) THROW_HARD('invalid raw PCG particle count')
         if( nptcls > 0 .and. .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open')
+        mass_here = real(nptcls, dp)
+        if( present(mass) ) mass_here = mass
+        id = 0_int64
+        if( present(wset_id) ) id = wset_id
+        if( mass_here < 0._dp ) THROW_HARD('invalid raw PCG applied mass')
         prov_fixed = ' '
         if( len_trim(provenance) > 0 )then
             prov_fixed(1:min(len_trim(provenance),PCG_RAW_PROV_LEN)) = &
@@ -1352,6 +1225,8 @@ contains
         call fileiochk('write_raw_accum writing magic', ierr)
         write(funit, iostat=ierr) state, eo, part, nparts, nptcls
         call fileiochk('write_raw_accum writing identity', ierr)
+        write(funit, iostat=ierr) mass_here, id
+        call fileiochk('write_raw_accum writing applied mass', ierr)
         write(funit, iostat=ierr) self%box, self%boxpd, self%padf, self%lims3, self%smpd
         call fileiochk('write_raw_accum writing geometry', ierr)
         write(funit, iostat=ierr) prov_fixed
@@ -1378,12 +1253,16 @@ contains
 
     !> adds one raw worker artifact to the open reduction; parts arrive in ascending
     !! order (reproducible association), slices are streamed
-    subroutine add_raw_accum( self, fname, state, eo, part, nparts, provenance, nptcls )
-        class(reconstructor_pcg), intent(inout) :: self
-        class(string),            intent(in)    :: fname
-        integer,                  intent(in)    :: state, eo, part, nparts
-        character(len=*),         intent(in)    :: provenance
-        integer,                  intent(out)   :: nptcls
+    subroutine add_raw_accum( self, fname, state, eo, part, nparts, provenance, nptcls, mass, wset_id )
+        class(reconstructor_pcg),  intent(inout) :: self
+        class(string),             intent(in)    :: fname
+        integer,                   intent(in)    :: state, eo, part, nparts
+        character(len=*),          intent(in)    :: provenance
+        integer,                   intent(out)   :: nptcls
+        real(dp),        optional, intent(out)   :: mass
+        integer(int64),  optional, intent(out)   :: wset_id(2)
+        real(dp)       :: mass_file
+        integer(int64) :: id_file(2)
         character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
         complex, allocatable :: bslice(:,:)
@@ -1406,6 +1285,10 @@ contains
         call fileiochk('add_raw_accum reading magic', ierr)
         read(funit, iostat=ierr) state_file, eo_file, part_file, nparts_file, nptcls
         call fileiochk('add_raw_accum reading identity', ierr)
+        read(funit, iostat=ierr) mass_file, id_file
+        call fileiochk('add_raw_accum reading applied mass', ierr)
+        if( present(mass) )    mass    = mass_file
+        if( present(wset_id) ) wset_id = id_file
         read(funit, iostat=ierr) box_file, boxpd_file, padf_file, lims_file, smpd_file
         call fileiochk('add_raw_accum reading geometry', ierr)
         read(funit, iostat=ierr) prov_file
@@ -1511,12 +1394,15 @@ contains
         integer                         :: nparts_file, nptcls_file
         integer                         :: box_file, boxpd_file, padf_file, lims_file(3,2)
         real                            :: smpd_file, fov_file, fov_cur
+        real(dp)                        :: mass_file
+        integer(int64)                  :: id_file(2)
         l_compatible = .false.
         if( .not. file_exists(fname) ) return
         call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=ierr)
         if( ierr /= 0 ) return
         read(funit, iostat=ierr) magic, version
         if( ierr == 0 ) read(funit, iostat=ierr) state_file, eo_file, part_file, nparts_file, nptcls_file
+        if( ierr == 0 ) read(funit, iostat=ierr) mass_file, id_file
         if( ierr == 0 ) read(funit, iostat=ierr) box_file, boxpd_file, padf_file, lims_file, smpd_file
         if( ierr == 0 ) read(funit, iostat=ierr) prov_file
         call fclose(funit)
@@ -1539,16 +1425,22 @@ contains
     !! its payload; status /= 0 when the file is missing, unreadable or not in the
     !! current raw format. Validation policy (exact or nested geometry, provenance)
     !! stays with the caller
-    subroutine read_pcg_raw_accum_header( fname, state, eo, part, nparts, nptcls, box, smpd, provenance, status )
-        class(string),    intent(in)  :: fname
-        integer,          intent(out) :: state, eo, part, nparts, nptcls, box
-        real,             intent(out) :: smpd
-        character(len=*), intent(out) :: provenance
-        integer,          intent(out) :: status
+    subroutine read_pcg_raw_accum_header( fname, state, eo, part, nparts, nptcls, box, smpd, provenance, status, &
+        &mass, wset_id )
+        class(string),            intent(in)  :: fname
+        integer,                  intent(out) :: state, eo, part, nparts, nptcls, box
+        real,                     intent(out) :: smpd
+        character(len=*),         intent(out) :: provenance
+        integer,                  intent(out) :: status
+        real(dp),       optional, intent(out) :: mass
+        integer(int64), optional, intent(out) :: wset_id(2)
         character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file
-        integer :: funit, version, boxpd_file, padf_file, lims_file(3,2)
+        integer        :: funit, version, boxpd_file, padf_file, lims_file(3,2)
+        real(dp)       :: mass_file
+        integer(int64) :: id_file(2)
         state = 0; eo = -1; part = 0; nparts = 0; nptcls = -1; box = 0; smpd = 0.
+        mass_file = -1._dp; id_file = 0_int64
         provenance = ''
         status = 1
         if( .not. file_exists(fname) ) return
@@ -1556,6 +1448,7 @@ contains
         if( status /= 0 ) return
         read(funit, iostat=status) magic, version
         if( status == 0 ) read(funit, iostat=status) state, eo, part, nparts, nptcls
+        if( status == 0 ) read(funit, iostat=status) mass_file, id_file
         if( status == 0 ) read(funit, iostat=status) box, boxpd_file, padf_file, lims_file, smpd
         if( status == 0 ) read(funit, iostat=status) prov_file
         call fclose(funit)
@@ -1565,6 +1458,8 @@ contains
             return
         endif
         provenance = trim(prov_file)
+        if( present(mass) )    mass    = mass_file
+        if( present(wset_id) ) wset_id = id_file
         status = 0
     end subroutine read_pcg_raw_accum_header
 
@@ -1573,13 +1468,16 @@ contains
     !! padded lattices of consecutive crops share their frequency step, so a smaller
     !! previous grid embeds exactly by index-aligned zero-extension (the old wrap rim
     !! carries aliased mass at/beyond the producing band, decaying as (1-u)^k)
-    subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls )
+    subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls, mass )
         class(reconstructor_pcg), intent(inout) :: self
         class(string),            intent(in)    :: fname
         integer,                  intent(in)    :: state, eo, part, nparts
         character(len=*),         intent(in)    :: provenance
         real,                     intent(in)    :: weight
         integer,                  intent(out)   :: nptcls
+        real(dp),       optional, intent(out)   :: mass
+        real(dp)       :: mass_file
+        integer(int64) :: id_file(2)
         character(len=16)               :: magic
         character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
         complex, allocatable :: bslice(:,:)
@@ -1602,6 +1500,9 @@ contains
         call fileiochk('add_raw_accum_weighted reading magic', ierr)
         read(funit, iostat=ierr) state_file, eo_file, part_file, nparts_file, nptcls
         call fileiochk('add_raw_accum_weighted reading identity', ierr)
+        read(funit, iostat=ierr) mass_file, id_file
+        call fileiochk('add_raw_accum_weighted reading applied mass', ierr)
+        if( present(mass) ) mass = mass_file
         read(funit, iostat=ierr) box_file, boxpd_file, padf_file, lims_file, smpd_file
         call fileiochk('add_raw_accum_weighted reading geometry', ierr)
         read(funit, iostat=ierr) prov_file
@@ -2143,43 +2044,28 @@ contains
 
     subroutine finalize_khat( self )
         class(reconstructor_pcg), intent(inout) :: self
-        real, parameter :: EPS_D = 1.0e-8
         complex, allocatable :: ctmp(:,:,:)
-        real,    allocatable :: tker(:,:,:), dep1d(:)
-        real                    :: depval
-        integer                 :: i, j, k, cdim(3)
+        real,    allocatable :: tker(:,:,:)
+        integer                 :: k
         integer(timer_int_kind) :: tp
-        cdim = self%wimg%get_array_shape()
         ! divide out the DEPOSITION envelope: scattering |T|^2 through the KB window
         ! multiplies the real-space kernel by the window's transform, a second
         ! envelope distinct from the gather's; separable exact stencil transform
-        tp = pcg_tic()
-        call kb_stencil_envelope_1d(self%kbwin,self%boxpd,dep1d)
-        self%t_fin_dep = pcg_toc(tp)
         tp = pcg_tic()
         ctmp = cmplx(self%Khat, 0.)
         call self%wimg%set_cmat(ctmp)
         call self%wimg%ifft()
         tker = self%wimg%get_rmat()
-        !$omp parallel do collapse(3) default(shared) private(i,j,k,depval) schedule(static)
+        !$omp parallel do default(shared) private(k) schedule(static)
         do k = 1, self%boxpd
-            do j = 1, self%boxpd
-                do i = 1, self%boxpd
-                    depval = dep1d(i) * dep1d(j) * dep1d(k)
-                    if( abs(depval) > EPS_D )then
-                        tker(i,j,k) = tker(i,j,k) / depval
-                    else
-                        tker(i,j,k) = 0.0
-                    endif
-                end do
-            end do
+            call self%divide_deposition_plane(tker, k)
         end do
         !$omp end parallel do
         call self%wimg%set_rmat(tker, .false.)
         call self%wimg%fft()
         ctmp      = self%wimg%get_cmat()
         self%Khat = real(ctmp)
-        deallocate(ctmp, tker, dep1d)
+        deallocate(ctmp, tker)
         self%l_kernel = .true.
         call self%calibrate_kernel
         self%t_fin_kernel = pcg_toc(tp)
@@ -3102,7 +2988,6 @@ contains
         self%t_fin_rhs    = 0.0_dp
         self%t_fin_rho    = 0.0_dp
         self%t_fin_fold   = 0.0_dp
-        self%t_fin_dep    = 0.0_dp
         self%t_fin_kernel = 0.0_dp
     end subroutine reset_finalize_profile
 
@@ -3113,13 +2998,11 @@ contains
         integer  :: out_unit
         out_unit = logfhandle
         if( present(funit) ) out_unit = funit
-        total = self%t_fin_rhs + self%t_fin_rho + self%t_fin_fold + &
-            &self%t_fin_dep + self%t_fin_kernel
+        total = self%t_fin_rhs + self%t_fin_rho + self%t_fin_fold + self%t_fin_kernel
         write(out_unit,'(a)') '>>> PCG ACCUMULATOR FINALIZATION (seconds)'
         write(out_unit,'(a,f9.3)') '    RHS fold + deapod + support : ', self%t_fin_rhs
         write(out_unit,'(a,f9.3)') '    rho shell statistics        : ', self%t_fin_rho
         write(out_unit,'(a,f9.3)') '    fused reciprocal + Khat pack: ', self%t_fin_fold
-        write(out_unit,'(a,f9.3)') '    deposition envelope setup   : ', self%t_fin_dep
         write(out_unit,'(a,f9.3)') '    kernel correction + FFT     : ', self%t_fin_kernel
         write(out_unit,'(a,f9.3)') '    ---- accounted subtotal     : ', total
     end subroutine report_finalize_profile

@@ -326,17 +326,22 @@ contains
     end subroutine test_reverse
 
     subroutine test_selec()
-        real    :: arr(NARR), ref(NARR)
-        integer :: k
-        logical :: all_ok
+        real     :: arr(NARR), ref(NARR)
+        real(dp) :: arr_dp(NARR)
+        integer  :: k
+        logical  :: all_ok, all_ok_dp
         write(*,'(A)') 'test_selec'
         ref = sorted_reals(RVALS)
-        all_ok = .true.
+        all_ok    = .true.
+        all_ok_dp = .true.
         do k = 1,NARR
             arr = RVALS ! selec reorders its input
             if( selec(k, NARR, arr) /= ref(k) ) all_ok = .false.
+            arr_dp = real(RVALS, dp)
+            if( selec(k, NARR, arr_dp) /= real(ref(k), dp) ) all_ok_dp = .false.
         enddo
         call assert_true(all_ok, 'selec(k, n, arr) is the k-th smallest value for every k (the header comment says largest)')
+        call assert_true(all_ok_dp, 'selec on double precision is the k-th smallest value for every k')
     end subroutine test_selec
 
     !---------------- unique, orderings, reordering ----------------

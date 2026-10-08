@@ -2,16 +2,12 @@
 !!
 !! Everything the run publishes besides the state maps themselves: the UMAP readouts of the
 !! embedding (kept so the state stage can colour the same figure by delivered state), the
-!! coordinate/weight/target/prior tables, the eigenvalue table, the manifest, and the optional
-!! nonuniform filtering of the delivered maps from the consensus half maps.
+!! coordinate/weight/target/prior tables, the eigenvalue table and the manifest.
 module simple_flex_pca_delivery_3d
-use simple_core_module_api, only: del_file, dp, file_exists, int2str_pad, logfhandle, mrc_ext, simple_exception, &
-    &string
+use simple_core_module_api,  only: del_file, dp, logfhandle, simple_exception
 use simple_flex_pca_records, only: flex_latent_readout, flex_selection, flex_fit_model, flex_latent, flex_state_set
 use simple_builder,          only: builder
-use simple_image,            only: image
 use simple_parameters,       only: parameters
-use simple_reconstructor,    only: reconstructor
 use simple_umap,             only: umap_embed, umap_subsample
 use simple_flex_pca_plot,    only: flex_plot_latent_jpg
 implicit none
@@ -20,7 +16,6 @@ private
 
 public :: deliver_latent_readouts, write_states_umap_figure
 public :: write_covariance_tables, write_covariance_eigenvolumes, write_covariance_manifest
-public :: apply_consensus_nu_filter
 
 !> UMAP coordinates of the last delivery readout (and their particle indices), kept so the state
 !! stage can draw the same embedding coloured by the delivered states (flex_pca_umap_states.jpg)
@@ -257,71 +252,5 @@ contains
         write(u,'(A,L1)') 'crossfsc_coupled=',.true.
         close(u)
     end subroutine write_covariance_manifest
-
-    !> Nonuniform filtering of the delivered state maps, using ONE filter from the CONSENSUS half maps.
-    subroutine apply_consensus_nu_filter( params, nstates )
-        use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vol, &
-            &cleanup_nu_filter, write_nu_local_resolution_map, get_nu_filtmap_finest_selected_lp
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: nstates
-        type(image)  :: vol_e, vol_o, vin, vout
-        type(string) :: fn, fn_out, spe, spo
-        character(len=:), allocatable :: pe, po, base
-        integer :: s, ldim(3)
-        ! consensus half maps: explicit vol_even/vol_odd if given, else derived from the vol1 stem
-        base = params%vols(1)%to_char()
-        if( len_trim(params%vol_even%to_char()) > 0 .and. len_trim(params%vol_odd%to_char()) > 0 )then
-            pe = params%vol_even%to_char(); po = params%vol_odd%to_char()
-        else
-            if( index(base, MRC_EXT) < 1 )then
-                write(logfhandle,'(A)') '>>> FLEX_PCA nufilt: cannot derive half-map names from vol1; &
-                    &pass vol_even and vol_odd explicitly'
-                return
-            endif
-            pe = base(:index(base, MRC_EXT, back=.true.)-1)//'_even'//MRC_EXT
-            po = base(:index(base, MRC_EXT, back=.true.)-1)//'_odd'//MRC_EXT
-        endif
-        if( .not. file_exists(pe) .or. .not. file_exists(po) )then
-            write(logfhandle,'(A)') '>>> FLEX_PCA nufilt: consensus half maps not found ('//pe//', '//po// &
-                &'); skipping nonuniform filtering'
-            return
-        endif
-        write(logfhandle,'(A)') '>>> FLEX_PCA nonuniform filter from the consensus half maps:'
-        write(logfhandle,'(A)') '>>>   '//pe
-        write(logfhandle,'(A)') '>>>   '//po
-        call vol_e%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-        call vol_o%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-        spe = pe; spo = po
-        call vol_e%read_and_crop(spe, params%smpd, params%box_crop, params%smpd_crop)
-        call vol_o%read_and_crop(spo, params%smpd, params%box_crop, params%smpd_crop)
-        call spe%kill; call spo%kill
-        ldim = [params%box_crop,params%box_crop,params%box_crop]
-        call setup_nu_dmats(vol_e, vol_o, params%mskdiam, [real ::])
-        call optimize_nu_cutoff_finds()
-        write(logfhandle,'(A,F8.2,A)') '>>> FLEX_PCA nufilt: finest selected local resolution ', &
-            &get_nu_filtmap_finest_selected_lp(),' A'
-        fn = 'flex_pca_nu_locres'//MRC_EXT
-        call write_nu_local_resolution_map(fn)
-        call fn%kill
-        ! apply the SAME filter map to every delivered volume
-        do s = 1, nstates
-            fn     = 'flex_pca_state_'//int2str_pad(s,3)//MRC_EXT
-            fn_out = 'flex_pca_state_'//int2str_pad(s,3)//'_nu'//MRC_EXT
-            if( .not. file_exists(fn%to_char()) )then
-                call fn%kill; call fn_out%kill; cycle
-            endif
-            call vin%new(ldim, params%smpd_crop)
-            call vin%read(fn)
-            call nu_filter_vol(vin, vout)
-            call vout%write(fn_out, del_if_exists=.true.)
-            call vin%kill; call vout%kill
-            call fn%kill; call fn_out%kill
-        end do
-        call cleanup_nu_filter()
-        call vol_e%kill; call vol_o%kill
-        write(logfhandle,'(A)') '>>> FLEX_PCA nonuniform-filtered maps written as *_nu.mrc &
-            &(originals retained); local resolution map: flex_pca_nu_locres.mrc'
-        call flush(logfhandle)
-    end subroutine apply_consensus_nu_filter
 
 end module simple_flex_pca_delivery_3d

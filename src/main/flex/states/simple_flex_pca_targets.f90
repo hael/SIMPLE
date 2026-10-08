@@ -1,11 +1,11 @@
 !@descr: flex_pca latent targets and basis rotations for state placement
 module simple_flex_pca_targets
-use simple_core_module_api, only: dp, dtiny, eigsrt, hpsort, jacobi, logfhandle, matinv, simple_exception
-use simple_image,         only: image
-use simple_srch_sort_loc, only: hpsort
-use simple_finch,         only: finch_hierarchy, fit_finch, finch_representatives, select_finch_level, refine_finch_level
-use simple_kd_tree,       only: kd_tree, knn_table
-use simple_linalg,        only: jacobi, eigsrt, matinv
+use simple_core_module_api, only: dp, dtiny, logfhandle
+use simple_srch_sort_loc,   only: hpsort
+use simple_kd_tree,         only: kd_tree, knn_table
+use simple_linalg,          only: jacobi, eigsrt, matinv
+use simple_kmeans,          only: kmeans
+use simple_kcenter,         only: kcenter
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -34,9 +34,10 @@ contains
         real,     allocatable :: feats(:,:)
         integer,  allocatable :: nodes(:), er(:), ec(:), sel(:), cell(:), ccnt(:)
         real(dp), allocatable :: ev(:), sig(:), qdeg(:), ddeg(:), V(:,:), W(:,:), lam(:)
-        real(dp), allocatable :: psi(:,:), dmin(:), rw(:), zbar(:), sdv(:)
-        real(dp) :: d2, s, nrm, best, wk1
-        integer  :: nnode, i, j, q, e, nedge, it, m, c, ibest, ni
+        real(dp), allocatable :: psi(:,:), rw(:), zbar(:), sdv(:)
+        type(kcenter) :: kc
+        real(dp) :: d2, s, nrm, wk1
+        integer  :: nnode, i, j, q, e, nedge, it, m, c, ni
         ok = .false.
         if( nstates < 2 .or. nptcls < 100 ) return
         nnode = min(nptcls, NNODE_MAX)
@@ -144,48 +145,13 @@ contains
                 psi(i,j) = V(i,j+1)*ddeg(i)/nrm * (s/wk1)
             end do
         end do
-        ! greedy k-center: seed farthest from the centroid, then farthest from everything chosen -- coverage
-        allocate(sel(nstates), dmin(nnode))
-        do j = 1, NDIFF
-            s = sum(psi(:,j))/real(nnode,dp)
-            psi(:,j) = psi(:,j) - s
-        end do
-        best = -1.d0; ibest = 1
-        do i = 1, nnode
-            d2 = sum(psi(i,:)**2)
-            if( d2 > best )then
-                best = d2; ibest = i
-            endif
-        end do
-        sel(1) = ibest
-        do i = 1, nnode
-            dmin(i) = sum((psi(i,:)-psi(ibest,:))**2)
-        end do
-        do c = 2, nstates
-            best = -1.d0; ibest = 1
-            do i = 1, nnode
-                if( dmin(i) > best )then
-                    best = dmin(i); ibest = i
-                endif
-            end do
-            sel(c) = ibest
-            do i = 1, nnode
-                dmin(i) = min(dmin(i), sum((psi(i,:)-psi(ibest,:))**2))
-            end do
-        end do
-        ! each node takes the nearest selected node's CELL; the target is the cell's mean RAW latent, which
-        ! regresses the RIM nodes k-center picks by design back onto the state they cover.
-        allocate(cell(nnode), ccnt(nstates), source=0)
-        do i = 1, nnode
-            best = huge(1.d0); ibest = 1
-            do c = 1, nstates
-                d2 = sum((psi(i,:) - psi(sel(c),:))**2)
-                if( d2 < best )then
-                    best = d2; ibest = c
-                endif
-            end do
-            cell(i) = ibest
-        end do
+        ! greedy k-center (simple_kcenter): seed farthest from the centroid, then farthest from everything
+        ! chosen -- coverage. Each node takes the nearest selected node's CELL; the target is the cell's mean
+        ! RAW latent, which regresses the RIM nodes k-center picks by design back onto the state they cover.
+        allocate(sel(nstates), cell(nnode), ccnt(nstates), source=0)
+        call kc%new(psi, nstates)
+        call kc%cluster(sel, cell)
+        call kc%kill
         centroids = 0.d0
         do i = 1, nnode
             c = cell(i)
@@ -205,96 +171,26 @@ contains
             &' knn=',KNN,' lambda2=',lam(2),' lambda3=',lam(3)
         ok = .true.
         call tree%kill; call knntab%kill
-        deallocate(feats, nodes, er, ec, ev, sig, qdeg, ddeg, V, W, lam, psi, dmin, sel, rw, zbar, sdv, cell, ccnt)
+        deallocate(feats, nodes, er, ec, ev, sig, qdeg, ddeg, V, W, lam, psi, sel, rw, zbar, sdv, cell, ccnt)
     end subroutine diffusion_kcenter_targets
 
-    !> Deterministic k-means in the SAME wcomp metric the kernel uses, so placement and weighting agree.
-    !! Seeded farthest-point from the particle nearest the latent mean, so no RNG is involved.
+    !> Deterministic k-means (simple_kmeans) in the SAME wcomp metric the kernel uses, so placement and
+    !! weighting agree: seeded at the particle nearest the latent mean, then farthest-point, no RNG.
+    !! Targets come ordered by decreasing population.
     subroutine kmeans_latent_targets( z, nptcls, ncomp, nstates, wcomp, centroids )
         integer,  intent(in)  :: nptcls, ncomp, nstates
         real(dp), intent(in)  :: z(nptcls,ncomp), wcomp(ncomp)
         real(dp), intent(out) :: centroids(ncomp,nstates)
         integer, parameter :: MAXIT = 50
-        real(dp), allocatable :: mind(:), csum(:,:), zbar(:)
-        integer,  allocatable :: cnt(:), memb(:)
-        real(dp) :: d2, best, dmax
-        integer  :: i, q, s, it, ibest, iseed, nchanged
-        logical  :: l_reseed
-        allocate(mind(nptcls), csum(ncomp,nstates), zbar(ncomp), cnt(nstates), memb(nptcls))
-        do q = 1, ncomp
-            zbar(q) = sum(z(:,q)) / real(nptcls,dp)
-        end do
-        best = huge(1.d0); iseed = 1
-        do i = 1, nptcls
-            d2 = 0.d0
-            do q = 1, ncomp
-                d2 = d2 + wcomp(q)*(z(i,q)-zbar(q))**2
-            end do
-            if( d2 < best )then
-                best  = d2
-                iseed = i
-            endif
-        end do
-        centroids(:,1) = z(iseed,:)
-        mind = huge(1.d0)
-        do s = 2, nstates
-            dmax = -1.d0; iseed = 1
-            do i = 1, nptcls
-                d2 = 0.d0
-                do q = 1, ncomp
-                    d2 = d2 + wcomp(q)*(z(i,q)-centroids(q,s-1))**2
-                end do
-                mind(i) = min(mind(i), d2)
-                if( mind(i) > dmax )then
-                    dmax  = mind(i)
-                    iseed = i
-                endif
-            end do
-            centroids(:,s) = z(iseed,:)
-        end do
-        memb = 0
-        do it = 1, MAXIT
-            nchanged = 0
-            !$omp parallel do default(shared) private(i,q,s,d2,best,ibest) schedule(static) reduction(+:nchanged)
-            do i = 1, nptcls
-                best = huge(1.d0); ibest = 1
-                do s = 1, nstates
-                    d2 = 0.d0
-                    do q = 1, ncomp
-                        d2 = d2 + wcomp(q)*(z(i,q)-centroids(q,s))**2
-                    end do
-                    if( d2 < best )then
-                        best  = d2
-                        ibest = s
-                    endif
-                end do
-                if( memb(i) /= ibest ) nchanged = nchanged + 1
-                memb(i) = ibest
-                mind(i)   = best
-            end do
-            !$omp end parallel do
-            csum = 0.d0; cnt = 0
-            do i = 1, nptcls
-                cnt(memb(i))    = cnt(memb(i)) + 1
-                csum(:,memb(i)) = csum(:,memb(i)) + z(i,:)
-            end do
-            l_reseed = .false.
-            do s = 1, nstates
-                if( cnt(s) > 0 )then
-                    centroids(:,s) = csum(:,s) / real(cnt(s),dp)
-                else
-                    ! empty cluster: reseed on the worst-fitted particle
-                    iseed          = maxloc(mind, dim=1)
-                    centroids(:,s) = z(iseed,:)
-                    mind(iseed)    = -1.d0
-                    l_reseed       = .true.
-                endif
-            end do
-            if( nchanged == 0 .and. .not. l_reseed ) exit
-        end do
-        write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA k-means iterations=',min(it,MAXIT), &
-            &'  reassigned on last pass=',nchanged
-        deallocate(mind, csum, zbar, cnt, memb)
+        type(kmeans)         :: km
+        integer, allocatable :: labels(:)
+        allocate(labels(nptcls))
+        call km%new(z, nstates, wdim=wcomp, maxits=MAXIT)
+        call km%cluster(labels, centroids)
+        write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA k-means iterations=',km%get_niters(), &
+            &'  reassigned on last pass=',km%get_nchanged()
+        call km%kill
+        deallocate(labels)
     end subroutine kmeans_latent_targets
 
     subroutine path_latent_targets( z, nptcls, ncomp, nstates, wcomp, centroids )
@@ -394,14 +290,13 @@ contains
         ! coordinate ALONG the path. A full-rank Mahalanobis kernel also measures the off-path directions, so
         ! an on-path but noisy particle falls outside every support -- that is what strands the dataset.
         real(dp), intent(out) :: proj_out(nptcls), tproj_out(nstates)
-        integer,  parameter :: NPOWER         = 128
         real(dp), parameter :: RHO_PATH_FLOOR = 0.1d0
-        real(dp), allocatable :: zbar(:), u(:), unew(:), cov(:,:), proj(:), rw(:), zc(:,:), pedge(:)
+        real(dp), allocatable :: zbar(:), u(:), cov(:,:), evals(:), evecs(:,:), proj(:), rw(:), zc(:,:), pedge(:)
         real,     allocatable :: sproj(:)
         integer,  allocatable :: cnt(:)
-        real(dp) :: rmax, nrm, d
-        integer  :: i, q, s, it, ilo, islot, slo, shi
-        allocate(zbar(ncomp), u(ncomp), unew(ncomp), cov(ncomp,ncomp), proj(nptcls), &
+        real(dp) :: rmax, d
+        integer  :: i, q, s, ilo, islot, slo, shi, nrot
+        allocate(zbar(ncomp), u(ncomp), cov(ncomp,ncomp), evals(ncomp), evecs(ncomp,ncomp), proj(nptcls), &
             &sproj(nptcls), cnt(nstates), rw(ncomp), zc(nptcls,ncomp), pedge(max(1,nstates-1)))
         do q = 1, ncomp
             zbar(q) = sum(z(:,q)) / real(nptcls,dp)
@@ -420,19 +315,16 @@ contains
         end do
         !$omp end parallel do
         cov = matmul(transpose(zc), zc)
-        ! leading eigenvector by power iteration: deterministic, and ncomp is at most a few dozen
-        u = 1.d0 / sqrt(real(ncomp,dp))
-        do it = 1, NPOWER
-            unew = matmul(cov, u)
-            nrm  = sqrt(sum(unew*unew))
-            if( nrm <= DTINY ) exit
-            unew = unew / nrm
-            if( sum(abs(unew-u)) < 1.d-12 )then
-                u = unew
-                exit
-            endif
-            u = unew
-        end do
+        ! leading eigenvector; its sign is pinned so the components sum positive (the slices run in that
+        ! direction), and a null covariance gives the uniform direction
+        call jacobi(cov, ncomp, ncomp, evals, evecs, nrot)
+        call eigsrt(evals, evecs, ncomp, ncomp)
+        if( evals(1) > DTINY )then
+            u = evecs(:,1)
+            if( sum(u) < 0.d0 ) u = -u
+        else
+            u = 1.d0 / sqrt(real(ncomp,dp))
+        endif
         !$omp parallel do default(shared) private(i,q,d) schedule(static)
         do i = 1, nptcls
             d = 0.d0
@@ -513,7 +405,7 @@ contains
         end do
         write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> FLEX_PCA path ordering direction over ',ncomp, &
             &' components; slice occupancies min=',minval(cnt),'  leading |u| on z1=',abs(u(1))
-        deallocate(zbar, u, unew, cov, proj, sproj, cnt, rw, zc, pedge)
+        deallocate(zbar, u, cov, evals, evecs, proj, sproj, cnt, rw, zc, pedge)
     end subroutine reliability_path_targets
 
     !> Reliability proxy from a cached embedding: observed spread over mean posterior variance, mapped

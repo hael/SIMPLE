@@ -45,7 +45,6 @@ contains
         strategy = create_rec3D_strategy(cline)
         call strategy%initialize(params, build, cline)
         call strategy%execute(params, build, cline)
-        call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params, build, cline)
         call rec_backend%kill
         ! End gracefully (single unified termination)
@@ -55,37 +54,78 @@ contains
 
     subroutine exec_rec3D_distr_worker( self, cline )
         use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_worker
+        use simple_state_weight_set,   only: state_weight_set
         class(commander_rec3D_worker), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
+        type(state_weight_set) :: wset
         integer, allocatable :: pinds(:)
         integer              :: nptcls2update
         logical              :: l_sigma_loaded
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
-        if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
+        if( cline%defined('pindfile') )then
+            ! the master's rows (simple_rec3D_service), this part's range of them
+            call read_part_rows(params%pindfile, [params%fromp,params%top], pinds)
+            nptcls2update = size(pinds)
+            ! as sample4update_reprod: a part without rows of the previous sampling is an error
+            if( nptcls2update == 0 .and. params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
+                THROW_HARD('no particles sampled in previous sampling')
+            endif
+        else if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
         else
             ! we sample all state > 0 and updatecnt > 0
             call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
         endif
+        ! m_estimator=flex: every particle weighs into the states of the project's state weight set
+        if( params%l_m_estimator_flex ) call wset%new(build%spproj, build%spproj_field)
         if( trim(params%rec_backend) == 'pcg' )then
-            call execute_rec3D_pcg_worker(params, build, cline, pinds)
+            if( params%l_m_estimator_flex )then
+                call execute_rec3D_pcg_worker(params, build, cline, pinds, wset)
+            else
+                call execute_rec3D_pcg_worker(params, build, cline, pinds)
+            endif
         else
             if( params%cc_objfun == OBJFUN_EUCLID )then
                 call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
                     &l_sigma_loaded)
                 if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
             endif
-            call calc_3Drec(params, build, nptcls2update, pinds)
+            if( params%l_m_estimator_flex )then
+                call calc_3Drec(params, build, nptcls2update, pinds, wset)
+            else
+                call calc_3Drec(params, build, nptcls2update, pinds)
+            endif
         endif
+        call wset%kill
         ! cleanup
         call build%esig%kill
         call build%kill_strategy3D_tbox
         call build%kill_general_tbox
         call qsys_declare_part_finished(params, string('simple_commanders_rec :: exec_rec3D'))
     end subroutine exec_rec3D_distr_worker
+
+    !> The rows of a row list (one index per line) that fall in fromto, in list order
+    subroutine read_part_rows( fname, fromto, pinds )
+        class(string),        intent(in)  :: fname
+        integer,              intent(in)  :: fromto(2)
+        integer, allocatable, intent(out) :: pinds(:)
+        integer, allocatable :: rows(:)
+        integer :: funit, io_stat, n, i
+        n = nlines(fname)
+        allocate(rows(n))
+        call fopen(funit, file=fname, status='OLD', action='READ', iostat=io_stat)
+        call fileiochk('read_part_rows: cannot open '//fname%to_char(), io_stat)
+        do i = 1, n
+            read(funit,*,iostat=io_stat) rows(i)
+            call fileiochk('read_part_rows: cannot read '//fname%to_char(), io_stat)
+        enddo
+        call fclose(funit)
+        pinds = pack(rows, rows >= fromto(1) .and. rows <= fromto(2))
+        deallocate(rows)
+    end subroutine read_part_rows
 
     subroutine exec_random_rec( self, cline )
         class(random_rec_commander), intent(inout) :: self

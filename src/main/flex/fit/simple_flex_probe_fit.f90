@@ -143,13 +143,6 @@ interface
         real,    intent(in) :: Us(ldu,0:*)
     end function polar_ring_selfpower
 
-    module subroutine project_fplane_mean_banded( rec, o, fpl_ref, fpl_out )
-        type(reconstructor), intent(in)    :: rec
-        class(ori),          intent(inout) :: o
-        type(fplane_type),   intent(in)    :: fpl_ref
-        type(fplane_type),   intent(inout) :: fpl_out
-    end subroutine project_fplane_mean_banded
-
     module subroutine polar_hybrid_exact_accum( rec0, recs, ncomp, o, fpl, hex, kex, npos, &
             &Gd, bd, cd, e_mm, myv )
         type(reconstructor), intent(in)    :: rec0

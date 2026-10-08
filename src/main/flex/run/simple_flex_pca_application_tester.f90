@@ -1,8 +1,10 @@
 !@descr: library-tier end-to-end tests of the flex_pca application on a deterministic two-state phantom
-!! The fixture exercises the production shared-memory commander path for every basis/state backend pair.
+!! The fixture exercises the production shared-memory commander path for every basis/state backend pair,
+!! and once more on the gridding pair with the bandwidth cross-validation (nbins > 1) and a covariance box
+!! below the native one (trial maps at box_crop, delivered maps at the native box).
 !! It uses a project-backed simulation because publication is part of the application contract: state maps,
 !! kernel weights and hard labels must agree. Truth-quality metrics are printed for phase-0 calibration;
-!! state-count, chance-separation, same-frame map ordering and store consistency are independent guards.
+!! state-count, chance-separation, same-frame map ordering and weight-set consistency are independent guards.
 module simple_flex_pca_application_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int32, real32, real64
@@ -11,7 +13,7 @@ use simple_core_module_api, only: ctfflag_yes, ctfparams, cwd_glob, file_exists,
 use simple_cmdline,             only: cmdline
 use simple_commanders_flex_pca, only: commander_flex_pca
 use simple_commanders_sim,      only: commander_simulate_particles
-use simple_flex_weights_state,  only: flex_weights_store
+use simple_state_weight_set,    only: state_weight_set
 use simple_image,               only: image
 use simple_oris,                only: oris
 use simple_sp_project,          only: sp_project
@@ -23,13 +25,13 @@ implicit none
 private
 
 public :: run_all_flex_pca_application_tests
-public :: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project
+public :: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project, read_state_weight_table
 public :: configure_flex_pca_phantom
 
 integer, parameter         :: BOX                             = 64
 integer, parameter         :: NPTCLS                          = 2000
 integer, parameter         :: NHALF                           = NPTCLS / 2
-integer, parameter         :: NARMS                           = 4
+integer, parameter         :: NARMS                           = 5
 integer, parameter         :: MIN_NEFF                        = 100
 integer, parameter         :: NTHR                            = 4
 integer, parameter         :: SEED_A                          = 202610061
@@ -57,11 +59,15 @@ real,    parameter, public :: FLEX_PHANTOM_MSKDIAM            = MSKDIAM
 real,    parameter, public :: FLEX_PHANTOM_LABEL_ACCURACY_MIN = LABEL_ACCURACY_MIN
 
 character(len=8),  parameter :: BASIS_BACKEND(NARMS) = [character(len=8) :: &
-    &'gridding', 'pcg',      'gridding', 'pcg']
+    &'gridding', 'pcg',      'gridding', 'pcg',      'gridding']
 character(len=8),  parameter :: STATE_BACKEND(NARMS) = [character(len=8) :: &
-    &'gridding', 'gridding', 'pcg',      'pcg']
-character(len=17), parameter :: ARM_TAG(NARMS)       = [character(len=17) :: &
-    &'grid_basis_grid', 'pcg_basis_grid', 'grid_basis_pcg', 'pcg_basis_pcg']
+    &'gridding', 'gridding', 'pcg',      'pcg',      'gridding']
+character(len=18), parameter :: ARM_TAG(NARMS)       = [character(len=18) :: &
+    &'grid_basis_grid', 'pcg_basis_grid', 'grid_basis_pcg', 'pcg_basis_pcg', 'grid_cv_crop48']
+!> bandwidth cross-validation bins of each arm; 1 skips the cross-validation
+integer,           parameter :: ARM_NBINS(NARMS)     = [1, 1, 1, 1, 4]
+!> covariance box of each arm (box_crop)
+integer,           parameter :: ARM_BOX_CROP(NARMS)  = [BOX, BOX, BOX, BOX, 48]
 
 type :: arm_result
     integer :: nstates = 0
@@ -100,7 +106,8 @@ contains
             call build_flex_pca_phantom_project(arm_dir//'/phantom.simple', stack, oritab)
             call simple_chdir(arm_dir)
             CWD_GLOB = arm_dir%to_char()
-            call run_application_arm(BASIS_BACKEND(arm), STATE_BACKEND(arm), truth_mean, result(arm))
+            call run_application_arm(BASIS_BACKEND(arm), STATE_BACKEND(arm), ARM_NBINS(arm), ARM_BOX_CROP(arm), &
+                &truth_mean, result(arm))
             call validate_arm(ARM_TAG(arm), truth_a, truth_b, truth_diff, result(arm))
             call simple_chdir(root)
             CWD_GLOB = root%to_char()
@@ -256,6 +263,7 @@ contains
         class(sp_project), allocatable :: project
         class(oris),       allocatable :: poses
         type(ctfparams) :: ctf
+        type(cmdline)   :: cline_compenv
         integer :: i, ipose, eo
         allocate(project, poses)
         call poses%new(NHALF, is_ptcl=.true.)
@@ -281,19 +289,47 @@ contains
             call project%os_ptcl2D%set(i, 'eo', real(eo))
         enddo
         call project%update_projinfo(projfile)
+        ! the computing environment new_project writes; the distributed master's queue setup reads it
+        call project%update_compenv(cline_compenv)
         call project%write(projfile)
         call poses%kill
         call project%kill
         deallocate(project, poses)
     end subroutine build_flex_pca_phantom_project
 
+    !> The project's state weight set as a table: weights(nstates,nptcls) and the hard labels(nptcls)
+    subroutine read_state_weight_table( project, field, nstates, weights, labels, status, message )
+        class(sp_project),         intent(in)  :: project
+        class(oris),               intent(in)  :: field
+        integer,                   intent(out) :: nstates
+        real(real32), allocatable, intent(out) :: weights(:,:)
+        integer,      allocatable, intent(out) :: labels(:)
+        integer,                   intent(out) :: status
+        character(len=*),          intent(out) :: message
+        type(state_weight_set)    :: weight_set
+        real(real32), allocatable :: column(:)
+        integer :: s
+        nstates = 0
+        call weight_set%new(project, field, status, message)
+        if( status /= 0 ) return
+        nstates = weight_set%get_nstates()
+        allocate(weights(nstates, weight_set%get_nptcls()))
+        do s = 1, nstates
+            call weight_set%get_weights(s, column)
+            weights(s,:) = column
+        enddo
+        call weight_set%get_labels(labels)
+        call weight_set%kill
+    end subroutine read_state_weight_table
+
     !> The common production command line. nparts=1 selects shared memory; nparts>1 selects
     !! the distributed master and its real worker processes through the local queue system.
-    subroutine configure_flex_pca_phantom( cline, truth_mean, basis_backend, state_backend, nparts, nthr )
-        class(cmdline),   intent(inout) :: cline
-        class(string),    intent(in)    :: truth_mean
-        character(len=*), intent(in)    :: basis_backend, state_backend
-        integer,          intent(in)    :: nparts, nthr
+    subroutine configure_flex_pca_phantom( cline, truth_mean, basis_backend, state_backend, nparts, nthr, nbins, box_crop )
+        class(cmdline),    intent(inout) :: cline
+        class(string),     intent(in)    :: truth_mean
+        character(len=*),  intent(in)    :: basis_backend, state_backend
+        integer,           intent(in)    :: nparts, nthr
+        integer, optional, intent(in)    :: nbins, box_crop
         call cline%set('prg',               'flex_pca')
         call cline%set('projfile',          'phantom.simple')
         call cline%set('mkdir',             'no')
@@ -302,7 +338,7 @@ contains
         call cline%set('pgrp',              'c1')
         call cline%set('mskdiam',           MSKDIAM)
         call cline%set('box_crop',          BOX)
-        call cline%set('box_rec',           BOX)
+        if( present(box_crop) ) call cline%set('box_crop', box_crop)
         call cline%set('lp',                8.0)
         call cline%set('nstates',           1)
         call cline%set('npreimages',        3)
@@ -314,6 +350,7 @@ contains
         call cline%set('n_probe_iters',     2)
         call cline%set('column_separation', 2)
         call cline%set('nbins',             1)
+        if( present(nbins) ) call cline%set('nbins', nbins)
         call cline%set('rec_states',        'yes')
         call cline%set('rec_backend',       basis_backend)
         call cline%set('rec_states_backend', state_backend)
@@ -322,16 +359,15 @@ contains
         call cline%set('objfun',            'euclid')
         call cline%set('sigma_est',         'global')
         call cline%set('umap',              'no')
-        call cline%set('nufilt',            'no')
         call cline%set('cache',             'no')
         call cline%set('qsys_name',         'local')
         call cline%set('nparts',            nparts)
         call cline%set('nthr',              nthr)
-        call cline%set('outvol',            'flex_pca_state_001.mrc')
     end subroutine configure_flex_pca_phantom
 
-    subroutine run_application_arm( basis_backend, state_backend, truth_mean, result )
+    subroutine run_application_arm( basis_backend, state_backend, nbins, box_crop, truth_mean, result )
         character(len=*), intent(in)  :: basis_backend, state_backend
+        integer,          intent(in)  :: nbins, box_crop
         class(string),    intent(in)  :: truth_mean
         type(arm_result), intent(out) :: result
         class(cmdline),            allocatable :: cline
@@ -339,7 +375,8 @@ contains
         integer(timer_int_kind) :: started
         allocate(cline, flex_pca)
         result = arm_result()
-        call configure_flex_pca_phantom(cline, truth_mean, basis_backend, state_backend, 1, NTHR)
+        call configure_flex_pca_phantom(cline, truth_mean, basis_backend, state_backend, 1, NTHR, nbins=nbins, &
+            &box_crop=box_crop)
         call set_fixed_seed(SEED_APP, propagate=.true.)
         started = tic()
         call flex_pca%execute(cline)
@@ -354,22 +391,19 @@ contains
         type(arm_result), intent(inout) :: result
         class(sp_project), allocatable :: project
         class(oris),       allocatable :: field
-        type(flex_weights_store) :: store
         real(real32), allocatable :: weights(:,:)
-        real(real64), allocatable :: scalars(:,:)
-        integer(int32), allocatable :: labels(:)
+        integer,      allocatable :: labels(:)
         integer, allocatable :: truth_counts(:,:)
         real,    allocatable :: corr(:,:)
         integer :: status, i, state, state_a, state_b, matched_a, matched_b, truth_label, predicted
-        integer :: nlabel_mismatch, nweight_mismatch
+        integer :: nlabel_mismatch, nweight_mismatch, nselection_mismatch
         character(len=STDLEN) :: message
         character(len=STDLEN) :: state_tag
         real :: best_score
         allocate(project, field)
         call project%read(string('phantom.simple'))
         field = project%os_ptcl3D
-        call store%new(project, field, BOX, SMPD, status, message)
-        if( status == 0 ) call store%take(result%nstates, weights, labels, scalars)
+        call read_state_weight_table(project, field, result%nstates, weights, labels, status, message)
         call assert_int(status, 0, trim(tag)//': delivered flex-weight set validates')
         if( status /= 0 )then
             write(logfhandle,'(A,A)') '>>> FLEX_PCA PHANTOM weight-store failure: ', trim(message)
@@ -378,7 +412,6 @@ contains
             deallocate(field, project)
             if( allocated(weights) ) deallocate(weights)
             if( allocated(labels)  ) deallocate(labels)
-            if( allocated(scalars) ) deallocate(scalars)
             return
         endif
         call assert_true(result%nstates >= 2, trim(tag)//': publication retains representatives of both truth modes')
@@ -386,7 +419,10 @@ contains
         allocate(truth_counts(result%nstates,2), source=0)
         nlabel_mismatch = 0
         nweight_mismatch = 0
+        nselection_mismatch = 0
         do i = 1, NPTCLS
+            if( (sum(weights(:,i)) > 0.) .neqv. (project%os_ptcl3D%get_state(i) > 0) ) &
+                &nselection_mismatch = nselection_mismatch + 1
             truth_label = merge(1, 2, mod(i,2) == 1)
             if( labels(i) >= 1 .and. labels(i) <= result%nstates ) &
                 &truth_counts(labels(i),truth_label) = truth_counts(labels(i),truth_label) + 1
@@ -401,6 +437,7 @@ contains
             &trim(tag)//': published state labels separate the two truth modes from chance')
         call assert_int(nlabel_mismatch, 0, trim(tag)//': weight flags and project labels agree')
         call assert_int(nweight_mismatch, 0, trim(tag)//': hard labels select the maximum kernel weight')
+        call assert_int(nselection_mismatch, 0, trim(tag)//': the weight set selects exactly the particles with state > 0')
         result%pc_corr = leading_pc_correlation(tag, truth_diff)
         call assert_true(ieee_is_finite(result%pc_corr), trim(tag)//': leading eigenvolume correlation is finite')
         allocate(corr(result%nstates,2))
@@ -441,21 +478,47 @@ contains
         call field%kill
         call project%kill
         deallocate(field, project)
-        deallocate(weights, labels, scalars, truth_counts, corr)
+        call ab_dump(tag, weights, labels)
+        deallocate(weights, labels, truth_counts, corr)
     end subroutine validate_arm
 
+    !> With SIMPLE_FLEX_AB_DIR set, the arm's embedding file and its published weights and hard labels
+    !! are kept there as <tag>_embedding.bin and <tag>_weights.txt (row: label, then one weight per
+    !! state), so two trees can be compared (the FLEX A/B of the flex_on_simple plan, section 8.2)
+    subroutine ab_dump( tag, weights, labels )
+        use simple_fileio, only: simple_copy_file
+        character(len=*), intent(in) :: tag
+        real(real32),     intent(in) :: weights(:,:)   !< (nstates, nptcls)
+        integer,          intent(in) :: labels(:)
+        character(len=4096) :: dir
+        integer :: dirlen, status, u, i
+        call get_environment_variable('SIMPLE_FLEX_AB_DIR', dir, dirlen, status)
+        if( status /= 0 .or. dirlen == 0 ) return
+        call simple_copy_file(string('flex_pca_embedding.bin'), string(trim(dir)//'/'//trim(tag)//'_embedding.bin'))
+        open(newunit=u, file=trim(dir)//'/'//trim(tag)//'_weights.txt', status='replace', action='write')
+        do i = 1, size(labels)
+            write(u,'(I0,*(1X,ES16.9))') labels(i), weights(:,i)
+        enddo
+        close(u)
+    end subroutine ab_dump
+
+    !> on the eigenvolume's box (the covariance box, box_crop), the truth Fourier-cropped to it
     real function leading_pc_correlation( tag, truth_diff ) result( corr )
+        use simple_imghead, only: find_ldim_nptcls
         character(len=*), intent(in) :: tag
         class(string),    intent(in) :: truth_diff
         type(image) :: truth, pc
         type(string) :: pcfile
+        real    :: smpd_pc
+        integer :: ldim_pc(3), ifoo
         corr = 0.0
         pcfile = 'flex_pca_polished_pc001.mrc'
         call assert_true(file_exists(pcfile), trim(tag)//': polished leading eigenvolume is delivered')
         if( .not. file_exists(pcfile) ) return
-        call truth%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
-        call pc%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
-        call truth%read(truth_diff)
+        call find_ldim_nptcls(pcfile, ldim_pc, ifoo)
+        smpd_pc = SMPD * real(BOX) / real(ldim_pc(1))
+        call truth%read_and_crop(truth_diff, SMPD, ldim_pc(1), smpd_pc)
+        call pc%new(ldim_pc, smpd_pc, wthreads=.false.)
         call pc%read(pcfile)
         corr = abs(truth%real_corr(pc))
         call truth%kill
@@ -471,7 +534,7 @@ contains
         type(string) :: map
         real :: smpd, fsc05, fsc0143
         integer :: box
-        call project%get_vol('vol_flex', state, map, smpd, box)
+        call project%get_vol('vol', state, map, smpd, box)
         call assert_true(file_exists(map), trim(tag)//': delivered state map exists')
         if( .not. file_exists(map) )then
             corr = 0.0

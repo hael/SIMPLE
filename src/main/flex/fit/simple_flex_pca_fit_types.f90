@@ -8,7 +8,7 @@
 module simple_flex_pca_fit_types
 use simple_core_module_api, only: dp, fplane_type, simple_exception, string
 use simple_image,             only: image
-use simple_reconstructor,     only: reconstructor
+use simple_reconstructor,     only: reconstructor, exp_samples
 use simple_flex_pca_polar,    only: flex_polar_bank
 use simple_flex_pca_crossfsc, only: crossfsc_file
 use simple_flex_pca_mstep,    only: flex_fit_mstep
@@ -36,7 +36,7 @@ type :: flex_fit_spec
     real(dp) :: conv_thresh = 0.d0
     logical :: l_mix_req = .false.
     integer :: kmix = 0, n_mix_warm = 3
-    integer :: khi_full = 0, kfr_ann(2) = 0
+    integer :: kfr_ann(2) = 0
     real :: dstep_ann = 0., lp_it = 0.
     logical :: l_deflate_mean = .false.
     integer :: vdfl = 0
@@ -66,15 +66,11 @@ end type flex_fit_history
 type :: flex_fit_diag
     real(dp), allocatable :: gam_dbg(:,:)
     real(dp), allocatable :: sec_bank_thr(:), sec_ring_thr(:), sec_exact_thr(:), sec_solve_thr(:)
-    integer :: khi_fit = 0  !< per-fit band, written by the BAND/RANK diagnostic;
     ! ---- cross-fit-FSC (crossfsc) per-fit hooks; the driver (xfsc_ctx_t) owns every decision ----
     ! fit_iter_finish harvests the writer payloads when l_xf_harvest is set (H before any ridge touches rho)
     ! and applies xf_invtau2 (record t-1, xfsc_prep_iter) to the rho_e/rho_o diagonals before the solves, once.
     logical :: l_xf_harvest = .false.
     real,     allocatable :: xf_h_e(:,:), xf_h_o(:,:)  !< (filtsz,ncomp) per-shell H, pre-ridge
-    integer,  allocatable :: xf_cnt(:)  !< (filtsz) shared per-shell voxel counts
-    real,     allocatable :: xf_fscq(:,:)  !< (filtsz,ncomp) internal e/o FSC curves
-    real(dp), allocatable :: xf_gam(:)  !< (ncomp) Gamma at the writer site
     real,     allocatable :: xf_invtau2(:,:)  !< (ncomp,filtsz) ridge from record t-1
   contains
     procedure :: kill => flex_fit_diag_kill
@@ -94,6 +90,7 @@ type :: flex_fit_iter
     real(dp) :: nll_tot = 0.d0
     integer :: nval = 0
     type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpl(:)
+    type(exp_samples), allocatable :: mean_es(:)   !< per-thread sample sets of the E-step's mean projection
   contains
     procedure :: kill => flex_fit_iter_kill
 end type flex_fit_iter
@@ -148,10 +145,8 @@ type :: xfsc_ctx_t
     logical  :: l_loaded   = .false.   !< artifact reloaded from disk (restart-complete series)
     logical  :: l_paired   = .false.   !< this driver is the paired engine
     integer  :: v_reg      = 0         !< par.4 arms: 0 internal / 1 cross / 2 blend
-    integer  :: reg_active = 0         !< arm ACTIVE this iteration (0 when degraded)
     integer  :: klo        = 6         !< low-resolution exemption index (reslim_ind analog)
     integer  :: filtsz     = 0
-    integer  :: pairing_id = 0         !< balanced mod-4 pairing id (paired engine; header field)
     type(crossfsc_file), allocatable :: xf
   contains
     procedure :: new  => xfsc_ctx_new
@@ -173,8 +168,8 @@ contains
             deallocate(self%xf)
         endif
         self%l_writer = .false.; self%l_any = .false.; self%l_loaded = .false.
-        self%l_paired = .false.; self%v_reg = 0; self%reg_active = 0
-        self%klo = 6; self%filtsz = 0; self%pairing_id = 0
+        self%l_paired = .false.; self%v_reg = 0
+        self%klo = 6; self%filtsz = 0
     end subroutine xfsc_ctx_kill
 
     !> Construct a fit shell: identity, file namespaces and the fit's particle selection.
@@ -263,16 +258,12 @@ contains
         self%l_xf_harvest = .false.
         if( allocated(self%xf_h_e)    ) deallocate(self%xf_h_e)
         if( allocated(self%xf_h_o)    ) deallocate(self%xf_h_o)
-        if( allocated(self%xf_cnt)    ) deallocate(self%xf_cnt)
-        if( allocated(self%xf_fscq)   ) deallocate(self%xf_fscq)
-        if( allocated(self%xf_gam)    ) deallocate(self%xf_gam)
         if( allocated(self%xf_invtau2)) deallocate(self%xf_invtau2)
         if( allocated(self%sec_bank_thr)  ) deallocate(self%sec_bank_thr)
         if( allocated(self%sec_ring_thr)  ) deallocate(self%sec_ring_thr)
         if( allocated(self%sec_exact_thr) ) deallocate(self%sec_exact_thr)
         if( allocated(self%sec_solve_thr) ) deallocate(self%sec_solve_thr)
         if( allocated(self%gam_dbg)   ) deallocate(self%gam_dbg)
-        self%khi_fit = 0
     end subroutine flex_fit_diag_kill
 
     subroutine flex_fit_iter_kill( self )
@@ -302,6 +293,12 @@ contains
                 call cleanup_plane(self%mean_fpl(ithr))
             end do
             deallocate(self%mean_fpl)
+        endif
+        if( allocated(self%mean_es) )then
+            do ithr = 1, size(self%mean_es)
+                call self%mean_es(ithr)%kill
+            end do
+            deallocate(self%mean_es)
         endif
         if( allocated(self%basis_fpls) )then
             do ithr = 1, size(self%basis_fpls,2)

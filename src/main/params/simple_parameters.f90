@@ -68,7 +68,6 @@ type :: parameters
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
-    character(len=3)          :: nufilt='no'          !< nonuniform local-resolution filter on flex_pca state maps(yes|no){no}
     character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
     character(len=3)          :: rec_states='yes'     !< flex_pca: reconstruct the state volumes, or deliver the embedding only(yes|no){yes}
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
@@ -192,7 +191,7 @@ type :: parameters
     type(string)              :: import_dir           !< dir to import .star files from for import_starproject
     type(string)              :: infile               !< file with inputs(.txt)
     type(string)              :: infile2              !< file with inputs(.txt)
-    type(string)              :: pindfile             !< flex_pca worker: this part's particle indices (written by the master)
+    type(string)              :: pindfile             !< distributed worker: particle rows written by the master (flex_pca, reconstruct3D)
     type(string)              :: keys
     type(string)              :: last_prev_dir        !< last previous execution directory
     type(string)              :: mic_new_root         !< new root for relocated micrograph data
@@ -287,6 +286,7 @@ type :: parameters
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
+    character(len=STDLEN)     :: m_estimator='no'     !< reconstruction M-estimator: flex weighs particles by the project's state weight set(no|flex){no}
     character(len=STDLEN)     :: rec_states_backend='gridding' !< flex_pca final state-map backend; independent of rec_backend, which governs the M-step(gridding|pcg){gridding}
     character(len=STDLEN)     :: state_placement='kcenter' !< flex_pca state targets at state_axis=0: diffusion k-center or equal-occupancy path(kcenter|equal_occ){kcenter}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -330,7 +330,6 @@ type :: parameters
     integer :: box=0               !< square image size(in pixels)
     integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
     integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded
-    integer :: box_rec=0           !< square image size(in pixels) for flex state-map reconstruction, decoupled from box_crop
     integer :: box_extract
     integer :: box_coarse=0
     integer :: box_fine=0
@@ -589,7 +588,6 @@ type :: parameters
     real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
-    real    :: smpd_rec=0.         !< sampling distance of the flex state-map reconstruction box (box_rec)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
@@ -645,6 +643,8 @@ type :: parameters
     logical :: l_cohort_sampling = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
+    logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set
+    logical :: l_state_defined      = .false. !< state= was given: reconstruction restricted to that state
     logical :: l_update_missing  = .false.
     logical :: l_remap_cls       = .false.
     logical :: sp_required       = .false.

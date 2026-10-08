@@ -48,7 +48,6 @@ end type flex_latent
 type :: flex_state_set
     integer :: nstates = 0
     real,     allocatable :: weights(:,:)          !< (nptcls,nstates)
-    real,     allocatable :: half_weights(:,:)
     real,     allocatable :: targets(:,:)          !< (ncomp,nstates)
     real,     allocatable :: bandwidths(:), neff(:)
     integer,  allocatable :: labels(:)
@@ -103,7 +102,6 @@ contains
     subroutine state_set_kill( self )
         class(flex_state_set), intent(inout) :: self
         if( allocated(self%weights) )      deallocate(self%weights)
-        if( allocated(self%half_weights) ) deallocate(self%half_weights)
         if( allocated(self%targets) )      deallocate(self%targets)
         if( allocated(self%bandwidths) )   deallocate(self%bandwidths)
         if( allocated(self%neff) )         deallocate(self%neff)

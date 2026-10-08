@@ -44,21 +44,23 @@ contains
 
     !> Guarantee a canonical sigma2 estimate for the given particle project.
     !! When one is available nothing happens. Otherwise calc_pspec derives the
-    !! particle power spectra and atomically publishes a committed state.
+    !! particle power spectra and atomically publishes a committed state, pooled
+    !! (global) unless sigma_est asks for per-stack groups.
     subroutine ensure_sigma2_for_iteration( template_cline, projfile, iter, box, smpd, l_sigma_glob, &
-            &label, l_bootstrapped )
-        class(cmdline),           intent(in)    :: template_cline
-        class(string),            intent(in)    :: projfile
-        integer,                  intent(in)    :: iter, box
-        real,                     intent(in)    :: smpd
-        logical,                  intent(in)    :: l_sigma_glob
-        character(len=*),         intent(in)    :: label
-        logical,                  intent(out)   :: l_bootstrapped
+            &label, l_bootstrapped, sigma_est )
+        class(cmdline),             intent(in)  :: template_cline
+        class(string),              intent(in)  :: projfile
+        integer,                    intent(in)  :: iter, box
+        real,                       intent(in)  :: smpd
+        logical,                    intent(in)  :: l_sigma_glob
+        character(len=*),           intent(in)  :: label
+        logical,                    intent(out) :: l_bootstrapped
+        character(len=*), optional, intent(in)  :: sigma_est
         type(commander_calc_pspec) :: xcalc_pspec
         type(cmdline) :: cline_pspec
         l_bootstrapped = .false.
         if( sigma2_estimate_available(projfile, box, smpd, l_sigma_glob) ) return
-        call prepare_pspec_cline(template_cline, projfile, iter, cline_pspec)
+        call prepare_pspec_cline(template_cline, projfile, iter, cline_pspec, sigma_est)
         write(logfhandle,'(A,I0)') '>>> '//trim(label)// &
             &': no compatible canonical sigma2 state; seeding from particle power spectra at iteration ', max(1, iter)
         call xcalc_pspec%execute(cline_pspec)
@@ -68,12 +70,14 @@ contains
 
     !> The calc_pspec command line that seeds the canonical sigma2 state from
     !! particle image power at iteration iter: a fresh, sparse line with the
-    !! PSPEC_TEMPLATE_KEYS the template defines
-    subroutine prepare_pspec_cline( template_cline, projfile, iter, cline_pspec )
-        class(cmdline), intent(in)    :: template_cline
-        class(string),  intent(in)    :: projfile
-        integer,        intent(in)    :: iter
-        type(cmdline),  intent(inout) :: cline_pspec
+    !! PSPEC_TEMPLATE_KEYS the template defines; the grouping is pooled (global)
+    !! unless sigma_est asks for per-stack groups
+    subroutine prepare_pspec_cline( template_cline, projfile, iter, cline_pspec, sigma_est )
+        class(cmdline),             intent(in)    :: template_cline
+        class(string),              intent(in)    :: projfile
+        integer,                    intent(in)    :: iter
+        type(cmdline),              intent(inout) :: cline_pspec
+        character(len=*), optional, intent(in)    :: sigma_est
         integer :: i
         call cline_pspec%kill
         call cline_pspec%set('prg',        'calc_pspec')
@@ -81,6 +85,7 @@ contains
         call cline_pspec%set('projfile',   projfile)
         call cline_pspec%set('objfun',     'euclid')
         call cline_pspec%set('sigma_est',  'global')
+        if( present(sigma_est) ) call cline_pspec%set('sigma_est', trim(sigma_est))
         call cline_pspec%set('which_iter', max(1, iter))
         do i = 1, size(PSPEC_TEMPLATE_KEYS)
             call cline_pspec%copy_arg(template_cline, trim(PSPEC_TEMPLATE_KEYS(i)))

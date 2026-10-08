@@ -1,7 +1,6 @@
 !@descr: utility routines for 2D class average processing
 module simple_strategy2D_utils
 use simple_pftc_srch_api
-use simple_clustering_utils,  only: cluster_dmat
 use simple_cmdline,           only: cmdline
 use simple_histogram,         only: histogram
 use simple_image_bin,         only: image_bin
@@ -376,7 +375,6 @@ contains
     end subroutine kill_cavg_sigstats_matrices
 
     subroutine calc_sigstats_dmats_ref( params, cavg_imgs_ref, cavg_imgs_match, oa_minmax, dmat_sig )
-        use simple_clustering_utils, only: cluster_dmat, labels2smat
         class(parameters),    intent(in)    :: params
         class(image),         intent(inout) :: cavg_imgs_ref(:), cavg_imgs_match(:)
         real,                 intent(in)    :: oa_minmax(2)

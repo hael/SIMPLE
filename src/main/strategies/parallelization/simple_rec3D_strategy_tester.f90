@@ -1,4 +1,4 @@
-!@descr: unit test routines for the rec3D backend selector (simple_rec3D_strategy)
+!@descr: unit test routines for the rec3D backend selector (simple_rec3D_strategy, simple_rec3D_service)
 ! Pins the parameter defaults the selector relies on (rec_backend=gridding, maxits_pcg=2),
 ! backend-name resolution and wiring, and the dynamic type the factory returns for every
 ! branch: shared-memory gridding, distributed gridding (nparts without part), shared-memory
@@ -7,8 +7,9 @@ module simple_rec3D_strategy_tester
 use simple_cmdline,        only: cmdline
 use simple_parameters,     only: parameters
 use simple_rec3D_strategy, only: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, &
-    &rec3D_pcg_inmem_strategy, create_rec3D_strategy, rec3D_backend_id, rec3D_backend_is_wired, &
-    &REC3D_BACKEND_INVALID, REC3D_BACKEND_GRIDDING, REC3D_BACKEND_PCG
+    &rec3D_pcg_inmem_strategy, create_rec3D_strategy
+use simple_rec3D_service,  only: rec3D_backend_id, rec3D_backend_is_wired, REC3D_BACKEND_INVALID, &
+    &REC3D_BACKEND_GRIDDING, REC3D_BACKEND_PCG
 use simple_test_utils
 implicit none
 private

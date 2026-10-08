@@ -30,7 +30,7 @@ assignment barrier
     release PFTC/reprojections, matching images, search workspaces, and batches
 
 Phase B — worker partial reconstruction
-    group selected particles by (state, even/odd)
+    group selected particles by (state, even/odd): hard labels, or weighted membership
     for each populated state
         for even, then odd
             construct one standalone reconstructor
@@ -44,13 +44,24 @@ Phase B — worker partial reconstruction
 An empty half of a populated state still writes an explicit zero partial. This
 preserves the paired even/odd partial-file contract consumed by `volassemble`.
 
+Under a state weight set (`m_estimator=flex`: a frozen weight per particle and
+state, published by `flex_pca`), the grouping follows the weights instead of
+the labels (`group_pinds_by_weights` in `simple_matcher_3Drec`). A particle
+joins the group of every state whose weight for it is above zero, in the half
+of its even/odd label, and enters that state's reconstructor with its weight.
+With `state=` only that state is grouped. A particle is therefore read once per
+state it weighs into. The weight scales both the data term and the density term
+of the inserted plane; partial names and payload formats are unchanged. The PCG
+(preconditioned conjugate gradients) worker groups the same way, with its
+membership threshold of 0.01 (`PCG_WEIGHT_THRESHOLD`).
+
 ## Ownership and lifetime
 
 | Phase | May remain allocated | Must not remain allocated |
 | --- | --- | --- |
 | Alignment | PFTC/reprojection model, matching images, search and probability workspaces | Partial reconstruction volumes and reconstruction image buffers |
 | Barrier | Final orientation/state/half metadata, selected particle indices, CTF/project metadata, symmetry, Euclidean sigma data | PFTC/reprojections, matching images, search strategies, particle PFTs, correlation caches, alignment batches |
-| Worker reconstruction | One half-map reconstructor, bounded reconstruction image/Fourier buffers, one `(state, half)` index range | EO composite, another state/half reconstructor, alignment objects |
+| Worker reconstruction | One half-map reconstructor, bounded reconstruction image/Fourier buffers, one `(state, half)` index range (with its weights under a weight set) | EO composite, another state/half reconstructor, alignment objects |
 | Assembly | EO composite and state-local postprocessing objects | Worker alignment state and arrays of state volumes |
 
 The worker memory target is therefore:
@@ -66,10 +77,15 @@ It must be independent of `nstates` in cubic reconstruction storage.
 1. Reconstruction uses the exact selected particle subset from the completed
    alignment phase.
 2. Orientation, shift, state, and even/odd labels are read-only after the
-   assignment barrier.
-3. Every valid selected particle belongs to exactly one `(state, half)` group.
+   assignment barrier. State weights are read-only throughout the run.
+3. Under hard labels, every valid selected particle belongs to exactly one
+   `(state, half)` group. Under a state weight set, a valid selected particle
+   belongs to one group per state it weighs into: it may enter several states,
+   once per state, and in each it is in the half of its even/odd label. A
+   particle without a weight above the backend's threshold belongs to no group.
 4. A worker has at most one initialized standalone half-map reconstructor.
 5. Each populated state produces both expected half-map partial artifacts.
+   Under a weight set, a state is populated when it has weighted members.
 6. Existing Cartesian partial names, payloads, CTF handling, interpolation,
    symmetry, and downstream assembly behavior are unchanged.
 7. Euclidean sigma data may remain available through reconstruction; retaining
@@ -90,12 +106,15 @@ using the normal state/half CPU path.
 
 Validate one and multiple states, unbalanced populations, empty states and
 empty halves, both particle sources, ML regularization, symmetry, distributed
-execution, and normal downstream assembly/postprocessing.
+execution, hard labels and fractional state weights, and normal downstream
+assembly/postprocessing.
 
-Check particle counts by state and half, Cartesian partial payloads, restored
-half maps, FSC/resolution, final map quality, reconstruction runtime, and peak
-RSS. Confirm at the assignment barrier that PFTC and alignment image/search
-objects are absent before the first half-map reconstructor is created.
+Check particle counts (under weights, memberships) by state and half,
+Cartesian partial payloads, restored half maps, FSC/resolution, final map
+quality, reconstruction runtime, and peak RSS. Confirm at the assignment
+barrier that PFTC and alignment image/search objects are absent before the
+first half-map reconstructor is created.
 
 Implementation anchors: `simple_strategy3D_matcher`, `simple_matcher_3Drec`,
-`simple_reconstructor_openmpoffload`, and `commander_volassemble`.
+`simple_state_weight_set`, `simple_reconstructor_openmpoffload`, and
+`commander_volassemble`.

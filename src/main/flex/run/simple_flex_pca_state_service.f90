@@ -3,18 +3,19 @@
 !! Everything between the delivered embedding and the weight table the reconstruction consumes:
 !! the measurement-error deconvolution of the latents (and its resume adoption), placement of
 !! the state kernels (population-floor variant here; the kernel/GMM placement in
-!! simple_flex_pca_weights), the occupancy floor, derived settings, and trial-map bandwidth CV.
+!! simple_flex_pca_weights), the occupancy floor, derived settings, trial-map bandwidth CV, and the
+!! raw state half maps FLEX infers from, through the reconstruction service.
 module simple_flex_pca_state_service
 use simple_core_module_api, only: del_file, dp, dtiny, file_exists, hpsort, int2str_pad, irnd_uni, logfhandle, &
     &mrc_ext, simple_exception, string
 use simple_builder,               only: builder
+use simple_cmdline,               only: cmdline
 use simple_image,                 only: image
 use simple_flex_pca_records,      only: flex_selection, flex_fit_model, flex_latent, flex_state_set
 use simple_parameters,            only: parameters
 use simple_srch_sort_loc,         only: hpsort
 use simple_flex_pca_deconv,       only: calibrate_noise_scale, deconvolve_latent
-use simple_flex_pca_embedding_io, only: read_deconv_block, append_deconv_block
-use simple_flex_pca_rec3D,        only: reconstruct_flex_weighted_states, flex_rec_smpd
+use simple_flex_pca_embedding_io, only: read_deconv_block, read_noise_scale, write_deconv_block, write_noise_scale
 use simple_flex_pca_rounds,       only: flex_pca_rounds
 use simple_flex_pca_weights,      only: build_covariance_state_weights, kernel_weights_at_bandwidth, &
     &bandwidth_cv_grid, bandwidth_cv_error, bandwidth_cv_adopt
@@ -23,10 +24,13 @@ private
 #include "simple_local_flags.inc"
 
 public :: apply_latent_deconvolution, prune_underpopulated_states, place_states_with_population_floor
-public :: cv_select_bandwidths
+public :: cv_select_bandwidths, reconstruct_state_halves, state_half_fname, delete_state_halves
 public :: auto_box_crop, auto_min_neff, auto_state_count
-public :: infile_path, infile_dir
+public :: infile_path
 public :: FLEX_AUTO_K_START, FLEX_AUTO_K_MIN, AUTO_NSTATES
+
+!> a weighted PARTITION row sums to one across the states within this (as in simple_state_weight_set)
+real(dp), parameter :: PARTITION_ROW_TOL = 1.0e-3_dp
 
 !> Cap and floor of auto_state_count (tester only; preimage_auto's ceiling is AUTO_NSTATES). The cap
 !! is bounded by cost: gate 2 of the state merge compares K(K-1)/2 map pairs.
@@ -48,30 +52,151 @@ integer, parameter :: POP_FLOOR_MAX_NSTATES    = 32
 
 contains
 
-    !> Reconstruct each trial half-map pair; weights owns the CV grid, score and final adoption.
-    subroutine cv_select_bandwidths( params, build, sel, nbins, min_neff, states, rounds )
-        type(flex_selection),   intent(in)    :: sel
-        type(flex_state_set),   intent(inout) :: states
-        class(flex_pca_rounds), intent(inout) :: rounds
-        class(parameters),      intent(inout) :: params
-        class(builder),         intent(inout) :: build
-        integer,                intent(in)    :: nbins, min_neff
-        real,     allocatable :: wbin(:,:), whalf(:,:), tgt_ev(:,:), tgt_od(:,:)
+    !> The raw state half maps FLEX infers from (D11), one per weight column: the reconstruction service
+    !! in this process on the covariance box (D9), no delivery filter, the shell density floor of
+    !! fractional weights; written as <prefix>_stateNN{,_even,_odd}.mrc (state_half_fname)
+    subroutine reconstruct_state_halves( params, build, cline, pinds, weights, prefix )
+        use simple_rec3D_service, only: rec3D_service, rec3D_request, rec3D_backend_id, REC3D_WEIGHTS_TABLE, &
+            &REC3D_OUTPUT_RAW, REC3D_DISPATCH_INPROC
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(in)    :: cline
+        integer,           intent(in)    :: pinds(:)
+        real,              intent(in)    :: weights(:,:)   !< (size(pinds), nstates)
+        character(len=*),  intent(in)    :: prefix
+        type(rec3D_service), allocatable :: service
+        type(rec3D_request) :: request
+        type(cmdline)       :: cline_rec
+        type(string), allocatable :: vols_bak(:)
+        character(len=len(params%automsk)) :: automsk_bak
+        integer :: nstates_bak, nparts_bak, part_bak, numlen_bak, nstates
+        logical :: l_nonuniform_bak, l_trail_rec_bak, l_state_defined_bak
+        nstates = size(weights,2)
+        if( size(weights,1) /= size(pinds) .or. nstates < 1 ) THROW_HARD('state weight table shape; reconstruct_state_halves')
+        ! an all-zero column would leave a state without half maps
+        if( any(maxval(weights, dim=1) <= 0.) ) THROW_HARD('a state of the weight table has no weight; reconstruct_state_halves')
+        ! The service reconstructs every column as a state of a single in-process part. The PCG path reads
+        ! these parameters directly (volassemble rebuilds its own from cline_rec): raw maps carry no
+        ! nonuniform filter, envelope support, trailing chain or state selection, whatever the caller's
+        ! command line holds.
+        nstates_bak            = params%nstates
+        nparts_bak             = params%nparts
+        part_bak               = params%part
+        numlen_bak             = params%numlen
+        l_nonuniform_bak       = params%l_nonuniform
+        l_trail_rec_bak        = params%l_trail_rec
+        l_state_defined_bak    = params%l_state_defined
+        automsk_bak            = params%automsk
+        vols_bak               = params%vols(1:nstates)
+        params%nstates         = nstates
+        params%nparts          = 1
+        params%part            = 1
+        params%numlen          = 1
+        params%l_nonuniform    = .false.
+        params%l_trail_rec     = .false.
+        params%l_state_defined = .false.
+        params%automsk         = 'no'
+        cline_rec = cline
+        call cline_rec%set('nstates',     size(weights,2))
+        call cline_rec%set('box_crop',    params%box_crop)
+        call cline_rec%set('mkdir',       'no')
+        call cline_rec%set('ml_reg',      'no')
+        call cline_rec%set('postprocess', 'no')
+        call cline_rec%set('rec_backend', trim(params%rec_states_backend))
+        call cline_rec%set('rho_floor',   'yes')
+        call cline_rec%set('filt_mode',   'none')
+        call cline_rec%set('automsk',     'no')
+        call cline_rec%delete('nparts')
+        call cline_rec%delete('part')
+        call cline_rec%delete('vol1')
+        call cline_rec%delete('trail_rec')
+        call cline_rec%delete('trail_seed')
+        call cline_rec%delete('ufrac_trec')
+        call cline_rec%delete('frozen_rec')
+        call cline_rec%delete('state')
+        request%pinds         = pinds
+        request%weights_table = weights
+        request%weights       = REC3D_WEIGHTS_TABLE
+        request%backend       = rec3D_backend_id(trim(params%rec_states_backend))
+        request%output        = REC3D_OUTPUT_RAW
+        request%prefix        = prefix
+        request%register      = .false.
+        request%dispatch      = REC3D_DISPATCH_INPROC
+        allocate(service)
+        call service%new(params, build, cline_rec, REC3D_DISPATCH_INPROC, params%nthr)
+        call service%execute(params, build, cline_rec, request)
+        call service%kill
+        deallocate(service)
+        call cline_rec%kill
+        params%nstates          = nstates_bak
+        params%nparts           = nparts_bak
+        params%part             = part_bak
+        params%numlen           = numlen_bak
+        params%l_nonuniform     = l_nonuniform_bak
+        params%l_trail_rec      = l_trail_rec_bak
+        params%l_state_defined  = l_state_defined_bak
+        params%automsk          = automsk_bak
+        params%vols(1:nstates)  = vols_bak
+        deallocate(vols_bak)
+    end subroutine reconstruct_state_halves
+
+    !> <prefix>_stateNN<suffix>.mrc, suffix '', '_even', '_odd', '_even_unfil' or '_odd_unfil'
+    function state_half_fname( prefix, state, suffix ) result( fname )
+        character(len=*), intent(in) :: prefix, suffix
+        integer,          intent(in) :: state
+        type(string) :: fname
+        fname = prefix//'_state'//int2str_pad(state,2)//suffix//MRC_EXT
+    end function state_half_fname
+
+    !> remove the maps and FSC of reconstruct_state_halves
+    subroutine delete_state_halves( prefix, nstates )
+        character(len=*), intent(in) :: prefix
+        integer,          intent(in) :: nstates
+        type(string) :: fname
+        integer      :: state
+        do state = 1, nstates
+            fname = state_half_fname(prefix, state, '')
+            call del_file(fname)
+            fname = state_half_fname(prefix, state, '_even')
+            call del_file(fname)
+            fname = state_half_fname(prefix, state, '_odd')
+            call del_file(fname)
+            fname = state_half_fname(prefix, state, '_even_unfil')
+            call del_file(fname)
+            fname = state_half_fname(prefix, state, '_odd_unfil')
+            call del_file(fname)
+            fname = prefix//'_fsc_state'//int2str_pad(state,2)//'.bin'
+            call del_file(fname)
+        end do
+        call fname%kill
+    end subroutine delete_state_halves
+
+    !> Trial half maps per bin from the service; weights owns the CV grid, score and final adoption.
+    !! The statistic sees the maps under the soft spherical mask (FLEX's own mask, D11).
+    subroutine cv_select_bandwidths( params, build, cline, sel, nbins, min_neff, states )
+        class(parameters),    intent(inout) :: params
+        class(builder),       intent(inout) :: build
+        class(cmdline),       intent(in)    :: cline
+        type(flex_selection), intent(in)    :: sel
+        integer,              intent(in)    :: nbins, min_neff
+        type(flex_state_set), intent(inout) :: states
+        real,     allocatable :: wbin(:,:), tgt_ev(:,:), tgt_od(:,:)
         real,     allocatable :: rmat(:,:,:), ev_flat(:), od_flat(:)
         real(dp), allocatable :: bins(:,:), hbin(:,:), err(:,:)
-        type(image) :: ev, od
-        type(string):: fn
+        type(image)  :: ev, od
+        type(string) :: prefix
         real(dp) :: h_used
         real     :: neff_used
-        integer  :: state, ib, nvox
+        integer  :: state, ib, nvox, ldim(3), i
         character(len=3) :: bstr
-        allocate(wbin(sel%nptcls,states%nstates), whalf(sel%nptcls,states%nstates))
+        allocate(wbin(sel%nptcls,states%nstates))
         allocate(bins(nbins,states%nstates), hbin(nbins,states%nstates), err(nbins,states%nstates), source=0.d0)
         call bandwidth_cv_grid(states, nbins, bins)
         write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA cross-validated bandwidth selection over ',nbins, &
             &' bins per state'
         call flush(logfhandle)
-        nvox = params%box_crop**3
+        ldim = [params%box_crop, params%box_crop, params%box_crop]
+        nvox = product(ldim)
         allocate(tgt_ev(nvox,states%nstates), tgt_od(nvox,states%nstates), source=0.)
         allocate(ev_flat(nvox), od_flat(nvox))
         do ib = 1, nbins
@@ -81,23 +206,16 @@ contains
                 hbin(ib,state) = h_used
             end do
             write(bstr,'(I3.3)') ib
-            whalf = wbin
-            call mask_state_weights_by_half(build, sel%pinds, 0, whalf)
-            params%outvol = 'flex_pca_cv'//bstr//'_even_state_001.mrc'
-            call reconstruct_flex_weighted_states(params, build, sel%pinds, whalf, states%nstates, &
-                &floor_rho=.true., rounds=rounds)
-            whalf = wbin
-            call mask_state_weights_by_half(build, sel%pinds, 1, whalf)
-            params%outvol = 'flex_pca_cv'//bstr//'_odd_state_001.mrc'
-            call reconstruct_flex_weighted_states(params, build, sel%pinds, whalf, states%nstates, &
-                &floor_rho=.true., rounds=rounds)
+            prefix = 'flex_pca_cv'//bstr
+            ! the even and odd maps of a bin come from one service call
+            call reconstruct_state_halves(params, build, cline, sel%pinds, wbin, prefix%to_char())
             do state = 1, states%nstates
-                fn = 'flex_pca_cv'//bstr//'_even_state_'//int2str_pad(state,3)//MRC_EXT
-                call ev%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
-                call del_file(fn%to_char()); call fn%kill
-                fn = 'flex_pca_cv'//bstr//'_odd_state_'//int2str_pad(state,3)//MRC_EXT
-                call od%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
-                call del_file(fn%to_char()); call fn%kill
+                call ev%new(ldim, params%smpd_crop)
+                call od%new(ldim, params%smpd_crop)
+                call ev%read(state_half_fname(prefix%to_char(), state, '_even'))
+                call od%read(state_half_fname(prefix%to_char(), state, '_odd'))
+                call ev%mask3D_soft(params%msk_crop, backgr=0.)
+                call od%mask3D_soft(params%msk_crop, backgr=0.)
                 rmat    = ev%get_rmat()
                 ev_flat = reshape(rmat, [nvox])
                 rmat    = od%get_rmat()
@@ -109,34 +227,43 @@ contains
                 err(ib,state) = bandwidth_cv_error(ev_flat, od_flat, tgt_ev(:,state), tgt_od(:,state))
                 call ev%kill; call od%kill
             end do
+            call delete_state_halves(prefix%to_char(), states%nstates)
             write(logfhandle,'(A,I3,A,ES11.3,A,ES12.4,A,ES12.4)') '>>>   cv bin=',ib, &
                 &' h(state1)=',hbin(ib,1),'  cross-halfset error: min=',minval(err(ib,:)),' max=',maxval(err(ib,:))
             call flush(logfhandle)
         end do
         call bandwidth_cv_adopt(states, bins, err, min_neff)
-        deallocate(wbin, whalf, bins, hbin, err, tgt_ev, tgt_od, ev_flat, od_flat)
+        ! the adopted bandwidths rewrite every weight column: the labels follow the pruning ruling (D10),
+        ! a row is active when its weights sum above zero and is labelled by its largest weight
+        do i = 1, sel%nptcls
+            if( sum(states%weights(i,:)) > 0. )then
+                states%labels(i) = maxloc(states%weights(i,:), dim=1)
+            else
+                states%labels(i) = 0
+            endif
+        end do
+        call prefix%kill
+        deallocate(wbin, bins, hbin, err, tgt_ev, tgt_od, ev_flat, od_flat)
     end subroutine cv_select_bandwidths
 
     !> Calibrate the per-particle noise (from the even/odd half solutions when the run has them,
-    !! else from the scale file the original run wrote) and replace z / precision by the posterior
-    !! means / precisions under the deconvolved mixture prior.
-    subroutine apply_latent_deconvolution( latent, model, sel, applied, labels, resume, adopted, srcdir, srcfile )
+    !! else from the embedding artifact the original run wrote) and replace z / precision by the
+    !! posterior means / precisions under the deconvolved mixture prior.
+    subroutine apply_latent_deconvolution( latent, model, sel, applied, labels, resume, adopted, srcfile )
         type(flex_latent),    intent(inout) :: latent  !< z and precision deconvolved in place; zhalf consumed
         type(flex_fit_model), intent(in)    :: model
         type(flex_selection), intent(in)    :: sel
         integer, allocatable, intent(inout) :: labels(:)   !< mixture component per particle
         logical,              intent(in)    :: resume
         logical,              intent(out)   :: adopted
-        !> directory of the embedding a resume was given (infile): the deconvolved cache and the labels are
-        !! looked up there when the run directory has none, so a states-only resume in a fresh directory
-        !! adopts the original run's deconvolution instead of re-running the K ladder
-        character(len=*),     intent(in)    :: srcdir
-        character(len=*),     intent(in)    :: srcfile   !< the infile itself: its trailing deconvolved block is adopted first
+        !> the embedding artifact a resume was given (infile): its deconvolution is adopted when present,
+        !! so a states-only resume, also in a fresh directory, does not re-run the K ladder; else its
+        !! noise scale is used
+        character(len=*),     intent(in)    :: srcfile
         logical,              intent(out)   :: applied
         real(dp) :: prior(model%ncomp), a_comp(model%ncomp), noise_scale
-        integer :: q, k_deconv, u_ns, io_ns
-        logical  :: l_resume
-        character(len=:), allocatable :: ns_fname
+        integer  :: q, k_deconv
+        logical  :: l_resume, l_found
         applied = .false.
         adopted = .false.
         l_resume = resume
@@ -148,7 +275,6 @@ contains
                         real(dp), allocatable :: zb(:,:), pb(:,:,:)
                         integer,  allocatable :: lb(:)
                         real(dp) :: nsb
-                        logical  :: l_found
                         call read_deconv_block(srcfile, sel%nptcls, model%ncomp, zb, pb, lb, nsb, l_found)
                         if( l_found )then
                             latent%z(1:sel%nptcls,1:model%ncomp) = zb
@@ -173,50 +299,36 @@ contains
         end do
         if( allocated(latent%zhalf) )then
             call calibrate_noise_scale(latent%zhalf, latent%precision, prior, sel%nptcls, model%ncomp, noise_scale, a_comp)
-            open(newunit=u_ns, file='flex_pca_noise_scale.txt', status='replace', action='write')
-            write(u_ns,'(ES16.8)') noise_scale
-            close(u_ns)
+            ! the scale joins the run's embedding artifact at once: a resume after a crash in the K ladder
+            ! deconvolves at the scale of the fit
+            if( file_exists('flex_pca_embedding.bin') ) &
+                &call write_noise_scale('flex_pca_embedding.bin', sel%nptcls, model%ncomp, noise_scale)
             deallocate(latent%zhalf)
         else
-            noise_scale = 1.d0
-            ! the calibrated noise scale of the fit: here, or next to infile (a resume in a fresh directory
-            ! used to silently fall back to 1.0 and deconvolve differently from the fit)
-            ns_fname = 'flex_pca_noise_scale.txt'
-            if( .not. file_exists(ns_fname) )then
-                if( len_trim(srcdir) > 0 )then
-                    if( file_exists(trim(srcdir)//'/flex_pca_noise_scale.txt') ) ns_fname = trim(srcdir)//'/flex_pca_noise_scale.txt'
-                endif
-            endif
-            open(newunit=u_ns, file=ns_fname, status='old', action='read', iostat=io_ns)
-            if( io_ns == 0 )then
-                read(u_ns,*,iostat=io_ns) noise_scale
-                close(u_ns)
-            endif
-            if( io_ns /= 0 ) noise_scale = 1.d0
-            write(logfhandle,'(A,A,A,F8.3)') '>>> FLEX_PCA resumed embedding: noise scale from ', ns_fname, &
+            ! the calibrated noise scale of the fit, from the resume's embedding artifact
+            call read_noise_scale(srcfile, sel%nptcls, model%ncomp, noise_scale, l_found)
+            write(logfhandle,'(A,A,A,F8.3)') '>>> FLEX_PCA resumed embedding: noise scale from ', trim(srcfile), &
                 &' (1.0 when absent) =', noise_scale
         endif
         call deconvolve_latent(latent%z, latent%precision, prior, sel%nptcls, model%ncomp, noise_scale, 16, k_deconv, &
             &prior_fname='flex_pca_deconv_prior.txt', labels_fname='flex_pca_deconv_labels.txt', pinds=sel%pinds, &
             &labels_out=labels)
         applied = .true.
-        ! the deconvolved coordinates join the raw cache of this run as a trailing block (one file)
+        ! the deconvolved coordinates join the run's embedding artifact as its trailing block (one file)
         if( file_exists('flex_pca_embedding.bin') )then
             if( allocated(labels) )then
-                call append_deconv_block('flex_pca_embedding.bin', sel%nptcls, model%ncomp, latent%z, latent%precision, labels, noise_scale)
+                call write_deconv_block('flex_pca_embedding.bin', sel%nptcls, model%ncomp, latent%z, latent%precision, labels, noise_scale)
             else
-                call append_deconv_block('flex_pca_embedding.bin', sel%nptcls, model%ncomp, latent%z, latent%precision, noise_scale=noise_scale)
+                call write_deconv_block('flex_pca_embedding.bin', sel%nptcls, model%ncomp, latent%z, latent%precision, noise_scale=noise_scale)
             endif
         else
             write(logfhandle,'(A)') '>>> FLEX_PCA deconvolved coordinates not cached: no flex_pca_embedding.bin in this directory'
         endif
     end subroutine apply_latent_deconvolution
 
-    !> Drop every state whose effective sample size is below min_neff and compact the per-state
-    !! arrays, so the reconstruction, the bandwidth CV and the merge all see only states that can
-    !! support a map. Particles whose argmax state is dropped become unassigned (label 0) and feed no
-    !! map -- they are, by construction, the particles the placement could not commit anywhere. At
-    !! least two states always survive: with fewer the run has no heterogeneity to deliver.
+    !> Drop every state whose effective sample size is below min_neff and compact the per-state arrays;
+    !! the weights then decide (pruning ruling): a row's label is its argmax over the kept states, PARTITION
+    !! rows are renormalized over them, a row without kept weight is unassigned. At least two states survive.
     subroutine prune_underpopulated_states( min_neff, states )
         type(flex_state_set), intent(inout) :: states
         integer :: nptcls
@@ -226,7 +338,9 @@ contains
         real,     allocatable :: w2(:,:), t2(:,:), b2(:), n2(:)
         real(dp), allocatable :: d2(:,:), f2(:)
         real,     allocatable :: key(:)
-        integer :: s, i, nkeep, ndrop, nlost, snew
+        real(dp) :: rowsum
+        integer  :: s, i, nkeep, ndrop, nlost, nrelabelled, snew
+        logical  :: l_partition
         nptcls = size(states%weights,1)
         if( states%nstates < 2 ) return
         allocate(keep(states%nstates), source=.true.)
@@ -253,6 +367,16 @@ contains
             nkeep = 2
             deallocate(key, ord)
         endif
+        ! PARTITION when every weighted row sums to one across the states (the weight set's rule)
+        l_partition = .true.
+        do i = 1, nptcls
+            rowsum = sum(real(states%weights(i,:),dp))
+            if( rowsum <= 0._dp ) cycle
+            if( abs(rowsum - 1._dp) > PARTITION_ROW_TOL )then
+                l_partition = .false.
+                exit
+            endif
+        end do
         ndrop = states%nstates - nkeep
         write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA OCCUPANCY FLOOR: ', ndrop, ' of ', states%nstates, &
             &' states have fewer than ', min_neff, ' effective particles and are dropped before reconstruction'
@@ -301,18 +425,26 @@ contains
             end do
             call move_alloc(f2, states%kfloor)
         endif
-        nlost = 0
+        ! the weights are authoritative (pruning ruling): a row with kept weight is relabelled by its
+        ! argmax over the kept states (PARTITION rows renormalized over them), a row without is deselected
+        nlost       = 0
+        nrelabelled = 0
         do i = 1, nptcls
-            if( states%labels(i) < 1 .or. states%labels(i) > states%nstates ) cycle
-            if( keep(states%labels(i)) )then
-                states%labels(i) = map(states%labels(i))
-            else
+            rowsum = sum(real(states%weights(i,:),dp))
+            if( rowsum <= 0._dp )then
+                if( states%labels(i) > 0 ) nlost = nlost + 1
                 states%labels(i) = 0
-                nlost     = nlost + 1
+                cycle
             endif
+            if( l_partition ) states%weights(i,:) = real(real(states%weights(i,:),dp) / rowsum)
+            if( states%labels(i) >= 1 .and. states%labels(i) <= states%nstates )then
+                if( .not. keep(states%labels(i)) ) nrelabelled = nrelabelled + 1
+            endif
+            states%labels(i) = maxloc(states%weights(i,:), dim=1)
         end do
-        write(logfhandle,'(A,I0,A,F6.2,A,I0,A)') '>>> FLEX_PCA OCCUPANCY FLOOR: ', nlost, ' particles (', &
-            &100.0*real(nlost)/real(max(nptcls,1)), '%) lost their state and feed no map; ', nkeep, ' states remain'
+        write(logfhandle,'(A,I0,A,F6.2,A,I0,A,I0,A)') '>>> FLEX_PCA OCCUPANCY FLOOR: ', nlost, ' particles (', &
+            &100.0*real(nlost)/real(max(nptcls,1)), '%) have no weight in a kept state and feed no map; ', &
+            &nrelabelled, ' relabelled by their largest kept weight; ', nkeep, ' states remain'
         call flush(logfhandle)
         states%nstates = nkeep
         deallocate(keep, map, occ)
@@ -530,16 +662,6 @@ contains
         call st_r%kill; call lat_r%kill
     end subroutine place_states_with_population_floor
 
-    subroutine mask_state_weights_by_half( build, pinds, wanted_eo, weights )
-        class(builder), intent(inout) :: build
-        integer,        intent(in)    :: pinds(:), wanted_eo
-        real,           intent(inout) :: weights(:,:)
-        integer :: i
-        do i = 1, size(pinds)
-            if( build%spproj_field%get_eo(pinds(i)) /= wanted_eo ) weights(i,:) = 0.
-        end do
-    end subroutine mask_state_weights_by_half
-
     !> The resume embedding path itself ('' when not resuming)
     function infile_path( params, l_resume ) result( f )
         type(parameters), intent(in) :: params
@@ -548,19 +670,5 @@ contains
         f = ''
         if( l_resume ) f = params%infile%to_char()
     end function infile_path
-
-    !> Directory of the resume embedding (params%infile), '' when not resuming or when the path has no
-    !! directory part; used to adopt the original run's deconvolved cache from a fresh run directory.
-    function infile_dir( params, l_resume ) result( d )
-        type(parameters), intent(in) :: params
-        logical,          intent(in) :: l_resume
-        character(len=:), allocatable :: d, f
-        integer :: k
-        d = ''
-        if( .not. l_resume ) return
-        f = params%infile%to_char()
-        k = index(f, '/', back=.true.)
-        if( k > 1 ) d = f(1:k-1)
-    end function infile_dir
 
 end module simple_flex_pca_state_service

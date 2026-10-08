@@ -14,7 +14,8 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_heade
     &sigma2_state_read_local_range, sigma2_state_read_particles, sigma2_state_read_groups, &
     &sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, SIGMA2_PROV_PSPEC, &
     &SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
-use simple_sigma2_state,      only: sigma2_state_layout_digest, sigma2_state_merge_local_ranges, &
+use simple_ptcl_layout,       only: ptcl_layout_digest
+use simple_sigma2_state,      only: sigma2_state_merge_local_ranges, &
     &sigma2_state_reduce_groups, sigma2_state_validate_identity, sigma2_state_validate_science, &
     &sigma2_state_candidate_path, sigma2_state_commit, sigma2_state_prepare_update, &
     &sigma2_state_range_path, sigma2_state_next_generation
@@ -61,9 +62,9 @@ contains
             stack_ids(i) = merge(1, 2, i <= nptcls/2)
             stack_indices(i) = 1 + modulo(i-1, max(1,nptcls/2))
         enddo
-        digest = sigma2_state_layout_digest('test-lineage', refs, stack_ids, stack_indices)
+        digest = ptcl_layout_digest('test-lineage', refs, stack_ids, stack_indices)
         call require(digest /= 0_int64, 'layout digest is nonzero')
-        prefix_digest = sigma2_state_layout_digest('test-lineage', refs, stack_ids, stack_indices, nptcls-1)
+        prefix_digest = ptcl_layout_digest('test-lineage', refs, stack_ids, stack_indices, nptcls-1)
         call require(prefix_digest /= 0_int64 .and. prefix_digest /= digest, 'prefix layout digest is distinct')
         call sigma2_state_init_header(header, 1, 3, nptcls, 8, 1.5, ngroups, grouping, &
             &1_int64, digest, SIGMA2_PROV_PSPEC)
@@ -113,7 +114,7 @@ contains
     !! read (it was not: every state was reported "layout digest undefined")
     subroutine test_estimate_available_on_disk()
         use simple_sp_project,       only: sp_project
-        use simple_sigma2_state,     only: sigma2_state_project_layout_digest
+        use simple_ptcl_layout,      only: ptcl_layout_digest
         use simple_sigma2_bootstrap, only: sigma2_estimate_available
         use simple_syslib,           only: simple_getcwd
         integer, parameter :: NP = 6, BOXT = 8
@@ -151,7 +152,7 @@ contains
             call project%os_ptcl3D%set_state(i, 1)
         enddo
         project%os_ptcl2D = project%os_ptcl3D
-        digest = sigma2_state_project_layout_digest(project, project%os_ptcl3D)
+        digest = ptcl_layout_digest(project, project%os_ptcl3D)
         call require(digest /= 0_int64, 'the in-memory project has a layout digest')
         call sigma2_state_init_header(header, 1, BOXT/2, NP, BOXT, SMPDT, 1, SIGMA2_GROUP_GLOBAL, &
             &1_int64, digest, SIGMA2_PROV_RESIDUAL)
