@@ -125,6 +125,40 @@ stage controller emits `trail_rec=yes`.
 At the symmetry-search stage, the workflow runs the shared symmetry handling
 used by the solve3D workflows.
 
+### 5.1 State reseeding (`reseed_states`, default `no`)
+
+In a multi-state run, a state can empty out and never come back. Each
+iteration gives every class-average half the state it fits best, so a state
+with more members reconstructs better and draws more. The probabilistic search
+also drops a state of 5 halves or fewer (`eul_prob_tab`), and an empty state
+takes no members back. `reseed_states=yes` (added 9 October 2026) lets a state
+that has emptied start again, at each stage boundary before the last stage
+(`reseed_state_labels`, `simple_solve3D_utils`):
+
+- **A state is weak** when it holds no more than 5 halves or less than 2% of
+  the selected ones. Both constants are provisional (`RESEED_MIN_POP`,
+  `RESEED_MIN_FRAC`).
+- **Each weak state, the emptiest first, takes members of the most populated
+  state.** These are its worst-fitting classes, ranked by the mean score of
+  their halves in that state. Both halves of a class move together. It takes
+  them until it holds an equal share of the selected halves, or until half the
+  donor's halves have moved, whichever comes first. Moved halves keep their
+  poses.
+- **Nothing is relabelled** when a reseeded state would hold 5 halves or fewer,
+  or a state would stay empty: there are too few classes.
+- **The next stage starts from rebuilt volumes.** They are reconstructed from
+  the new labels by the stage-boundary reconstruction (`calc_rec`), so that
+  stage's `_stageNN` volumes are the reseeded ones. The relabelling and the
+  populations are logged.
+- **The collapse check comes after the reseeding.** A reseeded run is not
+  exited early (`exit_collapse`), and the restart driver (`nrestarts_collapse`)
+  sees the states it ends with. A state that empties in the last stage is not
+  reseeded.
+
+The worst-fitting classes are also the noisiest, so a reseeded state can
+start from weak signal. A small but genuine state that falls under 2% after a
+stage is reseeded too. Validate the option before making it a default.
+
 ## 6. Mapping Back
 
 After staged refinement, the temporary `ptcl3D` and `out` segments are read

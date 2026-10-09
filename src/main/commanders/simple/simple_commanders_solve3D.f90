@@ -82,6 +82,7 @@ contains
         integer                   :: nstates_target, pop
         integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates
         real                      :: cavg_smpd
+        logical                   :: l_reseed, l_reseeded
         if( cline%defined('part') )then
             THROW_HARD('solve3D_cavgs distributed execution is master-only; remove part from command line')
         endif
@@ -114,6 +115,7 @@ contains
         call params%new(cline)
         nstates_target = params%nstates
         nstates_glob   = nstates_target
+        l_reseed       = nstates_target > 1 .and. params%reseed_states .eq. 'yes'
         call cline%set('mkdir',       'no')   ! to avoid nested directory structure
         call cline%set('oritype', 'ptcl3D')   ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
         params%oritype = 'ptcl3D'
@@ -228,11 +230,15 @@ contains
         ! Frequency marching
         call set_cline_refine3D(params, 1, l_cavgs=.true.)
         call rndstart(cline_refine3D)
+        l_reseeded = .false.
         do istage = 1, nstages_ini3D
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', lpinfo(istage)%lp, ' A'
             ! Preparation of command line for probabilistic search
             call set_cline_refine3D(params, istage, l_cavgs=.true.)
+            ! the volumes of the states reseeded after the previous stage, from their new members
+            if( l_reseeded ) call calc_rec(params, work_projfile, xrec3D, istage)
+            l_reseeded = .false.
             if( cline_refine3D%get_iarg('box_crop') < params%box )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
                     &cline_refine3D%get_iarg('box_crop')
@@ -243,6 +249,8 @@ contains
             if( istage == solve3D_symsrch_stage() )then
                 call symmetrize(params, istage, work_proj, work_projfile, xrec3D)
             endif
+            ! States the stage left (nearly) empty take members of the largest for the next stage
+            if( l_reseed .and. istage < nstages_ini3D ) call reseed_weak_states(l_reseeded)
             ! Early exit on state collapse
             if( nstates_target > 1 .and. params%exit_collapse .eq. 'yes' ) then
                 write(logfhandle,'(A,A)')'>>> CHECKING FOR STATE COLLAPSE...', work_projfile%to_char()
@@ -385,6 +393,32 @@ contains
                 call simple_list_files(VOL_FBODY//'*'//PPROC_SUFFIX//'*'//MRC_EXT, pproc_list)
                 if( allocated(pproc_list) ) call del_files(pproc_list)
             end subroutine del_pproc_vols
+
+            ! Relabels the states the stage left (nearly) empty with the worst-fitting class averages of
+            ! the most populated state (reseed_state_labels) and writes the labels; @p l_moved when
+            ! any moved, so the next stage starts from volumes rebuilt with them (calc_rec)
+            subroutine reseed_weak_states( l_moved )
+                logical, intent(out) :: l_moved
+                integer, allocatable :: labels(:), labels_prev(:)
+                real,    allocatable :: scores(:)
+                integer :: nmoved, s
+                l_moved = .false.
+                call work_proj%read_segment('ptcl3D', work_projfile)
+                labels      = work_proj%os_ptcl3D%get_all_asint('state')
+                labels_prev = labels
+                scores      = work_proj%os_ptcl3D%get_all('corr')
+                call reseed_state_labels(labels, scores, ncavgs, nstates_target, nmoved)
+                if( nmoved == 0 ) return
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> STATE RESEEDING AFTER STAGE ', istage, ': ', nmoved,&
+                    &' CLASS-AVERAGE HALVES RELABELLED'
+                do s = 1, nstates_target
+                    write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> POPULATION STATE ', s, ': ', count(labels_prev == s),&
+                        &' -> ', count(labels == s)
+                enddo
+                call work_proj%os_ptcl3D%set_all('state', labels)
+                call work_proj%write_segment_inside('ptcl3D', work_projfile)
+                l_moved = .true.
+            end subroutine reseed_weak_states
 
             subroutine rndstart( cline )
                 class(cmdline), intent(inout) :: cline

@@ -251,6 +251,10 @@ contains
         call solve3D_cavgs%add_input(UI_SRCH, pgrp_start, &
         &visibility=UI_VIS_ADVANCED)
         call solve3D_cavgs%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
+        call solve3D_cavgs%add_input(UI_SRCH, 'reseed_states', 'binary', 'Reseed emptied states', &
+        &'Between stages, a state left (nearly) empty takes the worst-fitting class averages of the most populated state, &
+        &so a state cannot collapse for good; with nstates>1(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="search", visibility=UI_VIS_ADVANCED)
         call solve3D_cavgs%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of class-average assignments for solve3D stage convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)

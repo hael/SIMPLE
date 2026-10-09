@@ -117,6 +117,7 @@ type :: parameters
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
+    character(len=3)          :: reseed_states='no'   !< solve3D_cavgs: reseed a state that empties from the largest(yes|no){no}
     character(len=3)          :: remap_cls='no'
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion (yes|no){yes}
     character(len=3)          :: reset_boxfiles='no'  !< whether to remove existing boxfiles and set boxfile in current dir (yes|no){no}

@@ -190,6 +190,7 @@ contains
         call reg%add_char('rank_cavgs', self%rank_cavgs)
         call reg%add_char('ranked_parts', self%ranked_parts)
         call reg%add_char('real_filter', self%real_filter)
+        call reg%add_char('reseed_states', self%reseed_states)
         call reg%add_char('ptcl_old_root', self%ptcl_old_root)
         call reg%add_char('recthres', self%recthres)
         call reg%add_char('refine', self%refine)

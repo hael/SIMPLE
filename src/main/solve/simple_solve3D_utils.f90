@@ -39,6 +39,9 @@ real             :: update_frac  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0
 integer          :: nstages_refine3D = 0
 integer, parameter :: FINAL_PCG_MAXITS_FLOOR = 5
+! state reseeding of multi-state solve3D_cavgs (reseed_states=yes); provisional until validated
+integer, parameter :: RESEED_MIN_POP  = 5     ! a state of no more entries leaves the probabilistic search (eul_prob_tab MIN_POP)
+real,    parameter :: RESEED_MIN_FRAC = 0.02  ! a state with less of the selected entries is reseeded too
 
 !> Immutable solve3D_addon context for the stage controller. Absent (or
 !! inactive) means the standard solve3D path; present and active it gives the add-on's
@@ -665,6 +668,97 @@ contains
             enddo
         endif
     end subroutine symmetrize
+
+    !> State reseeding of a multi-state class-average run (reseed_states=yes), between stages.
+    !! The entries are the even (1..@p ncavgs) and odd (@p ncavgs+1..2*@p ncavgs) halves of the
+    !! class averages, with their states @p states (0: not selected; relabelled in place) and
+    !! scores @p scores (higher fits better). A state is weak when it holds no more than
+    !! RESEED_MIN_POP entries, which the probabilistic search drops for good, or less than
+    !! RESEED_MIN_FRAC of the selected entries. Each weak state, the emptiest first, takes from the
+    !! most populated state its worst-fitting classes (by the mean score of their halves in that
+    !! state), both halves together, until it holds an equal share of the selected entries or
+    !! half the donor's entries are taken, whichever comes first. A state that this would leave
+    !! with no more than RESEED_MIN_POP entries is left as it is. When a state would still be
+    !! empty afterwards, nothing is relabelled: the reconstruction the next stage starts from
+    !! needs every state populated. @p nmoved is the number of entries relabelled.
+    subroutine reseed_state_labels( states, scores, ncavgs, nstates, nmoved )
+        integer, intent(inout) :: states(:)
+        real,    intent(in)    :: scores(:)
+        integer, intent(in)    :: ncavgs, nstates
+        integer, intent(out)   :: nmoved
+        integer, allocatable :: order(:), nin(:), states_in(:)
+        real,    allocatable :: keys(:)
+        logical, allocatable :: l_done(:)
+        integer, allocatable :: pops(:)
+        integer :: nsel, s, weak, donor, nwant, nmove, icls, j, ihalf
+        nmoved = 0
+        if( size(states) /= 2*ncavgs .or. size(scores) /= 2*ncavgs ) THROW_HARD('states and scores must cover both halves of every class average; reseed_state_labels')
+        if( nstates < 2 ) return
+        nsel      = count(states >= 1 .and. states <= nstates)
+        states_in = states
+        allocate(pops(nstates), source=0)
+        allocate(l_done(nstates), source=.false.)
+        allocate(order(ncavgs), nin(ncavgs), source=0)
+        allocate(keys(ncavgs), source=0.)
+        do
+            do s = 1, nstates
+                pops(s) = count(states == s)
+            enddo
+            ! the emptiest weak state not reseeded yet
+            weak = 0
+            do s = 1, nstates
+                if( l_done(s) ) cycle
+                if( pops(s) > RESEED_MIN_POP .and. real(pops(s)) >= RESEED_MIN_FRAC * real(nsel) ) cycle
+                if( weak == 0 )then
+                    weak = s
+                else if( pops(s) < pops(weak) )then
+                    weak = s
+                endif
+            enddo
+            if( weak == 0 ) exit
+            l_done(weak) = .true.
+            donor = maxloc(pops, dim=1)
+            if( donor == weak ) cycle
+            nwant = min(nsel / nstates - pops(weak), pops(donor) / 2)
+            if( nwant <= 0 .or. pops(weak) + nwant <= RESEED_MIN_POP ) cycle
+            ! the donor's classes, worst-fitting first; classes it holds no half of sort last
+            do icls = 1, ncavgs
+                nin(icls)   = 0
+                keys(icls)  = 0.
+                order(icls) = icls
+                do ihalf = 0, 1
+                    j = icls + ihalf * ncavgs
+                    if( states(j) /= donor ) cycle
+                    nin(icls)  = nin(icls) + 1
+                    keys(icls) = keys(icls) + scores(j)
+                enddo
+                if( nin(icls) > 0 )then
+                    keys(icls) = keys(icls) / real(nin(icls))
+                else
+                    keys(icls) = huge(keys(icls))
+                endif
+            enddo
+            call hpsort(keys, order)
+            nmove = 0
+            do j = 1, ncavgs
+                if( nmove >= nwant ) exit
+                icls = order(j)
+                if( nin(icls) == 0 ) exit
+                do ihalf = 0, 1
+                    if( states(icls + ihalf * ncavgs) == donor ) states(icls + ihalf * ncavgs) = weak
+                enddo
+                nmove = nmove + nin(icls)
+            enddo
+            nmoved = nmoved + nmove
+        enddo
+        if( nmoved == 0 ) return
+        do s = 1, nstates
+            if( count(states == s) > 0 ) cycle
+            states = states_in
+            nmoved = 0
+            return
+        enddo
+    end subroutine reseed_state_labels
 
     subroutine commit_deferred_sigma_update( params )
         use simple_commanders_euclid, only: commander_calc_group_sigmas
