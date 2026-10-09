@@ -1,12 +1,13 @@
 !@descr: neutral Cartesian Fourier lattice embedding, extraction, and packed KB gathers
 module simple_cartesian_fourier
 use simple_image, only: image
+use simple_kbinterpol, only: kbinterpol
 implicit none
 private
 
 public :: center_embed_real3d, center_crop_real3d
 public :: extract_native_fourier_plane
-public :: gather_packed_window, gather_packed_window_grad
+public :: gather_packed_window, gather_packed_window_grad, gather_packed_kb3_window_grad
 
 contains
 
@@ -134,5 +135,80 @@ contains
             end do
         end do
     end subroutine gather_packed_window_grad
+
+    !> Gather the standard three-tap KB value and fixed-cell derivatives without
+    !! materialising three-dimensional weight arrays.
+    pure subroutine gather_packed_kb3_window_grad( cmat, wrap_lower, wrap, kbwin, loc, value, dvalue_dloc, inside )
+        complex,            intent(in)  :: cmat(:,:,:)
+        integer,            intent(in)  :: wrap_lower
+        integer,            intent(in)  :: wrap(wrap_lower:)
+        type(kbinterpol),   intent(in)  :: kbwin
+        real,               intent(in)  :: loc(3)
+        complex,            intent(out) :: value, dvalue_dloc(3)
+        logical,            intent(out) :: inside
+        complex :: fcomp
+        real    :: base(3), draw(3), raw(3)
+        real    :: dx(3), dy(3), dz(3), wx(3), wy(3), wz(3)
+        real    :: sx, sy, sz, dsx, dsy, dsz, wyz, dyz, wydz
+        real    :: weight, dweight(3)
+        integer :: di, dj, dk, hh, kk, mm, ph, pk, pm, ny, nz, i0(3)
+
+        ! The nearest grid point owns this fixed three-tap cell; derivatives do
+        ! not include the discontinuous change to a neighbouring cell.
+        i0     = nint(loc) - 1
+        inside = .not.(any(i0 < lbound(wrap,1)) .or. any(i0 + 2 > ubound(wrap,1)))
+        value       = cmplx(0.,0.)
+        dvalue_dloc = cmplx(0.,0.)
+        if( .not. inside ) return
+
+        base = real(i0) - loc
+        do di = 1, 3
+            call kbwin%apod_fast_value_deriv(base + real(di-1), raw, draw)
+            wx(di) = raw(1); wy(di) = raw(2); wz(di) = raw(3)
+            dx(di) = -draw(1); dy(di) = -draw(2); dz(di) = -draw(3)
+        enddo
+        ! Normalize each axis separately. The quotient-rule derivatives keep
+        ! every 1-D weight sum at one and every derivative sum at zero.
+        sx  = sum(wx); sy  = sum(wy); sz  = sum(wz)
+        dsx = sum(dx); dsy = sum(dy); dsz = sum(dz)
+        wx  = wx / sx; wy = wy / sy; wz = wz / sz
+        dx  = (dx - wx * dsx) / sx
+        dy  = (dy - wy * dsy) / sy
+        dz  = (dz - wz * dsz) / sz
+
+        ! Match the generic oracle's packed/Friedel traversal and accumulation
+        ! order while forming separable weights only when they are consumed.
+        ny = size(cmat,2)
+        nz = size(cmat,3)
+        do dk = 1, 3
+            mm = wrap(i0(3)+dk-1)
+            do dj = 1, 3
+                kk   = wrap(i0(2)+dj-1)
+                wyz  = wy(dj) * wz(dk)
+                dyz  = dy(dj) * wz(dk)
+                wydz = wy(dj) * dz(dk)
+                do di = 1, 3
+                    hh = wrap(i0(1)+di-1)
+                    if( hh >= 0 )then
+                        ph = hh+1
+                        pk = kk+1; if( kk < 0 ) pk = pk+ny
+                        pm = mm+1; if( mm < 0 ) pm = pm+nz
+                        fcomp = cmat(ph,pk,pm)
+                    else
+                        ph = -hh+1
+                        pk = -kk+1; if( -kk < 0 ) pk = pk+ny
+                        pm = -mm+1; if( -mm < 0 ) pm = pm+nz
+                        fcomp = conjg(cmat(ph,pk,pm))
+                    endif
+                    weight     = wx(di) * wyz
+                    dweight(1) = dx(di) * wyz
+                    dweight(2) = wx(di) * dyz
+                    dweight(3) = wx(di) * wydz
+                    value       = value + weight * fcomp
+                    dvalue_dloc = dvalue_dloc + dweight * fcomp
+                enddo
+            enddo
+        enddo
+    end subroutine gather_packed_kb3_window_grad
 
 end module simple_cartesian_fourier

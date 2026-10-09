@@ -12,7 +12,7 @@ use simple_core_module_api,   only: dp, sp, PI, KBWINSZ, KBALPHA, OSMPL_PAD_FAC,
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_gridding,          only: kb_stencil_envelope_1d
-use simple_cartesian_fourier, only: center_embed_real3d, gather_packed_window_grad
+use simple_cartesian_fourier, only: center_embed_real3d, gather_packed_kb3_window_grad
 implicit none
 private
 public :: cartft_calc, CART_REFVOLS_FORMAT_VERSION
@@ -50,7 +50,6 @@ type :: cartft_calc
     integer :: boxpd   = 0                  !< padded box of the references
     integer :: padf    = 1                  !< padding factor
     integer :: iwinsz  = 0                  !< integer half-width of the KB window
-    integer :: wdim    = 0                  !< KB stencil width
     integer :: lims2(2,2) = 0               !< full-disk 2D Fourier limits
     real    :: padsc   = 1.                 !< padf**3, native Fourier scaling of a gather
     type(kbinterpol)               :: kbwin !< KB window of the gather
@@ -120,7 +119,6 @@ contains
         self%padsc   = real(self%padf)**3
         self%kbwin   = kbinterpol(KBWINSZ, KBALPHA)
         self%iwinsz  = ceiling(self%kbwin%get_winsz() - 0.5)
-        self%wdim    = 2*self%iwinsz + 1
         self%lims2(1,:) = [-box/2, box/2]
         self%lims2(2,:) = [-box/2, box/2]
         allocate(self%refs(2,nstates), self%ptcls(nptcls))
@@ -140,7 +138,6 @@ contains
         self%boxpd   = 0
         self%padf    = 1
         self%iwinsz  = 0
-        self%wdim    = 0
         self%lims2   = 0
         self%padsc   = 1.
         self%exists  = .false.
@@ -860,17 +857,8 @@ contains
         real(sp),           intent(in)  :: loc(3)
         complex,            intent(out) :: val, dval(3)
         logical,            intent(out) :: inside
-        real(sp) :: w(self%wdim,self%wdim,self%wdim), dw(self%wdim,self%wdim,self%wdim,3), switch_margin(3)
-        integer  :: i0(3)
-        ! w and dw/dloc on the same fixed interpolation stencil
-        call self%kbwin%apod_mat_3d_fast_grad(loc, self%iwinsz, self%wdim, i0, switch_margin, w, dw)
-        inside = .not.( any(i0 < lbound(self%wrap,1)) .or. any(i0 + self%wdim - 1 > ubound(self%wrap,1)) )
-        if( .not. inside )then
-            val  = cmplx(0.,0.)
-            dval = cmplx(0.,0.)
-            return
-        endif
-        call gather_packed_window_grad(cmat, lbound(self%wrap,1), self%wrap, i0, w, dw, val, dval)
+        call gather_packed_kb3_window_grad(cmat, lbound(self%wrap,1), self%wrap, &
+            &self%kbwin, loc, val, dval, inside)
         ! native Fourier scaling of the value and all derivatives
         val  = self%padsc*val
         dval = self%padsc*dval

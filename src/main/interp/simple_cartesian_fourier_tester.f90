@@ -10,7 +10,8 @@ module simple_cartesian_fourier_tester
 use ieee_arithmetic,          only: ieee_is_finite
 use simple_defs,              only: dp, sp, KBALPHA, KBWINSZ, KB_BETA_KB15_A2
 use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d, &
-    &extract_native_fourier_plane, gather_packed_window, gather_packed_window_grad
+    &extract_native_fourier_plane, gather_packed_window, gather_packed_window_grad, &
+    &gather_packed_kb3_window_grad
 use simple_core_module_api,   only: cyci_1d
 use simple_gridding,          only: kb_stencil_envelope_1d, kb_stencil_centered_crop_inv_envelope_1d
 use simple_image,             only: image
@@ -57,6 +58,8 @@ contains
         call run_kb_derivative()
         write(*,'(A)') 'test_packed_gather_derivative'
         call run_packed_gather_derivative()
+        write(*,'(A)') 'test_fused_kb3_gather_oracle'
+        call test_fused_kb3_gather_oracle()
         write(*,'(A)') 'test_neutral_extract'
         call run_neutral_extract()
     end subroutine run_all_cartesian_fourier_tests
@@ -180,6 +183,78 @@ subroutine run_packed_gather_derivative()
     call pcgop%kill
     deallocate(plane,phantom,cmat,wrap)
 end subroutine run_packed_gather_derivative
+
+!> Compare the fused production gather with the retained stencil-plus-gather path.
+subroutine test_fused_kb3_gather_oracle()
+    integer, parameter :: NCASES = 9
+    real(sp), parameter :: OFFSET = 1.e-4_sp
+    ! Exercise ordinary signs, periodic edges, both sides of half-grid cell
+    ! switches, an integer location, and one point outside wrap support.
+    real(sp), parameter :: LOCS(3,NCASES) = reshape([&
+        & 2.17_sp,       -1.23_sp,  0.31_sp, &
+        &-3.37_sp,        2.18_sp, -0.29_sp, &
+        & 7.45_sp,       -7.49_sp,  6.20_sp, &
+        & 0.5_sp-OFFSET,  1.20_sp, -2.10_sp, &
+        & 0.5_sp+OFFSET,  1.20_sp, -2.10_sp, &
+        &-0.5_sp-OFFSET, -1.20_sp,  2.10_sp, &
+        &-0.5_sp+OFFSET, -1.20_sp,  2.10_sp, &
+        & 0.00_sp,        1.00_sp, -2.00_sp, &
+        &20.00_sp,        0.00_sp,  0.00_sp], [3,NCASES])
+    type(kbinterpol) :: kbwin
+    complex :: cmat(BOXPD/2+1,BOXPD,BOXPD)
+    complex :: fused_gradient(3), fused_value, oracle_gradient(3), oracle_value
+    real(sp) :: derivatives(WDIM,WDIM,WDIM,3), margin(3), weights(WDIM,WDIM,WDIM)
+    real(dp) :: max_gradient_error, max_value_error, tolerance
+    integer :: i, j, k, icase, i0(3), wrap(-BOXPD-2:BOXPD+2)
+    logical :: fused_inside, oracle_inside
+
+    ! An asymmetric complex field exposes axis-order, wrapping, and Friedel
+    ! conjugation errors that a symmetric fixture could hide.
+    do k = 1, BOXPD
+        do j = 1, BOXPD
+            do i = 1, BOXPD/2+1
+                cmat(i,j,k) = cmplx(real(100*i+3*j+k), real(-2*i+j-4*k))
+            enddo
+        enddo
+    enddo
+    do i = lbound(wrap,1), ubound(wrap,1)
+        wrap(i) = modulo(i+BOXPD/2,BOXPD)-BOXPD/2
+    enddo
+    kbwin = kbinterpol(KBWINSZ,KBALPHA)
+    ! Both paths use single-precision kernel arithmetic; allow only a small
+    ! accumulation-roundoff margin rather than a fitted empirical tolerance.
+    tolerance = 32._dp*real(epsilon(1._sp),dp)
+    max_value_error = 0._dp
+    max_gradient_error = 0._dp
+
+    do icase = 1, NCASES
+        ! The oracle deliberately materializes the established 3-D stencil,
+        ! then gives it to the generic gather as a separate second stage.
+        call kbwin%apod_mat_3d_fast_grad(LOCS(:,icase),1,WDIM,i0,margin,weights,derivatives)
+        oracle_inside = .not.(any(i0 < lbound(wrap,1)) .or. any(i0+WDIM-1 > ubound(wrap,1)))
+        oracle_value = cmplx(0.,0.)
+        oracle_gradient = cmplx(0.,0.)
+        if( oracle_inside ) call gather_packed_window_grad(cmat,lbound(wrap,1),wrap,i0, &
+            &weights,derivatives,oracle_value,oracle_gradient)
+        call gather_packed_kb3_window_grad(cmat,lbound(wrap,1),wrap,kbwin,LOCS(:,icase), &
+            &fused_value,fused_gradient,fused_inside)
+        ! Check the support decision for every case, then retain the worst
+        ! finite value and derivative errors across all supported cases.
+        call assert_true(fused_inside .eqv. oracle_inside, &
+            &'fused KB3 gather changed the wrap-table support decision')
+        call assert_true(complex_is_finite(fused_value) .and. complex_vector_is_finite(fused_gradient), &
+            &'fused KB3 gather returned a non-finite value or derivative')
+        max_value_error = max(max_value_error, relative_complex_error(fused_value,oracle_value))
+        do i = 1, 3
+            max_gradient_error = max(max_gradient_error, &
+                &relative_complex_error(fused_gradient(i),oracle_gradient(i)))
+        enddo
+    enddo
+    call assert_true(max_value_error <= tolerance, &
+        &'fused KB3 gather value differs from the retained production path')
+    call assert_true(max_gradient_error <= tolerance, &
+        &'fused KB3 gather derivative differs from the retained production path')
+end subroutine test_fused_kb3_gather_oracle
 
 subroutine sample_neutral(cmat,wrap_lower,wrap,kbwin,loc,value,gradient,switch_margin)
     complex, intent(in) :: cmat(:,:,:)
