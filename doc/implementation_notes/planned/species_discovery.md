@@ -561,7 +561,10 @@ same branches.
 - Parsing reuses the comma-list machinery of `simple_string_utils`:
   `list_of_ints2arr` is what `clustinds` goes through, and the species list
   goes through its string sibling, added beside it (blanks around an entry
-  and empty entries ignored, as there). `parameters%element` becomes
+  and empty entries ignored, as there, so `Pt,` and `,Pt` split to the one
+  symbol `Pt`). A value with a comma is a list, and a list must hold two or
+  more symbols after splitting; `Pt,` is therefore an error, with a message
+  saying so, not a one-element list. `parameters%element` becomes
   `character(len=STDLEN)` like `clustinds`, so any length fits. The element
   checks sit in a non-fatal helper, `parse_element_list(str, symbols,
   errmsg)` in `simple_atoms`, where `element_exists` lives, returning a
@@ -1088,7 +1091,15 @@ dependence in `simple_parameters_phases.f90`, the key on
 `convolve` in `exec_simulate_nanoparticle` (`simple_commanders_sim.f90`);
 `species(:)`, `l_species_list` and the list parsing in the parameters
 (section 5); the list rules in `exec_detect_atoms`; `species(:)` copied
-into the nanoparticle in `new` for `write_species_pdb`.
+into the nanoparticle in `new` for `write_species_pdb`. And the sizing by
+`nspecies` of everything that was sized by `MAX_NSPECIES`: the arrays of
+`fit_species_mixture` and its optional `bic` and `admissible` results
+(allocatable, `kmax` = `nspecies_in` when given, `MAX_NSPECIES` when the
+search is automatic); the posteriors, which leave `atom_stats`
+(`species_post(MAX_NSPECIES)`) for an `(n, K)` array of the nanoparticle;
+the `POST` columns of `_species.csv`, written for `K` with a header the
+test reads; the chains of `_species.pdb` (letters, then digits); the bound
+`nspecies <= 3` in `simple_parameters_phases`, which goes.
 
 **The compound selectors `CdSeR`, `CdSeW`, `CdSeZ`** (phase 4; the
 maintainer asked on 2026-10-08 that the present species mixtures be handled
@@ -1266,16 +1277,31 @@ Exit, besides the checks every phase makes (10.0):
   gives `Ni`, `Pt`; `Pt` alone is one symbol and not a list; `Pt,Pt`,
   `Pt,`, `,Pt`, `Pt,Xx` and `Pt,X1` are rejected with a message, without
   stopping, since a fatal error cannot be asserted in process; a list of
-  five symbols is accepted and sizes `nspecies` to five.
+  five symbols is accepted and sizes `nspecies` to five; `Pt,` is rejected
+  as a list of one.
+- `simple_nano_species_tester`: `fit_species_mixture` with `nspecies_in` =
+  4 on a four-class sample (means 1, 0.6, 0.35, 0.2, spread 0.02, 100 atoms
+  each) returns four classes with every label right and the means within
+  0.02, and `bic` and `admissible` of size 4; with `nspecies_in` = 0 on the
+  same sample it returns 3, the ceiling of the automatic search, which is
+  what the ceiling means.
 - `simulate_nanoparticle pdbfile= pdb_bfac=yes` on a PDB of three Pt atoms
   with B factors 0, 10 and 20 A^2 gives three peaks in that order with
   equal voxel sums (recorded); without the key the three atoms are
   identical.
 - The phase 0 reference regenerated with the commands of its Progress entry
   (the first run's directory is not relied on): `element=Pt` reproduces its
-  numbers; `element=Pt,Ni` on the same volume gives the five present
-  products byte-identical to `element=Pt` and a `_species.pdb` with `Pt`
-  and `Ni` in the element column.
+  numbers. Discovery needs noise (the noise region's standard deviation
+  calibrates the thresholds, and a noiseless map stops with a message), so
+  the comparison runs use one noisy copy of the reference volume, Gaussian
+  noise at a fixed seed with a standard deviation of 0.05 of a core Pt
+  peak, added once and read by every run: on that copy, `element=Pt` and
+  `element=Pt,Ni` give the five present products byte-identical, and
+  `element=Pt,Ni` writes `_species.pdb` with `Pt` and `Ni` in the element
+  column, `_species.csv` with `POST1` and `POST2`, and a four-symbol list
+  (`Pt,Ni,Al,Si`, a wrong statement about a Pt particle, accepted as a
+  statement) writes `POST1` to `POST4`, chains `A` to `D`, and reports the
+  four-class fit inadmissible.
 - The parameter truth table of section 5 holds, checked by hand for every
   row with a fatal outcome and recorded.
 - `find_rMax('CdSeW')` returns the wurtzite cutoff and
@@ -1335,10 +1361,15 @@ integral is what the species call sees, so the classes separate on the
 integral ratio, not the peak ratio.
 
 Eligibility for the recall floors is defined without the fit, so that it
-cannot be circular: a generating atom is eligible when the clean render,
-filtered with the detection template (a Gaussian at `B_ref`), divided at
-the atom by the standard deviation of the added noise filtered the same
-way, is 6.5 or more. The test computes both from the maps it made.
+cannot be circular, and from each atom's own signal, so that neighbours
+cannot lend it: a generating atom is eligible when its marginal signal,
+the peak of its own kernel (its element at its own `B_i`, rendered alone
+in a small box and filtered with the detection template, a Gaussian at
+`B_ref`), divided by the standard deviation of the added noise filtered
+the same way, is 6.5 or more. Both come from what the test rendered, and
+the eligible set of a case is computed once and used by every run of that
+case, so that a plain run and a recovery run are compared on the same
+atoms.
 
 Floors, written into the test before its first run, none lowered:
 
@@ -1350,18 +1381,22 @@ Floors, written into the test before its first run, none lowered:
   discover_species=yes` and with no element and the key; with
   `element=Pt,Ni`, no recovered atom and the two-class fit reported
   inadmissible in `_species.txt`.
+- Every run of every case: recall of the strong class (Pt) of at least
+  0.98 over its eligible atoms, and recall over all eligible atoms of all
+  species of at least 0.95 for runs with discovery (the species call is
+  not allowed to pass while most atoms are missing); at most one false
+  atom (a found atom with no generating atom within `0.3 d_NN`, or a
+  second atom on one site).
 - Alloy, shell and light, with the list: every found atom within `0.3
-  d_NN` of a generating atom carries that atom's element; at most one
-  false atom (a found atom with no generating atom within `0.3 d_NN`, or a
-  second atom on one site); the two-class fit admissible; recall of the
-  light element of at least 0.90 over the eligible atoms; the fitted
-  intensity ratio within 10% of the measured single-atom ratio;
-  `_species.pdb` with one atom per table row and the element column equal
-  to the symbol of the table's class.
-- Light case: the `element=Pt` run finds fewer than 90% of the Al atoms,
-  otherwise the fixture does not test the recovery and the phase stops to
-  have it redesigned (a lighter element, or a lower noise); the
-  `element=Pt,Al` run finds at least 90% of the eligible ones, so the
+  d_NN` of a generating atom carries that atom's element; the two-class fit
+  admissible; recall of the light element of at least 0.90 over its
+  eligible atoms; the fitted intensity ratio within 10% of the measured
+  single-atom ratio; `_species.pdb` with one atom per table row and the
+  element column equal to the symbol of the table's class.
+- Light case: over the same eligible Al atoms, the `element=Pt` run finds
+  fewer than 90% of them, otherwise the fixture does not test the recovery
+  and the phase stops to have it redesigned (a lighter element, or a lower
+  noise); the `element=Pt,Al` run finds at least 90% of them, so the
   difference is the residual levels' work, recorded by stage and level.
 - Alloy and light without an element, with the key: `K` = 2 and every
   label of a found atom right, class 1 being the heavier element.
@@ -1372,7 +1407,11 @@ Floors, written into the test before its first run, none lowered:
   consistency floor, deliberately; the measured value goes to Progress.
 - With half maps: `noise_source` is `half_maps` and the label agreement
   between the halves is at least 0.95.
-- The test removes its fixture tree when it ends, pass or fail.
+- Every check and every measured number above goes through `test_gate`
+  (`simple_test_gate`: `check`, `metric`, `report`) into `metrics.tsv` in
+  the test's directory, as the test policy requires of a workflow test;
+  the test passes when the gate has no failure. The test removes its
+  fixture tree when it ends, pass or fail.
 
 `detect_atoms` runs with the test's thread count. The CTest entry keeps its
 name, label and budget; if it exceeds its timeout in Debug the timeout is
@@ -1583,8 +1622,22 @@ development) with these changes:
   decreasing expected intensity, the program does not reorder, and the
   pseudo-atom symbols are rejected (section 5).
 
-Also taken from the review: the purposes of the light case and of the half
-maps are floors, not Progress entries (the `element=Pt` run must miss Al
+A third review (same day) found three more blockers, taken: the
+any-length ruling had left the mixture, the posterior columns and the
+chains sized for three in the text, so the generalisation is now spelled
+out with a four-class unit test and a four-symbol run (section 9, 10.5);
+the phase 4 comparison runs were specified on the noiseless reference
+volume, on which discovery stops, so they run on one seeded noisy copy
+(10.5); and the phase 5 floors could pass while most atoms were missed, so
+the strong class and the whole eligible population get recall floors,
+eligibility comes from each atom's marginal signal rather than the
+filtered map at its position, and the plain-versus-recovery comparison
+uses one eligible set (10.6). Also: empty list entries are ignored as in
+`list_of_ints2arr` and a list must then hold two symbols (section 5), and
+the test goes through `test_gate` into `metrics.tsv` (10.6).
+
+Also taken from the second review: the purposes of the light case and of
+the half maps are floors, not Progress entries (the `element=Pt` run must miss Al
 atoms that the list run finds; admissibility for the mixed cases; a 0.95
 half-map agreement floor; product identity for every `element` value, not
 only `Pt,Ni`); `B_SURF` is described as an added displacement variance
