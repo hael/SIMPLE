@@ -10,7 +10,6 @@ use simple_atoms,      only: atoms
 use simple_parameters, only: parameters
 !use simple_linalg
 use simple_nanoparticle_utils
-use simple_nano_species, only: MAX_NSPECIES
 implicit none
 
 public :: nanoparticle
@@ -140,7 +139,6 @@ type :: atom_stats
     integer :: det_level         = 0  ! residual level that accepted the atom
     logical :: gate_used         = .false. ! accepted through the neighbour gate
     integer :: species           = 0  ! intensity class, numbered by decreasing intensity
-    real    :: species_post(MAX_NSPECIES) = 0. ! class posteriors
 end type atom_stats
 
 type :: nanoparticle
@@ -156,6 +154,11 @@ type :: nanoparticle
     real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
     real                  :: theoretical_radius = 0. ! theoretical atom radius in A
     real                  :: d_nn               = 0. ! median nearest-neighbour distance in A (species-free path)
+    ! the pruning policy of discard_atoms, kept for the recovered atoms of discovery: centre of mass (voxels), the
+    ! radius beyond which atoms are subject to deletion (A) and the contact-score threshold
+    real                  :: prune_cen(3)       = 0.
+    real                  :: prune_rad_thres    = 0.
+    integer               :: prune_cs_thres     = 0
     logical               :: l_species_free     = .false. ! no element given: pseudo-atom template, d_NN length scales
     ! species discovery (discover_species=yes)
     logical               :: l_discover_species = .false.
@@ -211,10 +214,13 @@ type :: nanoparticle
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
     type(atom_stats), allocatable :: recovered(:)    ! atoms recovered from the residual map, diagnostics only
+    real,             allocatable :: species_post(:,:) ! class posteriors of the level-1 then the recovered atoms
     real,             allocatable :: coords4stats(:,:)
     ! OTHER
-    character(len=2)      :: element   = '  '
-    character(len=4)      :: atom_name = '    '
+    character(len=2)      :: element     = '  '      ! symbol of the first species: radii, templates, atom names
+    character(len=5)      :: element_key = '     '   ! element as given (a compound selector): lattice lookups
+    character(len=4)      :: atom_name   = '    '
+    character(len=2), allocatable :: species(:)      ! species named by a list or compound selector, brightest first
     type(string)          :: npname
     type(string)          :: fbody
   contains
@@ -257,6 +263,8 @@ type :: nanoparticle
     procedure, private :: masscen
     procedure, private :: calc_longest_atm_dist
     procedure, private :: check_neighbors_cn
+    procedure, private :: binary_lattice => np_binary_lattice
+    procedure, private :: lattice_bond   => np_lattice_bond
     procedure, private :: calc_isotropic_disp
     procedure, private :: calc_anisotropic_disp
     ! visualization and output
@@ -293,13 +301,15 @@ contains
         self%l_species_free = len_trim(params%element) == 0
         if( self%l_species_free )then
             ! the radius follows from d_NN once the first binarisation has found centres
-            self%atom_name = 'X1  '
-            self%element   = 'X1'
+            self%atom_name   = 'X1  '
+            self%element     = 'X1'
+            self%element_key = 'X1'
             self%theoretical_radius = 0.
         else
-            self%atom_name = params%element(1:len(self%atom_name))
-            self%element   = params%element(1:len(self%element))
-            el_ucase       = upperCase(params%element(1:len(el_ucase)))
+            self%element_key = params%element(1:len(self%element_key))
+            self%element     = params%element(1:len(self%element))
+            self%atom_name   = self%element
+            el_ucase         = upperCase(self%element)
             call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
             if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         endif
@@ -320,6 +330,7 @@ contains
         self%l_discover_species = params%l_discover_species
         self%min_nbrs           = params%min_nbrs
         self%nspecies           = params%nspecies
+        if( allocated(params%species) ) self%species = params%species
         if( DEBUG ) call self%img%write(string('masked_input_vol.mrc'))
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
@@ -614,7 +625,7 @@ contains
         call self%discard_atoms
         ! fit lattice
         centers_A = self%atominfo2centers_A()
-        call fit_lattice(self%element, centers_A, a)
+        call fit_lattice(self%element_key, centers_A, a)
         deallocate(centers_A)
         call simatms%kill
     end subroutine identify_lattice_params
@@ -631,8 +642,9 @@ contains
         logical,                 intent(in)    :: l_atom_thres        ! do atomic thresholding or not
         class(string), optional, intent(in)    :: split_fname
         logical,       optional, intent(in)    :: l_print
-        type(image) :: simatms, img_cos
-        logical     :: ll_print
+        type(image)  :: simatms, img_cos
+        type(string) :: errmsg
+        logical      :: ll_print
         ll_print = .true.
         if( present( l_print) ) ll_print = l_print
         ! MODEL BUILDING
@@ -645,6 +657,10 @@ contains
         if( DEBUG ) call self%img%write(string('after_phasecorr.mrc'))
         ! Nanoparticle binarization
         call self%binarize_and_find_centers(l_print=ll_print)
+        if( self%l_discover_species .and. self%n_cc < 2 )then
+            errmsg = 'discover_species needs two or more level-1 atoms to measure d_NN; level 1 found '//int2str(self%n_cc)
+            THROW_HARD(errmsg%to_char())
+        endif
         if( self%l_species_free .or. self%l_discover_species ) call self%set_nn_length_scales
         ! discard small connected components
         call self%discard_small_ccs
@@ -1111,7 +1127,7 @@ contains
         if( self%l_species_free )then
             it_contact_score = CSCORE_CEIL_NOEL
         else
-            el_ucase = uppercase(trim(adjustl(self%element)))
+            el_ucase = uppercase(trim(adjustl(self%element_key)))
             call get_lattice_params(el_ucase, crystal_system, foo)
             select case( crystal_system )
                 case('wurtzite', 'zincblende')
@@ -1152,6 +1168,9 @@ contains
         end do
         if( cscore_thres > it_contact_score/2 ) cscore_thres = it_contact_score/2
         if( ll_print ) write(logfhandle,*) 'contact score threshold: ', cscore_thres
+        self%prune_cen       = self%NPcen
+        self%prune_rad_thres = cendist_thres
+        self%prune_cs_thres  = cscore_thres
         ! get connected components and binary matrices
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
@@ -1262,9 +1281,9 @@ contains
         real, allocatable,   intent(in)    :: centers_A(:,:)
         integer,             intent(inout) :: cscores(:)
         if( self%l_species_free )then
-            call calc_contact_scores(self%element, centers_A, cscores, d_nn=self%d_nn)
+            call calc_contact_scores(self%element_key, centers_A, cscores, d_nn=self%d_nn)
         else
-            call calc_contact_scores(self%element, centers_A, cscores)
+            call calc_contact_scores(self%element_key, centers_A, cscores)
         endif
     end subroutine contact_scores
 
@@ -1296,7 +1315,6 @@ contains
         real,    parameter :: PRIOR_SD_START = 0.5    ! spread of ln B around B_ref before any fit
         real,    parameter :: TAU_CLASS_MIN  = 0.05   ! floor of the intrinsic class spread, fraction of I_k
         real,    parameter :: LOW_SNR        = 6.5    ! shells below this predicted signal-to-noise are flagged
-        real,    parameter :: CS_OUTER_FRAC  = 0.85   ! contact pruning considers the atoms beyond this radius quantile
         real,    parameter :: INNER_FRAC     = 0.3    ! interior atoms for the coordination deficit
         real,    parameter :: CN_CLOSE_PACKED = 12.
         type(atom_stats), allocatable :: tab(:)
@@ -1307,10 +1325,12 @@ contains
         integer, allocatable :: labels(:), coord(:)
         type(image)  :: img_tmp, simimg
         real         :: s, d, dv, sig_ref, sig2n, s_a, s_i, rob_ratio, k_a, k_b, c_search_a, c_region, z_mu, z_sd
-        real         :: efalse_a, efalse_b, bic(MAX_NSPECIES), half_agree, half_corr
+        real,    allocatable :: bic(:)
+        logical, allocatable :: adm(:)
+        real         :: efalse_a, efalse_b, half_agree, half_corr
         integer      :: ldim(3), n, n1, nreg, nsearch_a, nsearch_b, nadded(2,MAX_LEVELS), npruned, K, stage, level
         integer      :: nnew, i, iround, isweep
-        logical      :: l_halves, adm(MAX_NSPECIES)
+        logical      :: l_halves
         if( self%d_nn <= 0. ) THROW_HARD('d_NN was not measured; discover_species')
         write(logfhandle,'(A)') '>>> SPECIES DISCOVERY (DIAGNOSTICS ONLY)'
         s       = self%smpd
@@ -1397,7 +1417,8 @@ contains
         ! tables: discovery fields of the level-1 atoms, the recovered atoms on their own
         self%atominfo(1:n1) = tab(1:n1)
         if( allocated(self%recovered) ) deallocate(self%recovered)
-        self%recovered = tab(n1+1:n)
+        self%recovered    = tab(n1+1:n)
+        self%species_post = post
         call img_tmp%kill
         call simimg%kill
         write(logfhandle,'(A,I0,A,I0,A,I0)') 'level-1 atoms: ', n1, ', recovered atoms: ', n - n1, ', classes: ', K
@@ -1785,47 +1806,29 @@ contains
             endif
         end function centroid
 
-        ! the contact-score rule of discard_atoms on the merged set, applied to the recovered atoms only
+        ! the pruning of discard_atoms applied to the recovered atoms (ruling of 2026-10-09, second): in the outer zone
+        ! of the level-1 set, a recovered atom with fewer level-1 atoms within the contact cutoff than the threshold
+        ! discard_atoms derived goes; recovered atoms never vouch for each other, atoms inside the zone stay
         subroutine prune_recovered
-            real,    allocatable :: centers_a(:,:), cendists(:), sorted(:)
-            integer, allocatable :: cs(:)
             logical, allocatable :: keep(:)
-            character(len=10) :: crystal_system
-            character(len=5)  :: el_ucase
-            real    :: cen(3), dthres, percen, a0(3)
-            integer :: j, cn, cthres, cceil
+            real    :: rmax_c, cendist
+            integer :: j, l, ncont
             npruned = 0
             if( n == n1 ) return
-            ! contact-score ceiling as in discard_atoms
-            cceil = CSCORE_CEIL_NOEL
-            if( .not. self%l_species_free )then
-                el_ucase = uppercase(trim(adjustl(self%element)))
-                call get_lattice_params(el_ucase, crystal_system, a0)
-                select case( crystal_system )
-                    case('wurtzite', 'zincblende')
-                        cceil = 4
-                end select
+            if( self%l_species_free )then
+                rmax_c = find_rMax(self%element_key, self%d_nn)
+            else
+                rmax_c = find_rMax(self%element_key)
             endif
-            call merged_centers_a(centers_a)
-            allocate(cs(n), source=0)
-            call self%contact_scores(centers_a, cs)
-            cen      = sum(centers_a, dim=2) / real(n)
-            cendists = sqrt(sum((centers_a - spread(cen, 2, n))**2, dim=1))
-            sorted   = cendists
-            call hpsort(sorted)
-            dthres   = sorted(nint(CS_OUTER_FRAC * real(n)))
-            cthres   = cceil
-            do cn = 1,cceil
-                percen = real(count(cs >= cn)) / real(n) * 100.
-                if( percen <= 95. )then
-                    cthres = cn
-                    exit
-                endif
-            enddo
-            if( cthres > cceil/2 ) cthres = cceil/2
             allocate(keep(n), source=.true.)
             do j = n1+1,n
-                if( cs(j) < cthres - 1 .and. cendists(j) > dthres ) keep(j) = .false.
+                cendist = euclid(tab(j)%center, self%prune_cen) * s
+                if( cendist <= self%prune_rad_thres ) cycle
+                ncont = 0
+                do l = 1,n1
+                    if( euclid(tab(j)%center, tab(l)%center) * s < rmax_c ) ncont = ncont + 1
+                enddo
+                if( ncont < self%prune_cs_thres ) keep(j) = .false.
             enddo
             npruned = count(.not. keep)
             if( npruned > 0 )then
@@ -1863,9 +1866,7 @@ contains
             x = tab(:n)%aper_int
             call fit_species_mixture(x, s_i, self%nspecies, K, labels, post, mu, var, bic, adm)
             do j = 1,n
-                tab(j)%species         = labels(j)
-                tab(j)%species_post    = 0.
-                tab(j)%species_post(:K) = post(j,:)
+                tab(j)%species = labels(j)
             enddo
         end subroutine assign_species
 
@@ -2006,35 +2007,54 @@ contains
             call fclose(funit)
         end subroutine write_radial_profiles
 
+        ! one posterior column per class, POST1 to POSTK
         subroutine write_species_table
-            integer :: funit, j, origin
+            type(string) :: header, fmt
+            integer      :: funit, j, origin, kc
+            header = 'INDEX,RECOVERED,X,Y,Z,RADIUS,COORD,STAGE,LEVEL,DET_Z,AMP,B_STAGE1,B_STAGE2,APER_INT,APER_SNR,CLASS'
+            do kc = 1,K
+                header = header//',POST'//int2str(kc)
+            enddo
+            header = header//',VALID_CORR,GATE_USED'
+            fmt    = '(I0,",",I0,5(",",ES16.8),2(",",I0),6(",",ES16.8),",",I0,'//int2str(K+1)//'(",",ES16.8),",",I0)'
             call fopen(funit, file=self%fbody//'_species.csv', status='REPLACE', action='WRITE')
-            write(funit,'(A)') 'INDEX,RECOVERED,X,Y,Z,RADIUS,COORD,STAGE,LEVEL,DET_Z,AMP,B_STAGE1,B_STAGE2,APER_INT,APER_SNR,'//&
-                &'CLASS,POST1,POST2,POST3,VALID_CORR,GATE_USED'
+            write(funit,'(A)') header%to_char()
             do j = 1,n
                 origin = merge(1, 0, j > n1)
-                write(funit,'(I0,",",I0,5(",",ES16.8),2(",",I0),6(",",ES16.8),",",I0,4(",",ES16.8),",",I0)') j, origin,&
+                write(funit,fmt%to_char()) j, origin,&
                     &(tab(j)%center - 1.) * s, rad(j), real(coord(j)), tab(j)%det_stage, tab(j)%det_level, tab(j)%det_z,&
                     &tab(j)%amp, tab(j)%bfac_stage1, tab(j)%bfac, tab(j)%aper_int, tab(j)%aper_snr, tab(j)%species,&
-                    &tab(j)%species_post, tab(j)%valid_corr, merge(1, 0, tab(j)%gate_used)
+                    &post(j,:), tab(j)%valid_corr, merge(1, 0, tab(j)%gate_used)
             enddo
             call fclose(funit)
         end subroutine write_species_table
 
-        ! every atom with its class: element column and chain by class (X1/A the strongest), occupancy the class
-        ! intensity over the strongest class's, B column the stage-2 B factor; a viewer selects a class by chain
+        ! every atom with its class: element column and chain by class (X1, or the first named species, and chain A
+        ! the strongest), occupancy the class intensity over the strongest class's, B column the stage-2 B factor;
+        ! a viewer selects a class by chain
         subroutine write_species_pdb
-            type(atoms) :: atms
-            integer     :: j, kc
-            real        :: occ
+            type(atoms)      :: atms
+            character(len=2) :: el
+            integer          :: j, kc
+            real             :: occ
+            if( K > 36 ) THROW_HARD('more classes than PDB chains A-Z, 0-9; write_species_pdb')
             call atms%new(n, dummy=.true.)
             do j = 1,n
                 kc  = tab(j)%species
                 occ = 1.
                 if( mu(1) > TINY ) occ = max(mu(kc), 0.) / mu(1)
-                call atms%set_name(     j, 'X'//int2str(kc)//'  ')
-                call atms%set_element(  j, 'X'//int2str(kc))
-                call atms%set_chain(    j, achar(iachar('A') + kc - 1))
+                if( allocated(self%species) )then
+                    el = self%species(kc)
+                else
+                    el = 'X'//int2str(kc)
+                endif
+                call atms%set_name(     j, el//'  ')
+                call atms%set_element(  j, el)
+                if( kc <= 26 )then
+                    call atms%set_chain(j, achar(iachar('A') + kc - 1))
+                else
+                    call atms%set_chain(j, achar(iachar('0') + kc - 27))
+                endif
                 call atms%set_coord(    j, (tab(j)%center - 1.) * s)
                 call atms%set_num(      j, j)
                 call atms%set_resnum(   j, j)
@@ -2050,8 +2070,9 @@ contains
             real, allocatable :: lnb(:), r(:)
             logical, allocatable :: strong(:)
             integer, allocatable :: order(:), bnd(:)
-            integer :: funit, kc, l, ninner, nsh, ish, nlow
-            real    :: bmed, cn_inner, misclass, rms2
+            real, parameter :: SURF_CONFINED = 0.8   ! a class with more of its atoms in the outer zone is flagged
+            integer :: funit, kc, l, ninner, nsh, ish, nlow, nin
+            real    :: bmed, cn_inner, misclass, rms2, cn_out, frac_out
             call fopen(funit, file=self%fbody//'_species.txt', status='REPLACE', action='WRITE')
             write(funit,'(A)') '# species discovery of detect_atoms (discover_species=yes): diagnostics, not used by any product'
             call write_kv(funit, 'K', int2str(K))
@@ -2066,7 +2087,7 @@ contains
             do kc = 1,K-1
                 call write_kv(funit, 'separation_D_'//int2str(kc)//'_'//int2str(kc+1), rstr(class_separation(mu(kc), var(kc), mu(kc+1), var(kc+1))))
             enddo
-            do l = 1,MAX_NSPECIES
+            do l = 1,size(bic)
                 call write_kv(funit, 'bic_K'//int2str(l),        rstr(bic(l)))
                 call write_kv(funit, 'admissible_K'//int2str(l), merge('yes', 'no ', adm(l)))
             enddo
@@ -2102,6 +2123,8 @@ contains
             do l = 1,MAX_LEVELS
                 call write_kv(funit, 'added_B_level_'//int2str(l), int2str(nadded(2,l)))
             enddo
+            call write_kv(funit, 'prune_zone_radius', rstr(self%prune_rad_thres))
+            call write_kv(funit, 'prune_contact_threshold', int2str(self%prune_cs_thres))
             call write_kv(funit, 'pruned', int2str(npruned))
             call write_kv(funit, 'recovered_atoms', int2str(n - n1))
             call write_kv(funit, 'total_atoms', int2str(n))
@@ -2123,6 +2146,22 @@ contains
                 enddo
             enddo
             call write_kv(funit, 'low_snr_shells', int2str(nlow))
+            ! a class confined to the outer zone of the pruning may be partial occupancy rather than a species
+            do kc = 1,K
+                nin = 0
+                cn_out = 0.
+                do l = 1,n
+                    if( tab(l)%species /= kc ) cycle
+                    if( euclid(tab(l)%center, self%prune_cen) * s > self%prune_rad_thres )then
+                        nin    = nin + 1
+                        cn_out = cn_out + real(coord(l))
+                    endif
+                enddo
+                frac_out = real(nin) / real(max(count(labels == kc), 1))
+                call write_kv(funit, 'class_outer_zone_fraction_'//int2str(kc), rstr(frac_out))
+                call write_kv(funit, 'class_outer_zone_mean_coord_'//int2str(kc), rstr(cn_out / real(max(nin, 1))))
+                call write_kv(funit, 'class_surface_confined_'//int2str(kc), merge('yes', 'no ', frac_out > SURF_CONFINED))
+            enddo
             if( l_halves )then
                 call write_kv(funit, 'halfmap_label_agreement', rstr(half_agree))
                 call write_kv(funit, 'halfmap_intensity_corr', rstr(half_corr))
@@ -2166,12 +2205,12 @@ contains
         if( present(a0) )then
             a = a0
         else
-            call fit_lattice(self%element, centers_A, a)
+            call fit_lattice(self%element_key, centers_A, a)
         endif
-        call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        call run_cn_analysis(self%element_key,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! calc strain and lattice displacements for all atoms
         allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
-        call strain_analysis(self%element, centers_A, a, strain_array)
+        call strain_analysis(self%element_key, centers_A, a, strain_array)
         if( allocated(self%coords4stats) ) call self%pack_instance4stats(strain_array)
         allocate(cc_mask(self%n_cc), source=.true.) ! because self%n_cc might change after pack_instance4stats
         ! validation through per-atom correlation with the simulated density
@@ -2453,19 +2492,14 @@ contains
         real              :: a0, foo(3), d
         integer           :: i
         a0 = sum(a)/real(size(a)) ! alrithmetic mean of fitted lattice parameters
-        ! identify nearest neighbors
-        el_ucase = uppercase(trim(adjustl(self%element)))
+        ! identify nearest neighbors within the first-shell cutoff, as run_cn_analysis
+        el_ucase = uppercase(trim(adjustl(self%element_key)))
         call get_lattice_params(el_ucase, crystal_system, foo)
-        select case(trim(adjustl(crystal_system)))
-            case('rocksalt')
-                d = a0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
-            case('wurtzite')
-                d = a(1) * ((1. + sqrt(8. / 3.) )/ 2.) 
-            case('bcc')
-                d = a0 * ((1. + sqrt(3.) / 2.) / 2.)
-            case DEFAULT ! FCC by default
-                d = a0 * ((1. + 1. / sqrt(2.)) / 2.)
-        end select
+        if( trim(crystal_system) == 'wurtzite' )then
+            d = lattice_cutoff(crystal_system, a)
+        else
+            d = lattice_cutoff(crystal_system, [a0, a0, a0])
+        endif
         do i = 1, self%n_cc
             if( i/=cc .and. self%atominfo(i)%cn_std > 12 .and. &
                     & euclid(self%atominfo(cc)%center(:3),self%atominfo(i)%center(:3))*self%smpd < d )then
@@ -2473,6 +2507,29 @@ contains
             endif
         enddo
     end subroutine check_neighbors_cn
+
+    ! the crystal system of the element is one of the binary crystals (rocksalt, zincblende, wurtzite)
+    logical function np_binary_lattice( self )
+        class(nanoparticle), intent(in) :: self
+        character(len=10) :: crystal_system
+        character(len=5)  :: el_ucase
+        real              :: foo(3)
+        el_ucase = uppercase(trim(adjustl(self%element_key)))
+        call get_lattice_params(el_ucase, crystal_system, foo)
+        np_binary_lattice = binary_lattice(crystal_system)
+    end function np_binary_lattice
+
+    ! bond length of the element's crystal system for the fitted lattice parameters a
+    real function np_lattice_bond( self, a )
+        class(nanoparticle), intent(in) :: self
+        real,                intent(in) :: a(3)
+        character(len=10) :: crystal_system
+        character(len=5)  :: el_ucase
+        real              :: foo(3)
+        el_ucase = uppercase(trim(adjustl(self%element_key)))
+        call get_lattice_params(el_ucase, crystal_system, foo)
+        np_lattice_bond = lattice_bond(crystal_system, a)
+    end function np_lattice_bond
 
     ! Calculates the isotropic displacement parameter U_ISO of a given cc by fitting
     ! the real space intensity distribution of the 3D reconstructed volume stored
@@ -2490,12 +2547,19 @@ contains
         integer :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, errflg
         logical :: fit_mask(self%ldim(1),self%ldim(2),self%ldim(3))
 
-        output_rad = (sum(a)/3)/(2.*sqrt(2.))/self%smpd  ! 1/2 FCC nearest neighbor dist
-        fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
-
-        ! Create search window containing sphere of fit rad to speed up loops.
-        center     = self%atominfo(cc)%center(:)
-        maxrad     = 0.5*(sum(a)/3) / self%smpd
+        if( self%binary_lattice() )then
+            ! half the bond of the binary crystal, in the same proportions as the fcc radii below
+            output_rad = 0.5 * self%lattice_bond(a) / self%smpd
+            fit_rad    = 0.75 * output_rad
+            center     = self%atominfo(cc)%center(:)
+            maxrad     = sqrt(2.) * output_rad
+        else
+            output_rad = (sum(a)/3)/(2.*sqrt(2.))/self%smpd  ! 1/2 FCC nearest neighbor dist
+            fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
+            ! Create search window containing sphere of fit rad to speed up loops.
+            center     = self%atominfo(cc)%center(:)
+            maxrad     = 0.5*(sum(a)/3) / self%smpd
+        endif
         ilo        = max(nint(center(1) - maxrad), 1)
         ihi        = min(nint(center(1) + maxrad), self%ldim(1))
         jlo        = max(nint(center(2) - maxrad), 1)
@@ -2576,11 +2640,19 @@ contains
         integer      :: ilo, ihi, jlo, jhi, klo, khi, i, j, k, nvoxels, n, errflg, nrot
         logical      :: fit_mask(self%ldim(1), self%ldim(2), self%ldim(3))
 
-        output_rad = ( sum(a) / 3 ) / ( 2. * sqrt(2.) )  ! 1/2 FCC nearest neighbor dist
-        fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
-        ! Create search window containing sphere of fit rad to speed up loops.
-        center  = self%atominfo(cc)%center(:)
-        maxrad  = 0.5 * (sum(a)/3) / self%smpd
+        if( self%binary_lattice() )then
+            ! half the bond of the binary crystal, in the same proportions as the fcc radii below
+            output_rad = 0.5 * self%lattice_bond(a)
+            fit_rad    = 0.75 * output_rad
+            center     = self%atominfo(cc)%center(:)
+            maxrad     = sqrt(2.) * output_rad / self%smpd
+        else
+            output_rad = ( sum(a) / 3 ) / ( 2. * sqrt(2.) )  ! 1/2 FCC nearest neighbor dist
+            fit_rad    = 0.75 * output_rad ! 0.75 prevents fitting tails of other atoms
+            ! Create search window containing sphere of fit rad to speed up loops.
+            center  = self%atominfo(cc)%center(:)
+            maxrad  = 0.5 * (sum(a)/3) / self%smpd
+        endif
         ilo     = max(nint(center(1) - maxrad), 1)
         ihi     = min(nint(center(1) + maxrad), self%ldim(1))
         jlo     = max(nint(center(2) - maxrad), 1)
@@ -3159,8 +3231,13 @@ contains
         call self%img_cc%kill_bimg()
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
         if( allocated(self%recovered) ) deallocate(self%recovered)
+        if( allocated(self%species_post) ) deallocate(self%species_post)
+        if( allocated(self%species) ) deallocate(self%species)
         self%l_species_free     = .false.
         self%d_nn               = 0.
+        self%prune_cen          = 0.
+        self%prune_rad_thres    = 0.
+        self%prune_cs_thres     = 0
         self%l_discover_species = .false.
         self%min_nbrs           = 3
         self%nspecies           = 0

@@ -5,7 +5,7 @@ use simple_defs_atoms
 use simple_molecule_data
 implicit none
 
-public :: atoms
+public :: atoms, parse_element_list
 private
 #include "simple_local_flags.inc"
 
@@ -924,12 +924,14 @@ contains
     ! and parametrization from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
     ! A pseudo-atom (X1..X3) is q (4 pi / B)**1.5 exp(-4 pi**2 r**2 / B), q = occupancy, B = beta:
     ! unit q integrates to one; lp does not blur it, its width is B
-    subroutine convolve( self, vol, cutoff, lp )
+    ! bfac_pdb: an element atom's beta is its Debye-Waller B, added to every b_j with the blur (default off)
+    subroutine convolve( self, vol, cutoff, lp, bfac_pdb )
         use simple_image, only: image
-        class(atoms),   intent(in)    :: self
-        class(image),   intent(inout) :: vol
-        real,           intent(in)    :: cutoff
-        real, optional, intent(in)    :: lp
+        class(atoms),      intent(in)    :: self
+        class(image),      intent(inout) :: vol
+        real,              intent(in)    :: cutoff
+        real,    optional, intent(in)    :: lp
+        logical, optional, intent(in)    :: bfac_pdb
         real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
         real, parameter   :: fourpisq = 4.*PI*PI
         real,    allocatable :: rmat(:,:,:), atom_aterm(:,:), atom_b(:,:), atom_xyz(:,:), atom_scale(:)
@@ -937,7 +939,10 @@ contains
         logical, allocatable :: atom_valid(:)
         real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, scale
         integer :: bbox(3,2), ldim(3), pos(3), i, j, k, l, jj, kk, z, icutoff
+        logical :: l_bfac_pdb
         if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
+        l_bfac_pdb = .false.
+        if( present(bfac_pdb) ) l_bfac_pdb = bfac_pdb
         smpd     = vol%get_smpd()
         ldim     = vol%get_ldim()
         lp_here  = 2.*smpd
@@ -1252,7 +1257,13 @@ contains
             case DEFAULT
                 cycle
             end select
-            if( z < Z_PSEUDO_FIRST .or. z > Z_PSEUDO_LAST ) b = b + bfac ! eq B.6
+            if( z < Z_PSEUDO_FIRST .or. z > Z_PSEUDO_LAST )then
+                b = b + bfac ! eq B.6
+                if( l_bfac_pdb )then
+                    if( self%beta(i) < 0. ) THROW_HARD('negative B factor with bfac_pdb; convolve')
+                    b = b + self%beta(i)
+                endif
+            endif
             aterm            = a/b**1.5    ! eq B.6
             xyz              = self%xyz(i,:)/smpd
             pos              = floor(xyz)
@@ -1659,6 +1670,81 @@ contains
         self%exists = .false.
     end subroutine kill
 
-        
-    
+    ! The species named by element=: one symbol; a compound selector CdSeR|CdSeW|CdSeZ, its two symbols in the
+    ! order written; or a comma-separated list of two or more distinct physical symbols, kept in the order given.
+    ! Non-fatal: false with errmsg on a value that is none of these. selector is blank unless one was given.
+    logical function parse_element_list( str, symbols, selector, errmsg )
+        use simple_string_utils, only: list_of_strs2arr
+        character(len=*),              intent(in)  :: str
+        character(len=2), allocatable, intent(out) :: symbols(:)
+        character(len=5),              intent(out) :: selector
+        type(string),                  intent(out) :: errmsg
+        character(len=len(str)), allocatable :: entries(:)
+        character(len=5) :: el_ucase
+        integer          :: i, j, nent
+        parse_element_list = .false.
+        selector = ''
+        allocate(symbols(0))
+        if( index(str, ',') == 0 )then
+            el_ucase = upperCase(trim(adjustl(str)))
+            if( len_trim(adjustl(str)) > len(el_ucase) ) el_ucase = ''
+            select case(el_ucase)
+                case('CDSER', 'CDSEW', 'CDSEZ')
+                    selector = trim(adjustl(str))
+                    symbols  = [capitalised(el_ucase(1:2)), capitalised(el_ucase(3:4))]
+                case DEFAULT
+                    if( len_trim(str) == 0 .or. len_trim(adjustl(str)) > 2 )then
+                        errmsg = 'element: '//trim(adjustl(str))//' is not an element symbol, a compound selector or a list'
+                        return
+                    endif
+                    symbols = [capitalised(trim(adjustl(str)))]
+                    if( .not. physical(symbols(1)) ) return
+            end select
+            parse_element_list = .true.
+            return
+        endif
+        entries = list_of_strs2arr(str)
+        nent    = size(entries)
+        if( nent < 2 )then
+            errmsg = 'element: a list needs two or more symbols: '//trim(str)
+            return
+        endif
+        deallocate(symbols)
+        allocate(symbols(nent))
+        do i = 1,nent
+            if( len_trim(entries(i)) > 2 )then
+                errmsg = 'element: list entry '//trim(entries(i))//' is not an element symbol'
+                return
+            endif
+            symbols(i) = capitalised(trim(entries(i)))
+            if( .not. physical(symbols(i)) ) return
+            do j = 1,i-1
+                if( symbols(j) == symbols(i) )then
+                    errmsg = 'element: '//trim(symbols(i))//' is given twice in the list'
+                    return
+                endif
+            enddo
+        enddo
+        parse_element_list = .true.
+
+      contains
+
+        function capitalised( el ) result( cap )
+            character(len=*), intent(in) :: el
+            character(len=2) :: cap
+            cap = upperCase(el(1:1))//lowerCase(el(2:))
+        end function capitalised
+
+        ! a symbol of the scattering-factor table; the pseudo-atom symbols are not elements
+        logical function physical( el )
+            character(len=2), intent(in) :: el
+            integer :: Z
+            real    :: r
+            call get_element_Z_and_radius(upperCase(trim(el)), Z, r)
+            physical = Z > 0 .and. Z < Z_PSEUDO_FIRST
+            if( .not. physical ) errmsg = 'element: '//trim(el)//' is not a physical element symbol'
+        end function physical
+
+    end function parse_element_list
+
 end module

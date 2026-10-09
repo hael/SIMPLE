@@ -1126,7 +1126,7 @@ contains
         integer(dp),   parameter  :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
         character(len=1), allocatable :: buf1(:), buf2(:)
         integer(dp) :: sz1, sz2, bufsz, bytepos, nleft
-        integer     :: in1, in2, ioerr1, ioerr2
+        integer     :: in1, in2, ioerr1, ioerr2, unit2
         files_identical = .false.
         if( .not. file_exists(fname1) ) return
         if( .not. file_exists(fname2) ) return
@@ -1142,6 +1142,9 @@ contains
         if( ioerr1 /= 0 ) return
         open(newunit=in2, file=fname2%to_char(), status='old', action='read', access='stream', iostat=ioerr2)
         if( ioerr2 /= 0 )then
+            ! gfortran does not connect one file to two units: the second name may be the first file
+            inquire(file=fname2%to_char(), number=unit2)
+            files_identical = unit2 == in1
             close(in1)
             return
         endif

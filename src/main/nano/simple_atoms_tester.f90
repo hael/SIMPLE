@@ -4,11 +4,11 @@
 module simple_atoms_tester
 use simple_test_utils
 use simple_defs
-use simple_defs_atoms, only: Z_PSEUDO_FIRST, Z_PSEUDO_LAST
+use simple_defs_atoms, only: Z_PSEUDO_FIRST, Z_PSEUDO_LAST, get_lattice_params, get_element_Z_and_radius
 use simple_string, only: string
 use simple_syslib, only: del_file
 use simple_image,  only: image, unmemoize_mask_coords
-use simple_atoms,  only: atoms
+use simple_atoms,  only: atoms, parse_element_list
 !$ use omp_lib,    only: omp_get_max_threads, omp_set_num_threads
 implicit none
 private
@@ -30,6 +30,10 @@ contains
         call test_pseudo_symbols()
         call test_pseudo_density()
         call test_pseudo_pdb_roundtrip()
+        call test_element_bfac()
+        call test_parse_element_list()
+        call test_compound_selector()
+        call test_lattice_cutoff()
     end subroutine run_all_atoms_tests
 
     ! three dummy atoms named C, O and N
@@ -328,5 +332,148 @@ contains
         call a%kill
         call b%kill
     end subroutine test_pseudo_pdb_roundtrip
+
+    ! bfac_pdb: a Pt atom's beta is added to every b_j beside the blur bfac = (8 smpd)**2 of convolve, so the voxel
+    ! sum is kept and the peak falls by sum a_j / (b_j + bfac + B)**1.5 over sum a_j / (b_j + bfac)**1.5; without
+    ! the flag beta is not read, and a pseudo-atom (whose beta is its width already) ignores the flag
+    subroutine test_element_bfac()
+        integer, parameter :: BX = 64
+        real,    parameter :: SMPD = 0.358, BFAC_PT = 20., CUTOFF = 10.
+        real,    parameter :: A_PT(5) = [0.9148, 1.8096, 3.2134, 3.2953, 1.5754]
+        real,    parameter :: B_PT(5) = [0.2263, 1.3813, 5.3243, 17.5987, 60.0171]
+        type(atoms) :: a
+        type(image) :: vol0, vol20, vol_def0, vol_def20, volp, volp_flag
+        real :: blur, ratio, sum0, sum20
+        write(*,'(A)') 'test_element_bfac'
+        blur  = (8. * SMPD)**2
+        ratio = sum(A_PT / (B_PT + blur + BFAC_PT)**1.5) / sum(A_PT / (B_PT + blur)**1.5)
+        call vol0%new([BX,BX,BX], SMPD, wthreads=.false.)
+        call vol20%new([BX,BX,BX], SMPD, wthreads=.false.)
+        call vol_def0%new([BX,BX,BX], SMPD, wthreads=.false.)
+        call vol_def20%new([BX,BX,BX], SMPD, wthreads=.false.)
+        call volp%new([BX,BX,BX], SMPD, wthreads=.false.)
+        call volp_flag%new([BX,BX,BX], SMPD, wthreads=.false.)
+        ! one Pt atom on the voxel (33,33,33)
+        call a%new(1, dummy=.true.)
+        call a%set_element(1, 'Pt')
+        call a%set_coord(1, [32., 32., 32.] * SMPD)
+        call a%set_occupancy(1, 1.)
+        call a%set_beta(1, 0.)
+        call a%convolve(vol0, CUTOFF, bfac_pdb=.true.)
+        call a%convolve(vol_def0, CUTOFF)
+        call a%set_beta(1, BFAC_PT)
+        call a%convolve(vol20, CUTOFF, bfac_pdb=.true.)
+        call a%convolve(vol_def20, CUTOFF)
+        sum0  = sum(vol0%get_rmat())
+        sum20 = sum(vol20%get_rmat())
+        call assert_true(all(vol0%get_rmat() == vol_def0%get_rmat()), 'bfac_pdb with B = 0 renders as the default')
+        call assert_real(sum0, sum20, 0.01 * sum0, 'bfac_pdb: B = 20 A**2 keeps the voxel sum within 1%')
+        call assert_real(ratio, vol20%get_rmat_at(33,33,33) / vol0%get_rmat_at(33,33,33), 0.01 * ratio,&
+            &'bfac_pdb: the peak falls by sum a_j / (b_j + bfac + B)**1.5 over sum a_j / (b_j + bfac)**1.5 within 1%')
+        call assert_real(0.243, ratio, 0.001, 'the Pt peak ratio at B = 20 A**2 and the default blur is 0.243')
+        call assert_true(all(vol_def20%get_rmat() == vol_def0%get_rmat()), 'without bfac_pdb the B column is not read')
+        call a%kill
+        ! a pseudo-atom is unaffected by the flag
+        call make_pseudo(a, [32., 32., 32.] * SMPD, 1., 13.9)
+        call a%convolve(volp, CUTOFF)
+        call a%convolve(volp_flag, CUTOFF, bfac_pdb=.true.)
+        call assert_true(all(volp%get_rmat() == volp_flag%get_rmat()), 'bfac_pdb leaves a pseudo-atom unchanged')
+        call a%kill
+        call vol0%kill
+        call vol20%kill
+        call vol_def0%kill
+        call vol_def20%kill
+        call volp%kill
+        call volp_flag%kill
+    end subroutine test_element_bfac
+
+    ! the species of element=: a list keeps its order; one symbol is not a list; duplicates, unknown symbols,
+    ! pseudo-atom symbols, a selector inside a list and a list of fewer than two symbols are rejected, without stopping
+    subroutine test_parse_element_list()
+        character(len=2), allocatable :: syms(:)
+        character(len=5) :: selector
+        type(string)     :: errmsg
+        logical          :: ok
+        integer          :: i
+        character(len=*), parameter :: REJECTED(7) = [character(len=9) :: 'Pt,Pt', 'Pt,', ',Pt', 'Pt,Xx', 'Pt,X1',&
+            &'CdSeW,Pt', 'Pt,Pt2']
+        write(*,'(A)') 'test_parse_element_list'
+        ok = parse_element_list('Pt,Ni', syms, selector, errmsg)
+        call assert_true(ok, 'Pt,Ni is accepted')
+        call assert_true(size(syms) == 2, 'Pt,Ni gives two symbols')
+        if( size(syms) == 2 ) call assert_true(syms(1) == 'Pt' .and. syms(2) == 'Ni', 'Pt,Ni gives Pt, Ni in that order')
+        ok = parse_element_list('Ni,Pt', syms, selector, errmsg)
+        call assert_true(ok, 'Ni,Pt is accepted')
+        if( size(syms) == 2 ) call assert_true(syms(1) == 'Ni' .and. syms(2) == 'Pt', 'Ni,Pt gives Ni, Pt: no reordering')
+        ok = parse_element_list(' pt , NI ', syms, selector, errmsg)
+        call assert_true(ok, 'blanks around the entries are ignored')
+        if( size(syms) == 2 ) call assert_true(syms(1) == 'Pt' .and. syms(2) == 'Ni', 'symbols are written capitalised')
+        ok = parse_element_list('Pt', syms, selector, errmsg)
+        call assert_true(ok, 'Pt alone is accepted')
+        call assert_true(size(syms) == 1 .and. len_trim(selector) == 0, 'Pt alone is one symbol, not a list or a selector')
+        if( size(syms) == 1 ) call assert_char('Pt', syms(1), 'Pt alone gives the symbol Pt')
+        ok = parse_element_list('Pt,Ni,Al,Si,Au', syms, selector, errmsg)
+        call assert_true(ok, 'a list of five symbols is accepted')
+        call assert_int(5, size(syms), 'a list of five symbols gives five species')
+        do i = 1,size(REJECTED)
+            ok = parse_element_list(trim(REJECTED(i)), syms, selector, errmsg)
+            call assert_false(ok, 'rejected: '//trim(REJECTED(i)))
+            call assert_true(errmsg%strlen_trim() > 0, 'rejected with a message: '//trim(REJECTED(i)))
+        enddo
+        ok = parse_element_list('Pt,', syms, selector, errmsg)
+        call assert_true(.not. ok .and. errmsg%has_substr('two or more'), 'Pt, is rejected as a list of one symbol')
+        ok = parse_element_list('Pt,X1', syms, selector, errmsg)
+        call assert_true(.not. ok .and. errmsg%has_substr('physical'), 'a pseudo-atom symbol is not a species')
+    end subroutine test_parse_element_list
+
+    ! the compound selectors are a lattice and a species statement: CdSeW names Cd and Se, its lattice is wurtzite,
+    ! and the neighbour cutoff of find_rMax uses that lattice with the radius of Cd
+    subroutine test_compound_selector()
+        use simple_nanoparticle_utils, only: find_rMax, lattice_cutoff
+        character(len=2), allocatable :: syms(:)
+        character(len=5)  :: selector
+        character(len=10) :: crystal_system
+        type(string)      :: errmsg
+        real              :: a(3), r_cd, rmax_expected
+        integer           :: z
+        logical           :: ok
+        write(*,'(A)') 'test_compound_selector'
+        ok = parse_element_list('CdSeW', syms, selector, errmsg)
+        call assert_true(ok, 'CdSeW is accepted')
+        call assert_true(size(syms) == 2 .and. selector == 'CdSeW', 'CdSeW gives two symbols and the selector')
+        if( size(syms) == 2 ) call assert_true(syms(1) == 'Cd' .and. syms(2) == 'Se', 'CdSeW gives Cd, Se in that order')
+        ok = parse_element_list('CdSeWx', syms, selector, errmsg)
+        call assert_false(ok, 'a longer value is not a compound selector')
+        call get_lattice_params('CDSEW', crystal_system, a)
+        call assert_char('wurtzite', trim(crystal_system), 'CDSEW is the wurtzite lattice')
+        call assert_true(all(abs(a - [4.2985, 4.2985, 7.0152]) < 1.e-4), 'CDSEW lattice constants a = 4.2985, c = 7.0152 A')
+        call get_element_Z_and_radius('CD', z, r_cd)
+        rmax_expected = lattice_cutoff('wurtzite', a) + 0.15 * r_cd
+        call assert_real(rmax_expected, find_rMax('CdSeW'), 1.e-4, 'find_rMax(CdSeW) is the wurtzite cutoff with the Cd radius')
+    end subroutine test_compound_selector
+
+    ! first-shell cutoff: the midpoint between the bond and the second shell, against the closed forms; the bonds of
+    ! CdSe in rocksalt (a = 5.49), zincblende (a = 6.077) and wurtzite (a = 4.2985, c = 7.0152) are 2.75, 2.63, 2.63 A
+    subroutine test_lattice_cutoff()
+        use simple_nanoparticle_utils, only: lattice_cutoff, lattice_bond, binary_lattice
+        real, parameter :: A_FCC = 3.912, A_BCC = 3.155, A_RS = 5.49, A_ZB = 6.077, A_WZ = 4.2985, C_WZ = 7.0152
+        write(*,'(A)') 'test_lattice_cutoff'
+        call assert_real((A_FCC / sqrt(2.) + A_FCC) / 2., lattice_cutoff('fcc', [A_FCC, A_FCC, A_FCC]), 1.e-5,&
+            &'fcc cutoff between a/sqrt(2) and a')
+        call assert_real((sqrt(3.) * A_BCC / 2. + A_BCC) / 2., lattice_cutoff('bcc', [A_BCC, A_BCC, A_BCC]), 1.e-5,&
+            &'bcc cutoff between sqrt(3) a / 2 and a')
+        call assert_real((A_RS / 2. + A_RS / sqrt(2.)) / 2., lattice_cutoff('rocksalt', [A_RS, A_RS, A_RS]), 1.e-5,&
+            &'rocksalt cutoff between a/2 and a/sqrt(2)')
+        call assert_real((sqrt(3.) * A_ZB / 4. + A_ZB / sqrt(2.)) / 2., lattice_cutoff('zincblende', [A_ZB, A_ZB, A_ZB]), 1.e-5,&
+            &'zincblende cutoff between sqrt(3) a / 4 and a/sqrt(2)')
+        call assert_real((3. / 8. * C_WZ + A_WZ) / 2., lattice_cutoff('wurtzite', [A_WZ, A_WZ, C_WZ]), 1.e-5,&
+            &'wurtzite cutoff between u c and a')
+        call assert_real(2.745, lattice_bond('rocksalt',   [A_RS, A_RS, A_RS]), 0.005, 'CdSe rocksalt bond 2.75 A')
+        call assert_real(2.631, lattice_bond('zincblende', [A_ZB, A_ZB, A_ZB]), 0.005, 'CdSe zincblende bond 2.63 A')
+        call assert_real(2.631, lattice_bond('wurtzite',   [A_WZ, A_WZ, C_WZ]), 0.005, 'CdSe wurtzite bond 2.63 A')
+        call assert_true(binary_lattice('rocksalt') .and. binary_lattice('zincblende') .and. binary_lattice('wurtzite'),&
+            &'rocksalt, zincblende and wurtzite are binary crystals')
+        call assert_false(binary_lattice('fcc') .or. binary_lattice('bcc'), 'fcc and bcc are not binary crystals')
+    end subroutine test_lattice_cutoff
 
 end module simple_atoms_tester

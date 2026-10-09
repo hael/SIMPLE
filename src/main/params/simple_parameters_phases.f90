@@ -1,7 +1,8 @@
 !@descr: constructor and semantic execution, source, derivation, and validation phases for SIMPLE parameters
 submodule(simple_parameters) simple_parameters_phases
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_sp_project, only: sp_project
+use simple_sp_project,             only: sp_project
+use simple_atoms,                  only: parse_element_list
 implicit none
 #include "simple_local_flags.inc"
 
@@ -661,8 +662,11 @@ contains
     module subroutine validate_parameter_consistency(self, cline)
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
-        type(atoms) :: atoms_obj
-        integer     :: binwidth_min
+        type(atoms)                   :: atoms_obj
+        type(string)                  :: errmsg
+        character(len=2), allocatable :: symbols(:)
+        character(len=5)              :: selector
+        integer                       :: binwidth_min
         select case(trim(self%memreport))
             case('yes','no')
             case DEFAULT
@@ -934,17 +938,46 @@ contains
         end select
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
-        if( cline%defined('element') )then
-            if( .not. atoms_obj%element_exists(self%element) )then
-                THROW_HARD('Element: '//trim(self%element)//' unsupported for now')
-            endif
-        endif
         if( trim(self%discover_species) /= 'yes' .and. trim(self%discover_species) /= 'no' )then
             THROW_HARD('discover_species must be yes or no')
         endif
         if( self%nspecies < 0 .or. self%nspecies > 3 ) THROW_HARD('nspecies must be 0 (from the data) to 3')
         if( self%min_nbrs < 0 ) THROW_HARD('min_nbrs must be 0 (no requirement) or positive')
         self%l_discover_species = trim(self%discover_species) == 'yes'
+        if( cline%defined('element') )then
+            if( index(self%element, ',') > 0 )then
+                ! a species list, brightest first: its length is the number of classes, level 1 runs on its first symbol
+                if( self%prg%to_char() /= 'detect_atoms' ) THROW_HARD('a list of elements is accepted by detect_atoms only')
+                if( .not. parse_element_list(self%element, self%species, selector, errmsg) ) THROW_HARD(errmsg%to_char())
+                self%l_species_list     = .true.
+                self%l_discover_species = .true.
+                self%nspecies           = size(self%species)
+                self%element            = self%species(1)
+            else
+                if( .not. atoms_obj%element_exists(self%element) )then
+                    THROW_HARD('Element: '//trim(self%element)//' unsupported for now')
+                endif
+                if( self%l_discover_species )then
+                    ! a compound selector names its two species
+                    if( parse_element_list(self%element, symbols, selector, errmsg) )then
+                        if( len_trim(selector) > 0 )then
+                            if( cline%defined('nspecies') ) THROW_HARD('nspecies is set by the compound selector, do not give it')
+                            self%species  = symbols
+                            self%nspecies = size(symbols)
+                        endif
+                    endif
+                endif
+            endif
+        endif
+        select case(trim(self%pdb_bfac))
+            case('yes')
+                if( .not. cline%defined('pdbfile') ) THROW_HARD('pdb_bfac=yes needs pdbfile')
+                self%l_pdb_bfac = .true.
+            case('no')
+                self%l_pdb_bfac = .false.
+            case DEFAULT
+                THROW_HARD('pdb_bfac must be yes or no')
+        end select
         select case(trim(self%imgkind))
             case('movie','mic','ptcl','cavg','cavg3D','vol','vol_cavg')
             case DEFAULT

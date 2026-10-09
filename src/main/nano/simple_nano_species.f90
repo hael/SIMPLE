@@ -30,42 +30,42 @@ integer,  parameter :: NGOLD_B         = 40
 
 contains
 
-    ! One-dimensional Gaussian mixture of the intensities x for K = 1..MAX_NSPECIES, fitted as an extreme
-    ! deconvolution (simple_xd_gmm): every intensity is a class value plus measurement noise of spread s_meas,
-    ! so the class variances are the intrinsic spreads and the observed variance of a class is var_k + s_meas**2
-    ! (var returns the observed one). Best of two deterministic starts, sorted quantiles and largest gaps.
-    ! K is nspecies_in when it is positive, otherwise the admissible K of lowest BIC. Classes are numbered by
-    ! decreasing mean; post(i,k) is the posterior. A K fixed by nspecies_in is taken even when inadmissible, so
-    ! a class may then hold no atom.
+    ! One-dimensional Gaussian mixture of the intensities x for K = 1..kmax, fitted as an extreme deconvolution
+    ! (simple_xd_gmm): every intensity is a class value plus measurement noise of spread s_meas, so the class
+    ! variances are the intrinsic spreads and the observed variance of a class is var_k + s_meas**2 (var returns
+    ! the observed one). Best of two deterministic starts, sorted quantiles and largest gaps. With nspecies_in
+    ! positive, kmax = K = nspecies_in; otherwise kmax = MAX_NSPECIES and K is the admissible K of lowest BIC.
+    ! Classes are numbered by decreasing mean; post(i,k) is the posterior. A K fixed by nspecies_in is taken even
+    ! when inadmissible, so a class may then hold no atom. bic and admissible are of size kmax.
     subroutine fit_species_mixture( x, s_meas, nspecies_in, K, labels, post, mu, var, bic, admissible )
-        real,              intent(in)  :: x(:)
-        real,              intent(in)  :: s_meas
-        integer,           intent(in)  :: nspecies_in
-        integer,           intent(out) :: K
-        integer,           intent(out) :: labels(size(x))
-        real, allocatable, intent(out) :: post(:,:), mu(:), var(:)
-        real,    optional, intent(out) :: bic(MAX_NSPECIES)
-        logical, optional, intent(out) :: admissible(MAX_NSPECIES)
-        real(dp) :: X1(size(x),1), R(1,1,size(x)), Nz(1,1,size(x))
-        real(dp) :: mus(MAX_NSPECIES,MAX_NSPECIES), vars(MAX_NSPECIES,MAX_NSPECIES), ws(MAX_NSPECIES,MAX_NSPECIES)
-        real(dp) :: posts(size(x),MAX_NSPECIES,MAX_NSPECIES), bics(MAX_NSPECIES), lnl
-        logical  :: adm(MAX_NSPECIES)
+        real,                           intent(in)  :: x(:)
+        real,                           intent(in)  :: s_meas
+        integer,                        intent(in)  :: nspecies_in
+        integer,                        intent(out) :: K
+        integer,                        intent(out) :: labels(size(x))
+        real,              allocatable, intent(out) :: post(:,:), mu(:), var(:)
+        real,    optional, allocatable, intent(out) :: bic(:)
+        logical, optional, allocatable, intent(out) :: admissible(:)
+        real(dp), allocatable :: mus(:,:), vars(:,:), ws(:,:), posts(:,:,:), bics(:)
+        logical,  allocatable :: adm(:)
+        real(dp) :: X1(size(x),1), R(1,1,size(x)), Nz(1,1,size(x)), lnl
         integer  :: n, kk, kmax
         n = size(x)
-        if( n < 1 )                                         THROW_HARD('no intensities; fit_species_mixture')
-        if( nspecies_in < 0 .or. nspecies_in > MAX_NSPECIES ) THROW_HARD('nspecies must be 0 (automatic) to 3; fit_species_mixture')
-        if( nspecies_in > n )                               THROW_HARD('fewer intensities than nspecies; fit_species_mixture')
-        if( s_meas <= 0. )                                  THROW_HARD('measurement spread must be positive; fit_species_mixture')
+        if( n < 1 )               THROW_HARD('no intensities; fit_species_mixture')
+        if( nspecies_in < 0 )     THROW_HARD('nspecies must be 0 (automatic) or positive; fit_species_mixture')
+        if( nspecies_in > n )     THROW_HARD('fewer intensities than nspecies; fit_species_mixture')
+        if( s_meas <= 0. )        THROW_HARD('measurement spread must be positive; fit_species_mixture')
         X1(:,1) = real(x, dp)
         R       = 1._dp
         Nz      = real(s_meas, dp)**2
-        kmax    = min(MAX_NSPECIES, n)
-        bics    = huge(1._dp)
-        adm     = .false.
-        mus     = 0._dp
-        vars    = 0._dp
-        ws      = 0._dp
-        posts   = 0._dp
+        if( nspecies_in > 0 )then
+            kmax = nspecies_in
+        else
+            kmax = min(MAX_NSPECIES, n)
+        endif
+        allocate(mus(kmax,kmax), vars(kmax,kmax), ws(kmax,kmax), posts(n,kmax,kmax), source=0._dp)
+        allocate(bics(kmax), source=huge(1._dp))
+        allocate(adm(kmax),  source=.false.)
         do kk = 1,kmax
             call fit_k(X1, R, Nz, kk, mus(:kk,kk), vars(:kk,kk), ws(:kk,kk), posts(:,:kk,kk), lnl)
             bics(kk) = -2._dp * lnl + real(3*kk-1, dp) * log(real(n, dp))

@@ -99,6 +99,7 @@ type :: parameters
     character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations(yes|no){yes}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'
+    character(len=3)          :: pdb_bfac='no'        !< simulate_nanoparticle pdbfile=: the B column broadens the element kernels(yes|no){no}
     character(len=3)          :: partition='no'       !< selection: states are partitions of classes, written to cls2D cluster(yes|no){no}
     character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
     character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
@@ -269,7 +270,8 @@ type :: parameters
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN)     :: ctf_correct_mode='phaseflip' !< CTF correction operation(phaseflip|wiener)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
-    character(len=5)          :: element ='     '     !< atom kind
+    character(len=STDLEN)     :: element=''           !< atom kind
+    character(len=2), allocatable :: species(:)       ! detect_atoms: species named by a list or compound selector, brightest first
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
@@ -636,6 +638,8 @@ type :: parameters
     logical :: l_noise_reg       = .false.
     logical :: l_neigh           = .false.
     logical :: l_discover_species = .false.
+    logical :: l_pdb_bfac        = .false.
+    logical :: l_species_list    = .false. !< element= is a comma-separated species list (detect_atoms)
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
     logical :: l_regpass         = .true.

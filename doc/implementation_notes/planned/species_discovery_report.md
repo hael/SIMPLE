@@ -183,3 +183,204 @@ All are recorded in Progress (section 16) under the phase named.
 5. **The open questions Q1 to Q7 of section 13 remain open.** The prototype
    took the recommended defaults: radius from the centre, the close-packed
    cutoff, both widths reported, and the splitting exclusion at `0.21 d_NN`.
+
+# Second run: species_element_model, phases 4 to 6 (2026-10-08 to 2026-10-09)
+
+Carried out unattended on dell under delegation, starting from the
+maintainer's checkout after the first run (base revision `d3480ae79`). The
+note's section 16 (Progress) holds the detail and every number. Paths below
+are relative to the run directory
+`/home/elmlundho/agent_runs/species_element_model`. Six maintainer rulings
+were issued during the run (`spec/rulings.md`), each recorded in the note
+where it belongs. Phases 4 and 5 ended with their exit criteria met. Phase 6
+was added by a ruling and then withdrawn by another; its source changes were
+undone.
+
+## What changed, phase by phase
+
+**Phase 4, B factors in the element kernels, the species list, the compound
+selectors** (`review/phase_4.diff`).
+- `atoms%convolve` takes an optional `bfac_pdb`: an element atom's B column
+  is then added to the width of every one of its five Gaussians, beside the
+  resolution blur. Every existing call is unchanged.
+  `simulate_nanoparticle pdbfile= pdb_bfac=yes` exposes it.
+- `element=Pt,Ni` on `detect_atoms`: a comma-separated list of the species,
+  brightest first, kept in the order given. It implies
+  `discover_species=yes`, fixes the number of classes to its length and
+  names the classes in `_species.pdb`. Level 1 runs as with the first symbol
+  alone.
+  - The parser `parse_element_list` is in `simple_atoms`, splitting with
+    the new `list_of_strs2arr`.
+  - `parameters%element` is now `STDLEN` long, with `species(:)` and
+    `l_species_list`. The command-line rules of the note's truth table are
+    in `exec_detect_atoms`, and every other program rejects a list.
+  - The class mixture, the posterior columns `POST1` to `POSTK` and the
+    chains `A` to `Z` then `0` to `9` are sized by the number of classes.
+- The compound selectors `CdSeW`, `CdSeZ`, `CdSeR` are no longer cut to `Cd`
+  before the lattice lookups. The nanoparticle keeps the selector for the
+  lattice and the symbol for radii and names. Under a ruling, the lattice
+  analysis of `atoms_stats` was repaired for the binary crystals:
+  - one first-shell cutoff function;
+  - a bond-length lattice fit;
+  - strain skipped for zincblende and wurtzite.
+  `single_atoms_stats` gained entries for the three selectors, which assert
+  the interior coordination and the fitted lattice constant (budget 35 to
+  38).
+- `files_identical` (from the last commit) returned false for a file
+  compared with itself, which failed the fast gate at the start of the run.
+  It was fixed.
+
+**Phase 5, the species test on element ground truth** (`review/phase_5.diff`).
+- `species_discovery` is rebuilt on particles rendered with the
+  five-Gaussian element kernels, made to look like a real Pt map supplied
+  by the maintainer:
+  - per-atom B rising to the surface;
+  - the measured signal transfer;
+  - noise shaped by the measured background spectrum, at 17 noise standard
+    deviations for a core atom;
+  - half maps for one case.
+- Cases: pure Pt, a random quarter Ni (alloy), a Ni core under a Pt skin
+  (core), a random quarter Al (light); 16 `detect_atoms` runs judged against
+  the generating models through `test_gate`.
+- Discovery now prunes recovered atoms by the present contact-score policy
+  (a recovered atom faces the level-1 zone and threshold). `_species.txt`
+  flags a class confined to the surface layer. Discovery stops with a clear
+  message when level 1 finds fewer than two atoms.
+
+**Phase 6, fitting atoms with the map-filtered kernel, withdrawn**
+(`review/phase_6.diff`: the note and this report only).
+- The approach: a per-shell transfer estimated against the level-1 atoms, a
+  radial kernel table, and every Gaussian atom of the discovery branch
+  replaced by the kernel.
+- On the fixtures the ruled correlation cut zeroed the transfer from 1.68 A
+  on. The alloy's intensity ratio came out 52% low with the cut and 37%
+  without (phase 5: 25%). On the real map the class spread grew from 21% to
+  77% (42% without the cut).
+- The sixth ruling withdrew the phase. The transfer estimate and kernel
+  table add parameters and failure modes to correct a secondary output.
+- The source was restored to the end of phase 5, and the note records what
+  was tried and why it failed (section 10.7).
+
+## The rulings and why
+
+1. **Lattice analysis of the compound crystals repaired in phase 4.** The
+   selector repair had exposed `fit_lattice` and the coordination numbers of
+   `atoms_stats` to the wurtzite and zincblende branches. Those had only ever
+   run with the fcc fallback, and the coordination numbers came out at 24 to
+   76 instead of 1 to 4.
+2. **Fixtures made like a real Pt map; level 1 not changed.** On the first
+   fixtures, white noise on a positive pedestal made the present level-1
+   threshold search land on a plateau at some noise seeds (3 of 285 atoms).
+   The maintainer measured a real map and had the fixtures take its
+   properties. The ground-truth intensity became the isolated atom's
+   aperture intensity.
+3. **Floors, the ratio reported, recovered surface atoms pruned as level 1
+   prunes.**
+   - The present path's pruning removes surface Pt atoms next to unseen
+     light atoms, so Pt recall is floored only with discovery.
+   - The intensity ratio is biased low on filtered kernels, so it is
+     reported and the class order is floored.
+   - Discovery had reinstated an outer shell of 240 weak surface atoms on
+     the real map, which `detect_atoms` removes on purpose.
+4. **The shell case replaced by a core case.** A light species confined to
+   the surface layer cannot be told from partial occupancy, and the pruning
+   removes it by design.
+5. **The core case's label floor moved to phase 6.** One Ni atom at the
+   centre was called Pt, from the radial bias of the aperture intensity.
+6. **Phase 6 withdrawn.** It is described above.
+
+## Decisions taken under delegation
+
+All are recorded in Progress under the phase named.
+- Phase 4:
+  - A compound selector is only one of `CdSeR`, `CdSeW`, `CdSeZ`.
+    Four-character pairs such as `CdSe` stay on the present path.
+  - The `nspecies` key keeps its bound of 3 for the blind mode; a list sets
+    `nspecies` without a bound.
+  - A selector names its species only under `discover_species=yes`.
+  - The atom name of a `CdSeW` run becomes `CD` (it was `CDSE`).
+  - For the binary crystals, the displacement fits of `atoms_stats` take
+    half the bond as their radius.
+- Phase 5:
+  - The Fourier filters of the fixtures act on the continuous spatial
+    frequency.
+  - The isolated atoms of the ground truth are rendered at the core B.
+  - The eligibility under the pruning policy uses the mean Pt position and
+    the fcc cutoff.
+  - The test reads every table by its header.
+- Phase 6: the review report is this run's section of the first run's
+  report.
+
+## Deviations from the plan, and why
+
+- The fixtures of 10.6 as first written (B rising to 10 A^2, white noise) and
+  several of its floors were replaced by rulings 2 to 5.
+- The intensity-ratio floor is reported, not floored, and the core case's
+  label check is reported (one wrong label at the centre). Both follow the
+  rulings; phase 6, which was to restore them, was withdrawn.
+- The shell case is replaced by the core case (ruling 4).
+- Phase 6 was added and withdrawn. No source change of it remains.
+
+## Evidence against the baseline
+
+- The phase 0 reference was regenerated at phase 4 with a build of the
+  unchanged checkout and with the new build: all 13 files byte-identical
+  (285 atoms, 0.0148 A, correlation 0.99969).
+- On a noisy copy, `element=Pt`, the key, `Pt,Ni` and `Pt,Ni,Al,Si` wrote the
+  five present products byte-identical.
+- `single_atoms_stats` was unchanged at the end of every phase: 285 / 285,
+  recall and precision 1.0000, 0.0148 A, 0.9997, 19.527 A.
+- The three compound entries pass:
+  - `CdSeW`: 147 atoms, interior coordination 4, fitted `a` 4.279 against
+    4.2985 A;
+  - `CdSeZ`: 154, coordination 4, 6.049 against 6.077;
+  - `CdSeR`: 193 of 199, coordination 6, 5.468 against 5.49.
+- `species_discovery` passes in about 300 s (Debug), with identical metrics
+  in two runs:
+  - no false atom;
+  - Pt recall 1.000; Ni recall 1.000; Al 0.952, where the `element=Pt` run
+    finds none of the Al;
+  - two-class fits admissible, classes in the right order;
+  - half-map agreement 1.00;
+  - B rise 1.28 to 1.42 of the generated rise;
+  - present products identical across runs.
+  The fitted ratios (reported) are 25% (alloy), 13% (core) and 38% (light)
+  low.
+- The real map (the maintainer's `Pt_example`, by hand):
+  - `element=Pt` gives the supplied 476 atoms (474 within 1 A, 0.016 A);
+  - with discovery, 267 atoms are recovered and 249 pruned; one species;
+  - `Pt,Ni` gives an inadmissible two-class fit.
+
+## Left open for the maintainer
+
+1. **The intensity bias** of the aperture intensity on filtered element
+   kernels: a known limitation (note, section 7), and the one central Ni
+   atom of the core case. Phase 6's attempt, and why it failed, is in 10.7.
+2. **`single_workflow_wurtzite` fails at the base revision too.** It
+   crashes in `refine3D` (`simple_strategy3D_srch.f90:211`, `subspace_inds`
+   past its bound), and its runs are not reproducible from one run to the
+   next. Recorded, not fixed.
+3. **The supplied real-map half maps** (`_even`, `_odd`) correlate 0.49 with
+   the map and 0.96 with its `_SIM.mrc`. They are not half reconstructions
+   of it.
+4. **The fixtures match part of the real map.** They match its
+   signal-to-noise and transfer, but not all of its surface broadening
+   (surface over core peak 0.91 against 0.77) nor its negative wells between
+   atoms.
+5. **Promotion of recovered atoms**, the validation beyond the element model
+   and the A/B on real Pt/Ni data remain as section 10.8 describes.
+6. **Found after the merge, on the maintainer's Mac (2026-10-09).**
+   - The B-rise floor of `species_discovery` was withdrawn: on filtered maps
+     the fitted rise carries a coordination artefact (note, section 7), and
+     the floor failed at 1.60 in the core case. The rise is reported.
+   - Run by hand without `SIMPLE_SEED`, the test is not reproducible: every
+     commander it runs in process reseeds from `/dev/urandom`. CTest sets
+     `SIMPLE_SEED=20260923`, the setting the floors were validated with; by
+     hand, export it first.
+   - With such an unseeded draw, `element=Pt,Ni` on the pure Pt fixture gave
+     an admissible two-class split, the second class a block of weaker
+     atoms at one end of the radius (most likely surface atoms). The pure
+     case's "inadmissible" floor therefore holds for the validated draw, not
+     for every draw. How often an asserted second species is found in a
+     single-species particle is for the validation on real maps to measure;
+     the surface-confined flag is the check meant to catch it.

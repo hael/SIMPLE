@@ -207,7 +207,9 @@ subroutine new_atoms_register( prgtab )
         call detect_atoms%new(&
         &'detect_atoms', &                                      ! name
         &'Identify atoms and connected regions in an atomic-resolution nanoparticle map',& ! summary
-        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map',& ! descr long
+        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map. '//&
+        &'element= may be a comma-separated list of the species the particle holds, brightest first (element=Pt,Ni): '//&
+        &'atoms are detected as with its first element, and discover_species=yes is implied with one class per listed element',& ! descr long
         &'single_exec',&                                        ! executable
         &.false., visibility=UI_VIS_STANDARD, display_name='Detect Atoms') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -279,6 +281,9 @@ subroutine new_atoms_register( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call simulate_nanoparticle%add_input(UI_PARM, moldiam, &
         &visibility=UI_VIS_ADVANCED)
+        call simulate_nanoparticle%add_input(UI_PARM, 'pdb_bfac', 'binary', 'B factors from the PDB', &
+        &'With pdbfile, the B column broadens the element kernels as a Debye-Waller factor(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

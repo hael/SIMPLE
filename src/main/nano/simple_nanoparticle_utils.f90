@@ -15,13 +15,14 @@ implicit none
 public :: thres_detect_conv_atom_denoised, phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
 public :: dists_btw_common, remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo, atm_rmsd_stats
-public :: est_nn_dist
+public :: est_nn_dist, lattice_cutoff, lattice_bond, binary_lattice
 private
 #include "simple_local_flags.inc"
 
 logical, parameter :: DEBUG = .false.
 integer, parameter :: NSTRAIN_COMPS = 7
 real,    parameter :: RMAX_NN_FRAC  = 1.267 ! close-packed neighbour cutoff in units of the nearest-neighbour distance
+real,    parameter :: U_WZ          = 3./8. ! ideal wurtzite internal parameter: the bond along c is u c
 
 contains
 
@@ -188,7 +189,7 @@ contains
     ! with bfac_ref the reference is a unit pseudo-atom of B factor bfac_ref instead of the element
     subroutine phasecorr_one_atom( img, element, bfac_ref )
         class(image),     intent(inout) :: img
-        character(len=2), intent(in)    :: element
+        character(len=*), intent(in)    :: element
         real, optional,   intent(in)    :: bfac_ref
         type(image) :: one_atom, img_copy
         type(atoms) :: atom
@@ -212,7 +213,7 @@ contains
             call atom%set_occupancy(1,1.)
             call atom%set_beta(1,bfac_ref)
         else
-            call atom%set_element(1,element)
+            call atom%set_element(1,el_symbol(element))
         endif
         call atom%set_coord(1,smpd*(real(ldim)/2.)) ! DO NOT NEED THE +1
         call atom%convolve(one_atom, cutoff)
@@ -269,7 +270,7 @@ contains
     ! Identify the bound for defining the neighbourhood in
     ! fit_lattice and strain_analysis routines below; with d_nn the close-packed cutoff RMAX_NN_FRAC * d_nn
     function find_rMax( element, d_nn ) result( rMax )
-        character(len=2), intent(in) :: element
+        character(len=*), intent(in) :: element
         real, optional,   intent(in) :: d_nn
         character(len=5)  :: el_ucase
         character(len=10) :: crystal_system
@@ -283,27 +284,64 @@ contains
         endif
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a_0)
-        call get_element_Z_and_radius(el_ucase, Z, r)
+        call get_element_Z_and_radius(uppercase(el_symbol(element)), Z, r)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
-        err = FRAC_ERR * r
-        select case(trim(adjustl(crystal_system)))
-            case('rocksalt')
-                rMax = a_0(1) * ((1. / 2. + 1. / sqrt(2.)) / 2.) + err
-            case('bcc')
-                rMax = a_0(1) * ((1. + sqrt(3.) / 2.) / 2.)      + err
-            case('wurtzite')
-                rMax = a_0(1) * ((1. + sqrt(8. / 3.)) / 2.)      + err
-            case('zincblende')
-                rMax = a_0(1) * ((sqrt(3.)/4 + 1/sqrt(2.)) / 2.) + err
-            case DEFAULT ! FCC by default
-                rMax = a_0(1) * ((1. + 1. / sqrt(2.)) / 2.)      + err
-        end select
+        err  = FRAC_ERR * r
+        rMax = lattice_cutoff(crystal_system, a_0) + err
         write(logfhandle,*) 'rMax identified as ', rMax
     end function find_rMax
 
+    ! First-shell neighbour cutoff of a crystal system with lattice parameters a = (a, a, c): the midpoint between
+    ! the first and the second shell. In the binary crystals the first shell is the bonds between the two species.
+    real function lattice_cutoff( crystal_system, a )
+        character(len=*), intent(in) :: crystal_system
+        real,             intent(in) :: a(3)
+        select case(trim(adjustl(crystal_system)))
+            case('rocksalt')
+                lattice_cutoff = a(1) * ((1. / 2. + 1. / sqrt(2.)) / 2.)
+            case('bcc')
+                lattice_cutoff = a(1) * ((1. + sqrt(3.) / 2.) / 2.)
+            case('wurtzite')
+                lattice_cutoff = (U_WZ * a(3) + a(1)) / 2.
+            case('zincblende')
+                lattice_cutoff = a(1) * ((sqrt(3.)/4 + 1/sqrt(2.)) / 2.)
+            case DEFAULT ! FCC by default
+                lattice_cutoff = a(1) * ((1. + 1. / sqrt(2.)) / 2.)
+        end select
+    end function lattice_cutoff
+
+    ! nearest-neighbour (bond) distance of a crystal system with lattice parameters a = (a, a, c)
+    real function lattice_bond( crystal_system, a )
+        character(len=*), intent(in) :: crystal_system
+        real,             intent(in) :: a(3)
+        select case(trim(adjustl(crystal_system)))
+            case('rocksalt')
+                lattice_bond = a(1) / 2.
+            case('bcc')
+                lattice_bond = a(1) * sqrt(3.) / 2.
+            case('wurtzite')
+                lattice_bond = U_WZ * a(3)
+            case('zincblende')
+                lattice_bond = a(1) * sqrt(3.) / 4.
+            case DEFAULT ! FCC by default
+                lattice_bond = a(1) / sqrt(2.)
+        end select
+    end function lattice_bond
+
+    ! the binary crystals, whose first shell is the bonds between the two species
+    logical function binary_lattice( crystal_system )
+        character(len=*), intent(in) :: crystal_system
+        select case(trim(adjustl(crystal_system)))
+            case('rocksalt', 'zincblende', 'wurtzite')
+                binary_lattice = .true.
+            case DEFAULT
+                binary_lattice = .false.
+        end select
+    end function binary_lattice
+
     ! ATTENTION: input coords of model have to be in ANGSTROMS
     subroutine fit_lattice( element, model, a )
-        character(len=2), intent(in)    :: element
+        character(len=*), intent(in)    :: element
         real,             intent(inout) :: model(:,:)
         real,             intent(inout) :: a(3) ! fitted lattice parameter
         real(kind=8) , allocatable :: A_matrix(:,:), x2(:),x2_ref(:)
@@ -315,9 +353,29 @@ contains
         real         :: u0(3), v0(3), w0(3), u(3), v(3), w(3), uN(3), vN(3), wN(3), xyzbeta(4,3)
         integer      :: natoms, iatom, centerAtom, i
         logical      :: areNearest(size(model,dim=2))
+        character(len=10) :: crystal_system
+        character(len=5)  :: el_ucase
+        real              :: a_tab(3), bond
         ! sanity check
         if( size(model,dim=1) /=3 )then
             THROW_HARD('Nonconforming input coordinates; fit_lattice')
+        endif
+        ! the binary crystals: the lattice from the median bond length, not a cubic grid
+        el_ucase = uppercase(trim(adjustl(element)))
+        call get_lattice_params(el_ucase, crystal_system, a_tab)
+        if( binary_lattice(crystal_system) )then
+            bond = est_nn_dist(model)
+            select case(trim(crystal_system))
+                case('rocksalt')
+                    a = 2. * bond
+                case('zincblende')
+                    a = 4. * bond / sqrt(3.)
+                case('wurtzite')
+                    a(1:2) = bond * sqrt(8. / 3.)
+                    a(3)   = a(1) * sqrt(8. / 3.)
+            end select
+            write(logfhandle,*) 'median bond length ', bond, ' '//trim(crystal_system)//' a: ', a
+            return
         endif
         natoms     = size  (model,dim=2)
         cMin       = minval(model,dim=2)
@@ -494,7 +552,7 @@ contains
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
     ! d_nn replaces the element's lattice in find_rMax
     subroutine calc_contact_scores( element, model, contact_scores, d_nn )
-        character(len=2),  intent(in)    :: element
+        character(len=*),  intent(in)    :: element
         real, allocatable, intent(in)    :: model(:,:)
         integer,           intent(inout) :: contact_scores(size(model,2))
         real, optional,    intent(in)    :: d_nn
@@ -520,7 +578,7 @@ contains
     ! This function calculates the coordination number for each atom
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
     subroutine run_cn_analysis( element, model, a, coord_nums_std, coord_nums_gen )
-        character(len=2),  intent(in)    :: element
+        character(len=*),  intent(in)    :: element
         real, allocatable, intent(in)    :: model(:,:)
         real,              intent(in)    :: a(3) ! lattice parameters
         integer,           intent(inout) :: coord_nums_std(size(model,2))
@@ -529,22 +587,15 @@ contains
         character(len=10) :: crystal_system
         integer :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
         real    :: dist, d, a0, foo(3)
-        ! Identify the bound for defining the neighborhood
-        a0 = sum(a)/real(size(a)) ! geometric mean of fitted lattice parameters
+        ! the first-shell cutoff; the cubic systems take the mean of the fitted lattice parameters
+        a0 = sum(a)/real(size(a))
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, foo)
-        select case(trim(adjustl(crystal_system)))
-            case('rocksalt')
-                d = a0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
-            case('wurtzite')
-                d = a(1) * ((1. + sqrt(8. / 3.)) / 2.)  ! for wurtzite, we use the a lattice parameter since the c lattice parameter is not relevant for defining the neighborhood in the basal plane
-            case('zincblende')
-                d = (( sqrt( 1 + 2 * a0)) / 4 + 1 / sqrt(2.) ) / 2.
-            case('bcc')
-                d = a0 * ((1. + sqrt(3.) / 2.) / 2.)
-            case DEFAULT ! FCC by default
-                d = a0 * ((1. + 1. / sqrt(2.)) / 2.)
-        end select
+        if( trim(crystal_system) == 'wurtzite' )then
+            d = lattice_cutoff(crystal_system, a)
+        else
+            d = lattice_cutoff(crystal_system, [a0, a0, a0])
+        endif
         ! init
         natoms         = size(model,2)
         coord_nums_std = 0
@@ -585,7 +636,7 @@ contains
 
     ! ATTENTION: input coords of model have to be in ANGSTROMS
     subroutine strain_analysis( element, model, a, strain_array)
-        character(len=2), intent(in)    :: element
+        character(len=*), intent(in)    :: element
         real,             intent(in)    :: model(:,:)
         real,             intent(inout) :: a(3) ! fitted lattice parameter
         real,             intent(inout) :: strain_array(:,:)
@@ -617,15 +668,24 @@ contains
         real(kind=8) :: p0(3, size(model,dim=2))
         character(len=5)  :: el_ucase
         character(len=4)  :: atom_name
+        character(len=2)  :: el
         character(len=10) :: crystal_system
         write(logfhandle, '(A)') '>>> STRAIN ANALYSIS'
+        el = el_symbol(element)
+        ! the analysis assumes atoms on a cubic grid of step a/2, which zincblende and wurtzite do not have
+        el_ucase = uppercase(trim(adjustl(element)))
+        call get_lattice_params(el_ucase, crystal_system, atm_a)
+        if( trim(crystal_system) == 'zincblende' .or. trim(crystal_system) == 'wurtzite' )then
+            write(logfhandle,'(A)') '>>> STRAIN ANALYSIS SKIPPED: no cubic grid in a '//trim(crystal_system)//' lattice, strain left at 0'
+            return
+        endif
         ! sanity check
         if( size(model,dim=1 ) /= 3 ) THROW_HARD('Wrong input coordinates! strain_analysis')
         natoms = size(model, dim=2)
         if( size(strain_array,dim=1) /= natoms )        THROW_HARD('dim=1 of strain_array not conforming with model! strain_analysis')
         if( size(strain_array,dim=2) /= NSTRAIN_COMPS ) THROW_HARD('dim=2 of strain_array not conforming with NSTRAIN_COMPS! strain_analysis')
         ! naming convention (simple_atoms)
-        atom_name = ' '//trim(element)//' '
+        atom_name = ' '//trim(el)//' '
         ! supercell size
         cMin       = minval(model, dim=2)
         cMax       = maxval(model, dim=2)
@@ -679,8 +739,6 @@ contains
         dy = a(2)
         dz = a(3)
         ! expected lattice parameters as uvw matrix
-        el_ucase = uppercase(trim(adjustl(element)))
-        call get_lattice_params(el_ucase, crystal_system, atm_a)
         uvwN0      = 0.
         uvwN0(1,1) = atm_a(1)/2.
         uvwN0(2,2) = atm_a(2)/2.
@@ -898,37 +956,37 @@ contains
             enddo
             ! Exx strain
             call Exx_strain%set_name(i,atom_name)
-            call Exx_strain%set_element(i,element)
+            call Exx_strain%set_element(i,el)
             call Exx_strain%set_coord(i,list_eXX(i,1:3))
             call Exx_strain%set_beta(i,list_eXX(i,4))
             call Exx_strain%set_resnum(i,i)
             ! Eyy strain
             call Eyy_strain%set_name(i,atom_name)
-            call Eyy_strain%set_element(i,element)
+            call Eyy_strain%set_element(i,el)
             call Eyy_strain%set_coord(i,list_eYY(i,1:3))
             call Eyy_strain%set_beta(i,list_eYY(i,4))
             call Eyy_strain%set_resnum(i,i)
             ! Ezz strain
             call Ezz_strain%set_name(i,atom_name)
-            call Ezz_strain%set_element(i,element)
+            call Ezz_strain%set_element(i,el)
             call Ezz_strain%set_coord(i,list_eZZ(i,1:3))
             call Ezz_strain%set_beta(i,list_eZZ(i,4))
             call Ezz_strain%set_resnum(i,i)
             ! Exy strain
             call Exy_strain%set_name(i,atom_name)
-            call Exy_strain%set_element(i,element)
+            call Exy_strain%set_element(i,el)
             call Exy_strain%set_coord(i,list_eXY(i,1:3))
             call Exy_strain%set_beta(i,list_eXY(i,4))
             call Exy_strain%set_resnum(i,i)
             ! Eyz strain
             call Eyz_strain%set_name(i,atom_name)
-            call Eyz_strain%set_element(i,element)
+            call Eyz_strain%set_element(i,el)
             call Eyz_strain%set_coord(i,list_eYZ(i,1:3))
             call Eyz_strain%set_beta(i,list_eYZ(i,4))
             call Eyz_strain%set_resnum(i,i)
             ! Exz strain
             call Exz_strain%set_name(i,atom_name)
-            call Exz_strain%set_element(i,element)
+            call Exz_strain%set_element(i,el)
             call Exz_strain%set_coord(i,list_eXZ(i,1:3))
             call Exz_strain%set_beta(i,list_eXZ(i,4))
             call Exz_strain%set_resnum(i,i)
@@ -1022,7 +1080,7 @@ contains
                 endif
             enddo
             call Err_strain%set_name(i,atom_name)
-            call Err_strain%set_element(i,element)
+            call Err_strain%set_element(i,el)
             call Err_strain%set_coord(i,list_eRR(i,1:3))
             call Err_strain%set_beta(i,list_eRR(i,4))
             call Err_strain%set_resnum(i,i)
@@ -1053,19 +1111,19 @@ contains
             enddo
             ! Ux
             call Ux_atoms%set_name(i,atom_name)
-            call Ux_atoms%set_element(i,element)
+            call Ux_atoms%set_element(i,el)
             call Ux_atoms%set_coord(i,list_Ux(i,1:3))
             call Ux_atoms%set_beta(i,list_Ux(i,4))
             call Ux_atoms%set_resnum(i,i)
             ! Uy
             call Uy_atoms%set_name(i,atom_name)
-            call Uy_atoms%set_element(i,element)
+            call Uy_atoms%set_element(i,el)
             call Uy_atoms%set_coord(i,list_Uy(i,1:3))
             call Uy_atoms%set_beta(i,list_Uy(i,4))
             call Uy_atoms%set_resnum(i,i)
             ! Uz
             call Uz_atoms%set_name(i,atom_name)
-            call Uz_atoms%set_element(i,element)
+            call Uz_atoms%set_element(i,el)
             call Uz_atoms%set_coord(i,list_Uz(i,1:3))
             call Uz_atoms%set_beta(i,list_Uz(i,4))
             call Uz_atoms%set_resnum(i,i)
@@ -1133,7 +1191,7 @@ contains
     end subroutine read_pdb2matrix
 
     subroutine write_matrix2pdb( element, matrix, pdbfile, betas )
-        character(len=2), intent(in) :: element
+        character(len=*), intent(in) :: element
         real,             intent(in) :: matrix(:,:)
         class(string),    intent(in) :: pdbfile
         real, optional,   intent(in) :: betas(size(matrix, dim=2))
@@ -1144,13 +1202,13 @@ contains
         betas_present = present(betas)
         ! check that the file extension is .pdb
         if(fname2ext(pdbfile) .ne. 'pdb') THROW_HARD('Wrong extension input file! Should be pdb')
-        atom_name = trim(adjustl(element))//'  '
+        atom_name = trim(adjustl(el_symbol(element)))//'  '
         n = size(matrix, dim=2)
         call a%new(n)
         ! fill up a
         do i = 1, n
             call a%set_name(i,atom_name)
-            call a%set_element(i, element)
+            call a%set_element(i, el_symbol(element))
             call a%set_coord(i, matrix(:,i))
             call a%set_num(i,i)
             call a%set_resnum(i,i)
@@ -1165,7 +1223,7 @@ contains
 
     ! Outputs pdb file of ideal atomic positions from fit lattice for visualization
     subroutine write_ideal_lattice_pdb( element, lattice, betas )
-        character(len=2),  intent(in) :: element
+        character(len=*),  intent(in) :: element
         real, allocatable, intent(in) :: lattice(:,:)
         real, optional,    intent(in) :: betas(size(lattice, dim=2))
         character(len=4)              :: atom_name
@@ -1176,13 +1234,13 @@ contains
         betas_present = present(betas)
         ! check that the file extension is .pdb
         if( fname2ext(string(pdbfile)) .ne. 'pdb' ) THROW_HARD('Wrong extension input file! Should be pdb')
-        atom_name = trim(adjustl(element))//'  '
+        atom_name = trim(adjustl(el_symbol(element)))//'  '
         n = size(lattice, dim=1)
         call a%new(n)
         ! fill up a
         do i = 1, n
             call a%set_name(i,atom_name)
-            call a%set_element(i, element)
+            call a%set_element(i, el_symbol(element))
             call a%set_coord(i, lattice(i,:)) ! Note indexing different compared to matrix2pdb()
             call a%set_num(i,i)
             call a%set_resnum(i,1) ! Resnum 1 allows visualization of bonds
@@ -1197,7 +1255,7 @@ contains
 
     subroutine find_couples( points_P, points_Q, element, P, Q, theoretical_rad, frac_diam )
         real,              intent(in)    :: points_P(:,:), points_Q(:,:)
-        character(len=2),  intent(in)    :: element
+        character(len=*),  intent(in)    :: element
         real, allocatable, intent(inout) :: P(:,:), Q(:,:) ! just the couples of points
         real, optional,    intent(in)    :: theoretical_rad, frac_diam
         real    :: theoretical_radius                      ! for threshold selection
@@ -1209,7 +1267,7 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: points_P_out(:,:), points_Q_out(:,:)
         real,    parameter   :: ABSURD = -10000.
-        el_ucase = upperCase(element)
+        el_ucase = upperCase(el_symbol(element))
         call get_element_Z_and_radius(el_ucase, z, theoretical_radius)
         if( z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         if( present(theoretical_rad) ) theoretical_radius = theoretical_rad
@@ -1381,5 +1439,13 @@ contains
             mask_out = .not. mask_out
         endif
     end subroutine find_atoms_subset
+
+    ! the element symbol of an element value, its first two characters: a compound selector (CdSeW) gives the
+    ! symbol of its first species for radii and atom names, while the lattice lookups take the selector itself
+    pure function el_symbol( element ) result( el )
+        character(len=*), intent(in) :: element
+        character(len=2) :: el
+        el = adjustl(element)
+    end function el_symbol
 
 end module simple_nanoparticle_utils

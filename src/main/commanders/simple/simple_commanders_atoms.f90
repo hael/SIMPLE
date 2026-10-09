@@ -407,9 +407,21 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        type(string)       :: vol_even, vol_odd
+        type(string)       :: vol_even, vol_odd, element
         real               :: a(3) ! lattice parameters
         logical            :: l_discover, l_halves
+        ! a species list implies discover_species=yes and sets the number of classes
+        if( cline%defined('element') )then
+            element = cline%get_carg('element')
+            if( element%has_substr(',') )then
+                if( cline%defined('discover_species') )then
+                    if( cline%get_carg('discover_species') /= 'yes' ) THROW_HARD('a species list needs discover_species=yes, which it implies')
+                else
+                    call cline%set('discover_species', 'yes')
+                endif
+                if( cline%defined('nspecies') ) THROW_HARD('nspecies is the length of the species list, do not give it')
+            endif
+        endif
         ! the species-discovery keys need discover_species=yes; the half maps leave the command line
         ! because parameters does not accept vol1 together with vol_even and vol_odd
         l_discover = .false.

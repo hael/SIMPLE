@@ -33,7 +33,7 @@ labels.
 |---|---|---|---|
 | `fast` | 15 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `highlevel` | 14 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
+| `highlevel` | 17 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process`, plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
@@ -60,8 +60,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 35: 15 fast,
-5 library, 14 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 38: 15 fast,
+5 library, 17 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -115,7 +115,8 @@ convenience and deliberately not a CTest entry.
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_auto pose_cont=only`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
-| `species_discovery` | highlevel | `detect_atoms discover_species=yes` on simulated one- and two-species pseudo-atom particles (with and without half maps), judged against the generating models; the present products must not change |
+| `single_atoms_stats_cdsew`, `single_atoms_stats_cdsez`, `single_atoms_stats_cdser` | highlevel | the same test on simulated wurtzite, zincblende and rocksalt CdSe nanoparticles (`element=CdSeW`, `CdSeZ`, `CdSeR`), whose lattice lookups use the compound selector; also asserts the coordination number of the interior atoms (4, 4, 6) and the fitted lattice constant within 2% of the table |
+| `species_discovery` | highlevel | `detect_atoms` with a species list, with `discover_species=yes` and without an element, on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors (with and without half maps), judged against the generating models through `test_gate` (`metrics.tsv`); the present products must not change |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 
 ### 1.3 Programs that are not registered

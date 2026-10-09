@@ -20,6 +20,7 @@ contains
         call test_separation()
         call test_size_floor()
         call test_three_classes()
+        call test_four_classes()
         call test_calibration()
         call test_gauss_width()
         call test_gauss_filter()
@@ -73,10 +74,11 @@ contains
         integer, parameter :: N = 400
         real,    parameter :: MU0 = 1., SD0 = 0.05
         real, allocatable  :: post(:,:), mu(:), var(:)
-        real     :: x(N), bic(MAX_NSPECIES)
+        real,    allocatable :: bic(:)
+        logical, allocatable :: adm(:)
+        real     :: x(N)
         real(dp) :: m, v, lnl, bic1
         integer  :: labels(N), K
-        logical  :: adm(MAX_NSPECIES)
         write(*,'(A)') 'test_one_class'
         call set_fixed_seed(20261001)
         call draw(x, 0, N, MU0, SD0)
@@ -105,9 +107,10 @@ contains
         integer, parameter :: NC = 200, N = 2*NC
         real,    parameter :: SD0 = 0.05
         real, allocatable  :: post(:,:), mu(:), var(:)
-        real    :: x(N), bic(MAX_NSPECIES)
+        real,    allocatable :: bic(:)
+        logical, allocatable :: adm(:)
+        real    :: x(N)
         integer :: labels(N), truth(N), K
-        logical :: adm(MAX_NSPECIES)
         write(*,'(A)') 'test_separation'
         truth(1:NC)   = 1
         truth(NC+1:N) = 2
@@ -138,9 +141,10 @@ contains
         integer, parameter :: N = 400
         real,    parameter :: SD0 = 0.05
         real, allocatable  :: post(:,:), mu(:), var(:)
-        real    :: x(N), bic(MAX_NSPECIES)
+        real,    allocatable :: bic(:)
+        logical, allocatable :: adm(:)
+        real    :: x(N)
         integer :: labels(N), K
-        logical :: adm(MAX_NSPECIES)
         write(*,'(A)') 'test_size_floor'
         call set_fixed_seed(20261004)
         call draw(x,     0, N-5, 1.0, SD0)
@@ -162,9 +166,10 @@ contains
         integer, parameter :: N1 = 264, N2 = 132, N3 = 132, N = N1+N2+N3
         real,    parameter :: SD0 = 0.04, MUS(3) = [1., 0.5, 0.167]
         real, allocatable  :: post(:,:), mu(:), var(:)
-        real    :: x(N), bic(MAX_NSPECIES)
+        real,    allocatable :: bic(:)
+        logical, allocatable :: adm(:)
+        real    :: x(N)
         integer :: labels(N), truth(N), K
-        logical :: adm(MAX_NSPECIES)
         write(*,'(A)') 'test_three_classes'
         call set_fixed_seed(20261006)
         ! drawn in the order 3, 1, 2 so that class numbers cannot follow the input order
@@ -182,6 +187,38 @@ contains
             call assert_true(all(abs(mu - MUS) < 0.02), 'three classes: the class intensities are recovered')
         endif
     end subroutine test_three_classes
+
+    ! four classes of 100 at intensities 1, 0.6, 0.35 and 0.2, spread 0.02: nspecies = 4 sizes the fit to four
+    ! classes; the automatic search stops at its ceiling MAX_NSPECIES
+    subroutine test_four_classes()
+        integer, parameter :: NC = 100, N = 4*NC
+        real,    parameter :: SD0 = 0.02, MUS(4) = [1., 0.6, 0.35, 0.2]
+        integer, parameter :: ORDER(4) = [4, 2, 1, 3]
+        real,    allocatable :: post(:,:), mu(:), var(:), bic(:)
+        logical, allocatable :: adm(:)
+        real    :: x(N)
+        integer :: labels(N), truth(N), K, ic
+        write(*,'(A)') 'test_four_classes'
+        call set_fixed_seed(20261007)
+        ! drawn in the order 4, 2, 1, 3 so that class numbers cannot follow the input order
+        do ic = 1,4
+            call draw(x, (ic-1) * NC, NC, MUS(ORDER(ic)), SD0)
+            truth((ic-1)*NC+1:ic*NC) = ORDER(ic)
+        enddo
+        call fit_species_mixture(x, SD0, 4, K, labels, post, mu, var, bic, adm)
+        call assert_int(4, K, 'four classes, nspecies = 4: K = 4')
+        call assert_int(4, size(bic), 'four classes, nspecies = 4: a BIC per K up to 4')
+        call assert_int(4, size(adm), 'four classes, nspecies = 4: an admissibility per K up to 4')
+        call assert_true(size(post,1) == N .and. size(post,2) == 4, 'four classes, nspecies = 4: four posterior columns')
+        if( K == 4 )then
+            call assert_true(all(labels == truth), 'four classes: every label right, classes by decreasing intensity')
+            call assert_true(all(abs(mu - MUS) < 0.02), 'four classes: the class intensities are recovered within 0.02')
+            call assert_true(adm(4), 'four classes: the four-class fit is admissible')
+        endif
+        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call assert_int(MAX_NSPECIES, K, 'four classes, automatic: K is the ceiling of the search')
+        call assert_int(MAX_NSPECIES, size(bic), 'four classes, automatic: a BIC per K up to the ceiling')
+    end subroutine test_four_classes
 
     ! white-noise region counts of section 8.8 of the plan (154.5, 38.0, 7.2 maxima above 2.5, 3.0, 3.5;
     ! search-to-region volume ratio 3.628); the plan's independent script gave C = 2105 and k = 4.99

@@ -322,6 +322,33 @@ contains
 
     end function list_of_ints2arr
 
+    !> the entries of a comma-separated list, left-adjusted; blanks around an entry and empty
+    !! entries (a trailing or doubled comma) are ignored, as in list_of_ints2arr
+    function list_of_strs2arr( listofstrs ) result( sarr )
+        character(len=*), intent(in) :: listofstrs
+        character(len=len(listofstrs)), allocatable :: sarr(:)
+        integer :: i, first
+        allocate(sarr(0))
+        first = 1
+        do i = 1, len(listofstrs)
+            if( listofstrs(i:i) == ',' )then
+                call add_entry(first, i - 1)
+                first = i + 1
+            endif
+        end do
+        call add_entry(first, len(listofstrs))
+
+      contains
+
+        subroutine add_entry( ifirst, ilast )
+            integer, intent(in) :: ifirst, ilast
+            if( ilast < ifirst ) return
+            if( len_trim(listofstrs(ifirst:ilast)) == 0 ) return
+            sarr = [character(len=len(listofstrs)) :: sarr, adjustl(listofstrs(ifirst:ilast))]
+        end subroutine add_entry
+
+    end function list_of_strs2arr
+
     !> \brief  removes punctuation (except comma) characters in string str
     subroutine removepunct( str )
         character(len=*), intent(inout) :: str

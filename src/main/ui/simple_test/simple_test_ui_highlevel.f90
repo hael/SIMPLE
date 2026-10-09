@@ -299,7 +299,7 @@ contains
         call species_discovery%new(&
         &'species_discovery',&
         &'species discovery in atom detection',&
-        &'validates the residual recovery and species call of detect_atoms against simulated one- and two-species nanoparticles',&
+        &'validates the species list and the residual recovery and species call of detect_atoms on Pt, Pt/Ni and Pt/Al nanoparticles rendered with element kernels and surface B factors',&
         &'simple_test_exec',&
         &.false., display_name='Species Discovery Test')
         call species_discovery%add_input(UI_COMP, nthr)

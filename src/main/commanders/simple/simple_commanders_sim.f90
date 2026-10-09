@@ -827,9 +827,9 @@ contains
         call atoms_obj%writePDB(params%pdbout)
         if( cline%defined('lp') )then
             cutoff = max(cutoff,4.*params%lp)
-            call atoms_obj%convolve(vol, cutoff, lp=params%lp)
+            call atoms_obj%convolve(vol, cutoff, lp=params%lp, bfac_pdb=params%l_pdb_bfac)
         else
-            call atoms_obj%convolve(vol, cutoff)
+            call atoms_obj%convolve(vol, cutoff, bfac_pdb=params%l_pdb_bfac)
         endif
         call vol%write(params%outvol)
         ! cleanup

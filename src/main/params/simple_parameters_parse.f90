@@ -144,6 +144,7 @@ contains
         call reg%add_char('outdir', self%outdir)
         call reg%add_char('outside', self%outside)
         call reg%add_char('pad', self%pad)
+        call reg%add_char('pdb_bfac', self%pdb_bfac)
         call reg%add_char('partition', self%partition)
         call reg%add_char('pca_mode', self%pca_mode)
         call reg%add_char('kpca_backend', self%kpca_backend)
