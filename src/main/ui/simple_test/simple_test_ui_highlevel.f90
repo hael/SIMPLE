@@ -14,6 +14,7 @@ type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
 type(ui_program), target :: single_atoms_stats
+type(ui_program), target :: species_discovery
 type(ui_program), target :: single_workflow
 type(ui_program), target :: stream_preproc
 type(ui_program), target :: flex_pca_blobs
@@ -34,6 +35,7 @@ contains
         call new_pcg_frac_update(tsttab)
         call new_rec3D_backends(tsttab)
         call new_single_atoms_stats(tsttab)
+        call new_species_discovery(tsttab)
         call new_single_workflow(tsttab)
         call new_stream_preproc(tsttab)
         call new_flex_pca_blobs(tsttab)
@@ -53,6 +55,7 @@ contains
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
         write(logfhandle,'(A)') rec3D_backends%name%to_char()
         write(logfhandle,'(A)') single_atoms_stats%name%to_char()
+        write(logfhandle,'(A)') species_discovery%name%to_char()
         write(logfhandle,'(A)') single_workflow%name%to_char()
         write(logfhandle,'(A)') stream_preproc%name%to_char()
         write(logfhandle,'(A)') flex_pca_blobs%name%to_char()
@@ -290,6 +293,18 @@ contains
         &'Atom element name: Au, Pt etc.', 'atom composition{Pt}', .false., 'Pt')
         call add_ui_program('single_atoms_stats', single_atoms_stats, tsttab, UI_CATEGORY)
     end subroutine new_single_atoms_stats
+
+    subroutine new_species_discovery( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call species_discovery%new(&
+        &'species_discovery',&
+        &'species discovery in atom detection',&
+        &'validates the residual recovery and species call of detect_atoms against simulated one- and two-species nanoparticles',&
+        &'simple_test_exec',&
+        &.false., display_name='Species Discovery Test')
+        call species_discovery%add_input(UI_COMP, nthr)
+        call add_ui_program('species_discovery', species_discovery, tsttab, UI_CATEGORY)
+    end subroutine new_species_discovery
 
     subroutine new_single_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab

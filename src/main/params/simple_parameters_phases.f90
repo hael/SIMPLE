@@ -939,6 +939,12 @@ contains
                 THROW_HARD('Element: '//trim(self%element)//' unsupported for now')
             endif
         endif
+        if( trim(self%discover_species) /= 'yes' .and. trim(self%discover_species) /= 'no' )then
+            THROW_HARD('discover_species must be yes or no')
+        endif
+        if( self%nspecies < 0 .or. self%nspecies > 3 ) THROW_HARD('nspecies must be 0 (from the data) to 3')
+        if( self%min_nbrs < 0 ) THROW_HARD('min_nbrs must be 0 (no requirement) or positive')
+        self%l_discover_species = trim(self%discover_species) == 'yes'
         select case(trim(self%imgkind))
             case('movie','mic','ptcl','cavg','cavg3D','vol','vol_cavg')
             case DEFAULT

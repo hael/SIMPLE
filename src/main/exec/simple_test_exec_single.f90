@@ -1,13 +1,15 @@
 !@descr: execution of test single processing commanders
 module simple_test_exec_single
 use simple_cmdline,                only: cmdline
-use simple_commanders_test_single, only: commander_test_single_atoms_stats, commander_test_single_workflow
+use simple_commanders_test_single, only: commander_test_single_atoms_stats, commander_test_species_discovery,&
+    &commander_test_single_workflow
 implicit none
 
 public :: exec_test_single_commander
 private
 
 type(commander_test_single_atoms_stats) :: xsingle_atoms_stats
+type(commander_test_species_discovery) :: xspecies_discovery
 type(commander_test_single_workflow)    :: xsingle_workflow
 
 contains
@@ -23,6 +25,8 @@ contains
         select case(trim(which))
             case( 'single_atoms_stats' )
                 call xsingle_atoms_stats%execute(cline)
+            case( 'species_discovery' )
+                call xspecies_discovery%execute(cline)
             case( 'single_workflow' )
                 call xsingle_workflow%execute(cline)
             case default

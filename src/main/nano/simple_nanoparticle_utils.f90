@@ -15,11 +15,13 @@ implicit none
 public :: thres_detect_conv_atom_denoised, phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
 public :: dists_btw_common, remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo, atm_rmsd_stats
+public :: est_nn_dist
 private
 #include "simple_local_flags.inc"
 
 logical, parameter :: DEBUG = .false.
 integer, parameter :: NSTRAIN_COMPS = 7
+real,    parameter :: RMAX_NN_FRAC  = 1.267 ! close-packed neighbour cutoff in units of the nearest-neighbour distance
 
 contains
 
@@ -183,9 +185,11 @@ contains
     end subroutine Kabsch_algo
 
     ! FORMULA: phasecorr = ifft(fft(field).*conj(fft(reference)));
-    subroutine phasecorr_one_atom( img, element )
+    ! with bfac_ref the reference is a unit pseudo-atom of B factor bfac_ref instead of the element
+    subroutine phasecorr_one_atom( img, element, bfac_ref )
         class(image),     intent(inout) :: img
         character(len=2), intent(in)    :: element
+        real, optional,   intent(in)    :: bfac_ref
         type(image) :: one_atom, img_copy
         type(atoms) :: atom
         real        :: cutoff, smpd
@@ -203,7 +207,13 @@ contains
         call one_atom%new(ldim, smpd)
         cutoff = 8.*smpd
         call atom%new(1)
-        call atom%set_element(1,element)
+        if( present(bfac_ref) )then
+            call atom%set_element(1,'X1')
+            call atom%set_occupancy(1,1.)
+            call atom%set_beta(1,bfac_ref)
+        else
+            call atom%set_element(1,element)
+        endif
         call atom%set_coord(1,smpd*(real(ldim)/2.)) ! DO NOT NEED THE +1
         call atom%convolve(one_atom, cutoff)
         call one_atom%fft()
@@ -238,15 +248,39 @@ contains
         ! call binimg%kill
     end subroutine thres_detect_conv_atom_denoised
 
+    ! median over atoms of the distance to the nearest other atom; coordinates in ANGSTROMS
+    real function est_nn_dist( centers )
+        real, intent(in) :: centers(:,:)
+        real    :: nn(size(centers,2))
+        integer :: i, j, n
+        n = size(centers,2)
+        if( n < 2 ) THROW_HARD('need two atoms or more; est_nn_dist')
+        nn = huge(1.)
+        !$omp parallel do default(shared) private(i,j) schedule(static) proc_bind(close)
+        do i = 1,n
+            do j = 1,n
+                if( j /= i ) nn(i) = min(nn(i), euclid(centers(:,i), centers(:,j)))
+            enddo
+        enddo
+        !$omp end parallel do
+        est_nn_dist = median(nn)
+    end function est_nn_dist
+
     ! Identify the bound for defining the neighbourhood in
-    ! fit_lattice and strain_analysis routines below
-    function find_rMax( element ) result( rMax )
+    ! fit_lattice and strain_analysis routines below; with d_nn the close-packed cutoff RMAX_NN_FRAC * d_nn
+    function find_rMax( element, d_nn ) result( rMax )
         character(len=2), intent(in) :: element
+        real, optional,   intent(in) :: d_nn
         character(len=5)  :: el_ucase
         character(len=10) :: crystal_system
         real, parameter   :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
         real    :: a_0(3), rMax, r, err
         integer :: Z
+        if( present(d_nn) )then
+            rMax = RMAX_NN_FRAC * d_nn
+            write(logfhandle,*) 'rMax identified as ', rMax
+            return
+        endif
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a_0)
         call get_element_Z_and_radius(el_ucase, Z, r)
@@ -458,14 +492,16 @@ contains
 
     ! This function calculates the contact score for each atom
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
-    subroutine calc_contact_scores( element, model, contact_scores )
+    ! d_nn replaces the element's lattice in find_rMax
+    subroutine calc_contact_scores( element, model, contact_scores, d_nn )
         character(len=2),  intent(in)    :: element
         real, allocatable, intent(in)    :: model(:,:)
         integer,           intent(inout) :: contact_scores(size(model,2))
+        real, optional,    intent(in)    :: d_nn
         integer :: natoms, iatom, jatom, cnt
         real    :: dist, rMax
         ! init
-        rMax           = find_rMax(element)
+        rMax           = find_rMax(element, d_nn)
         natoms         = size(model,2)
         contact_scores = 0
         do iatom = 1, natoms

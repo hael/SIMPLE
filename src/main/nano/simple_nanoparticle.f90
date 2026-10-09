@@ -10,6 +10,7 @@ use simple_atoms,      only: atoms
 use simple_parameters, only: parameters
 !use simple_linalg
 use simple_nanoparticle_utils
+use simple_nano_species, only: MAX_NSPECIES
 implicit none
 
 public :: nanoparticle
@@ -30,6 +31,11 @@ integer,          parameter :: NSTRAIN_COMPS       = 7
 character(len=*), parameter :: ATOMS_STATS_FILE    = 'atoms_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
+! species-free detection (no element): pseudo-atom template and length scales from the nearest-neighbour distance d_NN
+real,             parameter :: B_REF_PSEUDO        = 13.9    ! B factor of the pseudo-atom template, A**2 (sigma 0.42 A)
+real,             parameter :: RADIUS_NN_FRAC      = 0.4     ! atom radius in units of d_NN
+real,             parameter :: SPLIT_EXCL_NN_FRAC  = 0.21    ! exclusion radius of atom splitting in units of d_NN
+integer,          parameter :: CSCORE_CEIL_NOEL    = 12      ! contact-score ceiling of close packing
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//&
@@ -123,6 +129,18 @@ type :: atom_stats
     ! Auxiliary (non-output)
     real    :: aniso(3,3)        = 0. ! ADP Matrix for ANISOU PDB file                              N/A
     logical :: tossADP           = .false. ! true if atom inadequate for ADP calculations           N/A
+    ! species discovery (discover_species=yes), written to the _species files only
+    real    :: amp               = 0. ! fitted Gaussian amplitude
+    real    :: bfac              = 0. ! B factor of the class-tied fit (stage 2), A**2
+    real    :: bfac_stage1       = 0. ! B factor of the free-amplitude fit (stage 1), A**2
+    real    :: aper_int          = 0. ! aperture intensity
+    real    :: aper_snr          = 0. ! aperture intensity over its noise
+    real    :: det_z             = 0. ! detection z of a recovered atom
+    integer :: det_stage         = 0  ! 0 level 1, 1 residual stage A, 2 residual stage B
+    integer :: det_level         = 0  ! residual level that accepted the atom
+    logical :: gate_used         = .false. ! accepted through the neighbour gate
+    integer :: species           = 0  ! intensity class, numbered by decreasing intensity
+    real    :: species_post(MAX_NSPECIES) = 0. ! class posteriors
 end type atom_stats
 
 type :: nanoparticle
@@ -137,6 +155,14 @@ type :: nanoparticle
     real                  :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
     real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
     real                  :: theoretical_radius = 0. ! theoretical atom radius in A
+    real                  :: d_nn               = 0. ! median nearest-neighbour distance in A (species-free path)
+    logical               :: l_species_free     = .false. ! no element given: pseudo-atom template, d_NN length scales
+    ! species discovery (discover_species=yes)
+    logical               :: l_discover_species = .false.
+    integer               :: min_nbrs           = 3       ! recovered atoms need this many found neighbours, 0 = no gate
+    integer               :: nspecies           = 0  ! 0: number of species from the data
+    real                  :: msk_rad            = 0. ! radius of the soft spherical mask in voxels
+    type(string)          :: vol_even, vol_odd       ! optional half maps, the noise reference
     ! GLOBAL NP STATS
     type(stats_struct)    :: map_stats
     ! -- the rest
@@ -184,6 +210,7 @@ type :: nanoparticle
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
+    type(atom_stats), allocatable :: recovered(:)    ! atoms recovered from the residual map, diagnostics only
     real,             allocatable :: coords4stats(:,:)
     ! OTHER
     character(len=2)      :: element   = '  '
@@ -200,6 +227,7 @@ type :: nanoparticle
     procedure          :: get_img
     procedure          :: get_img_raw
     procedure          :: set_ncc
+    procedure          :: set_half_maps
     procedure          :: set_img
     procedure, private :: set_atomic_coords_from_pdb
     procedure, private :: set_atomic_coords_from_xyz
@@ -219,6 +247,9 @@ type :: nanoparticle
     procedure          :: find_centers
     procedure, private :: discard_small_ccs
     procedure, private :: discard_atoms
+    procedure, private :: set_nn_length_scales
+    procedure, private :: contact_scores
+    procedure, private :: discover_species
     procedure, private :: split_atoms
     procedure          :: validate_atoms
     ! calc stats
@@ -259,29 +290,49 @@ contains
         self%npname    = fname
         self%fbody     = get_fbody(basename(fname), fname2ext(fname))
         self%smpd      = params%smpd
-        self%atom_name = params%element(1:len(self%atom_name))
-        self%element   = params%element(1:len(self%element))
-        el_ucase       = upperCase(params%element(1:len(el_ucase)))
-        call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
-        if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
+        self%l_species_free = len_trim(params%element) == 0
+        if( self%l_species_free )then
+            ! the radius follows from d_NN once the first binarisation has found centres
+            self%atom_name = 'X1  '
+            self%element   = 'X1'
+            self%theoretical_radius = 0.
+        else
+            self%atom_name = params%element(1:len(self%atom_name))
+            self%element   = params%element(1:len(self%element))
+            el_ucase       = upperCase(params%element(1:len(el_ucase)))
+            call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
+            if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
+        endif
         call find_ldim_nptcls(self%npname, self%ldim, nptcls)
         call self%img%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img%read(fname)
         if( present(msk) )then
             call self%img%mask3D_soft(msk)
+            self%msk_rad = msk
         else
             call mskvol%estimate_spher_mask_diam(params, self%img, AMSKLP_NANO, msk_in_pix)
             write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * self%smpd
             call self%img%mask3D_soft(msk_in_pix)
             call mskvol%kill_bimg
+            self%msk_rad = msk_in_pix
         endif
+        self%l_discover_species = params%l_discover_species
+        self%min_nbrs           = params%min_nbrs
+        self%nspecies           = params%nspecies
         if( DEBUG ) call self%img%write(string('masked_input_vol.mrc'))
         call self%img_raw%copy(self%img)
         call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
     end subroutine new
 
     ! getters/setters
+
+    subroutine set_half_maps( self, vol_even, vol_odd )
+        class(nanoparticle), intent(inout) :: self
+        class(string),       intent(in)    :: vol_even, vol_odd
+        self%vol_even = vol_even
+        self%vol_odd  = vol_odd
+    end subroutine set_half_maps
 
     subroutine get_ldim( self, ldim )
         class(nanoparticle), intent(in)  :: self
@@ -536,6 +587,7 @@ contains
     subroutine conv_denoise( self, fname )
         class(nanoparticle), intent(inout) :: self
         class(string),       intent(in)    :: fname 
+        if( self%l_species_free ) THROW_HARD('conv_denoise needs an element')
         call phasecorr_one_atom(self%img, self%element)
         call self%img%write(fname)
     end subroutine conv_denoise
@@ -545,6 +597,7 @@ contains
         real,                intent(inout) :: a(3) ! lattice parameters
         real, allocatable :: centers_A(:,:)        ! coordinates of the atoms in ANGSTROMS
         type(image)       :: simatms
+        if( self%l_species_free ) THROW_HARD('identify_lattice_params needs an element')
         ! MODEL BUILDING
         ! phase correlation approach
         call phasecorr_one_atom(self%img, self%element)
@@ -584,10 +637,15 @@ contains
         if( present( l_print) ) ll_print = l_print
         ! MODEL BUILDING
         ! Phase correlation approach
-        call phasecorr_one_atom(self%img, self%element)
+        if( self%l_species_free )then
+            call phasecorr_one_atom(self%img, self%element, bfac_ref=B_REF_PSEUDO)
+        else
+            call phasecorr_one_atom(self%img, self%element)
+        endif
         if( DEBUG ) call self%img%write(string('after_phasecorr.mrc'))
         ! Nanoparticle binarization
         call self%binarize_and_find_centers(l_print=ll_print)
+        if( self%l_species_free .or. self%l_discover_species ) call self%set_nn_length_scales
         ! discard small connected components
         call self%discard_small_ccs
         ! atom splitting by correlation map validation
@@ -613,6 +671,8 @@ contains
         call self%write_centers
         call simatms%write(self%fbody//'_SIM.mrc')
         if( ll_print ) write(logfhandle,'(A)') 'output, simulated atomic density: '//self%fbody%to_char()//'_SIM.mrc'
+        ! the present products are written; discovery reads the level-1 atoms and writes its own files only
+        if( self%l_discover_species ) call self%discover_species
         ! destruct
         call img_cos%kill
         call simatms%kill
@@ -742,6 +802,7 @@ contains
             t_gen_sim = tic()
             call self%write_centers(string('centers_iteration.pdb'), coords)
             call atom%new(string('centers_iteration.pdb'))
+            if( self%l_species_free ) call set_pseudo_bfacs(atom)
             call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
             call del_file('centers_iteration.pdb')
             call atom%kill
@@ -753,6 +814,15 @@ contains
             if( WRITE_OUTPUT ) call simulated_distrib%write(string('simvol_thres'//trim(real2str(thres))//'_corr'//trim(real2str(t2c))//'.mrc'))
         end function t2c
 
+        ! the B column of write_centers holds valid_corr; the pseudo-atom template width is rendered instead
+        subroutine set_pseudo_bfacs( atms )
+            type(atoms), intent(inout) :: atms
+            integer :: iatm
+            do iatm = 1,atms%get_n()
+                call atms%set_beta(iatm, B_REF_PSEUDO)
+            enddo
+        end subroutine set_pseudo_bfacs
+
     end subroutine binarize_and_find_centers
 
     subroutine find_centers( self, img_cc, coords, imat )
@@ -762,7 +832,7 @@ contains
         real,    allocatable, optional, intent(out)   :: coords(:,:)
         integer, allocatable :: imat_cc_in(:,:,:)
         integer  :: i, ii, jj, kk
-        real(dp) :: m(3,self%n_cc), sum_mass(self%n_cc)
+        real(dp) :: m(3,self%n_cc), sum_mass(self%n_cc), val
         ! global variables allocation
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
         allocate( self%atominfo(self%n_cc) )
@@ -775,14 +845,17 @@ contains
         endif
         m        = 0._dp
         sum_mass = 0._dp
-        !$omp parallel do collapse(3) default(shared) private(i,ii,jj,kk) schedule(static) proc_bind(close)
+        ! voxels of one component are spread over threads, so the per-component sums are reductions
+        !$omp parallel do collapse(3) default(shared) private(i,ii,jj,kk,val) reduction(+:m,sum_mass)&
+        !$omp schedule(static) proc_bind(close)
         do kk = 1, self%ldim(3)
             do jj = 1, self%ldim(2)
                 do ii = 1, self%ldim(1)
                     i = imat_cc_in(ii,jj,kk)
                     if( i >= 1 .and. i <= self%n_cc )then
-                        m(:,i)      = m(:,i)      + real(self%img_raw%get([ii,jj,kk]),dp) * real([ii,jj,kk],dp)
-                        sum_mass(i) = sum_mass(i) + real(self%img_raw%get([ii,jj,kk]),dp)
+                        val         = real(self%img_raw%get([ii,jj,kk]),dp)
+                        m(:,i)      = m(:,i)      + val * real([ii,jj,kk],dp)
+                        sum_mass(i) = sum_mass(i) + val
                     endif
                 enddo
             enddo
@@ -830,8 +903,14 @@ contains
         integer :: icc, cnt, cnt_split
         integer :: rank, m(1)
         real    :: new_centers(3,3*self%n_cc) ! will pack it afterwards if it has too many elements
-        real    :: pc, radius
+        real    :: pc, radius, split_excl
         write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
+        ! squared exclusion radius as the distance tests below use it: voxels**2 * smpd
+        if( self%l_species_free )then
+            split_excl = (SPLIT_EXCL_NN_FRAC * self%d_nn)**2 / self%smpd
+        else
+            split_excl = (0.9 * self%theoretical_radius)**2
+        endif
         call self%img%get_rmat_ptr(rmat_pc) ! rmat_pc contains the phase correlation
         call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),           source = imat_cc)
@@ -912,7 +991,7 @@ contains
                     do k = 1, self%ldim(3)
                         if( imat(i,j,k) == icc )then
                             if(((real(i - new_center1(1)))**2 + (real(j - new_center1(2)))**2 + &
-                            &   (real(k - new_center1(3)))**2) * self%smpd  <=  (0.9 * self%theoretical_radius)**2) then
+                            &   (real(k - new_center1(3)))**2) * self%smpd  <=  split_excl) then
                                 mask(i,j,k) = .true.
                             endif
                         endif
@@ -923,7 +1002,7 @@ contains
             new_center2 = maxloc(rmat_pc(:self%ldim(1),:self%ldim(2),:self%ldim(3)), (imat == icc) .and. .not. mask)
             if( any(new_center2 > 0) )then ! if anything was found
                 ! Validate second center (check if it's 2 merged atoms, or one pointy one)
-                if( sum(real(new_center2 - new_center1)**2.) * self%smpd <= (0.9 * self%theoretical_radius)**2) then
+                if( sum(real(new_center2 - new_center1)**2.) * self%smpd <= split_excl) then
                     ! the new_center2 is within the diameter of the atom position at new_center1
                     ! therefore, it is not another atom and should be removed
                     where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
@@ -937,7 +1016,7 @@ contains
                             do k = 1, self%ldim(3)
                                 if( imat(i,j,k) == icc )then
                                     if(((real(i - new_center2(1)))**2 + (real(j - new_center2(2)))**2 +&
-                                    &   (real(k - new_center2(3)))**2) * self%smpd <= (0.9 * self%theoretical_radius)**2 )then
+                                    &   (real(k - new_center2(3)))**2) * self%smpd <= split_excl )then
                                         mask(i,j,k) = .true.
                                     endif
                                 endif
@@ -950,8 +1029,8 @@ contains
             new_center3 = maxloc(rmat_pc(:self%ldim(1),:self%ldim(2),:self%ldim(3)), (imat == icc) .and. .not. mask)
             if( any(new_center3 > 0) )then ! if anything was found
                 ! Validate third center
-                if(sum(real(new_center3 - new_center1)**2.) * self%smpd <= (0.9 * self%theoretical_radius)**2 .or. &
-                &  sum(real(new_center3 - new_center2)**2.) * self%smpd <= (0.9 * self%theoretical_radius)**2 )then
+                if(sum(real(new_center3 - new_center1)**2.) * self%smpd <= split_excl .or. &
+                &  sum(real(new_center3 - new_center2)**2.) * self%smpd <= split_excl )then
                     ! the new_center3 is within the diameter of the atom position at new_center1 or new_center2
                     ! therefore, it is not another atom and should be removed
                     where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
@@ -966,7 +1045,7 @@ contains
                             do k = 1, self%ldim(3)
                                 if( imat(i,j,k) == icc )then
                                     if( ((real(i - new_center3(1)))**2 + (real(j - new_center3(2)))**2 + &
-                                    &    (real(k - new_center3(3)))**2) * self%smpd <= (0.9 * self%theoretical_radius)**2 )then
+                                    &    (real(k - new_center3(3)))**2) * self%smpd <= split_excl )then
                                          found3d_cen = .not.mask(i,j,k)
                                          mask(i,j,k) = .true.
                                     endif
@@ -1029,20 +1108,24 @@ contains
         character(len=5)     :: el_ucase
         character(len=10)    :: crystal_system
         ll_print = .true.
-        el_ucase = uppercase(trim(adjustl(self%element)))
-        call get_lattice_params(el_ucase, crystal_system, foo)
-        select case( crystal_system )
-            case('wurtzite', 'zincblende')
-                it_contact_score = 4
-            case default !fcc bcc rocksalt
-                it_contact_score = 12
-        end select
+        if( self%l_species_free )then
+            it_contact_score = CSCORE_CEIL_NOEL
+        else
+            el_ucase = uppercase(trim(adjustl(self%element)))
+            call get_lattice_params(el_ucase, crystal_system, foo)
+            select case( crystal_system )
+                case('wurtzite', 'zincblende')
+                    it_contact_score = 4
+                case default !fcc bcc rocksalt
+                    it_contact_score = 12
+            end select
+        endif
         if( present(l_print) ) ll_print = l_print
         if( ll_print ) write(logfhandle, '(A)') '>>> DISCARDING ATOMS'
         ! calculate contact scores
         centers_A = self%atominfo2centers_A()
         allocate(cscores(self%n_cc), source=0)
-        call calc_contact_scores(self%element,centers_A,cscores)
+        call self%contact_scores(centers_A,cscores)
         ! calculate atomic distances from the center of mass of the nanoparticle
         self%NPcen = self%masscen()
         allocate(cendists(self%n_cc), cendists_sorted(self%n_cc), atom_del_mask(self%n_cc))
@@ -1118,7 +1201,7 @@ contains
                 if( allocated(cscores)   ) deallocate(cscores)
                 allocate(cscores(self%n_cc), source=0)
                 centers_A = self%atominfo2centers_A()
-                call calc_contact_scores(self%element,centers_A,cscores)
+                call self%contact_scores(centers_A,cscores)
             endif
         end subroutine remove_lowly_contacted
 
@@ -1153,11 +1236,914 @@ contains
                 if( allocated(cscores)   ) deallocate(cscores)
                 allocate(cscores(self%n_cc), source=0)
                 centers_A = self%atominfo2centers_A()
-                call calc_contact_scores(self%element,centers_A,cscores)
+                call self%contact_scores(centers_A,cscores)
             endif
         end subroutine remove_small_and_lowly_contacted
 
     end subroutine discard_atoms
+
+    ! d_NN from the centres of the first binarisation; on the species-free path the atom radius follows from it
+    subroutine set_nn_length_scales( self )
+        class(nanoparticle), intent(inout) :: self
+        real, allocatable :: centers_A(:,:)
+        centers_A = self%atominfo2centers_A()
+        self%d_nn = est_nn_dist(centers_A)
+        write(logfhandle,'(A,F8.4)') 'nearest-neighbour distance d_NN (A): ', self%d_nn
+        if( self%l_species_free )then
+            self%theoretical_radius = RADIUS_NN_FRAC * self%d_nn
+            write(logfhandle,'(A,F8.4)') 'atom radius 0.4 d_NN (A):            ', self%theoretical_radius
+        endif
+        deallocate(centers_A)
+    end subroutine set_nn_length_scales
+
+    ! contact scores of discard_atoms; the neighbour cutoff comes from d_NN on the species-free path
+    subroutine contact_scores( self, centers_A, cscores )
+        class(nanoparticle), intent(in)    :: self
+        real, allocatable,   intent(in)    :: centers_A(:,:)
+        integer,             intent(inout) :: cscores(:)
+        if( self%l_species_free )then
+            call calc_contact_scores(self%element, centers_A, cscores, d_nn=self%d_nn)
+        else
+            call calc_contact_scores(self%element, centers_A, cscores)
+        endif
+    end subroutine contact_scores
+
+    ! Residual recovery and species call on the level-1 atoms (doc/implementation_notes/planned/species_discovery.md,
+    ! sections 3.2 to 3.9). Reads the map and the level-1 atoms, fills recovered(:) and the discovery fields of
+    ! atominfo(:), and writes the three _species files; the present products are not touched.
+    subroutine discover_species( self )
+        use simple_nano_species, only: fit_species_mixture, class_separation, enclosed_fraction, calibrate_threshold,&
+            &expected_false_count, fit_gauss_width, gauss_filter3D, local_maxima, robust_spread
+        class(nanoparticle), intent(inout) :: self
+        real,    parameter :: TARGET_FALSE   = 0.2    ! expected noise maxima above k_A in the stage A search volume
+        real,    parameter :: CAL_LEVELS(3)  = [2.5, 3.0, 3.5]
+        real,    parameter :: REGION_NN_FRAC = 1.5    ! noise region: farther than this from every atom, in d_NN
+        real,    parameter :: NMS_NN_FRAC    = 0.35   ! non-maximum suppression and centroid radius, in d_NN
+        real,    parameter :: EXCL_A_NN_FRAC = 0.7    ! stage A (and ungated stage B): no atom closer, in d_NN
+        real,    parameter :: EXCL_B_NN_FRAC = 0.85   ! gate: no atom closer, in d_NN
+        real,    parameter :: GATE_NN_FRAC   = 1.15   ! gate: at least min_nbrs found atoms within, in d_NN
+        integer, parameter :: MAX_LEVELS     = 8
+        integer, parameter :: NSWEEPS_STAGE1 = 3
+        integer, parameter :: NROUNDS_STAGE2 = 2
+        integer, parameter :: NSWEEPS_ROUND  = 2
+        integer, parameter :: NPHANTOM       = 1000   ! phantom sites for s_A and s_I
+        integer, parameter :: NREGION_MIN    = 20000  ! smallest noise region, voxels
+        integer, parameter :: NSHELL_MAX     = 5
+        integer, parameter :: NSHELL_ATOMS   = 20     ! a radial shell holds at least this many atoms
+        real,    parameter :: STRONG_SNR     = 10.    ! strong atoms: amplitude above STRONG_SNR * s_A
+        integer, parameter :: NPRIOR_MIN     = 5      ! strong atoms needed for a shell or global width prior
+        real,    parameter :: PRIOR_SD_MIN   = 0.1    ! floor of the spread of ln B in the width prior
+        real,    parameter :: PRIOR_SD_START = 0.5    ! spread of ln B around B_ref before any fit
+        real,    parameter :: TAU_CLASS_MIN  = 0.05   ! floor of the intrinsic class spread, fraction of I_k
+        real,    parameter :: LOW_SNR        = 6.5    ! shells below this predicted signal-to-noise are flagged
+        real,    parameter :: CS_OUTER_FRAC  = 0.85   ! contact pruning considers the atoms beyond this radius quantile
+        real,    parameter :: INNER_FRAC     = 0.3    ! interior atoms for the coordination deficit
+        real,    parameter :: CN_CLOSE_PACKED = 12.
+        type(atom_stats), allocatable :: tab(:)
+        real,    allocatable :: map(:,:,:), hdiff(:,:,:), wmsk(:,:,:), model(:,:,:), backg(:,:,:), resid(:,:,:)
+        real,    allocatable :: cmap(:,:,:), zmap(:,:,:), cnoise(:,:,:), emap(:,:,:), omap(:,:,:)
+        logical, allocatable :: region(:,:,:), sphere(:,:,:), smask(:,:,:)
+        real,    allocatable :: post(:,:), mu(:), var(:), prior_m(:), prior_s(:), rad(:), x(:)
+        integer, allocatable :: labels(:), coord(:)
+        type(image)  :: img_tmp, simimg
+        real         :: s, d, dv, sig_ref, sig2n, s_a, s_i, rob_ratio, k_a, k_b, c_search_a, c_region, z_mu, z_sd
+        real         :: efalse_a, efalse_b, bic(MAX_NSPECIES), half_agree, half_corr
+        integer      :: ldim(3), n, n1, nreg, nsearch_a, nsearch_b, nadded(2,MAX_LEVELS), npruned, K, stage, level
+        integer      :: nnew, i, iround, isweep
+        logical      :: l_halves, adm(MAX_NSPECIES)
+        if( self%d_nn <= 0. ) THROW_HARD('d_NN was not measured; discover_species')
+        write(logfhandle,'(A)') '>>> SPECIES DISCOVERY (DIAGNOSTICS ONLY)'
+        s       = self%smpd
+        d       = self%d_nn
+        dv      = d / s
+        sig_ref = sqrt(B_REF_PSEUDO / (8. * PI**2))
+        ldim    = self%ldim
+        map     = self%img_raw%get_rmat()
+        ! mask weights of the soft sphere new applied to the map
+        call img_tmp%new(ldim, s)
+        allocate(wmsk(ldim(1),ldim(2),ldim(3)), source=1.)
+        call img_tmp%set_rmat(wmsk, .false.)
+        call img_tmp%mask3D_soft(self%msk_rad, backgr=0.)
+        wmsk   = img_tmp%get_rmat()
+        sphere = wmsk > 0.
+        nsearch_a = count(sphere)
+        ! half maps, masked as the map
+        l_halves = self%vol_even%is_allocated()
+        if( l_halves )then
+            call read_half(self%vol_even, emap)
+            call read_half(self%vol_odd,  omap)
+            hdiff = 0.5 * (emap - omap)
+            allocate(cnoise(ldim(1),ldim(2),ldim(3)))
+            call gauss_filter3D(hdiff, sig_ref / s, cnoise)
+        endif
+        allocate(model(ldim(1),ldim(2),ldim(3)), backg(ldim(1),ldim(2),ldim(3)), resid(ldim(1),ldim(2),ldim(3)),&
+            &cmap(ldim(1),ldim(2),ldim(3)), zmap(ldim(1),ldim(2),ldim(3)), source=0.)
+        allocate(region(ldim(1),ldim(2),ldim(3)), smask(ldim(1),ldim(2),ldim(3)))
+        ! level-1 atoms
+        n1  = self%n_cc
+        n   = n1
+        tab = self%atominfo(1:n1)
+        do i = 1,n
+            tab(i)%amp       = 0.
+            tab(i)%bfac      = B_REF_PSEUDO
+            tab(i)%det_stage = 0
+            tab(i)%det_level = 0
+        enddo
+        ! provisional stage-1 fit of level 1
+        call build_region
+        call noise_stats(.true.)
+        call fit_atoms_joint(NSWEEPS_STAGE1)
+        call build_region
+        call noise_stats(.true.)
+        ! calibrated thresholds and the residual levels
+        call compute_zmap
+        call calibrate
+        nadded = 0
+        do stage = 1,2
+            do level = 1,MAX_LEVELS
+                call detect_residual_level(stage, level, nnew)
+                nadded(stage,level) = nnew
+                if( nnew == 0 ) exit
+            enddo
+        enddo
+        call prune_recovered
+        ! both fit stages and the species call on the merged, pruned set
+        model = 0.
+        do i = 1,n
+            call render(i, 1.)
+        enddo
+        call fit_atoms_joint(NSWEEPS_STAGE1)
+        do i = 1,n
+            tab(i)%bfac_stage1 = tab(i)%bfac
+        enddo
+        call build_region
+        call noise_stats(.true.)
+        call calc_aperture_int
+        call assign_species
+        do iround = 1,NROUNDS_STAGE2
+            do isweep = 1,NSWEEPS_ROUND
+                call tied_sweep
+            enddo
+            call calc_aperture_int
+            call assign_species
+        enddo
+        call recovered_valid_corr
+        call geometry
+        if( l_halves ) call halfmap_agreement
+        call write_species_report
+        call write_radial_profiles
+        call write_species_table
+        call write_species_pdb
+        ! tables: discovery fields of the level-1 atoms, the recovered atoms on their own
+        self%atominfo(1:n1) = tab(1:n1)
+        if( allocated(self%recovered) ) deallocate(self%recovered)
+        self%recovered = tab(n1+1:n)
+        call img_tmp%kill
+        call simimg%kill
+        write(logfhandle,'(A,I0,A,I0,A,I0)') 'level-1 atoms: ', n1, ', recovered atoms: ', n - n1, ', classes: ', K
+        write(logfhandle,'(A)') '>>> SPECIES DISCOVERY, COMPLETED'
+
+    contains
+
+        subroutine read_half( fname, arr )
+            class(string),     intent(in)  :: fname
+            real, allocatable, intent(out) :: arr(:,:,:)
+            integer :: ldim_h(3), nptcls
+            call find_ldim_nptcls(fname, ldim_h, nptcls)
+            if( any(ldim_h /= ldim) ) THROW_HARD('half maps and map differ in size; discover_species')
+            call img_tmp%new(ldim, s)
+            call img_tmp%read(fname)
+            call img_tmp%mask3D_soft(self%msk_rad)
+            arr = img_tmp%get_rmat()
+        end subroutine read_half
+
+        ! voxel window of a ball of radius rv voxels around c (voxel coordinates)
+        subroutine ball_window( c, rv, lo, hi )
+            real,    intent(in)  :: c(3), rv
+            integer, intent(out) :: lo(3), hi(3)
+            lo = max(1, floor(c - rv))
+            hi = min(ldim, ceiling(c + rv))
+        end subroutine ball_window
+
+        ! set arr to val within rv voxels of c
+        subroutine mark_ball( c, rv, arr, val )
+            real,    intent(in)    :: c(3), rv
+            logical, intent(inout) :: arr(:,:,:)
+            logical, intent(in)    :: val
+            integer :: lo(3), hi(3), ii, jj, kk
+            call ball_window(c, rv, lo, hi)
+            do kk = lo(3),hi(3)
+                do jj = lo(2),hi(2)
+                    do ii = lo(1),hi(1)
+                        if( sum((real([ii,jj,kk]) - c)**2) <= rv * rv ) arr(ii,jj,kk) = val
+                    enddo
+                enddo
+            enddo
+        end subroutine mark_ball
+
+        ! render cutoff of atom i in A: four standard deviations, and always beyond the fit sphere
+        real function render_cutoff( i )
+            integer, intent(in) :: i
+            render_cutoff = max(4. * sqrt(tab(i)%bfac / (8. * PI**2)), 0.5 * d + s)
+        end function render_cutoff
+
+        ! add sgn times the fitted density of atom i to the model map
+        subroutine render( i, sgn )
+            integer, intent(in) :: i
+            real,    intent(in) :: sgn
+            integer :: lo(3), hi(3), ii, jj, kk
+            real    :: rc, r2
+            if( tab(i)%amp <= 0. ) return
+            rc = render_cutoff(i)
+            call ball_window(tab(i)%center, rc / s, lo, hi)
+            do kk = lo(3),hi(3)
+                do jj = lo(2),hi(2)
+                    do ii = lo(1),hi(1)
+                        r2 = sum((real([ii,jj,kk]) - tab(i)%center)**2) * s * s
+                        if( r2 > rc * rc ) cycle
+                        model(ii,jj,kk) = model(ii,jj,kk) + sgn * tab(i)%amp * exp(-4. * PI**2 * r2 / tab(i)%bfac)
+                    enddo
+                enddo
+            enddo
+        end subroutine render
+
+        ! samples of src - background - model within rad A of c, with atom iself's own density added back
+        subroutine gather( src, c, rad_a, iself, y, r2 )
+            real,              intent(in)  :: src(:,:,:), c(3), rad_a
+            integer,           intent(in)  :: iself
+            real, allocatable, intent(out) :: y(:), r2(:)
+            real    :: ybuf((2 * (ceiling(rad_a / s) + 1) + 1)**3), rbuf(size(ybuf)), dd
+            integer :: lo(3), hi(3), ii, jj, kk, m
+            call ball_window(c, rad_a / s, lo, hi)
+            m = 0
+            do kk = lo(3),hi(3)
+                do jj = lo(2),hi(2)
+                    do ii = lo(1),hi(1)
+                        dd = sum((real([ii,jj,kk]) - c)**2) * s * s
+                        if( dd > rad_a * rad_a ) cycle
+                        m = m + 1
+                        rbuf(m) = dd
+                        ybuf(m) = src(ii,jj,kk) - backg(ii,jj,kk) - model(ii,jj,kk)
+                        if( iself > 0 )then
+                            if( tab(iself)%amp > 0. ) ybuf(m) = ybuf(m) + tab(iself)%amp * exp(-4. * PI**2 * dd / tab(iself)%bfac)
+                        endif
+                    enddo
+                enddo
+            enddo
+            y  = ybuf(:m)
+            r2 = rbuf(:m)
+        end subroutine gather
+
+        ! voxels of full mask weight farther than REGION_NN_FRAC d_NN from every atom
+        subroutine build_region
+            character(len=:), allocatable :: msg
+            region = wmsk >= 0.9999
+            do i = 1,n
+                call mark_ball(tab(i)%center, REGION_NN_FRAC * dv, region, .false.)
+            enddo
+            nreg = count(region)
+            if( nreg < NREGION_MIN )then
+                msg = 'noise region of '//int2str(nreg)//' voxels is too small; give a larger mskdiam'
+                THROW_HARD(msg)
+            endif
+        end subroutine build_region
+
+        ! sigma_n from the half-map difference or the map over the region; with l_full also the spread ratio,
+        ! and s_A and s_I from phantom sites of the region
+        subroutine noise_stats( l_full )
+            logical, intent(in) :: l_full
+            real, allocatable :: vals(:), amps(:), ints(:), y(:), r2(:), g(:)
+            integer :: stride, cnt, nsite, ii, jj, kk
+            real    :: c(3)
+            if( l_halves )then
+                vals = pack(hdiff, region)
+            else
+                vals = pack(map, region)
+            endif
+            sig2n = sdev(vals)**2
+            if( sig2n <= 0. )then
+                THROW_HARD('no noise in the noise region: discover_species needs a noisy map')
+            endif
+            if( .not. l_full ) return
+            rob_ratio = robust_spread(vals) / sqrt(sig2n)
+            stride = max(1, nreg / NPHANTOM)
+            allocate(amps(nreg / stride + 1), ints(nreg / stride + 1))
+            cnt   = 0
+            nsite = 0
+            do kk = 1,ldim(3)
+                do jj = 1,ldim(2)
+                    do ii = 1,ldim(1)
+                        if( .not. region(ii,jj,kk) ) cycle
+                        cnt = cnt + 1
+                        if( mod(cnt - 1, stride) /= 0 ) cycle
+                        c = real([ii,jj,kk])
+                        call gather(map, c, 0.5 * d, 0, y, r2)
+                        g = exp(-r2 / (2. * sig_ref**2))
+                        nsite = nsite + 1
+                        amps(nsite) = sum(y * g) / sum(g * g)
+                        ints(nsite) = s**3 * sum(y) / enclosed_fraction(0.5 * d / sig_ref)
+                    enddo
+                enddo
+            enddo
+            s_a = sdev(amps(:nsite))
+            s_i = sdev(ints(:nsite))
+        end subroutine noise_stats
+
+        real function sdev( v )
+            real, intent(in) :: v(:)
+            real :: m
+            m    = sum(v) / real(size(v))
+            sdev = sqrt(sum((v - m)**2) / real(max(size(v) - 1, 1)))
+        end function sdev
+
+        ! width priors of stage 1: ln B of the strong atoms within d_NN in radius, else of all strong atoms
+        subroutine width_priors
+            real, allocatable :: lnb(:), r(:)
+            logical, allocatable :: strong(:), sel(:)
+            real    :: cen(3)
+            integer :: j
+            if( allocated(prior_m) ) deallocate(prior_m, prior_s)
+            allocate(prior_m(n), source=log(B_REF_PSEUDO))
+            allocate(prior_s(n), source=PRIOR_SD_START)
+            cen = 0.
+            do j = 1,n
+                cen = cen + tab(j)%center
+            enddo
+            cen = cen / real(n)
+            allocate(r(n), lnb(n), strong(n), sel(n))
+            do j = 1,n
+                r(j)      = sqrt(sum((tab(j)%center - cen)**2)) * s
+                lnb(j)    = log(tab(j)%bfac)
+                strong(j) = tab(j)%amp > STRONG_SNR * s_a
+            enddo
+            if( count(strong) < NPRIOR_MIN ) return
+            do j = 1,n
+                sel = strong .and. abs(r - r(j)) <= d
+                if( count(sel) < NPRIOR_MIN ) sel = strong
+                prior_m(j) = median(pack(lnb, sel))
+                prior_s(j) = max(robust_spread(pack(lnb, sel)), PRIOR_SD_MIN)
+            enddo
+        end subroutine width_priors
+
+        ! refit atom i on its own residual within d_NN / 2, free (stage 1) or tied to its class (stage 2)
+        subroutine fit_one( i, i_class, tau_class )
+            integer,        intent(in) :: i
+            real, optional, intent(in) :: i_class, tau_class
+            real, allocatable :: y(:), r2(:)
+            real :: a, b
+            call gather(map, tab(i)%center, 0.5 * d, i, y, r2)
+            if( present(i_class) )then
+                call fit_gauss_width(y, r2, sig2n, 0., 1., a, b, i_class=i_class, tau_class=tau_class)
+            else
+                call fit_gauss_width(y, r2, sig2n, prior_m(i), prior_s(i), a, b)
+            endif
+            call render(i, -1.)
+            tab(i)%amp  = a
+            tab(i)%bfac = b
+            call render(i, 1.)
+        end subroutine fit_one
+
+        ! background: the residual smoothed with a Gaussian of standard deviation d_NN
+        subroutine update_background
+            resid = map - model
+            call gauss_filter3D(resid, dv, backg)
+        end subroutine update_background
+
+        ! stage 1: Gauss-Seidel sweeps of free-amplitude fits, the background updated after each
+        subroutine fit_atoms_joint( nsweeps )
+            integer, intent(in) :: nsweeps
+            integer :: isw, j
+            do isw = 1,nsweeps
+                call width_priors
+                do j = 1,n
+                    call fit_one(j)
+                enddo
+                call update_background
+            enddo
+        end subroutine fit_atoms_joint
+
+        ! stage 2: every atom tied to the intensity of its class
+        subroutine tied_sweep
+            real    :: tau
+            integer :: j, kc
+            do j = 1,n
+                kc = tab(j)%species
+                if( mu(kc) <= 0. ) cycle
+                tau = max(sqrt(max(var(kc) - s_i**2, 0.)), TAU_CLASS_MIN * mu(kc))
+                call fit_one(j, i_class=mu(kc), tau_class=tau)
+            enddo
+            call update_background
+        end subroutine tied_sweep
+
+        ! standardised matched-filter map of the residual
+        subroutine compute_zmap
+            real, allocatable :: vals(:)
+            resid = map - backg - model
+            call gauss_filter3D(resid, sig_ref / s, cmap)
+            if( l_halves )then
+                vals = pack(cnoise, region)
+            else
+                vals = pack(cmap, region)
+            endif
+            z_mu = sum(vals) / real(size(vals))
+            z_sd = sdev(vals)
+            zmap = (cmap - z_mu) / z_sd
+        end subroutine compute_zmap
+
+        ! thresholds from the maxima of the noise field in the region (section 3.2)
+        subroutine calibrate
+            real,    allocatable :: vals(:), nz(:,:,:)
+            integer, allocatable :: ijk(:,:)
+            real    :: counts(size(CAL_LEVELS)), ratio
+            integer :: l
+            if( l_halves )then
+                nz = (cnoise - z_mu) / z_sd
+                call local_maxima(nz, region, CAL_LEVELS(1), 0, ijk, vals)
+            else
+                call local_maxima(zmap, region, CAL_LEVELS(1), 0, ijk, vals)
+            endif
+            do l = 1,size(CAL_LEVELS)
+                counts(l) = real(count(vals > CAL_LEVELS(l)))
+            enddo
+            ratio = real(nsearch_a) / real(nreg)
+            call calibrate_threshold(CAL_LEVELS, counts, ratio, TARGET_FALSE, k_a, c_search_a)
+            c_region = c_search_a / ratio
+            k_b      = k_a - 1.
+            call stage_b_mask
+            nsearch_b = count(smask)
+            efalse_a  = expected_false_count(c_search_a, k_a)
+            efalse_b  = expected_false_count(c_region * real(nsearch_b) / real(nreg), k_b)
+            write(logfhandle,'(A,3F8.1)')  'region maxima above 2.5, 3.0, 3.5: ', counts
+            write(logfhandle,'(A,2F8.3)')  'calibrated thresholds k_A, k_B:     ', k_a, k_b
+        end subroutine calibrate
+
+        ! stage B searches within GATE_NN_FRAC d_NN of the atoms when gated, else the whole sphere
+        subroutine stage_b_mask
+            integer :: j
+            if( self%min_nbrs > 0 )then
+                smask = .false.
+                do j = 1,n
+                    call mark_ball(tab(j)%center, GATE_NN_FRAC * dv, smask, .true.)
+                enddo
+                smask = smask .and. sphere
+            else
+                smask = sphere
+            endif
+        end subroutine stage_b_mask
+
+        ! one residual level: candidates are local maxima of the z map above the stage threshold, positioned at
+        ! the centroid of the positive residual, accepted by the exclusion distance or the neighbour gate (3.3)
+        subroutine detect_residual_level( stage, level, nnew )
+            integer, intent(in)  :: stage, level
+            integer, intent(out) :: nnew
+            real,    allocatable :: vals(:), considered(:,:), dists(:)
+            integer, allocatable :: ijk(:,:)
+            type(atom_stats) :: atm
+            real    :: thres, pos(3)
+            integer :: ic, nc, nbefore, j
+            logical :: l_gated, l_ok
+            call build_region
+            call noise_stats(.false.)
+            call compute_zmap
+            l_gated = stage == 2 .and. self%min_nbrs > 0
+            if( stage == 1 )then
+                thres = k_a
+                smask = sphere
+            else
+                thres = k_b
+                call stage_b_mask
+            endif
+            ! NVOX_THRESH of the 27 voxels above the threshold, the maximum itself included
+            call local_maxima(zmap, smask, thres, NVOX_THRESH - 1, ijk, vals)
+            allocate(considered(3,max(size(vals),1)))
+            nc      = 0
+            nbefore = n
+            do ic = 1,size(vals)
+                ! non-maximum suppression between the maxima of this level
+                if( nc > 0 )then
+                    if( any(sum((considered(:,:nc) - spread(real(ijk(:,ic)), 2, nc))**2, dim=1) < (NMS_NN_FRAC * dv)**2) ) cycle
+                endif
+                nc = nc + 1
+                considered(:,nc) = real(ijk(:,ic))
+                pos = centroid(ijk(:,ic))
+                allocate(dists(n))
+                do j = 1,n
+                    dists(j) = sqrt(sum((tab(j)%center - pos)**2)) * s
+                enddo
+                if( l_gated )then
+                    ! the gate counts the atoms accepted before this level: one shell per level
+                    l_ok = minval(dists) > EXCL_B_NN_FRAC * d .and. count(dists(:nbefore) <= GATE_NN_FRAC * d) >= self%min_nbrs
+                else
+                    l_ok = minval(dists) > EXCL_A_NN_FRAC * d
+                endif
+                deallocate(dists)
+                if( .not. l_ok ) cycle
+                atm = atom_stats()
+                atm%center    = pos
+                atm%amp       = 0.
+                atm%bfac      = B_REF_PSEUDO
+                atm%det_z     = vals(ic)
+                atm%det_stage = stage
+                atm%det_level = level
+                atm%gate_used = l_gated
+                tab = [tab(:n), atm]
+                n   = n + 1
+            enddo
+            nnew = n - nbefore
+            if( nnew > 0 )then
+                call width_priors
+                do j = nbefore+1,n
+                    call fit_one(j)
+                enddo
+            endif
+            write(logfhandle,'(A,I1,A,I1,A,I0)') 'residual stage ', stage, ', level ', level, ': atoms added ', nnew
+        end subroutine detect_residual_level
+
+        ! centroid of the positive residual within NMS_NN_FRAC d_NN of a voxel
+        function centroid( ijk ) result( pos )
+            integer, intent(in) :: ijk(3)
+            real    :: pos(3), w, wsum, c(3)
+            integer :: lo(3), hi(3), ii, jj, kk
+            c    = real(ijk)
+            pos  = 0.
+            wsum = 0.
+            call ball_window(c, NMS_NN_FRAC * dv, lo, hi)
+            do kk = lo(3),hi(3)
+                do jj = lo(2),hi(2)
+                    do ii = lo(1),hi(1)
+                        if( sum((real([ii,jj,kk]) - c)**2) > (NMS_NN_FRAC * dv)**2 ) cycle
+                        w = max(resid(ii,jj,kk), 0.)
+                        pos  = pos + w * real([ii,jj,kk])
+                        wsum = wsum + w
+                    enddo
+                enddo
+            enddo
+            if( wsum > 0. )then
+                pos = pos / wsum
+            else
+                pos = c
+            endif
+        end function centroid
+
+        ! the contact-score rule of discard_atoms on the merged set, applied to the recovered atoms only
+        subroutine prune_recovered
+            real,    allocatable :: centers_a(:,:), cendists(:), sorted(:)
+            integer, allocatable :: cs(:)
+            logical, allocatable :: keep(:)
+            character(len=10) :: crystal_system
+            character(len=5)  :: el_ucase
+            real    :: cen(3), dthres, percen, a0(3)
+            integer :: j, cn, cthres, cceil
+            npruned = 0
+            if( n == n1 ) return
+            ! contact-score ceiling as in discard_atoms
+            cceil = CSCORE_CEIL_NOEL
+            if( .not. self%l_species_free )then
+                el_ucase = uppercase(trim(adjustl(self%element)))
+                call get_lattice_params(el_ucase, crystal_system, a0)
+                select case( crystal_system )
+                    case('wurtzite', 'zincblende')
+                        cceil = 4
+                end select
+            endif
+            call merged_centers_a(centers_a)
+            allocate(cs(n), source=0)
+            call self%contact_scores(centers_a, cs)
+            cen      = sum(centers_a, dim=2) / real(n)
+            cendists = sqrt(sum((centers_a - spread(cen, 2, n))**2, dim=1))
+            sorted   = cendists
+            call hpsort(sorted)
+            dthres   = sorted(nint(CS_OUTER_FRAC * real(n)))
+            cthres   = cceil
+            do cn = 1,cceil
+                percen = real(count(cs >= cn)) / real(n) * 100.
+                if( percen <= 95. )then
+                    cthres = cn
+                    exit
+                endif
+            enddo
+            if( cthres > cceil/2 ) cthres = cceil/2
+            allocate(keep(n), source=.true.)
+            do j = n1+1,n
+                if( cs(j) < cthres - 1 .and. cendists(j) > dthres ) keep(j) = .false.
+            enddo
+            npruned = count(.not. keep)
+            if( npruned > 0 )then
+                tab = pack(tab(:n), keep)
+                n   = size(tab)
+            endif
+            write(logfhandle,'(A,I0)') 'recovered atoms pruned by contact score: ', npruned
+        end subroutine prune_recovered
+
+        subroutine merged_centers_a( centers_a )
+            real, allocatable, intent(out) :: centers_a(:,:)
+            integer :: j
+            allocate(centers_a(3,n))
+            do j = 1,n
+                centers_a(:,j) = (tab(j)%center - 1.) * s
+            enddo
+        end subroutine merged_centers_a
+
+        ! aperture intensities (3.5) in the units of the continuous integral
+        subroutine calc_aperture_int
+            real, allocatable :: y(:), r2(:)
+            integer :: j
+            do j = 1,n
+                call gather(map, tab(j)%center, 0.5 * d, j, y, r2)
+                tab(j)%aper_int = s**3 * sum(y) / enclosed_fraction(0.5 * d / sqrt(tab(j)%bfac / (8. * PI**2)))
+                tab(j)%aper_snr = tab(j)%aper_int / s_i
+            enddo
+        end subroutine calc_aperture_int
+
+        ! mixture of the aperture intensities (3.6)
+        subroutine assign_species
+            integer :: j
+            if( allocated(labels) ) deallocate(labels)
+            allocate(labels(n))
+            x = tab(:n)%aper_int
+            call fit_species_mixture(x, s_i, self%nspecies, K, labels, post, mu, var, bic, adm)
+            do j = 1,n
+                tab(j)%species         = labels(j)
+                tab(j)%species_post    = 0.
+                tab(j)%species_post(:K) = post(j,:)
+            enddo
+        end subroutine assign_species
+
+        ! valid_corr of the recovered atoms against the simulation with class intensities and own widths
+        subroutine recovered_valid_corr
+            type(atoms)       :: atms
+            real, allocatable :: pix1(:), pix2(:)
+            real    :: maxrad, cutoff
+            integer :: j, winsz, npix_in, nout1, nout2, ijk(3)
+            if( n == n1 ) return
+            call atms%new(n, dummy=.true.)
+            cutoff = 8. * s
+            do j = 1,n
+                call atms%set_element(j, 'X1')
+                call atms%set_coord(j, (tab(j)%center - 1.) * s)
+                call atms%set_occupancy(j, max(mu(tab(j)%species), 0.))
+                call atms%set_beta(j, tab(j)%bfac)
+                cutoff = max(cutoff, 4. * sqrt(tab(j)%bfac / (8. * PI**2)))
+            enddo
+            call simimg%new(ldim, s)
+            call atms%convolve(simimg, cutoff)
+            call atms%kill
+            maxrad  = 1.5 * RADIUS_NN_FRAC * dv
+            winsz   = ceiling(maxrad)
+            npix_in = (2 * winsz + 1)**3
+            allocate(pix1(npix_in), pix2(npix_in), source=0.)
+            do j = n1+1,n
+                ijk = nint(tab(j)%center)
+                call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, nout1, pix1)
+                call simimg%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, nout2, pix2)
+                tab(j)%valid_corr = pearsn_serial(pix1(:nout1), pix2(:nout2))
+            enddo
+        end subroutine recovered_valid_corr
+
+        ! radius from the centre of the atom positions and coordination within the neighbour cutoff
+        subroutine geometry
+            real, allocatable :: centers_a(:,:)
+            real    :: cen(3)
+            integer :: j
+            call merged_centers_a(centers_a)
+            if( allocated(coord) ) deallocate(coord)
+            allocate(coord(n), source=0)
+            call self%contact_scores(centers_a, coord)
+            cen = sum(centers_a, dim=2) / real(n)
+            rad = sqrt(sum((centers_a - spread(cen, 2, n))**2, dim=1))
+            do j = 1,n
+                tab(j)%cendist = rad(j)
+            enddo
+        end subroutine geometry
+
+        ! aperture intensities in each half map, classified with the final mixture
+        subroutine halfmap_agreement
+            real, allocatable :: y(:), r2(:), ie(:), io(:)
+            integer :: j, nagree
+            real    :: frac
+            allocate(ie(n), io(n))
+            do j = 1,n
+                frac = enclosed_fraction(0.5 * d / sqrt(tab(j)%bfac / (8. * PI**2)))
+                call gather(emap, tab(j)%center, 0.5 * d, j, y, r2)
+                ie(j) = s**3 * sum(y) / frac
+                call gather(omap, tab(j)%center, 0.5 * d, j, y, r2)
+                io(j) = s**3 * sum(y) / frac
+            enddo
+            nagree = 0
+            do j = 1,n
+                if( classify(ie(j)) == classify(io(j)) ) nagree = nagree + 1
+            enddo
+            half_agree = real(nagree) / real(n)
+            half_corr  = pearsn_serial(ie, io)
+        end subroutine halfmap_agreement
+
+        integer function classify( xi )
+            real, intent(in) :: xi
+            real    :: lp(K), w
+            integer :: kc
+            do kc = 1,K
+                w = real(count(labels == kc)) / real(n)
+                if( w > 0. )then
+                    lp(kc) = log(w) - 0.5 * log(var(kc)) - 0.5 * (xi - mu(kc))**2 / var(kc)
+                else
+                    lp(kc) = -huge(1.)
+                endif
+            enddo
+            classify = maxloc(lp, dim=1)
+        end function classify
+
+        ! best possible detection signal-to-noise of an atom of intensity ik and width sigma (section 7): its amplitude
+        ! over s_A, scaled from the template width to its own as (sigma / sig_ref)**1.5, so it goes as ik sigma**(-1.5)
+        real function pred_snr( ik, sigma )
+            real, intent(in) :: ik, sigma
+            pred_snr = ik / (2. * PI * sigma**2)**1.5 * (sigma / sig_ref)**1.5 / s_a
+        end function pred_snr
+
+        ! equal-count radial shells of class kc: first and last index into the radius order
+        subroutine class_shells( kc, order, nsh, bnd )
+            integer,              intent(in)  :: kc
+            integer, allocatable, intent(out) :: order(:), bnd(:)
+            integer,              intent(out) :: nsh
+            real,    allocatable :: rk(:)
+            integer :: j, nk
+            order = pack([(j, j=1,n)], tab(:n)%species == kc)
+            nk    = size(order)
+            nsh   = max(1, min(NSHELL_MAX, nk / NSHELL_ATOMS))
+            if( nk > 0 )then
+                rk = rad(order)
+                call hpsort(rk, order)
+            endif
+            allocate(bnd(nsh+1))
+            do j = 1,nsh+1
+                bnd(j) = ((j-1) * nk) / nsh
+            enddo
+        end subroutine class_shells
+
+        subroutine write_radial_profiles
+            integer, allocatable :: order(:), bnd(:), sel(:)
+            real,    allocatable :: sig1(:), sig2(:), ints(:)
+            integer :: funit, kc, ish, nsh, m
+            real    :: rms2, rms1
+            call fopen(funit, file=self%fbody//'_species_radial.csv', status='REPLACE', action='WRITE')
+            write(funit,'(A)') 'CLASS,SHELL,NATOMS,MEAN_RADIUS,RMS_SIGMA,SE_SIGMA,B,RMS_SIGMA_STAGE1,MEAN_INT,SE_INT,'//&
+                &'MEAN_COORD,PRED_SNR,LOW_SNR'
+            do kc = 1,K
+                call class_shells(kc, order, nsh, bnd)
+                do ish = 1,nsh
+                    m = bnd(ish+1) - bnd(ish)
+                    if( m < 1 ) cycle
+                    sel  = order(bnd(ish)+1:bnd(ish+1))
+                    sig2 = sqrt(tab(sel)%bfac / (8. * PI**2))
+                    sig1 = sqrt(tab(sel)%bfac_stage1 / (8. * PI**2))
+                    ints = tab(sel)%aper_int
+                    rms2 = sqrt(sum(sig2**2) / real(m))
+                    rms1 = sqrt(sum(sig1**2) / real(m))
+                    write(funit,'(I0,",",I0,",",I0,9(",",ES16.8),",",I0)') kc, ish, m, sum(rad(sel)) / real(m), rms2,&
+                        &sdev(sig2) / sqrt(real(m)), 8. * PI**2 * rms2**2, rms1, sum(ints) / real(m), sdev(ints) / sqrt(real(m)),&
+                        &real(sum(coord(sel))) / real(m), pred_snr(mu(kc), rms2), merge(1, 0, pred_snr(mu(kc), rms2) < LOW_SNR)
+                enddo
+            enddo
+            call fclose(funit)
+        end subroutine write_radial_profiles
+
+        subroutine write_species_table
+            integer :: funit, j, origin
+            call fopen(funit, file=self%fbody//'_species.csv', status='REPLACE', action='WRITE')
+            write(funit,'(A)') 'INDEX,RECOVERED,X,Y,Z,RADIUS,COORD,STAGE,LEVEL,DET_Z,AMP,B_STAGE1,B_STAGE2,APER_INT,APER_SNR,'//&
+                &'CLASS,POST1,POST2,POST3,VALID_CORR,GATE_USED'
+            do j = 1,n
+                origin = merge(1, 0, j > n1)
+                write(funit,'(I0,",",I0,5(",",ES16.8),2(",",I0),6(",",ES16.8),",",I0,4(",",ES16.8),",",I0)') j, origin,&
+                    &(tab(j)%center - 1.) * s, rad(j), real(coord(j)), tab(j)%det_stage, tab(j)%det_level, tab(j)%det_z,&
+                    &tab(j)%amp, tab(j)%bfac_stage1, tab(j)%bfac, tab(j)%aper_int, tab(j)%aper_snr, tab(j)%species,&
+                    &tab(j)%species_post, tab(j)%valid_corr, merge(1, 0, tab(j)%gate_used)
+            enddo
+            call fclose(funit)
+        end subroutine write_species_table
+
+        ! every atom with its class: element column and chain by class (X1/A the strongest), occupancy the class
+        ! intensity over the strongest class's, B column the stage-2 B factor; a viewer selects a class by chain
+        subroutine write_species_pdb
+            type(atoms) :: atms
+            integer     :: j, kc
+            real        :: occ
+            call atms%new(n, dummy=.true.)
+            do j = 1,n
+                kc  = tab(j)%species
+                occ = 1.
+                if( mu(1) > TINY ) occ = max(mu(kc), 0.) / mu(1)
+                call atms%set_name(     j, 'X'//int2str(kc)//'  ')
+                call atms%set_element(  j, 'X'//int2str(kc))
+                call atms%set_chain(    j, achar(iachar('A') + kc - 1))
+                call atms%set_coord(    j, (tab(j)%center - 1.) * s)
+                call atms%set_num(      j, j)
+                call atms%set_resnum(   j, j)
+                call atms%set_occupancy(j, occ)
+                call atms%set_beta(     j, tab(j)%bfac)
+            enddo
+            call atms%writepdb(self%fbody//'_species.pdb')
+            call atms%kill
+            write(logfhandle,'(A)') 'output, atoms with their class:   '//self%fbody%to_char()//'_species.pdb'
+        end subroutine write_species_pdb
+
+        subroutine write_species_report
+            real, allocatable :: lnb(:), r(:)
+            logical, allocatable :: strong(:)
+            integer, allocatable :: order(:), bnd(:)
+            integer :: funit, kc, l, ninner, nsh, ish, nlow
+            real    :: bmed, cn_inner, misclass, rms2
+            call fopen(funit, file=self%fbody//'_species.txt', status='REPLACE', action='WRITE')
+            write(funit,'(A)') '# species discovery of detect_atoms (discover_species=yes): diagnostics, not used by any product'
+            call write_kv(funit, 'K', int2str(K))
+            call write_kv(funit, 'nspecies_fixed', int2str(self%nspecies))
+            do kc = 1,K
+                call write_kv(funit, 'class_intensity_'//int2str(kc), rstr(mu(kc)))
+                call write_kv(funit, 'class_ratio_'//int2str(kc),     rstr(mu(kc) / mu(1)))
+                call write_kv(funit, 'class_fraction_'//int2str(kc),  rstr(real(count(labels == kc)) / real(n)))
+                call write_kv(funit, 'class_atoms_'//int2str(kc),     int2str(count(labels == kc)))
+                call write_kv(funit, 'class_sd_'//int2str(kc),        rstr(sqrt(var(kc))))
+            enddo
+            do kc = 1,K-1
+                call write_kv(funit, 'separation_D_'//int2str(kc)//'_'//int2str(kc+1), rstr(class_separation(mu(kc), var(kc), mu(kc+1), var(kc+1))))
+            enddo
+            do l = 1,MAX_NSPECIES
+                call write_kv(funit, 'bic_K'//int2str(l),        rstr(bic(l)))
+                call write_kv(funit, 'admissible_K'//int2str(l), merge('yes', 'no ', adm(l)))
+            enddo
+            misclass = sum(1. - maxval(post, dim=2)) / real(n)
+            call write_kv(funit, 'expected_misclassification', rstr(misclass))
+            call write_kv(funit, 'd_NN', rstr(d))
+            call write_kv(funit, 'B_ref', rstr(B_REF_PSEUDO))
+            allocate(strong(n))
+            strong = tab(:n)%amp > STRONG_SNR * s_a
+            if( count(strong) > 0 )then
+                lnb  = pack(tab(:n)%bfac_stage1, strong)
+                bmed = median(lnb)
+                call write_kv(funit, 'B_stage1_median_strong', rstr(bmed))
+                call write_kv(funit, 'B_stage1_over_B_ref', rstr(bmed / B_REF_PSEUDO))
+            endif
+            call write_kv(funit, 'noise_source', merge('half_maps', 'region   ', l_halves))
+            call write_kv(funit, 'sigma_n', rstr(sqrt(sig2n)))
+            call write_kv(funit, 's_A', rstr(s_a))
+            call write_kv(funit, 's_I', rstr(s_i))
+            call write_kv(funit, 'robust_over_plain_spread', rstr(rob_ratio))
+            call write_kv(funit, 'region_voxels', int2str(nreg))
+            call write_kv(funit, 'k_A', rstr(k_a))
+            call write_kv(funit, 'k_B', rstr(k_b))
+            call write_kv(funit, 'search_voxels_A', int2str(nsearch_a))
+            call write_kv(funit, 'search_voxels_B', int2str(nsearch_b))
+            call write_kv(funit, 'expected_false_A', rstr(efalse_a))
+            call write_kv(funit, 'expected_false_B', rstr(efalse_b))
+            call write_kv(funit, 'min_nbrs', int2str(self%min_nbrs))
+            call write_kv(funit, 'level1_atoms', int2str(n1))
+            do l = 1,MAX_LEVELS
+                call write_kv(funit, 'added_A_level_'//int2str(l), int2str(nadded(1,l)))
+            enddo
+            do l = 1,MAX_LEVELS
+                call write_kv(funit, 'added_B_level_'//int2str(l), int2str(nadded(2,l)))
+            enddo
+            call write_kv(funit, 'pruned', int2str(npruned))
+            call write_kv(funit, 'recovered_atoms', int2str(n - n1))
+            call write_kv(funit, 'total_atoms', int2str(n))
+            ! coordination of the inner atoms: a deficit flags undetected sites (section 7)
+            r = rad
+            order = [(l, l=1,n)]
+            call hpsort(r, order)
+            ninner   = max(1, nint(INNER_FRAC * real(n)))
+            cn_inner = real(sum(coord(order(:ninner)))) / real(ninner)
+            call write_kv(funit, 'interior_coordination', rstr(cn_inner))
+            call write_kv(funit, 'interior_coordination_deficit', rstr(CN_CLOSE_PACKED - cn_inner))
+            nlow = 0
+            do kc = 1,K
+                call class_shells(kc, order, nsh, bnd)
+                do ish = 1,nsh
+                    if( bnd(ish+1) <= bnd(ish) ) cycle
+                    rms2 = sqrt(sum(tab(order(bnd(ish)+1:bnd(ish+1)))%bfac) / real(bnd(ish+1) - bnd(ish)) / (8. * PI**2))
+                    if( pred_snr(mu(kc), rms2) < LOW_SNR ) nlow = nlow + 1
+                enddo
+            enddo
+            call write_kv(funit, 'low_snr_shells', int2str(nlow))
+            if( l_halves )then
+                call write_kv(funit, 'halfmap_label_agreement', rstr(half_agree))
+                call write_kv(funit, 'halfmap_intensity_corr', rstr(half_corr))
+            endif
+            call fclose(funit)
+        end subroutine write_species_report
+
+        subroutine write_kv( funit, key, val )
+            integer,          intent(in) :: funit
+            character(len=*), intent(in) :: key, val
+            write(funit,'(A,T34,A)') key, '= '//trim(val)
+        end subroutine write_kv
+
+        function rstr( v ) result( str )
+            real, intent(in) :: v
+            character(len=16) :: str
+            write(str,'(ES16.8)') v
+            str = adjustl(str)
+        end function rstr
+
+    end subroutine discover_species
 
     subroutine fillin_atominfo( self, a0, imat )
         class(nanoparticle),        intent(inout) :: self
@@ -1172,6 +2158,7 @@ contains
         real                 :: tmp_diam, a(3)
         integer              :: i, cc, cn, max_size
         character(len=*), parameter :: fn_fit_isotropic="fit_isotropic.mrc", fn_fit_anisotropic="fit_anisotropic.mrc"
+        if( self%l_species_free ) THROW_HARD('fillin_atominfo needs an element')
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         write(logfhandle, '(A)') '---Dev Note: ADP and Max Neighboring Displacements Under Testing---'
         ! calc cn and cn_gen
@@ -1784,6 +2771,8 @@ contains
                 else
                     call atms_ptr%set_beta(atms_obj_ind, self%atominfo(ainfo_ind)%cn_gen) ! use generalised coordination number
                 endif
+                ! a pseudo-atom is rendered at the template width
+                if( self%l_species_free ) call atms_ptr%set_beta(atms_obj_ind, B_REF_PSEUDO)
             end subroutine set_atom
 
     end subroutine simulate_atoms
@@ -2169,6 +3158,15 @@ contains
         call self%img_bin%kill_bimg()
         call self%img_cc%kill_bimg()
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
+        if( allocated(self%recovered) ) deallocate(self%recovered)
+        self%l_species_free     = .false.
+        self%d_nn               = 0.
+        self%l_discover_species = .false.
+        self%min_nbrs           = 3
+        self%nspecies           = 0
+        self%msk_rad            = 0.
+        call self%vol_even%kill
+        call self%vol_odd%kill
     end subroutine kill
 
 end module simple_nanoparticle

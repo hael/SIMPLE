@@ -109,6 +109,7 @@ use simple_xd_gmm_tester,                    only: run_all_xd_gmm_tests
 use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
+use simple_nano_species_tester,              only: run_all_nano_species_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
@@ -442,13 +443,15 @@ contains
         call add_suite(s, n, 'pose 1JYX recovery', run_all_strategy3D_cont_1jyx_tests)
     end subroutine suites_lib_cart_align3D
 
-    !> SINGLE (nanoparticles, atomic models): the atoms module and the C-alpha candidate search
+    !> SINGLE (nanoparticles, atomic models): the atoms module, the C-alpha candidate search and the
+    !! species-discovery numerics
     subroutine suites_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'atoms',          run_all_atoms_tests)
         call add_suite(s, n, 'cif2mrc',        run_all_cif2mrc_tests)
         call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
+        call add_suite(s, n, 'species',        run_all_nano_species_tests)
     end subroutine suites_single
 
     !> nightly pdb2mrc coverage of the built-in 6VXX and 1JYX models

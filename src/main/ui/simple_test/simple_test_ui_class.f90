@@ -243,11 +243,11 @@ contains
         call unit_single%new(&
         &'unit_single',&
         &'unit tests: SINGLE (nanoparticles, atomic models)',&
-        &'is the fast-gate unit suite for SINGLE: the atoms module and the C-alpha candidate search on a synthetic three-residue map',&
+        &'is the fast-gate unit suite for SINGLE: the atoms module, the C-alpha candidate search on a synthetic three-residue map and the species-discovery numerics',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: SINGLE')
         call unit_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (atoms, cif2mrc, c_alpha_finder)', '', .false., '')
+            &'One sub-suite of this area to run alone (atoms, cif2mrc, c_alpha_finder, species)', '', .false., '')
         call add_ui_program('unit_single', unit_single, tsttab, UI_CATEGORY)
     end subroutine new_unit_single
 

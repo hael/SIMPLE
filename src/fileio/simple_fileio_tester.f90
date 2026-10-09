@@ -30,6 +30,7 @@ contains
         call test_read_write_filetable()
         call test_write_singlelineoftext_and_read_exit_code()
         call test_simple_copy_file()
+        call test_files_identical()
         ! --- NEW: OS / syslib-related tests ---
         call test_simple_mkdir_dir_exists_chdir_getcwd_rmdir()
         call test_simple_touch_rename_abspath()
@@ -431,6 +432,49 @@ contains
         call src%kill
         call dst%kill
     end subroutine test_simple_copy_file
+
+    subroutine test_files_identical()
+        type(string) :: f1, f2, f3, f4, missing
+        write(*,'(A)') 'test_files_identical'
+        f1      = string('tmp_ident_1.dat')
+        f2      = string('tmp_ident_2.dat')
+        f3      = string('tmp_ident_3.dat')
+        f4      = string('tmp_ident_4.dat')
+        missing = string('tmp_ident_missing.dat')
+        ! f1: a few bytes; f2: a copy; f3: same size, one byte differs; f4: one byte longer
+        call write_bytes(f1, 'identical?')
+        call simple_copy_file(f1, f2)
+        call write_bytes(f3, 'identical!')
+        call write_bytes(f4, 'identical?!')
+        call assert_true(files_identical(f1, f2),            'files_identical: a copy is identical')
+        call assert_true(files_identical(f1, f1),            'files_identical: a file is identical to itself')
+        call assert_true(.not. files_identical(f1, f3),      'files_identical: one byte differs')
+        call assert_true(.not. files_identical(f1, f4),      'files_identical: sizes differ')
+        call assert_true(.not. files_identical(f1, missing), 'files_identical: missing second file')
+        call assert_true(.not. files_identical(missing, f1), 'files_identical: missing first file')
+        call del_file(f1)
+        call del_file(f2)
+        call del_file(f3)
+        call del_file(f4)
+        call f1%kill
+        call f2%kill
+        call f3%kill
+        call f4%kill
+        call missing%kill
+
+        contains
+
+            subroutine write_bytes( fname, bytes )
+                type(string),     intent(in) :: fname
+                character(len=*), intent(in) :: bytes
+                integer :: funit, ios
+                open(newunit=funit, file=fname%to_char(), status='replace', action='write', access='stream', form='unformatted', iostat=ios)
+                call assert_int(0, ios, 'files_identical: open '//fname%to_char())
+                write(funit) bytes
+                close(funit)
+            end subroutine write_bytes
+
+    end subroutine test_files_identical
 
     subroutine test_simple_mkdir_dir_exists_chdir_getcwd_rmdir()
         type(string) :: testdir, cwd_before, cwd_after

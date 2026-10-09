@@ -66,12 +66,14 @@ contains
         self%exists = .true.
     end subroutine new
 
-    !>  \brief  start: equal-mass quantile means along the axis of largest observed variance, every Sigma_k the
-    !!          observed covariance minus the mean noise (PSD-clipped), uniform mixing proportions
-    subroutine init( self, X, Nz )
-        class(xd_gmm), intent(inout) :: self
-        real(dp),      intent(in)    :: X(:,:)     !< (n,d) observations
-        real(dp),      intent(in)    :: Nz(:,:,:)  !< (d,d,n) noise covariances
+    !>  \brief  start: equal-mass quantile means along the axis of largest observed variance (or the means the
+    !!          caller supplies), every Sigma_k the observed covariance minus the mean noise (PSD-clipped),
+    !!          uniform mixing proportions
+    subroutine init( self, X, Nz, means0 )
+        class(xd_gmm),      intent(inout) :: self
+        real(dp),           intent(in)    :: X(:,:)      !< (n,d) observations
+        real(dp),           intent(in)    :: Nz(:,:,:)   !< (d,d,n) noise covariances
+        real(dp), optional, intent(in)    :: means0(:,:) !< (d,k) initial means
         real(dp) :: cobs(self%d,self%d), xmean(self%d), S(self%d,self%d), Nbar(self%d,self%d), ridge
         integer  :: n, i, q, r, jbest
         n = size(X,1)
@@ -85,8 +87,13 @@ contains
                 cobs(q,r) = sum((X(:,q)-xmean(q))*(X(:,r)-xmean(r)))/real(n,dp)
             end do
         end do
-        jbest = maxloc([(cobs(q,q), q=1,self%d)], dim=1)
-        call equal_mass_quantile_start(X, X(:,jbest), self%k, self%mu)
+        if( present(means0) )then
+            if( size(means0,1) /= self%d .or. size(means0,2) /= self%k ) THROW_HARD('means0 must be (d,k); init')
+            self%mu = means0
+        else
+            jbest = maxloc([(cobs(q,q), q=1,self%d)], dim=1)
+            call equal_mass_quantile_start(X, X(:,jbest), self%k, self%mu)
+        endif
         Nbar = 0._dp
         do i = 1, n
             Nbar = Nbar + Nz(:,:,i)

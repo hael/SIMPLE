@@ -16,7 +16,7 @@ use simple_estimate_ssnr,   only: fsc2optlp, fsc2optlp_sub, gaussian_filter, get
                                  &lpstages, lpstages_fast, lpstages_setlims, mskdiam2streamresthreshold,calc_dose_weights, fsc2cref,&
                                  &bfac_cap_filter
 use simple_fileio,          only: add2fbody, append2basename, arr2file, arr2txtfile, basename, del_file, del_files, fclose, file2drarr, file2rarr,&
-                                 &file2rmat, file_exists, fileiochk, filepath, fname2ext, fname2format, fname_new_ext, fopen, get_fbody, get_fpath,&
+                                 &file2rmat, file_exists, fileiochk, filepath, files_identical, fname2ext, fname2format, fname_new_ext, fopen, get_fbody, get_fpath,&
                                  &move_files2dir, nlines, read_filetable, rmat2file, simple_abspath, simple_chdir, simple_chmod, simple_copy_file,&
                                  &simple_getenv, simple_list_dirs, simple_list_files, simple_list_files_regexp, simple_rename, stemname, swap_suffix,&
                                  &wait_for_closure, simple_touch, simple_rmdir, simple_getcwd, write_filetable, write_singlelineoftext, move_files_in_cwd,&

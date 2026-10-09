@@ -1,4 +1,4 @@
-!@descr: SINGLE test commanders: the nanoparticle atoms pipeline and the SINGLE workflow
+!@descr: SINGLE test commanders: the nanoparticle atoms pipeline, species discovery and the SINGLE workflow
 module simple_commanders_test_single
 use simple_commanders_api
 #include "simple_local_flags.inc"
@@ -7,6 +7,11 @@ type, extends(commander_base) :: commander_test_single_atoms_stats
   contains
     procedure :: execute      => exec_test_single_atoms_stats
 end type commander_test_single_atoms_stats
+
+type, extends(commander_base) :: commander_test_species_discovery
+  contains
+    procedure :: execute      => exec_test_species_discovery
+end type commander_test_species_discovery
 
 type, extends(commander_base) :: commander_test_single_workflow
   contains
@@ -368,6 +373,432 @@ subroutine exec_test_single_atoms_stats( self, cline )
         if( actual_lines /= expected_lines ) call fail(filename//' has an incorrect row count')
     end subroutine check_line_count
 end subroutine exec_test_single_atoms_stats
+
+subroutine exec_test_species_discovery( self, cline )
+    use simple_commanders_atoms, only: commander_detect_atoms
+    use simple_commanders_sim,   only: commander_simulate_nanoparticle
+    use simple_atoms,            only: atoms
+    use simple_test_utils,       only: set_fixed_seed
+    use simple_rnd,              only: gasdev, ran3
+    class(commander_test_species_discovery), intent(inout) :: self
+    class(cmdline),                                 intent(inout) :: cline
+    ! floors of section 10.4 of doc/implementation_notes/planned/species_discovery.md, set before the first run
+    real,    parameter :: MIN_WEAK_RECALL  = 0.90   ! weak class, over its atoms of predicted SNR >= SNR_RECALL
+    real,    parameter :: SNR_RECALL       = 6.5
+    integer, parameter :: MAX_FALSE        = 1      ! false atoms per particle
+    real,    parameter :: RATIO_TOL        = 0.10   ! class intensity ratio, relative
+    real,    parameter :: WIDTH_TOL_STRONG = 0.03   ! per-shell width of the strongest class, relative
+    real,    parameter :: WIDTH_TOL_LIGHT  = 0.10   ! per-shell width of the light class, relative
+    real,    parameter :: MATCH_NN_FRAC    = 0.3    ! found atom matches a generating atom within this many d_NN
+    real,    parameter :: SIGMA_REF        = 0.4196 ! A, width of the detection template (B 13.9 A**2)
+    ! generating models of section 8 on the Pt lattice of single_atoms_stats
+    real,    parameter :: SMPD_FIX      = 0.358
+    real,    parameter :: SIGMA_CORE    = 0.35      ! A, strongest class in the core
+    real,    parameter :: SIGMA_SCATTER = 0.05      ! relative per-atom scatter of sigma
+    real,    parameter :: Q_LIGHT       = 1. / 6.   ! intensity of the light class
+    real,    parameter :: LIGHT_FRAC    = 0.25
+    real,    parameter :: RADIAL_VAR    = 2.        ! radial cases: variance at the surface over the centre
+    real,    parameter :: LIGHT_VAR_R6  = 1.3       ! R6: light over heavy variance at every radius
+    integer, parameter :: NSHELL_MAX    = 5
+    integer, parameter :: NSHELL_ATOMS  = 20
+    integer, parameter :: NCASES        = 4
+    character(len=5), parameter :: CASES(NCASES)       = ['case2', 'case9', 'R3   ', 'R6   ']
+    real,             parameter :: NOISE(NCASES)       = [0.03, 0.05, 0.05, 0.03] ! sdev over the peak of a core atom
+    logical,          parameter :: TWO_SPECIES(NCASES) = [.true., .false., .false., .true.]
+    logical,          parameter :: RADIAL(NCASES)      = [.false., .false., .true., .true.]
+    character(len=*), parameter :: PRODUCTS(5) = [character(len=12) :: 'map_ATMS.pdb', 'map_BIN.mrc', 'map_CC.mrc',&
+        &'map_MSK.mrc', 'map_SIM.mrc']
+    character(len=*), parameter :: RUNS(3) = [character(len=6) :: 'plain', 'disc', 'halves']
+    type(commander_simulate_nanoparticle) :: xsim
+    type(commander_detect_atoms)          :: xdet
+    type(cmdline)                         :: cline_sim, cline_det
+    type(atoms)                           :: lattice, model
+    type(string)                          :: cwd_saved, fixture_root, case_dir
+    real,    allocatable :: lat(:,:), gxyz(:,:), gsig(:), gq(:)
+    integer, allocatable :: gcls(:)
+    real    :: dnn_gen, cen(3), rmax
+    integer :: status, nthr, nlat, icase, irun, i
+    logical :: all_ok
+    write(logfhandle,'(a)') '>>> TEST_SPECIES_DISCOVERY:'
+    call set_fixed_seed(20261008)
+    nthr = 8
+    if( cline%defined('nthr') ) nthr = cline%get_iarg('nthr')
+    all_ok = .true.
+    call simple_getcwd(cwd_saved)
+    fixture_root = filepath(cwd_saved, 'test_species_discovery_'//int2str(get_process_id()))
+    if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
+    call simple_mkdir(fixture_root)
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_SPECIES_DISCOVERY FAILED: could not enter fixture directory')
+    ! the Pt lattice of phase 0: positions only
+    call cline_sim%set('prg',     'simulate_nanoparticle')
+    call cline_sim%set('element', 'Pt')
+    call cline_sim%set('moldiam', real(MOLDIAM))
+    call cline_sim%set('box',     BOX)
+    call cline_sim%set('smpd',    SMPD_FIX)
+    call cline_sim%set('nthr',    nthr)
+    call cline_sim%set('outvol',  'lattice.mrc')
+    call cline_sim%set('pdbout',  'lattice.pdb')
+    call xsim%execute(cline_sim)
+    call cline_sim%kill
+    call del_file('lattice.mrc')
+    call lattice%new(string('lattice.pdb'))
+    nlat = lattice%get_n()
+    allocate(lat(3,nlat))
+    do i = 1,nlat
+        lat(:,i) = lattice%get_coord(i)
+    enddo
+    call lattice%kill
+    dnn_gen = median_nn(lat)
+    cen     = sum(lat, dim=2) / real(nlat)
+    rmax    = maxval(sqrt(sum((lat - spread(cen, 2, nlat))**2, dim=1)))
+    write(logfhandle,'(a,i0,a,f7.4,a,f7.3,a)') '    lattice: ', nlat, ' atoms, d_NN ', dnn_gen, ' A, radius ', rmax, ' A'
+    do icase = 1,NCASES
+        case_dir = filepath(fixture_root, trim(CASES(icase)))
+        call simple_mkdir(case_dir)
+        call simple_chdir(case_dir, status)
+        if( status /= 0 ) THROW_HARD('TEST_SPECIES_DISCOVERY FAILED: could not enter a case directory')
+        write(logfhandle,'(a)') '>>> CASE '//trim(CASES(icase))
+        call make_fixture(icase)
+        do irun = 1,3
+            call run_detect(irun)
+        enddo
+        call compare_products
+        call evaluate(2)
+        call evaluate(3)
+        deallocate(gcls, gxyz, gsig, gq)
+        call simple_chdir(fixture_root, status)
+    enddo
+    call simple_chdir(cwd_saved, status)
+    if( status /= 0 ) THROW_HARD('TEST_SPECIES_DISCOVERY FAILED: could not restore original directory')
+    if( all_ok )then
+        write(logfhandle,'(a)') 'PASS: species_discovery'
+        call simple_end('**** SIMPLE_TEST_SPECIES_DISCOVERY NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_SPECIES_DISCOVERY FAILED')
+    endif
+
+  contains
+
+    subroutine fail( message )
+        character(len=*), intent(in) :: message
+        write(logfhandle,'(a)') '    FAIL: '//trim(message)
+        all_ok = .false.
+    end subroutine fail
+
+    ! median nearest-neighbour distance, the upper middle value for an even count
+    real function median_nn( xyz )
+        real, intent(in) :: xyz(:,:)
+        real    :: nn(size(xyz,2))
+        integer :: j, l
+        nn = huge(1.)
+        do j = 1,size(xyz,2)
+            do l = 1,size(xyz,2)
+                if( l /= j ) nn(j) = min(nn(j), norm2(xyz(:,j) - xyz(:,l)))
+            enddo
+        enddo
+        call hpsort(nn)
+        median_nn = nn(size(nn) / 2 + 1)
+    end function median_nn
+
+    ! pseudo-atom model of the case on the lattice, rendered, with noise; half maps whose average is the map
+    subroutine make_fixture( ic )
+        integer, intent(in) :: ic
+        type(image)       :: clean, nimg, even, odd
+        real, allocatable :: keys(:)
+        integer, allocatable :: order(:)
+        real    :: sig, r, bpeak, sdev_noise
+        integer :: j, nlight
+        allocate(gcls(nlat), source=1)
+        if( TWO_SPECIES(ic) )then
+            ! a random quarter of the atoms is light
+            allocate(keys(nlat))
+            do j = 1,nlat
+                keys(j) = ran3()
+            enddo
+            order = [(j, j=1,nlat)]
+            call hpsort(keys, order)
+            nlight = nint(LIGHT_FRAC * real(nlat))
+            gcls(order(:nlight)) = 2
+        endif
+        call model%new(nlat, dummy=.true.)
+        do j = 1,nlat
+            sig = SIGMA_CORE * (1. + SIGMA_SCATTER * gasdev(0., 1.))
+            if( RADIAL(ic) )then
+                r   = norm2(lat(:,j) - cen)
+                sig = sig * sqrt(1. + (RADIAL_VAR - 1.) * (r / rmax)**2)
+            endif
+            if( trim(CASES(ic)) == 'R6' .and. gcls(j) == 2 ) sig = sig * sqrt(LIGHT_VAR_R6)
+            if( gcls(j) == 1 )then
+                call model%set_element(j, 'X1')
+                call model%set_occupancy(j, 1.)
+            else
+                call model%set_element(j, 'X2')
+                call model%set_occupancy(j, Q_LIGHT)
+            endif
+            call model%set_coord(j, lat(:,j))
+            call model%set_beta(j, 8. * PI**2 * sig**2)
+            call model%set_num(j, j)
+            call model%set_resnum(j, j)
+        enddo
+        call model%writepdb(string('model.pdb'))
+        call model%kill
+        ! the generating model as written: two decimals of occupancy and B
+        call model%new(string('model.pdb'))
+        allocate(gxyz(3,nlat), gsig(nlat), gq(nlat))
+        do j = 1,nlat
+            gxyz(:,j) = model%get_coord(j)
+            gq(j)     = model%get_occupancy(j)
+            gsig(j)   = sqrt(model%get_beta(j) / (8. * PI**2))
+        enddo
+        call model%kill
+        call cline_sim%set('prg',     'simulate_nanoparticle')
+        call cline_sim%set('pdbfile', 'model.pdb')
+        call cline_sim%set('box',     BOX)
+        call cline_sim%set('smpd',    SMPD_FIX)
+        call cline_sim%set('nthr',    nthr)
+        call cline_sim%set('outvol',  'clean.mrc')
+        call cline_sim%set('pdbout',  'model_out.pdb')
+        call xsim%execute(cline_sim)
+        call cline_sim%kill
+        ! noise relative to the peak of a core atom of the strongest class
+        bpeak      = 8. * PI**2 * SIGMA_CORE**2
+        sdev_noise = NOISE(ic) * (4. * PI / bpeak)**1.5
+        write(logfhandle,'(a,i0,a,i0,a,es12.4)') '    model: ', count(gcls == 1), ' strong, ', count(gcls == 2),&
+            &' light atoms; noise sdev ', sdev_noise
+        call clean%new([BOX,BOX,BOX], SMPD_FIX)
+        call clean%read(string('clean.mrc'))
+        call nimg%new([BOX,BOX,BOX], SMPD_FIX)
+        call even%copy(clean)
+        call nimg%gauran(0., sqrt(2.) * sdev_noise)
+        call even%add(nimg)
+        call odd%copy(clean)
+        call nimg%gauran(0., sqrt(2.) * sdev_noise)
+        call odd%add(nimg)
+        call even%write(string('even.mrc'))
+        call odd%write(string('odd.mrc'))
+        call even%add(odd)
+        call even%div(2.)
+        call even%write(string('map.mrc'))
+        call clean%kill
+        call nimg%kill
+        call even%kill
+        call odd%kill
+        call del_file('clean.mrc')
+    end subroutine make_fixture
+
+    ! detect_atoms without element in a directory of its own: plain, with discovery, with discovery and half maps.
+    ! Full threads: the product comparison between the three runs also checks that detection is thread-invariant.
+    subroutine run_detect( ir )
+        integer, intent(in) :: ir
+        integer :: st
+        call simple_mkdir(trim(RUNS(ir)))
+        call simple_chdir(trim(RUNS(ir)), st)
+        call cline_det%set('prg',  'detect_atoms')
+        call cline_det%set('vol1', filepath(case_dir, 'map.mrc'))
+        call cline_det%set('smpd', SMPD_FIX)
+        call cline_det%set('nthr', nthr)
+        if( ir >= 2 ) call cline_det%set('discover_species', 'yes')
+        if( ir == 3 )then
+            call cline_det%set('vol_even', filepath(case_dir, 'even.mrc'))
+            call cline_det%set('vol_odd',  filepath(case_dir, 'odd.mrc'))
+        endif
+        call xdet%execute(cline_det)
+        call cline_det%kill
+        call simple_chdir(case_dir, st)
+    end subroutine run_detect
+
+    ! the present products do not depend on discover_species
+    subroutine compare_products
+        integer :: ip, ir
+        do ir = 2,3
+            do ip = 1,size(PRODUCTS)
+                if( .not. files_identical(string(trim(RUNS(1))//'/'//trim(PRODUCTS(ip))), string(trim(RUNS(ir))//'/'//trim(PRODUCTS(ip)))) )then
+                    call fail(trim(CASES(icase))//': '//trim(PRODUCTS(ip))//' differs with '//trim(RUNS(ir)))
+                endif
+            enddo
+        enddo
+        write(logfhandle,'(a)') '    present products compared with and without discover_species'
+    end subroutine compare_products
+
+    ! value of key in the key = value report
+    real function report_value( fname, key )
+        character(len=*), intent(in) :: fname, key
+        character(len=256) :: line
+        integer :: u, ios, ieq
+        report_value = -huge(1.)
+        open(newunit=u, file=fname, status='old', action='read', iostat=ios)
+        if( ios /= 0 ) return
+        do
+            read(u,'(a)',iostat=ios) line
+            if( ios /= 0 ) exit
+            ieq = index(line, '=')
+            if( ieq < 2 ) cycle
+            if( trim(adjustl(line(:ieq-1))) /= key ) cycle
+            read(line(ieq+1:),*,iostat=ios) report_value
+            exit
+        enddo
+        close(u)
+    end function report_value
+
+    ! text value of key in the key = value report
+    function report_string( fname, key ) result( val )
+        character(len=*), intent(in) :: fname, key
+        character(len=:), allocatable :: val
+        character(len=256) :: line
+        integer :: u, ios, ieq
+        val = ''
+        open(newunit=u, file=fname, status='old', action='read', iostat=ios)
+        if( ios /= 0 ) return
+        do
+            read(u,'(a)',iostat=ios) line
+            if( ios /= 0 ) exit
+            ieq = index(line, '=')
+            if( ieq < 2 ) cycle
+            if( trim(adjustl(line(:ieq-1))) /= key ) cycle
+            val = trim(adjustl(line(ieq+1:)))
+            exit
+        enddo
+        close(u)
+    end function report_string
+
+    ! a discovery run against the generating model
+    subroutine evaluate( ir )
+        integer, intent(in) :: ir
+        integer, parameter :: NCOL = 21
+        character(len=512) :: line
+        character(len=:), allocatable :: tag, csv, txt, pdb
+        real,    allocatable :: rows(:,:), dist(:), sig_fit(:), sig_gen(:), rad(:)
+        integer, allocatable :: match(:), hits(:), order(:), sel(:)
+        type(atoms) :: species_atms
+        real    :: tol, s_a, ratio, ratio_gen, snr, recall, rms_fit, rms_gen, rel
+        integer :: u, ios, nrow, j, l, nfalse, nwrong, nrec, k_found, nweak, nweak_found, kc, nsh, ish, m, lo, hi
+        tag = trim(CASES(icase))//'/'//trim(RUNS(ir))
+        csv = trim(RUNS(ir))//'/map_species.csv'
+        txt = trim(RUNS(ir))//'/map_species.txt'
+        if( .not. file_exists(csv) .or. .not. file_exists(txt) )then
+            call fail(tag//': species files were not written')
+            return
+        endif
+        nrow = nlines(string(csv)) - 1
+        allocate(rows(NCOL,nrow))
+        open(newunit=u, file=csv, status='old', action='read')
+        read(u,'(a)') line
+        do j = 1,nrow
+            read(u,'(a)') line
+            do l = 1,len_trim(line)
+                if( line(l:l) == ',' ) line(l:l) = ' '
+            enddo
+            read(line,*,iostat=ios) rows(:,j)
+            if( ios /= 0 ) call fail(tag//': unreadable species table row')
+        enddo
+        close(u)
+        ! the species PDB carries one atom per table row, with the class in the element column
+        pdb = trim(RUNS(ir))//'/map_species.pdb'
+        if( .not. file_exists(pdb) )then
+            call fail(tag//': species PDB was not written')
+        else
+            call species_atms%new(string(pdb))
+            if( species_atms%get_n() /= nrow )then
+                call fail(tag//': species PDB and table disagree on the atom count')
+            else
+                do j = 1,nrow
+                    if( species_atms%get_element(j) /= 'X'//int2str(nint(rows(16,j))) )then
+                        call fail(tag//': species PDB element column does not match the class of the table')
+                        exit
+                    endif
+                enddo
+            endif
+            call species_atms%kill
+        endif
+        k_found = nint(report_value(txt, 'K'))
+        s_a     = report_value(txt, 's_A')
+        if( ir == 3 .neqv. report_string(txt, 'noise_source') == 'half_maps' )then
+            call fail(tag//': the noise source is not the one given')
+        endif
+        ! match every found atom to its nearest generating atom
+        tol = MATCH_NN_FRAC * dnn_gen
+        allocate(match(nrow), hits(nlat), source=0)
+        allocate(dist(nrow), source=0.)
+        do j = 1,nrow
+            match(j) = minloc(sum((gxyz - spread(rows(3:5,j), 2, nlat))**2, dim=1), dim=1)
+            dist(j)  = norm2(gxyz(:,match(j)) - rows(3:5,j))
+            if( dist(j) > tol )then
+                match(j) = 0
+            else
+                hits(match(j)) = hits(match(j)) + 1
+            endif
+        enddo
+        ! unmatched atoms and second atoms on one site are false
+        nfalse = count(match == 0) + sum(max(hits - 1, 0))
+        nrec   = count(nint(rows(2,:)) == 1)
+        write(logfhandle,'(3a,i0,a,i0,a,i0,a,i0,a,es11.4)') '    ', tag, ': found ', nrow, ' (recovered ', nrec,&
+            &'), K = ', k_found, ', false ', nfalse, ', s_A ', s_a
+        if( nfalse > MAX_FALSE ) call fail(tag//': more than one false atom')
+        if( .not. any(gcls == 2) )then
+            if( k_found /= 1 ) call fail(tag//': a single species gave K /= 1')
+            if( nrec /= 0 )    call fail(tag//': a single species gave recovered atoms')
+            return
+        endif
+        if( k_found /= 2 ) call fail(tag//': two species gave K /= 2')
+        ! labels of the found atoms
+        nwrong = 0
+        do j = 1,nrow
+            if( match(j) == 0 ) cycle
+            if( nint(rows(16,j)) /= gcls(match(j)) ) nwrong = nwrong + 1
+        enddo
+        write(logfhandle,'(a,i0)') '        wrong labels: ', nwrong
+        if( nwrong > 0 ) call fail(tag//': a found atom has the wrong label')
+        ! recall of the weak class where its predicted signal-to-noise is SNR_RECALL or more
+        nweak       = 0
+        nweak_found = 0
+        do j = 1,nlat
+            if( gcls(j) /= 2 ) cycle
+            ! section 7: the amplitude over s_A, scaled from the template width as (sigma / sigma_ref)**1.5
+            snr = gq(j) / (2. * PI * gsig(j)**2)**1.5 * (gsig(j) / SIGMA_REF)**1.5 / s_a
+            if( snr < SNR_RECALL ) cycle
+            nweak = nweak + 1
+            if( hits(j) > 0 ) nweak_found = nweak_found + 1
+        enddo
+        recall = real(nweak_found) / real(max(nweak, 1))
+        write(logfhandle,'(a,i0,a,i0,a,f7.4,a,i0)') '        weak recall at predicted SNR >= 6.5: ', nweak_found, ' of ', nweak,&
+            &' = ', recall, '; weak atoms in total ', count(gcls == 2)
+        if( nweak == 0 ) call fail(tag//': no weak atom reaches the predicted SNR of the recall floor')
+        if( recall < MIN_WEAK_RECALL ) call fail(tag//': weak-class recall below 0.90')
+        ! intensity ratio
+        if( k_found == 2 )then
+            ratio     = report_value(txt, 'class_ratio_2')
+            ratio_gen = sum(gq, mask=gcls == 2) / real(count(gcls == 2)) / (sum(gq, mask=gcls == 1) / real(count(gcls == 1)))
+            write(logfhandle,'(a,f8.4,a,f8.4)') '        intensity ratio ', ratio, ', generating ', ratio_gen
+            if( abs(ratio / ratio_gen - 1.) > RATIO_TOL ) call fail(tag//': intensity ratio off by more than 10%')
+        endif
+        ! per-shell widths of the right-labelled found atoms against their generating widths
+        do kc = 1,2
+            sel = pack([(j, j=1,nrow)], match > 0)
+            sel = pack(sel, nint(rows(16,sel)) == kc .and. gcls(match(sel)) == kc)
+            m   = size(sel)
+            if( m == 0 ) cycle
+            rad   = rows(6,sel)
+            order = [(j, j=1,m)]
+            call hpsort(rad, order)
+            sig_fit = sqrt(rows(13,sel(order)) / (8. * PI**2))
+            sig_gen = gsig(match(sel(order)))
+            nsh = max(1, min(NSHELL_MAX, m / NSHELL_ATOMS))
+            do ish = 1,nsh
+                lo = ((ish-1) * m) / nsh + 1
+                hi = (ish * m) / nsh
+                rms_fit = sqrt(sum(sig_fit(lo:hi)**2) / real(hi - lo + 1))
+                rms_gen = sqrt(sum(sig_gen(lo:hi)**2) / real(hi - lo + 1))
+                rel     = rms_fit / rms_gen - 1.
+                write(logfhandle,'(a,i0,a,i0,a,i0,a,f7.4,a,f7.4,a,f7.4)') '        class ', kc, ' shell ', ish, ' (', hi - lo + 1,&
+                    &' atoms): sigma ', rms_fit, ', generating ', rms_gen, ', relative ', rel
+                if( kc == 1 .and. abs(rel) > WIDTH_TOL_STRONG ) call fail(tag//': strong-class shell width off by more than 3%')
+                if( kc == 2 .and. abs(rel) > WIDTH_TOL_LIGHT )  call fail(tag//': light-class shell width off by more than 10%')
+            enddo
+        enddo
+    end subroutine evaluate
+
+end subroutine exec_test_species_discovery
 
 subroutine exec_test_single_workflow( self, cline )
     use single_commanders_nano2D,       only: commander_analysis2D_nano

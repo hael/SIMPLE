@@ -306,6 +306,11 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=cont_refine3D_1jxy nthr=8)
   simple_add_test(single_atoms_stats highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=Pt)
+  # species discovery of detect_atoms (discover_species=yes) on simulated one- and two-species
+  # pseudo-atom particles, judged against the generating models; its own entry by the plan
+  # doc/implementation_notes/planned/species_discovery.md (section 10.4)
+  simple_add_test(species_discovery highlevel 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=species_discovery nthr=8)
   # stream preprocessing: five simulated movies through the stream's
   # preprocessing stage, which submits its jobs to the local queue; the other
   # stream stage tests moved to lib_stream, unit_project and forked_process,
@@ -353,7 +358,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 34)   # 15 fast + 1 platform + 13 highlevel + 5 library
+  set(SIMPLE_CTEST_BUDGET 35)   # 15 fast + 1 platform + 14 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

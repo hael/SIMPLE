@@ -215,6 +215,12 @@ subroutine new_atoms_register( prgtab )
         call detect_atoms%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '', &
         &visibility=UI_VIS_STANDARD)
+        call detect_atoms%add_input(UI_IMG, 'vol_even', 'file', 'Even half map', &
+        &'Even half map, the noise reference of discover_species=yes together with vol_odd', 'vol_even.mrc file', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
+        call detect_atoms%add_input(UI_IMG, 'vol_odd', 'file', 'Odd half map', &
+        &'Odd half map, the noise reference of discover_species=yes together with vol_even', 'vol_odd.mrc file', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         call detect_atoms%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
@@ -223,8 +229,18 @@ subroutine new_atoms_register( prgtab )
         ! search controls
         ! <empty>
         ! filter controls
-        call detect_atoms%add_input(UI_FILT, element, &
+        call detect_atoms%add_input(UI_FILT, element, required_override=.false., &
         &visibility=UI_VIS_STANDARD)
+        ! experimental species discovery, diagnostic files only
+        call detect_atoms%add_input(UI_PARM, 'discover_species', 'binary', 'Discover species', &
+        &'Recover weak atoms from the residual map and call the species; writes diagnostic files only(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call detect_atoms%add_input(UI_PARM, 'nspecies', 'num', 'Number of species', &
+        &'Number of species (intensity classes) for discover_species=yes, 0 = from the data{0}', '# species', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call detect_atoms%add_input(UI_PARM, 'min_nbrs', 'num', 'Neighbours a recovered atom needs', &
+        &'Already found atoms within 1.15 nearest-neighbour distances that a weak atom recovered at the second residual stage of discover_species=yes needs, 0 = no requirement{3}', '# neighbours', .false., 3., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call detect_atoms%add_input(UI_MASK, mskdiam, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)

@@ -2,6 +2,11 @@
 module simple_defs_atoms
 implicit none
 
+! Pseudo-atoms X1..X3: Gaussian intensity classes, not elements; atoms%convolve renders them from
+! occupancy (integrated intensity) and beta (B factor). Their Z are sentinels, clear of CDSE's 999.
+integer, parameter :: Z_PSEUDO_FIRST = 901
+integer, parameter :: Z_PSEUDO_LAST  = 903
+
 contains
 
     ! single covalent radii from Cordero, et al., 2008, "Covalent radii revisited"
@@ -216,6 +221,12 @@ contains
                 Z = 96; r = 1.69
             case('CDSE')
                 Z = 999; r = 1.5 ! not an element, but used for wurtzite CdSe
+            case('X1')
+                Z = Z_PSEUDO_FIRST    ; r = 1.0
+            case('X2')
+                Z = Z_PSEUDO_FIRST + 1; r = 1.0
+            case('X3')
+                Z = Z_PSEUDO_LAST     ; r = 1.0
         end select
     end subroutine get_element_Z_and_radius
 

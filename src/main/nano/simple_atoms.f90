@@ -63,6 +63,7 @@ type :: atoms
     procedure          :: get_n
     procedure          :: get_name
     procedure          :: get_nres
+    procedure          :: get_occupancy
     procedure          :: get_radius
     procedure          :: get_resnum
     procedure          :: set_atom_corr
@@ -660,6 +661,13 @@ contains
         get_n = self%n
     end function get_n
     
+    real function get_occupancy( self, i )
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_occupancy')
+        get_occupancy = self%occupancy(i)
+    end function get_occupancy
+
     integer function get_nres( self )
         class(atoms), intent(in) :: self
         get_nres = maxval( self%resnum(:) )
@@ -914,6 +922,8 @@ contains
     ! simulate electrostatic potential from elastic scattering
     ! Using 5-gaussian atomic scattering factors from Rullgard et al, J of Microscopy, 2011
     ! and parametrization from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
+    ! A pseudo-atom (X1..X3) is q (4 pi / B)**1.5 exp(-4 pi**2 r**2 / B), q = occupancy, B = beta:
+    ! unit q integrates to one; lp does not blur it, its width is B
     subroutine convolve( self, vol, cutoff, lp )
         use simple_image, only: image
         class(atoms),   intent(in)    :: self
@@ -922,10 +932,10 @@ contains
         real, optional, intent(in)    :: lp
         real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
         real, parameter   :: fourpisq = 4.*PI*PI
-        real,    allocatable :: rmat(:,:,:), atom_aterm(:,:), atom_b(:,:), atom_xyz(:,:)
+        real,    allocatable :: rmat(:,:,:), atom_aterm(:,:), atom_b(:,:), atom_xyz(:,:), atom_scale(:)
         integer, allocatable :: atom_bbox(:,:,:)
         logical, allocatable :: atom_valid(:)
-        real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, D, E
+        real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, scale
         integer :: bbox(3,2), ldim(3), pos(3), i, j, k, l, jj, kk, z, icutoff
         if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
         smpd     = vol%get_smpd()
@@ -933,16 +943,16 @@ contains
         lp_here  = 2.*smpd
         if( present(lp) ) lp_here = max(lp,lp_here)
         bfac     = (4.*lp_here)**2.
-        D        = sqrt(TWOPI) * 0.425 * lp_here
-        E        = 0.5 * lp_here*lp_here
         allocate(rmat(ldim(1),ldim(2),ldim(3)), source=0.)
         allocate(atom_aterm(5,self%n), atom_b(5,self%n), atom_xyz(3,self%n), source=0.)
+        allocate(atom_scale(self%n), source=C)
         allocate(atom_bbox(3,2,self%n), source=0)
         allocate(atom_valid(self%n), source=.false.)
         icutoff  = ceiling(cutoff/smpd)
         cutoffsq = cutoff*cutoff
         do i = 1,self%n
             z = self%Z(i)
+            scale = C
             select case(z)
             case(1) ! H
                 a = [0.0349, 0.1201, 0.1970, 0.0573, 0.1195]
@@ -1232,10 +1242,17 @@ contains
             case(96) ! CM
                 a = [1.2937, 3.1100, 5.0393, 4.7546, 3.5031]
                 b = [0.2638, 2.0341, 8.7101, 35.2992, 109.4972]
+            case(Z_PSEUDO_FIRST:Z_PSEUDO_LAST)
+                if( self%beta(i) <= 0. ) THROW_HARD('pseudo-atom needs a positive B factor; convolve')
+                a     = 0.
+                b     = 1.
+                a(1)  = self%occupancy(i) * (4.*PI)**1.5
+                b(1)  = self%beta(i)
+                scale = 1.
             case DEFAULT
                 cycle
             end select
-            b                = b + bfac    ! eq B.6
+            if( z < Z_PSEUDO_FIRST .or. z > Z_PSEUDO_LAST ) b = b + bfac ! eq B.6
             aterm            = a/b**1.5    ! eq B.6
             xyz              = self%xyz(i,:)/smpd
             pos              = floor(xyz)
@@ -1247,12 +1264,13 @@ contains
             bbox(:,2)        = min(bbox(:,2), ldim)
             atom_aterm(:,i)  = aterm
             atom_b(:,i)      = b
+            atom_scale(i)    = scale
             atom_xyz(:,i)    = xyz
             atom_bbox(:,:,i) = bbox
             atom_valid(i)    = .true.
         enddo
         ! Each plane has one writer and accumulates atoms in input order.
-        !$omp parallel do default(shared) private(l,i,aterm,b,xyz,bbox,j,k,r2,rjk2,jj,kk)&
+        !$omp parallel do default(shared) private(l,i,aterm,b,xyz,scale,bbox,j,k,r2,rjk2,jj,kk)&
         !$omp proc_bind(close) schedule(static)
         do l = 1,ldim(3)
             do i = 1,self%n
@@ -1262,6 +1280,7 @@ contains
                 aterm = atom_aterm(:,i)
                 b     = atom_b(:,i)
                 xyz   = atom_xyz(:,i)
+                scale = atom_scale(i)
                 do j = bbox(1,1),bbox(1,2)
                     jj = j-1
                     do k = bbox(2,1),bbox(2,2)
@@ -1270,29 +1289,22 @@ contains
                         if( rjk2 > cutoffsq ) cycle
                         r2          = rjk2 + (smpd*(xyz(3)-real(l-1)))**2.
                         if( r2 > cutoffsq ) cycle
-                        rmat(j,k,l) = rmat(j,k,l) + epot(r2,aterm,b)
+                        rmat(j,k,l) = rmat(j,k,l) + epot(r2,scale,aterm,b)
                     enddo
                 enddo
             enddo
         enddo
         !$omp end parallel do
         call vol%set_rmat(rmat,.false.)
-        deallocate(rmat, atom_aterm, atom_b, atom_xyz, atom_bbox, atom_valid)
+        deallocate(rmat, atom_aterm, atom_b, atom_xyz, atom_scale, atom_bbox, atom_valid)
 
     contains
     
-        ! potential assuming static atoms (eq B.6)
-        real function epot( r2, aterm, b )
-            real, intent(in) :: r2, aterm(5), b(5)
-            epot = C * sum( aterm * exp(-fourpisq*r2/b) )
+        ! potential assuming static atoms (eq B.6); scale is C for an element, 1 for a pseudo-atom
+        real function epot( r2, scale, aterm, b )
+            real, intent(in) :: r2, scale, aterm(5), b(5)
+            epot = scale * sum( aterm * exp(-fourpisq*r2/b) )
         end function epot
-
-        ! single gaussian convolution, unused
-        elemental real function egau( r2, zi )
-            real,    intent(in) :: r2
-            integer, intent(in) :: zi
-            egau = real(zi) / D * exp(-r2*E)
-        end function egau
 
     end subroutine convolve
 

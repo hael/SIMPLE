@@ -407,13 +407,33 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
         type(nanoparticle) :: nano
+        type(string)       :: vol_even, vol_odd
         real               :: a(3) ! lattice parameters
+        logical            :: l_discover, l_halves
+        ! the species-discovery keys need discover_species=yes; the half maps leave the command line
+        ! because parameters does not accept vol1 together with vol_even and vol_odd
+        l_discover = .false.
+        if( cline%defined('discover_species') ) l_discover = cline%get_carg('discover_species') == 'yes'
+        if( .not. l_discover )then
+            if( cline%defined('nspecies') ) THROW_HARD('nspecies needs discover_species=yes')
+            if( cline%defined('min_nbrs') ) THROW_HARD('min_nbrs needs discover_species=yes')
+            if( cline%defined('vol_even') .or. cline%defined('vol_odd') ) THROW_HARD('vol_even and vol_odd need discover_species=yes')
+        endif
+        if( cline%defined('vol_even') .neqv. cline%defined('vol_odd') ) THROW_HARD('give both vol_even and vol_odd or neither')
+        l_halves = cline%defined('vol_even')
+        if( l_halves )then
+            vol_even = cline%get_carg('vol_even')
+            vol_odd  = cline%get_carg('vol_odd')
+            call cline%delete('vol_even')
+            call cline%delete('vol_odd')
+        endif
         call params%new(cline)
         if( cline%defined('mskdiam') )then
             call nano%new(params, params%vols(1), msk=params%msk)
         else
             call nano%new(params, params%vols(1))
         endif
+        if( l_halves ) call nano%set_half_maps(vol_even, vol_odd)
         ! execute
         call nano%identify_atomic_pos(a, l_atom_thres=trim(params%atom_thres).eq.'yes')
         ! kill

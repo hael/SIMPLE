@@ -1120,6 +1120,55 @@ contains
         close(out)
     end subroutine simple_copy_file
 
+    ! byte-for-byte comparison of two files; false when either is missing or unreadable
+    logical function files_identical( fname1, fname2 )
+        class(string), intent(in) :: fname1, fname2 !< input filenames
+        integer(dp),   parameter  :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
+        character(len=1), allocatable :: buf1(:), buf2(:)
+        integer(dp) :: sz1, sz2, bufsz, bytepos, nleft
+        integer     :: in1, in2, ioerr1, ioerr2
+        files_identical = .false.
+        if( .not. file_exists(fname1) ) return
+        if( .not. file_exists(fname2) ) return
+        ! sizes are inquired by name: stream units do not report a size
+        inquire(file=fname1%to_char(), size=sz1)
+        inquire(file=fname2%to_char(), size=sz2)
+        if( sz1 /= sz2 .or. sz1 < 0 ) return
+        if( sz1 == 0 )then
+            files_identical = .true.
+            return
+        endif
+        open(newunit=in1, file=fname1%to_char(), status='old', action='read', access='stream', iostat=ioerr1)
+        if( ioerr1 /= 0 ) return
+        open(newunit=in2, file=fname2%to_char(), status='old', action='read', access='stream', iostat=ioerr2)
+        if( ioerr2 /= 0 )then
+            close(in1)
+            return
+        endif
+        bufsz = min(sz1, MAXBUFSZ)
+        allocate(buf1(bufsz), buf2(bufsz))
+        files_identical = .true.
+        bytepos = 1
+        nleft   = sz1
+        do while( nleft > 0 )
+            bufsz = min(nleft, MAXBUFSZ)
+            read(in1, pos=bytepos, iostat=ioerr1) buf1(:bufsz)
+            read(in2, pos=bytepos, iostat=ioerr2) buf2(:bufsz)
+            if( ioerr1 /= 0 .or. ioerr2 /= 0 )then
+                files_identical = .false.
+                exit
+            endif
+            if( any(buf1(:bufsz) /= buf2(:bufsz)) )then
+                files_identical = .false.
+                exit
+            endif
+            bytepos = bytepos + bufsz
+            nleft   = nleft   - bufsz
+        end do
+        close(in1)
+        close(in2)
+    end function files_identical
+
     function get_relative_path ( path, root, trimlength ) result ( newpath )
         class(string),     intent(in)    :: path, root
         integer, optional, intent(inout) :: trimlength

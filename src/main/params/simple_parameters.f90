@@ -45,6 +45,7 @@ type :: parameters
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: denoise='no'         !< whether to denoise images (yes|no){no}
+    character(len=3)          :: discover_species='no' !< detect_atoms: residual recovery and species call, diagnostics only(yes|no){no}
     character(len=3)          :: doprint='no'
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
@@ -432,6 +433,8 @@ type :: parameters
     integer :: nsample_fine=0      !< # particles to sample in refinement with fractional update, fine search
     integer :: nsnapshots=0        !< # cumulative project snapshots
     integer :: nspace=2500         !< # projection directions
+    integer :: nspecies=0          !< detect_atoms: number of species, 0 = from the data{0}
+    integer :: min_nbrs=3          !< detect_atoms: already found neighbours a recovered atom needs, 0 = no requirement{3}
     integer :: nspace_sub=500      !< # projection directions in subspace
     integer :: nspace_pickrefs=0   !< # reprojections of the stream's picking references (0: the initial analysis' default)
     integer :: nstages=8           !< # low-pass limit stages
@@ -631,6 +634,7 @@ type :: parameters
     logical :: l_ml_reg          = .true.
     logical :: l_noise_reg       = .false.
     logical :: l_neigh           = .false.
+    logical :: l_discover_species = .false.
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
     logical :: l_regpass         = .true.
