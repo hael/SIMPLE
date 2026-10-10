@@ -66,6 +66,8 @@ contains
         if( cline%defined('mkdir') )then
             if( .not. (cline%get_carg('mkdir') == 'yes') ) THROW_HARD('emulate_solve3D_stream needs mkdir=yes: its steps live in its execution directory')
         endif
+        ! the emulation always works in its own numbered execution directory, on a copy of the project
+        call cline%set('mkdir', 'yes')
         call get_prg_ptr(string('solve3D_addon'), ui_addon)
         if( .not. associated(ui_addon) ) THROW_HARD('the solve3D_addon user interface is not registered')
         ! the command line as given, kept for the steps and the report
@@ -78,6 +80,10 @@ contains
         ! ---- execution directory: the input project is copied into it
         call params%new(cline)
         call simple_getcwd(edir)
+        ! the input project is never written: params%new copied it into the execution directory
+        if( simple_abspath(params%projfile) == source_in )then
+            THROW_HARD('the emulation did not enter its own execution directory; its steps would overwrite the input project')
+        endif
         nbase      = params%nptcls_base
         naddon     = params%nptcls_addon
         nstates    = params%nstates
