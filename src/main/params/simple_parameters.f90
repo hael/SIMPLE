@@ -111,6 +111,7 @@ type :: parameters
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: addon_diag='no'      !< solve3D_addon cohort-only diagnostic reconstruction(yes|no){no}
+    character(len=3)          :: rollback='yes'       !< emulate_solve3D_stream: a regressed addon step is not adopted(yes|no){yes}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
@@ -412,6 +413,7 @@ type :: parameters
     integer :: nptcls_base=0       !< # particles in the initial solve3D snapshot
     integer :: nptcls3D_max=0      !< # particles of stream 3D's first solve3D at most (0: no cap; the stage's commander sets one)
     integer :: nptcls_addon_max=0  !< # cohort particles of each stream 3D addon run at most (0: no cap; the stage's commander sets one)
+    integer :: nptcls_addon=0      !< # selected particles each emulate_solve3D_stream addon step adds (the last step takes the remainder)
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
     integer :: npreimages=0        !< # state volumes; 0 = DISCOVER it (over-provision, then two-gate merge)

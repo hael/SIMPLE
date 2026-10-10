@@ -367,13 +367,31 @@ For `commander_stream_p07_solve3D_multistate` or any driver that grows a pool:
 - **Execution.** `mkdir=no` in each update's own directory; `nparts`,
   `worker_server` and `worker_priority` pass through.
 
+### Offline emulation
+
+`simple_exec prg=emulate_solve3D_stream projfile=<project> nptcls_base=<n>
+nptcls_addon=<m> <solve3D inputs>` replays this cycle on an existing project
+to tune the stream's settings (design: `doc/implementation_notes/planned/emulate_solve3D_stream.md`).
+The first `nptcls_base` selected particles are the base `solve3D` run; the rest
+are added by `solve3D_addon` in chunks of `nptcls_addon` selected particles, the
+last chunk taking the remainder when it is at least one chunk, and a remainder
+below one chunk being a single add-on. Every step executes the two commanders
+unchanged on the same row set with the later chunks deselected. It differs from
+the stream in that the cohort size is fixed (no cadence gate, no whole-stack
+rounding), the rows never grow, and the project's own 2D classes and FRCs are
+kept (a look-ahead the stream does not have). With `rollback=yes` (default) a
+REGRESSED add-on is not adopted: the previous result stays frozen and its chunk
+joins the next add-on. `emulate_solve3D_stream_report.txt` lists wall time,
+the last stage and the per-state resolutions and verdicts of every step.
+
 ## 13. Tests
 
 - Unit sub-suites: `project superset` (a 20-row current project with a 14-row
   frozen project, every identity refusal, membership, masking and restoration),
   `solve3D manifest` and `solve3D addon report` in `unit_project`;
   `frozen accumulator` and `volume pair metrics` in `unit_reconstruction`;
-  `addon report docking` in `lib_reconstruction`.
+  `addon report docking` in `lib_reconstruction`; `solve3D stream emulation`
+  (partitioning, source preparation, step projects, report) in `unit_project`.
 - Workflow gate `solve3D_addon` (CTest, highlevel): simulated particles of
   a symmetry-broken 6VXX map in two stacks. The base runs on a 2000-row
   frozen project (the first set, a seeded 75 % selection), the add-on on a
@@ -396,5 +414,6 @@ For `commander_stream_p07_solve3D_multistate` or any driver that grows a pool:
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90`, `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | the frozen add on the gridding and PCG backends |
 | `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_utils.f90` | the add-on context (the registration pass, stage-3 early stopping, the `frozen_rec` handshake), `calc_frozen_rec`, the ladder from the manifest |
 | `src/main/solve/simple_solve3D_addon_report.f90`, `src/main/volume/simple_volpair_metrics.f90` | the validation report |
+| `src/main/commanders/simple/simple_commanders_solve3D_stream_emulation.f90`, `src/main/solve/simple_solve3D_stream_emulation.f90` | the offline emulation of the stream cycle: partitioning, step projects, report |
 | `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` (`exec_bootstrap_rec3D`) | the final reconstruction that bootstraps the union's sigma2 state |
 | `src/utils/simple_map_reduce.f90` (`split_nobjs_active`), `src/utils/qsys/simple_qsys_env.f90` (`new`, `l_active`), `src/main/project/simple_sp_project_core.f90` (`merge_algndocs`) | partitions that balance the active particles, and the range-checked merge |

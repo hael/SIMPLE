@@ -1,6 +1,7 @@
 # emulate_solve3D_stream: the stream's solve3D/solve3D_addon cycle, offline
 
-Implementation note, 2026-10-10. Planned; nothing here is implemented.
+Implementation note, 2026-10-10. Implemented (uncompiled and not yet run);
+implementation step 5 (validation run, section 9) is open, hence the note stays under planned.
 Decisions reviewed by Hans on 2026-10-10 (section 10).
 Written against master `d205b3189` plus the uncommitted add-on stage-policy
 change (registration pass + the base run's last stage). Companion policies:
@@ -271,3 +272,26 @@ change.
 9. Later, optional: a batch reference `solve3D` on all particles with the
    same settings, with the final union compared against it (map correlation
    and FSC, using the add-on report's comparison routines).
+
+## 11. As implemented
+
+- Commander `commander_emulate_solve3D_stream`
+  (`simple_commanders_solve3D_stream_emulation.f90`), UI entry
+  `emulate_solve3D_stream` (developer visibility), dispatch in
+  `simple_exec_solve3D.f90`, keys `nptcls_addon` and `rollback`.
+- The input project is copied into the execution directory by the
+  emulation's own `params%new`; the prepared source is `E/source.simple`.
+  Step projects are rewritten from it, with absolute `projfile` entries.
+- A step's run directory is found from its registered manifest (the add-on
+  publishes the union over `E/addon_NN.simple` and registers the manifest by
+  absolute path); the add-on report and the FSC fallback are read from there.
+- Resolutions in the report are computed from the registered FSC of each
+  state of the step's result (FSC=0.143 and 0.5); a state without a
+  registered FSC falls back to `refine3D_fsc_fname` in the run directory.
+- Keys: the base command line is the entry command line minus `nptcls_base`,
+  `nptcls_addon`, `rollback` and `addon_diag`; an add-on receives the keys the
+  `solve3D_addon` UI accepts that the manifest does not record, except the
+  emulation's own. `vol1`, `cavg_ini`, `cavg_ini_ext`, `state` are not inputs
+  of the emulation and are refused if given.
+- The commanders run in-process; the emulation returns to its own directory
+  after each (`simple_chdir`).

@@ -70,6 +70,7 @@ use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_test
 use simple_solve3D_reseed_tester,            only: run_all_solve3D_reseed_tests
 use simple_project_superset_tester,          only: run_all_project_superset_tests
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
+use simple_solve3D_stream_emulation_tester,  only: run_all_solve3D_stream_emulation_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
 use simple_nu_filter_tester,                 only: run_all_nu_filter_tests
 use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
@@ -365,6 +366,7 @@ contains
         call add_suite(s, n, 'solve3D manifest',        run_all_solve3D_manifest_tests)
         call add_suite(s, n, 'project superset',        run_all_project_superset_tests)
         call add_suite(s, n, 'solve3D addon report', run_all_solve3D_addon_report_tests)
+        call add_suite(s, n, 'solve3D stream emulation', run_all_solve3D_stream_emulation_tests)
         call add_suite(s, n, 'state weight set',        run_all_state_weight_set_tests)
     end subroutine suites_project
 

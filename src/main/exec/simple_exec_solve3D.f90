@@ -5,6 +5,7 @@ use simple_string,              only: string
 use simple_exec_helpers,        only: restarted_exec, exec_screen
 use simple_commanders_solve3D, only: commander_solve3D_cavgs, commander_solve3D,&
                                     & commander_solve3D_cavgs_conditional_restarts, commander_solve3D_addon
+use simple_commanders_solve3D_stream_emulation, only: commander_emulate_solve3D_stream
 use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
@@ -15,6 +16,7 @@ private
 type(commander_solve3D)                               :: xsolve3D
 type(commander_solve3D_cavgs)                         :: xsolve3D_cavgs
 type(commander_solve3D_addon)                         :: xsolve3D_addon
+type(commander_emulate_solve3D_stream)                :: xemulate_solve3D_stream
 type(commander_solve3D_cavgs_conditional_restarts) :: xsolve3D_cavgs_conditional_restarts
 type(commander_estimate_lpstages)                     :: xestimate_lpstages
 type(commander_noisevol)                              :: xnoisevol
@@ -48,6 +50,8 @@ contains
                 endif
             case( 'solve3D_addon' )
                 call xsolve3D_addon%execute(cline)
+            case( 'emulate_solve3D_stream' )
+                call xemulate_solve3D_stream%execute(cline)
             case( 'estimate_lpstages' )
                 call xestimate_lpstages%execute(cline)
             case( 'noisevol' )

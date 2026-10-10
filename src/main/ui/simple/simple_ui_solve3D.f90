@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('solve
 type(ui_program), target :: solve3D
 type(ui_program), target :: solve3D_cavgs
 type(ui_program), target :: solve3D_addon
+type(ui_program), target :: emulate_solve3D_stream
 type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: noisevol
 
@@ -17,6 +18,7 @@ contains
         call new_solve3D(prgtab)
         call new_solve3D_cavgs(prgtab)
         call new_solve3D_addon(prgtab)
+        call new_emulate_solve3D_stream(prgtab)
         call new_estimate_lpstages(prgtab)
         call new_noisevol(prgtab)
     end subroutine construct_solve3D_programs
@@ -33,128 +35,143 @@ contains
         &.true.,&                                                                          ! requires sp_project
         &visibility=UI_VIS_STANDARD, display_name='De Novo 3D Map Determination')
         ! INPUT PARAMETER SPECIFICATIONS
+        call add_solve3D_base_inputs(solve3D, .false.)
+        ! add to ui_hash
+        call add_ui_program('solve3D', solve3D, prgtab, UI_CATEGORY)
+    end subroutine new_solve3D
+
+    !> The solve3D inputs, shared by solve3D and emulate_solve3D_stream. l_emulation leaves out the inputs the stream's
+    !! base run does not have: starting volumes, class-average starts and state continuation.
+    subroutine add_solve3D_base_inputs( prg, l_emulation )
+        type(ui_program), intent(inout) :: prg
+        logical,          intent(in)    :: l_emulation
         ! image input/output
-        call solve3D%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
-        & for particle matching', 'input starting volume e.g. vol.mrc', .false., '', &
-        &visibility=UI_VIS_ADVANCED)
+        if( .not. l_emulation )then
+            call prg%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
+            & for particle matching', 'input starting volume e.g. vol.mrc', .false., '', &
+            &visibility=UI_VIS_ADVANCED)
+        endif
         ! parameter input/output
-        call solve3D%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        call prg%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
         &'Reconstruction backend from stage 3 onward; stages 1 and 2 always use gridding(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_PARM, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        call prg%add_input(UI_PARM, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Maximum kernel PCG iterations from stage 3 onward; the cold original-sampling final reconstruction uses at least 5', &
         &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call solve3D%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        call prg%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
         &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
         &.false., 0., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call solve3D%add_input(UI_PARM, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
+        call prg%add_input(UI_PARM, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
         &'Soft solvent prior on the PCG base solve: a real-space ridge pulling solvent toward zero, solvent identified '//&
         &'per half from a prior-free solve of that half (smoothed absolute density, Otsu, logistic weight), then the '//&
         &'same cold solve again with the ridge; half-independent, so the pair stays gold standard; the support is untouched; '//&
         &'active in solve3D from stage 7 (one stage after NU filtering starts)(yes|no){no}', '', .false., 'no', group="search", &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call solve3D%add_input(UI_PARM, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
+        call prg%add_input(UI_PARM, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
         &'Ridge coefficient of the solvent prior relative to the data scale (1 = as strong as the low-band data term); '//&
         &'not given = estimated per state and iteration by cross-validation of the prior-free half pair', 'coefficient{auto}', &
         &.false., 1.0, group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
-        call solve3D%add_input(UI_PARM, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
+        call prg%add_input(UI_PARM, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
         &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', group="search", &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
-        call solve3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_PARM, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
-            &'Use existing ptcl3D orientations and state assignments from a prior solve3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        if( .not. l_emulation )then
+            call prg%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
+            &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+            &visibility=UI_VIS_ADVANCED)
+            call prg%add_input(UI_PARM, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
+                &'Use existing ptcl3D orientations and state assignments from a prior solve3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
+            &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        endif
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call solve3D%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        call prg%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, pgrp, group="model", visibility=UI_VIS_STANDARD)
-        call solve3D%add_input(UI_SRCH, pgrp_start, group="model", &
+        call prg%add_input(UI_SRCH, pgrp, group="model", visibility=UI_VIS_STANDARD)
+        call prg%add_input(UI_SRCH, pgrp_start, group="model", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
-        call solve3D%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
+        call prg%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
+        call prg%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
         &'Units every fractional-update sample is balanced over: none draws globally from the lowest update-count '//&
         &'particles; class gives every selected 2D class the same share; cavg first gives every group of similar '//&
         &'class averages the same share, then every class inside a group, so a preferred view spread over many '//&
         &'classes no longer dominates the sample and classes of one view keep equal footing(none|class|cavg){cavg}', &
         &'', .false., 'cavg', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, 'nclust', 'num', 'Number of class-average groups', &
+        call prg%add_input(UI_SRCH, 'nclust', 'num', 'Number of class-average groups', &
         &'Number of groups of similar class averages formed with balance=cavg, by average linkage on their aligned '//&
         &'correlation; with no more selected classes than this, every class is its own group{20}', '# groups{20}', &
         &.false., 20., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('balance', [character(len=4) :: 'cavg']))
-        call solve3D%add_input(UI_SRCH, 'nstages', 'num', 'Last solve3D stage to run',&
+        call prg%add_input(UI_SRCH, 'nstages', 'num', 'Last solve3D stage to run',&
             &'Last solve3D stage to run; default is 5 for nstates>1 and 8 otherwise; &
             &a multi-state run writes final volumes at its last stage',&
             &'last stage', .false., 8., group="search", visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
-        call solve3D%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &
-            &'State label to select from an existing multi-state solve3D project and continue as a single-state stage-5 search', &
-            &'state label', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
+        call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
+        if( .not. l_emulation )then
+            call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &
+                &'State label to select from an existing multi-state solve3D project and continue as a single-state stage-5 search', &
+                &'state label', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        endif
+        call prg%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of particle assignments for solve3D stage convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)
         ! filter controls
-        call solve3D%add_input(UI_FILT, hp, group="filter", &
+        call prg%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call prg%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, 'lpstart',     'num', 'Starting low-pass limit', 'Starting low-pass limit',&
+        call prg%add_input(UI_FILT, 'lpstart',     'num', 'Starting low-pass limit', 'Starting low-pass limit',&
             &'low-pass limit for the initial stage in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit',&
+        call prg%add_input(UI_FILT, 'lpstop',     'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the final stage in Angstroms; default is 6 for nstates>1 &
             &and 8 otherwise',    .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, lp, group="filter", &
+        call prg%add_input(UI_FILT, lp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, 'force_lp_range', 'binary', 'Force low-pass range', &
+        call prg%add_input(UI_FILT, 'force_lp_range', 'binary', 'Force low-pass range', &
             &'Use lpstart/lpstop directly for solve3D low-pass stages instead of class-FRC-derived limits(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call solve3D%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
+        call prg%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
             &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}; nonuniform_lpset promotes the &
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &
             &group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
-        call solve3D%add_input(UI_FILT, envfsc, group="filter", &
+        call prg%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, envmsklp, group="filter", &
+        call prg%add_input(UI_FILT, envmsklp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, 'lpstart_ini3D',     'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
+        call prg%add_input(UI_FILT, 'lpstart_ini3D',     'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call solve3D%add_input(UI_FILT, 'lpstop_ini3D',     'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&
+        call prg%add_input(UI_FILT, 'lpstop_ini3D',     'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&
             &'low-pass limit for the final stage of ini3D in Angstroms',    .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call solve3D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
-        call solve3D%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
+        call prg%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
+        call prg%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
             &'Use the density envelope, or prefer the lag-one NU-evidence envelope with density fallback, '//&
             &'from the staged automasking point(yes|nu|no){no}', &
             &'', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
         &choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']))
         ! computer controls
-        call solve3D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
-        call solve3D%add_input(UI_COMP, nthr,                                 group="compute", visibility=UI_VIS_STANDARD)
-        call solve3D%add_input(UI_COMP, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
+        call prg%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call prg%add_input(UI_COMP, nthr,                                 group="compute", visibility=UI_VIS_STANDARD)
+        call prg%add_input(UI_COMP, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .false., 0., group="compute", visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('solve3D', solve3D, prgtab, UI_CATEGORY)
-    end subroutine new_solve3D
+    end subroutine add_solve3D_base_inputs
+
 
     !> Grow a completed solve3D solution with the particles a superset
     !! project adds: the frozen particles contribute their signal, unsearched,
@@ -224,6 +241,38 @@ contains
         ! add to ui_hash
         call add_ui_program('solve3D_addon', solve3D_addon, prgtab, UI_CATEGORY)
     end subroutine new_solve3D_addon
+
+    !> Replay of the stream's solve3D and solve3D_addon cycle on an existing project: a base run on the first
+    !! nptcls_base selected particles, then add-on runs of nptcls_addon selected particles each.
+    subroutine new_emulate_solve3D_stream( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call emulate_solve3D_stream%new(&
+        &'emulate_solve3D_stream',&                                                              ! name
+        &'Replay the stream''s solve3D and solve3D_addon cycle on an existing project',&         ! summary
+        &'is a workflow that runs solve3D on the first nptcls_base selected particles of a project '//&
+        &'and then solve3D_addon on the remaining selected particles in chunks of nptcls_addon, '//&
+        &'the last chunk taking the remainder, to measure the run time and the map quality of the stream''s '//&
+        &'settings; the steps and their resolutions and verdicts are reported in emulate_solve3D_stream_report.txt',& ! help
+        &'simple_exec',&                                                                         ! executable
+        &.true., visibility=UI_VIS_DEVELOPER, display_name='Emulate the 3D Stream')              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        call emulate_solve3D_stream%add_input(UI_PARM, 'nptcls_base', 'num', 'Base particles', &
+        &'Number of selected particles (ptcl2D state > 0, in row order) of the base solve3D run', '# particles', .true., 0.)
+        call emulate_solve3D_stream%add_input(UI_PARM, 'nptcls_addon', 'num', 'Add-on particles', &
+        &'Number of selected particles each solve3D_addon run adds; the last run takes the remainder when it is at least this '//&
+        &'many, and a remainder below this many is a single add-on run', '# particles', .true., 0.)
+        call emulate_solve3D_stream%add_input(UI_PARM, 'rollback', 'binary', 'Roll back regressed add-ons', &
+        &'A regressed add-on is not adopted: the previous result stays frozen and its chunk joins the next add-on, as in the '//&
+        &'stream(yes|no){yes}', '', .false., 'yes', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call emulate_solve3D_stream%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
+        &'Also reconstruct the searched particles of every add-on alone, without the frozen term(yes|no){no}', &
+        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call add_solve3D_base_inputs(emulate_solve3D_stream, .true.)
+        ! add to ui_hash
+        call add_ui_program('emulate_solve3D_stream', emulate_solve3D_stream, prgtab, UI_CATEGORY)
+    end subroutine new_emulate_solve3D_stream
 
     subroutine new_solve3D_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
