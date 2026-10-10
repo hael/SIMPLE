@@ -15,6 +15,7 @@ integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,250
 integer,          parameter :: NSPACE_CAVGS_EARLY      = 500  ! nspace for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: MAXITS_CAVGS_EARLY      = 15   ! maxits for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early solve3D_cavgs stages using NSPACE_CAVGS_EARLY
+integer,          parameter :: NSPACE_REGISTER         = 1000 ! nspace of the solve3D_addon registration pass
 integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: NSPACE_SUB_BASE         = 2500
 
@@ -181,10 +182,13 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
-        logical :: l_addon
+        logical :: l_addon, l_register
         l_addon = .false.
         if( present(addon) ) l_addon = addon%active
+        l_register = l_addon
+        if( l_addon ) l_register = addon%l_register
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
+        if( l_register ) call set_refine3D_register_policy( cfg )
         if( l_addon )then
             ! stage 3 keeps its full budget only because of the symmetry search,
             ! which never runs in an add-on: it early-stops on overlap
@@ -193,12 +197,42 @@ contains
                 cfg%fracsrch = 90.
             endif
         endif
-        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_refine3D_lp_override )
+        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_refine3D_lp_override, l_register )
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
             call cline_refine3D%set('frozen_rec', addon%frozen_rec)
         endif
     end procedure set_cline_refine3D
+
+    !> solve3D_addon registration pass: the cohort's random poses are brought
+    !! into register against the frozen references by one full-cohort global
+    !! `prob` iteration at a fixed nspace, before the entry stage proper. It
+    !! keeps the entry stage's box and planned limit (the frozen sets exist at
+    !! that box), allows the shift range of the first prob stage, and runs
+    !! unfiltered and unmasked: no trailing chain (the stage boundary seeds it
+    !! from the registered poses), and every cohort particle updated, so the
+    !! frozen term enters at full mass.
+    subroutine set_refine3D_register_policy( cfg )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        cfg%refine          = 'prob'
+        cfg%prob_neigh_mode = ''
+        cfg%inspace         = NSPACE_REGISTER
+        cfg%inspace_sub     = 0
+        cfg%imaxits         = 1
+        cfg%fillin          = 'no'
+        cfg%update_frac_dyn = 1.0
+        cfg%trail_rec       = 'no'
+        cfg%filt_mode       = 'none'
+        cfg%automsk         = 'no'
+        cfg%envfsc          = 'no'
+        cfg%greedy_sampling = 'yes'
+        cfg%frac_best       = 1.0
+        cfg%overlap         = 0.99
+        cfg%fracsrch        = 99.
+        if( allocated(lpinfo) )then
+            if( size(lpinfo) >= SYMSRCH_STAGE ) cfg%trs = max(cfg%trs, lpinfo(SYMSRCH_STAGE)%trslim)
+        endif
+    end subroutine set_refine3D_register_policy
 
     subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -460,15 +494,16 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_register )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
+        logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
         real :: lp_eff, lpstop_eff, lp_cap
         logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
-        l_full_update_stage = force_full_sampling_mode(params)
+        l_full_update_stage = force_full_sampling_mode(params) .or. l_register
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
         ! Particle-route ladder cap LPSTOP_BOUNDS(1), not lpfinal; a coarser command-line lpstop stays a guard
@@ -480,7 +515,7 @@ contains
         ! boundary, since without gold-standard halves only an FSC beyond the previous band is clean.
         ! Add-on promotes from the union FSC (solve3D_policy.md sec. 4; solve3D_addon_policy.md sec. 5).
         l_fsc05_promoted = .false.
-        if( .not. l_cavgs .and. .not. l_explicit_lp ) &
+        if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register ) &
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
         ! Matching-band ceiling: the (promoted) stage limit in non-NU stages, none in NU stages unless
         ! lpstop is given (doc/policies/3D/solve3D_policy.md sec. 4).

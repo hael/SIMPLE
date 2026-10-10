@@ -158,8 +158,8 @@ contains
 
     !> Grow a completed solve3D solution with the particles a superset
     !! project adds: the frozen particles contribute their signal, unsearched,
-    !! to every reconstruction; the others are searched against the union from
-    !! stage 3 to the base run's last stage. Every setting that describes the
+    !! to every reconstruction; the others are searched against the union in one
+    !! registration pass and the base run's last stage. Every setting that describes the
     !! solution comes from the frozen project's run manifest; the command line
     !! carries only compute effort, convergence and diagnostics.
     subroutine new_solve3D_addon( prgtab )
@@ -200,7 +200,7 @@ contains
         ! search controls
         call solve3D_addon%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
         call solve3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
-        &'Required overlap of the searched particles'' assignments for early stopping in stage 3{0.95}', &
+        &'Required overlap of the searched particles'' assignments for early stopping when the last stage is stage 3{0.95}', &
         &'overlap fraction', .false., .95, group="search", visibility=UI_VIS_ADVANCED)
         ! overridable settings of the frozen run: how the added particles are sampled and masked
         call solve3D_addon%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &

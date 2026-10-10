@@ -48,10 +48,15 @@ real,    parameter :: RESEED_MIN_FRAC = 0.02  ! a state with less of the selecte
 !! stage 3 an overlap early stop (no symmetry search keeps it at full budget)
 !! and puts the frozen_rec handshake on the stage command line. The stage
 !! limits follow the standard rule (planned ladder, FSC=0.5 promotion).
+!! The add-on runs one stage, the last the base run ran, preceded by one
+!! registration pass (l_register): a single full-cohort iteration of global
+!! refine=prob at a fixed nspace, no trailing, no filtering or masking, at the
+!! entry stage's box and planned limit.
 type :: solve3D_addon_ctx
-    logical      :: active  = .false.
-    real         :: overlap = 0.95   !< stage-3 early-stopping overlap target
-    type(string) :: frozen_rec       !< frozen run context file
+    logical      :: active     = .false.
+    real         :: overlap    = 0.95    !< stage-3 early-stopping overlap target
+    logical      :: l_register = .false. !< the next stage command line is the registration pass
+    type(string) :: frozen_rec           !< frozen run context file
 end type solve3D_addon_ctx
 
 ! In submodule: simple_solve3D_controller.f90

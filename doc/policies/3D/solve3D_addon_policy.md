@@ -15,8 +15,9 @@ particles and more. The particles of the frozen solution (the frozen
 particles) keep their poses and state labels and are never searched; they
 contribute their accumulated signal to every reconstruction. The other active
 particles of the current project (the cohort) are searched against the frozen
-maps, from stage 3 of the frozen run's planned ladder to its last stage. The
-result is one ordinary project with every particle posed.
+maps in one stage, the last stage the frozen run ran (recorded in its
+manifest), preceded by a registration pass. The result is one ordinary project
+with every particle posed.
 
 Two uses are supported:
 
@@ -46,7 +47,7 @@ checked by the wrapper through `ui_program%accepts`
 | --- | --- |
 | Projects | `projfile_frozen` (`projfile` and `mkdir` as for every project program) |
 | Compute | `nparts`, `nthr` |
-| Sampling and convergence | `nsample` (default: the frozen run's effective value), `overlap` (default 0.95 at stage 3) |
+| Sampling and convergence | `nsample` (default: the frozen run's effective value), `overlap` (default 0.95, applies only when the last stage is stage 3) |
 | PCG solve budget and checks | `maxits_pcg`, `maxits_ml`, `pcg_solvent_check` |
 | Overridable settings of the frozen run | `balance`, `nclust`, `mskdiam` (default: the frozen run's value, replayed from its manifest) |
 | Diagnostics | `addon_diag` |
@@ -86,7 +87,10 @@ particles that the frozen accumulators never receive.
 The run manifest is the only route into the add-on. `exec_solve3D` writes
 `solve3D_manifest.txt` at the end of every completed run (after the final
 reconstruction) and registers it in `projinfo`;
-an early-stopped run writes none and is not a frozen input. The frozen project
+a run stopped before stage 3 writes
+none and is not a frozen input. A run stopped explicitly at stage 3 or later
+(`nstages`, e.g. a single-state `nstages=5` base) does the final reconstruction
+and writes one; the add-on then runs that stage. The frozen project
 must be an eligible `solve3D` or `solve3D_addon` output whose manifest
 validates against the project that registered it:
 
@@ -97,7 +101,8 @@ validates against the project that registered it:
   (digest);
 - the committed residual sigma2 state the manifest records exists unchanged;
 - the current project's native box and sampling equal the frozen solution's;
-- no stage box of the inherited ladder exceeds the native box.
+- the frozen run reached stage 3 or later, and its last stage's box does not
+  exceed the native box.
 
 The manifest reader keeps no backwards compatibility (release 4): a field
 or input key it does not know, such as those of removed features
@@ -153,27 +158,48 @@ inherited state are refused.
   counting, sampling and labelling routine of the established workflow sees
   the cohort alone, with no add-on branch. The working copy's inherited sigma2
   registration is dropped; the run estimates the cohort's own.
-- **Frozen sets.** One frozen accumulation per distinct stage box of the
-  inherited ladder, plus the native box, each a `reconstruct3D` on the frozen
+- **Frozen sets.** One frozen accumulation at the last stage's box, plus the
+  native box, each a `reconstruct3D` on the frozen
   copy with the frozen run's committed sigma2 state (a cropped box uses a
   prefix of its shells). A set is written as `frozen_stateNN_boxBBBB_*` with
   its manifest, under a run context (`solve3D_addon_frozen_context.txt`)
   that records the backend, the state layout, the frozen counts and the row
   counts of both projects. Sets are never clipped or padded.
-- **Entry.** Stage 3 (`PROB_REFINE_STAGE`) with `pgrp_start=pgrp`: no symmetry
-  search. The cohort gets random orientations and uniform random labels across
-  every inherited state; its `res` and `res05` are cleared. The native-box
-  frozen-only maps are the stage-3 references, trusted as they are (no CC
-  pose initialisation); their correlation with the frozen run's final maps is
-  logged as a provenance check and warned about below 0.9.
+- **Entry.** `pgrp_start=pgrp`: no symmetry search. The cohort gets random
+  orientations and uniform random labels across every inherited state; its
+  `res` and `res05` are cleared. The native-box frozen-only maps are the
+  references, trusted as they are (no CC pose initialisation); their
+  correlation with the frozen run's final maps is logged as a provenance check
+  and warned about below 0.9.
+- **Stage policy.** The add-on runs two refine3D steps, nothing before them
+  and nothing between:
+  1. *Registration pass.* One full-cohort iteration of global `refine=prob` at
+     `nspace=1000` (`NSPACE_REGISTER`), at the last stage's box and planned
+     limit, with the shift range of the first prob stage. It is unfiltered and
+     unmasked, does not trail, and updates every cohort particle, so the frozen
+     term enters at full mass. It brings the random cohort poses into register
+     with the frozen references; a cohort particle with no previous alignment
+     needs no more than this to be found by the stage's own search.
+  2. *The last stage the frozen run ran*, with the controller's configuration
+     for that stage unchanged: its search mode (`prob_neigh` is a global pass
+     over `nspace_sub` directions, so the registered poses are a start, not a
+     constraint), `nspace`, iteration budget, early stopping, sampling, trailing,
+     NU filtering and masking. The trailing chain, where the stage trails, is
+     seeded from the registered poses at the stage boundary.
 - **Ladder and limits.** The planned ladder (limit and crop per stage) is the
-  frozen run's, from its manifest, up to its last stage; the add-on cannot
-  re-plan, lower or raise it. The stage limits follow the `solve3D` rule:
-  FSC=0.5 promotion at every stage boundary past `FSC05_PROMOTE_MIN_STAGE`
-  from the FSC measured on the union, and the NU handoff in the NU stages.
-  Each stage boundary logs the add-on's limits next to the frozen run's.
+  frozen run's, from its manifest; the add-on cannot re-plan, lower or raise
+  it, and uses its last stage only. The stage limit follows the `solve3D`
+  rule: FSC=0.5 promotion at the stage boundary from the FSC measured on the
+  union, and the NU handoff when the stage is an NU stage. The registration
+  pass keeps the planned limit (no promotion). The stage logs the add-on's
+  limits next to the frozen run's.
 - **Early stopping.** The add-on context switches stage-3 early stopping on
-  (`overlap`, default 0.95); the stage controller is otherwise unchanged.
+  (`overlap`, default 0.95) when the last stage is stage 3; the stage
+  controller is otherwise unchanged.
+- **Manifest.** The stage is read from the frozen run's manifest
+  (`last_stage`, with the whole planned ladder). The add-on's own manifest
+  records that stage as its first and last stage, so a further add-on on the
+  result runs the same stage.
 
 ## 6. Sampling, Trailing and Multi-State
 
@@ -190,8 +216,8 @@ inherited state are refused.
   ```
 
   The cohort chain is written before the frozen term `F` is added; restoration,
-  FSC, priors and NU filtering consume `U`. Before the first trailing stage the
-  stage-boundary reconstruction seeds a full-mass, cohort-only chain through
+  FSC, priors and NU filtering consume `U`. Before the stage, if it trails, the
+  stage-boundary reconstruction (after the registration pass) seeds a full-mass, cohort-only chain through
   `trail_seed`; the frozen term never enters the chain.
 - **Multi-state.** One frozen state gives a single-state add-on, more gives
   the multi-state (independent) policies, decided by the frozen run's
@@ -368,7 +394,7 @@ For `commander_stream_p07_solve3D_multistate` or any driver that grows a pool:
 | `src/main/project/simple_project_superset.f90` | identity, membership, masking and restoration |
 | `src/main/volume/simple_frozen_accum.f90` | the frozen sets and their run context |
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90`, `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | the frozen add on the gridding and PCG backends |
-| `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_utils.f90` | the add-on context (stage-3 early stopping, the `frozen_rec` handshake), `calc_frozen_rec`, the ladder from the manifest |
+| `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_utils.f90` | the add-on context (the registration pass, stage-3 early stopping, the `frozen_rec` handshake), `calc_frozen_rec`, the ladder from the manifest |
 | `src/main/solve/simple_solve3D_addon_report.f90`, `src/main/volume/simple_volpair_metrics.f90` | the validation report |
 | `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` (`exec_bootstrap_rec3D`) | the final reconstruction that bootstraps the union's sigma2 state |
 | `src/utils/simple_map_reduce.f90` (`split_nobjs_active`), `src/utils/qsys/simple_qsys_env.f90` (`new`, `l_active`), `src/main/project/simple_sp_project_core.f90` (`merge_algndocs`) | partitions that balance the active particles, and the range-checked merge |

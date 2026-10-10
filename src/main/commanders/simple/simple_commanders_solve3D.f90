@@ -676,15 +676,18 @@ contains
         if( spproj_cur%get_box() /= man%get_box() .or. abs(spproj_cur%get_smpd() - man%get_smpd()) > 1.e-4*man%get_smpd() )then
             THROW_HARD('the current project''s native box or sampling differs from the frozen solution''s')
         endif
-        ! every consuming box gets a frozen set from reconstruct3D, which never
-        ! upsamples: a ladder whose stage box exceeds the native box (small
-        ! boxes, where the crop rounds up to a larger magic box) is refused
-        do i = solve3D_symsrch_stage(), man%get_last_stage()
-            stage = man%get_stage(i)
-            if( stage%box_crop > man%get_box() )then
-                THROW_HARD('the base run''s ladder upsamples (stage '//int2str(i)//' box '//int2str(stage%box_crop)//' > native '//int2str(man%get_box())//'); unsupported by solve3D_addon')
-            endif
-        enddo
+        ! the add-on runs one stage, the last the base run ran
+        if( man%get_last_stage() < solve3D_symsrch_stage() )then
+            THROW_HARD('the base run stopped at stage '//int2str(man%get_last_stage())//'; solve3D_addon needs a base run that reached stage '//int2str(solve3D_symsrch_stage())//' or later')
+        endif
+        ! its consuming box gets a frozen set from reconstruct3D, which never
+        ! upsamples: a stage box exceeding the native box (small boxes, where
+        ! the crop rounds up to a larger magic box) is refused
+        i     = man%get_last_stage()
+        stage = man%get_stage(i)
+        if( stage%box_crop > man%get_box() )then
+            THROW_HARD('the base run''s last stage upsamples (stage '//int2str(i)//' box '//int2str(stage%box_crop)//' > native '//int2str(man%get_box())//'); unsupported by solve3D_addon')
+        endif
         ! one particle index space, the superset relation, the membership
         call superset%new(spproj_cur, spproj_frz, man%get_nstates(), status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
@@ -818,7 +821,9 @@ contains
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
         logical :: l_force_full_sampling
-        logical :: l_no2D   !< the project carries no 2D solution (ptcl2D never searched): balance=none only
+        logical :: l_no2D   !< the project carries no usable 2D solution (no classes, class averages or class FRCs): balance=none only
+        logical :: l_virgin2D !< ptcl2D never searched: no 2D shifts to transfer
+        type(string) :: frcs_probe
         integer :: nthr_view
         character(len=5) :: smpl_units
         real    :: sampled_active_frac
@@ -936,10 +941,15 @@ contains
                 write(logfhandle,'(A)') '>>> SOLVE3D: dropped an inherited canonical sigma2 registration; sigmas are seeded here'
             endif
         endif
-        ! a project without a 2D solution runs under balance=none only: the
-        ! selection is still the ptcl2D state flags (set at import), but no
-        ! class exists to balance over and no class FRC to plan the ladder from
-        l_no2D = spproj%is_virgin_field('ptcl2D')
+        ! a project without a usable 2D solution runs under balance=none only:
+        ! the selection is still the ptcl2D state flags (set at import), but no
+        ! class exists to balance over and no class FRC to plan the ladder from.
+        ! ptcl2D rows that carry labels or shifts do not make a 2D solution on
+        ! their own: it needs the classes (cls2D) and their FRCs as well
+        l_virgin2D = spproj%is_virgin_field('ptcl2D')
+        call spproj%get_frcs(frcs_probe, 'frc2D', fail=.false.)
+        l_no2D = l_virgin2D .or. spproj%os_cls2D%get_noris() < 1 .or. frcs_probe%to_char() == NIL
+        call frcs_probe%kill
         call set_balance_default
         if( l_no2D )then
             select case(trim(params%balance))
@@ -950,7 +960,7 @@ contains
             if( trim(params%cavg_ini).eq.'yes' .or. trim(params%cavg_ini_ext).eq.'yes' )then
                 THROW_HARD('cavg_ini/cavg_ini_ext need class averages; the project has no 2D solution')
             endif
-            write(logfhandle,'(A)') '>>> SOLVE3D: NO 2D SOLUTION IN THE PROJECT; balance=none, ladder from lpstart/lpstop'
+            write(logfhandle,'(A)') '>>> SOLVE3D: NO USABLE 2D SOLUTION IN THE PROJECT (CLASSES OR CLASS FRCS MISSING); balance=none, ladder from lpstart/lpstop'
         endif
         ! add-on prologue: frozen copy, physical identity, frozen-row mask; the
         ! mask precedes every count below, so the established sampling
@@ -959,10 +969,10 @@ contains
         ! provide initialization of 3D alignment using class averages?
         start_stage = 1
         l_ini3D     = .false.
-        ! solve3D_addon has one entry route: stage 3 (prob) with trusted
-        ! frozen references, no symmetry search (pgrp_start = pgrp) and no CC
-        ! pose initialisation
-        if( l_addon ) start_stage = solve3D_symsrch_stage()
+        ! solve3D_addon runs one stage, the last the base run ran (recorded in
+        ! its manifest), after a registration pass; trusted frozen references,
+        ! no symmetry search (pgrp_start = pgrp) and no CC pose initialisation
+        if( l_addon ) start_stage = man_addon%get_last_stage()
         if( l_state_continue )then
             if( trim(params%cavg_ini).eq.'yes' .or. trim(params%cavg_ini_ext).eq.'yes' )then
                 THROW_HARD('solve3D state continuation cannot be combined with cavg_ini/cavg_ini_ext')
@@ -1036,6 +1046,11 @@ contains
             THROW_HARD('nstages must be >= first executable solve3D stage')
         endif
         l_run_final_rec = nstages_refine3D == solve3D_nstages() .or. params%nstates > 1
+        ! a single-state schedule stopped explicitly at the symmetry-search stage
+        ! or later is a solution in its own right (its last stage fills in the
+        ! particles no earlier stage updated): it gets the final reconstruction
+        ! and its run manifest, so it can be the frozen input of solve3D_addon
+        if( cline%defined('nstages') .and. nstages_refine3D >= solve3D_symsrch_stage() ) l_run_final_rec = .true.
         ! automasking is per state (state-specific masks), single or multi-state alike
         l_automsk     = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! l_automsk_off (the EXPLICIT automsk=no veto of the pcg-backend
@@ -1211,6 +1226,9 @@ contains
         ! Frequency marching
         call print_states(params, 0)
         do istage = start_stage, nstages_refine3D
+            ! solve3D_addon: the cohort's random poses are registered against
+            ! the frozen references before the stage proper
+            if( l_addon .and. istage == start_stage ) call addon_register_pass(istage)
             ! Preparation of command line for refinement
             if( l_addon )then
                 call set_cline_refine3D(params, istage, l_cavgs=.false., addon=addon_ctx)
@@ -1395,7 +1413,7 @@ contains
             if( status /= 0 ) THROW_HARD(trim(msg))
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! the stage-3 controls define the frozen accumulations
-            call set_cline_refine3D(params, start_stage, l_cavgs=.false., addon=addon_ctx)
+            call set_cline_refine3D(params, solve3D_symsrch_stage(), l_cavgs=.false., addon=addon_ctx)
             call store%new(run_id, trim(params%rec_backend), spproj%os_ptcl3D%get_noris(), &
                 &spproj_frz%os_ptcl3D%get_noris(), [(superset%get_nfrozen_state(s), s=1,params%nstates)])
             call store%write(frozen_ctx_fname)
@@ -1434,6 +1452,24 @@ contains
             call src%kill
             call dest%kill
         end subroutine addon_starting_state
+
+        !> The registration pass: one full-cohort iteration of global refine=prob
+        !! at a fixed nspace (set_refine3D_register_policy), at the entry
+        !! stage's box and planned limit and against the frozen references. It
+        !! leaves the cohort's poses in register for the stage proper, whose
+        !! boundary then seeds the cohort trailing chain from them.
+        subroutine addon_register_pass( istage_here )
+            integer, intent(in) :: istage_here
+            addon_ctx%l_register = .true.
+            call set_cline_refine3D(params, istage_here, l_cavgs=.false., addon=addon_ctx)
+            addon_ctx%l_register = .false.
+            write(logfhandle,'(A)')'>>>'
+            write(logfhandle,'(A,I0,A,I0,A,F7.3,A)') '>>> SOLVE3D_ADDON REGISTRATION PASS BEFORE STAGE ', istage_here, &
+                &': GLOBAL PROB, NSPACE ', cline_refine3D%get_iarg('nspace'), ', LP ', cline_refine3D%get_rarg('lp'), ' A'
+            call flush(logfhandle)
+            call exec_refine3D(params, istage_here, xrefine3D)
+            call print_states(params, istage_here)
+        end subroutine addon_register_pass
 
         !> The frozen-only native map against the base run's registered final
         !! map: agreement shows that poses, halves, sigmas and settings were
@@ -1760,9 +1796,9 @@ contains
             ! earlier refinement of this project may promote the first stage
             call spproj%os_ptcl3D%delete_entry('res')
             call spproj%os_ptcl3D%delete_entry('res05')
-            ! without a 2D solution there are no 2D shifts to transfer: the
+            ! a never-searched ptcl2D has no 2D shifts to transfer: the
             ! shifts ptcl3D holds (kept above) stay
-            if( .not. l_no2D ) call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
+            if( .not. l_virgin2D ) call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)
             nactive = 0
             do iptcl = 1,nptcls3D
                 state2D = spproj%os_ptcl2D%get_state(iptcl)

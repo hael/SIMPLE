@@ -144,13 +144,14 @@ stage. `refine3D` then treats `maxits` as the run length for that stage.
 
 ### Without a 2D solution
 
-`solve3D` and `solve3D_addon` run on a project whose `ptcl2D` was never
-searched (no classes, no class averages, no class FRCs) under `balance=none`
-only; `class` and `cavg` are refused with a message naming `balance=none`, as
+`solve3D` and `solve3D_addon` run on a project without a usable 2D solution
+(`ptcl2D` never searched, or no classes in `cls2D`, or no class FRCs
+registered, as in a project built from particles alone with per-particle
+labels) under `balance=none` only; `class` and `cavg` are refused with a message naming `balance=none`, as
 are `cavg_ini` and `cavg_ini_ext`. `balance` then defaults to `none`. The
 selection is unchanged: `ptcl3D%state` is reset from the `ptcl2D` state flags
-(set at import or by a selection), but no 2D shifts are transferred, so the
-shifts `ptcl3D` holds stay. No class sampling file is written; the initial
+(set at import or by a selection). The 2D shifts are transferred when
+`ptcl2D` was searched and otherwise the shifts `ptcl3D` holds stay. No class sampling file is written; the initial
 greedy draw and every stage sample the global lowest `updatecnt` tiers
 (`sample4update_cnt`), as every `balance=none` stage does. The ladder cannot
 be planned from class FRCs: `lpstart`/`lpstop` are taken from the command line
@@ -423,8 +424,11 @@ automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
 ## 9. Final Reconstruction
 
 `solve3D` runs a fresh original-sampling reconstruction from selected
-particles for full schedules and for every multi-state schedule. Other
-explicit early-stop schedules skip this final all-particle reconstruction.
+particles for full schedules, for every multi-state schedule, and for a
+single-state schedule stopped explicitly (`nstages`) at stage 3 or later; the
+run manifest follows it, so such a run can be the frozen input of
+`solve3D_addon`, which then runs that stage. Single-state schedules stopped
+before stage 3 skip this final all-particle reconstruction.
 Before a multi-state final reconstruction, a greedy missing-update pass
 (`refine=greedy`) assigns every active particle that no stage updated.
 
