@@ -1,0 +1,9053 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/planned/hardware_resource_planning.html">
+      
+      
+        <link rel="prev" href="emulate_solve3D_stream.html">
+      
+      
+        <link rel="next" href="nu_evidence_mask_cross_validated_threshold.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>SIMPLE hardware resource planning - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#simple-hardware-resource-planning" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              SIMPLE hardware resource planning
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE: the algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/automatic_gain_flip.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automatic Gain-Reference Flip Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/continuous_inplane_refinement_solve2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/ctf_estimation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CTF Modeling and Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-free Motion Correction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/nonuniform_filtering.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/particle_picking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Picking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/reconstruction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cartesian 3D Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/refine2d_class_averaging.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine2D and CTF-Aware Class Averaging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/refine3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iterative 3D Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/sampling_and_fractional_updates.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling and Fractional Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/solve2d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solve2D: De Novo 2D Class-Average Determination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/solve3d.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solve3D: De Novo 3D Map Determination
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/streaming_pipeline.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Streaming Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_16" id="__nav_4_16_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity analysis
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity analysis
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/heterogeneity_analysis/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/heterogeneity_analysis/classify3d_refs.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification (classify3D_refs)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/heterogeneity_analysis/flex_pca.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Projection-Aware Flex PCA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/heterogeneity_analysis/refine3d_states.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement (refine3D_states)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2_process_heterogeneous_datasets.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Processing heterogeneous data sets in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how2s/memory_estimator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation-note status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_2" id="__nav_8_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/abinitio2D_seeded_restart.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio2D seeded restart: initialize from the previous 2D clustering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/abinitio3D_addon_mode_proposal.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    abinitio3D_addon — development proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/calpha_finder.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C-alpha finder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/cont_kb_gather_performance.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous KB Gather Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/continuous_3D_pose_end_polishing_history_and_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated history and handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/continuous_3D_pose_end_polishing_scientific_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated scientific review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/continuous_3D_pose_end_polishing_validation_evidence.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement: consolidated validation evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/flex_cls_expansion_2026_10_01.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    cls_expansion: method and benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/flex_pca_envelope_support.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_pca: sampling-distance control, reconstruction backends, and the envelope mask as solve support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/nu_evidence_local_sharpening.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence local sharpening: model-free LocScale from cross-half evidence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/nu_refine_ml_estimator_competition.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retiring the NU shell walk: a dense static ladder with the regularized pair in the competition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/pcg_backend_overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The PCG reconstruction backend: what it is today
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/pcg_decision_log.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: decision log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/pcg_priors_history.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG backend: the complete experiment record (2026-08-25 to 2026-09-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/project_data_relocation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../completed/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8_3" id="__nav_8_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="atom_bfactor_model.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atomic B factors in SINGLE model building and refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="emulate_solve3D_stream.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    emulate_solve3D_stream: the stream's solve3D/solve3D_addon cycle, offline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE hardware resource planning
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="hardware_resource_planning.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE hardware resource planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Purpose
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-existing-simple-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Existing SIMPLE behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-terms-that-must-remain-separate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Terms that must remain separate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Terms that must remain separate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-partitions-and-concurrent-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Partitions and concurrent jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-per-process-and-whole-job-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Per-process and whole-job memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-total-work-and-active-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Total work and active work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-shared-and-distributed-memory-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Shared- and distributed-memory environments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-hardware-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Hardware inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Hardware inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-scheduler-capability-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Scheduler capability profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-workload-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Workload inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Workload inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-acquisition-and-detector-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Acquisition and detector profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-determine-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Determine concurrency
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Determine concurrency">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-cpu-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 CPU limit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-memory-limit-for-a-single-worker-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Memory limit for a single-worker model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-whole-commander-or-process-tree-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Whole-commander or process-tree model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-gpu-and-administrative-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 GPU and administrative limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-streaming-rate-and-persistent-worker-pools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.5 Streaming rate and persistent-worker pools
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-determine-the-number-of-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Determine the number of parts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-worked-local-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Worked local example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-calibration-corpus-and-model-training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Calibration corpus and model training
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Calibration corpus and model training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-installation-time-site-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 Installation-time site profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92-workload-time-recommendation-and-local-learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 Workload-time recommendation and local learning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93-administrator-run-reference-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 Administrator-run reference benchmark
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-measurement-and-parameter-optimization-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Measurement and parameter-optimization framework
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Measurement and parameter-optimization framework">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#101-framework-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.1 Framework components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#102-where-measurements-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.2 Where measurements run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#103-low-level-resource-qualification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3 Low-level resource qualification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1031-fast-probes-and-bullet-run-scaling-theory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3.1 Fast probes and bullet-run scaling theory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1032-minimum-viable-simple-qualification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3.2 Minimum viable SIMPLE qualification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1033-initial-run-on-the-reference-workstation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3.3 Initial run on the reference workstation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#104-filling-calibration-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.4 Filling calibration gaps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#105-adapting-to-new-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.5 Adapting to new hardware
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-validation-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Validation procedure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-proposed-planner-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Proposed planner output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-gaps-before-automatic-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Gaps before automatic selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-review-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Review questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_mask_cross_validated_threshold.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-evidence mask: threshold chosen by cross-half prediction error
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_states_cavgs.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    refine3D_states_cavgs: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="single_pcg_integration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE on the PCG backend: the atomic density prior
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="species_discovery.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE without a species input: atom detection, Gaussian density model, species discovery and map simulation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="species_discovery_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Review report: single_species_proto (SINGLE atom detection without a species input)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_3_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_3_9" id="__nav_8_3_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Next release
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_8_3_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_3_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Next release
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="next_release/calpha_nu_evidence_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Resolution Mask for C-alpha Detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="next_release/ctf_refinement_aberrations_ewald_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Defocus refinement, higher-order aberrations and the Ewald sphere: survey and plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_3_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_3_10" id="__nav_8_3_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rejected
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_8_3_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_3_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Rejected
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="rejected/continuous_projection_direction_pftc.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous Projection-Direction Exploration in PFTC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="rejected/continuous_so3_probability_model.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous SO(3) Probability Model for PFTC Assignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="rejected/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="rejected/joint_2d_3d_latent_conformational_mapping.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Joint 2D/3D Latent Affinity Propagation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_4" id="__nav_8_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rejected
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Rejected
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rejected/continuous_3D_pose_cont_refine3D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Standalone Cartesian pose refinement in refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rejected/continuous_3D_pose_end_polishing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous five-parameter pose refinement numerical validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rejected/denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rejected/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rejected/flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rejected/local_linear_diffusion_map_pre_image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rejected/nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/compile_time_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compile-Time Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/motion_correction_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-free Motion Correction Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/test_environment_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Environment Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_15" id="__nav_9_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    2D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/2D/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/2D/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/2D/solve2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solve2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_16" id="__nav_9_16_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3D
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    3D
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/classify3D_refs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-Guided 3D Classification Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/solve3D_addon_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve3D_addon Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/solve3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solve3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/3D/solve3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solve3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_17" id="__nav_9_17_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    NU
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/NU/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_18">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Heterogeneity
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/heterogeneity/refine3D_states_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformational State Refinement Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Stream
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/stream/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/stream/ipc_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream IPC Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/stream/pool2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pool 2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/stream/reference_generation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference Generation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/stream/restart_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Restart Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../policies/stream/stream_3D_ingestion_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream 3D Ingestion Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring-note status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_2" id="__nav_10_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/canonical_sigma2_state_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical Sigma2 State Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/class_average_and_reconstruct3d_partials_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average State, Trailing-Chain Mass and Reconstruct3D Partials Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/comment_novel_inventory_2026-09-30.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comment novels: inventory, September 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/comment_novel_inventory_2026-09-30_drafts.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comment novels: replacement drafts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/external_reference_cc_pose_initialization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Initialize Poses Against External References Before Euclidean Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/flex_on_simple_machinery.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLEX on SIMPLE machinery: fractional state weights and reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/flex_on_simple_machinery_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLEX on SIMPLE machinery: report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLEX PCA architecture and concrete refactoring plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/flex_refactoring_plan_2026_10_06.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FLEX refactoring plan: reduction, reuse, and a numerical test net
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/gui_refactor_plan_2026-10-06.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GUI metadata and assembler refactoring plan, 6 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/heterogeneity_analysis_ui_and_algorithm_docs_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Heterogeneity Analysis UI and Algorithm Documentation Refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/image_rmat_padding_encapsulation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The padded real-space array of image: zero padding, and a box-shaped pointer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/nu_euclidean_loss.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filtering: switch the candidate cost to the plain Euclidean loss
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/pose_cont_refactor_aftermath_issues.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pose_cont refactoring aftermath
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/pose_cont_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous Cartesian pose refinement (refine=cont): refactoring plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/pose_cont_refactoring_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous Cartesian pose refactoring (refine=cont): review report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/prob_state_retirement_flex_split.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire prob_state: flex PCA initializes every particle multi-state split
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/prob_state_retirement_flex_split_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Report: retire prob_state; flex PCA is the only particle state initializer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/refine3d_state_and_reference_workflow_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactor Multi-State 3D Workflows Around Scientific Intent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/release4_legacy_cleanup_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release 4 legacy cleanup: refactoring report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/retire_reconstructor_eo_module.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Retire the simple_reconstructor_eo Module
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/solve2D_chunks_move_plan_2026-10-06.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    solve2D_chunks move plan, 6 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/stream_area_review_2026-09-30.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream area review: state of the streaming pipeline, September 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/stream_area_review_2026-10-02.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream area review: state of the streaming pipeline, October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/stream_area_review_2026-10-05.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream area review: state of the streaming pipeline, 5 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/stream_fix_plan_2026-10-05.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream fix plan, 5 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/stream_followup_plan_2026-10-05.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream follow-up plan, 5 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/stream_owned_state_compile_time_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream Owned-State Refactoring: Compile-Time Report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/test_review_record.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test review record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/testing_standards_assessment.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE's testing against modern practice: an assessment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/trailing_reconstruction_without_halfmap_blend.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trailing reconstruction without the finished-halfmap blend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/trailing_reconstruction_without_halfmap_blend_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Review report: trailing reconstruction without the finished-halfmap blend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/ui_category_membership_tidying.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Category Membership Tidying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/uniform_test_environment_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A uniform, two-tier test environment for SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/view_balanced_fractional_sampling_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3-D fractional-update balance refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/completed/view_balanced_fractional_sampling_refactoring_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Report: 3-D fractional-update balance refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_3" id="__nav_10_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planned
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Planned
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 5: workflow gates and nightly runner handover
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/pool2D_encapsulation_plan_2026-10-06.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pool 2D encapsulation plan, 6 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/release4_legacy_cleanup_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release 4: Legacy cleanup, outstanding items
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/single_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SINGLE tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/stream_3D_first_run_plan_2026-10-07.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream 3D first run plan, 7 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/stream_3D_snapshots_plan_2026-10-06.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream 3D snapshots plan, 6 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/stream_area_tests_handover.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream tests in the new test environment: handover to Ruben
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/stream_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream refactor: the stages as clients of the library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/stream_sieve_ini3D_plan_2026-10-08.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stream initial 3D from the sieve's class averages, plan, 8 October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_3_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_3_10" id="__nav_10_3_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Need2basis
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_10_3_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_3_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Need2basis
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/need2basis/mrc_stack_volume_output_suffix_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Canonical MRC stack and volume output suffix refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/need2basis/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_3_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_3_11" id="__nav_10_3_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Next release
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_10_3_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_3_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Next release
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/next_release/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/planned/next_release/x_execution_layer_adoption.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adopting X's Execution Layer in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_4" id="__nav_10_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rejected
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Rejected
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/rejected/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/rejected/contract_submodule_architecture.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contract/Implementation Module Architecture for Fast Builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/rejected/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/rejected/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../refactoring_notes/rejected/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Purpose
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-existing-simple-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Existing SIMPLE behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-terms-that-must-remain-separate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Terms that must remain separate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Terms that must remain separate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-partitions-and-concurrent-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Partitions and concurrent jobs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-per-process-and-whole-job-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Per-process and whole-job memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-total-work-and-active-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Total work and active work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-shared-and-distributed-memory-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Shared- and distributed-memory environments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-hardware-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Hardware inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Hardware inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-scheduler-capability-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Scheduler capability profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-workload-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Workload inventory
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Workload inventory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-acquisition-and-detector-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Acquisition and detector profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-determine-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Determine concurrency
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Determine concurrency">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-cpu-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 CPU limit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-memory-limit-for-a-single-worker-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Memory limit for a single-worker model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-whole-commander-or-process-tree-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Whole-commander or process-tree model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-gpu-and-administrative-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 GPU and administrative limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-streaming-rate-and-persistent-worker-pools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.5 Streaming rate and persistent-worker pools
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-determine-the-number-of-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Determine the number of parts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-worked-local-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Worked local example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-calibration-corpus-and-model-training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Calibration corpus and model training
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Calibration corpus and model training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-installation-time-site-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 Installation-time site profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92-workload-time-recommendation-and-local-learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 Workload-time recommendation and local learning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93-administrator-run-reference-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 Administrator-run reference benchmark
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-measurement-and-parameter-optimization-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Measurement and parameter-optimization framework
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Measurement and parameter-optimization framework">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#101-framework-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.1 Framework components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#102-where-measurements-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.2 Where measurements run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#103-low-level-resource-qualification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3 Low-level resource qualification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1031-fast-probes-and-bullet-run-scaling-theory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3.1 Fast probes and bullet-run scaling theory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1032-minimum-viable-simple-qualification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3.2 Minimum viable SIMPLE qualification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1033-initial-run-on-the-reference-workstation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3.3 Initial run on the reference workstation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#104-filling-calibration-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.4 Filling calibration gaps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#105-adapting-to-new-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.5 Adapting to new hardware
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-validation-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Validation procedure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-proposed-planner-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Proposed planner output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-gaps-before-automatic-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Gaps before automatic selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-review-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Review questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="simple-hardware-resource-planning">SIMPLE hardware resource planning<a class="headerlink" href="#simple-hardware-resource-planning" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> DRAFT for user and system-administrator review, 2026-09-29</p>
+<h2 id="1-purpose">1. Purpose<a class="headerlink" href="#1-purpose" title="Permanent link">&para;</a></h2>
+<p>This document defines a reproducible way to translate available hardware and a
+SIMPLE workload into batch and streaming execution settings:</p>
+<ul>
+<li><code>nthr</code>: OpenMP threads used by each worker or partition;</li>
+<li><code>ncunits</code>: maximum workers or partition jobs allowed to run concurrently;</li>
+<li><code>nparts</code>: total number of pieces into which the work is divided;</li>
+<li><code>job_memory_per_task</code>: scheduler memory request for one concurrent worker;</li>
+<li>stage-specific persistent-worker counts and threads for streaming.</li>
+</ul>
+<p>The immediate goal is guidance and a future planning tool. This draft does not
+change SIMPLE defaults or automatically submit jobs.</p>
+<p>Memory alone cannot determine <code>nparts</code>. CPU capacity limits concurrency, the
+dataset determines useful partition granularity, and the scheduler determines
+placement. GPU capacity, local storage, network throughput, and wall-time
+limits may impose additional constraints. For streaming, the acquisition rate
+also imposes a service-rate requirement: processing must keep up with incoming
+movies without an unbounded backlog.</p>
+<h2 id="2-existing-simple-behavior">2. Existing SIMPLE behavior<a class="headerlink" href="#2-existing-simple-behavior" title="Permanent link">&para;</a></h2>
+<p>SIMPLE already contains the following pieces of the resource model:</p>
+<ul>
+<li><code>memreport=yes memreport_interval=&lt;seconds&gt;</code> writes per-process current and
+  peak RSS samples to <code>memory_usage_&lt;pid&gt;.csv</code>.</li>
+<li><code>scripts/memory_estimator.py</code> provides calibrated memory estimates for
+  <code>motion_correct</code>, <code>solve2D</code>, and <code>solve3D</code>. The calibration data,
+  targets, safety factors, and limitations are described in
+  <a href="../../how2s/memory_estimator.html">memory estimator and benchmark guide</a>.</li>
+<li><code>nparts</code> is the total number of distributed work partitions.</li>
+<li><code>ncunits</code> is the maximum number of partition jobs dispatched concurrently.</li>
+<li>When <code>ncunits</code> is omitted, the parameter layer currently sets
+  <code>ncunits = nparts</code>.</li>
+<li><code>nthr</code> is the OpenMP thread count per partition job.</li>
+<li>The local queue backend already warns when <code>ncunits * nthr</code> exceeds the
+  processor count reported by OpenMP.</li>
+<li><code>job_memory_per_task</code> becomes the scheduler memory request for a distributed
+  job. Its current default is 16000 MB; it is not generally derived from the
+  calibrated Python estimator.</li>
+</ul>
+<p>The older Fortran <code>simple_mem_estimator</code> is not the planning authority. It is
+active for only a few program paths, several of its functions are placeholders
+or disabled, and its coefficients are separate from the calibrated models.</p>
+<h2 id="3-terms-that-must-remain-separate">3. Terms that must remain separate<a class="headerlink" href="#3-terms-that-must-remain-separate" title="Permanent link">&para;</a></h2>
+<h3 id="31-partitions-and-concurrent-jobs">3.1 Partitions and concurrent jobs<a class="headerlink" href="#31-partitions-and-concurrent-jobs" title="Permanent link">&para;</a></h3>
+<p><code>nparts</code> describes work granularity. <code>ncunits</code> describes resource concurrency.
+They are equal only when every part should run at once.</p>
+<p>For example, <code>nparts=32 ncunits=8</code> creates 32 parts but runs at most eight at a
+time. As each part completes, another is dispatched. This can improve load
+balance without requiring resources for 32 simultaneous workers.</p>
+<h3 id="32-per-process-and-whole-job-memory">3.2 Per-process and whole-job memory<a class="headerlink" href="#32-per-process-and-whole-job-memory" title="Permanent link">&para;</a></h3>
+<p>The memory target must be identified before applying any formula:</p>
+<ul>
+<li><strong>Single-worker peak:</strong> one worker's allocation. This can determine
+  <code>job_memory_per_task</code> and memory-limited concurrency.</li>
+<li><strong>Whole-commander peak:</strong> the complete process already includes the relevant
+  work. Do not multiply it by <code>nparts</code>.</li>
+<li><strong>Process-tree bound:</strong> parent plus workers has already been aggregated. Do
+  not multiply it again by <code>ncunits</code>.</li>
+</ul>
+<p>The current calibrated targets are:</p>
+<table>
+<thead>
+<tr>
+<th>Commander</th>
+<th>Estimator target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>motion_correct</code></td>
+<td>single-worker peak RSS</td>
+</tr>
+<tr>
+<td><code>solve2D</code></td>
+<td>whole-commander peak RSS</td>
+</tr>
+<tr>
+<td><code>solve3D</code></td>
+<td>conservative parent plus largest <code>nparts</code> worker peaks</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-total-work-and-active-work">3.3 Total work and active work<a class="headerlink" href="#33-total-work-and-active-work" title="Permanent link">&para;</a></h3>
+<p>Partition calculations should use objects that actually perform work:
+micrographs, movies, selected particles, active classes, or other workflow
+units. Inactive or rejected records must not create empty parts when that can
+be avoided.</p>
+<h3 id="34-shared-and-distributed-memory-environments">3.4 Shared- and distributed-memory environments<a class="headerlink" href="#34-shared-and-distributed-memory-environments" title="Permanent link">&para;</a></h3>
+<p>The execution environment is a model input, not merely a deployment detail.
+SIMPLE must distinguish at least these cases:</p>
+<ul>
+<li><strong>Shared-memory workstation:</strong> one node whose CPU cores, RAM, GPUs, and I/O
+  paths are shared by all active SIMPLE processes and OpenMP threads.</li>
+<li><strong>Distributed-memory cluster:</strong> multiple scheduler-managed nodes; memory on
+  one node cannot satisfy an allocation on another node, and work is divided
+  among processes, jobs, MPI/coarray images, or persistent workers.</li>
+<li><strong>Hybrid cluster:</strong> the usual cluster configuration, with shared-memory
+  OpenMP execution inside each node and distributed workers across nodes.</li>
+</ul>
+<p>On a workstation, <code>nthr</code> controls threads inside a worker, while several local
+workers may still compete for the same memory bandwidth, RAM, filesystem, and
+GPU. The planner must reserve resources for the desktop, operating system, and
+other users when the workstation is not dedicated. Aggregate capacity is
+bounded by the one machine:</p>
+<pre><code class="language-text">ncunits * nthr &lt;= allocated workstation CPU threads
+M_parent + ncunits * M_worker + M_cache &lt;= usable workstation RAM
+</code></pre>
+<p>On a cluster, total memory across all nodes is not a single interchangeable
+pool. Every worker must fit its scheduler placement, and the concurrent-worker
+calculation must be performed per node before it is summed:</p>
+<pre><code class="language-text">U_node(i) = min(U_cpu_node(i), U_mem_node(i), U_gpu_node(i), U_admin_node(i))
+ncunits   &lt;= sum(U_node(i), i=1..N_nodes)
+</code></pre>
+<p>The parent or controller may consume memory only on a designated launch node,
+so <code>M_parent</code> must be charged to that node rather than divided across the
+allocation. Likewise, a GPU on one node cannot satisfy a worker placed on a
+different node.</p>
+<p>The environment also changes performance behavior. A workstation often uses
+local storage but experiences interactive contention; a cluster may provide
+more aggregate compute while sharing a parallel filesystem and network with
+other jobs. Launch latency, metadata traffic, inter-node communication,
+per-node merge work, and scheduler queue policy must be represented explicitly
+in cluster measurements. Models trained only on a workstation must not be used
+as cluster models without cluster validation, or vice versa.</p>
+<h2 id="4-hardware-inventory">4. Hardware inventory<a class="headerlink" href="#4-hardware-inventory" title="Permanent link">&para;</a></h2>
+<p>Before choosing execution settings, record:</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Hardware or policy value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>C_node</code></td>
+<td>CPU threads allocated to SIMPLE on one node</td>
+</tr>
+<tr>
+<td><code>R_node</code></td>
+<td>RAM allocated to SIMPLE on one node, in MiB</td>
+</tr>
+<tr>
+<td><code>G_node</code></td>
+<td>GPUs allocated on one node</td>
+</tr>
+<tr>
+<td><code>R_gpu</code></td>
+<td>usable memory per GPU, in MiB</td>
+</tr>
+<tr>
+<td><code>N_nodes</code></td>
+<td>nodes that may be used concurrently</td>
+</tr>
+<tr>
+<td><code>U_admin</code></td>
+<td>administrator or queue limit on concurrent jobs</td>
+</tr>
+<tr>
+<td><code>W_limit</code></td>
+<td>scheduler wall-time limit</td>
+</tr>
+<tr>
+<td><code>R_reserve</code></td>
+<td>RAM reserved for the OS, filesystem cache, launcher, and master</td>
+</tr>
+<tr>
+<td><code>D_local</code></td>
+<td>usable local scratch capacity and throughput</td>
+</tr>
+<tr>
+<td><code>E_kind</code></td>
+<td>execution environment: workstation, cluster, or hybrid cluster</td>
+</tr>
+<tr>
+<td><code>S_kind</code></td>
+<td>scheduler family or <code>local</code></td>
+</tr>
+<tr>
+<td><code>S_version</code></td>
+<td>scheduler and site-adapter version</td>
+</tr>
+<tr>
+<td><code>S_memscope</code></td>
+<td>memory accounting scope: job, node, task, slot, or unresolved</td>
+</tr>
+<tr>
+<td><code>P_place</code></td>
+<td>scheduler/process placement policy across nodes, sockets, GPUs, and NUMA domains</td>
+</tr>
+</tbody>
+</table>
+<p>The inventory schema must be extensible. In addition to these common values,
+it should retain processor architecture and instruction sets, sockets and NUMA
+domains, measured memory bandwidth, accelerator type and supported precision,
+host-to-device and device-to-device interconnects, storage class, and network
+topology. Unknown fields must survive a read/write cycle so adding a new
+hardware capability does not invalidate older site profiles.</p>
+<p>Use scheduler allocations rather than the physical machine totals. On a login
+node or shared workstation, use only resources explicitly available to the
+run. Record whether <code>C_node</code> counts physical cores or logical hardware threads;
+the selected convention must match the scheduler's CPU accounting.</p>
+<p>A provisional memory reserve for dedicated nodes is:</p>
+<pre><code class="language-text">R_reserve = max(4096 MiB, 0.10 * R_node)
+</code></pre>
+<p>This is an initial administrative policy, not a calibrated SIMPLE constant.
+Shared machines and filesystem-heavy stages may require a larger reserve.</p>
+<h3 id="41-scheduler-capability-profile">4.1 Scheduler capability profile<a class="headerlink" href="#41-scheduler-capability-profile" title="Permanent link">&para;</a></h3>
+<p>Cluster planning must not assume that every site uses SLURM. Initial coverage
+should include at least:</p>
+<ul>
+<li>SLURM;</li>
+<li>IBM Spectrum LSF and sites retaining legacy IBM queue interfaces such as
+  LoadLeveler or local wrappers;</li>
+<li>PBS Pro, OpenPBS, and Torque-family deployments;</li>
+<li>Sun/Grid Engine and Univa Grid Engine deployments;</li>
+<li>direct local execution; and</li>
+<li>an administrator-configurable adapter for other schedulers.</li>
+</ul>
+<p>This list defines coverage targets, not a claim that their command-line flags
+are interchangeable. CPU, memory, task, node, GPU, array, and wall-time
+requests have different meanings across schedulers and even across local site
+configurations of the same scheduler. For example, memory may be enforced per
+job, per node, per task, or per requested slot. A planner must never translate
+<code>job_memory_per_task</code> into a native option until the adapter has established
+the site's accounting convention.</p>
+<p>Every scheduler adapter should expose the same normalized capability contract:</p>
+<ul>
+<li>scheduler identity, version, queues or partitions, and site configuration;</li>
+<li>submission, status, cancellation, and exit-status propagation;</li>
+<li>physical-core, hardware-thread, task, node, socket, and NUMA allocation;</li>
+<li>memory request and enforcement scope;</li>
+<li>GPU type, count, sharing, and device-binding semantics;</li>
+<li>wall-time, job-array, dependency, retry, requeue, and preemption behavior;</li>
+<li>maximum active and queued jobs, array throttling, and site fair-use limits;</li>
+<li>environment modules, containers, launchers, local scratch, and exported
+  environment variables;</li>
+<li>stdout/stderr locations and the accounting records needed by telemetry.</li>
+</ul>
+<p>Capabilities should be discovered where possible and confirmed by the system
+administrator. Site overrides must be explicit, versioned, and retained in the
+site profile. An unknown scheduler or unresolved memory/CPU convention must
+disable automatic submission and return a rendered recommendation for review;
+it must not silently fall back to SLURM semantics.</p>
+<p>Scheduler support should be tracked through a coverage matrix with three
+levels:</p>
+<ol>
+<li><strong>Render coverage:</strong> SIMPLE can generate and display the native request.</li>
+<li><strong>Execution coverage:</strong> submission, monitoring, cancellation, dependencies,
+   arrays, and exit codes have passed adapter qualification.</li>
+<li><strong>Resource coverage:</strong> CPU, memory, GPU, placement, and concurrency requests
+   have been verified against scheduler accounting on a real site.</li>
+</ol>
+<p>Only resource-qualified adapters may apply automatically generated production
+settings. The matrix must record scheduler and adapter versions, the tested
+site, supported capabilities, known limitations, and the date of the last
+qualification.</p>
+<h2 id="5-workload-inventory">5. Workload inventory<a class="headerlink" href="#5-workload-inventory" title="Permanent link">&para;</a></h2>
+<p>Record the inputs that can materially change cost:</p>
+<ul>
+<li>commander or workflow stage;</li>
+<li>number of active work objects <code>N_work</code>;</li>
+<li>detector manufacturer and model, sensor generation, and readout mode;</li>
+<li>movie format, compression, bit depth or event representation, and file size;</li>
+<li>physical and super-resolution movie dimensions, frame count, and effective
+  downscaled dimensions;</li>
+<li>movie acquisition rate, normal and peak inter-arrival times, burst size, and
+  permitted processing lag;</li>
+<li>particle box size and sampled-particle count;</li>
+<li>number of classes, references, states, and iterations;</li>
+<li>sampling distance, mask diameter, symmetry, and reconstruction backend;</li>
+<li><code>nthr</code>, because threads can add workspaces and FFT plans;</li>
+<li>CPU-only, GPU, persistent-worker, coarray, or scheduler backend;</li>
+<li>expected bytes read and written per work object.</li>
+</ul>
+<p>Inputs outside a memory model's calibration range must be treated as
+extrapolations and validated with telemetry before production use.</p>
+<h3 id="51-acquisition-and-detector-profile">5.1 Acquisition and detector profile<a class="headerlink" href="#51-acquisition-and-detector-profile" title="Permanent link">&para;</a></h3>
+<p>The detector name alone is not a sufficient predictor. The same detector can
+produce different costs in counting, super-resolution, dose-fractionated, or
+event-based modes. Record the values that determine actual input volume:</p>
+<ul>
+<li>detector model and active sensor area;</li>
+<li>output format, including MRC, TIFF, EER, or another event representation;</li>
+<li>stored width and height, physical-pixel width and height, frames or events,
+  and sampling distance;</li>
+<li>average and high-percentile compressed file size;</li>
+<li>sustained movie rate <code>lambda_avg</code> and peak rate <code>lambda_peak</code>;</li>
+<li>burst duration, microscope pauses, and the largest acceptable backlog or
+  end-to-end latency.</li>
+</ul>
+<p>For a movie with stored dimensions <code>Nx</code> by <code>Ny</code>, <code>Nf</code> frames, and effective
+storage <code>Bpp</code> bytes per pixel, the uncompressed input size is approximately:</p>
+<pre><code class="language-text">B_movie = Nx * Ny * Nf * Bpp
+R_input = lambda * B_movie
+</code></pre>
+<p>Event formats and compression require measured <code>B_movie</code>; their cost must not
+be inferred from decoded dimensions alone. Both decoded compute cost and
+on-disk I/O rate belong in the model.</p>
+<h2 id="6-determine-concurrency">6. Determine concurrency<a class="headerlink" href="#6-determine-concurrency" title="Permanent link">&para;</a></h2>
+<p>Choose a candidate thread count <code>T = nthr</code>. Measure several values when
+possible; the largest thread count is not necessarily the fastest or most
+memory-efficient.</p>
+<h3 id="61-cpu-limit">6.1 CPU limit<a class="headerlink" href="#61-cpu-limit" title="Permanent link">&para;</a></h3>
+<p>For independent workers on one node:</p>
+<pre><code class="language-text">U_cpu_node = floor(C_node / T)
+</code></pre>
+<p>Across equivalent nodes:</p>
+<pre><code class="language-text">U_cpu = N_nodes * U_cpu_node
+</code></pre>
+<p>For heterogeneous allocations, calculate <code>U_cpu_node</code>, <code>U_mem_node</code>, and any
+accelerator limit independently for each node and sum the resulting per-node
+worker capacities. Do not multiply the capacity of the largest node by
+<code>N_nodes</code>.</p>
+<p>For the local backend, require:</p>
+<pre><code class="language-text">ncunits * nthr &lt;= C_node
+</code></pre>
+<p>unless deliberate oversubscription has been benchmarked and approved.</p>
+<h3 id="62-memory-limit-for-a-single-worker-model">6.2 Memory limit for a single-worker model<a class="headerlink" href="#62-memory-limit-for-a-single-worker-model" title="Permanent link">&para;</a></h3>
+<p>Let <code>M_worker</code> be the estimator's recommended worker memory, not its raw fitted
+value. Let <code>M_parent</code> be the parent/master peak retained while workers run. If
+the parent is not measured, reserve it explicitly rather than assuming zero.</p>
+<pre><code class="language-text">U_mem_node = floor((R_node - R_reserve - M_parent) / M_worker)
+</code></pre>
+<p><code>U_mem_node</code> must be at least one. If it is zero, reduce <code>nthr</code>, reduce input
+dimensions where scientifically permitted, request a larger-memory node, or
+use a stage-specific strategy. Do not solve the problem by allowing swapping.</p>
+<p>For scheduler jobs that are placed one worker per allocation, request:</p>
+<pre><code class="language-text">job_memory_per_task &gt;= M_worker
+</code></pre>
+<p>When several workers can share a node, the scheduler request and placement
+policy must guarantee their aggregate memory plus the reserve fits that node.</p>
+<h3 id="63-whole-commander-or-process-tree-model">6.3 Whole-commander or process-tree model<a class="headerlink" href="#63-whole-commander-or-process-tree-model" title="Permanent link">&para;</a></h3>
+<p>Compare the estimator's recommended total directly with the memory allocated
+to the entire command. Do not multiply that value by <code>nparts</code> or <code>ncunits</code>.</p>
+<p>The current <code>solve3D</code> model takes <code>partitions</code> and conservatively sums the
+largest <code>nparts</code> worker peaks. It does not take <code>ncunits</code>; therefore it can
+overestimate a throttled run where <code>ncunits &lt; nparts</code>. That limitation should
+be removed in a future calibration before automatic planning is enabled.</p>
+<h3 id="64-gpu-and-administrative-limits">6.4 GPU and administrative limits<a class="headerlink" href="#64-gpu-and-administrative-limits" title="Permanent link">&para;</a></h3>
+<p>For stages where one worker owns one GPU:</p>
+<pre><code class="language-text">U_gpu = N_nodes * G_node
+</code></pre>
+<p>This must be replaced with a stage-specific value when multiple workers share
+a GPU or one worker uses multiple GPUs. SIMPLE currently has no calibrated GPU
+memory model, so GPU runs require measured device-memory evidence.</p>
+<p>The final concurrency is:</p>
+<pre><code class="language-text">ncunits = max(1, min(N_work, U_cpu, U_mem, U_gpu, U_admin))
+</code></pre>
+<p>Omit <code>U_gpu</code> for CPU-only stages and omit any other limit that is genuinely
+not applicable. Never omit an unknown constraint by silently treating it as
+unlimited; report it as unresolved.</p>
+<h3 id="65-streaming-rate-and-persistent-worker-pools">6.5 Streaming rate and persistent-worker pools<a class="headerlink" href="#65-streaming-rate-and-persistent-worker-pools" title="Permanent link">&para;</a></h3>
+<p>Streaming is a staged service, not one batch command. Preprocessing,
+reference-picking/extraction, particle sieving, pool 2D, and later 3D work have
+different units of work and may use different persistent or partition-worker
+pools. The planner must recommend workers per stage and identify the stage
+that limits sustained throughput. A global <code>workers</code> or <code>ncunits</code> value must
+not conceal a slower downstream stage.</p>
+<p>For stage <code>s</code>, measure its effective service rate with <code>W</code> workers:</p>
+<pre><code class="language-text">mu_s(W) = completed input movies per second at stage s
+</code></pre>
+<p>The smallest acceptable worker count is the smallest measured <code>W</code> satisfying:</p>
+<pre><code class="language-text">mu_s(W) &gt;= safety_rate * lambda_peak
+</code></pre>
+<p>where <code>safety_rate</code> covers runtime variance and short acquisition bursts. This
+condition is necessary but not sufficient. The worker pool must also satisfy
+the per-node CPU, memory, GPU, local-scratch, and I/O constraints from section
+6. Because workers contend for memory bandwidth and storage, do not assume
+<code>mu_s(W) = W * mu_s(1)</code>; benchmark nearby counts until marginal throughput no
+longer justifies another worker.</p>
+<p>The planner should model the backlog explicitly:</p>
+<pre><code class="language-text">backlog(t + dt) = max(0, backlog(t) + arrivals(dt) - completions(dt))
+drain_time      = backlog / max(mu_bottleneck - lambda_avg, epsilon)
+</code></pre>
+<p>Recommendations should include steady-state utilization, peak backlog,
+predicted drain time after a burst, and reserved idle capacity. A configuration
+that eventually finishes but falls continuously behind acquisition is a
+failed stream configuration.</p>
+<p>The current stream implementation already exposes different controls at stage
+boundaries: preprocessing and reference-picking use partition concurrency,
+particle sieving derives persistent workers from <code>nchunks</code>, and the master can
+start a persistent-worker server. Calibration must preserve these distinct
+semantics and test restart behavior; it must not replace them with one batch
+formula.</p>
+<h2 id="7-determine-the-number-of-parts">7. Determine the number of parts<a class="headerlink" href="#7-determine-the-number-of-parts" title="Permanent link">&para;</a></h2>
+<p>After concurrency is known, choose <code>nparts</code>. The initial requirements are:</p>
+<pre><code class="language-text">ncunits &lt;= nparts &lt;= N_work
+</code></pre>
+<p>More parts than concurrent slots can improve load balance and allow shorter
+retries, but every part adds launch, filesystem, merge, and bookkeeping cost.</p>
+<p>Two useful estimates are:</p>
+<pre><code class="language-text">P_time = ceil(total_estimated_work_seconds / target_part_seconds)
+P_size = ceil(N_work / target_objects_per_part)
+</code></pre>
+<p>An initial general-purpose heuristic is:</p>
+<pre><code class="language-text">nparts = min(N_work, max(ncunits, P_time, P_size))
+</code></pre>
+<p>Until per-stage overhead is measured, cap routine batch runs near two to four
+waves of work:</p>
+<pre><code class="language-text">nparts &lt;= 4 * ncunits
+</code></pre>
+<p>This cap is a starting heuristic, not a scientific or architectural limit.
+Some stages constrain or reinterpret <code>nparts</code>, and continuation files in some
+workflows currently retain partition-shaped state. Check the owning workflow
+before changing <code>nparts</code> across a restart.</p>
+<p>For workflows with <code>nparts_chunk</code>, <code>nparts_pool</code>, or concurrently processed
+chunks, calculate the total possible worker count. For example:</p>
+<pre><code class="language-text">total concurrent workers = concurrent chunks * nparts_chunk
+</code></pre>
+<p>and apply the CPU and memory limits to that total, not to either input alone.</p>
+<h2 id="8-worked-local-example">8. Worked local example<a class="headerlink" href="#8-worked-local-example" title="Permanent link">&para;</a></h2>
+<p>Assume a dedicated workstation provides:</p>
+<pre><code class="language-text">C_node    = 32 CPU threads
+R_node    = 65536 MiB
+N_nodes   = 1
+N_work    = 100 movies
+nthr      = 4
+M_worker  = 4608 MiB
+M_parent  = 1024 MiB
+R_reserve = 6554 MiB
+U_admin   = 32
+</code></pre>
+<p>The <code>M_worker</code> value is the current recommendation for the documented
+4096-by-4096, 16-frame <code>motion_correct</code> example; it must be recalculated for
+the actual movie dimensions, frames, sampling, and threads.</p>
+<pre><code class="language-text">U_cpu = floor(32 / 4) = 8
+U_mem = floor((65536 - 6554 - 1024) / 4608) = 12
+ncunits = min(100, 8, 12, 32) = 8
+</code></pre>
+<p>A two-wave starting point is:</p>
+<pre><code class="language-text">nparts=16 ncunits=8 nthr=4 job_memory_per_task=4608
+</code></pre>
+<p>This is a capacity plan, not a performance optimum. A pilot should compare
+throughput and peak memory with nearby thread/worker combinations.</p>
+<h2 id="9-calibration-corpus-and-model-training">9. Calibration corpus and model training<a class="headerlink" href="#9-calibration-corpus-and-model-training" title="Permanent link">&para;</a></h2>
+<p>The planner must be trained from measurements covering multiple datasets,
+workflow parameters, machines, and software builds. A single reference dataset
+cannot distinguish a genuine resource relationship from a property of that
+particular specimen or acquisition.</p>
+<p>The calibration corpus <code>D_cal</code> is therefore an input to model fitting. Each
+observation should record the following feature groups and measured outcomes:</p>
+<table>
+<thead>
+<tr>
+<th>Feature group</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dataset</td>
+<td>image dimensions, frames, particles, box size, classes, sampling, states, active work objects</td>
+</tr>
+<tr>
+<td>Acquisition</td>
+<td>detector and mode, format, compressed bytes per movie, sustained and peak movie rate, burst length and latency target</td>
+</tr>
+<tr>
+<td>SIMPLE parameters</td>
+<td>commander, <code>nthr</code>, <code>nparts</code>, <code>ncunits</code>, backend, iterations, masks, filters, cache and GPU settings</td>
+</tr>
+<tr>
+<td>Hardware and scheduler</td>
+<td>environment kind, CPUs, RAM, GPUs and GPU RAM, nodes, NUMA layout, local storage, queue limits and placement</td>
+</tr>
+<tr>
+<td>Software environment</td>
+<td>SIMPLE revision, model version, compiler, FFT and math libraries, MPI/coarray runtime, operating system</td>
+</tr>
+<tr>
+<td>Outcomes</td>
+<td>success or failure, peak worker and process-tree memory, elapsed time, throughput, CPU/GPU utilization, I/O, merge time, backlog and latency</td>
+</tr>
+</tbody>
+</table>
+<p>Training runs should deliberately vary both the data and the parameters. They
+must include small, medium, and large cases; parameter combinations near
+expected resource limits; and repeated runs where runtime noise is material.
+Invalid combinations and resource failures are useful observations and should
+be retained with their failure reason rather than silently discarded.</p>
+<p>Models should normally be fitted per commander and execution backend. A single
+universal model is acceptable only if validation demonstrates that it predicts
+each supported commander as well as the dedicated models. Memory, elapsed time,
+and throughput are separate targets; the setting with the lowest memory is not
+necessarily the setting with the shortest elapsed time.</p>
+<p>Streaming models should additionally be fitted per stage and worker-pool
+topology. They must predict both service rate and resource use as persistent
+worker count changes. The optimization target is the smallest safe pool that
+meets the acquisition-rate and latency objectives, not the largest pool the
+machine can launch.</p>
+<p>Workstation, distributed cluster, and hybrid-cluster observations must be
+identified explicitly. A model may share portable workload-size terms across
+them, but environment-specific placement, communication, I/O, contention, and
+memory coefficients require independent validation.</p>
+<p>To avoid optimistic validation, hold out complete datasets and complete
+machines. Randomly splitting rows from the same dataset and host between
+training and validation would allow nearly identical runs to appear on both
+sides. Every fitted model must publish:</p>
+<ul>
+<li>its training ranges and held-out error;</li>
+<li>the SIMPLE and software versions represented;</li>
+<li>its safety margin and uncertainty estimate;</li>
+<li>the feature values required to make a recommendation;</li>
+<li>an out-of-distribution rule that returns "no recommendation".</li>
+</ul>
+<h3 id="91-installation-time-site-profile">9.1 Installation-time site profile<a class="headerlink" href="#91-installation-time-site-profile" title="Permanent link">&para;</a></h3>
+<p>At installation, the system administrator supplies or confirms the hardware
+and scheduler inventory from section 4. The shipped calibration models combine
+that inventory with representative workload envelopes from <code>D_cal</code> to produce
+a site profile, for example:</p>
+<ul>
+<li>supported execution backends and launchers;</li>
+<li>conservative concurrency ceilings per node;</li>
+<li>baseline <code>nthr</code>, <code>ncunits</code>, and <code>job_memory_per_task</code> ranges per commander;</li>
+<li>GPU ownership and memory constraints;</li>
+<li>configurations that require a pilot before production use.</li>
+</ul>
+<p>These are site defaults and feasibility limits, not fixed <code>nparts</code> values for
+all future jobs. The installer does not know the dimensions or number of work
+objects in a future dataset, so it cannot produce a reliable final partition
+count.</p>
+<h3 id="92-workload-time-recommendation-and-local-learning">9.2 Workload-time recommendation and local learning<a class="headerlink" href="#92-workload-time-recommendation-and-local-learning" title="Permanent link">&para;</a></h3>
+<p>When a user supplies an actual dataset and command line, the planner combines
+the site profile with those workload features to recommend <code>nthr</code>, <code>ncunits</code>,
+<code>nparts</code>, and <code>job_memory_per_task</code>. It should explain the limiting constraint
+and identify which inputs are extrapolations.</p>
+<p>Sites may optionally add telemetry from successful pilot and production runs
+to a local calibration corpus. Retraining must be explicit, versioned, and
+reproducible; a new local model replaces a shipped model only after held-out
+validation shows that it is at least as safe within the site's supported
+range. Raw scientific data need not be retained when the recorded features and
+resource telemetry are sufficient for fitting.</p>
+<h3 id="93-administrator-run-reference-benchmark">9.3 Administrator-run reference benchmark<a class="headerlink" href="#93-administrator-run-reference-benchmark" title="Permanent link">&para;</a></h3>
+<p>SIMPLE should publish a versioned reference benchmark that a system
+administrator can run before selecting site defaults. The benchmark needs two
+related but distinct artifacts:</p>
+<ol>
+<li>An immutable input bundle containing openly licensed real data, compact
+   desktop-sized subsets, manifests, checksums, provenance, and expected
+   scientific outputs. A DOI-backed archive such as Zenodo is appropriate for
+   distributing and identifying each released bundle.</li>
+<li>An append-only results corpus containing the input fingerprint, SIMPLE and
+   model versions, hardware and software profile, acquisition metadata,
+   parameter vector, telemetry, correctness result, and failure reason for
+   every run.</li>
+</ol>
+<p>The input bundle is not itself the results database. Keeping them separate
+allows the data release to remain immutable while benchmark observations grow
+across machines and software versions. Results contributed to a shared corpus
+must exclude raw user data, credentials, hostnames, and other site-sensitive
+metadata unless the administrator explicitly approves them.</p>
+<p>The normal qualification workflow should be:</p>
+<ol>
+<li>Download a named benchmark release and verify its checksums.</li>
+<li>Run its local execution adapter on a dedicated desktop or workstation,
+   without requiring a scheduler or cluster account.</li>
+<li>Sweep a bounded set of thread, partition, concurrent-worker, and persistent
+   stream-worker settings within declared time, memory, and storage budgets.</li>
+<li>Verify the expected scientific outputs while collecting resource and
+   throughput telemetry.</li>
+<li>Compare the observations with the shipped model and generate a versioned
+   site correction with uncertainty and supported ranges.</li>
+<li>Optionally validate that correction on cluster nodes using the real
+   scheduler, network, and shared filesystem before enabling cluster-wide
+   recommendations.</li>
+</ol>
+<p>The shipped corpus supplies broad prior evidence; the local benchmark supplies
+the correction for the administrator's actual machine. Extrapolation is
+permitted only inside declared workload and hardware ranges. A local benchmark
+that falls outside them must request another calibration point or return "no
+recommendation" rather than extending a fitted curve without evidence.</p>
+<h2 id="10-measurement-and-parameter-optimization-framework">10. Measurement and parameter-optimization framework<a class="headerlink" href="#10-measurement-and-parameter-optimization-framework" title="Permanent link">&para;</a></h2>
+<p>The project needs one framework that can run controlled experiments, collect
+comparable measurements, identify missing regions of the calibration corpus,
+and fit or validate recommendation models. It should extend the existing
+memory-estimator scripts rather than create an unrelated performance system.</p>
+<h3 id="101-framework-components">10.1 Framework components<a class="headerlink" href="#101-framework-components" title="Permanent link">&para;</a></h3>
+<p>The proposed framework has seven parts:</p>
+<ol>
+<li><strong>Experiment manifest.</strong> A versioned YAML or JSON file identifies the
+   dataset, SIMPLE revision, command, parameter ranges, detector and acquisition
+   profile, hardware requirements, local resource budget, repetitions, timeout,
+   and expected outputs.</li>
+<li><strong>Campaign generator.</strong> It expands the manifest into explicit runs while
+   respecting invalid combinations and a maximum CPU-hour or GPU-hour budget.</li>
+<li><strong>Execution adapters.</strong> Direct local execution is the portable default. The
+   same experiment can optionally run through SLURM, PBS, LSF, SGE, persistent
+   workers, or coarrays without changing its scientific inputs.</li>
+<li><strong>Telemetry collector.</strong> It records process-tree memory, CPU and GPU use,
+   elapsed time, I/O, scheduler placement, stream arrival and completion rates,
+   stage backlog, persistent-worker occupancy, exit status, and SIMPLE's own
+   metrics in a common schema.</li>
+<li><strong>Reference-data and results manager.</strong> It downloads and verifies immutable
+   benchmark bundles and writes scrubbed observations to an append-only local
+   or shared results store.</li>
+<li><strong>Feature and model pipeline.</strong> It converts measurements into <code>D_cal</code>, fits
+   commander/backend and stream-stage service models, evaluates held-out
+   datasets and machines, and publishes a versioned model bundle.</li>
+<li><strong>Advisor and report.</strong> It combines a model bundle, site profile, and actual
+   workload to explain recommended values and unresolved constraints.</li>
+</ol>
+<p>Every generated run needs a stable experiment ID derived from the manifest,
+dataset fingerprint, software revision, and parameter vector. Results must be
+append-only so interrupted campaigns can resume without silently replacing an
+earlier observation.</p>
+<h3 id="102-where-measurements-run">10.2 Where measurements run<a class="headerlink" href="#102-where-measurements-run" title="Permanent link">&para;</a></h3>
+<p>Different evidence belongs at different frequencies and on different hosts:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Where and when</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fast probes</td>
+<td>build CI and optional local installation qualification; seconds</td>
+<td>detect large regressions and characterize basic CPU, FFT, memory, I/O, launcher, and thread behavior</td>
+</tr>
+<tr>
+<td>Bullet runs</td>
+<td>a dedicated local desktop, workstation, or administrator-selected host; seconds to a few minutes</td>
+<td>sample a small number of nearby parameter settings and estimate local scaling slopes</td>
+</tr>
+<tr>
+<td>Representative pilots</td>
+<td>the target workstation by default, or the target queue and storage path when qualifying a cluster; minutes</td>
+<td>correct the shipped model for the actual dataset and site</td>
+</tr>
+<tr>
+<td>Calibration campaigns</td>
+<td>dedicated desktop/workstation by default; an optional controlled cluster node for cluster-specific behavior</td>
+<td>fill the multi-dataset corpus and refit released models</td>
+</tr>
+<tr>
+<td>Production telemetry</td>
+<td>opt-in, sampled, and scrubbed of scientific data</td>
+<td>detect drift and propose future calibration points</td>
+</tr>
+</tbody>
+</table>
+<p>CI runners are shared and noisy, so their absolute timings must not determine
+production resource requests. They are useful for detecting discontinuities
+and verifying that the measurement machinery still works. Published models
+must rely on controlled hosts plus representative site pilots.</p>
+<p>The portable benchmark must complete through the local adapter without a
+batch queue, privileged administrator operations, or shared cluster storage.
+Its manifests must cap elapsed time, peak storage, memory, and CPU/GPU use so a
+system administrator can select a subset appropriate for an ordinary desktop.
+Queue-based runs are additional evidence only when SIMPLE will be deployed on
+a cluster. They measure placement, network, launcher, and shared-filesystem
+effects; queue delay and unrelated cluster load must not define portable
+kernel or CPU coefficients.</p>
+<p>For clusters, bullet runs should include both one-node shared-memory probes and
+multi-node distributed probes. This separates thread scaling within a node
+from worker scaling across nodes and exposes shared-filesystem or network
+bottlenecks. Workstation qualification normally omits multi-node probes but
+must measure contention between concurrent local workers.</p>
+<h3 id="103-low-level-resource-qualification">10.3 Low-level resource qualification<a class="headerlink" href="#103-low-level-resource-qualification" title="Permanent link">&para;</a></h3>
+<p>Before running a full reference workflow, SIMPLE should run a short,
+scheduler-free qualification campaign that establishes a conservative operating
+envelope for the local machine. These are performance and capacity probes, not
+unit tests: scientific correctness is still a mandatory gate, but a shared or
+slower machine must not fail merely because an absolute timing differs from a
+reference host.</p>
+<p>The campaign should isolate one scaling dimension at a time:</p>
+<table>
+<thead>
+<tr>
+<th>Probe</th>
+<th>Controlled sweep</th>
+<th>Quantities measured</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>one worker and one thread</td>
+<td>fixed startup, memory, I/O, and elapsed-time costs</td>
+</tr>
+<tr>
+<td>Thread scaling</td>
+<td><code>nthr=1,2,4,...</code> up to physical-core capacity</td>
+<td>throughput, CPU efficiency, memory growth, and the thread-scaling knee</td>
+</tr>
+<tr>
+<td>Worker scaling</td>
+<td>1, 2, 4, ... concurrent workers at candidate <code>nthr</code> values</td>
+<td>aggregate throughput, process-tree memory, I/O contention, and oversubscription</td>
+</tr>
+<tr>
+<td>Partition scaling</td>
+<td>increasing <code>nparts</code> at fixed concurrency</td>
+<td>launch, merge, imbalance, and minimum useful task duration</td>
+</tr>
+<tr>
+<td>Stream scaling</td>
+<td>controlled movie replay while varying one stage pool at a time</td>
+<td>per-stage service rate, utilization, backlog, latency, and drain time</td>
+</tr>
+<tr>
+<td>Scheduler adapter</td>
+<td>one tiny job, a bounded array, a dependency, and a placement probe</td>
+<td>request semantics, task placement, accounting, exit codes, cancellation, and launch overhead</td>
+</tr>
+</tbody>
+</table>
+<p>Each point should be repeated enough to estimate runtime variability. Resource
+decisions must use conservative bounds rather than the best observed run:</p>
+<pre><code class="language-text">Q_low(c) = lower confidence bound for throughput at configuration c
+M_high(c) = upper confidence bound for peak process-tree memory at c
+</code></pre>
+<p>A configuration is inside the safe envelope only when all applicable
+conditions hold:</p>
+<pre><code class="language-text">scientific correctness checks pass
+M_high(c) &lt;= (1 - reserve_mem) * usable_memory
+threads(c) &lt;= allocated_physical_cores - reserve_cores
+GPU memory and ownership limits are satisfied
+temporary storage remains below its reserved capacity
+measured I/O demand remains below the sustainable local limit
+</code></pre>
+<p>For a stream configuration, also require:</p>
+<pre><code class="language-text">mu_low,s(c) &gt;= rate_headroom * lambda_peak    for every required stage s
+predicted peak backlog &lt;= backlog_limit
+predicted drain time &lt;= drain_time_limit
+</code></pre>
+<p>The reserve values are policies, not universal constants. A dedicated compute
+node may reserve less CPU than an interactive workstation, while an unknown or
+noisy environment should use larger memory, throughput, and rate margins. The
+qualification report must state the selected margins.</p>
+<p>For a batch stage, let <code>Q_best</code> be the best conservative throughput among safe
+configurations. Rather than selecting the largest configuration, form a
+near-optimal set:</p>
+<pre><code class="language-text">C_near = {c in C_safe : Q_low(c) &gt;= (1 - throughput_tolerance) * Q_best}
+</code></pre>
+<p>Choose from <code>C_near</code> the configuration using the fewest cores, workers, GPU
+slots, and memory. This identifies the scaling knee: it preserves nearly all
+measured throughput while avoiding resources whose marginal benefit is small.
+For a stream stage, choose the smallest safe worker pool that meets the peak
+arrival and latency contract. Nearby larger settings may be reported as burst
+options, but should not become defaults without a measured benefit.</p>
+<p>The campaign should proceed incrementally. Start from the one-worker baseline,
+increase one dimension, stop before a predicted capacity boundary, and retain
+the last two safe points around each scaling knee. Never deliberately drive the
+machine into swapping, GPU out-of-memory, filesystem exhaustion, or sustained
+stream backlog merely to discover a failure point. Boundary behavior should be
+inferred from telemetry and approached with bounded steps.</p>
+<p>The resulting low-level site profile should contain:</p>
+<ul>
+<li>recommended and maximum-safe <code>nthr</code> per representative kernel or commander;</li>
+<li>recommended and maximum-safe local concurrency;</li>
+<li>per-worker and process-tree memory bounds;</li>
+<li>the useful <code>nparts</code> range and minimum useful part duration;</li>
+<li>sustainable sequential and concurrent I/O rates;</li>
+<li>recommended persistent-worker counts and measured service-rate headroom per
+  stream stage;</li>
+<li>confidence intervals, reserve policies, environment fingerprint, and the
+  conditions that require requalification.</li>
+</ul>
+<p>When qualifying a cluster, scheduler probes should use negligible scientific
+work and safe resource requests. They should verify the resources actually
+granted from scheduler accounting and the job environment, rather than testing
+enforcement by intentionally exceeding memory or wall time. Queue wait time
+must be reported separately from launch overhead and execution time. A failed
+adapter probe blocks automatic submission for that scheduler but does not
+invalidate the scheduler-free local hardware profile.</p>
+<h3 id="1031-fast-probes-and-bullet-run-scaling-theory">10.3.1 Fast probes and bullet-run scaling theory<a class="headerlink" href="#1031-fast-probes-and-bullet-run-scaling-theory" title="Permanent link">&para;</a></h3>
+<p>Very fast tests can provide clues about scaling even when they are too small
+to predict an entire workflow. The framework should treat these as short
+probes, or "bullet runs": fire a small number of controlled measurements at
+the parameter space, observe their direction and limiting resource, and use
+that evidence to choose the next measurement.</p>
+<p>Useful probes include:</p>
+<ul>
+<li>FFT throughput at representative 2D and 3D box sizes with 1, 2, 4, and 8
+  threads;</li>
+<li>memory allocation, copy, transpose, and bandwidth at representative array
+  sizes;</li>
+<li>MRC stack sequential and concurrent read/write throughput;</li>
+<li>process, MPI/coarray image, and scheduler-task startup latency;</li>
+<li>one small partition at several <code>nthr</code> values;</li>
+<li>two or more concurrent small partitions to expose memory and I/O contention;</li>
+<li>replaying detector-specific movies at controlled sustained and burst arrival
+  rates while varying each stream stage's persistent-worker pool;</li>
+<li>measuring stage service rate, worker occupancy, peak backlog, and backlog
+  drain time for representative movie dimensions and formats;</li>
+<li>GPU initialization, transfer, kernel throughput, and device-memory peaks
+  where applicable.</li>
+</ul>
+<p>Existing correctness tests may expose some of these operations and can emit
+diagnostic measurements when doing so adds negligible work. Their pass/fail
+criteria must remain correctness-based: an absolute timing from a shared CI
+runner must not make a unit test fail. Stable performance probes should have
+their own manifests so their inputs and repetitions are explicit.</p>
+<p>A first-order scaling model for interpreting the probes is:</p>
+<pre><code class="language-text">T_run = T_fixed
+      + W_cpu / (nthr * ncunits * efficiency)
+      + nparts * T_launch
+      + T_io(ncunits)
+      + T_merge(nparts)
+
+M_node = M_parent + ncunits * M_worker(nthr, workload) + M_cache
+</code></pre>
+<p>This is a hypothesis to fit and test, not an assumed law. From short runs, the
+framework can estimate thread speedup and efficiency:</p>
+<pre><code class="language-text">speedup(T)    = elapsed(1) / elapsed(T)
+efficiency(T) = speedup(T) / T
+</code></pre>
+<p>A sharp loss of efficiency indicates that more threads are unlikely to help;
+rising elapsed time with concurrent workers indicates memory-bandwidth or I/O
+contention; nearly constant time per work object under proportional resource
+and dataset growth suggests useful weak scaling. Full pilots remain necessary
+because startup, merging, cache effects, and contention may be absent from a
+small probe.</p>
+<h3 id="1032-minimum-viable-simple-qualification">10.3.2 Minimum viable SIMPLE qualification<a class="headerlink" href="#1032-minimum-viable-simple-qualification" title="Permanent link">&para;</a></h3>
+<p>The first executable qualification should use one deterministic synthetic
+movie and the existing <code>motion_correct</code> memory harness. Motion correction is a
+useful first probe because it exercises SIMPLE startup, MRC I/O, FFT work,
+OpenMP scaling, and native process-memory telemetry without requiring a user
+dataset. It does not characterize every commander, GPU behavior, distributed
+execution, or all stream stages.</p>
+<p>The minimum procedure is:</p>
+<ol>
+<li>Record CPU topology, NUMA nodes, physical and logical cores, available RAM,
+   swap activity, storage capacity, operating system, SIMPLE revision, and the
+   executable paths.</li>
+<li>Pin the probe to physical cores in one NUMA domain. Record the binding and
+   avoid hardware threads for the initial sweep.</li>
+<li>Generate a deterministic movie large enough that the measured command lasts
+   at least about one second at the highest candidate thread count. Very short
+   cases are smoke tests only.</li>
+<li>Run <code>nthr=1,2,4,...</code> up to the physical cores available in that NUMA domain,
+   with at least three repetitions. Require successful completion and valid
+   memory telemetry for every point.</li>
+<li>Select the smallest <code>nthr</code> within the agreed throughput tolerance of the
+   best median result. Reject higher settings whose marginal throughput does
+   not justify their additional cores or memory.</li>
+<li>Run 1, 2, and then the proposed number of workers concurrently. Bind every
+   worker to disjoint physical cores and verify per-worker elapsed time,
+   aggregate throughput, process-tree memory, and swap activity.</li>
+<li>Choose <code>ncunits</code> no larger than the measured safe concurrency. On a shared
+   workstation, retain an explicit CPU and RAM reserve for the operating system
+   and other users.</li>
+<li>Set an initial <code>nparts</code> to one or two waves of measured concurrency when the
+   workload contains enough work objects. Increase it only when a separate
+   partition probe demonstrates better load balance or restart behavior.</li>
+<li>Round the observed upper memory bound upward using the declared uncertainty
+   and reserve policy. Do not reuse the fixture's memory request for larger
+   movies; query the calibrated workload model and verify it with a pilot.</li>
+<li>Repeat the selected configuration once as a final verification and save
+    the manifest, raw CSV, logs, telemetry, environment fingerprint, and
+    derived recommendation.</li>
+</ol>
+<p>The first result is a conservative local baseline for <code>nthr</code>, <code>ncunits</code>, and
+fixture memory. It is not yet a universal SIMPLE configuration. A second-level
+qualification must cover representative detector dimensions, concurrent I/O,
+and the stream-stage service rates required by the intended acquisition.</p>
+<h3 id="1033-initial-run-on-the-reference-workstation">10.3.3 Initial run on the reference workstation<a class="headerlink" href="#1033-initial-run-on-the-reference-workstation" title="Permanent link">&para;</a></h3>
+<p>The minimum qualification was exercised on 2026-09-29 on a two-socket Intel
+Xeon Gold 6242R workstation with 20 physical cores per socket, two hardware
+threads per core, two NUMA nodes, and approximately 251 GiB of RAM. The probe
+was pinned to physical CPUs in one socket and used a deterministic
+2048-by-2048, eight-frame movie at 1.3 Angstrom per pixel. Each thread setting
+was repeated three times.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;"><code>nthr</code></th>
+<th style="text-align: right;">Median elapsed (s)</th>
+<th style="text-align: right;">Worst elapsed (s)</th>
+<th style="text-align: right;">Median speedup</th>
+<th style="text-align: right;">Thread efficiency</th>
+<th style="text-align: right;">Highest peak RSS (MiB)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4.355</td>
+<td style="text-align: right;">4.405</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">415.6</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2.656</td>
+<td style="text-align: right;">2.698</td>
+<td style="text-align: right;">1.64</td>
+<td style="text-align: right;">0.820</td>
+<td style="text-align: right;">409.6</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">1.672</td>
+<td style="text-align: right;">1.687</td>
+<td style="text-align: right;">2.60</td>
+<td style="text-align: right;">0.651</td>
+<td style="text-align: right;">415.9</td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">1.149</td>
+<td style="text-align: right;">1.427</td>
+<td style="text-align: right;">3.79</td>
+<td style="text-align: right;">0.474</td>
+<td style="text-align: right;">414.0</td>
+</tr>
+<tr>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">1.122</td>
+<td style="text-align: right;">1.160</td>
+<td style="text-align: right;">3.88</td>
+<td style="text-align: right;">0.243</td>
+<td style="text-align: right;">523.2</td>
+</tr>
+</tbody>
+</table>
+<p>Sixteen threads improved median elapsed time by only 2.4 percent over eight
+threads while consuming twice as many cores and increasing the highest
+observed peak RSS by about 26 percent. Eight threads are therefore the
+provisional scaling knee for this fixture.</p>
+<p>Two concurrent eight-thread workers completed in 1.363 and 1.466 seconds. Four
+workers pinned to disjoint groups of eight physical cores completed in 1.125
+to 1.205 seconds, with peak RSS between 411.7 and 412.1 MiB per worker. The
+four-worker result supports this provisional shared-workstation baseline:</p>
+<pre><code class="language-text">nthr=8
+ncunits=4
+nparts=8 when at least eight work objects are available
+job_memory_per_task=1024 MiB for this 2048x2048x8 fixture only
+</code></pre>
+<p>This uses 32 of 40 physical cores and leaves eight cores as an interactive
+reserve. The memory request is deliberately rounded well above the observed
+peak, but it must not be used for production detector-sized movies. The host
+had a system load near 16 during the measurements, and each concurrent-worker
+configuration was run as only one wave. These results demonstrate the
+procedure and establish provisional parameters; repeated concurrency waves,
+I/O probes, and representative-movie pilots remain required before promoting a
+site profile.</p>
+<h3 id="104-filling-calibration-gaps">10.4 Filling calibration gaps<a class="headerlink" href="#104-filling-calibration-gaps" title="Permanent link">&para;</a></h3>
+<p>After each campaign, the framework should create a coverage report over
+commander, backend, dataset scale, parameter range, and hardware class. The
+next experiments should prioritize:</p>
+<ol>
+<li>unsupported combinations required by users or administrators;</li>
+<li>regions where model uncertainty is largest;</li>
+<li>predicted memory or wall-time safety boundaries;</li>
+<li>disagreement between the shipped model, local pilots, and production
+   telemetry;</li>
+<li>settings where nearby bullet runs show a change in scaling regime;</li>
+<li>held-out datasets and machines needed to test generalization.</li>
+</ol>
+<p>This adaptive design avoids an exhaustive Cartesian product while still
+measuring dangerous boundaries. A gap is closed only after the new region has
+both training observations and independent validation observations. The
+campaign stops when its measurement budget is exhausted or all required
+regions meet declared error and safety targets.</p>
+<h3 id="105-adapting-to-new-hardware">10.5 Adapting to new hardware<a class="headerlink" href="#105-adapting-to-new-hardware" title="Permanent link">&para;</a></h3>
+<p>The framework must expect hardware classes that were not represented when a
+model was released: new CPU architectures and vector widths, GPUs or other
+accelerators, unified-memory systems, faster interconnects, computational
+storage, and different node topologies. Recommendation logic must therefore be
+capability-based rather than a list of recognized product names.</p>
+<p>A hardware profile should describe observable capabilities and measured
+behavior, including:</p>
+<ul>
+<li>available execution backends and supported numerical precision;</li>
+<li>physical cores, hardware threads, sockets, NUMA domains, and vector features;</li>
+<li>host and accelerator memory capacity, bandwidth, and allocation behavior;</li>
+<li>accelerator count, sharing rules, and interconnect topology;</li>
+<li>local and shared storage bandwidth, latency, and capacity;</li>
+<li>network and collective-operation characteristics;</li>
+<li>compiler, driver, firmware, math-library, MPI, and coarray runtime versions.</li>
+</ul>
+<p>New hardware follows a staged qualification workflow:</p>
+<ol>
+<li><strong>Discover.</strong> Record the capabilities without assuming that a known model
+   applies because a device name looks similar.</li>
+<li><strong>Verify correctness.</strong> Run the applicable fast and platform tests for the
+   enabled backend. Unsupported operations disable only the affected backend.</li>
+<li><strong>Run bullet probes.</strong> Measure startup, FFT, memory, I/O, threading,
+   accelerator transfer, and representative kernel scaling.</li>
+<li><strong>Fit a provisional correction.</strong> Start from architecture-independent
+   formulas or the nearest validated model only when feature compatibility is
+   explicit; fit hardware-specific coefficients from the probes.</li>
+<li><strong>Run representative pilots.</strong> Exercise supported commanders on held-out
+   workloads and verify memory and wall-time safety margins.</li>
+<li><strong>Promote the profile.</strong> An administrator approves a versioned site model
+   with declared ranges, uncertainty, and expiration triggers.</li>
+</ol>
+<p>Until qualification reaches step 6, the planner may report measured
+capabilities and conservative feasibility bounds, but it must label parameter
+recommendations provisional or return "no recommendation". New hardware must
+not be silently mapped to an old GPU, CPU, or node class.</p>
+<p>The fitting design should share relationships that are genuinely portable,
+such as array-size growth or the distinction between fixed and per-work-unit
+costs, while keeping hardware-specific correction terms. This allows a new
+machine to benefit from the existing corpus without pretending that its
+throughput, concurrency, or memory behavior is already known. As local
+measurements accumulate, adaptive campaigns should prioritize the regions
+where the inherited model and observations disagree.</p>
+<p>A hardware profile must be requalified after changes that can alter execution
+behavior: major compiler or runtime upgrades, accelerator drivers or firmware,
+FFT and math libraries, MPI/coarray implementations, scheduler placement,
+memory configuration, storage, or network topology. Historical observations
+remain in the corpus with their environment identity; they are not rewritten
+as if they came from the new configuration.</p>
+<h2 id="11-validation-procedure">11. Validation procedure<a class="headerlink" href="#11-validation-procedure" title="Permanent link">&para;</a></h2>
+<p>Before using a plan for a large production run:</p>
+<ol>
+<li>Run the appropriate calibrated estimator and retain its JSON output.</li>
+<li>Reject or review every calibration-range warning.</li>
+<li>Run a representative pilot with <code>memreport=yes</code> and a short reporting
+   interval.</li>
+<li>Collect telemetry from the parent and every concurrent worker.</li>
+<li>Confirm that observed per-process and aggregate peaks remain below the
+   allocation with the declared reserve.</li>
+<li>Confirm <code>ncunits * nthr</code> does not oversubscribe allocated CPUs.</li>
+<li>Measure wall time per work object, I/O throughput, and merge overhead.</li>
+<li>Recalculate <code>P_time</code>, <code>P_size</code>, <code>ncunits</code>, and <code>nparts</code> from the pilot.</li>
+<li>For streaming, replay the expected sustained and peak acquisition rates and
+   confirm that every stage remains stable, peak backlog is bounded, and the
+   backlog drains within the declared latency target.</li>
+<li>Repeat after changes to SIMPLE, compiler, FFT library, allocator, operating
+   system, GPU stack, or important workflow settings.</li>
+</ol>
+<p>The plan must fail closed: an unsupported commander or missing memory target
+should produce "no recommendation" rather than a plausible-looking default.</p>
+<h2 id="12-proposed-planner-output">12. Proposed planner output<a class="headerlink" href="#12-proposed-planner-output" title="Permanent link">&para;</a></h2>
+<p>A future resource-planning command should report both its recommendation and
+the limiting factor:</p>
+<pre><code class="language-text">Commander: motion_correct
+Hardware: 32 CPU threads, 65536 MiB usable RAM, 0 GPUs
+Work: 100 movies
+Threads per worker (nthr): 4
+CPU-limited workers: 8
+Memory-limited workers: 12
+Administrative limit: 32
+Recommended concurrent workers (ncunits): 8 [CPU limited]
+Recommended total partitions (nparts): 16 [two waves]
+Memory per task: 4608 MiB
+Warnings: none
+</code></pre>
+<p>A stream recommendation should additionally report the acquisition contract
+and each stage's pool rather than collapsing them into one worker count:</p>
+<pre><code class="language-text">Acquisition: detector=&lt;model/mode&gt;, movie=4096x4096x40, peak=0.50 movies/s
+Sustainable input rate: 0.65 movies/s [30% headroom]
+Limiting stage: preprocessing
+Persistent workers: preprocessing=4, picking=2, sieving=2, pool2D=2
+Predicted peak backlog: 8 movies
+Predicted backlog drain time: 54 s
+Warnings: detector mode is locally calibrated; burst duration is extrapolated
+</code></pre>
+<p>Machine-readable output should also include the model version, calibration
+range, safety factor, reserve policy, formulas, every candidate limit, and all
+warnings. This makes the recommendation auditable by a system administrator.</p>
+<h2 id="13-gaps-before-automatic-selection">13. Gaps before automatic selection<a class="headerlink" href="#13-gaps-before-automatic-selection" title="Permanent link">&para;</a></h2>
+<p>Automatic <code>nparts</code> or <code>ncunits</code> selection should not become a default until:</p>
+<ul>
+<li>per-worker models exist for the main distributed stages;</li>
+<li>parent and worker overlap is measured rather than inferred;</li>
+<li>memory models include <code>ncunits</code> where concurrency changes the process-tree
+  bound;</li>
+<li>stage-specific minimum useful part sizes and launch/merge overheads are
+  calibrated;</li>
+<li>restart behavior when <code>nparts</code> changes is safe for the owning workflows;</li>
+<li>scheduler placement and memory semantics are validated for SLURM, PBS, LSF,
+  legacy IBM queue interfaces, SGE, local, persistent-worker, and coarray
+  execution;</li>
+<li>scheduler coverage is reported separately for request rendering, execution
+  lifecycle, and verified resource semantics, with unknown adapters failing
+  closed;</li>
+<li>GPU count and device-memory rules are available for GPU stages;</li>
+<li>the planner distinguishes physical cores, logical threads, sockets, and
+  NUMA locality;</li>
+<li>filesystem capacity and I/O contention can constrain concurrency;</li>
+<li>recommendations are validated on more than one machine and SIMPLE build;</li>
+<li>a versioned, multi-dataset calibration corpus and reproducible fitting
+  pipeline exist for every model used to generate automatic settings;</li>
+<li>installation-time site profiles and workload-time recommendations are
+  validated independently;</li>
+<li>workstation, distributed-cluster, and hybrid-cluster behavior is represented
+  explicitly in the corpus and validation reports;</li>
+<li>cluster capacity is computed and validated per node rather than from total
+  aggregate RAM and CPU counts;</li>
+<li>fast probes, representative pilots, and calibration campaigns use one
+  versioned experiment and telemetry schema;</li>
+<li>scheduler-free low-level probes establish conservative confidence bounds,
+  safe capacity limits, and the throughput-scaling knee before selecting local
+  defaults;</li>
+<li>model coverage reports identify unsupported regions and drive the next
+  measurements;</li>
+<li>detector, movie-format, dimension, sustained-rate, and burst-rate families
+  are represented in the stream calibration corpus;</li>
+<li>stream models distinguish stage-specific persistent-worker pools, service
+  rates, backlog growth, and drain time;</li>
+<li>a versioned public benchmark bundle provides checksummed real inputs and
+  expected scientific outputs independently of the append-only results corpus;</li>
+<li>the reference benchmark and bounded calibration sweeps work on a local
+  desktop or workstation without a scheduler;</li>
+<li>cluster-specific network, placement, launcher, and shared-filesystem effects
+  are qualified separately from the scheduler-free portable baseline;</li>
+<li>hardware profiles use extensible capability descriptions rather than fixed
+  device-name tables;</li>
+<li>an unknown hardware class fails closed until correctness, bullet probes, and
+  representative pilots establish a validated operating range.</li>
+</ul>
+<p>Until those conditions are met, the planner should recommend explicit command
+line values but leave the final decision with the user or system administrator.</p>
+<h2 id="14-review-questions">14. Review questions<a class="headerlink" href="#14-review-questions" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Should the planner optimize primarily for shortest elapsed time, minimum
+   resource use, scheduler throughput, or a selectable objective?</li>
+<li>What reserve policy is acceptable on dedicated nodes, shared workstations,
+   and persistent-worker nodes?</li>
+<li>Should <code>nparts</code> be allowed to change across restarts before partition-shaped
+   continuation state is removed?</li>
+<li>Which workflows require one part per socket, one part per node, or one part
+   per GPU rather than the general worker model?</li>
+<li>What minimum task duration should be targeted to avoid scheduler overhead?</li>
+<li>Should the first implementation only report recommendations, or may it also
+   populate <code>nparts</code>, <code>ncunits</code>, <code>nthr</code>, and <code>job_memory_per_task</code>?</li>
+<li>Which representative public or synthetic datasets should define the shipped
+   calibration corpus, and which dataset families must be held out?</li>
+<li>May a site train local models automatically from telemetry, or must an
+   administrator review and promote every fitted model?</li>
+<li>Which fast probes are stable enough to run in ordinary CI, and which require
+   a dedicated benchmark host?</li>
+<li>What CPU-hour and GPU-hour budgets should limit adaptive calibration
+    campaigns?</li>
+<li>Which hardware changes invalidate only a performance correction, and which
+    require complete backend requalification?</li>
+<li>Who is authorized to promote a provisional hardware profile for general
+    use at a site?</li>
+<li>Which SIMPLE workflows support true multi-node execution, and which should
+    remain constrained to one shared-memory node?</li>
+<li>Which placement policies should the planner support first: one worker per
+    node, one per socket, or several workers per node?</li>
+<li>Which detector generations, readout modes, movie dimensions, and storage
+    formats must the first stream calibration release cover?</li>
+<li>What acquisition-rate safety factor, maximum backlog, and backlog-drain
+    target define a successful stream configuration?</li>
+<li>Which real benchmark datasets can be redistributed with clear provenance,
+    licenses, checksums, and long-term versioning through Zenodo or an
+    equivalent archive?</li>
+<li>What elapsed-time, memory, CPU/GPU, download, and temporary-storage budgets
+    keep the reference qualification practical on an ordinary desktop?</li>
+<li>Who maintains the shared results schema, reviews contributed observations,
+    and promotes a new version of the shipped model?</li>
+<li>Which stream stages expose independently tunable persistent-worker pools,
+    and which counts must remain fixed by the current implementation?</li>
+<li>What throughput tolerance defines the near-optimal set from which the
+    least resource-intensive configuration is selected?</li>
+<li>How many repetitions and what confidence level are required before a
+    low-level measurement can define a conservative site limit?</li>
+<li>Which scheduler families and versions must be resource-qualified for the
+    first release, and which may initially provide render-only coverage?</li>
+<li>Which scheduler capabilities are mandatory for stream operation, including
+    persistent workers, dependencies, requeue behavior, and array throttling?</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
