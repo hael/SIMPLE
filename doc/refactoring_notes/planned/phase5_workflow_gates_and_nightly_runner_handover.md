@@ -21,8 +21,8 @@ workflow has passed on every platform.
 `simple_test_exec` remains the only test executable. The authoritative registry
 is `production/CMakeLists.txt`: **34 baseline entries**, with additional
 capability-gated coarray and OpenMP-offload entries. Working directories are
-`build/test_runs/<entry>`; registered environments include
-`SIMPLE_SEED=20260923` and explicit thread counts.
+`build/test_runs/<entry>`; registered environments include explicit thread
+counts, and `simple_test_exec` fixes `SIMPLE_SEED=20260923` for its process.
 
 | Tier | Registered entries | Execution |
 |---|---|---|

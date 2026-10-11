@@ -57,8 +57,8 @@ Each suite runs in its own dated directory and writes its report there
   comes from.
 - Make it reproducible. Seed every random draw with `set_fixed_seed(<n>)` from
   `simple_test_utils`. `seed_rnd`, which every commander calls through `parameters%new`, reads
-  `/dev/urandom` unless the environment variable `SIMPLE_SEED` is set; CTest sets it for every entry
-  (since the stream review), so export `SIMPLE_SEED=20260923` to reproduce a CTest run by hand.
+  `/dev/urandom` unless `SIMPLE_SEED` is set, and `simple_test_exec` sets it to 20260923 for its
+  process, so a run by hand draws what a CTest run draws.
   Never assert on timings.
 - Size: fast sub-suites (`unit_single`) must stay well under a second each. The whole fast gate
   is budgeted at 30 s on one thread. Library and workflow suites can take minutes.

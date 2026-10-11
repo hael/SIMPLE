@@ -373,14 +373,36 @@ All are recorded in Progress under the phase named.
    - The B-rise floor of `species_discovery` was withdrawn: on filtered maps
      the fitted rise carries a coordination artefact (note, section 7), and
      the floor failed at 1.60 in the core case. The rise is reported.
-   - Run by hand without `SIMPLE_SEED`, the test is not reproducible: every
-     commander it runs in process reseeds from `/dev/urandom`. CTest sets
-     `SIMPLE_SEED=20260923`, the setting the floors were validated with; by
-     hand, export it first.
+   - Run by hand, the test was not reproducible: every commander it runs in
+     process reseeds from `SIMPLE_SEED`, which only CTest set (20260923, the
+     setting the floors were validated with), and from `/dev/urandom`
+     otherwise. Since 2026-10-11 `simple_test_exec` sets that value for its
+     own process, so a run by hand of this or any other test draws what a
+     CTest run draws.
    - With such an unseeded draw, `element=Pt,Ni` on the pure Pt fixture gave
-     an admissible two-class split, the second class a block of weaker
-     atoms at one end of the radius (most likely surface atoms). The pure
-     case's "inadmissible" floor therefore holds for the validated draw, not
-     for every draw. How often an asserted second species is found in a
-     single-species particle is for the validation on real maps to measure;
-     the surface-confined flag is the check meant to catch it.
+     an admissible two-class split. The pure case's "inadmissible" floor
+     held for the validated draw, not for every draw.
+7. **The cause of that split, and the fix (2026-10-11).** A numpy emulation
+   of the pipeline on the pure fixture, over 35 noise draws, reproduced the
+   split in 9 of them.
+   - It is not the surface splitting off as a weaker class, as first
+     guessed. The brighter class was the low-coordination surface atoms, and
+     the class called Ni was the bulk of the particle. The Mac run's numbers
+     agree: the Pt class's inner shell moved out (B 28.7 against about 25
+     for all atoms in the other runs) while its outer shell stayed.
+   - The cause was the aperture intensity's division by the enclosed
+     fraction at each atom's own fitted width. On filtered maps that width
+     is narrowed by the neighbours' halos, so the correction lowered the
+     intensity of well-coordinated atoms. Noise-free, the intensity fell by
+     19% from 5 to 12 neighbours, enough for a two-class fit at `D` of about
+     3, the admissibility threshold. The stage-2 tie fed the class back into
+     the width and pushed 6 of the 9 draws over the threshold.
+   - The fix divides every aperture sum by the enclosed fraction at one
+     common width, the median fitted B. In the emulation the forced split
+     was then admissible in 0 of 35 draws (`D` at most 2.54). On the alloy,
+     core and light fixtures every atom was labelled right in 7 draws of
+     each, including the Ni atom at the centre of the core case that phase
+     5 had called Pt; `D` rose by 1 to 3.
+   - Note sections 3.5, 3.7 and 7 record it. The pure case's report now
+     shows the forced classes' `D`, the floor's margin. Not yet compiled or
+     run in SIMPLE.

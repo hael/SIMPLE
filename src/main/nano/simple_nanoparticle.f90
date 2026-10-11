@@ -1850,13 +1850,21 @@ contains
         ! aperture intensities (3.5) in the units of the continuous integral
         subroutine calc_aperture_int
             real, allocatable :: y(:), r2(:)
+            real    :: frac
             integer :: j
+            frac = aperture_fraction()
             do j = 1,n
                 call gather(map, tab(j)%center, 0.5 * d, j, y, r2)
-                tab(j)%aper_int = s**3 * sum(y) / enclosed_fraction(0.5 * d / sqrt(tab(j)%bfac / (8. * PI**2)))
+                tab(j)%aper_int = s**3 * sum(y) / frac
                 tab(j)%aper_snr = tab(j)%aper_int / s_i
             enddo
         end subroutine calc_aperture_int
+
+        ! enclosed fraction of the aperture at one common width, the median fitted B: an atom's own width is narrowed
+        ! by its neighbours' halos on filtered maps (section 7), and in stage 2 it follows the class it is tied to
+        real function aperture_fraction()
+            aperture_fraction = enclosed_fraction(0.5 * d / sqrt(median(tab(:n)%bfac) / (8. * PI**2)))
+        end function aperture_fraction
 
         ! mixture of the aperture intensities (3.6)
         subroutine assign_species
@@ -1923,8 +1931,8 @@ contains
             integer :: j, nagree
             real    :: frac
             allocate(ie(n), io(n))
+            frac = aperture_fraction()
             do j = 1,n
-                frac = enclosed_fraction(0.5 * d / sqrt(tab(j)%bfac / (8. * PI**2)))
                 call gather(emap, tab(j)%center, 0.5 * d, j, y, r2)
                 ie(j) = s**3 * sum(y) / frac
                 call gather(omap, tab(j)%center, 0.5 * d, j, y, r2)

@@ -13,8 +13,10 @@ private
 public :: assert_true, assert_int, assert_real, assert_char, assert_string_eq, assert_double, assert_false
 public :: begin_test_suite, end_test_suite, reset_test_report, report_summary
 public :: tests_run, tests_failed
-public :: set_fixed_seed
+public :: set_fixed_seed, fix_test_seed
 public :: enter_fixture, leave_fixture
+
+integer, parameter :: TEST_SEED = 20260923 ! the SIMPLE_SEED of every simple_test_exec run
 
 type :: test_suite_result
     character(len=STDLEN) :: name = ''
@@ -39,12 +41,27 @@ type(test_failure),      allocatable :: failures(:)
 
 contains
 
+    ! seeds the intrinsic generator with a fixed state; propagate also sets SIMPLE_SEED, from which the
+    ! commanders run in process reseed (parameters%new)
     subroutine set_fixed_seed( base_seed, propagate )
+        integer,           intent(in) :: base_seed
+        logical, optional, intent(in) :: propagate
+        if( present(propagate) )then
+            if( propagate ) call put_simple_seed(base_seed)
+        endif
+        call seed_rnd_fixed(base_seed)
+    end subroutine set_fixed_seed
+
+    ! SIMPLE_SEED of the test process, whatever the environment holds: a run by hand draws what a CTest run draws
+    subroutine fix_test_seed
+        call put_simple_seed(TEST_SEED)
+    end subroutine fix_test_seed
+
+    subroutine put_simple_seed( seed )
         use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
-        integer, intent(in)           :: base_seed
-        logical, intent(in), optional :: propagate
-        character(len=32)             :: seed_string
-        integer(c_int)                :: status
+        integer, intent(in) :: seed
+        character(len=32)   :: seed_string
+        integer(c_int)      :: status
         interface
             function c_setenv( name, value, overwrite ) bind(C, name='setenv') result(ierr)
                 import :: c_char, c_int
@@ -53,15 +70,10 @@ contains
                 integer(c_int)                      :: ierr
             end function c_setenv
         end interface
-        if( present(propagate) )then
-            if( propagate )then
-                write(seed_string,'(i0)') base_seed
-                status = c_setenv('SIMPLE_SEED'//c_null_char, trim(seed_string)//c_null_char, 1_c_int)
-                if( status /= 0_c_int ) error stop 'Could not set SIMPLE_SEED for the test process'
-            endif
-        endif
-        call seed_rnd_fixed(base_seed)
-    end subroutine set_fixed_seed
+        write(seed_string,'(i0)') seed
+        status = c_setenv('SIMPLE_SEED'//c_null_char, trim(seed_string)//c_null_char, 1_c_int)
+        if( status /= 0_c_int ) error stop 'Could not set SIMPLE_SEED for the test process'
+    end subroutine put_simple_seed
 
     subroutine reset_test_report( filename )
         character(len=*), optional, intent(in) :: filename

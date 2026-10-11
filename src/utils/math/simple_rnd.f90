@@ -51,8 +51,8 @@ contains
     !>  the old version was replaced because the bug described in the thread was observed with GCC and PGI
     !>  When the environment variable SIMPLE_SEED holds an integer, the seed is fixed instead:
     !>  SIMPLE_SEED advanced by 7919 for every earlier call since the last seed_rnd_fixed, so that
-    !>  successive commanders in one process draw different but reproducible numbers. The CTest
-    !>  entries set it; distributed workers inherit it. Calls from an OpenMP team take distinct
+    !>  successive commanders in one process draw different but reproducible numbers. simple_test_exec
+    !>  sets it (fix_test_seed); distributed workers inherit it. Calls from an OpenMP team take distinct
     !>  counts, in no fixed order, so only a one-thread run is reproducible.
     subroutine seed_rnd
         use iso_fortran_env, only: int64

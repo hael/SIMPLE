@@ -1,8 +1,9 @@
 !@descr: executes SIMPLE tests workflows
 program simple_test_exec
 use simple_test_exec_api
-use simple_parameters, only: parameters
+use simple_parameters,     only: parameters
 use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
+use simple_test_utils,     only: fix_test_seed
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)             :: xarg, prg
@@ -15,6 +16,8 @@ real(timer_int_kind)              :: rt_exec
 logical                           :: l_silent, l_did_execute
 ! start timer
 t0 = tic()
+! one fixed seed for every test run, inherited by the commanders and the distributed workers
+call fix_test_seed
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
 call get_command(entire_line)

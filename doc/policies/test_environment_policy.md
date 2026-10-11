@@ -67,8 +67,8 @@ checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
 
 **Every entry** runs in its own directory `build/test_runs/<entry>`, with its
-own `TIMEOUT`, an explicit `OMP_NUM_THREADS` (1 for the fast tier) and
-`SIMPLE_SEED=20260923`. Each suite writes a report,
+own `TIMEOUT` and an explicit `OMP_NUM_THREADS` (1 for the fast tier), and
+`simple_test_exec` fixes the seed of its process (below). Each suite writes a report,
 `SIMPLE_TEST_<suite>_<date>/simple_test_<suite>_report.txt`, with every check,
 every failure by name and the time of each sub-suite.
 
@@ -149,8 +149,11 @@ The `suite=` selector is the sub-suite name in lower case, with blanks and
 hyphens written as underscores and commas and slashes dropped
 (`stack I/O` is `stack_io`, `search, sort, locate` is `search_sort_locate`).
 The selectors of each suite are listed in the description of its `suite=`
-input in the test UI (`src/main/ui/simple_test/simple_test_ui_class.f90`). To
-reproduce a CTest run by hand, export `SIMPLE_SEED=20260923` first.
+input in the test UI (`src/main/ui/simple_test/simple_test_ui_class.f90`). A
+run by hand draws what a CTest run draws: `simple_test_exec` sets
+`SIMPLE_SEED=20260923` for its own process first (`fix_test_seed`), whatever
+the environment holds. The seed is not a user setting; a program that needs
+one takes it through `parameters`.
 
 `SIMPLE_UNIT_ORDER=reverse` is a diagnostic for the fused, in-process suites:
 it reverses the sub-suite table so a result that differs from the normal run
@@ -478,7 +481,8 @@ The assertion and reporting layer. A tester uses the assertions and
 | `assert_real(expected, actual, tol, msg)` | a real within an absolute tolerance (`tol = 0.` for an exact value) |
 | `assert_double(expected, actual, msg[, ulp_tol])` | a double within a number of ulps (10 by default) |
 | `assert_char(expected, actual, msg)`, `assert_string_eq(char, string, msg)` | text, trimmed |
-| `set_fixed_seed(base)` | seed the intrinsic generator with a fixed state |
+| `set_fixed_seed(base[, propagate])` | seed the intrinsic generator with a fixed state; `propagate=.true.` also sets `SIMPLE_SEED`, from which the commanders run in process reseed |
+| `fix_test_seed` | `SIMPLE_SEED` of the test process set to 20260923; called once by `simple_test_exec`, not by testers |
 | `begin_test_suite`, `end_test_suite`, `reset_test_report`, `report_summary`, `tests_run`, `tests_failed` | the runner's bookkeeping; not for testers |
 
 A failed assertion records its message, with expected and actual values, and

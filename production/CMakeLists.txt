@@ -187,13 +187,11 @@ if(BUILD_TESTS)
   # registers `simple_test_exec <args...>` (or the given launcher) with the
   # properties every entry must carry.
   set(SIMPLE_TEST_RUNS_DIR "${CMAKE_BINARY_DIR}/test_runs")
-  # SIMPLE_SEED makes seed_rnd (called by parameters%new, so by every commander)
-  # draw from a fixed seed instead of /dev/urandom; distributed workers inherit
-  # it, so the library and high-level entries are reproducible (plan, section 9.7,
-  # stream).
+  # The seed is not part of the environment: simple_test_exec fixes SIMPLE_SEED
+  # for its own process (fix_test_seed in simple_test_utils), so a run by hand
+  # draws what a CTest run draws.
   set(SIMPLE_TEST_ENV
     "SIMPLE_PATH=${CMAKE_INSTALL_PREFIX}"
-    "SIMPLE_SEED=20260923"
     "SIMPLE_QSYS=local"
     "SIMPLE_EMAIL=test@localhost"
     "GFORTRAN_UNBUFFERED_ALL=y"

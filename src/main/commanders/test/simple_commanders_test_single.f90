@@ -527,9 +527,6 @@ subroutine exec_test_species_discovery( self, cline )
     integer :: status, nthr, nlat, icase, ir, i
     logical :: l_passed
     write(logfhandle,'(a)') '>>> TEST_SPECIES_DISCOVERY:'
-    ! every commander run in process reseeds in parameters%new, from SIMPLE_SEED when it is set (CTest sets
-    ! SIMPLE_SEED=20260923, the setting the floors were validated with) and from /dev/urandom otherwise: run by hand,
-    ! export SIMPLE_SEED=20260923 first, or the fixtures differ from run to run
     call set_fixed_seed(20261008)
     nthr = 8
     if( cline%defined('nthr') ) nthr = cline%get_iarg('nthr')
@@ -1211,6 +1208,9 @@ subroutine exec_test_species_discovery( self, cline )
             if( l_list )then
                 call gate%check(tag//': no recovered atom', nrec == 0)
                 call gate%check(tag//': two-class fit inadmissible', report_string(txt, 'admissible_K2') == 'no')
+                ! the margin of the floor: admissibility needs a separation D of 3 or more
+                call gate%report(tag//': class 2 atoms (forced K = 2)', report_value(txt, 'class_atoms_2'))
+                call gate%report(tag//': separation D of the forced classes', report_value(txt, 'separation_D_1_2'))
             else
                 call gate%check(tag//': K = 1', k_found == 1)
                 call gate%check(tag//': no recovered atom', nrec == 0)
@@ -1236,8 +1236,8 @@ subroutine exec_test_species_discovery( self, cline )
                 &count(match > 0 .and. cls == 2 .and. gel(max(match,1)) == ELEMS(1)))
             if( l_list )then
                 if( trim(CASES(ic)) == 'core' )then
-                    ! reported in phase 5, floored again once the atoms are fitted with the map-filtered kernel (ruling
-                    ! of 2026-10-09, fifth): the aperture intensity's radial bias can mislabel a Ni atom at the centre
+                    ! reported (ruling of 2026-10-09, fifth): the own-width intensity mislabelled the Ni atom at the
+                    ! centre; floored again once a build shows the common width of the plan's 3.5 labels it right
                     call gate%report(tag//': found atoms with the wrong element (reported)', real(nwrong))
                 else
                     call gate%check(tag//': every found atom carries its element', nwrong == 0)
@@ -1248,7 +1248,7 @@ subroutine exec_test_species_discovery( self, cline )
                 ratio     = report_value(txt, 'class_ratio_2')
                 ratio_gen = int_el(elem_index(el2)) / int_el(1)
                 call gate%report(tag//': single-atom intensity ratio', ratio_gen)
-                ! the ratio is reported until the atoms are fitted with the map-filtered kernel (ruling of 2026-10-09, second)
+                ! the ratio is reported, not floored: it is biased low on filtered maps (ruling of 2026-10-09, second)
                 call gate%report(tag//': fitted intensity ratio', ratio)
                 call gate%report(tag//': fitted intensity ratio, relative error', abs(ratio / ratio_gen - 1.))
                 ! the second element found by stage (0 level 1, 1 residual stage A, 2 stage B) and level

@@ -61,9 +61,9 @@ path.
   positions, and class initialisation. `seed_rnd` now reads the environment variable
   `SIMPLE_SEED`. When it is set, the seed is that integer advanced by 7919 per call, so successive
   commanders draw different but reproducible numbers, and distributed workers inherit it. When it
-  is unset, production behaves as before. CTest sets `SIMPLE_SEED=20260923` for every entry. The
+  is unset, production behaves as before. `simple_test_exec` sets `SIMPLE_SEED=20260923` for its process. The
   suite runner also reseeds before every sub-suite, so `suite=<name>` draws the same numbers as the
-  full run. To reproduce a CTest run by hand, export `SIMPLE_SEED=20260923` first.
+  full run, and a run by hand draws what a CTest run draws.
 - **`abinitio2D_stream` is retired.** It ran one iteration of `solve2D` on 24 noise-free
   particles. Its command line was hand-written and differs from the one the stream's chunk code
   builds (`cls_init` ptcl vs rand, `rank_cavgs` no vs yes, no `chunk=yes`, `objfun` default vs

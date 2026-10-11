@@ -354,12 +354,16 @@ should also move the centre to the centroid of the atom's own residual.
 
 ### 3.5 Aperture intensity
 
-    I_i = smpd^3 sum over |r - r_i| < d_NN/2 of [ map - b - sum_{j /= i} rho_j ] / F(d_NN / 2 sigma_i)
+    I_i = smpd^3 sum over |r - r_i| < d_NN/2 of [ map - b - sum_{j /= i} rho_j ] / F(d_NN / 2 sigma)
 
 `F(t) = erf(t / sqrt 2) - sqrt(2 / pi) t exp(-t^2 / 2)` is the fraction of a
-Gaussian inside `t` standard deviations, and `sigma_i^2 = B_i / 8 pi^2`. The
-correction is 0.2% for the narrowest atoms of the emulation and 6% at twice
-their variance. The factor `smpd^3` puts the voxel sum in the units of the
+Gaussian inside `t` standard deviations, and `sigma^2 = B / 8 pi^2` with `B`
+the median fitted B of all atoms: one width for every atom, not the atom's
+own. On a filtered map an atom's own width is narrowed by its neighbours'
+negative halos (section 7), and dividing by its own `F` made the intensity
+fall with coordination; in stage 2 it also let the class an atom is tied to
+feed back into its intensity (3.7). Section 7 gives the numbers. The factor
+`smpd^3` puts the voxel sum in the units of the
 continuous integral `A_i (B_i / 4 pi)^(3/2)` of section 1, which the
 stage-2 penalty of 3.7 compares it with; the first version of this note
 omitted it (the mixture of 3.6 is scale-free, so the emulation did not see
@@ -369,8 +373,8 @@ in those units: the voxel sum of a pseudo-atom of intensity `q` is `q /
 smpd^3` (section 10, phase 1).
 
 This is the classification statistic. It is a plain sum, so it involves no
-matching; it measures the quantity that carries the species; and it depends
-on `B_i` only through the small correction. Its cost is noise: about 2.3
+matching; it measures the quantity that carries the species; and it does not
+depend on any atom's own width. Its cost is noise: about 2.3
 times that of the matched amplitude for white noise, and more when the noise
 is concentrated at low frequency (case 8b of section 8.1).
 
@@ -413,7 +417,8 @@ with the amplitude given in closed form for each `B`. `tau_k` is the
 intrinsic spread of the class from the deconvolution fit (the observed
 `var_k` less `s_I^2`, under the root) with a floor of
 `0.05 I_k`. Two rounds: fit, recompute the aperture intensities and the
-classes, fit again.
+classes, fit again. The aperture intensities do not use the tied widths
+(3.5), so a class cannot reinforce itself through them.
 
 The tie makes the width of a weak atom measurable. Its peak height is now
 informative about its width, because a broader atom of the same species must
@@ -760,8 +765,9 @@ and the class information to the present products:
   the filtered kernels have negative halos. On the fixtures of 10.6 as
   phase 5 closed them the fitted class ratios are 25% low for Pt/Ni mixed at
   random, 38% for Pt/Al and 13% for a Ni core under a Pt skin, where the Ni
-  intensity rises toward the centre and one Ni atom at the centre is called
-  Pt. The classes still come out in the right order; the ratios are
+  intensity rises toward the centre and one Ni atom at the centre was called
+  Pt (the coordination bias below, fixed by the common width of 3.5 in the
+  emulation). The classes still come out in the right order; the ratios are
   reported, not floored. A remedy, fitting each atom with the map-filtered
   kernel, was tried as phase 6 and withdrawn (10.7).
 - **Width bias on filtered maps** (2026-10-09, found after the merge), a
@@ -777,6 +783,30 @@ and the class information to the present products:
   of `_species.csv` and the radial profiles are therefore not mobility
   measurements on filtered maps; the B-factor work
   (`atom_bfactor_model.md`) has to model the filtering.
+- **Coordination bias of the intensity** (2026-10-11, found after the
+  merge). Until then each aperture sum was divided by the enclosed fraction
+  at the atom's own fitted width. A numpy emulation of the pipeline on the
+  pure fixture of 10.6 (level-1 positions taken from the generating model)
+  showed what that did:
+  - Noise-free, the intensity fell by 19% from atoms with 5 neighbours to
+    atoms with 12. Half came from the aperture sum (12%), half from the
+    width correction: the fitted B was 31.4 and 24.9 A^2 where the
+    generated B differ by 3.8.
+  - Over 35 noise draws, the two-class fit forced by `element=Pt,Ni` was
+    admissible in 9, and BIC preferred two classes in 34. The brighter class
+    was always low-coordination surface atoms (mean coordination 6.2 to
+    8.7) and the class called Ni the bulk (10.2 to 11.7), 89 to 235 atoms.
+    Without the stage-2 recompute it was admissible in 3.
+  - With one common width (3.5) it was admissible in none (`D` at most
+    2.54, mean 1.95), and BIC preferred two classes in 1.
+  - On the alloy, core and light fixtures (7 draws each) the common width
+    labelled every atom right in list and blind mode. With own widths one
+    surface atom of the alloy and the Ni atom at the centre of the core
+    (1.6 A out) were called Pt, as the test had seen. `D` rose from 5.8-7.0
+    to 8.0-9.4 (alloy), 6.3-6.9 to 7.5-8.0 (core) and 6.7-8.5 to 9.9-11.7
+    (light). The class ratios did not change.
+  The 12% bias of the aperture sum itself remains, under the intensity bias
+  above.
 - **Model bias.** Labels are found from scratch at every call; nothing is
   carried between iterations. Since `_SIM.mrc` only aligns (section 0), a
   wrong label can reach the next map only through the orientations. A direct
@@ -1601,7 +1631,9 @@ at 357), the environment-dependent bias of section 7. In phase 5 the core
 case's "every found atom carries its element" is reported (the number of
 wrong labels and where they are), not floored; every other floor stands.
 Phase 6 was to restore that floor for every case; it was withdrawn (10.7),
-and the core case's label count stays reported.
+and the core case's label count stays reported. With the common width of
+3.5 (2026-10-11) the emulation labels the centre atom right in 7 draws of 7;
+the floor can return once a build of the test confirms it.
 
 ### 10.7 Phase 6, withdrawn
 
@@ -2988,3 +3020,10 @@ variant (8.8).
 generator and detector of 8.8, with `python3 codex_checks.py null | contam |
 gate | all` (about two minutes for `all`). It ports `detect_peak_thres_fdr`
 and implements the threshold calibration of 3.2 as `calibrate_k`.
+
+`emul_species_cases.py` (numpy only, in the arun run `species_validation`,
+`numpy_checks/`): the fixtures of 10.6 and the fit and classification steps
+of `discover_species`, with the level-1 positions taken from the generating
+model. `CASE=pure|alloy|core|light INT_MODE=own|common python3
+emul_species_cases.py <seed> 20 list,blind` writes one JSON record (about 8 s
+per mode). It gave the coordination-bias numbers of section 7.
