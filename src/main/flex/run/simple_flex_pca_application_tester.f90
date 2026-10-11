@@ -23,6 +23,7 @@ use simple_type_defs,           only: CTFFLAG_YES, ctfparams
 use simple_ui,                  only: make_ui
 implicit none
 private
+#include "simple_local_flags.inc"
 
 public :: run_all_flex_pca_application_tests
 public :: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project, read_state_weight_table
@@ -30,13 +31,13 @@ public :: configure_flex_pca_phantom
 
 integer, parameter         :: BOX                             = 64
 integer, parameter         :: NPTCLS                          = 2000
-integer, parameter         :: NHALF                           = NPTCLS / 2
 integer, parameter         :: NARMS                           = 5
 integer, parameter         :: MIN_NEFF                        = 100
 integer, parameter         :: NTHR                            = 4
 integer, parameter         :: SEED_A                          = 202610061
 integer, parameter         :: SEED_B                          = 202610062
 integer, parameter         :: SEED_APP                        = 202610063
+integer, parameter         :: SEED_C                          = 202610091
 real,    parameter         :: SMPD                            = 2.0
 real,    parameter         :: MSKDIAM                         = 100.0
 real,    parameter         :: KV                              = 300.0
@@ -68,6 +69,8 @@ character(len=18), parameter :: ARM_TAG(NARMS)       = [character(len=18) :: &
 integer,           parameter :: ARM_NBINS(NARMS)     = [1, 1, 1, 1, 4]
 !> covariance box of each arm (box_crop)
 integer,           parameter :: ARM_BOX_CROP(NARMS)  = [BOX, BOX, BOX, BOX, 48]
+!> file tags of the phantom states
+character(len=1),  parameter :: STATE_TAGS(3)        = ['a', 'b', 'c']
 
 type :: arm_result
     integer :: nstates = 0
@@ -121,40 +124,81 @@ contains
         enddo
     end subroutine test_two_state_backend_matrix
 
-    !> Build the deterministic truth maps, shared orientations and interleaved two-state stack.
-    !! Both the library fixture and the high-level shared/distributed gate use this exact recipe.
-    subroutine create_flex_pca_phantom_fixture( root, nthr, truth_a, truth_b, truth_mean, truth_diff, oritab, stack )
-        class(string), intent(in)  :: root
-        integer,       intent(in)  :: nthr
-        type(string),  intent(out) :: truth_a, truth_b, truth_mean, truth_diff, oritab, stack
-        type(string) :: stk_a, stk_b
-        call write_phantom_truths(root, truth_a, truth_b, truth_mean, truth_diff)
+    !> Truth maps, shared poses and the interleaved stack (row nstates*(i-1)+s holds pose i in state s); the
+    !! defaults are the two-state library fixture. nstates=3 adds state C (truth_c); nviews > 0 repeats
+    !! nviews directions, each one pose, so a direction is an exact 2D class
+    subroutine create_flex_pca_phantom_fixture( root, nthr, truth_a, truth_b, truth_mean, truth_diff, oritab, stack, &
+        &nptcls, nstates, nviews, truth_c )
+        class(string),           intent(in)  :: root
+        integer,                 intent(in)  :: nthr
+        type(string),            intent(out) :: truth_a, truth_b, truth_mean, truth_diff, oritab, stack
+        integer,       optional, intent(in)  :: nptcls, nstates, nviews
+        type(string),  optional, intent(out) :: truth_c
+        integer, parameter :: SEEDS(3) = [SEED_A, SEED_B, SEED_C]
+        type(string), allocatable :: truths(:), stks(:)
+        integer :: nst, nv, nposes, s
+        call phantom_layout(nst, nv, nposes, nptcls, nstates, nviews)
+        if( nst == 3 .and. .not. present(truth_c) ) THROW_HARD('three phantom states need truth_c')
+        allocate(truths(nst), stks(nst))
+        call write_phantom_truths(root, nst, truths, truth_mean, truth_diff)
+        truth_a = truths(1)
+        truth_b = truths(2)
+        if( nst == 3 ) truth_c = truths(3)
         oritab = root//'/truth_orientations.txt'
-        call write_uniform_orientations(oritab)
+        call write_uniform_orientations(oritab, nposes, nv)
         call simple_chdir(root)
-        stk_a = simulate_stack(truth_a, oritab, string('particles_state_a.mrcs'), SEED_A, nthr)
-        stk_b = simulate_stack(truth_b, oritab, string('particles_state_b.mrcs'), SEED_B, nthr)
-        stack = interleave_stacks(stk_a, stk_b, string('particles_two_state.mrcs'))
-        call stk_a%kill
-        call stk_b%kill
+        do s = 1, nst
+            stks(s) = simulate_stack(truths(s), oritab, string('particles_state_'//STATE_TAGS(s)//'.mrcs'), &
+                &SEEDS(s), nposes, nthr)
+        enddo
+        if( nst == 2 )then
+            stack = interleave_stacks(stks, nposes, string('particles_two_state.mrcs'))
+        else
+            stack = interleave_stacks(stks, nposes, string('particles_three_state.mrcs'))
+        endif
+        deallocate(truths, stks)
     end subroutine create_flex_pca_phantom_fixture
 
-    !> Common asymmetric body plus one narrow lobe moved by exactly eight pixels between A and B.
-    subroutine write_phantom_truths( root, truth_a, truth_b, truth_mean, truth_diff )
+    !> The state count, direction count and poses per state of the phantom, from the optional arguments of
+    !! the fixture routines; every state shares the nposes poses, every direction nposes/nviews of them
+    subroutine phantom_layout( nst, nv, nposes, nptcls, nstates, nviews )
+        integer,           intent(out) :: nst, nv, nposes
+        integer, optional, intent(in)  :: nptcls, nstates, nviews
+        integer :: ntot
+        ntot = NPTCLS
+        nst  = 2
+        nv   = 0
+        if( present(nptcls)  ) ntot = nptcls
+        if( present(nstates) ) nst  = nstates
+        if( present(nviews)  ) nv   = nviews
+        if( nst < 2 .or. nst > 3 ) THROW_HARD('the phantom has two or three states')
+        if( mod(ntot, nst) /= 0 ) THROW_HARD('phantom particles must split evenly over the states')
+        nposes = ntot / nst
+        if( nv > 0 )then
+            if( mod(nposes, nv) /= 0 ) THROW_HARD('phantom poses must split evenly over the directions')
+        endif
+    end subroutine phantom_layout
+
+    !> Common asymmetric body plus one narrow lobe: moved by exactly eight pixels between A and B, and in
+    !! state C at the third corner of a near-equilateral triangle with them
+    subroutine write_phantom_truths( root, nst, truths, truth_mean, truth_diff )
         class(string), intent(in)  :: root
-        type(string),  intent(out) :: truth_a, truth_b, truth_mean, truth_diff
+        integer,       intent(in)  :: nst
+        type(string),  intent(out) :: truths(nst), truth_mean, truth_diff
+        real,    parameter :: LOBE_POS(3,3) = reshape([-8.0, -2.0, 0.0,   8.0, -2.0, 0.0,   0.0, 12.0, 0.0], [3,3])
         integer, parameter :: NBLOBS        = 6
         real,    parameter :: POS(3,NBLOBS) = reshape([ &
             &-18., -10.,   4.,   14.,   8.,  -8.,   -6.,  18.,  12., &
             &  4., -16., -14.,   20., -12.,  16.,  -20.,  13., -11.], [3,NBLOBS])
         real,    parameter :: SIGMA(NBLOBS) = [7.0, 6.0, 5.5, 6.5, 4.5, 5.0]
         real,    parameter :: AMP(NBLOBS)   = [1.0, 0.85, 0.75, 0.70, 0.55, 0.50]
-        type(image) :: vol_a, vol_b, vol_mean, vol_diff
-        real, allocatable :: base(:,:,:), a(:,:,:), b(:,:,:)
-        real :: ctr(3), d2
-        integer :: blob, ix, iy, iz
-        truth_a    = root//'/truth_state_a.mrc'
-        truth_b    = root//'/truth_state_b.mrc'
+        type(image)       :: vol
+        real, allocatable :: base(:,:,:), a(:,:,:), b(:,:,:), mean(:,:,:)
+        real    :: ctr(3), d2
+        integer :: blob, ix, iy, iz, s
+        do s = 1, nst
+            truths(s) = root//'/truth_state_'//STATE_TAGS(s)//'.mrc'
+        enddo
         truth_mean = root//'/truth_mean.mrc'
         truth_diff = root//'/truth_a_minus_b.mrc'
         allocate(base(BOX,BOX,BOX), source=0.0)
@@ -169,44 +213,57 @@ contains
                 enddo
             enddo
         enddo
-        call vol_a%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
-        call vol_a%set_rmat(base, .false.)
-        call vol_a%write(truth_a)
-        call vol_a%write(truth_b)
-        call add_gaussian_blob(truth_a, [-8.0,-2.0,0.0], 4.0, 0.85)
-        call add_gaussian_blob(truth_b, [ 8.0,-2.0,0.0], 4.0, 0.85)
-        call vol_a%read(truth_a)
-        call vol_b%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
-        call vol_b%read(truth_b)
-        a = vol_a%get_rmat()
-        b = vol_b%get_rmat()
-        call vol_mean%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
-        call vol_mean%set_rmat(0.5 * (a + b), .false.)
-        call vol_mean%write(truth_mean)
-        call vol_diff%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
-        call vol_diff%set_rmat(a - b, .false.)
-        call vol_diff%write(truth_diff)
-        call vol_a%kill
-        call vol_b%kill
-        call vol_mean%kill
-        call vol_diff%kill
-        deallocate(base, a, b)
+        call vol%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
+        call vol%set_rmat(base, .false.)
+        do s = 1, nst
+            call vol%write(truths(s))
+            call add_gaussian_blob(truths(s), LOBE_POS(:,s), 4.0, 0.85)
+        enddo
+        allocate(mean(BOX,BOX,BOX), source=0.0)
+        do s = 1, nst
+            call vol%read(truths(s))
+            if( s == 1 ) a = vol%get_rmat()
+            if( s == 2 ) b = vol%get_rmat()
+            mean = mean + vol%get_rmat()
+        enddo
+        call vol%set_rmat(mean / real(nst), .false.)
+        call vol%write(truth_mean)
+        call vol%set_rmat(a - b, .false.)
+        call vol%write(truth_diff)
+        call vol%kill
+        deallocate(base, a, b, mean)
     end subroutine write_phantom_truths
 
-    subroutine write_uniform_orientations( fname )
+    !> nposes uniform spiral poses; with nviews > 0, nviews spiral directions, each repeated as one pose
+    !! nposes/nviews times in a row
+    subroutine write_uniform_orientations( fname, nposes, nviews )
         class(string), intent(in) :: fname
-        class(oris), allocatable :: poses
+        integer,       intent(in) :: nposes, nviews
+        class(oris), allocatable :: poses, views
+        integer :: i, nrep
         allocate(poses)
-        call poses%new(NHALF, is_ptcl=.true.)
-        call poses%spiral()
-        call poses%write(fname, [1,NHALF])
+        call poses%new(nposes, is_ptcl=.true.)
+        if( nviews > 0 )then
+            allocate(views)
+            call views%new(nviews, is_ptcl=.true.)
+            call views%spiral()
+            nrep = nposes / nviews
+            do i = 1, nposes
+                call poses%transfer_ori(i, views, (i - 1) / nrep + 1)
+            enddo
+            call views%kill
+            deallocate(views)
+        else
+            call poses%spiral()
+        endif
+        call poses%write(fname, [1,nposes])
         call poses%kill
         deallocate(poses)
     end subroutine write_uniform_orientations
 
-    function simulate_stack( volume, oritab, outstk, seed, nthr ) result( stack )
+    function simulate_stack( volume, oritab, outstk, seed, nposes, nthr ) result( stack )
         class(string), intent(in) :: volume, oritab, outstk
-        integer,       intent(in) :: seed, nthr
+        integer,       intent(in) :: seed, nposes, nthr
         type(string) :: stack
         class(commander_simulate_particles), allocatable :: simulate
         class(cmdline), allocatable :: cline
@@ -218,7 +275,7 @@ contains
         call cline%set('oritab',   oritab)
         call cline%set('outstk',   outstk)
         call cline%set('outfile',  outstk//'.txt')
-        call cline%set('nptcls',   NHALF)
+        call cline%set('nptcls',   nposes)
         call cline%set('nthr',     nthr)
         call cline%set('smpd',     SMPD)
         call cline%set('mskdiam',  MSKDIAM)
@@ -240,34 +297,40 @@ contains
         deallocate(simulate, cline)
     end function simulate_stack
 
-    function interleave_stacks( stk_a, stk_b, outstk ) result( stack )
-        class(string), intent(in) :: stk_a, stk_b, outstk
+    !> image i of state stack s goes to row nstates*(i-1)+s
+    function interleave_stacks( stks, nposes, outstk ) result( stack )
+        class(string), intent(in) :: stks(:), outstk
+        integer,       intent(in) :: nposes
         type(string) :: stack
         type(image)  :: img
-        integer :: i
+        integer :: i, s, nst
+        nst = size(stks)
         call img%new([BOX,BOX,1], SMPD, wthreads=.false.)
-        do i = 1, NHALF
-            call img%read(stk_a, i)
-            call img%write(outstk, 2*i - 1)
-            call img%read(stk_b, i)
-            call img%write(outstk, 2*i)
+        do i = 1, nposes
+            do s = 1, nst
+                call img%read(stks(s), i)
+                call img%write(outstk, nst*(i - 1) + s)
+            enddo
         enddo
         call img%kill
         stack = simple_abspath(outstk)
     end function interleave_stacks
 
-    !> Both truth states occur in both even/odd halfsets. Rows 2i-1 and 2i share their pose,
-    !! so orientation coverage cannot become a state cue.
-    subroutine build_flex_pca_phantom_project( projfile, stack, oritab )
-        class(string), intent(in) :: projfile, stack, oritab
+    !> Every truth state occurs in both even/odd halfsets. The rows of one pose (2i-1 and 2i by default)
+    !! share it, so orientation coverage cannot become a state cue. With nviews > 0 the ptcl2D class of a
+    !! particle is its direction, an exact 2D class: one pose, no in-plane rotation and no shift.
+    subroutine build_flex_pca_phantom_project( projfile, stack, oritab, nptcls, nstates, nviews )
+        class(string),     intent(in) :: projfile, stack, oritab
+        integer, optional, intent(in) :: nptcls, nstates, nviews
         class(sp_project), allocatable :: project
         class(oris),       allocatable :: poses
         type(ctfparams) :: ctf
         type(cmdline)   :: cline_compenv
-        integer :: i, ipose, eo
+        integer :: i, ipose, eo, nst, nv, nposes
+        call phantom_layout(nst, nv, nposes, nptcls, nstates, nviews)
         allocate(project, poses)
-        call poses%new(NHALF, is_ptcl=.true.)
-        call poses%read(oritab, [1,NHALF])
+        call poses%new(nposes, is_ptcl=.true.)
+        call poses%read(oritab, [1,nposes])
         ctf%smpd    = SMPD
         ctf%kv      = KV
         ctf%cs      = CS
@@ -277,8 +340,8 @@ contains
         ctf%angast  = 0.0
         ctf%ctfflag = CTFFLAG_YES
         call project%add_stk(stack, ctf)
-        do i = 1, NPTCLS
-            ipose = (i + 1) / 2
+        do i = 1, nst * nposes
+            ipose = (i - 1) / nst + 1
             eo     = mod(ipose, 2)
             call project%os_ptcl3D%set_euler(i, poses%get_euler(ipose))
             call project%os_ptcl3D%set_state(i, 1)
@@ -287,6 +350,7 @@ contains
             call project%os_ptcl2D%set_euler(i, poses%get_euler(ipose))
             call project%os_ptcl2D%set_state(i, 1)
             call project%os_ptcl2D%set(i, 'eo', real(eo))
+            if( nv > 0 ) call project%os_ptcl2D%set_class(i, (ipose - 1) / (nposes / nv) + 1)
         enddo
         call project%update_projinfo(projfile)
         ! the computing environment new_project writes; the distributed master's queue setup reads it

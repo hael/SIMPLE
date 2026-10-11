@@ -12,8 +12,10 @@ private
 
 contains
 
+    !> l_all_rows: every active row is aligned and must be updated, without the cohort cap, and the
+    !! sampling counters are cleared again afterwards, so a following coverage check counts only later updates
     subroutine initialize_poses_against_external_references( params, parent_cline, xrefine3D, xrec3D, &
-        &nactive, reference_vols, checkpoint_vols, pose_init_iter, lp_init )
+        &nactive, reference_vols, checkpoint_vols, pose_init_iter, lp_init, l_all_rows )
         class(parameters),     intent(in)    :: params
         class(cmdline),        intent(inout) :: parent_cline
         class(commander_base), intent(inout) :: xrefine3D, xrec3D
@@ -22,6 +24,7 @@ contains
         type(string),          intent(out)   :: checkpoint_vols(:)
         integer,               intent(in)    :: pose_init_iter
         real,        optional, intent(in)    :: lp_init
+        logical,     optional, intent(in)    :: l_all_rows
         integer, parameter :: NSAMPLE_POSE_INIT_CAP = 100000
         integer, parameter :: NSPACE_POSE_INIT       = 2500
         real,    parameter :: LP_POSE_INIT           = 15.0
@@ -31,6 +34,7 @@ contains
         type(string)      :: startvol
         integer :: state, nsample_pose_init
         real    :: ufrac_pose_init, lp
+        logical :: l_all
         if( nactive < 1 ) THROW_HARD('external-reference pose initialization requires active particles')
         if( size(reference_vols) < 1 ) THROW_HARD('external-reference pose initialization requires references')
         if( size(checkpoint_vols) /= size(reference_vols) )then
@@ -39,7 +43,10 @@ contains
         if( pose_init_iter < 1 ) THROW_HARD('external-reference pose-initialization iteration must be positive')
         lp = LP_POSE_INIT
         if( present(lp_init) ) lp = lp_init
+        l_all = .false.
+        if( present(l_all_rows) ) l_all = l_all_rows
         nsample_pose_init = min(nactive, NSAMPLE_POSE_INIT_CAP)
+        if( l_all ) nsample_pose_init = nactive
         ufrac_pose_init   = real(nsample_pose_init) / real(nactive)
         call lpstages_setlims(params%box, 1, params%smpd, lp, lp, &
             &lpinfo_pose_init)
@@ -106,7 +113,7 @@ contains
             &'>>> FIXED-REFERENCE CC POSE INITIALIZATION STATES/NSAMPLE/FRACTION/LP: ', &
             &size(reference_vols), '/', nsample_pose_init, '/', ufrac_pose_init, '/', lp
         call xrefine3D%execute(cline_pose_init)
-        call validate_pose_initialized_states(params%projfile, size(reference_vols), nsample_pose_init)
+        call validate_pose_initialized_states(params%projfile, size(reference_vols), nsample_pose_init, l_all)
         cline_checkpoint = cline_pose_init
         call cline_checkpoint%set('prg',         'reconstruct3D')
         call cline_checkpoint%set('objfun',      'cc')
@@ -124,6 +131,7 @@ contains
             checkpoint_vols(state) = refine3D_state_vol_fname(state)
         enddo
         call cleanup_assignment_files(params%nparts)
+        if( l_all ) call prepare_pose_initialization_coverage(params%projfile)
         call cline_checkpoint%kill
         call cline_pose_init%kill
         call startvol%kill
@@ -140,9 +148,11 @@ contains
         call pose_proj%kill
     end subroutine prepare_pose_initialization_coverage
 
-    subroutine validate_pose_initialized_states( projfile, nstates, nsample_expected )
+    !> l_all: every active row must be updated, not 99% of the cohort
+    subroutine validate_pose_initialized_states( projfile, nstates, nsample_expected, l_all )
         type(string), intent(in) :: projfile
         integer,      intent(in) :: nstates, nsample_expected
+        logical,      intent(in) :: l_all
         type(sp_project) :: pose_proj
         integer, allocatable :: states(:), updatecnts(:)
         integer :: state, nupdated, state_pop, nexpected
@@ -154,9 +164,15 @@ contains
         states     = pose_proj%os_ptcl3D%get_all_asint('state')
         updatecnts = pose_proj%os_ptcl3D%get_all_asint('updatecnt')
         nupdated   = count(states > 0 .and. updatecnts > 0)
-        nexpected  = floor(0.99*real(nsample_expected)) ! to account for rouding
-        if( nupdated < nexpected )then
-            THROW_HARD('external-reference pose initialization updated fewer particles than the capped cohort')
+        if( l_all )then
+            if( nupdated < count(states > 0) )then
+                THROW_HARD('external-reference pose initialization left active particles without an update')
+            endif
+        else
+            nexpected = floor(0.99*real(nsample_expected)) ! to account for rounding
+            if( nupdated < nexpected )then
+                THROW_HARD('external-reference pose initialization updated fewer particles than the capped cohort')
+            endif
         endif
         do state = 1,nstates
             state_pop = count(states == state .and. updatecnts > 0)

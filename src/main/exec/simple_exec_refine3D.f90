@@ -7,20 +7,21 @@ use simple_commanders_mask,      only: commander_automask
 use simple_commanders_volops,    only: commander_postprocess
 use simple_commanders_rec,       only: commander_rec3D
 use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto, commander_refine3D_states, &
-    &commander_classify3D_refs, commander_bootstrap_rec3D
+    &commander_refine3D_states_cavgs, commander_classify3D_refs, commander_bootstrap_rec3D
 implicit none
 
 public :: exec_refine3D_commander
 private
 
-type(commander_automask)        :: xautomask
-type(commander_postprocess)     :: xpostprocess
-type(commander_rec3D)           :: xrec3D
-type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
-type(commander_refine3D_auto)   :: xrefine3D_auto
-type(commander_refine3D_states) :: xrefine3D_states
-type(commander_classify3D_refs) :: xclassify3D_refs
-type(commander_refine3D)        :: xrefine3D
+type(commander_automask)              :: xautomask
+type(commander_postprocess)           :: xpostprocess
+type(commander_rec3D)                 :: xrec3D
+type(commander_bootstrap_rec3D)       :: xbootstrap_rec3D
+type(commander_refine3D_auto)         :: xrefine3D_auto
+type(commander_refine3D_states)       :: xrefine3D_states
+type(commander_refine3D_states_cavgs) :: xrefine3D_states_cavgs
+type(commander_classify3D_refs)       :: xclassify3D_refs
+type(commander_refine3D)              :: xrefine3D
 
 contains
 
@@ -58,6 +59,12 @@ contains
                     call restarted_exec(cline, string('refine3D_states'), string('simple_exec'))
                 else
                     call xrefine3D_states%execute(cline)
+                endif
+            case( 'refine3D_states_cavgs' )
+                if( cline%defined('nrestarts') )then
+                    call restarted_exec(cline, string('refine3D_states_cavgs'), string('simple_exec'))
+                else
+                    call xrefine3D_states_cavgs%execute(cline)
                 endif
             case( 'classify3D_refs' )
                 if( cline%defined('nrestarts') )then

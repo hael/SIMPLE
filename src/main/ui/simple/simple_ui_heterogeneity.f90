@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = &
     category_descriptor('heterogeneity', 'Heterogeneity Analysis', 65)
 type(ui_program), target :: flex_pca
 type(ui_program), target :: refine3D_states
+type(ui_program), target :: refine3D_states_cavgs
 type(ui_program), target :: classify3D_refs
 type(ui_program), target :: ptcl3D_state_consensus
 
@@ -16,6 +17,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_flex_pca(prgtab)
         call new_refine3D_states(prgtab)
+        call new_refine3D_states_cavgs(prgtab)
         call new_classify3D_refs(prgtab)
         call new_ptcl3D_state_consensus(prgtab)
     end subroutine construct_heterogeneity_programs
@@ -273,6 +275,46 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         call refine3D_states%add_input(UI_COMP, nthr, group='compute', visibility=UI_VIS_STANDARD)
         call add_ui_program('refine3D_states', refine3D_states, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_states
+
+    subroutine new_refine3D_states_cavgs( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call refine3D_states_cavgs%new(&
+        &'refine3D_states_cavgs',&
+        &'Refine conformational states of class-expansion sub-class averages',&
+        &'sorts the sub-class averages of cls_expansion into conformational states: flex PCA initializes the states on the even and odd class averages, the refine3D_states frequency march refines them with PCG reconstruction, and the states are handed back to the particles',&
+        &'simple_exec',&
+        &.true.,&
+        &visibility=UI_VIS_DEVELOPER, display_name='Class-Average State Refinement')
+        call refine3D_states_cavgs%add_input(UI_SRCH, maxits, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_states_cavgs%add_input(UI_SRCH, nstates, required_override=.false., group='search', visibility=UI_VIS_STANDARD)
+        call refine3D_states_cavgs%add_input(UI_SRCH, 'min_state_frac', 'num', 'Minimum flex state population fraction', &
+        &'For class averages without multi-state labels, initialized by flex PCA (nstates>=3), every initial state must hold &
+        &at least this fraction of the class-average rows{0.1}', &
+        &'fraction of rows', .false., 0.1, group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_states_cavgs%add_input(UI_SRCH, 'pose_policy', 'multi', 'Pose-search policy', &
+        &'Pose-search policy(local|global){global}. Local uses the current geometric neighborhood; global permits full probabilistic matching', &
+        &'local or global', .false., 'global', group='search', &
+        &choices=ui_choices([character(len=6) :: 'local', 'global']), visibility=UI_VIS_STANDARD)
+        call refine3D_states_cavgs%add_input(UI_SRCH, pgrp, group='search', visibility=UI_VIS_STANDARD)
+        call refine3D_states_cavgs%add_input(UI_SRCH, 'overlap', 'num', 'State-overlap convergence target', &
+        &'Required overlap of state assignments for convergence during frequency marching', 'overlap fraction', &
+        &.false., .99, group='search', visibility=UI_VIS_DEVELOPER)
+        call refine3D_states_cavgs%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', &
+        &'Starting low-pass limit of the frequency march, also the covariance band of the flex PCA initialization', &
+        &'low-pass limit in Angstroms', .false., 10., group='filter', visibility=UI_VIS_ADVANCED)
+        call refine3D_states_cavgs%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', &
+        &'Final low-pass limit of the frequency march', 'low-pass limit in Angstroms', &
+        &.false., 6., group='filter', visibility=UI_VIS_ADVANCED)
+        call refine3D_states_cavgs%add_input(UI_FILT, ml_reg, group='filter', visibility=UI_VIS_ADVANCED)
+        call refine3D_states_cavgs%add_input(UI_FILT, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Reconstruction backend of the flex PCA initialization, the frequency march and the final maps(pcg|gridding){pcg}', &
+        &'', .false., 'pcg', group='filter', choices=ui_choices([character(len=8) :: 'pcg', 'gridding']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_states_cavgs%add_input(UI_MASK, mskdiam, group='mask', visibility=UI_VIS_STANDARD)
+        call refine3D_states_cavgs%add_input(UI_COMP, nparts, group='compute', visibility=UI_VIS_STANDARD)
+        call refine3D_states_cavgs%add_input(UI_COMP, nthr, group='compute', visibility=UI_VIS_STANDARD)
+        call add_ui_program('refine3D_states_cavgs', refine3D_states_cavgs, prgtab, UI_CATEGORY)
+    end subroutine new_refine3D_states_cavgs
 
     subroutine new_classify3D_refs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

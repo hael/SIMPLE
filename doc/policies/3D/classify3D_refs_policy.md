@@ -93,6 +93,13 @@ The shared implementation is
 `simple_external_reference_pose_initialization`. `solve3D` input-volume
 starts and `refine3D_auto ref_pose_init=cc` use the same service.
 
+The service has an optional all-rows mode (`l_all_rows`) for class-average
+work projects, where every row is one class average. It aligns every active
+row with no cohort cap, requires every active row to be updated, and clears
+the `sampled` and `updatecnt` fields again after the checkpoint, so that a
+following coverage check counts only later updates. Callers that omit it keep
+the capped cohort described above.
+
 ## 4. Euclidean Classification
 
 After the checkpoint, the wrapper switches to `objfun=euclid` and uses full

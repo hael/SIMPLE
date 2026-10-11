@@ -29,6 +29,8 @@ choose the state(s) to retain
       |
       +-- merged states --> select/merge, then single-state solve3D
       |
+      +-- optional: cls_expansion --> refine3D_states_cavgs
+      |
       v
 refine3D_states
       |
@@ -316,6 +318,40 @@ classification. Fixed-pose classification is `flex_pca` itself.
 view coverage, show interpretable structural differences, and remain similar
 when the analysis is repeated or the requested state count is changed. Treat
 very small, poorly oriented, or irreproducible states as suspect.
+
+### Optional: find the states on class averages first
+
+This route is experimental; its program is visible at the Developer level.
+Instead of letting `flex_pca` initialize the states from the particles, the
+states can be found on class averages and handed to the particles. First,
+split every 2D class of the consensus project into sub-classes:
+
+```bash
+simple_exec prg=cls_expansion \
+  projfile=<SINGLE_STATE_SOLVE3D_PROJECT.simple> \
+  ncls=<SUBCLASSES_PER_CLASS> mskdiam=<MASK_DIAMETER_A> \
+  nparts=<PARTITIONS> nthr=<THREADS>
+```
+
+`cls_expansion` needs the 2D classification of the particles in the project.
+Like every program here it writes its result as a new project in its own run
+directory. Then sort the sub-class averages of that project into states:
+
+```bash
+simple_exec prg=refine3D_states_cavgs \
+  projfile=<CLS_EXPANSION_PROJECT.simple> \
+  nstates=<NUMBER_OF_STATES> pgrp=<POINT_GROUP> mskdiam=<MASK_DIAMETER_A> \
+  nparts=<PARTITIONS> nthr=<THREADS>
+```
+
+It needs at least 100 selected sub-class averages, `nstates >= 3` and the
+consensus map of the project. It writes a state per sub-class average and
+hands the states to the particles; particles of sub-classes that end without a
+state are set to state 0. Its state maps, `rec_final_stateNN.mrc`, are
+class-average maps, registered as `vol_cavg`. If it delivered two or more
+states, run `refine3D_states` as shown above on its output project,
+`<REFINE3D_STATES_CAVGS_PROJECT.simple>`, but without `nstates`: it finds the
+handed-back labels and refines them without `flex_pca`.
 
 ## 6. Extract and refine each useful state
 

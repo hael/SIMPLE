@@ -1,7 +1,7 @@
 # Heterogeneity Analysis
 
 Heterogeneity analysis extends the single-map model when one consensus density
-cannot explain the particles. SIMPLE provides one continuous model and two
+cannot explain the particles. SIMPLE provides one continuous model and three
 discrete-state workflows, selected by the provenance of the starting model and
 particle poses:
 
@@ -10,6 +10,9 @@ particle poses:
   space.
 - [`refine3D_states`](refine3d_states.md) refines same-lineage conformational
   states from an existing particle and reference scaffold.
+- [`refine3D_states_cavgs`](refine3d_states_cavgs.md) sorts the sub-class
+  averages of `cls_expansion` into states, refines them on the class averages
+  and hands the labels to particle-level `refine3D_states`.
 - [`classify3D_refs`](classify3d_refs.md) classifies particles against a complete
   external reference set, then reconstructs data-derived state maps before
   continuing refinement.

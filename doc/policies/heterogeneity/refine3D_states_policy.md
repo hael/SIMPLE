@@ -7,6 +7,7 @@ historical command alias is registered or routed.
 Related policies:
 
 - [refine3D policy](../3D/refine3D_policy.md)
+- [class-average state refinement policy](refine3D_states_cavgs_policy.md)
 - [classify3D references policy](../3D/classify3D_refs_policy.md)
 - [importance-sampling and fractional-update policy](../importance_sampling_fractional_update_policy.md)
 - [nonuniform filtering policy](../NU/nonuniform_filtering_policy.md)
@@ -16,6 +17,9 @@ Primary implementation:
 - `src/main/ui/simple/simple_ui_refine3D.f90`
 - `src/main/exec/simple_exec_refine3D.f90`
 - `src/main/commanders/simple/simple_commanders_refine3D.f90`
+- `src/main/simple_refine3D_states_controller.f90` (the frequency march and
+  the flex_pca state initialization, shared with `refine3D_states_cavgs` under
+  a typed policy whose defaults are this workflow's behaviour)
 - `src/main/simple_refine3D_stage_plan.f90`
 - `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90`
 
@@ -40,7 +44,10 @@ workflow may start from:
 
 1. populated multi-state labels, which continue without state
    initialization; compatible project state maps are used as they are,
-   otherwise the state maps are reconstructed from the labels;
+   otherwise the state maps are reconstructed from the labels. One source of
+   such labels is `refine3D_states_cavgs`, which sorts the sub-class averages
+   of `cls_expansion` into states and hands them back to the particles; its
+   `vol_cavg` maps are class-average maps, not particle state maps;
 2. state-0/1 input (every active particle in one state) plus `nstates`,
    initialized by `flex_pca`: labels and maps derive from the project
    consensus map under a population floor (`min_state_frac`, default 0.1) so
