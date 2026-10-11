@@ -1,5 +1,5 @@
 !@descr: unit tests of chunk planning, source preparation, step projects and reports (simple_solve3D_stream_emulation)
-! The automatic plan (nsample per state count, capped runs dealt by class) on synthetic selections; the
+! The automatic plan (nsample per state count, capped runs of whole stacks) on synthetic selections; the
 ! explicit split, its refusals, the 3D-free source and the step projects on a 20-row fixture; both reports.
 module simple_solve3D_stream_emulation_tester
 use simple_defs,                    only: STDLEN
@@ -20,7 +20,6 @@ contains
         call test_chunk_nsample()
         call test_chunk_run_count()
         call test_balanced_partition()
-        call test_class_stratified_partition()
         call test_partition()
         call test_partition_refusals()
         call test_source_and_step_projects()
@@ -35,6 +34,17 @@ contains
         selected(3) = .false.
         selected(7) = .false.
     end subroutine make_selection
+
+    !> the stack index of n rows in consecutive stacks of stksz rows
+    subroutine make_stacks( stkind, n, stksz )
+        integer, allocatable, intent(out) :: stkind(:)
+        integer,              intent(in)  :: n, stksz
+        integer :: i
+        allocate(stkind(n))
+        do i = 1, n
+            stkind(i) = (i - 1) / stksz + 1
+        enddo
+    end subroutine make_stacks
 
     !> the number of rows in chunk k
     integer function chunk_size( part, k ) result( n )
@@ -100,114 +110,84 @@ contains
         call assert_true(l_bounds_kept, 'every legal count splits into the fewest runs within the bounds')
     end subroutine test_chunk_run_count
 
+    !> Runs are consecutive whole stacks in row order: stacks of 50 or 37 rows, unselected rows inside,
+    !! base-only bounds, a cut that must fall inside a single large stack, and the refusals.
     subroutine test_balanced_partition()
         logical, allocatable :: selected(:)
-        integer, allocatable :: part(:), classes(:)
-        integer :: nchunks, nclasses, status, i
+        integer, allocatable :: part(:), stkind(:)
+        integer :: nchunks, ninside, status, i, sizes(0:2)
+        logical :: l_whole
         character(len=STDLEN) :: msg
         write(*,'(A)') 'test_balanced_partition'
-        ! Without class labels the runs are dealt the selected rows in turn, in row order.
+        ! Four runs whose balanced cuts fall exactly on stack boundaries.
         allocate(selected(100000), source=.true.)
-        allocate(classes(100000),  source=0)
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call make_stacks(stkind, 100000, 50)
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
         call assert_int(0, status, '100000 active particles split successfully')
         call assert_int(3, nchunks, 'four total runs mean three add-on chunks')
-        call assert_int(0, nclasses, 'no labels mean no classes')
+        call assert_int(0, ninside, 'every cut falls on a stack boundary')
         call assert_true(all([(chunk_size(part, i), i=0,3)] == 25000), 'all four runs hold 25000 particles')
-        call assert_true(all(part(1:8) == [0, 1, 2, 3, 0, 1, 2, 3]), 'without labels the rows are dealt in turn')
-        deallocate(selected, classes)
-        ! Three balanced active shares with unselected rows in the row range.
+        deallocate(selected)
+        ! Stacks of 37 rows with unselected rows: whole stacks, sizes within one stack of the balanced share.
         allocate(selected(60005), source=.true.)
-        allocate(classes(60005),  source=0)
+        call make_stacks(stkind, 60005, 37)
         selected([2, 20003, 40004, 60005]) = .false.
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
         call assert_int(0, status, '60001 active particles with holes split successfully')
         call assert_int(2, nchunks, 'the cap makes three total runs')
-        call assert_int(20001, chunk_size(part, 0), 'the first run takes the active remainder')
-        call assert_int(20000, chunk_size(part, 1), 'the second run has an even active share')
-        call assert_int(20000, chunk_size(part, 2), 'the third run has an even active share')
+        call assert_int(0, ninside, 'no cut falls inside a stack')
+        sizes   = [(chunk_size(part, i), i=0,2)]
+        l_whole = .true.
+        do i = 2, size(part)
+            if( stkind(i) /= stkind(i-1) ) cycle
+            if( part(i) >= 0 .and. part(i-1) >= 0 .and. part(i) /= part(i-1) ) l_whole = .false.
+        enddo
+        call assert_true(l_whole, 'no stack is split between runs')
+        call assert_int(60001, sum(sizes), 'every selected row is in one run')
+        call assert_true(maxval(abs(sizes - 20000)) <= 37, 'run sizes stay within one stack of the balanced share')
         call assert_true(all(part([2, 20003, 40004, 60005]) == -1), 'inactive holes belong to no chunk')
-        call assert_true(all(part([1, 3, 4, 5]) == [0, 1, 2, 0]), 'unselected rows are skipped in the deal')
-        deallocate(selected, classes)
+        deallocate(selected)
         ! A legal one-run plan labels the base only, at both bounds.
         allocate(selected(10000), source=.true.)
-        allocate(classes(10000),  source=0)
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call make_stacks(stkind, 10000, 50)
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
         call assert_int(0, status, 'the minimum is accepted')
         call assert_int(0, nchunks, 'the minimum is a base-only run')
         call assert_true(all(part == 0), 'every active row is in the base')
-        deallocate(selected, classes)
+        deallocate(selected)
         allocate(selected(30000), source=.true.)
-        allocate(classes(30000),  source=0)
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call make_stacks(stkind, 30000, 50)
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
         call assert_int(0, status, 'the chunk maximum is accepted')
         call assert_int(0, nchunks, 'the maximum is a base-only run')
         call assert_int(30000, chunk_size(part, 0), 'the base holds the full capped selection')
-        deallocate(selected, classes)
+        deallocate(selected)
+        ! One particle over the cap: the cut moves to the nearest stack boundary.
         allocate(selected(30001), source=.true.)
-        allocate(classes(30001),  source=0)
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call make_stacks(stkind, 30001, 50)
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
         call assert_int(0, status, 'one particle over the cap splits successfully')
         call assert_int(1, nchunks, 'one particle over the cap makes one add-on')
-        call assert_int(15001, chunk_size(part, 0), 'the base takes the balanced remainder')
-        call assert_int(15000, chunk_size(part, 1), 'the add-on differs from the base by one')
-        deallocate(selected, classes)
+        call assert_int(15000, chunk_size(part, 0), 'the base ends on the nearest stack boundary')
+        call assert_int(15001, chunk_size(part, 1), 'the add-on takes the rest')
+        ! A single stack has no boundary: the cut falls inside it, at the balanced share.
+        stkind = 1
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
+        call assert_int(1, ninside, 'a cut without a usable boundary falls inside the stack')
+        call assert_int(15001, chunk_size(part, 0), 'the inside cut keeps the balanced share')
+        deallocate(selected)
         ! A refused plan leaves every row unassigned.
         allocate(selected(9999), source=.true.)
-        allocate(classes(9999),  source=0)
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call make_stacks(stkind, 9999, 50)
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
         call assert_true(status /= 0, '9999 particles are refused')
         call assert_int(0, nchunks, 'a refused plan has no add-on chunks')
         call assert_true(all(part == -1), 'a refused plan assigns no row')
-        deallocate(classes)
-        allocate(classes(10), source=0)
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
-        call assert_true(status /= 0, 'class labels of another length are refused')
+        deallocate(stkind)
+        allocate(stkind(10), source=1)
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
+        call assert_true(status /= 0, 'stack indices of another length are refused')
     end subroutine test_balanced_partition
-
-    !> Two sessions in row order: class 1 fills the first 40000 rows, classes 2 to 6 alternate in the
-    !! rest. Cutting in row order would give the base class 1 alone; dealing gives every run every class.
-    subroutine test_class_stratified_partition()
-        integer, parameter   :: NR = 90002
-        logical, allocatable :: selected(:)
-        integer, allocatable :: part(:), classes(:)
-        integer :: nchunks, nclasses, status, i, c, k, ncls_run(0:3), sizes(0:3)
-        logical :: l_class_balanced, l_every_class_in_base
-        character(len=STDLEN) :: msg
-        write(*,'(A)') 'test_class_stratified_partition'
-        allocate(selected(NR), source=.true.)
-        allocate(classes(NR))
-        do i = 1, NR
-            if( i <= 40000 )then
-                classes(i) = 1
-            else
-                classes(i) = 2 + mod(i, 5)
-            endif
-        enddo
-        selected(7) = .false.
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
-        call assert_int(0, status, '90001 labelled particles split successfully')
-        call assert_int(3, nchunks, 'the cap makes four total runs')
-        call assert_int(6, nclasses, 'six classes are dealt')
-        do k = 0, 3
-            sizes(k) = chunk_size(part, k)
-        enddo
-        call assert_int(90001, sum(sizes), 'every selected row is in one run')
-        call assert_true(maxval(sizes) - minval(sizes) <= 1, 'run sizes differ by at most one')
-        l_class_balanced      = .true.
-        l_every_class_in_base = .true.
-        do c = 1, 6
-            do k = 0, 3
-                ncls_run(k) = count(part == k .and. classes == c)
-            enddo
-            if( maxval(ncls_run) - minval(ncls_run) > 1 ) l_class_balanced = .false.
-            if( ncls_run(0) < 1 ) l_every_class_in_base = .false.
-        enddo
-        call assert_true(l_class_balanced, 'every class is split over the runs to within one particle')
-        call assert_true(l_every_class_in_base, 'the base holds every class')
-        call assert_int(10000, count(part == 0 .and. classes == 1), 'the base holds a quarter of the first session')
-        call assert_int(-1, part(7), 'an unselected row belongs to no run')
-    end subroutine test_class_stratified_partition
 
     subroutine test_partition()
         logical, allocatable :: selected(:)
@@ -441,7 +421,7 @@ contains
         character(len=2*STDLEN) :: all_lines
         integer :: funit, io_stat
         write(*,'(A)') 'test_chunks_report'
-        call report%new_chunks('simple_exec prg=solve3D_chunks', 'source.simple', [20001, 20000, 20000], 3, chunk_nsample(3), 6)
+        call report%new_chunks('simple_exec prg=solve3D_chunks', 'source.simple', [20001, 20000, 20000], 3, chunk_nsample(3), 0)
         fname = 'solve3D_chunks_report_test.txt'
         call report%write(fname)
         all_lines = ''
@@ -454,7 +434,7 @@ contains
             if( index(line, 'selected particles:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
             if( index(line, 'run particles:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
             if( index(line, 'nsample:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
-            if( index(line, 'runs dealt') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+            if( index(line, 'whole stacks') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
         enddo
         close(funit, status='delete')
         call assert_true(index(all_lines, 'SOLVE3D_CHUNKS REPORT') > 0, 'the chunks report has its own header')
@@ -463,7 +443,8 @@ contains
         call assert_true(index(all_lines, 'nsample: 1666  sampled per iteration (nsample x states): 4998') > 0, &
             &'the chunks report records nsample and the total it samples')
         call assert_true(index(all_lines, 'run particles: 20001 20000 20000') > 0, 'the actual balanced run sizes are listed')
-        call assert_true(index(all_lines, 'runs dealt by 2D class: 6 classes') > 0, 'the chunks report names the deal')
+        call assert_true(index(all_lines, 'whole stacks in arrival order; cuts inside a stack: 0') > 0, &
+            &'the chunks report names the cut rule')
         call report%kill
     end subroutine test_chunks_report
 

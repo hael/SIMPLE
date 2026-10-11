@@ -842,6 +842,19 @@ contains
         logical :: l_addon, l_cohort_chain_seeded
         character(len=*), parameter :: ADDON_DIAG_DIR  = 'addon_diag' !< addon_diag=yes: the cohort-only map
         character(len=*), parameter :: FROZEN_COPY_DIR = 'frozen'     !< the frozen project's copy
+        integer(timer_int_kind) :: t_tot, t_phase
+        real(timer_int_kind)    :: rt_setup, rt_start, rt_register, rt_stages, rt_final, rt_epilogue, rt_tot
+        if( L_BENCH_GLOB )then
+            rt_setup    = 0.
+            rt_start    = 0.
+            rt_register = 0.
+            rt_stages   = 0.
+            rt_final    = 0.
+            rt_epilogue = 0.
+            rt_tot      = 0.
+            t_tot       = tic()
+            t_phase     = t_tot
+        endif
         cline_entry = cline
         l_addon = cline%defined('addon_manifest')
         l_cohort_chain_seeded = .false.
@@ -1142,6 +1155,10 @@ contains
         emitted_lp     = -1.
         emitted_lpstop = -1.
         ! starting volume logics
+        if( L_BENCH_GLOB )then
+            rt_setup = toc(t_phase)
+            t_phase  = tic()
+        endif
         if( l_addon )then
             ! random cohort poses and labels, the per-box frozen sets and the
             ! native frozen references as the stage-3 vol1..volN
@@ -1213,6 +1230,7 @@ contains
             call set_cline_refine3D(params, start_stage, l_cavgs=.false.)
             call calc_rec(params, params%projfile, xrec3D, start_stage)
         endif
+        if( L_BENCH_GLOB ) rt_start = toc(t_phase)
         if( cline%defined('nstages') )then
             write(logfhandle,'(A,I0,A,I0)')'>>> SOLVE3D STAGE RANGE: ', start_stage, ' -> ', nstages_refine3D
             if( nstages_refine3D < solve3D_nstages() )then
@@ -1228,7 +1246,11 @@ contains
         do istage = start_stage, nstages_refine3D
             ! solve3D_addon: the cohort's random poses are registered against
             ! the frozen references before the stage proper
-            if( l_addon .and. istage == start_stage ) call addon_register_pass(istage)
+            if( l_addon .and. istage == start_stage )then
+                if( L_BENCH_GLOB ) t_phase = tic()
+                call addon_register_pass(istage)
+                if( L_BENCH_GLOB ) rt_register = toc(t_phase)
+            endif
             ! Preparation of command line for refinement
             if( l_addon )then
                 call set_cline_refine3D(params, istage, l_cavgs=.false., addon=addon_ctx)
@@ -1258,7 +1280,9 @@ contains
             ! Executing the refinement with the above settings
             write(logfhandle,'(A,I0)')'>>> SOLVE3D ENTERING REFINE3D STAGE ', istage
             call flush(logfhandle)
+            if( L_BENCH_GLOB ) t_phase = tic()
             call exec_refine3D(params, istage, xrefine3D)
+            if( L_BENCH_GLOB ) rt_stages = rt_stages + toc(t_phase)
             write(logfhandle,'(A,I0)')'>>> SOLVE3D RETURNED FROM REFINE3D STAGE ', istage
             call flush(logfhandle)
             call print_states(params, istage)
@@ -1273,6 +1297,7 @@ contains
             call gen_ortho_reprojs4viz(params, spproj)
             call gui_comm%add_metadata(spproj, oritype='cls3D', stage=istage)
         enddo
+        if( L_BENCH_GLOB ) t_phase = tic()
         if( l_run_final_rec )then
             if( params%nstates > 1 ) call ensure_multistate_particle_assignments
             ! the shared ending: final all-particle reconstruction at original
@@ -1288,6 +1313,10 @@ contains
             write(logfhandle,'(A,I0)')'>>> SOLVE3D EARLY STOP AFTER STAGE ', nstages_refine3D
             write(logfhandle,'(A)')'>>> FINAL ALL-PARTICLE RECONSTRUCTION SKIPPED'
         endif
+        if( L_BENCH_GLOB )then
+            rt_final = toc(t_phase)
+            t_phase  = tic()
+        endif
         ! the run manifest, last and never fatal: a completed run (final
         ! reconstruction) is a candidate frozen input
         if( l_addon )then
@@ -1300,6 +1329,8 @@ contains
         else if( l_run_final_rec )then
             call write_run_manifest(.true., 'solve3D')
         endif
+        if( L_BENCH_GLOB ) rt_epilogue = toc(t_phase)
+        call write_solve3D_benchmark
         ! final update GUI
         call spproj%read_segment('cls2D',  params%projfile)
         call spproj%read_segment('ptcl3D', params%projfile)
@@ -1313,6 +1344,37 @@ contains
             verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
+
+        subroutine write_solve3D_benchmark
+            type(string) :: benchfname
+            integer :: fnr
+            if( .not. L_BENCH_GLOB ) return
+            rt_tot     = toc(t_tot)
+            benchfname = string('SOLVE3D_BENCH.txt')
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,a)')    'solve3D route                       : ', merge('solve3D_addon', 'solve3D      ', l_addon)
+            write(fnr,'(a,i0)')   'solve3D nstates                     : ', params%nstates
+            write(fnr,'(a,i0)')   'solve3D first stage                 : ', start_stage
+            write(fnr,'(a,i0)')   'solve3D last stage                  : ', nstages_refine3D
+            write(fnr,'(a,i0)')   'solve3D searched particles          : ', nptcls_eff
+            write(fnr,'(a,i0)')   'solve3D nsample                     : ', params%nsample
+            write(fnr,'(a,f0.3)') 'solve3D update fraction             : ', update_frac
+            write(fnr,'(a,i0)')   'solve3D box                         : ', params%box
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f0.2)') 'solve3D setup/preparation           :', rt_setup
+            write(fnr,'(a,1x,f0.2)') 'solve3D starting state/frozen sets  :', rt_start
+            write(fnr,'(a,1x,f0.2)') 'solve3D add-on registration pass    :', rt_register
+            write(fnr,'(a,1x,f0.2)') 'solve3D refine3D stages             :', rt_stages
+            write(fnr,'(a,1x,f0.2)') 'solve3D final reconstruction        :', rt_final
+            write(fnr,'(a,1x,f0.2)') 'solve3D epilogue/add-on report      :', rt_epilogue
+            write(fnr,'(a,1x,f0.2)') 'solve3D total time                  :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'solve3D % accounted for             :', &
+                &((rt_setup + rt_start + rt_register + rt_stages + rt_final + rt_epilogue) / rt_tot) * 100.
+            call fclose(fnr)
+            call benchfname%kill
+        end subroutine write_solve3D_benchmark
 
         subroutine record_emitted_limits( istage_run )
             integer, intent(in) :: istage_run

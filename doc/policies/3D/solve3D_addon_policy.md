@@ -389,9 +389,9 @@ the last stage and the per-state resolutions and verdicts of every step.
 `simple_exec prg=solve3D_chunks projfile=<project> <solve3D inputs>` runs the
 same base-then-add-on chain on all selected particles of a project, without
 caller-chosen chunk sizes. Every run samples 5000 particles per iteration in
-total and searches 10000 to 30000 new particles. The particles are dealt to
-the runs class by class, every add-on is adopted, and the final union is
-published over the workflow's project copy. The policy is
+total and searches 10000 to 30000 new particles. Its runs are consecutive
+whole stacks in arrival order, as the stream forms them, every add-on is
+adopted, and the final union is published over the workflow's project copy. The policy is
 [solve3D_chunks_policy.md](solve3D_chunks_policy.md).
 
 ## 13. Tests

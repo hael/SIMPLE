@@ -37,17 +37,19 @@ contains
         &.true.,&                                                                          ! requires sp_project
         &visibility=UI_VIS_STANDARD, display_name='De Novo 3D Map Determination')
         ! INPUT PARAMETER SPECIFICATIONS
-        call add_solve3D_base_inputs(solve3D, l_stream_compatible=.false., l_include_nsample=.true.)
+        call add_solve3D_base_inputs(solve3D, l_stream_compatible=.false., l_include_nsample=.true., l_include_pcg=.true.)
         ! add to ui_hash
         call add_ui_program('solve3D', solve3D, prgtab, UI_CATEGORY)
     end subroutine new_solve3D
 
     !> The solve3D inputs shared by solve3D and the stream-compatible workflows. l_stream_compatible leaves out the
-    !! inputs a stream base run does not have; l_include_nsample controls whether the public sample-size input is exposed.
-    subroutine add_solve3D_base_inputs( prg, l_stream_compatible, l_include_nsample )
+    !! inputs a stream base run does not have; l_include_nsample and l_include_pcg expose the public sample size
+    !! and the reconstruction backend with its PCG controls.
+    subroutine add_solve3D_base_inputs( prg, l_stream_compatible, l_include_nsample, l_include_pcg )
         type(ui_program), intent(inout) :: prg
         logical,          intent(in)    :: l_stream_compatible
         logical,          intent(in)    :: l_include_nsample
+        logical,          intent(in)    :: l_include_pcg
         ! image input/output
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
@@ -55,34 +57,36 @@ contains
             &visibility=UI_VIS_ADVANCED)
         endif
         ! parameter input/output
-        call prg%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
-        &'Reconstruction backend from stage 3 onward; stages 1 and 2 always use gridding(gridding|pcg){gridding}', &
-        &'', .false., 'gridding', group="search", &
-        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_PARM, 'maxits_pcg', 'num', 'PCG maximum iterations', &
-        &'Maximum kernel PCG iterations from stage 3 onward; the cold original-sampling final reconstruction uses at least 5', &
-        &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call prg%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
-        &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
-        &.false., 0., group="search", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call prg%add_input(UI_PARM, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
-        &'Soft solvent prior on the PCG base solve: a real-space ridge pulling solvent toward zero, solvent identified '//&
-        &'per half from a prior-free solve of that half (smoothed absolute density, Otsu, logistic weight), then the '//&
-        &'same cold solve again with the ridge; half-independent, so the pair stays gold standard; the support is untouched; '//&
-        &'active in solve3D from stage 7 (one stage after NU filtering starts)(yes|no){no}', '', .false., 'no', group="search", &
-        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call prg%add_input(UI_PARM, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
-        &'Ridge coefficient of the solvent prior relative to the data scale (1 = as strong as the low-band data term); '//&
-        &'not given = estimated per state and iteration by cross-validation of the prior-free half pair', 'coefficient{auto}', &
-        &.false., 1.0, group="search", visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
-        call prg%add_input(UI_PARM, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
-        &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', group="search", &
-        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
+        if( l_include_pcg )then
+            call prg%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+            &'Reconstruction backend from stage 3 onward; stages 1 and 2 always use gridding(gridding|pcg){gridding}', &
+            &'', .false., 'gridding', group="search", &
+            &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
+            call prg%add_input(UI_PARM, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+            &'Maximum kernel PCG iterations from stage 3 onward; the cold original-sampling final reconstruction uses at least 5', &
+            &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
+            &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+            call prg%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+            &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
+            &.false., 0., group="search", visibility=UI_VIS_ADVANCED, &
+            &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+            call prg%add_input(UI_PARM, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
+            &'Soft solvent prior on the PCG base solve: a real-space ridge pulling solvent toward zero, solvent identified '//&
+            &'per half from a prior-free solve of that half (smoothed absolute density, Otsu, logistic weight), then the '//&
+            &'same cold solve again with the ridge; half-independent, so the pair stays gold standard; the support is untouched; '//&
+            &'active in solve3D from stage 7 (one stage after NU filtering starts)(yes|no){no}', '', .false., 'no', group="search", &
+            &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+            &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+            call prg%add_input(UI_PARM, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
+            &'Ridge coefficient of the solvent prior relative to the data scale (1 = as strong as the low-band data term); '//&
+            &'not given = estimated per state and iteration by cross-validation of the prior-free half pair', 'coefficient{auto}', &
+            &.false., 1.0, group="search", visibility=UI_VIS_ADVANCED, &
+            &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
+            call prg%add_input(UI_PARM, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
+            &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', group="search", &
+            &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+            &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
+        endif
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
             &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -274,7 +278,8 @@ contains
         call emulate_solve3D_stream%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
         &'Also reconstruct the searched particles of every add-on alone, without the frozen term(yes|no){no}', &
         &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call add_solve3D_base_inputs(emulate_solve3D_stream, l_stream_compatible=.true., l_include_nsample=.true.)
+        call add_solve3D_base_inputs(emulate_solve3D_stream, l_stream_compatible=.true., l_include_nsample=.true., &
+            &l_include_pcg=.true.)
         ! add to ui_hash
         call add_ui_program('emulate_solve3D_stream', emulate_solve3D_stream, prgtab, UI_CATEGORY)
     end subroutine new_emulate_solve3D_stream
@@ -286,8 +291,8 @@ contains
         call solve3D_chunks%new(&
         &'solve3D_chunks',&                                                                    ! name
         &'Run solve3D on automatically balanced particle cohorts',&                            ! summary
-        &'is a workflow that deals the active ptcl2D rows (state > 0) class by class into a base and add-on '//&
-        &'cohorts with the same 2D class mix and sizes that differ by at most one. Every run samples 5000 '//&
+        &'is a workflow that emulates the stream: it cuts the active ptcl2D rows (state > 0) into a base and '//&
+        &'add-on cohorts of consecutive whole stacks in arrival order, with balanced sizes. Every run samples 5000 '//&
         &'particles per iteration in total, whatever the number of states (nsample = 5000/nstates), and '//&
         &'searches 10000 to 30000 new particles. '//&
         &'With at most 30000 active particles only the base run is executed',&                   ! help
@@ -295,9 +300,10 @@ contains
         &.true., visibility=UI_VIS_ADVANCED, display_name='Solve 3D in Particle Chunks')       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         call solve3D_chunks%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
-        &'Also reconstruct the searched particles of every add-on alone, without the frozen term(yes|no){no}', &
-        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call add_solve3D_base_inputs(solve3D_chunks, l_stream_compatible=.true., l_include_nsample=.false.)
+        &'Also reconstruct the searched particles of every add-on alone, without the frozen term(yes|no){yes}', &
+        &'', .false., 'yes', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call add_solve3D_base_inputs(solve3D_chunks, l_stream_compatible=.true., l_include_nsample=.false., &
+            &l_include_pcg=.false.)
         ! add to ui_hash
         call add_ui_program('solve3D_chunks', solve3D_chunks, prgtab, UI_CATEGORY)
     end subroutine new_solve3D_chunks

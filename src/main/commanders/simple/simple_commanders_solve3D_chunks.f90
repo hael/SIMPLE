@@ -226,13 +226,12 @@ contains
         type(ui_program), pointer     :: ui_addon => null(), ui_workflow => null()
         type(string),     allocatable :: keys(:)
         type(string)                  :: edir, source_in, source_fname, frozen, result_proj, step_proj, cmd_text, report_fname
-        integer,          allocatable :: part(:), part_sizes(:), classes(:)
+        integer,          allocatable :: part(:), part_sizes(:), stkind(:)
         logical,          allocatable :: selected(:)
         character(len=:), allocatable :: key
         character(len=STDLEN)         :: msg
         integer(8) :: t0, t1, rate
-        integer    :: i, k, s, status, nchunks, nselected, nfrozen_sel, nstates, nsample, nclasses
-        logical    :: l_classes
+        integer    :: i, k, s, status, nchunks, nselected, nfrozen_sel, nstates, nsample, ninside
         ! ---- validate the public command line before setting the internal sampling target or writing anything
         call get_prg_ptr(string('solve3D_chunks'), ui_workflow)
         if( .not. associated(ui_workflow) ) THROW_HARD('the solve3D_chunks user interface is not registered')
@@ -263,6 +262,11 @@ contains
         endif
         nsample = chunk_nsample(nstates)
         call cline%set('nsample', nsample)
+        ! workflow defaults: cohort-only diagnostics and NU filtering with LP-set matching; gridding
+        ! reconstruction always (the program offers no PCG controls); balance follows solve3D's default
+        if( .not. cline%defined('addon_diag') ) call cline%set('addon_diag', 'yes')
+        if( .not. cline%defined('filt_mode')  ) call cline%set('filt_mode',  'nonuniform_lpset')
+        call cline%set('rec_backend', 'gridding')
         call cline%set('mkdir', 'yes')
         call get_prg_ptr(string('solve3D_addon'), ui_addon)
         if( .not. associated(ui_addon) ) THROW_HARD('the solve3D_addon user interface is not registered')
@@ -290,16 +294,12 @@ contains
             selected(i) = spproj%os_ptcl2D%get_state(i) > 0
         enddo
         nselected = count(selected)
-        ! the runs are dealt the particles class by class; without a 2D solution all labels are 0 (row order)
-        allocate(classes(size(selected)), source=0)
-        l_classes = .not. spproj%is_virgin_field('ptcl2D')
-        if( l_classes ) l_classes = spproj%os_cls2D%get_noris() > 0
-        if( l_classes )then
-            do i = 1, size(selected)
-                if( selected(i) ) classes(i) = spproj%os_ptcl2D%get_class(i)
-            enddo
-        endif
-        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        ! the runs are consecutive whole stacks in arrival order, as the stream forms them
+        allocate(stkind(size(selected)), source=0)
+        do i = 1, size(selected)
+            stkind(i) = spproj%os_ptcl2D%get_int(i, 'stkind')
+        enddo
+        call partition_selected_balanced(selected, stkind, part, nchunks, ninside, status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
         allocate(part_sizes(0:nchunks))
         do k = 0, nchunks
@@ -308,11 +308,7 @@ contains
         write(logfhandle,'(A,I0,A,I0)') '>>> SOLVE3D_CHUNKS SELECTED/RUNS: ', nselected, '/', nchunks + 1
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> SOLVE3D_CHUNKS NSAMPLE/STATES/SAMPLED PER ITERATION: ', nsample, '/', &
             &nstates, '/', nsample * nstates
-        if( nclasses > 0 )then
-            write(logfhandle,'(A,I0)') '>>> SOLVE3D_CHUNKS RUNS DEALT BY 2D CLASS, CLASSES: ', nclasses
-        else
-            write(logfhandle,'(A)') '>>> SOLVE3D_CHUNKS NO 2D CLASSES: RUNS DEALT IN ROW ORDER'
-        endif
+        write(logfhandle,'(A,I0)') '>>> SOLVE3D_CHUNKS RUNS: WHOLE STACKS IN ARRIVAL ORDER; CUTS INSIDE A STACK: ', ninside
         do k = 0, nchunks
             write(logfhandle,'(A,I0,A,I0)') '>>> SOLVE3D_CHUNKS RUN ', k, ' PARTICLES: ', part_sizes(k)
         enddo
@@ -322,7 +318,7 @@ contains
         call spproj%projinfo%set(1, 'projfile', source_fname%to_char())
         call spproj%write(source_fname)
         call spproj%kill
-        call report%new_chunks(cmd_text%to_char(), source_in%to_char(), part_sizes, nstates, nsample, nclasses)
+        call report%new_chunks(cmd_text%to_char(), source_in%to_char(), part_sizes, nstates, nsample, ninside)
         report_fname = edir%to_char()//'/'//CHUNKS_REPORT_FNAME
         ! ---- the base run
         write(logfhandle,'(A)') '>>> SOLVE3D_CHUNKS BASE RUN'

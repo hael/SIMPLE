@@ -47,8 +47,9 @@ simple_exec prg=solve3D_chunks projfile=<project> <stream-compatible solve3D inp
 
 It samples a fixed total of `NSAMPLE_TOTAL_CHUNK=5000` particles per
 iteration whatever `nstates` is, derives the run count from that total,
-deals the active particles to the runs class by class, runs partition 0 as the base, and runs every later partition once
-as an add-on. The sampling, the split and its refusal are the contract in
+cuts the active particles into runs of consecutive whole stacks in arrival
+order (as the stream forms its runs), runs partition 0 as the base, and runs
+every later partition once as an add-on. The sampling, the split and its refusal are the contract in
 section 3.2.
 
 ## 2. What the stream does, and what the emulation reproduces
@@ -73,19 +74,18 @@ selection model, the sieve's `cavg_ini_ext` start) or the final multistate
 `refine3D` the stream runs on `pool_final`.
 
 `solve3D_chunks` reuses the same prepared-source, step-project, nested
-commander, and reporting mechanics. It is not a closer imitation of the
-stream cadence: its purpose is a deterministic automatic analysis of all
-active particles in balanced, capped searched cohorts. In particular, it
-does not use the stream's row order, whole-stack rounding, cadence gate, or
-rollback.
+commander, and reporting mechanics. Its purpose is primarily stream
+emulation with automatically sized runs: like the stream, it forms runs from
+consecutive whole stacks in arrival order; unlike the stream, it has no
+cadence gate and no rollback (Hans, 2026-10-11).
 
 ## 3. Partitioning
 
-Both workflows count the rows whose input `ptcl2D` state is > 0. The
-emulation takes them in row order (the stream's order: pool stacks in import
-order); `solve3D_chunks` deals them by 2D class (3.2). Inactive rows are
-assigned to no partition and stay inactive in every step. Let `Nactive` be
-the number of active rows.
+Both workflows count the rows whose input `ptcl2D` state is > 0, in row
+order (the stream's order: pool stacks in import order). The emulation cuts
+at given particle counts; `solve3D_chunks` cuts at stack boundaries (3.2).
+Inactive rows are assigned to no partition and stay inactive in every step.
+Let `Nactive` be the number of active rows.
 
 ### 3.1 Explicit legacy emulation
 
@@ -132,18 +132,18 @@ number of states influences neither the number of particles sampled nor the
 run sizes. The update fraction of every run stays between 1/6 and 1/2. Each
 state gets about `5000 / nstates` freshly searched particles per iteration.
 
-The `Nactive` particles are dealt to exactly `nruns` runs, class by class:
-ordered by their `ptcl2D` class label (row order within a class, unlabelled
-particles first), the `i`-th goes to run `mod(i-1, nruns)`. Run sizes differ
-by at most one: if `Nactive = q*nruns + r`, the first `r` runs contain `q+1`
-active particles and the rest contain `q`. Every class is split over the
-runs to within one particle, so every run, the base included, has the same
-2D class mix, and a cohort is a fair sample of the base's population. The
-runs are not contiguous in the rows. Without a usable 2D solution (`ptcl2D`
-virgin or no `cls2D`) every label counts as 0 and the deal follows row
-order. Run 0 is the base; it is not assigned a separate `nptcls_base`. Runs
-1 through `nruns-1` are the add-on cohorts. The full contract and its
-reasons are in `doc/policies/3D/solve3D_chunks_policy.md`.
+The `Nactive` particles are cut, in row order, into exactly `nruns` runs of
+consecutive whole stacks (`stkind`), as the stream's `cap_rows` forms its
+runs. The balanced targets are `q+1` particles for the first `r` runs and
+`q` for the rest (`Nactive = q*nruns + r`). Cut `k` goes to the stack
+boundary nearest its target among those that keep run `k-1` and the
+remaining runs within `[NMIN, NMAX]`; when there is none, the cut goes inside
+a stack at the target moved into the limits (counted and reported). Run
+sizes therefore stay within about one stack of the balanced share. Run 0 is
+the base, the start of the session as in the stream; it is not assigned a
+separate `nptcls_base`. Runs 1 through `nruns-1` are the add-on cohorts, in
+arrival order. View imbalance within a run is left to `balance=cavg`. The
+full contract is in `doc/policies/3D/solve3D_chunks_policy.md`.
 
 `nruns=1` is valid, so a data set of 10,000 to 30,000 active particles runs
 the base only. Before any child `solve3D` run the workflow refuses
@@ -257,10 +257,12 @@ verdict does not change the plan.
 The UI entries share the private `simple_ui_solve3D` routine
 `add_solve3D_base_inputs`. `solve3D` asks for the full list;
 `emulate_solve3D_stream` and `solve3D_chunks` ask for the stream-compatible
-list, which omits `vol1`, `cavg_ini`, `cavg_ini_ext`, and `state`. A separate
-logical argument controls whether the public `nsample` input is present:
-it remains present for `solve3D` and the legacy emulation, and is absent for
-`solve3D_chunks`.
+list, which omits `vol1`, `cavg_ini`, `cavg_ini_ext`, and `state`. Two
+further logical arguments control whether the public `nsample` input and the
+reconstruction backend with its PCG controls (`rec_backend`, `maxits_pcg`,
+`maxits_ml`, `pcg_solvent`, `pcg_solvent_lambda`, `pcg_solvent_check`) are
+present: both remain for `solve3D` and the legacy emulation, and both are
+absent for `solve3D_chunks`.
 
 ### 5.1 Explicit legacy emulation
 
@@ -283,8 +285,10 @@ base and add-on sizes are still required.
 | Key | Status | Routed to |
 | --- | --- | --- |
 | `projfile` | required | prepared source and every step project |
-| `addon_diag` | optional, default no | every add-on |
-| stream-compatible `solve3D` inputs | as in the emulation | the base; manifest-recorded policy reaches add-ons |
+| `addon_diag` | optional, default yes | every add-on |
+| `filt_mode` | optional, default `nonuniform_lpset` | the base; replayed from its manifest by add-ons |
+| other stream-compatible `solve3D` inputs | as in the emulation | the base; manifest-recorded policy reaches add-ons |
+| `rec_backend` and the PCG controls | not accepted | `rec_backend=gridding` is set for the base and replayed by add-ons |
 | `nsample` | not accepted from the caller | set internally to `NSAMPLE_TOTAL_CHUNK / nstates` for the base and replayed from its manifest by add-ons |
 | `nptcls_base`, `nptcls_addon`, `rollback` | not accepted | derived balanced plan and unconditional adoption replace them |
 | `vol1`, `cavg_ini`, `cavg_ini_ext`, `state`, `projfile_frozen` | not accepted | none |
@@ -305,11 +309,14 @@ the base run's sampling record, so the add-ons sample the base run's total.
 `solve3D_chunks` therefore leaves its internal `nsample` off the add-on
 command line.
 
-Defaults are `solve3D`'s, `balance` included: `cavg` when the project
-carries class averages (kept in the source copy, 4.2), `none` when it has no
-usable 2D solution (`set_balance_default` in `exec_solve3D`; the `class`
-branch needs `vol1`, which is refused here). Neither workflow replaces this
-default. An explicit `balance` is honoured.
+The emulation's defaults are `solve3D`'s, `balance` included: `cavg` when
+the project carries class averages (kept in the source copy, 4.2), `none`
+when it has no usable 2D solution (`set_balance_default` in `exec_solve3D`;
+the `class` branch needs `vol1`, which is refused here). An explicit
+`balance` is honoured. `solve3D_chunks` keeps that `balance` default and
+sets its own other defaults before `params%new`, in the form the UI default
+audit reads: `addon_diag=yes` and `filt_mode=nonuniform_lpset`; it always
+sets `rec_backend=gridding` (Hans, 2026-10-11).
 
 ## 6. Report
 
@@ -343,7 +350,7 @@ samples per iteration (`nsample * nstates`), and every planned run size.
 | shared report utilities | the same solve module | `emulation_step`, the backward-compatible `emulation_report%new`, the chunks-specific `new_chunks`, and the two report filenames |
 | partition/report tester | `src/main/solve/simple_solve3D_stream_emulation_tester.f90` | both partition policies, balanced feasibility boundaries, inactive rows, source/step projects, and shared report serialization |
 | commanders | renamed `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90` | public `commander_emulate_solve3D_stream` and `commander_solve3D_chunks`; each owns its validation, partition choice, child-command sequence, key exclusions, and adoption policy, while sharing only leaf helpers for step-project writing, accepted argument copying, and statistics |
-| UI | `src/main/ui/simple/simple_ui_solve3D.f90` | both entries and shared `add_solve3D_base_inputs`, including the flag that hides `nsample` from `solve3D_chunks` |
+| UI | `src/main/ui/simple/simple_ui_solve3D.f90` | both entries and shared `add_solve3D_base_inputs`, including the flags that hide `nsample` and the PCG controls from `solve3D_chunks` |
 | dispatch | `src/main/exec/simple_exec_solve3D.f90` | both `emulate_solve3D_stream` and `solve3D_chunks` cases, importing the renamed commander module |
 | keys | `simple_parameters.f90`, `simple_parameters_parse.f90` | legacy `nptcls_addon` and `rollback`; `solve3D_chunks` adds no public parameter keys |
 | policy | `doc/policies/3D/solve3D_addon_policy.md` | a short section naming the emulation and its differences from the stream (section 2) |
@@ -365,17 +372,20 @@ separate change.
   the layout digest never changes row count. Neither affects timing or maps.
   The stream's append path stays covered by the snapshot generator test.
 - **Partitioning versus whole stacks.** The stream's caps round down to whole
-  stacks. Both offline workflows partition active particles exactly; the
-  automatic workflow additionally balances run sizes and every class's share
-  to within one. A stack-aware mode would be a different policy because it
-  cannot in general preserve that balance.
-- **Dealt cohorts read every stack.** A `solve3D_chunks` run reads its
-  particles from all stacks rather than from a block of stacks: the same
-  amount of data from more files.
-- **The cap is a search-work cap, not a memory cap for the union.** Every
-  automatic cohort is at most 30,000 particles, but each add-on also reads
-  and reconstructs with the growing frozen union. Late-step cost can
-  therefore grow even though newly searched work remains capped.
+  stacks. `solve3D_chunks` cuts at stack boundaries too; the explicit
+  emulation still cuts at exact particle counts.
+- **Cohorts dealt over the whole session read every stack.** An earlier
+  version of `solve3D_chunks` dealt particles to the runs class by class. On
+  a 751729-row ribosome project on a spinning disk, each iteration's sample
+  then touched about one particle per stack file, the iterations were bound
+  by disk seeks, and the CPUs sat idle much of the time. Runs of consecutive
+  whole stacks read their own block of files, as the stream does.
+- **The cap is a search-work cap, not a cap on the union.** Every automatic
+  cohort is at most 30,000 particles, but each add-on also accumulates the
+  frozen term over every frozen particle and reconstructs the whole union at
+  the end. Late-step cost therefore grows even though newly searched work
+  remains capped; `SOLVE3D_BENCH.txt` in each run directory times these
+  phases.
 - **Fewer sampled particles per state.** The total sampled per iteration is
   fixed, so with `nstates` states each state gets about `5000 / nstates`
   freshly searched particles per iteration. Multi-state runs may need more
@@ -447,11 +457,12 @@ The `solve3D_chunks` extension adds these decisions:
     `nsample=NSAMPLE_TOTAL_CHUNK/nstates`, and solve3D's own policy
     (`nsample * nstates` sampled per iteration) stays unchanged (Hans,
     2026-10-11).
-11. Use the fewest capped runs, `nruns=ceil(Nactive/NMAX)`, and deal the
-    active particles to them class by class, so run sizes and every class's
-    share differ by at most one. Run 0 is the base in the same deal, not a
-    separately sized special case. Without 2D classes the deal follows row
-    order (Hans, 2026-10-11).
+11. Use the fewest capped runs, `nruns=ceil(Nactive/NMAX)`, cut in row order
+    at stack boundaries as the stream forms its runs, with sizes within about
+    one stack of the balanced share. Run 0 is the base, not a separately
+    sized special case. A class-by-class deal was tried and dropped: it hides
+    the stream's base condition and made disk reads seek-bound (Hans,
+    2026-10-11).
 12. Permit a base-only plan and refuse fewer than `NMIN` active particles;
     no other plan can fail.
 13. Always adopt automatic add-ons, even when their quality verdict is
@@ -476,11 +487,13 @@ The `solve3D_chunks` extension adds these decisions:
   solve3D settings but no `nptcls_base`, `nptcls_addon`, `rollback`, or
   `nsample`. It checks the UI allowlist, reads `nstates` from the command
   line, injects `nsample=chunk_nsample(nstates)` before `params%new`, passes
-  the `ptcl2D` class labels (zeros without a usable 2D solution) to the
-  balanced partitioner, permits zero add-ons, and sets rollback false so
+  the `ptcl2D` stack indices to the balanced partitioner, permits zero
+  add-ons, and sets rollback false so
   every result advances the frozen union. It logs and reports `nsample` with
   the total `nsample * nstates`. It refuses `nstages` below
-  `solve3D_symsrch_stage()` before anything is written, logs every regressed
+  `solve3D_symsrch_stage()` before anything is written, sets its defaults
+  (`addon_diag=yes`, `filt_mode=nonuniform_lpset`) and
+  `rec_backend=gridding`, logs every regressed
   add-on, and at the end publishes the final result over its execution
   directory's project copy (`publish_solve3D_result`, the pattern of
   `solve3D_addon`'s publication: temporary file renamed over the target,
@@ -491,10 +504,14 @@ The `solve3D_chunks` extension adds these decisions:
   source preparation and step selection, and the `emulation_step` and
   `emulation_report` types.
   The original report initializer and legacy output remain intact; a separate
-  chunks initializer records the balanced run-size vector and how the runs
-  were dealt (by 2D class, with the class count, or in row order) in
-  `solve3D_chunks_report.txt`. The balanced partitioner deals by a counting
-  sort on the class label; it no longer uses `split_nobjs_active`.
+  chunks initializer records the balanced run-size vector and the number of
+  cuts that fell inside a stack in `solve3D_chunks_report.txt`. The balanced
+  partitioner cuts at stack boundaries; it no longer uses
+  `split_nobjs_active`.
+- `exec_solve3D` writes `SOLVE3D_BENCH.txt` in its run directory when
+  `L_BENCH_GLOB` is set: setup, starting state (the frozen accumulation for
+  an add-on), registration pass, refine3D stages, final reconstruction and
+  epilogue, in the format of the other SIMPLE benchmark files.
 - The input project is copied into the workflow execution directory by its
   single `params%new`; the prepared source is `E/source.simple`. Every step
   project is rewritten from it with absolute `projfile` entries. Both child
@@ -513,8 +530,7 @@ The `solve3D_chunks` extension adds these decisions:
 - `simple_solve3D_stream_emulation_tester.f90` covers both partition
   policies, including the automatic constants, the `nsample` derivation for
   1 to 20 states, the cap-derived run count and its bounds over a sweep of
-  particle counts, the deal in row order without labels, the deal by class
-  on a two-session fixture (equal sizes, every class split to within one,
-  every class in the base), base-only bounds, and the pre-existing
+  particle counts, runs of whole stacks with unselected rows inside and a
+  cut inside a single large stack, base-only bounds, and the pre-existing
   source/project/report behavior. These tests are written
   but have not yet been compiled or run.

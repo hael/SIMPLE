@@ -1,7 +1,7 @@
 !@descr: shared partitioning, step projects and reports for offline solve3D/solve3D_addon chunk workflows
-! The explicit split cuts the active particles (ptcl2D state > 0) in row order into a base and consecutive
-! add-on chunks; the balanced split deals them to the runs class by class. A step project is the prepared
-! source with later chunks deselected. Contracts: doc/policies/3D/solve3D_chunks_policy.md and
+! Both splits cut the active particles (ptcl2D state > 0) in row order into a base and consecutive add-on
+! chunks: the explicit one at given particle counts, the balanced one at stack boundaries. A step project is
+! the prepared source with later chunks deselected. Contracts: doc/policies/3D/solve3D_chunks_policy.md and
 ! doc/implementation_notes/planned/emulate_solve3D_stream.md sec. 3, 4.2, 4.3 and 6.
 module simple_solve3D_stream_emulation
 use simple_core_module_api
@@ -47,7 +47,7 @@ type :: emulation_report
     private
     character(len=:), allocatable :: command, source
     integer,          allocatable :: part_sizes(:)
-    integer :: nselected = 0, nbase = 0, naddon = 0, nchunks = 0, nstates = 0, nsample = 0, nclasses = 0
+    integer :: nselected = 0, nbase = 0, naddon = 0, nchunks = 0, nstates = 0, nsample = 0, ninside = 0
     logical :: l_rollback = .true.
     logical :: l_chunks   = .false.
     integer :: nsteps = 0
@@ -87,48 +87,75 @@ contains
         status = 0
     end subroutine derive_chunk_run_count
 
-    !> Deal the selected rows to the fewest capped runs: ordered by class label (rows in order within a
-    !! class), the i-th goes to run mod(i-1,nruns). Run sizes, and every class's share of a run, differ by
-    !! at most one; equal labels give a deal in row order. Run 0 is the base; unselected rows get -1.
-    !! nclasses counts the labels >= 1 among the selected rows.
-    subroutine partition_selected_balanced( selected, classes, part, nchunks, nclasses, status, msg )
+    !> Cut the selected rows, in row order, into the fewest capped runs of consecutive whole stacks, as the
+    !! stream forms its runs. Cut k goes to the stack boundary nearest its balanced target; when no boundary
+    !! keeps the runs within the limits it goes inside a stack (ninside counts those). Unselected rows get -1.
+    subroutine partition_selected_balanced( selected, stkind, part, nchunks, ninside, status, msg )
         logical,              intent(in)  :: selected(:)
-        integer,              intent(in)  :: classes(:)
+        integer,              intent(in)  :: stkind(:)
         integer, allocatable, intent(out) :: part(:)
-        integer,              intent(out) :: nchunks, nclasses, status
+        integer,              intent(out) :: nchunks, ninside, status
         character(len=*),     intent(out) :: msg
-        integer, allocatable :: next(:)
-        integer :: nruns, ncls, i, c, n, rank
+        integer, allocatable :: sel_stk(:), cuts(:)
+        integer :: nsel, nruns, q, r, k, i, rank, irun, target, lo, hi, a, b, cut
         allocate(part(size(selected)), source=-1)
-        nchunks  = 0
-        nclasses = 0
-        if( size(classes) /= size(selected) )then
+        nchunks = 0
+        ninside = 0
+        if( size(stkind) /= size(selected) )then
             status = 1
-            msg    = 'the class labels and the selection differ in size'
+            msg    = 'the stack indices and the selection differ in size'
             return
         endif
-        call derive_chunk_run_count(count(selected), nruns, status, msg)
+        nsel = count(selected)
+        call derive_chunk_run_count(nsel, nruns, status, msg)
         if( status /= 0 ) return
-        ! counting sort on the label; labels below 1 form one group, dealt first
-        ncls = max(0, maxval(classes, mask=selected))
-        allocate(next(0:ncls), source=0)
-        do i = 1, size(selected)
-            if( .not. selected(i) ) cycle
-            c       = max(0, classes(i))
-            next(c) = next(c) + 1
+        sel_stk = pack(stkind, selected) ! the stack of each selected particle, by rank
+        allocate(cuts(0:nruns), source=0)
+        cuts(nruns) = nsel               ! cuts(k): selected particles in runs 0..k-1
+        q      = nsel / nruns
+        r      = mod(nsel, nruns)
+        target = 0
+        do k = 1, nruns - 1
+            target = target + q
+            if( k <= r ) target = target + 1
+            ! the cuts that keep run k-1 and the remaining runs within the limits
+            a = max(cuts(k-1) + NPTCLS_CHUNK_MIN, nsel - (nruns - k) * NPTCLS_CHUNK_MAX)
+            b = min(cuts(k-1) + NPTCLS_CHUNK_MAX, nsel - (nruns - k) * NPTCLS_CHUNK_MIN)
+            ! the nearest stack boundaries at or below and above the target (-1: none in [a,b])
+            lo = min(target, b)
+            do while( lo >= a )
+                if( sel_stk(lo) /= sel_stk(lo+1) ) exit
+                lo = lo - 1
+            enddo
+            if( lo < a ) lo = -1
+            hi = max(target, a)
+            do while( hi <= b )
+                if( sel_stk(hi) /= sel_stk(hi+1) ) exit
+                hi = hi + 1
+            enddo
+            if( hi > b ) hi = -1
+            if( lo > 0 .and. hi > 0 )then
+                cut = lo
+                if( hi - target < target - lo ) cut = hi
+            else if( lo > 0 )then
+                cut = lo
+            else if( hi > 0 )then
+                cut = hi
+            else
+                cut     = min(max(target, a), b)
+                ninside = ninside + 1
+            endif
+            cuts(k) = cut
         enddo
-        nclasses = count(next(1:ncls) > 0)
         rank = 0
-        do c = 0, ncls
-            n       = next(c)
-            next(c) = rank ! the rank before the first row of class c
-            rank    = rank + n
-        enddo
+        irun = 0
         do i = 1, size(selected)
             if( .not. selected(i) ) cycle
-            c       = max(0, classes(i))
-            next(c) = next(c) + 1
-            part(i) = mod(next(c) - 1, nruns)
+            rank = rank + 1
+            do while( rank > cuts(irun+1) )
+                irun = irun + 1
+            enddo
+            part(i) = irun
         enddo
         nchunks = nruns - 1
     end subroutine partition_selected_balanced
@@ -253,12 +280,12 @@ contains
         allocate(self%steps(0))
     end subroutine new
 
-    !> Initialize the report for the automatic active-balanced workflow; nclasses is the number of
-    !! 2D classes the runs were dealt over (0: dealt in row order).
-    subroutine new_chunks( self, command, source, part_sizes, nstates, nsample, nclasses )
+    !> Initialize the report for the automatic active-balanced workflow; ninside counts the run cuts
+    !! that fell inside a stack.
+    subroutine new_chunks( self, command, source, part_sizes, nstates, nsample, ninside )
         class(emulation_report), intent(inout) :: self
         character(len=*),        intent(in)    :: command, source
-        integer,                 intent(in)    :: part_sizes(:), nstates, nsample, nclasses
+        integer,                 intent(in)    :: part_sizes(:), nstates, nsample, ninside
         call self%kill
         self%command    = trim(command)
         self%source     = trim(source)
@@ -266,7 +293,7 @@ contains
         self%nselected  = sum(part_sizes)
         self%nstates    = nstates
         self%nsample    = nsample
-        self%nclasses   = nclasses
+        self%ninside    = ninside
         self%l_rollback = .false.
         self%l_chunks   = .true.
         allocate(self%steps(0))
@@ -318,11 +345,8 @@ contains
                 &'  states: ', self%nstates
             write(funit,'(A,I0,A,I0)') 'nsample: ', self%nsample, '  sampled per iteration (nsample x states): ', &
                 &self%nsample * self%nstates
-            if( self%nclasses > 0 )then
-                write(funit,'(A,I0,A)') 'runs dealt by 2D class: ', self%nclasses, ' classes'
-            else
-                write(funit,'(A)') 'runs dealt in row order: no 2D classes'
-            endif
+            write(funit,'(A,I0)') 'runs: consecutive whole stacks in arrival order; cuts inside a stack: ', &
+                &self%ninside
             write(funit,'(A)',advance='no') 'run particles:'
             do i = 1, size(self%part_sizes)
                 write(funit,'(1X,I0)',advance='no') self%part_sizes(i)
@@ -381,7 +405,7 @@ contains
         self%nchunks    = 0
         self%nstates    = 0
         self%nsample    = 0
-        self%nclasses   = 0
+        self%ninside    = 0
         self%nsteps     = 0
         self%l_rollback = .true.
         self%l_chunks   = .false.
