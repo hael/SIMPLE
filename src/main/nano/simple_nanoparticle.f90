@@ -30,6 +30,7 @@ integer,          parameter :: NSTRAIN_COMPS       = 7
 character(len=*), parameter :: ATOMS_STATS_FILE    = 'atoms_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
+real,             parameter :: MSKDIAM_OVER_DIAM   = 1.2     ! estimated mask diameter over the particle diameter
 ! species-free detection (no element): pseudo-atom template and length scales from the nearest-neighbour distance d_NN
 real,             parameter :: B_REF_PSEUDO        = 13.9    ! B factor of the pseudo-atom template, A**2 (sigma 0.42 A)
 real,             parameter :: RADIUS_NN_FRAC      = 0.4     ! atom radius in units of d_NN
@@ -293,7 +294,7 @@ contains
         character(len=2) :: el_ucase
         integer :: nptcls
         integer :: Z ! atomic number
-        real    :: msk_in_pix
+        real    :: msk_in_pix, diam
         call self%kill
         self%npname    = fname
         self%fbody     = get_fbody(basename(fname), fname2ext(fname))
@@ -321,7 +322,10 @@ contains
             call self%img%mask3D_soft(msk)
             self%msk_rad = msk
         else
-            call mskvol%estimate_spher_mask_diam(params, self%img, AMSKLP_NANO, msk_in_pix)
+            call mskvol%estimate_spher_mask_diam(params, self%img, AMSKLP_NANO, diam)
+            if( diam <= 0. ) THROW_HARD('the mask estimate found no particle; give mskdiam')
+            msk_in_pix = MSKDIAM_OVER_DIAM * diam / (2. * self%smpd)
+            write(logfhandle,*) 'particle diameter in A: ', diam
             write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * self%smpd
             call self%img%mask3D_soft(msk_in_pix)
             call mskvol%kill_bimg
@@ -1318,9 +1322,10 @@ contains
         real,    parameter :: INNER_FRAC     = 0.3    ! interior atoms for the coordination deficit
         real,    parameter :: CN_CLOSE_PACKED = 12.
         type(atom_stats), allocatable :: tab(:)
-        real,    allocatable :: map(:,:,:), hdiff(:,:,:), wmsk(:,:,:), model(:,:,:), backg(:,:,:), resid(:,:,:)
+        real,    allocatable :: map(:,:,:), nmap(:,:,:), hdiff(:,:,:), wmsk(:,:,:), model(:,:,:), backg(:,:,:)
+        real,    allocatable :: resid(:,:,:)
         real,    allocatable :: cmap(:,:,:), zmap(:,:,:), cnoise(:,:,:), emap(:,:,:), omap(:,:,:)
-        logical, allocatable :: region(:,:,:), sphere(:,:,:), smask(:,:,:)
+        logical, allocatable :: region(:,:,:), zone(:,:,:), sphere(:,:,:), smask(:,:,:)
         real,    allocatable :: post(:,:), mu(:), var(:), prior_m(:), prior_s(:), rad(:), x(:)
         integer, allocatable :: labels(:), coord(:)
         type(image)  :: img_tmp, simimg
@@ -1339,21 +1344,32 @@ contains
         sig_ref = sqrt(B_REF_PSEUDO / (8. * PI**2))
         ldim    = self%ldim
         map     = self%img_raw%get_rmat()
-        ! mask weights of the soft sphere new applied to the map
+        ! the map as read, before the mask: the noise region extends beyond the particle's mask (3.2)
         call img_tmp%new(ldim, s)
+        call img_tmp%read(self%npname)
+        nmap = img_tmp%get_rmat()
+        ! mask weights of the soft sphere new applied to the map: the search volume
         allocate(wmsk(ldim(1),ldim(2),ldim(3)), source=1.)
         call img_tmp%set_rmat(wmsk, .false.)
         call img_tmp%mask3D_soft(self%msk_rad, backgr=0.)
         wmsk   = img_tmp%get_rmat()
         sphere = wmsk > 0.
         nsearch_a = count(sphere)
-        ! half maps, masked as the map
+        ! half maps, as read
         l_halves = self%vol_even%is_allocated()
         if( l_halves )then
             call read_half(self%vol_even, emap)
             call read_half(self%vol_odd,  omap)
+        endif
+        ! the zone from the exact zeros of the input, then the constant the mask of new took off the map (its edge
+        ! median) off every map read here, so that they share the zero of the masked map
+        call noise_zone
+        call remove_edge_median(nmap)
+        allocate(cnoise(ldim(1),ldim(2),ldim(3)), source=0.)
+        if( l_halves )then
+            call remove_edge_median(emap)
+            call remove_edge_median(omap)
             hdiff = 0.5 * (emap - omap)
-            allocate(cnoise(ldim(1),ldim(2),ldim(3)))
             call gauss_filter3D(hdiff, sig_ref / s, cnoise)
         endif
         allocate(model(ldim(1),ldim(2),ldim(3)), backg(ldim(1),ldim(2),ldim(3)), resid(ldim(1),ldim(2),ldim(3)),&
@@ -1434,9 +1450,47 @@ contains
             if( any(ldim_h /= ldim) ) THROW_HARD('half maps and map differ in size; discover_species')
             call img_tmp%new(ldim, s)
             call img_tmp%read(fname)
-            call img_tmp%mask3D_soft(self%msk_rad)
             arr = img_tmp%get_rmat()
         end subroutine read_half
+
+        subroutine remove_edge_median( arr )
+            real, intent(inout) :: arr(:,:,:)
+            call img_tmp%set_rmat(arr, .false.)
+            call img_tmp%zero_background
+            arr = img_tmp%get_rmat()
+        end subroutine remove_edge_median
+
+        ! voxels that can hold only noise once the atoms are excluded: inside the box's inscribed sphere and inside
+        ! any mask the input already carries (its nearest exact zero), both less two soft-edge widths
+        subroutine noise_zone
+            real    :: cen(3), rlim, r2
+            integer :: ii, jj, kk
+            logical :: l_zero
+            cen  = real(ldim / 2 + 1)
+            rlim = real(minval(ldim)) / 2.
+            do kk = 1,ldim(3)
+                do jj = 1,ldim(2)
+                    do ii = 1,ldim(1)
+                        l_zero = .not. abs(nmap(ii,jj,kk)) > 0.
+                        if( l_halves )then
+                            if( .not. abs(emap(ii,jj,kk)) > 0. ) l_zero = .true.
+                            if( .not. abs(omap(ii,jj,kk)) > 0. ) l_zero = .true.
+                        endif
+                        if( l_zero ) rlim = min(rlim, sqrt(sum((real([ii,jj,kk]) - cen)**2)))
+                    enddo
+                enddo
+            enddo
+            rlim = rlim - 2. * COSMSKHALFWIDTH
+            allocate(zone(ldim(1),ldim(2),ldim(3)))
+            do kk = 1,ldim(3)
+                do jj = 1,ldim(2)
+                    do ii = 1,ldim(1)
+                        r2 = sum((real([ii,jj,kk]) - cen)**2)
+                        zone(ii,jj,kk) = r2 <= rlim * rlim
+                    enddo
+                enddo
+            enddo
+        end subroutine noise_zone
 
         ! voxel window of a ball of radius rv voxels around c (voxel coordinates)
         subroutine ball_window( c, rv, lo, hi )
@@ -1515,22 +1569,22 @@ contains
             r2 = rbuf(:m)
         end subroutine gather
 
-        ! voxels of full mask weight farther than REGION_NN_FRAC d_NN from every atom
+        ! voxels of the noise zone farther than REGION_NN_FRAC d_NN from every atom
         subroutine build_region
             character(len=:), allocatable :: msg
-            region = wmsk >= 0.9999
+            region = zone
             do i = 1,n
                 call mark_ball(tab(i)%center, REGION_NN_FRAC * dv, region, .false.)
             enddo
             nreg = count(region)
             if( nreg < NREGION_MIN )then
-                msg = 'noise region of '//int2str(nreg)//' voxels is too small; give a larger mskdiam'
+                msg = 'noise region of '//int2str(nreg)//' voxels is too small: the box leaves too little room around the particle'
                 THROW_HARD(msg)
             endif
         end subroutine build_region
 
-        ! sigma_n from the half-map difference or the map over the region; with l_full also the spread ratio,
-        ! and s_A and s_I from phantom sites of the region
+        ! sigma_n from the half-map difference or the map as read over the region; with l_full also the spread
+        ! ratio, and s_A and s_I from phantom sites of the region
         subroutine noise_stats( l_full )
             logical, intent(in) :: l_full
             real, allocatable :: vals(:), amps(:), ints(:), y(:), r2(:), g(:)
@@ -1539,7 +1593,7 @@ contains
             if( l_halves )then
                 vals = pack(hdiff, region)
             else
-                vals = pack(map, region)
+                vals = pack(nmap, region)
             endif
             sig2n = sdev(vals)**2
             if( sig2n <= 0. )then
@@ -1558,7 +1612,7 @@ contains
                         cnt = cnt + 1
                         if( mod(cnt - 1, stride) /= 0 ) cycle
                         c = real([ii,jj,kk])
-                        call gather(map, c, 0.5 * d, 0, y, r2)
+                        call gather(nmap, c, 0.5 * d, 0, y, r2)
                         g = exp(-r2 / (2. * sig_ref**2))
                         nsite = nsite + 1
                         amps(nsite) = sum(y * g) / sum(g * g)
@@ -1656,16 +1710,18 @@ contains
             call update_background
         end subroutine tied_sweep
 
-        ! standardised matched-filter map of the residual
+        ! standardised matched-filter map of the residual; without half maps the noise field is the residual of the
+        ! map as read, so that it extends beyond the mask
         subroutine compute_zmap
-            real, allocatable :: vals(:)
+            real, allocatable :: vals(:), nres(:,:,:)
             resid = map - backg - model
             call gauss_filter3D(resid, sig_ref / s, cmap)
-            if( l_halves )then
-                vals = pack(cnoise, region)
-            else
-                vals = pack(cmap, region)
+            if( .not. l_halves )then
+                nres = nmap - backg - model
+                call gauss_filter3D(nres, sig_ref / s, cnoise)
             endif
+            allocate(vals(count(region)))
+            vals = pack(cnoise, region)
             z_mu = sum(vals) / real(size(vals))
             z_sd = sdev(vals)
             zmap = (cmap - z_mu) / z_sd
@@ -1677,12 +1733,8 @@ contains
             integer, allocatable :: ijk(:,:)
             real    :: counts(size(CAL_LEVELS)), ratio
             integer :: l
-            if( l_halves )then
-                nz = (cnoise - z_mu) / z_sd
-                call local_maxima(nz, region, CAL_LEVELS(1), 0, ijk, vals)
-            else
-                call local_maxima(zmap, region, CAL_LEVELS(1), 0, ijk, vals)
-            endif
+            nz = (cnoise - z_mu) / z_sd
+            call local_maxima(nz, region, CAL_LEVELS(1), 0, ijk, vals)
             do l = 1,size(CAL_LEVELS)
                 counts(l) = real(count(vals > CAL_LEVELS(l)))
             enddo

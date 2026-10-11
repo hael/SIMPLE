@@ -293,6 +293,7 @@ contains
         type(parameters)  :: params
         integer           :: ivol, nvols, ldim(3), ifoo, loc(1), best_msk, mskfromto(2)
         real, allocatable :: msk_in_pix(:)
+        real              :: diam
         type(image_msk)   :: mskvol
         type(image)       :: vol, vol_ref, mskimg, mskimg2, mskimg2inv, vol_sum, vol_sum2, vol_w
         type(string), allocatable :: volnames(:)
@@ -309,7 +310,8 @@ contains
         allocate(msk_in_pix(nvols), source=0.)
         do ivol = 1,nvols
             call vol%read(volnames(ivol))
-            call mskvol%estimate_spher_mask_diam(params, vol, AMSKLP_NANO, msk_in_pix(ivol))
+            call mskvol%estimate_spher_mask_diam(params, vol, AMSKLP_NANO, diam)
+            msk_in_pix(ivol) = diam / (2. * params%smpd) + COSMSKHALFWIDTH
             write(logfhandle,*) ivol, 'mask diameter in A: ', 2. * msk_in_pix(ivol) * params%smpd
             call mskvol%kill_bimg
         end do

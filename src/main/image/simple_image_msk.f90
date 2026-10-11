@@ -112,13 +112,14 @@ contains
         call vol%mul(self)
     end subroutine apply_3Dmask
 
-    subroutine estimate_spher_mask_diam( self, params, vol, amsklp, msk_in_pix )
+    !> diameter in A of the particle: the largest connected component of the volume low-pass filtered at amsklp
+    !! and binarised by Otsu; the caller turns it into a mask radius
+    subroutine estimate_spher_mask_diam( self, params, vol, amsklp, diam )
         class(image_msk),  intent(inout) :: self
         class(parameters), intent(in)    :: params
         class(image),      intent(inout) :: vol
         real,              intent(in)    :: amsklp
-        real,              intent(out)   :: msk_in_pix
-        real        :: diam
+        real,              intent(out)   :: diam
         type(image) :: vol_filt
         if( vol%is_2d() )THROW_HARD('estimate_spher_mask_diam is intended for volumes only; automask3D')
         self%amsklp = amsklp
@@ -129,10 +130,8 @@ contains
         call self%transfer2bimg(vol_filt)
         ! binarization
         call self%automask3D_binarize(params, l_tight=.false.)
-        ! mask diameter estimation
+        ! diameter of the largest component, the only one left (label 1)
         call self%diameter_cc(1, diam)
-        diam = diam / self%get_smpd() ! in pixels now
-        msk_in_pix = diam / 2. + COSMSKHALFWIDTH
         ! destruct
         call vol_filt%kill
     end subroutine estimate_spher_mask_diam

@@ -395,9 +395,8 @@ contains
         self%nccs = maxval(self%bimat)
     end subroutine order_ccs
 
-    ! This subroutine calculates the diamenter of the
-    ! connected component labelled n_cc in the connected
-    ! component image img_cc
+    ! diameter in A of the connected component labelled n_cc: twice the largest distance of its voxels from
+    ! their centre of mass, in 2D and in 3D
     subroutine diameter_cc( self, n_cc, diam )
         class(image_bin), intent(inout) :: self
         integer,         intent(in)    :: n_cc
@@ -416,9 +415,14 @@ contains
         where(imat_cc .ne. n_cc) imat_cc = 0   ! keep just the considered cc
         ! Find center of mass of the cc
         call get_pixel_pos(imat_cc,pos)
+        if( size(pos, dim=2) == 0 )then
+            diam = 0.
+            deallocate(pos, imat_cc)
+            return
+        endif
         center_of_mass(1) = sum(pos(1,:))/real(size(pos,dim = 2))
         center_of_mass(2) = sum(pos(2,:))/real(size(pos,dim = 2))
-        center_of_mass(3) = 1.
+        center_of_mass(3) = sum(pos(3,:))/real(size(pos,dim = 2))
         allocate(msk(size(pos, dim =2)), source=.true.)
         ! Calculate maximim radius
         radius = pixels_dist(center_of_mass,real(pos),'max',msk)

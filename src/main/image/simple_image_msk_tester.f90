@@ -4,7 +4,7 @@ use simple_test_utils ! assertions etc.
 use simple_defs       ! COSMSKHALFWIDTH, GRAPHENE_BAND1/2/3, TINY
 use simple_image,     only: image, unmemoize_mask_coords
 use simple_image_bin, only: image_bin
-use simple_image_msk, only: automask2D, automask2D_mskdiam
+use simple_image_msk, only: image_msk, automask2D, automask2D_mskdiam
 use simple_parameters,only: parameters
 use simple_syslib,    only: del_file
 use simple_math,      only: bounds_from_mask3D
@@ -77,9 +77,40 @@ contains
         if( allocated(diams)  ) deallocate(diams)
         if( allocated(shifts) ) deallocate(shifts)
         if( allocated(mask)   ) deallocate(mask)
+        call test_estimate_spher_mask_diam()
         call unmemoize_mask_coords
         call cleanup_nano_mask_files
     end subroutine run_all_nano_mask_tests
+
+    !> the particle diameter that detect_atoms turns into its mask, on a sphere off the box centre along all three
+    !! axes: low-passed at 5 A it reads about 1 A wider than drawn (13.3 A for 12 A in a numpy check)
+    subroutine test_estimate_spher_mask_diam()
+        integer, parameter :: BOX = 64, OFFSET(3) = [4, -3, 5]
+        real,    parameter :: SMPD = 0.5, RAD = 6.0
+        class(parameters), allocatable :: params
+        type(image)     :: vol
+        type(image_msk) :: mskvol
+        integer :: i, j, k, c(3)
+        real    :: diam
+        write(*,'(A)') 'test_estimate_spher_mask_diam'
+        allocate(parameters :: params)
+        params%part = 1
+        call vol%new([BOX,BOX,BOX], SMPD)
+        vol = 0.
+        c   = BOX / 2 + 1 + OFFSET
+        do k = 1,BOX
+            do j = 1,BOX
+                do i = 1,BOX
+                    if( real(sum(([i,j,k] - c)**2)) * SMPD**2 <= RAD**2 ) call vol%set([i,j,k], 1.)
+                enddo
+            enddo
+        enddo
+        call mskvol%estimate_spher_mask_diam(params, vol, AMSKLP_NANO, diam)
+        call assert_real(2. * RAD, diam, 2., 'estimate_spher_mask_diam: diameter of an off-centre sphere')
+        call mskvol%kill_bimg
+        call vol%kill
+        deallocate(params)
+    end subroutine test_estimate_spher_mask_diam
 
     subroutine cleanup_nano_mask_files()
         call del_file('binarized_automask2D.mrc')
@@ -533,6 +564,7 @@ contains
         call test_ccs_degenerate()
         call test_morphology()
         call test_cc_bookkeeping()
+        call test_diameter_cc_3D()
         call test_holes_and_feret()
     end subroutine run_all_image_bin_tests
 
@@ -829,6 +861,26 @@ contains
         deallocate(imat)
         if( allocated(sz) ) deallocate(sz)
     end subroutine test_cc_bookkeeping
+
+    !---------------- diameter of a component in 3D ----------------
+
+    !> twice the farthest voxel from the component's own centre of mass, for a block well off the first plane
+    subroutine test_diameter_cc_3D()
+        integer, parameter :: N = 40
+        real,    parameter :: SMPD = 2.0
+        type(image_bin) :: bimg
+        integer, allocatable :: imat(:,:,:)
+        real :: diam
+        write(*,'(A)') 'test_diameter_cc_3D'
+        call bimg%new_bimg([N,N,N], SMPD)
+        allocate(imat(N,N,N), source=0)
+        imat(10:14, 20:24, 30:34) = 1 ! 5x5x5 block, centre (12,22,32)
+        call bimg%set_imat(imat)
+        call bimg%diameter_cc(1, diam)
+        call assert_real(2.0 * sqrt(12.0) * SMPD, diam, 1.0e-3, 'diameter_cc: 5x5x5 block, corner at sqrt(12) voxels')
+        call bimg%kill_bimg
+        deallocate(imat)
+    end subroutine test_diameter_cc_3D
 
     !---------------- hole filling and Feret diameters ----------------
 

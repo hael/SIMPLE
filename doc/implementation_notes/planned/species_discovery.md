@@ -16,8 +16,10 @@ two rulings of the same day: B factors go into the element kernels of the
 simulator, and the species of a synthesised particle are given on the
 command line as a list; its test renders ground truth with the element
 kernels, not with the atoms the detector assumes. Promotion of anything
-beyond diagnostics waits for the validation of section 10.8. Section 15
-records the reviews and what they changed.
+beyond diagnostics waits for the validation of section 10.8. The third
+run, phases 7 and 8 (10.9), runs `detect_atoms` in all its modes on the 66
+real Pt maps and changes no code. Section 15 records the reviews and what
+they changed.
 
 Nothing in SIMPLE was compiled or run. The numbers in section 8 come from a
 numpy emulation of the proposed pipeline on synthetic particles
@@ -84,7 +86,11 @@ Constraints taken from the code:
   `msk_crop` (`simple_commanders_rec_distr.f90:461-466`, `:638-682`), and
   `nanoparticle%new` masks again (`simple_nanoparticle.f90:271-278`). Any
   noise reference has to come from inside that sphere and away from the
-  atoms.
+  atoms. Without `mskdiam`, `nanoparticle%new` estimates the particle's
+  diameter (low-pass at 5 A, Otsu, the largest connected component) and
+  masks at 1.2 times it (2026-10-11; section 7 says what the estimate did
+  before). Discovery takes its noise from the map as read, so the noise
+  region is not bounded by that mask (3.2).
 - `image%phase_corr` divides by one global norm that depends on the map
   (`simple_image_calc.f90:1482-1485`). Correlation maps of different residuals
   are therefore not on one scale until they are standardised.
@@ -196,9 +202,13 @@ in all cases but two, 395 and 394 of 396 there) and none of the weakest.
 
 ### 3.2 Noise reference
 
-The noise region is the set of voxels inside the shipped sphere, at least the
-soft-edge width from its rim, and farther than `1.5 d_NN` from every accepted
-atom. It is rebuilt after each level. Three numbers come from it:
+The noise region is the set of voxels of the map as read (before the mask of
+`nanoparticle%new`) that lie inside the box's inscribed sphere and inside any
+mask the input already carries (its nearest exactly zero voxel, as in the
+volumes `refine3D_nano` ships), both less two soft-edge widths, and farther
+than `1.5 d_NN` from every accepted atom. It is rebuilt after each level.
+Without half maps the noise field of the z maps is the matched-filter
+residual of that unmasked map. Three numbers come from it:
 
 - the mean and standard deviation of each correlation map, which turn that
   map into a z map and remove the global norm of `phase_corr`;
@@ -212,8 +222,8 @@ positions makes no assumption about the colour of the noise. The emulation
 used white noise, noise band-limited at 1 A, and strongly correlated noise,
 with the same thresholds.
 
-If the region is too small, because `mskdiam` hugs the particle, the program
-stops and asks for a larger mask. The noise in the region is a lower bound on
+If the region is too small, because the box leaves too little room around
+the particle, the program stops. The noise in the region is a lower bound on
 the noise inside the particle, where alignment error adds to it.
 
 **Half maps as the noise reference.** With `vol_even` and `vol_odd` given,
@@ -807,6 +817,19 @@ and the class information to the present products:
     (light). The class ratios did not change.
   The 12% bias of the aperture sum itself remains, under the intensity bias
   above.
+- **Mask estimate** (2026-10-11, found by the first validation run of
+  10.9). Without `mskdiam` the mask comes from the particle's diameter,
+  measured by `image_bin%diameter_cc` on the largest connected component of
+  the map low-passed at 5 A and binarised by Otsu. That routine was written
+  for images: it took the centre of mass with z fixed at the first plane, so
+  in a volume it measured from the bottom face of the box and returned
+  nearly the box diagonal (82 to 93 A in boxes of 57 A). The mask covered the
+  box, which was harmless on volumes already masked by `refine3D_nano` and
+  not on the unmasked archive maps: there the present path reproduced 33 of
+  66 maps. The centre now has its z, the mask diameter is 1.2 times the
+  measured diameter, and discovery's noise region no longer lives inside
+  the mask (3.2). On the maintainer's `Pt_example` map a numpy copy of the
+  fixed estimate gives 27.1 A against a coordinate extent of 28.3 A.
 - **Model bias.** Labels are found from scratch at every call; nothing is
   carried between iterations. Since `_SIM.mrc` only aligns (section 0), a
   wrong label can reach the next map only through the orientations. A direct
@@ -1261,7 +1284,8 @@ than keep the fallback:
 Sections 10.1 to 10.4 are phases 0 to 3, the first run (done 2026-10-08);
 10.5 and 10.6 are phases 4 and 5, the second run; 10.7 is its phase 6,
 added and then withdrawn by rulings of 2026-10-09; 10.8 is what comes after
-them.
+them; 10.9 is phases 7 and 8, the third run, which validates on real maps
+and changes no code.
 
 ### 10.0 Rules of coexistence
 
@@ -1675,6 +1699,158 @@ promotion: recovered atoms into `_ATMS.pdb` with data-derived components in
 `_CC.mrc`, class intensities and per-atom widths into `_SIM.mrc`, `element`
 optional in the other four programs, `autorefine3D_nano` end to end on a
 simulated two-species trajectory, `atoms_stats` without the lattice table.
+The validation on real maps of 10.9 comes first, and so does it before the
+B-factor work of `atom_bfactor_model.md`.
+
+### 10.9 Phases 7 and 8: validation on real maps (measurement only)
+
+The third run changes no source code. It runs `detect_atoms` in its modes on
+every real map we have and measures; its products are tables and a report.
+Every confidently reconstructed map is a single-species Pt particle, so on
+those maps it establishes what the simulations cannot:
+
+1. the present detection still gives the stored coordinates, after
+   everything this development changed near it;
+2. how often discovery reports a species that is not there, on real noise,
+   filtering, surface disorder and partial occupancy;
+3. how the intensity and the fitted width of an atom depend on its
+   coordination and radius on real maps: the coordination artefact of
+   section 7 was measured on fixtures only, and on real maps partial
+   occupancy of the surface works the other way. This is the evidence the
+   B-factor work needs before it starts;
+4. by planting a weaker class into real maps (phase 8), a first measure of
+   sensitivity on real backgrounds.
+
+**The first attempt** (2026-10-11, arun run `species_validation`) stopped
+being a validation in its first phase: on these unmasked maps the automatic
+mask covered the box (section 7, "Mask estimate"). The present path
+reproduced 33 of the 66 maps (run 4, without an element, 44), and on 11 maps
+the detected atoms were background; with `mskdiam` set to 1.2 times the
+extent of the stored coordinates every one of the 11 was found (92 to 100%
+of the stored atoms within 1 A). Its other numbers, on the maps whose
+particle was found, are a first look: one class on 32 of 33 maps with the
+element and on 41 of 44 without; `Pt,Ni` inadmissible on 32 of 33; the
+aperture intensity rising with coordination (+3.8% of the mean per
+neighbour, median over maps) and falling with radius (1.14 to 0.87 of the
+mean from the inner to the outer fifth of the atoms), and the fitted B flat
+with coordination (28.9 A^2 at 6 neighbours, 28.2 at 12). Its tables stay in
+that run's directory on the Dell. After the fix, phases 7 and 8 run again in
+full (run `species_validation_r2`); the report compares the two where the
+mask changed a number.
+
+**Inputs.** `/data/NanoX/zenodo` on the Dell, read only: 66 maps
+`mrcs/<name>.mrc` with their stored coordinates `pdbs/<name>.pdb`, paired by
+name (names beginning `._` are macOS metadata and are skipped); 15
+particles (ECT1-2, EFC1-4, ESC1-5, ESIP1-2, FC1, FCHCS1) at 2 to 8 time points
+each; all Pt, 163 to 698 atoms (median 315); 0.358 A per voxel; boxes 160
+(49 maps), 120 (13: ESC4, ESC5, FCHCS1) and 200 (4: EFC1). No half maps exist.
+`detect_atoms` estimates its own mask on every map (no `mskdiam`), as
+production does.
+
+**Build.** The tree at launch, Release with tests (`./compile_clean.sh`,
+which runs the fast gate). Before any map: `species_discovery` and the four
+`single_atoms_stats` entries pass under CTest.
+
+**Phase 7: five runs per map**, all with `smpd=0.358`, in a directory per
+map and run:
+
+| run | keys | mode |
+| --- | --- | --- |
+| 1 | `element=Pt` | the present detection |
+| 2 | `element=Pt discover_species=yes` | blind discovery with the element |
+| 3 | `element=Pt,Ni` | a second species asserted |
+| 4 | no element | species-free level 1 |
+| 5 | no element, `discover_species=yes` | species-free discovery |
+
+Measured per map, one row per map and run in `validation.tsv`:
+
+- **Present path (runs 1, 4).** Atom count against the stored PDB; atoms
+  matched one to one within 1 A each way; root-mean-square and largest
+  distance of the matched pairs; the particle diameter the program measures
+  for its mask (log line `particle diameter in A:`; the mask diameter is 1.2
+  times it) against the extent of the stored coordinates (twice the largest
+  distance from their centroid plus one nearest-neighbour distance).
+- **Discovery (runs 2, 3, 5)**, from `_species.txt` and `_species.csv`:
+  `K` and the BIC table; `admissible_K2`, `separation_D_1_2` and the class
+  sizes; recovered atoms kept and pruned, their radii against level 1's
+  outermost atom and their detection z; the surface-confined flag per class;
+  the calibrated thresholds, expected false counts and noise numbers; the
+  single-class intensity spread against `s_I`.
+- **Intensity and width against environment (runs 2 and 5).** Per
+  coordination number (5 to 12) and per radial fifth of the atoms: the
+  number of atoms, the mean aperture intensity, and the mean stage-1 and
+  stage-2 B; per map, the least-squares slope of B against `(r / r_max)^2`
+  and of the intensity against the coordination number.
+- **Product identity.** The five present products of runs 1, 2 and 3
+  identical (`cmp`), and those of runs 4 and 5.
+
+A `detect_atoms` that stops with an error on a map (for example discovery's
+"noise region too small" on a small box) is that map's result: the message
+goes into the table and the run continues with the next map.
+
+**Phase 8: planted species.** On each map, after phase 7: 20% of the
+level-1 atoms of run 2 that lie inside its pruning zone (`prune_zone_radius`
+of `_species.txt`; the surface layer is out of reach by design, section 7),
+chosen at random with a seed fixed per map. Each chosen atom keeps a
+fraction `r` of its density, without any atom model:
+
+- the map is multiplied by `f = 1 - (1 - r) w`, where `w` is 1 within
+  `0.35 d_NN` of the atom centre and falls to 0 at `0.5 d_NN` along a cosine
+  (`d_NN` from `_species.txt`);
+- noise is put back so that the local noise level stays the map's: a patch
+  of the map's own background (centred on a random voxel at least
+  `2 d_NN` beyond the outermost atom and inside the box, its mean over that
+  background removed), times `sqrt(1 - f^2)`, is added at the atom.
+
+Levels `r` = 0.6 (about the Pt/Ni ratio of the potential model), 0.4 and
+0.25, and a control that adds the noise of the 0.6 level (`0.8 w` times the
+patch) without scaling anything, to show that the noise injection does not
+create a class by itself. Runs 2, 3 (labels `Pt,Ni`) and 5 on every planted
+map. Measured: recall and precision of the planted atoms among the found
+atoms of class 2, false class-2 labels among unplanted atoms, `K`,
+admissibility, `D`, and the fitted intensity ratio against `r`.
+
+**Across maps** (phase 8, in the report):
+
+- present path: the fraction of maps reproduced (98% or more of the stored
+  atoms matched within 1 A), the rest listed with their numbers;
+- false positives: the fraction of maps with `K` = 1 in runs 2 and 5, with
+  `Pt,Ni` inadmissible, the distribution of `D`, of kept recovered atoms
+  per map and where they lie, and the maps where the surface-confined flag
+  fires;
+- environment: over maps, how intensity and B depend on coordination and
+  radius, set against the fixture numbers of section 7;
+- time series: per particle, whether the calls and the recovered counts stay
+  the same across its time points;
+- sensitivity: recall, precision, admissibility and ratio error against `r`
+  for the three discovery runs, and the `r` below which the planted class
+  stops being found;
+- mask: the measured particle diameter against the coordinate extent,
+  outliers listed.
+
+**Expectations, stated before the run.** Not floors (no code is under
+test); written first so that the report compares against them:
+
+- every map reproduced by the present path;
+- `K` = 1 in runs 2 and 5 on at least 95% of maps, and `Pt,Ni` inadmissible
+  on at least 95%;
+- planted `r` = 0.6 and 0.4: the planted class found with recall at least
+  0.9 and at most one false label per map, on at least 90% of maps; the
+  control never reported as a second class;
+- the measured particle diameter within 15% of the coordinate extent on
+  every map (0.96 times it on `Pt_example` in a numpy copy of the method).
+
+**Products.** In `scratch/keep/validation/` on the Dell: `validation.tsv`,
+`environment.tsv` (the per-coordination and per-shell numbers),
+`planted.tsv`, the scripts that made them, and the `detect_atoms` logs. The
+map outputs are deleted once their numbers are in the tables. The report is
+this run's section of `species_discovery_report.md`: the numbers above,
+compared with the expectations, readable on its own. Figures are made on the
+Mac from the tables (the Dell has no plotting library).
+
+**Compute.** 66 maps, five runs each in phase 7 and twelve in phase 8: about
+1100 `detect_atoms` runs, tens of seconds each in Release, several at a time
+with fewer threads each. A few hours; disk is small.
 
 
 ## 11. Relation to `single_pcg_integration.md`
@@ -1739,7 +1915,8 @@ The files a run may change, and in which phase. A phase edits only its
 files; a file the work turns out to need is added here, with its phase and
 a one-line reason, before it is edited. Testers of a listed Fortran file
 (`*_tester.f90`) are covered by its row. Phase 0 edits nothing but this
-note. Phases 0 to 3 are the first run (done); 4 and 5 the second.
+note. Phases 0 to 3 are the first run (done); 4 and 5 the second (done);
+7 and 8 the third, which edits only this note and the report.
 
 | File | What changes | Phases |
 | --- | --- | --- |
@@ -1764,7 +1941,7 @@ note. Phases 0 to 3 are the first run (done); 4 and 5 the second.
 | `production/CMakeLists.txt` | its CTest entry; `SIMPLE_CTEST_BUDGET` raised by one (phase 3); the `single_atoms_stats` entries with `element=CdSeW`, `CdSeZ` and `CdSeR`, budget raised by one each (phase 4); the `species_discovery` timeout only if Debug needs it, and its comment, which described the pseudo-atom fixtures (phase 5) | 3, 4, 5 |
 | `src/utils/text/simple_string_utils.f90` | the string form of `list_of_ints2arr`, which splits the species list (section 5) | 4 |
 | `src/fileio/simple_fileio.f90` | `files_identical` returned false for a file compared with itself, because gfortran will not open one file on two units; this failed the fast gate at the start of phase 4, before any change | 4 |
-| `doc/implementation_notes/planned/species_discovery_report.md` | the review report: this run's section for phases 4 to 6 (sixth ruling of 2026-10-09) | 6 |
+| `doc/implementation_notes/planned/species_discovery_report.md` | the review report: the second run's section for phases 4 to 6 (sixth ruling of 2026-10-09); the third run's section, the validation on real maps (10.9) | 6, 8 |
 | `doc/implementation_notes/planned/species_discovery.md` | this note: Progress, file-table rows, rulings | each |
 
 ## 15. Review of 2026-10-07 and what it changed
