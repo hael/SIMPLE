@@ -124,6 +124,7 @@ contains
     procedure          :: map2ptcls_state
     procedure          :: map_cls2D_flag_to_ptcls
     procedure          :: map_ptcls_state_to_cls
+    procedure          :: map_cls3D_states2ptcls
     procedure          :: prune_particles
     procedure          :: scale_projfile
     ! PTCL2D/3D - getters
@@ -568,6 +569,11 @@ interface
     module subroutine map_ptcls_state_to_cls( self )
         class(sp_project), intent(inout) :: self
     end subroutine map_ptcls_state_to_cls
+
+    module subroutine map_cls3D_states2ptcls( self, active )
+        class(sp_project), intent(inout) :: self
+        logical,           intent(in)    :: active(:)
+    end subroutine map_cls3D_states2ptcls
 
     module subroutine prune_particles( self )
         class(sp_project), target, intent(inout) :: self

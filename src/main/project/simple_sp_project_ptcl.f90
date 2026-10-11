@@ -400,6 +400,29 @@ contains
         call self%os_cls3D%set_all('state',real(cls_states))
     end subroutine map_ptcls_state_to_cls
 
+    !> ptcl3D states from the cls3D states of the particles' ptcl2D classes; particles outside active, or
+    !! without a class, get state 0. Poses and the ptcl2D field are left alone.
+    module subroutine map_cls3D_states2ptcls( self, active )
+        class(sp_project), intent(inout) :: self
+        logical,           intent(in)    :: active(:)
+        integer :: iptcl, icls, nptcls, ncls
+        nptcls = self%os_ptcl3D%get_noris()
+        if( size(active) /= nptcls ) THROW_HARD('active mask and ptcl3D differ in size; map_cls3D_states2ptcls')
+        if( self%os_ptcl2D%get_noris() /= nptcls )then
+            THROW_HARD('inconsistent number of particles in ptcl2D & ptcl3D fields; map_cls3D_states2ptcls')
+        endif
+        ncls = self%os_cls3D%get_noris()
+        do iptcl = 1,nptcls
+            icls = 0
+            if( active(iptcl) ) icls = self%os_ptcl2D%get_class(iptcl)
+            if( icls < 1 .or. icls > ncls )then
+                call self%os_ptcl3D%set_state(iptcl, 0)
+            else
+                call self%os_ptcl3D%set_state(iptcl, self%os_cls3D%get_state(icls))
+            endif
+        enddo
+    end subroutine map_cls3D_states2ptcls
+
     ! Removes in place mics, stacks and particles with state=0.
     ! New images are not generated, so positive physical indstk values are preserved.
     module subroutine prune_particles( self )

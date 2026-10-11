@@ -83,7 +83,7 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
-| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report |
+| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, state weight set, cavgs work project |
 | `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
@@ -117,6 +117,7 @@ convenience and deliberately not a CTest entry.
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
 | `species_discovery` | highlevel | `detect_atoms discover_species=yes` on simulated one- and two-species pseudo-atom particles (with and without half maps), judged against the generating models; the present products must not change |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
+| `flex_pca_blobs` | highlevel | `flex_pca` on a two-state phantom in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on a three-state phantom of 3 600 particles in 60 exact views, gated on the planted states and directions |
 
 ### 1.3 Programs that are not registered
 

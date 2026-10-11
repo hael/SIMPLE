@@ -2,8 +2,8 @@
 ! The phase-shift policy across the record front doors (add_single_movie/add_stk/add_stktab,
 ! get_micparams/get_ctfparams, text and binary serialisation), the write/read round trip of the mic and
 ! particle segments, what the project file must not persist, partial alignment documents merged back
-! (merge_algndocs) and the GUI's JSON view of a segment (print_segment_json: windows, sorting, histogram and
-! plot blocks, absent optionals).
+! (merge_algndocs), the GUI's JSON view of a segment (print_segment_json: windows, sorting, histogram and
+! plot blocks, absent optionals) and the hand-back of class states to particles (map_cls3D_states2ptcls).
 module simple_sp_project_tester
 use simple_core_module_api   ! string, oris, ctfparams, del_file, filepath, syslib, PI, ran3, logfhandle
 use simple_test_utils        ! assertions etc.
@@ -36,6 +36,7 @@ contains
         call test_phase_serialisation()
         call test_write_read_roundtrip()
         call test_read_does_not_mutate_projinfo()
+        call test_map_cls3D_states2ptcls()
         call test_partial_docs_merge()
         call test_partial_docs_merge_uneven()
         call test_print_segment_json()
@@ -317,6 +318,45 @@ contains
         call probe%kill
         call proj%kill
     end subroutine test_read_does_not_mutate_projinfo
+
+    !---------------- class states handed to particles ----------------
+
+    ! classes 1-3 at states 2, 0 and 1; particle 4 is inactive and particle 5 has no class, so both end at
+    ! state 0; the poses and the ptcl2D states are not touched
+    subroutine test_map_cls3D_states2ptcls()
+        integer, parameter :: N = 6
+        integer, parameter :: CLASSES(N)  = [1, 2, 3, 3, 0, 1]
+        integer, parameter :: EXPECTED(N) = [2, 0, 1, 0, 0, 2]
+        class(sp_project), allocatable :: proj
+        logical :: active(N)
+        real    :: e1_before(N)
+        integer :: i
+        write(*,'(A)') 'test_map_cls3D_states2ptcls'
+        allocate(proj)
+        call proj%os_ptcl2D%new(N, is_ptcl=.true.)
+        call proj%os_ptcl3D%new(N, is_ptcl=.true.)
+        call proj%os_cls3D%new(3, is_ptcl=.false.)
+        call proj%os_cls3D%set_state(1, 2)
+        call proj%os_cls3D%set_state(2, 0)
+        call proj%os_cls3D%set_state(3, 1)
+        do i = 1,N
+            if( CLASSES(i) > 0 ) call proj%os_ptcl2D%set_class(i, CLASSES(i))
+            call proj%os_ptcl2D%set_state(i, 1)
+            call proj%os_ptcl3D%set_state(i, 1)
+            call proj%os_ptcl3D%set_euler(i, [10.*real(i), 20., 30.])
+            e1_before(i) = proj%os_ptcl3D%e1get(i)
+        enddo
+        active    = .true.
+        active(4) = .false.
+        call proj%map_cls3D_states2ptcls(active)
+        do i = 1,N
+            call assert_int(EXPECTED(i), proj%os_ptcl3D%get_state(i), 'particle state from its class')
+            call assert_int(1, proj%os_ptcl2D%get_state(i), 'the ptcl2D selection is left alone')
+            call assert_real(e1_before(i), proj%os_ptcl3D%e1get(i), TOL, 'the pose is left alone')
+        enddo
+        call proj%kill
+        deallocate(proj)
+    end subroutine test_map_cls3D_states2ptcls
 
     !---------------- partial alignment documents ----------------
 

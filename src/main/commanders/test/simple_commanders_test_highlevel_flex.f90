@@ -1,8 +1,9 @@
-!@descr: FLEX PCA workflow gates: shared memory against distributed, and the per-state refinement
+!@descr: FLEX PCA workflow gates: shared memory against distributed, the per-state refinement and the class-average state refinement
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_flex
 use, intrinsic :: iso_fortran_env,      only: real32, real64
+use simple_commanders_denoise,          only: commander_cls_expansion
 use simple_commanders_flex_pca,         only: commander_flex_pca
-use simple_commanders_refine3D,         only: commander_refine3D_auto
+use simple_commanders_refine3D,         only: commander_refine3D_auto, commander_refine3D_states_cavgs
 use simple_state_weight_set,            only: state_weight_set
 use simple_sigma2_state_file,           only: sigma2_state_digest_file
 use simple_flex_pca_application_tester, only: create_flex_pca_phantom_fixture, &
@@ -14,7 +15,7 @@ use simple_image,                 only: image
 use simple_oris,                  only: oris
 use simple_sp_project,            only: sp_project
 use simple_test_gate,             only: test_gate
-use simple_test_truth_metrics,    only: compare_to_truth
+use simple_test_truth_metrics,    only: compare_to_truth, pair_pose_error
 use simple_ui,                    only: make_ui
 implicit none
 #include "simple_local_flags.inc"
@@ -27,6 +28,25 @@ integer, parameter :: STATE_REFINE_SEED   = 202610071
 integer, parameter :: STATE_REFINE_MAXITS = 5
 real,    parameter :: STATE_REFINE_MARGIN = 0.01
 real,    parameter :: MAP_CORR_LP = 8.0
+!> the class-average state refinement (refine3D_states_cavgs): CAVGS_NVIEWS directions, each an exact 2D
+!! class of 60 particles over CAVGS_NSTATES planted states, split by cls_expansion into CAVGS_NSUB
+!! sub-classes; the states differ in one lobe of 4 A sigma, hence the fit band CAVGS_EXPANSION_LP
+integer, parameter :: CAVGS_NPTCLS       = 3600
+integer, parameter :: CAVGS_NSTATES      = 3
+integer, parameter :: CAVGS_NVIEWS       = 60
+integer, parameter :: CAVGS_NSUB         = 3
+integer, parameter :: CAVGS_MIN_SUBAVGS  = 100
+integer, parameter :: CAVGS_NPAIRS       = 2000
+integer, parameter :: CAVGS_SEED         = 202610092
+real,    parameter :: CAVGS_EXPANSION_LP = 12.0
+!> detection floors, not regression floors. Accuracy: each delivered state recoded to the majority truth
+!! of its sub-averages; with three balanced truth states and CAVGS_MIN_COMMITTED committed sub-averages,
+!! Hoeffding's union bound over the 27 recodings puts P(accuracy >= 0.60) under random labels below
+!! 27*exp(-2*90*0.267^2) < 1e-4 (two delivered states cap the accuracy at 2/3). Pose: the median pair
+!! error of random poses is tens of degrees
+integer, parameter :: CAVGS_MIN_COMMITTED      = 90
+real,    parameter :: CAVGS_LABEL_ACCURACY_MIN = 0.60
+real,    parameter :: CAVGS_POSE_ERROR_MAX     = 15.0
 
 type :: flex_gate_result
     logical :: valid = .false.
@@ -109,6 +129,8 @@ subroutine run_flex_pca_blobs_gate( nthr, all_ok )
     endif
     ! the per-state refinement of the shared run's states, after the FLEX comparisons it does not touch
     if( shared%valid ) call run_state_refinements(root, 2*nthr, truth_a, truth_b, shared, gate)
+    ! the class-average state refinement, on its own three-state phantom
+    call run_states_cavgs_gate(root, 2*nthr, gate)
     all_ok = all_ok .and. gate%passed()
     call gate%kill
     call kill_result(shared)
@@ -438,6 +460,302 @@ subroutine kill_result( result )
     call result%map_b%kill
     result = flex_gate_result()
 end subroutine kill_result
+
+!> cls_expansion, then refine3D_states_cavgs against the truth mean, on a three-state phantom under
+!! root/states_cavgs; the products against the truth, the contract against the cls_expansion project
+subroutine run_states_cavgs_gate( root, nthr, gate )
+    class(string),   intent(in)    :: root
+    integer,         intent(in)    :: nthr
+    type(test_gate), intent(inout) :: gate
+    class(sp_project), allocatable :: expanded, sorted
+    type(string) :: fixture, run_dir, expansion_projfile, sorted_projfile, work_projfile, truth_mean, oritab
+    type(string) :: truths(CAVGS_NSTATES)
+    integer      :: status, nsel
+    fixture = root//'/states_cavgs'
+    run_dir = fixture//'/run'
+    call simple_mkdir(fixture)
+    call simple_mkdir(run_dir)
+    call prepare_states_cavgs_project(fixture, run_dir, nthr, truths, truth_mean, oritab)
+    CWD_GLOB = fixture%to_char()
+    call run_cls_expansion_stage(run_dir, nthr, expansion_projfile)
+    call gate%check('states_cavgs: cls_expansion writes its project', file_exists(expansion_projfile))
+    if( file_exists(expansion_projfile) )then
+        allocate(expanded)
+        call expanded%read(expansion_projfile)
+        nsel = expanded%os_cls2D%count_state_gt_zero()
+        call gate%report('states_cavgs: selected sub-class averages', real(nsel))
+        call gate%check('states_cavgs: cls_expansion delivers at least 100 selected sub-class averages', &
+            &nsel >= CAVGS_MIN_SUBAVGS)
+        if( nsel >= CAVGS_MIN_SUBAVGS )then
+            call run_states_cavgs_stage(run_dir, expansion_projfile, nthr, sorted_projfile, work_projfile)
+            call gate%check('states_cavgs: refine3D_states_cavgs writes its project', file_exists(sorted_projfile))
+            call gate%check('states_cavgs: the work project is deleted', .not. file_exists(work_projfile))
+            if( file_exists(sorted_projfile) )then
+                allocate(sorted)
+                call sorted%read(sorted_projfile)
+                call inspect_states_cavgs(expanded, sorted, truths, truth_mean, oritab, gate)
+                call sorted%kill
+                deallocate(sorted)
+            endif
+        endif
+        call expanded%kill
+        deallocate(expanded)
+    endif
+    call simple_chdir(root, status)
+    if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not restore fixture directory')
+    CWD_GLOB = root%to_char()
+end subroutine run_states_cavgs_gate
+
+!> the three-state phantom whose directions are exact 2D classes, in run_dir/phantom.simple with the
+!! truth mean registered as the consensus map (vol, state 1)
+subroutine prepare_states_cavgs_project( fixture, run_dir, nthr, truths, truth_mean, oritab )
+    class(string), intent(in)  :: fixture, run_dir
+    integer,       intent(in)  :: nthr
+    type(string),  intent(out) :: truths(CAVGS_NSTATES), truth_mean, oritab
+    class(sp_project), allocatable :: project
+    type(string) :: truth_diff, stack, projfile
+    call create_flex_pca_phantom_fixture(fixture, nthr, truths(1), truths(2), truth_mean, truth_diff, oritab, stack, &
+        &nptcls=CAVGS_NPTCLS, nstates=CAVGS_NSTATES, nviews=CAVGS_NVIEWS, truth_c=truths(3))
+    projfile = run_dir//'/phantom.simple'
+    call build_flex_pca_phantom_project(projfile, stack, oritab, nptcls=CAVGS_NPTCLS, nstates=CAVGS_NSTATES, &
+        &nviews=CAVGS_NVIEWS)
+    allocate(project)
+    call project%read(projfile)
+    call project%add_vol2os_out(truth_mean, FLEX_PHANTOM_SMPD, 1, 'vol', box=FLEX_PHANTOM_BOX)
+    call project%write(projfile)
+    call project%kill
+    deallocate(project)
+end subroutine prepare_states_cavgs_project
+
+!> cls_expansion in a new run directory of run_dir; projfile_out is the project it writes there
+subroutine run_cls_expansion_stage( run_dir, nthr, projfile_out )
+    class(string), intent(in)  :: run_dir
+    integer,       intent(in)  :: nthr
+    type(string),  intent(out) :: projfile_out
+    class(commander_cls_expansion), allocatable :: xexpansion
+    class(cmdline),                 allocatable :: cline
+    type(string) :: exec_dir
+    integer      :: status
+    call simple_chdir(run_dir, status)
+    if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not enter the class-average run directory')
+    CWD_GLOB = run_dir%to_char()
+    allocate(xexpansion, cline)
+    call cline%set('prg',      'cls_expansion')
+    call cline%set('projfile', run_dir//'/phantom.simple')
+    call cline%set('mkdir',    'yes')
+    call cline%set('ncls',     CAVGS_NSUB)
+    call cline%set('lp',       CAVGS_EXPANSION_LP)
+    call cline%set('mskdiam',  FLEX_PHANTOM_MSKDIAM)
+    call cline%set('nthr',     nthr)
+    call set_fixed_seed(CAVGS_SEED, propagate=.true.)
+    call xexpansion%execute(cline)
+    ! cls_expansion ran in its own numbered directory
+    call simple_getcwd(exec_dir)
+    projfile_out = exec_dir//'/phantom.simple'
+    call cline%kill
+    deallocate(xexpansion, cline)
+end subroutine run_cls_expansion_stage
+
+!> refine3D_states_cavgs on projfile_in in a new run directory of run_dir; projfile_out is the project it
+!! writes there and work_projfile the work project it must have deleted
+subroutine run_states_cavgs_stage( run_dir, projfile_in, nthr, projfile_out, work_projfile )
+    class(string), intent(in)  :: run_dir, projfile_in
+    integer,       intent(in)  :: nthr
+    type(string),  intent(out) :: projfile_out, work_projfile
+    class(commander_refine3D_states_cavgs), allocatable :: xstates
+    class(cmdline),                         allocatable :: cline
+    type(string) :: exec_dir
+    integer      :: status
+    call simple_chdir(run_dir, status)
+    if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not enter the class-average run directory')
+    CWD_GLOB = run_dir%to_char()
+    allocate(xstates, cline)
+    call cline%set('prg',      'refine3D_states_cavgs')
+    call cline%set('projfile', projfile_in)
+    call cline%set('mkdir',    'yes')
+    call cline%set('nstates',  CAVGS_NSTATES)
+    call cline%set('pgrp',     'c1')
+    call cline%set('mskdiam',  FLEX_PHANTOM_MSKDIAM)
+    call cline%set('nthr',     nthr)
+    call set_fixed_seed(CAVGS_SEED, propagate=.true.)
+    call xstates%execute(cline)
+    call simple_getcwd(exec_dir)
+    projfile_out  = exec_dir//'/phantom.simple'
+    work_projfile = exec_dir//'/refine3D_states_cavgs_tmpproj.simple'
+    call cline%kill
+    deallocate(xstates, cline)
+end subroutine run_states_cavgs_stage
+
+!> refine3D_states_cavgs's products against the truth: particle i holds state mod(i-1,3)+1 and pose
+!! (i-1)/3+1, and every direction is one pose; the contract against the cls_expansion project
+subroutine inspect_states_cavgs( expanded, sorted, truths, truth_mean, oritab, gate )
+    class(sp_project), intent(in)    :: expanded, sorted
+    class(string),     intent(in)    :: truths(:), truth_mean, oritab
+    type(test_gate),   intent(inout) :: gate
+    character(len=8), parameter :: CLS2D_KEYS(3) = [character(len=8) :: 'state', 'pop', 'cluster']
+    character(len=8), parameter :: CLS3D_KEYS(2) = [character(len=8) :: 'cluster', 'accept']
+    character(len=8), parameter :: POSE_KEYS(5)  = [character(len=8) :: 'e1', 'e2', 'e3', 'x', 'y']
+    class(oris), allocatable :: poses, est, tru
+    integer, allocatable :: sub_counts(:,:), sub_views(:,:), sub_truth(:), sub_view(:), states(:), ptcl_states(:)
+    integer, allocatable :: cavg_counts(:,:), ptcl_counts(:,:), committed(:), expected(:), best_truth(:)
+    real,    allocatable :: corr(:,:)
+    type(string) :: map
+    real    :: smpd, fsc05, fsc0143, err, frac5
+    integer :: nsub, nposes, nposes_per_view, i, k, s, t, nstates_out, ncommitted, ipose, view, box
+    integer :: nmajority, nmembers
+    logical :: l_ok
+    nsub            = expanded%os_cls2D%get_noris()
+    nposes          = CAVGS_NPTCLS / CAVGS_NSTATES
+    nposes_per_view = nposes / CAVGS_NVIEWS
+    ! truth composition of every sub-average, from its members' planted states and directions
+    allocate(sub_counts(nsub,CAVGS_NSTATES), sub_views(nsub,CAVGS_NVIEWS), source=0)
+    do i = 1, expanded%os_ptcl2D%get_noris()
+        k = expanded%os_ptcl2D%get_class(i)
+        if( k < 1 .or. k > nsub ) cycle
+        t     = mod(i - 1, CAVGS_NSTATES) + 1
+        ipose = (i - 1) / CAVGS_NSTATES + 1
+        view  = (ipose - 1) / nposes_per_view + 1
+        sub_counts(k,t)   = sub_counts(k,t)   + 1
+        sub_views(k,view) = sub_views(k,view) + 1
+    enddo
+    ! a sub-average without members has no truth (0) and is left out of the accuracy and the poses
+    allocate(sub_truth(nsub), sub_view(nsub), source=0)
+    do k = 1, nsub
+        if( sum(sub_counts(k,:)) == 0 ) cycle
+        sub_truth(k) = maxloc(sub_counts(k,:), dim=1)
+        sub_view(k)  = maxloc(sub_views(k,:),  dim=1)
+    enddo
+    ! the contract: cls2D and the cls_expansion fields of cls3D kept, particle poses kept
+    call gate%check('states_cavgs: cls2D is unchanged', fields_equal(expanded%os_cls2D, sorted%os_cls2D, CLS2D_KEYS))
+    call gate%check('states_cavgs: cls3D keeps cluster and accept', &
+        &fields_equal(expanded%os_cls3D, sorted%os_cls3D, CLS3D_KEYS))
+    call gate%check('states_cavgs: particle poses are unchanged', &
+        &fields_equal(expanded%os_ptcl3D, sorted%os_ptcl3D, POSE_KEYS))
+    ! the delivered states, consecutive and populated, and their hand-back through the 2D classes
+    states      = nint(sorted%os_cls3D%get_all('state'))
+    ptcl_states = sorted%os_ptcl3D%get_all_asint('state')
+    nstates_out = maxval(states)
+    call gate%report('states_cavgs: delivered states', real(nstates_out))
+    call gate%check('states_cavgs: two or three states are delivered', &
+        &nstates_out >= 2 .and. nstates_out <= CAVGS_NSTATES)
+    if( nstates_out < 2 ) return
+    l_ok = .true.
+    do s = 1, nstates_out
+        if( count(states == s) == 0 .or. count(ptcl_states == s) == 0 ) l_ok = .false.
+    enddo
+    call gate%check('states_cavgs: every delivered state holds sub-averages and particles', l_ok)
+    allocate(expected(size(ptcl_states)), source=0)
+    do i = 1, size(ptcl_states)
+        if( sorted%os_ptcl2D%get_state(i) < 1 ) cycle
+        k = sorted%os_ptcl2D%get_class(i)
+        if( k >= 1 .and. k <= nsub ) expected(i) = states(k)
+    enddo
+    call gate%check('states_cavgs: every particle carries the state of its sub-class', all(ptcl_states == expected))
+    ! one class-average map per delivered state, and the consensus entry kept
+    l_ok = .not. sorted%isthere_in_osout('vol_cavg', nstates_out + 1)
+    do s = 1, nstates_out
+        if( .not. sorted%isthere_in_osout('vol_cavg', s) )then
+            l_ok = .false.
+        else
+            call sorted%get_vol('vol_cavg', s, map, smpd, box)
+            if( .not. file_exists(map) ) l_ok = .false.
+        endif
+    enddo
+    call gate%check('states_cavgs: one vol_cavg map per delivered state', l_ok)
+    l_ok = sorted%isthere_in_osout('vol', 1)
+    if( l_ok )then
+        call sorted%get_vol('vol', 1, map, smpd, box)
+        l_ok = map%to_char() == truth_mean%to_char()
+    endif
+    call gate%check('states_cavgs: the consensus map entry is kept', l_ok)
+    ! coverage and state accuracy of the committed sub-averages
+    ncommitted = count(states > 0 .and. sub_truth > 0)
+    call gate%report('states_cavgs: committed sub-average fraction', real(count(states > 0)) / real(nsub))
+    call gate%metric('states_cavgs: committed sub-averages with members', real(ncommitted), &
+        &real(CAVGS_MIN_COMMITTED), ncommitted >= CAVGS_MIN_COMMITTED)
+    allocate(cavg_counts(nstates_out,CAVGS_NSTATES), ptcl_counts(nstates_out,CAVGS_NSTATES), source=0)
+    nmajority = 0
+    nmembers  = 0
+    do k = 1, nsub
+        if( states(k) < 1 .or. sub_truth(k) < 1 ) cycle
+        cavg_counts(states(k),sub_truth(k)) = cavg_counts(states(k),sub_truth(k)) + 1
+        nmajority = nmajority + maxval(sub_counts(k,:))
+        nmembers  = nmembers  + sum(sub_counts(k,:))
+    enddo
+    do i = 1, size(ptcl_states)
+        if( ptcl_states(i) < 1 ) cycle
+        t = mod(i - 1, CAVGS_NSTATES) + 1
+        ptcl_counts(ptcl_states(i),t) = ptcl_counts(ptcl_states(i),t) + 1
+    enddo
+    if( ncommitted > 0 )then
+        call gate%metric('states_cavgs: sub-average state accuracy', &
+            &real(sum(maxval(cavg_counts,dim=2))) / real(ncommitted), CAVGS_LABEL_ACCURACY_MIN, &
+            &real(sum(maxval(cavg_counts,dim=2))) >= CAVGS_LABEL_ACCURACY_MIN * real(ncommitted))
+        call gate%report('states_cavgs: member purity of the committed sub-averages', &
+            &real(nmajority) / real(max(1, nmembers)))
+    endif
+    if( sum(ptcl_counts) > 0 ) call gate%report('states_cavgs: particle state accuracy', &
+        &real(sum(maxval(ptcl_counts,dim=2))) / real(sum(ptcl_counts)))
+    write(logfhandle,'(A)') '>>> FLEX_PCA_BLOBS states_cavgs sub-average truth counts: state nA nB nC'
+    do s = 1, nstates_out
+        write(logfhandle,'(A,I0,3(1X,I0))') '>>>   ', s, cavg_counts(s,:)
+    enddo
+    ! poses of the committed sub-averages against their directions, free of the global frame
+    if( ncommitted >= 2 )then
+        committed = pack([(k, k = 1, nsub)], states > 0 .and. sub_truth > 0)
+        allocate(poses, est, tru)
+        call poses%new(nposes, is_ptcl=.true.)
+        call poses%read(oritab, [1,nposes])
+        call est%new(ncommitted, is_ptcl=.false.)
+        call tru%new(ncommitted, is_ptcl=.false.)
+        do i = 1, ncommitted
+            call est%set_euler(i, sorted%os_cls3D%get_euler(committed(i)))
+            call tru%set_euler(i, poses%get_euler((sub_view(committed(i)) - 1) * nposes_per_view + 1))
+        enddo
+        err = pair_pose_error(est, tru, [(i, i = 1, ncommitted)], [(i, i = 1, ncommitted)], CAVGS_NPAIRS, &
+            &CAVGS_SEED, frac5)
+        call gate%metric('states_cavgs: median pair pose error of the sub-averages (deg)', err, &
+            &CAVGS_POSE_ERROR_MAX, err <= CAVGS_POSE_ERROR_MAX)
+        call gate%report('states_cavgs: fraction of sub-average pose pairs within 5 deg', frac5)
+        call poses%kill
+        call est%kill
+        call tru%kill
+        deallocate(poses, est, tru)
+    endif
+    ! the class-average maps against the planted states
+    allocate(corr(nstates_out,CAVGS_NSTATES), source=0.)
+    allocate(best_truth(nstates_out), source=0)
+    do s = 1, nstates_out
+        if( .not. sorted%isthere_in_osout('vol_cavg', s) ) cycle
+        call sorted%get_vol('vol_cavg', s, map, smpd, box)
+        if( .not. file_exists(map) ) cycle
+        do t = 1, CAVGS_NSTATES
+            call compare_to_truth(truths(t), map, FLEX_PHANTOM_MSKDIAM, corr(s,t), fsc05, fsc0143, corr_lp=MAP_CORR_LP)
+        enddo
+        best_truth(s) = maxloc(corr(s,:), dim=1)
+        write(logfhandle,'(A,I0,3(1X,F9.6))') '>>> FLEX_PCA_BLOBS states_cavgs map/truth correlations: ', s, corr(s,:)
+    enddo
+    call gate%check('states_cavgs: the state maps match at least two distinct planted states', &
+        &count([(any(best_truth == t), t = 1, CAVGS_NSTATES)]) >= 2)
+    call map%kill
+end subroutine inspect_states_cavgs
+
+!> whether every listed field agrees between two orientation sets of the same size
+logical function fields_equal( a, b, keys ) result( l_equal )
+    class(oris),      intent(in) :: a, b
+    character(len=*), intent(in) :: keys(:)
+    integer :: i, j
+    l_equal = a%get_noris() == b%get_noris()
+    if( .not. l_equal ) return
+    do j = 1, size(keys)
+        do i = 1, a%get_noris()
+            if( a%get(i, trim(keys(j))) /= b%get(i, trim(keys(j))) )then
+                l_equal = .false.
+                return
+            endif
+        enddo
+    enddo
+end function fields_equal
 
 module subroutine exec_test_write_state_weights_labels( self, cline )
     class(commander_test_write_state_weights_labels), intent(inout) :: self

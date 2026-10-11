@@ -338,7 +338,9 @@ contains
         &'FLEX PCA shared/distributed workflow validation',&
         &'runs one deterministic two-state phantom through shared memory and two real local workers, '//&
         &'then checks each result against truth and records cross-mode agreement; then refines each '//&
-        &'truth-matched state with refine3D_auto state=X, with the frozen FLEX weights and with the hard labels',&
+        &'truth-matched state with refine3D_auto state=X, with the frozen FLEX weights and with the hard labels; '//&
+        &'then runs cls_expansion and refine3D_states_cavgs on a three-state phantom and checks the class-average '//&
+        &'states against truth',&
         &'simple_test_exec',&
         &.false., display_name='FLEX PCA Workflow Validation')
         call flex_pca_blobs%add_input(UI_COMP, nthr)

@@ -324,7 +324,10 @@ if(BUILD_TESTS)
   # per-state refinement of the shared run's truth-matched states
   # (refine3D_auto state=X with the frozen FLEX weights against the hard labels,
   # flex_on_simple plan, sections 6 and 9) on eight threads: checks added to
-  # this suite rather than a new process.
+  # this suite rather than a new process. Last, the class-average state
+  # refinement on its own three-state phantom of 3 600 particles in 60 exact
+  # views: cls_expansion, then refine3D_states_cavgs, gated on the planted
+  # states and directions; also checks in this suite rather than a new process.
   simple_add_test(flex_pca_blobs highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_pca_blobs nthr=4)
 

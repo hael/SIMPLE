@@ -41,7 +41,9 @@ sampling keeps an initially larger state from winning solely through better angu
 
 ## Implementation
 
-- Workflow: `src/main/commanders/simple/simple_commanders_refine3D.f90`.
+- Workflow: `src/main/commanders/simple/simple_commanders_refine3D.f90`; the
+  frequency march and the flex_pca state initialization in
+  `src/main/simple_refine3D_states_controller.f90`.
 - Frequency schedule: `src/main/simple_refine3D_stage_plan.f90`.
 - State assignment: `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` and
   `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90`.
