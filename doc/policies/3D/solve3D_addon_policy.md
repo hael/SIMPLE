@@ -384,6 +384,16 @@ REGRESSED add-on is not adopted: the previous result stays frozen and its chunk
 joins the next add-on. `emulate_solve3D_stream_report.txt` lists wall time,
 the last stage and the per-state resolutions and verdicts of every step.
 
+### Automatic balanced chunks
+
+`simple_exec prg=solve3D_chunks projfile=<project> <solve3D inputs>` runs the
+same base-then-add-on chain on all selected particles of a project, without
+caller-chosen chunk sizes. Every run samples 5000 particles per iteration in
+total and searches 10000 to 30000 new particles. The particles are dealt to
+the runs class by class, every add-on is adopted, and the final union is
+published over the workflow's project copy. The policy is
+[solve3D_chunks_policy.md](solve3D_chunks_policy.md).
+
 ## 13. Tests
 
 - Unit sub-suites: `project superset` (a 20-row current project with a 14-row
@@ -391,7 +401,8 @@ the last stage and the per-state resolutions and verdicts of every step.
   `solve3D manifest` and `solve3D addon report` in `unit_project`;
   `frozen accumulator` and `volume pair metrics` in `unit_reconstruction`;
   `addon report docking` in `lib_reconstruction`; `solve3D stream emulation`
-  (partitioning, source preparation, step projects, report) in `unit_project`.
+  (legacy partitioning, automatic active-balanced chunk planning, source
+  preparation, step projects and reports) in `unit_project`.
 - Workflow gate `solve3D_addon` (CTest, highlevel): simulated particles of
   a symmetry-broken 6VXX map in two stacks. The base runs on a 2000-row
   frozen project (the first set, a seeded 75 % selection), the add-on on a
@@ -414,6 +425,6 @@ the last stage and the per-state resolutions and verdicts of every step.
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90`, `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | the frozen add on the gridding and PCG backends |
 | `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_utils.f90` | the add-on context (the registration pass, stage-3 early stopping, the `frozen_rec` handshake), `calc_frozen_rec`, the ladder from the manifest |
 | `src/main/solve/simple_solve3D_addon_report.f90`, `src/main/volume/simple_volpair_metrics.f90` | the validation report |
-| `src/main/commanders/simple/simple_commanders_solve3D_stream_emulation.f90`, `src/main/solve/simple_solve3D_stream_emulation.f90` | the offline emulation of the stream cycle: partitioning, step projects, report |
+| `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90`, `src/main/solve/simple_solve3D_stream_emulation.f90` | `emulate_solve3D_stream` and `solve3D_chunks`: independent legacy and automatic orchestration with shared source preparation, cumulative step-project, statistics, and report leaf utilities |
 | `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` (`exec_bootstrap_rec3D`) | the final reconstruction that bootstraps the union's sigma2 state |
 | `src/utils/simple_map_reduce.f90` (`split_nobjs_active`), `src/utils/qsys/simple_qsys_env.f90` (`new`, `l_active`), `src/main/project/simple_sp_project_core.f90` (`merge_algndocs`) | partitions that balance the active particles, and the range-checked merge |

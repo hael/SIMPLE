@@ -8,6 +8,7 @@ type(ui_program), target :: solve3D
 type(ui_program), target :: solve3D_cavgs
 type(ui_program), target :: solve3D_addon
 type(ui_program), target :: emulate_solve3D_stream
+type(ui_program), target :: solve3D_chunks
 type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: noisevol
 
@@ -19,6 +20,7 @@ contains
         call new_solve3D_cavgs(prgtab)
         call new_solve3D_addon(prgtab)
         call new_emulate_solve3D_stream(prgtab)
+        call new_solve3D_chunks(prgtab)
         call new_estimate_lpstages(prgtab)
         call new_noisevol(prgtab)
     end subroutine construct_solve3D_programs
@@ -35,18 +37,19 @@ contains
         &.true.,&                                                                          ! requires sp_project
         &visibility=UI_VIS_STANDARD, display_name='De Novo 3D Map Determination')
         ! INPUT PARAMETER SPECIFICATIONS
-        call add_solve3D_base_inputs(solve3D, .false.)
+        call add_solve3D_base_inputs(solve3D, l_stream_compatible=.false., l_include_nsample=.true.)
         ! add to ui_hash
         call add_ui_program('solve3D', solve3D, prgtab, UI_CATEGORY)
     end subroutine new_solve3D
 
-    !> The solve3D inputs, shared by solve3D and emulate_solve3D_stream. l_emulation leaves out the inputs the stream's
-    !! base run does not have: starting volumes, class-average starts and state continuation.
-    subroutine add_solve3D_base_inputs( prg, l_emulation )
+    !> The solve3D inputs shared by solve3D and the stream-compatible workflows. l_stream_compatible leaves out the
+    !! inputs a stream base run does not have; l_include_nsample controls whether the public sample-size input is exposed.
+    subroutine add_solve3D_base_inputs( prg, l_stream_compatible, l_include_nsample )
         type(ui_program), intent(inout) :: prg
-        logical,          intent(in)    :: l_emulation
+        logical,          intent(in)    :: l_stream_compatible
+        logical,          intent(in)    :: l_include_nsample
         ! image input/output
-        if( .not. l_emulation )then
+        if( .not. l_stream_compatible )then
             call prg%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
             & for particle matching', 'input starting volume e.g. vol.mrc', .false., '', &
             &visibility=UI_VIS_ADVANCED)
@@ -80,7 +83,7 @@ contains
         &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', group="search", &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
-        if( .not. l_emulation )then
+        if( .not. l_stream_compatible )then
             call prg%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
             &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
             &visibility=UI_VIS_ADVANCED)
@@ -98,7 +101,9 @@ contains
         call prg%add_input(UI_SRCH, pgrp, group="model", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_SRCH, pgrp_start, group="model", &
         &visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
+        if( l_include_nsample )then
+            call prg%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
+        endif
         call prg%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
         &'Units every fractional-update sample is balanced over: none draws globally from the lowest update-count '//&
         &'particles; class gives every selected 2D class the same share; cavg first gives every group of similar '//&
@@ -116,7 +121,7 @@ contains
             &a multi-state run writes final volumes at its last stage',&
             &'last stage', .false., 8., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
-        if( .not. l_emulation )then
+        if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &
                 &'State label to select from an existing multi-state solve3D project and continue as a single-state stage-5 search', &
                 &'state label', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
@@ -269,10 +274,33 @@ contains
         call emulate_solve3D_stream%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
         &'Also reconstruct the searched particles of every add-on alone, without the frozen term(yes|no){no}', &
         &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call add_solve3D_base_inputs(emulate_solve3D_stream, .true.)
+        call add_solve3D_base_inputs(emulate_solve3D_stream, l_stream_compatible=.true., l_include_nsample=.true.)
         ! add to ui_hash
         call add_ui_program('emulate_solve3D_stream', emulate_solve3D_stream, prgtab, UI_CATEGORY)
     end subroutine new_emulate_solve3D_stream
+
+    !> Analyze the active particles in automatically balanced solve3D/solve3D_addon cohorts.
+    subroutine new_solve3D_chunks( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call solve3D_chunks%new(&
+        &'solve3D_chunks',&                                                                    ! name
+        &'Run solve3D on automatically balanced particle cohorts',&                            ! summary
+        &'is a workflow that deals the active ptcl2D rows (state > 0) class by class into a base and add-on '//&
+        &'cohorts with the same 2D class mix and sizes that differ by at most one. Every run samples 5000 '//&
+        &'particles per iteration in total, whatever the number of states (nsample = 5000/nstates), and '//&
+        &'searches 10000 to 30000 new particles. '//&
+        &'With at most 30000 active particles only the base run is executed',&                   ! help
+        &'simple_exec',&                                                                       ! executable
+        &.true., visibility=UI_VIS_ADVANCED, display_name='Solve 3D in Particle Chunks')       ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        call solve3D_chunks%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
+        &'Also reconstruct the searched particles of every add-on alone, without the frozen term(yes|no){no}', &
+        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call add_solve3D_base_inputs(solve3D_chunks, l_stream_compatible=.true., l_include_nsample=.false.)
+        ! add to ui_hash
+        call add_ui_program('solve3D_chunks', solve3D_chunks, prgtab, UI_CATEGORY)
+    end subroutine new_solve3D_chunks
 
     subroutine new_solve3D_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

@@ -1,6 +1,6 @@
-!@descr: unit tests of the emulate_solve3D_stream partitioning, source preparation, step projects and report (simple_solve3D_stream_emulation)
-! 20-row fixture with two unselected rows: the base/chunk split and the merged last chunk, every refusal,
-! the 3D-free source and the deselection of later chunks, and the step table of the text report.
+!@descr: unit tests of chunk planning, source preparation, step projects and reports (simple_solve3D_stream_emulation)
+! The automatic plan (nsample per state count, capped runs dealt by class) on synthetic selections; the
+! explicit split, its refusals, the 3D-free source and the step projects on a 20-row fixture; both reports.
 module simple_solve3D_stream_emulation_tester
 use simple_defs,                    only: STDLEN
 use simple_string,                  only: string
@@ -17,10 +17,15 @@ contains
 
     subroutine run_all_solve3D_stream_emulation_tests()
         write(*,'(A)') '**** running all solve3D stream emulation tests ****'
+        call test_chunk_nsample()
+        call test_chunk_run_count()
+        call test_balanced_partition()
+        call test_class_stratified_partition()
         call test_partition()
         call test_partition_refusals()
         call test_source_and_step_projects()
         call test_report()
+        call test_chunks_report()
     end subroutine run_all_solve3D_stream_emulation_tests
 
     !> NROWS rows with rows 3 and 7 unselected
@@ -36,6 +41,173 @@ contains
         integer, intent(in) :: part(:), k
         n = count(part == k)
     end function chunk_size
+
+    !> solve3D samples nsample*nstates per iteration: the derived nsample keeps that total at the fixed target
+    subroutine test_chunk_nsample()
+        integer :: s
+        logical :: l_total_kept
+        write(*,'(A)') 'test_chunk_nsample'
+        call assert_int(5000,  NSAMPLE_TOTAL_CHUNK, 'the total sampled per iteration is fixed')
+        call assert_int(10000, NPTCLS_CHUNK_MIN,    'the particle minimum is two sampling totals')
+        call assert_int(30000, NPTCLS_CHUNK_MAX,    'the particle cap is six sampling totals')
+        call assert_int(5000, chunk_nsample(1), 'one state samples the whole total')
+        call assert_int(2500, chunk_nsample(2), 'two states split the total')
+        call assert_int(1666, chunk_nsample(3), 'three states round nsample down')
+        call assert_int(1250, chunk_nsample(4), 'four states split the total')
+        l_total_kept = .true.
+        do s = 1, 20
+            if( chunk_nsample(s) * s > NSAMPLE_TOTAL_CHUNK      ) l_total_kept = .false.
+            if( chunk_nsample(s) * s <= NSAMPLE_TOTAL_CHUNK - s ) l_total_kept = .false.
+        enddo
+        call assert_true(l_total_kept, 'nsample*nstates stays within nstates-1 of the total for 1..20 states')
+    end subroutine test_chunk_nsample
+
+    subroutine test_chunk_run_count()
+        integer :: nruns, status, n
+        logical :: l_bounds_kept
+        character(len=STDLEN) :: msg
+        write(*,'(A)') 'test_chunk_run_count'
+        call derive_chunk_run_count(100000, nruns, status, msg)
+        call assert_int(0, status, '100000 particles have a legal plan')
+        call assert_int(4, nruns, 'the plan uses the fewest capped runs')
+        call derive_chunk_run_count(10000, nruns, status, msg)
+        call assert_int(0, status, 'the exact minimum is one legal run')
+        call assert_int(1, nruns, 'the minimum needs no add-on')
+        call derive_chunk_run_count(30000, nruns, status, msg)
+        call assert_int(0, status, 'the exact maximum is one legal run')
+        call assert_int(1, nruns, 'the maximum needs no add-on')
+        call derive_chunk_run_count(30001, nruns, status, msg)
+        call assert_int(0, status, 'one particle over the cap has a legal balanced plan')
+        call assert_int(2, nruns, 'one particle over the cap needs two runs')
+        call derive_chunk_run_count(9999, nruns, status, msg)
+        call assert_true(status /= 0, 'fewer particles than the minimum are refused')
+        call assert_int(0, nruns, 'a refused plan has no runs')
+        ! every legal count gives balanced runs inside the bounds
+        l_bounds_kept = .true.
+        do n = NPTCLS_CHUNK_MIN, 20 * NPTCLS_CHUNK_MAX, 997
+            call derive_chunk_run_count(n, nruns, status, msg)
+            if( status /= 0 )then
+                l_bounds_kept = .false.
+                cycle
+            endif
+            ! the smallest run meets the minimum, the largest the cap, and one run fewer would exceed the cap
+            if( n / nruns < NPTCLS_CHUNK_MIN ) l_bounds_kept = .false.
+            if( (n + nruns - 1) / nruns > NPTCLS_CHUNK_MAX ) l_bounds_kept = .false.
+            if( nruns > 1 )then
+                if( (n - 1) / (nruns - 1) < NPTCLS_CHUNK_MAX ) l_bounds_kept = .false.
+            endif
+        enddo
+        call assert_true(l_bounds_kept, 'every legal count splits into the fewest runs within the bounds')
+    end subroutine test_chunk_run_count
+
+    subroutine test_balanced_partition()
+        logical, allocatable :: selected(:)
+        integer, allocatable :: part(:), classes(:)
+        integer :: nchunks, nclasses, status, i
+        character(len=STDLEN) :: msg
+        write(*,'(A)') 'test_balanced_partition'
+        ! Without class labels the runs are dealt the selected rows in turn, in row order.
+        allocate(selected(100000), source=.true.)
+        allocate(classes(100000),  source=0)
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_int(0, status, '100000 active particles split successfully')
+        call assert_int(3, nchunks, 'four total runs mean three add-on chunks')
+        call assert_int(0, nclasses, 'no labels mean no classes')
+        call assert_true(all([(chunk_size(part, i), i=0,3)] == 25000), 'all four runs hold 25000 particles')
+        call assert_true(all(part(1:8) == [0, 1, 2, 3, 0, 1, 2, 3]), 'without labels the rows are dealt in turn')
+        deallocate(selected, classes)
+        ! Three balanced active shares with unselected rows in the row range.
+        allocate(selected(60005), source=.true.)
+        allocate(classes(60005),  source=0)
+        selected([2, 20003, 40004, 60005]) = .false.
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_int(0, status, '60001 active particles with holes split successfully')
+        call assert_int(2, nchunks, 'the cap makes three total runs')
+        call assert_int(20001, chunk_size(part, 0), 'the first run takes the active remainder')
+        call assert_int(20000, chunk_size(part, 1), 'the second run has an even active share')
+        call assert_int(20000, chunk_size(part, 2), 'the third run has an even active share')
+        call assert_true(all(part([2, 20003, 40004, 60005]) == -1), 'inactive holes belong to no chunk')
+        call assert_true(all(part([1, 3, 4, 5]) == [0, 1, 2, 0]), 'unselected rows are skipped in the deal')
+        deallocate(selected, classes)
+        ! A legal one-run plan labels the base only, at both bounds.
+        allocate(selected(10000), source=.true.)
+        allocate(classes(10000),  source=0)
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_int(0, status, 'the minimum is accepted')
+        call assert_int(0, nchunks, 'the minimum is a base-only run')
+        call assert_true(all(part == 0), 'every active row is in the base')
+        deallocate(selected, classes)
+        allocate(selected(30000), source=.true.)
+        allocate(classes(30000),  source=0)
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_int(0, status, 'the chunk maximum is accepted')
+        call assert_int(0, nchunks, 'the maximum is a base-only run')
+        call assert_int(30000, chunk_size(part, 0), 'the base holds the full capped selection')
+        deallocate(selected, classes)
+        allocate(selected(30001), source=.true.)
+        allocate(classes(30001),  source=0)
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_int(0, status, 'one particle over the cap splits successfully')
+        call assert_int(1, nchunks, 'one particle over the cap makes one add-on')
+        call assert_int(15001, chunk_size(part, 0), 'the base takes the balanced remainder')
+        call assert_int(15000, chunk_size(part, 1), 'the add-on differs from the base by one')
+        deallocate(selected, classes)
+        ! A refused plan leaves every row unassigned.
+        allocate(selected(9999), source=.true.)
+        allocate(classes(9999),  source=0)
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_true(status /= 0, '9999 particles are refused')
+        call assert_int(0, nchunks, 'a refused plan has no add-on chunks')
+        call assert_true(all(part == -1), 'a refused plan assigns no row')
+        deallocate(classes)
+        allocate(classes(10), source=0)
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_true(status /= 0, 'class labels of another length are refused')
+    end subroutine test_balanced_partition
+
+    !> Two sessions in row order: class 1 fills the first 40000 rows, classes 2 to 6 alternate in the
+    !! rest. Cutting in row order would give the base class 1 alone; dealing gives every run every class.
+    subroutine test_class_stratified_partition()
+        integer, parameter   :: NR = 90002
+        logical, allocatable :: selected(:)
+        integer, allocatable :: part(:), classes(:)
+        integer :: nchunks, nclasses, status, i, c, k, ncls_run(0:3), sizes(0:3)
+        logical :: l_class_balanced, l_every_class_in_base
+        character(len=STDLEN) :: msg
+        write(*,'(A)') 'test_class_stratified_partition'
+        allocate(selected(NR), source=.true.)
+        allocate(classes(NR))
+        do i = 1, NR
+            if( i <= 40000 )then
+                classes(i) = 1
+            else
+                classes(i) = 2 + mod(i, 5)
+            endif
+        enddo
+        selected(7) = .false.
+        call partition_selected_balanced(selected, classes, part, nchunks, nclasses, status, msg)
+        call assert_int(0, status, '90001 labelled particles split successfully')
+        call assert_int(3, nchunks, 'the cap makes four total runs')
+        call assert_int(6, nclasses, 'six classes are dealt')
+        do k = 0, 3
+            sizes(k) = chunk_size(part, k)
+        enddo
+        call assert_int(90001, sum(sizes), 'every selected row is in one run')
+        call assert_true(maxval(sizes) - minval(sizes) <= 1, 'run sizes differ by at most one')
+        l_class_balanced      = .true.
+        l_every_class_in_base = .true.
+        do c = 1, 6
+            do k = 0, 3
+                ncls_run(k) = count(part == k .and. classes == c)
+            enddo
+            if( maxval(ncls_run) - minval(ncls_run) > 1 ) l_class_balanced = .false.
+            if( ncls_run(0) < 1 ) l_every_class_in_base = .false.
+        enddo
+        call assert_true(l_class_balanced, 'every class is split over the runs to within one particle')
+        call assert_true(l_every_class_in_base, 'the base holds every class')
+        call assert_int(10000, count(part == 0 .and. classes == 1), 'the base holds a quarter of the first session')
+        call assert_int(-1, part(7), 'an unselected row belongs to no run')
+    end subroutine test_class_stratified_partition
 
     subroutine test_partition()
         logical, allocatable :: selected(:)
@@ -244,15 +416,55 @@ contains
         do
             read(funit,'(A)',iostat=io_stat) line
             if( io_stat /= 0 ) exit
+            if( index(line, 'EMULATE_SOLVE3D_STREAM REPORT') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+            if( index(line, 'selected particles:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+            if( index(line, 'run particles:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
             if( index(line, ' addon ') > 0 .or. index(line, ' base ') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
             if( index(line, 'REGRESSED') > 0 ) all_lines = trim(all_lines)//'|REGRESSED-LINE'
         enddo
         close(funit, status='delete')
+        call assert_true(index(all_lines, 'EMULATE_SOLVE3D_STREAM REPORT') > 0, 'the legacy report header is unchanged')
+        call assert_true(index(all_lines, 'selected particles: 18  base: 6  add-on chunk: 4  add-on steps: 3') > 0, &
+            &'the legacy base and add-on controls are reported')
+        call assert_true(index(all_lines, 'run particles:') == 0, 'the legacy report does not use the chunks preamble')
         call assert_true(index(all_lines, ' base ') > 0, 'the base step is tabulated')
         call assert_true(index(all_lines, ' addon ') > 0, 'the add-on step is tabulated')
         call assert_true(index(all_lines, 'ROLLED BACK') > 0, 'a step that was not adopted is marked')
         call assert_true(index(all_lines, 'REGRESSED-LINE') > 0, 'the per-state verdict is listed')
         call report%kill
     end subroutine test_report
+
+    subroutine test_chunks_report()
+        type(emulation_report)  :: report
+        type(string)            :: fname
+        character(len=STDLEN)   :: line
+        character(len=2*STDLEN) :: all_lines
+        integer :: funit, io_stat
+        write(*,'(A)') 'test_chunks_report'
+        call report%new_chunks('simple_exec prg=solve3D_chunks', 'source.simple', [20001, 20000, 20000], 3, chunk_nsample(3), 6)
+        fname = 'solve3D_chunks_report_test.txt'
+        call report%write(fname)
+        all_lines = ''
+        open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=io_stat)
+        call assert_int(0, io_stat, 'the chunks report file was written')
+        do
+            read(funit,'(A)',iostat=io_stat) line
+            if( io_stat /= 0 ) exit
+            if( index(line, 'SOLVE3D_CHUNKS REPORT') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+            if( index(line, 'selected particles:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+            if( index(line, 'run particles:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+            if( index(line, 'nsample:') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+            if( index(line, 'runs dealt') > 0 ) all_lines = trim(all_lines)//'|'//trim(line)
+        enddo
+        close(funit, status='delete')
+        call assert_true(index(all_lines, 'SOLVE3D_CHUNKS REPORT') > 0, 'the chunks report has its own header')
+        call assert_true(index(all_lines, 'selected particles: 60001  runs: 3  states: 3') > 0, &
+            &'the chunks report summarizes the automatic plan')
+        call assert_true(index(all_lines, 'nsample: 1666  sampled per iteration (nsample x states): 4998') > 0, &
+            &'the chunks report records nsample and the total it samples')
+        call assert_true(index(all_lines, 'run particles: 20001 20000 20000') > 0, 'the actual balanced run sizes are listed')
+        call assert_true(index(all_lines, 'runs dealt by 2D class: 6 classes') > 0, 'the chunks report names the deal')
+        call report%kill
+    end subroutine test_chunks_report
 
 end module simple_solve3D_stream_emulation_tester
