@@ -1,4 +1,4 @@
-# Particle I/O on per-micrograph stacks: reading, sampling, half-sets and add-on passes
+# Particle I/O on per-micrograph stacks: reading, half-sets, add-on passes and data layout
 
 Implementation note, 2026-10-12. **Plan; nothing implemented.**
 
@@ -8,8 +8,17 @@ It merges two notes of the same day:
   `32a495cef`;
 - `particle_io_handling.md` from the agent checkout, now retired.
 
-RELION references are to its master at `05cd1ad9`. Nothing here touches how
-sampling units are built (`simple_view_partition_sampling.f90`).
+RELION references are to its master at `05cd1ad9`.
+
+**Sampling strategies are decoupled from this note** (Hans, 2026-10-12). The
+goal is a data path, and in time a layout on disk, that lets any sampling
+scheme read cheaply. Workflows should not have to be designed around disk
+latency. Nothing here changes which particles are drawn.
+
+**When.** The measurements of section 4 run once the global-sigma
+refactoring has been validated (Hans, 2026-10-12). Their numbers are the
+basis for deciding which steps of section 3 come next, and whether the
+container layout is worth its own design note.
 
 The plan was prompted by the stream ribosome project: thousands of
 per-micrograph stacks with a handful of particles each, on which `solve2D`
@@ -23,10 +32,10 @@ and `solve3D` spend their time in file metadata. Companion documents:
 Rulings so far (Hans, 2026-10-12):
 
 - **No particle is rewritten into another file.** No cache, raw or cropped,
-  is added. The existing cropped 2D cache and the extraction format stay as
-  they are.
-- **Half-sets per stack** for new partitions (section 3.3).
-- **Add-on passes** (section 3.4):
+  is added. The existing cropped 2D cache and the extraction's pixel format
+  stay as they are.
+- **Half-sets per stack** for new partitions (section 3.2).
+- **Add-on passes** (section 3.3):
   - frozen contributions are never recomputed, and their old noise weighting
     is an accepted error;
   - the add-on's final reconstruction is incremental;
@@ -62,24 +71,21 @@ Rulings so far (Hans, 2026-10-12):
   - **Half-sets per stack** (ruled). Reconstruction opens each sampled stack
     once per state instead of once per half, and overlapping neighbouring
     picks stay in one half.
-  - **Stack-coherent sampling**, behind a parameter. A sample of n particles
-    then comes from about n/m stacks (m particles per stack) instead of close
-    to n. This changes which particles are drawn, not how many, nor how often
-    over an epoch.
   - **Add-on passes** (ruled): an add-on reads only its own particles.
+  - **A direction for discussion:** extraction writes containers, large
+    files holding many micrographs' stacks, so that any sampling touches few
+    files (section 3.4). New data only; nothing is rewritten.
 - **Counts.** Counted from the code for two stream-sized examples
-  (section 2.5), under `balance=none`, before any gain from concurrent opens
-  or read-ahead, the opens per `solve3D` iteration fall:
+  (section 2.5), before any gain from concurrent opens or read-ahead, the
+  opens per `solve3D` iteration fall:
   - 1.6–1.7× with one open per stack;
-  - 3.8–5.7× adding stack-coherent sampling;
-  - 5.1–7.6× adding half-sets per stack.
+  - 1.7–1.8× adding half-sets per stack.
 
-  With the default `balance=cavg`, stack-coherent sampling gives less. A
-  sampler dry run on the real project decides.
-- **`solve2D` on a stream pool** below `nsample`=200,000 samples every
-  particle every iteration, so sampling cannot help there. One open per stack
-  halves its opens, concurrent opens and read-ahead overlap them, and
-  anything beyond that needs fewer files (not proposed).
+  Opens per iteration stay of the order of the number of sampled particles.
+  Going further means a layout on disk with fewer files (section 3.4).
+- **`solve2D` on a stream pool** below `nsample`=200,000 reads every particle
+  every iteration. One open per stack halves its opens, and concurrent opens
+  and read-ahead overlap them.
 
 ## 1. Why this is not a particle cache
 
@@ -108,7 +114,6 @@ mapping each per-micrograph stack costs what opening it costs.
 same code at the same box, with no key, owner, budget or uniformity rule.
 
 - The read-path changes alter how the bytes are fetched.
-- Stack-coherent sampling alters which particles are drawn.
 - Half-sets per stack alter the half labels of new partitions.
 - The add-on changes alter which passes run.
 
@@ -228,12 +233,10 @@ all parts. Each strategy is named in the table's first column.
 | stacks touched per pass, today | 4,561 (91%), 2.2 ptcl each | 9,049 (23%), 1.1 ptcl each |
 | opens per `solve3D` iteration, today (2T + 2T + R) | 25,281 | 45,800 |
 | one open per stack (T + T + R) | 16,159 | 27,703 |
-| stack-coherent sampling alone, `balance=none`, whole stacks (n/m per pass, both halves) | 10,000 | 12,000 |
-| one open per stack + stack-coherent sampling | 6,667 | 8,000 |
-| ... + half-sets per stack | 5,000 | 6,000 |
+| ... + half-sets per stack (T + T + T) | 13,683 | 27,147 |
 | particle read calls today (3n) | 30,000 | 30,000 |
 | with one read call per stack run | 16,159 | 27,703 |
-| ... + stack-coherent sampling (+ half-sets per stack) | 6,667 (5,000) | 8,000 (6,000) |
+| ... + half-sets per stack | 13,683 | 27,147 |
 | `solve2D`, full sampling: opens today → one open per stack | 20,000 → 10,000 | 160,000 → 80,000 |
 
 Some cases add to these counts:
@@ -267,6 +270,10 @@ by earlier runs, several times.
   not a measurement.
 
 ## 3. Plan
+
+The steps below are candidates. Which come next, and in what order, is
+decided from the measurements of section 4. The add-on passes depend on the
+global-sigma refactoring in any case.
 
 ### 3.1 Read path (bit-exact)
 
@@ -359,78 +366,17 @@ reads through `discrete_read_imgbatch`, so the build gains too.
 - `SIMPLE_IO_NSTREAMS` overrides the cap already, so a sweep settles it
   before code changes (section 4).
 
-### 3.2 Stack-coherent sampling (sampler only; behind a parameter)
-
-This couples sampling to stacks. The quotas and tier rules stay. Only the
-choice inside the cutoff tier changes, from particle-uniform to stack-major:
-
-1. **Forced picks.** Per unit (one unit for `balance=none`), compute the
-   quota and cutoff tier as now, and take every particle below the cutoff
-   tier, as now.
-2. **Stack order.** Order the stacks: those already touched by forced picks
-   first, then the rest, each group shuffled with the run's seed. `stkind` is
-   in the particle segment, so the sampler needs nothing from `os_stk`.
-3. **The walk.** Walk the stacks. In each, take the cutoff-tier particles of
-   units whose quota is not yet filled, at most c per stack per pass.
-4. **Repeat** the walk until every quota is filled. With large stacks and a
-   small c this takes more than one walk, which falls back towards today's
-   spread.
-
-**What stays the same.**
-
-- The per-unit quotas.
-- Lower tiers before higher ones. Under `balance=none`, every active particle
-  is drawn once before any is drawn twice: the epoch property of
-  `sample4update_cnt`.
-- The sample is drawn once in the master (`exec_prob_align`,
-  `master_draws_sample3D`), and the parts reproduce it from the `sampled`
-  flags, so nothing changes in the parts.
-
-**Where it applies.**
-
-- `sample4update_cnt`, `sample4update_rnd` (the sticky `solve2D` stage), the
-  non-greedy `sample4update_class` and the fill-in sampler.
-- A cohort drawn at a stage's first iteration (`cohort_sampling`) stays
-  stack-coherent for the whole stage.
-- With `frac_best` the fill works inside the eligible top fraction.
-- Greedy selection already fixes the particles and is left alone.
-
-**Expected effect.**
-
-- About n/m stacks per pass under `balance=none` with c ≥ m.
-- Under `balance=class` or `cavg`, a stack's particles fall in different
-  units, so fewer can be taken together.
-- A mean-field estimate gives about 45–80% of today's stack count for
-  example A, and 25–50% for B. It assumes the units are filled in turn, each
-  preferring touched stacks, with a fraction φ of each unit in its cutoff
-  tier (φ from 1 at an epoch start towards 0.5).
-- The sampler dry run replaces the estimate with the count on the real
-  project.
-
-**Statistics.**
-
-- Within one iteration the sample is clustered by micrograph: shared
-  defocus, ice and drift.
-- With m ≈ 5 the clusters are small, and n/m = 2,000 micrographs per
-  iteration keeps the defocus spread.
-- The per-stack cap c bounds the cluster on large stacks. c = 16 would mean
-  at least 625 micrographs per 10,000 particles, and 4 MB per stack at box
-  256 in float32.
-- Coverage over an epoch is unchanged.
-- Within an iteration, particles of dense micrographs are somewhat more
-  likely to be drawn. The tiers even this out across iterations.
-
-The sampler is driven by stack membership only, never by maps, poses or
-projection directions. It stays off by default until the dry run, a
-benchmark run and a ruling.
-
-### 3.3 Half-sets per stack (ruled 2026-10-12)
+### 3.2 Half-sets per stack (ruled 2026-10-12)
 
 - **Two reasons:**
-  - With per-index alternation every sampled stack has both halves, so
-    reconstruction opens it once per half: 2n/m of the 4n/m opens under one
-    open per stack plus stack-coherent sampling. Per stack, reconstruction
-    opens each stack once per state.
+  - With per-index alternation, a stack with two or more sampled particles
+    usually has both halves, so reconstruction opens it once per half. Per
+    stack, it opens each touched stack once per state.
+    - The gain grows with the number of sampled particles per stack.
+    - In example A of section 2.5, reconstruction opens fall from 7,037 to
+      4,561.
+    - In example B, with about one sampled particle per stack, they fall
+      only from 9,604 to 9,049.
   - Overlapping neighbouring picks share pixels. With per-index alternation
     they sit in opposite halves, which couples the half-maps and inflates
     the FSC. Keeping a micrograph's particles in one half removes that
@@ -465,7 +411,7 @@ benchmark run and a ruling.
   would avoid the label change. But it needs both half accumulators live,
   which the multistate peak-memory policy avoids.
 
-### 3.4 Add-on passes (ruled 2026-10-12)
+### 3.3 Add-on passes (ruled 2026-10-12)
 
 This is the stream's largest particle I/O. It changes the `solve3D_addon`
 contract (`solve3D_addon_policy.md`, sections 3, 5, 7 and 8), and it depends
@@ -535,36 +481,90 @@ the run's own particles instead of the union, with no image-power seed:
   is read, as the frozen sets are today (`simple_frozen_accum.f90`). The
   manifest records them with the merged sigma2 state.
 
-### 3.5 Fewer files (not proposed now)
+### 3.4 A layout on disk that serves any sampling (direction, for discussion)
 
-At full sampling (`solve2D` on pools below `nsample`), the only way to cut
-opens further is fewer files. Three routes, none proposed:
+The read-path changes make each open and each request cheaper. But opens per
+iteration stay of the order of the number of sampled particles, because the
+sample decides which files are touched. A layout that lets any sampling
+scheme read cheaply has to remove three costs:
 
-- **One stack per stream chunk** at pool import. This breaks the 1:1
-  `os_stk`/`os_mic` relation that `simple_sp_project_mic.f90`,
-  `simple_reextract_strategy.f90`, `simple_refine_motion_model_strategy.f90`
-  and `prune_project` rely on.
-- **A repacked copy:** set aside (section 1).
-- **A fractional `solve2D` update for stream pools.** This would let
-  stack-coherent sampling apply, at the cost of a change to the 2D sampling
-  policy.
+- **The per-file cost** (open, metadata, header): fewer files.
+- **The per-request latency** (a seek, or a network round trip): the
+  particles in memory or on flash. On a spinning disk no layout makes
+  scattered single-particle reads cheap; only memory does.
+- **The serial wait:** requests issued ahead (read-ahead), since the sample
+  is known before the pass.
 
-Revisit once the read path is in and the time-share measurement shows what
-part of a `solve2D` iteration is still opens.
+**Containers.** One layout removes the first cost without a rewrite of
+existing data, and keeps one stack row per micrograph.
 
-### 3.6 Not addressed
+- **Writing.**
+  - Extraction appends each micrograph's particles to a large container
+    file instead of writing one file per micrograph.
+  - There is one container per extraction job, so each file has one writer.
+  - The MRC header's image count is set when the container is closed.
+- **Indexing.**
+  - Each micrograph keeps its own `os_stk` row, so the 1:1 relation with
+    `os_mic` holds. The row's path is the container, and its particles'
+    `indstk` are their image positions in it.
+  - The stack-indexing policy already separates the stack row from the
+    physical file (`indstk` is the physical image index). Rows sharing one
+    file need a paragraph in that policy, not a format change.
+- **Reading.**
+  - A part process opens each container once and keeps it open. Any particle
+    is then one positioned read at a known offset.
+  - Several streams read one container through separate descriptors, on the
+    POSIX path. A Fortran file can be connected to only one unit.
+  - Opens per iteration fall from thousands to the number of containers
+    touched, whatever the sampling scheme.
+- **On a spinning disk,** a container written in micrograph order is
+  contiguous. Scattered reads inside it are short seeks within one region,
+  not jumps between thousands of files interleaved with other outputs.
+- **New data only.** Existing projects keep their files. Reextraction and
+  motion-model refinement, which rewrite particles anyway, write containers.
+
+**Costs and open points.**
+
+- **Shared files.** Code that treats a stack file as one micrograph's must
+  be audited. Removing or rejecting a micrograph deselects its rows and
+  leaves its images in the container, and the space comes back only through
+  compaction.
+- **Ownership.** Extraction is the writer, so this changes extraction and
+  the stream, which is Joe's area.
+- **Order.** It needs the POSIX path first. Today's sorted read opens one
+  reader per stack row in parallel, which would connect a shared container
+  to several Fortran units.
+- **When to decide.** From the measurements of section 4: how much of an
+  iteration is opens, and what an open costs on the file systems in use.
+
+**Set aside:**
+
+- one stack per stream chunk, which breaks the 1:1 `os_stk`/`os_mic`
+  relation that `simple_sp_project_mic.f90`, `simple_reextract_strategy.f90`,
+  `simple_refine_motion_model_strategy.f90` and `prune_project` rely on;
+- a repacked copy (section 1).
+
+### 3.5 Not addressed
 
 Every part process re-reads the project file and references at launch, and
 the master writes the project segment each iteration. Persistent workers
 would remove that, and the cold memo with it. That is out of scope here.
 
-## 4. Measurements before code
+## 4. Measurements: the basis for the next decision
 
-- **Sampler dry run.** Run the current and the stack-major samplers on the
-  ribosome project file for a stage's worth of iterations under
-  `balance=none`, `class` and `cavg`. Record the distinct `stkind` per
-  iteration, a quota check per unit, and the coverage over an epoch. No image
-  is read.
+These run after the global-sigma refactoring has been validated, on the code
+as it then stands. They need no change to the read path. The only code is
+the benchmark split of section 5, which the time-share measurement needs.
+Their numbers then decide:
+
+- which of the read-path steps are worth doing, and in what order;
+- whether stacks need to be kept open from the search into the
+  reconstruction;
+- whether the stream-count cap on spinning disks changes;
+- whether the container layout gets its own design note.
+
+The measurements:
+
 - **File operations.** Run
   `strace -f -c -e trace=openat,newfstatat,statx,read,pread64,lseek,close` on
   one `prob_tab` part and one `refine3D` part of one iteration. Compare with
@@ -608,16 +608,6 @@ would remove that, and the cold memo with it. That is out of scope here.
   - The POSIX path opens in parallel, many times over, on more stacks than
     streams.
   - Read-ahead changes no byte read.
-- **Stack-coherent sampling.**
-  - The per-unit quotas are exact.
-  - The lower tiers are exhausted before the cutoff tier.
-  - Under `balance=none`, every active particle is drawn once per ⌈1/f⌉
-    iterations.
-  - The cap c is respected.
-  - Under `balance=none` at an epoch start, with stacks of m and c ≥ m, the
-    sample covers ⌈n/m⌉ stacks.
-  - A fixed seed gives the same sample, and the parts reproduce the master's
-    sample (`sample4update_reprod`) unchanged.
 - **Half-sets per stack.**
   - The halves differ by at most the largest stack.
   - Every particle of a stack carries one label.
@@ -638,31 +628,33 @@ would remove that, and the cold memo with it. That is out of scope here.
 
 ## 7. Order of work
 
-1. **Measurements:** the benchmark split first, then the dry run, the file
+1. **The global-sigma refactoring is validated** first
+   (`global_sigma2_only.md`).
+2. **Measurements** (section 4): the benchmark split, then the file
    operations, the time share, the open latency, the stream-count sweep and
    the whole-stack ribosome run.
-2. **One open per stack per pass.**
-3. **One read call per stack run.**
-4. **Half-sets per stack.** It is ruled, small, and independent of the read
-   path.
-5. **The POSIX read-only path:** concurrent opens, then read-ahead.
-6. **Stacks kept open from the search into the reconstruction,** if step 1's
-   numbers still show the metadata cost.
-7. **Stack-coherent sampling** behind a parameter, after the dry run and a
-   ruling.
-8. **Add-on passes,** as a separate track after the global-sigma refactoring
-   lands.
+3. **Decision.** The numbers are reviewed, and the next steps are chosen from
+   the candidates below. The order shown is provisional:
+   - one open per stack per pass;
+   - one read call per stack run;
+   - the POSIX read-only path: concurrent opens, then read-ahead;
+   - stacks kept open from the search into the reconstruction;
+   - the container layout, as its own design note.
+4. **Half-sets per stack** are ruled and do not wait for the numbers. They
+   land with the first step chosen, and their effect on reconstruction opens
+   is measured with it.
+5. **Add-on passes,** as a separate track that builds on the global-sigma
+   refactoring.
 
-Each step ends with a review of its numbers.
+Each step ends with a review of its numbers against the measurements of
+step 2.
 
 ## 8. Open decisions
 
-1. **Stack-coherent sampling:** is clustering by micrograph within an
-   iteration acceptable, and what value of c?
-2. **Fewer files:** should stream `solve2D` sample fractionally, so that
-   stack-coherent sampling applies?
-3. **Half-sets per stack:** is the 1% largest-stack threshold for the
+1. **Half-sets per stack:** is the 1% largest-stack threshold for the
    per-index fallback right?
+2. **The container layout** (section 3.4): worth its own design note, with
+   Joe, once the measurements are in?
 
 ## 9. Code map
 
@@ -671,8 +663,7 @@ Each step ends with a review of its numbers.
 | Read path | `src/main/strategies/search/simple_matcher_ptcl_io.f90` (`discrete_read_imgbatch`, `stk_dims`, read counters), `src/fileio/simple_discrete_stack_io.f90`, `src/fileio/simple_imgfile.f90`, `src/fileio/simple_imghead.f90`, `src/main/image/simple_image_io.f90` |
 | POSIX path | `src/fileio/simple_posix.c`, `src/fileio/simple_syslib.f90` (`io_read_nstreams`, the memory-available query, the new helpers) |
 | Read-ahead and benchmarks | `simple_strategy2D_matcher.f90`, `simple_strategy3D_matcher.f90`, `simple_commanders_prob.f90`, `simple_matcher_3Drec.f90`, `simple_refine2D_strategy.f90`, `simple_refine3D_strategy.f90` |
-| Sampling | `src/main/ori/simple_oris_sampling.f90` (`sample4update_cnt`, `_rnd`, `_class`, fill-in), the sampling parameter in `simple_parameters*.f90` and its UI |
 | Half-sets | `src/main/ori/simple_oris_setters.f90` (`partition_eo`) |
 | Add-on passes | `simple_commanders_solve3D.f90`, `simple_solve3D_utils.f90`, `simple_frozen_accum.f90`, `src/main/simple_final_rec.f90`, `exec_bootstrap_rec3D` (`simple_commanders_refine3D.f90`), `src/main/sigma2/` |
 | Policies | `doc/policies/3D/solve3D_addon_policy.md` (sections 3, 5, 7, 8), the documents that describe half-set assignment, a short policy for the particle read path |
-| Tests | `src/fileio/simple_stack_io_tester.f90`, the `oris` sampling and setter testers, `src/main/volume/simple_frozen_accum_tester.f90` |
+| Tests | `src/fileio/simple_stack_io_tester.f90`, the `oris` setter testers, `src/main/volume/simple_frozen_accum_tester.f90` |

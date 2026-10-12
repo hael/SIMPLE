@@ -4,6 +4,9 @@ Implementation note, 2026-10-07, revised 2026-10-08 after review. Written
 against master `108c8c9d`. Companion page: `single_pcg_integration.md`
 (section 11 says how the two fit together).
 
+Where the work stands and what comes next, in short:
+`species_discovery_status.md` (2026-10-12).
+
 Status. The design is for review and is not approved as a replacement of the
 present detection. What is approved is a small, opt-in prototype: the
 foundations and the species-free level 1 of section 10 (phases 0 to 2, which
