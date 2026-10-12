@@ -424,10 +424,11 @@ contains
         &classes it already has, and its classes in proportion to their populations, at most pop/minpop each; a class &
         &with fewer than 2*minpop particles (or than 3*(neigs+1), the model floor) is kept whole. Per split class: a CTF- and noise-weighted low-rank &
         &covariance model (rank neigs, pose fixed, cross-fitted), placement by bimodality with the fit residual as a &
-        &junk axis, posterior-precision soft weights; each particle is labelled with its most likely subclass. Then one &
-        &greedy in-plane refine2D round and CTF-corrected averages from the soft weights (cls_expansion_cavgs.mrc, plus &
-        &even/odd), and per subclass the soft population, the split separation and the label-free cross-half &
-        &reproducibility (os_cls2D neff, sep, repro)',&
+        &junk axis, posterior-precision soft weights; each particle is labelled with its most likely subclass. Then &
+        &CTF-corrected averages from the soft weights (cls_expansion_cavgs.mrc, plus even/odd), and per subclass the &
+        &soft population, the split separation and the label-free cross-half reproducibility (os_cls2D neff, sep, &
+        &repro). With refine_inpl=yes, one greedy in-plane refine2D round against the sub-averages comes first and &
+        &the averages are made on the refined alignment',&
         &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED, display_name='Class Expansion')
@@ -453,6 +454,10 @@ contains
             &their aligned correlation; without class averages every class is its own group{20}', &
             '# groups{20}', .false., 20.0, &
         &visibility=UI_VIS_ADVANCED)
+        call cls_expansion%add_input(UI_SRCH, 'refine_inpl', 'binary', 'In-plane refinement round', &
+            &'One greedy in-plane refine2D round against the sub-averages (classes fixed), then the averages on the &
+            &refined alignment(yes|no){no}', '(yes|no){no}', .false., 'no', &
+            &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call cls_expansion%add_input(UI_FILT, 'neigs', 'num', &
             'Rank of the per-class covariance model (default 8)', &
             'Rank of the per-class covariance model (default 8)', &

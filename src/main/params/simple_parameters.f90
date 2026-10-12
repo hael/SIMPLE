@@ -118,6 +118,7 @@ type :: parameters
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
+    character(len=3)          :: refine_inpl='no'     !< cls_expansion: one in-plane refine2D round, then averages on that alignment(yes|no){no}
     character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
     character(len=3)          :: reseed_states='no'   !< solve3D_cavgs: reseed a state that empties from the largest(yes|no){no}
     character(len=3)          :: remap_cls='no'

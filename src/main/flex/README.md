@@ -221,6 +221,7 @@ groups (square root of the group population) and their classes (population), at 
 The strategy (`../strategies/parallelization/simple_cls_expansion_strategy.f90`) groups the
 classes with the `balance=cavg` clustering (`cluster_cavgs_into_groups`), prepares the planes
 through `transform_ptcls(keep_ft=.true.)`, owns the part files, the merge and the project
-writes; the commander (`../commanders/simple/simple_commanders_denoise.f90`) runs the split, one
-greedy in-plane `refine2D` round and the restoration from the split's soft weights. Method and
+writes; the commander (`../commanders/simple/simple_commanders_denoise.f90`) runs the split and,
+with `refine_inpl=yes` (off by default), one greedy in-plane `refine2D` round and the restoration
+from the split's soft weights on the refined alignment. Method and
 benchmarks: `doc/implementation_notes/completed/flex_cls_expansion_2026_10_01.md`.

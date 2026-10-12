@@ -49,14 +49,16 @@ own in-plane alignment:
    posterior precision; labelled members count fully, so the hard label (the GMM's most likely
    component) is the largest weight of its row. A component the GMM labels leave empty is centred
    on its GMM mean.
-5. **One greedy in-plane round** of `refine2D` against the sub-averages with the classes fixed
-   (`refine=inpl`, iteration 3, `trs=3`); the sigma2 state is estimated first when the project
-   has none that resolves.
-6. **Restoration.** CTF-corrected averages from the refined alignment with the split's soft weights
-   (`cls_expansion_weights.txt` and `cls_expansion_class_map.txt`, read back; the project labels stay
-   the split's hard labels), regularised like the class averager (`den += 1/tau2` per shell, `tau2`
-   from the subclass's own even/odd FRC; a half without members counts as SNR 1); even and odd
-   member versions are written too.
+5. **Restoration.** CTF-corrected averages with the soft weights, on the members' own 2D alignment,
+   regularised like the class averager (`den += 1/tau2` per shell, `tau2` from the subclass's own
+   even/odd FRC; a half without members counts as SNR 1); even and odd member versions are written
+   too. The project labels are the hard labels.
+6. **Optional in-plane round** (`refine_inpl=yes`, off by default since 2026-10-12: unproven, it can
+   make things worse). One greedy in-plane round of `refine2D` against the sub-averages with the
+   classes fixed (`refine=inpl`, iteration 3, `trs=3`; the sigma2 state is estimated first when the
+   project has none that resolves), then step 5 again on the refined alignment with the split's
+   soft weights (`cls_expansion_weights.txt` and `cls_expansion_class_map.txt`, read back; the
+   project labels stay the split's).
 7. **Readouts per subclass** (`os_cls2D`, class map): `pop` (hard members), `neff` (the sum of the
    weights), `sep` (Ashman's D of the parent's first cut, 0 for a whole class) and `repro`, the
    cross-half correlation of the subclass's difference image to its most different sibling (even

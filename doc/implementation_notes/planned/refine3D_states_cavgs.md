@@ -567,9 +567,10 @@ Current behaviour of `cls_expansion` that bears on this program (since
 2026-10-12). `ncls` is the total number of sub-classes, budgeted over
 class-average groups and classes; a class too small to split is kept whole, so
 some rows are whole-class averages (a parent with a single row in `cls2D`). The
-final restoration pass reuses the split's soft weights on the refined alignment:
-the averages are soft, `neff` is the sum of a sub-class's weights, `sep` is the
-split's, and the particle labels stay the split's hard, most likely sub-class.
+averages are made from the split's soft weights (on the refined alignment when
+the optional in-plane round, `refine_inpl=yes`, runs; it is off by default):
+`neff` is the sum of a sub-class's weights, `sep` is the split's, and the
+particle labels are the split's hard, most likely sub-class.
 A sub-class can end with no hard members (`pop` 0, `neff` > 0); it keeps its row
 and average. `cls2D` is rebuilt with state 1 on every `cls3D` row, so fresh
 output always goes through flex here.

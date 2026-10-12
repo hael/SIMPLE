@@ -45,65 +45,80 @@ contains
             return
         endif
         call build%kill_general_tbox
-        ! 2. one greedy in-plane round of refine2D against the sub-averages, classes fixed; the
-        !    sigma2 state is estimated first when the project has none that resolves
-        call spproj%read_segment('projinfo', params%projfile)
-        call spproj%get_sigma2_state_path(sigma2_path, l_sigma2)
-        if( l_sigma2 ) l_sigma2 = file_exists(sigma2_path%to_char())
-        call spproj%read_segment('cls2D', params%projfile)
-        nsub = spproj%os_cls2D%get_noris()
-        call spproj%kill
-        if( .not. l_sigma2 )then
-            write(logfhandle,'(A)') '>>> CLS_EXPANSION: no usable sigma2 state in the project; estimating it with calc_pspec'
-            cline_pspec = cline
-            call cline_pspec%set('prg',   'calc_pspec')
-            call cline_pspec%set('mkdir', 'no')
-            call cline_pspec%delete('class')
-            call cline_pspec%delete('neigs')
-            call cline_pspec%delete('lp')
-            call cline_pspec%delete('minpop')
-            call cline_pspec%delete('nclust')
-            call xcalc_pspec%execute(cline_pspec)
-            call cline_pspec%kill
+        if( trim(params%refine_inpl) == 'yes' )then
+            call refine_inpl_and_restore
+        else
+            write(logfhandle,'(A)') '>>> CLS_EXPANSION: no in-plane refinement (refine_inpl=no); the averages of the split are final'
         endif
-        cline_c2d = cline
-        call cline_c2d%set('prg',      'refine2D')
-        call cline_c2d%set('projfile', params%projfile%to_char())
-        call cline_c2d%set('refs',     FLEX_CLS_CAVGS_FILE)
-        call cline_c2d%set('ncls',     nsub)
-        call cline_c2d%set('refine',   'inpl')
-        call cline_c2d%set('maxits',   1)
-        call cline_c2d%set('startit',  3)
-        call cline_c2d%set('trs',      3.0)
-        call cline_c2d%set('mkdir',    'no')
-        call cline_c2d%delete('class')
-        call cline_c2d%delete('neigs')
-        call cline_c2d%delete('lp')
-        call cline_c2d%delete('minpop')
-        call cline_c2d%delete('nclust')
-        write(logfhandle,'(A)') '>>> CLS_EXPANSION: one greedy in-plane round of refine2D against the sub-averages'
-        call xrefine2D%execute(cline_c2d)
-        call cline_c2d%kill
-        call sigma2_path%kill
-        ! 3. the restoration from the refined alignment with the split's soft weights; the hard labels stay the split's
-        open(newunit=funit, file=FLEX_CLS_RESTORE_FLAG, status='replace', action='write')
-        write(funit,'(A)') 'restore'
-        close(funit)
-        cline_restore = cline
-        call cline_restore%set('mkdir', 'no')
-        write(logfhandle,'(A)') '>>> CLS_EXPANSION: restoring the sub-averages from the refined alignment'
-        strategy = create_cls_expansion_strategy(cline_restore)
-        call strategy%initialize(params, build, cline_restore)
-        call strategy%execute(params, build, cline_restore)
-        call strategy%finalize_run(params, build, cline_restore)
-        call strategy%cleanup(params)
-        if( allocated(strategy) ) deallocate(strategy)
-        call del_file(FLEX_CLS_RESTORE_FLAG)
-        call cline_restore%kill
         write(logfhandle,'(A)') '>>> CLS_EXPANSION: weighted sub-class averages in cls_expansion_cavgs.mrc (plus even/odd), &
             &responsibilities in cls_expansion_weights.txt'
-        call build%kill_general_tbox
         call simple_end('**** SIMPLE_CLS_EXPANSION NORMAL STOP ****')
+
+    contains
+
+        !> optional (refine_inpl=yes): one in-plane refine2D round against the sub-averages, then the averages again
+        !! on the refined alignment
+        subroutine refine_inpl_and_restore
+            ! 2. one greedy in-plane round of refine2D against the sub-averages, classes fixed; the
+            !    sigma2 state is estimated first when the project has none that resolves
+            call spproj%read_segment('projinfo', params%projfile)
+            call spproj%get_sigma2_state_path(sigma2_path, l_sigma2)
+            if( l_sigma2 ) l_sigma2 = file_exists(sigma2_path%to_char())
+            call spproj%read_segment('cls2D', params%projfile)
+            nsub = spproj%os_cls2D%get_noris()
+            call spproj%kill
+            if( .not. l_sigma2 )then
+                write(logfhandle,'(A)') '>>> CLS_EXPANSION: no usable sigma2 state in the project; estimating it with calc_pspec'
+                cline_pspec = cline
+                call cline_pspec%set('prg',   'calc_pspec')
+                call cline_pspec%set('mkdir', 'no')
+                call cline_pspec%delete('class')
+                call cline_pspec%delete('neigs')
+                call cline_pspec%delete('lp')
+                call cline_pspec%delete('minpop')
+                call cline_pspec%delete('nclust')
+                call cline_pspec%delete('refine_inpl')
+                call xcalc_pspec%execute(cline_pspec)
+                call cline_pspec%kill
+            endif
+            cline_c2d = cline
+            call cline_c2d%set('prg',      'refine2D')
+            call cline_c2d%set('projfile', params%projfile%to_char())
+            call cline_c2d%set('refs',     FLEX_CLS_CAVGS_FILE)
+            call cline_c2d%set('ncls',     nsub)
+            call cline_c2d%set('refine',   'inpl')
+            call cline_c2d%set('maxits',   1)
+            call cline_c2d%set('startit',  3)
+            call cline_c2d%set('trs',      3.0)
+            call cline_c2d%set('mkdir',    'no')
+            call cline_c2d%delete('class')
+            call cline_c2d%delete('neigs')
+            call cline_c2d%delete('lp')
+            call cline_c2d%delete('minpop')
+            call cline_c2d%delete('nclust')
+            call cline_c2d%delete('refine_inpl')
+            write(logfhandle,'(A)') '>>> CLS_EXPANSION: one greedy in-plane round of refine2D against the sub-averages'
+            call xrefine2D%execute(cline_c2d)
+            call cline_c2d%kill
+            call sigma2_path%kill
+            ! 3. the restoration from the refined alignment with the split's soft weights; the hard labels stay the split's
+            open(newunit=funit, file=FLEX_CLS_RESTORE_FLAG, status='replace', action='write')
+            write(funit,'(A)') 'restore'
+            close(funit)
+            cline_restore = cline
+            call cline_restore%set('mkdir', 'no')
+            write(logfhandle,'(A)') '>>> CLS_EXPANSION: restoring the sub-averages from the refined alignment'
+            strategy = create_cls_expansion_strategy(cline_restore)
+            call strategy%initialize(params, build, cline_restore)
+            call strategy%execute(params, build, cline_restore)
+            call strategy%finalize_run(params, build, cline_restore)
+            call strategy%cleanup(params)
+            if( allocated(strategy) ) deallocate(strategy)
+            call del_file(FLEX_CLS_RESTORE_FLAG)
+            call cline_restore%kill
+            call build%kill_general_tbox
+        end subroutine refine_inpl_and_restore
+
     end subroutine exec_cls_expansion
 
 end module simple_commanders_denoise

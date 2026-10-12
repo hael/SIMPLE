@@ -174,6 +174,7 @@ contains
         call reg%add_char('prg', self%prg)
         call reg%add_char('print_states', self%print_states)
         call reg%add_char('prob_inpl', self%prob_inpl)
+        call reg%add_char('refine_inpl', self%refine_inpl)
         call reg%add_char('prob_neigh_mode', self%prob_neigh_mode)
         call reg%add_char('proj_is_class', self%proj_is_class)
         call reg%add_char('addon_diag', self%addon_diag)
