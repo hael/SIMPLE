@@ -1235,13 +1235,7 @@ subroutine exec_test_species_discovery( self, cline )
                 &count(match > 0 .and. cls == 2 .and. gel(max(match,1)) == el2) >&
                 &count(match > 0 .and. cls == 2 .and. gel(max(match,1)) == ELEMS(1)))
             if( l_list )then
-                if( trim(CASES(ic)) == 'core' )then
-                    ! reported (ruling of 2026-10-09, fifth): the own-width intensity mislabelled the Ni atom at the
-                    ! centre; floored again once a build shows the common width of the plan's 3.5 labels it right
-                    call gate%report(tag//': found atoms with the wrong element (reported)', real(nwrong))
-                else
-                    call gate%check(tag//': every found atom carries its element', nwrong == 0)
-                endif
+                call gate%check(tag//': every found atom carries its element', nwrong == 0)
                 call gate%check(tag//': two-class fit admissible', report_string(txt, 'admissible_K2') == 'yes')
                 call gate%metric(tag//': '//el2//' recall over eligible', recall_of(elig .and. gel == el2, hits),&
                     &MIN_LIGHT_RECALL, recall_of(elig .and. gel == el2, hits) >= MIN_LIGHT_RECALL)

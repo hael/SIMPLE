@@ -73,10 +73,14 @@ contains
         call assert_true(all(b%get_coord(3) == a%get_coord(3)), 'copy keeps the coordinates')
         c = a
         call assert_true(all(c%get_coord(2) == a%get_coord(2)), 'assignment keeps the coordinates')
+        call a%set_occupancy(2, 0.37)
         call a%extract_atom(one, 2)
         call assert_int(1, one%get_n(), 'extract_atom gives one atom')
         call assert_true(all(one%get_coord(1) == a%get_coord(2)), 'extract_atom keeps the coordinates')
         call assert_char('O ', one%get_element(1), 'extract_atom keeps the element')
+        call assert_real(0.37, one%get_occupancy(1), 0., 'extract_atom keeps the occupancy')
+        call assert_real(12.5, one%get_beta(1), 0., 'extract_atom keeps the B factor')
+        call assert_int(7, one%get_resnum(1), 'extract_atom keeps the residue number')
         call a%kill
         call assert_int(0, a%get_n(), 'kill leaves no atoms')
         call b%kill

@@ -1332,18 +1332,19 @@ contains
         real         :: s, d, dv, sig_ref, sig2n, s_a, s_i, rob_ratio, k_a, k_b, c_search_a, c_region, z_mu, z_sd
         real,    allocatable :: bic(:)
         logical, allocatable :: adm(:)
-        real         :: efalse_a, efalse_b, half_agree, half_corr
+        real         :: efalse_a, efalse_b, half_agree, half_corr, cn_slope
         integer      :: ldim(3), n, n1, nreg, nsearch_a, nsearch_b, nadded(2,MAX_LEVELS), npruned, K, stage, level
         integer      :: nnew, i, iround, isweep
         logical      :: l_halves
         if( self%d_nn <= 0. ) THROW_HARD('d_NN was not measured; discover_species')
         write(logfhandle,'(A)') '>>> SPECIES DISCOVERY (DIAGNOSTICS ONLY)'
-        s       = self%smpd
-        d       = self%d_nn
-        dv      = d / s
-        sig_ref = sqrt(B_REF_PSEUDO / (8. * PI**2))
-        ldim    = self%ldim
-        map     = self%img_raw%get_rmat()
+        s        = self%smpd
+        d        = self%d_nn
+        dv       = d / s
+        sig_ref  = sqrt(B_REF_PSEUDO / (8. * PI**2))
+        ldim     = self%ldim
+        cn_slope = 0.
+        map      = self%img_raw%get_rmat()
         ! the map as read, before the mask: the noise region extends beyond the particle's mask (3.2)
         call img_tmp%new(ldim, s)
         call img_tmp%read(self%npname)
@@ -1414,6 +1415,7 @@ contains
         enddo
         call build_region
         call noise_stats(.true.)
+        call geometry
         call calc_aperture_int
         call assign_species
         do iround = 1,NROUNDS_STAGE2
@@ -1424,7 +1426,6 @@ contains
             call assign_species
         enddo
         call recovered_valid_corr
-        call geometry
         if( l_halves ) call halfmap_agreement
         call write_species_report
         call write_radial_profiles
@@ -1703,9 +1704,9 @@ contains
             integer :: j, kc
             do j = 1,n
                 kc = tab(j)%species
-                if( mu(kc) <= 0. ) cycle
+                if( expected_int(j, kc) <= 0. ) cycle
                 tau = max(sqrt(max(var(kc) - s_i**2, 0.)), TAU_CLASS_MIN * mu(kc))
-                call fit_one(j, i_class=mu(kc), tau_class=tau)
+                call fit_one(j, i_class=expected_int(j, kc), tau_class=tau)
             enddo
             call update_background
         end subroutine tied_sweep
@@ -1918,17 +1919,30 @@ contains
             aperture_fraction = enclosed_fraction(0.5 * d / sqrt(median(tab(:n)%bfac) / (8. * PI**2)))
         end function aperture_fraction
 
-        ! mixture of the aperture intensities (3.6)
+        ! mixture of the aperture intensities (3.6), with one term in the coordination number shared by the classes
         subroutine assign_species
             integer :: j
             if( allocated(labels) ) deallocate(labels)
             allocate(labels(n))
             x = tab(:n)%aper_int
-            call fit_species_mixture(x, s_i, self%nspecies, K, labels, post, mu, var, bic, adm)
+            call fit_species_mixture(x, s_i, self%nspecies, K, labels, post, mu, var, bic, adm,&
+                &cov=cn_cov(), slope=cn_slope)
             do j = 1,n
                 tab(j)%species = labels(j)
             enddo
         end subroutine assign_species
+
+        ! the covariate of the class fit: each atom's contacts (geometry) less those of a close-packed site
+        function cn_cov() result( c )
+            real :: c(n)
+            c = real(coord(:n)) - CN_CLOSE_PACKED
+        end function cn_cov
+
+        ! the intensity the class fit expects of atom j in class kc
+        real function expected_int( j, kc )
+            integer, intent(in) :: j, kc
+            expected_int = mu(kc) + cn_slope * (real(coord(j)) - CN_CLOSE_PACKED)
+        end function expected_int
 
         ! valid_corr of the recovered atoms against the simulation with class intensities and own widths
         subroutine recovered_valid_corr
@@ -1942,7 +1956,7 @@ contains
             do j = 1,n
                 call atms%set_element(j, 'X1')
                 call atms%set_coord(j, (tab(j)%center - 1.) * s)
-                call atms%set_occupancy(j, max(mu(tab(j)%species), 0.))
+                call atms%set_occupancy(j, max(expected_int(j, tab(j)%species), 0.))
                 call atms%set_beta(j, tab(j)%bfac)
                 cutoff = max(cutoff, 4. * sqrt(tab(j)%bfac / (8. * PI**2)))
             enddo
@@ -1992,20 +2006,22 @@ contains
             enddo
             nagree = 0
             do j = 1,n
-                if( classify(ie(j)) == classify(io(j)) ) nagree = nagree + 1
+                if( classify(ie(j), j) == classify(io(j), j) ) nagree = nagree + 1
             enddo
             half_agree = real(nagree) / real(n)
             half_corr  = pearsn_serial(ie, io)
         end subroutine halfmap_agreement
 
-        integer function classify( xi )
-            real, intent(in) :: xi
+        ! the class of intensity xi measured at atom j under the final mixture
+        integer function classify( xi, j )
+            real,    intent(in) :: xi
+            integer, intent(in) :: j
             real    :: lp(K), w
             integer :: kc
             do kc = 1,K
                 w = real(count(labels == kc)) / real(n)
                 if( w > 0. )then
-                    lp(kc) = log(w) - 0.5 * log(var(kc)) - 0.5 * (xi - mu(kc))**2 / var(kc)
+                    lp(kc) = log(w) - 0.5 * log(var(kc)) - 0.5 * (xi - expected_int(j, kc))**2 / var(kc)
                 else
                     lp(kc) = -huge(1.)
                 endif
@@ -2147,6 +2163,9 @@ contains
             do kc = 1,K-1
                 call write_kv(funit, 'separation_D_'//int2str(kc)//'_'//int2str(kc+1), rstr(class_separation(mu(kc), var(kc), mu(kc+1), var(kc+1))))
             enddo
+            ! the class intensities are those of an atom with CN_CLOSE_PACKED contacts; the slope is per contact
+            call write_kv(funit, 'coord_slope', rstr(cn_slope))
+            if( abs(mu(1)) > TINY ) call write_kv(funit, 'coord_slope_over_class_1', rstr(cn_slope / mu(1)))
             do l = 1,size(bic)
                 call write_kv(funit, 'bic_K'//int2str(l),        rstr(bic(l)))
                 call write_kv(funit, 'admissible_K'//int2str(l), merge('yes', 'no ', adm(l)))

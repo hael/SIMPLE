@@ -563,21 +563,35 @@ contains
         self%n          = n
         self%het        = self_in%het
         self%element    = self_in%element
+        self%charge     = self_in%charge
         self%radius     = self_in%radius
         self%atom_corr  = self_in%atom_corr
     end subroutine copy
 
+    ! atom i as a one-atom instance, every per-atom field copied as copy does
     subroutine extract_atom( self, self_atom, i )
-        class(atoms), intent(inout) :: self
-        type(atoms),  intent(out)   :: self_atom
-        integer,      intent(in)    :: i
+        class(atoms), intent(in)  :: self
+        type(atoms),  intent(out) :: self_atom
+        integer,      intent(in)  :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; extract_atom')
         call self_atom%new(1)
-        self_atom%name         = self%get_name(i)
-        self_atom%element      = self%get_element(i)
-        self_atom%xyz(1,:)     = self%get_coord(i)
-        self_atom%beta         = self%get_beta(i)
-        self_atom%Z            = self%get_atomicnumber(i)
-        self_atom%radius       = self%get_radius(i)
+        self_atom%name(1)      = self%name(i)
+        self_atom%resname(1)   = self%resname(i)
+        self_atom%chain(1)     = self%chain(i)
+        self_atom%altloc(1)    = self%altloc(i)
+        self_atom%icode(1)     = self%icode(i)
+        self_atom%mw(1)        = self%mw(i)
+        self_atom%xyz(1,:)     = self%xyz(i,:)
+        self_atom%beta(1)      = self%beta(i)
+        self_atom%occupancy(1) = self%occupancy(i)
+        self_atom%num(1)       = self%num(i)
+        self_atom%resnum(1)    = self%resnum(i)
+        self_atom%Z(1)         = self%Z(i)
+        self_atom%het(1)       = self%het(i)
+        self_atom%element(1)   = self%element(i)
+        self_atom%charge(1)    = self%charge(i)
+        self_atom%radius(1)    = self%radius(i)
+        self_atom%atom_corr(1) = self%atom_corr(i)
     end subroutine extract_atom
 
     ! CHECKERS

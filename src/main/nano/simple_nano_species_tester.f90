@@ -21,6 +21,7 @@ contains
         call test_size_floor()
         call test_three_classes()
         call test_four_classes()
+        call test_coordination_term()
         call test_calibration()
         call test_gauss_width()
         call test_gauss_filter()
@@ -160,6 +161,42 @@ contains
         call assert_int(2, K, 'a class at the size floor gives K = 2')
         call assert_true(all(labels(1:N-8) == 1) .and. all(labels(N-7:N) == 2), 'a class at the size floor: every label right')
     end subroutine test_size_floor
+
+    ! one term in a covariate shared by the classes (the coordination number less 12, here 5 to 12 contacts): one
+    ! class under a slope gives its slope and its value at 12 contacts; two classes 0.25 apart under the same slope,
+    ! which spreads each over 0.35, are found with their labels (numpy check of this method: 16 draws of 16)
+    subroutine test_coordination_term()
+        integer, parameter :: N = 200, N2 = 50
+        real,    parameter :: SLOPE0 = 0.05, SD0 = 0.04
+        real, allocatable  :: post(:,:), mu(:), var(:)
+        real,    allocatable :: bic(:)
+        logical, allocatable :: adm(:)
+        real    :: x(N), c(N), slope
+        integer :: labels(N), truth(N), K, i
+        write(*,'(A)') 'test_coordination_term'
+        do i = 1,N
+            c(i) = real(mod(i, 8)) - 7.
+        enddo
+        call set_fixed_seed(20261012)
+        call draw(x, 0, N, 1., SD0)
+        x = x + SLOPE0 * c
+        call fit_species_mixture(x, SD0, 1, K, labels, post, mu, var, cov=c, slope=slope)
+        call assert_int(1, K, 'one class under a slope: nspecies = 1 fixes K')
+        call assert_real(SLOPE0, slope, 0.005, 'one class under a slope: the slope is recovered')
+        call assert_real(1., mu(1), 0.015, 'one class under a slope: its value at 12 contacts')
+        truth(1:N-N2)   = 1
+        truth(N-N2+1:N) = 2
+        call set_fixed_seed(20261013)
+        call draw(x,    0, N-N2, 1.,   SD0)
+        call draw(x, N-N2,   N2, 0.75, SD0)
+        x = x + SLOPE0 * c
+        call fit_species_mixture(x, SD0, 2, K, labels, post, mu, var, bic, adm, cov=c, slope=slope)
+        call assert_int(2, K, 'two classes under a slope: nspecies = 2 fixes K')
+        call assert_true(adm(2), 'two classes under a slope: the two-class fit is admissible')
+        call assert_true(count(labels == truth) >= nint(0.98 * N), 'two classes under a slope: 98% of the labels right')
+        call assert_real(0.75,   mu(2), 0.025, 'two classes under a slope: the value of class 2 at 12 contacts')
+        call assert_real(SLOPE0, slope, 0.008, 'two classes under a slope: the shared slope')
+    end subroutine test_coordination_term
 
     ! case 12 of the plan: 264, 132 and 132 atoms at intensities 1, 0.5 and 0.167, spread 0.04 (D >= 8)
     subroutine test_three_classes()

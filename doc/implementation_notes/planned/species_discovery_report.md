@@ -180,6 +180,9 @@ All are recorded in Progress (section 16) under the phase named.
      fixed.
    - `atoms%extract_atom` does not copy the occupancy, so a pseudo-atom
      extracted with it renders with zero intensity.
+   - Both are settled since. Phase 4 of the second run repaired the
+     compound selectors, and on 2026-10-12 `extract_atom` was made to copy
+     every per-atom field (note, Progress, before phase 9).
 5. **The open questions Q1 to Q7 of section 13 remain open.** The prototype
    took the recommended defaults: radius from the centre, the close-packed
    cutoff, both widths reported, and the splitting exclusion at `0.21 d_NN`.
@@ -356,6 +359,7 @@ All are recorded in Progress under the phase named.
 1. **The intensity bias** of the aperture intensity on filtered element
    kernels: a known limitation (note, section 7), and the one central Ni
    atom of the core case. Phase 6's attempt, and why it failed, is in 10.7.
+   The central atom is labelled right since the common width of item 7.
 2. **`single_workflow_wurtzite` fails at the base revision too.** It
    crashes in `refine3D` (`simple_strategy3D_srch.f90:211`, `subspace_inds`
    past its bound), and its runs are not reproducible from one run to the
@@ -404,5 +408,216 @@ All are recorded in Progress under the phase named.
      each, including the Ni atom at the centre of the core case that phase
      5 had called Pt; `D` rose by 1 to 3.
    - Note sections 3.5, 3.7 and 7 record it. The pure case's report now
-     shows the forced classes' `D`, the floor's margin. Not yet compiled or
-     run in SIMPLE.
+     shows the forced classes' `D`, the floor's margin. The maintainer's
+     build and test run passed, and the fix was committed as `0029ed77e`.
+     On 2026-10-12 a build that also carried the coordination term labelled
+     every atom of the core case right, the centre Ni atom included, and
+     that case's label floor was restored.
+
+# Third run: species_validation_r2, phases 7 and 8 (2026-10-11)
+
+Carried out unattended on dell under delegation, on the maintainer's
+checkout at `c28bfc101`. That revision carries the fix of the automatic mask
+of `detect_atoms` and takes discovery's noise region from the map as read
+(note, sections 7 and 3.2). It is a measurement run: no source file changed.
+The note's section 16 (Progress) holds the detail. Paths below are relative
+to the run directory `/home/elmlundho/agent_runs/species_validation_r2`. The
+tables, the scripts that made them and every `detect_atoms` log are in
+`scratch/keep/validation/`; this section does not reproduce them. No ruling
+was issued. Both phases ended with their exit criteria met. Of 10.9's six
+expectations two held (one class on 95% of the maps, the control never a
+class) and four did not (every map reproduced, `Pt,Ni` inadmissible on 95%,
+the planted class found, the diameter within 15% everywhere), as reported
+below.
+
+A first attempt at this validation (run `species_validation`, the same day)
+found that the mask estimate covered the whole box on these unmasked maps.
+The present detection then reproduced only 33 of the 66 maps, and on 11 it
+returned background. Its numbers are compared below wherever the fix
+changed them.
+
+Terms. `detect_atoms` first runs the present detection, called level 1:
+template correlation, a threshold, connected components, splitting, and
+pruning by contact score. It writes five products, the atoms
+(`_ATMS.pdb`) and four maps. With `discover_species=yes` it then adds the
+recovered atoms: weaker atoms found in the residual map and pruned by the
+same contact-score policy. It measures each atom's aperture intensity (the
+density summed in a sphere of half the nearest-neighbour distance) and fits
+one to three intensity classes. A two-class fit is admissible when both
+classes are large enough and separated by `D` of 3 or more (`D` is the
+distance of the class means over their pooled spread). The five runs per map
+are run 1 `element=Pt` (the present detection), run 2 `element=Pt
+discover_species=yes`, run 3 `element=Pt,Ni` (two classes asserted), run 4
+no element (level 1 with a Gaussian template), and run 5 no element with
+`discover_species=yes`.
+
+## What changed, phase by phase
+
+**Phase 7, five runs of `detect_atoms` on the 66 maps**
+(`review/phase_7.diff`: the note's Progress only).
+- Release build with tests, the fast gate (the quick unit tests every build
+  runs) and the five CTest entries, all passing before any map. The fast
+  gate included the two new mask checks.
+- The 66 maps of `/data/NanoX/zenodo` with their stored coordinates, five
+  runs each with the program's own mask, 330 runs.
+- Per-map tables `validation.tsv` and `environment.tsv`.
+
+**Phase 8, planted classes and the comparison across maps**
+(`review/phase_8.diff`: the note's Progress and this section).
+- 20% of the level-1 atoms inside the pruning zone of each map were dimmed
+  to a fraction `r` of their density, with the map's own background noise
+  put back. The levels were `r` = 0.6, 0.4 and 0.25, plus a control that
+  adds the noise alone. That is 264 planted maps and 3792 planted atoms.
+- Runs 2, 3 and 5 on each planted map, 792 runs, in `planted.tsv`.
+
+## Decisions taken under delegation
+
+All are recorded in Progress under the phase named.
+- Phase 7:
+  - The first attempt's scripts were reused, with two log lines added: the
+    measured particle diameter and its ratio to the coordinate extent. The
+    two runs therefore measure the same way.
+  - The kept recovered atoms were also judged against the stored
+    coordinates, which the first attempt did not do.
+- Phase 8: the planting is the first attempt's `plant.py`, unchanged but for
+  paths. That covers four choices:
+  - the zone centre is the mean of the level-1 atoms;
+  - the random seed is `crc32` of the map name;
+  - the background patch comes from beyond the outermost atom plus two
+    nearest-neighbour distances;
+  - the header is copied byte for byte.
+  The planted atoms are therefore the same wherever the two runs' level-1
+  atoms agree.
+
+## Deviations from the plan, and why
+
+None in what was run. 10.9 gives the stored atom count's median as 315; it is
+313 (the two middle values are 311 and 315), as the first attempt also
+found.
+
+## Evidence against the baseline
+
+- `single_atoms_stats` shows exactly the numbers of phase 0 of the first run:
+  - 285 of 285 atoms;
+  - recall and precision 1.0000;
+  - 0.0148 A root-mean-square error;
+  - correlation 0.9997.
+  Its three CdSe entries show the numbers of phase 4.
+- `species_discovery` passes with no failed check. Every metric that moved
+  against the first attempt is named in Progress. They moved by at most a
+  few percent, from the new mask on the simulated box and the new noise
+  region, for example:
+  - the alloy's intensity ratio went from 0.4350 to 0.4324;
+  - the present detection found one more atom on the core particle.
+- The five present products are byte-identical between runs 1, 2 and 3 and
+  between runs 4 and 5 on all 66 maps.
+
+## Across maps, against the expectations of 10.9
+
+| Item | Expected | This run | First attempt |
+| --- | --- | --- | --- |
+| present path, maps reproduced (98% of stored atoms within 1 A) | every map | 56 of 66 (run 1), 47 (run 4) | 33, 44 |
+| one class found | 95% of maps | 95.5% (run 2), 97.0% (run 5) | 93.9%, 93.9% |
+| `Pt,Ni` two-class fit inadmissible | 95% | 93.9% (62 of 66) | 92.4% |
+| planted class found at `r` 0.6 and 0.4 (recall 0.9, at most one false label), best of runs 2 and 5 | 90% of maps | 0 and 1 of 66 | 0 and 2 |
+| control reported as a second class | never | never | never |
+| measured particle diameter within 15% of the coordinate extent | every map | 64 of 66 (ratio 0.91 to 1.27) | none (its mask was 2.9 to 4.0 times the extent) |
+
+- **Present path.** The fix brought every map's particle back: no map
+  matches below 84%, where 11 were below 50%. The ten maps short of 98% in
+  run 1 are ESC1_time28s 0.849, FCHCS1_time23s 0.923 (0.996 in the first
+  attempt), ESC4_time04s 0.947, EFC2_time39s 0.956, FC1_time21s 0.960,
+  EFC1_time29s 0.961, ESIP2_time27s 0.966, ECT2_time15s 0.973, ECT2_time22s
+  0.977 and ESIP1_time03s 0.979. The remaining misses are
+  surface atoms in seven of the ten maps that fall short, and interior atoms
+  on three of them (ESIP2_time27s, FCHCS1_time23s, EFC1_time29s). The mask
+  cuts no stored atom on any of them. ESC1_time28s is the worst (0.849), and
+  it is sensitive to the mask:
+  - run 4 matches 0.989 on the same map;
+  - a mask of 37.8 A instead of the automatic 40.1 A matched 568 of 569 in
+    the first attempt.
+  Eight maps the first attempt reproduced without an element now fall just
+  short (0.960 to 0.979).
+- **False positives.** The three maps with a second class are:
+  - EFC4_time03s and ESC4_time01s: 22 and 11 atoms at about 0.4 to 0.5 of
+    the Pt intensity, every one in the outer zone, so the surface-confined
+    flag fires;
+  - ESIP2_time05s: 12 atoms brighter than the rest.
+  The forced `Pt,Ni` separation `D` runs from 0.01 to 7.72 (median 1.92).
+  The surface-confined flag fires on 2, 11 and 1 maps in runs 2, 3 and 5.
+  Kept recovered atoms number 0 to 117 per map (median 12.5) in run 2.
+  Of the 1534 recovered atoms kept in run 2, 187 sit on stored atoms that
+  level 1 missed. The other 1347 sit one bond length (median 2.57 A) from
+  the nearest stored atom, at sites the stored model does not hold. Their
+  detection z is 4.8 to 9.5 for 80% of them (z is the residual peak in noise
+  standard deviations). They never form a class of their own.
+- **Environment.** These numbers changed by at most 0.1 A^2 or a few
+  thousandths with the fix:
+  - the aperture intensity rises with coordination, by +3.8% per neighbour
+    at the median map, and is 26% higher at 12 neighbours than at 5;
+  - it falls from 1.14 to 0.87 of the map mean between the inner and the
+    outer fifth of the atoms;
+  - the fitted width is flat: B 28.9 A^2 at 6 neighbours, 28.3 at 12, and
+    flat with radius (median slope -0.45 A^2 against `(r / r_max)^2`).
+  On the simulated particles of the note's section 7, the intensity fell
+  with coordination and the width fell by 4 A^2. The real maps show neither
+  artefact, and their intensity trend has the opposite sign. Partial
+  occupancy and disorder of the surface are a likely reason, not tested
+  here; the B-factor work needs to know which it is.
+- **Time series.** There is one class in runs 2 and 5 at every time point
+  of 12 of the 15 particles. The exceptions are single time points (EFC4 at
+  3 s in run 2 only, ESC4 at 1 s, ESIP2 at 5 s). The recovered counts do not
+  stay the same within a particle (EFC2 1 to 56, ESC1 24 to 111).
+- **Sensitivity.**
+  - At `r` = 0.6 the planted atoms are detected (99% at the median map) but
+    form no class. Their measured intensity, 0.73 of the rest, lies inside
+    the spread of real Pt intensities, which is about twice the measurement
+    noise.
+  - At 0.4 and 0.25 a second class appears on about a third of the maps
+    (21 and 25 of 66), clustered by particle: every time point of ESC4 and
+    FCHCS1, and five of EFC4's six. There its recall is 0.83 and 0.72,
+    its precision about 0.8, and it carries about ten false labels.
+  - The fitted class ratio is above `r` by +0.13 at 0.4 and +0.20 at 0.25
+    (medians; range +0.06 to +0.33), and equals the measured intensity of
+    the planted atoms on those maps (0.53 against 0.54 at 0.4, 0.45 against
+    0.45 at 0.25). At 0.6 it is 0.05 below `r` on the four maps with two
+    classes, whose class 2 is only about half planted atoms (precision 0.47).
+  - On the other maps one class is reported.
+  - `Pt,Ni` forces two classes everywhere, with median precision 0.26,
+    0.41 and 0.33 at the three levels and the fitted ratio +0.13 to +0.40
+    above `r`.
+  - In 10.9's sense the class is found on at most one map at any level,
+    so there is no `r` below which it is found.
+  - The first attempt measured the same picture, so the fix did not change
+    the sensitivity.
+
+## Left open for the maintainer
+
+1. **Sensitivity on real maps is far below the expectation.** A class at
+   0.6 of the Pt intensity is not separated, and at 0.4 it is separated
+   only on a third of the maps. The limit is the spread of the real
+   aperture intensities, about twice their noise, with the coordination
+   and radius trends above. It is not detection. Whether to model that
+   spread is open: per-shell or per-coordination normalisation, or the
+   density likelihood of note section 5. That decision belongs before any
+   promotion (10.8). Ruled on 2026-10-12: the class fit gets one intensity
+   term in the coordination number, shared by the classes (note, 10.10).
+   It was implemented by hand the same day and passed the maintainer's
+   tests. A fourth run, phase 9 (10.11), measures it on the 66 maps.
+2. **The recovered atoms off the stored model.** These are about 20 per
+   map, one bond from a stored atom, mostly in the outer half of the
+   particle (median radius 0.87 of the outermost atom) but often with many
+   found neighbours (median 9). Whether they are partly occupied
+   sites or noise cannot be decided from the stored coordinates, and half
+   maps would tell. Recall also that the expected number of noise maxima
+   above the stage-B threshold is 2 to 4 per map on these boxes, above the
+   target of 0.2 that the stage-A threshold meets.
+3. **The present path on ten maps** matches 85% to 98% of the stored atoms.
+   On ESC1_time28s it depends on the mask diameter (40.1 A gives 0.849,
+   37.8 A gave 0.998). The 1.2 factor between the particle diameter and the
+   mask may deserve a look on non-spherical particles. Two maps' diameters
+   are 19% and 27% above the coordinate extent (EFC2_time18s, EFC2_time39s).
+4. **`Pt,Ni` admissible on four maps**, one more than 10.9's 5% allows:
+   EFC4_time03s, ESC4_time01s, ESIP1_time08s and ESIP2_time05s.
+5. Figures are left for the Mac, from `validation.tsv`, `environment.tsv`
+   and `planted.tsv`.

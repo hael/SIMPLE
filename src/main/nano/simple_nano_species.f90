@@ -2,7 +2,7 @@
 ! Array numerics with no image dependence; the design is doc/implementation_notes/planned/species_discovery.md
 ! (sections 3.2 to 3.7).
 module simple_nano_species
-use simple_defs,          only: dp, DPI
+use simple_defs,          only: dp, DPI, DTINY
 use simple_error,         only: simple_exception
 use simple_srch_sort_loc, only: hpsort
 use simple_stat,          only: median
@@ -19,14 +19,18 @@ integer,  parameter :: MAX_NSPECIES    = 3      ! largest number of classes trie
 real,     parameter :: MIN_SEPARATION  = 3.     ! adjacent classes need a separation D of at least this
 integer,  parameter :: MIN_CLASS_ATOMS = 8      ! a class holds at least max(MIN_CLASS_ATOMS, MIN_CLASS_FRAC * N) atoms
 real,     parameter :: MIN_CLASS_FRAC  = 0.02
-integer,  parameter :: MAXITS_EM       = 1000
-real(dp), parameter :: TOL_EM          = 1.d-10 ! relative change of the log-likelihood that ends EM
+integer,  parameter :: MAXITS_EM       = 200    ! a fit still moving after this many iterations is crawling on a flat likelihood
+real(dp), parameter :: TOL_EM          = 1.d-8  ! relative change of the log-likelihood that ends EM
 real(dp), parameter :: PI_MIN_EM       = 1.d-6  ! mixing floor of the deconvolution fit: a component below it freezes
 real,     parameter :: U_MAX           = 50.    ! upper end of the threshold search
 real,     parameter :: BFAC_MIN        = 1.     ! range of the width search, B in A**2
 real,     parameter :: BFAC_MAX        = 200.
 integer,  parameter :: NGRID_B         = 100    ! log-spaced grid of the width search before golden-section refinement
 integer,  parameter :: NGOLD_B         = 40
+integer,  parameter :: NITER_SLOPE     = 20     ! alternations of the class fit and the shared covariate slope
+real(dp), parameter :: SLOPE_TOL_REL   = 1.d-3  ! the slope has converged when it moves by less than this mean intensity
+real(dp), parameter :: TOL_SLOPE_EM    = 1.d-4  ! EM tolerance of the class fits inside the alternation
+real(dp), parameter :: TOL_SLOPE_FIN   = 1.d-6  ! EM tolerance of the class fit at the slope chosen
 
 contains
 
@@ -37,7 +41,9 @@ contains
     ! positive, kmax = K = nspecies_in; otherwise kmax = MAX_NSPECIES and K is the admissible K of lowest BIC.
     ! Classes are numbered by decreasing mean; post(i,k) is the posterior. A K fixed by nspecies_in is taken even
     ! when inadmissible, so a class may then hold no atom. bic and admissible are of size kmax.
-    subroutine fit_species_mixture( x, s_meas, nspecies_in, K, labels, post, mu, var, bic, admissible )
+    ! With cov, every intensity carries one term slope * cov(i) shared by the classes (3.6): mu is then the class
+    ! value at cov = 0, the slope is fitted for each K and counts as one more parameter, and slope returns that of K.
+    subroutine fit_species_mixture( x, s_meas, nspecies_in, K, labels, post, mu, var, bic, admissible, cov, slope )
         real,                           intent(in)  :: x(:)
         real,                           intent(in)  :: s_meas
         integer,                        intent(in)  :: nspecies_in
@@ -46,15 +52,20 @@ contains
         real,              allocatable, intent(out) :: post(:,:), mu(:), var(:)
         real,    optional, allocatable, intent(out) :: bic(:)
         logical, optional, allocatable, intent(out) :: admissible(:)
-        real(dp), allocatable :: mus(:,:), vars(:,:), ws(:,:), posts(:,:,:), bics(:)
+        real,    optional,              intent(in)  :: cov(:)
+        real,    optional,              intent(out) :: slope
+        real(dp), allocatable :: mus(:,:), vars(:,:), ws(:,:), posts(:,:,:), bics(:), slopes(:)
         logical,  allocatable :: adm(:)
         real(dp) :: X1(size(x),1), R(1,1,size(x)), Nz(1,1,size(x)), lnl
-        integer  :: n, kk, kmax
+        integer  :: n, kk, kmax, npar
         n = size(x)
         if( n < 1 )               THROW_HARD('no intensities; fit_species_mixture')
         if( nspecies_in < 0 )     THROW_HARD('nspecies must be 0 (automatic) or positive; fit_species_mixture')
         if( nspecies_in > n )     THROW_HARD('fewer intensities than nspecies; fit_species_mixture')
         if( s_meas <= 0. )        THROW_HARD('measurement spread must be positive; fit_species_mixture')
+        if( present(cov) )then
+            if( size(cov) /= n )  THROW_HARD('one covariate per intensity; fit_species_mixture')
+        endif
         X1(:,1) = real(x, dp)
         R       = 1._dp
         Nz      = real(s_meas, dp)**2
@@ -65,10 +76,18 @@ contains
         endif
         allocate(mus(kmax,kmax), vars(kmax,kmax), ws(kmax,kmax), posts(n,kmax,kmax), source=0._dp)
         allocate(bics(kmax), source=huge(1._dp))
+        allocate(slopes(kmax), source=0._dp)
         allocate(adm(kmax),  source=.false.)
         do kk = 1,kmax
-            call fit_k(X1, R, Nz, kk, mus(:kk,kk), vars(:kk,kk), ws(:kk,kk), posts(:,:kk,kk), lnl)
-            bics(kk) = -2._dp * lnl + real(3*kk-1, dp) * log(real(n, dp))
+            if( present(cov) )then
+                call fit_k_cov(X1, real(cov, dp), R, Nz, kk, mus(:kk,kk), vars(:kk,kk), ws(:kk,kk), posts(:,:kk,kk),&
+                    &lnl, slopes(kk))
+                npar = 3 * kk
+            else
+                call fit_k(X1, R, Nz, kk, mus(:kk,kk), vars(:kk,kk), ws(:kk,kk), posts(:,:kk,kk), lnl)
+                npar = 3 * kk - 1
+            endif
+            bics(kk) = -2._dp * lnl + real(npar, dp) * log(real(n, dp))
             adm(kk)  = is_admissible(posts(:,:kk,kk), mus(:kk,kk), vars(:kk,kk))
         enddo
         if( nspecies_in > 0 )then
@@ -85,6 +104,7 @@ contains
         var    = real(vars(:K,K))
         if( present(bic) )        bic        = real(min(bics, real(huge(1.), dp)))
         if( present(admissible) ) admissible = adm
+        if( present(slope) )      slope      = real(slopes(K))
     end subroutine fit_species_mixture
 
     ! D = |mu_a - mu_b| / sqrt((var_a + var_b) / 2)
@@ -345,16 +365,23 @@ contains
 
     ! Extreme-deconvolution fits of kk classes from the sorted-quantile and the largest-gap starts; the fit of
     ! higher likelihood, by decreasing mean. var is the observed class variance, intrinsic plus the noise.
-    subroutine fit_k( X1, R, Nz, kk, mu, var, w, post, lnl )
-        real(dp), intent(in)  :: X1(:,:), R(:,:,:), Nz(:,:,:)
-        integer,  intent(in)  :: kk
-        real(dp), intent(out) :: mu(kk), var(kk), w(kk), post(size(X1,1),kk), lnl
+    subroutine fit_k( X1, R, Nz, kk, mu, var, w, post, lnl, tol, mstart )
+        real(dp),           intent(in)  :: X1(:,:), R(:,:,:), Nz(:,:,:)
+        integer,            intent(in)  :: kk
+        real(dp),           intent(out) :: mu(kk), var(kk), w(kk), post(size(X1,1),kk), lnl
+        real(dp), optional, intent(in)  :: tol, mstart(kk)
         real(dp) :: mu2(kk), var2(kk), w2(kk), post2(size(X1,1),kk), lnl2, means0(1,kk)
         real     :: xs(size(X1,1)), gaps(size(X1,1)-1)
         integer  :: idx(size(X1,1)), gidx(size(X1,1)-1), bnd(kk+1), n, i, g, order(kk)
         n = size(X1,1)
-        call fit_from(mu, var, w, post, lnl)
-        if( kk > 1 )then
+        if( present(mstart) )then
+            ! one start, from the given means
+            means0(1,:) = mstart
+            call fit_from(mu, var, w, post, lnl, means0)
+        else
+            call fit_from(mu, var, w, post, lnl)
+        endif
+        if( kk > 1 .and. .not. present(mstart) )then
             ! the kk-1 largest gaps of the sorted sample bound the start groups
             xs  = real(X1(:,1))
             idx = [(i, i=1,n)]
@@ -392,7 +419,11 @@ contains
                 real(dp), optional, intent(in)  :: means0_o(1,kk)
                 type(xd_gmm) :: g
                 real(dp) :: m(1,kk), S(1,1,kk), xhat(size(X1,1),1), xcov(1,1,size(X1,1))
-                call g%new(1, kk, MAXITS_EM, TOL_EM, PI_MIN_EM)
+                if( present(tol) )then
+                    call g%new(1, kk, MAXITS_EM, tol, PI_MIN_EM)
+                else
+                    call g%new(1, kk, MAXITS_EM, TOL_EM, PI_MIN_EM)
+                endif
                 if( present(means0_o) )then
                     call g%init(X1, Nz, means0_o)
                 else
@@ -410,6 +441,78 @@ contains
             end subroutine fit_from
 
     end subroutine fit_k
+
+    ! fit_k with one slope on the covariate cv shared by the classes; mu is the class value at cv = 0. One class: the
+    ! least-squares slope, its maximum likelihood. Several: alternation of the classes fitted to x - slope cv (warm
+    ! started, at the loose TOL_SLOPE_EM) and the slope refitted as the within-class weighted regression of x on cv,
+    ! until it moves by less than SLOPE_TOL_REL of the mean intensity, from slope 0 and from the least-squares slope;
+    ! the likelier slope is kept (a species that follows cv, such as a core, pulls the least-squares start away) and
+    ! the classes refitted at it from their means at TOL_SLOPE_FIN
+    subroutine fit_k_cov( X1, cv, R, Nz, kk, mu, var, w, post, lnl, slope )
+        real(dp), intent(in)  :: X1(:,:), cv(:), R(:,:,:), Nz(:,:,:)
+        integer,  intent(in)  :: kk
+        real(dp), intent(out) :: mu(kk), var(kk), w(kk), post(size(X1,1),kk), lnl, slope
+        real(dp) :: mu2(kk), var2(kk), w2(kk), post2(size(X1,1),kk), mstart(kk), lnl2, slope2, s0, xm, cm, sxx, smean
+        integer  :: n
+        n     = size(X1,1)
+        xm    = sum(X1(:,1)) / real(n, dp)
+        cm    = sum(cv) / real(n, dp)
+        sxx   = sum((cv - cm)**2)
+        smean = sum(abs(X1(:,1))) / real(n, dp)
+        s0    = 0._dp
+        if( sxx > DTINY ) s0 = sum((cv - cm) * (X1(:,1) - xm)) / sxx
+        if( kk == 1 )then
+            slope = s0
+            call fit_k(shifted(slope), R, Nz, kk, mu, var, w, post, lnl)
+            return
+        endif
+        call alternate(0._dp, mu,  var,  w,  post,  lnl,  slope)
+        call alternate(s0,    mu2, var2, w2, post2, lnl2, slope2)
+        if( lnl2 > lnl )then
+            mu    = mu2
+            slope = slope2
+        endif
+        mstart = mu
+        call fit_k(shifted(slope), R, Nz, kk, mu, var, w, post, lnl, tol=TOL_SLOPE_FIN, mstart=mstart)
+
+        contains
+
+            subroutine alternate( slope0, mu_o, var_o, w_o, post_o, lnl_o, slope_o )
+                real(dp), intent(in)  :: slope0
+                real(dp), intent(out) :: mu_o(kk), var_o(kk), w_o(kk), post_o(size(X1,1),kk), lnl_o, slope_o
+                real(dp) :: mprev(kk), num, den, wk, xb, cb, snew
+                integer  :: it, k
+                logical  :: l_conv
+                slope_o = slope0
+                call fit_k(shifted(slope_o), R, Nz, kk, mu_o, var_o, w_o, post_o, lnl_o, tol=TOL_SLOPE_EM)
+                do it = 1,NITER_SLOPE
+                    num = 0._dp
+                    den = 0._dp
+                    do k = 1,kk
+                        wk = sum(post_o(:,k))
+                        if( wk < DTINY ) cycle
+                        xb  = sum(post_o(:,k) * X1(:,1)) / wk
+                        cb  = sum(post_o(:,k) * cv) / wk
+                        num = num + sum(post_o(:,k) * (X1(:,1) - xb) * (cv - cb)) / var_o(k)
+                        den = den + sum(post_o(:,k) * (cv - cb)**2) / var_o(k)
+                    enddo
+                    snew = slope_o
+                    if( den > DTINY ) snew = num / den
+                    l_conv  = abs(snew - slope_o) <= SLOPE_TOL_REL * smean
+                    slope_o = snew
+                    mprev   = mu_o
+                    call fit_k(shifted(slope_o), R, Nz, kk, mu_o, var_o, w_o, post_o, lnl_o, tol=TOL_SLOPE_EM, mstart=mprev)
+                    if( l_conv ) exit
+                enddo
+            end subroutine alternate
+
+            function shifted( b ) result( xs )
+                real(dp), intent(in) :: b
+                real(dp) :: xs(size(X1,1),1)
+                xs(:,1) = X1(:,1) - b * cv
+            end function shifted
+
+    end subroutine fit_k_cov
 
     ! permutation that sorts a short array into decreasing order
     function sort_desc( v ) result( p )
