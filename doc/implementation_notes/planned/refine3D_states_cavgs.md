@@ -563,14 +563,16 @@ Per-particle labels are a seed, not a result. The `cls_expansion` note states
 that the latent orders members but does not label individual particles. The
 particle-level march must stay free to move them, which it is.
 
-Current behaviour of `cls_expansion` that bears on this program, confirmed by
-two independent reads of the code. The final restoration pass runs with labels
-taken from the project, so the weights are one-hot and the separation is zero.
-It rewrites `cls_expansion_weights.txt` and rebuilds `cls2D`, writing state 1
-on every `cls3D` row, so its fresh output always goes through flex here. The
-delivered `sep` is therefore 0, `neff` equals `pop`, and the soft
-responsibilities are gone. That matters if `sep` should gate which
-sub-averages enter, or if a soft hand-back is wanted later.
+Current behaviour of `cls_expansion` that bears on this program (since
+2026-10-12). `ncls` is the total number of sub-classes, budgeted over
+class-average groups and classes; a class too small to split is kept whole, so
+some rows are whole-class averages (a parent with a single row in `cls2D`). The
+final restoration pass reuses the split's soft weights on the refined alignment:
+the averages are soft, `neff` is the sum of a sub-class's weights, `sep` is the
+split's, and the particle labels stay the split's hard, most likely sub-class.
+A sub-class can end with no hard members (`pop` 0, `neff` > 0); it keeps its row
+and average. `cls2D` is rebuilt with state 1 on every `cls3D` row, so fresh
+output always goes through flex here.
 
 ## Validation and documentation
 

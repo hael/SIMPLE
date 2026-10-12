@@ -373,6 +373,7 @@ type :: parameters
     integer :: maxpop=0            !< max population of an optics group
     integer :: memreport_interval=30 !< minimum runtime memory report interval in seconds
     integer :: minits=0            !< minimum # iterations
+    integer :: minpop=25           !< min # particles per subclass of cls_expansion; a class needs 2x to be split{25}
     integer :: nboxes_max=0
     integer :: nchunks=0
     integer :: nchunks_in_parallel=1 !< max # of chunks run in parallel (0 = all at once)
@@ -381,7 +382,7 @@ type :: parameters
     integer :: ncls=500            !< # clusters
     integer :: ncls_coarse=0       !< # coarse clusters
     integer :: ncls_fine=0         !< # fine clusters
-    integer :: nclust=20           !< # class-average groups of balance=cavg sampling{20}
+    integer :: nclust=20           !< # class-average groups of balance=cavg sampling and cls_expansion{20}
     integer :: nptcls_coarse=0     !< # coarse particles
     integer :: nptcls_fine=0       !< # fine particles
     integer :: nsubcls_min=3       !< minimum subclasses per parent class for class splitting

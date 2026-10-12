@@ -324,16 +324,25 @@ very small, poorly oriented, or irreproducible states as suspect.
 This route is experimental; its program is visible at the Developer level.
 Instead of letting `flex_pca` initialize the states from the particles, the
 states can be found on class averages and handed to the particles. First,
-split every 2D class of the consensus project into sub-classes:
+split the 2D classes of the consensus project into sub-classes:
 
 ```bash
 simple_exec prg=cls_expansion \
   projfile=<SINGLE_STATE_SOLVE3D_PROJECT.simple> \
-  ncls=<SUBCLASSES_PER_CLASS> mskdiam=<MASK_DIAMETER_A> \
+  ncls=<TOTAL_SUBCLASSES> mskdiam=<MASK_DIAMETER_A> \
   nparts=<PARTITIONS> nthr=<THREADS>
 ```
 
 `cls_expansion` needs the 2D classification of the particles in the project.
+`ncls` is the total number of sub-classes, at least the number of classes. The
+classes are grouped by class-average correlation (`nclust`, 20 groups by
+default), so classes of one view share that view's budget; a group's share grows
+with the square root of its population, and inside a group the classes share in
+proportion to their populations. A class holds at most `pop/minpop` sub-classes
+(`minpop=25` by default) and is kept whole below `2*minpop` particles (or below
+the covariance model's floor of `3*(neigs+1)`, 27 by default). The
+sub-class averages are built from the soft weights; each particle is labelled
+with its most likely sub-class.
 Like every program here it writes its result as a new project in its own run
 directory. Then sort the sub-class averages of that project into states:
 

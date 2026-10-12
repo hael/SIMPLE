@@ -29,7 +29,10 @@ contains
         type(string)             :: sigma2_path
         integer :: nsub, funit
         logical :: l_sigma2
-        ! 1. the split: per-class covariance model, placement, weighted sub-averages
+        ! a flag left by an interrupted run would turn the split into a restoration (workers must keep it)
+        if( .not. cline%defined('part') ) call del_file(FLEX_CLS_RESTORE_FLAG)
+        ! 1. the split: subclass budget over the classes (ncls in total), per-class covariance model, placement,
+        !    soft weights and hard labels
         strategy = create_cls_expansion_strategy(cline)
         call strategy%initialize(params, build, cline)
         call strategy%execute(params, build, cline)
@@ -58,6 +61,8 @@ contains
             call cline_pspec%delete('class')
             call cline_pspec%delete('neigs')
             call cline_pspec%delete('lp')
+            call cline_pspec%delete('minpop')
+            call cline_pspec%delete('nclust')
             call xcalc_pspec%execute(cline_pspec)
             call cline_pspec%kill
         endif
@@ -74,13 +79,15 @@ contains
         call cline_c2d%delete('class')
         call cline_c2d%delete('neigs')
         call cline_c2d%delete('lp')
+        call cline_c2d%delete('minpop')
+        call cline_c2d%delete('nclust')
         write(logfhandle,'(A)') '>>> CLS_EXPANSION: one greedy in-plane round of refine2D against the sub-averages'
         call xrefine2D%execute(cline_c2d)
         call cline_c2d%kill
         call sigma2_path%kill
-        ! 3. the restoration from the refined alignment (labels from the project, via the mode file)
-        open(newunit=funit, file=FLEX_CLS_LABELS_MODE, status='replace', action='write')
-        write(funit,'(A)') 'project'
+        ! 3. the restoration from the refined alignment with the split's soft weights; the hard labels stay the split's
+        open(newunit=funit, file=FLEX_CLS_RESTORE_FLAG, status='replace', action='write')
+        write(funit,'(A)') 'restore'
         close(funit)
         cline_restore = cline
         call cline_restore%set('mkdir', 'no')
@@ -91,6 +98,7 @@ contains
         call strategy%finalize_run(params, build, cline_restore)
         call strategy%cleanup(params)
         if( allocated(strategy) ) deallocate(strategy)
+        call del_file(FLEX_CLS_RESTORE_FLAG)
         call cline_restore%kill
         write(logfhandle,'(A)') '>>> CLS_EXPANSION: weighted sub-class averages in cls_expansion_cavgs.mrc (plus even/odd), &
             &responsibilities in cls_expansion_weights.txt'

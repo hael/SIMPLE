@@ -364,6 +364,7 @@ contains
         call reg%add_int('maxpop', self%maxpop)
         call reg%add_int('memreport_interval', self%memreport_interval)
         call reg%add_int('minits', self%minits)
+        call reg%add_int('minpop', self%minpop)
         call reg%add_int('nboxes_max', self%nboxes_max)
         call reg%add_int('nchunks', self%nchunks)
         call reg%add_int('nchunks_in_parallel', self%nchunks_in_parallel)

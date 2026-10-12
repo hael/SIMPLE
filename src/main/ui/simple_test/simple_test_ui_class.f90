@@ -307,12 +307,12 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call unit_heterogeneity%new(&
         &'unit_heterogeneity',&
-        &'unit tests: heterogeneity analysis (flex_pca)',&
-        &'is the fast-gate unit suite for flex_pca: latent model, state weights, deconvolution of 4000 particles and the PCG M-step operator at box 32 with the baseline solve',&
+        &'unit tests: heterogeneity analysis (flex_pca, cls_expansion)',&
+        &'is the fast-gate unit suite for flex_pca: latent model, state weights, deconvolution of 4000 particles and the PCG M-step operator at box 32 with the baseline solve; and the cls_expansion subclass budget',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Heterogeneity')
         call unit_heterogeneity%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (flex_pca, flex_pcg_operator)', '', .false., '')
+            &'One sub-suite of this area to run alone (flex_pca, flex_pcg_operator, flex_cls_expansion)', '', .false., '')
         call add_ui_program('unit_heterogeneity', unit_heterogeneity, tsttab, UI_CATEGORY)
     end subroutine new_unit_heterogeneity
 

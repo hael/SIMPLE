@@ -1,4 +1,5 @@
 !@descr: cls_expansion backend: per-class low-rank covariance model on Fourier coefficients (fit, placement, weighted sub-averages, reproducibility); arrays in, arrays out
+! Also the subclass budget: how many subclasses each class gets out of a total.
 module simple_flex_cls_expansion
 use simple_defs,               only: sp, dp, PI, DPI, CMPLX_ZERO, DCMPLX_ZERO, logfhandle
 use simple_error,              only: simple_exception
@@ -11,6 +12,7 @@ implicit none
 
 public :: flex_cls_model, flex_cls_fit, flex_cls_place_states, flex_cls_restore_states, flex_cls_shell_noise, flex_cls_half_reproducibility
 public :: flex_cls_signal_power, flex_cls_pose_tangents, flex_cls_weighted_mean, flex_cls_fit_crossed
+public :: flex_cls_allocate_subclasses, flex_cls_split_floor
 private
 #include "simple_local_flags.inc"
 
@@ -25,6 +27,7 @@ real(dp), parameter :: FLEX_CLS_NUIS_RIDGE = 1.d-6  !< ridge on the free nuisanc
 real(dp), parameter :: FLEX_CLS_INV_RIDGE  = 1.d-12 !< ridge before inverting a small SPD matrix, relative to max |A|
 real(sp), parameter :: FLEX_CLS_W_CUTOFF   = 1.e-3  !< kernel weights below this are zero
 integer,  parameter :: FLEX_CLS_MIN_LEAF   = 8      !< a leaf is cut only when both halves can hold this many members
+real(dp), parameter :: FLEX_CLS_GROUP_ALPHA = 0.5d0 !< a group's subclass total grows as its population**alpha
 
 type flex_cls_model
     integer :: nfit = 0, ncomp = 0, nptcls = 0
@@ -376,6 +379,84 @@ contains
         end do
     end subroutine flex_cls_calibration
 
+    !> Members a class needs before the covariance model can split it into nsub subclasses (ncomp = neigs)
+    pure integer function flex_cls_split_floor( nsub, ncomp ) result( nmin )
+        integer, intent(in) :: nsub, ncomp
+        nmin = max(2 * nsub, 3 * (ncomp + 1))
+    end function flex_cls_split_floor
+
+    !> Subclasses per class out of ntot: group totals by highest averages (Webster) on pop**alpha from one per class,
+    !! then per class by highest averages on pop; a class of at least minsplit members holds up to pop/minpop, any
+    !! other class one. ngot < ntot when the capacities run out, ngot > ntot when ntot is below the class count.
+    pure subroutine flex_cls_allocate_subclasses( pops, groups, ntot, minpop, minsplit, nsub, ngot )
+        integer, intent(in)  :: pops(:)    !< class populations
+        integer, intent(in)  :: groups(:)  !< group label of every class (any positive integers)
+        integer, intent(in)  :: ntot, minpop, minsplit
+        integer, intent(out) :: nsub(size(pops)), ngot
+        integer,  allocatable :: cap(:), gind(:), glab(:), gk(:), gcap(:), gtot(:)
+        real(dp), allocatable :: gpow(:)
+        real(dp) :: q, qbest
+        integer  :: m, ng, c, g, k, ibest, iextra
+        m = size(pops)
+        nsub = 1
+        ngot = m
+        if( m < 1 ) return
+        allocate(cap(m), gind(m), glab(m), source=0)
+        do c = 1, m
+            cap(c) = 1
+            if( pops(c) >= minsplit ) cap(c) = max(1, pops(c) / max(1, minpop))
+        end do
+        ng = 0
+        do c = 1, m
+            k = 0
+            if( ng > 0 ) k = findloc(glab(1:ng), groups(c), dim=1)
+            if( k == 0 )then
+                ng       = ng + 1
+                glab(ng) = groups(c)
+                k        = ng
+            endif
+            gind(c) = k
+        end do
+        allocate(gk(ng), gcap(ng), gtot(ng), source=0)
+        allocate(gpow(ng), source=0.d0)
+        do g = 1, ng
+            gk(g)   = count(gind == g)
+            gcap(g) = sum(cap, mask=(gind == g))
+            gpow(g) = real(sum(pops, mask=(gind == g)), dp)**FLEX_CLS_GROUP_ALPHA
+        end do
+        gtot = gk
+        do while( ngot < ntot )
+            ibest = 0
+            qbest = -1.d0
+            do g = 1, ng
+                if( gtot(g) >= gcap(g) ) cycle
+                q = gpow(g) / (real(gtot(g),dp) + 0.5d0)
+                if( q > qbest )then
+                    ibest = g
+                    qbest = q
+                endif
+            end do
+            if( ibest == 0 ) exit
+            gtot(ibest) = gtot(ibest) + 1
+            ngot        = ngot + 1
+        end do
+        do g = 1, ng
+            do iextra = 1, gtot(g) - gk(g)
+                ibest = 0
+                qbest = -1.d0
+                do c = 1, m
+                    if( gind(c) /= g .or. nsub(c) >= cap(c) ) cycle
+                    q = real(pops(c),dp) / (real(nsub(c),dp) + 0.5d0)
+                    if( q > qbest )then
+                        ibest = c
+                        qbest = q
+                    endif
+                end do
+                nsub(ibest) = nsub(ibest) + 1
+            end do
+        end do
+    end subroutine flex_cls_allocate_subclasses
+
     !> exactly ncls subclasses: divisive bisection of the standardised latent (plus the log fit residual) scored by
     !! Ashman's D, a tied-covariance GMM for the labels, posterior-precision kernel weights, Kish neff
     subroutine flex_cls_place_states( model, ncls, weights, labels, neff, separation )
@@ -470,14 +551,15 @@ contains
                 weights(i,memb(i)) = 1.
             end do
         endif
-        call posterior_kernel_weights(zaug, paug, model%nptcls, nd, ncls, labels, weights, neff)
+        call posterior_kernel_weights(zaug, paug, model%nptcls, nd, ncls, labels, tcen, weights, neff)
         deallocate(tcen, wcomp, bw, zstd, cen2, dsep_of, memb, nmemb, zaug, paug)
     end subroutine flex_cls_place_states
 
     !> w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s)), c_s the mean latent of the members labelled s; neff = Kish
-    subroutine posterior_kernel_weights( z, prec, nptcls, nd, ncls, labels, weights, neff )
+    subroutine posterior_kernel_weights( z, prec, nptcls, nd, ncls, labels, cen_empty, weights, neff )
         integer,  intent(in)  :: nptcls, nd, ncls, labels(:)
         real(dp), intent(in)  :: z(nptcls,nd), prec(nd,nd,nptcls)
+        real(dp), intent(in)  :: cen_empty(nd,ncls)   !< the centre of a subclass the labels leave empty (its GMM mean)
         real(sp), intent(out) :: weights(:,:), neff(:)
         real(dp) :: cen(nd), d(nd), q
         integer  :: s, i, n
@@ -488,7 +570,7 @@ contains
                     cen(i) = sum(z(:,i), mask=(labels == s)) / real(n,dp)
                 end do
             else
-                cen = 0.d0
+                cen = cen_empty(:,s)
             endif
             do i = 1, nptcls
                 d = z(i,:) - cen
@@ -755,6 +837,8 @@ contains
         do s = 1, size(ae,2)
             do sh = 1, nsh
                 cc   = min(0.999d0, max(0.001d0, real(frc(sh,s),dp)))
+                ! a half without members has no FRC: an SNR of one keeps a tiny class unshrunk
+                if( min(den_e(sh,s), den_o(sh,s)) <= 1.d-30 ) cc = 0.5d0
                 ssnr = cc / (1.d0 - cc)
                 sig2 = 1.d0 / max(0.5d0 * (den_e(sh,s) + den_o(sh,s)), 1.d-30)
                 tau2(sh,s) = max(ssnr * sig2, 1.d-30)

@@ -1,12 +1,38 @@
 # cls_expansion: method and benchmarks
 
-    simple_exec prg=cls_expansion projfile=... ncls=3 mskdiam=... nparts=10 nthr=8
+    simple_exec prg=cls_expansion projfile=... ncls=<total subclasses> mskdiam=... nparts=10 nthr=8
 
-The flex covariance model replaced the diffusion-map `cls_split` on 2026-10-05.
+The flex covariance model replaced the diffusion-map `cls_split` on 2026-10-05. Since 2026-10-12
+`ncls` is the total number of subclasses (section 0); the benchmarks of section 2 were run with the
+earlier fixed count per class (`ncls=3` meant three per class).
+
+## 0. Subclass budget
+
+Before any split, on the master (or the shared-memory run):
+
+1. **Groups.** The parent classes are clustered by their class averages exactly as for
+   `balance=cavg` sampling (`cluster_cavgs_into_groups`: average linkage on the in-plane, shift and
+   mirror invariant correlation at 6 A, `nclust` groups, default 20; every class its own group when
+   there are no more classes than `nclust`, or when the project has no class averages or `frc2D`).
+   Classes of one view fall in one group, so classes that are essentially the same share a budget.
+2. **Capacity.** A class of at least `max(2 minpop, 3 (neigs + 1))` particles holds up to
+   `floor(pop / minpop)` subclasses (`minpop` default 25); any other class one, i.e. it is kept whole
+   (its members get one weighted average; nothing is dropped).
+3. **Group totals.** Starting from one per class, the subclasses go one at a time to the open group
+   with the highest `P_g^0.5 / (T_g + 0.5)` (Webster), `P_g` the group population and `T_g` its
+   current total, up to the group's capacity. The classes 2D already made of a view count against
+   that view's share.
+4. **Within a group.** The group's extra subclasses go one at a time to the class with the highest
+   `pop / (n + 0.5)`, up to its capacity.
+5. `ncls` must be at least the number of classes; when the capacities hold fewer, the run warns and
+   delivers what they hold. The budget is written to `cls_expansion_allocation.txt` (class, group,
+   pop, nsub) and read by the workers; the groups to `cls_expansion_groupsNN_cavgs` and
+   `cls_expansion_groups.txt`.
 
 ## 1. Method
 
-Per 2D class, with every member in the class frame by its own in-plane alignment:
+Per 2D class with two or more subclasses in the budget, with every member in the class frame by its
+own in-plane alignment:
 
 1. **Model.** `y_i = c_i (mu + U z_i + N nu_i) + noise` on the Fourier half-plane up to 30 A
    (`lp=`): `c_i` the member's CTF, `mu` the class mean, `U` a rank-8 basis (`neigs=`), `N` four
@@ -16,21 +42,26 @@ Per 2D class, with every member in the class frame by its own in-plane alignment
 2. **Cross-fit.** Five folds; each member is embedded with a basis fitted on the other folds and
    its latent and posterior precision are mapped into the full fit's frame through the bases.
 3. **Placement.** Divisive bisection of `[z, log residual]` (the residual detrended against CTF
-   power) into exactly `ncls` leaves: 2-means candidates on the full latent and on each
+   power) into exactly the class's budgeted number of leaves: 2-means candidates on the full latent and on each
    coordinate, scored by Ashman's D along the cut axis, the leaf with the best cut split next; a
    tied-covariance GMM seeded by the leaves gives the labels.
 4. **Weights.** `w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s))`, `A_i` the member's own
-   posterior precision; labelled members count fully; `neff` is the Kish effective population.
+   posterior precision; labelled members count fully, so the hard label (the GMM's most likely
+   component) is the largest weight of its row. A component the GMM labels leave empty is centred
+   on its GMM mean.
 5. **One greedy in-plane round** of `refine2D` against the sub-averages with the classes fixed
    (`refine=inpl`, iteration 3, `trs=3`); the sigma2 state is estimated first when the project
    has none that resolves.
-6. **Restoration.** CTF-corrected weighted averages from the refined alignment, regularised like
-   the class averager (`den += 1/tau2` per shell, `tau2` from the subclass's own even/odd FRC);
-   even and odd member versions are written too.
-7. **Readouts per subclass** (`os_cls2D`, class map): `pop`, `neff`, `sep` (Ashman's D of the
-   parent's first cut) and `repro`, the cross-half correlation of the subclass's difference image
-   to its most different sibling (even members vs odd members): a structural difference
-   reproduces, a noise-driven split does not.
+6. **Restoration.** CTF-corrected averages from the refined alignment with the split's soft weights
+   (`cls_expansion_weights.txt` and `cls_expansion_class_map.txt`, read back; the project labels stay
+   the split's hard labels), regularised like the class averager (`den += 1/tau2` per shell, `tau2`
+   from the subclass's own even/odd FRC; a half without members counts as SNR 1); even and odd
+   member versions are written too.
+7. **Readouts per subclass** (`os_cls2D`, class map): `pop` (hard members), `neff` (the sum of the
+   weights), `sep` (Ashman's D of the parent's first cut, 0 for a whole class) and `repro`, the
+   cross-half correlation of the subclass's difference image to its most different sibling (even
+   members vs odd members; 0 for a whole class): a structural difference reproduces, a noise-driven
+   split does not. A subclass can end with no hard members (`pop` 0, `neff` > 0); it keeps its row.
 
 ## 2. Benchmarks
 

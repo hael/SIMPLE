@@ -1,7 +1,7 @@
 !@descr: fractional-update sampling units (balance=class|cavg): one unit per selected 2D class, cavg groups by class-average correlation
 ! Under cavg the selected class averages are clustered into nclust groups by average linkage on their aligned
 ! correlation; with no more selected classes than nclust every class is its own group. The sampler never uses
-! 3D maps, poses or projection directions.
+! 3D maps, poses or projection directions. cls_expansion groups its parent classes with the same clustering.
 module simple_view_partition_sampling
 use simple_pftc_srch_api
 use simple_clustering_utils, only: cluster_dmat
@@ -9,11 +9,11 @@ use simple_strategy2D_utils, only: prep_cavgs4clust, calc_cluster_cavgs_dmat
 use simple_oris,             only: class_sample_quotas, class_sample_sweep
 implicit none
 
-public :: make_class_samples, report_class_sample_coverage, has_selected_cavgs, VIEW_PARTITION_FILE
+public :: make_class_samples, report_class_sample_coverage, has_selected_cavgs
+public :: has_clusterable_cavgs, cluster_cavgs_into_groups
 private
 #include "simple_local_flags.inc"
 
-character(len=*), parameter :: VIEW_PARTITION_FILE  = 'view_partition.txt'
 character(len=*), parameter :: VIEW_PARTITION_FBODY = 'view_partition'
 character(len=*), parameter :: VIEW_PARTITION_CRIT  = 'cc' !< in-plane, shift and mirror invariant correlation
 real,             parameter :: VIEW_PARTITION_LP    = 6.  !< low-pass limit of the class-average alignment (as cluster_cavgs)
@@ -34,6 +34,25 @@ contains
         l_has = ncls > 0 .and. file_exists(stkname)
         call stkname%kill
     end function has_selected_cavgs
+
+    !> whether every cls2D row has a class average and the 2D FRCs exist, as the class-average clustering needs
+    logical function has_clusterable_cavgs( spproj ) result( l_has )
+        class(sp_project), intent(inout) :: spproj
+        type(string) :: stkname, frcs_fname
+        integer      :: ncls
+        real         :: smpd
+        l_has = .false.
+        if( spproj%os_cls2D%get_noris() < 1 ) return
+        call spproj%get_cavgs_stk(stkname, ncls, smpd, fail=.false.)
+        if( ncls /= spproj%os_cls2D%get_noris() .or. .not. file_exists(stkname) )then
+            call stkname%kill
+            return
+        endif
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        l_has = file_exists(frcs_fname)
+        call stkname%kill
+        call frcs_fname%kill
+    end function has_clusterable_cavgs
 
     !> One class_sample per selected 2D class, best ptcl2D score first, for balance (class|cavg): group 0
     !! under class, the class-average group under cavg. l_drop_inactive3D leaves out rows inactive in
@@ -66,33 +85,53 @@ contains
         if( l_drop_inactive3D ) call drop_inactive_rows(spproj, clssmp)
     end subroutine make_class_samples
 
-    !> class-average group of every selected class (clsinds order); every class is its own group when
-    !! there are no more selected classes than nclust
+    !> class-average group of every selected class (clsinds order)
     subroutine cluster_selected_cavgs( params, spproj, nthr, clsinds, labels )
         class(parameters),    intent(in)    :: params
         class(sp_project),    intent(inout) :: spproj
         integer,              intent(in)    :: nthr
         integer,              intent(in)    :: clsinds(:)
         integer, allocatable, intent(inout) :: labels(:)
+        logical, allocatable :: l_sel(:)
+        integer :: i
+        if( params%nclust < 1 ) THROW_HARD('balance=cavg needs nclust >= 1')
+        if( .not. has_selected_cavgs(spproj) ) THROW_HARD('balance=cavg needs selected class averages')
+        l_sel = spproj%os_cls2D%get_all_asint('state') > 0
+        if( any(pack([(i, i=1,size(l_sel))], mask=l_sel) /= clsinds) ) THROW_HARD('selected classes and sampling units differ')
+        call cluster_cavgs_into_groups(params, spproj, nthr, l_sel, params%nclust, VIEW_PARTITION_FBODY, labels)
+    end subroutine cluster_selected_cavgs
+
+    !> Group of every class flagged in l_sel (cls2D rows, row order): average linkage on the aligned correlation of
+    !! the class averages into nclust groups, every class its own group when there are no more than nclust. Writes
+    !! the group stacks <fbody>NN_cavgs and the table <fbody>.txt; runs on nthr threads, then restores the team.
+    subroutine cluster_cavgs_into_groups( params, spproj, nthr, l_sel, nclust, fbody, labels )
+        class(parameters),    intent(in)    :: params
+        class(sp_project),    intent(inout) :: spproj
+        integer,              intent(in)    :: nthr, nclust
+        logical,              intent(in)    :: l_sel(:)
+        character(len=*),     intent(in)    :: fbody
+        integer, allocatable, intent(inout) :: labels(:)
         type(cmdline)            :: cline_clust
         type(parameters)         :: params_clust
         type(image), allocatable :: cavg_imgs(:)
         real,        allocatable :: mm(:,:), dmat(:,:)
-        integer,     allocatable :: states(:), clspops(:), clsinds_clust(:), i_medoids(:)
-        logical,     allocatable :: l_sel(:)
+        integer,     allocatable :: clspops(:), clsinds(:), clsinds_clust(:), i_medoids(:)
         integer(timer_int_kind) :: t_start
-        integer :: nsel, nclust, ldim(3), i
+        integer :: nsel, ngroups, ldim(3), nthr_prev, nteam_prev, i
         t_start = tic()
-        if( params%nclust < 1 ) THROW_HARD('balance=cavg needs nclust >= 1')
-        if( .not. has_selected_cavgs(spproj) ) THROW_HARD('balance=cavg needs selected class averages')
-        states = spproj%os_cls2D%get_all_asint('state')
-        l_sel  = states > 0
-        nsel   = count(l_sel)
-        if( nsel <= params%nclust )then
+        if( nclust < 1 ) THROW_HARD('class-average groups need nclust >= 1')
+        if( size(l_sel) /= spproj%os_cls2D%get_noris() ) THROW_HARD('class mask does not match cls2D')
+        nsel    = count(l_sel)
+        if( nsel < 1 ) THROW_HARD('no classes to group')
+        clsinds = pack([(i, i=1,size(l_sel))], mask=l_sel)
+        if( nsel <= nclust )then
             labels = [(i, i=1,nsel)]
             write(logfhandle,'(A,I0,A,I0,A)') '>>> CLASS-AVERAGE GROUPS: one group per class (', nsel, &
-                &' selected classes <= nclust=', params%nclust, ')'
+                &' classes <= nclust=', nclust, ')'
         else
+            nthr_prev  = nthr_glob
+            nteam_prev = nthr_prev
+            !$ nteam_prev = omp_get_max_threads()
             ! the class averages are aligned and compared under their own parameters: objfun=cc, no CTF
             call cline_clust%set('prg',      'cluster_cavgs')
             call cline_clust%set('projfile', params%projfile)
@@ -113,37 +152,40 @@ contains
             params_clust%msk  = min(real(params_clust%box/2) - COSMSKHALFWIDTH - 1., &
                 &0.5 * params_clust%mskdiam / params_clust%smpd)
             dmat = calc_cluster_cavgs_dmat(params_clust, cavg_imgs, [minval(mm(:,1)), maxval(mm(:,2))], VIEW_PARTITION_CRIT)
-            nclust = params%nclust
-            call cluster_dmat(dmat, 'avglink', nclust, i_medoids, labels)
+            ngroups = nclust
+            call cluster_dmat(dmat, 'avglink', ngroups, i_medoids, labels)
             call dealloc_imgarr(cavg_imgs)
             call cline_clust%kill
-            !$ call omp_set_num_threads(params%nthr)
-            nthr_glob = params%nthr
+            !$ call omp_set_num_threads(nteam_prev)
+            nthr_glob = nthr_prev
             if( any(clsinds_clust /= clsinds) ) THROW_HARD('class-average clustering changed the class order')
             write(logfhandle,'(A,I0,A,I0,A,I0,A,F8.1,A)') '>>> CLASS-AVERAGE GROUPS: ', nsel, ' class averages in ', &
-                &nclust, ' groups by average linkage on correlation (', max(1, nthr), ' threads, ', toc(t_start), ' s)'
+                &ngroups, ' groups by average linkage on correlation (', max(1, nthr), ' threads, ', toc(t_start), ' s)'
         endif
         ! inspection output
         cavg_imgs = read_cavgs_into_imgarr(spproj, mask=l_sel)
-        call write_imgarr(nsel, cavg_imgs, labels, VIEW_PARTITION_FBODY, params%ext%to_char())
+        call write_imgarr(nsel, cavg_imgs, labels, fbody, params%ext%to_char())
         call dealloc_imgarr(cavg_imgs)
-        call write_partition_table
+        call write_group_table
         if( allocated(clsinds_clust) ) deallocate(clsinds_clust)
 
     contains
 
-        subroutine write_partition_table
+        subroutine write_group_table
+            type(string) :: fname
             integer :: funit, io_stat, k
-            call fopen(funit, file=string(VIEW_PARTITION_FILE), status='REPLACE', action='WRITE', iostat=io_stat)
-            call fileiochk('cluster_selected_cavgs; '//VIEW_PARTITION_FILE, io_stat)
+            fname = string(trim(fbody)//TXT_EXT)
+            call fopen(funit, file=fname, status='REPLACE', action='WRITE', iostat=io_stat)
+            call fileiochk('cluster_cavgs_into_groups; '//fname%to_char(), io_stat)
             write(funit,'(A)') '# class group'
             do k = 1, nsel
                 write(funit,'(I6,1X,I4)') clsinds(k), labels(k)
             enddo
             call fclose(funit)
-        end subroutine write_partition_table
+            call fname%kill
+        end subroutine write_group_table
 
-    end subroutine cluster_selected_cavgs
+    end subroutine cluster_cavgs_into_groups
 
     !> only active particles are sampled: rows with ptcl3D state 0 leave their unit
     subroutine drop_inactive_rows( spproj, clssmp )

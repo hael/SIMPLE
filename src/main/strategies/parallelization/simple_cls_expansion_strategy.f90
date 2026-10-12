@@ -1,4 +1,7 @@
 !@descr: cls_expansion execution strategies: shared memory, distributed master and distributed worker
+! ncls is the total number of subclasses: the master (or the shared-memory run) groups the classes by
+! class-average correlation and budgets the subclasses per class; the restoration pass reuses the split's
+! soft weights and class map.
 module simple_cls_expansion_strategy
 use simple_core_module_api
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -14,7 +17,7 @@ use simple_srch_sort_loc,          only: hpsort
 implicit none
 
 public :: cls_expansion_strategy
-public :: FLEX_CLS_CAVGS_FILE, FLEX_CLS_LABELS_MODE
+public :: FLEX_CLS_CAVGS_FILE, FLEX_CLS_RESTORE_FLAG
 public :: cls_expansion_shmem_strategy
 public :: cls_expansion_worker_strategy
 public :: cls_expansion_master_strategy
@@ -27,11 +30,23 @@ integer, parameter :: FLEX_CLS_NEIGS_DEFAULT  = 8    !< rank of the per-class co
 integer, parameter :: FLEX_CLS_SEED_BASE      = 20260930 !< per-class random seed = base + class index
 real,    parameter :: FLEX_CLS_LP_FIT_DEFAULT = 30.  !< the fit band stops here (A) unless lp= is given;
                                                      !! the sub-class averages always use the full band
-character(len=*), parameter :: FLEX_CLS_WEIGHTS_FILE = 'cls_expansion_weights.txt'  !< pind parent global_sub w(1:ncls)
-character(len=*), parameter :: FLEX_CLS_CAVGS_FILE   = 'cls_expansion_cavgs.mrc'    !< weighted sub-class averages
+character(len=*), parameter :: FLEX_CLS_WEIGHTS_FILE = 'cls_expansion_weights.txt'    !< pind parent subclass nsub w(1:nsub)
+character(len=*), parameter :: FLEX_CLS_MAP_FILE     = 'cls_expansion_class_map.txt'  !< subclass parent local pop neff sep repro
+character(len=*), parameter :: FLEX_CLS_ALLOC_FILE   = 'cls_expansion_allocation.txt' !< class group pop nsub: the split's budget
+character(len=*), parameter :: FLEX_CLS_GROUPS_FBODY = 'cls_expansion_groups'         !< class-average groups: stacks and table
+character(len=*), parameter :: FLEX_CLS_CAVGS_FILE   = 'cls_expansion_cavgs.mrc'      !< weighted sub-class averages
 character(len=*), parameter :: FLEX_CLS_CAVGS_EVEN   = 'cls_expansion_cavgs_even.mrc' !< the same from the even members
 character(len=*), parameter :: FLEX_CLS_CAVGS_ODD    = 'cls_expansion_cavgs_odd.mrc'  !< the same from the odd members
-character(len=*), parameter :: FLEX_CLS_LABELS_MODE  = 'cls_expansion_labels_mode.txt' !< master -> workers: the SIMPLE_FLEXCLS_LABELS value
+character(len=*), parameter :: FLEX_CLS_RESTORE_FLAG = 'cls_expansion_restore.txt'    !< present: restore from the split's weights
+
+!> the split's soft weights of every particle (restoration input), indexed by particle
+type split_weights
+    integer, allocatable :: off(:)     !< first weight of the particle in w, 0 without a row
+    integer, allocatable :: nsub(:)    !< subclasses of the particle's parent
+    integer, allocatable :: sub(:)     !< the particle's hard subclass (global index)
+    integer, allocatable :: parent(:)  !< the particle's parent class
+    real,    allocatable :: w(:)
+end type split_weights
 
 type, abstract :: cls_expansion_strategy
 contains
@@ -146,8 +161,10 @@ contains
         type(parameters), intent(in)    :: params
         class(cmdline),   intent(inout) :: cline
         if( trim(params%oritype) /= 'ptcl2D' ) THROW_HARD('cls_expansion supports oritype=ptcl2D only')
-        if( .not. cline%defined('ncls') .or. params%ncls < 2 ) THROW_HARD('cls_expansion requires a fixed ncls>=2')
-        if( params%neigs < 1 ) THROW_HARD('cls_expansion requires neigs>=1')
+        if( .not. cline%defined('ncls') .or. params%ncls < 1 ) THROW_HARD('cls_expansion requires ncls, the total number of subclasses')
+        if( params%neigs  < 1 ) THROW_HARD('cls_expansion requires neigs>=1')
+        if( params%minpop < 2 ) THROW_HARD('cls_expansion requires minpop>=2')
+        if( params%nclust < 1 ) THROW_HARD('cls_expansion requires nclust>=1')
     end subroutine validate_cls_expansion
 
     subroutine shmem_initialize(self, params, build, cline)
@@ -224,9 +241,10 @@ contains
         type(parameters),                 intent(inout) :: params
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
-        integer, allocatable :: cls_inds(:), cls_pops(:)
+        type(sp_project)     :: spproj
+        integer, allocatable :: cls_inds(:), cls_pops(:), nsub(:), first_sub(:)
+        real,    allocatable :: sep(:)
         call init_common(params, build, cline)
-        call flex_publish_labels_mode()
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         self%nparts_run = min(max(1, params%nparts), size(cls_inds))
         write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls expansion worker planning: requested_nparts=', params%nparts, &
@@ -237,6 +255,17 @@ contains
             call flush(logfhandle)
         endif
         call set_master_num_threads(self%nthr_master, string('CLS_EXPANSION'))
+        if( flex_restore_mode() )then
+            ! the workers restore subsets: the whole set of parents is checked against the split here
+            call read_split_map(cls_inds, .true., nsub, first_sub, sep)
+            deallocate(nsub, first_sub, sep)
+        else
+            ! the subclass budget is set once, here, and read by the workers
+            call spproj%read(params%projfile)
+            call allocate_subclasses(params, spproj, cls_inds, cls_pops, self%nthr_master, nsub)
+            call spproj%kill
+            deallocate(nsub)
+        endif
         call prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
         call self%qenv%new(params, self%nparts_run, numlen=params%numlen)
         ! workers run inside the master's execution directory
@@ -273,7 +302,6 @@ contains
         integer :: ipart
         call self%qenv%kill
         call qsys_cleanup(params)
-        call del_file(FLEX_CLS_LABELS_MODE)
         if( allocated(self%part_params) )then
             do ipart = 1, size(self%part_params)
                 call self%part_params(ipart)%kill
@@ -351,9 +379,10 @@ contains
                 deallocate(pinds)
             endif
         end do
-        cls_inds = pack(cls_inds, mask=cls_pops > 2)
-        cls_pops = pack(cls_pops, mask=cls_pops > 2)
-        if( size(cls_inds) < 1 ) THROW_HARD('No classes with enough particles to split')
+        ! every labelled class is a parent: one too small to split is kept whole
+        cls_inds = pack(cls_inds, mask=cls_pops > 0)
+        cls_pops = pack(cls_pops, mask=cls_pops > 0)
+        if( size(cls_inds) < 1 ) THROW_HARD('No populated classes for cls_expansion')
         call label%kill
     end subroutine collect_split_classes
 
@@ -382,11 +411,13 @@ contains
         type(builder),    intent(inout) :: build
         type(string),     intent(out)   :: label
         label = 'class'
-        ! labels from the project: the parents are the clusters
-        if( flex_labels_from_project() ) label = 'cluster'
+        ! restoration: the parents are the clusters the split wrote
+        if( flex_restore_mode() ) label = 'cluster'
     end subroutine determine_split_label
 
 
+    !> the classes of this run (all, or a worker's part): split under the budget, or restored from the split's
+    !! weights; writes the class map, weights, stacks and, outside a worker, the project
     subroutine run_local_split(params, build, cline, spproj, part, l_write_project)
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -394,85 +425,100 @@ contains
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: part
         logical,          intent(in)    :: l_write_project
-        type(string) :: label, map_fname, assign_fname, wts_fname, stk_fname
-        integer, allocatable :: cls_inds(:), cls_pops(:), pinds(:), labels(:), new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
-        real,    allocatable :: weights(:,:), neff_of_subcls(:), sep_of_subcls(:), repro_of_subcls(:), repro(:)
-        type(image), allocatable :: cavgs_even(:), cavgs_odd(:)
-        type(string) :: stk_even, stk_odd
-        type(image), allocatable :: cavgs(:)
+        type(split_weights)      :: sw
+        type(string)             :: map_fname, assign_fname, wts_fname, stk_fname, stk_even, stk_odd
+        type(image), allocatable :: cavgs(:), cavgs_even(:), cavgs_odd(:)
+        integer,     allocatable :: cls_inds(:), cls_pops(:), nsub(:), first_sub(:), pinds(:), labels(:)
+        integer,     allocatable :: new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
+        real,        allocatable :: weights(:,:), repro(:), sep_of_cls(:), neff_of_subcls(:), sep_of_subcls(:), repro_of_subcls(:)
         real    :: separation
-        integer :: i, iglob, nsplit, funit_map, funit_assign, funit_wts, kfit
-        logical :: l_sigma
+        integer :: i, iglob, ntot_sub, funit_map, funit_assign, funit_wts, kfit
+        logical :: l_sigma, l_restore
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
-        call determine_split_label(params, build, label)
+        l_restore = flex_restore_mode()
+        if( l_restore )then
+            ! the split's record is read before any output of this pass replaces it
+            call read_split_map(cls_inds, l_write_project, nsub, first_sub, sep_of_cls)
+            call read_split_weights(spproj%os_ptcl2D%get_noris(), sw)
+        else if( l_write_project )then
+            call allocate_subclasses(params, spproj, cls_inds, cls_pops, params%nthr, nsub)
+        else
+            call read_allocation(cls_inds, nsub)
+        endif
+        ntot_sub = sum(nsub)
         call prepare_flex_sigma2(params, build, spproj, cline, l_sigma)
         kfit = flex_fit_band(params, cline)
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,L1)') 'Cls expansion flex: ncls=', params%ncls, ' neigs=', params%neigs, &
-            &' fit band kto=', kfit, ' sigma2 loaded=', l_sigma
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,L1,A,L1)') 'Cls expansion flex: classes=', size(cls_inds), &
+            &' subclasses=', ntot_sub, ' neigs=', params%neigs, ' fit band kto=', kfit, ' sigma2 loaded=', l_sigma, &
+            &' restoration=', l_restore
         call flush(logfhandle)
         if( l_write_project )then
-            map_fname = string('cls_expansion_class_map.txt')
-            open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
-            write(funit_map,'(A)') '# global_subclass parent_class local_subclass pop separation repro'
-            allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
-            allocate(parent_of_subcls(sum(cls_pops)), pop_of_subcls(sum(cls_pops)), source=0)
-            allocate(neff_of_subcls(sum(cls_pops)), sep_of_subcls(sum(cls_pops)), repro_of_subcls(sum(cls_pops)), source=0.)
+            map_fname = string(FLEX_CLS_MAP_FILE)
             wts_fname = string(FLEX_CLS_WEIGHTS_FILE)
             stk_fname = string(FLEX_CLS_CAVGS_FILE)
             stk_even  = string(FLEX_CLS_CAVGS_EVEN)
             stk_odd   = string(FLEX_CLS_CAVGS_ODD)
-            open(newunit=funit_wts, file=wts_fname%to_char(), status='replace', action='write')
-            write(funit_wts,'(A)') '# particle_index parent_class global_subclass weights(1:ncls)'
+            allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
+            allocate(parent_of_subcls(ntot_sub), pop_of_subcls(ntot_sub), source=0)
+            allocate(neff_of_subcls(ntot_sub), sep_of_subcls(ntot_sub), repro_of_subcls(ntot_sub), source=0.)
         else
             map_fname    = string('cls_expansion_class_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
             assign_fname = string('cls_expansion_assignments_part')//int2str_pad(part, params%numlen)//TXT_EXT
-            open(newunit=funit_map,    file=map_fname%to_char(),    status='replace', action='write')
+            wts_fname    = flex_weights_part_fname(part, params%numlen)
+            stk_fname    = flex_cavgs_part_fname(part, params%numlen)
+            stk_even     = flex_cavgs_part_fname(part, params%numlen, 'even')
+            stk_odd      = flex_cavgs_part_fname(part, params%numlen, 'odd')
             open(newunit=funit_assign, file=assign_fname%to_char(), status='replace', action='write')
-            write(funit_map,'(A)')    '# local_subclass_row parent_class local_subclass pop separation repro'
             write(funit_assign,'(A)') '# particle_index parent_class local_subclass'
-            wts_fname = flex_weights_part_fname(part, params%numlen)
-            stk_fname = flex_cavgs_part_fname(part, params%numlen)
-            stk_even  = flex_cavgs_part_fname(part, params%numlen, 'even')
-            stk_odd   = flex_cavgs_part_fname(part, params%numlen, 'odd')
-            open(newunit=funit_wts, file=wts_fname%to_char(), status='replace', action='write')
-            write(funit_wts,'(A)') '# particle_index parent_class local_subclass weights(1:ncls)'
         endif
+        ! in a part the subclass column is the part's row (map) or the local subclass (weights)
+        open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
+        write(funit_map,'(A)') '# subclass parent_class local_subclass pop neff separation repro'
+        open(newunit=funit_wts, file=wts_fname%to_char(), status='replace', action='write')
+        write(funit_wts,'(A)') '# particle_index parent_class subclass nsub weights(1:nsub)'
         iglob = 0
         do i = 1, size(cls_inds)
-            write(logfhandle,'(A,I8,A,I8)') 'Cls expansion starting: class=', cls_inds(i), ' nptcls=', cls_pops(i)
+            write(logfhandle,'(A,I8,A,I8,A,I6)') 'Cls expansion starting: class=', cls_inds(i), ' nptcls=', cls_pops(i), &
+                &' nsub=', nsub(i)
             call flush(logfhandle)
-            call split_class_flex(params, build, spproj, cls_inds(i), params%ncls, params%neigs, kfit, l_sigma, &
-                                  nsplit, pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
-            if( nsplit < 1 ) cycle
-            call record_class(cls_inds(i), nsplit, pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
-            if( allocated(pinds)   ) deallocate(pinds)
-            if( allocated(repro)   ) deallocate(repro)
+            if( l_restore )then
+                if( l_write_project .and. iglob + 1 /= first_sub(i) ) THROW_HARD('cls_expansion restoration: subclass numbering differs from the split')
+                separation = sep_of_cls(i)
+                call restore_class_flex(params, build, spproj, cls_inds(i), nsub(i), first_sub(i), separation, kfit, l_sigma, &
+                    &sw, pinds, labels, weights, cavgs, repro, cavgs_even, cavgs_odd)
+            else
+                call split_class_flex(params, build, spproj, cls_inds(i), nsub(i), params%neigs, kfit, l_sigma, &
+                    &pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
+            endif
+            call record_class(cls_inds(i), nsub(i), pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
+            if( allocated(pinds)      ) deallocate(pinds)
+            if( allocated(repro)      ) deallocate(repro)
+            if( allocated(labels)     ) deallocate(labels)
+            if( allocated(weights)    ) deallocate(weights)
+            if( allocated(cavgs)      ) call dealloc_imgarr(cavgs)
             if( allocated(cavgs_even) ) call dealloc_imgarr(cavgs_even)
             if( allocated(cavgs_odd)  ) call dealloc_imgarr(cavgs_odd)
-            if( allocated(labels)  ) deallocate(labels)
-            if( allocated(weights) ) deallocate(weights)
-            if( allocated(cavgs)   ) call dealloc_imgarr(cavgs)
         end do
         close(funit_map)
-        if( .not. l_write_project ) close(funit_assign)
         close(funit_wts)
+        if( .not. l_write_project ) close(funit_assign)
         if( l_write_project )then
-            call apply_split_project_updates(spproj, params, iglob, new_class, new_parent, parent_of_subcls(1:iglob), &
-                &pop_of_subcls(1:iglob), neff_of_subcls=neff_of_subcls(1:iglob), sep_of_subcls=sep_of_subcls(1:iglob), &
-                &repro_of_subcls=repro_of_subcls(1:iglob), cavgs_stk=stk_fname)
+            if( iglob /= ntot_sub ) THROW_HARD('cls_expansion: the delivered subclasses differ from the budget')
+            call apply_split_project_updates(spproj, params, iglob, new_class, new_parent, parent_of_subcls, pop_of_subcls, &
+                &neff_of_subcls, sep_of_subcls, repro_of_subcls, stk_fname)
             deallocate(new_class, new_parent, parent_of_subcls, pop_of_subcls, neff_of_subcls, sep_of_subcls, repro_of_subcls)
         endif
-        if( allocated(cls_inds) ) deallocate(cls_inds)
-        if( allocated(cls_pops) ) deallocate(cls_pops)
-        call label%kill
+        call kill_split_weights(sw)
         call map_fname%kill
+        call wts_fname%kill
+        call stk_fname%kill
+        call stk_even%kill
+        call stk_odd%kill
         if( assign_fname%is_allocated() ) call assign_fname%kill
-        if( wts_fname%is_allocated()    ) call wts_fname%kill
-        if( stk_fname%is_allocated()    ) call stk_fname%kill
 
     contains
 
-        !> one split class into the maps, assignments, weights, stacks and project arrays
+        !> one class into the map, weights, stacks and assignments (part) or project arrays (whole run)
         subroutine record_class( cls_id, nsplit, pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd )
             integer,                  intent(in)    :: cls_id, nsplit
             integer,                  intent(in)    :: pinds(:), labels(:)
@@ -481,48 +527,232 @@ contains
             real,                     intent(in)    :: separation
             real,        allocatable, intent(in)    :: repro(:)
             type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
-            integer :: j, k
+            integer :: j, k, isub
+            real    :: neff
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls expansion summary: class=', cls_id, ' nptcls=', size(labels), ' nsubcls=', nsplit
             call flush(logfhandle)
             do j = 1, nsplit
                 iglob = iglob + 1
+                neff  = sum(weights(:,j))
                 if( l_write_project )then
                     parent_of_subcls(iglob) = cls_id
                     pop_of_subcls(iglob)    = count(labels == j)
-                    neff_of_subcls(iglob)   = sum(weights(:,j))
+                    neff_of_subcls(iglob)   = neff
                     sep_of_subcls(iglob)    = separation
                     repro_of_subcls(iglob)  = repro(j)
                 endif
-                write(funit_map,'(I8,1X,I8,1X,I8,1X,I8,1X,F8.3,1X,F8.3)') iglob, cls_id, j, count(labels == j), separation, repro(j)
+                write(funit_map,'(I8,1X,I8,1X,I8,1X,I8,1X,F12.3,1X,F8.3,1X,F8.3)') iglob, cls_id, j, count(labels == j), &
+                    &neff, separation, repro(j)
                 ! the sub-class average lands at its row: global index here, local row in a part
                 call cavgs(j)%write(stk_fname, iglob)
                 call cavgs_even(j)%write(stk_even, iglob)
                 call cavgs_odd(j)%write(stk_odd, iglob)
             end do
-            if( l_write_project )then
-                do k = 1, size(labels)
-                    if( labels(k) <= 0 ) cycle
-                    new_class(pinds(k))  = iglob - nsplit + labels(k)
+            do k = 1, size(labels)
+                if( labels(k) <= 0 ) cycle
+                if( l_write_project )then
+                    isub = iglob - nsplit + labels(k)
+                    new_class(pinds(k))  = isub
                     new_parent(pinds(k)) = cls_id
-                end do
-                do k = 1, size(labels)
-                    if( labels(k) <= 0 ) cycle
-                    write(funit_wts,'(I10,1X,I10,1X,I10,*(1X,F8.5))') pinds(k), cls_id, &
-                        &iglob - nsplit + labels(k), weights(k,:)
-                end do
-            else
-                do k = 1, size(labels)
-                    if( labels(k) <= 0 ) cycle
+                else
+                    isub = labels(k)
                     write(funit_assign,'(I10,1X,I10,1X,I10)') pinds(k), cls_id, labels(k)
-                end do
-                do k = 1, size(labels)
-                    if( labels(k) <= 0 ) cycle
-                    write(funit_wts,'(I10,1X,I10,1X,I10,*(1X,F8.5))') pinds(k), cls_id, labels(k), weights(k,:)
-                end do
-            endif
+                endif
+                write(funit_wts,'(I10,1X,I10,1X,I10,1X,I6,*(1X,F8.6))') pinds(k), cls_id, isub, nsplit, weights(k,:)
+            end do
         end subroutine record_class
 
     end subroutine run_local_split
+
+    !> The split's subclass budget: the classes grouped by class-average correlation (one group per class without
+    !! class averages), then ncls subclasses spread over groups and classes; written to FLEX_CLS_ALLOC_FILE
+    subroutine allocate_subclasses( params, spproj, cls_inds, cls_pops, nthr, nsub )
+        use simple_view_partition_sampling, only: has_clusterable_cavgs, cluster_cavgs_into_groups
+        use simple_flex_cls_expansion,      only: flex_cls_allocate_subclasses, flex_cls_split_floor
+        type(parameters),     intent(in)    :: params
+        type(sp_project),     intent(inout) :: spproj
+        integer,              intent(in)    :: cls_inds(:), cls_pops(:), nthr
+        integer, allocatable, intent(out)   :: nsub(:)
+        integer, allocatable  :: groups(:)
+        logical, allocatable  :: l_sel(:)
+        character(len=STDLEN) :: msg
+        integer :: m, ncls2D, minsplit, ngot, ngroups, funit, i, g
+        m = size(cls_inds)
+        if( params%ncls < m )then
+            write(msg,'(A,I0,A,I0,A)') 'cls_expansion: ncls=', params%ncls, ' (the total number of subclasses) is below the ', &
+                &m, ' classes'
+            THROW_HARD(trim(msg))
+        endif
+        if( m > 1 )then
+            if( any(cls_inds(2:) <= cls_inds(:m-1)) ) THROW_HARD('cls_expansion: the classes must be in increasing order')
+        endif
+        ncls2D = spproj%os_cls2D%get_noris()
+        if( has_clusterable_cavgs(spproj) .and. maxval(cls_inds) <= ncls2D )then
+            allocate(l_sel(ncls2D), source=.false.)
+            l_sel(cls_inds) = .true.
+            call cluster_cavgs_into_groups(params, spproj, nthr, l_sel, params%nclust, FLEX_CLS_GROUPS_FBODY, groups)
+        else
+            write(logfhandle,'(A)') '>>> CLS_EXPANSION: no class average for every class (or no frc2D); every class is its own group'
+            groups = [(i, i=1,m)]
+        endif
+        ngroups  = maxval(groups)
+        minsplit = max(2 * params%minpop, flex_cls_split_floor(2, params%neigs))
+        allocate(nsub(m))
+        call flex_cls_allocate_subclasses(cls_pops, groups, params%ncls, params%minpop, minsplit, nsub, ngot)
+        if( ngot < params%ncls )then
+            write(msg,'(A,I0,A,I0,A,I0)') 'cls_expansion: the class populations hold ', ngot, ' subclasses at minpop=', &
+                &params%minpop, ' instead of ncls=', params%ncls
+            THROW_WARN(trim(msg))
+        endif
+        open(newunit=funit, file=FLEX_CLS_ALLOC_FILE, status='replace', action='write')
+        write(funit,'(A)') '# class group pop nsub'
+        do i = 1, m
+            write(funit,'(I8,1X,I6,1X,I10,1X,I6)') cls_inds(i), groups(i), cls_pops(i), nsub(i)
+        end do
+        close(funit)
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A)') '>>> CLS_EXPANSION SUBCLASS BUDGET: ', sum(nsub), ' subclasses of ', &
+            &m, ' classes in ', ngroups, ' groups (ncls=', params%ncls, ', minpop=', params%minpop, ')'
+        write(logfhandle,'(A,I0,A,I0)') '    Classes kept whole: ', count(nsub == 1), '; split threshold (particles): ', minsplit
+        write(logfhandle,'(A)') '    Group   Classes    Particles   Subclasses   Particles/subclass'
+        do g = 1, ngroups
+            if( .not. any(groups == g) ) cycle
+            write(logfhandle,'(4X,I5,2X,I8,2X,I11,2X,I11,2X,F19.1)') g, count(groups == g), sum(cls_pops, mask=(groups == g)), &
+                &sum(nsub, mask=(groups == g)), real(sum(cls_pops, mask=(groups == g))) / real(sum(nsub, mask=(groups == g)))
+        end do
+        write(logfhandle,'(A)') ''
+        call flush(logfhandle)
+    end subroutine allocate_subclasses
+
+    !> a worker's subclass counts, from the master's budget file
+    subroutine read_allocation( cls_inds, nsub )
+        integer,              intent(in)  :: cls_inds(:)
+        integer, allocatable, intent(out) :: nsub(:)
+        character(len=XLONGSTRLEN) :: line
+        integer :: funit, ios, cls, grp, pop, n, i
+        allocate(nsub(size(cls_inds)), source=0)
+        open(newunit=funit, file=FLEX_CLS_ALLOC_FILE, status='old', action='read', iostat=ios)
+        call fileiochk('read_allocation opening '//FLEX_CLS_ALLOC_FILE, ios)
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            if( len_trim(line) == 0 ) cycle
+            if( line(1:1) == '#' ) cycle
+            read(line,*) cls, grp, pop, n
+            i = findloc(cls_inds, cls, dim=1)
+            if( i > 0 ) nsub(i) = n
+        end do
+        close(funit)
+        if( any(nsub < 1) ) THROW_HARD('a class of this part has no subclass count in '//FLEX_CLS_ALLOC_FILE)
+    end subroutine read_allocation
+
+    !> the split's class map: per class of cls_inds its subclass count, first global subclass and separation;
+    !! l_all requires cls_inds to hold every parent of the map (a whole run, not a worker's part)
+    subroutine read_split_map( cls_inds, l_all, nsub, first_sub, sep )
+        integer,              intent(in)  :: cls_inds(:)
+        logical,              intent(in)  :: l_all
+        integer, allocatable, intent(out) :: nsub(:), first_sub(:)
+        real,    allocatable, intent(out) :: sep(:)
+        character(len=XLONGSTRLEN) :: line
+        real    :: neff, sepv, repro
+        integer :: funit, ios, isub, parent, loc, pop, i
+        allocate(nsub(size(cls_inds)), first_sub(size(cls_inds)), source=0)
+        allocate(sep(size(cls_inds)), source=0.)
+        open(newunit=funit, file=FLEX_CLS_MAP_FILE, status='old', action='read', iostat=ios)
+        call fileiochk('read_split_map opening '//FLEX_CLS_MAP_FILE, ios)
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            if( len_trim(line) == 0 ) cycle
+            if( line(1:1) == '#' ) cycle
+            read(line,*) isub, parent, loc, pop, neff, sepv, repro
+            i = findloc(cls_inds, parent, dim=1)
+            if( i == 0 .and. l_all ) THROW_HARD('a class of the split has no members to restore; its subclasses would be renumbered')
+            if( i == 0 ) cycle
+            ! the subclasses of a class are consecutive: global = first + local - 1
+            if( nsub(i) == 0 ) first_sub(i) = isub - loc + 1
+            if( isub - loc + 1 /= first_sub(i) ) THROW_HARD('the subclasses of a class are not consecutive in '//FLEX_CLS_MAP_FILE)
+            nsub(i) = nsub(i) + 1
+            sep(i)  = sepv
+        end do
+        close(funit)
+        if( any(nsub < 1) ) THROW_HARD('a class to restore has no subclasses in '//FLEX_CLS_MAP_FILE)
+    end subroutine read_split_map
+
+    !> the split's soft weights of every particle with a row (nptcls = the particle field)
+    subroutine read_split_weights( nptcls, sw )
+        integer,             intent(in)    :: nptcls
+        type(split_weights), intent(inout) :: sw
+        character(len=:), allocatable :: line
+        real,             allocatable :: wbuf(:)
+        integer :: funit, ios, pind, parent, isub, n, ntot, nmax, j
+        call kill_split_weights(sw)
+        allocate(sw%off(nptcls), sw%nsub(nptcls), sw%sub(nptcls), sw%parent(nptcls), source=0)
+        open(newunit=funit, file=FLEX_CLS_WEIGHTS_FILE, status='old', action='read', iostat=ios)
+        call fileiochk('read_split_weights opening '//FLEX_CLS_WEIGHTS_FILE, ios)
+        ! rows are as wide as their parent has subclasses: count first, then read
+        ntot = 0
+        nmax = 0
+        do
+            call read_record(funit, line, ios)
+            if( ios /= 0 ) exit
+            if( len_trim(line) == 0 ) cycle
+            if( line(1:1) == '#' ) cycle
+            read(line,*,iostat=ios) pind, parent, isub, n
+            if( ios /= 0 ) THROW_HARD('read error in '//FLEX_CLS_WEIGHTS_FILE)
+            if( pind < 1 .or. pind > nptcls .or. n < 1 ) THROW_HARD('invalid row in '//FLEX_CLS_WEIGHTS_FILE)
+            ntot = ntot + n
+            nmax = max(nmax, n)
+        end do
+        allocate(sw%w(max(1,ntot)), source=0.)
+        allocate(wbuf(max(1,nmax)))
+        rewind(funit)
+        ntot = 0
+        do
+            call read_record(funit, line, ios)
+            if( ios /= 0 ) exit
+            if( len_trim(line) == 0 ) cycle
+            if( line(1:1) == '#' ) cycle
+            read(line,*,iostat=ios) pind, parent, isub, n, (wbuf(j), j=1,n)
+            if( ios /= 0 ) THROW_HARD('short or invalid row in '//FLEX_CLS_WEIGHTS_FILE)
+            sw%off(pind)        = ntot + 1
+            sw%nsub(pind)       = n
+            sw%sub(pind)        = isub
+            sw%parent(pind)     = parent
+            sw%w(ntot+1:ntot+n) = wbuf(1:n)
+            ntot = ntot + n
+        end do
+        close(funit)
+        deallocate(wbuf)
+    end subroutine read_split_weights
+
+    !> one whole record of a formatted sequential file, however long (ios /= 0 at the end of the file)
+    subroutine read_record( funit, line, ios )
+        integer,                       intent(in)  :: funit
+        character(len=:), allocatable, intent(out) :: line
+        integer,                       intent(out) :: ios
+        character(len=1024) :: buf
+        integer :: nread
+        line = ''
+        do
+            read(funit,'(A)',advance='no',iostat=ios,size=nread) buf
+            line = line//buf(1:nread)
+            if( is_iostat_eor(ios) )then
+                ios = 0
+                return
+            endif
+            if( ios /= 0 ) return
+        end do
+    end subroutine read_record
+
+    subroutine kill_split_weights( sw )
+        type(split_weights), intent(inout) :: sw
+        if( allocated(sw%off)    ) deallocate(sw%off)
+        if( allocated(sw%nsub)   ) deallocate(sw%nsub)
+        if( allocated(sw%sub)    ) deallocate(sw%sub)
+        if( allocated(sw%parent) ) deallocate(sw%parent)
+        if( allocated(sw%w)      ) deallocate(sw%w)
+    end subroutine kill_split_weights
 
 
     ! ===== the flex model
@@ -599,8 +829,8 @@ contains
     end subroutine prepare_flex_sigma2
 
     !> the members of one class as Fourier planes in the class frame with their CTF, half-plane lattice, shells 1..nyq;
-    !! noise weights from the canonical sigma2 or the class's own residual spectrum; nptcls = 0 when too small
-    subroutine flex_class_planes( params, build, spproj, cls_id, ncls, ncomp, kfit, l_sigma, pinds, y, c, w, wq, &
+    !! noise weights from the canonical sigma2 or the class's own residual spectrum; nptcls = 0 without members
+    subroutine flex_class_planes( params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
                                   hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls )
         use simple_flex_cls_expansion,  only: flex_cls_shell_noise
         use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps, ft_map_lims, ft_map_phys_addrh, ft_map_phys_addrk
@@ -608,7 +838,7 @@ contains
         type(parameters),         intent(inout) :: params
         type(builder),            intent(inout) :: build
         type(sp_project),         intent(inout) :: spproj
-        integer,                  intent(in)    :: cls_id, ncls, ncomp, kfit
+        integer,                  intent(in)    :: cls_id, kfit
         logical,                  intent(in)    :: l_sigma
         integer,     allocatable, intent(out)   :: pinds(:), hidx(:), kidx(:), shell(:)
         complex(sp), allocatable, intent(out)   :: y(:,:)
@@ -640,15 +870,6 @@ contains
         if( .not. allocated(imgs) )then
             write(logfhandle,'(A,I8)') 'Cls expansion flex warning: no transformed images returned for parent class ', cls_id
             call flush(logfhandle)
-            return
-        endif
-        if( size(imgs) < max(2*ncls, 3*(ncomp+1)) )then
-            write(logfhandle,'(A,I8,A,I8,A)') 'Cls expansion flex: class=', cls_id, ' nptcls=', size(imgs), &
-                &' is too small for the covariance model; left unsplit'
-            call flush(logfhandle)
-            call dealloc_imgarr(imgs)
-            call gridcorr_img%kill
-            if( allocated(pinds) ) deallocate(pinds)
             return
         endif
         nptcls = size(imgs)
@@ -844,116 +1065,23 @@ contains
 
     end subroutine flex_class_restore_deliver
 
-    !> the labels mode: the environment, or the mode file the master wrote for its workers
-    subroutine flex_labels_mode( mode, found )
-        character(len=STDLEN), intent(out) :: mode
-        logical,               intent(out) :: found
-        integer :: istat, funit, ios
-        mode = ''
-        found = .false.
-        call get_environment_variable('SIMPLE_FLEXCLS_LABELS', mode, status=istat)
-        if( istat == 0 .and. len_trim(mode) > 0 )then
-            found = .true.
-            return
-        endif
-        if( .not. file_exists(FLEX_CLS_LABELS_MODE) ) return
-        open(newunit=funit, file=FLEX_CLS_LABELS_MODE, status='old', action='read', iostat=ios)
-        if( ios /= 0 ) return
-        read(funit,'(A)',iostat=ios) mode
-        close(funit)
-        found = ios == 0 .and. len_trim(mode) > 0
-    end subroutine flex_labels_mode
+    !> the restoration pass: the commander's flag file in the execution directory, seen by the workers too
+    logical function flex_restore_mode()
+        flex_restore_mode = file_exists(FLEX_CLS_RESTORE_FLAG)
+    end function flex_restore_mode
 
-    !> the master publishes the labels mode for its workers
-    subroutine flex_publish_labels_mode()
-        character(len=STDLEN) :: mode
-        logical :: found
-        integer :: funit
-        call flex_labels_mode(mode, found)
-        if( .not. found ) return
-        open(newunit=funit, file=FLEX_CLS_LABELS_MODE, status='replace', action='write')
-        write(funit,'(A)') trim(mode)
-        close(funit)
-    end subroutine flex_publish_labels_mode
-
-    logical function flex_labels_from_project()
-        character(len=STDLEN) :: mode
-        logical :: found
-        call flex_labels_mode(mode, found)
-        flex_labels_from_project = found .and. trim(mode) == 'project'
-    end function flex_labels_from_project
-
-    !> labels from the project's class field, ranked into local labels 1..ncls (0 when unlabelled)
-    logical function flex_external_labels( spproj, pinds, ncls, labels )
-        type(sp_project),     intent(inout) :: spproj
-        integer,              intent(in)  :: pinds(:), ncls
-        integer, allocatable, intent(out) :: labels(:)
-        character(len=STDLEN) :: fname
-        integer, allocatable  :: glob(:), uniq(:)
-        integer :: istat, ios, g, i, n, k, maxp
-        logical :: found
-        flex_external_labels = .false.
-        call flex_labels_mode(fname, found)
-        if( .not. found ) return
-        maxp = maxval(pinds)
-        allocate(glob(maxp), source=0)
-        if( trim(fname) /= 'project' ) THROW_HARD('SIMPLE_FLEXCLS_LABELS must be project; got '//trim(fname))
-        do i = 1, size(pinds)
-            glob(pinds(i)) = spproj%os_ptcl2D%get_class(pinds(i))
-        end do
-        n = size(pinds)
-        allocate(labels(n), source=0, stat=istat)
-        allocate(uniq(ncls), source=0)
-        k = 0
-        do i = 1, n
-            g = glob(pinds(i))
-            if( g <= 0 ) cycle
-            if( .not. any(uniq(1:k) == g) )then
-                if( k == ncls ) cycle
-                k = k + 1; uniq(k) = g
-            endif
-        end do
-        ! rank the global ids so the local labels follow their order
-        call sort_small(uniq, k)
-        do i = 1, n
-            g = glob(pinds(i))
-            labels(i) = 0
-            do ios = 1, k
-                if( uniq(ios) == g ) labels(i) = ios
-            end do
-        end do
-        flex_external_labels = .true.
-        deallocate(glob, uniq)
-
-      contains
-
-        subroutine sort_small( a, m )
-            integer, intent(inout) :: a(:)
-            integer, intent(in)    :: m
-            integer :: p, q, t
-            do p = 2, m
-                q = p
-                do while( q > 1 )
-                    if( a(q-1) <= a(q) ) exit
-                    t = a(q-1); a(q-1) = a(q); a(q) = t
-                    q = q - 1
-                end do
-            end do
-        end subroutine sort_small
-
-    end function flex_external_labels
-
-    !> one class through the model: planes, cross-fitted fit with nuisance, placement, delivery; nsplit = 0 when too small
-    subroutine split_class_flex( params, build, spproj, cls_id, ncls, ncomp, kfit, l_sigma, nsplit, pinds, labels, weights, cavgs, &
+    !> one class into nsub subclasses: planes, cross-fitted fit with nuisance, placement, delivery; nsub = 1 keeps the
+    !! class whole (one weighted average of all members)
+    subroutine split_class_flex( params, build, spproj, cls_id, nsub, ncomp, kfit, l_sigma, pinds, labels, weights, cavgs, &
                                  separation, repro, cavgs_even, cavgs_odd )
-        use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_fit_crossed, flex_cls_weighted_mean, flex_cls_pose_tangents
+        use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_fit_crossed, flex_cls_weighted_mean, flex_cls_pose_tangents, &
+            &flex_cls_split_floor
         use simple_rnd,             only: seed_rnd_fixed
         type(parameters),         intent(inout) :: params
         type(builder),            intent(inout) :: build
         type(sp_project),         intent(inout) :: spproj
-        integer,                  intent(in)    :: cls_id, ncls, ncomp, kfit
+        integer,                  intent(in)    :: cls_id, nsub, ncomp, kfit
         logical,                  intent(in)    :: l_sigma
-        integer,                  intent(out)   :: nsplit
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
         real,        allocatable, intent(out)   :: weights(:,:)
         type(image), allocatable, intent(inout) :: cavgs(:)
@@ -968,46 +1096,77 @@ contains
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
         logical,     allocatable :: fitmask(:)
         integer :: ldim(3), ncoeff, nptcls, j
-        nsplit = 0
         separation = 0.
-        if( allocated(labels)  ) deallocate(labels)
-        if( allocated(weights) ) deallocate(weights)
-        if( allocated(cavgs)   ) call dealloc_imgarr(cavgs)
-        call flex_class_planes(params, build, spproj, cls_id, ncls, ncomp, kfit, l_sigma, pinds, y, c, w, wq, &
+        if( allocated(cavgs) ) call dealloc_imgarr(cavgs)
+        call flex_class_planes(params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
             &hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls)
-        if( nptcls < 1 ) return
-        ! restoration only: the project already holds the split
-        if( flex_external_labels(spproj, pinds, ncls, labels) )then
-            allocate(weights(nptcls,ncls), source=0.)
-            do j = 1, nptcls
-                if( labels(j) > 0 ) weights(j,labels(j)) = 1.
-            end do
-            separation = 0.
-            call flex_class_restore_deliver(params, cls_id, ncls, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, &
+        if( nptcls < 1 ) THROW_HARD('cls_expansion: a class has no members')
+        if( nsub == 1 )then
+            allocate(weights(nptcls,1), source=1.)
+            allocate(labels(nptcls), source=1)
+            call flex_class_restore_deliver(params, cls_id, 1, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, &
                 &gridcorr_img, ldim, ncoeff, nptcls, labels, weights, cavgs, repro, cavgs_even, cavgs_odd)
-            nsplit = ncls
-            call gridcorr_img%kill
-            deallocate(y, c, w, wq, hidx, kidx, shell, fitmask)
-            return
+        else
+            if( nptcls < flex_cls_split_floor(nsub, ncomp) ) THROW_HARD('cls_expansion: a class is too small for its subclass count')
+            call seed_rnd_fixed(FLEX_CLS_SEED_BASE + cls_id)
+            ! nuisance columns: the pose tangents and the class mean (per-particle contrast)
+            allocate(mu_all(ncoeff), nuis(ncoeff,4))
+            call flex_cls_weighted_mean(y, c, w, mu_all)
+            call flex_cls_pose_tangents(mu_all, hidx, kidx, params%box, nuis(:,1:3))
+            nuis(:,4) = cmplx(mu_all, kind=sp)
+            call flex_cls_fit_crossed(model, y, c, w, wq, fitmask, ncomp, verbose=.true., nuis=nuis)
+            write(logfhandle,'(A,4F9.4)') 'Cls expansion flex nuisance rms (x, y, rot, contrast; latent units): ', &
+                &[(sqrt(sum(model%nu(:,j)**2)/real(nptcls,dp)), j=1,4)]
+            deallocate(mu_all, nuis)
+            call flex_class_deliver(params, cls_id, model, nsub, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, &
+                &gridcorr_img, ldim, ncoeff, nptcls, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
+            call model%kill
         endif
-        call seed_rnd_fixed(FLEX_CLS_SEED_BASE + cls_id)
-        ! nuisance columns: the pose tangents and the class mean (per-particle contrast)
-        allocate(mu_all(ncoeff), nuis(ncoeff,4))
-        call flex_cls_weighted_mean(y, c, w, mu_all)
-        call flex_cls_pose_tangents(mu_all, hidx, kidx, params%box, nuis(:,1:3))
-        nuis(:,4) = cmplx(mu_all, kind=sp)
-        call flex_cls_fit_crossed(model, y, c, w, wq, fitmask, ncomp, verbose=.true., nuis=nuis)
-        write(logfhandle,'(A,4F9.4)') 'Cls expansion flex nuisance rms (x, y, rot, contrast; latent units): ', &
-            &[(sqrt(sum(model%nu(:,j)**2)/real(nptcls,dp)), j=1,4)]
-        deallocate(mu_all, nuis)
-        call flex_class_deliver(params, cls_id, model, ncls, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, gridcorr_img, ldim, &
-            &ncoeff, nptcls, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
-        nsplit = ncls
-        call model%kill
         call gridcorr_img%kill
         deallocate(y, c, w, wq, hidx, kidx, shell, fitmask)
     end subroutine split_class_flex
 
+    !> one class restored on the current alignment from the split's soft weights; the hard labels are the split's
+    subroutine restore_class_flex( params, build, spproj, cls_id, nsub, first_sub, separation, kfit, l_sigma, sw, pinds, &
+                                   labels, weights, cavgs, repro, cavgs_even, cavgs_odd )
+        type(parameters),         intent(inout) :: params
+        type(builder),            intent(inout) :: build
+        type(sp_project),         intent(inout) :: spproj
+        integer,                  intent(in)    :: cls_id, nsub, first_sub, kfit
+        real,                     intent(in)    :: separation   !< the split's, for the log
+        logical,                  intent(in)    :: l_sigma
+        type(split_weights),      intent(in)    :: sw
+        integer,     allocatable, intent(out)   :: pinds(:), labels(:)
+        real,        allocatable, intent(out)   :: weights(:,:)
+        type(image), allocatable, intent(inout) :: cavgs(:)
+        real,        allocatable, intent(out)   :: repro(:)
+        type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
+        type(image) :: gridcorr_img
+        complex(sp), allocatable :: y(:,:)
+        real(sp),    allocatable :: c(:,:), w(:,:), wq(:)
+        integer,     allocatable :: hidx(:), kidx(:), shell(:)
+        logical,     allocatable :: fitmask(:)
+        integer :: ldim(3), ncoeff, nptcls, k, ip, o
+        if( allocated(cavgs) ) call dealloc_imgarr(cavgs)
+        call flex_class_planes(params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
+            &hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls)
+        if( nptcls < 1 ) THROW_HARD('cls_expansion restoration: a class has no members')
+        allocate(weights(nptcls,nsub), source=0.)
+        allocate(labels(nptcls), source=0)
+        do k = 1, nptcls
+            ip = pinds(k)
+            o  = sw%off(ip)
+            if( o < 1 .or. sw%parent(ip) /= cls_id .or. sw%nsub(ip) /= nsub ) THROW_HARD('cls_expansion restoration: a member has no split weights for its class')
+            weights(k,:) = sw%w(o:o+nsub-1)
+            labels(k)    = sw%sub(ip) - first_sub + 1
+            if( labels(k) < 1 .or. labels(k) > nsub ) THROW_HARD('cls_expansion restoration: a hard label outside its class')
+        end do
+        call flex_class_restore_deliver(params, cls_id, nsub, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, &
+            &gridcorr_img, ldim, ncoeff, nptcls, labels, weights, cavgs, repro, cavgs_even, cavgs_odd, neff=sum(weights, dim=1), &
+            &separation=separation)
+        call gridcorr_img%kill
+        deallocate(y, c, w, wq, hidx, kidx, shell, fitmask)
+    end subroutine restore_class_flex
 
 
 
@@ -1024,6 +1183,9 @@ contains
 
 
 
+
+    !> the split into the project: hard subclass and parent per particle, one cls2D/cls3D row per subclass with its
+    !! readouts, and the sub-class average stack
     subroutine apply_split_project_updates(spproj, params, nsplit, new_class, new_parent, parent_of_subcls, pop_of_subcls, &
                                            neff_of_subcls, sep_of_subcls, repro_of_subcls, cavgs_stk)
         type(sp_project), intent(inout) :: spproj
@@ -1031,10 +1193,10 @@ contains
         integer,          intent(in)    :: nsplit
         integer,          intent(in)    :: new_class(:), new_parent(:)
         integer,          intent(in)    :: parent_of_subcls(:), pop_of_subcls(:)
-        real,    optional, intent(in)   :: neff_of_subcls(:)  !< flex: effective (soft) population per subclass
-        real,    optional, intent(in)   :: sep_of_subcls(:)   !< flex: Ashman's D of the parent's split (same for its subclasses)
-        real,    optional, intent(in)   :: repro_of_subcls(:) !< flex: cross-half reproducibility of the subclass difference
-        type(string), optional, intent(in) :: cavgs_stk       !< flex: the sub-class average stack to register
+        real,             intent(in)    :: neff_of_subcls(:)  !< soft population: the sum of the subclass's weights
+        real,             intent(in)    :: sep_of_subcls(:)   !< Ashman's D of the parent's split (same for its subclasses)
+        real,             intent(in)    :: repro_of_subcls(:) !< cross-half reproducibility of the subclass difference
+        type(string),     intent(in)    :: cavgs_stk          !< the sub-class average stack to register
         integer :: i
         call spproj%os_ptcl2D%set_all2single('class',   0)
         call spproj%os_ptcl2D%set_all2single('cluster', 0)
@@ -1050,28 +1212,30 @@ contains
             call spproj%os_cls2D%set(i, 'pop',     pop_of_subcls(i))
             call spproj%os_cls2D%set(i, 'accept',  1)
             call spproj%os_cls2D%set(i, 'state',   1)
-            if( present(neff_of_subcls) ) call spproj%os_cls2D%set(i, 'neff', neff_of_subcls(i))
-            if( present(sep_of_subcls)  ) call spproj%os_cls2D%set(i, 'sep',  sep_of_subcls(i))
-            if( present(repro_of_subcls)) call spproj%os_cls2D%set(i, 'repro', repro_of_subcls(i))
+            call spproj%os_cls2D%set(i, 'neff',    neff_of_subcls(i))
+            call spproj%os_cls2D%set(i, 'sep',     sep_of_subcls(i))
+            call spproj%os_cls2D%set(i, 'repro',   repro_of_subcls(i))
             call spproj%os_cls3D%set(i, 'cluster', parent_of_subcls(i))
             call spproj%os_cls3D%set(i, 'accept',  1)
             call spproj%os_cls3D%set(i, 'state',   1)
         end do
-        if( present(cavgs_stk) ) call spproj%add_cavgs2os_out(cavgs_stk, params%smpd, imgkind='cavg')
+        call spproj%add_cavgs2os_out(cavgs_stk, params%smpd, imgkind='cavg')
         call spproj%write(params%projfile)
     end subroutine apply_split_project_updates
 
+    !> the part outputs in global subclass order (by parent, then local subclass): class map, assignments into the
+    !! project, weights table and the average stacks
     subroutine merge_worker_outputs(params, nparts_run)
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nparts_run
         type(sp_project) :: spproj
-        integer, allocatable :: part_counts(:), part_localstack(:,:), part_parent(:,:), part_local(:,:)
-        integer, allocatable :: part_pop(:,:), part_global(:,:)
+        integer, allocatable :: part_counts(:), part_parent(:,:), part_local(:,:), part_pop(:,:), part_global(:,:)
+        real,    allocatable :: part_neff(:,:), part_sep(:,:), part_repro(:,:)
         integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:)
-        integer, allocatable :: new_class(:), new_parent(:)
+        integer, allocatable :: new_class(:), new_parent(:), first_glob(:), nsub_of(:)
+        real,    allocatable :: neff(:), sep(:), repro(:)
         type(string) :: map_fname, assign_fname
-        real, allocatable :: neff(:), sep(:), repro(:)
-        integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, global_cls
+        integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, p
         character(len=XLONGSTRLEN) :: line
         call spproj%read(params%projfile)
         write(logfhandle,'(A,I8)') 'Cls expansion merge: start nparts=', nparts_run
@@ -1080,33 +1244,22 @@ contains
         total = 0
         do ipart = 1, nparts_run
             map_fname = string('cls_expansion_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
-            write(logfhandle,'(A,I8,A,A)') 'Cls expansion merge: counting map part=', ipart, ' file=', trim(map_fname%to_char())
-            call flush(logfhandle)
             call count_data_lines(map_fname, nlocal)
             part_counts(ipart) = nlocal
             total = total + nlocal
-            write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls expansion merge: counted map part=', ipart, ' rows=', nlocal, &
-                ' running_total=', total
-            call flush(logfhandle)
             call map_fname%kill
         end do
         if( total < 1 ) THROW_HARD('No subclass outputs produced by distributed cls_expansion workers')
         max_count = maxval(part_counts)
-        write(logfhandle,'(A,I8,A,I8)') 'Cls expansion merge: maps counted total=', total, ' max_count=', max_count
-        call flush(logfhandle)
-        allocate(part_localstack(max_count, nparts_run), part_parent(max_count, nparts_run), part_local(max_count, nparts_run), &
-                 part_pop(max_count, nparts_run), part_global(max_count, nparts_run), source=0)
+        allocate(part_parent(max_count, nparts_run), part_local(max_count, nparts_run), part_pop(max_count, nparts_run), &
+                 part_global(max_count, nparts_run), source=0)
+        allocate(part_neff(max_count, nparts_run), part_sep(max_count, nparts_run), part_repro(max_count, nparts_run), source=0.)
         allocate(comb_part(total), comb_row(total), comb_parent(total), comb_local(total), comb_pop(total), source=0)
         idx = 0
         do ipart = 1, nparts_run
             map_fname = string('cls_expansion_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
-            write(logfhandle,'(A,I8,A,A)') 'Cls expansion merge: reading map part=', ipart, ' file=', trim(map_fname%to_char())
-            call flush(logfhandle)
-            call read_part_map(map_fname, part_counts(ipart), part_localstack(1:part_counts(ipart), ipart), &
-                               part_parent(1:part_counts(ipart), ipart), part_local(1:part_counts(ipart), ipart), &
-                               part_pop(1:part_counts(ipart), ipart))
-            write(logfhandle,'(A,I8,A,I8)') 'Cls expansion merge: read map part=', ipart, ' rows=', part_counts(ipart)
-            call flush(logfhandle)
+            call read_part_map(map_fname, part_counts(ipart), part_parent(:,ipart), part_local(:,ipart), part_pop(:,ipart), &
+                &part_neff(:,ipart), part_sep(:,ipart), part_repro(:,ipart))
             do i = 1, part_counts(ipart)
                 idx = idx + 1
                 comb_part(idx)   = ipart
@@ -1117,22 +1270,36 @@ contains
             end do
             call map_fname%kill
         end do
-        write(logfhandle,'(A,I8)') 'Cls expansion merge: sorting subclass map rows=', total
-        call flush(logfhandle)
         call sort_combined_maps(comb_part, comb_row, comb_parent, comb_local, comb_pop)
-        map_fname = string('cls_expansion_class_map.txt')
-        open(newunit=funit, file=map_fname%to_char(), status='replace', action='write')
-        write(funit,'(A)') '# global_subclass parent_class local_subclass pop'
+        ! a parent's subclasses are consecutive: global = first_glob(parent) + local - 1
+        allocate(first_glob(maxval(comb_parent)), nsub_of(maxval(comb_parent)), source=0)
+        allocate(neff(total), sep(total), repro(total), source=0.)
         do idx = 1, total
             if( idx > 1 )then
                 if( comb_parent(idx) == comb_parent(idx-1) .and. comb_local(idx) == comb_local(idx-1) )then
                     THROW_HARD('Duplicate parent/local subclass pair detected while merging cls_expansion outputs')
                 endif
             endif
+            p = comb_parent(idx)
+            if( comb_local(idx) == 1 ) first_glob(p) = idx
+            nsub_of(p) = nsub_of(p) + 1
+            if( first_glob(p) < 1 .or. idx /= first_glob(p) + comb_local(idx) - 1 )then
+                THROW_HARD('the subclasses of a parent are not consecutive while merging cls_expansion outputs')
+            endif
             part_global(comb_row(idx), comb_part(idx)) = idx
-            write(funit,'(I8,1X,I8,1X,I8,1X,I8)') idx, comb_parent(idx), comb_local(idx), comb_pop(idx)
+            neff(idx)  = part_neff(comb_row(idx), comb_part(idx))
+            sep(idx)   = part_sep(comb_row(idx), comb_part(idx))
+            repro(idx) = part_repro(comb_row(idx), comb_part(idx))
+        end do
+        map_fname = string(FLEX_CLS_MAP_FILE)
+        open(newunit=funit, file=map_fname%to_char(), status='replace', action='write')
+        write(funit,'(A)') '# subclass parent_class local_subclass pop neff separation repro'
+        do idx = 1, total
+            write(funit,'(I8,1X,I8,1X,I8,1X,I8,1X,F12.3,1X,F8.3,1X,F8.3)') idx, comb_parent(idx), comb_local(idx), &
+                &comb_pop(idx), neff(idx), sep(idx), repro(idx)
         end do
         close(funit)
+        call map_fname%kill
         write(logfhandle,'(A,I8)') 'Cls expansion merge: subclass map merged total=', total
         call flush(logfhandle)
         allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
@@ -1146,107 +1313,69 @@ contains
                 if( len_trim(line) == 0 ) cycle
                 if( line(1:1) == '#' ) cycle
                 read(line,*) pind, parent_cls, local_cls
-                global_cls = lookup_part_global(part_counts(ipart), part_parent(1:part_counts(ipart), ipart), &
-                                                part_local(1:part_counts(ipart), ipart), part_global(1:part_counts(ipart), ipart), &
-                                                parent_cls, local_cls)
-                if( global_cls <= 0 ) THROW_HARD('Could not map worker-local subclass to global subclass during merge')
-                new_class(pind)  = global_cls
+                new_class(pind)  = global_subclass(parent_cls, local_cls)
                 new_parent(pind) = parent_cls
             end do
             close(funit)
             call assign_fname%kill
         end do
-        call merge_flex_outputs(params, nparts_run, total, part_counts, part_parent, part_local, part_global, part_pop, neff, sep, repro)
+        call merge_part_weights_and_stacks(params, nparts_run, part_counts, part_global, first_glob, nsub_of)
         call apply_split_project_updates(spproj, params, total, new_class, new_parent, comb_parent, comb_pop, &
-            &neff_of_subcls=neff, sep_of_subcls=sep, repro_of_subcls=repro, cavgs_stk=string(FLEX_CLS_CAVGS_FILE))
-        deallocate(neff, sep, repro)
+            &neff, sep, repro, string(FLEX_CLS_CAVGS_FILE))
         call spproj%kill
-        deallocate(new_class, new_parent, part_counts, part_localstack, part_parent, part_local, part_pop, part_global, &
-                   comb_part, comb_row, comb_parent, comb_local, comb_pop)
-        call map_fname%kill
+        deallocate(new_class, new_parent, part_counts, part_parent, part_local, part_pop, part_global, part_neff, part_sep, &
+                   part_repro, comb_part, comb_row, comb_parent, comb_local, comb_pop, first_glob, nsub_of, neff, sep, repro)
+
+    contains
+
+        integer function global_subclass( parent, loc )
+            integer, intent(in) :: parent, loc
+            global_subclass = 0
+            if( parent >= 1 .and. parent <= size(first_glob) )then
+                if( loc >= 1 .and. loc <= nsub_of(parent) ) global_subclass = first_glob(parent) + loc - 1
+            endif
+            if( global_subclass < 1 ) THROW_HARD('Could not map worker-local subclass to global subclass during merge')
+        end function global_subclass
+
     end subroutine merge_worker_outputs
 
-    !> merges the part weight tables, average stacks and neff into the global subclass order
-    subroutine merge_flex_outputs(params, nparts_run, total, part_counts, part_parent, part_local, part_global, part_pop, neff, sep, repro)
-        type(parameters),  intent(inout) :: params
-        integer,           intent(in)    :: nparts_run, total, part_counts(:)
-        integer,           intent(in)    :: part_parent(:,:), part_local(:,:), part_global(:,:), part_pop(:,:)
-        real, allocatable, intent(out)   :: neff(:), sep(:), repro(:)
-        type(string) :: wts_fname, stk_fname, out_wts, out_stk, map_fname
+    !> the part weight tables and average stacks in global subclass order
+    subroutine merge_part_weights_and_stacks(params, nparts_run, part_counts, part_global, first_glob, nsub_of)
+        type(parameters), intent(inout) :: params
+        integer,          intent(in)    :: nparts_run, part_counts(:), part_global(:,:), first_glob(:), nsub_of(:)
+        type(string) :: wts_fname, stk_fname, out_wts, out_stk
         type(image)  :: img
-        real, allocatable :: w(:)
-        real    :: sepval, reproval
-        integer :: ipart, funit_in, funit_out, ios, pind, parent_cls, local_cls, global_cls, irow, ldim(3), nimgs, j, i1, i2, i3, i4, ieo
-        character(len=XLONGSTRLEN) :: line
-        allocate(neff(total), sep(total), repro(total), source=0.)
-        allocate(w(params%ncls))
-        ! the separation travels as the fifth column of the part maps
-        do ipart = 1, nparts_run
-            map_fname = string('cls_expansion_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
-            open(newunit=funit_in, file=map_fname%to_char(), status='old', action='read', iostat=ios)
-            call fileiochk('merge_flex_outputs opening '//map_fname%to_char(), ios)
-            irow = 0
-            do
-                read(funit_in,'(A)',iostat=ios) line
-                if( ios /= 0 ) exit
-                if( len_trim(line) == 0 ) cycle
-                if( line(1:1) == '#' ) cycle
-                irow = irow + 1
-                if( irow > part_counts(ipart) ) exit
-                sepval = 0.; reproval = 0.
-                read(line,*,iostat=ios) i1, i2, i3, i4, sepval, reproval
-                if( part_global(irow, ipart) > 0 )then
-                    sep(part_global(irow, ipart))   = sepval
-                    repro(part_global(irow, ipart)) = reproval
-                endif
-            end do
-            close(funit_in)
-            call map_fname%kill
-        end do
+        character(len=:), allocatable :: line
+        real,             allocatable :: w(:)
+        integer :: ipart, funit_in, funit_out, ios, pind, parent_cls, local_cls, n, irow, ldim(3), nimgs, j, ieo
+        allocate(w(max(1, maxval(nsub_of))))
         out_wts = string(FLEX_CLS_WEIGHTS_FILE)
-        out_stk = string(FLEX_CLS_CAVGS_FILE)
         open(newunit=funit_out, file=out_wts%to_char(), status='replace', action='write')
-        write(funit_out,'(A)') '# particle_index parent_class global_subclass weights(1:ncls)'
+        write(funit_out,'(A)') '# particle_index parent_class subclass nsub weights(1:nsub)'
         do ipart = 1, nparts_run
             wts_fname = flex_weights_part_fname(ipart, params%numlen)
             open(newunit=funit_in, file=wts_fname%to_char(), status='old', action='read', iostat=ios)
-            call fileiochk('merge_flex_outputs opening '//wts_fname%to_char(), ios)
+            call fileiochk('merge_part_weights_and_stacks opening '//wts_fname%to_char(), ios)
             do
-                read(funit_in,'(A)',iostat=ios) line
+                ! rows are as wide as their parent has subclasses
+                call read_record(funit_in, line, ios)
                 if( ios /= 0 ) exit
                 if( len_trim(line) == 0 ) cycle
                 if( line(1:1) == '#' ) cycle
-                read(line,*) pind, parent_cls, local_cls, w
-                global_cls = lookup_part_global(part_counts(ipart), part_parent(1:part_counts(ipart), ipart), &
-                                                part_local(1:part_counts(ipart), ipart), part_global(1:part_counts(ipart), ipart), &
-                                                parent_cls, local_cls)
-                if( global_cls <= 0 ) THROW_HARD('Could not map worker-local subclass to global subclass during flex merge')
-                write(funit_out,'(I10,1X,I10,1X,I10,*(1X,F8.5))') pind, parent_cls, global_cls, w
-                ! the subclass of column j is the sibling with local index j under the same parent
-                do j = 1, params%ncls
-                    irow = lookup_part_global(part_counts(ipart), part_parent(1:part_counts(ipart), ipart), &
-                                              part_local(1:part_counts(ipart), ipart), part_global(1:part_counts(ipart), ipart), &
-                                              parent_cls, j)
-                    if( irow > 0 ) neff(irow) = neff(irow) + w(j)
-                end do
+                read(line,*,iostat=ios) pind, parent_cls, local_cls, n
+                if( ios /= 0 ) THROW_HARD('read error in a cls_expansion part weight table')
+                if( n < 1 .or. n > size(w) ) THROW_HARD('inconsistent row in a cls_expansion part weight table')
+                read(line,*,iostat=ios) pind, parent_cls, local_cls, n, (w(j), j=1,n)
+                if( ios /= 0 ) THROW_HARD('short row in a cls_expansion part weight table')
+                if( parent_cls < 1 .or. parent_cls > size(nsub_of) ) THROW_HARD('unknown parent in a cls_expansion part weight table')
+                if( n /= nsub_of(parent_cls) .or. local_cls < 1 .or. local_cls > n ) THROW_HARD('inconsistent row in a cls_expansion part weight table')
+                write(funit_out,'(I10,1X,I10,1X,I10,1X,I6,*(1X,F8.6))') pind, parent_cls, first_glob(parent_cls) + local_cls - 1, &
+                    &n, w(1:n)
             end do
             close(funit_in)
             call wts_fname%kill
         end do
         close(funit_out)
-        ! rewrite the merged class map with the separation as its fifth column
-        map_fname = string('cls_expansion_class_map.txt')
-        open(newunit=funit_out, file=map_fname%to_char(), status='replace', action='write')
-        write(funit_out,'(A)') '# global_subclass parent_class local_subclass pop separation repro'
-        do ipart = 1, nparts_run
-            do irow = 1, part_counts(ipart)
-                j = part_global(irow, ipart)
-                write(funit_out,'(I8,1X,I8,1X,I8,1X,I8,1X,F8.3,1X,F8.3)') j, part_parent(irow, ipart), part_local(irow, ipart), &
-                    &part_pop(irow, ipart), sep(j), repro(j)
-            end do
-        end do
-        close(funit_out)
-        call map_fname%kill
         ! the stacks (full, even, odd): part row r -> global index part_global(r, ipart)
         do ieo = 0, 2
             select case(ieo)
@@ -1275,19 +1404,7 @@ contains
         deallocate(w)
         call out_wts%kill
         call out_stk%kill
-    end subroutine merge_flex_outputs
-
-    integer function lookup_part_global(nrows, parents, locals, globals, parent_cls, local_cls) result(global_cls)
-        integer, intent(in) :: nrows, parents(:), locals(:), globals(:), parent_cls, local_cls
-        integer :: i
-        global_cls = 0
-        do i = 1, nrows
-            if( parents(i) == parent_cls .and. locals(i) == local_cls )then
-                global_cls = globals(i)
-                return
-            endif
-        end do
-    end function lookup_part_global
+    end subroutine merge_part_weights_and_stacks
 
     subroutine count_data_lines(fname, nlines)
         type(string), intent(in)  :: fname
@@ -1307,11 +1424,12 @@ contains
         close(funit)
     end subroutine count_data_lines
 
-    subroutine read_part_map(fname, nrows, localstack, parents, locals, pops)
+    subroutine read_part_map(fname, nrows, parents, locals, pops, neffs, seps, repros)
         type(string), intent(in)  :: fname
         integer,      intent(in)  :: nrows
-        integer,      intent(out) :: localstack(:), parents(:), locals(:), pops(:)
-        integer :: funit, ios, irow
+        integer,      intent(out) :: parents(:), locals(:), pops(:)
+        real,         intent(out) :: neffs(:), seps(:), repros(:)
+        integer :: funit, ios, irow, row
         character(len=XLONGSTRLEN) :: line
         open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
         call fileiochk('read_part_map opening '//fname%to_char(), ios)
@@ -1323,7 +1441,7 @@ contains
             if( line(1:1) == '#' ) cycle
             irow = irow + 1
             if( irow > nrows ) exit
-            read(line,*) localstack(irow), parents(irow), locals(irow), pops(irow)
+            read(line,*) row, parents(irow), locals(irow), pops(irow), neffs(irow), seps(irow), repros(irow)
         end do
         close(funit)
     end subroutine read_part_map

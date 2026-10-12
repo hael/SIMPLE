@@ -30,11 +30,14 @@ real,    parameter :: STATE_REFINE_MARGIN = 0.01
 real,    parameter :: MAP_CORR_LP = 8.0
 !> the class-average state refinement (refine3D_states_cavgs): CAVGS_NVIEWS directions, each an exact 2D
 !! class of 60 particles over CAVGS_NSTATES planted states, split by cls_expansion into CAVGS_NSUB
-!! sub-classes; the states differ in one lobe of 4 A sigma, hence the fit band CAVGS_EXPANSION_LP
+!! sub-classes each (ncls is the total; the project has no class averages, so every view is its own group,
+!! and CAVGS_MINPOP lets 60 particles hold three); the states differ in one lobe of 4 A sigma, hence the
+!! fit band CAVGS_EXPANSION_LP
 integer, parameter :: CAVGS_NPTCLS       = 3600
 integer, parameter :: CAVGS_NSTATES      = 3
 integer, parameter :: CAVGS_NVIEWS       = 60
 integer, parameter :: CAVGS_NSUB         = 3
+integer, parameter :: CAVGS_MINPOP       = 20
 integer, parameter :: CAVGS_MIN_SUBAVGS  = 100
 integer, parameter :: CAVGS_NPAIRS       = 2000
 integer, parameter :: CAVGS_SEED         = 202610092
@@ -543,7 +546,8 @@ subroutine run_cls_expansion_stage( run_dir, nthr, projfile_out )
     call cline%set('prg',      'cls_expansion')
     call cline%set('projfile', run_dir//'/phantom.simple')
     call cline%set('mkdir',    'yes')
-    call cline%set('ncls',     CAVGS_NSUB)
+    call cline%set('ncls',     CAVGS_NSUB * CAVGS_NVIEWS)
+    call cline%set('minpop',   CAVGS_MINPOP)
     call cline%set('lp',       CAVGS_EXPANSION_LP)
     call cline%set('mskdiam',  FLEX_PHANTOM_MSKDIAM)
     call cline%set('nthr',     nthr)

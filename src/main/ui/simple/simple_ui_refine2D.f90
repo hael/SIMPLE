@@ -419,11 +419,15 @@ contains
         call cls_expansion%new(&
         &'cls_expansion',&
         &'Split 2D classes with a per-class low-rank covariance model',&
-        &'splits every 2D class into ncls subclasses: a CTF- and noise-weighted low-rank covariance model per class &
-        &(rank neigs, pose fixed, cross-fitted), placement by bimodality with the fit residual as a junk axis, &
-        &posterior-precision weights, one greedy in-plane refine2D round, CTF-corrected weighted sub-class averages &
-        &(cls_expansion_cavgs.mrc, plus even/odd), and per subclass the effective population, the split separation &
-        &and the label-free cross-half reproducibility (os_cls2D neff, sep, repro)',&
+        &'splits the 2D classes into ncls subclasses in total. The classes are grouped by class-average correlation &
+        &(nclust groups); a group gets subclasses in proportion to the square root of its population, counting the &
+        &classes it already has, and its classes in proportion to their populations, at most pop/minpop each; a class &
+        &with fewer than 2*minpop particles (or than 3*(neigs+1), the model floor) is kept whole. Per split class: a CTF- and noise-weighted low-rank &
+        &covariance model (rank neigs, pose fixed, cross-fitted), placement by bimodality with the fit residual as a &
+        &junk axis, posterior-precision soft weights; each particle is labelled with its most likely subclass. Then one &
+        &greedy in-plane refine2D round and CTF-corrected averages from the soft weights (cls_expansion_cavgs.mrc, plus &
+        &even/odd), and per subclass the soft population, the split separation and the label-free cross-half &
+        &reproducibility (os_cls2D neff, sep, repro)',&
         &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED, display_name='Class Expansion')
@@ -433,10 +437,22 @@ contains
             'e.g. 5', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call cls_expansion%add_input(UI_PARM, 'ncls', 'num', &
-            'Number of subclasses per class (>=2)', &
-            'Number of subclasses per class (>=2)', &
-            '# subclasses', .true., 3.0, &
+            'Total number of subclasses', &
+            'Total number of subclasses over all classes, at least the number of classes', &
+            '# subclasses', .true., 0.0, &
         &visibility=UI_VIS_STANDARD)
+        call cls_expansion%add_input(UI_PARM, 'minpop', 'num', &
+            'Minimum particles per subclass', &
+            'Minimum particles per subclass: a class holds at most pop/minpop subclasses and is kept whole below &
+            &2*minpop particles (and below 3*(neigs+1)){25}', &
+            '# particles{25}', .false., 25.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call cls_expansion%add_input(UI_PARM, 'nclust', 'num', &
+            'Number of class-average groups', &
+            'Number of groups of similar class averages the subclass budget is spread over, by average linkage on &
+            &their aligned correlation; without class averages every class is its own group{20}', &
+            '# groups{20}', .false., 20.0, &
+        &visibility=UI_VIS_ADVANCED)
         call cls_expansion%add_input(UI_FILT, 'neigs', 'num', &
             'Rank of the per-class covariance model (default 8)', &
             'Rank of the per-class covariance model (default 8)', &
