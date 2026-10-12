@@ -200,3 +200,11 @@ Where the implementation differs from the plan:
 - **A first set too small for solve3D:** the marker waits. If a later publication is merged
   before solve3D can start, `solve3D_cavgs` runs on the classes then current (the pool's,
   registered with their class averages by `take_cavgs`).
+
+Changed 12 October 2026: the first publication is the sieve's 2D whatever `sieve_ini3D` is, so the
+first `solve3D` can balance over its classes (p07 gives no `balance`, so its runs take solve3D's
+default, `cavg`). It is published as soon as the sets the sieve has handed off hold
+`NPTCLS_FIRST3D` (now 30,000) accepted particles, the sieve's final set has come, or pool
+iteration 10 has completed, whichever comes first, without waiting for a pool iteration. The
+`sieve_ini3D=yes` marker, and with it `solve3D_cavgs`, remains optional
+(`stream_3D_ingestion_policy.md`, sections 3 and 9).

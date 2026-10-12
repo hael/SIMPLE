@@ -526,10 +526,14 @@ contains
         call make_test_stage(stage, cline)
         call stage%attach_upstream()
         call stage%watch_sets()
+        call assert_int(3, stage%nptcls_sieved, 'the accepted particles handed off are counted for the first set')
         call stage%transfer_sets(nimported)
         call assert_false(stage%l_sieve_final, 'an ordinary set')
+        call assert_false(stage%l_sieve_final_seen, 'no final set handed off yet')
         set_file = write_sieved_set(2, [3], l_final=.true.)
         call stage%watch_sets()
+        call assert_true(stage%l_sieve_final_seen, 'the final set is noted when handed off, before the pool takes it')
+        call assert_int(6, stage%nptcls_sieved, 'its particles are counted too')
         call stage%transfer_sets(nimported)
         call assert_true(stage%l_sieve_final, 'the sieve''s final set is noted')
         ! a later set with particles that is not final: the sieve had more after all
@@ -546,6 +550,13 @@ contains
         call assert_int(0, nimported,                  'and imports nothing')
         call assert_int(nmics0, stage%nmics,           'the pool is unchanged')
         call assert_int(0, count(.not. stage%setslist%get_included_flags()), 'the empty set is taken')
+        ! the final set makes the first set due; without the sieve's class averages it cannot be built,
+        ! so the pool publishes instead, at its own trigger, and nothing is tried again
+        call assert_true(stage%collects_sieve_sets(), 'the first set is still to come from the sieve''s 2D')
+        call stage%publish_first_set()
+        call assert_true(stage%l_sieve_first_failed,  'a first set without class averages fails once')
+        call assert_int(1, stage%last_export_id,      'and publishes nothing')
+        call assert_false(stage%collects_sieve_sets(), 'the pool''s publication comes instead')
         call stage%kill
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
@@ -591,6 +602,9 @@ contains
         call assert_false(stage%exports_after(24, .true., 0),  'up to iteration 24')
         call assert_true(stage%exports_after(25, .false., 0),  'from iteration 25 every pool publishes')
         call assert_true(stage%exports_after(31, .true., 0),   'after each iteration')
+        call assert_false(stage%first_set_due(NPTCLS_FIRST3D - 1, .false.), 'the first set waits for its particles')
+        call assert_true(stage%first_set_due(NPTCLS_FIRST3D, .false.),      'and is due once the sieve has handed off as many')
+        call assert_true(stage%first_set_due(0, .true.),                    'or once the sieve''s final set has come')
         call assert_real(100., stage%default_mskdiam(64, 2.0), 1.e-4, 'the default mask diameter is in Angstroms')
     end subroutine test_pause_rules
 

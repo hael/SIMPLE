@@ -6,9 +6,9 @@
 !   The body of stream p07 as a type. Pool 2D publishes its classified state
 !   after each completed iteration (doc/policies/stream/stream_3D_ingestion_policy.md).
 !   Each pass in which no job runs takes the newest publication. The first (in
-!   a fresh pool, the one after the iteration that leaves NPTCLS_FIRST3D
-!   particles selected, or after iteration 10, whichever comes first) is taken
-!   as the pool selects it, without the pool model: at most nptcls3D_max of its
+!   a fresh pool, the sieve's own 2D of the sets that hold NPTCLS_FIRST3D
+!   accepted particles, published at once; the pool's when that cannot be built)
+!   is taken as published, without the pool model: at most nptcls3D_max of its
 !   particles, whole stacks in order, the others deselected for a later
 !   publication to select. Those rows are the first set, whose selection stays
 !   for the session. Every later publication's class averages are selected once
@@ -16,8 +16,10 @@
 !   the stage's rows (the first set's rows take only the 2D parameters). Its
 !   class averages and FRCs, copied into the stage's folder, come with its
 !   classes. The selected particles start solve3D (at most nptcls3D_max, the
-!   others queued for the first addon run). When the first publication is the
-!   sieve's own 2D (sieve_ini3D=yes in its out segment), solve3D_cavgs first
+!   others queued for the first addon run); p07 gives no balance, so solve3D and
+!   the addon runs sample by their default (balance=cavg, over the classes of
+!   the publication taken). When the first publication carries the
+!   sieve_ini3D=yes marker in its out segment, solve3D_cavgs first
 !   makes the initial volumes from its class averages, the classes' poses and
 !   states are mapped to the particles, and solve3D starts from them
 !   (cavg_ini_ext), with the states the first set holds. Once it is done, every growth of
@@ -702,9 +704,9 @@ contains
         l_ok = .true.
     end function select_with_model
 
-    ! The first publication @p set (number @p id), into a stage without rows: merged as the pool
-    ! selects it (the particles an iteration has updated and the pool keeps), without the pool
-    ! model's decision. At most nptcls3D_max of them stay selected, whole stacks in order
+    ! The first publication @p set (number @p id), into a stage without rows: merged as published
+    ! (the sieve's selection, or the pool's when p06 published its own), without the pool model's
+    ! decision. At most nptcls3D_max of them stay selected, whole stacks in order
     ! (cap_first_run); the others are deselected, for a later publication's selection to take.
     ! The rows left selected are the first set: their selection stays for the session, and later
     ! publications change only their 2D parameters (merge_publication).
@@ -730,7 +732,7 @@ contains
         enddo
         self%nptcls_selected = count(self%first_set)
         write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> PUBLICATION ', id, ' IS THE FIRST SET: ', self%nptcls_selected,&
-            &' PARTICLES AS THE POOL SELECTS THEM; ', ndeselected, ' OVER THE CAP DESELECTED'
+            &' PARTICLES AS PUBLISHED; ', ndeselected, ' OVER THE CAP DESELECTED'
     end subroutine take_first_publication
 
     ! .true. for row @p iptcl of the first set, whose selection stays for the session.
@@ -1261,9 +1263,8 @@ contains
         ! from the class averages' poses and states (solve3D_cavgs, sieve_ini3D): after the symmetry stage
         if( self%l_cavg_ini_ext ) call cline_job%set('cavg_ini_ext', 'yes')
         self%l_cavg_ini_ext = .false.
-        ! fractional-update samples drawn globally, not balanced over classes; the manifest records
-        ! it and every addon run replays it (solve3D_addon refuses it on its own command line)
-        call cline_job%set('balance',         'none')
+        ! no balance: solve3D's default, cavg with the 2D solution every publication brings (the
+        ! first set's class averages are the sieve's, from p06's first publication)
         if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
         call cline_job%set('nparts',          self%params%nparts3D)
         call cline_job%set('nthr',            self%params%nthr3D)
@@ -1279,8 +1280,9 @@ contains
     end subroutine start_solve3D
 
     ! solve3D_addon on the grown pool, from the latest result, in solve3D_addon/it_<n>/, on at
-    ! most nptcls_addon_max of the cohort (cap_addon_cohort). The base run's settings
-    ! (balance=none among them) come from its manifest, not this command line.
+    ! most nptcls_addon_max of the cohort (cap_addon_cohort). The base run's settings come from its
+    ! manifest, not this command line. The manifest records no balance, as start_solve3D gives
+    ! none, so the run takes solve3D's default (cavg, over the newest publication's classes).
     subroutine start_addon( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job

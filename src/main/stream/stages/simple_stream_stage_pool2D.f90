@@ -7,13 +7,17 @@
 !   sieve has handed off since the last pass, adds them to the pool when it is
 !   free, lets the pool run its next 2D iteration (or pauses it while too few
 !   new particles arrive), answers the GUI (mask diameter, snapshots) and
-!   publishes the pool's classified state for 3D: once in a pool that has
-!   published nothing yet, after the first iteration that leaves NPTCLS_FIRST3D
-!   particles selected or after FIRST_EXPORT_ITER, whichever comes first, then
-!   after each completed iteration from EXPORT_START_ITER. With sieve_ini3D=yes the
-!   first publication is built from the sieve's own 2D instead (the imported sets,
-!   their class averages and FRCs combined; publish_sieve_set)
-!   (doc/policies/stream/stream_3D_ingestion_policy.md). The commander
+!   publishes for 3D. The first publication of a fresh pool is the first set,
+!   built from the sieve's own 2D (the sets handed off, their class averages and
+!   FRCs combined; publish_sieve_set), so multistate 3D can balance over its
+!   classes: as soon as the sets hold NPTCLS_FIRST3D accepted particles or the
+!   sieve's final set has come (publish_first_set), or after pool iteration
+!   FIRST_EXPORT_ITER, whichever comes first. With sieve_ini3D=yes it carries the
+!   marker that makes multistate 3D run solve3D_cavgs on it first. When it cannot
+!   be built, the pool's classified state is published instead, after the first
+!   iteration that leaves NPTCLS_FIRST3D selected or after FIRST_EXPORT_ITER. Later
+!   publications are the pool's, after each completed iteration from
+!   EXPORT_START_ITER (doc/policies/stream/stream_3D_ingestion_policy.md). The commander
 !   (simple_commanders_stream_p06_pool2D) only normalises the command line and loops over
 !   iterate() until finished().
 !
@@ -97,7 +101,7 @@ integer, parameter :: FIRST_EXPORT_ITER     = MSKDIAM_SWITCH_ITER ! a fresh pool
                                                    ! iteration at the latest (earlier once NPTCLS_FIRST3D are selected): at
                                                    ! this iteration it carries the sieve's mask diameter, set when it was dispatched
 integer, parameter :: EXPORT_START_ITER     = 25  ! the pool is published for 3D after each iteration from this one on
-! sieve_ini3D: the imported sets' class averages (main, halves) and FRCs, kept until the first publication
+! the class averages (main, halves) and FRCs of the sets handed off, kept until the first publication
 character(len=*), parameter :: SIEVE_CAVGS_DIR = 'sieve_cavgs'
                                                    ! (the final run's last iteration, FINAL_ITER, among them)
 integer, parameter :: NPUBLICATIONS_KEPT    = 2   ! the newest publications kept on disk; older ones are removed
@@ -137,13 +141,16 @@ type :: stream_stage_pool2D
     integer :: last_export_id            = 1
     integer :: optics_id_offset          = 0
     real    :: final_mskdiam             = 0. ! the sieve's mask diameter (A), applied from MSKDIAM_SWITCH_ITER
-    real    :: sieve_mskdiam             = 0. ! sieve_ini3D: the sieve's mask diameter (A) for the first publication
-    real    :: sieve_smpd                = 0. ! sieve_ini3D: the pixel size (A) of the sieve's class averages
+    real    :: sieve_mskdiam             = 0. ! the sieve's mask diameter (A) for the first publication
+    real    :: sieve_smpd                = 0. ! the pixel size (A) of the sieve's class averages
+    integer :: nptcls_sieved             = 0  ! accepted particles of the sets handed off, until the first publication
     real    :: mskdiam                   = 0. ! the pool's mask diameter (A): given, the default, or updated
     real    :: smpd                      = 0. ! the pool's native pixel size (A), from the first set imported
     integer :: box                       = 0  ! the pool's native box (px), from the first set imported
     logical :: l_pause                   = .false.
     logical :: l_sieve_final             = .false. ! the sieve's final set is in the pool
+    logical :: l_sieve_final_seen        = .false. ! the sieve has handed off its final set
+    logical :: l_sieve_first_failed      = .false. ! the first publication could not be built from the sieve's 2D
     logical :: l_stepwise                = .false. ! import only enough sets to reach the threshold
     logical :: l_mskdiam_read            = .false. ! final_mskdiam has been read from the first set
     logical :: l_mskdiam_given           = .false. ! a mask diameter on the command line: the sieve's does not replace it
@@ -183,6 +190,8 @@ contains
     procedure :: apply_gui_updates
     procedure :: write_snapshot
     procedure :: export_pool_state
+    procedure :: publish_first_set
+    procedure :: publish_first_from_sieve
     procedure :: collects_sieve_sets
     procedure :: collect_sieve_set
     procedure :: publish_sieve_set
@@ -196,6 +205,7 @@ contains
     procedure, nopass :: runs_to_final
     procedure, nopass :: publishes_final
     procedure, nopass :: exports_after
+    procedure, nopass :: first_set_due
     procedure, nopass :: default_mskdiam
 end type stream_stage_pool2D
 
@@ -318,6 +328,7 @@ contains
             endif
         endif
         call self%watch_sets()
+        call self%publish_first_set()
         call self%update_pool_progress()
         ! an iteration's results are back and the next is not dispatched: one consistent state
         call self%export_pool_state()
@@ -405,11 +416,14 @@ contains
         self%final_mskdiam            = 0.
         self%sieve_mskdiam            = 0.
         self%sieve_smpd               = 0.
+        self%nptcls_sieved            = 0
         self%mskdiam                  = 0.
         self%smpd                     = 0.
         self%box                      = 0
         self%l_pause                  = .false.
         self%l_sieve_final            = .false.
+        self%l_sieve_final_seen       = .false.
+        self%l_sieve_first_failed     = .false.
         self%l_stepwise               = .false.
         self%l_mskdiam_read           = .false.
         self%l_mskdiam_given          = .false.
@@ -450,6 +464,7 @@ contains
     subroutine watch_sets( self )
         class(stream_stage_pool2D), intent(inout) :: self
         type(string), allocatable :: projects(:)
+        type(sp_project)          :: set
         integer :: nprojects, i
         call self%project_buff%watch(nprojects, projects)
         if( nprojects == 0 ) return
@@ -459,6 +474,16 @@ contains
             call self%setslist%push2chunk_list(projects(i), self%setslist%size() + 1, .true.)
         enddo
         if( .not. self%l_mskdiam_read ) call self%read_final_mskdiam(projects(1))
+        ! until the first publication: each set's class averages kept and its particles counted
+        if( .not. self%collects_sieve_sets() ) return
+        do i = 1,nprojects
+            call set%read_segment('ptcl2D', projects(i))
+            call set%read_segment('out',    projects(i))
+            call self%collect_sieve_set(set, projects(i))
+            self%nptcls_sieved = self%nptcls_sieved + set%os_ptcl2D%get_noris(consider_state=.true.)
+            if( is_final_set(set) ) self%l_sieve_final_seen = .true.
+            call set%kill
+        enddo
     end subroutine watch_sets
 
     ! The mask diameter the sieve's 2D used, from the class averages of set @p projfile; a set
@@ -547,7 +572,6 @@ contains
             call sets(nsets)%read_segment('stk',    crec%projfile)
             call sets(nsets)%read_segment('ptcl2D', crec%projfile)
             call sets(nsets)%read_segment('out',    crec%projfile)
-            if( self%collects_sieve_sets() ) call self%collect_sieve_set(sets(nsets), crec%projfile)
             if( is_final_set(sets(nsets)) )then
                 self%l_sieve_final = .true.
                 write(logfhandle,'(A,I3)') '>>> FINAL SIEVE SET DETECTED - RUNNING UNINTERRUPTED TO ITERATION ', FINAL_ITER
@@ -844,12 +868,9 @@ contains
         if( .not. exports_after(self%pool%iteration(), self%last_export_id == 1, self%pool%npublishable()) ) return
         call simple_getcwd(cwd)
         nstks = 0
-        if( self%collects_sieve_sets() )then
-            ! the first publication from the sieve's own 2D; the pool's when it cannot be built
-            call self%publish_sieve_set(publication_fname(cwd, self%last_export_id), nstks)
-            if( nstks == 0 ) write(logfhandle,'(A)') '>>> WARNING: NO PUBLICATION FROM THE SIEVE''S CLASS AVERAGES; THE POOL''S INSTEAD'
-            if( dir_exists(SIEVE_CAVGS_DIR) ) call simple_rmdir(SIEVE_CAVGS_DIR)
-        endif
+        ! the first set not published yet by FIRST_EXPORT_ITER: from the sieve's own 2D, the pool's
+        ! when it cannot be built
+        if( self%collects_sieve_sets() ) call self%publish_first_from_sieve(cwd, nstks)
         if( nstks == 0 ) call self%pool%publish(publication_fname(cwd, self%last_export_id), nstks, self%params%optics_dir,&
             &publishes_final(self%pool%iteration(), self%l_sieve_final))
         if( nstks > 0 )then
@@ -861,11 +882,42 @@ contains
         self%last_export_iteration = self%pool%iteration()
     end subroutine export_pool_state
 
-    !> .true. while the first publication is to come from the sieve's own 2D (sieve_ini3D=yes and
-    !! no publication yet: a restarted pool with publications on disk collects nothing).
+    !> The first set, as soon as it is due (first_set_due: NPTCLS_FIRST3D accepted particles handed
+    !! off, or the sieve's final set), without waiting for a pool iteration: the first publication,
+    !! from the sieve's own 2D (publish_first_from_sieve). Pool iteration FIRST_EXPORT_ITER is the
+    !! fallback (export_pool_state).
+    subroutine publish_first_set( self )
+        class(stream_stage_pool2D), intent(inout) :: self
+        type(string) :: cwd
+        integer      :: nstks
+        if( .not. self%collects_sieve_sets() ) return
+        if( .not. first_set_due(self%nptcls_sieved, self%l_sieve_final_seen) ) return
+        call simple_getcwd(cwd)
+        call self%publish_first_from_sieve(cwd, nstks)
+        if( nstks > 0 ) self%last_export_id = self%last_export_id + 1
+    end subroutine publish_first_set
+
+    !> The first publication from the sieve's own 2D (publish_sieve_set), as the next publication in
+    !! @p cwd; @p nstks its stacks. One attempt: when it cannot be built (0 stacks), the pool's
+    !! classified state is published instead, at its own trigger (export_pool_state). The collected
+    !! class averages are removed either way.
+    subroutine publish_first_from_sieve( self, cwd, nstks )
+        class(stream_stage_pool2D), intent(inout) :: self
+        class(string),              intent(in)    :: cwd
+        integer,                    intent(out)   :: nstks
+        call self%publish_sieve_set(publication_fname(cwd, self%last_export_id), nstks)
+        if( nstks == 0 )then
+            self%l_sieve_first_failed = .true.
+            write(logfhandle,'(A)') '>>> WARNING: NO FIRST SET FROM THE SIEVE''S CLASS AVERAGES; THE POOL''S PUBLICATION INSTEAD'
+        endif
+        if( dir_exists(SIEVE_CAVGS_DIR) ) call simple_rmdir(SIEVE_CAVGS_DIR)
+    end subroutine publish_first_from_sieve
+
+    !> .true. while the first publication is to come from the sieve's own 2D: no publication yet (a
+    !! restarted pool with publications on disk collects nothing) and no failed attempt.
     logical function collects_sieve_sets( self )
         class(stream_stage_pool2D), intent(in) :: self
-        collects_sieve_sets = self%params%sieve_ini3D == 'yes' .and. self%last_export_id == 1
+        collects_sieve_sets = self%last_export_id == 1 .and. .not. self%l_sieve_first_failed
     end function collects_sieve_sets
 
     !> The class averages (main, _even, _odd) and FRCs of the sieve set @p set (read from @p projfile),
@@ -900,12 +952,13 @@ contains
         endif
     end subroutine collect_sieve_set
 
-    !> The first publication from the sieve's own 2D (sieve_ini3D) as @p projfile: every set the
-    !! pool has imported, read whole, combined (build_sieve_publication) with their collected class
-    !! averages and FRCs (combine_sieve_classes), the newest optics map's groups, and
-    !! sieve_ini3D=yes in its out segment, the marker multistate 3D follows. Written under a
-    !! temporary name and renamed, as every publication. @p nstks is the number of stacks published;
-    !! 0, with nothing written, when a set's files are missing or disagree.
+    !> The first publication, from the sieve's own 2D, as @p projfile: every set the sieve has handed
+    !! off, whether in the pool yet or not, read whole, combined (build_sieve_publication) with their
+    !! collected class averages and FRCs (combine_sieve_classes), and the newest optics map's groups.
+    !! With sieve_ini3D=yes its out segment carries sieve_ini3D=yes, the marker on which multistate
+    !! 3D runs solve3D_cavgs first. Written under a temporary name and renamed, as every
+    !! publication. @p nstks is the number of stacks published; 0, with nothing written, when a
+    !! set's files are missing or disagree.
     subroutine publish_sieve_set( self, projfile, nstks )
         class(stream_stage_pool2D), intent(inout) :: self
         class(string),              intent(in)    :: projfile
@@ -920,7 +973,7 @@ contains
         integer            :: nsets, iset, irec, ncls, lastmap
         nstks = 0
         if( self%sieve_smpd <= 0. ) return
-        nsets = count(self%setslist%get_included_flags())
+        nsets = self%setslist%size()
         if( nsets == 0 ) return
         allocate(sets(nsets), stks(nsets), frcs(nsets), ncls_sets(nsets))
         iset = 0
@@ -928,7 +981,6 @@ contains
         do irec = 1,self%setslist%size()
             call it%get(crec)
             call it%next()
-            if( .not. crec%included ) cycle
             iset = iset + 1
             if( .not. file_exists(crec%projfile) ) return
             call sets(iset)%read(crec%projfile)
@@ -958,7 +1010,7 @@ contains
             call pub%add_cavgs2os_out(cavgsfname, self%sieve_smpd, 'cavg')
         endif
         call pub%add_frcs2os_out(frcsfname, 'frc2D')
-        call pub%os_out%set(1, 'sieve_ini3D', 'yes')
+        if( self%params%sieve_ini3D == 'yes' ) call pub%os_out%set(1, 'sieve_ini3D', 'yes')
         if( publishes_final(self%pool%iteration(), self%l_sieve_final) ) call pub%os_out%set(1, 'pool_final', 'yes')
         call pub%write(projfile, tempfile=.true.)
         write(logfhandle,'(A,A,A,I8,A,I6,A,I8,A)') '>>> PUBLISHED THE SIEVE''S 2D FOR 3D: ', projfile%to_char(), ', ', nstks,&
@@ -1072,6 +1124,15 @@ contains
             if( iter <  FIRST_EXPORT_ITER .and. nselected >= NPTCLS_FIRST3D ) exports_after = .true.
         endif
     end function exports_after
+
+    !> Whether the first set is due before any pool iteration: the sets the sieve has handed off
+    !! hold NPTCLS_FIRST3D accepted particles (@p nptcls_sieved), or its final set has come
+    !! (@p l_final_seen), after which no more particles come.
+    pure logical function first_set_due( nptcls_sieved, l_final_seen )
+        integer, intent(in) :: nptcls_sieved
+        logical, intent(in) :: l_final_seen
+        first_set_due = nptcls_sieved >= NPTCLS_FIRST3D .or. l_final_seen
+    end function first_set_due
 
     !> The mask diameter (A) when none is given: the box less the soft edge and a pixel. The stage
     !! this replaces used the pixel count as Angstroms.

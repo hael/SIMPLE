@@ -39,34 +39,41 @@ Each pass of p06 runs, in this order:
    number ending their name (a chunk's id, so `chunk_fine_10` after `chunk_fine_2`), the sieve's
    final sets (`sieve_final_c<n>_f<m>`) after every other (`sort_sets`), whatever order the folder
    lists them in. A final set is therefore never taken before a set the sieve handed off earlier,
-   which would otherwise read as a set after the final one and take the final note back;
-2. refresh the pool: a paused pool refreshes its statistics; a running one is checked for a
+   which would otherwise read as a set after the final one and take the final note back. Until
+   the first publication, each set's class averages and FRCs are kept in `sieve_cavgs/` and its
+   accepted particles counted, as it is handed off;
+2. publish the first set for 3D as soon as it is due, without waiting for a pool iteration: the
+   sieve's own 2D of the sets handed off, once they hold `NPTCLS_FIRST3D` (30,000) accepted
+   particles or the sieve's final set has come (`publish_first_set`; the 3D ingestion policy,
+   sections 3 and 9);
+3. refresh the pool: a paused pool refreshes its statistics; a running one is checked for a
    completed iteration, whose particle parameters, classes and resolution come back into the
    pool, with a dimension update (section 7);
-3. publish the pool's classified state for 3D when the refresh brought back iteration
-   `EXPORT_START_ITER` (25) or a later one; and, in a pool that has published nothing yet, an
-   iteration whose publication would select `NPTCLS_FIRST3D` (100,000) particles or iteration
-   `FIRST_EXPORT_ITER` (10, the `MSKDIAM_SWITCH_ITER`), whichever comes first (`exports_after`),
-   before anything new is imported or dispatched (the 3D ingestion policy). That first
-   publication is the one 3D takes as the pool selects it. At iteration 10 it carries the sieve's
-   mask diameter, which the pool took when it dispatched iteration 10; earlier, the pool's starting
-   one. A restarted pool with publications on disk skips it and resumes at 25. The final
+4. publish for 3D when the refresh brought back iteration `EXPORT_START_ITER` (25) or a later
+   one: the pool's classified state, before anything new is imported or dispatched (the 3D
+   ingestion policy). In a pool that has published nothing yet, iteration `FIRST_EXPORT_ITER`
+   (10, the `MSKDIAM_SWITCH_ITER`) is the first set's fallback trigger. When the first set cannot
+   be built from the sieve's 2D, the pool's classified state goes instead, after the first
+   iteration whose publication would select `NPTCLS_FIRST3D` particles or iteration 10, whichever
+   comes first (`exports_after`); at iteration 10 it carries the sieve's mask diameter, which the
+   pool took when it dispatched iteration 10, and earlier the pool's starting one. A restarted
+   pool with publications on disk skips the first and resumes at 25. The final
    run stops at `FINAL_ITER` (25), so a short session still publishes its last iteration (until 5
    October 2026 the publications started after iteration 25, and a session whose final set came
    before it never reached 3D);
-4. import the new sets when the pool is free (the first import starts it, section 4): p06 chooses
+5. import the new sets when the pool is free (the first import starts it, section 4): p06 chooses
    the sets and the pool appends them (`append_sets`: their micrographs, their stacks renumbered
    after the pool's, their particles as new rows with no 2D parameters but their shifts). With
    `stepwise=yes` (p06's default, set by its commander; a registered parameter) an import takes
    sets in order until its own particles reach the starting threshold (or `ncls` * 20 before it
    is known); the rest wait for the next import. Only the particles of the import count, so a
    pool past its threshold still takes as many sets as one threshold's worth;
-5. apply the pause rule (section 5);
-6. start the next iteration unless paused or below the starting threshold;
-7. from iteration `MSKDIAM_SWITCH_ITER` (10), switch once to the sieve's mask diameter, unless
+6. apply the pause rule (section 5);
+7. start the next iteration unless paused or below the starting threshold;
+8. from iteration `MSKDIAM_SWITCH_ITER` (10), switch once to the sieve's mask diameter, unless
    one was given on the command line, which is kept (follow-up plan, decision 7);
-8. send the class averages to the GUI;
-9. apply the GUI's updates.
+9. send the class averages to the GUI;
+10. apply the GUI's updates.
 
 ## 4. Start
 
@@ -172,9 +179,10 @@ in 3D, and in snapshots by the user's selection.
 
 ## 10. The final project
 
-With `sieve_ini3D=yes`, the first publication for 3D is the sieve's own 2D instead of the pool's
-(`stream_3D_ingestion_policy.md`, section 9): p06 keeps the imported sets' class averages and FRCs
-in `sieve_cavgs/` until it, and removes them after.
+The first publication for 3D is the sieve's own 2D, not the pool's, whatever `sieve_ini3D` is
+(`stream_3D_ingestion_policy.md`, sections 3 and 9; decided 12 October 2026, before which only
+`sieve_ini3D=yes` did so): p06 keeps the class averages and FRCs of the sets handed off in
+`sieve_cavgs/` until it, and removes them after. `sieve_ini3D=yes` only adds its marker.
 
 When p06 stops, the history of completed iterations (`POOL_NHISTORY` full copies of the pool,
 kept for snapshots) is freed first, so the final write does not hold it too, and the resident

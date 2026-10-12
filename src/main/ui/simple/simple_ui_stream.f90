@@ -132,8 +132,8 @@ subroutine new_pool2D( prgtab )
         &'Number of low-pass limit stages of each streaming solve3D run{5}', '# stages', .false., 5., group="search", &
         &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call solve3D_stream%add_input(UI_SRCH, 'nptcls3D_max', 'num', 'Particles of the first solve3D', &
-        &'Maximum number of particles of the first streaming solve3D run, whole stacks in order; the others wait for later publications{100000}', &
-        &'max # particles', .false., 100000., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        &'Maximum number of particles of the first streaming solve3D run, whole stacks in order; the others wait for later publications{30000}', &
+        &'max # particles', .false., 30000., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call solve3D_stream%add_input(UI_SRCH, 'nptcls_addon_max', 'num', 'Cohort particles of each addon run', &
         &'Maximum number of new particles each streaming solve3D_addon run aligns, the oldest whole stacks first; the &
         &others wait for the next run{60000}', 'max # particles', .false., 60000., group="search", &
@@ -327,8 +327,8 @@ subroutine new_pool2D( prgtab )
         &visibility=UI_VIS_DEVELOPER)
         ! the first 3D's route, forwarded by the master to pool 2D
         call master%add_input(UI_PARM, 'sieve_ini3D',    'binary',        'Initial 3D from the sieve''s class averages', &
-        &'Publish the first particle set for 3D with the sieve''s combined class averages; multistate 3D then runs &
-        &solve3D_cavgs for the initial volumes and solve3D at the particle level(yes|no){no}', &
+        &'The first particle set for 3D always carries the sieve''s combined class averages; with yes, multistate 3D &
+        &runs solve3D_cavgs on them for the initial volumes before solve3D at the particle level(yes|no){no}', &
         &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! the 3D route of the initial analysis (picking references), forwarded by the master; 0 keeps the

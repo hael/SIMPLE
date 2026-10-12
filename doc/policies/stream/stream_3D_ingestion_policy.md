@@ -9,8 +9,9 @@ preserve.
   `src/main/stream/stages/simple_stream_stage_pool2D.f90`, the pool's `publish` in
   `src/main/stream/pool2D/simple_stream_pool2D.f90`, and `build_pool_publication`,
   `pool_publication_nselected`, `build_sieve_publication`, `combine_sieve_classes` and
-  `delete_pool_publication` in `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`; with
-  `sieve_ini3D`, the stage's `collect_sieve_set` and `publish_sieve_set` (section 9).
+  `delete_pool_publication` in `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`; the
+  first set from the sieve's 2D, the stage's `publish_first_set`, `first_set_due`,
+  `collect_sieve_set` and `publish_sieve_set` (sections 3 and 9).
 - Their import (p07): `import_sets`, `take_first_publication`, `select_cavgs`,
   `merge_publication` and `take_cavgs` in `src/main/stream/stages/simple_stream_stage_solve3D.f90`.
 - p07's runs: when it starts `solve3D` and `solve3D_addon` (`next_job`), the first `solve3D`'s
@@ -47,19 +48,30 @@ completed iteration left it.
 
 ## 3. When and how it is published
 
-1. **When:** once per completed pool iteration from `EXPORT_START_ITER` (25) on, and once in a
-   pool that has published nothing yet (`exports_after`): after the first iteration whose
-   publication would select `NPTCLS_FIRST3D` (100,000) particles (`npublishable`, counted as
-   `build_pool_publication` selects: updated and kept by the pool), or after iteration
-   `FIRST_EXPORT_ITER` (10), whichever comes first. Each is published in the pass where that
-   iteration's results have come back and before the next iteration is dispatched, so a
-   publication is one consistent iteration. The iteration-10 publication carries the sieve's mask
-   diameter: the pool takes it when it dispatches iteration 10 (`MSKDIAM_SWITCH_ITER`), so that
-   iteration's class averages were still made with the previous one; an earlier first publication
-   carries the pool's starting diameter. 3D takes the first publication as the pool selects it
-   (section 4, item 3). A restarted pool with publications on disk skips the first and resumes at
-   25, so 3D never takes the early classification of a restarted pool as a later publication.
-   Iterations 11 to 24 publish nothing.
+1. **When:**
+   - **The first set**, in a pool that has published nothing yet, is the sieve's own 2D of the
+     sets it has handed off (section 9, items 1 and 2), with their classes and class averages,
+     so the first `solve3D` can balance over them (section 4, item 6). It is published as soon
+     as it is due, in the pass that finds it so, without waiting for a pool iteration
+     (`publish_first_set`, `first_set_due`): once the sets handed off, in the pool yet or not,
+     hold `NPTCLS_FIRST3D` (30,000) accepted particles, or once the sieve's final set has come.
+     Pool iteration `FIRST_EXPORT_ITER` (10) is the fallback, whichever comes first. Decided 12
+     October 2026; until then the first publication was the pool's (the sieve's only with
+     `sieve_ini3D=yes`), after the first iteration that selected 100,000 particles or iteration 10.
+   - **When the first set cannot be built** (section 9, item 2), the pool's classified state
+     goes instead, once (`exports_after`): after the first iteration whose publication would
+     select `NPTCLS_FIRST3D` particles (`npublishable`, counted as `build_pool_publication`
+     selects: updated and kept by the pool), or after iteration 10, whichever comes first. At
+     iteration 10 it carries the sieve's mask diameter, which the pool takes when it dispatches
+     iteration 10 (`MSKDIAM_SWITCH_ITER`); earlier, the pool's starting diameter.
+   - **Later publications** are the pool's, once per completed pool iteration from
+     `EXPORT_START_ITER` (25) on. Each is published in the pass where that iteration's results
+     have come back and before the next iteration is dispatched, so a publication is one
+     consistent iteration. Iterations 11 to 24 publish nothing.
+
+   3D takes the first publication as published (section 4, item 3). A restarted pool with
+   publications on disk skips the first and resumes at 25, so 3D never takes the early
+   classification of a restarted pool as a later publication.
 2. **Nothing classified:** a pool with no classified stack publishes nothing for that iteration.
 3. **File names:** a publication is `<id>.simple` (5-digit id) in p06's completed folder
    (`DIR_STREAM_COMPLETED`). Its class averages and FRCs are written beside it first
@@ -82,10 +94,11 @@ completed iteration left it.
      waits for the next publication instead of stopping.
    - **The mask diameter** is taken from every publication used (`take_mskdiam`): a change is
      logged and applies from the next run.
-3. **The first publication** p07 takes, into a stage without rows (in a fresh session, the one
-   after 100,000 selected particles or iteration 10; after a p07 restart, the newest), is taken
-   as the pool selects it, without the pool model (`take_first_publication`):
-   - its particles an iteration has updated and the pool keeps are merged as selected;
+3. **The first publication** p07 takes, into a stage without rows (in a fresh session, the first
+   set, section 3, item 1; after a p07 restart, the newest), is taken as published, without the
+   pool model (`take_first_publication`):
+   - its selected particles (the sieve's selection; the pool's updated and kept particles when
+     p06 published its own) are merged as selected;
    - at most `nptcls3D_max` stay selected, whole stacks in order (`cap_first_run`, item 6); the
      others are deselected, for a later publication's model selection to take (they then come in
      through an addon run);
@@ -120,10 +133,10 @@ completed iteration left it.
      publication carries one (the newest optics map's; group ids are kept across maps).
    - **The class averages and FRCs come with the classes** (`take_cavgs`). The publication's are
      copied into `quality_selection/<id>/` and replace the stage's `cavg` and `frc2D` entries in
-     its out segment; the volumes and FSCs stay. p07's runs sample with `balance=none` (item 6),
-     but any reader of a run's project or a 3D snapshot (`balance=cavg`, solve3D's default, for
-     one) needs the class averages and FRCs of the classes its rows are labelled with, and p06
-     removes a publication two publications later (section 3, item 5).
+     its out segment; the volumes and FSCs stay. p07's runs balance their samples over them
+     (solve3D's default `balance=cavg`, item 6), and any reader of a run's project or a 3D snapshot needs the
+     class averages and FRCs of the classes its rows are labelled with, and p06 removes a
+     publication two publications later (section 3, item 5).
 6. **The first run:** `solve3D` starts once at least `MIN_PTCLS_PER_STATE` (5) particles per
    state are selected (`next_job`), in the pass that takes them; with fewer, it waits for later
    publications to select more.
@@ -142,16 +155,21 @@ completed iteration left it.
      13).
    - **Settings:** the commander checks 2 <= `nstates` <= 20 (the GUI status holds
      `MAX_STATES_SOLVE3D_MULTISTATE`) and `nptcls3D_max` >= 5 × `nstates` before the stage starts.
-     `solve3D` runs with `balance=none` (fractional-update samples drawn globally, not balanced
-     over class averages); its manifest records it and every addon run replays it, since
-     `solve3D_addon` refuses the base run's settings on its own command line.
+     p07 gives no `balance`, so its runs sample by solve3D's default (`set_balance_default`):
+     `balance=cavg`, since every publication brings classes, class averages and FRCs. The
+     fractional-update samples are balanced over groups of class averages (`nclust`, 20, by
+     default): the first `solve3D` over the first set's, the sieve's classes of the first
+     publication. The manifest records only keys given on the base run's command line, so it
+     holds no `balance`, and each addon run takes the same default over the classes of the
+     newest publication taken. Decided 12 October 2026; from 8 October every run was given
+     `balance=none`.
      The settings come from the command line, defaulting to `NSTATES3D` (3), `NSTAGES3D` (5),
-     `NPTCLS3D_MAX` (100,000), `NPARTS3D` (8) and `NTHR3D` (8), with the pool's mask diameter.
+     `NPTCLS3D_MAX` (30,000), `NPARTS3D` (8) and `NTHR3D` (8), with the pool's mask diameter.
      p07 passes no low-pass limits: `solve3D` and the final `refine3D` set their own. `nptcls3D_max` is p07's own: the master does not set it. Its
      default, `NPTCLS3D_MAX`, is `NPTCLS_FIRST3D`, the count p06's first publication waits for;
      a different `nptcls3D_max` does not move p06's trigger.
-   - **Selections:** the first set is the pool's own selection of an early classification (at
-     most iteration 10), with no model decision; the later publications start past the pool's
+   - **Selections:** the first set is the sieve's selection (its chunks' classification and
+     rejection), with no pool model decision; the later publications start past the pool's
      low-pass ramp (iteration 20), so the pool model scores settled classifications.
 7. **Addon runs:** once a result exists, its active rows are the frozen particles, and the
    cohort is the selected rows that are not (appended since, or selected again). An
@@ -228,7 +246,8 @@ completed iteration left it.
   run**, never by a publication, which only deselects or selects (a deselected row loses its
   label).
 - **One quality authority per row:** a first-set row's selection is the first publication's,
-  as the pool made it; every other row's is the newest publication's, as the pool model made it.
+  as the sieve made it (the pool, when p06 published its own); every other row's is the newest
+  publication's, as the pool model made it.
   The first `solve3D`'s queue deselects rows in its job's project only, never in the stage's rows.
 
 ## 6. Change rules
@@ -239,9 +258,11 @@ completed iteration left it.
 - Tests:
   - `unit_stream` "pool 2D": `test_publication_holds_classified_stacks` (classified stacks only,
     renumbering, image indices, the selected particles counted as published, nothing to publish
-    before any iteration), `test_export_numbering`, and `test_pause_rules` (`exports_after`: in a
+    before any iteration), `test_export_numbering`, `test_pause_rules` (`exports_after`: in a
     fresh pool only, iteration 10 or earlier once `NPTCLS_FIRST3D` are selected; every iteration
-    from 25);
+    from 25; `first_set_due`: `NPTCLS_FIRST3D` accepted particles handed off, or the final set)
+    and `test_sieve_final_set` (the accepted particles and the final set noted as handed off; a
+    first set that cannot be built fails once, publishes nothing and leaves it to the pool);
   - `unit_stream` "solve 3D": `test_merge_publications` (appending, matching in another order
     and by image index, selection and class in place with the 3D parameters and multistate label
     kept, deselection of a missing stack, the classes), the watch order and mask diameter, the job
@@ -259,15 +280,20 @@ completed iteration left it.
 ## 7. Known gaps
 
 - **Cost of a publication:** each one writes the pool's whole classified set, about the size of
-  the pool project, once after iteration 10 and once per iteration from 25.
+  the pool project, once per iteration from 25; the first set holds the sieve's sets instead.
 - **Stack matching** is a search from the last match; it is linear per stack only when the
   publication's order differs from the stage's (after a pool restart).
 - **p07 never removes rows:** a stack the pool drops for good stays deselected in p07's rows.
 - **Retention of 2:** a reader that lags two publications behind finds the files of the older
   one gone. p07 reads the newest in the pass it sees it.
-- **The first set's selection is the least settled and stays:** it is the pool's own selection
-  of an early classification (at most iteration 10, whose class averages predate the sieve's mask
-  diameter), with no model decision, and later publications do not change it.
+- **The first set's selection is the least settled and stays:** it is the sieve's selection,
+  from its chunks' classification of the first 30,000 accepted particles, with no pool model
+  decision, and later publications do not change it.
+- **The first run balances over unaligned classes:** the sieve's chunks are classified
+  separately, so the same view appears in the class averages of many chunks. `balance=cavg`
+  groups them by correlation (`cluster_cavgs`, `nclust` groups), which merges such repeats, but
+  its cost grows with the square of the number of class averages. Every addon run groups the
+  newest publication's classes again.
 - **A p07 restart** takes the newest publication first, as the pool selects it, so after a
   restart past iteration 25 the first set is that publication's earliest stacks (at most
   `nptcls3D_max`), again without the pool model.
@@ -319,29 +345,34 @@ and is disabled after one click.
 7. **Tests:** `test_snapshot3D` in p07's tester: before a result; from a fixture result with
    three states, two of them selected; the same request again.
 
-## 9. The first 3D from the sieve's class averages (`sieve_ini3D`)
+## 9. The first set from the sieve's 2D, and the first 3D from its class averages (`sieve_ini3D`)
 
-An optional route for the first 3D, off unless the stream master's `sieve_ini3D=yes`, which the
-master passes to p06 only (`doc/refactoring_notes/planned/stream_sieve_ini3D_plan_2026-10-08.md`).
+The first publication is the sieve's own 2D whatever `sieve_ini3D` is (items 1 and 2; since 12
+October 2026). The first 3D from its class averages (items 3 to 7) is optional, off unless the
+stream master's `sieve_ini3D=yes`, which the master passes to p06 only
+(`doc/refactoring_notes/planned/stream_sieve_ini3D_plan_2026-10-08.md`).
 
-1. **p06 collects the sieve's 2D.** While it has published nothing, each set it imports has its
-   class averages (main, `_even`, `_odd`) and FRCs copied into `sieve_cavgs/<set stem>/`
-   (`collect_sieve_set`), with the first mask diameter and pixel size the sets carry. A restarted
-   pool with publications on disk collects nothing.
-2. **The first publication is the sieve's 2D** (`publish_sieve_set`), at the usual trigger
+1. **p06 collects the sieve's 2D.** While it has published nothing, each set the sieve hands off
+   (as it is handed off, before the pool takes it) has its class averages (main, `_even`,
+   `_odd`) and FRCs copied into `sieve_cavgs/<set stem>/` (`collect_sieve_set`), with the first
+   mask diameter and pixel size the sets carry; its accepted particles are counted
+   (`nptcls_sieved`) and the sieve's final set is noted (`l_sieve_final_seen`) for the trigger
+   (section 3, item 1). A restarted pool with publications on disk collects nothing.
+2. **The first publication is the sieve's 2D** (`publish_sieve_set`), when the first set is due
    (section 3, item 1):
-   - every set the pool has imported, re-read whole, combined (`build_sieve_publication`): the
+   - every set the sieve has handed off, in the pool yet or not, re-read whole, combined (`build_sieve_publication`): the
      stacks renumbered with each particle's image index, the sieve's 2D parameters and selection,
      each set's class labels offset by the classes of the sets before it, the class tables
      concatenated with the sieve's states and the populations of the selected particles;
    - the class averages, halves and FRCs concatenated in set order beside the publication under
      the usual names (`combine_sieve_classes`), refused when a file is missing, a stack does not
      hold its set's classes, or the boxes or FRC sizes differ;
-   - the newest optics map's groups, the sieve's mask diameter, and `sieve_ini3D=yes` in the out
-     segment, the marker p07 follows.
+   - the newest optics map's groups, the sieve's mask diameter, and, with `sieve_ini3D=yes`
+     only, `sieve_ini3D=yes` in the out segment, the marker p07 follows.
 
-   When it cannot be built, the pool's publication goes instead, with a warning. `sieve_cavgs/`
-   is removed after either. Later publications are the pool's.
+   It is tried once: when it cannot be built, the pool's publication goes instead, at the pool's
+   trigger (section 3, item 1), with a warning. `sieve_cavgs/` is removed after the attempt.
+   Later publications are the pool's.
 3. **p07 takes it as any first publication** (section 4, item 3: the first set, at most
    `nptcls3D_max`, whole stacks in order), with `take_cavgs` copying the halves too. On the marker
    (`is_sieve_publication`), `solve3D_cavgs` runs instead of the first `solve3D`
@@ -354,8 +385,8 @@ master passes to p06 only (`doc/refactoring_notes/planned/stream_sieve_ini3D_pla
    (`params%nstates`) for the session, addon runs and the final run included. The first set keeps
    the rows still selected.
 5. **solve3D starts in the same pass** from those poses and states (`cavg_ini_ext=yes`, after the
-   symmetry stage, which needs every state populated), with the cap, the queue and
-   `balance=none` as always. A failed `solve3D_cavgs`, or one that leaves no class with a state,
+   symmetry stage, which needs every state populated), with the cap, the queue and the
+   default `balance=cavg` as always (section 4, item 6). A failed `solve3D_cavgs`, or one that leaves no class with a state,
    starts `solve3D` as without it, with a warning.
 6. **The GUI** shows "running solve3D_cavgs" with the solve3D progress of 1.
 7. **Restart:** a p07 restart that takes the marked publication takes the route again; any later
