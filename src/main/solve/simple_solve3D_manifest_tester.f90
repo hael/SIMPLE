@@ -1,9 +1,9 @@
 !@descr: unit tests of the solve3D run manifest (simple_solve3D_manifest)
 ! Manifest round trip and refusals, registration, >256-char paths, replay onto a cmdline and
-! frozen-project validation (CTF change: dfx only); in-memory projects, one 8^3 map, a sigma2
-! stand-in with blanks in its name.
+! frozen-project validation (CTF change: dfx only); in-memory projects, one 8^3 map and a
+! committed canonical sigma2 state with blanks in its name.
 module simple_solve3D_manifest_tester
-use, intrinsic :: iso_fortran_env, only: int64
+use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_defs,                only: STDLEN
 use simple_string,              only: string
 use simple_fileio,              only: del_file, file_exists, fopen, fclose
@@ -11,7 +11,11 @@ use simple_syslib,              only: simple_mkdir, simple_rmdir
 use simple_image,               only: image
 use simple_cmdline,             only: cmdline
 use simple_sp_project,          only: sp_project
-use simple_sigma2_state_file,   only: sigma2_state_digest_begin, sigma2_state_digest_text
+use simple_ptcl_layout,         only: ptcl_layout_digest
+use simple_sigma2_state_file,   only: sigma2_state_header, sigma2_state_init_header, &
+    &sigma2_state_create_candidate, sigma2_state_write_particles, sigma2_state_write_groups, &
+    &sigma2_state_read_header, sigma2_state_publish, sigma2_state_digest_begin, &
+    &sigma2_state_digest_text, SIGMA2_GROUP_GLOBAL, SIGMA2_PROV_RESIDUAL
 use simple_solve3D_manifest, only: solve3D_manifest, solve3D_stage_record, manifest_records_input, &
     &manifest_overridable_input
 use simple_test_utils
@@ -127,9 +131,69 @@ contains
         spproj%os_ptcl2D = spproj%os_ptcl3D
         call write_volume(VOL_FNAME, 1.)
         call spproj%add_vol2os_out(string(VOL_FNAME), 1.3, 1, 'vol')
-        call write_lines(SIGMA_FNAME, [character(len=1024) :: 'sigma2 stand-in'])
+        call write_sigma_state(SIGMA_FNAME, spproj)
         call spproj%projinfo%set(1, 'sigma2_state', SIGMA_FNAME)
     end subroutine make_project
+
+    !> A small committed sigma2 state. Its header layout identity belongs to
+    !! spproj; its grouped and particle sections are independently mutable.
+    subroutine write_sigma_state( fname, spproj, generation )
+        character(len=*),         intent(in)    :: fname
+        type(sp_project),         intent(inout) :: spproj
+        integer(int64), optional, intent(in)    :: generation
+        type(sigma2_state_header) :: header
+        type(string) :: candidate
+        real(real32) :: spectra(3,NPTCLS), groups(3,2,1)
+        integer(int64) :: gen
+        character(len=STDLEN) :: msg
+        integer :: i, status
+        gen = 1_int64
+        if( present(generation) ) gen = generation
+        candidate = trim(fname)//'.next'
+        call del_file(candidate)
+        call del_file(fname)
+        call sigma2_state_init_header(header, 1, 3, NPTCLS, 8, 1.3, 1, SIGMA2_GROUP_GLOBAL, gen, &
+            &ptcl_layout_digest(spproj, spproj%os_ptcl3D), SIGMA2_PROV_RESIDUAL)
+        call sigma2_state_create_candidate(candidate%to_char(), header, status, msg)
+        call assert_int(0, status, 'create manifest sigma2 fixture: '//trim(msg))
+        do i = 1, NPTCLS
+            spectra(:,i) = real([i, 2*i, 3*i], real32)
+        enddo
+        groups(:,1,1) = [6.0_real32, 12.0_real32, 18.0_real32]
+        groups(:,2,1) = [7.0_real32, 14.0_real32, 21.0_real32]
+        call sigma2_state_write_particles(candidate%to_char(), 1, spectra, status, msg)
+        call assert_int(0, status, 'write manifest sigma2 particle fixture: '//trim(msg))
+        call sigma2_state_write_groups(candidate%to_char(), groups, status, msg)
+        call assert_int(0, status, 'write manifest sigma2 grouped fixture: '//trim(msg))
+        call sigma2_state_publish(candidate%to_char(), fname, status, msg)
+        call assert_int(0, status, 'publish manifest sigma2 fixture: '//trim(msg))
+        call candidate%kill
+    end subroutine write_sigma_state
+
+    !> Change one value without changing the file shape or header. A grouped
+    !! value invalidates the cheap signature; a particle value deliberately does not.
+    subroutine overwrite_sigma_value( fname, particle_value, value )
+        character(len=*), intent(in) :: fname
+        logical,          intent(in) :: particle_value
+        real(real32),     intent(in) :: value
+        type(sigma2_state_header) :: header
+        character(len=STDLEN) :: msg
+        integer(int64) :: pos
+        integer :: funit, io_stat, status
+        call sigma2_state_read_header(fname, header, status, msg)
+        call assert_int(0, status, 'read manifest sigma2 fixture header: '//trim(msg))
+        if( status /= 0 ) return
+        pos = merge(header%particle_offset, header%grouped_offset, particle_value)
+        open(newunit=funit, file=trim(fname), access='stream', form='unformatted', &
+            &status='old', action='readwrite', iostat=status)
+        if( status == 0 )then
+            write(funit, pos=pos, iostat=status) value
+            if( status == 0 ) flush(funit)
+            close(funit, iostat=io_stat)
+            if( status == 0 ) status = io_stat
+        endif
+        call assert_int(0, status, 'overwrite manifest sigma2 fixture value')
+    end subroutine overwrite_sigma_value
 
     subroutine write_volume( fname, val )
         character(len=*), intent(in) :: fname
@@ -257,8 +321,19 @@ contains
         call assert_false(back%matches_artifact('vol', 2, string(VOL_FNAME)), 'no map is recorded for an unregistered state')
         call back%get_artifact('sigma2_state', 0, path, found)
         call assert_true(found, 'the registered sigma2 state is recorded')
-        if( found ) call assert_true(back%matches_artifact('sigma2_state', 0, path), &
-            &'an artifact path with blanks round trips to the file it names')
+        if( found )then
+            call assert_true(back%matches_artifact('sigma2_state', 0, path), &
+                &'an artifact path with blanks round trips to the file it names')
+            call overwrite_sigma_value(SIGMA_FNAME, .true., 99.0_real32)
+            call assert_true(back%matches_artifact('sigma2_state', 0, path), &
+                &'sigma2 manifest validation does not hash the particle payload')
+            call overwrite_sigma_value(SIGMA_FNAME, .false., 99.0_real32)
+            call assert_false(back%matches_artifact('sigma2_state', 0, path), &
+                &'sigma2 manifest validation checks the grouped section')
+            call write_sigma_state(SIGMA_FNAME, spproj, generation=2_int64)
+            call assert_false(back%matches_artifact('sigma2_state', 0, path), &
+                &'sigma2 manifest validation checks the committed header identity')
+        endif
         call del_file(MAN_FNAME)
         call del_file(MAN_FNAME2)
         call man%kill
@@ -288,12 +363,12 @@ contains
         call write_with_checksum(MAN_FNAME, lines(1:iend))
         call back%read(string(MAN_FNAME), status, msg)
         call assert_int(0, status, 'records re-checksummed by the tester read back: '//trim(msg))
-        ! another schema version
+        ! the previous schema version
         tampered(1:n) = lines(1:n)
-        tampered(1)   = 'solve3D_manifest 2'
+        tampered(1)   = 'solve3D_manifest 1'
         call write_lines(MAN_FNAME, tampered(1:n))
         call back%read(string(MAN_FNAME), status, msg)
-        call assert_true(status /= 0, 'another schema version is refused')
+        call assert_true(status /= 0, 'the previous schema version is refused')
         ! not a manifest
         tampered(1) = 'solve3D_addon_frozen_context 1'
         call write_lines(MAN_FNAME, tampered(1:n))
@@ -423,7 +498,7 @@ contains
         call simple_mkdir(DIR1)
         call simple_mkdir(DIR2)
         call make_project(spproj)
-        call write_lines(LONG_SIGMA, [character(len=1024) :: 'sigma2 stand-in under a deep directory'])
+        call write_sigma_state(LONG_SIGMA, spproj)
         call spproj%projinfo%set(1, 'sigma2_state', LONG_SIGMA)
         call make_manifest(man, spproj, 2, vol1=LONG_VOL1)
         call man%write(string(MAN_FNAME), status, msg)

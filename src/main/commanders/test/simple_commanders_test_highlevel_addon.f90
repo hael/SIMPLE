@@ -373,10 +373,11 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     call simple_chdir(cwd_here, status)
     ! ---- provenance and isolation ----
     call gate%check('frozen_project_unchanged', sigma2_state_digest_file(frozen_run_proj) == dig_proj0)
-    call gate%check('frozen_sigma2_unchanged',  man_base%matches_artifact('sigma2_state', 0, frozen_sigma))
+    call gate%check('frozen_sigma2_identity_unchanged', man_base%matches_artifact('sigma2_state', 0, frozen_sigma))
     call gate%check('frozen_map_unchanged',     man_base%matches_artifact('vol', 1, frozen_vol))
     ! the frozen term was weighted by the base run's committed residual sigma2
-    ! state (its copy in the add-on run is byte-equal after every accumulation)
+    ! state (its copy retains the committed header and grouped-section identity
+    ! after every accumulation; particle spectra are not rescanned here)
     call gate%check('frozen_sigma2_consumed_as_committed', &
         &man_base%matches_artifact('sigma2_state', 0, string('1_solve3D_addon/frozen/frozen_sigma2_state.bin')))
     call man_base%kill

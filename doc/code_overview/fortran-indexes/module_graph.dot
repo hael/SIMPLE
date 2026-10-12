@@ -1754,6 +1754,7 @@ digraph module_graph {
   "simple_commanders_solve3D_chunks" -> "simple_solve3d_addon_report";
   "simple_commanders_solve3D_chunks" -> "simple_solve3d_manifest";
   "simple_commanders_solve3D_chunks" -> "simple_solve3d_stream_emulation";
+  "simple_commanders_solve3D_chunks" -> "simple_solve3d_utils";
   "simple_commanders_solve3D_chunks" -> "simple_ui";
   "simple_commanders_solve3D_chunks" -> "simple_ui_program";
   "simple_commanders_starproject" -> "simple_commanders_api";
@@ -4373,6 +4374,7 @@ digraph module_graph {
   "simple_solve3D_manifest_tester" -> "simple_defs";
   "simple_solve3D_manifest_tester" -> "simple_fileio";
   "simple_solve3D_manifest_tester" -> "simple_image";
+  "simple_solve3D_manifest_tester" -> "simple_ptcl_layout";
   "simple_solve3D_manifest_tester" -> "simple_sigma2_state_file";
   "simple_solve3D_manifest_tester" -> "simple_solve3d_manifest";
   "simple_solve3D_manifest_tester" -> "simple_sp_project";

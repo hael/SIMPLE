@@ -99,7 +99,8 @@ validates against the project that registered it:
   are the ones the manifest recorded;
 - every state map registered in the project is the map the run produced
   (digest);
-- the committed residual sigma2 state the manifest records exists unchanged;
+- the committed residual sigma2 state has the recorded committed header and
+  grouped-section identity; manifest validation never scans its particle spectra;
 - the current project's native box and sampling equal the frozen solution's;
 - the frozen run reached stage 3 or later, and its last stage's box does not
   exceed the native box.
@@ -110,8 +111,10 @@ or input key it does not know, such as those of removed features
 unreadable, so a solution from an older build cannot be extended.
 
 The frozen project is never written. The add-on works on a copy of it in the
-run directory (`frozen/`, with its sigma2 state), whose sigma2 file must stay
-byte-equal to the frozen run's through every frozen accumulation.
+run directory (`frozen/`, with its sigma2 state), whose sigma2 state must retain
+the frozen run's committed header and grouped-section identity through every
+frozen accumulation. This is intentionally not a byte-equality check over the
+per-particle spectra.
 
 ## 4. Particle Identity and Membership
 

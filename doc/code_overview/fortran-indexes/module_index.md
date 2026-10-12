@@ -6243,6 +6243,7 @@ Local symbols (enclosing procedure scope):
 - `exec_solve3D::validate_cavg_ini_ext_states` — subroutine
 - `exec_solve3D::verify_frozen_sigma` — subroutine
 - `exec_solve3D::write_run_manifest` — subroutine
+- `exec_solve3D::write_solve3D_benchmark` — subroutine
 - `exec_solve3D_addon::log_override` — subroutine
 - `exec_solve3D_addon::publish_result` — subroutine
 - `exec_solve3D_cavgs::configure_cavgs_distributed_clines` — subroutine
@@ -6268,6 +6269,7 @@ Uses:
 - `simple_solve3d_addon_report`
 - `simple_solve3d_manifest`
 - `simple_solve3d_stream_emulation`
+- `simple_solve3d_utils`
 - `simple_ui`
 - `simple_ui_program`
 
@@ -6280,6 +6282,7 @@ Private symbols:
 - `copy_forwardable_addon_arg` — subroutine
 - `exec_emulate_solve3D_stream` — subroutine
 - `exec_solve3D_chunks` — subroutine
+- `publish_solve3D_result` — subroutine
 - `write_solve3D_step_project` — subroutine
 
 Local symbols (enclosing procedure scope):
@@ -12771,7 +12774,9 @@ Private symbols:
 - `test_ccs_connectivity_2D` — subroutine
 - `test_ccs_connectivity_3D` — subroutine
 - `test_ccs_degenerate` — subroutine
+- `test_diameter_cc_3D` — subroutine
 - `test_disc_and_cos_edge` — subroutine
+- `test_estimate_spher_mask_diam` — subroutine
 - `test_graphene_mask` — subroutine
 - `test_holes_and_feret` — subroutine
 - `test_image_bin_examples` — subroutine
@@ -14973,6 +14978,7 @@ Local symbols (enclosing procedure scope):
 - `binarize_and_find_centers::t2c` — function
 - `discard_atoms::remove_lowly_contacted` — subroutine
 - `discard_atoms::remove_small_and_lowly_contacted` — subroutine
+- `discover_species::aperture_fraction` — function
 - `discover_species::assign_species` — subroutine
 - `discover_species::ball_window` — subroutine
 - `discover_species::build_region` — subroutine
@@ -14991,10 +14997,12 @@ Local symbols (enclosing procedure scope):
 - `discover_species::mark_ball` — subroutine
 - `discover_species::merged_centers_a` — subroutine
 - `discover_species::noise_stats` — subroutine
+- `discover_species::noise_zone` — subroutine
 - `discover_species::pred_snr` — function
 - `discover_species::prune_recovered` — subroutine
 - `discover_species::read_half` — subroutine
 - `discover_species::recovered_valid_corr` — subroutine
+- `discover_species::remove_edge_median` — subroutine
 - `discover_species::render` — subroutine
 - `discover_species::render_cutoff` — function
 - `discover_species::rstr` — function
@@ -20323,6 +20331,7 @@ Uses:
 - `simple_syslib`
 
 Public symbols:
+- `sigma2_state_artifact_signature` — function
 - `sigma2_state_create_candidate` — subroutine
 - `sigma2_state_digest_begin` — function
 - `sigma2_state_digest_file` — function
@@ -20640,6 +20649,7 @@ Uses:
 - `simple_defs`
 - `simple_fileio`
 - `simple_image`
+- `simple_ptcl_layout`
 - `simple_sigma2_state_file`
 - `simple_solve3d_manifest`
 - `simple_sp_project`
@@ -20655,6 +20665,7 @@ Private symbols:
 - `ladder` — function
 - `make_manifest` — subroutine
 - `make_project` — subroutine
+- `overwrite_sigma_value` — subroutine
 - `read_lines` — subroutine
 - `same_text` — function
 - `test_file_refusals` — subroutine
@@ -20665,6 +20676,7 @@ Private symbols:
 - `test_replay` — subroutine
 - `test_round_trip` — subroutine
 - `write_lines` — subroutine
+- `write_sigma_state` — subroutine
 - `write_volume` — subroutine
 - `write_with_checksum` — subroutine
 
@@ -20702,6 +20714,7 @@ Uses:
 - `simple_sp_project`
 
 Public symbols:
+- `chunk_nsample` — function
 - `derive_chunk_run_count` — subroutine
 - `emulation_report` — type
 - `emulation_step` — type
@@ -20738,7 +20751,9 @@ Private symbols:
 - `chunk_size` — function
 - `make_project` — subroutine
 - `make_selection` — subroutine
+- `make_stacks` — subroutine
 - `test_balanced_partition` — subroutine
+- `test_chunk_nsample` — subroutine
 - `test_chunk_run_count` — subroutine
 - `test_chunks_report` — subroutine
 - `test_partition` — subroutine
@@ -25287,12 +25302,14 @@ Public symbols:
 - `begin_test_suite` — subroutine
 - `end_test_suite` — subroutine
 - `enter_fixture` — subroutine
+- `fix_test_seed` — subroutine
 - `leave_fixture` — subroutine
 - `report_summary` — subroutine
 - `reset_test_report` — subroutine
 - `set_fixed_seed` — subroutine
 
 Private symbols:
+- `put_simple_seed` — subroutine
 - `record_assertion` — subroutine
 - `test_failure` — type
 - `test_suite_result` — type
@@ -25300,7 +25317,7 @@ Private symbols:
 - `write_summary` — subroutine
 
 Local symbols (enclosing procedure scope):
-- `set_fixed_seed::c_setenv` — function
+- `put_simple_seed::c_setenv` — function
 
 ---
 ## Module: simple_testfuns

@@ -466,9 +466,11 @@ resolution when available, otherwise the supplied final fallback LP.
 Every completed run also writes `solve3D_manifest.txt` last, atomically and
 never fatally, and registers it in `projinfo` by bare name with its run
 identifier (`simple_solve3D_manifest`): the project identity, the particle
-source, the solution, the ladder as planned and emitted, the entry inputs and
-the digests of the state maps, halves, FSCs and the committed sigma2 state. A
-failed manifest write warns and leaves the run as it is.
+source, the solution, the ladder as planned and emitted, the entry inputs,
+content digests of the state maps, halves and FSCs, and a cheap committed-header
+and grouped-section identity for sigma2. Sigma particle spectra are not scanned
+to write or validate the manifest. A failed manifest write warns and leaves the
+run as it is.
 
 ## 11. solve3D_addon
 

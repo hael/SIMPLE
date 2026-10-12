@@ -1,4 +1,4 @@
-!@descr: the typed, versioned run manifest of solve3D: identity, solution, ladder, inputs and artifact digests of a completed run
+!@descr: the typed, versioned run manifest of solve3D: identity, solution, ladder, inputs and artifact identities of a completed run
 ! Written last, atomically and never fatally by exec_solve3D (write_run_manifest),
 ! then registered in projinfo by bare name. It is the only route into solve3D_addon:
 ! read_registered, validate_frozen against the frozen project, then replay. The replayed inputs are
@@ -13,7 +13,7 @@ use simple_cmdline,           only: cmdline
 use simple_sp_project,        only: sp_project
 use simple_ptcl_layout,       only: ptcl_layout_digest
 use simple_sigma2_state_file, only: sigma2_state_digest_begin, sigma2_state_digest_text, &
-    &sigma2_state_digest_integer, sigma2_state_digest_file
+    &sigma2_state_digest_integer, sigma2_state_digest_file, sigma2_state_artifact_signature
 implicit none
 
 public :: solve3D_manifest, solve3D_stage_record, MANIFEST_FNAME, manifest_records_input, manifest_overridable_input
@@ -21,7 +21,7 @@ private
 #include "simple_local_flags.inc"
 
 character(len=*), parameter :: MANIFEST_SCHEMA       = 'solve3D_manifest'
-integer,          parameter :: MANIFEST_VERSION      = 1
+integer,          parameter :: MANIFEST_VERSION      = 2
 character(len=*), parameter :: MANIFEST_FNAME        = 'solve3D_manifest.txt'
 character(len=*), parameter :: MANIFEST_PROJINFO_KEY = 'solve3D_manifest'
 character(len=*), parameter :: RUN_ID_PROJINFO_KEY   = 'solve3D_run_id'
@@ -249,12 +249,13 @@ contains
         call val%kill
     end subroutine record_inputs
 
-    !> the run's registered products with their digests: every state's final
-    !! map, its halves and FSC, and the committed residual sigma2 state
+    !> The run's registered products: content digests for every state's final
+    !! map, halves and FSC; cheap header/group identity for committed sigma2.
     subroutine record_artifacts( self, spproj )
         class(solve3D_manifest), intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
         type(string) :: fname, halfvol
+        integer(int64) :: sigma_signature
         integer :: state, box_vol
         real    :: smpd_vol
         logical :: found
@@ -274,8 +275,11 @@ contains
             endif
         enddo
         call spproj%get_sigma2_state_path(fname, found)
-        if( found .and. file_exists(fname) ) &
-            &call self%add_artifact('sigma2_state', 0, sigma2_state_digest_file(fname), fname)
+        if( found .and. file_exists(fname) )then
+            sigma_signature = sigma2_state_artifact_signature(fname)
+            if( sigma_signature /= 0_int64 ) &
+                &call self%add_artifact('sigma2_state', 0, sigma_signature, fname)
+        endif
         call fname%kill
         call halfvol%kill
     end subroutine record_artifacts
@@ -811,7 +815,8 @@ contains
         if( found ) fname = self%artifact_path(ind)
     end subroutine get_artifact
 
-    !> the file carries the digest recorded for the artifact (kind, state)
+    !> The file carries the recorded identity for artifact (kind, state).
+    !! Sigma2 checks its committed header and grouped section, never particles.
     logical function matches_artifact( self, kind, state, fname ) result( l_match )
         class(solve3D_manifest), intent(in) :: self
         character(len=*),           intent(in) :: kind
@@ -822,7 +827,11 @@ contains
         l_match = .false.
         ind = self%find_artifact(kind, state)
         if( ind == 0 ) return
-        digest  = sigma2_state_digest_file(fname)
+        if( trim(kind) == 'sigma2_state' )then
+            digest = sigma2_state_artifact_signature(fname)
+        else
+            digest = sigma2_state_digest_file(fname)
+        endif
         l_match = digest /= 0_int64 .and. digest == self%artifact_digest(ind)
     end function matches_artifact
 

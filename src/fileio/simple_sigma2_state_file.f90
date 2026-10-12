@@ -14,7 +14,7 @@ public :: sigma2_state_write_groups, sigma2_state_read_groups
 public :: sigma2_state_write_local_range, sigma2_state_read_local_range
 public :: sigma2_state_validate_file, sigma2_state_publish
 public :: sigma2_state_digest_begin, sigma2_state_digest_text, sigma2_state_digest_integer
-public :: sigma2_state_digest_file
+public :: sigma2_state_digest_file, sigma2_state_artifact_signature
 public :: SIGMA2_STATE_FNAME, SIGMA2_STATE_NEXT_FNAME
 public :: SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK
 public :: SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_STAR_SEED
@@ -728,6 +728,24 @@ contains
         integer,        intent(in)    :: value
         hash = fnv_integer(hash, int(value,int64), 8)
     end subroutine sigma2_state_digest_integer
+
+    !> Cheap identity of a committed sigma2 artifact, 0 when invalid. The
+    !! validation reads the header and grouped section only; particle spectra
+    !! are deliberately excluded from manifest integrity checks.
+    integer(int64) function sigma2_state_artifact_signature( fname ) result( signature )
+        class(string), intent(in) :: fname
+        type(sigma2_state_header) :: header
+        integer(int64) :: words(STATE_NWORDS)
+        character(len=256) :: message
+        integer :: status
+        signature = 0_int64
+        call sigma2_state_validate_file(fname%to_char(), status, message, deep=.true.)
+        if( status /= 0 ) return
+        call sigma2_state_read_header(fname%to_char(), header, status, message)
+        if( status /= 0 .or. header%state /= SIGMA2_STATE_COMMITTED ) return
+        call pack_state_header(header, words)
+        signature = words(W_HEADER_CHECKSUM)
+    end function sigma2_state_artifact_signature
 
     !> FNV-1a 64 over the bytes of a file (8-byte words, then the tail), 0 when unreadable
     integer(int64) function sigma2_state_digest_file( fname ) result( digest )

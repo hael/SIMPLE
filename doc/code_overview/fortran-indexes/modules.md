@@ -170,8 +170,8 @@
 | `simple_commanders_sieve` | main/commanders/simple/simple_commanders_sieve.f90 | 1 |
 | `simple_commanders_sim` | main/commanders/simple/simple_commanders_sim.f90 | 6 |
 | `simple_commanders_solve2D` | main/commanders/simple/simple_commanders_solve2D.f90 | 28 |
-| `simple_commanders_solve3D` | main/commanders/simple/simple_commanders_solve3D.f90 | 38 |
-| `simple_commanders_solve3D_chunks` | main/commanders/simple/simple_commanders_solve3D_chunks.f90 | 7 |
+| `simple_commanders_solve3D` | main/commanders/simple/simple_commanders_solve3D.f90 | 39 |
+| `simple_commanders_solve3D_chunks` | main/commanders/simple/simple_commanders_solve3D_chunks.f90 | 8 |
 | `simple_commanders_starproject` | main/commanders/simple/simple_commanders_starproject.f90 | 3 |
 | `simple_commanders_stkops` | main/commanders/simple/simple_commanders_stkops.f90 | 8 |
 | `simple_commanders_stream_p00_master` | main/commanders/stream/simple_commanders_stream_p00_master.f90 | 13 |
@@ -345,7 +345,7 @@
 | `simple_image` | main/image/simple_image.f90<br>main/image/simple_image_access.f90<br>main/image/simple_image_arith.f90<br>main/image/simple_image_calc.f90<br>main/image/simple_image_checks.f90<br>main/image/simple_image_core.f90<br>main/image/simple_image_ctf.f90<br>main/image/simple_image_fft.f90<br>main/image/simple_image_filt.f90<br>main/image/simple_image_freq_anal.f90<br>main/image/simple_image_geom.f90<br>main/image/simple_image_io.f90<br>main/image/simple_image_norm.f90<br>main/image/simple_image_ops.f90<br>main/image/simple_image_polar.f90<br>main/image/simple_image_seg.f90<br>main/image/simple_image_vis.f90 | 760 |
 | `simple_image_bin` | main/image/simple_image_bin.f90 | 38 |
 | `simple_image_msk` | main/image/simple_image_msk.f90 | 15 |
-| `simple_image_msk_tester` | main/image/simple_image_msk_tester.f90 | 27 |
+| `simple_image_msk_tester` | main/image/simple_image_msk_tester.f90 | 29 |
 | `simple_image_serialize_tester` | main/image/simple_image_serialize_tester.f90 | 4 |
 | `simple_image_tester` | main/image/simple_image_tester.f90 | 32 |
 | `simple_imgarr_utils` | main/image_processing/simple_imgarr_utils.f90 | 14 |
@@ -413,7 +413,7 @@
 | `simple_mrc_validate_tester` | main/image/simple_mrc_validate_tester.f90 | 5 |
 | `simple_nano_species` | main/nano/simple_nano_species.f90 | 17 |
 | `simple_nano_species_tester` | main/nano/simple_nano_species_tester.f90 | 14 |
-| `simple_nanoparticle` | main/nano/simple_nanoparticle.f90 | 93 |
+| `simple_nanoparticle` | main/nano/simple_nanoparticle.f90 | 96 |
 | `simple_nanoparticle_utils` | main/nano/simple_nanoparticle_utils.f90 | 26 |
 | `simple_neighs` | utils/math/simple_neighs.f90 | 8 |
 | `simple_nrtxtfile` | fileio/simple_nrtxtfile.f90 | 8 |
@@ -544,7 +544,7 @@
 | `simple_sigma2_bootstrap_tester` | main/sigma2/simple_sigma2_bootstrap_tester.f90 | 4 |
 | `simple_sigma2_files` | fileio/simple_sigma2_files.f90 | 2 |
 | `simple_sigma2_state` | main/sigma2/simple_sigma2_state.f90 | 11 |
-| `simple_sigma2_state_file` | fileio/simple_sigma2_state_file.f90 | 25 |
+| `simple_sigma2_state_file` | fileio/simple_sigma2_state_file.f90 | 26 |
 | `simple_sigma2_state_tester` | main/sigma2/simple_sigma2_state_tester.f90 | 13 |
 | `simple_simple_volinterp` | main/volume/simple_volinterp.f90 | 3 |
 | `simple_simulator` | main/simple_simulator.f90 | 1 |
@@ -554,10 +554,10 @@
 | `simple_solve3D_addon_report` | main/solve/simple_solve3D_addon_report.f90 | 20 |
 | `simple_solve3D_addon_report_tester` | main/solve/simple_solve3D_addon_report_tester.f90 | 7 |
 | `simple_solve3D_manifest` | main/solve/simple_solve3D_manifest.f90 | 37 |
-| `simple_solve3D_manifest_tester` | main/solve/simple_solve3D_manifest_tester.f90 | 18 |
+| `simple_solve3D_manifest_tester` | main/solve/simple_solve3D_manifest_tester.f90 | 20 |
 | `simple_solve3D_reseed_tester` | main/solve/simple_solve3D_reseed_tester.f90 | 6 |
-| `simple_solve3D_stream_emulation` | main/solve/simple_solve3D_stream_emulation.f90 | 11 |
-| `simple_solve3D_stream_emulation_tester` | main/solve/simple_solve3D_stream_emulation_tester.f90 | 11 |
+| `simple_solve3D_stream_emulation` | main/solve/simple_solve3D_stream_emulation.f90 | 12 |
+| `simple_solve3D_stream_emulation_tester` | main/solve/simple_solve3D_stream_emulation_tester.f90 | 13 |
 | `simple_solve3D_utils` | main/solve/simple_solve3D_controller.f90<br>main/solve/simple_solve3D_utils.f90 | 93 |
 | `simple_sp_project` | main/project/simple_sp_project.f90<br>main/project/simple_sp_project_cls.f90<br>main/project/simple_sp_project_core.f90<br>main/project/simple_sp_project_io.f90<br>main/project/simple_sp_project_mic.f90<br>main/project/simple_sp_project_optics.f90<br>main/project/simple_sp_project_out.f90<br>main/project/simple_sp_project_ptcl.f90<br>main/project/simple_sp_project_stk.f90 | 247 |
 | `simple_sp_project_tester` | main/project/simple_sp_project_tester.f90 | 16 |
@@ -667,7 +667,7 @@
 | `simple_test_truth_metrics` | main/commanders/test/simple_test_truth_metrics.f90 | 5 |
 | `simple_test_ui_class` | main/ui/simple_test/simple_test_ui_class.f90 | 24 |
 | `simple_test_ui_highlevel` | main/ui/simple_test/simple_test_ui_highlevel.f90 | 17 |
-| `simple_test_utils` | utils/simple_test_utils.f90 | 18 |
+| `simple_test_utils` | utils/simple_test_utils.f90 | 20 |
 | `simple_testfuns` | utils/math/simple_testfuns.f90 | 34 |
 | `simple_tifflib` | fileio/simple_tifflib.f90 | 30 |
 | `simple_timer` | utils/simple_timer.f90 | 20 |
