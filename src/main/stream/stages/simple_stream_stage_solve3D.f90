@@ -135,6 +135,9 @@ real,    parameter :: ADDON_COHORT_FRAC   = 0.10
 ! classes, then cls_expansion of the classes the pool model keeps into about NCLS_EXPANDED in all
 integer, parameter :: NCLS2D_FIRST        = 150
 integer, parameter :: NCLS_EXPANDED       = 500
+! solve3D_cavgs' low-pass ramp (A), fixed (force_lp_range) rather than derived from the class FRCs
+real,    parameter :: LPSTART_CAVGS3D     = 20.
+real,    parameter :: LPSTOP_CAVGS3D      = 8.
 
 character(len=*), parameter :: SOLVE3D_DIR      = 'solve3D'
 character(len=*), parameter :: CAVGS3D_DIR      = 'solve3D_cavgs'
@@ -1273,6 +1276,10 @@ contains
         call cline_job%set('pgrp',            'c1')
         call cline_job%set('nstates',         self%params%nstates)
         call cline_job%set('prune',           'no')
+        ! a fixed low-pass ramp, not one derived from the class FRCs
+        call cline_job%set('lpstart',         LPSTART_CAVGS3D)
+        call cline_job%set('lpstop',          LPSTOP_CAVGS3D)
+        call cline_job%set('force_lp_range',  'yes')
         if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
         call cline_job%set('nthr',            self%params%nthr3D)
         ! nparts makes it distributed even at 1; one part runs in shared memory

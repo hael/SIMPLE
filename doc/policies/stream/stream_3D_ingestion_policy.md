@@ -411,8 +411,9 @@ input and its forwarding are gone.
    subclasses, their class averages, halves and FRCs, and the particles' subclass labels become
    the stage's (`adopt_job_2D`).
 7. **solve3D_cavgs** (`start_cavgs3D`, `solve3D_cavgs/`) makes `nstates` volumes from those class
-   averages (`pgrp=c1`, `prune=no`, the mask diameter, its own low-pass limits from the FRCs; one
-   run, no collapse restarts).
+   averages (`pgrp=c1`, `prune=no`, the mask diameter; one run, no collapse restarts). Its
+   low-pass limits are a fixed ramp from `LPSTART_CAVGS3D` (20 Å) to `LPSTOP_CAVGS3D` (8 Å) over its stages (`lpstart`, `lpstop`,
+   `force_lp_range=yes`), not one derived from the class FRCs.
 8. **Its result** (`take_cavgs3D_result`): each class's pose and state is mapped to its selected
    particles (`map2ptcls`); the states the selected particles hold are renumbered from 1
    (`compact_states`) in both particle segments and the classes, and become the stage's states
