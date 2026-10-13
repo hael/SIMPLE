@@ -4,6 +4,7 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('project', 'Project Management', 10)
+type(ui_program), target :: consolidate_particles
 type(ui_program), target :: export_relion
 type(ui_program), target :: export_starproject
 type(ui_program), target :: extract_subproj
@@ -29,6 +30,7 @@ contains
 
     subroutine construct_project_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
+        call new_consolidate_particles(prgtab)
         call new_export_relion(prgtab)
         call new_export_starproject(prgtab)
         call new_extract_subproj(prgtab)
@@ -50,6 +52,22 @@ contains
         call new_write_mic_filetab(prgtab)
         call new_reimport_particles(prgtab)
     end subroutine construct_project_programs
+
+    subroutine new_consolidate_particles( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call consolidate_particles%new(&
+        &'consolidate_particles',&                                      ! name
+        &'Copies the active particles into one stack',&                 ! summary
+        &'is a program that drops deselected particles and copies the images of the rest, byte for byte, &
+        &into one stack in the execution directory; every stack row of the new project points at it',& ! help
+        &'simple_exec',&                                                ! executable
+        &.true., visibility=UI_VIS_DEVELOPER, display_name='Consolidate Particles') ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! <empty>
+        ! add to ui_hash
+        call add_ui_program('consolidate_particles', consolidate_particles, prgtab, UI_CATEGORY)
+    end subroutine new_consolidate_particles
 
 subroutine new_export_relion( prgtab )
         class(ui_hash), intent(inout) :: prgtab

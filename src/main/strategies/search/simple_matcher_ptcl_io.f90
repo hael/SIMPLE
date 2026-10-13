@@ -282,40 +282,47 @@ contains
             type(string),    allocatable :: run_stknames(:)
             integer,         allocatable :: run_stkinds(:), run_from(:), run_to(:), run_ldims(:,:), run_nptcls(:)
             integer,         allocatable :: inds_in_stk_run(:)
+            type(string) :: run_name
             integer :: i, ii, irun, stkind, prev_stkind, ind_in_stk, nthr_run, run_from_i, run_to_i, iopen, nopen
             handled = .false.
             if( trim(params%oritype) == 'cls3D' ) return
             do i = batchlims(1)+1, batchlims(2)
                 if( pinds(i) < pinds(i-1) ) return
             end do
-            allocate(inds_in_stk_run(nbatch), run_stkinds(nbatch), run_from(nbatch), run_to(nbatch))
+            allocate(inds_in_stk_run(nbatch), run_stkinds(nbatch), run_from(nbatch), run_to(nbatch), run_stknames(nbatch))
             nstks = 0
             prev_stkind = -1
             do i = batchlims(1), batchlims(2)
                 ii = i - batchlims(1) + 1
                 call build%spproj%map_ptcl_ind2stk_ind(params%oritype, pinds(i), stkind, ind_in_stk)
                 if( stkind < prev_stkind )then
-                    deallocate(inds_in_stk_run, run_stkinds, run_from, run_to)
+                    deallocate(inds_in_stk_run, run_stkinds, run_from, run_to, run_stknames)
                     return
                 endif
                 inds_in_stk_run(ii) = ind_in_stk
                 if( stkind /= prev_stkind )then
-                    nstks = nstks + 1
-                    run_stkinds(nstks) = stkind
-                    run_from(nstks)    = ii
-                    if( nstks > 1 ) run_to(nstks-1) = ii - 1
                     prev_stkind = stkind
+                    run_name    = build%spproj%os_stk%get_str(stkind, 'stk')
+                    ! stack rows sharing one file stay in one run: Fortran connects a file to one unit
+                    if( nstks > 0 )then
+                        if( run_name .eq. run_stknames(nstks) ) cycle
+                    endif
+                    nstks = nstks + 1
+                    run_stkinds(nstks)  = stkind
+                    run_stknames(nstks) = run_name
+                    run_from(nstks)     = ii
+                    if( nstks > 1 ) run_to(nstks-1) = ii - 1
                 endif
             end do
+            call run_name%kill
             if( nstks < 1 )then
-                deallocate(inds_in_stk_run, run_stkinds, run_from, run_to)
+                deallocate(inds_in_stk_run, run_stkinds, run_from, run_to, run_stknames)
                 handled = .true.
                 return
             endif
             run_to(nstks) = nbatch
-            allocate(run_stknames(nstks), run_ldims(3,nstks), run_nptcls(nstks))
+            allocate(run_ldims(3,nstks), run_nptcls(nstks))
             do irun = 1, nstks
-                run_stknames(irun) = build%spproj%os_stk%get_str(run_stkinds(irun), 'stk')
                 call stk_dims(params, build, run_stkinds(irun), run_stknames(irun), &
                     &run_ldims(:,irun), run_nptcls(irun))
             end do

@@ -192,6 +192,23 @@ indstk has been recomputed from project-row order
 That state corrupts the particle-to-image mapping and can make distributed
 workers request image indices that do not correspond to the intended particles.
 
+## Stack Rows Sharing One File
+
+`consolidate_particles` drops the inactive rows (metadata-only prune). It then
+copies the remaining images, byte for byte, into one stack file in project row
+order.
+
+- **Stack rows stay.** Every stack row keeps its own fields, so there is
+  still one row per micrograph.
+- **Each row's path** points at the shared file.
+- **Each particle's `indstk`** is its image index in the shared file, which is
+  its project row.
+- **`nptcls_stk`** is the shared file's image count. It is the same in every
+  row.
+
+The fields keep their meaning. Only the assumption of one file per stack row
+goes.
+
 ## Reader Policy
 
 Any code that reads particle images from a stack file must resolve the
@@ -199,6 +216,11 @@ particle's `stkind` and use `indstk` as the physical image index
 (`map_ptcl_ind2stk_ind`). A missing `nptcls_stk`, or an `indstk` that is
 missing or outside `1..nptcls_stk`, is an error. Readers must never use a
 project particle row as the physical stack-file image index.
+
+Several stack rows may share one file (section above). Fortran connects a
+file to one unit at a time, so a reader that opens one unit per stack row must
+group consecutive rows that share a file into one read
+(`read_sorted_stack_runs` in `simple_matcher_ptcl_io.f90`).
 
 ## Validation Policy
 

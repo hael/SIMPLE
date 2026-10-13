@@ -20,6 +20,10 @@ refactoring has been validated (Hans, 2026-10-12). Their numbers are the
 basis for deciding which steps of section 3 come next, and whether the
 container layout is worth its own design note.
 
+**The consolidated-stack experiment runs first** (Hans, 2026-10-13). It
+measures on the ribosome project, before any further change, what one file
+instead of thousands is worth (section 4).
+
 The plan was prompted by the stream ribosome project: thousands of
 per-micrograph stacks with a handful of particles each, on which `solve2D`
 and `solve3D` spend their time in file metadata. Companion documents:
@@ -67,6 +71,8 @@ Rulings so far (Hans, 2026-10-12):
     - one read call per stack run;
     - a POSIX read-only path that opens stacks concurrently and tells the
       kernel ahead of time what the pass will read;
+    - a pass-sized particle buffer in 3D, so the reconstruction reads from
+      memory what the search already read;
     - optionally, stacks kept open from the search into the reconstruction.
   - **Half-sets per stack** (ruled). Reconstruction opens each sampled stack
     once per state instead of once per half, and overlapping neighbouring
@@ -347,11 +353,51 @@ reads through `discrete_read_imgbatch`, so the build gains too.
     system.
   - The Windows build is not a concern.
 
+**A pass-sized particle buffer: read once, use twice in 3D.**
+
+- **Today** the 3D search reads its share in batches of 50 images per thread,
+  each read, prepared and searched before the next (`refine3D_exec`,
+  `simple_strategy3D_matcher.f90:170`).
+  - The reconstruction then runs in the same process (`write_partial_recs`,
+    :225, into `calc_3Drec` or the PCG worker). It reads the same particles
+    from disk again, 500 at a time, once per state and half, and once per
+    state with weight under fractional state weights.
+  - 2D already reads once: the search batch also feeds the class sums.
+- **The buffer.** Before the search loop the read layer fills one buffer
+  with the raw images of the pass's share:
+  - in one sorted sweep, each stack opened once per pass;
+  - indexed by particle, and held exactly as read, so the results stay
+    bit-identical;
+  - with the read-ahead hint issued for the whole list before the sweep
+    starts.
+
+  The search batches and the reconstruction both take their images from the
+  buffer. Read 3 disappears.
+- **Memory.** At box 336 in float32 a particle is about 450 KB.
+  - A distributed part with 1,250 particles (10,000 sampled over eight parts)
+    needs about 560 MB.
+  - A shared-memory run with 10,000 particles needs about 4.5 GB.
+  - The buffer is capped by the memory the system reports available. A share
+    that does not fit falls back to today's batch reads, and the pool below
+    then applies.
+- **Scope.**
+  - The buffer lives for one iteration in one process, and nothing is
+    written to disk.
+  - The probability table and the polish pass run in other processes and
+    keep their own reads.
+- **Overlap with compute** comes from read-ahead while the buffer fills, not
+  from the buffer itself. Filling a buffer before the loop on its own
+  changes the order of the reads, not their number or cost.
+- **Measure** with the time-share measurement of section 4, which times
+  reading in the search and in the reconstruction separately.
+
 **Stacks kept open from the search into the reconstruction (optional).**
 
 - In a `refine3D` part, reads 2 and 3 run in the same process. A pool of the
   part's open descriptors, kept from the search into the reconstruction,
   makes read 3's opens free.
+- With the particle buffer this matters only for shares that exceed the
+  buffer's cap.
 - It is bounded by the open-file limit. When the pool is full, the least
   recently used stack is closed.
 - It is worth adding only if the file-operation and open-latency
@@ -523,6 +569,38 @@ existing data, and keeps one stack row per micrograph.
 - **New data only.** Existing projects keep their files. Reextraction and
   motion-model refinement, which rewrite particles anyway, write containers.
 
+**Prior art: cisTEM** (its master at `455de9a1`). cisTEM never has
+per-micrograph stack files.
+
+- **One stack per refinement package.**
+  - The stack (`particle_stack_N.mrc`) is cut straight from the micrographs
+    when the package is created: each micrograph is read once, and its
+    particles are written consecutively (`MyNewRefinementPackageWizard.cpp`).
+  - A package made from a subset of another one copies the selected
+    particles into a new stack, unless all of them carry over.
+- **Reading is a forward scan of one file.**
+  - `MRCFile` (`src/core/mrc_file.cpp`) is one `std::fstream` that seeks
+    only when it is not already at the wanted slice.
+  - Reads are serialized under `omp critical` within a process.
+  - Distributed jobs take contiguous particle ranges
+    (`FirstLastParticleForJob`).
+  - There is no mmap, `pread` or read-ahead.
+- **Subsets are chosen in stack order.**
+  - `refine2d` decides per particle before the read.
+  - `refine3d` reads every particle of its range and decides afterwards, so
+    a 10% update still reads the whole range.
+  - The noise-spectrum estimate and `refine2d`'s starting averages sample
+    random blocks of consecutive particles "to avoid seeking a lot in large
+    files".
+- **What it shows:**
+  - With one file per package the per-file cost disappears.
+  - Writing that file costs no extra pass, because it is written at the moment
+    particles are cut from the micrographs. That is the moment SIMPLE's
+    extraction would write containers.
+  - Arbitrary sampling is still not free. Where seeks mattered, cisTEM shaped
+    the sampling to the layout (blocks) or read everything. A good layout
+    gets most of the way; read-ahead and memory residency do the rest.
+
 **Costs and open points.**
 
 - **Shared files.** Code that treats a stack file as one micrograph's must
@@ -563,6 +641,27 @@ Their numbers then decide:
 - whether the stream-count cap on spinning disks changes;
 - whether the container layout gets its own design note.
 
+**The consolidated-stack experiment** comes before the rest.
+
+- **The program.** `consolidate_particles` (developer visibility) drops the
+  inactive rows and copies the remaining images, byte for byte, into one
+  stack in the execution directory. Every stack row then points at it, which
+  is the container indexing of section 3.4
+  (`project_stack_indexing_policy.md`, "Stack Rows Sharing One File").
+- **The reader fix it needs.** The sorted read path now keeps consecutive
+  stack rows that share a file in one run, read through one unit.
+- **What it measures.** Same particles, same sampling, same pixels, one file
+  instead of thousands: the most any layout change can buy. It measures the
+  per-file cost and the locality on disk together.
+- **How to run it.**
+  - Start with the share of the ribosome base run (about 29,000
+    particles, 13 GB), where the probabilistic pre-step took 140 of 204 s.
+  - Run the same `solve3D` settings on the original project and on the
+    consolidated one, each from a cold page cache.
+  - Compare `SOLVE3D_BENCH.txt` and the refine3D strategy and matcher
+    benchmark files, with `iostat -x` and `free -g` alongside.
+  - The program logs the gigabytes it copied and the time the copy took.
+
 The measurements:
 
 - **File operations.** Run
@@ -599,6 +698,12 @@ The measurements:
 
 ## 6. Tests
 
+- **The particle buffer.**
+  - With the buffer and without it, the search and the reconstruction
+    produce bit-identical outputs.
+  - A share above the cap falls back to batch reads, with the same outputs.
+  - The reconstruction makes no read from disk when the buffer holds the
+    share, checked by the open counter.
 - **The read path.**
   - `build%imgbatch` is bit-identical between the old and new paths on a
     fixture with stacks of 1, 5 and 200 particles, on sorted and unsorted
@@ -638,6 +743,7 @@ The measurements:
    - one open per stack per pass;
    - one read call per stack run;
    - the POSIX read-only path: concurrent opens, then read-ahead;
+   - the pass-sized particle buffer in 3D;
    - stacks kept open from the search into the reconstruction;
    - the container layout, as its own design note.
 4. **Half-sets per stack** are ruled and do not wait for the numbers. They
@@ -661,6 +767,7 @@ step 2.
 | Area | Files |
 | --- | --- |
 | Read path | `src/main/strategies/search/simple_matcher_ptcl_io.f90` (`discrete_read_imgbatch`, `stk_dims`, read counters), `src/fileio/simple_discrete_stack_io.f90`, `src/fileio/simple_imgfile.f90`, `src/fileio/simple_imghead.f90`, `src/main/image/simple_image_io.f90` |
+| Particle buffer | `simple_matcher_ptcl_io.f90` (the buffer, filled in one sweep), `simple_strategy3D_matcher.f90` (filled before the search loop), `simple_matcher_3Drec.f90` and `simple_rec3D_pcg_strategy.f90` (read from it) |
 | POSIX path | `src/fileio/simple_posix.c`, `src/fileio/simple_syslib.f90` (`io_read_nstreams`, the memory-available query, the new helpers) |
 | Read-ahead and benchmarks | `simple_strategy2D_matcher.f90`, `simple_strategy3D_matcher.f90`, `simple_commanders_prob.f90`, `simple_matcher_3Drec.f90`, `simple_refine2D_strategy.f90`, `simple_refine3D_strategy.f90` |
 | Half-sets | `src/main/ori/simple_oris_setters.f90` (`partition_eo`) |

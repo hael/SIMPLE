@@ -9,13 +9,14 @@ commander_print_project_field, commander_replace_project_field, commander_select
 commander_extract_subproj, commander_fix_projfile, commander_ptcl3D_state_consensus
 use simple_commanders_project_mov,  only: commander_import_movies, commander_write_mic_filetab
 use simple_commanders_project_ptcl, only: commander_zero_project_shifts, commander_import_boxes,&
-commander_import_particles, commander_reimport_particles, commander_prune_project_distr
+commander_import_particles, commander_reimport_particles, commander_prune_project_distr, commander_consolidate_particles
 use simple_commanders_project_cls,  only: commander_import_cavgs
 implicit none
 
 public :: exec_project_commander
 private
 
+type(commander_consolidate_particles) :: xconsolidate_particles
 type(commander_export_relion)         :: xexport_relion
 type(commander_export_starproject)    :: xexport_starproject
 type(commander_extract_substk)        :: xextract_substk
@@ -50,6 +51,8 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(adjustl(which)))
+            case( 'consolidate_particles' )
+                call xconsolidate_particles%execute(cline)
             case( 'export_relion' )
                 call xexport_relion%execute(cline)
             case( 'export_starproject' )

@@ -37,6 +37,11 @@ type, extends(commander_base) :: commander_prune_project
     procedure :: execute      => exec_prune_project
 end type commander_prune_project
 
+type, extends(commander_base) :: commander_consolidate_particles
+  contains
+    procedure :: execute      => exec_consolidate_particles
+end type commander_consolidate_particles
+
 type, extends(commander_base) :: commander_scale_project
   contains
     procedure :: execute      => exec_scale_project
@@ -791,6 +796,145 @@ contains
         ! end gracefully
         call qsys_declare_part_finished(params, string('simple_commanders_project_ptcl :: exec_prune_project'))
     end subroutine exec_prune_project
+
+    !> Copies the active particles' images byte for byte into one MRC stack in project row order and points
+    !! every stack row at it (indstk = project row, nptcls_stk = particle count); rows keep their metadata.
+    subroutine exec_consolidate_particles( self, cline )
+        class(commander_consolidate_particles), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        character(len=*), parameter  :: STKFBODY = 'consolidated_particles'
+        integer(kind=8),  parameter  :: BUFBYTES = 268435456_8 ! copy buffer cap, 256 MB
+        type(parameters)             :: params
+        type(sp_project)             :: spproj
+        type(MrcImgHead)             :: hed_out, hed_src
+        type(string)                 :: stkname, stkout, cwd
+        integer(kind=1), allocatable :: buf(:)
+        integer(kind=8)              :: imgbytes, ncopied
+        integer(timer_int_kind)      :: t0
+        integer :: ldim_ref(3), mode_ref, nptcls, nstks, istk, iptcl, fromp, top
+        integer :: run_row, run_ind, run_len, max_run, stkind, indstk, src_unit, out_unit, ios
+        logical :: l_ref
+        real    :: smpd
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        t0 = tic()
+        call spproj%read(params%projfile)
+        if( spproj%get_nstks() == 0 ) THROW_HARD('no particle stacks; exec_consolidate_particles')
+        call spproj%prune_particles
+        nptcls = spproj%os_ptcl2D%get_noris()
+        nstks  = spproj%get_nstks()
+        if( nptcls < 1 .or. nstks < 1 ) THROW_HARD('no active particles; exec_consolidate_particles')
+        if( spproj%os_stk%get_top(nstks) /= nptcls ) THROW_HARD('pruned stack rows do not cover the particles')
+        call simple_getcwd(cwd)
+        stkout = filepath(cwd, STKFBODY//STK_EXT)
+        do istk = 1, nstks
+            stkname = spproj%os_stk%get_str(istk, 'stk')
+            if( stkname .eq. stkout ) THROW_HARD('a source stack is the output; run in a new execution directory')
+        end do
+        ! the output header is the first stack's, sized to every particle and without extended header
+        l_ref   = .false.
+        stkname = spproj%os_stk%get_str(1, 'stk')
+        call open_src
+        close(src_unit)
+        hed_out  = hed_src
+        ldim_ref = hed_out%getDims()
+        mode_ref = hed_out%getMode()
+        smpd     = spproj%get_smpd()
+        imgbytes = int(ldim_ref(1),kind=8) * int(ldim_ref(2),kind=8) * int(hed_out%bytesPerPix(),kind=8)
+        l_ref    = .true.
+        if( hed_out%pixIsComplex() ) THROW_HARD('Fourier particle stacks cannot be consolidated')
+        if( imgbytes < 1_8 ) THROW_HARD('empty images in the first stack: '//stkname%to_char())
+        call hed_out%setDims([ldim_ref(1), ldim_ref(2), nptcls])
+        call hed_out%setPixSz(smpd)
+        hed_out%nsymbt = 0
+        open(newunit=out_unit, file=stkout%to_char(), status='replace', action='write', access='stream', iostat=ios)
+        if( ios /= 0 ) THROW_HARD('cannot create the consolidated stack; exec_consolidate_particles')
+        call hed_out%write(out_unit)
+        ! a run is consecutive project rows at consecutive images of one stack: one read and one write
+        max_run = int(min(int(nptcls,kind=8), max(1_8, BUFBYTES / imgbytes)))
+        allocate(buf(imgbytes * int(max_run,kind=8)))
+        ncopied = 0_8
+        run_row = 0
+        run_ind = 0
+        do istk = 1, nstks
+            stkname = spproj%os_stk%get_str(istk, 'stk')
+            call open_src
+            fromp   = spproj%os_stk%get_fromp(istk)
+            top     = spproj%os_stk%get_top(istk)
+            run_len = 0
+            do iptcl = fromp, top
+                call spproj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indstk)
+                if( stkind /= istk ) THROW_HARD('particle row outside its stack range; exec_consolidate_particles')
+                if( indstk > hed_src%getStackSz() ) THROW_HARD('particle index beyond its stack: '//stkname%to_char())
+                if( run_len > 0 )then
+                    if( indstk == run_ind + run_len .and. run_len < max_run )then
+                        run_len = run_len + 1
+                        cycle
+                    endif
+                    call copy_run
+                endif
+                run_row = iptcl
+                run_ind = indstk
+                run_len = 1
+            end do
+            if( run_len > 0 ) call copy_run
+            close(src_unit)
+        end do
+        close(out_unit)
+        deallocate(buf)
+        if( ncopied /= int(nptcls,kind=8) * imgbytes ) THROW_HARD('consolidated stack is incomplete')
+        ! every stack row points at the consolidated stack and keeps its other fields
+        do istk = 1, nstks
+            call spproj%os_stk%set(istk, 'stk',        stkout)
+            call spproj%os_stk%set(istk, 'nptcls_stk', nptcls)
+        end do
+        do iptcl = 1, nptcls
+            call spproj%os_ptcl2D%set(iptcl, 'indstk', iptcl)
+            call spproj%os_ptcl3D%set(iptcl, 'indstk', iptcl)
+        end do
+        ! the particle layout identity changed, so a registered sigma2 state no longer applies
+        call spproj%projinfo%delete_entry('sigma2_state')
+        call spproj%write(params%projfile)
+        write(logfhandle,'(A,I0,A,I0,A)') '>>> CONSOLIDATED ', nptcls, ' PARTICLES FROM ', nstks, ' STACKS INTO '//stkout%to_char()
+        write(logfhandle,'(A,F10.2,A,F10.1,A)') '>>> ', real(ncopied)/1.e9, ' GB COPIED IN ', toc(t0), ' S'
+        call spproj%kill
+        call hed_out%kill
+        call hed_src%kill
+        call simple_end('**** SIMPLE_CONSOLIDATE_PARTICLES NORMAL STOP ****')
+
+    contains
+
+        ! every stack must match the first in box and pixel mode
+        subroutine open_src
+            integer :: dims(3)
+            if( fname2format(stkname) /= 'M' ) THROW_HARD('only MRC stacks can be consolidated: '//stkname%to_char())
+            if( .not. file_exists(stkname) ) THROW_HARD('particle stack not found: '//stkname%to_char())
+            open(newunit=src_unit, file=stkname%to_char(), status='old', action='read', access='stream', iostat=ios)
+            if( ios /= 0 ) THROW_HARD('cannot open particle stack: '//stkname%to_char())
+            call hed_src%new
+            call hed_src%read(src_unit)
+            if( .not. l_ref ) return
+            dims = hed_src%getDims()
+            if( dims(1) /= ldim_ref(1) .or. dims(2) /= ldim_ref(2) ) &
+                &THROW_HARD('stack box differs from the first stack: '//stkname%to_char())
+            if( hed_src%getMode() /= mode_ref ) &
+                &THROW_HARD('stack pixel mode differs from the first stack: '//stkname%to_char())
+        end subroutine open_src
+
+        subroutine copy_run
+            integer(kind=8) :: nbytes, src_pos, dst_pos
+            nbytes  = int(run_len,kind=8) * imgbytes
+            src_pos = int(hed_src%firstDataByte(),kind=8) + int(run_ind - 1,kind=8) * imgbytes
+            dst_pos = int(hed_out%firstDataByte(),kind=8) + int(run_row - 1,kind=8) * imgbytes
+            read(src_unit, pos=src_pos, iostat=ios) buf(1:nbytes)
+            if( ios /= 0 ) THROW_HARD('cannot read particle images: '//stkname%to_char())
+            write(out_unit, pos=dst_pos, iostat=ios) buf(1:nbytes)
+            if( ios /= 0 ) THROW_HARD('cannot write the consolidated stack; exec_consolidate_particles')
+            ncopied = ncopied + nbytes
+            run_len = 0
+        end subroutine copy_run
+
+    end subroutine exec_consolidate_particles
 
     subroutine exec_scale_project( self, cline )
         class(commander_scale_project), intent(inout) :: self
