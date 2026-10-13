@@ -69,7 +69,10 @@ class WorkspaceTest(TestCase):
       workspace = Workspace()
       self.assertTrue(workspace.new(project, user=self.test_workspace_user))
       assertWorkspace(workspace, id=2, user=self.test_workspace_user)
-      workspace_path = os.path.join(project.get_absdir(), ".workspace_2")
+      workspace_path = os.path.join(project.get_absdir(), ".workspace_1")
+      self.assertEqual(workspace.get_workspacemodel().disp, 1)
+      self.assertEqual(workspace.get_workspacemodel().dirc, ".workspace_1")
+      self.assertEqual(os.path.realpath(workspace.get_linkpath()), workspace_path)
       self.simple_exec.assert_called_once_with(
         ["simple_exec", "prg=new_project", "projname=workspace", "dir=" + workspace_path],
         check=True,
@@ -103,8 +106,36 @@ class WorkspaceTest(TestCase):
       workspace.new(project, user=self.test_workspace_user)
       assertWorkspace(workspace, id=2, user=self.test_workspace_user)
       self.assertTrue(workspace.delete(), "failed to delete workspace")
+      trash = os.path.join(project.get_absdir(), "TRASH")
+      self.assertTrue(os.path.isdir(os.path.join(trash, ".workspace_2")))
+      self.assertEqual(
+        os.path.realpath(os.path.join(trash, "ds_new_workspace_1_2")),
+        os.path.join(trash, ".workspace_2"),
+      )
       workspace = Workspace(id=2)
       self.assertEqual(workspace.id, 0, "deleted workspace is still present")
+
+  def test_workspace_delete_after_display_number_is_reused(self):
+    with tempfile.TemporaryDirectory() as tmpdirc:
+      project = Project()
+      self.assertTrue(project.new(self.test_project_name, tmpdirc))
+      keeper = Workspace()
+      self.assertTrue(keeper.new(project, user=self.test_workspace_user))
+
+      first = Workspace()
+      self.assertTrue(first.new(project, user=self.test_workspace_user))
+      self.assertTrue(first.delete())
+
+      second = Workspace()
+      self.assertTrue(second.new(project, user=self.test_workspace_user))
+      self.assertEqual(second.get_workspacemodel().disp, 2)
+      self.assertTrue(second.delete())
+
+      trash = os.path.join(project.get_absdir(), "TRASH")
+      self.assertTrue(os.path.isfile(os.path.join(trash, f".workspace_{first.id}", "workspace.simple")))
+      self.assertTrue(os.path.isfile(os.path.join(trash, f".workspace_{second.id}", "workspace.simple")))
+      self.assertTrue(os.path.islink(os.path.join(trash, f"ds_new_workspace_2_{first.id}")))
+      self.assertTrue(os.path.islink(os.path.join(trash, f"ds_new_workspace_2_{second.id}")))
 
   def test_workspace_rename(self):
     # test renaming workspace

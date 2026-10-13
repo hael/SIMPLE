@@ -19,7 +19,7 @@ class Workspace:
     Represents a cryo-EM workspace within a project.
 
     A workspace maps to:
-      - a hidden directory  (.workspace_<id>/)  inside the project directory
+      - a hidden directory  (.workspace_<display number>/)  inside the project directory
       - a human-readable symlink (ds_<name>/) pointing to that directory
       - a TRASH/ subdirectory inside the workspace directory used for soft-deletes
 
@@ -138,7 +138,7 @@ class Workspace:
         display_id = WorkspaceModel.objects.filter(proj=projectmodel).count() + 1
         new_workspace_name = "new workspace " + str(display_id)
 
-        # save the record early to obtain the auto-assigned id, which is used for the directory name
+        # save the record to obtain its database identity
         workspacemodel = WorkspaceModel(
             proj=projectmodel, name=new_workspace_name, disp=display_id,
             cdat=timezone.now(), mdat=timezone.now(), user=user
@@ -148,11 +148,14 @@ class Workspace:
         if self.id == 0:
             return False
 
-        new_workspace_dirc = ".workspace_" + str(self.id)
+        new_workspace_dirc = ".workspace_" + str(display_id)
         new_workspace_link = "ds_" + new_workspace_name.replace(" ", "_")
         new_workspace_path = os.path.join(projectdir, new_workspace_dirc)
 
-        if not ensure_directory(new_workspace_path):
+        try:
+            os.mkdir(new_workspace_path)
+        except OSError as error:
+            print_error("workspace directory cannot be created: " + str(error))
             workspacemodel.delete()
             return False
         if not SIMPLEProject(new_workspace_path).create():
@@ -187,8 +190,8 @@ class Workspace:
             print_error("project trash folder doesn't exist")
             return False
 
-        trash_path = os.path.join(projecttrash, self.workspacemodel.dirc)
-        trash_link = os.path.join(projecttrash, self.workspacemodel.link)
+        trash_path = os.path.join(projecttrash, f".workspace_{self.id}")
+        trash_link = os.path.join(projecttrash, f"{self.workspacemodel.link}_{self.id}")
 
         # verify source filesystem state
         if not os.path.exists(self.absdir):
@@ -205,10 +208,10 @@ class Workspace:
             return False
 
         # verify trash destinations are free
-        if os.path.exists(trash_path):
+        if os.path.lexists(trash_path):
             print_error("workspace trash directory already exists")
             return False
-        if os.path.exists(trash_link):
+        if os.path.lexists(trash_link):
             print_error("trash link already exists")
             return False
 
