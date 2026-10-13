@@ -30,7 +30,7 @@ public :: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project, read_
 public :: configure_flex_pca_phantom
 
 integer, parameter         :: BOX                             = 64
-integer, parameter         :: NPTCLS                          = 2000
+integer, parameter         :: DEFAULT_NPTCLS                  = 2000
 integer, parameter         :: NARMS                           = 5
 integer, parameter         :: MIN_NEFF                        = 100
 integer, parameter         :: NTHR                            = 4
@@ -48,11 +48,11 @@ real,    parameter         :: SIM_SNR                         = 1.0
 real,    parameter         :: MAP_CORR_LP                     = 8.0
 ! The delivered state ids are recoded independently to their majority truth class. With at most
 ! three state ids there are only 2^3 binary recodings; under random truth labels Hoeffding's union
-! bound puts P(best accuracy >= 0.60) below 8*exp(-2*NPTCLS*0.10^2) < 4e-17. This is an independent
+! bound puts P(best accuracy >= 0.60) below 8*exp(-2*DEFAULT_NPTCLS*0.10^2) < 4e-17. This is an independent
 ! detection floor, not the phase-0 production observation used later as a regression floor.
 real,    parameter         :: LABEL_ACCURACY_MIN              = 0.60
 integer, parameter, public :: FLEX_PHANTOM_BOX                = BOX
-integer, parameter, public :: FLEX_PHANTOM_NPTCLS             = NPTCLS
+integer, parameter, public :: FLEX_PHANTOM_NPTCLS             = DEFAULT_NPTCLS
 integer, parameter, public :: FLEX_PHANTOM_NCOMP              = 2
 integer, parameter, public :: FLEX_PHANTOM_MAX_STATES         = 3
 real,    parameter, public :: FLEX_PHANTOM_SMPD               = SMPD
@@ -165,7 +165,7 @@ contains
         integer,           intent(out) :: nst, nv, nposes
         integer, optional, intent(in)  :: nptcls, nstates, nviews
         integer :: ntot
-        ntot = NPTCLS
+        ntot = DEFAULT_NPTCLS
         nst  = 2
         nv   = 0
         if( present(nptcls)  ) ntot = nptcls
@@ -484,7 +484,7 @@ contains
         nlabel_mismatch = 0
         nweight_mismatch = 0
         nselection_mismatch = 0
-        do i = 1, NPTCLS
+        do i = 1, DEFAULT_NPTCLS
             if( (sum(weights(:,i)) > 0.) .neqv. (project%os_ptcl3D%get_state(i) > 0) ) &
                 &nselection_mismatch = nselection_mismatch + 1
             truth_label = merge(1, 2, mod(i,2) == 1)
@@ -496,7 +496,7 @@ contains
                 if( int(labels(i)) /= predicted ) nweight_mismatch = nweight_mismatch + 1
             endif
         enddo
-        result%label_accuracy = real(sum(maxval(truth_counts,dim=2))) / real(NPTCLS)
+        result%label_accuracy = real(sum(maxval(truth_counts,dim=2))) / real(DEFAULT_NPTCLS)
         call assert_true(result%label_accuracy >= LABEL_ACCURACY_MIN, &
             &trim(tag)//': published state labels separate the two truth modes from chance')
         call assert_int(nlabel_mismatch, 0, trim(tag)//': weight flags and project labels agree')
