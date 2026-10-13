@@ -1,6 +1,12 @@
-# Particle I/O on per-micrograph stacks: reading, half-sets, add-on passes and data layout
+# Particle I/O on per-micrograph stacks: reading, half-sets and add-on passes
 
 Implementation note, 2026-10-12. **Plan; nothing implemented.**
+
+**Reviewed 2026-10-13** ([static review](../completed/particle_io_few_particle_stacks_review_2026-10-13.md)),
+and revised the same day to meet it. The review found the diagnosis sound but
+the plan not ready: two scientific contracts and several designs were
+missing. Hans ruled on the contracts the same day (section 8). The designs
+are in sections 3.1 to 3.3.
 
 It merges two notes of the same day:
 
@@ -11,44 +17,64 @@ It merges two notes of the same day:
 RELION references are to its master at `05cd1ad9`.
 
 **Sampling strategies are decoupled from this note** (Hans, 2026-10-12). The
-goal is a data path, and in time a layout on disk, that lets any sampling
-scheme read cheaply. Workflows should not have to be designed around disk
-latency. Nothing here changes which particles are drawn.
+goal is a data path that lets any sampling scheme read cheaply. Workflows
+should not have to be designed around disk latency. Nothing here changes
+which particles are drawn.
 
 **When.** The measurements of section 4 run once the global-sigma
-refactoring has been validated (Hans, 2026-10-12). Their numbers are the
-basis for deciding which steps of section 3 come next, and whether the
-container layout is worth its own design note.
+refactoring has been validated (Hans, 2026-10-12). Their numbers set the
+order of the read-path steps of section 3.1.
 
-**The consolidated-stack experiment runs first** (Hans, 2026-10-13). It
-measures on the ribosome project, before any further change, what one file
-instead of thousands is worth (section 4).
+**The consolidated-stack experiment is done** (2026-10-13, section 4). One
+file instead of 19,520 shortened the refine3D stages of the ribosome base
+run by 18.7%. No material layout gain was demonstrated on this dataset and
+machine. Hans's conclusion: consolidating stacks, in the stream or in batch
+extraction, is not worth pursuing; the work is SIMPLE's low-level I/O
+performance.
 
 The plan was prompted by the stream ribosome project: thousands of
 per-micrograph stacks with a handful of particles each, on which `solve2D`
-and `solve3D` spend their time in file metadata. Companion documents:
+and `solve3D` seemed to spend their time in file metadata. The experiment
+did not show that. Companion documents:
 
 - [particle_cache_policy.md](../../policies/2D/particle_cache_policy.md);
 - [solve3D_policy.md](../../policies/3D/solve3D_policy.md);
 - [solve3D_addon_policy.md](../../policies/3D/solve3D_addon_policy.md);
 - the global-sigma refactoring outline (`global_sigma2_only.md`).
 
-Rulings so far (Hans, 2026-10-12):
+Rulings so far (Hans):
 
-- **No particle is rewritten into another file.** No cache, raw or cropped,
-  is added. The existing cropped 2D cache and the extraction's pixel format
-  stay as they are.
-- **Half-sets per stack** for new partitions (section 3.2).
+- **No particle is rewritten into another file** (2026-10-12). No cache, raw
+  or cropped, is added. The existing cropped 2D cache and the extraction's
+  pixel format stay as they are.
+- **No layout with fewer files** (2026-10-13). Consolidating stacks, in the
+  stream or in batch extraction, is set aside on the experiment's result
+  (section 3.4). The work is the low-level read path (section 3.1).
+- **Half-sets per stack** for new partitions (section 3.2). The review moved
+  their creation from a per-field routine to one project-owned partition.
 - **Add-on passes** (section 3.3):
   - frozen contributions are never recomputed, and their old noise weighting
     is an accepted error;
   - the add-on's final reconstruction is incremental;
   - the noise model is global;
-  - new particles start from the union's committed global sigma.
+  - new particles start from the union's committed global sigma;
+  - a frozen particle can be retired in the project but stays in the frozen
+    volumetric components already generated (2026-10-13);
+  - add-on chains (`solve3D_addon`, `solve3D_chunks`,
+    `emulate_solve3D_stream`) support only the gridding backend: they look
+    for initial solutions and speed, not PCG-level precision (2026-10-13);
+  - the first add-on of a chain reads the base particles once and writes the
+    first carried sums; `solve3D` does not change (2026-10-13);
+  - the offline chains publish their last incremental add-on as it is, with
+    the old weighting of the frozen contributions (2026-10-13).
 
 ## 0. Summary
 
-- **On this data the cost is per stack, not per byte.**
+- **Fewer files bought little** (measured, section 4). One file instead of
+  19,520 shortened the refine3D stages by 18.7%. That file was still reopened
+  once per batch, and the experiment did not separate metadata, bytes,
+  conversion, copying and compute. It shows direction, not an upper bound.
+  What the per-file work is today:
   - Each sampled particle typically sits in a stack that no other sampled
     particle touches.
   - The first touch of a stack in a part process costs two existence checks,
@@ -65,33 +91,33 @@ Rulings so far (Hans, 2026-10-12):
 - **The stream adds a larger cost.** Every `solve3D_addon` reads all frozen
   particles up to six times: two frozen accumulations, and four passes of
   `bootstrap_rec3D` in the final reconstruction.
-- **The plan, none of which stores anything derived from the particles:**
+- **The plan, none of which stores anything derived from the particles on
+  disk:**
   - **Read path, bit-exact:**
-    - one open per stack per pass;
-    - one read call per stack run;
-    - a POSIX read-only path that opens stacks concurrently and tells the
-      kernel ahead of time what the pass will read;
+    - a pass-scoped read session, so each stack is opened once per pass;
+    - bounded coalesced reads within a stack run;
+    - a POSIX read-only path that opens stacks concurrently and prefetches
+      a bounded window ahead of the reads;
     - a pass-sized particle buffer in 3D, so the reconstruction reads from
-      memory what the search already read;
+      memory what the search already read, within an explicit memory budget;
     - optionally, stacks kept open from the search into the reconstruction.
-  - **Half-sets per stack** (ruled). Reconstruction opens each sampled stack
-    once per state instead of once per half, and overlapping neighbouring
-    picks stay in one half.
-  - **Add-on passes** (ruled): an add-on reads only its own particles.
-  - **A direction for discussion:** extraction writes containers, large
-    files holding many micrographs' stacks, so that any sampling touches few
-    files (section 3.4). New data only; nothing is rewritten.
+  - **Half-sets per stack** (ruled): one project-owned partition, created
+    once in the master. Reconstruction opens each sampled stack once per
+    state instead of once per half, and overlapping neighbouring picks stay
+    in one half.
+  - **Add-on passes** (ruled): an add-on reads only its own particles; the
+    first add-on of a chain reads the base particles once.
+  - **Set aside:** a layout on disk with fewer files (section 3.4).
 - **Counts.** Counted from the code for two stream-sized examples
-  (section 2.5), before any gain from concurrent opens or read-ahead, the
+  (section 2.5), before any gain from concurrent opens or prefetching, the
   opens per `solve3D` iteration fall:
-  - 1.6–1.7× with one open per stack;
+  - 1.6–1.7× with one open per stack per pass;
   - 1.7–1.8× adding half-sets per stack.
 
   Opens per iteration stay of the order of the number of sampled particles.
-  Going further means a layout on disk with fewer files (section 3.4).
 - **`solve2D` on a stream pool** below `nsample`=200,000 reads every particle
-  every iteration. One open per stack halves its opens, and concurrent opens
-  and read-ahead overlap them.
+  every iteration. One open per stack per pass halves its opens, and
+  concurrent opens and prefetching overlap them.
 
 ## 1. Why this is not a particle cache
 
@@ -241,7 +267,7 @@ all parts. Each strategy is named in the table's first column.
 | one open per stack (T + T + R) | 16,159 | 27,703 |
 | ... + half-sets per stack (T + T + T) | 13,683 | 27,147 |
 | particle read calls today (3n) | 30,000 | 30,000 |
-| with one read call per stack run | 16,159 | 27,703 |
+| with at most one request per stack run (coalesced) | 16,159 | 27,703 |
 | ... + half-sets per stack | 13,683 | 27,147 |
 | `solve2D`, full sampling: opens today → one open per stack | 20,000 → 10,000 | 160,000 → 80,000 |
 
@@ -277,9 +303,9 @@ by earlier runs, several times.
 
 ## 3. Plan
 
-The steps below are candidates. Which come next, and in what order, is
-decided from the measurements of section 4. The add-on passes depend on the
-global-sigma refactoring in any case.
+The read path (3.1) is the work: SIMPLE's low-level I/O performance (Hans,
+2026-10-13). The measurements of section 4 set the order of its steps. The
+add-on passes depend on the global-sigma refactoring in any case.
 
 ### 3.1 Read path (bit-exact)
 
@@ -288,33 +314,55 @@ stack reader (`simple_discrete_stack_io.f90`) and the image file layer. The
 cropped 2D cache keeps its own reader (`ptcl_cache_read_batch`). Its build
 reads through `discrete_read_imgbatch`, so the build gains too.
 
-**One open per stack per pass.**
+**One open per stack per pass: a pass-scoped read session.**
 
-- Take `ldim` and `nptcls` from the header that `dstack_io%open` reads
-  anyway, and drop the separate `find_ldim_nptcls` on first touch.
-- The rule in the memo comment is kept: the physical header, not `os_stk`'s
-  `box`/`nptcls_stk`, decides record offsets. The check moves into the open.
-- Drop the existence check after the open in `imgfile%open` (:141) for
-  read-only opens. It is a second metadata operation on every open.
-- No change to threading. This halves the opens in reads 1 and 2.
+- **The duplicate first-touch work goes.**
+  - Take `ldim` and `nptcls` from the header that `dstack_io%open` reads
+    anyway, and drop the separate `find_ldim_nptcls` on first touch.
+  - The rule in the memo comment is kept: the physical header, not `os_stk`'s
+    `box`/`nptcls_stk`, decides record offsets. The check moves into the
+    open.
+  - Drop the existence check after the open in `imgfile%open` (:141) for
+    read-only opens. It is a second metadata operation on every open.
+- **That alone gives one open per batch call, not per pass.**
+  `discrete_read_imgbatch` builds and destroys its readers on every call, and
+  the probability table, the search and the reconstruction call it batch
+  after batch. A stack split across a batch boundary is opened again.
+- **The session.** A read session owns the state of one pass:
+  - the decoded headers;
+  - reusable per-stream scratch, including the mode-12 conversion buffer,
+    instead of the small reader and header arrays allocated per stack today;
+  - exact counters (stacks opened, requests, bytes);
+  - at least the descriptor of the stack at the current batch boundary, so
+    the next batch continues it.
 
-**One read call per stack run.**
+  Batches that end on stack boundaries are an alternative where they keep
+  within the batch memory bound.
+- **No change to threading.** Validation counts opens over a complete pass,
+  not one reader call.
 
-- In each run, read the span of slices from the lowest to the highest needed
-  index with one `rSlices(first, last)` into a scratch buffer. Then copy the
-  needed slices into `build%imgbatch`.
-- Do so when the span costs less than separate requests: the slices read
-  beyond the needed ones fit within a gap budget (latency × bandwidth).
-  Start at 2 MB and set it from the open-latency measurement. Otherwise read
-  per particle, as now.
+**Coalesced reads within a stack run.**
+
+- Group a run's needed slices into one or more spans, each read with one
+  positioned request into scratch, and copy the needed slices into
+  `build%imgbatch`.
+- A span bridges a gap only when that costs less than a separate request on
+  the already-open descriptor. The decision weighs:
+  - the bytes read beyond the needed slices;
+  - a hard cap on scratch;
+  - the conversion and copy cost of the extra slices, high for mode 12;
+  - the measured cost of one more positioned read on an open descriptor.
+    Open latency is not the right figure: the saved operation is a request,
+    not an open.
+- One span from the lowest to the highest index is not the rule. Slices 1
+  and 5 of a five-image stack are two slices today, and one span would read
+  and convert all five.
 - On a spinning disk, passing over a short gap costs about as much as
   reading it, while a second request costs a rotation or a seek.
-- On stacks of 5 the span is the whole stack. The bytes are the same, and so
-  are the mode-2 and mode-12 conversions.
 - This is second priority on stream data (one or two particles per stack per
   pass today), and first-order on large stacks and full sampling.
 
-**A POSIX read-only path: concurrent opens and read-ahead.**
+**A POSIX read-only path: concurrent opens and a bounded prefetch window.**
 
 - **The path.** One small set of C helpers in `simple_posix.c`, bound in
   `simple_syslib.f90`, with no Fortran unit involved:
@@ -322,6 +370,14 @@ reads through `discrete_read_imgbatch`, so the build gains too.
   - `pread`;
   - `posix_fadvise`;
   - close.
+- **What the path must define**, in one place:
+  - one authoritative MRC header decode;
+  - 64-bit data offsets;
+  - extended headers (`nsymbt`);
+  - mode and signedness conversion;
+  - short reads and `EINTR` retried;
+  - end of file and truncation reported as errors;
+  - the fallback to today's reader for a mode the path does not handle.
 - **Concurrent opens.** Each stream opens, reads and closes its own stacks
   inside the parallel region, so up to `io_read_nstreams` opens are in flight
   instead of one.
@@ -330,22 +386,24 @@ reads through `discrete_read_imgbatch`, so the build gains too.
   - `simple_stack_io_tester.f90`, which already reads in parallel
     (`test_dstack_parallel_read_*`), gains a case that opens in parallel,
     many times over, on more stacks than streams.
-- **Read-ahead.** At the start of a pass the reader hands the kernel the
-  pass's files (`posix_fadvise` with `WILLNEED`). The kernel queues the
-  reads, orders them by position on disk and runs them while the CPUs work.
-  - **Matchers and probability tables.** The sample is known before the
-    first batch. Per-micrograph stacks are small (5 particles at box 336 is
-    about 2 MB), so whole files are hinted and no header is needed first. A
-    large stack is hinted by range once its header is known.
-  - **Reconstruction.** It hints a window ahead: the next batch or two while
-    the current one is gridded.
-  - **Bounds.** Never more than a fraction of the memory the system reports
-    available, so the hints do not evict what the run already holds.
+- **Prefetch in a bounded window.** The sample is known before the first
+  batch, so reads can be issued ahead of use. `posix_fadvise` takes an open
+  descriptor, not a path, so hinting a whole pass up front would mean
+  opening every file twice or holding thousands of descriptors.
+  - Instead a producer keeps a bounded window of stacks ahead of the
+    consumer: it opens them and fills a double buffer with `pread`, and
+    `WILLNEED` may be issued inside the window as a hint.
+  - The advice is not binding, and the kernel is not relied on to order
+    reads across files.
+  - **Matchers and probability tables** run the window over the sorted
+    sample. **Reconstruction** keeps the next batch or two ahead while the
+    current one is gridded.
+  - **Bounds.** The window has a fixed byte budget, so prefetched data never
+    evict what the run already holds.
   - **Full sampling.** This also serves `solve2D` on stream pools, where
     sampling cannot help.
 - **Conversion.** It is the existing code: `simple_float16_to_float32` for
-  mode 12 and the current conversions for the other modes. A mode the path
-  does not handle falls back to today's reader.
+  mode 12 and the current conversions for the other modes.
 - **Platform.**
   - `posix_fadvise` is Linux-only and is a no-op elsewhere, as
     `simple_fs_is_rotational` already is.
@@ -364,30 +422,54 @@ reads through `discrete_read_imgbatch`, so the build gains too.
     state with weight under fractional state weights.
   - 2D already reads once: the search batch also feeds the class sums.
 - **The buffer.** Before the search loop the read layer fills one buffer
-  with the raw images of the pass's share:
-  - in one sorted sweep, each stack opened once per pass;
-  - indexed by particle, and held exactly as read, so the results stay
-    bit-identical;
-  - with the read-ahead hint issued for the whole list before the sweep
-    starts.
-
-  The search batches and the reconstruction both take their images from the
-  buffer. Read 3 disappears.
+  with the images of the pass's share, in one sorted sweep through the read
+  session.
+  - **Representation.** One contiguous slab of decoded `real32` pixels plus
+    an index map from particle to slab position. It is immutable once
+    filled. Not an array of `image` objects: search preparation changes its
+    input pixels, and every `image%new` allocates FFT storage and creates
+    FFT plans.
+  - **Use.** The search batches and the reconstruction copy their images
+    from the slab into the existing bounded image batches. The results stay
+    bit-identical. Read 3 disappears.
+  - **Mode 12.** The slab holds the decoded float32 values, so conversion
+    runs once. The memory figures below assume that.
 - **Memory.** At box 336 in float32 a particle is about 450 KB.
   - A distributed part with 1,250 particles (10,000 sampled over eight parts)
     needs about 560 MB.
   - A shared-memory run with 10,000 particles needs about 4.5 GB.
-  - The buffer is capped by the memory the system reports available. A share
-    that does not fit falls back to today's batch reads, and the pool below
-    then applies.
+- **The memory budget.** The buffer is allocated against an explicit budget,
+  not against the memory the system reports available: several workers
+  reading that figure at once would each claim the same memory.
+  - The budget comes from the scheduler or the user where given, and
+    otherwise from a conservative share per process or per node.
+  - The allocation checks its status. A share that does not fit the budget,
+    or an allocation that fails, falls back to today's batch reads, and the
+    pool below then applies.
+  - Benchmarks report the aggregate RSS of the node as well as each
+    process's.
 - **Scope.**
   - The buffer lives for one iteration in one process, and nothing is
     written to disk.
   - The probability table and the polish pass run in other processes and
     keep their own reads.
-- **Overlap with compute** comes from read-ahead while the buffer fills, not
-  from the buffer itself. Filling a buffer before the loop on its own
+- **Overlap with compute** comes from the prefetch window while the buffer
+  fills, not from the buffer itself. Filling a buffer before the loop on its own
   changes the order of the reads, not their number or cost.
+- **The memory policy.** The second read exists because of
+  `separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md`
+  (July 2026, `7a979b086` and `90d4ed283`). Inserting each batch into the
+  reconstructors during the search kept every state's even and odd
+  reconstructor allocated next to the all-state reprojection model. The
+  policy separated the phases to bound the peak at the larger of the two, and
+  accepted the reread as the price.
+  - The buffer keeps the phases separate but raises both peaks. With A the
+    alignment working set, R the reconstruction working set and B the
+    buffer, the peak goes from max(A, R) to max(A + B, R + B). B is small
+    next to A and R at the sizes above, but it is not free, hence the budget.
+  - The policy's lifetime table does not list a buffer living across the
+    assignment barrier. It gains that line, with the budget rule, when the
+    buffer lands.
 - **Measure** with the time-share measurement of section 4, which times
   reading in the search and in the reconstruction separately.
 
@@ -397,11 +479,15 @@ reads through `discrete_read_imgbatch`, so the build gains too.
   part's open descriptors, kept from the search into the reconstruction,
   makes read 3's opens free.
 - With the particle buffer this matters only for shares that exceed the
-  buffer's cap.
+  buffer's budget.
 - It is bounded by the open-file limit. When the pool is full, the least
   recently used stack is closed.
-- It is worth adding only if the file-operation and open-latency
-  measurements show the metadata cost still matters after the steps above.
+- A bounded LRU pool may reuse little: the search ends holding the tail of
+  its order, while the reconstruction starts again near the beginning.
+  Before any code, the real access trace of a pass is replayed against
+  realistic pool sizes.
+- It is worth adding only if that replay and the file-operation measurement
+  show the metadata cost still matters after the steps above.
 
 **The stream-count cap.**
 
@@ -430,29 +516,59 @@ reads through `discrete_read_imgbatch`, so the build gains too.
     tube in one half-set (`divideParticlesInRandomHalves`,
     `exp_model.cpp:261-317`; its error text at :400: "half-sets are always
     per-filament").
-- **The rule.**
-  - `partition_eo` (`simple_oris_setters.f90:791`) orders the stacks at
-    random with the run's random stream (`seed_rnd`).
-  - It gives each stack's particles to the half with fewer particles so far,
-    so the halves are equal to within one stack.
-- **When it applies.**
-  - Only to new partitions: `partition_eo` runs only when
-    `get_nevenodd() == 0`, at the call sites in the refine2D and refine3D
-    strategies, the 2D and 3D matchers, reconstruction, `calc_pspec`,
-    `make_cavgs` and `solve2D`. Existing labels never change.
-  - In the stream, chunk projects are partitioned as they are created, and
-    the pool keeps their labels.
-- **The fallback.** Per index, as now, when per stack cannot balance the
-  halves:
-  - the field carries no `stkind` (class-average fields);
-  - a time series (`ini_tseries`, in `make_cavgs`);
-  - the largest stack holds more than 1% of the field's particles (imported
-    projects with a few large stacks).
+- **The partition belongs to the project, not to a field.** Today
+  `partition_eo` (`simple_oris_setters.f90:791`) labels one field wherever it
+  is called. A randomized per-stack version of it cannot stay that way:
+  - SIMPLE's particle sampling uses the same process-wide random state, so
+    drawing a split would change the next sample, against this note's
+    promise to change no draw.
+  - Distributed call sites can each create a partition while only one
+    result is kept.
+  - `ptcl2D` and `ptcl3D` can be partitioned separately and disagree once
+    the stack order is random.
+  - In a partly labelled field, callers that test only
+    `get_nevenodd() == 0` never label the unlabelled appended rows.
+  - Stream merges and the final ingestion combine labelled and unlabelled
+    rows.
+- **One transaction, in the master, before any worker runs:**
+  1. validate the grouping provenance and how complete the current
+     partition is;
+  2. derive one deterministic split from an isolated random stream;
+  3. balance the active (`state > 0`) populations while every row of a
+     group gets one label;
+  4. write the same labels at once to `ptcl2D` and `ptcl3D`, which must be
+     congruent;
+  5. record enough provenance to tell a complete, a missing and an
+     inconsistent split apart;
+  6. workers consume the partition, and stop rather than invent one.
 
-  The fallback is logged.
+  The call sites that run `partition_eo` today (the refine2D and refine3D
+  strategies, the 2D and 3D matchers, reconstruction, `calc_pspec`,
+  `make_cavgs` and `solve2D`) become consumers. Existing labels never
+  change; unlabelled rows of a partly labelled project are placed by the
+  same rule. In the stream, chunk projects are partitioned as they are
+  created, and the pool keeps their labels.
+- **Groups are scientific, not storage.** `stkind` is a storage row. Native
+  extraction makes it one micrograph, but imports can lay particles out
+  otherwise, and several stack rows can share one physical file
+  (`consolidate_particles`). The grouping follows the micrograph or
+  filament identity where the project has it, not the physical path.
+- **Placement.** Largest group first, to the half with fewer active
+  particles, with deterministic random tie-breaking. The imbalance is
+  bounded by the largest group. It is logged, and the transaction warns, or
+  refuses, when there are too few independent groups.
+- **No split by size.** A large micrograph or filament stays whole: its
+  overlapping particles are exactly what the rule is for. A finer split
+  follows only an explicit scientific identity, such as a filament. This
+  replaces the earlier fallback to per-index labels for any stack above 1%
+  of the field.
+- **Routes without micrograph groups.** Class-average fields (no `stkind`)
+  and time series (`ini_tseries`, in `make_cavgs`) take an explicit policy
+  argument, or a separate per-index routine. `oris%partition_eo` alone has no
+  workflow context to infer them.
 - **FLEX.** Its repair of a degenerate split
-  (`simple_flex_pca_project_gateway.f90:104`) uses the same routine, so it
-  follows the same rule.
+  (`simple_flex_pca_project_gateway.f90:104`) uses the same project-level
+  transaction, so it follows the same rule.
 - **Not chosen.** Reading each batch once and routing it to both halves
   would avoid the label change. But it needs both half accumulators live,
   which the multistate peak-memory policy avoids.
@@ -461,7 +577,9 @@ reads through `discrete_read_imgbatch`, so the build gains too.
 
 This is the stream's largest particle I/O. It changes the `solve3D_addon`
 contract (`solve3D_addon_policy.md`, sections 3, 5, 7 and 8), and it depends
-on the global-sigma refactoring (`global_sigma2_only.md`).
+on the global-sigma refactoring (`global_sigma2_only.md`). The review found
+four contracts the first rulings did not settle; all four are now ruled
+(section 8).
 
 **Why the frozen sums are recomputed today.** The frozen particles' poses and
 labels never change during a session (stream 3D ingestion policy, item 10).
@@ -481,8 +599,28 @@ Their noise weighting does:
   at their final poses, with their best sigmas (the run's last pass, below).
 - The boxes are the same in every add-on of a chain, since each runs the
   frozen run's last stage.
-- The first add-on starts from the base run's frozen sets, computed once as
-  today.
+- **Retirement (ruled 2026-10-13).** Today a frozen particle rejected in the
+  current project's `ptcl2D` retires: it leaves the frozen term and stays
+  inactive in the union (`solve3D_addon_policy.md`, frozen membership;
+  `simple_project_superset.f90`, `retire_from_frozen`). Once a particle is
+  inside a carried sum it cannot be taken out, and that is accepted: a
+  retired particle is inactive in the project but stays in the frozen
+  volumetric components already generated. The add-on policy's
+  frozen-membership text changes accordingly.
+- **The first carried sums (ruled 2026-10-13).** The base run publishes no
+  carry-ready sums, and its finished maps and fractional trailing
+  accumulators are not the full-particle raw sums required. The first add-on
+  of a chain therefore reads the base particles once, at the stage's box and
+  the native box, as `addon_starting_state` (`simple_commanders_solve3D.f90`)
+  does today, and writes the first carried sums. `solve3D` does not change.
+- **Gridding only (ruled 2026-10-13).** Add-on chains look for initial
+  solutions and speed, not PCG-level precision. `solve3D_addon` refuses
+  `rec_backend=pcg`, as `solve3D_chunks` already forces gridding. The PCG
+  side of the frozen sets (the `B`/`D` payloads in `simple_frozen_accum.f90`
+  and the frozen add in the PCG backend) is then dead and is deleted. This
+  step does not wait for the global-sigma refactoring. It also removes the
+  question of how a PCG chain would seed `bootstrap_rec3D`, which forces its
+  bootstrap map through gridding.
 
 **The noise model.**
 
@@ -498,6 +636,21 @@ Their noise weighting does:
   Only the base run, with no union before it, seeds from image power.
 - Frozen particles keep their committed sigmas, and their contributions keep
   the weighting they were accumulated with.
+- **The transaction is copy-on-write.** The inherited committed state belongs
+  to the frozen output and must stay intact for rollback, and its rows do
+  not describe the growing union. The add-on therefore:
+  1. creates a candidate state of its own;
+  2. copies the retained frozen records into it;
+  3. initializes every cohort row from the right even or odd global curve;
+  4. updates only the cohort during the stage;
+  5. restores the union membership;
+  6. recomputes both global means over the union;
+  7. publishes atomically.
+
+  The cohort comes from the membership mask, not from a suffix of appended
+  rows: never-updated rows and reselected rows inside the frozen range can
+  join it. Means committed while the frozen rows are still masked would be
+  cohort-only means.
 
 **Incremental final reconstruction.** Today's bootstrap sequence runs over
 the run's own particles instead of the union, with no image-power seed:
@@ -516,58 +669,57 @@ the run's own particles instead of the union, with no image-power seed:
 
 - **The output** carries the sums and a sigma2 state that merges the frozen
   particles' committed sigmas with the run's new ones.
-- **The full fit** is left to the session's final run (stream 3D ingestion
-  policy).
+- **The full fit.** Only the stream's p07 stage ends with a full `refine3D`
+  over every selected particle (stream 3D ingestion policy). The offline
+  chains do not: `emulate_solve3D_stream` ends at its last adopted add-on,
+  and `solve3D_chunks` publishes its last add-on directly. They publish the
+  incremental result as it is, and the historical weighting of the frozen
+  contributions stays in offline results (ruled 2026-10-13: the fastest
+  option). No terminal full reconstruction is added.
 - **What an add-on reads:** its own particles only, in the sampled stage
-  iterations and the three passes at the end. Nothing of the frozen
-  particles.
+  iterations and at the end. Nothing of the frozen particles, once valid
+  carried sums exist. One reconstruction call owns one grid, so the passes
+  at the end are:
+  - three when the native box and the stage's box are equal: bootstrap map,
+    residual pass, shipped map with the new carried sums;
+  - four when they differ, since step 3 then reads once per box, unless a
+    dual-grid accumulator or the cohort buffer serves both;
+  - one more with `addon_diag=yes`, the default of `solve3D_chunks`, for the
+    cohort-only reconstruction.
 - **Over a session,** each particle is read a bounded number of times,
   however many add-ons follow.
-- **The carried sums** are validated against the run context before a byte
-  is read, as the frozen sets are today (`simple_frozen_accum.f90`). The
-  manifest records them with the merged sigma2 state.
+- **The carried sums are one bundle, validated cheaply.** They must not go
+  through the manifest's generic digest of non-sigma artifacts, which reads
+  the whole file. As with today's frozen sets (`simple_frozen_accum.f90`):
+  - components are written under temporary names;
+  - a bundle manifest records the schema, dimensions, sampling, backend,
+    state and half, byte sizes, the membership or lineage identity, the
+    sigma2 generation and the parent and run lineage;
+  - the bundle manifest is published last, and the solve manifest and the
+    project only after the bundle is complete;
+  - validation checks headers, sizes, context, lineage and generation, not
+    full-file digests. The sigma2 identity keeps its structural and
+    generation signature.
 
-### 3.4 A layout on disk that serves any sampling (direction, for discussion)
+  Each adopted run owns its complete bundle, because stream cleanup can
+  remove earlier run directories. A failed or rolled-back run leaves the
+  previous bundle untouched.
 
-The read-path changes make each open and each request cheaper. But opens per
-iteration stay of the order of the number of sampled particles, because the
-sample decides which files are touched. A layout that lets any sampling
-scheme read cheaply has to remove three costs:
+### 3.4 A layout on disk with fewer files (set aside, 2026-10-13)
 
-- **The per-file cost** (open, metadata, header): fewer files.
-- **The per-request latency** (a seek, or a network round trip): the
-  particles in memory or on flash. On a spinning disk no layout makes
-  scattered single-particle reads cheap; only memory does.
-- **The serial wait:** requests issued ahead (read-ahead), since the sample
-  is known before the pass.
+Extraction writing containers, large files that hold many micrographs'
+stacks, was proposed so that any sampling would touch few files. In the
+consolidated-stack experiment (section 4) one file shortened the refine3D
+stages of the ribosome base run by 18.7% and gained nothing on passes that
+read in order: no material layout gain on this dataset and machine. Hans set
+it aside on that result, together with consolidating stacks in the stream or
+in batch extraction.
 
-**Containers.** One layout removes the first cost without a rewrite of
-existing data, and keeps one stack row per micrograph.
+`consolidate_particles` stays as a developer program for measurements, and
+with it the paragraph "Stack Rows Sharing One File" of
+`project_stack_indexing_policy.md`.
 
-- **Writing.**
-  - Extraction appends each micrograph's particles to a large container
-    file instead of writing one file per micrograph.
-  - There is one container per extraction job, so each file has one writer.
-  - The MRC header's image count is set when the container is closed.
-- **Indexing.**
-  - Each micrograph keeps its own `os_stk` row, so the 1:1 relation with
-    `os_mic` holds. The row's path is the container, and its particles'
-    `indstk` are their image positions in it.
-  - The stack-indexing policy already separates the stack row from the
-    physical file (`indstk` is the physical image index). Rows sharing one
-    file need a paragraph in that policy, not a format change.
-- **Reading.**
-  - A part process opens each container once and keeps it open. Any particle
-    is then one positioned read at a known offset.
-  - Several streams read one container through separate descriptors, on the
-    POSIX path. A Fortran file can be connected to only one unit.
-  - Opens per iteration fall from thousands to the number of containers
-    touched, whatever the sampling scheme.
-- **On a spinning disk,** a container written in micrograph order is
-  contiguous. Scattered reads inside it are short seeks within one region,
-  not jumps between thousands of files interleaved with other outputs.
-- **New data only.** Existing projects keep their files. Reextraction and
-  motion-model refinement, which rewrite particles anyway, write containers.
+The prior art below is kept for reference.
 
 **Prior art: cisTEM** (its master at `455de9a1`). cisTEM never has
 per-micrograph stack files.
@@ -598,8 +750,7 @@ per-micrograph stack files.
     particles are cut from the micrographs. That is the moment SIMPLE's
     extraction would write containers.
   - Arbitrary sampling is still not free. Where seeks mattered, cisTEM shaped
-    the sampling to the layout (blocks) or read everything. A good layout
-    gets most of the way; read-ahead and memory residency do the rest.
+    the sampling to the layout (blocks) or read everything.
 
 **Prior art: cryoSPARC.** It is closed source. This comes from its public
 guide and forum posts, which were not read in full.
@@ -619,30 +770,8 @@ guide and forum posts, which were not read in full.
 - **Reading.** Refinement loads as many images onto the GPU as fit and
   normally runs two threads, so reading and computing overlap. Particles
   come from the cache or from memory. No prefetch setting is documented.
-- **What it shows.** Consolidation is the remedy users reach for, which is
-  what the experiment in section 4 does. No layout built to serve any
-  sampling was found.
-
-**Costs and open points.**
-
-- **Shared files.** Code that treats a stack file as one micrograph's must
-  be audited. Removing or rejecting a micrograph deselects its rows and
-  leaves its images in the container, and the space comes back only through
-  compaction.
-- **Ownership.** Extraction is the writer, so this changes extraction and
-  the stream, which is Joe's area.
-- **Order.** It needs the POSIX path first. Today's sorted read opens one
-  reader per stack row in parallel, which would connect a shared container
-  to several Fortran units.
-- **When to decide.** From the measurements of section 4: how much of an
-  iteration is opens, and what an open costs on the file systems in use.
-
-**Set aside:**
-
-- one stack per stream chunk, which breaks the 1:1 `os_stk`/`os_mic`
-  relation that `simple_sp_project_mic.f90`, `simple_reextract_strategy.f90`,
-  `simple_refine_motion_model_strategy.f90` and `prune_project` rely on;
-- a repacked copy (section 1).
+- **What it shows.** Consolidation is the remedy users reach for. On the
+  ribosome project it bought 18.7% of the stage time (section 4).
 
 ### 3.5 Not addressed
 
@@ -657,34 +786,47 @@ as it then stands. They need no change to the read path. The only code is
 the benchmark split of section 5, which the time-share measurement needs.
 Their numbers then decide:
 
-- which of the read-path steps are worth doing, and in what order;
+- the order of the read-path steps, and which of them are worth doing;
 - whether stacks need to be kept open from the search into the
   reconstruction;
-- whether the stream-count cap on spinning disks changes;
-- whether the container layout gets its own design note.
+- whether the stream-count cap on spinning disks changes.
 
-**The consolidated-stack experiment** comes before the rest.
+**The consolidated-stack experiment (done, 2026-10-13).**
 
-- **The program.** `consolidate_particles` (developer visibility) drops the
-  inactive rows and copies the remaining images, byte for byte, into one
-  stack in the execution directory. Every stack row then points at it, which
-  is the container indexing of section 3.4
-  (`project_stack_indexing_policy.md`, "Stack Rows Sharing One File").
-- **The reader fix it needs.** The sorted read path now keeps consecutive
-  stack rows that share a file in one run, read through one unit.
-- **What it measures.** Same particles, same sampling, same pixels, one file
-  instead of thousands: the most any layout change can buy. It measures the
-  per-file cost and the locality on disk together.
-- **How to run it.**
-  - Start with the share of the ribosome base run (about 29,000
-    particles, 13 GB), where the probabilistic pre-step took 140 of 204 s.
-  - Run the same `solve3D` settings on the original project and on the
-    consolidated one, each from a cold page cache.
-  - Compare `SOLVE3D_BENCH.txt` and the refine3D strategy and matcher
-    benchmark files, with `iostat -x` and `free -g` alongside.
-  - The program logs the total to copy at the start, then every 30 seconds
-    the gigabytes copied, the share done, the rate and the minutes left. At
-    the end it logs the gigabytes copied and the time the copy took.
+- **Setup.** `consolidate_particles` copied the ribosome project's 436,455
+  active particles (197 GB in 19,520 stacks of about 22) byte for byte into
+  one file on the same disk. The copy is disk-bound, about 53 minutes on the
+  production server: one spinning disk holding the stacks and the outputs,
+  and 252 GiB of memory. `solve3D_chunks` then ran with identical settings
+  and the same 15 runs of about 29,100 particles on the original project and
+  on the consolidated one.
+- **Result.**
+
+  | | 19,520 stacks | One file | Change |
+  | --- | --- | --- | --- |
+  | base step, total | 8,638 s | 7,103 s | −17.8% |
+  | refine3D stages | 8,011 s | 6,514 s | −18.7% |
+  | final reconstruction | 413 s | 398 s | −3.6% |
+  | add-ons 1–3, s per 1,000 particles added | 147, 141, 148 | 125, 129, 134 | −9% to −15% |
+
+- **What it shows.** No material layout gain was demonstrated on this
+  dataset and machine.
+  - The gain is in the stage iterations, which read a random sample. The
+    final reconstruction, which reads in order, gained nothing.
+  - It is direction, not an upper bound on what layout or metadata work can
+    buy. The one file was still reopened once per batch, and the experiment
+    does not separate metadata, bytes, conversion, copying and compute.
+    About half of the wall time of a matcher partition is outside its
+    timers.
+- **Caveats.** Ab initio is stochastic: the two base runs reached different
+  three-state solutions, and compute differs with the solution, so the
+  numbers are indicative. One machine, and the consolidated chain had
+  finished 4 of its 14 steps.
+- **A firm attribution**, if one is ever needed: capture one pass's selected
+  particles and access trace and replay it against both layouts, or repeat
+  fixed-sample runs to completion.
+- **Consequence** (Hans): no layout with fewer files (section 3.4); the work
+  is the read path (section 3.1).
 
 The measurements:
 
@@ -699,8 +841,11 @@ The measurements:
   - Read the shares on the ribosome project for `solve3D` and `solve2D`.
 - **Open latency** on the cluster file system. Time open, a 1 KB read and a
   close over a few thousand stacks not read recently, with one stream and
-  with 8 streams. This sets the span-read gap budget and says how much
-  concurrent opens buy.
+  with 8 streams. This says how much concurrent opens buy.
+- **Positioned-read latency** on an already-open descriptor, cold and warm.
+  This, not the open latency, sets the gap budget for coalesced spans.
+- **The access trace of one pass**, replayed against realistic descriptor
+  pool sizes before any pool is written (section 3.1).
 - **Stream-count sweep.** `SIMPLE_IO_NSTREAMS` at 1, 2, 4, 8 and 16 on the
   ribosome's spinning disk, with `free -g` and `iostat -x` alongside.
 - **The ribosome with whole-stack runs** (`solve3D_chunks`, `76c37002b`).
@@ -711,12 +856,15 @@ The measurements:
 - **Where:** `REFINE2D_BENCH_ITERnnn.txt`, the refine3D matcher's
   per-partition files, the refine3D strategy file and `SOLVE3D_BENCH.txt`,
   in SIMPLE's format (CONTEXT, TIMINGS, % accounted for).
-- **Timings:** particle reading, separate from particle preparation.
+- **Timings:** particle reading, separate from particle preparation;
+  conversion and copy time; buffer allocation time.
 - **Counts, in the context sections, for each pass:**
   - stacks opened;
   - read requests;
-  - bytes read;
-  - bytes hinted.
+  - bytes requested, and bytes actually read including over-read;
+  - bytes prefetched, and how many of them were used;
+  - the cache state, warm or cold.
+- **Memory:** process RSS and the aggregate RSS of the node.
 - **Rule:** a gain is claimed only from the same run measured before and
   after.
 
@@ -725,31 +873,61 @@ The measurements:
 - **The particle buffer.**
   - With the buffer and without it, the search and the reconstruction
     produce bit-identical outputs.
-  - A share above the cap falls back to batch reads, with the same outputs.
+  - The slab is unchanged after the search; fractional multi-state
+    reconstruction reuses it once per state.
+  - A share above the budget, or a failed allocation, falls back to batch
+    reads, with the same outputs.
   - The reconstruction makes no read from disk when the buffer holds the
     share, checked by the open counter.
 - **The read path.**
   - `build%imgbatch` is bit-identical between the old and new paths on a
-    fixture with stacks of 1, 5 and 200 particles, on sorted and unsorted
-    index lists, in mode 2 and mode 12.
-  - One open per stack per call, checked by an open counter in `dstack_io`.
+    fixture with stacks of 1, 5 and 200 particles, on sorted, unsorted and
+    duplicate index lists, in mode 2 and mode 12, with the output order kept.
+  - One open per stack per pass, counted over a complete pass, including a
+    stack split across consecutive batches.
+  - Two logical stack rows sharing one physical file.
+  - Several coalesced spans in one stack, with the over-read within its
+    budget.
   - A dimension mismatch still stops.
+  - The POSIX path: nonzero extended headers, 64-bit offsets, missing and
+    truncated files, short reads, `EINTR`, end of file, advice the platform
+    does not support, and the fallback modes.
   - The POSIX path opens in parallel, many times over, on more stacks than
-    streams.
-  - Read-ahead changes no byte read.
+    streams. Descriptor exhaustion, leaks and pool eviction are covered.
+  - Prefetching changes no byte read.
 - **Half-sets per stack.**
-  - The halves differ by at most the largest stack.
-  - Every particle of a stack carries one label.
-  - Each fallback applies: no `stkind`, a time series, a stack above 1% of
-    the field.
-  - Existing labels are untouched.
-  - A fixed seed gives the same split.
+  - The halves differ by at most the largest group.
+  - Every particle of a group carries one label, and no group is split for
+    its size.
+  - Class-average fields and time series take their explicit route.
+  - `ptcl2D` and `ptcl3D` carry the same labels after merge, prune,
+    reextraction and stream publication.
+  - A partly labelled appended project gets its missing labels; existing
+    labels are untouched.
+  - Workers refuse a missing or inconsistent partition instead of creating
+    one.
+  - Creating the split leaves the particle sample unchanged (isolated random
+    stream), and a fixed seed gives the same split.
 - **Add-on passes.**
   - When no sigma changes, the carried sums equal sums recomputed from the
     frozen particles.
   - The shipped map from carried sums equals a full reconstruction of the
-    union under the same weights.
-  - A carried-sum file of another run context is refused.
+    union under the same weights, within tolerances justified by the changed
+    accumulation order; drift is checked over the depth of a chain.
+  - At least two chained add-ons, with rollback, restart and truncated or
+    mixed bundles.
+  - A frozen particle retired after at least one carried add-on stays in the
+    carried sums and is inactive in the project; reselection after
+    retirement.
+  - Gridding, with equal and unequal native and stage boxes;
+    `solve3D_addon` refuses `rec_backend=pcg`.
+  - The first add-on of a chain reads the base particles once and writes
+    the first bundle.
+  - No frozen particle stack is read once a valid bundle exists.
+  - Both offline chains publish their last incremental add-on as it is, with
+    no terminal reconstruction.
+  - The union's even and odd sigma means after the membership is restored.
+  - A bundle of another run context is refused.
   - The merged sigma2 state holds the frozen particles' committed records
     unchanged.
 - **Lightweight gates.** `scripts/check_test_registry.py` runs whenever a
@@ -760,41 +938,60 @@ The measurements:
 1. **The global-sigma refactoring is validated** first
    (`global_sigma2_only.md`).
 2. **Measurements** (section 4): the benchmark split, then the file
-   operations, the time share, the open latency, the stream-count sweep and
-   the whole-stack ribosome run.
-3. **Decision.** The numbers are reviewed, and the next steps are chosen from
-   the candidates below. The order shown is provisional:
-   - one open per stack per pass;
-   - one read call per stack run;
-   - the POSIX read-only path: concurrent opens, then read-ahead;
-   - the pass-sized particle buffer in 3D;
-   - stacks kept open from the search into the reconstruction;
-   - the container layout, as its own design note.
-4. **Half-sets per stack** are ruled and do not wait for the numbers. They
-   land with the first step chosen, and their effect on reconstruction opens
-   is measured with it.
+   operations, the time share, the open and positioned-read latencies, the
+   access-trace replay, the stream-count sweep and the whole-stack ribosome
+   run.
+3. **The read path.** The numbers set the order of its steps. The order shown
+   is provisional:
+   - the pass-scoped read session (one open per stack per pass);
+   - bounded coalesced reads within a stack run;
+   - the POSIX read-only path: concurrent opens, then the bounded prefetch
+     window;
+   - the pass-sized particle buffer in 3D, with its budget and the policy
+     line;
+   - stacks kept open from the search into the reconstruction, only if the
+     trace replay supports it.
+4. **Half-sets per stack** are ruled and do not wait for the numbers. The
+   project-owned partition transaction is written first; the labels land
+   with the first read-path step, and their effect on reconstruction opens is
+   measured with it.
 5. **Add-on passes,** as a separate track that builds on the global-sigma
-   refactoring.
+   refactoring. Removing PCG from the add-on chains can land before, on its
+   own.
 
 Each step ends with a review of its numbers against the measurements of
 step 2.
 
-## 8. Open decisions
+## 8. Decisions
 
-1. **Half-sets per stack:** is the 1% largest-stack threshold for the
-   per-index fallback right?
-2. **The container layout** (section 3.4): worth its own design note, with
-   Joe, once the measurements are in?
+None is open. The review's contracts were ruled by Hans on 2026-10-13:
+
+- **Retirement.** A frozen particle can be retired in the project but stays
+  in the frozen volumetric components already generated (section 3.3).
+- **PCG.** Add-on chains support only the gridding backend (section 3.3).
+- **The first carried sums.** The first add-on of a chain reads the base
+  particles once, at the stage's box and the native box, as every add-on
+  does today, and writes the first carried sums. `solve3D` does not change.
+  The alternative, the base run writing the sums, would read the same
+  particles and touch more code.
+- **What the offline chains publish.** `solve3D_chunks` and
+  `emulate_solve3D_stream` publish their last incremental add-on as it is,
+  with the old noise weighting of the frozen contributions: the fastest
+  option. In the stream, p07's full refinement still recomputes everything
+  at the end of a session. Rejected: full final reconstructions in every
+  offline add-on, and one terminal full reconstruction per offline chain.
+- **The half-set fallback.** The question on its 1% threshold is gone: the
+  fallback is removed (section 3.2).
 
 ## 9. Code map
 
 | Area | Files |
 | --- | --- |
-| Read path | `src/main/strategies/search/simple_matcher_ptcl_io.f90` (`discrete_read_imgbatch`, `stk_dims`, read counters), `src/fileio/simple_discrete_stack_io.f90`, `src/fileio/simple_imgfile.f90`, `src/fileio/simple_imghead.f90`, `src/main/image/simple_image_io.f90` |
-| Particle buffer | `simple_matcher_ptcl_io.f90` (the buffer, filled in one sweep), `simple_strategy3D_matcher.f90` (filled before the search loop), `simple_matcher_3Drec.f90` and `simple_rec3D_pcg_strategy.f90` (read from it) |
-| POSIX path | `src/fileio/simple_posix.c`, `src/fileio/simple_syslib.f90` (`io_read_nstreams`, the memory-available query, the new helpers) |
-| Read-ahead and benchmarks | `simple_strategy2D_matcher.f90`, `simple_strategy3D_matcher.f90`, `simple_commanders_prob.f90`, `simple_matcher_3Drec.f90`, `simple_refine2D_strategy.f90`, `simple_refine3D_strategy.f90` |
-| Half-sets | `src/main/ori/simple_oris_setters.f90` (`partition_eo`) |
-| Add-on passes | `simple_commanders_solve3D.f90`, `simple_solve3D_utils.f90`, `simple_frozen_accum.f90`, `src/main/simple_final_rec.f90`, `exec_bootstrap_rec3D` (`simple_commanders_refine3D.f90`), `src/main/sigma2/` |
-| Policies | `doc/policies/3D/solve3D_addon_policy.md` (sections 3, 5, 7, 8), the documents that describe half-set assignment, a short policy for the particle read path |
+| Read path | `src/main/strategies/search/simple_matcher_ptcl_io.f90` (`discrete_read_imgbatch`, `stk_dims`, read counters, the read session), `src/fileio/simple_discrete_stack_io.f90`, `src/fileio/simple_imgfile.f90`, `src/fileio/simple_imghead.f90`, `src/main/image/simple_image_io.f90` |
+| Particle buffer | `simple_matcher_ptcl_io.f90` (the slab and its index map, filled in one sweep), `simple_strategy3D_matcher.f90` (filled before the search loop), `simple_matcher_3Drec.f90` and `simple_rec3D_pcg_strategy.f90` (copy from it) |
+| POSIX path | `src/fileio/simple_posix.c`, `src/fileio/simple_syslib.f90` (`io_read_nstreams`, the new helpers) |
+| Prefetch and benchmarks | `simple_strategy2D_matcher.f90`, `simple_strategy3D_matcher.f90`, `simple_commanders_prob.f90`, `simple_matcher_3Drec.f90`, `simple_refine2D_strategy.f90`, `simple_refine3D_strategy.f90` |
+| Half-sets | the project-level partition transaction (with `sp_project`), `src/main/ori/simple_oris_setters.f90` (`partition_eo`, the per-index routine), and its call sites as consumers |
+| Add-on passes | `simple_commanders_solve3D.f90` (`addon_starting_state`), `simple_solve3D_utils.f90`, `simple_frozen_accum.f90`, `src/main/project/simple_project_superset.f90` (retirement), `src/main/simple_final_rec.f90`, `exec_bootstrap_rec3D` (`simple_commanders_refine3D.f90`), `simple_commanders_solve3D_chunks.f90`, `src/main/sigma2/` |
+| Policies | `doc/policies/3D/solve3D_addon_policy.md` (sections 3, 5, 7, 8; frozen membership under retirement; the PCG frozen add removed), `doc/policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md` (the raw-image buffer across the assignment barrier), the documents that describe half-set assignment, a short policy for the particle read path |
 | Tests | `src/fileio/simple_stack_io_tester.f90`, the `oris` setter testers, `src/main/volume/simple_frozen_accum_tester.f90` |
