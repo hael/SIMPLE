@@ -125,6 +125,12 @@ interface
         integer :: istage
     end function solve3D_symsrch_stage
 
+    module pure function cavgs_prob_athres( athres_run, istage ) result( athres )
+        real,    intent(in) :: athres_run
+        integer, intent(in) :: istage
+        real :: athres
+    end function cavgs_prob_athres
+
     module function solve3D_ml_reg_start_stage() result(istage)
         integer :: istage
     end function solve3D_ml_reg_start_stage

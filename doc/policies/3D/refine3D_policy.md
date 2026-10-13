@@ -194,7 +194,10 @@ an empty directory, and every final reconstruction at a new sampling. Since
   sampling in solve3D and refine3D_auto), the seed is upgraded by one
   residual pass: `refine=sigma` against the seeded map at the final sampling
   (no search, no volume assembly, no orientation output, alignment docs are
-  not merged, and the particle field left exactly as it was: shared-memory
+  not merged, no state labels seeded or written, so a multi-state project
+  collapsed into one state keeps it (`labels_may_change`, as for
+  `refine=eval`; until 13 October 2026 the distributed start relabelled such a
+  project at random and wrote it), and the particle field left exactly as it was: shared-memory
   initialisation does not reset `updatecnt`/`sampled` for it, the run
   finalizers do not write the field, and the distributed master refreshes it
   from disk before its whole-project write), committed as the next canonical

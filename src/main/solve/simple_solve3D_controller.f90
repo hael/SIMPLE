@@ -24,6 +24,7 @@ integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaus
 integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
 integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
 integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
+real,             parameter :: PROB_ATHRES_TAPER_MIN   = 10.         ! solve3D_cavgs' narrowed angular window ends here (prob_athres_taper)
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
@@ -143,6 +144,16 @@ contains
         integer :: istage
         istage = SYMSRCH_STAGE
     end function solve3D_symsrch_stage
+
+    !> solve3D_cavgs' angular sampling threshold at stage @p istage with prob_athres_taper=yes: the
+    !! run's prob_athres (@p athres_run) through the symmetry-search stage, then halved each stage,
+    !! never below PROB_ATHRES_TAPER_MIN (nor above the run's value). With 90: 45, 22.5, 11.25 and
+    !! 10 for stages 4 to 7.
+    module procedure cavgs_prob_athres
+        athres = athres_run
+        if( istage <= SYMSRCH_STAGE ) return
+        athres = max(min(athres_run, PROB_ATHRES_TAPER_MIN), athres_run * 0.5**(istage - SYMSRCH_STAGE))
+    end procedure cavgs_prob_athres
 
     module function solve3D_ml_reg_start_stage() result(istage)
         integer :: istage
@@ -620,6 +631,13 @@ contains
         if( l_cavgs )then
             call cline_refine3D%set('snr_noise_reg',      cfg%snr_noise_reg)
             call cline_refine3D%delete('update_frac')
+            ! the angular sampling window narrowed stage by stage after the symmetry search
+            ! (prob_athres_taper); otherwise the run's prob_athres throughout
+            if( params%prob_athres_taper .eq. 'yes' )then
+                call cline_refine3D%set('prob_athres',    cavgs_prob_athres(params%prob_athres, istage))
+                write(logfhandle,'(A,F6.1)') '>>> ANGULAR SAMPLING THRESHOLD (prob_athres_taper, DEG): ',&
+                    &cavgs_prob_athres(params%prob_athres, istage)
+            endif
         else
             call cline_refine3D%delete('snr_noise_reg')
         endif

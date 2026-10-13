@@ -1280,6 +1280,8 @@ contains
         call cline_job%set('lpstart',         LPSTART_CAVGS3D)
         call cline_job%set('lpstop',          LPSTOP_CAVGS3D)
         call cline_job%set('force_lp_range',  'yes')
+        ! the angular sampling window narrowed after the symmetry search, so the poses settle
+        call cline_job%set('prob_athres_taper', 'yes')
         if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
         call cline_job%set('nthr',            self%params%nthr3D)
         ! nparts makes it distributed even at 1; one part runs in shared memory

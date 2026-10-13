@@ -34,7 +34,7 @@ When unset, it supplies:
 - `mkdir=yes`
 - `objfun=euclid`
 - `overlap=0.95`
-- `prob_athres=90`
+- `prob_athres=90` (narrowed in the late stages with `prob_athres_taper=yes`, section 5.2)
 - `cenlp` from the solve3D controller default
 - `imgkind=cavg`
 - `noise_norm=no`
@@ -158,6 +158,35 @@ that has emptied start again, at each stage boundary before the last stage
 The worst-fitting classes are also the noisiest, so a reseeded state can
 start from weak signal. A small but genuine state that falls under 2% after a
 stage is reseeded too. Validate the option before making it a default.
+
+### 5.2 Narrowing the angular window (`prob_athres_taper`, default `no`)
+
+The probabilistic search draws each orientation from the candidates within
+an angular window of the best one: `min(prob_athres, the previous iteration's
+mean angular jump)` (`calc_athres`). With `prob_athres=90`, the cap almost
+never applies, so the window follows the last jumps, and the jumps follow the
+window. A run of 560 class averages (13 October 2026) kept an orientation
+overlap of about 0.02 and a mean jump of about 50 degrees through stage 7,
+ending with the even and odd halves of each class 90.6 degrees apart, as
+random orientations would be. Its unsettled poses drew the class averages to
+the blurriest state, and in stage 7 the states collapsed into one.
+
+`prob_athres_taper=yes` (added 13 October 2026) narrows the window per stage
+(`cavgs_prob_athres`, set on each stage's `refine3D` command line by the stage
+controller):
+
+- the run's `prob_athres` through the symmetry-search stage (3), which keeps
+  the early exploration that `prob_athres=90` was chosen for;
+- then halved each stage, never below 10 degrees (`PROB_ATHRES_TAPER_MIN`) nor
+  above the run's value: 45, 22.5, 11.25 and 10 for stages 4 to 7 from 90.
+
+The threshold of each stage is logged. Without the option every stage keeps
+the run's `prob_athres`. Particle `solve3D` is not affected. Validate the
+option before making it a default.
+
+Tests: `test_prob_athres_taper` and the reseeding tests in
+`simple_solve3D_reseed_tester` (`unit_reconstruction`, "solve3D_cavgs stage
+rules").
 
 ## 6. Mapping Back
 

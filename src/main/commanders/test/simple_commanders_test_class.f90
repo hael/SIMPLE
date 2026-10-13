@@ -413,7 +413,7 @@ contains
         call add_suite(s, n, 'weighted insertion',        run_all_reconstructor_tests)
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
         call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
-        call add_suite(s, n, 'solve3D state reseeding',   run_all_solve3D_reseed_tests)
+        call add_suite(s, n, 'solve3D_cavgs stage rules', run_all_solve3D_reseed_tests)
     end subroutine suites_reconstruction
 
     !> registration on the polar Fourier transform, shared by the 2D and 3D searches

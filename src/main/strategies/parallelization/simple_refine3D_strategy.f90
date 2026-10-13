@@ -468,6 +468,9 @@ contains
         logical :: l_any_vols, l_complete_vols
         integer :: n_state_bins
         if( params%nstates <= 1 ) return
+        ! a pass that searches nothing (refine=sigma, eval) leaves the particle field as it is: a
+        ! collapsed multi-state project, all in one state, must not be relabelled at random
+        if( .not. labels_may_change(params) ) return
         l_any_vols      = any_volume_source_defined(cline, params%nstates)
         l_complete_vols = complete_volume_source_defined(cline, params%nstates)
         if( l_any_vols .and. .not.l_complete_vols )then
@@ -482,6 +485,13 @@ contains
         call activate_ptcl3D_states_from_selection(build, params)
         call gen_labelling(build%spproj_field, params%nstates, 'uniform')
     end subroutine seed_multistate_startup_labels
+
+    !> .false. for a refine3D pass that searches nothing (refine=sigma, eval): it neither seeds nor
+    !! writes state labels, and leaves the particle field as it found it.
+    pure logical function labels_may_change( params ) result( l_may )
+        type(parameters), intent(in) :: params
+        l_may = trim(params%refine) /= 'sigma' .and. trim(params%refine) /= 'eval'
+    end function labels_may_change
 
     subroutine assert_multistate_populations( build, params )
         type(builder),    intent(inout) :: build
@@ -1081,8 +1091,8 @@ contains
                 endif
             endif
         else
-            ! STATE LABEL INIT
-            if( self%l_multistates )then
+            ! STATE LABEL INIT (none in a pass that searches nothing, which writes no field)
+            if( self%l_multistates .and. labels_may_change(params) )then
                 call seed_multistate_startup_labels(build, params, cline)
                 call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
