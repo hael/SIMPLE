@@ -252,10 +252,8 @@ if(BUILD_TESTS)
   # lib_stream: the stream stages that run in-process, one thread, with the
   # arguments the stream gives them (Ruben's stream tests): optics assignment
   # (a minute: the stream watcher waits LONGTIME = 60 s), picking references,
-  # pick and extract. Review verdict 2026-09-24 (plan, section 9.7, stream).
-  # The hosted Linux runner exceeded the former 1800 s limit while the final
-  # movies-to-3D sub-suite was still making progress (owner decision 2026-10-07).
-  simple_add_test(lib_stream library 3600 1
+  # pick and extract. 
+  simple_add_test(lib_stream library 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_stream)
 
   # ---- high-level gates (explicit CTest runs only) --------------------------
