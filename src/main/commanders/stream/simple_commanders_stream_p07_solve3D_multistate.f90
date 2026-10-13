@@ -29,7 +29,6 @@ module simple_commanders_stream_p07_solve3D_multistate
 use simple_defs,                    only: logfhandle
 use simple_error,                   only: simple_exception
 use simple_defs_fname,              only: METADATA_EXT
-use simple_defs_stream,             only: NPTCLS_FIRST3D
 use simple_jiffys,                  only: simple_end
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
@@ -47,7 +46,7 @@ integer, parameter :: NSTATES3D        = 3      ! states of the 3D
 integer, parameter :: NSTAGES3D        = 5      ! solve3D stages
 integer, parameter :: NPARTS3D         = 8      ! parts and threads of each 3D job
 integer, parameter :: NTHR3D           = 8
-integer, parameter :: NPTCLS3D_MAX     = NPTCLS_FIRST3D ! the first solve3D's particles at most, as many as p06's first publication waits for
+integer, parameter :: NPTCLS3D_MAX     = 30000  ! the first solve3D's particles at most (p06's first set may hold more)
 integer, parameter :: NPTCLS_ADDON_MAX = 60000  ! each addon run's cohort particles at most
 
 type, extends(commander_base) :: commander_stream_p07_solve3D_multistate

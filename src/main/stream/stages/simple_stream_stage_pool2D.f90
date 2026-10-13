@@ -10,10 +10,10 @@
 !   publishes for 3D. The first publication of a fresh pool is the first set,
 !   built from the sieve's own 2D (the sets handed off, their class averages and
 !   FRCs combined; publish_sieve_set), so multistate 3D can balance over its
-!   classes: as soon as the sets hold NPTCLS_FIRST3D accepted particles or the
-!   sieve's final set has come (publish_first_set), or after pool iteration
-!   FIRST_EXPORT_ITER, whichever comes first. With sieve_ini3D=yes it carries the
-!   marker that makes multistate 3D run solve3D_cavgs on it first. When it cannot
+!   classes: as soon as the sets hold NPTCLS_FIRST3D accepted particles, or
+!   NMICS_FIRST3D micrographs' worth of them (the sets cover as many micrographs),
+!   or the sieve's final set has come (publish_first_set), or after pool iteration
+!   FIRST_EXPORT_ITER, whichever comes first. When it cannot
 !   be built, the pool's classified state is published instead, after the first
 !   iteration that leaves NPTCLS_FIRST3D selected or after FIRST_EXPORT_ITER. Later
 !   publications are the pool's, after each completed iteration from
@@ -101,6 +101,8 @@ integer, parameter :: FIRST_EXPORT_ITER     = MSKDIAM_SWITCH_ITER ! a fresh pool
                                                    ! iteration at the latest (earlier once NPTCLS_FIRST3D are selected): at
                                                    ! this iteration it carries the sieve's mask diameter, set when it was dispatched
 integer, parameter :: EXPORT_START_ITER     = 25  ! the pool is published for 3D after each iteration from this one on
+integer, parameter :: NMICS_FIRST3D         = 500 ! the first set is due once the sets handed off cover as many micrographs:
+                                                   ! that many micrographs' worth of particles at their average rate
 ! the class averages (main, halves) and FRCs of the sets handed off, kept until the first publication
 character(len=*), parameter :: SIEVE_CAVGS_DIR = 'sieve_cavgs'
                                                    ! (the final run's last iteration, FINAL_ITER, among them)
@@ -144,6 +146,7 @@ type :: stream_stage_pool2D
     real    :: sieve_mskdiam             = 0. ! the sieve's mask diameter (A) for the first publication
     real    :: sieve_smpd                = 0. ! the pixel size (A) of the sieve's class averages
     integer :: nptcls_sieved             = 0  ! accepted particles of the sets handed off, until the first publication
+    integer :: nmics_sieved              = 0  ! micrographs of the sets handed off, until the first publication
     real    :: mskdiam                   = 0. ! the pool's mask diameter (A): given, the default, or updated
     real    :: smpd                      = 0. ! the pool's native pixel size (A), from the first set imported
     integer :: box                       = 0  ! the pool's native box (px), from the first set imported
@@ -417,6 +420,7 @@ contains
         self%sieve_mskdiam            = 0.
         self%sieve_smpd               = 0.
         self%nptcls_sieved            = 0
+        self%nmics_sieved             = 0
         self%mskdiam                  = 0.
         self%smpd                     = 0.
         self%box                      = 0
@@ -474,13 +478,15 @@ contains
             call self%setslist%push2chunk_list(projects(i), self%setslist%size() + 1, .true.)
         enddo
         if( .not. self%l_mskdiam_read ) call self%read_final_mskdiam(projects(1))
-        ! until the first publication: each set's class averages kept and its particles counted
+        ! until the first publication: each set's class averages kept, its particles and micrographs counted
         if( .not. self%collects_sieve_sets() ) return
         do i = 1,nprojects
+            call set%read_segment('mic',    projects(i))
             call set%read_segment('ptcl2D', projects(i))
             call set%read_segment('out',    projects(i))
             call self%collect_sieve_set(set, projects(i))
             self%nptcls_sieved = self%nptcls_sieved + set%os_ptcl2D%get_noris(consider_state=.true.)
+            self%nmics_sieved  = self%nmics_sieved  + set%os_mic%get_noris()
             if( is_final_set(set) ) self%l_sieve_final_seen = .true.
             call set%kill
         enddo
@@ -883,7 +889,8 @@ contains
     end subroutine export_pool_state
 
     !> The first set, as soon as it is due (first_set_due: NPTCLS_FIRST3D accepted particles handed
-    !! off, or the sieve's final set), without waiting for a pool iteration: the first publication,
+    !! off, NMICS_FIRST3D micrographs, or the sieve's final set), without waiting for a pool
+    !! iteration: the first publication,
     !! from the sieve's own 2D (publish_first_from_sieve). Pool iteration FIRST_EXPORT_ITER is the
     !! fallback (export_pool_state).
     subroutine publish_first_set( self )
@@ -891,7 +898,7 @@ contains
         type(string) :: cwd
         integer      :: nstks
         if( .not. self%collects_sieve_sets() ) return
-        if( .not. first_set_due(self%nptcls_sieved, self%l_sieve_final_seen) ) return
+        if( .not. first_set_due(self%nptcls_sieved, self%nmics_sieved, self%l_sieve_final_seen) ) return
         call simple_getcwd(cwd)
         call self%publish_first_from_sieve(cwd, nstks)
         if( nstks > 0 ) self%last_export_id = self%last_export_id + 1
@@ -955,8 +962,7 @@ contains
     !> The first publication, from the sieve's own 2D, as @p projfile: every set the sieve has handed
     !! off, whether in the pool yet or not, read whole, combined (build_sieve_publication) with their
     !! collected class averages and FRCs (combine_sieve_classes), and the newest optics map's groups.
-    !! With sieve_ini3D=yes its out segment carries sieve_ini3D=yes, the marker on which multistate
-    !! 3D runs solve3D_cavgs first. Written under a temporary name and renamed, as every
+    !! Written under a temporary name and renamed, as every
     !! publication. @p nstks is the number of stacks published; 0, with nothing written, when a
     !! set's files are missing or disagree.
     subroutine publish_sieve_set( self, projfile, nstks )
@@ -1010,7 +1016,6 @@ contains
             call pub%add_cavgs2os_out(cavgsfname, self%sieve_smpd, 'cavg')
         endif
         call pub%add_frcs2os_out(frcsfname, 'frc2D')
-        if( self%params%sieve_ini3D == 'yes' ) call pub%os_out%set(1, 'sieve_ini3D', 'yes')
         if( publishes_final(self%pool%iteration(), self%l_sieve_final) ) call pub%os_out%set(1, 'pool_final', 'yes')
         call pub%write(projfile, tempfile=.true.)
         write(logfhandle,'(A,A,A,I8,A,I6,A,I8,A)') '>>> PUBLISHED THE SIEVE''S 2D FOR 3D: ', projfile%to_char(), ', ', nstks,&
@@ -1126,12 +1131,13 @@ contains
     end function exports_after
 
     !> Whether the first set is due before any pool iteration: the sets the sieve has handed off
-    !! hold NPTCLS_FIRST3D accepted particles (@p nptcls_sieved), or its final set has come
-    !! (@p l_final_seen), after which no more particles come.
-    pure logical function first_set_due( nptcls_sieved, l_final_seen )
-        integer, intent(in) :: nptcls_sieved
+    !! hold NPTCLS_FIRST3D accepted particles (@p nptcls_sieved), or NMICS_FIRST3D micrographs'
+    !! worth of them at their average rate, i.e. they cover as many micrographs (@p nmics_sieved),
+    !! or its final set has come (@p l_final_seen), after which no more particles come.
+    pure logical function first_set_due( nptcls_sieved, nmics_sieved, l_final_seen )
+        integer, intent(in) :: nptcls_sieved, nmics_sieved
         logical, intent(in) :: l_final_seen
-        first_set_due = nptcls_sieved >= NPTCLS_FIRST3D .or. l_final_seen
+        first_set_due = nptcls_sieved >= NPTCLS_FIRST3D .or. nmics_sieved >= NMICS_FIRST3D .or. l_final_seen
     end function first_set_due
 
     !> The mask diameter (A) when none is given: the box less the soft edge and a pixel. The stage

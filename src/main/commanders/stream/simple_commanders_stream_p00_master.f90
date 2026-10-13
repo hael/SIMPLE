@@ -22,7 +22,8 @@
 !   picking) one after another, each asked once the one before has stopped, so
 !   their final writes do not hold their memory at the same time. A stage still
 !   running STOP_TIMEOUT_S after it was asked is killed. The master exits once
-!   all have stopped, after a last heartbeat.
+!   all have stopped, after a last heartbeat, sent again until the GUI accepts
+!   it (send_last_heartbeat).
 !==============================================================================
 module simple_commanders_stream_p00_master
 use, intrinsic :: iso_c_binding,                        only: c_ptr, c_null_ptr, c_loc, c_f_pointer, c_funloc
@@ -72,6 +73,8 @@ character(len=*), parameter :: PICKREFS_3D_KEYS(7) = [character(len=18) :: 'nsta
 integer, parameter :: MASTER_NCUNITS        = 16    ! computing units of the master's queue environment
 integer, parameter :: MASTER_QSYS_NTHR      = 16
 integer, parameter :: HEARTBEAT_S           = 5     ! between heartbeats
+integer, parameter :: LAST_HEARTBEAT_TRIES  = 3     ! tries of the last heartbeat, LAST_HEARTBEAT_WAIT_S apart
+integer, parameter :: LAST_HEARTBEAT_WAIT_S = 1
 integer, parameter :: MEMLOG_EVERY          = 12    ! heartbeats between memory logs
 integer, parameter :: OPTICS_STOP_TIMEOUT_S = 60    ! optics assignment stops first, waited for up to this
 integer, parameter :: STOP_TIMEOUT_S        = 600   ! a stage still running this long after it was asked to stop is killed
@@ -208,7 +211,11 @@ contains
         stop_times   = 0
         do
             loop_counter = loop_counter + 1
-            call send_heartbeat()
+            if( l_last_loop )then
+                call send_last_heartbeat()
+            else
+                call send_heartbeat()
+            endif
             if( mod(loop_counter, MEMLOG_EVERY) == 0 ) call log_memory()
             if( l_last_loop ) exit
             if( l_stop .or. sigterm_received() )then
@@ -246,8 +253,12 @@ contains
 
         ! One heartbeat: the stages' state to the GUI, and its answer applied. A heartbeat the GUI
         ! did not accept (no answer, or a status other than 200) may not have been read: the next
-        ! one sends everything again, not only what changed since.
-        subroutine send_heartbeat()
+        ! one sends everything again, not only what changed since. @p l_accepted, when present,
+        ! tells whether the GUI accepted it.
+        subroutine send_heartbeat( l_accepted )
+            logical, optional, intent(out) :: l_accepted
+            logical :: l_ok
+            l_ok = .false.
             call assembler%assemble_stream_heartbeat(fork_gui_status(shared%stages(STAGE_PREPROCESS)%fork),&
                 &fork_gui_status(shared%stages(STAGE_ASSIGN_OPTICS)%fork),&
                 &fork_gui_status(shared%stages(STAGE_INITIAL_ANALYSIS)%fork),&
@@ -261,6 +272,7 @@ contains
             request = assembler%to_string()
             if( post%request(response, request) )then
                 if( response%code == 200 )then
+                    l_ok = .true.
                     if( commands%parse(response%content%to_char()) ) call apply_commands()
                 else
                     call assembler%clear_hashes()
@@ -272,7 +284,24 @@ contains
             call response%content%kill()
             call response%content_type%kill()
             call qsys%service_persistent_worker_warmup()
+            if( present(l_accepted) ) l_accepted = l_ok
         end subroutine send_heartbeat
+
+        ! The last heartbeat, once every stage has stopped, with the stream's stop time and final
+        ! status: sent again, up to LAST_HEARTBEAT_TRIES times LAST_HEARTBEAT_WAIT_S apart, until
+        ! the GUI accepts it. Lost, it would leave the stream running in NICE, which marks a running
+        ! stream failed once it has heard no heartbeat for a minute. Without a GUI (no niceserver)
+        ! it is sent once.
+        subroutine send_last_heartbeat()
+            integer :: itry
+            logical :: l_accepted
+            do itry = 1,LAST_HEARTBEAT_TRIES
+                call send_heartbeat(l_accepted)
+                if( l_accepted .or. params%niceserver%strlen() == 0 ) return
+                if( itry < LAST_HEARTBEAT_TRIES ) call sleep(LAST_HEARTBEAT_WAIT_S)
+            enddo
+            THROW_WARN('the GUI did not accept the last heartbeat; it may show the stream as failed')
+        end subroutine send_last_heartbeat
 
         ! A start-up failure once stages are forked: they are asked to stop, and killed (their
         ! jobs cancelled) when still running after STARTUP_STOP_TIMEOUT_S, before the master
@@ -439,7 +468,6 @@ contains
                 call c%delete('box_extract')
                 call c%delete('pickrefs')
                 call c%delete('nthr3D_pickrefs')
-                call c%delete('sieve_ini3D')
                 do ikey = 1,size(PICKREFS_3D_KEYS)
                     call c%delete(trim(PICKREFS_3D_KEYS(ikey)))
                 enddo
@@ -526,8 +554,6 @@ contains
                 call c%set('ncls',            POOL2D_NCLS)
                 call c%set('mkdir',           'yes')
                 call c%set('nicedispid',      params%nicedispid)
-                ! the first publication from the sieve's class averages (multistate 3D follows its marker)
-                if( params%sieve_ini3D == 'yes' ) call c%set('sieve_ini3D', 'yes')
                 call c%set('worker_priority', 'high')
                 if( server_address%strlen() > 0 ) call c%set('worker_server', server_address)
             end associate

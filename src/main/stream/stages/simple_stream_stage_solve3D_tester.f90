@@ -59,6 +59,7 @@ contains
         call test_first_run_cap()
         call test_addon_cohort_cap()
         call test_cavgs3D()
+        call test_first_set_deselection_stays()
         call test_mskdiam_from_each_publication()
         call test_rows_problem()
         call test_rules()
@@ -66,6 +67,7 @@ contains
         call test_retention()
         call test_send_status()
         call test_send_volumes()
+        call test_send_cavgs3D_volumes()
         call test_snapshot3D()
         call test_iterate_waits()
         call test_finished()
@@ -294,9 +296,9 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_addon_cohort_cap
 
-    !> the route from the sieve's class averages (sieve_ini3D): the marker of the first
-    !! publication; the states renumbered from 1; and solve3D_cavgs' classes mapped onto the first
-    !! set, the states its particles hold becoming the stage's, so solve3D starts from them
+    !> the first set's initial volumes from its class averages (ini3D_cavgs): the subclasses per
+    !! class of cls_expansion; the states renumbered from 1; and solve3D_cavgs' classes mapped onto
+    !! the first set, the states its particles hold becoming the stage's, so solve3D starts from them
     subroutine test_cavgs3D()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)        :: cline
@@ -316,12 +318,11 @@ contains
         states = [0, 0]
         call stage%compact_states(states, newind, nstates)
         call assert_int(0, nstates, 'none when no state is held')
-        ! the marker
-        call add_cavgs_entry(set, 150.)
-        call assert_false(stage%is_sieve_publication(set), 'a publication without the marker is the pool''s')
-        call set%os_out%set(1, 'sieve_ini3D', 'yes')
-        call assert_true(stage%is_sieve_publication(set),  'one with sieve_ini3D=yes is the sieve''s 2D')
-        call set%kill
+        ! cls_expansion's subclasses per class, about 500 in all
+        call assert_int(5, stage%subclasses_per_class(100), '100 classes: 5 subclasses each, 500 in all')
+        call assert_int(4, stage%subclasses_per_class(120), '120 classes: 4 each, 480 rounded')
+        call assert_int(2, stage%subclasses_per_class(300), '300 classes: 2 each, at least 2')
+        call assert_int(2, stage%subclasses_per_class(0),   'no class: 2, cls_expansion''s least')
         ! a first set of rows 2 to 5 (row 1 never updated), classes 1 (rows 1 to 3) and 2 (rows 4, 5)
         call enter_fixture('a3_stage_cavgs3D', cwd_saved, root)
         call set_test_cline(cline)
@@ -361,6 +362,54 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_cavgs3D
+
+    !> a first-set row deselected on the way to the initial volumes (its class rejected, or left
+    !! without a state by solve3D_cavgs) stays a first-set row, deselected for the session: a later
+    !! publication that selects it does not select it again
+    subroutine test_first_set_deselection_stays()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: set, res
+        type(string)     :: cwd_saved, root
+        integer          :: nfail0, i
+        allocate(stage)
+        write(*,'(A)') 'test_first_set_deselection_stays'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_first_set_deselection', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        ! a first set of rows 1 to 5, classes 1 (rows 1 to 3) and 2 (rows 4, 5)
+        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
+        call set%os_ptcl2D%set_class(4, 2)
+        call set%os_ptcl2D%set_class(5, 2)
+        do i = 1,5
+            call set%os_ptcl2D%set(i, 'corr', 0.5)
+        enddo
+        call stage%take_first_publication(set, 1)
+        call set%kill
+        ! class 1 in state 1, class 2 without a state
+        call res%os_cls3D%new(2, is_ptcl=.false.)
+        do i = 1,2
+            call res%os_cls3D%set(i, 'e1', 30.)
+        enddo
+        call res%os_cls3D%set_state(1, 1)
+        call res%os_cls3D%set_state(2, 0)
+        call assert_true(stage%take_cavgs3D_result(res),        'the classes are mapped onto the first set')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(4), 'class 2''s particles are deselected')
+        call assert_true(stage%in_first_set(4),                 'and stay first-set rows')
+        call assert_int(3, stage%nptcls_selected,               'class 1''s stay selected')
+        ! a later publication of the same stacks selects every particle
+        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
+        call stage%merge_publication(set, 2)
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(4), 'a later publication does not select them again')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(5), 'neither of them')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'class 1''s particles stay selected')
+        call set%kill
+        call res%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_first_set_deselection_stays
 
     !> a publication's class averages and FRCs are copied into its quality folder and replace the
     !! stage's earlier ones, whose state volume stays; a publication without FRCs cannot be used
@@ -899,6 +948,78 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_send_volumes
+
+    !> solve3D_cavgs' initial volumes go to the GUI under the stage's renumbered states, without
+    !! FSCs, with the reprojections named after solve3D_cavgs' own state; a state no particle
+    !! holds is not sent, and the stage's project does not register them
+    subroutine test_send_cavgs3D_volumes()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)                 :: cline
+        type(sp_project)              :: res
+        type(stream_pipe)             :: reader
+        type(image)                   :: vol
+        type(gui_metadata_vol3D)      :: meta_vol
+        character(len=:), allocatable :: buffer
+        real,             allocatable :: invres_got(:), fsc_got(:)
+        type(string)                  :: cwd_saved, root, volfile
+        integer(c_int)                :: fds(2)
+        integer                       :: nfail0, meta_type, nvols, ntiles, iptcl, s
+        logical                       :: l_sent(3), l_fsc
+        allocate(stage)
+        write(*,'(A)') 'test_send_cavgs3D_volumes'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_cavgs3D_volumes', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call open_loopback(fds)
+        call stage%init_gui(-1, int(fds(2)))
+        call reader%new(int(fds(1)), -1, max_metadata_size(), 'test reader')
+        ! solve3D_cavgs' volumes of its states 1 to 3; its state 2 is held by no particle, and its
+        ! state 3 has reprojections; the stage's states 1 and 2 are its 1 and 3
+        do s = 1,3
+            volfile = 'rec_final_state'//int2str_pad(s, 2)//'.mrc'
+            call vol%new([VOL_BOX, VOL_BOX, VOL_BOX], VOL_SMPD)
+            call vol%write(volfile)
+            call vol%kill
+            call res%add_vol2os_out(volfile, VOL_SMPD, s, 'vol_cavg')
+        enddo
+        call simple_touch(refine3D_reprojs_fname(3))
+        stage%params%nstates = 2
+        call stage%spproj%os_ptcl3D%new(5, is_ptcl=.true.)
+        do iptcl = 1,5
+            call stage%spproj%os_ptcl3D%set_state(iptcl, merge(1, 2, iptcl <= 3))
+        enddo
+        call stage%send_cavgs3D_volumes(res, [1, 0, 2])
+        nvols  = 0
+        ntiles = 0
+        l_sent = .false.
+        l_fsc  = .false.
+        do while( reader%receive(buffer) )
+            meta_type = transfer(buffer, meta_type)
+            if( meta_type == GUI_METADATA_VOL3D_TYPE )then
+                nvols    = nvols + 1
+                meta_vol = transfer(buffer, meta_vol)
+                if( meta_vol%get_state() >= 1 .and. meta_vol%get_state() <= 3 ) l_sent(meta_vol%get_state()) = .true.
+                l_fsc = l_fsc .or. meta_vol%get_fsc(invres_got, fsc_got)
+            endif
+            if( meta_type == GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE ) ntiles = ntiles + 1
+        enddo
+        call assert_int(2, nvols, 'one volume per state a particle holds')
+        call assert_true(l_sent(1) .and. l_sent(2), 'under the stage''s states 1 and 2')
+        call assert_false(l_sent(3),                'none under solve3D_cavgs'' own state 3')
+        call assert_false(l_fsc,                    'without an FSC curve')
+        call assert_int(3, ntiles,                  'the reprojection tiles of its state 3, the stage''s 2')
+        call assert_int(3, stage%state_pop(1),      'the populations are kept for the status')
+        call assert_int(2, stage%state_pop(2),      'for each state')
+        call assert_real(0., stage%state_res(1), 1.e-6, 'with no resolution')
+        call assert_false(stage%spproj%isthere_in_osout('vol', 1), 'the stage''s project does not register them')
+        call res%kill
+        call reader%kill
+        call stage%kill
+        call close_loopback(fds)
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_send_cavgs3D_volumes
 
     !> a 3D snapshot request: before a result, answered as not written; from a result, the
     !! particles of the selected states merged into state 1, the state volumes out of the project

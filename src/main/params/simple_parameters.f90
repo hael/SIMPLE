@@ -72,6 +72,7 @@ type :: parameters
     character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
     character(len=3)          :: rec_states='yes'     !< flex_pca: reconstruct the state volumes, or deliver the embedding only(yes|no){yes}
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
+    character(len=3)          :: ini3D_cavgs='yes'    !< stream multistate 3D: initial volumes from the first set's class averages (solve2D, selection, cls_expansion, solve3D_cavgs)(yes|no){yes}
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
@@ -131,7 +132,6 @@ type :: parameters
     character(len=3)          :: trust_header='no'    !< whether to trust the header information in the input files(yes|no){no}
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: score_states='no'    !< report quality-model scores grouped by cls3D state(yes|no){no}
-    character(len=3)          :: sieve_ini3D='no'     !< stream: the first 3D from the sieve's class averages (solve3D_cavgs, then solve3D)(yes|no){no}
     character(len=3)          :: single_pass='no'     !< only run coarse pass of sieving(yes|no){no}
     character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending

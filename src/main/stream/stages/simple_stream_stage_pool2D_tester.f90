@@ -237,7 +237,7 @@ contains
         call pool%kill
     end subroutine test_publication_holds_classified_stacks
 
-    !> the first publication from the sieve's own 2D (sieve_ini3D): the sets' stacks and particles
+    !> the first publication from the sieve's own 2D: the sets' stacks and particles
     !! with their class labels offset per set and the sieve's selection, the class tables
     !! concatenated with their states and the populations of the selected particles; and the sets'
     !! class averages, halves and FRCs concatenated in set order, refused when a half is missing or
@@ -527,6 +527,7 @@ contains
         call stage%attach_upstream()
         call stage%watch_sets()
         call assert_int(3, stage%nptcls_sieved, 'the accepted particles handed off are counted for the first set')
+        call assert_int(1, stage%nmics_sieved,  'and their micrographs')
         call stage%transfer_sets(nimported)
         call assert_false(stage%l_sieve_final, 'an ordinary set')
         call assert_false(stage%l_sieve_final_seen, 'no final set handed off yet')
@@ -534,6 +535,7 @@ contains
         call stage%watch_sets()
         call assert_true(stage%l_sieve_final_seen, 'the final set is noted when handed off, before the pool takes it')
         call assert_int(6, stage%nptcls_sieved, 'its particles are counted too')
+        call assert_int(2, stage%nmics_sieved,  'and its micrograph')
         call stage%transfer_sets(nimported)
         call assert_true(stage%l_sieve_final, 'the sieve''s final set is noted')
         ! a later set with particles that is not final: the sieve had more after all
@@ -602,9 +604,10 @@ contains
         call assert_false(stage%exports_after(24, .true., 0),  'up to iteration 24')
         call assert_true(stage%exports_after(25, .false., 0),  'from iteration 25 every pool publishes')
         call assert_true(stage%exports_after(31, .true., 0),   'after each iteration')
-        call assert_false(stage%first_set_due(NPTCLS_FIRST3D - 1, .false.), 'the first set waits for its particles')
-        call assert_true(stage%first_set_due(NPTCLS_FIRST3D, .false.),      'and is due once the sieve has handed off as many')
-        call assert_true(stage%first_set_due(0, .true.),                    'or once the sieve''s final set has come')
+        call assert_false(stage%first_set_due(NPTCLS_FIRST3D - 1, 499, .false.), 'the first set waits for its particles')
+        call assert_true(stage%first_set_due(NPTCLS_FIRST3D, 0, .false.),        'and is due once the sieve has handed off as many')
+        call assert_true(stage%first_set_due(0, 500, .false.),                   'or 500 micrographs'' worth of them')
+        call assert_true(stage%first_set_due(0, 0, .true.),                      'or once the sieve''s final set has come')
         call assert_real(100., stage%default_mskdiam(64, 2.0), 1.e-4, 'the default mask diameter is in Angstroms')
     end subroutine test_pause_rules
 

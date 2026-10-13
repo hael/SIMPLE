@@ -41,10 +41,11 @@ Each pass of p06 runs, in this order:
    lists them in. A final set is therefore never taken before a set the sieve handed off earlier,
    which would otherwise read as a set after the final one and take the final note back. Until
    the first publication, each set's class averages and FRCs are kept in `sieve_cavgs/` and its
-   accepted particles counted, as it is handed off;
+   accepted particles and micrographs counted, as it is handed off;
 2. publish the first set for 3D as soon as it is due, without waiting for a pool iteration: the
-   sieve's own 2D of the sets handed off, once they hold `NPTCLS_FIRST3D` (30,000) accepted
-   particles or the sieve's final set has come (`publish_first_set`; the 3D ingestion policy,
+   sieve's own 2D of the sets handed off, once they hold `NPTCLS_FIRST3D` (100,000) accepted
+   particles, cover `NMICS_FIRST3D` (500) micrographs, or the sieve's final set has come
+   (`publish_first_set`; the 3D ingestion policy,
    sections 3 and 9);
 3. refresh the pool: a paused pool refreshes its statistics; a running one is checked for a
    completed iteration, whose particle parameters, classes and resolution come back into the
@@ -179,10 +180,10 @@ in 3D, and in snapshots by the user's selection.
 
 ## 10. The final project
 
-The first publication for 3D is the sieve's own 2D, not the pool's, whatever `sieve_ini3D` is
+The first publication for 3D is the sieve's own 2D, not the pool's
 (`stream_3D_ingestion_policy.md`, sections 3 and 9; decided 12 October 2026, before which only
-`sieve_ini3D=yes` did so): p06 keeps the class averages and FRCs of the sets handed off in
-`sieve_cavgs/` until it, and removes them after. `sieve_ini3D=yes` only adds its marker.
+the master's former `sieve_ini3D=yes` did so): p06 keeps the class averages and FRCs of the sets
+handed off in `sieve_cavgs/` until it, and removes them after.
 
 When p06 stops, the history of completed iterations (`POOL_NHISTORY` full copies of the pool,
 kept for snapshots) is freed first, so the final write does not hold it too, and the resident

@@ -151,6 +151,12 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
      each get their own 600 s, so a stop can take up to their sum.
    - Reference picking and pool 2D log their resident memory and the time at each step of their
      final write (`log_rss`, ">>> RSS ..."), so a stop that runs out of time shows where.
+   - Once none runs, the master sends a last heartbeat, with the stream's stop time and its final
+     status (finished, or failed when a stage failed), and exits. It is sent again, up to
+     `LAST_HEARTBEAT_TRIES` (3) times `LAST_HEARTBEAT_WAIT_S` (1 s) apart, until NICE accepts it
+     (`send_last_heartbeat`; once without a `niceserver`): NICE marks a stream it last saw
+     running failed after a minute without a heartbeat, so a lost last one would show a stopped
+     stream as failed. Added 13 October 2026.
 4. **A start-up failure** once stages are forked (a stage not running, the listener thread not
    made) stops them before the master stops: asked, then killed with their jobs cancelled after
    `STARTUP_STOP_TIMEOUT_S` (60 s). The persistent-worker server ends with the master's process;

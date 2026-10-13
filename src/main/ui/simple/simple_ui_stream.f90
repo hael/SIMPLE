@@ -134,6 +134,11 @@ subroutine new_pool2D( prgtab )
         call solve3D_stream%add_input(UI_SRCH, 'nptcls3D_max', 'num', 'Particles of the first solve3D', &
         &'Maximum number of particles of the first streaming solve3D run, whole stacks in order; the others wait for later publications{30000}', &
         &'max # particles', .false., 30000., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call solve3D_stream%add_input(UI_SRCH, 'ini3D_cavgs', 'binary', 'Initial volumes from class averages', &
+        &'Initial volumes of the first set from its class averages: solve2D into 150 classes, the pool model''s selection, &
+        &cls_expansion into about 500 classes and solve3D_cavgs, whose poses and states start the first solve3D; no runs &
+        &solve3D on the first set directly(yes|no){yes}', '', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="search", visibility=UI_VIS_DEVELOPER)
         call solve3D_stream%add_input(UI_SRCH, 'nptcls_addon_max', 'num', 'Cohort particles of each addon run', &
         &'Maximum number of new particles each streaming solve3D_addon run aligns, the oldest whole stacks first; the &
         &others wait for the next run{60000}', 'max # particles', .false., 60000., group="search", &
@@ -325,11 +330,6 @@ subroutine new_pool2D( prgtab )
         call master%add_input(UI_PARM, 'tilt_thres',     'float',         'Beam-shift clustering threshold', &
         &'Distance threshold of the hierarchical clustering of the beam-image shifts into optics groups', '0.05', .false., '', &
         &visibility=UI_VIS_DEVELOPER)
-        ! the first 3D's route, forwarded by the master to pool 2D
-        call master%add_input(UI_PARM, 'sieve_ini3D',    'binary',        'Initial 3D from the sieve''s class averages', &
-        &'The first particle set for 3D always carries the sieve''s combined class averages; with yes, multistate 3D &
-        &runs solve3D_cavgs on them for the initial volumes before solve3D at the particle level(yes|no){no}', &
-        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! the 3D route of the initial analysis (picking references), forwarded by the master; 0 keeps the
         ! initial analysis' default. preserve_default: the defaults of nrestarts_collapse, lpstart_ini3D and

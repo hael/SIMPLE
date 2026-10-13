@@ -204,7 +204,14 @@ Where the implementation differs from the plan:
 Changed 12 October 2026: the first publication is the sieve's 2D whatever `sieve_ini3D` is, so the
 first `solve3D` can balance over its classes (p07 gives no `balance`, so its runs take solve3D's
 default, `cavg`). It is published as soon as the sets the sieve has handed off hold
-`NPTCLS_FIRST3D` (now 30,000) accepted particles, the sieve's final set has come, or pool
-iteration 10 has completed, whichever comes first, without waiting for a pool iteration. The
+`NPTCLS_FIRST3D` (100,000) accepted particles or cover 500 micrographs, the sieve's final set
+has come, or pool iteration 10 has completed, whichever comes first, without waiting for a pool
+iteration; p07's first run takes at most `nptcls3D_max` (30,000) of them. The
 `sieve_ini3D=yes` marker, and with it `solve3D_cavgs`, remains optional
 (`stream_3D_ingestion_policy.md`, sections 3 and 9).
+
+Superseded 12 October 2026: p07 now makes the first set's initial volumes from class averages of
+its own, by default (`ini3D_cavgs=yes`): solve2D into 150 classes, the pool model's selection,
+cls_expansion into about 500 classes, then `solve3D_cavgs`, whose poses and states start the first
+`solve3D` as here. The `sieve_ini3D` input, p06's marker and the master's forwarding are removed
+(`stream_3D_ingestion_policy.md`, section 9). The first publication stays the sieve's 2D.

@@ -130,7 +130,7 @@ contains
         enddo
     end function pool_publication_nselected
 
-    !> The first publication for 3D built from the sieve's own 2D (sieve_ini3D), from the sieve's
+    !> The first publication for 3D built from the sieve's own 2D, from the sieve's
     !! sets @p sets, each read whole (micrographs, stacks, particles, classes): their stacks
     !! renumbered from 1 and their particles with their image index in the stack (indstk), as
     !! build_pool_publication sets them; the sieve's 2D parameters and selection, each set's class
