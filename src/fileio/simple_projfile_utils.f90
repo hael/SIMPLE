@@ -264,7 +264,7 @@ contains
             generation = 1_int64
             offset = 0
             do irow = 1, nchunks
-                call sigma2_state_validate_file(chunks_sigma2_state(irow)%to_char(), status, message, deep=.true.)
+                call sigma2_state_validate_file(chunks_sigma2_state(irow)%to_char(), status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
                 call sigma2_state_read_header(chunks_sigma2_state(irow)%to_char(), source_header, status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
@@ -335,7 +335,7 @@ contains
             integer(int64) :: source_digest
             integer :: status
             character(len=STDLEN) :: message
-            call sigma2_state_validate_file(chunks_sigma2_state(ichunk)%to_char(), status, message, deep=.true.)
+            call sigma2_state_validate_file(chunks_sigma2_state(ichunk)%to_char(), status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
             call sigma2_state_read_header(chunks_sigma2_state(ichunk)%to_char(), source_header, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
@@ -786,7 +786,7 @@ contains
                 integer(int64) :: source_digest
                 integer :: status
                 character(len=STDLEN) :: message
-                call sigma2_state_validate_file(project_sigma2_states(isource)%to_char(), status, message, deep=.true.)
+                call sigma2_state_validate_file(project_sigma2_states(isource)%to_char(), status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
                 call sigma2_state_read_header(project_sigma2_states(isource)%to_char(), source_header, status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))

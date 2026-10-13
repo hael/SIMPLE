@@ -152,7 +152,7 @@ contains
             case('star_export')
                 call project%get_sigma2_state_path(state_path, found)
                 if( .not. found ) THROW_HARD('project has no canonical sigma2 state path')
-                call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
+                call sigma2_state_validate_file(state_path%to_char(), status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
                 call sigma2_state_read_header(state_path%to_char(), header, status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))

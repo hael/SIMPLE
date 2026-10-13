@@ -157,7 +157,7 @@ contains
                         &previous_header%kto == params%kfromto(2) .and. &
                         &abs(real(previous_header%smpd)-params%smpd) <= 1.e-5*max(1.,params%smpd)
                     if( preserve_prefix )then
-                        call sigma2_state_validate_file(state_path%to_char(), state_status, state_message, deep=.true.)
+                        call sigma2_state_validate_file(state_path%to_char(), state_status, state_message)
                         preserve_prefix = state_status == 0
                     endif
                 endif

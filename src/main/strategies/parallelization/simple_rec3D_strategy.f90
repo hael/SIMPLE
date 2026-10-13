@@ -313,7 +313,7 @@ contains
         rebuild = .true.
         call build%spproj%get_sigma2_state_path(state_path, found)
         if( found )then
-            call sigma2_state_validate_file(state_path%to_char(), status, message, deep=.true.)
+            call sigma2_state_validate_file(state_path%to_char(), status, message)
             if( status == 0 )then
                 layout_digest = ptcl_layout_digest(build%spproj, build%spproj_field)
                 if( params%l_sigma_glob )then

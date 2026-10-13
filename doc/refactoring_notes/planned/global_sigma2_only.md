@@ -220,8 +220,8 @@ expensive structures exist only because the spectrum could differ by stack.
     every vocabulary key for every program, so a hand-typed key would be
     recorded.
   - The reader refuses unknown input keys and any other schema version.
-    Version 2 (the sigma2 artifact identified by its header and grouped
-    section) is not yet in use, so the key leaves without a second bump.
+    Version 2 (the sigma2 artifact identified by its generation and valid
+    file structure) is not yet in use, so the key leaves without a second bump.
     A manifest that recorded the key is refused as carrying an unknown key,
     and that solution can no longer be extended.
 - **The memory benchmark script** (`scripts/memory/benchmark_solve2d.py`)
@@ -362,7 +362,7 @@ without aliases.
 | `read_groups` (`euclid_sigma2`) | `read_global` |
 | `sigma2_state_reduce_groups` | `sigma2_state_reduce` |
 | `sigma2_state_read_groups`, `sigma2_state_write_groups` | `sigma2_state_read_global`, `sigma2_state_write_global` |
-| header fields `grouped_offset`, `group_checksum` | `global_offset`, `global_checksum` (same words on disk) |
+| header field `grouped_offset` | `global_offset` (same word on disk; checksum word 18 stays reserved) |
 | `sigma2_group_iter` | `sigma2_commit_iter` |
 
 ## 6. Optimisations

@@ -92,7 +92,7 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        call sigma2_state_validate_file(committed_path, status, message, deep=.true.)
+        call sigma2_state_validate_file(committed_path, status, message)
         if( status /= 0 ) return
         call sigma2_state_read_header(committed_path, header, status, message)
         if( status /= 0 ) return
@@ -271,7 +271,7 @@ contains
         real(real64), allocatable :: sums(:,:,:)
         integer :: first_row, last_row, i, row, half, group, nshell
         real(real64) :: expected, tolerance
-        call sigma2_state_validate_file(path, status, message, deep=.true.)
+        call sigma2_state_validate_file(path, status, message)
         if( status /= 0 ) return
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return

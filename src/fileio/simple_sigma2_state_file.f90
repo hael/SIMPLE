@@ -49,6 +49,7 @@ integer, parameter :: W_VERSION=1, W_HEADER_BYTES=2, W_REAL_BYTES=3, W_KFROM=4, 
 integer, parameter :: W_NPTCLS=6, W_BOX=7, W_NGROUPS=8, W_GROUPING=9, W_GENERATION=10
 integer, parameter :: W_PROVENANCE=11, W_STATE=12, W_RANGE_IO=13, W_LAYOUT_DIGEST=14
 integer, parameter :: W_GROUPED_OFFSET=15, W_PARTICLE_OFFSET=16, W_FILE_BYTES=17
+! Retired checksum words remain in the version-2 layout and are zero in new files.
 integer, parameter :: W_GROUP_CHECKSUM=18, W_SMPD_BITS=19, W_HEADER_CHECKSUM=32
 
 integer, parameter :: RW_VERSION=1, RW_HEADER_BYTES=2, RW_REAL_BYTES=3, RW_KFROM=4, RW_KTO=5
@@ -99,6 +100,7 @@ contains
         header%provenance    = provenance
         header%state         = SIGMA2_STATE_CANDIDATE
         header%range_io      = SIGMA2_RANGE_LOCAL
+        header%group_checksum = 0_int64
         header%smpd          = real(smpd, real64)
         call set_state_layout(header)
     end subroutine sigma2_state_init_header
@@ -142,9 +144,6 @@ contains
         if( magic /= STATE_MAGIC )then
             status = 1; message = 'invalid sigma2 state magic'; return
         endif
-        if( checksum_words(words(:W_HEADER_CHECKSUM-1)) /= words(W_HEADER_CHECKSUM) )then
-            status = 1; message = 'invalid sigma2 state header checksum'; return
-        endif
         if( words(W_HEADER_BYTES) /= STATE_HEADER_BYTES )then
             status = 1; message = 'invalid sigma2 state header size'; return
         endif
@@ -175,7 +174,7 @@ contains
         words(W_FILE_BYTES)       = header%file_bytes
         words(W_GROUP_CHECKSUM)   = header%group_checksum
         words(W_SMPD_BITS) = transfer(header%smpd, words(W_SMPD_BITS))
-        words(W_HEADER_CHECKSUM) = checksum_words(words(:W_HEADER_CHECKSUM-1))
+        words(W_HEADER_CHECKSUM) = 0_int64
     end subroutine pack_state_header
 
     subroutine unpack_state_header(words, header)
@@ -269,7 +268,7 @@ contains
         if( status /= 0 ) return
         if( present(source_path) )then
             if( len_trim(source_path) > 0 .and. file_exists(source_path) )then
-                call sigma2_state_validate_file(source_path, status, message, deep=.true.)
+                call sigma2_state_validate_file(source_path, status, message)
                 if( status /= 0 ) return
                 call sigma2_state_read_header(source_path, source_header, status, message)
                 if( status /= 0 ) return
@@ -304,7 +303,7 @@ contains
                     close(dst_unit)
                     status = io_stat; message = 'cannot copy committed sigma2 state'; return
                 endif
-                header%group_checksum    = source_header%group_checksum
+                header%group_checksum    = 0_int64
                 call write_header_unit(dst_unit, header, io_stat)
                 flush(dst_unit)
                 close(dst_unit)
@@ -450,14 +449,12 @@ contains
         if( any(shape(groups) /= [nshell,2,int(header%ngroups)]) )then
             status = 1; message = 'invalid sigma2 grouped section shape'; return
         endif
-        header%group_checksum = checksum_reals(reshape(groups, [size(groups)]))
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot open sigma2 grouped section'; return
         endif
         write(funit, pos=header%grouped_offset, iostat=io_stat) groups
-        if( io_stat == 0 ) call write_header_unit(funit, header, io_stat)
         flush(funit)
         close(funit)
         if( io_stat /= 0 )then
@@ -493,15 +490,12 @@ contains
         message = ''
     end subroutine sigma2_state_read_groups
 
-    subroutine sigma2_state_validate_file(path, status, message, deep)
+    subroutine sigma2_state_validate_file(path, status, message)
         character(len=*), intent(in) :: path
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
-        logical, optional, intent(in) :: deep
         type(sigma2_state_header) :: header
-        real(real32), allocatable :: groups(:,:,:)
         integer(int64) :: file_bytes
-        logical :: l_deep
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         inquire(file=trim(path), size=file_bytes, iostat=status)
@@ -511,16 +505,6 @@ contains
         if( file_bytes /= header%file_bytes )then
             status = 1; message = 'sigma2 state file size does not match header'; return
         endif
-        l_deep = .false.
-        if( present(deep) ) l_deep = deep
-        if( .not. l_deep ) return
-        call sigma2_state_read_groups(path, groups, status, message)
-        if( status /= 0 ) return
-        if( checksum_reals(reshape(groups,[size(groups)])) /= header%group_checksum )then
-            status = 1; message = 'sigma2 grouped checksum mismatch'; return
-        endif
-        status = 0
-        message = ''
     end subroutine sigma2_state_validate_file
 
     subroutine sigma2_state_publish(candidate_path, committed_path, status, message)
@@ -530,7 +514,7 @@ contains
         type(sigma2_state_header) :: header
         type(string) :: parent
         integer :: funit, io_stat
-        call sigma2_state_validate_file(candidate_path, status, message, deep=.true.)
+        call sigma2_state_validate_file(candidate_path, status, message)
         if( status /= 0 ) return
         call sigma2_state_read_header(candidate_path, header, status, message)
         if( status /= 0 ) return
@@ -538,6 +522,7 @@ contains
             status = 1; message = 'only a sigma2 candidate can be published'; return
         endif
         header%state = SIGMA2_STATE_COMMITTED
+        header%group_checksum = 0_int64
         open(newunit=funit, file=trim(candidate_path), access='stream', form='unformatted', &
             &status='old', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
@@ -598,7 +583,7 @@ contains
         words(RW_LAYOUT_DIGEST) = layout_digest
         words(RW_DATA_OFFSET)     = data_offset
         words(RW_FILE_BYTES)      = file_bytes
-        words(RW_HEADER_CHECKSUM) = checksum_words(words(:RW_HEADER_CHECKSUM-1))
+        words(RW_HEADER_CHECKSUM) = 0_int64
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='new', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
@@ -651,9 +636,6 @@ contains
             &words(RW_HEADER_BYTES) /= RANGE_HEADER_BYTES .or. words(RW_REAL_BYTES) /= 4_int64 )then
             close(funit); status = 1; message = 'invalid local sigma2 range header'; return
         endif
-        if( checksum_words(words(:RW_HEADER_CHECKSUM-1)) /= words(RW_HEADER_CHECKSUM) )then
-            close(funit); status = 1; message = 'invalid local sigma2 range header checksum'; return
-        endif
         kfrom = int(words(RW_KFROM)); kto = int(words(RW_KTO))
         first_row = int(words(RW_FIRST)); last_row = int(words(RW_LAST))
         generation = words(RW_GENERATION); layout_digest = words(RW_LAYOUT_DIGEST)
@@ -673,28 +655,6 @@ contains
             status = io_stat; message = 'cannot read local sigma2 range data'; return
         endif
     end subroutine sigma2_state_read_local_range
-
-    pure integer(int64) function checksum_reals(values) result(hash)
-        real(real32), intent(in) :: values(:)
-        integer(int32) :: bits
-        integer :: i
-        hash = FNV_OFFSET
-        do i = 1, size(values)
-            bits = transfer(values(i), bits)
-            hash = fnv_integer(hash, int(bits,int64), 4)
-        enddo
-        if( hash == 0_int64 ) hash = 1_int64
-    end function checksum_reals
-
-    pure integer(int64) function checksum_words(words) result(hash)
-        integer(int64), intent(in) :: words(:)
-        integer :: i
-        hash = FNV_OFFSET
-        do i = 1, size(words)
-            hash = fnv_integer(hash, words(i), 8)
-        enddo
-        if( hash == 0_int64 ) hash = 1_int64
-    end function checksum_words
 
     pure integer(int64) function fnv_integer(seed, value, nbytes) result(hash)
         integer(int64), intent(in) :: seed, value
@@ -729,22 +689,19 @@ contains
         hash = fnv_integer(hash, int(value,int64), 8)
     end subroutine sigma2_state_digest_integer
 
-    !> Cheap identity of a committed sigma2 artifact, 0 when invalid. The
-    !! validation reads the header and grouped section only; particle spectra
-    !! are deliberately excluded from manifest integrity checks.
+    !> Generation of a structurally valid committed sigma2 artifact, 0 when invalid.
+    !! The manifest does not compare header or payload checksums.
     integer(int64) function sigma2_state_artifact_signature( fname ) result( signature )
         class(string), intent(in) :: fname
         type(sigma2_state_header) :: header
-        integer(int64) :: words(STATE_NWORDS)
         character(len=256) :: message
         integer :: status
         signature = 0_int64
-        call sigma2_state_validate_file(fname%to_char(), status, message, deep=.true.)
+        call sigma2_state_validate_file(fname%to_char(), status, message)
         if( status /= 0 ) return
         call sigma2_state_read_header(fname%to_char(), header, status, message)
         if( status /= 0 .or. header%state /= SIGMA2_STATE_COMMITTED ) return
-        call pack_state_header(header, words)
-        signature = words(W_HEADER_CHECKSUM)
+        signature = header%generation
     end function sigma2_state_artifact_signature
 
     !> FNV-1a 64 over the bytes of a file (8-byte words, then the tail), 0 when unreadable

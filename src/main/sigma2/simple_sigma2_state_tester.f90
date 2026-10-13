@@ -187,14 +187,15 @@ contains
     subroutine test_particle_io_layout()
         type(sigma2_state_header) :: header
         type(string) :: range_path
-        real(real32), allocatable :: loaded(:,:)
+        real(real32), allocatable :: loaded(:,:), stored(:,:,:)
         real(real32) :: spectra(3,4)
         logical :: scheduled(4), active(4)
-        integer :: eo(4), groups(4), status
+        integer :: eo(4), groups(4), status, funit
         integer :: first_row, last_row, kfrom, kto
         integer(int64), parameter :: DIGEST = 661_int64
         integer(int64), parameter :: RANGE_HEADER_BYTES = 256_int64
         integer(int64) :: generation, layout_digest, expected_bytes, actual_bytes
+        integer(int64) :: range_words(16), state_words(32)
         character(len=128) :: message
         character(len=*), parameter :: CANDIDATE = 'layout_sigma2_state.next'
         character(len=*), parameter :: COMMITTED = 'layout_sigma2_state.bin'
@@ -229,7 +230,28 @@ contains
             &'local range retains its bounds')
         call require(all(loaded == spectra), 'local range round-trips its spectra')
         deallocate(loaded)
-
+        open(newunit=funit, file=RANGE, access='stream', form='unformatted', status='old', action='readwrite')
+        read(funit, pos=17) range_words
+        call require(range_words(16) == 0_int64, 'new local range leaves retired checksum word zero')
+        range_words(16) = 12345_int64
+        write(funit, pos=17) range_words
+        close(funit)
+        call sigma2_state_read_local_range(RANGE, generation, layout_digest, first_row, last_row, &
+            &kfrom, kto, loaded, status, message)
+        call require_ok(status, message)
+        call require(all(loaded == spectra), 'local range accepts a historical nonzero checksum word')
+        deallocate(loaded)
+        open(newunit=funit, file=RANGE, access='stream', form='unformatted', status='old', action='readwrite')
+        range_words(1) = 99_int64
+        write(funit, pos=17) range_words
+        close(funit)
+        call sigma2_state_read_local_range(RANGE, generation, layout_digest, first_row, last_row, &
+            &kfrom, kto, loaded, status, message)
+        call require(status /= 0, 'local-range version corruption still fails structural validation')
+        open(newunit=funit, file=RANGE, access='stream', form='unformatted', status='old', action='readwrite')
+        range_words(1) = 2_int64
+        write(funit, pos=17) range_words
+        close(funit)
         call sigma2_state_merge_local_ranges(CANDIDATE, [range_path], scheduled, status, message)
         call require_ok(status, message)
         call sigma2_state_read_particles(CANDIDATE, 1, 4, loaded, status, message)
@@ -243,17 +265,55 @@ contains
         call require(status == 0 .and. actual_bytes == header%file_bytes, 'candidate size equals its recorded size')
         call require(header%file_bytes == header%particle_offset + 3_int64*4_int64*4_int64 - 1_int64, &
             &'the particle section is the last section of the state file')
-
         call sigma2_state_reduce_groups(CANDIDATE, active, eo, groups, status, message)
         call require_ok(status, message)
-        call sigma2_state_validate_file(CANDIDATE, status, message, deep=.true.)
+        call sigma2_state_read_header(CANDIDATE, header, status, message)
         call require_ok(status, message)
+        call require(header%version == 2 .and. header%grouped_offset == 513_int64, &
+            &'new state retains its version-two header and grouped offset')
+        call require(header%group_checksum == 0_int64, 'new state leaves the retired checksum word zero')
+        call sigma2_state_read_groups(CANDIDATE, stored, status, message)
+        call require_ok(status, message)
+        call overwrite_group_first_value(CANDIDATE, stored(1,1,1)+10.0_real32)
+        call sigma2_state_validate_file(CANDIDATE, status, message)
+        call require_ok(status, message)
+        call sigma2_state_validate_science(CANDIDATE, active, eo, groups, status, message)
+        call require(status /= 0 .and. index(message, 'does not match particle records') > 0, &
+            &'structural validation accepts payload edits but science validation rejects inconsistent groups')
+        call overwrite_group_first_value(CANDIDATE, stored(1,1,1))
         call sigma2_state_commit(CANDIDATE, COMMITTED, active, eo, groups, status, message)
         call require_ok(status, message)
         call sigma2_state_read_particles(COMMITTED, 1, 4, loaded, status, message)
         call require_ok(status, message)
         call require(all(loaded == spectra), 'committed particle spectra round-trip')
         deallocate(loaded)
+        open(newunit=funit, file=COMMITTED, access='stream', form='unformatted', status='old', action='read')
+        read(funit, pos=17) state_words
+        close(funit)
+        call require(state_words(32) == 0_int64, 'new state leaves retired header checksum word zero')
+        call set_state_header_word(COMMITTED, 32, 12345_int64)
+        call sigma2_state_validate_file(COMMITTED, status, message)
+        call require_ok(status, message)
+        call set_state_header_word(COMMITTED, 18, 67890_int64)
+        call sigma2_state_validate_file(COMMITTED, status, message)
+        call require_ok(status, message)
+        call sigma2_state_read_header(COMMITTED, header, status, message)
+        call require_ok(status, message)
+        call require(header%group_checksum == 67890_int64, 'historical checksum words remain readable')
+        call set_state_header_word(COMMITTED, 1, 99_int64)
+        call sigma2_state_validate_file(COMMITTED, status, message)
+        call require(status /= 0, 'state version corruption still fails structural validation')
+        call set_state_header_word(COMMITTED, 1, 2_int64)
+        header%generation = 2_int64
+        call sigma2_state_create_candidate(CANDIDATE, header, status, message, source_path=COMMITTED)
+        call require_ok(status, message)
+        call sigma2_state_read_header(CANDIDATE, header, status, message)
+        call require_ok(status, message)
+        open(newunit=funit, file=CANDIDATE, access='stream', form='unformatted', status='old', action='read')
+        read(funit, pos=17) state_words
+        close(funit)
+        call require(state_words(18) == 0_int64 .and. state_words(32) == 0_int64, &
+            &'copied candidate clears both retired checksum words')
         call del_file(CANDIDATE)
         call del_file(COMMITTED)
         call del_file(RANGE)
@@ -327,7 +387,7 @@ contains
         open(newunit=funit, file=CANDIDATE, access='stream', form='unformatted', status='replace')
         write(funit) 1
         close(funit)
-        call sigma2_state_validate_file(CANDIDATE, status, message, deep=.true.)
+        call sigma2_state_validate_file(CANDIDATE, status, message)
         call require(status /= 0, 'truncated candidate rejected')
         call assert_committed_generation(COMMITTED, committed_header%generation)
         call assert_file_unchanged(COMMITTED, committed_bytes)
@@ -481,6 +541,49 @@ contains
         close(funit)
         call require(io_stat == 0, 'committed file can be read')
     end subroutine read_file_bytes
+
+    subroutine overwrite_group_first_value(path, value)
+        character(len=*), intent(in) :: path
+        real(real32),     intent(in) :: value
+        type(sigma2_state_header) :: header
+        character(len=128) :: message
+        integer :: funit, status, io_stat
+        call sigma2_state_read_header(path, header, status, message)
+        call require_ok(status, message)
+        if( status /= 0 ) return
+        open(newunit=funit, file=path, access='stream', form='unformatted', &
+            &status='old', action='readwrite', iostat=status)
+        if( status /= 0 )then
+            call require(.false., 'grouped value can be opened for test mutation')
+            return
+        endif
+        write(funit, pos=header%grouped_offset, iostat=status) value
+        close(funit, iostat=io_stat)
+        if( status == 0 ) status = io_stat
+        call require(status == 0, 'grouped value can be changed for test mutation')
+    end subroutine overwrite_group_first_value
+
+    subroutine set_state_header_word(path, index, value)
+        character(len=*), intent(in) :: path
+        integer,          intent(in) :: index
+        integer(int64),   intent(in) :: value
+        integer(int64) :: words(32)
+        integer :: funit, status, io_stat
+        open(newunit=funit, file=path, access='stream', form='unformatted', &
+            &status='old', action='readwrite', iostat=status)
+        if( status /= 0 )then
+            call require(.false., 'state header can be opened for test mutation')
+            return
+        endif
+        read(funit, pos=17, iostat=status) words
+        if( status == 0 )then
+            words(index) = value
+            write(funit, pos=17, iostat=status) words
+        endif
+        close(funit, iostat=io_stat)
+        if( status == 0 ) status = io_stat
+        call require(status == 0, 'state header can be changed for test mutation')
+    end subroutine set_state_header_word
 
     subroutine cleanup(path1, path2, path3, path4)
         character(len=*), intent(in) :: path1, path2, path3, path4

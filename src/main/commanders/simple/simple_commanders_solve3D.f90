@@ -1452,7 +1452,7 @@ contains
 
         !> The frozen term is weighted by the base run's committed residual
         !! sigma2 state, never by a re-estimate: its copy must retain the
-        !! recorded committed header and grouped-section identity.
+        !! recorded committed generation after structural validation.
         subroutine verify_frozen_sigma
             if( .not. man_addon%matches_artifact('sigma2_state', 0, frozen_sigma_copy) ) &
                 &THROW_HARD('the frozen sigma2 state was not consumed as committed by the base run')

@@ -170,8 +170,8 @@ contains
         call candidate%kill
     end subroutine write_sigma_state
 
-    !> Change one value without changing the file shape or header. A grouped
-    !! value invalidates the cheap signature; a particle value deliberately does not.
+    !> Change one payload value without changing the file shape or header.
+    !! Neither grouped nor particle values affect the cheap signature.
     subroutine overwrite_sigma_value( fname, particle_value, value )
         character(len=*), intent(in) :: fname
         logical,          intent(in) :: particle_value
@@ -328,11 +328,11 @@ contains
             call assert_true(back%matches_artifact('sigma2_state', 0, path), &
                 &'sigma2 manifest validation does not hash the particle payload')
             call overwrite_sigma_value(SIGMA_FNAME, .false., 99.0_real32)
-            call assert_false(back%matches_artifact('sigma2_state', 0, path), &
-                &'sigma2 manifest validation checks the grouped section')
+            call assert_true(back%matches_artifact('sigma2_state', 0, path), &
+                &'sigma2 manifest validation does not hash the grouped payload')
             call write_sigma_state(SIGMA_FNAME, spproj, generation=2_int64)
             call assert_false(back%matches_artifact('sigma2_state', 0, path), &
-                &'sigma2 manifest validation checks the committed header identity')
+                &'sigma2 manifest validation checks the committed generation')
         endif
         call del_file(MAN_FNAME)
         call del_file(MAN_FNAME2)

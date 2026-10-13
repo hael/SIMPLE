@@ -249,8 +249,8 @@ contains
         call val%kill
     end subroutine record_inputs
 
-    !> The run's registered products: content digests for every state's final
-    !! map, halves and FSC; cheap header/group identity for committed sigma2.
+    !> The run's registered products: content digests for final maps, halves
+    !! and FSCs; the committed sigma2 generation identifies its transaction.
     subroutine record_artifacts( self, spproj )
         class(solve3D_manifest), intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
@@ -816,7 +816,7 @@ contains
     end subroutine get_artifact
 
     !> The file carries the recorded identity for artifact (kind, state).
-    !! Sigma2 checks its committed header and grouped section, never particles.
+    !! Sigma2 checks structure and file size, then compares the generation.
     logical function matches_artifact( self, kind, state, fname ) result( l_match )
         class(solve3D_manifest), intent(in) :: self
         character(len=*),           intent(in) :: kind
