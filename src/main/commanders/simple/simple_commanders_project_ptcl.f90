@@ -805,14 +805,15 @@ contains
         character(len=*),     parameter :: STKFBODY    = 'consolidated_particles'
         integer(kind=8),      parameter :: BUFBYTES    = 268435456_8        ! copy buffer cap, 256 MB
         real(timer_int_kind), parameter :: REPORT_SECS = 30._timer_int_kind ! seconds between progress lines
+        real(timer_int_kind), parameter :: RATE_WEIGHT = 0.2_timer_int_kind ! weight of the latest interval in the rate
         type(parameters)             :: params
         type(sp_project)             :: spproj
         type(MrcImgHead)             :: hed_out, hed_src
         type(string)                 :: stkname, stkout, cwd
         integer(kind=1), allocatable :: buf(:)
-        integer(kind=8)              :: imgbytes, ncopied, nbytes_tot
+        integer(kind=8)              :: imgbytes, ncopied, ncopied_rep, nbytes_tot
         integer(timer_int_kind)      :: t0, t_copy
-        real(timer_int_kind)         :: t_report
+        real(timer_int_kind)         :: t_report, rate_avg
         integer :: ldim_ref(3), mode_ref, nptcls, nstks, istk, iptcl, fromp, top
         integer :: run_row, run_ind, run_len, max_run, stkind, indstk, src_unit, out_unit, ios
         logical :: l_ref
@@ -858,11 +859,13 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,F8.2,A)') '>>> COPYING ', nptcls, ' PARTICLES FROM ', nstks, ' STACKS, ', &
             &real(nbytes_tot)/1.e9, ' GB'
         call flush(logfhandle)
-        ncopied  = 0_8
-        run_row  = 0
-        run_ind  = 0
-        t_report = 0._timer_int_kind
-        t_copy   = tic()
+        ncopied     = 0_8
+        ncopied_rep = 0_8
+        run_row     = 0
+        run_ind     = 0
+        t_report    = 0._timer_int_kind
+        rate_avg    = 0._timer_int_kind
+        t_copy      = tic()
         do istk = 1, nstks
             stkname = spproj%os_stk%get_str(istk, 'stk')
             call open_src
@@ -944,16 +947,23 @@ contains
             call report_progress
         end subroutine copy_run
 
-        ! volume, share, rate and time left, every REPORT_SECS seconds
+        ! volume, share, recent rate and time left at that rate, every REPORT_SECS seconds; the rate is
+        ! a running average of the intervals, so a slowdown shows in the time left
         subroutine report_progress
             real(timer_int_kind) :: t_now, rate
             t_now = toc(t_copy)
             if( t_now - t_report < REPORT_SECS ) return
-            t_report = t_now
-            rate     = real(ncopied,kind=timer_int_kind) / 1.e6_timer_int_kind / t_now
+            rate = real(ncopied - ncopied_rep,kind=timer_int_kind) / 1.e6_timer_int_kind / (t_now - t_report)
+            if( rate_avg > 0._timer_int_kind )then
+                rate_avg = (1._timer_int_kind - RATE_WEIGHT) * rate_avg + RATE_WEIGHT * rate
+            else
+                rate_avg = rate
+            endif
+            t_report    = t_now
+            ncopied_rep = ncopied
             write(logfhandle,'(A,F8.2,A,F8.2,A,F5.1,A,F8.1,A,F7.1,A)') '>>> COPIED ', real(ncopied)/1.e9, ' OF ',&
-                &real(nbytes_tot)/1.e9, ' GB (', 100.*real(ncopied)/real(nbytes_tot), ' %), ', rate, ' MB/S, ',&
-                &real(nbytes_tot - ncopied) / (rate * 1.e6 * 60.), ' MIN LEFT'
+                &real(nbytes_tot)/1.e9, ' GB (', 100.*real(ncopied)/real(nbytes_tot), ' %), ', rate_avg, ' MB/S, ',&
+                &real(nbytes_tot - ncopied) / (rate_avg * 1.e6 * 60.), ' MIN LEFT'
             call flush(logfhandle)
         end subroutine report_progress
 

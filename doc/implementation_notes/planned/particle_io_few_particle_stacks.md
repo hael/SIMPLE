@@ -601,6 +601,28 @@ per-micrograph stack files.
     the sampling to the layout (blocks) or read everything. A good layout
     gets most of the way; read-ahead and memory residency do the rest.
 
+**Prior art: cryoSPARC.** It is closed source. This comes from its public
+guide and forum posts, which were not read in full.
+
+- **Same indexing as SIMPLE.** Extraction writes one stack per micrograph.
+  Each particle's metadata row holds a file path and an index in that file.
+  A selection removes rows and rewrites no file.
+- **Same cost.** Particles stay in many small files, and a subset still goes
+  through the original stacks. No timings are published.
+- **Two remedies.**
+  - An SSD cache copies whole stack files to a local SSD at job start. Jobs of
+    a project share it, and old data is evicted when space runs out.
+  - The Restack Particles job writes the selected particles into fewer, larger
+    files, with the number of particles per file as a parameter. It is a
+    manual step. Users report it as slow, memory-hungry with large batches,
+    and prone to open-file errors.
+- **Reading.** Refinement loads as many images onto the GPU as fit and
+  normally runs two threads, so reading and computing overlap. Particles
+  come from the cache or from memory. No prefetch setting is documented.
+- **What it shows.** Consolidation is the remedy users reach for, which is
+  what the experiment in section 4 does. No layout built to serve any
+  sampling was found.
+
 **Costs and open points.**
 
 - **Shared files.** Code that treats a stack file as one micrograph's must
