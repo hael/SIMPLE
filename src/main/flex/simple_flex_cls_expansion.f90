@@ -1,4 +1,4 @@
-!@descr: cls_expansion backend: per-class low-rank covariance model on Fourier coefficients (fit, placement, weighted sub-averages, reproducibility); arrays in, arrays out
+!@descr: cls_expansion backend: per-class low-rank covariance model on Fourier coefficients (fit, placement, conditional sub-class averages, reproducibility); arrays in, arrays out
 ! Also the subclass budget: how many subclasses each class gets out of a total.
 module simple_flex_cls_expansion
 use simple_defs,               only: sp, dp, PI, DPI, CMPLX_ZERO, DCMPLX_ZERO, logfhandle
@@ -7,25 +7,22 @@ use simple_rnd,                only: ran3
 use simple_flex_pca_targets,   only: kmeans_latent_targets
 use simple_flex_pca_gmm,       only: gmm_state_weights
 use simple_flex_pca_posterior, only: spd_inv_dp
-use simple_stat,               only: kish_ess
 implicit none
 
-public :: flex_cls_model, flex_cls_fit, flex_cls_place_states, flex_cls_restore_states, flex_cls_shell_noise, flex_cls_half_reproducibility
-public :: flex_cls_signal_power, flex_cls_pose_tangents, flex_cls_weighted_mean, flex_cls_fit_crossed
-public :: flex_cls_allocate_subclasses, flex_cls_split_floor
+public :: flex_cls_model, flex_cls_fit, flex_cls_place_states, flex_cls_shell_noise, flex_cls_pose_tangents, flex_cls_weighted_mean
+public :: flex_cls_ctf_mean, flex_cls_extend_basis, flex_cls_conditional_averages, flex_cls_shell_frc, flex_cls_half_frc
+public :: flex_cls_frc_cutoff, flex_cls_allocate_subclasses, flex_cls_split_floor
 private
 #include "simple_local_flags.inc"
 
 integer,  parameter :: FLEX_CLS_N_ALS      = 4      !< prior-free probe iterations
 integer,  parameter :: FLEX_CLS_N_PPCA     = 8      !< PPCA iterations (upper bound, convergence stops earlier)
 integer,  parameter :: FLEX_CLS_N_RESTARTS = 3      !< random starts of the ALS probe
-integer,  parameter :: FLEX_CLS_NFOLD      = 5      !< cross-fitting folds (basis on 4/5 of the members)
 real(dp), parameter :: FLEX_CLS_RIDGE_REL  = 1.d-3  !< Tikhonov ridge on the basis block, relative to G(1,1)
 real(dp), parameter :: FLEX_CLS_CONV_TOL   = 1.d-3  !< relative latent change that stops the PPCA loop
 real(dp), parameter :: FLEX_CLS_WIENER_EPS = 0.1d0  !< sub-average denominator ctf^2 + eps, per member
 real(dp), parameter :: FLEX_CLS_NUIS_RIDGE = 1.d-6  !< ridge on the free nuisance block of the E-step, relative to max A(q,q)
 real(dp), parameter :: FLEX_CLS_INV_RIDGE  = 1.d-12 !< ridge before inverting a small SPD matrix, relative to max |A|
-real(sp), parameter :: FLEX_CLS_W_CUTOFF   = 1.e-3  !< kernel weights below this are zero
 integer,  parameter :: FLEX_CLS_MIN_LEAF   = 8      !< a leaf is cut only when both halves can hold this many members
 real(dp), parameter :: FLEX_CLS_GROUP_ALPHA = 0.5d0 !< a group's subclass total grows as its population**alpha
 
@@ -202,124 +199,6 @@ contains
         deallocate(yf, cf, wf, wqf, ea, eaa, zprev)
     end subroutine flex_cls_fit
 
-    !> cross-fitted embedding: FLEX_CLS_NFOLD folds, every member embedded with a basis fitted on the other
-    !! folds and mapped into the full fit's frame; the model holds the full basis and every member's latent, precision and nuisance
-    subroutine flex_cls_fit_crossed( model, y, c, w, wq, fitmask, ncomp, verbose, nuis )
-        type(flex_cls_model),  intent(inout) :: model
-        complex(sp),           intent(in)    :: y(:,:)
-        real(sp),              intent(in)    :: c(:,:), w(:,:), wq(:)
-        logical,               intent(in)    :: fitmask(:)
-        integer,               intent(in)    :: ncomp
-        logical,     optional, intent(in)    :: verbose
-        complex(sp), optional, intent(in)    :: nuis(:,:)
-        type(flex_cls_model) :: fold
-        complex(sp), allocatable :: yt(:,:)
-        real(sp),    allocatable :: ct(:,:), wt(:,:)
-        real(dp),    allocatable :: ea(:,:), eaa(:,:,:), zfull(:,:), T(:,:), G(:,:), Bm(:,:), cov(:,:), tmp(:,:)
-        integer,     allocatable :: fold_of(:)
-        real(dp) :: nudummy(1)
-        integer :: nptcls, ncoeff, nfold, f, i, k, ntrain, nfit, q, r
-        logical :: l_verb
-        l_verb = .false.
-        if( present(verbose) ) l_verb = verbose
-        ncoeff = size(y,1)
-        nptcls = size(y,2)
-        nfold  = min(FLEX_CLS_NFOLD, max(2, nptcls / (3 * (ncomp + 1))))
-        allocate(fold_of(nptcls))
-        do i = 1, nptcls
-            fold_of(i) = 1 + mod(i - 1, nfold)
-        end do
-        if( present(nuis) )then
-            call flex_cls_fit(model, y, c, w, wq, fitmask, ncomp, verbose=l_verb, nuis=nuis)
-        else
-            call flex_cls_fit(model, y, c, w, wq, fitmask, ncomp, verbose=l_verb)
-        endif
-        nfit = model%nfit
-        allocate(zfull(nptcls,ncomp), source=model%z)
-        allocate(ea(0:ncomp,1), eaa(0:ncomp,0:ncomp,1))
-        allocate(T(ncomp,ncomp), G(ncomp,ncomp), Bm(ncomp,ncomp), cov(ncomp,ncomp), tmp(ncomp,ncomp))
-        ! Gram matrix of the full basis in the fit-band inner product
-        do q = 1, ncomp
-            do r = 1, ncomp
-                G(q,r) = sum(real(wq(model%fitidx),dp) * real(conjg(model%U(:,q)) * model%U(:,r)))
-            end do
-        end do
-        call spd_inverse(G, ncomp)
-        do f = 1, nfold
-            ntrain = count(fold_of /= f)
-            allocate(yt(ncoeff,ntrain), ct(ncoeff,ntrain), wt(ncoeff,ntrain))
-            k = 0
-            do i = 1, nptcls
-                if( fold_of(i) == f ) cycle
-                k = k + 1
-                yt(:,k) = y(:,i); ct(:,k) = c(:,i); wt(:,k) = w(:,i)
-            end do
-            if( present(nuis) )then
-                call flex_cls_fit(fold, yt, ct, wt, wq, fitmask, ncomp, verbose=.false., nuis=nuis)
-            else
-                call flex_cls_fit(fold, yt, ct, wt, wq, fitmask, ncomp, verbose=.false.)
-            endif
-            ! z_full = G^-1 (U_full^H W U_fold) z_fold
-            do q = 1, ncomp
-                do r = 1, ncomp
-                    Bm(q,r) = sum(real(wq(model%fitidx),dp) * real(conjg(model%U(:,q)) * fold%U(:,r)))
-                end do
-            end do
-            T = matmul(G, Bm)
-            do i = 1, nptcls
-                if( fold_of(i) /= f ) cycle
-                if( model%nnuis > 0 )then
-                    call embed_one(fold, y(:,i), c(:,i), w(:,i), wq, nfit, ncomp, model%z(i,:), model%prec(:,:,i), &
-                        &model%nu(i,:), ea, eaa)
-                    model%resid(i) = member_residual(fold, y(fold%fitidx,i), c(fold%fitidx,i), w(fold%fitidx,i), &
-                        &wq(fold%fitidx), nfit, model%z(i,:), 0, model%nu(i,:))
-                else
-                    call embed_one(fold, y(:,i), c(:,i), w(:,i), wq, nfit, ncomp, model%z(i,:), model%prec(:,:,i), &
-                        &nudummy, ea, eaa)
-                    model%resid(i) = member_residual(fold, y(fold%fitidx,i), c(fold%fitidx,i), w(fold%fitidx,i), &
-                        &wq(fold%fitidx), nfit, model%z(i,:), 0)
-                endif
-                model%z(i,:) = matmul(T, model%z(i,:))
-                cov = model%prec(:,:,i)
-                call spd_inverse(cov, ncomp)
-                tmp = matmul(T, matmul(cov, transpose(T)))
-                call spd_inverse(tmp, ncomp)
-                model%prec(:,:,i) = tmp
-            end do
-            call fold%kill
-            deallocate(yt, ct, wt)
-        end do
-        deallocate(T, G, Bm, cov, tmp)
-        if( l_verb ) call flex_cls_calibration(model, zfull)
-        deallocate(fold_of, zfull, ea, eaa)
-    end subroutine flex_cls_fit_crossed
-
-    !> one member's latent, precision and nuisance under a given basis
-    subroutine embed_one( basis, yi, ci, wi, wq, nfit, ncomp, z, prec, nu, ea, eaa )
-        type(flex_cls_model), intent(inout) :: basis
-        complex(sp),          intent(in)    :: yi(:)
-        real(sp),             intent(in)    :: ci(:), wi(:), wq(:)
-        integer,              intent(in)    :: nfit, ncomp
-        real(dp),             intent(out)   :: z(ncomp), prec(ncomp,ncomp), nu(:)
-        real(dp),             intent(inout) :: ea(0:ncomp,1), eaa(0:ncomp,0:ncomp,1)
-        complex(sp) :: yf(nfit,1)
-        real(sp)    :: cf(nfit,1), wf(nfit,1), wqf(nfit)
-        type(flex_cls_model) :: one
-        yf(:,1) = yi(basis%fitidx); cf(:,1) = ci(basis%fitidx); wf(:,1) = wi(basis%fitidx); wqf = wq(basis%fitidx)
-        call one%new(nfit, ncomp, 1)
-        one%fitidx = basis%fitidx; one%mu = basis%mu; one%U = basis%U
-        if( basis%nnuis > 0 )then
-            one%nnuis = basis%nnuis
-            allocate(one%N(nfit,one%nnuis), source=basis%N)
-            allocate(one%nu(1,one%nnuis), source=0.d0)
-        endif
-        call estep(one, yf, cf, wf, wqf, nfit, 1, ncomp, .true., ea, eaa)
-        z    = one%z(1,:)
-        prec = one%prec(:,:,1)
-        if( one%nnuis > 0 ) nu = one%nu(1,:)
-        call one%kill
-    end subroutine embed_one
-
     !> one member's weighted fit residual per coefficient (1 at the noise level); nuisance from row inu or nu
     function member_residual( basis, yf, cf, wf, wqf, nfit, z, inu, nu ) result( r )
         type(flex_cls_model), intent(in) :: basis
@@ -361,23 +240,6 @@ contains
         call spd_inv_dp(A, Ainv, k)
         A = Ainv
     end subroutine spd_inverse
-
-    !> log: cross-fitted and in-sample latent scatter over the posterior width, per component
-    subroutine flex_cls_calibration( model, zfull )
-        type(flex_cls_model), intent(in) :: model
-        real(dp),             intent(in) :: zfull(:,:)
-        real(dp) :: var_x, var_f, pw
-        integer  :: q, n, i
-        n = model%nptcls
-        do q = 1, model%ncomp
-            var_x = sum((model%z(:,q) - sum(model%z(:,q))/n)**2) / max(n-1,1)
-            var_f = sum((zfull(:,q)   - sum(zfull(:,q))/n)**2)   / max(n-1,1)
-            pw    = sum(1.d0 / max([(model%prec(q,q,i), i=1,n)], 1.d-30)) / n
-            write(logfhandle,'(A,I2,A,F8.2,A,F8.2)') '>>> FLEX_CLS calibration comp ', q, &
-                &': cross-fit scatter/posterior width=', sqrt(var_x / max(pw,1.d-30)), &
-                &'  in-sample=', sqrt(var_f / max(pw,1.d-30))
-        end do
-    end subroutine flex_cls_calibration
 
     !> Members a class needs before the covariance model can split it into nsub subclasses (ncomp = neigs)
     pure integer function flex_cls_split_floor( nsub, ncomp ) result( nmin )
@@ -458,36 +320,28 @@ contains
     end subroutine flex_cls_allocate_subclasses
 
     !> exactly ncls subclasses: divisive bisection of the standardised latent (plus the log fit residual) scored by
-    !! Ashman's D, a tied-covariance GMM for the labels, posterior-precision kernel weights, Kish neff
-    subroutine flex_cls_place_states( model, ncls, weights, labels, neff, separation )
+    !! Ashman's D, then a tied-covariance GMM; every member is labelled with its most likely subclass (hard labels:
+    !! the particle -> subclass map, and the members whose latent centre gives each conditional average)
+    subroutine flex_cls_place_states( model, ncls, labels, separation )
         type(flex_cls_model), intent(in)  :: model
         integer,              intent(in)  :: ncls
-        real(sp),             intent(out) :: weights(:,:)  !< (nptcls,ncls)
         integer,              intent(out) :: labels(:)     !< (nptcls)
-        real(sp),             intent(out) :: neff(:)       !< (ncls)
-        real(sp), optional,   intent(out) :: separation    !< Ashman's D of the first cut (standardised latent)
-        real(dp), allocatable :: tcen(:,:), wcomp(:), zstd(:,:), cen2(:,:,:), dsep_of(:), zaug(:,:), paug(:,:,:)
+        real(sp),             intent(out) :: separation    !< Ashman's D of the first cut (standardised latent)
+        real(dp), allocatable :: tcen(:,:), wcomp(:), zstd(:,:), cen2(:,:,:), dsep_of(:), zaug(:,:)
         integer,  allocatable :: memb(:), nmemb(:)
-        real(sp), allocatable :: bw(:)
-        real(dp) :: var, dfirst, rmean, rvar
+        real(sp), allocatable :: bw(:), weights(:,:), neff(:)
+        real(dp) :: var, dfirst
         integer  :: i, s, q, nleaf, isplit, nsub, k, nd
         if( .not. model%exists ) THROW_HARD('flex_cls_place_states: no model')
         if( ncls < 2 ) THROW_HARD('flex_cls_place_states: ncls must be >= 2')
-        if( size(weights,1) /= model%nptcls .or. size(weights,2) /= ncls ) THROW_HARD('flex_cls_place_states: weights shape')
-        if( size(labels) /= model%nptcls .or. size(neff) /= ncls ) THROW_HARD('flex_cls_place_states: labels/neff shape')
-        ! placement latent = model latent + log fit residual (precision = population scatter)
+        if( size(labels) /= model%nptcls ) THROW_HARD('flex_cls_place_states: labels shape')
+        ! placement latent = model latent + log fit residual
         nd = model%ncomp + 1
-        allocate(zaug(model%nptcls,nd), paug(nd,nd,model%nptcls), source=0.d0)
+        allocate(zaug(model%nptcls,nd), source=0.d0)
         zaug(:,1:model%ncomp) = model%z
         zaug(:,nd) = log(max(model%resid, 1.d-30))
         call detrend(zaug(:,nd), model%cpow, model%nptcls)
-        rmean = sum(zaug(:,nd)) / real(model%nptcls,dp)
-        rvar  = sum((zaug(:,nd) - rmean)**2) / real(max(model%nptcls-1,1),dp)
-        do i = 1, model%nptcls
-            paug(1:model%ncomp,1:model%ncomp,i) = model%prec(:,:,i)
-            paug(nd,nd,i) = 1.d0 / max(rvar, 1.d-30)
-        end do
-        allocate(tcen(nd,ncls), wcomp(nd), bw(ncls), zstd(model%nptcls,nd))
+        allocate(tcen(nd,ncls), wcomp(nd), bw(ncls), zstd(model%nptcls,nd), weights(model%nptcls,ncls), neff(ncls))
         allocate(cen2(nd,2,ncls), dsep_of(ncls), memb(model%nptcls), nmemb(ncls))
         do q = 1, nd
             var = sum((zaug(:,q) - sum(zaug(:,q))/real(model%nptcls,dp))**2) / real(max(model%nptcls-1,1),dp)
@@ -534,7 +388,7 @@ contains
         end do
         write(logfhandle,'(A,I0,A,F7.3,A,*(1X,I0))') '>>> FLEX_CLS divisive split into ', ncls, &
             &' subclasses; first cut D=', dfirst, ' leaf populations:', nmemb
-        if( present(separation) ) separation = real(dfirst, sp)
+        separation = real(dfirst, sp)
         wcomp = 1.d0
         weights = 0.
         labels  = 0
@@ -542,46 +396,13 @@ contains
         bw      = 0.
         call gmm_state_weights(zaug, model%nptcls, nd, nd, ncls, tcen, wcomp, &
             &weights, neff, bw, labels, respawn=.false.)
-        ! singular GMM covariance: the divisive leaves, one-hot
+        ! singular GMM covariance: the divisive leaves
         if( any(sum(weights, dim=2) < 0.5) )then
             write(logfhandle,'(A)') '>>> FLEX_CLS GMM responsibilities unavailable; hard divisive subclasses'
-            weights = 0.
-            do i = 1, model%nptcls
-                labels(i) = memb(i)
-                weights(i,memb(i)) = 1.
-            end do
+            labels = memb
         endif
-        call posterior_kernel_weights(zaug, paug, model%nptcls, nd, ncls, labels, tcen, weights, neff)
-        deallocate(tcen, wcomp, bw, zstd, cen2, dsep_of, memb, nmemb, zaug, paug)
+        deallocate(tcen, wcomp, bw, zstd, cen2, dsep_of, memb, nmemb, zaug, weights, neff)
     end subroutine flex_cls_place_states
-
-    !> w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s)), c_s the mean latent of the members labelled s; neff = Kish
-    subroutine posterior_kernel_weights( z, prec, nptcls, nd, ncls, labels, cen_empty, weights, neff )
-        integer,  intent(in)  :: nptcls, nd, ncls, labels(:)
-        real(dp), intent(in)  :: z(nptcls,nd), prec(nd,nd,nptcls)
-        real(dp), intent(in)  :: cen_empty(nd,ncls)   !< the centre of a subclass the labels leave empty (its GMM mean)
-        real(sp), intent(out) :: weights(:,:), neff(:)
-        real(dp) :: cen(nd), d(nd), q
-        integer  :: s, i, n
-        do s = 1, ncls
-            n = count(labels == s)
-            if( n > 0 )then
-                do i = 1, nd
-                    cen(i) = sum(z(:,i), mask=(labels == s)) / real(n,dp)
-                end do
-            else
-                cen = cen_empty(:,s)
-            endif
-            do i = 1, nptcls
-                d = z(i,:) - cen
-                q = dot_product(d, matmul(prec(:,:,i), d))
-                weights(i,s) = real(exp(-0.5d0 * q), sp)
-            end do
-            where( weights(:,s) < FLEX_CLS_W_CUTOFF ) weights(:,s) = 0.
-            where( labels == s ) weights(:,s) = max(weights(:,s), 1.)
-            neff(s) = real(kish_ess(real(weights(:,s),dp)), sp)
-        end do
-    end subroutine posterior_kernel_weights
 
     !> the best two-way cut of one leaf: 2-means on the full latent and on each coordinate, scored by Ashman's D; dsep = -1 when too small
     subroutine best_bisection( zstd, nptcls, ncomp, memb, leaf, cen, dsep )
@@ -716,16 +537,37 @@ contains
         integer,     intent(in)  :: shell(:)   !< (ncoeff) shell index in 1..nsh
         integer,     intent(in)  :: nsh
         real(sp),    intent(out) :: s2(nsh)
+        integer,     parameter   :: CHUNK = 2048  !< coefficients per thread block
         complex(dp), allocatable :: mu(:)
-        real(sp),    allocatable :: w1(:,:)
+        real(dp),    allocatable :: den(:)
         real(dp) :: pow(nsh)
-        integer  :: cnt(nsh), ncoeff, nptcls, i, j
+        integer  :: cnt(nsh), ncoeff, nptcls, i, j, ic, j0, j1
         ncoeff = size(y,1)
         nptcls = size(y,2)
-        allocate(mu(ncoeff), w1(ncoeff,nptcls))
-        w1 = 1.
-        call weighted_average(y, c, w1, ncoeff, nptcls, FLEX_CLS_WIENER_EPS, mu)
+        allocate(mu(ncoeff), den(ncoeff))
+        ! the CTF-weighted mean with unit noise weights, blockwise
+        !$omp parallel do default(shared) private(ic,j0,j1,i,j) schedule(static)
+        do ic = 1, (ncoeff + CHUNK - 1) / CHUNK
+            j0 = (ic - 1) * CHUNK + 1
+            j1 = min(ncoeff, ic * CHUNK)
+            mu(j0:j1) = DCMPLX_ZERO; den(j0:j1) = 0.d0
+            do i = 1, nptcls
+                do j = j0, j1
+                    mu(j)  = mu(j)  + real(c(j,i),dp) * cmplx(y(j,i),kind=dp)
+                    den(j) = den(j) + real(c(j,i),dp)**2 + FLEX_CLS_WIENER_EPS
+                end do
+            end do
+            do j = j0, j1
+                if( den(j) > 1.d-30 )then
+                    mu(j) = mu(j) / den(j)
+                else
+                    mu(j) = DCMPLX_ZERO
+                endif
+            end do
+        end do
+        !$omp end parallel do
         pow = 0.d0; cnt = 0
+        !$omp parallel do default(shared) private(i,j) schedule(static) reduction(+:pow,cnt)
         do i = 1, nptcls
             do j = 1, ncoeff
                 if( shell(j) < 1 .or. shell(j) > nsh ) cycle
@@ -733,6 +575,7 @@ contains
                 cnt(shell(j)) = cnt(shell(j)) + 1
             end do
         end do
+        !$omp end parallel do
         do j = 1, nsh
             if( cnt(j) > 0 )then
                 s2(j) = real(max(pow(j) / real(cnt(j),dp), 1.d-30), sp)
@@ -740,111 +583,8 @@ contains
                 s2(j) = 1.
             endif
         end do
-        deallocate(mu, w1)
+        deallocate(mu, den)
     end subroutine flex_cls_shell_noise
-
-    !> CTF-corrected weighted sub-averages; without shell a constant eps regularises, with shell and tau2 den += 1/tau2,
-    !! with shell alone unregularised (shell_den returns the mean den per shell)
-    subroutine flex_cls_restore_states( y, c, w, weights, avgs, shell, tau2, shell_den )
-        complex(sp),        intent(in)  :: y(:,:)         !< (ncoeff,nptcls)
-        real(sp),           intent(in)  :: c(:,:)         !< (ncoeff,nptcls)
-        real(sp),           intent(in)  :: w(:,:)         !< (ncoeff,nptcls)
-        real(sp),           intent(in)  :: weights(:,:)   !< (nptcls,ncls)
-        complex(sp),        intent(out) :: avgs(:,:)      !< (ncoeff,ncls)
-        integer,  optional, intent(in)  :: shell(:)       !< (ncoeff) shell index of every coefficient
-        real(dp), optional, intent(in)  :: tau2(:,:)      !< (nsh,ncls) prior signal power per shell: den += 1/tau2
-        real(dp), optional, intent(out) :: shell_den(:,:) !< (nsh,ncls) mean of den over the shell (1/noise variance of the average)
-        real(dp),    allocatable :: den0(:), rsum(:)
-        complex(dp), allocatable :: num0(:)
-        integer,     allocatable :: cnt(:)
-        real(dp)    :: eps, r, wc, den
-        complex(dp) :: num
-        integer  :: ncoeff, nptcls, ncls, i, j, s, nsh, sh
-        logical  :: l_wiener, l_shell
-        l_shell  = present(shell)
-        l_wiener = l_shell .and. present(tau2)
-        eps = FLEX_CLS_WIENER_EPS
-        if( l_shell ) eps = 0.d0
-        ncoeff = size(y,1)
-        nptcls = size(y,2)
-        ncls   = size(weights,2)
-        if( size(weights,1) /= nptcls ) THROW_HARD('flex_cls_restore_states: weights shape')
-        if( size(avgs,1) /= ncoeff .or. size(avgs,2) /= ncls ) THROW_HARD('flex_cls_restore_states: avgs shape')
-        allocate(num0(ncoeff), den0(ncoeff))
-        nsh = 0
-        if( l_shell )then
-            nsh = maxval(shell)
-            if( present(tau2) )      nsh = size(tau2,1)
-            if( present(shell_den) ) nsh = size(shell_den,1)
-        endif
-        allocate(rsum(max(nsh,1)), cnt(max(nsh,1)))
-        do s = 1, ncls
-            !$omp parallel do default(shared) private(i,j,r,wc,num,den) schedule(static)
-            do j = 1, ncoeff
-                num = DCMPLX_ZERO
-                den = 0.d0
-                do i = 1, nptcls
-                    r = real(weights(i,s),dp)
-                    if( r <= 0.d0 ) cycle
-                    wc  = r * real(w(j,i),dp)
-                    num = num + wc * real(c(j,i),dp) * cmplx(y(j,i),kind=dp)
-                    den = den + wc * (real(c(j,i),dp)**2 + eps)
-                end do
-                num0(j) = num; den0(j) = den
-            end do
-            !$omp end parallel do
-            if( l_shell )then
-                rsum = 0.d0; cnt = 0
-                do j = 1, ncoeff
-                    sh = shell(j)
-                    if( sh < 1 .or. sh > nsh ) cycle
-                    rsum(sh) = rsum(sh) + den0(j); cnt(sh) = cnt(sh) + 1
-                end do
-                if( present(shell_den) )then
-                    do sh = 1, nsh
-                        shell_den(sh,s) = 0.d0
-                        if( cnt(sh) > 0 ) shell_den(sh,s) = rsum(sh) / real(cnt(sh),dp)
-                    end do
-                endif
-            endif
-            if( l_wiener )then
-                do j = 1, ncoeff
-                    sh = shell(j)
-                    if( sh >= 1 .and. sh <= nsh ) den0(j) = den0(j) + 1.d0 / max(tau2(sh,s), 1.d-30)
-                end do
-            endif
-            do j = 1, ncoeff
-                if( den0(j) > 1.d-30 )then
-                    avgs(j,s) = cmplx(num0(j) / den0(j), kind=sp)
-                else
-                    avgs(j,s) = CMPLX_ZERO
-                endif
-            end do
-        end do
-        deallocate(num0, den0, rsum, cnt)
-    end subroutine flex_cls_restore_states
-
-    !> prior signal power per shell and subclass from the even/odd sub-averages: ssnr * noise variance of the half-average
-    subroutine flex_cls_signal_power( ae, ao, den_e, den_o, shell, nsh, tau2 )
-        complex(sp), intent(in)  :: ae(:,:), ao(:,:)         !< (ncoeff,ncls)
-        real(dp),    intent(in)  :: den_e(:,:), den_o(:,:)   !< (nsh,ncls)
-        integer,     intent(in)  :: shell(:), nsh
-        real(dp),    intent(out) :: tau2(nsh,size(ae,2))
-        real(sp) :: frc(nsh,size(ae,2))
-        real(dp) :: cc, ssnr, sig2
-        integer  :: s, sh
-        call flex_cls_shell_frc(ae, ao, shell, nsh, frc)
-        do s = 1, size(ae,2)
-            do sh = 1, nsh
-                cc   = min(0.999d0, max(0.001d0, real(frc(sh,s),dp)))
-                ! a half without members has no FRC: an SNR of one keeps a tiny class unshrunk
-                if( min(den_e(sh,s), den_o(sh,s)) <= 1.d-30 ) cc = 0.5d0
-                ssnr = cc / (1.d0 - cc)
-                sig2 = 1.d0 / max(0.5d0 * (den_e(sh,s) + den_o(sh,s)), 1.d-30)
-                tau2(sh,s) = max(ssnr * sig2, 1.d-30)
-            end do
-        end do
-    end subroutine flex_cls_signal_power
 
     !> per-shell Fourier ring correlation between two sets of sub-averages
     subroutine flex_cls_shell_frc( ae, ao, shell, nsh, frc )
@@ -868,69 +608,339 @@ contains
         end do
     end subroutine flex_cls_shell_frc
 
-    !> even/odd sub-averages and, per subclass, the best cross-half correlation of its difference image to a sibling
-    subroutine flex_cls_half_reproducibility( y, c, w, wq, fitmask, weights, repro, avgs_even, avgs_odd, shell, tau2, den_even, den_odd )
-        complex(sp),        intent(in)  :: y(:,:)
-        real(sp),           intent(in)  :: c(:,:), w(:,:), wq(:)
-        logical,            intent(in)  :: fitmask(:)
-        real(sp),           intent(in)  :: weights(:,:)   !< (nptcls,ncls)
-        real(sp),           intent(out) :: repro(:)       !< (ncls)
-        complex(sp),        intent(out) :: avgs_even(:,:), avgs_odd(:,:)   !< (ncoeff,ncls)
-        integer,  optional, intent(in)  :: shell(:)
-        real(dp), optional, intent(in)  :: tau2(:,:)
-        real(dp), optional, intent(out) :: den_even(:,:), den_odd(:,:)   !< (nsh,ncls) mean den per shell of each half
-        real(sp), allocatable :: wh(:,:)
-        real(dp), allocatable :: om(:)
-        complex(dp) :: de, do_
-        real(dp) :: num, dee, doo, r
-        integer  :: ncoeff, nptcls, ncls, i, j, s, t
-        ncoeff = size(y,1); nptcls = size(y,2); ncls = size(weights,2)
-        allocate(wh(nptcls,ncls), om(ncoeff))
-        wh = weights
-        do i = 1, nptcls
-            if( mod(i,2) == 1 ) wh(i,:) = 0.
-        end do
-        if( present(shell) .and. present(tau2) )then
-            call flex_cls_restore_states(y, c, w, wh, avgs_even, shell=shell, tau2=tau2)
-        else if( present(shell) .and. present(den_even) )then
-            call flex_cls_restore_states(y, c, w, wh, avgs_even, shell=shell, shell_den=den_even)
-        else
-            call flex_cls_restore_states(y, c, w, wh, avgs_even)
-        endif
-        wh = weights
-        do i = 1, nptcls
-            if( mod(i,2) == 0 ) wh(i,:) = 0.
-        end do
-        if( present(shell) .and. present(tau2) )then
-            call flex_cls_restore_states(y, c, w, wh, avgs_odd, shell=shell, tau2=tau2)
-        else if( present(shell) .and. present(den_odd) )then
-            call flex_cls_restore_states(y, c, w, wh, avgs_odd, shell=shell, shell_den=den_odd)
-        else
-            call flex_cls_restore_states(y, c, w, wh, avgs_odd)
-        endif
-        do j = 1, ncoeff
-            om(j) = 0.d0
-            if( fitmask(j) ) om(j) = real(wq(j),dp) * sum(real(w(j,:),dp)) / real(nptcls,dp)
-        end do
-        repro = 0.
-        do s = 1, ncls
-            do t = 1, ncls
-                if( t == s ) cycle
-                num = 0.d0; dee = 0.d0; doo = 0.d0
-                do j = 1, ncoeff
-                    if( om(j) <= 0.d0 ) cycle
-                    de  = cmplx(avgs_even(j,s) - avgs_even(j,t), kind=dp)
-                    do_ = cmplx(avgs_odd(j,s)  - avgs_odd(j,t),  kind=dp)
-                    num = num + om(j) * real(de * conjg(do_))
-                    dee = dee + om(j) * real(de * conjg(de))
-                    doo = doo + om(j) * real(do_ * conjg(do_))
+    !> the CTF-corrected mean of the members, sum_i w_i c_i y_i / sum_i w_i c_i^2 per coefficient (no regularisation:
+    !! the conditional averages are filtered afterwards by the FRC of their independent halves), blockwise
+    subroutine flex_cls_ctf_mean( y, c, w, avg )
+        complex(sp), intent(in)  :: y(:,:)        !< (ncoeff,nptcls)
+        real(sp),    intent(in)  :: c(:,:)        !< (ncoeff,nptcls)
+        real(sp),    intent(in)  :: w(:,:)        !< (ncoeff,nptcls)
+        complex(sp), intent(out) :: avg(:)        !< (ncoeff)
+        integer,     parameter   :: CHUNK = 2048  !< coefficients per thread block
+        real(dp)    :: den, wc
+        complex(dp) :: num
+        integer     :: ncoeff, nptcls, i, j, ic, j0, j1
+        ncoeff = size(y,1)
+        nptcls = size(y,2)
+        if( size(avg) /= ncoeff ) THROW_HARD('flex_cls_ctf_mean: avg shape')
+        !$omp parallel do default(shared) private(ic,j0,j1,i,j,wc,num,den) schedule(static)
+        do ic = 1, (ncoeff + CHUNK - 1) / CHUNK
+            j0 = (ic - 1) * CHUNK + 1
+            j1 = min(ncoeff, ic * CHUNK)
+            do j = j0, j1
+                num = DCMPLX_ZERO
+                den = 0.d0
+                do i = 1, nptcls
+                    wc  = real(w(j,i),dp)
+                    num = num + wc * real(c(j,i),dp) * cmplx(y(j,i),kind=dp)
+                    den = den + wc * real(c(j,i),dp)**2
                 end do
-                r = num / sqrt(max(dee * doo, 1.d-60))
-                repro(s) = max(repro(s), real(r, sp))
+                avg(j) = CMPLX_ZERO
+                if( den > 1.d-30 ) avg(j) = cmplx(num / den, kind=sp)
             end do
         end do
-        deallocate(wh, om)
-    end subroutine flex_cls_half_reproducibility
+        !$omp end parallel do
+    end subroutine flex_cls_ctf_mean
+
+    !> The basis on every coefficient: the PPCA M-step with the members' latents and nuisances fixed, x = [1, z, nu],
+    !! on all, the even and the odd members; above the fit band each shell is shrunk by 2F/(1+F), F the FRC of the
+    !! half solutions, and the fitted coefficients keep the fitted basis. even: the halves (default: alternately)
+    subroutine flex_cls_extend_basis( model, y, c, w, shell, uext, frc_basis, even )
+        type(flex_cls_model), intent(in)  :: model
+        complex(sp),          intent(in)  :: y(:,:)        !< (ncoeff,nptcls)
+        real(sp),             intent(in)  :: c(:,:), w(:,:) !< (ncoeff,nptcls)
+        integer,              intent(in)  :: shell(:)      !< (ncoeff)
+        complex(dp),          intent(out) :: uext(:,:)     !< (ncoeff,ncomp)
+        real(dp),    optional, intent(out) :: frc_basis(:) !< (nsh) even/odd FRC of the columns on every shell
+        logical,     optional, intent(in)  :: even(:)      !< (nptcls) the even half
+        integer,     allocatable :: half(:)
+        integer,  parameter :: CHUNK = 512
+        real(dp),    allocatable :: cov(:,:), wsh(:), num(:), dee(:), doo(:)
+        real(dp),    allocatable :: xm(:,:,:), exm(:,:,:), am(:,:), bre(:,:), bim(:,:), lpk(:,:,:), rre(:,:,:), rim(:,:,:)
+        complex(dp), allocatable :: ue(:,:), uo(:,:)
+        integer,     allocatable :: hidx(:,:), pos(:)
+        logical,     allocatable :: l_fit(:)
+        real(dp)    :: x(1+model%ncomp+model%nnuis), ex(1+model%ncomp+model%nnuis,1+model%ncomp+model%nnuis)
+        real(dp)    :: a(1+model%ncomp+model%nnuis,1+model%ncomp+model%nnuis), cw, f
+        complex(dp) :: b(1+model%ncomp+model%nnuis,3), th(1+model%ncomp+model%nnuis,3)
+        integer     :: ncoeff, nptcls, r, nn, q, npk, nsh, nchunk, ic, j0, j1, nj, j, i, h, sh, p, k, m, nh(2)
+        ncoeff = size(y,1); nptcls = size(y,2); r = model%ncomp; nn = model%nnuis; q = 1 + r + nn; npk = q * (q + 1) / 2
+        if( nptcls /= model%nptcls ) THROW_HARD('flex_cls_extend_basis: member count')
+        if( size(uext,1) /= ncoeff .or. size(uext,2) /= r ) THROW_HARD('flex_cls_extend_basis: uext shape')
+        nsh = maxval(shell)
+        allocate(half(nptcls))
+        do i = 1, nptcls
+            half(i) = 1 + mod(i,2)                            ! 1: even, 2: odd
+            if( present(even) )then
+                half(i) = 2
+                if( even(i) ) half(i) = 1
+            endif
+        end do
+        ! per half: the members' regressors x = [1, z, nu] and their second moments E[x x^T] (the latent block plus
+        ! its posterior covariance), packed upper triangle by columns
+        nh(1) = count(half == 1); nh(2) = nptcls - nh(1)
+        allocate(hidx(maxval(nh),2), pos(nptcls), source=0)
+        allocate(xm(maxval(nh),q,2), exm(maxval(nh),npk,2), source=0.d0)
+        nh = 0
+        do i = 1, nptcls
+            nh(half(i)) = nh(half(i)) + 1
+            hidx(nh(half(i)),half(i)) = i
+            pos(i) = nh(half(i))
+        end do
+        !$omp parallel do default(shared) private(i,h,m,x,ex,cov,p,k) schedule(static)
+        do i = 1, nptcls
+            h = half(i)
+            m = pos(i)
+            allocate(cov(r,r))
+            cov = model%prec(:,:,i)
+            call spd_inverse(cov, r)
+            x(1) = 1.d0; x(2:1+r) = model%z(i,:)
+            if( nn > 0 ) x(2+r:q) = model%nu(i,:)
+            do p = 1, q
+                ex(:,p) = x * x(p)
+            end do
+            ex(2:1+r,2:1+r) = ex(2:1+r,2:1+r) + cov
+            xm(m,:,h) = x
+            do p = 1, q
+                k = p * (p - 1) / 2
+                exm(m,k+1:k+p,h) = ex(1:p,p)
+            end do
+            deallocate(cov)
+        end do
+        !$omp end parallel do
+        allocate(l_fit(ncoeff), source=.false.)
+        l_fit(model%fitidx) = .true.
+        allocate(ue(ncoeff,r), uo(ncoeff,r), source=DCMPLX_ZERO)
+        uext = DCMPLX_ZERO
+        nchunk = (ncoeff + CHUNK - 1) / CHUNK
+        !$omp parallel do default(shared) private(ic,j0,j1,nj,am,bre,bim,lpk,rre,rim,h,m,i,cw,j,a,b,th,p,k) schedule(dynamic)
+        do ic = 1, nchunk
+            j0 = (ic - 1) * CHUNK + 1
+            j1 = min(ncoeff, ic * CHUNK)
+            nj = j1 - j0 + 1
+            allocate(lpk(nj,npk,2), rre(nj,q,2), rim(nj,q,2))
+            do h = 1, 2                                       ! 1: even, 2: odd (the halves)
+                ! sum_i c^2 w E[x x^T] and sum_i c w y x over the half's members, as matrix products
+                allocate(am(nj,nh(h)), bre(nj,nh(h)), bim(nj,nh(h)))
+                do m = 1, nh(h)
+                    i = hidx(m,h)
+                    do j = j0, j1
+                        cw = real(c(j,i),dp) * real(w(j,i),dp)
+                        am(j-j0+1,m)  = cw * real(c(j,i),dp)
+                        bre(j-j0+1,m) = cw * real(real(y(j,i)),dp)
+                        bim(j-j0+1,m) = cw * real(aimag(y(j,i)),dp)
+                    end do
+                end do
+                lpk(:,:,h) = matmul(am,  exm(1:nh(h),:,h))
+                rre(:,:,h) = matmul(bre, xm(1:nh(h),:,h))
+                rim(:,:,h) = matmul(bim, xm(1:nh(h),:,h))
+                deallocate(am, bre, bim)
+            end do
+            do j = j0, j1
+                ! full = even + odd; solve the three systems
+                call unpack_lhs(lpk(j-j0+1,:,1) + lpk(j-j0+1,:,2), a)
+                b(:,1) = cmplx(rre(j-j0+1,:,1) + rre(j-j0+1,:,2), rim(j-j0+1,:,1) + rim(j-j0+1,:,2), kind=dp)
+                call solve3(a, b(:,1:1), th(:,1:1))
+                uext(j,:) = th(2:1+r,1)
+                call unpack_lhs(lpk(j-j0+1,:,1), a); b(:,2) = cmplx(rre(j-j0+1,:,1), rim(j-j0+1,:,1), kind=dp)
+                call solve3(a, b(:,2:2), th(:,2:2))
+                ue(j,:) = th(2:1+r,2)
+                call unpack_lhs(lpk(j-j0+1,:,2), a); b(:,3) = cmplx(rre(j-j0+1,:,2), rim(j-j0+1,:,2), kind=dp)
+                call solve3(a, b(:,3:3), th(:,3:3))
+                uo(j,:) = th(2:1+r,3)
+            end do
+            deallocate(lpk, rre, rim)
+        end do
+        !$omp end parallel do
+        ! per-shell shrinkage of the extension from the FRC of the halves: the columns pooled above the fit band
+        allocate(wsh(nsh), num(nsh), dee(nsh), doo(nsh), source=0.d0)
+        do j = 1, ncoeff
+            sh = shell(j)
+            if( sh < 1 .or. l_fit(j) ) cycle
+            num(sh) = num(sh) + sum(real(ue(j,:) * conjg(uo(j,:)), dp))
+            dee(sh) = dee(sh) + sum(abs(ue(j,:))**2)
+            doo(sh) = doo(sh) + sum(abs(uo(j,:))**2)
+        end do
+        call frc_weights(wsh)
+        do j = 1, ncoeff
+            sh = shell(j)
+            if( sh < 1 )then
+                uext(j,:) = DCMPLX_ZERO
+                cycle
+            endif
+            if( .not. l_fit(j) ) uext(j,:) = uext(j,:) * wsh(sh)
+        end do
+        ! the fitted coefficients keep the fitted basis
+        do j = 1, model%nfit
+            uext(model%fitidx(j),:) = model%U(j,:)
+        end do
+        if( present(frc_basis) )then
+            ! the columns' even/odd agreement on every shell, the fit band included
+            num = 0.d0; dee = 0.d0; doo = 0.d0
+            do j = 1, ncoeff
+                sh = shell(j)
+                if( sh < 1 ) cycle
+                num(sh) = num(sh) + sum(real(ue(j,:) * conjg(uo(j,:)), dp))
+                dee(sh) = dee(sh) + sum(abs(ue(j,:))**2)
+                doo(sh) = doo(sh) + sum(abs(uo(j,:))**2)
+            end do
+            frc_basis = 0.d0
+            do sh = 1, min(nsh, size(frc_basis))
+                if( dee(sh) * doo(sh) > 0.d0 ) frc_basis(sh) = num(sh) / sqrt(dee(sh) * doo(sh))
+            end do
+        endif
+        deallocate(xm, exm, hidx, pos, l_fit, ue, uo, wsh, num, dee, doo, half)
+
+      contains
+
+        !> 2F/(1+F) per shell from num/dee/doo (0 where F <= 0)
+        subroutine frc_weights( wout )
+            real(dp), intent(out) :: wout(:)
+            integer :: k
+            do k = 1, size(wout)
+                wout(k) = 0.d0
+                if( dee(k) * doo(k) > 0.d0 )then
+                    f = num(k) / sqrt(dee(k) * doo(k))
+                    if( f > 0.d0 ) wout(k) = 2.d0 * f / (1.d0 + f)
+                endif
+            end do
+        end subroutine frc_weights
+
+        !> the symmetric q x q system from its packed upper triangle
+        subroutine unpack_lhs( pk, amat )
+            real(dp), intent(in)  :: pk(:)
+            real(dp), intent(out) :: amat(:,:)
+            integer :: pp, kk
+            do pp = 1, size(amat,1)
+                kk = pp * (pp - 1) / 2
+                amat(1:pp,pp) = pk(kk+1:kk+pp)
+                amat(pp,1:pp-1) = pk(kk+1:kk+pp-1)
+            end do
+        end subroutine unpack_lhs
+
+        !> a q x q SPD solve with one complex right-hand side (real and imaginary parts)
+        subroutine solve3( amat, bvec, tvec )
+            real(dp),    intent(inout) :: amat(:,:)
+            complex(dp), intent(in)    :: bvec(:,:)
+            complex(dp), intent(out)   :: tvec(:,:)
+            real(dp) :: ainv(size(amat,1),size(amat,1))
+            ainv = amat
+            call spd_inverse(ainv, size(amat,1))
+            tvec(:,1) = cmplx(matmul(ainv, real(bvec(:,1),dp)), matmul(ainv, aimag(bvec(:,1))), kind=dp)
+        end subroutine solve3
+
+    end subroutine flex_cls_extend_basis
+
+    !> The subclass deviations of the conditional averages, D_s = U z_s (parent + D_s is the model's image at the
+    !! subclass centre): z_s = (I - S)^-1 (zbar_s - zbar), the members' mean latent relative to the class's, undoing
+    !! the posterior shrinkage I - S (S the mean posterior covariance). An empty subclass gets D_s = 0
+    subroutine flex_cls_conditional_averages( model, labels, uext, devs )
+        type(flex_cls_model), intent(in)  :: model
+        integer,              intent(in)  :: labels(:)  !< (nptcls) the subclass of every member, 1..ncls (<= 0: left out)
+        complex(dp),          intent(in)  :: uext(:,:)  !< (ncoeff,ncomp) the basis on every coefficient (flex_cls_extend_basis)
+        complex(sp),          intent(out) :: devs(:,:)  !< (ncoeff,ncls)
+        real(dp)    :: zbar(model%ncomp), zs(model%ncomp), deshrink(model%ncomp,model%ncomp), cov(model%ncomp,model%ncomp)
+        real(dp)    :: wsum, nmemb
+        complex(dp) :: d
+        integer     :: nptcls, ncls, i, j, s, q
+        nptcls = size(labels)
+        ncls   = size(devs,2)
+        if( nptcls /= model%nptcls ) THROW_HARD('flex_cls_conditional_averages: labels/model member count')
+        if( size(devs,1) /= size(uext,1) ) THROW_HARD('flex_cls_conditional_averages: devs shape')
+        ! the members' mean latent and mean posterior covariance S; deshrink = (I - S)^-1
+        zbar = 0.d0; deshrink = 0.d0; nmemb = 0.d0
+        do i = 1, nptcls
+            zbar  = zbar + model%z(i,:)
+            cov   = model%prec(:,:,i)
+            call spd_inverse(cov, model%ncomp)
+            deshrink = deshrink + cov
+            nmemb = nmemb + 1.d0
+        end do
+        if( nmemb > 0.d0 )then
+            zbar = zbar / nmemb; deshrink = -deshrink / nmemb
+        endif
+        do q = 1, model%ncomp
+            deshrink(q,q) = deshrink(q,q) + 1.d0
+        end do
+        call spd_inverse(deshrink, model%ncomp)
+        do s = 1, ncls
+            devs(:,s) = CMPLX_ZERO
+            zs = 0.d0; wsum = 0.d0
+            do i = 1, nptcls
+                if( labels(i) /= s ) cycle
+                zs   = zs + model%z(i,:)
+                wsum = wsum + 1.d0
+            end do
+            if( wsum <= 0.d0 ) cycle
+            zs = matmul(deshrink, zs / wsum - zbar)
+            do j = 1, size(uext,1)
+                d = sum(uext(j,:) * zs)
+                devs(j,s) = cmplx(d, kind=sp)
+            end do
+        end do
+    end subroutine flex_cls_conditional_averages
+
+    !> even/odd FRC per shell of the class's CTF-weighted mean, blockwise
+    subroutine flex_cls_half_frc( y, c, w, shell, nsh, frc, even )
+        complex(sp), intent(in)  :: y(:,:)          !< (ncoeff,nptcls)
+        real(sp),    intent(in)  :: c(:,:), w(:,:)  !< (ncoeff,nptcls)
+        integer,     intent(in)  :: shell(:), nsh
+        real(dp),    intent(out) :: frc(nsh)
+        logical,     intent(in)  :: even(:)         !< (nptcls) the even half
+        integer,     parameter   :: CHUNK = 2048
+        complex(dp), allocatable :: me(:), mo(:)
+        real(dp),    allocatable :: de(:), do_(:)
+        real(dp) :: num(nsh), pe(nsh), po(nsh), wc
+        integer  :: ncoeff, nptcls, ic, j0, j1, i, j, sh
+        ncoeff = size(y,1); nptcls = size(y,2)
+        allocate(me(ncoeff), mo(ncoeff), de(ncoeff), do_(ncoeff))
+        !$omp parallel do default(shared) private(ic,j0,j1,i,j,wc) schedule(static)
+        do ic = 1, (ncoeff + CHUNK - 1) / CHUNK
+            j0 = (ic - 1) * CHUNK + 1
+            j1 = min(ncoeff, ic * CHUNK)
+            me(j0:j1) = DCMPLX_ZERO; mo(j0:j1) = DCMPLX_ZERO; de(j0:j1) = 0.d0; do_(j0:j1) = 0.d0
+            do i = 1, nptcls
+                do j = j0, j1
+                    wc = real(w(j,i),dp) * real(c(j,i),dp)
+                    if( even(i) )then
+                        me(j) = me(j) + wc * cmplx(y(j,i),kind=dp); de(j) = de(j) + wc * real(c(j,i),dp)
+                    else
+                        mo(j) = mo(j) + wc * cmplx(y(j,i),kind=dp); do_(j) = do_(j) + wc * real(c(j,i),dp)
+                    endif
+                end do
+            end do
+            do j = j0, j1
+                me(j) = me(j) / max(de(j), 1.d-30); mo(j) = mo(j) / max(do_(j), 1.d-30)
+            end do
+        end do
+        !$omp end parallel do
+        num = 0.d0; pe = 0.d0; po = 0.d0
+        do j = 1, ncoeff
+            sh = shell(j)
+            if( sh < 1 .or. sh > nsh ) cycle
+            num(sh) = num(sh) + real(me(j) * conjg(mo(j)), dp)
+            pe(sh)  = pe(sh)  + abs(me(j))**2
+            po(sh)  = po(sh)  + abs(mo(j))**2
+        end do
+        frc = 0.d0
+        do sh = 1, nsh
+            if( pe(sh) * po(sh) > 0.d0 ) frc(sh) = num(sh) / sqrt(pe(sh) * po(sh))
+        end do
+        deallocate(me, mo, de, do_)
+    end subroutine flex_cls_half_frc
+
+    !> the last shell before an FRC curve first falls below thr (scanned from shell 3: the first shells hold few
+    !! coefficients); the last shell when it never does
+    integer function flex_cls_frc_cutoff( frc, thr ) result( k )
+        real(dp), intent(in) :: frc(:), thr
+        integer :: sh
+        k = size(frc)
+        do sh = 3, size(frc)
+            if( frc(sh) < thr )then
+                k = sh - 1
+                return
+            endif
+        end do
+    end function flex_cls_frc_cutoff
 
     ! ===== private
 

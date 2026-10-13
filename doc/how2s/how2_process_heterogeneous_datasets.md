@@ -340,9 +340,11 @@ default), so classes of one view share that view's budget; a group's share grows
 with the square root of its population, and inside a group the classes share in
 proportion to their populations. A class holds at most `pop/minpop` sub-classes
 (`minpop=25` by default) and is kept whole below `2*minpop` particles (or below
-the covariance model's floor of `3*(neigs+1)`, 27 by default). The
-sub-class averages are built from the soft weights; each particle is labelled
-with its most likely sub-class.
+the covariance model's floor of `3*(neigs+1)`, 51 by default). The
+sub-class averages are the model's conditional averages: the class mean plus
+the model's variation at each sub-class's latent centre, with even and odd
+halves from two independent half models; each particle is labelled with its
+most likely sub-class.
 Like every program here it writes its result as a new project in its own run
 directory. Then sort the sub-class averages of that project into states:
 

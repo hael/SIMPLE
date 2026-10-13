@@ -1,9 +1,8 @@
-!@descr: unit tests for the cls_expansion subclass budget and sub-average prior (simple_flex_cls_expansion)
+!@descr: unit tests for the cls_expansion subclass budget (simple_flex_cls_expansion)
 ! Expected allocations come from a Python emulation of the same highest-averages rule (sqrt group
 ! population between groups, population within a group, pop/minpop ceiling, split threshold).
 module simple_flex_cls_expansion_tester
-use simple_defs,               only: dp, sp
-use simple_flex_cls_expansion, only: flex_cls_allocate_subclasses, flex_cls_split_floor, flex_cls_signal_power
+use simple_flex_cls_expansion, only: flex_cls_allocate_subclasses, flex_cls_split_floor
 use simple_test_utils
 implicit none
 private
@@ -19,7 +18,6 @@ contains
         call test_allocation_capacity()
         call test_allocation_one_per_class()
         call test_allocation_group_labels()
-        call test_signal_power_empty_half()
     end subroutine run_all_flex_cls_expansion_tests
 
     subroutine test_split_floor()
@@ -85,23 +83,5 @@ contains
         call assert_int(3, nsub(2), 'subclasses of a class match the reference')
         call assert_int(3, nsub(3), 'subclasses of a class match the reference')
     end subroutine test_allocation_group_labels
-
-    !> an empty half gives the prior an SNR of one; two equal halves give the FRC ceiling
-    subroutine test_signal_power_empty_half()
-        complex(sp) :: ae(2,2), ao(2,2)
-        real(dp)    :: den_e(1,2), den_o(1,2), tau2(1,2)
-        integer     :: shell(2)
-        write(*,'(A)') 'test_signal_power_empty_half'
-        shell = 1
-        ae(:,1) = (0., 0.)
-        ao(:,1) = [(1., 2.), (-3., 0.5)]
-        ae(:,2) = [(1., 2.), (-3., 0.5)]
-        ao(:,2) = ae(:,2)
-        den_e = reshape([0.d0, 2.d0], [1,2])
-        den_o = reshape([4.d0, 2.d0], [1,2])
-        call flex_cls_signal_power(ae, ao, den_e, den_o, shell, 1, tau2)
-        call assert_double(0.5d0, tau2(1,1), 'empty half: tau2 = 2 / den of the filled half')
-        call assert_true(abs(tau2(1,2) - 499.5d0) < 1.d-9 * 499.5d0, 'equal halves: tau2 = 999 * noise variance')
-    end subroutine test_signal_power_empty_half
 
 end module simple_flex_cls_expansion_tester

@@ -4,7 +4,9 @@
 
 The flex covariance model replaced the diffusion-map `cls_split` on 2026-10-05. Since 2026-10-12
 `ncls` is the total number of subclasses (section 0); the benchmarks of section 2 were run with the
-earlier fixed count per class (`ncls=3` meant three per class).
+earlier fixed count per class (`ncls=3` meant three per class). Since 2026-10-12 the sub-class averages
+are the model's conditional averages (section 1, steps 4-5); the benchmarks of sections 2-4 were made
+with the earlier soft-weighted member averages and the cross-fit.
 
 ## 0. Subclass budget
 
@@ -17,7 +19,7 @@ Before any split, on the master (or the shared-memory run):
    Classes of one view fall in one group, so classes that are essentially the same share a budget.
 2. **Capacity.** A class of at least `max(2 minpop, 3 (neigs + 1))` particles holds up to
    `floor(pop / minpop)` subclasses (`minpop` default 25); any other class one, i.e. it is kept whole
-   (its members get one weighted average; nothing is dropped).
+   (its average is the class's CTF-corrected mean, with even/odd halves; nothing is dropped).
 3. **Group totals.** Starting from one per class, the subclasses go one at a time to the open group
    with the highest `P_g^0.5 / (T_g + 0.5)` (Webster), `P_g` the group population and `T_g` its
    current total, up to the group's capacity. The classes 2D already made of a view count against
@@ -34,36 +36,40 @@ Before any split, on the master (or the shared-memory run):
 Per 2D class with two or more subclasses in the budget, with every member in the class frame by its
 own in-plane alignment:
 
-1. **Model.** `y_i = c_i (mu + U z_i + N nu_i) + noise` on the Fourier half-plane up to 30 A
-   (`lp=`): `c_i` the member's CTF, `mu` the class mean, `U` a rank-8 basis (`neigs=`), `N` four
-   nuisance columns (the pose tangents dx, dy, dtheta of the class mean and the mean itself for
-   contrast), `z_i` the latent. Noise weights from the sigma2 shell spectrum. Fitted by an ALS
-   probe (3 random starts) then PPCA EM.
-2. **Cross-fit.** Five folds; each member is embedded with a basis fitted on the other folds and
-   its latent and posterior precision are mapped into the full fit's frame through the bases.
+1. **Model.** `y_i = c_i (mu + U z_i + N nu_i) + noise` on the Fourier half-plane: `c_i` the member's
+   CTF, `mu` the class mean, `U` a rank-16 basis (`neigs=`), `N` four nuisance columns (the pose
+   tangents dx, dy, dtheta of the class mean and the mean itself for contrast), `z_i` the latent.
+   Noise weights from the sigma2 shell spectrum (else the class's residual spectrum). Fitted by an
+   ALS probe (3 random starts) then PPCA EM, in sample.
+2. **Bands.** With `lp=` the fit band is `lp`. Otherwise it is derived per class: a first fit to half
+   the class's resolution shell (the class mean's even/odd FRC at 0.143), at most 20 A; the even/odd
+   FRC per shell of that basis, extended to every coefficient, sets the global band where it falls
+   below 0.5, never finer than the first fit (a finer band let reproducible high-resolution variation,
+   such as residual misalignment, crowd the coarse motion out of the latent).
 3. **Placement.** Divisive bisection of `[z, log residual]` (the residual detrended against CTF
    power) into exactly the class's budgeted number of leaves: 2-means candidates on the full latent and on each
    coordinate, scored by Ashman's D along the cut axis, the leaf with the best cut split next; a
-   tied-covariance GMM seeded by the leaves gives the labels.
-4. **Weights.** `w_is = exp(-1/2 (z_i - c_s)^T A_i (z_i - c_s))`, `A_i` the member's own
-   posterior precision; labelled members count fully, so the hard label (the GMM's most likely
-   component) is the largest weight of its row. A component the GMM labels leave empty is centred
-   on its GMM mean.
-5. **Restoration.** CTF-corrected averages with the soft weights, on the members' own 2D alignment,
-   regularised like the class averager (`den += 1/tau2` per shell, `tau2` from the subclass's own
-   even/odd FRC; a half without members counts as SNR 1); even and odd member versions are written
-   too. The project labels are the hard labels.
-6. **Optional in-plane round** (`refine_inpl=yes`, off by default since 2026-10-12: unproven, it can
-   make things worse). One greedy in-plane round of `refine2D` against the sub-averages with the
-   classes fixed (`refine=inpl`, iteration 3, `trs=3`; the sigma2 state is estimated first when the
-   project has none that resolves), then step 5 again on the refined alignment with the split's
-   soft weights (`cls_expansion_weights.txt` and `cls_expansion_class_map.txt`, read back; the
-   project labels stay the split's).
-7. **Readouts per subclass** (`os_cls2D`, class map): `pop` (hard members), `neff` (the sum of the
-   weights), `sep` (Ashman's D of the parent's first cut, 0 for a whole class) and `repro`, the
-   cross-half correlation of the subclass's difference image to its most different sibling (even
-   members vs odd members; 0 for a whole class): a structural difference reproduces, a noise-driven
-   split does not. A subclass can end with no hard members (`pop` 0, `neff` > 0); it keeps its row.
+   tied-covariance GMM seeded by the leaves gives the labels: every member's most likely subclass
+   (hard labels only; they are the project's `ptcl2D` class and the members of each subclass).
+4. **Conditional averages.** Subclass `s` gets the model's expected image at its latent centre,
+   `P + U_ext z_s`: `P` the CTF-corrected class mean, `z_s` the mean latent of its members moved off the
+   prior (`(I - S)^-1 (zbar_s - zbar)`, `S` the members' mean posterior covariance), `U_ext` the basis
+   solved on every coefficient with the latents fixed and shrunk above the fit band, shell by shell,
+   by `2F/(1+F)` of the even/odd basis FRC. Every subclass borrows the class's full signal and spends
+   only `neigs` numbers where it varies.
+5. **Halves and filter.** Two independent half models, on the even and on the odd members (own mean,
+   basis and latents; the same bands and subclass membership), give the even and odd conditional
+   averages, written unfiltered. Each subclass's even/odd FRC (`cls_expansion_frcs.txt`/`.bin`,
+   registered as `frc2D`) filters its full average by `2F/(1+F)` per shell. A class too small for half models uses the joint
+   deviations in both halves; a class kept whole delivers its mean and half means, filtered the same way.
+6. **Readouts per subclass** (`os_cls2D`, class map): `pop` (hard members), `neff` (= `pop`; there
+   are no soft weights), `sep` (Ashman's D of the parent's first cut, 0 for a whole class) and `repro`,
+   the correlation of the subclass's deviations from the two half models (0 for a whole class): a
+   structural difference reproduces, a noise-driven split does not.
+
+The poses of the sub-class averages are refined downstream (`refine3D_states_cavgs`) and the
+particles' by particle-level `refine3D_states`; the earlier optional in-plane `refine2D` round and its
+restoration from the split's soft weights are gone with the soft weights.
 
 ## 2. Benchmarks
 
@@ -273,12 +279,12 @@ The existing cls_expansion strategy already follows the usual pattern and is kep
    and submits `simple_exec prg=cls_expansion ... part=NN class_assignment=<list>` through `qsys_env`.
 2. Every worker runs the same shared-memory code (`run_local_split`) on its classes, in the
    master's directory, and writes only part files: today `cls_expansion_class_map_partNN.txt` and
-   `cls_expansion_assignments_partNN.txt`; the flex path adds `cls_expansion_weights_partNN.bin`
-   (pind, parent, local sub, `ncls` weights) and `cls_expansion_cavgs_partNN.mrc` (local sub order).
+   `cls_expansion_assignments_partNN.txt`; the flex path adds `cls_expansion_frcs_partNN.txt`
+   (per-subclass even/odd FRCs) and `cls_expansion_cavgs_partNN.mrc` (local sub order).
    A worker never touches the project.
 3. The master waits on the job-finished flags, merges the part files once
-   (`merge_worker_outputs`: global subclass numbering, then labels, weights and the concatenated
-   cavg stack in that order), writes the project, registers the stack and the weight files, and
+   (`merge_worker_outputs`: global subclass numbering, then labels, FRCs and the concatenated
+   cavg stack in that order), writes the project, registers the stack and its FRCs, and
    cleans up. One submission, one merge, no rounds, no stages, no master-side numerics.
 4. `nparts=1` runs the same `run_local_split` in process and skips the part files.
 
@@ -320,5 +326,5 @@ against the particle read, so a class is never split across workers.
 - Whether the weighted averages should also be re-centred per subclass (cluster2D centres its
   averages every iteration; cls_expansion does not).
 - Whether to expose the soft weights to `map2ptcls`/selection downstream, or leave the hard labels
-  as the only consumed output for now.
+  as the only consumed output for now. (Settled 2026-10-12: hard labels only; the soft weights are gone.)
 

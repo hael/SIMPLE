@@ -423,12 +423,12 @@ contains
         &(nclust groups); a group gets subclasses in proportion to the square root of its population, counting the &
         &classes it already has, and its classes in proportion to their populations, at most pop/minpop each; a class &
         &with fewer than 2*minpop particles (or than 3*(neigs+1), the model floor) is kept whole. Per split class: a CTF- and noise-weighted low-rank &
-        &covariance model (rank neigs, pose fixed, cross-fitted), placement by bimodality with the fit residual as a &
-        &junk axis, posterior-precision soft weights; each particle is labelled with its most likely subclass. Then &
-        &CTF-corrected averages from the soft weights (cls_expansion_cavgs.mrc, plus even/odd), and per subclass the &
-        &soft population, the split separation and the label-free cross-half reproducibility (os_cls2D neff, sep, &
-        &repro). With refine_inpl=yes, one greedy in-plane refine2D round against the sub-averages comes first and &
-        &the averages are made on the refined alignment',&
+        &covariance model (rank neigs, pose fixed, pose tangents and contrast as nuisance) on a data-derived band, &
+        &placement by bimodality with the fit residual as a junk axis; each particle is labelled with its most likely &
+        &subclass. Then the conditional sub-class averages, the expected image of the model at the latent centre of each &
+        &subclass (cls_expansion_cavgs.mrc, each filtered by its own even/odd FRC, plus the even/odd halves from &
+        &independent half models; the FRCs as class FRCs), and per subclass the population, the split separation and &
+        &the cross-half reproducibility (os_cls2D pop, neff = pop, sep, repro)',&
         &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED, display_name='Class Expansion')
@@ -454,19 +454,16 @@ contains
             &their aligned correlation; without class averages every class is its own group{20}', &
             '# groups{20}', .false., 20.0, &
         &visibility=UI_VIS_ADVANCED)
-        call cls_expansion%add_input(UI_SRCH, 'refine_inpl', 'binary', 'In-plane refinement round', &
-            &'One greedy in-plane refine2D round against the sub-averages (classes fixed), then the averages on the &
-            &refined alignment(yes|no){no}', '(yes|no){no}', .false., 'no', &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call cls_expansion%add_input(UI_FILT, 'neigs', 'num', &
-            'Rank of the per-class covariance model (default 8)', &
-            'Rank of the per-class covariance model (default 8)', &
-            '# components', .false., 8.0, &
+            'Rank of the per-class covariance model (default 16)', &
+            'Rank of the per-class covariance model (default 16)', &
+            '# components', .false., 16.0, &
         &visibility=UI_VIS_ADVANCED)
         call cls_expansion%add_input(UI_FILT, 'lp', 'num', &
-            'Fit band limit in A (default 30)', &
-            'The covariance model is fitted up to this resolution; the sub-class averages use the full band', &
-            'low-pass limit(in A)', .false., 30.0, &
+            'Fit band limit in A (default: data-derived per class)', &
+            'The covariance model is fitted up to this resolution; without it the band is derived per class from the &
+            &even/odd FRCs, at most 20 A; the sub-class averages use the full band', &
+            'low-pass limit(in A)', .false., 20.0, &
         &visibility=UI_VIS_ADVANCED)
         call cls_expansion%add_input(UI_MASK, mskdiam, required_override=.true., group="mask", visibility=UI_VIS_STANDARD)
         call cls_expansion%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)

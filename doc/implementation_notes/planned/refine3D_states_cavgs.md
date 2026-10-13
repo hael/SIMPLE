@@ -112,7 +112,7 @@ The work project is built exactly as in `solve3D_cavgs` (section 3 of
 `solve3D_cavgs_policy.md`). `cls_expansion` already writes the class averages
 in that form: `cls_expansion_cavgs.mrc`, which it registers as the `cavg`
 stack, with `cls_expansion_cavgs_even.mrc` and `cls_expansion_cavgs_odd.mrc`
-beside it.
+beside it and their per-subclass FRCs (`cls_expansion_frcs.bin`) as `frc2D`.
 
 - It preserves project info, compute environment and job-process metadata.
 - It registers the even and odd class-average stacks as two stacks.
@@ -567,12 +567,12 @@ Current behaviour of `cls_expansion` that bears on this program (since
 2026-10-12). `ncls` is the total number of sub-classes, budgeted over
 class-average groups and classes; a class too small to split is kept whole, so
 some rows are whole-class averages (a parent with a single row in `cls2D`). The
-averages are made from the split's soft weights (on the refined alignment when
-the optional in-plane round, `refine_inpl=yes`, runs; it is off by default):
-`neff` is the sum of a sub-class's weights, `sep` is the split's, and the
-particle labels are the split's hard, most likely sub-class.
-A sub-class can end with no hard members (`pop` 0, `neff` > 0); it keeps its row
-and average. `cls2D` is rebuilt with state 1 on every `cls3D` row, so fresh
+averages are the model's conditional averages (the class mean plus the model's
+variation at the sub-class's latent centre), with even and odd versions from
+two independent half models; `neff` equals `pop` (there are no soft weights),
+`sep` is the split's, and the particle labels are the split's hard, most likely
+sub-class. A sub-class can end with no members (`pop` 0); it keeps its row,
+with the class mean as its average. `cls2D` is rebuilt with state 1 on every `cls3D` row, so fresh
 output always goes through flex here.
 
 ## Validation and documentation

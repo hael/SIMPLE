@@ -1,7 +1,7 @@
 !@descr: cls_expansion execution strategies: shared memory, distributed master and distributed worker
 ! ncls is the total number of subclasses: the master (or the shared-memory run) groups the classes by
-! class-average correlation and budgets the subclasses per class; the restoration pass reuses the split's
-! soft weights and class map.
+! class-average correlation and budgets the subclasses per class. Every class is split once into its subclasses
+! (hard labels) and delivers their conditional averages with independent even/odd halves and per-subclass FRCs.
 module simple_cls_expansion_strategy
 use simple_core_module_api
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -17,7 +17,7 @@ use simple_srch_sort_loc,          only: hpsort
 implicit none
 
 public :: cls_expansion_strategy
-public :: FLEX_CLS_CAVGS_FILE, FLEX_CLS_RESTORE_FLAG
+public :: FLEX_CLS_CAVGS_FILE
 public :: cls_expansion_shmem_strategy
 public :: cls_expansion_worker_strategy
 public :: cls_expansion_master_strategy
@@ -26,27 +26,17 @@ public :: create_cls_expansion_strategy
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: FLEX_CLS_NEIGS_DEFAULT  = 8    !< rank of the per-class covariance model
+integer, parameter :: FLEX_CLS_NEIGS_DEFAULT  = 16   !< rank of the per-class covariance model
 integer, parameter :: FLEX_CLS_SEED_BASE      = 20260930 !< per-class random seed = base + class index
-real,    parameter :: FLEX_CLS_LP_FIT_DEFAULT = 30.  !< the fit band stops here (A) unless lp= is given;
-                                                     !! the sub-class averages always use the full band
-character(len=*), parameter :: FLEX_CLS_WEIGHTS_FILE = 'cls_expansion_weights.txt'    !< pind parent subclass nsub w(1:nsub)
+real,    parameter :: FLEX_CLS_BAND_FIRST_LP  = 20.  !< the band-selection fit stops here at most (A); lp= sets the band
 character(len=*), parameter :: FLEX_CLS_MAP_FILE     = 'cls_expansion_class_map.txt'  !< subclass parent local pop neff sep repro
 character(len=*), parameter :: FLEX_CLS_ALLOC_FILE   = 'cls_expansion_allocation.txt' !< class group pop nsub: the split's budget
 character(len=*), parameter :: FLEX_CLS_GROUPS_FBODY = 'cls_expansion_groups'         !< class-average groups: stacks and table
-character(len=*), parameter :: FLEX_CLS_CAVGS_FILE   = 'cls_expansion_cavgs.mrc'      !< weighted sub-class averages
-character(len=*), parameter :: FLEX_CLS_CAVGS_EVEN   = 'cls_expansion_cavgs_even.mrc' !< the same from the even members
-character(len=*), parameter :: FLEX_CLS_CAVGS_ODD    = 'cls_expansion_cavgs_odd.mrc'  !< the same from the odd members
-character(len=*), parameter :: FLEX_CLS_RESTORE_FLAG = 'cls_expansion_restore.txt'    !< present: restore from the split's weights
-
-!> the split's soft weights of every particle (restoration input), indexed by particle
-type split_weights
-    integer, allocatable :: off(:)     !< first weight of the particle in w, 0 without a row
-    integer, allocatable :: nsub(:)    !< subclasses of the particle's parent
-    integer, allocatable :: sub(:)     !< the particle's hard subclass (global index)
-    integer, allocatable :: parent(:)  !< the particle's parent class
-    real,    allocatable :: w(:)
-end type split_weights
+character(len=*), parameter :: FLEX_CLS_CAVGS_FILE   = 'cls_expansion_cavgs.mrc'      !< conditional sub-class averages, filtered
+character(len=*), parameter :: FLEX_CLS_CAVGS_EVEN   = 'cls_expansion_cavgs_even.mrc' !< the same from the even half model, unfiltered
+character(len=*), parameter :: FLEX_CLS_CAVGS_ODD    = 'cls_expansion_cavgs_odd.mrc'  !< the same from the odd half model, unfiltered
+character(len=*), parameter :: FLEX_CLS_FRCS_TXT     = 'cls_expansion_frcs.txt'       !< even/odd FRC per subclass (row frc(1:nyq))
+character(len=*), parameter :: FLEX_CLS_FRCS         = 'cls_expansion_frcs.bin'       !< the same as class FRCs (frc2D)
 
 type, abstract :: cls_expansion_strategy
 contains
@@ -242,8 +232,7 @@ contains
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
         type(sp_project)     :: spproj
-        integer, allocatable :: cls_inds(:), cls_pops(:), nsub(:), first_sub(:)
-        real,    allocatable :: sep(:)
+        integer, allocatable :: cls_inds(:), cls_pops(:), nsub(:)
         call init_common(params, build, cline)
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
         self%nparts_run = min(max(1, params%nparts), size(cls_inds))
@@ -255,17 +244,11 @@ contains
             call flush(logfhandle)
         endif
         call set_master_num_threads(self%nthr_master, string('CLS_EXPANSION'))
-        if( flex_restore_mode() )then
-            ! the workers restore subsets: the whole set of parents is checked against the split here
-            call read_split_map(cls_inds, .true., nsub, first_sub, sep)
-            deallocate(nsub, first_sub, sep)
-        else
-            ! the subclass budget is set once, here, and read by the workers
-            call spproj%read(params%projfile)
-            call allocate_subclasses(params, spproj, cls_inds, cls_pops, self%nthr_master, nsub)
-            call spproj%kill
-            deallocate(nsub)
-        endif
+        ! the subclass budget is set once, here, and read by the workers
+        call spproj%read(params%projfile)
+        call allocate_subclasses(params, spproj, cls_inds, cls_pops, self%nthr_master, nsub)
+        call spproj%kill
+        deallocate(nsub)
         call prepare_class_partitions(self, params, cline, cls_inds, cls_pops)
         call self%qenv%new(params, self%nparts_run, numlen=params%numlen)
         ! workers run inside the master's execution directory
@@ -356,7 +339,7 @@ contains
         logical, allocatable :: keep_mask(:)
         type(string) :: label
         integer :: i
-        call determine_split_label(params, build, label)
+        label = 'class'
         ! the distinct values of the label among the active particles
         cls_inds = split_label_inds(build, label)
         if( cline%defined('class') ) cls_inds = pack(cls_inds, mask=(cls_inds == params%class))
@@ -406,18 +389,8 @@ contains
         inds = pack([(i, i=1,size(isthere))], mask=isthere)
     end function split_label_inds
 
-    subroutine determine_split_label(params, build, label)
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
-        type(string),     intent(out)   :: label
-        label = 'class'
-        ! restoration: the parents are the clusters the split wrote
-        if( flex_restore_mode() ) label = 'cluster'
-    end subroutine determine_split_label
-
-
-    !> the classes of this run (all, or a worker's part): split under the budget, or restored from the split's
-    !! weights; writes the class map, weights, stacks and, outside a worker, the project
+    !> the classes of this run (all, or a worker's part): each split under the budget into its subclasses; writes the
+    !! class map, the per-subclass FRCs, the stacks and, outside a worker, the project (a worker writes its assignments)
     subroutine run_local_split(params, build, cline, spproj, part, l_write_project)
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -425,22 +398,16 @@ contains
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: part
         logical,          intent(in)    :: l_write_project
-        type(split_weights)      :: sw
-        type(string)             :: map_fname, assign_fname, wts_fname, stk_fname, stk_even, stk_odd
+        type(string)             :: map_fname, assign_fname, frc_fname, stk_fname, stk_even, stk_odd
         type(image), allocatable :: cavgs(:), cavgs_even(:), cavgs_odd(:)
-        integer,     allocatable :: cls_inds(:), cls_pops(:), nsub(:), first_sub(:), pinds(:), labels(:)
+        integer,     allocatable :: cls_inds(:), cls_pops(:), nsub(:), pinds(:), labels(:)
         integer,     allocatable :: new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
-        real,        allocatable :: weights(:,:), repro(:), sep_of_cls(:), neff_of_subcls(:), sep_of_subcls(:), repro_of_subcls(:)
+        real,        allocatable :: repro(:), frcs(:,:), neff_of_subcls(:), sep_of_subcls(:), repro_of_subcls(:)
         real    :: separation
-        integer :: i, iglob, ntot_sub, funit_map, funit_assign, funit_wts, kfit
-        logical :: l_sigma, l_restore
+        integer :: i, iglob, ntot_sub, funit_map, funit_assign, funit_frc, kfit
+        logical :: l_sigma
         call collect_split_classes(cline, params, build, cls_inds, cls_pops)
-        l_restore = flex_restore_mode()
-        if( l_restore )then
-            ! the split's record is read before any output of this pass replaces it
-            call read_split_map(cls_inds, l_write_project, nsub, first_sub, sep_of_cls)
-            call read_split_weights(spproj%os_ptcl2D%get_noris(), sw)
-        else if( l_write_project )then
+        if( l_write_project )then
             call allocate_subclasses(params, spproj, cls_inds, cls_pops, params%nthr, nsub)
         else
             call read_allocation(cls_inds, nsub)
@@ -448,13 +415,12 @@ contains
         ntot_sub = sum(nsub)
         call prepare_flex_sigma2(params, build, spproj, cline, l_sigma)
         kfit = flex_fit_band(params, cline)
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,L1,A,L1)') 'Cls expansion flex: classes=', size(cls_inds), &
-            &' subclasses=', ntot_sub, ' neigs=', params%neigs, ' fit band kto=', kfit, ' sigma2 loaded=', l_sigma, &
-            &' restoration=', l_restore
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,L1)') 'Cls expansion flex: classes=', size(cls_inds), &
+            &' subclasses=', ntot_sub, ' neigs=', params%neigs, ' fit band kto=', kfit, ' (0: data-derived per class) sigma2 loaded=', l_sigma
         call flush(logfhandle)
         if( l_write_project )then
             map_fname = string(FLEX_CLS_MAP_FILE)
-            wts_fname = string(FLEX_CLS_WEIGHTS_FILE)
+            frc_fname = string(FLEX_CLS_FRCS_TXT)
             stk_fname = string(FLEX_CLS_CAVGS_FILE)
             stk_even  = string(FLEX_CLS_CAVGS_EVEN)
             stk_odd   = string(FLEX_CLS_CAVGS_ODD)
@@ -464,53 +430,50 @@ contains
         else
             map_fname    = string('cls_expansion_class_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
             assign_fname = string('cls_expansion_assignments_part')//int2str_pad(part, params%numlen)//TXT_EXT
-            wts_fname    = flex_weights_part_fname(part, params%numlen)
+            frc_fname    = flex_frcs_part_fname(part, params%numlen)
             stk_fname    = flex_cavgs_part_fname(part, params%numlen)
             stk_even     = flex_cavgs_part_fname(part, params%numlen, 'even')
             stk_odd      = flex_cavgs_part_fname(part, params%numlen, 'odd')
             open(newunit=funit_assign, file=assign_fname%to_char(), status='replace', action='write')
             write(funit_assign,'(A)') '# particle_index parent_class local_subclass'
         endif
-        ! in a part the subclass column is the part's row (map) or the local subclass (weights)
+        ! in a part the subclass column is the part's row (map, FRCs)
         open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
         write(funit_map,'(A)') '# subclass parent_class local_subclass pop neff separation repro'
-        open(newunit=funit_wts, file=wts_fname%to_char(), status='replace', action='write')
-        write(funit_wts,'(A)') '# particle_index parent_class subclass nsub weights(1:nsub)'
+        open(newunit=funit_frc, file=frc_fname%to_char(), status='replace', action='write')
+        if( l_write_project )then
+            write(funit_frc,'(A)') '# row frc(1:nyq): even/odd FRC of the conditional average (row: global)'
+        else
+            write(funit_frc,'(A)') '# row frc(1:nyq): even/odd FRC of the conditional average (row: the part''s)'
+        endif
         iglob = 0
         do i = 1, size(cls_inds)
             write(logfhandle,'(A,I8,A,I8,A,I6)') 'Cls expansion starting: class=', cls_inds(i), ' nptcls=', cls_pops(i), &
                 &' nsub=', nsub(i)
             call flush(logfhandle)
-            if( l_restore )then
-                if( l_write_project .and. iglob + 1 /= first_sub(i) ) THROW_HARD('cls_expansion restoration: subclass numbering differs from the split')
-                separation = sep_of_cls(i)
-                call restore_class_flex(params, build, spproj, cls_inds(i), nsub(i), first_sub(i), separation, kfit, l_sigma, &
-                    &sw, pinds, labels, weights, cavgs, repro, cavgs_even, cavgs_odd)
-            else
-                call split_class_flex(params, build, spproj, cls_inds(i), nsub(i), params%neigs, kfit, l_sigma, &
-                    &pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
-            endif
-            call record_class(cls_inds(i), nsub(i), pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
+            call split_class_flex(params, build, spproj, cls_inds(i), nsub(i), params%neigs, kfit, l_sigma, &
+                &pinds, labels, cavgs, separation, repro, cavgs_even, cavgs_odd, frcs)
+            call record_class(cls_inds(i), nsub(i), pinds, labels, cavgs, separation, repro, cavgs_even, cavgs_odd)
             if( allocated(pinds)      ) deallocate(pinds)
             if( allocated(repro)      ) deallocate(repro)
             if( allocated(labels)     ) deallocate(labels)
-            if( allocated(weights)    ) deallocate(weights)
+            if( allocated(frcs)       ) deallocate(frcs)
             if( allocated(cavgs)      ) call dealloc_imgarr(cavgs)
             if( allocated(cavgs_even) ) call dealloc_imgarr(cavgs_even)
             if( allocated(cavgs_odd)  ) call dealloc_imgarr(cavgs_odd)
         end do
         close(funit_map)
-        close(funit_wts)
+        close(funit_frc)
         if( .not. l_write_project ) close(funit_assign)
         if( l_write_project )then
             if( iglob /= ntot_sub ) THROW_HARD('cls_expansion: the delivered subclasses differ from the budget')
+            call flex_frcs_txt2bin(params, [frc_fname], iglob)
             call apply_split_project_updates(spproj, params, iglob, new_class, new_parent, parent_of_subcls, pop_of_subcls, &
                 &neff_of_subcls, sep_of_subcls, repro_of_subcls, stk_fname)
             deallocate(new_class, new_parent, parent_of_subcls, pop_of_subcls, neff_of_subcls, sep_of_subcls, repro_of_subcls)
         endif
-        call kill_split_weights(sw)
         call map_fname%kill
-        call wts_fname%kill
+        call frc_fname%kill
         call stk_fname%kill
         call stk_even%kill
         call stk_odd%kill
@@ -518,31 +481,30 @@ contains
 
     contains
 
-        !> one class into the map, weights, stacks and assignments (part) or project arrays (whole run)
-        subroutine record_class( cls_id, nsplit, pinds, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd )
+        !> one class into the map, FRCs, stacks and assignments (part) or project arrays (whole run); neff is the hard
+        !! population
+        subroutine record_class( cls_id, nsplit, pinds, labels, cavgs, separation, repro, cavgs_even, cavgs_odd )
             integer,                  intent(in)    :: cls_id, nsplit
             integer,                  intent(in)    :: pinds(:), labels(:)
-            real,                     intent(in)    :: weights(:,:)
             type(image), allocatable, intent(inout) :: cavgs(:)
             real,                     intent(in)    :: separation
             real,        allocatable, intent(in)    :: repro(:)
             type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
-            integer :: j, k, isub
-            real    :: neff
+            integer :: j, k
             write(logfhandle,'(A,I8,A,I8,A,I8)') 'Cls expansion summary: class=', cls_id, ' nptcls=', size(labels), ' nsubcls=', nsplit
             call flush(logfhandle)
             do j = 1, nsplit
                 iglob = iglob + 1
-                neff  = sum(weights(:,j))
                 if( l_write_project )then
                     parent_of_subcls(iglob) = cls_id
                     pop_of_subcls(iglob)    = count(labels == j)
-                    neff_of_subcls(iglob)   = neff
+                    neff_of_subcls(iglob)   = real(count(labels == j))
                     sep_of_subcls(iglob)    = separation
                     repro_of_subcls(iglob)  = repro(j)
                 endif
                 write(funit_map,'(I8,1X,I8,1X,I8,1X,I8,1X,F12.3,1X,F8.3,1X,F8.3)') iglob, cls_id, j, count(labels == j), &
-                    &neff, separation, repro(j)
+                    &real(count(labels == j)), separation, repro(j)
+                write(funit_frc,'(I8,*(1X,F8.5))') iglob, frcs(:,j)
                 ! the sub-class average lands at its row: global index here, local row in a part
                 call cavgs(j)%write(stk_fname, iglob)
                 call cavgs_even(j)%write(stk_even, iglob)
@@ -551,14 +513,11 @@ contains
             do k = 1, size(labels)
                 if( labels(k) <= 0 ) cycle
                 if( l_write_project )then
-                    isub = iglob - nsplit + labels(k)
-                    new_class(pinds(k))  = isub
+                    new_class(pinds(k))  = iglob - nsplit + labels(k)
                     new_parent(pinds(k)) = cls_id
                 else
-                    isub = labels(k)
                     write(funit_assign,'(I10,1X,I10,1X,I10)') pinds(k), cls_id, labels(k)
                 endif
-                write(funit_wts,'(I10,1X,I10,1X,I10,1X,I6,*(1X,F8.6))') pinds(k), cls_id, isub, nsplit, weights(k,:)
             end do
         end subroutine record_class
 
@@ -646,122 +605,7 @@ contains
         if( any(nsub < 1) ) THROW_HARD('a class of this part has no subclass count in '//FLEX_CLS_ALLOC_FILE)
     end subroutine read_allocation
 
-    !> the split's class map: per class of cls_inds its subclass count, first global subclass and separation;
-    !! l_all requires cls_inds to hold every parent of the map (a whole run, not a worker's part)
-    subroutine read_split_map( cls_inds, l_all, nsub, first_sub, sep )
-        integer,              intent(in)  :: cls_inds(:)
-        logical,              intent(in)  :: l_all
-        integer, allocatable, intent(out) :: nsub(:), first_sub(:)
-        real,    allocatable, intent(out) :: sep(:)
-        character(len=XLONGSTRLEN) :: line
-        real    :: neff, sepv, repro
-        integer :: funit, ios, isub, parent, loc, pop, i
-        allocate(nsub(size(cls_inds)), first_sub(size(cls_inds)), source=0)
-        allocate(sep(size(cls_inds)), source=0.)
-        open(newunit=funit, file=FLEX_CLS_MAP_FILE, status='old', action='read', iostat=ios)
-        call fileiochk('read_split_map opening '//FLEX_CLS_MAP_FILE, ios)
-        do
-            read(funit,'(A)',iostat=ios) line
-            if( ios /= 0 ) exit
-            if( len_trim(line) == 0 ) cycle
-            if( line(1:1) == '#' ) cycle
-            read(line,*) isub, parent, loc, pop, neff, sepv, repro
-            i = findloc(cls_inds, parent, dim=1)
-            if( i == 0 .and. l_all ) THROW_HARD('a class of the split has no members to restore; its subclasses would be renumbered')
-            if( i == 0 ) cycle
-            ! the subclasses of a class are consecutive: global = first + local - 1
-            if( nsub(i) == 0 ) first_sub(i) = isub - loc + 1
-            if( isub - loc + 1 /= first_sub(i) ) THROW_HARD('the subclasses of a class are not consecutive in '//FLEX_CLS_MAP_FILE)
-            nsub(i) = nsub(i) + 1
-            sep(i)  = sepv
-        end do
-        close(funit)
-        if( any(nsub < 1) ) THROW_HARD('a class to restore has no subclasses in '//FLEX_CLS_MAP_FILE)
-    end subroutine read_split_map
-
-    !> the split's soft weights of every particle with a row (nptcls = the particle field)
-    subroutine read_split_weights( nptcls, sw )
-        integer,             intent(in)    :: nptcls
-        type(split_weights), intent(inout) :: sw
-        character(len=:), allocatable :: line
-        real,             allocatable :: wbuf(:)
-        integer :: funit, ios, pind, parent, isub, n, ntot, nmax, j
-        call kill_split_weights(sw)
-        allocate(sw%off(nptcls), sw%nsub(nptcls), sw%sub(nptcls), sw%parent(nptcls), source=0)
-        open(newunit=funit, file=FLEX_CLS_WEIGHTS_FILE, status='old', action='read', iostat=ios)
-        call fileiochk('read_split_weights opening '//FLEX_CLS_WEIGHTS_FILE, ios)
-        ! rows are as wide as their parent has subclasses: count first, then read
-        ntot = 0
-        nmax = 0
-        do
-            call read_record(funit, line, ios)
-            if( ios /= 0 ) exit
-            if( len_trim(line) == 0 ) cycle
-            if( line(1:1) == '#' ) cycle
-            read(line,*,iostat=ios) pind, parent, isub, n
-            if( ios /= 0 ) THROW_HARD('read error in '//FLEX_CLS_WEIGHTS_FILE)
-            if( pind < 1 .or. pind > nptcls .or. n < 1 ) THROW_HARD('invalid row in '//FLEX_CLS_WEIGHTS_FILE)
-            ntot = ntot + n
-            nmax = max(nmax, n)
-        end do
-        allocate(sw%w(max(1,ntot)), source=0.)
-        allocate(wbuf(max(1,nmax)))
-        rewind(funit)
-        ntot = 0
-        do
-            call read_record(funit, line, ios)
-            if( ios /= 0 ) exit
-            if( len_trim(line) == 0 ) cycle
-            if( line(1:1) == '#' ) cycle
-            read(line,*,iostat=ios) pind, parent, isub, n, (wbuf(j), j=1,n)
-            if( ios /= 0 ) THROW_HARD('short or invalid row in '//FLEX_CLS_WEIGHTS_FILE)
-            sw%off(pind)        = ntot + 1
-            sw%nsub(pind)       = n
-            sw%sub(pind)        = isub
-            sw%parent(pind)     = parent
-            sw%w(ntot+1:ntot+n) = wbuf(1:n)
-            ntot = ntot + n
-        end do
-        close(funit)
-        deallocate(wbuf)
-    end subroutine read_split_weights
-
-    !> one whole record of a formatted sequential file, however long (ios /= 0 at the end of the file)
-    subroutine read_record( funit, line, ios )
-        integer,                       intent(in)  :: funit
-        character(len=:), allocatable, intent(out) :: line
-        integer,                       intent(out) :: ios
-        character(len=1024) :: buf
-        integer :: nread
-        line = ''
-        do
-            read(funit,'(A)',advance='no',iostat=ios,size=nread) buf
-            line = line//buf(1:nread)
-            if( is_iostat_eor(ios) )then
-                ios = 0
-                return
-            endif
-            if( ios /= 0 ) return
-        end do
-    end subroutine read_record
-
-    subroutine kill_split_weights( sw )
-        type(split_weights), intent(inout) :: sw
-        if( allocated(sw%off)    ) deallocate(sw%off)
-        if( allocated(sw%nsub)   ) deallocate(sw%nsub)
-        if( allocated(sw%sub)    ) deallocate(sw%sub)
-        if( allocated(sw%parent) ) deallocate(sw%parent)
-        if( allocated(sw%w)      ) deallocate(sw%w)
-    end subroutine kill_split_weights
-
-
     ! ===== the flex model
-
-    function flex_weights_part_fname( part, numlen ) result( fname )
-        integer, intent(in) :: part, numlen
-        type(string) :: fname
-        fname = string('cls_expansion_weights_part')//int2str_pad(part, numlen)//TXT_EXT
-    end function flex_weights_part_fname
 
     function flex_cavgs_part_fname( part, numlen, which ) result( fname )
         integer,                    intent(in) :: part, numlen
@@ -774,16 +618,16 @@ contains
         endif
     end function flex_cavgs_part_fname
 
-    !> the last Fourier shell of the covariance fit (lp= or the default, capped at Nyquist)
+    !> the global fit band (shell) from lp=; 0 without lp= (the bands are then data-derived per class, split_class_flex)
     integer function flex_fit_band( params, cline ) result( kfit )
         type(parameters), intent(in) :: params
         class(cmdline),   intent(in) :: cline
         real    :: lp_fit
         integer :: nyq
+        kfit = 0
+        if( .not. cline%defined('lp') ) return
         nyq    = fdim(params%box) - 1
-        lp_fit = FLEX_CLS_LP_FIT_DEFAULT
-        if( cline%defined('lp') ) lp_fit = params%lp
-        lp_fit = max(lp_fit, 2. * params%smpd)
+        lp_fit = max(params%lp, 2. * params%smpd)
         kfit   = max(2, min(nyq, calc_fourier_index(lp_fit, params%box, params%smpd)))
     end function flex_fit_band
 
@@ -854,15 +698,11 @@ contains
         real    :: mat(2,2), loc(2), sfsq, ang, df, tval, e3, sum_df, diff_df, angast, phshift, amp_contr, wl, half_wl2_cs
         integer :: lims(3,2), nyq, i, j, h, k, sh, iptcl
         logical :: l_ctf, l_flip
-        type(string) :: label
         integer, allocatable :: members(:)
         nptcls = 0
         ncoeff = 0
         if( allocated(pinds) ) deallocate(pinds)
-        ! the members by the split label (class, or cluster when the labels come from the project)
-        call determine_split_label(params, build, label)
-        call spproj%os_ptcl2D%get_pinds(cls_id, label%to_char(), members)
-        call label%kill
+        call spproj%os_ptcl2D%get_pinds(cls_id, 'class', members)
         if( .not. allocated(members) ) return
         call transform_ptcls(params, build, spproj, params%oritype, cls_id, imgs, pinds, phflip=.false., &
             &keep_ft=.true., gridcorr=gridcorr_img, pinds_in=members)
@@ -959,123 +799,257 @@ contains
             ! no canonical sigma2: the class's own residual spectrum sets the noise weights
             allocate(s2(nyq))
             call flex_cls_shell_noise(y, c, shell, nyq, s2)
+            !$omp parallel do default(shared) private(i,j) schedule(static) proc_bind(close)
             do i = 1, nptcls
                 do j = 1, ncoeff
                     w(j,i) = 1. / s2(shell(j))
                 end do
             end do
+            !$omp end parallel do
             write(logfhandle,'(A,I8,A,ES10.3,A,ES10.3)') 'Cls expansion flex noise from residuals: class=', cls_id, &
-                &' sigma2 shell 1=', s2(1), ' shell kfit=', s2(kfit)
+                &' sigma2 shell 1=', s2(1), ' shell nyq/4=', s2(max(1,nyq/4))
             deallocate(s2)
         endif
     end subroutine flex_class_planes
 
-    !> placement into ncls subclasses and the weighted averages of one class, from its fitted model
-    subroutine flex_class_deliver( params, cls_id, model, ncls, y, c, w, wq, fitmask, shell, nsh, hidx, kidx, gridcorr_img, ldim, &
-                                   ncoeff, nptcls, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd )
+    !> one fitted class: placement (hard labels) and the conditional averages of its subclasses
+    subroutine flex_class_deliver( params, cls_id, model, ncls, ncomp, y, c, w, wq, fitmask, shell, hidx, kidx, even, &
+                                   gridcorr_img, ldim, nptcls, labels, cavgs, cavgs_even, cavgs_odd, frcs, separation, repro )
         use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_place_states
-        type(parameters),         intent(inout) :: params
-        integer,                  intent(in)    :: cls_id, ncls, ldim(3), ncoeff, nptcls, nsh
+        type(parameters),         intent(in)    :: params
+        integer,                  intent(in)    :: cls_id, ncls, ncomp, ldim(3), nptcls
         type(flex_cls_model),     intent(in)    :: model
         complex(sp),              intent(in)    :: y(:,:)
         real(sp),                 intent(in)    :: c(:,:), w(:,:), wq(:)
-        logical,                  intent(in)    :: fitmask(:)
+        logical,                  intent(in)    :: fitmask(:), even(:)
         integer,                  intent(in)    :: shell(:), hidx(:), kidx(:)
         type(image),              intent(inout) :: gridcorr_img
         integer,     allocatable, intent(out)   :: labels(:)
-        real,        allocatable, intent(out)   :: weights(:,:)
-        type(image), allocatable, intent(inout) :: cavgs(:)
+        type(image), allocatable, intent(inout) :: cavgs(:), cavgs_even(:), cavgs_odd(:)
+        real,        allocatable, intent(inout) :: frcs(:,:)
         real,                     intent(out)   :: separation
         real,        allocatable, intent(out)   :: repro(:)
-        type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
-        real(sp), allocatable :: neff(:)
-        allocate(weights(nptcls,ncls), labels(nptcls), neff(ncls))
-        call flex_cls_place_states(model, ncls, weights, labels, neff, separation)
-        call flex_class_restore_deliver(params, cls_id, ncls, y, c, w, wq, fitmask, shell, nsh, hidx, kidx, gridcorr_img, ldim, &
-            &ncoeff, nptcls, labels, weights, cavgs, repro, cavgs_even, cavgs_odd, neff=neff, separation=separation)
-        deallocate(neff)
-    end subroutine flex_class_deliver
-
-    !> the restoration of one class from its weights: regularised sub-averages, even/odd versions, reproducibility
-    subroutine flex_class_restore_deliver( params, cls_id, ncls, y, c, w, wq, fitmask, shell, nsh, hidx, kidx, gridcorr_img, &
-                                           ldim, ncoeff, nptcls, labels, weights, cavgs, repro, cavgs_even, cavgs_odd, neff, separation )
-        use simple_flex_cls_expansion,  only: flex_cls_restore_states, flex_cls_half_reproducibility, flex_cls_signal_power
-        use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps, ft_map_phys_addrh, ft_map_phys_addrk
-        type(parameters),         intent(inout) :: params
-        integer,                  intent(in)    :: cls_id, ncls, ldim(3), ncoeff, nptcls, nsh
-        complex(sp),              intent(in)    :: y(:,:)
-        real(sp),                 intent(in)    :: c(:,:), w(:,:), wq(:)
-        logical,                  intent(in)    :: fitmask(:)
-        integer,                  intent(in)    :: shell(:), hidx(:), kidx(:)
-        type(image),              intent(inout) :: gridcorr_img
-        integer,                  intent(in)    :: labels(:)
-        real,                     intent(in)    :: weights(:,:)
-        type(image), allocatable, intent(inout) :: cavgs(:)
-        real,        allocatable, intent(out)   :: repro(:)
-        type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
-        real,        optional,    intent(in)    :: neff(:), separation
-        complex(sp), allocatable :: avgs(:,:), avgs_e(:,:), avgs_o(:,:)
-        real(dp),    allocatable :: tau2(:,:), den_e(:,:), den_o(:,:)
-        real    :: nf, sep
+        integer(timer_int_kind) :: t0
         integer :: s
-        allocate(repro(ncls))
-        allocate(avgs(ncoeff,ncls), avgs_e(ncoeff,ncls), avgs_o(ncoeff,ncls), tau2(nsh,ncls), den_e(nsh,ncls), den_o(nsh,ncls))
-        ! unregularised even/odd sub-averages -> FRC and noise variance -> prior signal power
-        call flex_cls_half_reproducibility(y, c, w, wq, fitmask, weights, repro, avgs_e, avgs_o, shell=shell, &
-            &den_even=den_e, den_odd=den_o)
-        call flex_cls_signal_power(avgs_e, avgs_o, den_e, den_o, shell, nsh, tau2)
-        call flex_cls_restore_states(y, c, w, weights, avgs, shell=shell, tau2=tau2)
-        call flex_cls_half_reproducibility(y, c, w, wq, fitmask, weights, repro, avgs_e, avgs_o, shell=shell, tau2=tau2)
-        call memoize_ft_maps(ldim, params%smpd)
-        call planes_to_images(avgs,   cavgs)
-        call planes_to_images(avgs_e, cavgs_even)
-        call planes_to_images(avgs_o, cavgs_odd)
-        call forget_ft_maps
-        sep = 0.
-        if( present(separation) ) sep = separation
+        t0 = tic()
+        allocate(labels(nptcls))
+        call flex_cls_place_states(model, ncls, labels, separation)
+        call flex_time(cls_id, 'placement', t0)
+        call flex_class_conditional_averages(params, cls_id, ncls, ncomp, y, c, w, wq, fitmask, shell, hidx, kidx, even, labels, &
+            &gridcorr_img, ldim, cavgs, cavgs_even, cavgs_odd, frcs, repro, model=model)
         do s = 1, ncls
-            nf = real(count(labels == s))
-            if( present(neff) ) nf = neff(s)
-            write(logfhandle,'(A,I8,A,I4,A,I8,A,F10.1,A,F7.3,A,F7.3)') 'Cls expansion flex subclass: class=', cls_id, ' sub=', s, &
-                &' pop=', count(labels == s), ' neff=', nf, ' sep=', sep, ' repro=', repro(s)
+            write(logfhandle,'(A,I8,A,I4,A,I8,A,F7.3,A,F7.3)') 'Cls expansion flex subclass: class=', cls_id, ' sub=', s, &
+                &' pop=', count(labels == s), ' sep=', separation, ' repro=', repro(s)
         end do
         call flush(logfhandle)
-        deallocate(avgs, avgs_e, avgs_o, tau2, den_e, den_o)
+    end subroutine flex_class_deliver
+
+    !> the subclass averages P + D_s of one class from the joint model, the unfiltered even/odd ones from the half models
+    !! (too few members: half parents + joint deviations), their FRCs, and the full one filtered by 2F/(1+F) of its FRC.
+    !! Without a model (a class kept whole): the CTF-corrected parent and half parents
+    subroutine flex_class_conditional_averages( params, cls_id, ncls, ncomp, y, c, w, wq, fitmask, shell, hidx, kidx, even, labels, &
+                                  gridcorr_img, ldim, cavgs, cavgs_even, cavgs_odd, frcs, repro, model )
+        use simple_flex_cls_expansion, only: flex_cls_model, flex_cls_ctf_mean, flex_cls_extend_basis, &
+                                             flex_cls_conditional_averages, flex_cls_shell_frc
+        use simple_estimate_ssnr,      only: fsc2optlp_sub
+        use simple_memoize_ft_maps,    only: memoize_ft_maps, forget_ft_maps, ft_map_phys_addrh, ft_map_phys_addrk
+        type(parameters),         intent(in)    :: params
+        integer,                  intent(in)    :: cls_id, ncls, ncomp, ldim(3)
+        complex(sp),              intent(in)    :: y(:,:)
+        real(sp),                 intent(in)    :: c(:,:), w(:,:), wq(:)
+        logical,                  intent(in)    :: fitmask(:), even(:)
+        integer,                  intent(in)    :: shell(:), hidx(:), kidx(:), labels(:)
+        type(image),              intent(inout) :: gridcorr_img
+        type(image), allocatable, intent(inout) :: cavgs(:), cavgs_even(:), cavgs_odd(:)
+        real,        allocatable, intent(inout) :: frcs(:,:)
+        real,        allocatable, intent(out)   :: repro(:)
+        type(flex_cls_model), optional, intent(in) :: model
+        complex(sp), allocatable :: par(:,:), dev(:,:), parh(:,:), devh(:,:,:), planes(:,:)
+        complex(dp), allocatable :: uext(:,:)
+        real(sp),    allocatable :: fpar(:,:)
+        real(dp),    allocatable :: num(:), pe(:), po(:)
+        real    :: filt(maxval(shell)), fdev(maxval(shell))
+        integer :: ncoeff, nsh, s, j, sh
+        logical :: l_halves
+        integer(timer_int_kind) :: t0
+        t0 = tic()
+        ncoeff = size(y,1); nsh = maxval(shell)
+        l_halves = present(model) .and. min(count(even), count(.not. even)) >= max(2*ncls, 3*(ncomp+1))
+        allocate(par(ncoeff,1), dev(ncoeff,ncls))
+        dev = CMPLX_ZERO
+        ! the joint model: its parent (CTF-corrected, no signal prior) and the subclass deviations on every coefficient
+        call flex_cls_ctf_mean(y, c, w, par(:,1))
+        if( present(model) )then
+            allocate(uext(ncoeff,model%ncomp))
+            call flex_cls_extend_basis(model, y, c, w, shell, uext, even=even)
+            call flex_cls_conditional_averages(model, labels, uext, dev)
+            deallocate(uext)
+        endif
+        call flex_time(cls_id, 'conditional', t0)
+        ! the halves
+        allocate(parh(ncoeff,2), devh(ncoeff,ncls,2))
+        call flex_class_half_models(params, cls_id, ncls, ncomp, y, c, w, wq, fitmask, shell, hidx, kidx, even, labels, &
+            &l_halves, parh, devh)
+        if( .not. l_halves )then
+            devh(:,:,1) = dev
+            devh(:,:,2) = dev
+        endif
+        call flex_time(cls_id, 'halves', t0)
+        ! the agreement of the half parents and of the half deviations (pooled over the subclasses), logged
+        allocate(fpar(nsh,1))
+        call flex_cls_shell_frc(parh(:,1:1), parh(:,2:2), shell, nsh, fpar)
+        allocate(num(nsh), pe(nsh), po(nsh), source=0.d0)
+        do s = 1, ncls
+            do j = 1, ncoeff
+                sh = shell(j)
+                if( sh < 1 .or. sh > nsh ) cycle
+                num(sh) = num(sh) + real(cmplx(devh(j,s,1),kind=dp) * conjg(cmplx(devh(j,s,2),kind=dp)), dp)
+                pe(sh)  = pe(sh)  + abs(cmplx(devh(j,s,1),kind=dp))**2
+                po(sh)  = po(sh)  + abs(cmplx(devh(j,s,2),kind=dp))**2
+            end do
+        end do
+        fdev = 0.
+        where( pe * po > 0.d0 ) fdev = real(num / sqrt(pe * po))
+        ! the full (joint), the even and the odd conditional averages
+        allocate(planes(ncoeff,3*ncls))
+        do s = 1, ncls
+            planes(:,s)        = par(:,1)  + dev(:,s)
+            planes(:,ncls+s)   = parh(:,1) + devh(:,s,1)
+            planes(:,2*ncls+s) = parh(:,2) + devh(:,s,2)
+        end do
+        if( allocated(frcs) ) deallocate(frcs)
+        allocate(frcs(nsh,ncls), repro(ncls))
+        call flex_cls_shell_frc(planes(:,ncls+1:2*ncls), planes(:,2*ncls+1:3*ncls), shell, nsh, frcs)
+        ! the full conditional average filtered by its subclass's even/odd FRC
+        do s = 1, ncls
+            call fsc2optlp_sub(nsh, frcs(:,s), filt)
+            do j = 1, ncoeff
+                sh = shell(j)
+                if( sh >= 1 .and. sh <= nsh ) planes(j,s) = planes(j,s) * filt(sh)
+            end do
+        end do
+        do s = 1, ncls
+            repro(s) = 0.
+            if( sum(abs(devh(:,s,1))**2) * sum(abs(devh(:,s,2))**2) > 0. ) repro(s) = &
+                &real(sum(devh(:,s,1) * conjg(devh(:,s,2)))) / sqrt(sum(abs(devh(:,s,1))**2) * sum(abs(devh(:,s,2))**2))
+        end do
+        if( present(model) )then
+            write(logfhandle,'(A,I8,A,L1,A,F7.2,A,F7.2,A,F7.2,A)') 'Cls expansion conditional averages: class=', cls_id, ' halves=', l_halves, &
+                &' FRC 0.143: parent', res143(fpar(:,1)), ' A, deviations', res143(fdev), ' A, subclasses (mean)', &
+                &sum([(res143(frcs(:,s)), s=1,ncls)]) / real(ncls), ' A'
+        else
+            write(logfhandle,'(A,I8,A,F7.2,A)') 'Cls expansion class kept whole: class=', cls_id, ' FRC 0.143 of its half means', &
+                &res143(fpar(:,1)), ' A'
+        endif
+        ! images
+        call memoize_ft_maps(ldim, params%smpd)
+        call to_images(planes(:,1:ncls),          cavgs)
+        call to_images(planes(:,ncls+1:2*ncls),   cavgs_even)
+        call to_images(planes(:,2*ncls+1:3*ncls), cavgs_odd)
+        call forget_ft_maps
+        call flex_time(cls_id, 'images', t0)
+        deallocate(par, dev, parh, devh, fpar, num, pe, po, planes)
 
       contains
 
-        subroutine planes_to_images( planes, imgs )
-            complex(sp),              intent(in)    :: planes(:,:)
-            type(image), allocatable, intent(inout) :: imgs(:)
-            integer :: j, s
-            call alloc_imgarr(ncls, ldim, params%smpd, imgs)
-            do s = 1, ncls
-                call imgs(s)%zero_and_flag_ft
-                do j = 1, ncoeff
-                    call imgs(s)%set_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1, planes(j,s))
-                    ! the half-plane keeps the h=0 column for k>=0 only; the physical layout stores
-                    ! both halves of that column, so the k<0 mate is set to the conjugate
-                    if( hidx(j) == 0 .and. kidx(j) > 0 ) call imgs(s)%set_cmat_at(ft_map_phys_addrh(0,-kidx(j)), &
-                        &ft_map_phys_addrk(0,-kidx(j)), 1, conjg(planes(j,s)))
-                end do
-                call imgs(s)%ifft
-                call imgs(s)%mul(gridcorr_img)
+        !> the resolution (A) at which an FRC first falls below 0.143 (from shell 3 on)
+        real function res143( frc )
+            real, intent(in) :: frc(:)
+            integer :: k
+            res143 = real(params%box) * params%smpd / real(size(frc))
+            do k = 3, size(frc)
+                if( frc(k) < 0.143 )then
+                    res143 = real(params%box) * params%smpd / real(k)
+                    return
+                endif
             end do
-        end subroutine planes_to_images
+        end function res143
 
-    end subroutine flex_class_restore_deliver
+        subroutine to_images( pl, imgs )
+            complex(sp),              intent(in)    :: pl(:,:)
+            type(image), allocatable, intent(inout) :: imgs(:)
+            integer :: jj, ss
+            if( allocated(imgs) ) call dealloc_imgarr(imgs)
+            call alloc_imgarr(size(pl,2), ldim, params%smpd, imgs)
+            do ss = 1, size(pl,2)
+                call imgs(ss)%zero_and_flag_ft
+                do jj = 1, ncoeff
+                    call imgs(ss)%set_cmat_at(ft_map_phys_addrh(hidx(jj),kidx(jj)), ft_map_phys_addrk(hidx(jj),kidx(jj)), 1, pl(jj,ss))
+                    ! the half-plane keeps the h=0 column for k>=0 only; its k<0 mate is the conjugate
+                    if( hidx(jj) == 0 .and. kidx(jj) > 0 ) call imgs(ss)%set_cmat_at(ft_map_phys_addrh(0,-kidx(jj)), &
+                        &ft_map_phys_addrk(0,-kidx(jj)), 1, conjg(pl(jj,ss)))
+                end do
+                call imgs(ss)%ifft
+                call imgs(ss)%mul(gridcorr_img)
+            end do
+        end subroutine to_images
 
-    !> the restoration pass: the commander's flag file in the execution directory, seen by the workers too
-    logical function flex_restore_mode()
-        flex_restore_mode = file_exists(FLEX_CLS_RESTORE_FLAG)
-    end function flex_restore_mode
+    end subroutine flex_class_conditional_averages
 
-    !> one class into nsub subclasses: planes, cross-fitted fit with nuisance, placement, delivery; nsub = 1 keeps the
-    !! class whole (one weighted average of all members)
-    subroutine split_class_flex( params, build, spproj, cls_id, nsub, ncomp, kfit, l_sigma, pinds, labels, weights, cavgs, &
-                                 separation, repro, cavgs_even, cavgs_odd )
-        use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_fit_crossed, flex_cls_weighted_mean, flex_cls_pose_tangents, &
-            &flex_cls_split_floor
+    !> wall time of one step of one class, logged
+    subroutine flex_time( cls_id, step, t0 )
+        integer,                 intent(in)    :: cls_id
+        character(len=*),        intent(in)    :: step
+        integer(timer_int_kind), intent(inout) :: t0
+        write(logfhandle,'(A,I8,A,A,A,F9.2)') 'Cls expansion time: class=', cls_id, ' step=', step, ' s=', toc(t0)
+        call flush(logfhandle)
+        t0 = tic()
+    end subroutine flex_time
+
+    !> the even and the odd half of one class: its CTF-corrected parent and, with l_models, its own model on the joint
+    !! band (fitmask) and the subclass deviations U z_s of the joint labels; the halves share no particles
+    subroutine flex_class_half_models( params, cls_id, ncls, ncomp, y, c, w, wq, fitmask, shell, hidx, kidx, even, labels, &
+                                       l_models, parh, devh )
+        use simple_flex_cls_expansion, only: flex_cls_model, flex_cls_fit, flex_cls_extend_basis, flex_cls_conditional_averages, &
+                                             flex_cls_weighted_mean, flex_cls_pose_tangents, flex_cls_ctf_mean
+        use simple_rnd,                only: seed_rnd_fixed
+        type(parameters), intent(in)  :: params
+        integer,          intent(in)  :: cls_id, ncls, ncomp
+        complex(sp),      intent(in)  :: y(:,:)
+        real(sp),         intent(in)  :: c(:,:), w(:,:), wq(:)
+        logical,          intent(in)  :: fitmask(:), even(:), l_models
+        integer,          intent(in)  :: shell(:), hidx(:), kidx(:), labels(:)
+        complex(sp),      intent(out) :: parh(:,:), devh(:,:,:)   !< (ncoeff,2), (ncoeff,ncls,2)
+        type(flex_cls_model)     :: mh
+        complex(sp), allocatable :: yh(:,:), nuis(:,:)
+        real(sp),    allocatable :: ch(:,:), wh(:,:)
+        complex(dp), allocatable :: uext(:,:), mu_h(:)
+        integer,     allocatable :: idx(:)
+        integer :: ncoeff, n, h, i
+        ncoeff = size(y,1); n = size(y,2)
+        allocate(nuis(ncoeff,4), mu_h(ncoeff))
+        devh = CMPLX_ZERO
+        do h = 1, 2
+            idx = pack([(i, i=1,n)], even .eqv. (h == 1))
+            allocate(yh(ncoeff,size(idx)), ch(ncoeff,size(idx)), wh(ncoeff,size(idx)))
+            do i = 1, size(idx)
+                yh(:,i) = y(:,idx(i)); ch(:,i) = c(:,idx(i)); wh(:,i) = w(:,idx(i))
+            end do
+            call flex_cls_ctf_mean(yh, ch, wh, parh(:,h))
+            if( l_models )then
+                call flex_cls_weighted_mean(yh, ch, wh, mu_h)
+                call flex_cls_pose_tangents(mu_h, hidx, kidx, params%box, nuis(:,1:3))
+                nuis(:,4) = cmplx(mu_h, kind=sp)
+                call seed_rnd_fixed(FLEX_CLS_SEED_BASE + cls_id + 1000 * h)
+                call flex_cls_fit(mh, yh, ch, wh, wq, fitmask, ncomp, verbose=.false., nuis=nuis)
+                allocate(uext(ncoeff,mh%ncomp))
+                call flex_cls_extend_basis(mh, yh, ch, wh, shell, uext)
+                call flex_cls_conditional_averages(mh, labels(idx), uext, devh(:,:,h))
+                call mh%kill
+                deallocate(uext)
+            endif
+            deallocate(yh, ch, wh)
+        end do
+        deallocate(nuis, mu_h)
+    end subroutine flex_class_half_models
+
+    !> one class: its members as Fourier planes in the class frame; a class kept whole (nsub = 1) gives its CTF-corrected
+    !! parent (with the half parents and the same filter); otherwise the bands (data-derived without lp=), the model,
+    !! placement and the conditional averages of its nsub subclasses
+    subroutine split_class_flex( params, build, spproj, cls_id, nsub, ncomp, kfit, l_sigma, pinds, labels, cavgs, &
+                                 separation, repro, cavgs_even, cavgs_odd, frcs )
+        use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_fit, flex_cls_half_frc, flex_cls_frc_cutoff, &
+            &flex_cls_extend_basis, flex_cls_weighted_mean, flex_cls_pose_tangents, flex_cls_split_floor
         use simple_rnd,             only: seed_rnd_fixed
         type(parameters),         intent(inout) :: params
         type(builder),            intent(inout) :: build
@@ -1083,109 +1057,158 @@ contains
         integer,                  intent(in)    :: cls_id, nsub, ncomp, kfit
         logical,                  intent(in)    :: l_sigma
         integer,     allocatable, intent(out)   :: pinds(:), labels(:)
-        real,        allocatable, intent(out)   :: weights(:,:)
         type(image), allocatable, intent(inout) :: cavgs(:)
         real,                     intent(out)   :: separation
         real,        allocatable, intent(out)   :: repro(:)
         type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
+        real,        allocatable, intent(inout) :: frcs(:,:)
         type(image)          :: gridcorr_img
         type(flex_cls_model) :: model
-        complex(sp), allocatable :: y(:,:), nuis(:,:)
-        complex(dp), allocatable :: mu_all(:)
+        complex(sp), allocatable :: y(:,:)
         real(sp),    allocatable :: c(:,:), w(:,:), wq(:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
-        logical,     allocatable :: fitmask(:)
+        logical,     allocatable :: fitmask(:), even(:)
         integer :: ldim(3), ncoeff, nptcls, j
         separation = 0.
         if( allocated(cavgs) ) call dealloc_imgarr(cavgs)
         call flex_class_planes(params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
             &hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls)
         if( nptcls < 1 ) THROW_HARD('cls_expansion: a class has no members')
+        ! the halves: the project's eo of the members (the particles' gold-standard halves), else members alternately
+        allocate(even(nptcls))
+        do j = 1, nptcls
+            even(j) = nint(spproj%os_ptcl2D%get(pinds(j), 'eo')) == 0
+        end do
+        if( all(even) .or. .not. any(even) )then
+            even = [(mod(j,2) == 0, j=1,nptcls)]
+            write(logfhandle,'(A,I8,A)') 'Cls expansion: class=', cls_id, ' has no eo halves; members alternately'
+        endif
         if( nsub == 1 )then
-            allocate(weights(nptcls,1), source=1.)
             allocate(labels(nptcls), source=1)
-            call flex_class_restore_deliver(params, cls_id, 1, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, &
-                &gridcorr_img, ldim, ncoeff, nptcls, labels, weights, cavgs, repro, cavgs_even, cavgs_odd)
+            call flex_class_conditional_averages(params, cls_id, 1, ncomp, y, c, w, wq, fitmask, shell, hidx, kidx, even, &
+                &labels, gridcorr_img, ldim, cavgs, cavgs_even, cavgs_odd, frcs, repro)
         else
             if( nptcls < flex_cls_split_floor(nsub, ncomp) ) THROW_HARD('cls_expansion: a class is too small for its subclass count')
-            call seed_rnd_fixed(FLEX_CLS_SEED_BASE + cls_id)
-            ! nuisance columns: the pose tangents and the class mean (per-particle contrast)
+            call fit_class_model
+            call flex_class_deliver(params, cls_id, model, nsub, ncomp, y, c, w, wq, fitmask, shell, hidx, kidx, even, &
+                &gridcorr_img, ldim, nptcls, labels, cavgs, cavgs_even, cavgs_odd, frcs, separation, repro)
+            call model%kill
+        endif
+        call gridcorr_img%kill
+        deallocate(y, c, w, wq, hidx, kidx, shell, fitmask, even)
+
+      contains
+
+        !> the class model: the bands, then one in-sample fit on the global band with the pose tangents and the class
+        !! mean (per-particle contrast) as nuisance columns
+        subroutine fit_class_model
+            type(flex_cls_model)     :: model0
+            complex(dp), allocatable :: uext(:,:), mu_all(:)
+            complex(sp), allocatable :: nuis(:,:)
+            real(dp),    allocatable :: frc(:)
+            integer(timer_int_kind)  :: t0
+            integer :: nsh, k0, kres, kglob
+            t0  = tic()
+            nsh = maxval(shell)
+            ! nuisance columns: the in-plane pose tangents of the class mean (d/dx, d/dy, d/dtheta) and the class mean
+            ! (per-particle contrast), fitted jointly and never placed on or averaged over
             allocate(mu_all(ncoeff), nuis(ncoeff,4))
             call flex_cls_weighted_mean(y, c, w, mu_all)
             call flex_cls_pose_tangents(mu_all, hidx, kidx, params%box, nuis(:,1:3))
             nuis(:,4) = cmplx(mu_all, kind=sp)
-            call flex_cls_fit_crossed(model, y, c, w, wq, fitmask, ncomp, verbose=.true., nuis=nuis)
+            deallocate(mu_all)
+            if( kfit > 0 )then
+                ! lp= given: the global band
+                kglob = kfit
+            else
+                ! data-derived: a first fit to half the class resolution (at most FLEX_CLS_BAND_FIRST_LP); the even/odd
+                ! FRC of its basis on every shell sets the global band at 0.5
+                allocate(frc(nsh))
+                call flex_cls_half_frc(y, c, w, shell, nsh, frc, even)
+                kres = flex_cls_frc_cutoff(frc, 0.143d0)
+                k0   = max(4, min(kres / 2, calc_fourier_index(FLEX_CLS_BAND_FIRST_LP, params%box, params%smpd)))
+                fitmask = shell >= 1 .and. shell <= k0
+                call seed_rnd_fixed(FLEX_CLS_SEED_BASE + cls_id)
+                call flex_cls_fit(model0, y, c, w, wq, fitmask, ncomp, verbose=.false., nuis=nuis)
+                allocate(uext(ncoeff,ncomp))
+                call flex_cls_extend_basis(model0, y, c, w, shell, uext, frc_basis=frc, even=even)
+                deallocate(uext)
+                call model0%kill
+                ! never finer than the first band: reproducible fine variation would crowd out the coarse motion
+                kglob = max(max(4, k0 / 2), min(k0, flex_cls_frc_cutoff(frc, 0.5d0)))
+                write(logfhandle,'(A,I8,A,F7.1,A,F7.1,A,F7.1,A)') 'Cls expansion bands: class=', cls_id, &
+                    &' class resolution ', params%box * params%smpd / real(max(kres,1)), ' A; first fit to ', &
+                    &params%box * params%smpd / real(k0), ' A; global latent to ', &
+                    &params%box * params%smpd / real(kglob), ' A'
+                deallocate(frc)
+                call flex_time(cls_id, 'bands', t0)
+            endif
+            fitmask = shell >= 1 .and. shell <= kglob
+            call seed_rnd_fixed(FLEX_CLS_SEED_BASE + cls_id)
+            call flex_cls_fit(model, y, c, w, wq, fitmask, ncomp, verbose=.true., nuis=nuis)
             write(logfhandle,'(A,4F9.4)') 'Cls expansion flex nuisance rms (x, y, rot, contrast; latent units): ', &
                 &[(sqrt(sum(model%nu(:,j)**2)/real(nptcls,dp)), j=1,4)]
-            deallocate(mu_all, nuis)
-            call flex_class_deliver(params, cls_id, model, nsub, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, &
-                &gridcorr_img, ldim, ncoeff, nptcls, labels, weights, cavgs, separation, repro, cavgs_even, cavgs_odd)
-            call model%kill
-        endif
-        call gridcorr_img%kill
-        deallocate(y, c, w, wq, hidx, kidx, shell, fitmask)
+            deallocate(nuis)
+            call flex_time(cls_id, 'fit', t0)
+        end subroutine fit_class_model
+
     end subroutine split_class_flex
 
-    !> one class restored on the current alignment from the split's soft weights; the hard labels are the split's
-    subroutine restore_class_flex( params, build, spproj, cls_id, nsub, first_sub, separation, kfit, l_sigma, sw, pinds, &
-                                   labels, weights, cavgs, repro, cavgs_even, cavgs_odd )
-        type(parameters),         intent(inout) :: params
-        type(builder),            intent(inout) :: build
-        type(sp_project),         intent(inout) :: spproj
-        integer,                  intent(in)    :: cls_id, nsub, first_sub, kfit
-        real,                     intent(in)    :: separation   !< the split's, for the log
-        logical,                  intent(in)    :: l_sigma
-        type(split_weights),      intent(in)    :: sw
-        integer,     allocatable, intent(out)   :: pinds(:), labels(:)
-        real,        allocatable, intent(out)   :: weights(:,:)
-        type(image), allocatable, intent(inout) :: cavgs(:)
-        real,        allocatable, intent(out)   :: repro(:)
-        type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
-        type(image) :: gridcorr_img
-        complex(sp), allocatable :: y(:,:)
-        real(sp),    allocatable :: c(:,:), w(:,:), wq(:)
-        integer,     allocatable :: hidx(:), kidx(:), shell(:)
-        logical,     allocatable :: fitmask(:)
-        integer :: ldim(3), ncoeff, nptcls, k, ip, o
-        if( allocated(cavgs) ) call dealloc_imgarr(cavgs)
-        call flex_class_planes(params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
-            &hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls)
-        if( nptcls < 1 ) THROW_HARD('cls_expansion restoration: a class has no members')
-        allocate(weights(nptcls,nsub), source=0.)
-        allocate(labels(nptcls), source=0)
-        do k = 1, nptcls
-            ip = pinds(k)
-            o  = sw%off(ip)
-            if( o < 1 .or. sw%parent(ip) /= cls_id .or. sw%nsub(ip) /= nsub ) THROW_HARD('cls_expansion restoration: a member has no split weights for its class')
-            weights(k,:) = sw%w(o:o+nsub-1)
-            labels(k)    = sw%sub(ip) - first_sub + 1
-            if( labels(k) < 1 .or. labels(k) > nsub ) THROW_HARD('cls_expansion restoration: a hard label outside its class')
+    function flex_frcs_part_fname( part, numlen ) result( fname )
+        integer, intent(in) :: part, numlen
+        type(string) :: fname
+        fname = string('cls_expansion_frcs_part')//int2str_pad(part, numlen)//TXT_EXT
+    end function flex_frcs_part_fname
+
+    !> the conditional averages' even/odd FRCs (text rows 'row frc(1:nyq)') as class FRCs (FLEX_CLS_FRCS, frc2D);
+    !! rows map to global subclasses directly, or through row_global(:,ifile) for part files
+    subroutine flex_frcs_txt2bin( params, fnames, ntot, row_global )
+        use simple_class_frcs, only: class_frcs
+        type(parameters),  intent(in) :: params
+        type(string),      intent(in) :: fnames(:)
+        integer,           intent(in) :: ntot
+        integer, optional, intent(in) :: row_global(:,:)
+        type(class_frcs)  :: frcs
+        real, allocatable :: frc(:)
+        character(len=XLONGSTRLEN) :: line
+        integer :: ifile, funit, ios, row, iglob, nyq
+        if( ntot < 1 ) return
+        nyq = fdim(params%box) - 1
+        call frcs%new(ntot, params%box, params%smpd)
+        allocate(frc(nyq))
+        do ifile = 1, size(fnames)
+            if( .not. file_exists(fnames(ifile)%to_char()) ) cycle
+            open(newunit=funit, file=fnames(ifile)%to_char(), status='old', action='read', iostat=ios)
+            if( ios /= 0 ) cycle
+            do
+                read(funit,'(A)',iostat=ios) line
+                if( ios /= 0 ) exit
+                if( len_trim(line) == 0 ) cycle
+                if( line(1:1) == '#' ) cycle
+                read(line,*,iostat=ios) row, frc
+                if( ios /= 0 ) cycle
+                iglob = row
+                if( present(row_global) ) iglob = row_global(row, ifile)
+                if( iglob >= 1 .and. iglob <= ntot ) call frcs%set_frc(iglob, frc)
+            end do
+            close(funit)
         end do
-        call flex_class_restore_deliver(params, cls_id, nsub, y, c, w, wq, fitmask, shell, maxval(shell), hidx, kidx, &
-            &gridcorr_img, ldim, ncoeff, nptcls, labels, weights, cavgs, repro, cavgs_even, cavgs_odd, neff=sum(weights, dim=1), &
-            &separation=separation)
-        call gridcorr_img%kill
-        deallocate(y, c, w, wq, hidx, kidx, shell, fitmask)
-    end subroutine restore_class_flex
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        call frcs%write(string(FLEX_CLS_FRCS))
+        ! and as text in global subclass order (the part files map their rows)
+        if( present(row_global) )then
+            open(newunit=funit, file=FLEX_CLS_FRCS_TXT, status='replace', action='write')
+            write(funit,'(A)') '# row frc(1:nyq): even/odd FRC of the conditional average (row: global)'
+            do iglob = 1, ntot
+                write(funit,'(I8,*(1X,F8.5))') iglob, frcs%get_frc(iglob, params%box)
+            end do
+            close(funit)
+        endif
+        call frcs%kill
+        deallocate(frc)
+    end subroutine flex_frcs_txt2bin
 
     !> the split into the project: hard subclass and parent per particle, one cls2D/cls3D row per subclass with its
-    !! readouts, and the sub-class average stack
+    !! readouts, the sub-class average stack and its FRCs (frc2D)
     subroutine apply_split_project_updates(spproj, params, nsplit, new_class, new_parent, parent_of_subcls, pop_of_subcls, &
                                            neff_of_subcls, sep_of_subcls, repro_of_subcls, cavgs_stk)
         type(sp_project), intent(inout) :: spproj
@@ -1193,7 +1216,7 @@ contains
         integer,          intent(in)    :: nsplit
         integer,          intent(in)    :: new_class(:), new_parent(:)
         integer,          intent(in)    :: parent_of_subcls(:), pop_of_subcls(:)
-        real,             intent(in)    :: neff_of_subcls(:)  !< soft population: the sum of the subclass's weights
+        real,             intent(in)    :: neff_of_subcls(:)  !< the hard population
         real,             intent(in)    :: sep_of_subcls(:)   !< Ashman's D of the parent's split (same for its subclasses)
         real,             intent(in)    :: repro_of_subcls(:) !< cross-half reproducibility of the subclass difference
         type(string),     intent(in)    :: cavgs_stk          !< the sub-class average stack to register
@@ -1219,12 +1242,13 @@ contains
             call spproj%os_cls3D%set(i, 'accept',  1)
             call spproj%os_cls3D%set(i, 'state',   1)
         end do
+        call spproj%add_frcs2os_out(string(FLEX_CLS_FRCS), 'frc2D')
         call spproj%add_cavgs2os_out(cavgs_stk, params%smpd, imgkind='cavg')
         call spproj%write(params%projfile)
     end subroutine apply_split_project_updates
 
     !> the part outputs in global subclass order (by parent, then local subclass): class map, assignments into the
-    !! project, weights table and the average stacks
+    !! project, the average stacks and the per-subclass FRCs
     subroutine merge_worker_outputs(params, nparts_run)
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nparts_run
@@ -1235,6 +1259,7 @@ contains
         integer, allocatable :: new_class(:), new_parent(:), first_glob(:), nsub_of(:)
         real,    allocatable :: neff(:), sep(:), repro(:)
         type(string) :: map_fname, assign_fname
+        type(string), allocatable :: frc_fnames(:)
         integer :: ipart, nlocal, total, max_count, idx, i, funit, ios, pind, parent_cls, local_cls, p
         character(len=XLONGSTRLEN) :: line
         call spproj%read(params%projfile)
@@ -1319,7 +1344,15 @@ contains
             close(funit)
             call assign_fname%kill
         end do
-        call merge_part_weights_and_stacks(params, nparts_run, part_counts, part_global, first_glob, nsub_of)
+        call merge_part_stacks(params, nparts_run, part_counts, part_global)
+        ! the per-subclass FRCs, part rows -> global subclasses
+        allocate(frc_fnames(nparts_run))
+        do ipart = 1, nparts_run
+            frc_fnames(ipart) = flex_frcs_part_fname(ipart, params%numlen)
+        end do
+        call flex_frcs_txt2bin(params, frc_fnames, total, row_global=part_global(:,1:nparts_run))
+        call frc_fnames(:)%kill
+        deallocate(frc_fnames)
         call apply_split_project_updates(spproj, params, total, new_class, new_parent, comb_parent, comb_pop, &
             &neff, sep, repro, string(FLEX_CLS_CAVGS_FILE))
         call spproj%kill
@@ -1339,44 +1372,13 @@ contains
 
     end subroutine merge_worker_outputs
 
-    !> the part weight tables and average stacks in global subclass order
-    subroutine merge_part_weights_and_stacks(params, nparts_run, part_counts, part_global, first_glob, nsub_of)
+    !> the part average stacks (full, even, odd) in global subclass order: part row r -> global index part_global(r, ipart)
+    subroutine merge_part_stacks(params, nparts_run, part_counts, part_global)
         type(parameters), intent(inout) :: params
-        integer,          intent(in)    :: nparts_run, part_counts(:), part_global(:,:), first_glob(:), nsub_of(:)
-        type(string) :: wts_fname, stk_fname, out_wts, out_stk
+        integer,          intent(in)    :: nparts_run, part_counts(:), part_global(:,:)
+        type(string) :: stk_fname, out_stk
         type(image)  :: img
-        character(len=:), allocatable :: line
-        real,             allocatable :: w(:)
-        integer :: ipart, funit_in, funit_out, ios, pind, parent_cls, local_cls, n, irow, ldim(3), nimgs, j, ieo
-        allocate(w(max(1, maxval(nsub_of))))
-        out_wts = string(FLEX_CLS_WEIGHTS_FILE)
-        open(newunit=funit_out, file=out_wts%to_char(), status='replace', action='write')
-        write(funit_out,'(A)') '# particle_index parent_class subclass nsub weights(1:nsub)'
-        do ipart = 1, nparts_run
-            wts_fname = flex_weights_part_fname(ipart, params%numlen)
-            open(newunit=funit_in, file=wts_fname%to_char(), status='old', action='read', iostat=ios)
-            call fileiochk('merge_part_weights_and_stacks opening '//wts_fname%to_char(), ios)
-            do
-                ! rows are as wide as their parent has subclasses
-                call read_record(funit_in, line, ios)
-                if( ios /= 0 ) exit
-                if( len_trim(line) == 0 ) cycle
-                if( line(1:1) == '#' ) cycle
-                read(line,*,iostat=ios) pind, parent_cls, local_cls, n
-                if( ios /= 0 ) THROW_HARD('read error in a cls_expansion part weight table')
-                if( n < 1 .or. n > size(w) ) THROW_HARD('inconsistent row in a cls_expansion part weight table')
-                read(line,*,iostat=ios) pind, parent_cls, local_cls, n, (w(j), j=1,n)
-                if( ios /= 0 ) THROW_HARD('short row in a cls_expansion part weight table')
-                if( parent_cls < 1 .or. parent_cls > size(nsub_of) ) THROW_HARD('unknown parent in a cls_expansion part weight table')
-                if( n /= nsub_of(parent_cls) .or. local_cls < 1 .or. local_cls > n ) THROW_HARD('inconsistent row in a cls_expansion part weight table')
-                write(funit_out,'(I10,1X,I10,1X,I10,1X,I6,*(1X,F8.6))') pind, parent_cls, first_glob(parent_cls) + local_cls - 1, &
-                    &n, w(1:n)
-            end do
-            close(funit_in)
-            call wts_fname%kill
-        end do
-        close(funit_out)
-        ! the stacks (full, even, odd): part row r -> global index part_global(r, ipart)
+        integer :: ipart, irow, ldim(3), nimgs, ieo
         do ieo = 0, 2
             select case(ieo)
                 case(0); out_stk = string(FLEX_CLS_CAVGS_FILE)
@@ -1401,10 +1403,8 @@ contains
                 call stk_fname%kill
             end do
         end do
-        deallocate(w)
-        call out_wts%kill
         call out_stk%kill
-    end subroutine merge_part_weights_and_stacks
+    end subroutine merge_part_stacks
 
     subroutine count_data_lines(fname, nlines)
         type(string), intent(in)  :: fname
