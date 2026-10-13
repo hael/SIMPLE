@@ -71,7 +71,8 @@ integer, parameter :: NCLS2D        = 10
 integer, parameter :: NPTCLS_COARSE = 300
 integer, parameter :: NPTCLS_FINE   = 600
 integer, parameter :: NSTATES3D     = 2
-integer, parameter :: NSTAGES3D     = 2
+! External class-average initialization starts solve3D after symmetry stage 3.
+integer, parameter :: NSTAGES3D     = 4
 integer, parameter :: NTHR_JOBS     = 4
 integer, parameter :: MIN_PTCLS_3D  = 5 * NSTATES3D
 real,    parameter :: SIM_SNR       = 0.5
