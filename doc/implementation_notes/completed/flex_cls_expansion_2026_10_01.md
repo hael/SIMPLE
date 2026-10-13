@@ -40,7 +40,9 @@ own in-plane alignment:
    CTF, `mu` the class mean, `U` a rank-16 basis (`neigs=`), `N` four nuisance columns (the pose
    tangents dx, dy, dtheta of the class mean and the mean itself for contrast), `z_i` the latent.
    Noise weights from the sigma2 shell spectrum (else the class's residual spectrum). Fitted by an
-   ALS probe (3 random starts) then PPCA EM, in sample.
+   ALS probe (3 random starts) then PPCA EM, in sample. The members are masked in the class frame by
+   the box's inscribed circle (soft edge): the box corners that the in-plane rotation moves would
+   otherwise become directions of variation; nothing inside the box, beyond `mskdiam` included, is cut.
 2. **Bands.** With `lp=` the fit band is `lp`. Otherwise it is derived per class: a first fit to half
    the class's resolution shell (the class mean's even/odd FRC at 0.143), at most 20 A; the even/odd
    FRC per shell of that basis, extended to every coefficient, sets the global band where it falls

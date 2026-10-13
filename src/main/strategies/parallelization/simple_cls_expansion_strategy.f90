@@ -672,8 +672,8 @@ contains
         params%top   = top_bak
     end subroutine prepare_flex_sigma2
 
-    !> the members of one class as Fourier planes in the class frame with their CTF, half-plane lattice, shells 1..nyq;
-    !! noise weights from the canonical sigma2 or the class's own residual spectrum; nptcls = 0 without members
+    !> the members of one class as Fourier planes in the class frame (inscribed-circle mask) with their CTF, half-plane
+    !! lattice, shells 1..nyq; noise weights from the canonical sigma2 or the class's own residual spectrum
     subroutine flex_class_planes( params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
                                   hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls )
         use simple_flex_cls_expansion,  only: flex_cls_shell_noise
@@ -713,6 +713,16 @@ contains
             return
         endif
         nptcls = size(imgs)
+        ! the box's inscribed circle, soft edge: drops the box corners the in-plane rotation moves, which would
+        ! otherwise become directions of variation, and keeps everything beyond mskdiam
+        call imgs(1)%memoize_mask_coords
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, nptcls
+            call imgs(i)%ifft
+            call imgs(i)%mask2D_soft(real(params%box) / 2. - 2., backgr=0.)
+            call imgs(i)%fft
+        end do
+        !$omp end parallel do
         ldim = [params%box, params%box, 1]
         call memoize_ft_maps(ldim, params%smpd)
         lims = ft_map_lims

@@ -422,7 +422,8 @@ contains
         &'splits the 2D classes into ncls subclasses in total. The classes are grouped by class-average correlation &
         &(nclust groups); a group gets subclasses in proportion to the square root of its population, counting the &
         &classes it already has, and its classes in proportion to their populations, at most pop/minpop each; a class &
-        &with fewer than 2*minpop particles (or than 3*(neigs+1), the model floor) is kept whole. Per split class: a CTF- and noise-weighted low-rank &
+        &with fewer than 2*minpop particles (or than 3*(neigs+1), the model floor) is kept whole. Per split class, &
+        &its particles masked by the box''s inscribed circle: a CTF- and noise-weighted low-rank &
         &covariance model (rank neigs, pose fixed, pose tangents and contrast as nuisance) on a data-derived band, &
         &placement by bimodality with the fit residual as a junk axis; each particle is labelled with its most likely &
         &subclass. Then the conditional sub-class averages, the expected image of the model at the latent centre of each &
