@@ -10,7 +10,7 @@ Scope:
 - `simple_motion_gain_analysis.f90`
 - `simple_motion_gain_helpers.f90`
 - test wiring through `simple_motion_gain_tester.f90` (the `motion gain`
-  sub-suite of `simple_test_exec test=unit_project`); the movie-driven
+  sub-suite of `simple_test_exec test=unit_motion`); the movie-driven
   runners `simple_test_search_gain_flips` and `simple_test_create_gain` were
   retired on 2026-09-23
 

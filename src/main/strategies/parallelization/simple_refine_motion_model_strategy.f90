@@ -181,7 +181,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, cline)
-        use simple_particle_extractor, only: ptcl_extractor, dealloc_particles_frames
+        use simple_particle_extractor, only: ptcl_extractor
         use simple_motion_model,       only: motion_model
         use simple_matcher_ptcl_io,    only: prepimgbatch, killimgbatch
         class(refine_motion_model_inmem_strategy), intent(inout) :: self
@@ -300,7 +300,7 @@ contains
                     stack = string(EXTRACT_STK_FBODY)//get_fbody(basename(mov_name), ext)//STK_EXT
                     call spproj_in%os_stk%set(stk_ind, 'stk', simple_abspath(stack,check_exists=.false.))
                     ! extract all frames particles
-                    call extractor%extract_all_particles_frames(coords, [params%fromf, params%tof], 1)
+                    call extractor%extract_all_particles_frames(coords, [params%fromf, params%tof])
                     deallocate(coords)
                     ! Generate stacks for individual frame blocks
                     do ind = 1, nfractioned_stacks
@@ -355,7 +355,6 @@ contains
         endif
         call extractor%kill
         call killimgbatch(build)
-        call dealloc_particles_frames
         call build%kill_general_tbox
         ! Output project
         call spproj%read_non_data_segments(params%projfile)

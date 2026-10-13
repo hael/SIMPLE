@@ -416,7 +416,7 @@ subroutine set_ui_params
                                    '{0}', .false., 0.0)
 
     call mcconvention%set_param(   'mcconvention',    'str',    'Frame of reference during movie alignment', &
-                                   'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', &
+                                   'Frame of reference during movie alignment; simple/unblur/motioncorr:central; relion:first(simple|unblur|relion|motioncorr){simple}', &
                                    '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
 
     call mcpatch%set_param(        'mcpatch',         'binary', 'Patch-based motion correction', &

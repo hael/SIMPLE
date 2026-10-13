@@ -10,20 +10,18 @@ private
 #include "simple_local_flags.inc"
 
 public :: ptcl_extractor
-public :: dealloc_particles_frames
 
 integer, parameter :: POLYDIM    = 18
 real,    parameter :: NSIGMAS    = 6.0
 logical, parameter :: DEBUG_HERE = .false.
 
-type(image), allocatable :: particles_frames(:,:)
-
 type :: ptcl_extractor
     private
     type(image),      allocatable :: frames(:)
     type(image),      allocatable :: particle(:), frame_particle(:)
+    type(image),      allocatable :: particles_frames(:,:)
     type(motion_model)            :: mmodel
-    real,             allocatable :: doses(:,:,:),weights(:), isoshifts(:,:)
+    real,             allocatable :: weights(:), isoshifts(:,:)
     integer,          allocatable :: hotpix_coords(:,:)
     logical,          allocatable :: particle_mask(:,:,:)
     type(string)                  :: gainrefname, moviename, docname
@@ -33,11 +31,11 @@ type :: ptcl_extractor
     real                          :: smpd_physical = 0. ! original input sampling, before any EER upsampling or Fourier cropping
     real                          :: smpd_out
     real                          :: scale
-    real                          :: total_dose, doseperframe, preexposure, kv
+    real                          :: total_dose, doseperframe, kv
     integer                       :: ldim(3), ldim_sc(3), box, box_pd
-    integer                       :: nframes, start_frame, nhotpix, align_frame
+    integer                       :: nframes, nhotpix, align_frame
     integer                       :: eer_fraction, eer_upsampling=1
-    logical                       :: l_doseweighing = .false.
+    logical                       :: l_dose_weighted = .false.
     logical                       :: l_scale        = .false.
     logical                       :: l_gain         = .false.
     logical                       :: l_eer          = .false.
@@ -54,6 +52,7 @@ type :: ptcl_extractor
     procedure, private :: load_model_metadata, prepare_motion
     procedure, private :: read_movie_frames, apply_gain_correction, prepare_frames
     procedure, private :: init_particle_buffers
+    procedure, private :: dealloc_particles_frames
     procedure          :: display
     procedure          :: extract_particles
     procedure          :: extract_particles_from_mic
@@ -62,7 +61,7 @@ type :: ptcl_extractor
     procedure, private :: extract_ptcl
     procedure, private :: extract_single_particle_frame
     procedure, private :: post_process
-    procedure, private :: cure_outliers
+    procedure, private :: cure_movie_outliers, cure_outliers
     procedure, private :: add_eer_gain_defects
     procedure, private :: cure_outliers_from_coords, cure_outlier_coords
     procedure, private :: evaluate_local_shift
@@ -73,9 +72,10 @@ type :: ptcl_extractor
     procedure          :: does_exist
     procedure          :: get_particle_mask
     procedure          :: has_frames, has_isoshifts
+    procedure          :: has_particle_frames
     procedure          :: has_weights, has_model_frameweights
     procedure          :: has_hotpix_coords
-    procedure          :: set_test_movie_state
+    procedure          :: test_movie_outlier_curation
     ! Destructor
     procedure :: kill
 end type ptcl_extractor
@@ -109,7 +109,7 @@ contains
         if( self%nhotpix > 0 ) call self%cure_outliers_from_coords(self%hotpix_coords)
         call self%gain%kill
         write(logfhandle,'(A,A)')'>> CORRECTED FOR GAIN AND OUTLIERS: ',self%moviename%to_char()
-        call self%prepare_frames(apply_dose_weighting=.false.)
+        call self%prepare_frames(.false.)
         call self%init_particle_buffers
         call self%eer%kill
         self%exists = .true.
@@ -122,7 +122,6 @@ contains
         class(ptcl_extractor),     intent(inout) :: self
         class(ori),                intent(in)    :: omic
         class(parameters), target, intent(in)    :: params
-        integer :: reference_frame
         call self%kill
         self%l_mov = .false.
         if( omic%isthere('mcmodel') )then
@@ -132,7 +131,6 @@ contains
         if( .not.self%l_mov )then
             THROW_WARN('Motion model absent; extracting from the integrated micrograph')
             call self%init_mic(params%box, (params%pcontrast .eq. 'black'))
-            self%exists = .true.
             return
         endif
         self%l_neg = (params%pcontrast .eq. 'black')
@@ -141,17 +139,13 @@ contains
         if( .not.file_exists(self%moviename) )then
             THROW_HARD('Motion model movie is absent: '//self%moviename%to_char())
         endif
-        ! Global-only movie extraction retains its first-frame reference.
-        reference_frame = 1
-        if( self%l_poly ) reference_frame = self%mmodel%fixed_frame
-        call self%prepare_motion(reference_frame)
+        call self%prepare_motion(self%mmodel%fixed_frame)
         self%total_dose = real(self%nframes) * self%doseperframe
         call self%read_movie_frames
         call self%apply_gain_correction
-        ! Movie extraction re-detects defects when the model recorded outliers.
-        if( self%nhotpix > 0 ) call self%cure_outliers
+        call self%cure_movie_outliers
         call self%gain%kill
-        call self%prepare_frames(apply_dose_weighting=.true.)
+        call self%prepare_frames(.true.)
         call self%init_particle_buffers
         call self%eer%kill
         self%exists = .true.
@@ -161,10 +155,13 @@ contains
         class(ptcl_extractor), intent(inout) :: self
         integer,               intent(in)    :: box
         logical,               intent(in)    :: neg
+        if( box <= 0 ) THROW_HARD('Particle box must be positive!')
+        call self%kill
         self%box   = box
         self%l_neg = neg
         self%l_mov = .false.
         call self%init_mask
+        self%exists = .true.
     end subroutine init_mic
 
     ! mask for post-extraction normalizations
@@ -196,10 +193,7 @@ contains
         self%l_scale       = abs(self%scale - 1.) > 0.001
         self%nframes       = self%mmodel%nframes
         self%doseperframe  = self%mmodel%dose_per_frame
-        self%l_doseweighing = self%mmodel%dw
-        self%preexposure   = 0.
         self%kv            = self%mmodel%voltage
-        self%start_frame   = 1
         self%l_eer         = self%mmodel%eer
         self%eer_upsampling = self%mmodel%eer_upsampling
         self%eer_fraction   = self%mmodel%eer_fraction
@@ -228,6 +222,8 @@ contains
         if( DEBUG_HERE ) print *,'movie model parsed'
     end subroutine load_model_metadata
 
+    ! Ensure that global & local offsets are always consistent with
+    ! the alignment reference frame
     subroutine prepare_motion( self, reference_frame )
         class(ptcl_extractor), intent(inout) :: self
         integer,               intent(in)    :: reference_frame
@@ -298,6 +294,7 @@ contains
         class(ptcl_extractor), intent(inout) :: self
         logical,               intent(in)    :: apply_dose_weighting
         integer :: iframe
+        self%l_dose_weighted = .false.
         if( .not.apply_dose_weighting .and. all(self%ldim == self%ldim_sc) ) return
         !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
         do iframe = 1,self%nframes
@@ -319,6 +316,7 @@ contains
                 call self%frames(iframe)%ifft
             enddo
             !$omp end parallel do
+            self%l_dose_weighted = .true.
         endif
     end subroutine prepare_frames
 
@@ -339,36 +337,39 @@ contains
     subroutine display( self )
         class(ptcl_extractor), intent(in) :: self
         integer :: i
-        print *, 'docname        ', self%docname%to_char()
-        print *, 'nframes        ', self%nframes
-        print *, 'dimensions     ', self%ldim
-        print *, 'smpd_movie     ', self%mmodel%smpd_movie
-        print *, 'smpd_physical  ', self%smpd_physical
-        print *, 'smpd_out       ', self%smpd_out
-        print *, 'box            ', self%box
-        print *, 'box_pd         ', self%box_pd
-        print *, 'voltage        ', self%kv
-        print *, 'doseperframe   ', self%doseperframe
-        print *, 'gainrefname    ', self%gainrefname%to_char()
-        if( self%l_model ) print *, 'flipgain       ', trim(self%mmodel%flipgain)
-        print *, 'moviename      ', self%moviename%to_char()
-        print *, 'doseweighting  ', self%l_doseweighing
-        print *, 'total dose     ', self%total_dose
-        print *, 'l_scale        ', self%l_scale
-        print *, 'scale          ', self%scale
-        print *, 'gain           ', self%l_gain
-        print *, 'nhotpix        ', self%nhotpix
-        print *, 'eer            ', self%l_eer
-        print *, 'eer_fraction   ', self%eer_fraction
-        print *, 'eer_upsampling ', self%eer_upsampling
-        print *, 'align_frame    ', self%align_frame
+        write(logfhandle,*) 'docname        ', self%docname%to_char()
+        write(logfhandle,*) 'nframes        ', self%nframes
+        write(logfhandle,*) 'dimensions     ', self%ldim
+        if( self%l_model )then
+            write(logfhandle,*) 'smpd_movie     ', self%mmodel%smpd_movie
+            write(logfhandle,*) 'flipgain       ', trim(self%mmodel%flipgain)
+            write(logfhandle,*) 'doseweighting_model   ', self%mmodel%dw
+        endif
+        write(logfhandle,*) 'smpd_physical  ', self%smpd_physical
+        write(logfhandle,*) 'smpd_out       ', self%smpd_out
+        write(logfhandle,*) 'box            ', self%box
+        write(logfhandle,*) 'box_pd         ', self%box_pd
+        write(logfhandle,*) 'voltage        ', self%kv
+        write(logfhandle,*) 'doseperframe   ', self%doseperframe
+        write(logfhandle,*) 'gainrefname    ', self%gainrefname%to_char()
+        write(logfhandle,*) 'moviename      ', self%moviename%to_char()
+        write(logfhandle,*) 'doseweighting_applied ', self%l_dose_weighted
+        write(logfhandle,*) 'total dose     ', self%total_dose
+        write(logfhandle,*) 'l_scale        ', self%l_scale
+        write(logfhandle,*) 'scale          ', self%scale
+        write(logfhandle,*) 'gain           ', self%l_gain
+        write(logfhandle,*) 'nhotpix        ', self%nhotpix
+        write(logfhandle,*) 'eer            ', self%l_eer
+        write(logfhandle,*) 'eer_fraction   ', self%eer_fraction
+        write(logfhandle,*) 'eer_upsampling ', self%eer_upsampling
+        write(logfhandle,*) 'align_frame    ', self%align_frame
         if( allocated(self%isoshifts) )then
             do i = 1,size(self%isoshifts,dim=2)
-                print *,'isoshifts ',i,self%isoshifts(:,i),self%weights(i)
+                write(logfhandle,*) 'isoshifts ',i,self%isoshifts(:,i),self%weights(i)
             enddo
         endif
         do i = 1,POLYDIM
-            print *,'polycoeffs    ',i,self%polyx(i),self%polyy(i)
+            write(logfhandle,*) 'polycoeffs    ',i,self%polyx(i),self%polyy(i)
         enddo
     end subroutine display
 
@@ -453,42 +454,34 @@ contains
         endif
     end subroutine extract_particles_from_mic
 
-    subroutine extract_all_particles_frames( self, coords, ffromto, fstep)
-        class(ptcl_extractor),    intent(inout) :: self
-        integer,                  intent(in)    :: coords(:,:)
-        integer,                  intent(in)    :: ffromto(2), fstep
-        integer :: i, f, nptcls, lb, ub
-        logical :: l_allocated
+    subroutine extract_all_particles_frames( self, coords, ffromto )
+        class(ptcl_extractor), intent(inout) :: self
+        integer,               intent(in)    :: coords(:,:)
+        integer,               intent(in)    :: ffromto(2)
+        integer :: i, f, nptcls
+        if( .not.allocated(self%frames) ) THROW_HARD('Movie frames are not initialized!')
+        if( .not.allocated(self%particle) ) THROW_HARD('Particle buffers are not initialized!')
+        if( size(coords,dim=1) /= 2 ) THROW_HARD('Particle coordinates must have two components!')
         nptcls = size(coords,dim=2)
+        if( nptcls < 1 ) THROW_HARD('No particles to extract!')
         if( ffromto(1) <= 0 .or. ffromto(2) > self%nframes .or.&
             & ffromto(1) > ffromto(2)) THROW_HARD('Invalid frame range!')
-        ! Reallocate images
-        l_allocated = allocated(particles_frames)
-        if( l_allocated )then
-            lb = lbound(particles_frames,dim=1)
-            ub = ubound(particles_frames,dim=1)
-            if( lb /= ffromto(1) .or. ub /= ffromto(2) .or.&
-                ubound(particles_frames,dim=2) < nptcls ) then
-                call dealloc_particles_frames
-                l_allocated = .false.
-            endif
-        endif
-        if( .not.l_allocated )then
-            allocate(particles_frames(ffromto(1):ffromto(2), 1:nptcls))
-            !$omp parallel do default(shared) private(i,f) schedule(guided) proc_bind(close) collapse(2)
-            do i = 1,nptcls
-                do f = ffromto(1),ffromto(2)
-                    call particles_frames(f,i)%new([self%box,self%box,1],&
-                        & self%smpd_out, wthreads=.false.)
-                enddo
+        ! Cache exactly this extraction, with this instance's geometry and particle count.
+        call self%dealloc_particles_frames
+        allocate(self%particles_frames(ffromto(1):ffromto(2), 1:nptcls))
+        !$omp parallel do default(shared) private(i,f) schedule(guided) proc_bind(close) collapse(2)
+        do i = 1,nptcls
+            do f = ffromto(1),ffromto(2)
+                call self%particles_frames(f,i)%new([self%box,self%box,1],&
+                    & self%smpd_out, wthreads=.false.)
             enddo
-            !$omp end parallel do
-        endif
+        enddo
+        !$omp end parallel do
         ! extract
         !$omp parallel do default(shared) private(i,f) schedule(guided) proc_bind(close) collapse(2)
         do i = 1,nptcls
             do f = ffromto(1),ffromto(2)
-                call self%extract_single_particle_frame(coords(:,i), particles_frames(f,i), f)
+                call self%extract_single_particle_frame(coords(:,i), self%particles_frames(f,i), f)
             enddo
         enddo
         !$omp end parallel do
@@ -504,10 +497,16 @@ contains
         real    :: rmin, rmax, rmean, rsdev
         integer :: i, f, cnt
         logical :: l_err
-        if( ffromto(1) <= 0 .or. ffromto(2) > self%nframes .or.&
-            & ffromto(1) > ffromto(2) )then
-            THROW_HARD('Invalid frame range!')
+        if( .not.self%has_particle_frames(ffromto, nptcls) )then
+            THROW_HARD('Requested particles or frame range are not cached!')
         endif
+        if( size(particles) < nptcls ) THROW_HARD('Particle output array is too small!')
+        do i = 1,nptcls
+            if( .not.particles(i)%exists() ) THROW_HARD('Particle output image is not initialized!')
+            if( any(particles(i)%get_ldim() /= [self%box,self%box,1]) )then
+                THROW_HARD('Inconsistent particle output dimensions!')
+            endif
+        enddo
         cnt    = 0
         vmin   = huge(vmin)
         vmax   = -vmin
@@ -519,7 +518,7 @@ contains
         do i = 1,nptcls
             call particles(i)%zero_and_unflag_ft
             do f = ffromto(1), ffromto(2)
-                call particles(i)%add(particles_frames(f,i))
+                call particles(i)%add(self%particles_frames(f,i))
             enddo
             call self%post_process(particles(i))
             call particles(i)%stats(rmean, rsdev, rmax, rmin, errout=l_err)
@@ -632,7 +631,18 @@ contains
         call img%norm_noise(self%particle_mask, sdev_noise)
     end subroutine post_process
 
-    !> Identify statistical outliers and cure them.
+    ! Re-detect recorded statistical defects, but always recover EER gain defects.
+    subroutine cure_movie_outliers( self )
+        class(ptcl_extractor), intent(inout) :: self
+        if( self%nhotpix > 0 )then
+            call self%cure_outliers
+        else if( self%l_eer .and. self%l_gain )then
+            call self%add_eer_gain_defects
+            if( self%nhotpix > 0 ) call self%cure_outliers_from_coords(self%hotpix_coords)
+        endif
+    end subroutine cure_movie_outliers
+
+    !> Identify statistical outliers and cure them together with EER gain defects.
     subroutine cure_outliers( self )
         class(ptcl_extractor), intent(inout) :: self
         real,    allocatable :: rsum(:,:)
@@ -646,19 +656,19 @@ contains
             call self%frames(iframe)%add_rmat2mat_workshare(rsum)
         enddo
         call moment(rsum, ave, sdev, var, err)
-        if( err .or. sdev < TINY )then
-            deallocate(rsum)
-            return
+        if( err )then
+            ave  = sum(rsum) / real(size(rsum))
+            sdev = 0.
         endif
-        lthresh = ave - NSIGMAS * sdev
-        uthresh = ave + NSIGMAS * sdev
-        !$omp workshare
-        where( rsum < lthresh .or. rsum > uthresh )
-            outliers = .true.
-        elsewhere
-            outliers = .false.
-        end where
-        !$omp end workshare
+        outliers = .false.
+        ! Degenerate sum statistics cannot detect outliers, but gain defects remain known.
+        if( .not.err .and. sdev >= TINY )then
+            lthresh = ave - NSIGMAS * sdev
+            uthresh = ave + NSIGMAS * sdev
+            !$omp workshare
+            where( rsum < lthresh .or. rsum > uthresh ) outliers = .true.
+            !$omp end workshare
+        endif
         noutliers_detected = count(outliers)
         if( self%l_eer .and. self%l_gain ) call self%gain%add_zero2mask(outliers)
         noutliers = count(outliers)
@@ -745,8 +755,11 @@ contains
             call self%frames(iframe)%add_rmat2mat_workshare(rsum)
         enddo
         call moment(rsum, ave, sdev, var, err)
+        if( err )then
+            ave  = sum(rsum) / real(size(rsum))
+            sdev = 0.
+        endif
         deallocate(rsum)
-        if( err .or. sdev < TINY ) return
         write(logfhandle,'(a)') '>>> REMOVING PROVIDED DEAD/HOT PIXELS'
         write(logfhandle,'(a,1x,i10)') '>>> # DEAD/HOT PIXELS:', noutliers
         write(logfhandle,'(a,1x,2f10.1)') '>>> AVERAGE (STDEV):  ', ave, sdev
@@ -877,6 +890,19 @@ contains
         has_frames = allocated(self%frames)
     end function has_frames
 
+    ! True only for particles and inclusive frame bounds populated by the last extraction.
+    pure logical function has_particle_frames(self, ffromto, nptcls)
+        class(ptcl_extractor), intent(in) :: self
+        integer,               intent(in) :: ffromto(2), nptcls
+        has_particle_frames = .false.
+        if( .not.allocated(self%particles_frames) ) return
+        if( nptcls < 1 .or. nptcls > size(self%particles_frames,dim=2) ) return
+        if( ffromto(1) > ffromto(2) ) return
+        if( ffromto(1) < lbound(self%particles_frames,dim=1) ) return
+        if( ffromto(2) > ubound(self%particles_frames,dim=1) ) return
+        has_particle_frames = .true.
+    end function has_particle_frames
+
     pure logical function has_isoshifts(self)
         class(ptcl_extractor), intent(in) :: self
         has_isoshifts = allocated(self%isoshifts)
@@ -897,60 +923,121 @@ contains
         has_model_frameweights = allocated(self%mmodel%frameweights)
     end function has_model_frameweights
 
-    ! Allocation-only fixture for lifecycle tests; not a movie extraction initializer.
-    subroutine set_test_movie_state(self, nframes)
+    ! White-box checks of the post-gain step used by init_mov, without an EER decoder fixture.
+    subroutine test_movie_outlier_curation( self, gain_only, combined, flat_gain_only, flat_combined,&
+        &no_gain, non_eer, clean_gain )
         class(ptcl_extractor), intent(inout) :: self
-        integer,               intent(in)    :: nframes
-        if( nframes < 1 ) THROW_HARD('Invalid frame count for particle extractor test fixture')
+        logical, intent(out) :: gain_only, combined, flat_gain_only, flat_combined, no_gain, non_eer, clean_gain
+        integer, parameter :: NX=32, NY=32, NFR=2, GX=13, GY=16, HX=24, HY=16
+        real :: pixels(NX,NY,1), expected(NX,NY,NFR), gain_pixels(NX,NY,1)
+        integer :: icase, iframe, i, j
+        logical :: checks(7)
+        checks = .true.
+        do icase = 1,size(checks)
+            call self%kill
+            self%ldim    = [NX,NY,1]
+            self%nframes = NFR
+            self%l_eer   = icase /= 6
+            self%l_gain  = icase /= 5
+            if( icase == 2 .or. icase == 4 )then
+                self%nhotpix = 1
+                allocate(self%hotpix_coords(2,1))
+                self%hotpix_coords(:,1) = [GX,GY]
+            endif
+            gain_pixels = 1.
+            if( icase /= 7 ) gain_pixels(GX,GY,1) = 0.
+            call self%gain%new(self%ldim, 1., wthreads=.false.)
+            call self%gain%set_rmat(gain_pixels, .false.)
+            allocate(self%frames(NFR))
+            do iframe = 1,NFR
+                do j = 1,NY
+                    do i = 1,NX
+                        pixels(i,j,1) = real(i+j+1)
+                    enddo
+                enddo
+                ! Opposite frames have a constant zero sum but nonzero local medians.
+                if( (icase == 3 .or. icase == 4) .and. iframe == 2 ) pixels = -pixels
+                expected(:,:,iframe) = pixels(:,:,1)
+                if( icase /= 7 ) pixels(GX,GY,1) = 0.
+                if( icase == 2 .or. icase == 7 ) pixels(HX,HY,1) = 100000.
+                if( icase >= 5 ) expected(:,:,iframe) = pixels(:,:,1)
+                call self%frames(iframe)%new(self%ldim, 1., wthreads=.false.)
+                call self%frames(iframe)%set_rmat(pixels, .false.)
+            enddo
+            call self%cure_movie_outliers
+            ! Removing the center of a linear ramp leaves symmetric pairs with the same median.
+            do iframe = 1,NFR
+                do j = 1,NY
+                    do i = 1,NX
+                        checks(icase) = checks(icase) .and.&
+                            &abs(self%frames(iframe)%get([i,j,1]) - expected(i,j,iframe)) < 1.e-5
+                    enddo
+                enddo
+            enddo
+        enddo
         call self%kill
-        self%nframes = nframes
-        self%l_mov   = .true.
-        self%l_model = .true.
-        self%exists  = .true.
-        allocate(self%frames(nframes))
-        allocate(self%isoshifts(2,nframes), source=0.)
-        allocate(self%weights(nframes), source=1./real(nframes))
-        allocate(self%hotpix_coords(2,1), source=1)
-        self%nhotpix = 1
-        self%mmodel%exists  = .true.
-        self%mmodel%nframes = nframes
-        allocate(self%mmodel%frameweights(nframes), source=1./real(nframes))
-    end subroutine set_test_movie_state
+        gain_only      = checks(1)
+        combined       = checks(2)
+        flat_gain_only = checks(3)
+        flat_combined  = checks(4)
+        no_gain        = checks(5)
+        non_eer        = checks(6)
+        clean_gain     = checks(7)
+    end subroutine test_movie_outlier_curation
 
     subroutine kill(self)
         class(ptcl_extractor), intent(inout) :: self
         integer :: i
+        call self%dealloc_particles_frames
         if( allocated(self%weights) )   deallocate(self%weights)
         if( allocated(self%isoshifts) ) deallocate(self%isoshifts)
         if( allocated(self%frames) )then
-            do i=1,self%nframes
+            do i = 1,size(self%frames)
                 call self%frames(i)%kill
             enddo
             deallocate(self%frames)
         endif
         if( allocated(self%particle) )then
-            do i = 1,nthr_glob
+            do i = 1,size(self%particle)
                 call self%particle(i)%kill
+            enddo
+            deallocate(self%particle)
+        endif
+        if( allocated(self%frame_particle) )then
+            do i = 1,size(self%frame_particle)
                 call self%frame_particle(i)%kill
             enddo
-            deallocate(self%particle,self%frame_particle)
+            deallocate(self%frame_particle)
         endif
-        if( allocated(self%doses) )         deallocate(self%doses)
         if( allocated(self%hotpix_coords) ) deallocate(self%hotpix_coords)
         if( allocated(self%particle_mask) ) deallocate(self%particle_mask)
-        self%l_doseweighing = .false.
+        call self%gain%kill
+        call self%eer%kill
+        self%l_dose_weighted = .false.
+        self%l_scale        = .false.
         self%l_gain         = .false.
         self%l_eer          = .false.
+        self%l_poly         = .false.
         self%l_neg          = .true.
         self%l_mov          = .true.
         self%l_model        = .false.
         self%nframes        = 0
         self%nhotpix        = 0
+        self%ldim          = 0
+        self%ldim_sc       = 0
+        self%box           = 0
+        self%box_pd        = 0
+        self%total_dose    = 0.
         self%doseperframe   = 0.
+        self%kv            = 0.
         self%scale          = 1.
         self%align_frame    = 0
+        self%eer_fraction  = 0
         self%eer_upsampling = 1
         self%smpd_physical  = 0.
+        self%smpd_out       = 0.
+        self%polyx          = 0._dp
+        self%polyy          = 0._dp
         call self%mmodel%kill
         call self%moviename%kill
         call self%docname%kill
@@ -958,17 +1045,18 @@ contains
         self%exists = .false.
     end subroutine kill
 
-    subroutine dealloc_particles_frames()
+    subroutine dealloc_particles_frames(self)
+        class(ptcl_extractor), intent(inout) :: self
         integer :: i, f, lb, ub
-        if( allocated(particles_frames) ) then
-            lb = lbound(particles_frames,dim=1)
-            ub = ubound(particles_frames,dim=1)
-            do i = 1, size(particles_frames,dim=2)
+        if( allocated(self%particles_frames) ) then
+            lb = lbound(self%particles_frames,dim=1)
+            ub = ubound(self%particles_frames,dim=1)
+            do i = 1, size(self%particles_frames,dim=2)
                 do f = lb, ub
-                    call particles_frames(f,i)%kill
+                    call self%particles_frames(f,i)%kill
                 enddo
             enddo
-            deallocate(particles_frames)
+            deallocate(self%particles_frames)
         endif
     end subroutine dealloc_particles_frames
 

@@ -51,7 +51,7 @@ The common pattern is:
   `src/main/commanders/test/simple_commanders_test_class.f90` and listed in the
   area's `suite=` help in `src/main/ui/simple_test/simple_test_ui_class.f90`.
 - CTest registers one entry per suite (labels `fast`, `library`, `workflow`,
-  `platform`); `SIMPLE_CTEST_BUDGET` fixes their number. The 13 `fast` suites
+  `platform`); `SIMPLE_CTEST_BUDGET` fixes their number. The 15 `fast` suites
   run on every `compile_*.sh` build (unless `--exclude-tests`) through
   `scripts/run_fast_gate.sh` (registry check, 30 s budget); the rest run nightly.
 - A program that only runs commanders or prints results is not a test; use a

@@ -14,10 +14,10 @@ simpler model is used.
 ## Preprocessing
 
 Frames are gain-corrected, optionally EER-fractionated, hot-pixel cured
-(values outside 6 standard deviations replaced by a local window average),
-optionally truncated by dose, and Fourier-cropped to the smallest FFT-friendly
-box that still supports the final alignment resolution `lp_stop`. The central
-frame is the fixed reference (frame 1 under the RELION convention).
+(values outside 6 standard deviations replaced by a local window median/random
+value), optionally truncated by dose, and Fourier-cropped to the smallest
+FFT-friendly box that still supports the final alignment resolution `lp_stop`.
+The central frame is the fixed reference (frame 1 under the RELION convention).
 
 ## Global alignment
 

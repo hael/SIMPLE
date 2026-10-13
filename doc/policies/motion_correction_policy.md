@@ -1,6 +1,6 @@
 # Reference-free Motion Correction Policy
 
-Status — 2026-10-07: In development. This is a working policy, not a declaration
+Status — 2026-10-09: updated. This is a working policy, not a declaration
 that the implementation and all integration checks are complete.
 
 ## Purpose and scope
@@ -159,9 +159,7 @@ in one output path. Patch alignment receives the global frame weights.
 
 The working alignment reference is the central frame,
 `nint(0.5 * nframes)`. `mcconvention=first` or `relion` re-references the applied
-global shifts to frame one. A measured displacement is corrected by applying
-its negative; do not reverse this sign in metadata merely because the image
-operation uses a corrective shift.
+global shifts to frame one.
 
 ### Residual local motion
 
@@ -348,10 +346,6 @@ scientific conventions to propagate into new code.
   A gain-only defect can therefore remain uncurated, and the early return for
   a nearly constant frame sum also bypasses this work. Complete EER defect
   handling must be tested independently of statistical detection.
-- For EER, STAR dose rate currently comes from `target_dose_per_frame`, whereas
-  the binary also stores the effective `dose_per_frame`. Grouping and truncation
-  can make these quantities differ. Do not assume that STAR and binary dose
-  metadata are numerically interchangeable.
 - `corrs2weights` returns all-zero weights when every correlation is nonpositive.
   Global alignment warns on negative mean correlation but does not reject the
   movie at that point. Successful execution alone therefore does not establish
