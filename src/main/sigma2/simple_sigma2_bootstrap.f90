@@ -37,6 +37,7 @@ contains
         ! the digest is undefined and no committed state is ever consumable
         call spproj%read_segment('stk',      projfile)
         call spproj%read_segment('ptcl3D',   projfile)
+        call spproj%update_projinfo(projfile)
         l_available = canonical_sigma2_consumable(spproj, spproj%os_ptcl3D, box, smpd, l_sigma_glob, message)
         if( .not. l_available ) write(logfhandle,'(A)') '>>> SIGMA2 BOOTSTRAP: canonical state not consumable: '//trim(message)
         call spproj%kill

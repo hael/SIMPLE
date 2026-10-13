@@ -7,8 +7,9 @@
 ! paths and the prepared update, and the reduction skipping a record with a non-positive shell.
 module simple_sigma2_state_tester
 use, intrinsic :: iso_fortran_env, only: int8, int32, int64, real32
+use simple_fileio,            only: simple_copy_file
 use simple_string,            only: string
-use simple_syslib,            only: del_file, file_exists
+use simple_syslib,            only: del_file, file_exists, simple_mkdir, simple_rmdir
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, &
     &sigma2_state_create_candidate, sigma2_state_write_local_range, sigma2_state_read_header, &
     &sigma2_state_read_local_range, sigma2_state_read_particles, sigma2_state_read_groups, &
@@ -120,6 +121,8 @@ contains
         integer, parameter :: NP = 6, BOXT = 8
         real,    parameter :: SMPDT = 1.5
         character(len=*), parameter :: PROJ = 'tmp_sigma2_state_tester_proj.simple'
+        character(len=*), parameter :: COPY_DIR = 'tmp_sigma2_state_tester_copy'
+        character(len=*), parameter :: COPY_PROJ = COPY_DIR//'/test.simple'
         character(len=*), parameter :: CAND = 'tmp_sigma2_state_tester.next'
         character(len=*), parameter :: COMM = 'tmp_sigma2_state_tester.bin'
         character(len=*), parameter :: RNG  = 'tmp_sigma2_state_tester_range.bin'
@@ -180,6 +183,13 @@ contains
             &'a committed state of the project''s own layout is consumable from the project file')
         call assert_false(sigma2_estimate_available(string(PROJ), BOXT+2, SMPDT, .true.), &
             &'negative control: the same state is not consumable on another grid')
+        call simple_mkdir(COPY_DIR)
+        call simple_copy_file(string(PROJ), string(COPY_PROJ))
+        call assert_false(sigma2_estimate_available(string(COPY_PROJ), BOXT, SMPDT, .true.), &
+            &'a copied project cannot consume a relative state from its source directory')
+        call del_file(COPY_PROJ)
+        call simple_rmdir(COPY_DIR, status)
+        call assert_int(0, status, 'copied project test directory is removed')
         call project%kill
         call cleanup(CAND, COMM, RNG, PROJ)
     end subroutine test_estimate_available_on_disk
