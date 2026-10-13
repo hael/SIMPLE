@@ -64,6 +64,19 @@ contains
         &'simple_exec',&                                                ! executable
         &.true., visibility=UI_VIS_DEVELOPER, display_name='Consolidate Particles') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call consolidate_particles%add_input(UI_FILE, projfile, &
+        &visibility=UI_VIS_STANDARD)
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
         ! <empty>
         ! add to ui_hash
         call add_ui_program('consolidate_particles', consolidate_particles, prgtab, UI_CATEGORY)

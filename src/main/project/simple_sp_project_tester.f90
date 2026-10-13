@@ -3,7 +3,8 @@
 ! get_micparams/get_ctfparams, text and binary serialisation), the write/read round trip of the mic and
 ! particle segments, what the project file must not persist, partial alignment documents merged back
 ! (merge_algndocs), the GUI's JSON view of a segment (print_segment_json: windows, sorting, histogram and
-! plot blocks, absent optionals) and the hand-back of class states to particles (map_cls3D_states2ptcls).
+! plot blocks, absent optionals), the hand-back of class states to particles (map_cls3D_states2ptcls) and
+! the metadata-only prune of deselected stacks and particles (prune_particles).
 module simple_sp_project_tester
 use simple_core_module_api   ! string, oris, ctfparams, del_file, filepath, syslib, PI, ran3, logfhandle
 use simple_test_utils        ! assertions etc.
@@ -37,6 +38,7 @@ contains
         call test_write_read_roundtrip()
         call test_read_does_not_mutate_projinfo()
         call test_map_cls3D_states2ptcls()
+        call test_prune_particles()
         call test_partial_docs_merge()
         call test_partial_docs_merge_uneven()
         call test_print_segment_json()
@@ -357,6 +359,65 @@ contains
         call proj%kill
         deallocate(proj)
     end subroutine test_map_cls3D_states2ptcls
+
+    !---------------- metadata-only prune ----------------
+
+    ! stack 1 is intact, stack 2 has state 0 while its particles are active, stack 3 has one inactive particle;
+    ! the prune drops stack 2 with its particles and particle 8, renumbers the rest and keeps the physical indstk
+    subroutine test_prune_particles()
+        integer, parameter :: N = 10
+        integer, parameter :: STK_FROMP(3)   = [1, 4, 7]
+        integer, parameter :: STK_TOP(3)     = [3, 6, 10]
+        integer, parameter :: STK_STATE(3)   = [1, 0, 1]
+        integer, parameter :: STKINDS(N)     = [1,1,1, 2,2,2, 3,3,3,3]
+        integer, parameter :: INDSTKS(N)     = [1,2,3, 1,2,3, 1,2,3,4]
+        integer, parameter :: KEPT(6)        = [1,2,3, 7,9,10]
+        integer, parameter :: NEW_STKINDS(6) = [1,1,1, 2,2,2]
+        integer, parameter :: NEW_INDSTKS(6) = [1,2,3, 1,3,4]
+        class(sp_project), allocatable :: proj
+        integer :: i
+        write(*,'(A)') 'test_prune_particles'
+        allocate(proj)
+        call proj%os_stk%new(3, is_ptcl=.false.)
+        do i = 1,3
+            call proj%os_stk%set(i, 'fromp',      STK_FROMP(i))
+            call proj%os_stk%set(i, 'top',        STK_TOP(i))
+            call proj%os_stk%set(i, 'nptcls',     STK_TOP(i) - STK_FROMP(i) + 1)
+            call proj%os_stk%set(i, 'nptcls_stk', STK_TOP(i) - STK_FROMP(i) + 1)
+            call proj%os_stk%set_state(i, STK_STATE(i))
+        enddo
+        call proj%os_ptcl2D%new(N, is_ptcl=.true.)
+        call proj%os_ptcl3D%new(N, is_ptcl=.true.)
+        do i = 1,N
+            call proj%os_ptcl2D%set(i, 'stkind', STKINDS(i))
+            call proj%os_ptcl3D%set(i, 'stkind', STKINDS(i))
+            call proj%os_ptcl2D%set(i, 'indstk', INDSTKS(i))
+            call proj%os_ptcl3D%set(i, 'indstk', INDSTKS(i))
+            call proj%os_ptcl2D%set(i, 'corr',   real(i))
+            call proj%os_ptcl2D%set_state(i, 1)
+            call proj%os_ptcl3D%set_state(i, 1)
+        enddo
+        call proj%os_ptcl2D%set_state(8, 0)
+        call proj%os_ptcl3D%set_state(8, 0)
+        call proj%prune_particles
+        call assert_int(2, proj%get_nstks(),            'the state 0 stack is dropped')
+        call assert_int(6, proj%os_ptcl2D%get_noris(),  'ptcl2D rows: only the particles of kept stacks')
+        call assert_int(6, proj%os_ptcl3D%get_noris(),  'ptcl3D rows: only the particles of kept stacks')
+        call assert_int(6, proj%os_stk%get_top(2),      'the stack ranges cover every particle row')
+        call assert_int(1, proj%os_stk%get_fromp(1),    'first stack from')
+        call assert_int(3, proj%os_stk%get_top(1),      'first stack to')
+        call assert_int(4, proj%os_stk%get_fromp(2),    'second stack from')
+        call assert_int(3, proj%os_stk%get_int(2, 'nptcls'), 'second stack particle count')
+        do i = 1,6
+            call assert_real(real(KEPT(i)), proj%os_ptcl2D%get(i, 'corr'), TOL, 'the record of the surviving particle')
+            call assert_int(NEW_STKINDS(i), proj%os_ptcl2D%get_int(i, 'stkind'), 'ptcl2D stkind renumbered')
+            call assert_int(NEW_STKINDS(i), proj%os_ptcl3D%get_int(i, 'stkind'), 'ptcl3D stkind renumbered')
+            call assert_int(NEW_INDSTKS(i), proj%os_ptcl2D%get_int(i, 'indstk'), 'ptcl2D physical index preserved')
+            call assert_int(NEW_INDSTKS(i), proj%os_ptcl3D%get_int(i, 'indstk'), 'ptcl3D physical index preserved')
+        enddo
+        call proj%kill
+        deallocate(proj)
+    end subroutine test_prune_particles
 
     !---------------- partial alignment documents ----------------
 

@@ -151,7 +151,9 @@ pruning.
 If pruning removes particle rows from the project but keeps the original stack
 files:
 
-- Remove deleted rows from `os_ptcl2D` and `os_ptcl3D`.
+- Remove deleted rows from `os_ptcl2D` and `os_ptcl3D`. A particle of a stack
+  row with state 0 is deleted with that row, whatever its own state, because
+  the prune drops the stack row and a particle cannot outlive it.
 - Update `os_stk%fromp`, `os_stk%top`, and `os_stk%nptcls` to describe the
   post-prune project.
 - Remap `stkind` if stack rows are renumbered.

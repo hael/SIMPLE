@@ -660,7 +660,9 @@ Their numbers then decide:
     consolidated one, each from a cold page cache.
   - Compare `SOLVE3D_BENCH.txt` and the refine3D strategy and matcher
     benchmark files, with `iostat -x` and `free -g` alongside.
-  - The program logs the gigabytes it copied and the time the copy took.
+  - The program logs the total to copy at the start, then every 30 seconds
+    the gigabytes copied, the share done, the rate and the minutes left. At
+    the end it logs the gigabytes copied and the time the copy took.
 
 The measurements:
 

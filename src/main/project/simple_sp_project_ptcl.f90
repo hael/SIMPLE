@@ -423,7 +423,7 @@ contains
         enddo
     end subroutine map_cls3D_states2ptcls
 
-    ! Removes in place mics, stacks and particles with state=0.
+    ! Removes in place mics, stacks and particles with state=0, and the particles of stacks with state=0.
     ! New images are not generated, so positive physical indstk values are preserved.
     module subroutine prune_particles( self )
         class(sp_project), target, intent(inout) :: self
@@ -439,26 +439,36 @@ contains
         ! particles reverse indexing
         nptcls_tot = self%os_ptcl2D%get_noris()
         allocate(ptcls_mask(nptcls_tot), stkinds(nptcls_tot))
-        nptcls_eff = 0
-        stkinds    = 0
-        !$omp parallel do proc_bind(close) default(shared) private(iptcl) reduction(+:nptcls_eff)
+        stkinds = 0
+        !$omp parallel do proc_bind(close) default(shared) private(iptcl)
         do iptcl = 1,nptcls_tot
             ptcls_mask(iptcl) = self%os_ptcl2D%get_state(iptcl) > 0
-            if( ptcls_mask(iptcl) )then
-                stkinds(iptcl) = self%os_ptcl2D%get_int(iptcl,'stkind')
-                nptcls_eff     = nptcls_eff+1
-            endif
+            if( ptcls_mask(iptcl) ) stkinds(iptcl) = self%os_ptcl2D%get_int(iptcl,'stkind')
         enddo
         !$omp end parallel do
-        ! per-stack surviving particle counts, single pass instead of O(nstks*nptcls) count()
+        ! a particle survives with its stack only; per-stack surviving particle counts in a single pass
+        allocate(stks_mask(nstks_tot))
         allocate(stk_pop(nstks_tot), source=0)
+        do istk = 1,nstks_tot
+            stks_mask(istk) = self%os_stk%get_state(istk) > 0
+        enddo
+        nptcls_eff = 0
         do iptcl = 1,nptcls_tot
-            if( ptcls_mask(iptcl) ) stk_pop(stkinds(iptcl)) = stk_pop(stkinds(iptcl)) + 1
+            if( .not.ptcls_mask(iptcl) ) cycle
+            if( stkinds(iptcl) < 1 .or. stkinds(iptcl) > nstks_tot )then
+                write(logfhandle,*) 'iptcl/stkind/nstks: ', iptcl, stkinds(iptcl), nstks_tot
+                THROW_HARD('selected particle stkind out of range; prune_particles')
+            endif
+            if( stks_mask(stkinds(iptcl)) )then
+                stk_pop(stkinds(iptcl)) = stk_pop(stkinds(iptcl)) + 1
+                nptcls_eff              = nptcls_eff + 1
+            else
+                ptcls_mask(iptcl) = .false.
+            endif
         enddo
         ! stacks
-        allocate(stks_mask(nstks_tot))
         do istk = 1,nstks_tot
-            stks_mask(istk) = self%os_stk%get_state(istk) > 0 .and. stk_pop(istk) > 0
+            stks_mask(istk) = stk_pop(istk) > 0
         enddo
         nstks = count(stks_mask)
         call os_stk%new(nstks, is_ptcl=.false.)

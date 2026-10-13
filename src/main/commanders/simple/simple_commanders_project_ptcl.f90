@@ -802,15 +802,17 @@ contains
     subroutine exec_consolidate_particles( self, cline )
         class(commander_consolidate_particles), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
-        character(len=*), parameter  :: STKFBODY = 'consolidated_particles'
-        integer(kind=8),  parameter  :: BUFBYTES = 268435456_8 ! copy buffer cap, 256 MB
+        character(len=*),     parameter :: STKFBODY    = 'consolidated_particles'
+        integer(kind=8),      parameter :: BUFBYTES    = 268435456_8        ! copy buffer cap, 256 MB
+        real(timer_int_kind), parameter :: REPORT_SECS = 30._timer_int_kind ! seconds between progress lines
         type(parameters)             :: params
         type(sp_project)             :: spproj
         type(MrcImgHead)             :: hed_out, hed_src
         type(string)                 :: stkname, stkout, cwd
         integer(kind=1), allocatable :: buf(:)
-        integer(kind=8)              :: imgbytes, ncopied
-        integer(timer_int_kind)      :: t0
+        integer(kind=8)              :: imgbytes, ncopied, nbytes_tot
+        integer(timer_int_kind)      :: t0, t_copy
+        real(timer_int_kind)         :: t_report
         integer :: ldim_ref(3), mode_ref, nptcls, nstks, istk, iptcl, fromp, top
         integer :: run_row, run_ind, run_len, max_run, stkind, indstk, src_unit, out_unit, ios
         logical :: l_ref
@@ -824,7 +826,6 @@ contains
         nptcls = spproj%os_ptcl2D%get_noris()
         nstks  = spproj%get_nstks()
         if( nptcls < 1 .or. nstks < 1 ) THROW_HARD('no active particles; exec_consolidate_particles')
-        if( spproj%os_stk%get_top(nstks) /= nptcls ) THROW_HARD('pruned stack rows do not cover the particles')
         call simple_getcwd(cwd)
         stkout = filepath(cwd, STKFBODY//STK_EXT)
         do istk = 1, nstks
@@ -853,9 +854,15 @@ contains
         ! a run is consecutive project rows at consecutive images of one stack: one read and one write
         max_run = int(min(int(nptcls,kind=8), max(1_8, BUFBYTES / imgbytes)))
         allocate(buf(imgbytes * int(max_run,kind=8)))
-        ncopied = 0_8
-        run_row = 0
-        run_ind = 0
+        nbytes_tot = int(nptcls,kind=8) * imgbytes
+        write(logfhandle,'(A,I0,A,I0,A,F8.2,A)') '>>> COPYING ', nptcls, ' PARTICLES FROM ', nstks, ' STACKS, ', &
+            &real(nbytes_tot)/1.e9, ' GB'
+        call flush(logfhandle)
+        ncopied  = 0_8
+        run_row  = 0
+        run_ind  = 0
+        t_report = 0._timer_int_kind
+        t_copy   = tic()
         do istk = 1, nstks
             stkname = spproj%os_stk%get_str(istk, 'stk')
             call open_src
@@ -894,6 +901,8 @@ contains
         end do
         ! the particle layout identity changed, so a registered sigma2 state no longer applies
         call spproj%projinfo%delete_entry('sigma2_state')
+        write(logfhandle,'(A)') '>>> WRITING PROJECT'
+        call flush(logfhandle)
         call spproj%write(params%projfile)
         write(logfhandle,'(A,I0,A,I0,A)') '>>> CONSOLIDATED ', nptcls, ' PARTICLES FROM ', nstks, ' STACKS INTO '//stkout%to_char()
         write(logfhandle,'(A,F10.2,A,F10.1,A)') '>>> ', real(ncopied)/1.e9, ' GB COPIED IN ', toc(t0), ' S'
@@ -932,7 +941,21 @@ contains
             if( ios /= 0 ) THROW_HARD('cannot write the consolidated stack; exec_consolidate_particles')
             ncopied = ncopied + nbytes
             run_len = 0
+            call report_progress
         end subroutine copy_run
+
+        ! volume, share, rate and time left, every REPORT_SECS seconds
+        subroutine report_progress
+            real(timer_int_kind) :: t_now, rate
+            t_now = toc(t_copy)
+            if( t_now - t_report < REPORT_SECS ) return
+            t_report = t_now
+            rate     = real(ncopied,kind=timer_int_kind) / 1.e6_timer_int_kind / t_now
+            write(logfhandle,'(A,F8.2,A,F8.2,A,F5.1,A,F8.1,A,F7.1,A)') '>>> COPIED ', real(ncopied)/1.e9, ' OF ',&
+                &real(nbytes_tot)/1.e9, ' GB (', 100.*real(ncopied)/real(nbytes_tot), ' %), ', rate, ' MB/S, ',&
+                &real(nbytes_tot - ncopied) / (rate * 1.e6 * 60.), ' MIN LEFT'
+            call flush(logfhandle)
+        end subroutine report_progress
 
     end subroutine exec_consolidate_particles
 
