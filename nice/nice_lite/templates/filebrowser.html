@@ -14,10 +14,10 @@
         }
     </style>
 </head>
-<body class="bg-streambg min-h-screen font-sans flex flex-col">
-    <div class="flex justify-center p-5 flex-1">
-        <div class="flex flex-col w-full">
-            <div class="bg-streambar rounded-xl border border-streamline px-6 pb-6 h-full flex flex-col">
+<body class="bg-streambg h-screen overflow-hidden font-sans flex flex-col">
+    <div class="flex justify-center p-5 flex-1 min-h-0">
+        <div class="flex flex-col w-full min-h-0">
+            <div class="bg-streambar rounded-xl border border-streamline px-6 pb-6 h-full min-h-0 flex flex-col">
                 <div class="py-4 flex items-center justify-between gap-2">
                     <div class="text-[12px] font-medium text-streamlabel uppercase tracking-widest">
                         {% if type == "dir" %}
