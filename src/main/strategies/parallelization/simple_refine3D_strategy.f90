@@ -581,6 +581,24 @@ contains
         call benchfname%kill
     end subroutine write_strategy_bench_report
 
+    subroutine write_iteration_states( params, build )
+        type(parameters), intent(in) :: params
+        type(builder),    intent(in) :: build
+        type(string) :: fname
+        integer :: fnr, iptcl
+        if( params%print_states /= 'yes' ) return
+        fname = 'states_iter'//int2str_pad(params%which_iter, 3)//'.txt'
+        call fopen(fnr, file=fname, status='replace', action='write')
+        write(fnr,'(a)') '# pind state updatecnt'
+        do iptcl = 1, build%spproj_field%get_noris()
+            write(fnr,'(i0,1x,i0,1x,i0)') build%spproj_field%get_int(iptcl, 'pind'), &
+                &build%spproj_field%get_state(iptcl), &
+                &build%spproj_field%get_updatecnt(iptcl)
+        enddo
+        call fclose(fnr)
+        call fname%kill
+    end subroutine write_iteration_states
+
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
     ! ======================================================================
@@ -786,6 +804,8 @@ contains
             call build%spproj%write_segment_inside(params%oritype)
             call cline_polish%kill
         endif
+
+        call write_iteration_states(params, build)
         if( L_BENCH_GLOB )then
             self%bench%rt_sched   = toc(self%bench%t_sched)
             self%bench%t_assemble = tic()
@@ -1304,6 +1324,7 @@ contains
                 &array=L_USE_SLURM_ARR, extra_params=params)
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
         endif
+        call write_iteration_states(params, build)
         call job_descr_pass%kill
         do state = 1, params%nstates
             call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
