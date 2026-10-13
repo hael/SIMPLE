@@ -117,7 +117,6 @@ contains
         use simple_sp_project,       only: sp_project
         use simple_ptcl_layout,      only: ptcl_layout_digest
         use simple_sigma2_bootstrap, only: sigma2_estimate_available
-        use simple_syslib,           only: simple_getcwd
         integer, parameter :: NP = 6, BOXT = 8
         real,    parameter :: SMPDT = 1.5
         character(len=*), parameter :: PROJ = 'tmp_sigma2_state_tester_proj.simple'
@@ -128,7 +127,7 @@ contains
         character(len=*), parameter :: RNG  = 'tmp_sigma2_state_tester_range.bin'
         type(sp_project) :: project
         type(sigma2_state_header) :: header
-        type(string) :: ranges(1), cwd
+        type(string) :: ranges(1)
         real(real32) :: spectra(BOXT/2, NP)
         logical :: scheduled(NP), active(NP)
         integer :: eo(NP), groups(NP), i, status
@@ -136,11 +135,7 @@ contains
         character(len=128) :: message
         write(*,'(A)') 'test_estimate_available_on_disk'
         call cleanup(CAND, COMM, RNG, PROJ)
-        call project%projinfo%new(1, is_ptcl=.false.)
-        call project%projinfo%set(1, 'projname', 'sigma_lineage')
-        call project%projinfo%set(1, 'projfile', PROJ)
-        call simple_getcwd(cwd)
-        call project%projinfo%set(1, 'cwd', cwd%to_char())
+        call project%update_projinfo(string(PROJ))
         call project%os_stk%new(1, is_ptcl=.false.)
         call project%os_stk%set(1, 'stk',   '/data/sigma_particles.mrcs')
         call project%os_stk%set(1, 'fromp', 1)
