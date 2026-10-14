@@ -67,8 +67,9 @@ contains
         l_bootstrap_sigmas = .false.
         if( final_stage_uses_ml_reg() )then
             ! a valid committed state is reused directly; a missing, stale,
-            ! wrong-grid, wrong-layout or wrong-grouping state is rebuilt from
-            ! particle power and residual-upgraded by bootstrap_rec3D.
+            ! wrong-grid or wrong-layout state, or one whose header the current
+            ! format refuses, is rebuilt from particle power and
+            ! residual-upgraded by bootstrap_rec3D.
             ! Sigmas estimated at a cropped registration box are refreshed at
             ! native sampling before the shipped map.
             l_bootstrap_sigmas = canonical_final_rec_needs_bootstrap()
@@ -194,8 +195,7 @@ contains
                 character(len=STDLEN) :: message
                 ! one validation boundary for every canonical consumer, at the
                 ! final (original) sampling
-                l_bootstrap = .not. canonical_sigma2_consumable(spproj, spproj%os_ptcl3D, ldim(1), smpd, &
-                    &params%l_sigma_glob, message)
+                l_bootstrap = .not. canonical_sigma2_consumable(spproj, spproj%os_ptcl3D, ldim(1), smpd, message)
                 if( l_bootstrap ) write(logfhandle,'(A)') &
                     &'>>> FINAL RECONSTRUCTION: rebuilding canonical sigmas: '//trim(message)
             end function canonical_final_rec_needs_bootstrap
@@ -225,7 +225,6 @@ contains
                 call child_cline%set('prg',      prg)
                 call child_cline%set('mkdir',    'no')
                 call child_cline%set('projfile', projfile)
-                call child_cline%set('sigma_est',   params%sigma_est)
                 ! volassemble appends _STATENN and writes the extension-less
                 ! resolution document next to rec_final_stateNN.mrc.
                 call child_cline%set('outfile', 'RESOLUTION_FINAL.txt')

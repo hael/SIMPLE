@@ -1,7 +1,8 @@
 !@descr: unit tests of the class-average work project (simple_cavgs_work_project)
 ! Six generated class averages with _even/_odd companions, the third deselected in cls2D: the row layout,
-! the selection, the project info, the transient sigma2 state, the nparts cap, the even/odd diagnostics
-! and the file removal.
+! the selection, the project info, the transient sigma2 state, the nparts cap, the even/odd diagnostics,
+! the file removal, and a half that cls2D flags with state 0 (state_even/state_odd) as an inactive row,
+! which stays inactive when class labels are put on the rows.
 module simple_cavgs_work_project_tester
 use simple_cavgs_work_project, only: cavgs_work_project
 use simple_cmdline,            only: cmdline
@@ -32,7 +33,54 @@ contains
         call test_build()
         call test_cap_nparts()
         call test_eo_diagnostics()
+        call test_memberless_halves()
     end subroutine run_all_cavgs_work_project_tests
+
+    !> class 1 without even members and class 2 without odd members (state_even/state_odd 0): only
+    !! that half's row is inactive; a deselected class stays inactive whatever its half flags; class
+    !! labels go onto the active rows only
+    subroutine test_memberless_halves()
+        class(sp_project), allocatable :: spproj, work
+        type(cavgs_work_project) :: wp
+        type(string)             :: cwd_saved, fixture_root
+        integer :: icls, nfail_before, labels(NCAVGS)
+        write(*,'(A)') 'test_memberless_halves'
+        nfail_before = tests_failed
+        call enter_fixture('tmp_cavgs_work_project_halves', cwd_saved, fixture_root)
+        allocate(spproj, work)
+        call make_input(spproj)
+        do icls = 1,NCAVGS
+            call spproj%os_cls2D%set(icls, 'state_even', merge(0, 1, icls == 1))
+            call spproj%os_cls2D%set(icls, 'state_odd',  merge(0, 1, icls == 2))
+        enddo
+        call wp%new(spproj, string(WORK_PROJNAME//'.simple'), string(SIGMA2_FNAME))
+        call work%read(string(WORK_PROJNAME//'.simple'))
+        call assert_int(0, work%os_ptcl3D%get_state(wp%even_row(1)), 'a memberless even half is an inactive row')
+        call assert_int(0, work%os_ptcl2D%get_state(wp%even_row(1)), 'and inactive in ptcl2D')
+        call assert_int(1, work%os_ptcl3D%get_state(wp%odd_row(1)),  'its odd half stays active')
+        call assert_int(0, work%os_ptcl3D%get_state(wp%odd_row(2)),  'a memberless odd half is an inactive row')
+        call assert_int(1, work%os_ptcl3D%get_state(wp%even_row(2)), 'its even half stays active')
+        call assert_int(0, work%os_ptcl3D%get_state(wp%even_row(DESELECTED)), 'a deselected class stays inactive')
+        call assert_int(1, work%os_ptcl3D%get_state(wp%even_row(4)), 'a class with both halves keeps both rows')
+        call assert_int(1, work%os_ptcl3D%get_state(wp%odd_row(4)),  'its odd row too')
+        ! the cls3D labels of a multi-label run: the inactive rows keep state 0
+        labels = [(1 + mod(icls,2), icls = 1,NCAVGS)]
+        call wp%label_rows(work%os_ptcl3D, labels)
+        call assert_int(0,         work%os_ptcl3D%get_state(wp%even_row(1)), 'labelling keeps a memberless even half inactive')
+        call assert_int(labels(1), work%os_ptcl3D%get_state(wp%odd_row(1)),  'its odd half takes the label')
+        call assert_int(0,         work%os_ptcl3D%get_state(wp%odd_row(2)),  'labelling keeps a memberless odd half inactive')
+        call assert_int(labels(2), work%os_ptcl3D%get_state(wp%even_row(2)), 'its even half takes the label')
+        call assert_int(0, work%os_ptcl3D%get_state(wp%even_row(DESELECTED)), 'labelling keeps a deselected class inactive')
+        call assert_int(0, work%os_ptcl3D%get_state(wp%odd_row(DESELECTED)),  'both of its rows')
+        call assert_int(labels(4), work%os_ptcl3D%get_state(wp%even_row(4)), 'a class with both halves labels both rows')
+        call assert_int(labels(4), work%os_ptcl3D%get_state(wp%odd_row(4)),  'its odd row too')
+        call wp%delete_files
+        call wp%kill
+        call work%kill
+        call spproj%kill
+        deallocate(spproj, work)
+        call leave_fixture(cwd_saved, fixture_root, nfail_before)
+    end subroutine test_memberless_halves
 
     ! ---- fixtures -------------------------------------------------------------
 

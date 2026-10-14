@@ -15,53 +15,64 @@ private
 #include "simple_local_flags.inc"
 
 !> what calc_pspec takes from the command line it is derived from: the
-!! particle segment, the mask, and the compute and queue settings;
-!! the rest of the execution environment is the project's compenv
-character(len=*), parameter :: PSPEC_TEMPLATE_KEYS(6) = [character(len=10) :: &
-    &'oritype', 'mskdiam', 'nthr', 'nparts', 'qsys_name', 'walltime']
+!! mask, and the compute and queue settings; the rest of the execution
+!! environment is the project's compenv
+character(len=*), parameter :: PSPEC_TEMPLATE_KEYS(5) = [character(len=10) :: &
+    &'mskdiam', 'nthr', 'nparts', 'qsys_name', 'walltime']
 
 contains
 
-    !> Can the intended euclid consumer load a registered, file-valid,
-    !! committed canonical state with the expected grid, layout, and grouping?
-    logical function sigma2_estimate_available( projfile, box, smpd, l_sigma_glob ) &
-            &result( l_available )
-        class(string), intent(in) :: projfile
-        integer,       intent(in) :: box
-        real,          intent(in) :: smpd
-        logical,       intent(in) :: l_sigma_glob
+    !> Can a euclid consumer of the given particle field (ptcl2D or ptcl3D) load the
+    !! project's canonical state: registered, file-valid, committed, global, with the
+    !! expected grid and particle layout? The store path is relative to the project's
+    !! directory, which every consumer takes from the project file's location
+    !! (update_projinfo); a copy of the project in a new execution directory still
+    !! records the previous run's cwd, so the check resolves the store the same way as
+    !! the consumers and a new execution directory rebuilds its own store
+    logical function sigma2_estimate_available( projfile, oritype, box, smpd ) result( l_available )
+        class(string),    intent(in) :: projfile
+        character(len=*), intent(in) :: oritype
+        integer,          intent(in) :: box
+        real,             intent(in) :: smpd
         type(sp_project) :: spproj
+        class(oris), pointer :: os
         character(len=STDLEN) :: message
+        select case(trim(oritype))
+            case('ptcl2D','ptcl3D')
+            case default
+                THROW_HARD('canonical sigma2 is kept for ptcl2D or ptcl3D, not '//trim(oritype))
+        end select
         call spproj%read_segment('projinfo', projfile)
+        ! the store resolves against the project file's directory, as in every consumer
+        ! (update_projinfo), not against the cwd a copied project still records
+        call spproj%update_projinfo(projfile)
         ! the layout digest is taken over the stack table as well: without it
         ! the digest is undefined and no committed state is ever consumable
         call spproj%read_segment('stk',      projfile)
-        call spproj%read_segment('ptcl3D',   projfile)
-        call spproj%update_projinfo(projfile)
-        l_available = canonical_sigma2_consumable(spproj, spproj%os_ptcl3D, box, smpd, l_sigma_glob, message)
+        call spproj%read_segment(oritype,    projfile)
+        call spproj%ptr2oritype(oritype, os)
+        l_available = canonical_sigma2_consumable(spproj, os, box, smpd, message)
         if( .not. l_available ) write(logfhandle,'(A)') '>>> SIGMA2 BOOTSTRAP: canonical state not consumable: '//trim(message)
+        nullify(os)
         call spproj%kill
     end function sigma2_estimate_available
 
-    !> Guarantee a canonical sigma2 estimate for the given particle project.
-    !! When one is available nothing happens. Otherwise calc_pspec derives the
-    !! particle power spectra and atomically publishes a committed state, pooled
-    !! (global) unless sigma_est asks for per-stack groups.
-    subroutine ensure_sigma2_for_iteration( template_cline, projfile, iter, box, smpd, l_sigma_glob, &
-            &label, l_bootstrapped, sigma_est )
-        class(cmdline),             intent(in)  :: template_cline
-        class(string),              intent(in)  :: projfile
-        integer,                    intent(in)  :: iter, box
-        real,                       intent(in)  :: smpd
-        logical,                    intent(in)  :: l_sigma_glob
-        character(len=*),           intent(in)  :: label
-        logical,                    intent(out) :: l_bootstrapped
-        character(len=*), optional, intent(in)  :: sigma_est
+    !> The one rebuild entry of every workflow that consumes or updates the canonical state: when
+    !! it is not consumable (missing, stale, another grid or layout, a header the format refuses), calc_pspec
+    !! seeds it from particle power spectra and publishes it; otherwise nothing happens.
+    subroutine ensure_sigma2_for_iteration( template_cline, projfile, oritype, iter, box, smpd, label, l_bootstrapped )
+        class(cmdline),   intent(in)  :: template_cline
+        class(string),    intent(in)  :: projfile
+        character(len=*), intent(in)  :: oritype
+        integer,          intent(in)  :: iter, box
+        real,             intent(in)  :: smpd
+        character(len=*), intent(in)  :: label
+        logical,          intent(out) :: l_bootstrapped
         type(commander_calc_pspec) :: xcalc_pspec
         type(cmdline) :: cline_pspec
         l_bootstrapped = .false.
-        if( sigma2_estimate_available(projfile, box, smpd, l_sigma_glob) ) return
-        call prepare_pspec_cline(template_cline, projfile, iter, cline_pspec, sigma_est)
+        if( sigma2_estimate_available(projfile, oritype, box, smpd) ) return
+        call prepare_pspec_cline(template_cline, projfile, oritype, iter, cline_pspec)
         write(logfhandle,'(A,I0)') '>>> '//trim(label)// &
             &': no compatible canonical sigma2 state; seeding from particle power spectra at iteration ', max(1, iter)
         call xcalc_pspec%execute(cline_pspec)
@@ -69,24 +80,22 @@ contains
         l_bootstrapped = .true.
     end subroutine ensure_sigma2_for_iteration
 
-    !> The calc_pspec command line that seeds the canonical sigma2 state from
-    !! particle image power at iteration iter: a fresh, sparse line with the
-    !! PSPEC_TEMPLATE_KEYS the template defines; the grouping is pooled (global)
-    !! unless sigma_est asks for per-stack groups
-    subroutine prepare_pspec_cline( template_cline, projfile, iter, cline_pspec, sigma_est )
-        class(cmdline),             intent(in)    :: template_cline
-        class(string),              intent(in)    :: projfile
-        integer,                    intent(in)    :: iter
-        type(cmdline),              intent(inout) :: cline_pspec
-        character(len=*), optional, intent(in)    :: sigma_est
+    !> The calc_pspec command line that seeds the canonical sigma2 state of the given particle
+    !! field from particle image power at iteration iter: a fresh, sparse line with the
+    !! PSPEC_TEMPLATE_KEYS the template defines
+    subroutine prepare_pspec_cline( template_cline, projfile, oritype, iter, cline_pspec )
+        class(cmdline),   intent(in)    :: template_cline
+        class(string),    intent(in)    :: projfile
+        character(len=*), intent(in)    :: oritype
+        integer,          intent(in)    :: iter
+        type(cmdline),    intent(inout) :: cline_pspec
         integer :: i
         call cline_pspec%kill
         call cline_pspec%set('prg',        'calc_pspec')
         call cline_pspec%set('mkdir',      'no')
         call cline_pspec%set('projfile',   projfile)
+        call cline_pspec%set('oritype',    oritype)
         call cline_pspec%set('objfun',     'euclid')
-        call cline_pspec%set('sigma_est',  'global')
-        if( present(sigma_est) ) call cline_pspec%set('sigma_est', trim(sigma_est))
         call cline_pspec%set('which_iter', max(1, iter))
         do i = 1, size(PSPEC_TEMPLATE_KEYS)
             call cline_pspec%copy_arg(template_cline, trim(PSPEC_TEMPLATE_KEYS(i)))
@@ -113,7 +122,6 @@ contains
         call cline_sigma%set('refine',                      'sigma')
         call cline_sigma%set('objfun',                     'euclid')
         call cline_sigma%set('ml_reg',                         'no')
-        call cline_sigma%set('sigma_est',                  'global')
         call cline_sigma%set('volrec',                         'no')
         call cline_sigma%set('continue',                       'no')
         call cline_sigma%set('center',                         'no')

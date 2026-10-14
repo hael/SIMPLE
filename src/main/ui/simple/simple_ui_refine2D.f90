@@ -81,10 +81,6 @@ contains
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="search", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
-        &'Sigma estimation method(group|global){global}','', .false., 'global', group="search", &
-        &choices=ui_choices([character(len=6) :: 'group', 'global']), &
-        &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_ADVANCED)
@@ -429,7 +425,8 @@ contains
         &subclass. Then the conditional sub-class averages, the expected image of the model at the latent centre of each &
         &subclass (cls_expansion_cavgs.mrc, each filtered by its own even/odd FRC, plus the even/odd halves from &
         &independent half models; the FRCs as class FRCs), and per subclass the population, the split separation and &
-        &the cross-half reproducibility (os_cls2D pop, neff = pop, sep, repro)',&
+        &the cross-half reproducibility (os_cls2D pop, neff = pop, sep, repro); a subclass half without members is &
+        &written inactive (os_cls2D state_even/state_odd 0)',&
         &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED, display_name='Class Expansion')

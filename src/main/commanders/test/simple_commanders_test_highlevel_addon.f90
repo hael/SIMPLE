@@ -167,6 +167,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     use simple_test_truth_metrics,      only: dock_both_hands, compare_to_truth, pair_pose_error, add_gaussian_blob
     use simple_solve3D_addon_report, only: solve3D_addon_report, ADDON_REPORT_FNAME
     use simple_image,                   only: image
+    use simple_class_frcs,              only: class_frcs
     use, intrinsic :: iso_fortran_env, only: int64
     integer, intent(in)    :: nthr
     logical, intent(inout) :: all_ok
@@ -178,6 +179,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     character(len=*), parameter :: TRUTH_ORIS  = 'simulated_oris.txt'
     character(len=*), parameter :: PROJNAME    = 'addon_gate'
     character(len=*), parameter :: STRICT_DIR  = 'strict'
+    character(len=*), parameter :: FRCS_2D     = 'frcs_2D_standin.bin' !< the stand-in's class FRCs
     real,    parameter :: SMPD        = 2.2
     integer, parameter :: BOX         = 112
     real,    parameter :: MSKDIAM     = 180.
@@ -219,6 +221,8 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     type(string)        :: root, stk_abs, stk_base_abs, stk_new_abs, full_proj, strict_proj_fname
     type(string)        :: frozen_run_proj, out_run_proj
     type(image)         :: img
+    type(class_frcs)    :: clsfrcs
+    real, allocatable   :: frc(:)
     type(string)        :: frozen_sigma, frozen_vol, addon_vol, base_vol, cwd_here, truth_abs
     character(len=STDLEN) :: msg
     integer(int64)      :: dig_proj0
@@ -307,6 +311,21 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
         call spproj%os_ptcl2D%set_state(i, 1)
         call spproj%os_ptcl3D%set_state(i, 1)
     enddo
+    ! the stand-in's class FRCs, which solve3D requires of a 2D solution before it balances over
+    ! classes: one smooth fall-off through 0.5 at GATE_LPSTOP for every class (the runs below
+    ! force their low-pass range, so the values do not plan the ladder)
+    call clsfrcs%new(NCLS2D, BOX, SMPD)
+    allocate(frc(clsfrcs%get_filtsz()))
+    do i = 1, size(frc)
+        frc(i) = 1. / (1. + (real(i) * GATE_LPSTOP / (real(BOX) * SMPD))**4)
+    enddo
+    do i = 1, NCLS2D
+        call clsfrcs%set_frc(i, frc)
+    enddo
+    call clsfrcs%write(string(FRCS_2D))
+    call clsfrcs%kill
+    deallocate(frc)
+    call spproj%add_frcs2os_out(simple_abspath(string(FRCS_2D)), 'frc2D')
     call spproj%write(full_proj)
     ! ---- the frozen project: the base set alone (its import gives the current
     ! project's first stack and rows), a seeded selection, same basename, own
@@ -386,7 +405,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     ! every particle at native sampling, so the output is the frozen input of
     ! a next add-on
     call gate%check('output_registers_the_union_sigma2_state', &
-        &canonical_sigma2_consumable(out_proj, out_proj%os_ptcl3D, BOX, SMPD, .true., msg))
+        &canonical_sigma2_consumable(out_proj, out_proj%os_ptcl3D, BOX, SMPD, msg))
     call man_out%read_registered(out_proj, out_run_proj, status, msg)
     call gate%check('addon_manifest_registered', status == 0)
     call man_out%validate_frozen(out_proj, status, msg)

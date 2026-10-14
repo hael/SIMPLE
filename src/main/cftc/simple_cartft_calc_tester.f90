@@ -1,7 +1,7 @@
 !@descr: unit tests for the Cartesian Fourier calculator of continuous pose refinement (simple_cartft_calc)
 ! Particle preparation, objectives and gradients, the gather against the PFTC projector, reference
 ! volumes and their files, batch preparation, the sigma owner and its polish fallback, the
-! per-shell sigma2 against the polar calculator (noise-only, model power, and the group sigma2 of
+! per-shell sigma2 against the polar calculator (noise-only, model power, and the global sigma2 of
 ! noisy particles) and the canonical sigma2 round trip. Test ids (E*, N*) are those of the
 ! pose_cont refactoring plan, section 10.
 module simple_cartft_calc_tester
@@ -27,13 +27,14 @@ use simple_projector,       only: projector
 use simple_oris,            only: oris
 use simple_sp_project,      only: sp_project
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, sigma2_state_create_candidate, &
-    &sigma2_state_write_local_range, sigma2_state_read_particles, sigma2_state_read_groups, sigma2_state_read_header, &
-    &SIGMA2_GROUP_GLOBAL, SIGMA2_PROV_RESIDUAL
+    &sigma2_state_write_local_range, sigma2_state_read_particles, sigma2_state_read_global, sigma2_state_read_header, &
+    &sigma2_state_write_particles, sigma2_state_publish, SIGMA2_PROV_RESIDUAL
 use simple_sigma2_state,    only: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_prepare_update, &
-    &sigma2_state_merge_local_ranges, sigma2_state_reduce_groups, sigma2_state_commit
+    &sigma2_state_assemble_candidate, sigma2_state_reduce
 use simple_matcher_2Dprep,  only: prepimg4align_cart
 use simple_type_defs,       only: ctfparams, ctfvars, CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
+use simple_sigma2_state_tester, only: write_test_sigma2_store
 implicit none
 private
 public :: run_all_cartft_calc_tests
@@ -164,8 +165,20 @@ contains
         no_ctf%ctfflag = CTFFLAG_NO
         active_range   = [2, box/2]
         if( present(kfromto) ) active_range = kfromto
-        call calc%set_ptcl(1, observed, no_ctf, sigma2, active_range)
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, active_range)
     end subroutine set_unweighted_particle
+
+    !> Slot islot for OBJFUN_EUCLID whitened by its own spectrum sigma2 (shells from 0): the
+    !! calculator holds it as the spectrum of both halves and the slot is prepared as half 1.
+    subroutine set_euclid_slot( calc, islot, observed, ctfparms, sigma2, kfromto )
+        class(cartft_calc), intent(inout) :: calc
+        integer,            intent(in)    :: islot, kfromto(2)
+        complex,            intent(in)    :: observed(:,:)
+        type(ctfparams),    intent(in)    :: ctfparms
+        real,               intent(in)    :: sigma2(0:)
+        call calc%set_sigma2(0, spread(sigma2, 2, 2))
+        call calc%set_ptcl(islot, observed, ctfparms, 1, kfromto)
+    end subroutine set_euclid_slot
 
     !> sum |X|^2/sigma2 over the pixels whose shell nint(|(h,k)|) lies in kfromto (unit sigma2
     !! when absent): the normalizer of the euclid loss.
@@ -253,7 +266,7 @@ contains
                 raw_observed(h,k) = cval*prediction(h,k)
             end do
         end do
-        call calc%set_ptcl(1, raw_observed, ctfparms, sigma2, [2, TEST_BOX/2 - 1])
+        call set_euclid_slot(calc, 1, raw_observed, ctfparms, sigma2, [2, TEST_BOX/2 - 1])
         call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
         power = whitened_power(raw_observed, [2, TEST_BOX/2 - 1], sigma2)
         call assert_true(objective*power/2._dp < 1.e-9_dp .and. maxval(abs(gradient))*power/2._dp < 1.e-7_dp, &
@@ -273,7 +286,7 @@ contains
                 raw_observed(h,k) = cval*prediction(h,k)
             end do
         end do
-        call calc%set_ptcl(1, raw_observed, ctfparms, sigma2, [2, TEST_BOX/2 - 1])
+        call set_euclid_slot(calc, 1, raw_observed, ctfparms, sigma2, [2, TEST_BOX/2 - 1])
         call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
         power = whitened_power(raw_observed, [2, TEST_BOX/2 - 1], sigma2)
         call assert_true(objective*power/2._dp < 1.e-9_dp .and. maxval(abs(gradient))*power/2._dp < 1.e-7_dp, &
@@ -297,17 +310,17 @@ contains
         call calc%predict(1, .true., rotation, shift, prediction)
         ctfparms%ctfflag = CTFFLAG_NO
         short_sigma2 = 1.
-        call calc%set_ptcl(1, prediction, ctfparms, short_sigma2, [2, TEST_BOX/2])
+        call set_euclid_slot(calc, 1, prediction, ctfparms, short_sigma2, [2, TEST_BOX/2])
         effective_range = calc%get_ptcl_kfromto(1)
         call assert_true(calc%ptcl_is_valid(1) .and. effective_range(2) == TEST_BOX/2 - 2, &
             &'short noise spectrum did not cap the active shell range')
         sigma2 = 1.
         sigma2(TEST_BOX/2) = -1.
-        call calc%set_ptcl(1, prediction, ctfparms, sigma2, [2, TEST_BOX/2])
+        call set_euclid_slot(calc, 1, prediction, ctfparms, sigma2, [2, TEST_BOX/2])
         call assert_true(.not. calc%ptcl_is_valid(1), 'invalid active noise variance was accepted')
         sigma2 = 1.
         sigma2(1) = ieee_value(0., ieee_quiet_nan)
-        call calc%set_ptcl(1, prediction, ctfparms, sigma2, [2, TEST_BOX/2])
+        call set_euclid_slot(calc, 1, prediction, ctfparms, sigma2, [2, TEST_BOX/2])
         call assert_true(calc%ptcl_is_valid(1), 'invalid variance outside the active range rejected the particle')
         call calc%kill
     end subroutine test_sigma_shell_contract
@@ -428,7 +441,7 @@ contains
         call calc%predict(1, .true., truth_rotation, truth_shift, observed)
         call calc%predict(1, .true., candidate_rotation, candidate_shift, prediction)
         sigma2 = [(0.5 + 0.1*real(shell), shell = 0, TEST_BOX/2)]
-        call calc%set_ptcl(1, observed, no_ctf, sigma2, kfromto)
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, kfromto)
         call assert_int(OBJFUN_EUCLID, calc%get_ptcl_objfun(1), 'a slot prepared with sigma2 is not a euclid slot')
         call calc%objective_gradient(1, .true., 1, candidate_rotation, candidate_shift, objective, gradient)
         residual_sum = 0._dp
@@ -448,11 +461,11 @@ contains
         call assert_true(abs(objective - oracle) < FORMULA_TOL*max(1._dp, oracle), &
             &'Cartesian euclid loss disagrees with the brute-force sum')
         call assert_true(abs(calc%score(1, objective) - exp(-oracle)) < FORMULA_TOL, 'euclid score is not exp(-L)')
-        call calc%set_ptcl(1, observed, no_ctf, 3.7*sigma2, kfromto)
+        call set_euclid_slot(calc, 1, observed, no_ctf, 3.7*sigma2, kfromto)
         call calc%objective_gradient(1, .true., 1, candidate_rotation, candidate_shift, scaled_objective, gradient)
         call assert_true(abs(scaled_objective - objective) < SCALING_TOL*objective, &
             &'euclid loss changed under a uniform scaling of sigma2')
-        call calc%set_ptcl(1, observed, no_ctf, [(sigma2(shell)*(1. + 0.5*real(shell)), shell = 0, TEST_BOX/2)], kfromto)
+        call set_euclid_slot(calc, 1, observed, no_ctf, [(sigma2(shell)*(1. + 0.5*real(shell)), shell = 0, TEST_BOX/2)], kfromto)
         call calc%objective_gradient(1, .true., 1, candidate_rotation, candidate_shift, reshaped_objective, gradient)
         call assert_true(abs(reshaped_objective - objective) > 1.e-3_dp*objective, &
             &'euclid loss did not change under a shell-dependent scaling of sigma2')
@@ -512,7 +525,7 @@ contains
                 if( objfuns(iobj) == OBJFUN_CC )then
                     call calc%set_ptcl(1, observed, ctfparms, [2, 6])
                 else
-                    call calc%set_ptcl(1, observed, ctfparms, sigma2, [2, 6])
+                    call set_euclid_slot(calc, 1, observed, ctfparms, sigma2, [2, 6])
                 endif
                 call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
                 do axis = 1, 5
@@ -752,10 +765,10 @@ contains
             call pftc%memoize_refs
             call pftc%memoize_ptcls
             if( objfuns(iobj) == OBJFUN_EUCLID )then
-                allocate(sigma2_noise(KFROMTO(1):KFROMTO(2),1), source=1.)
+                allocate(sigma2_noise(KFROMTO(1):KFROMTO(2),2), source=1.)
                 call pftc%assign_sigma2_noise(sigma2_noise)
                 call pftc%memoize_sqsum_ptcl(1)
-                call calc%set_ptcl(1, ptcl_plane, no_ctf, sigma2, KFROMTO)
+                call set_euclid_slot(calc, 1, ptcl_plane, no_ctf, sigma2, KFROMTO)
             else
                 call calc%set_ptcl(1, ptcl_plane, no_ctf, KFROMTO)
             endif
@@ -1147,16 +1160,20 @@ contains
     end subroutine test_observation_established_path
 
     !> The inputs of a small CTF batch of NB particles: raw images of box 2*SMALL_BOX, stored
-    !! shifts on the cropped grid, CTF parameters and a per-particle sigma2.
-    subroutine build_batch_fixture( nb, raws, crop_shifts, ctfs, sigma2, noise_mask )
+    !! shifts on the cropped grid, CTF parameters, the two sigma2 spectra (one per half) and the
+    !! particles' halves.
+    subroutine build_batch_fixture( nb, raws, crop_shifts, ctfs, sigma2, halves, noise_mask )
         integer,                      intent(in)  :: nb
         type(image),     allocatable, intent(out) :: raws(:)
         real,            allocatable, intent(out) :: crop_shifts(:,:), sigma2(:,:)
+        integer,         allocatable, intent(out) :: halves(:)
         type(ctfparams), allocatable, intent(out) :: ctfs(:)
         logical,         allocatable, intent(out) :: noise_mask(:,:,:)
         type(image) :: masker
         integer :: i, shell
-        allocate(raws(nb), crop_shifts(2,nb), ctfs(nb), sigma2(0:SMALL_BOX/2,nb))
+        allocate(raws(nb), crop_shifts(2,nb), ctfs(nb), sigma2(0:SMALL_BOX/2,2), halves(nb))
+        sigma2(:,1) = [(1. + 0.05*real(shell),   shell = 0, SMALL_BOX/2)]
+        sigma2(:,2) = [(1. + 0.05*real(2*shell), shell = 0, SMALL_BOX/2)]
         do i = 1, nb
             call build_raw_particle(raws(i), 2*SMALL_BOX, 0.75, i)
             crop_shifts(:,i) = [0.4*real(i) - 1., 0.7 - 0.3*real(i)]
@@ -1169,7 +1186,7 @@ contains
             ctfs(i)%angast  = 10.*real(i)
             ctfs(i)%phshift = 0.
             ctfs(i)%ctfflag = CTFFLAG_YES
-            sigma2(:,i) = [(1. + 0.05*real(shell*i), shell = 0, SMALL_BOX/2)]
+            halves(i) = mod(i,2) + 1
         end do
         call masker%disc([2*SMALL_BOX, 2*SMALL_BOX, 1], 0.75, 0.4*real(2*SMALL_BOX), noise_mask)
         call masker%kill
@@ -1192,42 +1209,52 @@ contains
     ! N11 and N12: the batch preparation of production (prep_cart_batch) fills slot i exactly as
     ! the single-particle path called in the test (prepimg4align_cart on a copy, then set_ptcl),
     ! under both objectives; with a team of three threads it gives the serial result bit for
-    ! bit. Expected values: that path, and the serial run.
+    ! bit. Expected values: that path, and the serial run. Under euclid, slots whitened by their
+    ! half's spectrum give the objectives of slots holding their own copy of it. A slot keeps its
+    ! arrays across fills: one filled first under the other objective, half and band and then as the
+    ! single-particle path fills it gives that path's objectives bit for bit.
     subroutine test_batch_preparation()
         integer, parameter :: NB = 5, KFROMTO(2) = [2, SMALL_BOX/2 - 1]
         real,    parameter :: CROP_SMPD = 1.5, MSKRAD = 6.
-        type(cartft_calc) :: batch_calc, single_calc, team_calc
+        type(cartft_calc) :: batch_calc, single_calc, team_calc, copy_calc, refill_calc
         type(image),     allocatable :: raws(:)
         type(image)      :: raw_copy, work
         type(ctfparams), allocatable :: ctfs(:)
         type(ctfparams)  :: ctf_out
         logical,         allocatable :: noise_mask(:,:,:)
         real,            allocatable :: crop_shifts(:,:), sigma2(:,:), volume(:,:,:), taper(:)
+        integer,         allocatable :: halves(:)
         complex,         allocatable :: observed(:,:)
-        real(dp) :: batch_values(6,NB), single_values(6,NB), team_values(6,NB)
+        real(dp) :: batch_values(6,NB), single_values(6,NB), team_values(6,NB), copy_values(6,NB), refill_values(6,NB)
         integer  :: i, iobj, nthr_saved
         call build_small_volume(volume)
-        call build_batch_fixture(NB, raws, crop_shifts, ctfs, sigma2, noise_mask)
+        call build_batch_fixture(NB, raws, crop_shifts, ctfs, sigma2, halves, noise_mask)
         nthr_saved = 1
         !$ nthr_saved = omp_get_max_threads()
         do iobj = 1, 2
             call new_batch_calc(batch_calc)
             call new_batch_calc(single_calc)
             call new_batch_calc(team_calc)
+            call new_batch_calc(copy_calc)
+            call new_batch_calc(refill_calc)
+            call refill_calc%set_sigma2(0, sigma2)
+            call batch_calc%set_sigma2(0, sigma2)
+            call single_calc%set_sigma2(0, sigma2)
+            call team_calc%set_sigma2(0, sigma2)
             taper = single_calc%get_ptcl_taper()
             !$ call omp_set_num_threads(1)
             if( iobj == 1 )then
                 call prep_cart_batch(batch_calc, NB, raws, noise_mask, SMALL_BOX, CROP_SMPD, MSKRAD, crop_shifts, ctfs, KFROMTO)
             else
                 call prep_cart_batch(batch_calc, NB, raws, noise_mask, SMALL_BOX, CROP_SMPD, MSKRAD, crop_shifts, ctfs, KFROMTO, &
-                    &sigma2)
+                    &halves)
             endif
             !$ call omp_set_num_threads(3)
             if( iobj == 1 )then
                 call prep_cart_batch(team_calc, NB, raws, noise_mask, SMALL_BOX, CROP_SMPD, MSKRAD, crop_shifts, ctfs, KFROMTO)
             else
                 call prep_cart_batch(team_calc, NB, raws, noise_mask, SMALL_BOX, CROP_SMPD, MSKRAD, crop_shifts, ctfs, KFROMTO, &
-                    &sigma2)
+                    &halves)
             endif
             !$ call omp_set_num_threads(nthr_saved)
             ! the single-particle path, serially
@@ -1240,14 +1267,27 @@ contains
                     &observed, ctf_out)
                 if( iobj == 1 )then
                     call single_calc%set_ptcl(i, observed, ctf_out, KFROMTO)
+                    call refill_calc%set_ptcl(i, observed, ctf_out, 3 - halves(i), [KFROMTO(1)+1, KFROMTO(2)-1])
+                    call refill_calc%set_ptcl(i, observed, ctf_out, KFROMTO)
                 else
-                    call single_calc%set_ptcl(i, observed, ctf_out, sigma2(:,i), KFROMTO)
+                    call single_calc%set_ptcl(i, observed, ctf_out, halves(i), KFROMTO)
+                    call set_euclid_slot(copy_calc, i, observed, ctf_out, sigma2(:,halves(i)), KFROMTO)
+                    call refill_calc%set_ptcl(i, observed, ctf_out, [1, KFROMTO(2)])
+                    call refill_calc%set_ptcl(i, observed, ctf_out, halves(i), KFROMTO)
                 endif
             end do
             call forget_ft_maps
             call slot_signatures(batch_calc,  NB, batch_values)
             call slot_signatures(single_calc, NB, single_values)
             call slot_signatures(team_calc,   NB, team_values)
+            call slot_signatures(refill_calc, NB, refill_values)
+            call assert_true(all(refill_values == single_values), &
+                &'a refilled slot differs from a slot filled once')
+            if( iobj == 2 )then
+                call slot_signatures(copy_calc, NB, copy_values)
+                call assert_true(all(copy_values == single_values), &
+                    &'slots by half differ from slots holding their own copy of the spectrum')
+            endif
             call assert_true(all(batch_values == single_values), &
                 &'batch preparation differs from the single-particle preparation (N11)')
             call assert_true(all(team_values == batch_values), 'threaded batch preparation differs from the serial one (N12)')
@@ -1256,6 +1296,8 @@ contains
             call batch_calc%kill
             call single_calc%kill
             call team_calc%kill
+            call copy_calc%kill
+            call refill_calc%kill
             call work%kill
             call raw_copy%kill
         end do
@@ -1297,7 +1339,7 @@ contains
             if( mod(i,2) == 0 )then
                 call calc%set_ptcl(i, observed, no_ctf, KFROMTO)
             else
-                call calc%set_ptcl(i, observed, no_ctf, sigma2, KFROMTO)
+                call set_euclid_slot(calc, i, observed, no_ctf, sigma2, KFROMTO)
             endif
         end do
         allocate(sigma_serial(KFROMTO(1):KFROMTO(2),NP), sigma_team(KFROMTO(1):KFROMTO(2),NP), source=0.)
@@ -1352,14 +1394,15 @@ contains
         truth     = real(euler2m([19., 37., 28.]), dp)
         committed = real(euler2m([20., 36.2, 28.7]), dp)
         call calc%predict(1, .true., truth, [0.3_dp, -0.2_dp], observed)
-        call calc%set_ptcl(1, observed, no_ctf, sigma2, KFROMTO)
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, KFROMTO)
         params%fromp    = 7
         params%top      = 7
         params%kfromto  = KFROMTO
         params%box      = TEST_BOX
         fname = 'tmp_cartft_calc_tester_sigma2.bin'
+        call write_test_sigma2_store(fname%to_char(), 7, TEST_BOX)
         call esig%new(params, fname, TEST_BOX)
-        call esig%allocate_ptcls
+        call esig%read_part
         call esig%calc_sigma2(calc, 1, 7, 1, .true., committed, [0.1_dp, 0._dp])
         stored = esig%get_sigma2_part(7)
         call calc%predict(1, .true., committed, [0.1_dp, 0._dp], model)
@@ -1380,6 +1423,7 @@ contains
         stored = esig%get_sigma2_part(7)
         call assert_true(all(abs(stored) <= 1.e-6*real(maxval(oracle))), 'an exact match stored a nonzero sigma2')
         call esig%kill
+        call del_file(fname)
         ! a Cartesian cc pass: no sigma2 state at all
         params%l_cart_refine = .true.
         params%cc_objfun     = OBJFUN_CC
@@ -1460,12 +1504,12 @@ contains
         call cart_work%new([BOX, BOX, 1], SMPD)
         call masked%copy(noise)
         call prepimg4align_cart(masked, noise_mask, cart_work, MSKRAD, SMPD, [0., 0.], taper, no_ctf, observed, ctf_out)
-        call calc%set_ptcl(1, observed, ctf_out, sigma2, KFROMTO)
+        call set_euclid_slot(calc, 1, observed, ctf_out, sigma2, KFROMTO)
         call calc%sigma_contribution(1, .true., 1, real(euler2m([0., 0., 0.]), dp), [0._dp, 0._dp], contrib, ref_pow, ptcl_pow, v)
         cart_tapered = contrib
         call masked%copy(noise)
         call prepimg4align_cart(masked, noise_mask, cart_work, MSKRAD, SMPD, [0., 0.], unit_taper, no_ctf, observed, ctf_out)
-        call calc%set_ptcl(1, observed, ctf_out, sigma2, KFROMTO)
+        call set_euclid_slot(calc, 1, observed, ctf_out, sigma2, KFROMTO)
         call calc%sigma_contribution(1, .true., 1, real(euler2m([0., 0., 0.]), dp), [0._dp, 0._dp], contrib, ref_pow, ptcl_pow, v)
         cart_plain = contrib
         ! the taper's noise-power factor of this realization (Parseval over the masked image)
@@ -1536,7 +1580,7 @@ contains
         ! the transaction the discrete pass opened and the residuals it wrote for part 1
         candidate = sigma2_state_candidate_path(COMMITTED, 2_int64)
         range_path = sigma2_state_range_path(COMMITTED, 2_int64, 1, 1)
-        call sigma2_state_prepare_update(COMMITTED, candidate%to_char(), status, message)
+        call sigma2_state_prepare_update(COMMITTED, 1, 1, status, message)
         call assert_int(0, status, 'open the sigma2 transaction: '//trim(message))
         do i = 1, NP
             discrete(:,i) = real(7 + i, real32)
@@ -1555,13 +1599,14 @@ contains
         truth          = real(euler2m([19., 37., 28.]), dp)
         committed_pose = real(euler2m([20., 36.2, 28.7]), dp)
         call calc%predict(1, .true., truth, [0.3_dp, -0.2_dp], observed)
-        call calc%set_ptcl(1, observed, no_ctf, sigma2, KFROMTO)
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, KFROMTO)
         call build%esig%calc_sigma2(calc, 1, 2, 1, .true., committed_pose, [0.1_dp, 0._dp])
         call build%esig%calc_sigma2(calc, 2, 3, 1, .true., committed_pose, [0._dp, 0._dp])
         polished = build%esig%get_sigma2_part(2)
         call build%esig%write_sigma2
-        call sigma2_state_merge_local_ranges(candidate%to_char(), [range_path], [(.true., i = 1, NP)], status, message)
-        call assert_int(0, status, 'merge the polish range: '//trim(message))
+        call sigma2_state_assemble_candidate(COMMITTED, candidate%to_char(), [range_path], [(.true., i = 1, NP)], &
+            &[(.true., i = 1, NP)], [(modulo(i-1, 2), i = 1, NP)], status, message)
+        call assert_int(0, status, 'commit the polish range: '//trim(message))
         call sigma2_state_read_particles(candidate%to_char(), 1, NP, rows, status, message)
         call assert_int(0, status, 'read the candidate rows: '//trim(message))
         call assert_true(all(rows(:,1) == discrete(:,1)), 'the polish changed the row of a particle it did not evaluate')
@@ -1728,7 +1773,7 @@ contains
         call masked%copy(ptcl)
         call prepimg4align_cart(masked, noise_mask, cart_work, MSKRAD, SMPD, [0., 0.], taper, ctfparms, observed, ctf_out)
         sigma2 = 1.
-        call calc%set_ptcl(1, observed, ctf_out, sigma2, KFROMTO)
+        call set_euclid_slot(calc, 1, observed, ctf_out, sigma2, KFROMTO)
         call calc%sigma_contribution(1, .true., 1, evaluated, [0._dp, 0._dp], contrib, ref_pow, ptcl_pow, v)
         call forget_ft_maps
         call assert_true(all(ref_pow > 0.) .and. all(contrib > 0.), 'N31 fixture: model or residual vanishes in a shell')
@@ -1766,7 +1811,7 @@ contains
         call cline%kill
     end subroutine test_polar_sigma_signal
 
-    ! N33: the group sigma2 that mixed polar/Cartesian generations reduce agrees between the two
+    ! N33: the global sigma2 that mixed polar/Cartesian generations reduce agrees between the two
     ! representations under realistic conditions: NG particles at in-plane angles off the polar grid
     ! (true shift zero, the shift a search would find) and astigmatic CTFs, white noise over the
     ! whole image at a signal-to-noise ratio of SNR, a mask clear of the particle; both production
@@ -1877,7 +1922,7 @@ contains
             call pftc%polarize_ptcl_pft(polar_pad, i, pdim=pdim, oversamp=.true.)
             call masked%copy(ptcl)
             call prepimg4align_cart(masked, noise_mask, cart_work, MSKRAD, SMPD, [0., 0.], taper, ctfparms(i), observed, ctf_out)
-            call calc%set_ptcl(i, observed, ctf_out, sigma2, KFROMTO)
+            call set_euclid_slot(calc, i, observed, ctf_out, sigma2, KFROMTO)
             evaluated = real(euler2m([e1(i), e2(i), e3]), dp)
             call calc%sigma_contribution(1, .true., i, evaluated, [0._dp, 0._dp], contrib, ref_pow, ptcl_pow, v)
             cart_sum = cart_sum + real(contrib, dp)
@@ -1965,9 +2010,9 @@ contains
 
     ! N32: the canonical round trip of a generation a Cartesian pass writes and a polar pass reads:
     ! write (calc_sigma2, write_sigma2), merge, reduce, commit, then reload through the polar sigma
-    ! owner (read_part, read_groups). The exact-zero rule: a record with zero shells (an observation
+    ! owner (read_part, read_global). The exact-zero rule: a record with zero shells (an observation
     ! empty there against a zero reference) stays in the particle rows, the reducer excludes it from
-    ! the groups, and its particle reloads the positive group of its half.
+    ! the global spectra, and the reload holds the positive spectrum of each half.
     subroutine test_canonical_sigma_round_trip()
         integer, parameter :: BOX = 32, NP = 4, KFROMTO(2) = [2, 10], NSHELL = BOX/2, ZERO_FROM = 4
         real,    parameter :: SEED = 3.
@@ -1980,12 +2025,12 @@ contains
         type(sigma2_state_header) :: header
         type(string)              :: candidate, range_path
         real, allocatable         :: volume(:,:,:), zero_volume(:,:,:), band(:)
-        real(real32), allocatable :: groups(:,:,:)
+        real(real32), allocatable :: globals(:,:)
         complex  :: observed(-BOX/2:BOX/2,-BOX/2:BOX/2)
         real     :: sigma2(0:BOX/2), written(NSHELL,NP), mean_even(NSHELL)
         real(dp) :: truth(3,3), committed_pose(3,3)
         logical  :: active(NP)
-        integer  :: eo(NP), group_ids(NP), i, h, k, status
+        integer  :: eo(NP), i, h, k, status
         character(len=128) :: message
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    1.0)
@@ -1999,7 +2044,7 @@ contains
         p%kfromto = KFROMTO
         candidate = sigma2_state_candidate_path(COMMITTED, 2_int64)
         range_path = sigma2_state_range_path(COMMITTED, 2_int64, 1, 1)
-        call sigma2_state_prepare_update(COMMITTED, candidate%to_char(), status, message)
+        call sigma2_state_prepare_update(COMMITTED, 1, 1, status, message)
         call assert_int(0, status, 'open the sigma2 transaction: '//trim(message))
         ! write: a Cartesian euclid pass, three particles at poses off their truth, the fourth with
         ! an observation empty from shell ZERO_FROM on against the zero reference of state 2
@@ -2022,7 +2067,7 @@ contains
                     end do
                 end do
             endif
-            call calc%set_ptcl(i, observed, no_ctf, sigma2, KFROMTO)
+            call set_euclid_slot(calc, i, observed, no_ctf, sigma2, KFROMTO)
             call build%esig%calc_sigma2(calc, i, i, merge(2, 1, i == NP), .true., committed_pose, [0.1_dp, 0._dp])
             written(:,i) = SEED
             written(KFROMTO(1):KFROMTO(2),i) = build%esig%get_sigma2_part(i)
@@ -2030,25 +2075,23 @@ contains
         call assert_true(all(written(ZERO_FROM:KFROMTO(2),NP) == 0.) .and. all(written(KFROMTO(1):ZERO_FROM-1,NP) > 0.), &
             &'N32 fixture: the fourth record does not have exactly zero shells')
         call build%esig%write_sigma2
-        ! reduce and commit
-        call sigma2_state_merge_local_ranges(candidate%to_char(), [range_path], [(.true., i = 1, NP)], status, message)
-        call assert_int(0, status, 'merge the Cartesian range: '//trim(message))
+        ! the streaming commit
         active    = .true.
         eo        = [(modulo(i-1, 2), i = 1, NP)]
-        group_ids = 1
-        call sigma2_state_reduce_groups(candidate%to_char(), active, eo, group_ids, status, message)
+        call sigma2_state_assemble_candidate(COMMITTED, candidate%to_char(), [range_path], [(.true., i = 1, NP)], &
+            &active, eo, status, message)
         call assert_int(0, status, 'a record with zero shells is skipped, not fatal: '//trim(message))
-        call sigma2_state_commit(candidate%to_char(), COMMITTED, active, eo, group_ids, status, message)
+        call sigma2_state_publish(candidate%to_char(), COMMITTED, status, message)
         call assert_int(0, status, 'commit the Cartesian generation: '//trim(message))
         call sigma2_state_read_header(COMMITTED, header, status, message)
         call assert_true(status == 0 .and. header%generation == 2_int64, 'the Cartesian generation was not committed')
-        call sigma2_state_read_groups(COMMITTED, groups, status, message)
-        call assert_int(0, status, 'read the committed groups: '//trim(message))
+        call sigma2_state_read_global(COMMITTED, globals, status, message)
+        call assert_int(0, status, 'read the committed global spectra: '//trim(message))
         mean_even = 0.5*(written(:,1) + written(:,3))
-        call assert_true(all(abs(groups(:,1,1) - mean_even) <= 1.e-6*mean_even), &
-            &'the even group is not the mean of its records')
-        call assert_true(all(abs(groups(:,2,1) - written(:,2)) <= 1.e-6*written(:,2)), &
-            &'the odd group is not the mean of its valid records alone')
+        call assert_true(all(abs(globals(:,1) - mean_even) <= 1.e-6*mean_even), &
+            &'the even spectrum is not the mean of its records')
+        call assert_true(all(abs(globals(:,2) - written(:,2)) <= 1.e-6*written(:,2)), &
+            &'the odd spectrum is not the mean of its valid records alone')
         ! reload: the polar sigma owner of the next pass
         call build%esig%kill
         p%l_cart_refine = .false.
@@ -2057,11 +2100,10 @@ contains
         do i = 1, NP
             band = build%esig%get_sigma2_part(i)
             call assert_true(all(band == written(KFROMTO(1):KFROMTO(2),i)), 'a particle record did not reload as written')
-            call assert_true(all(build%esig%sigma2_noise(:,i) == groups(:,eo(i)+1,1)), &
-                &'a particle did not reload the group of its half')
-            call assert_true(all(ieee_is_finite(build%esig%sigma2_noise(:,i))) .and. all(build%esig%sigma2_noise(:,i) > 0.), &
-                &'a reloaded alignment sigma2 is not finite and positive')
         end do
+        call assert_true(all(build%esig%sigma2_noise == globals), 'the reload does not hold the two global spectra')
+        call assert_true(all(ieee_is_finite(build%esig%sigma2_noise)) .and. all(build%esig%sigma2_noise > 0.), &
+            &'a reloaded alignment sigma2 is not finite and positive')
         call build%esig%kill
         call build%pftc%kill
         call calc%kill
@@ -2072,7 +2114,7 @@ contains
 
     ! FIXTURES OF THE CANONICAL SIGMA2 STATE
 
-    !> A committed canonical sigma2 state at path (generation 1, one global group, shells 1..box/2 of
+    !> A committed canonical sigma2 state at path (generation 1, the two global spectra, shells 1..box/2 of
     !! np particles, every value seed) and a builder whose project registers it, np particles in
     !! state 1 with alternating halves; params gets what the sigma owner of a Cartesian euclid pass reads.
     subroutine new_sigma2_fixture( path, np, box, seed, params, build )
@@ -2082,31 +2124,25 @@ contains
         type(parameters),       intent(inout) :: params
         type(builder),  target, intent(inout) :: build
         type(sigma2_state_header) :: header
-        type(string) :: candidate, range_path
+        type(string) :: candidate
         real(real32) :: spectra(box/2,np)
         logical      :: active(np)
-        integer      :: eo(np), groups(np), i, status
+        integer      :: eo(np), i, status
         character(len=128) :: message
         call remove_sigma2_files(path, 3)
         candidate = sigma2_state_candidate_path(path, 1_int64)
-        range_path = sigma2_state_range_path(path, 1_int64, 1, 1)
-        call sigma2_state_init_header(header, 1, box/2, np, box, 1.0, 1, SIGMA2_GROUP_GLOBAL, 1_int64, &
-            &FIXTURE_DIGEST, SIGMA2_PROV_RESIDUAL)
+        call sigma2_state_init_header(header, 1, box/2, np, box, 1.0, 1_int64, FIXTURE_DIGEST, SIGMA2_PROV_RESIDUAL)
         call sigma2_state_create_candidate(candidate%to_char(), header, status, message)
         call assert_int(0, status, 'sigma2 fixture candidate: '//trim(message))
         spectra = real(seed, real32)
-        call sigma2_state_write_local_range(range_path%to_char(), 1_int64, FIXTURE_DIGEST, 1, spectra, 1, box/2, status, message)
-        call assert_int(0, status, 'sigma2 fixture range: '//trim(message))
-        call sigma2_state_merge_local_ranges(candidate%to_char(), [range_path], [(.true., i = 1, np)], status, message)
-        call assert_int(0, status, 'sigma2 fixture merge: '//trim(message))
+        call sigma2_state_write_particles(candidate%to_char(), 1, spectra, status, message)
+        call assert_int(0, status, 'sigma2 fixture records: '//trim(message))
         active = .true.
         eo     = [(modulo(i-1, 2), i = 1, np)]
-        groups = 1
-        call sigma2_state_reduce_groups(candidate%to_char(), active, eo, groups, status, message)
+        call sigma2_state_reduce(candidate%to_char(), active, eo, status, message)
         call assert_int(0, status, 'sigma2 fixture reduction: '//trim(message))
-        call sigma2_state_commit(candidate%to_char(), path, active, eo, groups, status, message)
+        call sigma2_state_publish(candidate%to_char(), path, status, message)
         call assert_int(0, status, 'sigma2 fixture commit: '//trim(message))
-        call del_file(range_path)
         call build%spproj%set_sigma2_state_path(string(path))
         call build%spproj%os_ptcl3D%new(np, is_ptcl=.true.)
         do i = 1, np
@@ -2118,7 +2154,6 @@ contains
         params%cc_emit_sigma = 'no'
         params%l_cart_refine = .true.
         params%l_cont_polish = .false.
-        params%l_sigma_glob  = .true.
         params%fromp         = 1
         params%top           = np
         params%part          = 1

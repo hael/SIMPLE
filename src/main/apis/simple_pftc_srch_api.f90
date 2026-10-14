@@ -9,7 +9,6 @@ use simple_imgarr_utils,    only: read_cavgs_into_imgarr,  read_stk_into_imgarr,
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 use simple_polarft_calc,    only: polarft_calc
-use simple_sigma2_binfile,  only: sigma2_binfile
 use simple_sp_project,      only: sp_project
 use simple_stack_io,        only: stack_io
 use simple_starproject,     only: starproject

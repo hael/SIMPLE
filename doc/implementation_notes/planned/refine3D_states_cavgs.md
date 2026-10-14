@@ -414,7 +414,7 @@ without `flex_pca`.
 | `filt_mode` | `none` | fixed, anything else is refused |
 | `ml_reg` | `yes` | from the first block; `ml_reg=no` turns it off |
 | `envfsc`, `automsk`, `combine_eo` | `no` | fixed, other values are refused |
-| `objfun`, `sigma_est` | `euclid`, `global` | fixed, as in `solve3D_cavgs` |
+| `objfun` | `euclid` | fixed, as in `solve3D_cavgs` |
 | `rec_backend` | `pcg` | seed checkpoint, flex, march and final maps; `gridding` accepted as an override |
 | `mskdiam` | none | required, the PCG support |
 | `pcg_mskfile`, `pcg_solvent` | unset | refused |

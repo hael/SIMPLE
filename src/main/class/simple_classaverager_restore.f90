@@ -5,6 +5,8 @@ use simple_gridding,         only: prep2D_inv_instrfun4mul
 use simple_oris,             only: population_blend_weights
 use simple_cavg_sums,        only: cavg_sums, CAVG_SUMS_STATE, CAVG_SUMS_CONTRIB, CAVG_SUMS_OK,&
                                   &cavg_contrib_fname
+use simple_euclid_sigma2,    only: sigma2_half
+use simple_fplane_grid,      only: fplane_grid
 implicit none
 #include "simple_local_flags.inc"
 
@@ -101,9 +103,9 @@ contains
         if( p_ptr%l_ml_reg )then
             call b_ptr%spproj%get_sigma2_state_path(fname, found)
             if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
+            ! restoration whitens by the two global spectra; it reads no particle records
             call b_ptr%esig%new(p_ptr, b_ptr%pftc, fname, p_ptr%box)
-            call b_ptr%esig%read_part(  b_ptr%spproj_field)
-            call b_ptr%esig%read_groups(b_ptr%spproj_field)
+            call b_ptr%esig%read_global
             call fname%kill
         end if
     end subroutine cavger_read_euclid_sigma2
@@ -207,9 +209,10 @@ contains
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
         type(fplane_type) :: fplanes(nthr_glob)
+        type(fplane_grid) :: grid
         type(ctfparams) :: ctfparms_here
-        integer :: sigma2_kfromto(2)
-        integer :: iptcl, ithr, icls, i, nyq_crop
+        integer, allocatable :: cls_first(:), cls_order(:)
+        integer :: iptcl, ithr, icls, i, j, ih, box_pd
         real    :: crop_factor, shift_here(2)
         ! Memoization for the padded image tmp_pad_imgs was allocated with. The
         ! (ldim,smpd) pair fixes the physical extent, and boxpd*smpd == box_croppd*
@@ -220,24 +223,48 @@ contains
             call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
         endif
         crop_factor = real(p_ptr%box_crop) / real(p_ptr%box)
-        ! Dimensions & limits
-        nyq_crop       = cavgs%even%fit%get_lfny(1)
-        sigma2_kfromto = [1, nyq_crop]
-        if( p_ptr%l_ml_reg ) then
-            sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
-            sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
-            ! gen_fplane4rec derives the sigma2 source range from the box it is handed
-            ! (box_croppd/OSMPL_PAD_FAC). That is params%box for the full-size buffer
-            ! but box_crop for the cropped one, so the spectrum has to be truncated to
-            ! the shells the cropped grid actually spans.
-            if( l_cropped_ptcls ) sigma2_kfromto(2) = min(sigma2_kfromto(2), nyq_crop)
-        end if
-        !$omp parallel do default(shared) private(icls,i,iptcl,ithr,ctfparms_here,shift_here)&
+        ! the plane grid of the padded box, once for the call: the spectra's cached one with ML regularization;
+        ! its spectra span the shells of the box it is built for (box_crop/2 for cropped particles)
+        box_pd = merge(ldim_croppd(1), ldim_pd(1), l_cropped_ptcls)
+        if( p_ptr%l_ml_reg )then
+            call b_ptr%esig%prep_fplane_grid(box_pd, lbound(b_ptr%esig%sigma2_noise,1))
+        else
+            call grid%new(box_pd)
+        endif
+        ! the batch bucketed by class once (a stable counting sort): class icls holds the batch indices
+        ! cls_order(cls_first(icls):cls_first(icls+1)-1), in batch order, so each class's sums
+        ! accumulate in the same order as a scan over the whole batch
+        allocate(cls_first(ncls+1), source=0)
+        allocate(cls_order(nptcls))
+        do i = 1, nptcls
+            if( precs(i)%pind == 0 ) cycle
+            icls = precs(i)%class
+            if( icls < 1 .or. icls > ncls ) cycle
+            cls_first(icls+1) = cls_first(icls+1) + 1
+        enddo
+        cls_first(1) = 1
+        do icls = 1, ncls
+            cls_first(icls+1) = cls_first(icls+1) + cls_first(icls)
+        enddo
+        ! cls_first(icls+1) - 1 is the last slot of class icls; fill from the front with a running cursor
+        cls_order = 0
+        do i = 1, nptcls
+            if( precs(i)%pind == 0 ) cycle
+            icls = precs(i)%class
+            if( icls < 1 .or. icls > ncls ) cycle
+            cls_order(cls_first(icls)) = i
+            cls_first(icls) = cls_first(icls) + 1
+        enddo
+        ! the cursors now point at the next class's first slot: shift them back by one class
+        do icls = ncls, 1, -1
+            cls_first(icls+1) = cls_first(icls)
+        enddo
+        cls_first(1) = 1
+        !$omp parallel do default(shared) private(icls,j,i,iptcl,ithr,ih,ctfparms_here,shift_here)&
         !$omp schedule(static,1) proc_bind(close)
         do icls = 1, ncls
-            do i = 1, nptcls
-                if( precs(i)%pind == 0 )     cycle
-                if( precs(i)%class /= icls ) cycle
+            do j = cls_first(icls), cls_first(icls+1) - 1
+                i     = cls_order(j)
                 ithr  = omp_get_thread_num() + 1
                 iptcl = precs(i)%pind
                 ! particle: normalize, pad & forward FT
@@ -265,12 +292,12 @@ contains
                     shift_here         = shift_here * crop_factor
                 endif
                 if( p_ptr%l_ml_reg ) then
-                    call tmp_pad_imgs(ithr)%gen_fplane4rec(sigma2_kfromto, p_ptr%smpd_crop, &
-                        ctfparms_here, shift_here, fplanes(ithr), &
-                        b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
+                    ih = sigma2_half(precs(i)%eo)
+                    call tmp_pad_imgs(ithr)%gen_fplane4rec(p_ptr%smpd_crop, ctfparms_here, shift_here, &
+                        &fplanes(ithr), b_ptr%esig%fplane, half=ih)
                 else
-                    call tmp_pad_imgs(ithr)%gen_fplane4rec(sigma2_kfromto, p_ptr%smpd_crop, &
-                        ctfparms_here, shift_here, fplanes(ithr) )
+                    call tmp_pad_imgs(ithr)%gen_fplane4rec(p_ptr%smpd_crop, ctfparms_here, shift_here, &
+                        &fplanes(ithr), grid)
                 endif
                 ! rotation, interpolation and accumulation
                 select case(precs(i)%eo)
@@ -284,6 +311,8 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        call grid%kill
+        deallocate(cls_first, cls_order)
     end subroutine cavger_update_sums
 
     !>  \brief  is for generating class averages offline

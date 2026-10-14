@@ -1334,7 +1334,6 @@ contains
         call cline%set('prg',             'solve2D')
         call cline%set('mkdir',           'no')
         call cline%set('ncls',            ncls_job)
-        call cline%set('sigma_est',       'global')
         call cline%set('center',          'yes')
         call cline%set('autoscale',       'yes')
         call cline%set('nsample',         max(NSAMPLE2D, nsample_job))
@@ -1613,14 +1612,14 @@ contains
     subroutine balance_classes( spproj, projfile_out, outdir )
         type(sp_project), intent(inout) :: spproj
         class(string),    intent(in)    :: projfile_out, outdir
-        type(string)              :: cavgsstk, balanced_stk, odd_stk, even_stk, sigma2_stk
-        type(string)              :: odd_balanced_stk, even_balanced_stk, sigma2_balanced_stk, cwd
+        type(string)              :: cavgsstk, balanced_stk, odd_stk, even_stk
+        type(string)              :: odd_balanced_stk, even_balanced_stk, cwd
         type(image), allocatable  :: cavg_imgs(:)
         type(oris)                :: os_cls2D_src
         integer,     allocatable  :: src_inds(:), pops(:), reps(:), extra(:)
         real,        allocatable  :: frac(:)
         logical,     allocatable  :: picked(:)
-        integer :: ncls_all, nsrc, total_pop, icls, j, out_ind, istk, rem, imax, iout, n_balanced
+        integer :: ncls_all, nsrc, total_pop, icls, j, out_ind, istk, rem, imax, n_balanced
         real    :: smpd_dummy
         call simple_getcwd(cwd)
         call simple_mkdir('balance_classes')
@@ -1712,17 +1711,6 @@ contains
             call duplicate_balanced_stack(even_stk, even_balanced_stk, ncls_all, nsrc, src_inds, reps)
             call update_os_out_stk(spproj, even_stk, even_balanced_stk, n_balanced)
         endif
-        ! the sigma2 output is carried forward under the balanced name
-        do iout = 1, spproj%os_out%get_noris()
-            if( .not. spproj%os_out%isthere(iout, 'imgkind') ) cycle
-            if( spproj%os_out%get_str(iout, 'imgkind') /= 'sigma2' ) cycle
-            if( .not. spproj%os_out%isthere(iout, 'sigma2') ) cycle
-            sigma2_stk = spproj%os_out%get_str(iout, 'sigma2')
-            if( .not. file_exists(sigma2_stk) ) cycle
-            sigma2_balanced_stk = 'cavgs_balanced'//STAR_EXT
-            call simple_copy_file(sigma2_stk, sigma2_balanced_stk)
-            call spproj%os_out%set(iout, 'sigma2', simple_abspath(sigma2_balanced_stk))
-        enddo
         call spproj%write(projfile_out)
         call simple_chdir(cwd)
         write(logfhandle, '(A,I0,A)') '>>> BALANCED CLASS AVERAGES TO ', n_balanced, ' ENTRIES'

@@ -130,7 +130,8 @@ contains
         if( objfun == OBJFUN_CC )then
             call calc%set_ptcl(1, gain*observed, no_ctf, kfromto)
         else
-            call calc%set_ptcl(1, gain*observed, no_ctf, sigma2, kfromto)
+            call calc%set_sigma2(0, spread(sigma2, 2, 2))
+            call calc%set_ptcl(1, gain*observed, no_ctf, 1, kfromto)
         endif
     end subroutine new_fixture
 
@@ -154,7 +155,8 @@ contains
             call calc%set_ptcl(1, observed, no_ctf, kfromto)
         else
             allocate(sigma2(0:box/2), source=1.)
-            call calc%set_ptcl(1, observed, no_ctf, sigma2, kfromto)
+            call calc%set_sigma2(0, spread(sigma2, 2, 2))
+            call calc%set_ptcl(1, observed, no_ctf, 1, kfromto)
         endif
     end subroutine set_centred_particle
 
@@ -400,14 +402,16 @@ contains
         sigma2(2) = -1.
         call calc%new(1, TEST_BOX, 1)
         call calc%set_ref(1, .true., zero_volume)
-        call calc%set_ptcl(1, zero_plane, no_ctf, sigma2, [2, TEST_BOX/2])
+        call calc%set_sigma2(0, spread(sigma2, 2, 2))
+        call calc%set_ptcl(1, zero_plane, no_ctf, 1, [2, TEST_BOX/2])
         call assert_true(.not. calc%ptcl_is_valid(1), 'invalid sigma data was accepted')
         sigma2 = 1.
         ! both objectives normalize by the particle power, so an observation without power is an
         ! invalid preparation; the unobservable case is a zero reference against a particle
-        call calc%set_ptcl(1, zero_plane, no_ctf, sigma2, [2, TEST_BOX/2])
+        call calc%set_sigma2(0, spread(sigma2, 2, 2))
+        call calc%set_ptcl(1, zero_plane, no_ctf, 1, [2, TEST_BOX/2])
         call assert_true(.not. calc%ptcl_is_valid(1), 'an observation without power was accepted')
-        call calc%set_ptcl(1, zero_plane + cmplx(1., -0.5), no_ctf, sigma2, [2, TEST_BOX/2])
+        call calc%set_ptcl(1, zero_plane + cmplx(1., -0.5), no_ctf, 1, [2, TEST_BOX/2])
         rotation = real(euler2m([19., 37., 28.]), dp)
         shift    = [0.2_dp, -0.1_dp]
         original_rotation = rotation

@@ -4,12 +4,14 @@
 ! truth maps (same frame, 8 A low-pass), at least as well as the hard reconstruction of the same
 ! particles matches its truth, minus 0.01; 0/1 weights equal to the labels reproduce the hard maps
 ! byte for byte; gridding and PCG trailing seeds represent the same applied mass; a trailing chain of
-! another weight set generation is re-seeded, one of the same is blended (both backends).
+! another weight set generation is re-seeded, one of the same is blended (both backends); under PCG a
+! state left without particles is dropped and its previous maps are carried forward.
 module simple_rec3D_service_tester
 use simple_defs,                        only: logfhandle
 use simple_string,                      only: string
 use simple_string_utils,                only: int2str_pad
 use simple_syslib,                      only: simple_mkdir, simple_chdir, simple_rename
+use simple_fileio,                      only: simple_copy_file
 use simple_image,                       only: image
 use simple_cmdline,                     only: cmdline
 use simple_sp_project,                  only: sp_project
@@ -48,6 +50,7 @@ contains
         call test_fractional_phantom('gridding')
         call test_fractional_phantom('pcg')
         call test_trailing_weight_identity()
+        call test_empty_state_carried()
         call simple_chdir(root)
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine run_all_rec3D_service_lib_tests
@@ -166,6 +169,48 @@ contains
         call fname%kill
         call fname_hard%kill
     end subroutine test_labels_equal_hard
+
+    !> PCG with a state that lost every particle while the other has them (the gridding rule): the
+    !! run completes, the empty state's previous maps stay byte for byte, the other state is rewritten
+    subroutine test_empty_state_carried()
+        character(len=5), parameter :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
+        type(sp_project) :: project
+        type(string)     :: fname, fname_prev
+        integer :: truth_labels(FLEX_PHANTOM_NPTCLS), i, k, status
+        logical :: l_kept
+        write(*,'(A)') 'test_empty_state_carried pcg'
+        truth_labels = [(conformer(i), i = 1, FLEX_PHANTOM_NPTCLS)]
+        call make_project('empty_pcg', truth_labels)
+        call run_rec3D('pcg', .false.)
+        do k = 1, size(SUFFIXES)
+            fname      = state_map_fname(2, trim(SUFFIXES(k)))
+            fname_prev = fname//'.prev'
+            call simple_copy_file(fname, fname_prev, status)
+        enddo
+        fname      = state_map_fname(1, '')
+        fname_prev = fname//'.prev'
+        call simple_copy_file(fname, fname_prev, status)
+        ! every particle to state 1: state 2 has none
+        call project%read(string('phantom.simple'))
+        do i = 1, FLEX_PHANTOM_NPTCLS
+            call project%os_ptcl3D%set_state(i, 1)
+        enddo
+        call project%write(string('phantom.simple'))
+        call project%kill
+        call run_rec3D('pcg', .false.)
+        l_kept = .true.
+        do k = 1, size(SUFFIXES)
+            fname      = state_map_fname(2, trim(SUFFIXES(k)))
+            fname_prev = fname//'.prev'
+            l_kept = l_kept .and. same_bytes(fname, fname_prev)
+        enddo
+        call assert_true(l_kept, 'pcg: the empty state keeps its previous maps byte for byte')
+        fname      = state_map_fname(1, '')
+        fname_prev = fname//'.prev'
+        call assert_false(same_bytes(fname, fname_prev), 'pcg: the populated state is reconstructed again')
+        call fname%kill
+        call fname_prev%kill
+    end subroutine test_empty_state_carried
 
     function state_map_fname( s, suffix ) result( fname )
         integer,          intent(in) :: s

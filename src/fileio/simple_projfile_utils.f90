@@ -1,17 +1,14 @@
 !@descr: project file utilities
 module simple_projfile_utils
-use, intrinsic :: iso_fortran_env, only: int32, int64, real32
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_image,             only: image
 use simple_sp_project,        only: sp_project
 use simple_oris,              only: oris
 use simple_ptcl_layout,       only: ptcl_layout_digest
-use simple_sigma2_state,      only: sigma2_state_candidate_path, sigma2_state_commit, &
-    &sigma2_state_reduce_groups
-use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
-    &sigma2_state_init_header, sigma2_state_read_header, sigma2_state_read_particles, &
-    &sigma2_state_validate_file, sigma2_state_write_particles, SIGMA2_GROUP_GLOBAL, &
-    &SIGMA2_GROUP_STACK, SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
+use simple_sigma2_state,      only: sigma2_state_candidate_path, sigma2_state_concatenate
+use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, sigma2_state_read_header, &
+    &sigma2_state_validate_file, sigma2_state_publish, SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
 use simple_class_frcs
 implicit none
 #include "simple_local_flags.inc"
@@ -255,11 +252,10 @@ contains
         subroutine concatenate_canonical_states
             type(sigma2_state_header) :: source_header, target_header
             type(string) :: target_path, candidate_path
-            real(real32), allocatable :: block(:,:)
             logical, allocatable :: active(:)
-            integer, allocatable :: eo_ids(:), group_ids(:)
+            integer, allocatable :: eo_ids(:)
             integer(int64) :: layout_digest, generation
-            integer :: irow, offset, status, ngroups
+            integer :: irow, offset, status
             character(len=STDLEN) :: message
             generation = 1_int64
             offset = 0
@@ -274,57 +270,34 @@ contains
                     if( source_header%box /= target_header%box .or. &
                         &source_header%kfrom /= target_header%kfrom .or. &
                         &source_header%kto /= target_header%kto .or. &
-                        &source_header%grouping /= target_header%grouping .or. &
                         &abs(real(source_header%smpd-target_header%smpd)) > 1.e-5 ) &
-                        &THROW_HARD('canonical sigma2 chunk states use incompatible native grids or grouping')
+                        &THROW_HARD('canonical sigma2 chunk states use incompatible native grids')
                 endif
                 generation = max(generation, source_header%generation + 1_int64)
                 offset = offset + int(source_header%nptcls)
             enddo
             if( offset /= nallptcls ) THROW_HARD('canonical sigma2 chunk rows do not match merged project')
-            allocate(active(nallptcls), eo_ids(nallptcls), group_ids(nallptcls))
-            ngroups = 0
+            allocate(active(nallptcls), eo_ids(nallptcls))
             do irow = 1, nallptcls
-                active(irow)    = merged_proj%os_ptcl2D%get_state(irow) > 0
-                eo_ids(irow)    = merged_proj%os_ptcl2D%get_eo(irow)
-                group_ids(irow) = merged_proj%os_ptcl2D%get_int(irow, 'stkind')
-                if( active(irow) ) ngroups = max(ngroups, group_ids(irow))
+                active(irow) = merged_proj%os_ptcl2D%get_state(irow) > 0
+                eo_ids(irow) = merged_proj%os_ptcl2D%get_eo(irow)
             enddo
-            if( target_header%grouping == SIGMA2_GROUP_GLOBAL )then
-                ngroups = 1
-                group_ids = 1
-            else if( target_header%grouping /= SIGMA2_GROUP_STACK )then
-                THROW_HARD('unsupported canonical sigma2 grouping in chunk merge')
-            endif
             layout_digest = ptcl_layout_digest(merged_proj, merged_proj%os_ptcl2D)
             if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
             target_path = dir//'sigma2_state.bin'
             candidate_path = sigma2_state_candidate_path(target_path%to_char(), generation)
             ! target_header is intent(out) there: its own fields go in as values
             call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
-                &nallptcls, int(target_header%box), real(target_header%smpd), ngroups, &
-                &int(target_header%grouping, int32), generation, layout_digest, SIGMA2_PROV_RESIDUAL)
-            call sigma2_state_create_candidate(candidate_path%to_char(), target_header, status, message)
+                &nallptcls, int(target_header%box), real(target_header%smpd), generation, layout_digest, &
+                &SIGMA2_PROV_RESIDUAL)
+            ! the chunk stores copied in blocks, the global spectra summed while copying
+            call sigma2_state_concatenate(chunks_sigma2_state(:nchunks), candidate_path%to_char(), target_header, &
+                &active, eo_ids, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
-            offset = 0
-            do irow = 1, nchunks
-                call sigma2_state_read_header(chunks_sigma2_state(irow)%to_char(), source_header, status, message)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                call sigma2_state_read_particles(chunks_sigma2_state(irow)%to_char(), 1, &
-                    &int(source_header%nptcls), block, status, message)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                call sigma2_state_write_particles(candidate_path%to_char(), offset+1, block, status, message)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                offset = offset + int(source_header%nptcls)
-                deallocate(block)
-            enddo
-            call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            call sigma2_state_commit(candidate_path%to_char(), target_path%to_char(), active, eo_ids, &
-                &group_ids, status, message)
+            call sigma2_state_publish(candidate_path%to_char(), target_path%to_char(), status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
             call merged_proj%set_sigma2_state_path(target_path)
-            deallocate(active, eo_ids, group_ids)
+            deallocate(active, eo_ids)
             call target_path%kill
             call candidate_path%kill
         end subroutine concatenate_canonical_states
@@ -815,11 +788,10 @@ contains
                 class(oris), intent(in) :: target_particles
                 type(sigma2_state_header) :: source_header, target_header
                 type(string) :: target_dir, target_path, candidate_path
-                real(real32), allocatable :: block(:,:)
                 logical, allocatable :: active(:)
-                integer, allocatable :: eo_ids(:), group_ids(:)
+                integer, allocatable :: eo_ids(:)
                 integer(int64) :: layout_digest, generation
-                integer :: ip, irow, offset, nrows, ngroups, status
+                integer :: ip, irow, offset, nrows, status
                 character(len=STDLEN) :: message
                 nrows = target_particles%get_noris(consider_state=.false.)
                 generation = 1_int64
@@ -833,28 +805,18 @@ contains
                         if( source_header%box /= target_header%box .or. &
                             &source_header%kfrom /= target_header%kfrom .or. &
                             &source_header%kto /= target_header%kto .or. &
-                            &source_header%grouping /= target_header%grouping .or. &
                             &abs(real(source_header%smpd-target_header%smpd)) > 1.e-5 ) &
-                            &THROW_HARD('merge_projects canonical sigma2 inputs use incompatible grids or grouping')
+                            &THROW_HARD('merge_projects canonical sigma2 inputs use incompatible grids')
                     endif
                     generation = max(generation, source_header%generation + 1_int64)
                     offset = offset + int(source_header%nptcls)
                 enddo
                 if( offset /= nrows ) THROW_HARD('canonical sigma2 rows do not cover the merged project')
-                allocate(active(nrows), eo_ids(nrows), group_ids(nrows))
-                ngroups = 0
+                allocate(active(nrows), eo_ids(nrows))
                 do irow = 1, nrows
-                    active(irow)    = target_particles%get_state(irow) > 0
-                    eo_ids(irow)    = target_particles%get_eo(irow)
-                    group_ids(irow) = target_particles%get_int(irow, 'stkind')
-                    if( active(irow) ) ngroups = max(ngroups, group_ids(irow))
+                    active(irow) = target_particles%get_state(irow) > 0
+                    eo_ids(irow) = target_particles%get_eo(irow)
                 enddo
-                if( target_header%grouping == SIGMA2_GROUP_GLOBAL )then
-                    ngroups = 1
-                    group_ids = 1
-                else if( target_header%grouping /= SIGMA2_GROUP_STACK )then
-                    THROW_HARD('unsupported canonical sigma2 grouping in merge_projects')
-                endif
                 layout_digest = ptcl_layout_digest(merged_proj, target_particles)
                 if( layout_digest == 0_int64 ) THROW_HARD('cannot derive merged canonical sigma2 layout identity')
                 target_dir = get_fpath(projfile_out)
@@ -862,29 +824,16 @@ contains
                 candidate_path = sigma2_state_candidate_path(target_path%to_char(), generation)
                 ! target_header is intent(out) there: its own fields go in as values
                 call sigma2_state_init_header(target_header, int(target_header%kfrom), int(target_header%kto), &
-                    &nrows, int(target_header%box), real(target_header%smpd), ngroups, &
-                    &int(target_header%grouping, int32), generation, layout_digest, SIGMA2_PROV_RESIDUAL)
-                call sigma2_state_create_candidate(candidate_path%to_char(), target_header, status, message)
+                    &nrows, int(target_header%box), real(target_header%smpd), generation, layout_digest, &
+                    &SIGMA2_PROV_RESIDUAL)
+                ! the project stores copied in blocks, the global spectra summed while copying
+                call sigma2_state_concatenate(project_sigma2_states(:nprojs), candidate_path%to_char(), &
+                    &target_header, active, eo_ids, status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
-                offset = 0
-                do ip = 1, nprojs
-                    call sigma2_state_read_header(project_sigma2_states(ip)%to_char(), source_header, status, message)
-                    if( status /= 0 ) THROW_HARD(trim(message))
-                    call sigma2_state_read_particles(project_sigma2_states(ip)%to_char(), 1, &
-                        &int(source_header%nptcls), block, status, message)
-                    if( status /= 0 ) THROW_HARD(trim(message))
-                    call sigma2_state_write_particles(candidate_path%to_char(), offset+1, block, status, message)
-                    if( status /= 0 ) THROW_HARD(trim(message))
-                    offset = offset + int(source_header%nptcls)
-                    deallocate(block)
-                enddo
-                call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, status, message)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                call sigma2_state_commit(candidate_path%to_char(), target_path%to_char(), active, eo_ids, &
-                    &group_ids, status, message)
+                call sigma2_state_publish(candidate_path%to_char(), target_path%to_char(), status, message)
                 if( status /= 0 ) THROW_HARD(trim(message))
                 call merged_proj%set_sigma2_state_path(target_path)
-                deallocate(active, eo_ids, group_ids)
+                deallocate(active, eo_ids)
                 call target_dir%kill
                 call target_path%kill
                 call candidate_path%kill

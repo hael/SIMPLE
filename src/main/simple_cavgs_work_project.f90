@@ -23,6 +23,7 @@ type :: cavgs_work_project
     procedure :: get_ncavgs
     procedure :: even_row
     procedure :: odd_row
+    procedure :: label_rows
     procedure :: cap_nparts
     procedure :: eo_angular_distance
     procedure :: eo_state_overlap
@@ -47,7 +48,7 @@ contains
         type(ctfparams)      :: ctfvars
         type(ori)            :: o, o_even, o_odd
         type(string)         :: stk, stk_even, stk_odd, ext
-        integer, allocatable :: states(:)
+        integer, allocatable :: states(:), states_even(:), states_odd(:)
         integer :: icls, even_ind, odd_ind
         real    :: smpd
         call self%kill
@@ -61,6 +62,12 @@ contains
         states = nint(spproj%os_cls2D%get_all('state'))
         if( size(states) /= self%ncavgs ) THROW_HARD('cls2D rows and registered class averages differ in number')
         if( count(states > 0) == 0 ) THROW_HARD('no selected class averages in the project')
+        ! a half that cls2D flags with state 0 (state_even/state_odd; absent means active) is an inactive row
+        allocate(states_even(self%ncavgs), states_odd(self%ncavgs), source=1)
+        do icls = 1,self%ncavgs
+            if( spproj%os_cls2D%isthere(icls, 'state_even') ) states_even(icls) = spproj%os_cls2D%get_int(icls, 'state_even')
+            if( spproj%os_cls2D%isthere(icls, 'state_odd')  ) states_odd(icls)  = spproj%os_cls2D%get_int(icls, 'state_odd')
+        enddo
         ctfvars%ctfflag = CTFFLAG_NO
         ctfvars%smpd    = smpd
         work_proj%projinfo = spproj%projinfo
@@ -85,16 +92,18 @@ contains
             call o%set('class', icls)
             call o%set('state', states(icls))
             o_even = o
+            if( states_even(icls) == 0 ) call o_even%set('state', 0)
             call o_even%set('eo', 0)
             call o_even%set('stkind', work_proj%os_ptcl3D%get(even_ind,'stkind'))
             call work_proj%os_ptcl3D%set_ori(even_ind, o_even)
             o_odd = o
+            if( states_odd(icls) == 0 ) call o_odd%set('state', 0)
             call o_odd%set('eo', 1)
             call o_odd%set('stkind', work_proj%os_ptcl3D%get(odd_ind,'stkind'))
             call work_proj%os_ptcl3D%set_ori(odd_ind, o_odd)
             ! the selection is mirrored into ptcl2D, as everywhere else
-            call work_proj%os_ptcl2D%set_state(even_ind, min(1, states(icls)))
-            call work_proj%os_ptcl2D%set_state(odd_ind,  min(1, states(icls)))
+            call work_proj%os_ptcl2D%set_state(even_ind, min(1, states(icls), states_even(icls)))
+            call work_proj%os_ptcl2D%set_state(odd_ind,  min(1, states(icls), states_odd(icls)))
         enddo
         call work_proj%write()
         self%projfile     = projfile
@@ -103,7 +112,7 @@ contains
         call o%kill
         call o_even%kill
         call o_odd%kill
-        deallocate(states)
+        deallocate(states, states_even, states_odd)
     end subroutine new
 
     function get_projfile( self ) result( fname )
@@ -130,6 +139,21 @@ contains
         integer,                   intent(in) :: icls
         odd_row = self%ncavgs + icls
     end function odd_row
+
+    !> puts labels(icls) as the state of both rows of every class in os, the work project's ptcl3D rows; a
+    !! row that is inactive (a deselected class, or a half cls2D flags with state 0) stays inactive
+    subroutine label_rows( self, os, labels )
+        class(cavgs_work_project), intent(in)    :: self
+        class(oris),               intent(inout) :: os
+        integer,                   intent(in)    :: labels(:)
+        integer :: icls
+        if( size(labels) /= self%ncavgs ) THROW_HARD('one label per class average; label_rows')
+        if( os%get_noris() /= 2 * self%ncavgs ) THROW_HARD('the rows of another project; label_rows')
+        do icls = 1,self%ncavgs
+            if( os%get_state(self%even_row(icls)) > 0 ) call os%set_state(self%even_row(icls), labels(icls))
+            if( os%get_state(self%odd_row(icls))  > 0 ) call os%set_state(self%odd_row(icls),  labels(icls))
+        enddo
+    end subroutine label_rows
 
     !> a distributed run gets at most one part per row
     subroutine cap_nparts( self, params, cline )

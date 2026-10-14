@@ -2,11 +2,13 @@
 ! Two disjoint half sets of a deterministic asymmetric phantom (simulate_particles path, seeded noise)
 ! are reconstructed with matrix-free PCG (fixed soft support) and production gridding. Pinned: half
 ! ownership, realised SNR and noise independence, solve determinism, the half-map FSC contract, strong
-! noiseless recovery, and (48 views) a lambda sweep bracketing a noisy-error optimum that beats gridding.
+! noiseless recovery, (48 views) a lambda sweep bracketing a noisy-error optimum that beats gridding, and
+! the noise model of one accumulation call: one spectrum of its half with a weight per particle.
 ! Both solve tests have enough views per half (96, 48) that the noiseless bar tests the solver, not the sampling.
 module simple_pcg_halfset_tester
 use simple_defs,              only: dp, OSMPL_PAD_FAC
 use simple_image,             only: image
+use simple_fplane_grid,       only: fplane_grid
 use simple_ori,               only: ori
 use simple_oris,              only: oris
 use simple_projector,         only: projector
@@ -58,6 +60,7 @@ contains
         call test_independent_observations()
         call test_halfset_fsc_96()
         call test_halfset_matrix_48()
+        call test_half_spectrum_weights()
     end subroutine run_all_pcg_halfset_tests
 
     ! ---- fixture ---------------------------------------------------------------
@@ -284,6 +287,7 @@ contains
         real, allocatable, intent(out)   :: reconstruction(:,:,:)
         type(ctfparams)          :: ctfparms
         type(fplane_type)        :: fplane
+        type(fplane_grid)        :: grid
         type(image)              :: observation, observation_padded, restored
         type(ori)                :: o
         type(parameters), target :: params
@@ -303,6 +307,7 @@ contains
         call restored%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
         call observation%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call observation_padded%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD, wthreads=.false.)
+        call grid%new(OSMPL_PAD_FAC*BOX)
         call o%new(.false.)
         call c1sym%new('c1')
         call memoize_ft_maps([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD)
@@ -313,7 +318,7 @@ contains
             call observation%set_rmat(observations(:,:,i:i), .false.)
             call observation%pad(observation_padded, backgr=0., antialiasing=.false.)
             call observation_padded%fft()
-            call observation_padded%gen_fplane4rec([0,BOX/2], SMPD, ctfparms, [0.,0.], fplane)
+            call observation_padded%gen_fplane4rec(SMPD, ctfparms, [0.,0.], fplane, grid)
             call gridder%insert_plane_oversamp(c1sym, o, fplane)
         enddo
         call gridder%compress_exp()
@@ -670,5 +675,75 @@ contains
         call even_oris%kill()
         call odd_oris%kill()
     end subroutine test_halfset_matrix_48
+
+    !> One accumulation call holds one half: the half's spectrum with a weight per particle
+    !! (sigma2_i = sigma2/w_i) accumulates what the particles, each holding its own spectrum
+    !! sigma2/w_i, accumulate one at a time (the per-particle noise matrix it replaces)
+    subroutine test_half_spectrum_weights()
+        integer, parameter :: NP = 6
+        real(dp), parameter :: RELTOL = 1.e-4_dp
+        type(reconstructor_pcg) :: pcgop, single
+        type(oris)      :: even_oris, odd_oris, one
+        type(ori)       :: o
+        type(ctfparams) :: ctfp
+        integer, allocatable :: even_ids(:), odd_ids(:)
+        complex, allocatable :: planes(:,:,:), clean_planes(:,:,:), b(:,:,:), bi(:,:,:), bsum(:,:,:)
+        real,    allocatable :: clean_images(:,:,:), noisy_images(:,:,:), noise(:,:,:)
+        real,    allocatable :: d(:,:,:), di(:,:,:), dsum(:,:,:), sig2(:)
+        real     :: w(NP)
+        real(dp) :: realized_snr
+        integer  :: i, R, lims2(2,2)
+        write(*,'(A)') 'test_half_spectrum_weights'
+        call build_disjoint_halves(NP, even_oris, odd_oris, even_ids, odd_ids)
+        ! the CTF path whitens (the no-CTF path ignores the noise model); without a CTF to model
+        ctfp%ctfflag = CTFFLAG_NO
+        ctfp%smpd    = SMPD
+        call o%new(.false.)
+        do i = 1, NP
+            call even_oris%get_ori(i, o)
+            call o%set_ctfvars(ctfp)
+            call o%set_shift([0.3*real(i), -0.2*real(i)])
+            call even_oris%set_ori(i, o)
+        enddo
+        call pcgop%new(BOX, SMPD, LAMBDA)
+        call build_observations(pcgop, even_oris, EVEN_SEED, OBS_SNR, planes, clean_planes, clean_images, &
+            &noisy_images, noise, realized_snr)
+        lims2 = pcgop%get_lims2()
+        R     = lims2(1,2)
+        allocate(sig2(0:R))
+        sig2 = [(1. + 0.1*real(i), i = 0, R)]
+        w    = [(0.5 + 0.25*real(i), i = 1, NP)]
+        call pcgop%prep_particles(even_oris, use_ctf=.true., inv_sig2=1.0/sig2, weights=w)
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(planes, NP, 1)
+        call pcgop%get_raw_accum(b, d)
+        call one%new(1, .false.)
+        do i = 1, NP
+            call single%new(BOX, SMPD, LAMBDA)
+            call even_oris%get_ori(i, o)
+            call one%set_ori(1, o)
+            call single%prep_particles(one, use_ctf=.true., inv_sig2=1.0/(sig2/w(i)))
+            call single%begin_accum
+            call single%accumulate_batch(planes(:,:,i:i), 1, 1)
+            call single%get_raw_accum(bi, di)
+            if( i == 1 )then
+                bsum = bi
+                dsum = di
+            else
+                bsum = bsum + bi
+                dsum = dsum + di
+            endif
+            call single%kill()
+        enddo
+        call assert_true(maxval(abs(b - bsum)) <= RELTOL*maxval(abs(bsum)), &
+            &'one spectrum per half with weights accumulates the right-hand side of per-particle spectra')
+        call assert_true(maxval(abs(d - dsum)) <= RELTOL*maxval(abs(dsum)), &
+            &'one spectrum per half with weights accumulates the density of per-particle spectra')
+        call pcgop%kill()
+        call o%kill()
+        call one%kill()
+        call even_oris%kill()
+        call odd_oris%kill()
+    end subroutine test_half_spectrum_weights
 
 end module simple_pcg_halfset_tester

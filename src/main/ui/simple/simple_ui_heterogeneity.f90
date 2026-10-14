@@ -156,7 +156,6 @@ contains
         call flex_pca%add_input(UI_PARM, 'oritype', 'str', &
             'Particle orientation segment', 'Fixed to ptcl3D', 'ptcl3D', .false., 'ptcl3D', &
         &visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_SRCH, sigma_est, visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'umap', 'binary', &
             'UMAP plot of the final embedding', &
             'Write flex_pca_umap.txt: 2-D UMAP coordinates of a bounded subsample of the final all-N latent &
@@ -229,7 +228,6 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         call refine3D_states%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target', &
         &'Particles sampled per iteration; set 0 to derive the automatic target from the number of states', &
         &'particles (0=automatic)', .false., 0., group='search', visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
-        call refine3D_states%add_input(UI_SRCH, sigma_est, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'pose_policy', 'multi', 'Pose-search policy', &
         &'Pose-search policy(local|global){global}. Local uses the current geometric neighborhood; global permits full probabilistic matching', &
         &'local or global', .false., 'global', group='search', &

@@ -236,7 +236,6 @@ contains
         call self%cline_refine2D%set('trs',        MINSHIFT)
         call self%cline_refine2D%set('projfile',   POOL_PROJFILE)
         call self%cline_refine2D%set('projname',   get_fbody(POOL_PROJFILE,'simple'))
-        call self%cline_refine2D%set('sigma_est', params%sigma_est)
         if( cline%defined('cls_init') )then
             call self%cline_refine2D%set('cls_init', params%cls_init)
         else

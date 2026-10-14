@@ -105,7 +105,8 @@ For each populated state and halfset, the backend solves a CTF- and
 noise-weighted fixed-pose least-squares problem with PCG. Orientations, in-plane
 shifts, state assignments, half assignments, CTF parameters, phase shifts and
 `ctfflag` are read from the project and are never optimized by reconstruction.
-The Euclidean objective uses per-particle `sigma2`; correlation is unweighted.
+The Euclidean objective uses the noise spectrum of the particle's even/odd half
+(section 8); correlation is unweighted.
 `mskdiam` supplies the spherical fallback support and `pgrp` is applied by
 coordinate replication. `automsk=yes` and `automsk=nu` replace it with density
 support; the NU-evidence envelope is never a solve support.
@@ -564,9 +565,12 @@ unweighted fallback — that would quietly change which objective is minimised.
 Under a state weight set the worker divides each member's spectrum by its
 state weight, under `objfun=cc` too (section 1).
 
-Sigma2 is per-particle-per-shell, read via `euclid_sigma2` from the canonical state
-file, then upsampled to the operator's shell range.
-Validation and group loading (`load_sigma2_groups`) live once in
+Sigma2 is one global spectrum per even/odd half, read via `euclid_sigma2` from the
+canonical state file; every particle of one accumulation call is in the same half, so the
+call takes that half's inverse spectrum once from the plane-grid cache of `euclid_sigma2`
+(`prep_fplane_grid`, `simple_fplane_grid`) at the operator's shells, and a particle's state
+weight scales it (`sigma2_i = sigma2_half/w_i`, `prep_particles(inv_sig2=, weights=)`).
+Validation and loading (`load_sigma2`) live once in
 `src/fileio/simple_sigma2_files.f90`, called by the `reconstruct3D` commander,
 the reconstruction service, the PCG strategy and `flex_pca`. That module is
 deliberately builder-free: `builder` depends on `euclid_sigma2`, so the sigma2

@@ -44,8 +44,6 @@ type heap_vars
     complex(dp), pointer :: shmat_8(:,:)        => null()
     real(dp),    pointer :: pft_r1_8(:,:)       => null()
     ! cache arrays for batched computations
-    real(dp),    pointer :: w_weights(:)        => null()  ! k/sigma2 weights
-    real(dp),    pointer :: sumsq_cache(:)      => null()  ! particle sumsq per k
     complex(sp), pointer :: joint_coeffs(:,:)   => null()  ! objective/dsx/dsy angular coefficients
 end type heap_vars
 
@@ -105,7 +103,11 @@ type :: polarft_calc
     ! Others
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
-    real,    pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
+    real,    pointer     :: sigma2_noise(:,:) => null() !< two global spectra (shell, half), column merge(1,2,iseven)
+    ! the Euclidean shell weights k/sigma2(k) of the two spectra (shell, half), in the two precisions the kernels
+    ! use, formed once when the spectra are filled (memoize_sigma2_weights) instead of per shell per evaluation
+    real(sp),    allocatable :: sigma2_wk(:,:)
+    real(dp),    allocatable :: sigma2_wk8(:,:)
     logical              :: with_ctf  = .false.         !< CTF flag
     logical              :: existence = .false.         !< to indicate existence
   contains
@@ -123,7 +125,6 @@ type :: polarft_calc
     procedure          :: cp_odd2even_ref
     procedure          :: cp_even_ref2ptcl
     procedure          :: cp_refs
-    procedure          :: swap_ptclsevenodd
     procedure          :: set_eo
     procedure          :: set_with_ctf
     procedure          :: assign_sigma2_noise
@@ -168,6 +169,7 @@ type :: polarft_calc
     procedure, private :: rotate_ctf
     ! ===== MEMO: simple_polarft_memo.f90
     procedure          :: memoize_sqsum_ptcl
+    procedure          :: memoize_sigma2_weights
     procedure          :: wsqsum_ptcl_now
     procedure          :: memoize_ptcls, memoize_refs
     procedure, private :: kill_memo_ptcls, kill_memo_refs
@@ -291,10 +293,6 @@ interface
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
     end subroutine cp_even_ref2ptcl
-
-    module subroutine swap_ptclsevenodd(self)
-        class(polarft_calc), intent(inout) :: self
-    end subroutine swap_ptclsevenodd
 
     module subroutine set_eo(self, iptcl, is_even)
         class(polarft_calc), intent(inout) :: self
@@ -549,6 +547,10 @@ interface
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in) :: iptcl
     end subroutine memoize_sqsum_ptcl
+
+    module subroutine memoize_sigma2_weights(self)
+        class(polarft_calc), intent(inout) :: self
+    end subroutine memoize_sigma2_weights
 
     module function wsqsum_ptcl_now(self, iptcl) result(wsq)
         class(polarft_calc), intent(in) :: self
@@ -816,7 +818,7 @@ interface
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot
         real(sp),                    intent(in)    :: shvec(2)
-        real(sp), optional,          intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         real(sp), optional,          intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
         real(sp), optional,          intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
         real(sp), optional,          intent(out)   :: v

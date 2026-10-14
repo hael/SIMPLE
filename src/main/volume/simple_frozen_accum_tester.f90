@@ -6,6 +6,7 @@ use simple_defs,              only: OSMPL_PAD_FAC, STDLEN
 use simple_string,            only: string
 use simple_fileio,            only: del_file, fopen, fclose
 use simple_image,             only: image
+use simple_fplane_grid,       only: fplane_grid
 use simple_ori,               only: ori
 use simple_oris,              only: oris
 use simple_parameters,        only: parameters
@@ -217,6 +218,7 @@ contains
         type(sym)                :: c1sym
         type(ctfparams)          :: ctfparms
         type(fplane_type)        :: fplane
+        type(fplane_grid)        :: grid
         type(image)              :: obs, obs_pad
         real,    allocatable     :: imgs(:,:,:), rho_c(:,:,:), rho_u(:,:,:), rho_f(:,:,:), rmat_c(:,:,:), rmat_u(:,:,:)
         complex, allocatable     :: cmat_c(:,:,:), cmat_u(:,:,:), cmat_f(:,:,:)
@@ -243,6 +245,7 @@ contains
         call make_images(imgs)
         call obs%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call obs_pad%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD, wthreads=.false.)
+        call grid%new(OSMPL_PAD_FAC*BOX)
         call o%new(.false.)
         call c1sym%new('c1')
         call memoize_ft_maps([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD)
@@ -254,7 +257,7 @@ contains
             call obs%set_rmat(imgs(:,:,i:i), .false.)
             call obs%pad(obs_pad, backgr=0., antialiasing=.false.)
             call obs_pad%fft()
-            call obs_pad%gen_fplane4rec([0,BOX/2], SMPD, ctfparms, [0.,0.], fplane)
+            call obs_pad%gen_fplane4rec(SMPD, ctfparms, [0.,0.], fplane, grid)
             if( mod(i,2) == 0 )then
                 call u_even%insert_plane_oversamp(c1sym, o, fplane)
                 if( i <= NFROZEN )then

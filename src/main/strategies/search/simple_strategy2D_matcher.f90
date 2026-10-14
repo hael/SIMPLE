@@ -13,7 +13,8 @@ use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
                                            all_active_ptcls_2D_assigned, refine2D_blends_carryover
-use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
+    &write_sigma2_bench_context, write_sigma2_bench_timings
 use simple_ptcl_cache,               only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_imgarr_utils,             only: alloc_imgarr
 use simple_strategy2D_greedy,        only: strategy2D_greedy
@@ -40,9 +41,9 @@ class(builder),    pointer :: b_ptr => null()
 class(parameters), pointer :: p_ptr => null()
 real(timer_int_kind)       :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
 real(timer_int_kind)       :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_tot
-real(timer_int_kind)       :: rt_cavg_interp_splat
+real(timer_int_kind)       :: rt_cavg_interp_splat, rt_sigma2_write
 integer(timer_int_kind)    :: t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
-integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot
+integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot, t_sigma2_write
 type(string)               :: benchfname
 
 type :: refine2D_ctrl
@@ -188,7 +189,12 @@ contains
             if( ctrl%do_bench ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo
         call cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, batchsz_max, orientation)
-        if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
+        rt_sigma2_write = 0.0
+        if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
+            if( ctrl%do_bench ) t_sigma2_write = tic()
+            call b_ptr%esig%write_sigma2
+            if( ctrl%do_bench ) rt_sigma2_write = toc(t_sigma2_write)
+        endif
         call write_orientations()
         call finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
         call b_ptr%esig%kill
@@ -478,6 +484,7 @@ contains
             write(fnr,'(a,i0)') 'match2D process pid                 : ', p_ptr%pid
             write(fnr,'(a,i0)') 'match2D peak RSS (bytes)            : ', peak_rss
             write(fnr,'(a,f0.3)') 'match2D peak RSS (GiB)              : ', peak_rss_gib
+            call write_sigma2_bench_context(fnr, 'match2D', nptcls2update)
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'match2D startup/setup               :', rt_startup
@@ -487,6 +494,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match2D alignment search            :', rt_align
             write(fnr,'(a,1x,f0.2)') 'match2D class averaging             :', rt_cavg
             write(fnr,'(a,1x,f0.2)') 'match2D cavg FFT/CTF/interpolation  :', rt_cavg_interp_splat
+            call write_sigma2_bench_timings(fnr, 'match2D', rt_sigma2_write)
             write(fnr,'(a,1x,f0.2)') 'match2D total time                  :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'match2D % accounted for             :', &
                 ((rt_startup + rt_alloc_ptcl_imgs2D + rt_prep_pftc_refs2D + rt_build_batch_particles2D + &

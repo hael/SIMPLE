@@ -13,9 +13,9 @@ use simple_cmdline,             only: cmdline
 use simple_sp_project,          only: sp_project
 use simple_ptcl_layout,         only: ptcl_layout_digest
 use simple_sigma2_state_file,   only: sigma2_state_header, sigma2_state_init_header, &
-    &sigma2_state_create_candidate, sigma2_state_write_particles, sigma2_state_write_groups, &
+    &sigma2_state_create_candidate, sigma2_state_write_particles, sigma2_state_write_global, &
     &sigma2_state_read_header, sigma2_state_publish, sigma2_state_digest_begin, &
-    &sigma2_state_digest_text, SIGMA2_GROUP_GLOBAL, SIGMA2_PROV_RESIDUAL
+    &sigma2_state_digest_text, SIGMA2_PROV_RESIDUAL
 use simple_solve3D_manifest, only: solve3D_manifest, solve3D_stage_record, manifest_records_input, &
     &manifest_overridable_input
 use simple_test_utils
@@ -136,14 +136,14 @@ contains
     end subroutine make_project
 
     !> A small committed sigma2 state. Its header layout identity belongs to
-    !! spproj; its grouped and particle sections are independently mutable.
+    !! spproj; its global spectra and particle section are independently mutable.
     subroutine write_sigma_state( fname, spproj, generation )
         character(len=*),         intent(in)    :: fname
         type(sp_project),         intent(inout) :: spproj
         integer(int64), optional, intent(in)    :: generation
         type(sigma2_state_header) :: header
         type(string) :: candidate
-        real(real32) :: spectra(3,NPTCLS), groups(3,2,1)
+        real(real32) :: spectra(3,NPTCLS), globals(3,2)
         integer(int64) :: gen
         character(len=STDLEN) :: msg
         integer :: i, status
@@ -152,26 +152,26 @@ contains
         candidate = trim(fname)//'.next'
         call del_file(candidate)
         call del_file(fname)
-        call sigma2_state_init_header(header, 1, 3, NPTCLS, 8, 1.3, 1, SIGMA2_GROUP_GLOBAL, gen, &
+        call sigma2_state_init_header(header, 1, 3, NPTCLS, 8, 1.3, gen, &
             &ptcl_layout_digest(spproj, spproj%os_ptcl3D), SIGMA2_PROV_RESIDUAL)
         call sigma2_state_create_candidate(candidate%to_char(), header, status, msg)
         call assert_int(0, status, 'create manifest sigma2 fixture: '//trim(msg))
         do i = 1, NPTCLS
             spectra(:,i) = real([i, 2*i, 3*i], real32)
         enddo
-        groups(:,1,1) = [6.0_real32, 12.0_real32, 18.0_real32]
-        groups(:,2,1) = [7.0_real32, 14.0_real32, 21.0_real32]
+        globals(:,1) = [6.0_real32, 12.0_real32, 18.0_real32]
+        globals(:,2) = [7.0_real32, 14.0_real32, 21.0_real32]
         call sigma2_state_write_particles(candidate%to_char(), 1, spectra, status, msg)
         call assert_int(0, status, 'write manifest sigma2 particle fixture: '//trim(msg))
-        call sigma2_state_write_groups(candidate%to_char(), groups, status, msg)
-        call assert_int(0, status, 'write manifest sigma2 grouped fixture: '//trim(msg))
+        call sigma2_state_write_global(candidate%to_char(), globals, status, msg)
+        call assert_int(0, status, 'write manifest sigma2 global spectra fixture: '//trim(msg))
         call sigma2_state_publish(candidate%to_char(), fname, status, msg)
         call assert_int(0, status, 'publish manifest sigma2 fixture: '//trim(msg))
         call candidate%kill
     end subroutine write_sigma_state
 
     !> Change one payload value without changing the file shape or header.
-    !! Neither grouped nor particle values affect the cheap signature.
+    !! Neither global-spectra nor particle values affect the cheap signature.
     subroutine overwrite_sigma_value( fname, particle_value, value )
         character(len=*), intent(in) :: fname
         logical,          intent(in) :: particle_value
@@ -183,7 +183,7 @@ contains
         call sigma2_state_read_header(fname, header, status, msg)
         call assert_int(0, status, 'read manifest sigma2 fixture header: '//trim(msg))
         if( status /= 0 ) return
-        pos = merge(header%particle_offset, header%grouped_offset, particle_value)
+        pos = merge(header%particle_offset, header%global_offset, particle_value)
         open(newunit=funit, file=trim(fname), access='stream', form='unformatted', &
             &status='old', action='readwrite', iostat=status)
         if( status == 0 )then
@@ -329,7 +329,7 @@ contains
                 &'sigma2 manifest validation does not hash the particle payload')
             call overwrite_sigma_value(SIGMA_FNAME, .false., 99.0_real32)
             call assert_true(back%matches_artifact('sigma2_state', 0, path), &
-                &'sigma2 manifest validation does not hash the grouped payload')
+                &'sigma2 manifest validation does not hash the global spectra')
             call write_sigma_state(SIGMA_FNAME, spproj, generation=2_int64)
             call assert_false(back%matches_artifact('sigma2_state', 0, path), &
                 &'sigma2 manifest validation checks the committed generation')
@@ -401,6 +401,12 @@ contains
         call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
         call back%read(string(MAN_FNAME), status, msg)
         call assert_true(status /= 0 .and. index(msg, 'input key') > 0, 'an unknown input key is refused')
+        ! the retired sigma_est key, recorded by an earlier build of manifest version 2
+        tampered(1:iend) = [lines(1:iend-2), [character(len=1024) :: 'input sigma_est global'], lines(iend-1:iend-1)]
+        tampered(iend+1) = lines(iend)
+        call write_with_checksum(MAN_FNAME, tampered(1:iend+1))
+        call back%read(string(MAN_FNAME), status, msg)
+        call assert_true(status /= 0 .and. index(msg, 'input key') > 0, 'a recorded sigma_est is an unknown input key')
         ! a field of a removed feature is unknown: no backwards compatibility (release 4)
         tampered(1:iend+1) = [lines(1:iend-2), [character(len=1024) :: 'ptcl_src raw'], lines(iend-1:iend)]
         call write_with_checksum(MAN_FNAME, tampered(1:iend+1))

@@ -140,11 +140,6 @@ contains
         ! matching LP, NU gating, and convergence.
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc', 'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',            'no') ! 4 now, probably fine
-        if( cline%defined('ref_pose_init') .and. cline%get_carg('ref_pose_init').eq.'cc' )then
-            call cline%set('sigma_est', 'global')
-        else if( .not. cline%defined('sigma_est') )then
-            call cline%set('sigma_est', 'global') ! 4 now, probably fine
-        endif
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',        'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
@@ -810,7 +805,6 @@ contains
         if( .not. cline%defined('envfsc')          ) call cline%set('envfsc',            'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('center')          ) call cline%set('center',            'no')
-        if( .not. cline%defined('sigma_est')       ) call cline%set('sigma_est',     'global')
         if( .not. cline%defined('prob_inpl')       ) call cline%set('prob_inpl',        'yes')
         call states_ctrl%resolve_sampling(cline)
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',               'yes')
@@ -904,7 +898,6 @@ contains
         call cline%set('envfsc',          'no')
         call cline%set('combine_eo',      'no')
         call cline%set('objfun',          'euclid')
-        call cline%set('sigma_est',       'global')
         call cline%set('trail_rec',       'no')
         call cline%set('balance',         'none')
         call cline%set('greedy_sampling', 'no')
@@ -997,7 +990,6 @@ contains
             call require_value('trail_rec',   'no')
             call require_value('pcg_solvent', 'no')
             call require_value('objfun',      'euclid')
-            call require_value('sigma_est',   'global')
             if( cline%defined('rec_backend') )then
                 val = cline%get_carg('rec_backend')
                 select case(val%to_char())
@@ -1041,7 +1033,7 @@ contains
             type(string)                  :: stk, stk_eo(2), ext, consensus_vol
             integer,          allocatable :: cls2D_states(:), cls3D_states(:), ptcl2D_states(:), ptcl3D_states(:)
             character(len=:), allocatable :: errmsg
-            integer :: ncls_stk, ldim(3), nimgs, vol_box, nrows, nmin, ieo, state, nlabels
+            integer :: ncls_stk, ldim(3), nimgs, vol_box, nrows, nmin, ieo, state, nlabels, icls
             real    :: smpd_stk, smpd_hdr, vol_smpd
             call spproj%get_cavgs_stk(stk, ncls_stk, smpd_stk)
             if( spproj%os_cls2D%get_noris() /= ncls_stk .or. spproj%os_cls3D%get_noris() /= ncls_stk )then
@@ -1119,8 +1111,13 @@ contains
                 if( .not. cline%defined('nstates') .or. params%nstates < 3 )then
                     THROW_HARD(WORKFLOW_LABEL//' needs nstates >= 3 for the flex_pca initialization')
                 endif
-                ! flex's own population-floor check, on the 2*nsel active rows
-                nrows = 2 * nsel
+                ! flex's own population-floor check, on the active rows: two per selected class, less
+                ! the halves cls2D flags with state 0
+                nrows = 0
+                do icls = 1,ncls_stk
+                    if( cls2D_states(icls) <= 0 ) cycle
+                    nrows = nrows + half_active(icls, 'state_even') + half_active(icls, 'state_odd')
+                enddo
                 nmin  = max(1, nint(params%min_state_frac * real(nrows)))
                 if( params%nstates * nmin > nrows )then
                     THROW_HARD(WORKFLOW_LABEL//' has too few selected sub-class averages for nstates at min_state_frac')
@@ -1128,17 +1125,29 @@ contains
             endif
         end subroutine preflight
 
-        !> flex's two fits split the rows by flex_pca_half_of and each needs FLEX_MIN_FIT_ROWS active rows
+        !> 1 when the half of class icls is active, 0 when cls2D flags it with state 0 (flag absent: active)
+        integer function half_active( icls, flag )
+            integer,          intent(in) :: icls
+            character(len=*), intent(in) :: flag
+            half_active = 1
+            if( spproj%os_cls2D%isthere(icls, flag) )then
+                if( spproj%os_cls2D%get_int(icls, flag) == 0 ) half_active = 0
+            endif
+        end function half_active
+
+        !> flex's two fits split the rows by flex_pca_half_of and each needs FLEX_MIN_FIT_ROWS active rows,
+        !! counted on the work project's rows as flex will see them
         subroutine check_flex_fits()
             use simple_flex_pca_stages, only: flex_pca_half_of
             character(len=:), allocatable :: errmsg
-            integer :: icls, nfit(2)
+            integer :: irow, nfit(2)
+            call work_proj%read_segment('ptcl3D', params%projfile)
             nfit = 0
-            do icls = 1,ncavgs
-                if( spproj%os_cls2D%get_state(icls) == 0 ) cycle
-                nfit(flex_pca_half_of(wp%even_row(icls))) = nfit(flex_pca_half_of(wp%even_row(icls))) + 1
-                nfit(flex_pca_half_of(wp%odd_row(icls)))  = nfit(flex_pca_half_of(wp%odd_row(icls)))  + 1
+            do irow = 1,work_proj%os_ptcl3D%get_noris()
+                if( work_proj%os_ptcl3D%get_state(irow) == 0 ) cycle
+                nfit(flex_pca_half_of(irow)) = nfit(flex_pca_half_of(irow)) + 1
             enddo
+            call work_proj%kill
             if( any(nfit < FLEX_MIN_FIT_ROWS) )then
                 errmsg = WORKFLOW_LABEL//' gives a flex_pca fit fewer than '//int2str(FLEX_MIN_FIT_ROWS)//' rows: '//&
                     &int2str(nfit(1))//' and '//int2str(nfit(2))
@@ -1160,14 +1169,11 @@ contains
             mean_vol = simple_abspath(string(MEAN_VOL_FNAME))
         end subroutine seed_poses
 
-        !> the consecutive cls3D labels of the selected classes onto both rows of each class
+        !> the consecutive cls3D labels of the selected classes onto the active rows of each class (an inactive
+        !! half stays inactive)
         subroutine copy_cls3D_labels()
-            integer :: icls
             call work_proj%read_segment('ptcl3D', params%projfile)
-            do icls = 1,ncavgs
-                call work_proj%os_ptcl3D%set_state(wp%even_row(icls), cls_label(icls))
-                call work_proj%os_ptcl3D%set_state(wp%odd_row(icls),  cls_label(icls))
-            enddo
+            call wp%label_rows(work_proj%os_ptcl3D, cls_label)
             call work_proj%write_segment_inside('ptcl3D', params%projfile)
             call work_proj%kill
         end subroutine copy_cls3D_labels
@@ -1327,7 +1333,6 @@ contains
         call cline%set('incrreslim',      'no')
         call cline%set('combine_eo',      'no')
         call cline%set('multivol_mode',   'independent')
-        call cline%set('sigma_est',       'global')
         ! staged frequency marching always uses planner-driven downscaling
         if( cline%defined('autoscale') ) write(logfhandle,'(A)') &
             &'>>> '//WORKFLOW_LABEL//' IGNORES autoscale: frequency marching owns downscaling'
@@ -1818,7 +1823,6 @@ contains
         call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
         call warn_for_forced_bootstrap_overrides(cline)
-        call cline%set('sigma_est', 'global')
         if( .not. cline%defined('which_iter')  ) call cline%set('which_iter',       1)
         if( .not. cline%defined('postprocess') ) call cline%set('postprocess',  'yes')
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no')
@@ -1831,7 +1835,7 @@ contains
         call cline%set('mkdir', 'no') ! child calls must not create nested run directories
         ! 1. One sigma2 basis for every bootstrap: the particle power spectra, what a fresh refinement
         ! seeds from, committed to the canonical state; which_iter only numbers the residual pass.
-        call prepare_pspec_cline(cline, params%projfile, which_iter, cline_pspec)
+        call prepare_pspec_cline(cline, params%projfile, 'ptcl3D', which_iter, cline_pspec)
         write(logfhandle,'(A,I0)') '>>> BOOTSTRAP_REC3D SIGMA2 FROM PARTICLE POWER SPECTRA, ITERATION ', which_iter
         call xcalc_pspec%execute(cline_pspec)
         call cline_pspec%kill
@@ -1915,7 +1919,6 @@ contains
             call cline_rec%set('mkdir',              'no')
             call cline_rec%set('oritype', params%oritype)
             call cline_rec%set('nstates', params%nstates)
-            call cline_rec%set('sigma_est',     'global')
             call cline_rec%set('which_iter',       iter)
             call cline_rec%set('trail_rec',        'no')
             call cline_rec%set('combine_eo',       'no')
@@ -1988,14 +1991,6 @@ contains
 
         subroutine warn_for_forced_bootstrap_overrides( cline_in )
             class(cmdline), intent(inout) :: cline_in
-            type(string) :: val
-            if( cline_in%defined('sigma_est') )then
-                val = cline_in%get_carg('sigma_est')
-                if( val%to_char().ne.'global' )then
-                    THROW_WARN('bootstrap_rec3D enforces sigma_est=global; ignoring input sigma_est='//val%to_char())
-                endif
-                call val%kill
-            endif
             if( cline_in%defined('objfun') ) THROW_WARN('bootstrap_rec3D controls objfun internally; ignoring input objfun')
             if( cline_in%defined('ml_reg') ) THROW_WARN('bootstrap_rec3D controls ml_reg internally; ignoring input ml_reg')
         end subroutine warn_for_forced_bootstrap_overrides

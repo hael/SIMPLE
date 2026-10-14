@@ -9,6 +9,7 @@ use ieee_arithmetic, only: ieee_is_finite
 !$  use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 use simple_atoms, only: atoms
 use simple_cartft_calc, only: cartft_calc
+use simple_fplane_grid, only: fplane_grid
 use simple_builder, only: builder
 use simple_cartft_pose_opt, only: right_increment_rotation, CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT
 use simple_cmdline, only: cmdline
@@ -30,6 +31,7 @@ use simple_sym, only: sym
 use simple_syslib, only: del_file
 use simple_ui, only: make_ui
 use simple_test_utils
+use simple_sigma2_state_tester, only: write_test_sigma2_store
 implicit none
 private
 
@@ -321,11 +323,12 @@ contains
 
     !> Prepare particle iparticle into the calculator slot islot as production prepares it: the
     !! observation centred on the stored (perturbed) shift, phase-flipped, masked and tapered
-    !! (prepimg4align_cart, O4 and O5 (a)), for objfun over [2, upper_shell].
-    subroutine prepare_particle(calc, particle, ctf_parameters, noise_mask, taper, stored_shift, objfun, sigma2, &
+    !! (prepimg4align_cart, O4 and O5 (a)), for objfun over [2, upper_shell]; a euclid slot whitens
+    !! by the even spectrum the calculator holds (set_sigma2), every particle being even.
+    subroutine prepare_particle(calc, particle, ctf_parameters, noise_mask, taper, stored_shift, objfun, &
         &upper_shell, raw_work, fourier_work, islot)
         class(cartft_calc), intent(inout) :: calc
-        real, intent(in) :: particle(:, :, :), taper(:), sigma2(0:)
+        real, intent(in) :: particle(:, :, :), taper(:)
         type(ctfparams), intent(in) :: ctf_parameters
         logical, intent(in) :: noise_mask(:, :, :)
         real(dp), intent(in) :: stored_shift(2)
@@ -338,7 +341,7 @@ contains
         call prepimg4align_cart(raw_work, noise_mask, fourier_work, TEST_MSKRAD, TEST_SMPD, &
             &real(stored_shift), taper, ctf_parameters, observed, cropped_ctf)
         if (objfun == OBJFUN_EUCLID) then
-            call calc%set_ptcl(islot, observed, cropped_ctf, sigma2, [2, upper_shell])
+            call calc%set_ptcl(islot, observed, cropped_ctf, 1, [2, upper_shell])
         else
             call calc%set_ptcl(islot, observed, cropped_ctf, [2, upper_shell])
         end if
@@ -381,6 +384,7 @@ contains
         call memoize_ft_maps([TEST_BOX, TEST_BOX, 1], TEST_SMPD)
         call memoize_mask_coords_of_box()
         call new_work_images(nworkers, raw_work, fourier_work)
+        call calc%set_sigma2(0, spread(unit_sigma2, 2, 2))
 !$omp parallel default(shared)
         block
             real, allocatable :: sigma_contrib(:), ref_pow(:), ptcl_pow(:)
@@ -392,7 +396,7 @@ contains
 !$omp do schedule(dynamic,1)
             do iparticle = 1, size(particles, 3)
                 call prepare_particle(calc, particles(:, :, iparticle:iparticle), ctf_parameters(iparticle), &
-                    &noise_mask, taper, initial_shifts(:, iparticle), OBJFUN_EUCLID, unit_sigma2, upper_shell, &
+                    &noise_mask, taper, initial_shifts(:, iparticle), OBJFUN_EUCLID, upper_shell, &
                     &raw_work(thread_index), fourier_work(thread_index), thread_index)
                 ! the truth pose relative to the observation centred on the stored shift
                 call calc%sigma_contribution(1, .true., thread_index, truth_rotations(:, :, iparticle), &
@@ -476,8 +480,11 @@ contains
         end do
         ! sigma2 belongs to the Euclidean objective (C5): the strategy records the residual
         if (objfun == OBJFUN_EUCLID) then
+            ! the records the residual replaces, read from a unit store as a matcher reads them
+            call write_test_sigma2_store('tmp_strategy3D_cont_1jyx_sigma2.bin', size(particles, 3), TEST_BOX)
             call b%esig%new(p, string('tmp_strategy3D_cont_1jyx_sigma2.bin'), TEST_BOX)
-            call b%esig%allocate_ptcls
+            call b%esig%read_part
+            call b%cftc%set_sigma2(0, spread(sigma2, 2, 2))
         end if
         call memoize_ft_maps([TEST_BOX, TEST_BOX, 1], TEST_SMPD)
         call memoize_mask_coords_of_box()
@@ -495,7 +502,7 @@ contains
 !$omp do schedule(dynamic,1)
             do iparticle = 1, size(particles, 3)
                 call prepare_particle(b%cftc, particles(:, :, iparticle:iparticle), ctf_parameters(iparticle), &
-                    &noise_mask, taper, initial_shifts(:, iparticle), objfun, sigma2, upper_shell, &
+                    &noise_mask, taper, initial_shifts(:, iparticle), objfun, upper_shell, &
                     &raw_work(thread_index), fourier_work(thread_index), iparticle)
                 call b%spproj_field%get_ori(iparticle, seed)
                 call b%cftc%objective_gradient(1, .true., iparticle, real(seed%get_mat(), dp), [0._dp, 0._dp], &
@@ -523,7 +530,10 @@ contains
 !$omp end parallel
         call kill_work_images(raw_work, fourier_work)
         call forget_ft_maps()
-        if (objfun == OBJFUN_EUCLID) call b%esig%kill
+        if (objfun == OBJFUN_EUCLID)then
+            call b%esig%kill
+            call del_file('tmp_strategy3D_cont_1jyx_sigma2.bin')
+        end if
         call b%pgrpsyms%kill
     end subroutine refine_all_particles
 
@@ -577,6 +587,7 @@ contains
         real(dp), intent(in) :: terminal_rotations(:, :, :, :), terminal_shifts(:, :, :)
         integer, parameter :: NMAPS = 2 + NOBJFUNS !< exact, perturbed, refined per objective
         type(fplane_type) :: plane
+        type(fplane_grid) :: grid
         type(image) :: particle, padded_particle, maps(NMAPS), truth_metric, metric
         type(ori) :: orientation
         type(parameters), target :: reconstruction_parameters
@@ -586,11 +597,10 @@ contains
         real, allocatable :: map_array(:, :, :), truth_array(:, :, :), fsc(:), resolutions(:)
         real(dp) :: correlations(NMAPS)
         real :: fsc05(NMAPS), fsc0143(NMAPS)
-        integer :: i, imap, upper_shell
+        integer :: i, imap
         logical :: finite_fsc(NMAPS)
         character(len=16) :: map_names(NMAPS)
 
-        upper_shell = active_upper_shell(TEST_LPS(iband))
         map_names(1) = 'exact'
         map_names(2) = 'perturbed'
         do imap = 1, NOBJFUNS
@@ -613,6 +623,7 @@ contains
         call particle%new([TEST_BOX, TEST_BOX, 1], TEST_SMPD, wthreads=.false.)
         call padded_particle%new([OSMPL_PAD_FAC*TEST_BOX, OSMPL_PAD_FAC*TEST_BOX, 1], &
             &TEST_SMPD, wthreads=.false.)
+        call grid%new(OSMPL_PAD_FAC*TEST_BOX)
         call orientation%new(.false.)
         call c1%new('c1')
         call memoize_ft_maps([OSMPL_PAD_FAC*TEST_BOX, OSMPL_PAD_FAC*TEST_BOX, 1], TEST_SMPD)
@@ -681,6 +692,7 @@ contains
             call reconstructors(imap)%kill
         end do
         call padded_particle%kill
+        call grid%kill
         call particle%kill
         call empty_project%kill
 
@@ -690,7 +702,7 @@ contains
             integer, intent(in) :: imap_insert
             real(dp), intent(in) :: rotation(3, 3), shift(2)
             call orientation%set_euler(real(dm2euler(rotation)))
-            call padded_particle%gen_fplane4rec([2, upper_shell], TEST_SMPD, ctf_parameters(i), real(shift), plane)
+            call padded_particle%gen_fplane4rec(TEST_SMPD, ctf_parameters(i), real(shift), plane, grid)
             call reconstructors(imap_insert)%insert_plane_oversamp(c1, orientation, plane)
         end subroutine insert
 

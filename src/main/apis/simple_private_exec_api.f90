@@ -50,7 +50,7 @@ use simple_commanders_prob,     only: commander_prob_tab, commander_prob_tab_nei
                                       commander_prob_align_neigh, commander_prob_tab2D, commander_prob_align2D
 use simple_commanders_flex_pca,          only: commander_flex_pca_worker
 ! euclid commanders, for obtaining signal statistics for noise normalized Euclidean distance functiuon evalutaion
-use simple_commanders_euclid,       only: commander_calc_pspec,commander_calc_group_sigmas
+use simple_commanders_euclid,       only: commander_calc_pspec,commander_commit_sigma2
 use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
 
 ! rec commanders, 3D reconstrunction from aligned particles with Fourier griddding

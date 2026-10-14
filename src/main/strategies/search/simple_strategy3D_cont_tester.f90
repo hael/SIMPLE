@@ -5,7 +5,7 @@
 ! status, convergence fields), the euclid sigma2 residual at the committed pose, threaded batches
 ! equal to serial, particles outside the sample untouched, polish fields, the athres_cont bound.
 module simple_strategy3D_cont_tester
-use simple_core_module_api, only: dp, euler2m, string, rad2deg
+use simple_core_module_api, only: dp, euler2m, string, rad2deg, del_file
 use simple_defs_ori,        only: N_PTCL_ORIPARAMS
 use simple_builder,         only: builder
 use simple_parameters,      only: parameters
@@ -17,6 +17,7 @@ use simple_strategy3D_cont, only: strategy3D_cont, cont_seed_is_valid
 use simple_cartft_pose_opt, only: CARTFT_ACCEPTED
 use simple_type_defs,       only: ctfparams, CTFFLAG_NO, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
+use simple_sigma2_state_tester, only: write_test_sigma2_store
 implicit none
 private
 public :: run_all_strategy3D_cont_tests
@@ -75,7 +76,7 @@ contains
         type(parameters), target, intent(inout) :: p
         integer,                  intent(in)    :: objfun
         type(ctfparams)      :: no_ctf
-        real, allocatable    :: volume(:,:,:), sigma2(:)
+        real, allocatable    :: volume(:,:,:)
         complex, allocatable :: observed(:,:)
         real    :: seed_shift(2), truth_shift(2)
         integer :: i, pinds(NPTCLS)
@@ -100,7 +101,7 @@ contains
         call b%cftc%set_ref(1, .true.,  volume)
         call b%cftc%set_ref(1, .false., volume)
         call b%cftc%new_ptcls(NPTCLS)
-        allocate(sigma2(0:BOX/2), source=1.)
+        call b%cftc%set_sigma2(1, spread(spread(1., 1, BOX/2), 2, 2))
         allocate(observed(-BOX/2:BOX/2,-BOX/2:BOX/2))
         no_ctf%ctfflag = CTFFLAG_NO
         do i = 1, NPTCLS
@@ -118,13 +119,15 @@ contains
             if( objfun == OBJFUN_CC )then
                 call b%cftc%set_ptcl(NPTCLS + 1 - i, observed, no_ctf, KFROMTO)
             else
-                call b%cftc%set_ptcl(NPTCLS + 1 - i, observed, no_ctf, sigma2, KFROMTO)
+                call b%cftc%set_ptcl(NPTCLS + 1 - i, observed, no_ctf, mod(i,2) + 1, KFROMTO)
             endif
         end do
         call b%cftc%set_ptcl_inds(pinds)
         if( objfun == OBJFUN_EUCLID )then
+            ! the records the residual replaces, read from a unit store as a matcher reads them
+            call write_test_sigma2_store('tmp_strategy3D_cont_tester_sigma2.bin', NPTCLS, BOX)
             call b%esig%new(p, string('tmp_strategy3D_cont_tester_sigma2.bin'), BOX)
-            call b%esig%allocate_ptcls
+            call b%esig%read_part
         endif
     end subroutine build_fixture
 
@@ -132,6 +135,7 @@ contains
         type(builder), intent(inout) :: b
         call b%cftc%kill
         call b%esig%kill
+        call del_file('tmp_strategy3D_cont_tester_sigma2.bin')
         call b%pgrpsyms%kill
         call b%spproj%os_ptcl3D%kill
         nullify(b%spproj_field)
@@ -212,7 +216,7 @@ contains
         type(ori) :: before, after
         real(dp)  :: objective, gradient(5), truth(3,3), expected_score
         real      :: native_before(2), sigma_shells_sum
-        real, allocatable :: stored(:), sigma2(:)
+        real, allocatable :: stored(:)
         complex, allocatable :: observed(:,:)
         type(ctfparams) :: no_ctf
         integer   :: islot, iobj
@@ -247,16 +251,15 @@ contains
             ! rejected: the seed is the optimum of its observation
             call b%spproj_field%get_ori(4, before)
             allocate(observed(-BOX/2:BOX/2,-BOX/2:BOX/2))
-            allocate(sigma2(0:BOX/2), source=1.)
             no_ctf%ctfflag = CTFFLAG_NO
             islot = b%cftc%get_ptcl_slot(4)
             call b%cftc%predict(1, .true., real(before%get_mat(), dp), [0._dp, 0._dp], observed)
             if( objfuns(iobj) == OBJFUN_CC )then
                 call b%cftc%set_ptcl(islot, observed, no_ctf, KFROMTO)
             else
-                call b%cftc%set_ptcl(islot, observed, no_ctf, sigma2, KFROMTO)
+                call b%cftc%set_ptcl(islot, observed, no_ctf, mod(4,2) + 1, KFROMTO)
             endif
-            deallocate(observed, sigma2)
+            deallocate(observed)
             native_before = before%get_2Dshift()
             call run_particle(b, p, 4)
             call b%spproj_field%get_ori(4, after)

@@ -4,7 +4,6 @@ use simple_cmdline,                 only: cmdline
 use simple_commanders_atoms,        only: commander_cif2pdb
 use simple_commanders_distr,        only: commander_split
 use simple_commanders_project_ptcl, only: commander_split_stack
-use simple_commanders_euclid,       only: commander_sigma2_convert
 implicit none
 
 public :: exec_other_commander
@@ -13,7 +12,6 @@ private
 type(commander_cif2pdb)                  :: xcif2pdb
 type(commander_split)                    :: xsplit
 type(commander_split_stack)              :: xsplit_stack
-type(commander_sigma2_convert)            :: xsigma2_convert
 
 contains
 
@@ -32,8 +30,6 @@ contains
                 call xsplit%execute(cline)
             case( 'split_stack' )
                 call xsplit_stack%execute(cline)
-            case( 'sigma2_convert' )
-                call xsigma2_convert%execute(cline)
             case default
                 l_did_execute = .false.
         end select

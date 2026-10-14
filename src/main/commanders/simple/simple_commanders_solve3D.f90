@@ -94,7 +94,6 @@ contains
             THROW_HARD('solve3D_cavgs takes no multivol_mode: nstates>1 refines independent states')
         endif
         l_state_continue_mode = .false.
-        call cline%set('sigma_est', 'global') ! obviously
         call cline%set('oritype',      'out') ! because cavgs are part of out segment
         call cline%set('bfac',            0.) ! because de novo maps should not be sharpened
         call cline%set('filt_mode',   'none') ! no fancy filtering for cavgs route
@@ -880,7 +879,6 @@ contains
             THROW_HARD('cache=yes (downscaled particle cache) is not supported for 3D workflows')
         endif
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
-        call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because de novo maps should not be sharpened
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                    'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',                   0.95)

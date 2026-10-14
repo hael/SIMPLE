@@ -288,7 +288,6 @@ contains
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
         call cline%set('objfun', 'cc') ! best objfun for this kind of data
         call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms
-        if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
         if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 
         if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1) ! this is an empirically determined regularization parameter
         call xrefine3D%execute(cline)

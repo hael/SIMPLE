@@ -220,9 +220,10 @@ contains
         complex(sp) :: c
         real(dp)    :: ptcl_sqsum
         real(sp)    :: A_sp, shift_mag_sq, wk
-        integer     :: k, i, ithr, kk, k0, p, ieo
+        integer     :: k, i, ithr, kk, k0, p, ieo, ih
         ithr         =  omp_get_thread_num() + 1
         i            =  self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         k0           =  self%kfromto(1)
         ieo          =  merge(REF_EVEN, REF_ODD, self%iseven(i))
         ptcl_sqsum   =  self%wsqsum_ptcl_now(iptcl)
@@ -243,7 +244,7 @@ contains
             ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             do k = self%kfromto(1), self%kfromto(2)
-                wk = real(k, sp) / self%sigma2_noise(k,iptcl)
+                wk = self%sigma2_wk(k,ih)
                 kk = k - k0 + 1
                 do p = 1,self%pftsz
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
@@ -256,7 +257,7 @@ contains
             ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*)
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             do k = self%kfromto(1), self%kfromto(2)
-                wk = real(k, sp) / self%sigma2_noise(k,iptcl)
+                wk = self%sigma2_wk(k,ih)
                 do p = 1,self%pftsz
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
                         &2._sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
@@ -306,9 +307,10 @@ contains
         complex(sp) :: c
         real(dp)    :: wk
         real(sp)    :: shift_mag_sq
-        integer     :: k, i, kk, k0, p, ieo
+        integer     :: k, i, kk, k0, p, ieo, ih
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         k0           = self%kfromto(1)
         ieo          = merge(REF_EVEN, REF_ODD, self%iseven(i))
         norm         = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
@@ -326,7 +328,7 @@ contains
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             do k = self%kfromto(1), self%kfromto(2)
                 kk = k - k0 + 1
-                wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk = self%sigma2_wk8(k,ih)
                 do p = 1,self%pftsz
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                     c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
@@ -337,7 +339,7 @@ contains
         else
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             do k = self%kfromto(1), self%kfromto(2)
-                wk = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk = self%sigma2_wk8(k,ih)
                 do p = 1,self%pftsz
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                     c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
@@ -645,13 +647,14 @@ contains
         integer,                     intent(in)    :: iptcl, irot
         complex(dp) :: c
         real(dp)    :: sumsq, wk
-        integer     :: ithr, p, rp, k, i
+        integer     :: ithr, p, rp, k, i, ih
         ithr = omp_get_thread_num() + 1
         i = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         gen_euclid_for_rot_8_1 = 0.d0
         if( irot <= self%pftsz )then
             do k = self%kfromto(1),self%kfromto(2)
-                wk    = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk    = self%sigma2_wk8(k,ih)
                 sumsq = 0.d0
                 do p = 1, irot-1
                     ! rotation index
@@ -671,7 +674,7 @@ contains
             enddo
         else
             do k = self%kfromto(1),self%kfromto(2)
-                wk    = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk    = self%sigma2_wk8(k,ih)
                 sumsq = 0.d0
                 do p = 1, irot-self%pftsz-1
                     rp = p + self%nrots - irot + 1
@@ -699,9 +702,10 @@ contains
         complex(dp), pointer :: shmat_8(:,:)
         complex(dp) :: c
         real(dp)    :: sumsq, wk
-        integer     :: ithr, p, rp, k, i
+        integer     :: ithr, p, rp, k, i, ih
         ithr    = omp_get_thread_num() + 1
         i       = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         shmat_8 => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat4aln_8(ithr, shvec, shmat_8)
         ! splitting both the compute based on irot and the loop avoids branching,
@@ -709,7 +713,7 @@ contains
         gen_euclid_for_rot_8_2 = 0.d0
         if( irot <= self%pftsz )then
             do k = self%kfromto(1),self%kfromto(2)
-                wk    = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk    = self%sigma2_wk8(k,ih)
                 sumsq = 0.d0
                 do p = 1, irot-1
                     ! rotation index
@@ -732,7 +736,7 @@ contains
             enddo
         else
             do k = self%kfromto(1),self%kfromto(2)
-                wk    = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk    = self%sigma2_wk8(k,ih)
                 sumsq = 0.d0
                 do p = 1, irot-self%pftsz-1
                     rp = p + self%nrots - irot + 1
@@ -888,10 +892,11 @@ contains
         complex(dp), pointer :: shmat_8(:,:)
         complex(dp) :: crefctf, cdiff, cg
         real(dp)    :: fk, wk, gkx, gky
-        integer     :: k, i, ithr, p, rp
+        integer     :: k, i, ithr, p, rp, ih
 
         ithr      = omp_get_thread_num() + 1
         i         = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         f         = 0.d0
         grad      = 0.d0
         argtransf => self%argtransf
@@ -925,7 +930,7 @@ contains
                     cg  = cmplx(0.d0, argtransf(self%pftsz+rp,k), kind=dp) * crefctf
                     gky = gky + real(cg * conjg(cdiff), dp)
                 enddo
-                wk      = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk      = self%sigma2_wk8(k,ih)
                 f       = f       + wk * fk
                 grad(1) = grad(1) + wk * gkx
                 grad(2) = grad(2) + wk * gky
@@ -955,7 +960,7 @@ contains
                     cg  = cmplx(0.d0, -argtransf(self%pftsz+rp,k), kind=dp) * crefctf
                     gky = gky + real(cg * conjg(cdiff), dp)
                 enddo
-                wk      = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                wk      = self%sigma2_wk8(k,ih)
                 f       = f       + wk * fk
                 grad(1) = grad(1) + wk * gkx
                 grad(2) = grad(2) + wk * gky
@@ -1012,7 +1017,7 @@ contains
         complex(sp) :: cross_term, ref2_term
         real(sp) :: A_sp, shift(2), shift_mag_sq, wk
         real(dp) :: wsq_now
-        integer :: i, ithr, k, k0, kk, p, ieo
+        integer :: i, ithr, k, k0, kk, p, ieo, ih
         logical :: shifted
 
         if( .not. self%is_euclid_objfun() )then
@@ -1020,6 +1025,7 @@ contains
         endif
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         k0           = self%kfromto(1)
         ieo          = merge(REF_EVEN, REF_ODD, self%iseven(i))
         shift        = real(shvec,sp)
@@ -1056,7 +1062,7 @@ contains
         enddo
         call fftwf_execute_dft(self%plan_fwd3_many, cjoint, cjoint)
         do k = self%kfromto(1), self%kfromto(2)
-            wk = real(k,sp) / self%sigma2_noise(k,iptcl)
+            wk = self%sigma2_wk(k,ih)
             kk = k - k0 + 1
             do p = 1,self%pftsz
                 ref2_term  = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
@@ -1290,14 +1296,15 @@ contains
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shvec(2)
         integer,                     intent(in)    :: irot
-        real(sp),  optional,         intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),                    intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         real(sp),  optional,         intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
         real(sp),  optional,         intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
         real(sp),  optional,         intent(out)   :: v
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
         real(dp)    :: norm_factor, wk, vnum, vden, ppow
-        integer     :: i, ithr, ieo, k
+        integer     :: i, ithr, ieo, k, ih
         i    = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp_8 => self%heap_vars(ithr)%pft_ref_tmp_8
@@ -1326,8 +1333,8 @@ contains
             vnum = 0.d0
             vden = 0.d0
             do k = self%kfromto(1), self%kfromto(2)
-                if( self%sigma2_noise(k,iptcl) <= 0. ) cycle
-                wk   = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                if( self%sigma2_noise(k,ih) <= 0. ) cycle
+                wk   = real(k, dp) / real(self%sigma2_noise(k,ih), dp)
                 ppow = sum(real(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i)), dp))
                 vnum = vnum + wk * sum(real(pft_ref_tmp_8(:,k) * conjg(pft_ref_tmp_8(:,k)), dp))
                 vden = vden + wk * ppow
@@ -1340,12 +1347,7 @@ contains
         endif
         ! sigma2 - pre-compute normalization factor
         norm_factor = 2.d0 * real(self%pftsz, dp)
-        if (present(sigma_contrib)) then
-            sigma_contrib = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8), dp), dim=1) / norm_factor)
-        else
-            self%sigma2_noise(self%kfromto(1):self%kfromto(2), iptcl) = &
-                real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8), dp), dim=1) / norm_factor)
-        endif
+        sigma_contrib = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8), dp), dim=1) / norm_factor)
     end subroutine gen_sigma_contrib
 
     ! the values are stored in self%crmat_many(ithr)%r( 1:nrots, ind )
@@ -1378,9 +1380,10 @@ contains
         complex(sp) :: c
         real(dp)    :: A, v
         real(sp)    :: wk, shift_mag_sq
-        integer     :: k, kk, k0, i, j, ithr, iref, p, ieo
+        integer     :: k, kk, k0, i, j, ithr, iref, p, ieo, ih
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         ieo   = merge(REF_EVEN, REF_ODD, self%iseven(i))
         k0    = self%kfromto(1)
         shmat => self%heap_vars(ithr)%shmat
@@ -1405,7 +1408,7 @@ contains
                 call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
                 ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
                 do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k) / self%sigma2_noise(k,iptcl)
+                    wk = self%sigma2_wk(k,ih)
                     kk = k - k0 + 1
                     do p = 1, self%pftsz+1
                         c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
@@ -1420,7 +1423,7 @@ contains
             do j = 1, nr
                 iref = irefs(j)
                 do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k) / self%sigma2_noise(k,iptcl)
+                    wk = self%sigma2_wk(k,ih)
                     do p = 1, self%pftsz+1
                         c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                         c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
@@ -1454,13 +1457,14 @@ contains
         real        :: ftvals(self%nrots), w(self%kfromto(1):self%kfromto(2))
         real        :: sqsumptcl, acc, acc_c
         integer(dp) :: t
-        integer     :: i, k, rot, rot_c, ir, jr, ref
+        integer     :: i, k, rot, rot_c, ir, jr, ref, ih
         ! particle index
         i = self%pinds(iptcl)
+        ih = merge(1, 2, self%iseven(i))
         ! particle variance and shell weights
         sqsumptcl = 0.0
         do k = self%kfromto(1),self%kfromto(2)
-            w(k)      = real(k) / self%sigma2_noise(k,iptcl)
+            w(k)      = self%sigma2_wk(k,ih)
             sqsumptcl = sqsumptcl + w(k) * sum(real(self%pfts_ptcls(:,k,i)*conjg(self%pfts_ptcls(:,k,i))))
         enddo
         ! convenience allocation
@@ -1528,11 +1532,12 @@ contains
         type(c_ptr) :: p_c
         complex(sp), allocatable, target :: buffer_c(:,:)
         real(sp),                pointer :: buffer_r(:,:)
-        real(sp),    allocatable         :: ftvals(:,:),wks(:,:)
+        real(sp),    allocatable         :: ftvals(:,:), wks(:,:)
         real(dp),    allocatable         :: wsq_now(:)
+        integer,     allocatable         :: halves(:)
         real(dp)       :: df, max_abs, max_rel, rms, sumsq, f_gpu, f_cpu
         integer(dp)    :: t
-        integer        :: i, k, iref, p,j, iptcl, nptcls
+        integer        :: i, iref, p, j, iptcl, nptcls
         integer(c_int) :: plan_cufft, ierr
         integer(c_int) :: n(1), inembed(1), onembed(1), howmany, idist, odist
         nptcls = pfromto(2) - pfromto(1) + 1
@@ -1551,18 +1556,14 @@ contains
         ! ierr = cufftPlanMany(plan_cufft, 1_c_int, n, inembed, 1_c_int, idist,&
         !       &onembed, 1_c_int, odist, CUFFT_C2R, howmany)
         if (ierr /= 0) stop 6
-        ! Some allocations
-        allocate(wks(self%kfromto(1):self%kfromto(2),nptcls), source=0.)
-        ! particle self-terms under the CURRENT sigma2 (wsqsums_ptcls may be
-        ! stale; a stale normalization makes the losses unbounded below)
-        allocate(wsq_now(nptcls), source=0.d0)
+        ! the two per-half weight vectors and each particle's half, not a weight per shell and particle;
+        ! the memoised self-terms follow the current spectra (memoize_sigma2_weights)
+        wks = self%sigma2_wk
+        allocate(halves(nptcls), wsq_now(nptcls))
         do iptcl = 1,nptcls
-            i = self%pinds(pfromto(1) + iptcl - 1)
-            do k = self%kfromto(1),self%kfromto(2)
-                wks(k,iptcl) = real(k) / real(self%sigma2_noise(k,pfromto(1) + iptcl - 1))
-                wsq_now(iptcl) = wsq_now(iptcl) + &
-                    &self%kshell_sqsums_ptcls(k,i) / real(self%sigma2_noise(k,pfromto(1) + iptcl - 1),dp)
-            enddo
+            i  = self%pinds(pfromto(1) + iptcl - 1)
+            halves(iptcl)  = merge(1, 2, self%iseven(i))
+            wsq_now(iptcl) = self%wsqsums_ptcls(i)
         enddo
         ! associate arays to avoid memory allocation, device attachment issues
         ! and the self object inside of the kernel
@@ -1573,7 +1574,7 @@ contains
         print *,'GPU - persistent data transfer time: ',toc(t)
         t = tic()
         call gen_many2many_euclids_cufft_kernel( self%kfromto, self%pftsz, self%nrefs,&
-            &nptcls, self%nrots, plan_cufft, wks, howmany, wsq_now,&
+            &nptcls, self%nrots, plan_cufft, wks, halves, howmany, wsq_now,&
             &ft_ref, ft_ref2,&
             &self%ft_ctf2(:,:,pfromto(1):pfromto(2)), self%ft_ptcl_ctf(:,:,pfromto(1):pfromto(2)),&
             &buffer_c, ierr)
@@ -1614,19 +1615,20 @@ contains
         enddo
         rms = sqrt(sumsq / real(howmany * self%nrots, dp))
         print '(a,3es16.7)', 'CUFFT/gen_euclids max_abs/max_rel/rms=', max_abs, max_rel, rms
-        deallocate(buffer_c, ftvals, wks)
+        deallocate(buffer_c, ftvals, wks, halves, wsq_now)
 #endif
     end subroutine gen_many2many_euclids_cufft
 
     subroutine gen_many2many_euclids_cufft_kernel( kfromto, pftsz, nrefs, nptcls, nrots,&
-        &plan_cufft, wks, howmany, wsqsums_ptcls, &
+        &plan_cufft, wks, halves, howmany, wsqsums_ptcls, &
         &ft_ref, ft_ref2,&
         &ft_ctf2, ft_ptcl_ctf, buffer_c, ierr )
         use  simple_gpu_utils
         use, intrinsic :: iso_c_binding, only: c_loc, c_int, c_ptr
         integer,             intent(in)    :: kfromto(2), pftsz, nrefs, nptcls, nrots, howmany
         integer(c_int),      intent(in)    :: plan_cufft
-        real(sp),            intent(in)    :: wks(kfromto(1):kfromto(2), nptcls)
+        real(sp),            intent(in)    :: wks(kfromto(1):kfromto(2), 2)   !< k/sigma2 of the two halves
+        integer,             intent(in)    :: halves(nptcls)                  !< each particle's half (column of wks)
         real(dp),            intent(in)    :: wsqsums_ptcls(nptcls)
         complex(sp),         intent(in)    :: ft_ref( pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
         complex(sp),         intent(in)    :: ft_ref2(pftsz+1,kfromto(1):kfromto(2),nrefs,N_REF_PARITIES)
@@ -1640,7 +1642,7 @@ contains
         real(dp)    :: A
         integer     :: iptcl, iref, p, k, j
         !$omp target teams distribute parallel do collapse(3)&
-        !$omp& map(to:kfromto, pftsz, nrefs, nptcls, wks)&
+        !$omp& map(to:kfromto, pftsz, nrefs, nptcls, wks, halves)&
         !$omp& map(present, to:ft_ref2, ft_ref)&
         !$omp& map(present, alloc:buffer_c)&
         !$omp& map(to:ft_ctf2, ft_ptcl_ctf)&
@@ -1653,7 +1655,7 @@ contains
                     do k = kfromto(1), kfromto(2)
                         c = ft_ctf2(p,k,iptcl) * ft_ref2(p,k,iref,REF_EVEN)
                         c = c - 2.0_sp * ft_ptcl_ctf(p,k,iptcl) * conjg(ft_ref(p,k,iref,REF_EVEN))
-                        d = d + wks(k,iptcl) * c
+                        d = d + wks(k,halves(iptcl)) * c
                     end do
                     buffer_c(p,j) = d
                 enddo

@@ -31,13 +31,13 @@ type :: cartft_ref
 end type cartft_ref
 
 !> One prepared particle for one objective: the observation X and the shift-free transfer
-!! abs(C) over its shells, whitened by 1/sqrt(sigma2) under OBJFUN_EUCLID, unweighted under
-!! OBJFUN_CC (no sigma2 is held).
+!! abs(C) over its shells, whitened by 1/sqrt(sigma2) of its half under OBJFUN_EUCLID,
+!! unweighted under OBJFUN_CC.
 type :: cartft_ptcl
     complex, allocatable :: observed(:,:), transfer(:,:)
-    real,    allocatable :: sigma2(:)           !< OBJFUN_EUCLID only
     real(dp) :: power   = 0._dp                 !< sum |X|^2 (whitened under OBJFUN_EUCLID)
     integer  :: kfromto(2) = 0
+    integer  :: half    = 0                     !< column of its half in sigma2 (OBJFUN_EUCLID only)
     integer  :: objfun  = 0                     !< OBJFUN_CC or OBJFUN_EUCLID once prepared
     logical  :: valid   = .false.
 end type cartft_ptcl
@@ -57,6 +57,10 @@ type :: cartft_calc
     type(cartft_ref),  allocatable :: refs(:,:)   !< (2,nstates): 1 even, 2 odd
     type(cartft_ptcl), allocatable :: ptcls(:)    !< (nptcls) prepared particles
     integer,           allocatable :: slots(:)    !< particle index -> slot of the current batch (0 when absent)
+    integer,           allocatable :: shells(:,:) !< (lims2) shell nint(sqrt(h*h+k*k)) of a pixel inside the Nyquist disk, -1 outside
+    real,              allocatable :: sigma2(:,:)       !< (shell, half) the two global spectra (OBJFUN_EUCLID)
+    real,              allocatable :: rsqrt_sigma2(:,:) !< 1/sqrt(sigma2) where valid
+    logical,           allocatable :: sigma2_ok(:,:)    !< finite and positive
     logical :: exists = .false.
 contains
     ! lifecycle
@@ -72,6 +76,7 @@ contains
     procedure          :: read
     procedure          :: cart_refvols_header_compatible
     ! particles
+    procedure          :: set_sigma2
     procedure, private :: set_ptcl_cc
     procedure, private :: set_ptcl_euclid
     generic            :: set_ptcl => set_ptcl_cc, set_ptcl_euclid
@@ -107,6 +112,7 @@ contains
     subroutine new( self, nstates, box, nptcls )
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: nstates, box, nptcls
+        integer :: h, k
         call self%kill
         if( nstates < 1 ) THROW_HARD('cartft_calc requires at least one state')
         if( nptcls  < 1 ) THROW_HARD('cartft_calc requires at least one particle slot')
@@ -122,6 +128,16 @@ contains
         self%lims2(1,:) = [-box/2, box/2]
         self%lims2(2,:) = [-box/2, box/2]
         allocate(self%refs(2,nstates), self%ptcls(nptcls))
+        ! the shell of every pixel, once for the box: the pixel loops look it up instead of a square root.
+        ! A pixel belongs to shell nint(|(h,k)|), the polar ring membership, only inside the Nyquist circle
+        ! |(h,k)| <= box/2: the outer half of the Nyquist shell is beyond the band of the padded reference
+        ! transform (and beyond its wrap table), where the polar ring of radius box/2 does not sample either
+        allocate(self%shells(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=-1)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k <= (box/2)**2 ) self%shells(h,k) = nint(sqrt(real(h*h + k*k)))
+            end do
+        end do
         self%exists = .true.
     end subroutine new
 
@@ -132,6 +148,10 @@ contains
         if( allocated(self%ptcls) ) deallocate(self%ptcls)
         if( allocated(self%wrap)  ) deallocate(self%wrap)
         if( allocated(self%slots) ) deallocate(self%slots)
+        if( allocated(self%shells)) deallocate(self%shells)
+        if( allocated(self%sigma2)       ) deallocate(self%sigma2)
+        if( allocated(self%rsqrt_sigma2) ) deallocate(self%rsqrt_sigma2)
+        if( allocated(self%sigma2_ok)    ) deallocate(self%sigma2_ok)
         self%nstates = 0
         self%nptcls  = 0
         self%box     = 0
@@ -355,24 +375,50 @@ contains
         call self%fill_ptcl(iptcl, OBJFUN_CC, observed, ctfparms, lower_shell, upper_shell)
     end subroutine set_ptcl_cc
 
-    !> Prepare particle slot iptcl for OBJFUN_EUCLID: X/sqrt(sigma2) and abs(C)/sqrt(sigma2) of
-    !! the pixel's shell over kfromto intersected with the sigma2 shells and the Cartesian
-    !! Nyquist limit, and the whitened particle power that normalizes the loss. An empty range,
-    !! a non-finite or non-positive sigma2 in it or an observation without power leaves the
-    !! slot invalid. THROW_HARD for iptcl outside 1..nptcls or an unsupported CTF flag.
-    subroutine set_ptcl_euclid( self, iptcl, observed, ctfparms, sigma2, kfromto )
+    !> The two global spectra of OBJFUN_EUCLID (shell kfrom.., half), held once for every slot
+    !! with their inverse square roots and the shells where they are usable (finite, positive)
+    subroutine set_sigma2( self, kfrom, sigma2 )
+        class(cartft_calc), intent(inout) :: self
+        integer,            intent(in)    :: kfrom
+        real,               intent(in)    :: sigma2(kfrom:,:)
+        integer :: kto, k, h
+        if( size(sigma2,2) /= 2 ) THROW_HARD('cartft_calc sigma2 must hold one spectrum per even/odd half')
+        kto = ubound(sigma2,1)
+        if( allocated(self%sigma2)       ) deallocate(self%sigma2)
+        if( allocated(self%rsqrt_sigma2) ) deallocate(self%rsqrt_sigma2)
+        if( allocated(self%sigma2_ok)    ) deallocate(self%sigma2_ok)
+        allocate(self%sigma2(kfrom:kto,2), source=sigma2)
+        allocate(self%rsqrt_sigma2(kfrom:kto,2), source=0.)
+        allocate(self%sigma2_ok(kfrom:kto,2))
+        do h = 1, 2
+            do k = kfrom, kto
+                self%sigma2_ok(k,h) = ieee_is_finite(self%sigma2(k,h)) .and. self%sigma2(k,h) > 0.
+                if( self%sigma2_ok(k,h) ) self%rsqrt_sigma2(k,h) = 1./sqrt(self%sigma2(k,h))
+            end do
+        end do
+    end subroutine set_sigma2
+
+    !> Prepare particle slot iptcl for OBJFUN_EUCLID with the spectrum of its half (set_sigma2):
+    !! X/sqrt(sigma2) and abs(C)/sqrt(sigma2) of the pixel's shell over kfromto intersected with
+    !! the sigma2 shells and the Cartesian Nyquist limit, and the whitened particle power that
+    !! normalizes the loss. An empty range, a non-finite or non-positive sigma2 in it or an
+    !! observation without power leaves the slot invalid. THROW_HARD for iptcl outside
+    !! 1..nptcls, a half other than 1 or 2, no spectra or an unsupported CTF flag.
+    subroutine set_ptcl_euclid( self, iptcl, observed, ctfparms, half, kfromto )
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: iptcl
         complex,            intent(in)    :: observed(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2))
         type(ctfparams),    intent(in)    :: ctfparms !< at the cropped sampling
-        real,               intent(in)    :: sigma2(0:)
+        integer,            intent(in)    :: half
         integer,            intent(in)    :: kfromto(2)
         integer :: lower_shell, upper_shell
         if( .not. self%exists ) THROW_HARD('cartft_calc particle set before new')
         if( iptcl < 1 .or. iptcl > self%nptcls ) THROW_HARD('cartft_calc particle slot out of range')
-        lower_shell = max(0, kfromto(1))
-        upper_shell = min(kfromto(2), ubound(sigma2,1), self%box/2)
-        call self%fill_ptcl(iptcl, OBJFUN_EUCLID, observed, ctfparms, lower_shell, upper_shell, sigma2)
+        if( .not. allocated(self%sigma2) ) THROW_HARD('cartft_calc euclid particle set before its sigma2')
+        if( half < 1 .or. half > 2 ) THROW_HARD('cartft_calc euclid particle without an even/odd half')
+        lower_shell = max(lbound(self%sigma2,1), kfromto(1))
+        upper_shell = min(kfromto(2), ubound(self%sigma2,1), self%box/2)
+        call self%fill_ptcl(iptcl, OBJFUN_EUCLID, observed, ctfparms, lower_shell, upper_shell, half)
     end subroutine set_ptcl_euclid
 
     !> True when particle slot iptcl holds a valid preparation.
@@ -499,7 +545,7 @@ contains
         associate( cmat => self%refs(ihalf,state)%cmat )
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
-                    if( .not. in_shells(h, k, [0, self%box/2], self%box) ) cycle
+                    if( self%shells(h,k) < 0 ) cycle
                     loc = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
                     call self%gather(cmat, loc, val, dval, inside)
                     if( .not. inside ) THROW_HARD('cartft_calc gather location outside the wrap table')
@@ -540,7 +586,7 @@ contains
         real(sp)    :: loc(3)
         real(dp)    :: l_arg, frequency(2), particle_power, prediction_power, cross_real
         real(dp)    :: model_gradient(2)
-        integer     :: axis, h, jaxis, k, ihalf, objfun
+        integer     :: axis, h, jaxis, k, ihalf, objfun, shell
         logical     :: inside
         call self%check_eval_args(state, iseven, iptcl)
         ihalf = self%ref_index(iseven)
@@ -555,7 +601,8 @@ contains
             model_gradient   = 0._dp
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
-                    if( .not. in_shells(h, k, p%kfromto, self%box) ) cycle
+                    shell = self%shells(h,k)
+                    if( shell < p%kfromto(1) .or. shell > p%kfromto(2) ) cycle
                     loc = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
                     call self%gather(cmat, loc, val, dval, inside)
                     if( .not. inside ) THROW_HARD('cartft_calc gather location outside the wrap table')
@@ -614,7 +661,7 @@ contains
         real(dp)    :: l_arg, dloc(3,3), frequency(2)
         real(dp)    :: particle_power, prediction_power, cross_real
         real(dp)    :: model_gradient(5)
-        integer     :: axis, h, jaxis, k, ihalf, objfun
+        integer     :: axis, h, jaxis, k, ihalf, objfun, shell
         logical     :: inside
         call self%check_eval_args(state, iseven, iptcl)
         ihalf = self%ref_index(iseven)
@@ -629,7 +676,8 @@ contains
             model_gradient   = 0._dp
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
-                    if( .not. in_shells(h, k, p%kfromto, self%box) ) cycle
+                    shell = self%shells(h,k)
+                    if( shell < p%kfromto(1) .or. shell > p%kfromto(2) ) cycle
                     loc = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
                     call self%gather(cmat, loc, val, dval, inside)
                     if( .not. inside ) THROW_HARD('cartft_calc gather location outside the wrap table')
@@ -699,7 +747,7 @@ contains
         real,              optional, intent(out) :: v
         complex     :: val, dval(3), phase
         complex(dp) :: model, raw_observed, residual
-        real(dp), allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:)
+        real(dp), allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:), root_sigma2(:)
         real(dp)    :: l_arg, root_sigma, vnum, vden
         real(sp)    :: loc(3)
         integer, allocatable :: counts(:)
@@ -720,18 +768,21 @@ contains
             allocate(ref_sum(lower_shell:upper_shell),   source=0._dp)
             allocate(ptcl_sum(lower_shell:upper_shell),  source=0._dp)
             allocate(counts(lower_shell:upper_shell),    source=0)
+            ! the square root of the half's spectrum per shell, once per call
+            allocate(root_sigma2(lower_shell:upper_shell))
+            root_sigma2 = sqrt(real(self%sigma2(lower_shell:upper_shell,p%half), dp))
             vnum = 0._dp
             vden = 0._dp
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
-                    if( .not. in_shells(h, k, p%kfromto, self%box) ) cycle
-                    shell = nint(sqrt(real(h*h + k*k)))
+                    shell = self%shells(h,k)
+                    if( shell < p%kfromto(1) .or. shell > p%kfromto(2) ) cycle
                     loc   = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
                     call self%gather(cmat, loc, val, dval, inside)
                     if( .not. inside ) THROW_HARD('cartft_calc gather location outside the wrap table')
                     l_arg = 2._dp*real(PI, dp)*(real(h, dp)*shift(1) + real(k, dp)*shift(2))/real(self%box, dp)
                     phase = cmplx(cos(l_arg), sin(l_arg), kind=sp)
-                    root_sigma   = sqrt(real(p%sigma2(shell), dp))
+                    root_sigma   = root_sigma2(shell)
                     model        = cmplx(phase, kind=dp)*cmplx(p%transfer(h,k), kind=dp)*cmplx(val, kind=dp)*root_sigma
                     raw_observed = cmplx(p%observed(h,k), kind=dp)*root_sigma
                     residual     = raw_observed - model
@@ -740,8 +791,8 @@ contains
                     if( l_diag )then
                         ref_sum(shell)  = ref_sum(shell)  + real(conjg(model)*model, dp)
                         ptcl_sum(shell) = ptcl_sum(shell) + real(conjg(raw_observed)*raw_observed, dp)
-                        vnum = vnum + real(conjg(residual)*residual, dp)/real(p%sigma2(shell), dp)
-                        vden = vden + real(conjg(raw_observed)*raw_observed, dp)/real(p%sigma2(shell), dp)
+                        vnum = vnum + real(conjg(residual)*residual, dp)/real(self%sigma2(shell,p%half), dp)
+                        vden = vden + real(conjg(raw_observed)*raw_observed, dp)/real(self%sigma2(shell,p%half), dp)
                     endif
                 end do
             end do
@@ -786,14 +837,15 @@ contains
 
     ! PRIVATE
 
-    !> Fill particle slot iptcl for objfun over the shells lower_shell..upper_shell; sigma2 is
-    !! present exactly for OBJFUN_EUCLID (set_ptcl_euclid) and whitens observation and transfer.
-    subroutine fill_ptcl( self, iptcl, objfun, observed, ctfparms, lower_shell, upper_shell, sigma2 )
+    !> Fill particle slot iptcl for objfun over the shells lower_shell..upper_shell; half is
+    !! present exactly for OBJFUN_EUCLID (set_ptcl_euclid): its spectrum whitens observation and
+    !! transfer.
+    subroutine fill_ptcl( self, iptcl, objfun, observed, ctfparms, lower_shell, upper_shell, half )
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: iptcl, objfun, lower_shell, upper_shell
         complex,            intent(in)    :: observed(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2))
         type(ctfparams),    intent(in)    :: ctfparms
-        real, optional,     intent(in)    :: sigma2(0:)
+        integer, optional,  intent(in)    :: half
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
         real     :: cval, weight
@@ -805,22 +857,22 @@ contains
                 THROW_HARD('cartft_calc particle with an unsupported CTF flag')
         end select
         associate( p => self%ptcls(iptcl) )
-            if( allocated(p%observed) ) deallocate(p%observed)
-            if( allocated(p%transfer) ) deallocate(p%transfer)
-            if( allocated(p%sigma2)   ) deallocate(p%sigma2)
             p%valid   = .false.
             p%objfun  = objfun
             p%power   = 0._dp
             p%kfromto = [lower_shell, upper_shell]
+            p%half    = 0
             if( upper_shell < lower_shell ) return
-            if( present(sigma2) )then
-                do shell = lower_shell, upper_shell
-                    if( .not. ieee_is_finite(sigma2(shell)) .or. sigma2(shell) <= 0.0 ) return
-                end do
-                allocate(p%sigma2(lower_shell:upper_shell), source=sigma2(lower_shell:upper_shell))
+            if( present(half) )then
+                if( .not. all(self%sigma2_ok(lower_shell:upper_shell,half)) ) return
+                p%half = half
             endif
-            allocate(p%observed(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=cmplx(0.,0.))
-            allocate(p%transfer(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=cmplx(0.,0.))
+            ! the slot's arrays are kept across fills (the box is fixed for the calculator's lifetime);
+            ! every reader visits only the pixels of the slot's shells, which the fill below writes
+            if( .not. allocated(p%observed) ) &
+                &allocate(p%observed(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=cmplx(0.,0.))
+            if( .not. allocated(p%transfer) ) &
+                &allocate(p%transfer(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=cmplx(0.,0.))
             use_ctf = ctfparms%ctfflag /= CTFFLAG_NO
             if( use_ctf )then
                 tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
@@ -829,10 +881,10 @@ contains
             endif
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
-                    if( .not. in_shells(h, k, p%kfromto, self%box) ) cycle
-                    shell  = nint(sqrt(real(h*h + k*k)))
+                    shell = self%shells(h,k)
+                    if( shell < p%kfromto(1) .or. shell > p%kfromto(2) ) cycle
                     weight = 1.0
-                    if( present(sigma2) ) weight = 1.0/sqrt(sigma2(shell))
+                    if( present(half) ) weight = self%rsqrt_sigma2(shell,half)
                     cval = 1.0
                     ! SIMPLE's CTF object without the process-global Fourier maps of the matcher;
                     ! abs(CTF): the observation is phase-flipped (CTFFLAG_YES, O4) or stored flipped
@@ -883,17 +935,6 @@ contains
                 &THROW_HARD('cartft_calc shell range lies outside the native Fourier disk')
         end associate
     end subroutine check_eval_args
-
-    !> True when pixel (h,k) belongs to a shell nint(|(h,k)|) inside kfromto, the polar ring
-    !! membership, and lies inside the Nyquist circle |(h,k)| <= box/2: the outer half of the
-    !! Nyquist shell is beyond the band of the padded reference transform (and beyond its wrap
-    !! table), where the polar ring of radius box/2 does not sample either.
-    pure logical function in_shells( h, k, kfromto, box )
-        integer, intent(in) :: h, k, kfromto(2), box
-        integer :: shell
-        shell     = nint(sqrt(real(h*h + k*k)))
-        in_shells = shell >= kfromto(1) .and. shell <= kfromto(2) .and. h*h + k*k <= (box/2)**2
-    end function in_shells
 
     !> Convert the whitened residual power sum |r|^2 and its Gauss-Newton sums into the
     !! normalized loss L = sum |r|^2/power, its gradient and Gauss-Newton block. NaN when the

@@ -224,38 +224,37 @@ contains
         call img_pad%kill()
     end subroutine apply_ctf_wiener_wpad
 
-    module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, &
+    !> The reconstruction plane of a padded particle transform: its shifted, CTF-weighted samples on the native
+    !! lattice. grid is the memoised plane grid of the padded box (shell table and, when whitening, the two
+    !! spectra resampled to it); half selects the particle's spectrum and switches the whitening on.
+    module subroutine gen_fplane4rec( self, smpd_crop, ctfparms, shift, fplane, grid, half, &
         &store_transfer, observation_model )
         use simple_math,          only: ceil_div, floor_div
-        use simple_math_ft,       only: resample_sigma2
-        use simple_euclid_sigma2, only: euclid_sigma2
         class(image),      intent(inout) :: self
-        integer,           intent(in)    :: kfromto(2)
         real,              intent(in)    :: smpd_crop
         class(ctfparams),  intent(in)    :: ctfparms
         real,              intent(in)    :: shift(2)
         type(fplane_type), intent(out)   :: fplane
-        real, optional,    intent(in)    :: sig2arr(kfromto(1):kfromto(2))
+        type(fplane_grid), intent(in)    :: grid
+        integer, optional, intent(in)    :: half
         logical, optional, intent(in)    :: store_transfer
         logical, optional, intent(in)    :: observation_model
         type(ctf)                :: tfun
         type(ctfvars)            :: ctfvals
-        real, allocatable        :: sigma2_noise(:) !< Noise power spectrum for ML regularization
         complex(c_float_complex) :: c, transfer, phase, w1, w2, ph0, ph_h, ph_k
         real(dp)                 :: pshift(2)
         logical :: l_ml_reg, l_store_transfer, l_observation_model
         type(ftiter) :: fiterator
         ! CTF kernel scalars (precomputed)
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, ker, tval, tvalsq
-        integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax,  sigma_nyq
-        integer :: box_croppd, box_crop
+        integer :: physh, physk, h, k, shell, hmin, hmax, kmin, kmax, ih
+        integer :: box_croppd
         integer :: hloop_min, hloop_max, kloop_min, sample_stride
         integer :: hlo_nat, hhi_nat, klo_nat
         logical :: l_ctf, l_flip
-        ! Shell LUT: shell = nint(sqrt(r2)) via lookup table
-        integer, allocatable :: shell_lut(:)
-        integer :: max_r2, r2, abs_hmax, abs_kmax
-        l_ml_reg = present(sig2arr)
+        integer :: r2
+        character(len=:), allocatable :: msg
+        l_ml_reg = present(half)
         l_store_transfer = .false.
         if( present(store_transfer) ) l_store_transfer = store_transfer
         l_observation_model = .false.
@@ -267,14 +266,19 @@ contains
         ! setup the Fourier plane (PADDED/CROPPED)
         ! -----------------------
         box_croppd = self%ldim(1)
-        box_crop   = box_croppd / OSMPL_PAD_FAC
+        if( grid%box_croppd /= box_croppd )then
+            msg = 'the plane grid belongs to another padded box; gen_fplane4rec'
+            THROW_HARD(msg)
+        endif
+        if( l_ml_reg )then
+            if( .not. grid%has_sigma2() ) THROW_HARD('whitening needs the spectra attached to the plane grid; gen_fplane4rec')
+            ih = half
+        endif
         ! cropped Fourier limits & dimensions need to be congruent with how the reconstroctor_eo objects are set up
         call fiterator%new([box_croppd, box_croppd, 1], smpd_crop)
         ! use redundant logical limits (mode 3) so negative h exists for Friedel access (-h,-k)
         fplane%frlims = fiterator%loop_lims(3)
         fplane%nyq    = fiterator%get_lfny(1)
-        call fiterator%new([box_crop, box_crop, 1], smpd_crop)
-        sigma_nyq     = fiterator%get_lfny(1)
         ! matrices
         if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
         if( allocated(fplane%ctfsq_plane) ) deallocate(fplane%ctfsq_plane)
@@ -312,21 +316,10 @@ contains
             amp_contr_const = ctfvals%amp_contr_const
         end if
         ! -----------------------
-        ! ML regularization noise spectrum
-        ! -----------------------
-        if (l_ml_reg) then
-            allocate(sigma2_noise(0:fplane%nyq), source=0.0)
-            call resample_sigma2(kfromto(1), sigma_nyq, sig2arr, fplane%nyq, &
-                &real(sigma_nyq)/real(fplane%nyq), sigma2_noise)
-        end if
-        ! -----------------------
         ! Shift phase recurrence
         ! -----------------------
         pshift = real(-shift * fplane%shconst(1:2), dp)
-        ! -----------------------
-        ! Precompute shell LUT to avoid sqrt in inner loops
-        ! r2 = h*h + k*k, shell = nint(sqrt(r2))
-        ! -----------------------
+        ! the shell of a sample comes from the grid's table, shell = nint(sqrt(h*h + k*k))
         hmin = fplane%frlims(1,1)
         hmax = fplane%frlims(1,2)
         kmin = fplane%frlims(2,1)
@@ -343,13 +336,6 @@ contains
                       real(sin(real(hloop_min,dp)*pshift(1)), c_float), kind=c_float_complex )
         ph_k = cmplx( real(cos(real(kloop_min,dp)*pshift(2)), c_float), &
                       real(sin(real(kloop_min,dp)*pshift(2)), c_float), kind=c_float_complex )
-        abs_hmax = max(abs(hmin), abs(hmax))
-        abs_kmax = max(abs(kmin), abs(kmax))
-        max_r2   = abs_hmax*abs_hmax + abs_kmax*abs_kmax
-        allocate(shell_lut(0:max_r2))
-        do r2 = 0, max_r2
-            shell_lut(r2) = nint(sqrt(real(r2)))
-        end do
         ! ============================================================
         ! Fill k in [kmin .. 0] explicitly (ONLY STORED REGION)
         ! ============================================================
@@ -357,7 +343,7 @@ contains
             ph_h = ph0
             do h = hloop_min, hloop_max, sample_stride
                 r2    = h*h + k*k
-                shell = shell_lut(r2)
+                shell = grid%shell_lut(r2)
                 if (shell > fplane%nyq) then
                     c        = cmplx(0.0_c_float, 0.0_c_float, kind=c_float_complex)
                     if( l_store_transfer ) transfer = cmplx(0.0_c_float, 0.0_c_float, kind=c_float_complex)
@@ -402,13 +388,13 @@ contains
                     ! with a separate forward operator CTF/sqrt(sigma2).
                     if (l_ml_reg) then
                         if( l_observation_model )then
-                            c        = c        / sqrt(sigma2_noise(shell))
-                            if( l_store_transfer ) transfer = transfer / sqrt(sigma2_noise(shell))
+                            c        = c        * grid%rsqrt_sig2(shell,ih)
+                            if( l_store_transfer ) transfer = transfer * grid%rsqrt_sig2(shell,ih)
                         else
-                            c        = c        / sigma2_noise(shell)
-                            if( l_store_transfer ) transfer = transfer / sigma2_noise(shell)
+                            c        = c        * grid%inv_sig2(shell,ih)
+                            if( l_store_transfer ) transfer = transfer * grid%inv_sig2(shell,ih)
                         endif
-                        tvalsq   = tvalsq   / sigma2_noise(shell)
+                        tvalsq   = tvalsq   * grid%inv_sig2(shell,ih)
                     end if
                 end if
                 fplane%cmplx_plane(h/sample_stride,k/sample_stride) = c
@@ -418,8 +404,6 @@ contains
             end do
             ph_k = ph_k * w2
         end do
-        if (allocated(shell_lut)    ) deallocate(shell_lut)
-        if (allocated(sigma2_noise) ) deallocate(sigma2_noise)
     end subroutine gen_fplane4rec
 
     ! Calculate Joe's Ice Fraction Score for images, not intended for micrographs

@@ -3,8 +3,9 @@
 ! 100 particles and two computing units, and the tests read its state and the scripts it writes
 ! (partition scripts carrying fromp/top/part/nparts, single-job scripts from a chash or a
 ! cmdline, a multi-job script), the job-status round trip, the computing-unit bookkeeping and
-! the streaming stack (size, particle range, done/fail stacks, clear). Scripts are written in
-! the suite's directory and deleted.
+! the streaming stack (size, particle range, done/fail stacks, clear), and the batch parts that
+! failed (a non-zero or lost exit status, and real local part scripts whose executable fails).
+! Scripts are written in the suite's directory and deleted.
 module simple_qsys_ctrl_tester
 use simple_core_module_api
 use simple_qsys_local, only: qsys_local
@@ -35,7 +36,97 @@ contains
         call test_async_job_record_and_fresh_dir()
         call test_cancel_unfinished_jobs()
         call test_job_liveness()
+        call test_failed_parts()
+        call test_failed_local_parts()
     end subroutine run_all_qsys_ctrl_tests
+
+    !> a partition script records itself and writes its exit status; a submitted part without its
+    !! finished sentinel fails on a non-zero or lost status, not on a zero one or none
+    subroutine test_failed_parts()
+        type(qsys_local)             :: qsys_obj
+        integer, allocatable, target :: parts(:,:)
+        type(qsys_ctrl)              :: ctrl
+        type(chash)                  :: job_descr, q_descr
+        type(string)                 :: cwd_saved, root
+        character(len=:), allocatable :: txt
+        logical, allocatable         :: done(:), submitted(:)
+        integer, allocatable         :: failed(:)
+        integer :: nfail0
+        write(*,'(A)') 'test_failed_parts'
+        nfail0 = tests_failed
+        call enter_fixture('qsys_failed_parts', cwd_saved, root)
+        call make_ctrl(qsys_obj, parts, ctrl)
+        call job_descr%new(10)
+        call job_descr%set('prg',  'refine2D')
+        call job_descr%set('nthr', '1')
+        call q_descr%new(10)
+        call q_descr%set('qsys_name', 'local')
+        call ctrl%prep_part_jobs(job_descr, string('.mrc'), q_descr)
+        txt = file_text('distr_simple_script_2')
+        call assert_true(index(txt, 'EXIT_CODE_JOB_2'//JOB_INFO_EXT) > 0, 'a partition script records itself')
+        call assert_true(index(txt, 'echo $? > EXIT_CODE_JOB_2') > 0, 'and writes its exit status')
+        call ctrl%get_jobs_status(done, submitted)
+        done      = .false.
+        submitted = .true.
+        call ctrl%set_jobs_status(done, submitted)
+        failed = ctrl%failed_parts()
+        call assert_int(0, size(failed), 'no part has failed while none wrote a status')
+        call write_lines('EXIT_CODE_JOB_1', '0')
+        call write_lines('EXIT_CODE_JOB_2', '1')
+        call write_lines('EXIT_CODE_JOB_3', int2str(JOB_LOST_EXIT_CODE))
+        failed = ctrl%failed_parts()
+        call assert_int(2, size(failed), 'two parts have failed')
+        if( size(failed) == 2 ) call assert_true(all(failed == [2,3]), 'the non-zero and the lost status, not the zero one')
+        call job_descr%kill
+        call q_descr%kill
+        call ctrl%kill
+        call qsys_obj%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_failed_parts
+
+    !> local part scripts whose executable fails are submitted for real: the master sees both
+    !! failed parts within seconds instead of waiting for their finished sentinels
+    subroutine test_failed_local_parts()
+        integer, parameter :: WAIT_S = 30
+        type(qsys_local)             :: qsys_obj
+        integer, allocatable, target :: parts(:,:)
+        type(qsys_ctrl)              :: ctrl
+        type(chash)                  :: job_descr, q_descr
+        type(string)                 :: cwd_saved, root
+        character(len=:), allocatable :: cwd_glob_saved
+        integer, allocatable         :: failed(:)
+        integer :: nfail0, it
+        write(*,'(A)') 'test_failed_local_parts'
+        nfail0 = tests_failed
+        call enter_fixture('qsys_failed_local_parts', cwd_saved, root)
+        ! the scripts change to CWD_GLOB before they run
+        cwd_glob_saved = trim(CWD_GLOB)
+        CWD_GLOB = root%to_char()
+        call qsys_obj%new()
+        parts = split_nobjs_even(NPTCLS, NPARTS)
+        call ctrl%new(string('false'), qsys_obj, parts, [1, NPARTS], NCUNITS, .false.)
+        call job_descr%new(10)
+        call job_descr%set('prg', 'none')
+        call q_descr%new(10)
+        call q_descr%set('qsys_name', 'local')
+        call ctrl%prep_part_jobs(job_descr, string('.mrc'), q_descr)
+        call ctrl%submit_scripts
+        allocate(failed(0))
+        do it = 1, WAIT_S
+            failed = ctrl%failed_parts()
+            if( size(failed) == NCUNITS ) exit
+            call sleep(1)
+        end do
+        call assert_int(NCUNITS, size(failed), 'both submitted parts are seen to have failed')
+        if( size(failed) == NCUNITS ) call assert_true(all(failed == [1,2]), 'the first two parts')
+        call assert_true(file_exists(string('EXIT_CODE_JOB_1'//JOB_INFO_EXT)), 'a part recorded itself')
+        CWD_GLOB = cwd_glob_saved
+        call job_descr%kill
+        call q_descr%kill
+        call ctrl%kill
+        call qsys_obj%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_failed_local_parts
 
     !> a local job of this host is alive while its process is, gone once it is not; one of another
     !! host cannot be told; a job gone at two checks in a row gets the lost status written

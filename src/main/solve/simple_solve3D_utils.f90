@@ -1,6 +1,5 @@
 !@descr: utilities for solve3D de novo map determination used by commanders_solve3D
 module simple_solve3D_utils
-use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
 use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration, sigma2_estimate_available
 use simple_commanders_volops,    only: commander_symmetrize_map
@@ -10,10 +9,6 @@ use simple_parameters,           only: parameters
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
     &refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname, refine3D_reprojs_fname
-use simple_ptcl_layout,          only: ptcl_layout_digest
-use simple_sigma2_state,         only: sigma2_state_validate_identity
-use simple_sigma2_state_file,    only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
-    &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 use simple_halfmap_diagnostics,  only: copy_support_provenance, rename_support_provenance, &
     &remove_support_provenance
 use simple_solve3D_manifest,     only: solve3D_manifest, solve3D_stage_record
@@ -772,21 +767,21 @@ contains
     end subroutine reseed_state_labels
 
     subroutine commit_deferred_sigma_update( params )
-        use simple_commanders_euclid, only: commander_calc_group_sigmas
+        use simple_commanders_euclid, only: commander_commit_sigma2
         class(parameters), intent(in) :: params
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(cmdline) :: cline_calc_group_sigmas
+        type(commander_commit_sigma2) :: xcommit_sigma2
+        type(cmdline) :: cline_commit_sigma2
         if( params%cc_objfun /= OBJFUN_EUCLID .and. trim(params%cc_emit_sigma) /= 'yes' ) return
         if( .not. cline_refine3D%defined('sigma_commit_deferred') ) return
         if( cline_refine3D%get_carg('sigma_commit_deferred') /= 'yes' ) return
         if( .not. cline_refine3D%defined('endit') ) THROW_HARD('deferred canonical sigma2 update has no final iteration')
-        cline_calc_group_sigmas = cline_refine3D
-        call cline_calc_group_sigmas%set('prg',                   'calc_group_sigmas')
-        call cline_calc_group_sigmas%set('mkdir',                 'no')
-        call cline_calc_group_sigmas%set('which_iter',            cline_refine3D%get_iarg('endit'))
-        call cline_calc_group_sigmas%set('sigma_commit_deferred', 'no')
-        call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
-        call cline_calc_group_sigmas%kill
+        cline_commit_sigma2 = cline_refine3D
+        call cline_commit_sigma2%set('prg',                   'commit_sigma2')
+        call cline_commit_sigma2%set('mkdir',                 'no')
+        call cline_commit_sigma2%set('which_iter',            cline_refine3D%get_iarg('endit'))
+        call cline_commit_sigma2%set('sigma_commit_deferred', 'no')
+        call xcommit_sigma2%execute(cline_commit_sigma2)
+        call cline_commit_sigma2%kill
         call cline_refine3D%set('sigma_commit_deferred', 'no')
         write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: committed canonical state after stage reconstruction'
     end subroutine commit_deferred_sigma_update
@@ -848,9 +843,8 @@ contains
             ! canonical estimate (every later stage boundary).
             sigma_iter = 1
             if( cline_refine3D%defined('startit') ) sigma_iter = max(1, cline_refine3D%get_iarg('startit'))
-            call ensure_sigma2_for_iteration(cline_rec, projfile, sigma_iter, params%box, params%smpd, &
-                &params%l_sigma_glob, 'SOLVE3D STAGE '//int2str(istage)//' STARTING RECONSTRUCTION', &
-                &l_sigma_bootstrapped)
+            call ensure_sigma2_for_iteration(cline_rec, projfile, 'ptcl3D', sigma_iter, params%box, params%smpd, &
+                &'SOLVE3D STAGE '//int2str(istage)//' STARTING RECONSTRUCTION', l_sigma_bootstrapped)
             if( l_sigma_bootstrapped ) call cline_rec%set('which_iter', sigma_iter)
         endif
         call xrec3D%execute(cline_rec)
@@ -957,7 +951,7 @@ contains
         call cline_rec%delete('vol_odd')
         call strip_refine3D_planning_keys(cline_rec)
         if( stage_rec_is_euclid(cline_rec) )then
-            if( .not. sigma2_estimate_available(projfile, params%box, params%smpd, params%l_sigma_glob) )then
+            if( .not. sigma2_estimate_available(projfile, 'ptcl3D', params%box, params%smpd) )then
                 THROW_HARD('solve3D_addon: the frozen project carries no consumable committed residual sigma2 state')
             endif
         endif

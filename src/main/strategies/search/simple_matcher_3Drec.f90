@@ -5,6 +5,7 @@ use simple_timer
 use simple_builder,         only: builder
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch, prep_rec_observation, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
+use simple_fplane_grid,     only: fplane_grid
 use simple_parameters,      only: parameters
 use simple_reconstructor,   only: reconstructor
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody
@@ -403,7 +404,8 @@ contains
         type(image), allocatable, optional, intent(inout) :: crop_imgs(:)
         integer,                  optional, intent(in)    :: kfromto(2)
         logical,                  optional, intent(in)    :: observation_model, whiten
-        integer :: i, ithr, kfromto_here(2)
+        type(fplane_grid) :: grid
+        integer :: i, ithr, kfromto_here(2), box_pd
         logical :: l_crop, l_band, l_obs, l_whiten
         l_crop = present(crop_imgs)
         if( l_crop ) l_crop = allocated(crop_imgs)
@@ -428,6 +430,13 @@ contains
             kfromto_here = build%esig%get_kfromto()
         endif
         if( l_crop ) kfromto_here(2) = min(kfromto_here(2), params%box_crop/2)
+        ! the plane grid of the padded box, once for the call: the spectra's cached one when whitening
+        box_pd = merge(params%box_croppd, params%boxpd, l_crop)
+        if( l_whiten )then
+            call build%esig%prep_fplane_grid(box_pd, kfromto_here(1))
+        else
+            call grid%new(box_pd)
+        endif
         !$omp parallel do default(shared) private(i,ithr) schedule(static) proc_bind(close)
         do i = 1,nptcls
             ithr = omp_get_thread_num() + 1
@@ -440,26 +449,37 @@ contains
             else
                 call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
             endif
-            call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), l_crop, kfromto_here, &
-                &l_whiten, l_obs, l_band, fplanes(i))
+            if( l_whiten )then
+                call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), l_crop, kfromto_here, &
+                    &build%esig%fplane, l_whiten, l_obs, l_band, fplanes(i))
+            else
+                call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), l_crop, kfromto_here, &
+                    &grid, l_whiten, l_obs, l_band, fplanes(i))
+            endif
         end do
         !$omp end parallel do
+        call grid%kill
     end subroutine prep_imgs4rec
 
     !> The reconstruction plane of particle iptcl from its padded transform pad_img, prep_imgs4rec's
-    !! per-particle step: CTF and shift scaled to the cropped grid when cropped; whitened by the particle's
-    !! sigma2 spectrum when whiten; with observation_model the plane holds the whitened observation and the
-    !! forward transfer; with cap its Nyquist is capped at the band kfromto(2).
-    subroutine gen_rec_plane( params, build, iptcl, pad_img, cropped, kfromto, whiten, observation_model, cap, fplane )
-        use simple_image, only: image
+    !! per-particle step: CTF and shift scaled to the cropped grid when cropped; whitened by the sigma2
+    !! spectrum of the particle's half when whiten; with observation_model the plane holds the whitened observation and the
+    !! forward transfer; with cap its Nyquist is capped at the band kfromto(2). grid is the plane grid of
+    !! pad_img's box, with the spectra attached when whiten (euclid_sigma2%prep_fplane_grid).
+    subroutine gen_rec_plane( params, build, iptcl, pad_img, cropped, kfromto, grid, whiten, observation_model, &
+            &cap, fplane )
+        use simple_image,         only: image
+        use simple_euclid_sigma2, only: sigma2_half
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: iptcl, kfromto(2)
+        type(fplane_grid), intent(in)    :: grid
         class(image),      intent(inout) :: pad_img
         logical,           intent(in)    :: cropped, whiten, observation_model, cap
         type(fplane_type), intent(inout) :: fplane
         type(ctfparams) :: ctfparms
-        real :: shift(2), crop_factor
+        real    :: shift(2), crop_factor
+        integer :: ih
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
         shift    = build%spproj_field%get_2Dshift(iptcl)
         if( cropped )then
@@ -470,14 +490,11 @@ contains
             shift         = shift * crop_factor
         endif
         if( whiten )then
-            if( iptcl < lbound(build%esig%sigma2_noise,2) .or. iptcl > ubound(build%esig%sigma2_noise,2) )then
-                THROW_HARD('particle index outside the sigma2 table; gen_rec_plane')
-            endif
-            call pad_img%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, fplane, &
-                &build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl), store_transfer=observation_model, &
-                &observation_model=observation_model)
+            ih = sigma2_half(build%spproj_field%get_eo(iptcl))
+            call pad_img%gen_fplane4rec(params%smpd_crop, ctfparms, shift, fplane, grid, half=ih, &
+                &store_transfer=observation_model, observation_model=observation_model)
         else
-            call pad_img%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms, shift, fplane, &
+            call pad_img%gen_fplane4rec(params%smpd_crop, ctfparms, shift, fplane, grid, &
                 &store_transfer=observation_model, observation_model=observation_model)
         endif
         ! the plane claims no frequency beyond the band (padded units)

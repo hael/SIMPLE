@@ -489,6 +489,7 @@ subroutine run_states_cavgs_gate( root, nthr, gate )
         call gate%report('states_cavgs: selected sub-class averages', real(nsel))
         call gate%check('states_cavgs: cls_expansion delivers at least 100 selected sub-class averages', &
             &nsel >= CAVGS_MIN_SUBAVGS)
+        call check_memberless_halves(expanded, gate)
         if( nsel >= CAVGS_MIN_SUBAVGS )then
             call run_states_cavgs_stage(run_dir, expansion_projfile, nthr, sorted_projfile, work_projfile)
             call gate%check('states_cavgs: refine3D_states_cavgs writes its project', file_exists(sorted_projfile))
@@ -508,6 +509,66 @@ subroutine run_states_cavgs_gate( root, nthr, gate )
     if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not restore fixture directory')
     CWD_GLOB = root%to_char()
 end subroutine run_states_cavgs_gate
+
+!> cls_expansion flags a sub-class half with state 0 (cls2D state_even/state_odd) exactly when the
+!! sub-class has no member in that half (the project's ptcl2D class and eo; a parent class whose members
+!! all share one eo is split into halves alternately and is left out), and no blank half stays active
+subroutine check_memberless_halves( spproj, gate )
+    use simple_fileio, only: add2fbody, fname2ext
+    class(sp_project), intent(inout) :: spproj
+    type(test_gate),   intent(inout) :: gate
+    character(len=4), parameter :: HALVES(2) = ['even', 'odd ']
+    type(image)          :: img
+    type(string)         :: stk, ext, stk_half
+    real,    allocatable :: rmat(:,:,:)
+    integer, allocatable :: npop(:,:), parent_eo(:,:)
+    real    :: smpd
+    integer :: ncavgs, icls, ih, iptcl, ldim(3), nflag(2), nmismatch, nblank_active, half_state, eo, parent
+    logical :: l_blank
+    call spproj%get_cavgs_stk(stk, ncavgs, smpd)
+    ! the members of every sub-class in each half, and which halves each parent class has at all
+    allocate(npop(2,ncavgs), source=0)
+    allocate(parent_eo(2,max(1,maxval(spproj%os_ptcl2D%get_all_asint('cluster')))), source=0)
+    do iptcl = 1, spproj%os_ptcl2D%get_noris()
+        icls = spproj%os_ptcl2D%get_int(iptcl, 'class')
+        if( icls < 1 .or. icls > ncavgs ) cycle
+        eo = spproj%os_ptcl2D%get_eo(iptcl)
+        if( eo < 0 .or. eo > 1 ) cycle
+        npop(eo+1,icls) = npop(eo+1,icls) + 1
+        parent = spproj%os_ptcl2D%get_int(iptcl, 'cluster')
+        if( parent >= 1 .and. parent <= size(parent_eo,2) ) parent_eo(eo+1,parent) = 1
+    enddo
+    ext = string('.')//fname2ext(stk)
+    nflag = 0; nmismatch = 0; nblank_active = 0
+    do ih = 1, 2
+        stk_half = add2fbody(stk, ext, '_'//trim(HALVES(ih)))
+        call find_ldim_nptcls(stk_half, ldim, ncavgs)
+        ldim(3) = 1
+        call img%new(ldim, smpd)
+        do icls = 1, ncavgs
+            half_state = 1
+            if( spproj%os_cls2D%isthere(icls, 'state_'//trim(HALVES(ih))) ) &
+                &half_state = spproj%os_cls2D%get_int(icls, 'state_'//trim(HALVES(ih)))
+            if( half_state == 0 ) nflag(ih) = nflag(ih) + 1
+            call img%read(stk_half, icls)
+            rmat    = img%get_rmat()
+            l_blank = all(rmat == 0.)
+            if( l_blank .and. half_state /= 0 ) nblank_active = nblank_active + 1
+            parent = spproj%os_cls2D%get_int(icls, 'cluster')
+            if( parent < 1 .or. parent > size(parent_eo,2) ) cycle
+            if( sum(parent_eo(:,parent)) < 2 ) cycle
+            if( (npop(ih,icls) == 0) .neqv. (half_state == 0) ) nmismatch = nmismatch + 1
+        enddo
+        call img%kill
+    enddo
+    call gate%report('states_cavgs: sub-class halves written with state 0', real(sum(nflag)))
+    call gate%check('states_cavgs: a sub-class half carries state 0 exactly when it has no member', nmismatch == 0)
+    call gate%check('states_cavgs: no blank sub-class half stays active', nblank_active == 0)
+    deallocate(npop, parent_eo)
+    call stk%kill
+    call ext%kill
+    call stk_half%kill
+end subroutine check_memberless_halves
 
 !> the three-state phantom whose directions are exact 2D classes, in run_dir/phantom.simple with the
 !! truth mean registered as the consensus map (vol, state 1)

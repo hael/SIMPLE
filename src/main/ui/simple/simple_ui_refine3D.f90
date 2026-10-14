@@ -84,8 +84,6 @@ contains
         &'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, sigma_est, group="search", &
-        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call refine3D%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -214,8 +212,6 @@ contains
         &'move a particle from its seed: the capture range for wrongly assigned orientations', &
         &'in degrees{10}', .false., 10., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
-        call refine3D_auto%add_input(UI_SRCH, sigma_est, group="search", &
-        &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &

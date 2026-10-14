@@ -75,10 +75,10 @@ contains
         type(string) :: benchfname
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
-        integer(timer_int_kind) :: t_prep_refs, t_memoize_refs
+        integer(timer_int_kind) :: t_prep_refs, t_memoize_refs, t_sigma2_write
         real(timer_int_kind)    :: rt_startup, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
         real(timer_int_kind)    :: rt_alloc_ptcl_imgs
-        real(timer_int_kind)    :: rt_prep_refs, rt_memoize_refs, rt_rec_accum, rt_rec_write
+        real(timer_int_kind)    :: rt_prep_refs, rt_memoize_refs, rt_rec_accum, rt_rec_write, rt_sigma2_write
         p_ptr => params
         b_ptr => build
         rss_after_teardown      = -1_int64
@@ -200,7 +200,12 @@ contains
         endif
         ! a polish pass leaves the greedy fraction of the discrete search it follows
         if( .not. p_ptr%l_cont_polish ) call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
-        if( ctrl%do_emit_sigma ) call b_ptr%esig%write_sigma2
+        rt_sigma2_write = 0.0
+        if( ctrl%do_emit_sigma )then
+            if( ctrl%do_bench ) t_sigma2_write = tic()
+            call b_ptr%esig%write_sigma2
+            if( ctrl%do_bench ) rt_sigma2_write = toc(t_sigma2_write)
+        endif
         call maybe_write_orientations()
         do iptcl_batch = 1, batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
@@ -275,6 +280,7 @@ contains
             write(fnr,'(a,f0.3)') 'match3D RSS after align teardown (GiB)  : ', rss_after_teardown_gib
             write(fnr,'(a,i0)') 'match3D RSS after reconstruction (bytes): ', rss_after_reconstruction
             write(fnr,'(a,f0.3)') 'match3D RSS after reconstruction (GiB)  : ', rss_after_reconstruction_gib
+            call write_sigma2_bench_context(fnr, 'match3D', nptcls2update)
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'match3D startup/setup              :', rt_startup
@@ -284,6 +290,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match3D project metadata I/O       :', rt_projio
             write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction     :', rt_rec
             write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction thread-s:', rt_rec * real(p_ptr%nthr, kind(rt_rec))
+            call write_sigma2_bench_timings(fnr, 'match3D', rt_sigma2_write)
             write(fnr,'(a,1x,f0.2)') 'match3D total time                 :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'match3D total thread-s             :', rt_tot * real(p_ptr%nthr, kind(rt_tot))
             write(fnr,'(a,1x,f0.2)') 'match3D % accounted for            :', &

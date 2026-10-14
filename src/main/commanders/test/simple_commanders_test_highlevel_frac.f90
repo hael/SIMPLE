@@ -38,8 +38,8 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
     use simple_reconstructor_pcg,  only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE, PCG_LAMBDA
     use simple_rec3D_pcg_strategy, only: validate_pcg_common
     use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, killimgbatch, prep_rec_observation
-    use simple_sigma2_files,       only: load_sigma2_groups
-    use simple_math_ft,            only: resample_sigma2
+    use simple_sigma2_files,       only: load_sigma2
+    use simple_euclid_sigma2,      only: sigma2_half
     type(parameters), intent(inout) :: params
     type(builder),    intent(inout) :: build
     class(cmdline),   intent(inout) :: cline
@@ -59,7 +59,7 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
     call build%spproj_field%sample4rec([params%fromp,params%top], nselected, selected_pinds)
     if( nselected < 1 ) THROW_HARD('no active particles selected for PCG fractional-update validation')
     if( params%cc_objfun == OBJFUN_EUCLID )then
-        call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, &
+        call load_sigma2(params, build%pftc, build%esig, build%spproj, &
             &build%spproj_field, l_sigma_loaded)
         if( .not. l_sigma_loaded ) THROW_HARD('PCG fractional-update validation requires sigma2 for objfun=euclid')
     endif
@@ -196,13 +196,13 @@ contains
             &' n_subset1=', size(pinds1), ' n_subset2=', size(pinds2)
         write(unit,'(A,F10.6,A,F10.6,A,F10.6)') 'state_f1=', f1, ' state_f2=', f2, ' u=', u
 
-        call accumulate_raw(full_pinds, op_full)
+        call accumulate_raw(full_pinds, eo_here, op_full)
         call op_full%write_raw_accum(f_full, state_here, eo_here, 1, 1, size(full_pinds), provenance)
         call op_full%kill
-        call accumulate_raw(pinds1, op_subset)
+        call accumulate_raw(pinds1, eo_here, op_subset)
         call op_subset%write_raw_accum(f_sub1, state_here, eo_here, 1, 2, size(pinds1), provenance)
         call op_subset%kill
-        call accumulate_raw(pinds2, op_subset)
+        call accumulate_raw(pinds2, eo_here, op_subset)
         call op_subset%write_raw_accum(f_sub2, state_here, eo_here, 2, 2, size(pinds2), provenance)
         call op_subset%kill
 
@@ -297,16 +297,16 @@ contains
         call f_chain2%kill
     end subroutine validate_half
 
-    subroutine accumulate_raw( pinds, op )
-        integer,                 intent(in)    :: pinds(:)
+    subroutine accumulate_raw( pinds, eo_here, op )
+        integer,                 intent(in)    :: pinds(:), eo_here
         type(reconstructor_pcg), intent(inout) :: op
         type(oris)           :: selection
         type(ori)            :: orientation
         type(ctfparams)      :: ctfparms
         type(image)          :: obs
         complex, allocatable :: y_batch(:,:,:)
-        real, allocatable    :: sig2(:,:)
-        integer              :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
+        real, allocatable    :: inv_sig2(:)
+        integer              :: lims2(2,2), R, batchlims(2), batchsz, ih
         integer              :: i, ii, iptcl, ibatch
         real                 :: shift(2), crop_factor
         call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
@@ -314,13 +314,13 @@ contains
         call op%set_window_sphere(params%msk_crop)
         lims2 = op%get_lims2()
         R = lims2(1,2)
-        allocate(sig2(0:R,size(pinds)), source=1.0)
+        ! as the PCG worker: the half's inverse spectrum from the spectra's plane grid
+        allocate(inv_sig2(0:R), source=1.0)
         if( params%cc_objfun == OBJFUN_EUCLID )then
-            kfromto = build%esig%get_kfromto()
-            do i = 1, size(pinds)
-                call resample_sigma2(kfromto(1), kfromto(2), &
-                    &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, 1.0, sig2(0:R,i))
-            enddo
+            call build%esig%prep_fplane_grid(params%box_croppd, lbound(build%esig%sigma2_noise,1))
+            ih = sigma2_half(eo_here)
+            if( OSMPL_PAD_FAC*R > build%esig%fplane%nyq ) THROW_HARD('the plane grid does not reach the PCG shells')
+            inv_sig2(0:R) = build%esig%fplane%inv_sig2(0:OSMPL_PAD_FAC*R:OSMPL_PAD_FAC, ih)
         endif
         call selection%new(size(pinds), .true.)
         call orientation%new(.false.)
@@ -335,7 +335,7 @@ contains
             call orientation%set_shift(shift)
             call selection%set_ori(i, orientation)
         enddo
-        call op%prep_particles(selection, use_ctf=.true., sig2=sig2)
+        call op%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2)
         allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
         call op%begin_accum
         call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
@@ -354,7 +354,7 @@ contains
         call obs%kill
         call selection%kill
         call orientation%kill
-        deallocate(y_batch, sig2)
+        deallocate(y_batch, inv_sig2)
     end subroutine accumulate_raw
 
     subroutine new_reduction( op )

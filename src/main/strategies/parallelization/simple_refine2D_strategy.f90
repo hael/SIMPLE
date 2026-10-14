@@ -1,5 +1,6 @@
 !@descr: refine2D execution strategies: shared memory and distributed master
 module simple_refine2D_strategy
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_builder,     only: builder
 use simple_parameters,  only: parameters
@@ -12,9 +13,9 @@ use simple_cavg_sums,   only: cavg_sums, cavg_contrib_fname, CAVG_SUMS_STATE, CA
 use simple_ptcl_cache,  only: ptcl_cache_ensure
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
-use simple_euclid_sigma2, only: sigma2_group_iter
-use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
-    &sigma2_state_range_path, sigma2_state_next_generation
+use simple_euclid_sigma2, only: sigma2_commit_iter
+use simple_sigma2_state, only: sigma2_state_prepare_update
+use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header
 implicit none
 
 public :: refine2D_strategy, refine2D_inmem_strategy, refine2D_distr_strategy, create_refine2D_strategy
@@ -31,8 +32,24 @@ contains
     procedure(cleanup_interface),       deferred :: cleanup
 end type refine2D_strategy
 
+!> Timings of the sigma2 transaction of an iteration (REFINE2D_STRATEGY_BENCH_ITERnnn.txt)
+type :: refine2D_bench_state
+    integer(timer_int_kind) :: t_tot        = 0
+    integer(timer_int_kind) :: t_sigma_prep = 0
+    integer(timer_int_kind) :: t_sigma      = 0
+    real(timer_int_kind)    :: rt_tot        = 0.
+    real(timer_int_kind)    :: rt_sigma_prep = 0.
+    real(timer_int_kind)    :: rt_sigma      = 0.
+    ! the canonical sigma2 store this iteration updated, and the rows its update replaced
+    integer                 :: sigma2_nptcls  = 0
+    integer                 :: sigma2_nshells = 0
+    integer(int64)          :: sigma2_nbytes  = 0_int64
+    integer                 :: sigma2_nrows_updated = 0
+end type refine2D_bench_state
+
 type, extends(refine2D_strategy) :: refine2D_inmem_strategy
     type(convergence) :: conv
+    type(refine2D_bench_state), private :: bench
 contains
     procedure :: initialize         => inmem_initialize
     procedure :: execute_iteration  => inmem_execute_iteration
@@ -46,6 +63,7 @@ type, extends(refine2D_strategy) :: refine2D_distr_strategy
     type(chash)        :: job_descr
     type(convergence)  :: conv
     integer            :: nthr_master
+    type(refine2D_bench_state), private :: bench
 contains
     procedure :: initialize         => distr_initialize
     procedure :: execute_iteration  => distr_execute_iteration
@@ -127,11 +145,13 @@ contains
         if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
         call cline%set('mkdir', 'no')
         params%which_iter = max(1, params%startit)
-        call init_refine2D_refs(cline, params, build)
+        ! the halves are on disk before the references, whose class averages may seed the sigma2 state
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
+        call init_refine2D_refs(cline, params, build)
+        if( .not. cline%defined('part') ) call ensure_canonical_sigma2(params, build, cline)
         startit = 1
         if( cline%defined('startit') )startit = params%startit
         if( startit == 1 )then
@@ -145,19 +165,23 @@ contains
     subroutine inmem_execute_iteration( self, params, build, cline, converged)
         use simple_strategy2D_matcher, only: refine2D_exec
         use simple_starproject,        only: starproject
-        use simple_commanders_euclid,  only: commander_calc_group_sigmas
+        use simple_commanders_euclid,  only: commander_commit_sigma2
         use simple_commanders_prob,    only: commander_prob_align2D
         class(refine2D_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_commit_sigma2) :: xcommit_sigma2
         type(commander_prob_align2D)      :: xprob_align2D
         type(starproject) :: starproj
         type(cmdline)     :: cline_prob_align
         real              :: update_frac_req
         logical           :: l_full_update, l_update_frac_req
+        if( L_BENCH_GLOB )then
+            self%bench    = refine2D_bench_state()
+            self%bench%t_tot = tic()
+        endif
         call self%conv%print_iteration(params%which_iter)
         call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
@@ -182,7 +206,9 @@ contains
         endif
         ! main clustering/alignment step
         if( params%cc_objfun==OBJFUN_EUCLID )then
+            if( L_BENCH_GLOB ) self%bench%t_sigma_prep = tic()
             call prepare_canonical_sigma_update(params, build)
+            if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
         call refine2D_exec(params, build, cline, params%which_iter, converged)
         if( l_full_update )then
@@ -191,8 +217,13 @@ contains
         endif
         ! Euclid sigma2 consolidation for next iteration
         if( params%cc_objfun==OBJFUN_EUCLID )then
-            call cline%set('which_iter', sigma2_group_iter(params%which_iter, matcher_completed=.true.))
-            call xcalc_group_sigmas%execute(cline)
+            call cline%set('which_iter', sigma2_commit_iter(params%which_iter, matcher_completed=.true.))
+            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
+            call xcommit_sigma2%execute(cline)
+            if( L_BENCH_GLOB )then
+                self%bench%rt_sigma = toc(self%bench%t_sigma)
+                call record_sigma2_bench_context(build, self%bench)
+            endif
             call cline%set('which_iter', params%which_iter)
         endif
         ! Write starfile
@@ -200,6 +231,7 @@ contains
         ! cleanup
         call starproj%kill
         call cline_prob_align%kill
+        if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine inmem_execute_iteration
 
     subroutine inmem_finalize_iteration( self, params, build)
@@ -207,6 +239,7 @@ contains
         type(parameters),                intent(in)     :: params
         type(builder),                   intent(inout)  :: build
         call gen_jpeg(params%which_iter) 
+        call write_strategy_bench_report(params, self%bench, 'shared-memory')
     end subroutine inmem_finalize_iteration
 
     subroutine inmem_cleanup( self, params)
@@ -251,11 +284,13 @@ contains
         if( build%spproj%get_nptcls() == 0 ) THROW_HARD('no particles found!')
         call cline%set('mkdir', 'no')
         params%which_iter = max(1, params%startit)
-        call init_refine2D_refs(cline, params, build)
+        ! the halves are on disk before the references, whose class averages may seed the sigma2 state
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
+        call init_refine2D_refs(cline, params, build)
+        call ensure_canonical_sigma2(params, build, cline)
         if( params%startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
@@ -270,20 +305,24 @@ contains
 
     subroutine distr_execute_iteration( self, params, build, cline, converged )
         use simple_stream_utils,         only: terminate_stream
-        use simple_commanders_euclid,    only: commander_calc_group_sigmas
+        use simple_commanders_euclid,    only: commander_commit_sigma2
         use simple_commanders_prob,      only: commander_prob_align2D
         class(refine2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_commit_sigma2) :: xcommit_sigma2
         type(commander_prob_align2D)      :: xprob_align2D
         type(cmdline)                     :: cline_calc_sigma, cline_prob_align
         type(string)                      :: update_frac_req
         real                              :: frac_srch_space
         integer                           :: n_unassigned
         logical                           :: l_full_assignment, l_full_update, l_update_frac_key
+        if( L_BENCH_GLOB )then
+            self%bench    = refine2D_bench_state()
+            self%bench%t_tot = tic()
+        endif
         call self%conv%print_iteration(params%which_iter)
         ! Update job description
         call cline%set('nparts',     params%nparts)
@@ -317,10 +356,12 @@ contains
         ! The master creates one generation-scoped candidate after every
         ! project-state update and before workers read the committed state.
         ! Each worker emits only its exclusive global particle range; the
-        ! calc_group_sigmas barrier below validates exact coverage and is the
-        ! sole owner of grouped reduction and atomic publication.
+        ! commit_sigma2 barrier below validates exact coverage and is the
+        ! sole owner of the global reduction and atomic publication.
         if( params%cc_objfun==OBJFUN_EUCLID )then
+            if( L_BENCH_GLOB ) self%bench%t_sigma_prep = tic()
             call prepare_canonical_sigma_update(params, build)
+            if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
         ! Schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, &
@@ -345,10 +386,15 @@ contains
         ! Sigma2 consolidation
         if( params%cc_objfun==OBJFUN_EUCLID )then
             cline_calc_sigma = cline
-            call cline_calc_sigma%set('prg',        'calc_group_sigmas')
-            call cline_calc_sigma%set('which_iter', sigma2_group_iter(params%which_iter, matcher_completed=.true.))
+            call cline_calc_sigma%set('prg',        'commit_sigma2')
+            call cline_calc_sigma%set('which_iter', sigma2_commit_iter(params%which_iter, matcher_completed=.true.))
             call cline_calc_sigma%set('nthr',       self%nthr_master)
-            call xcalc_group_sigmas%execute(cline_calc_sigma)
+            if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
+            call xcommit_sigma2%execute(cline_calc_sigma)
+            if( L_BENCH_GLOB )then
+                self%bench%rt_sigma = toc(self%bench%t_sigma)
+                call record_sigma2_bench_context(build, self%bench)
+            endif
         endif
         ! Check convergence
         converged = self%conv%check_conv2D(params, cline, build%spproj_field, &
@@ -372,6 +418,7 @@ contains
             endif
             converged = converged .and. l_full_assignment
         endif
+        if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
 
     subroutine distr_finalize_iteration( self, params, build )
@@ -380,6 +427,7 @@ contains
         type(builder),                   intent(inout) :: build
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call gen_jpeg(params%which_iter)
+        call write_strategy_bench_report(params, self%bench, 'distributed')
     end subroutine distr_finalize_iteration
 
     subroutine distr_cleanup( self, params )
@@ -411,30 +459,86 @@ contains
 
     ! private helpers
 
-    subroutine prepare_canonical_sigma_update( params, build )
-        use, intrinsic :: iso_fortran_env, only: int64
+    !> The canonical sigma2 state at refinement entry, through the one rebuild entry; a rebuild
+    !! registers the state in the project file, so projinfo is re-read
+    subroutine ensure_canonical_sigma2( params, build, cline )
+        use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        type(string) :: state_path, candidate_path, range_path
-        integer(int64) :: next_gen
-        integer :: ipart, status
+        type(cmdline),    intent(in)    :: cline
+        logical :: l_rebuilt
+        if( params%cc_objfun /= OBJFUN_EUCLID ) return
+        call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, params%startit, params%box, &
+            &params%smpd, 'REFINE2D SIGMA2', l_rebuilt)
+        if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
+    end subroutine ensure_canonical_sigma2
+
+    !> Context of the sigma2 transaction: the committed store's dimensions and the active rows
+    !! carrying the current sampling marker (updated this iteration)
+    subroutine record_sigma2_bench_context( build, bench )
+        type(builder),              intent(inout) :: build
+        type(refine2D_bench_state), intent(inout) :: bench
+        type(sigma2_state_header) :: header
+        type(string)          :: state_path
+        integer, allocatable  :: rep_rows(:), smp_rows(:), rec_rows(:)
+        integer               :: status
+        logical               :: found
+        character(len=STDLEN) :: message
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( .not. found ) return
+        call sigma2_state_read_header(state_path%to_char(), header, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        bench%sigma2_nptcls  = header%nptcls
+        bench%sigma2_nshells = header%kto - header%kfrom + 1
+        bench%sigma2_nbytes  = header%file_bytes
+        call build%spproj_field%get_update_rows(rep_rows, smp_rows, rec_rows)
+        bench%sigma2_nrows_updated = size(smp_rows)
+        deallocate(rep_rows, smp_rows, rec_rows)
+        call state_path%kill
+    end subroutine record_sigma2_bench_context
+
+    subroutine write_strategy_bench_report( params, bench, execution_mode )
+        type(parameters),           intent(in) :: params
+        type(refine2D_bench_state), intent(in) :: bench
+        character(len=*),           intent(in) :: execution_mode
+        type(string) :: benchfname
+        integer :: fnr
+        real(timer_int_kind) :: rt_accounted
+        if( .not. L_BENCH_GLOB ) return
+        rt_accounted = 0.
+        if( bench%rt_tot > TINY ) rt_accounted = 100. * (bench%rt_sigma_prep + bench%rt_sigma) / bench%rt_tot
+        benchfname = string('REFINE2D_STRATEGY_BENCH_ITER')//int2str_pad(params%which_iter,3)//TXT_EXT
+        call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a,a)')  'refine2D execution mode             : ', trim(execution_mode)
+        write(fnr,'(a,i0)') 'refine2D ncls                       : ', params%ncls
+        write(fnr,'(a,i0)') 'refine2D sigma2 store particles     : ', bench%sigma2_nptcls
+        write(fnr,'(a,i0)') 'refine2D sigma2 store shells        : ', bench%sigma2_nshells
+        write(fnr,'(a,i0)') 'refine2D sigma2 store bytes         : ', bench%sigma2_nbytes
+        write(fnr,'(a,i0)') 'refine2D sigma2 rows updated        : ', bench%sigma2_nrows_updated
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f0.3)') 'refine2D sigma2 candidate prep      :', bench%rt_sigma_prep
+        write(fnr,'(a,1x,f0.3)') 'refine2D sigma2 commit              :', bench%rt_sigma
+        write(fnr,'(a,1x,f0.2)') 'refine2D total time                 :', bench%rt_tot
+        write(fnr,'(a,1x,f0.2)') 'refine2D % sigma2 transaction       :', rt_accounted
+        call fclose(fnr)
+        call benchfname%kill
+    end subroutine write_strategy_bench_report
+
+    subroutine prepare_canonical_sigma_update( params, build )
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(string) :: state_path
+        integer :: status
         logical :: found
         character(len=STDLEN) :: message
         call build%spproj%get_sigma2_state_path(state_path, found)
         if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-        ! transaction-scoped names (see the refine3D strategy)
-        call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
-        candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
-        do ipart = 1, params%nparts
-            range_path = sigma2_state_range_path(state_path%to_char(), next_gen, ipart, params%numlen)
-            call del_file(range_path)
-        enddo
-        call sigma2_state_prepare_update(state_path%to_char(), candidate_path%to_char(), status, message)
+        ! the committed store validated, nothing left by another transaction of the next generation
+        call sigma2_state_prepare_update(state_path%to_char(), params%nparts, params%numlen, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         call state_path%kill
-        call candidate_path%kill
-        call range_path%kill
     end subroutine prepare_canonical_sigma_update
 
     !> Initialize references for refine2D (used by inmem and distr modes).

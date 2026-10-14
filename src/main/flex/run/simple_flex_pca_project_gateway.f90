@@ -12,7 +12,7 @@ use simple_builder,            only: builder
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_sp_project,         only: sp_project
-use simple_sigma2_files,       only: load_sigma2_groups
+use simple_sigma2_files,       only: load_sigma2
 use simple_flex_pca_rounds,    only: flex_pca_rounds
 use simple_state_weight_set,   only: state_weight_set, STATE_WEIGHTS_KIND_PARTITION
 implicit none
@@ -112,109 +112,41 @@ contains
             &THROW_HARD('flex_pca requires populated even and odd halfsets')
     end subroutine validate_covariance_inputs
 
-    !> The canonical sigma2 state, validated (canonical_sigma2_consumable) or seeded from particle
-    !! power (simple_sigma2_bootstrap) before any part command line is generated; the master and
-    !! shared-memory roles only, workers consume what it committed. Per-stack (group) sigma2 needs
-    !! particles in both halves of every stack: a 2D selection deselects whole stacks, and the
-    !! canonical reduce then refuses ("empty even/odd half"), so a selection with such a stack falls
-    !! back to the pooled spectrum here and sigma_est=global never has to be typed for a subset.
+    !> The canonical sigma2 state through the one rebuild entry (simple_sigma2_bootstrap), before any
+    !! part command line is generated; the master and shared-memory roles only, workers consume what
+    !! it committed.
     subroutine ensure_canonical_sigma_state( params, build, cline )
         use simple_core_module_api,  only: OBJFUN_EUCLID
         use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
-        type(parameters), intent(inout) :: params
+        type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        class(cmdline),   intent(inout) :: cline
-        integer, allocatable :: cnt(:,:)
-        integer :: iptcl, ngroups, g, e, nempty
+        class(cmdline),   intent(in)    :: cline
         logical :: l_bootstrapped
         if( params%cc_objfun /= OBJFUN_EUCLID ) return
-        if( .not. params%l_sigma_glob )then
-            ngroups = 0
-            do iptcl = 1, params%nptcls
-                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                ngroups = max(ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
-            enddo
-            if( ngroups > 0 )then
-                allocate(cnt(0:1,ngroups), source=0)
-                do iptcl = 1, params%nptcls
-                    if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                    g = build%spproj_field%get_int(iptcl, 'stkind')
-                    e = build%spproj_field%get_eo(iptcl)
-                    if( g < 1 .or. g > ngroups .or. e < 0 .or. e > 1 ) cycle
-                    cnt(e,g) = cnt(e,g) + 1
-                enddo
-                nempty = 0
-                do g = 1, ngroups
-                    if( cnt(0,g) == 0 .or. cnt(1,g) == 0 ) nempty = nempty + 1
-                enddo
-                if( nempty > 0 )then
-                    if( sum(cnt(0,:)) == 0 .or. sum(cnt(1,:)) == 0 )then
-                        write(logfhandle,'(A)') '>>> FLEX_PCA SIGMA: the project carries no even/odd assignment, so &
-                            &per-stack sigma2 halves cannot be formed; using the pooled (global) noise spectrum &
-                            &(sigma_est=global)'
-                    else
-                        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA SIGMA: ', nempty, ' of ', ngroups, &
-                            &' sigma2 groups (stacks) have no particles in one half after the selection; &
-                            &using the pooled (global) noise spectrum (sigma_est=global)'
-                    endif
-                    params%sigma_est   = 'global'
-                    params%l_sigma_glob = .true.
-                    call cline%set('sigma_est', 'global')
-                endif
-                deallocate(cnt)
-            endif
-        endif
-        call ensure_sigma2_for_iteration(cline, params%projfile, 1, params%box, params%smpd, params%l_sigma_glob, &
-            &'FLEX_PCA SIGMA', l_bootstrapped, sigma_est=merge('global', 'group ', params%l_sigma_glob))
+        call ensure_sigma2_for_iteration(cline, params%projfile, 'ptcl3D', 1, params%box, params%smpd, &
+            &'FLEX_PCA SIGMA', l_bootstrapped)
         if( l_bootstrapped ) call build%spproj%read_segment('projinfo', params%projfile)
     end subroutine ensure_canonical_sigma_state
 
-    subroutine load_and_validate_sigma( params, build, cline, pinds, loaded , rounds)
+    subroutine load_and_validate_sigma( params, build, cline, loaded, rounds )
         class(flex_pca_rounds), intent(inout) :: rounds
         type(parameters),       intent(inout) :: params
         type(builder),          intent(inout) :: build
         class(cmdline),         intent(inout) :: cline
-        integer,                intent(in)    :: pinds(:)
         logical,                intent(out)   :: loaded
-        integer :: i, k, iptcl, noris, fromp_save, top_save
-        ! The sigma table is allocated on params%fromp:top. A distributed worker's particle list is the
-        ! master's partition (pindfile), not the fromp/top split of the project, so widen the range to
-        ! every particle for the load (the canonical reader fills rows for state>0 within the range) and
-        ! restore after. The unit fallback below has always done the same.
-        noris      = build%spproj_field%get_noris()
-        fromp_save = params%fromp
-        top_save   = params%top
-        params%fromp = 1
-        params%top   = noris
-        call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, loaded)
-        params%fromp = fromp_save
-        params%top   = top_save
+        call load_sigma2(params, build%pftc, build%esig, build%spproj, build%spproj_field, loaded)
         if( .not. loaded )then
-            ! gen_fplane4rec follows norm_noise_taper_edge_pad_fft, so a unit spectrum is the correct fallback
-            ! Construct the sigma object through its own API (the legacy loader's idiom: widen
-            ! fromp/top to every particle so the table covers the whole project, restore after):
-            ! esig%new also registers the table with the polar calculator; a bare allocate of the
-            ! component inside a never-constructed object leaves the consumers with an
-            ! inconsistent object
-            params%fromp = 1
-            params%top   = noris
+            ! gen_fplane4rec follows norm_noise_taper_edge_pad_fft, so a unit spectrum is the correct
+            ! fallback; esig%new also registers the spectra with the polar calculator
             call build%esig%new(params, build%pftc, string('flex_pca_unit_sigma2.dat'), params%box)
-            params%fromp = fromp_save
-            params%top   = top_save
             build%esig%sigma2_noise = 1.0
+            call build%pftc%memoize_sigma2_weights
             loaded = .true.
             write(logfhandle,'(A)') '>>> FLEX_PCA SIGMA: using unit white-noise spectrum after background normalization'
-            write(logfhandle,'(A)') '>>> FLEX_PCA SIGMA: provide sigma2_group*.star for coloured experimental noise'
         endif
-        do i = 1, size(pinds)
-            iptcl = pinds(i)
-            do k = lbound(build%esig%sigma2_noise,1), ubound(build%esig%sigma2_noise,1)
-                if( .not. ieee_is_finite(build%esig%sigma2_noise(k,iptcl)) .or. &
-                    &build%esig%sigma2_noise(k,iptcl) <= TINY )then
-                    THROW_HARD('flex_pca found a nonpositive or nonfinite sigma2 value')
-                endif
-            end do
-        end do
+        if( any(.not. ieee_is_finite(build%esig%sigma2_noise)) .or. any(build%esig%sigma2_noise <= TINY) )then
+            THROW_HARD('flex_pca found a nonpositive or nonfinite sigma2 value')
+        endif
         params%ml_reg   = 'yes'
         params%l_ml_reg = .true.
         call cline%set('ml_reg','yes')
@@ -369,7 +301,6 @@ contains
         call cline_rec%set('mskdiam',     params%mskdiam)
         call cline_rec%set('pgrp',        trim(params%pgrp))
         call cline_rec%set('objfun',      trim(params%objfun))
-        call cline_rec%set('sigma_est',   trim(params%sigma_est))
         call cline_rec%set('nthr',        params%nthr)
         ! the run's solver controls carry over to its delivered maps
         call cline_rec%set('maxits_pcg',  params%maxits_pcg)

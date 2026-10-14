@@ -53,7 +53,8 @@ contains
     subroutine exec_solve2D_workflow( cline, start_stage_requested, stop_stage_requested, &
         &checkpoint_last_iter, l_checkpoint, terminal_policy )
         use simple_classaverager
-        use simple_timer, only: timer_int_kind, tic, toc
+        use simple_timer,             only: timer_int_kind, tic, toc
+        use simple_commanders_euclid, only: commander_calc_pspec
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: start_stage_requested, stop_stage_requested, checkpoint_last_iter
         logical,        intent(in)    :: l_checkpoint
@@ -84,7 +85,6 @@ contains
             t_phase        = t_tot
         endif
         call cline%set('oritype',   'ptcl2D')
-        if( .not. cline%defined('sigma_est')     ) call cline%set('sigma_est',     'global')
         if( .not. cline%defined('autoscale')     ) call cline%set('autoscale',     'yes')
         if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('center')        ) call cline%set('center',        'yes')
@@ -620,51 +620,18 @@ contains
             if( allocated(phase_label) ) deallocate(phase_label)
         end subroutine execute_refine2D
 
+        !> the resumed stages consume the canonical sigma2 state: the one rebuild entry
         subroutine ensure_resume_sigma_state
-            use, intrinsic :: iso_fortran_env, only: int64
-            use simple_ptcl_layout,  only: ptcl_layout_digest
-            use simple_sigma2_state, only: sigma2_state_validate_identity
-            use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
-                &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
-            type(string) :: state_path
-            integer(int64) :: layout_digest
-            integer :: iptcl, ngroups, status
-            logical :: found, rebuild
-            character(len=STDLEN) :: message
+            use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
+            logical :: l_rebuilt
             if( params%cc_objfun /= OBJFUN_EUCLID ) return
-            rebuild = .true.
-            call spproj%get_sigma2_state_path(state_path, found)
-            if( found )then
-                call sigma2_state_validate_file(state_path%to_char(), status, message)
-                if( status == 0 )then
-                    layout_digest = ptcl_layout_digest(spproj, spproj_field)
-                    if( params%l_sigma_glob )then
-                        call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, &
-                            &1, fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                            &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_GLOBAL, &
-                            &expected_ngroups=1)
-                    else
-                        ngroups = 0
-                        do iptcl = 1, params%nptcls
-                            if( spproj_field%get_state(iptcl) <= 0 ) cycle
-                            ngroups = max(ngroups, spproj_field%get_int(iptcl, 'stkind'))
-                        enddo
-                        call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, &
-                            &1, fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                            &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_STACK, &
-                            &expected_ngroups=ngroups)
-                    endif
-                    rebuild = status /= 0
-                endif
-            endif
-            if( rebuild )then
-                write(logfhandle,'(A)') '>>> SOLVE2D CHECKPOINT: rebuilding missing or stale canonical sigma2 state'
-                call xcalc_pspec%execute(cline_calc_pspec)
+            call ensure_sigma2_for_iteration(cline_calc_pspec, params%projfile, params%oritype, 1, params%box, &
+                &params%smpd, 'SOLVE2D CHECKPOINT', l_rebuilt)
+            if( l_rebuilt )then
                 call spproj%read_segment('projinfo', params%projfile)
             else
                 write(logfhandle,'(A)') '>>> SOLVE2D CHECKPOINT: reusing validated canonical sigma2 state'
             endif
-            call state_path%kill
         end subroutine ensure_resume_sigma_state
 
         subroutine execute_terminal_pass( terminal_policy )
@@ -812,7 +779,6 @@ contains
         call cline%set('remove_chunks','no')
         call cline%set('objfun',       'euclid')
         call cline%set('numlen',       5)
-        call cline%set('sigma_est',    'global')
         if( .not. cline%defined('refine') ) call cline%set('refine', 'prob_snhc')
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',         'yes')
@@ -1145,7 +1111,6 @@ contains
         call cline_refine2D_chunk%set('mkdir',      'no')
         call cline_refine2D_chunk%set('mskdiam',    params%mskdiam)
         call cline_refine2D_chunk%set('ncls',       params%ncls_start)
-        call cline_refine2D_chunk%set('sigma_est', params%sigma_est)
         call cline_refine2D_chunk%set('rank_cavgs','yes')
         call cline_refine2D_chunk%set('chunk',      'yes')
         ! objective function

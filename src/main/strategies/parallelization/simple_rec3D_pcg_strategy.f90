@@ -9,8 +9,8 @@ use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG
     &pcg_raw_accum_compatible, measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, &
     &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map, read_pcg_raw_accum_header
 use simple_matcher_ptcl_io,     only: prepimgbatch, discrete_read_imgbatch, killimgbatch, prep_rec_observation
-use simple_sigma2_files,        only: load_sigma2_groups
-use simple_math_ft,             only: resample_sigma2
+use simple_sigma2_files,        only: load_sigma2
+use simple_euclid_sigma2,       only: sigma2_half
 use simple_image,               only: image
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics, &
     &write_support_provenance
@@ -250,7 +250,7 @@ contains
         if( params%cc_objfun == OBJFUN_EUCLID )then
             l_sigma_loaded = allocated(build%esig%sigma2_noise)
             if( .not. l_sigma_loaded )then
-                call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, &
+                call load_sigma2(params, build%pftc, build%esig, build%spproj, &
                     &build%spproj_field, l_sigma_loaded)
             endif
             if( .not. l_sigma_loaded ) THROW_HARD('PCG objfun=euclid requires sigma2 files')
@@ -348,8 +348,8 @@ contains
             type(string)    :: fname
             type(image)     :: obs
             complex, allocatable :: y_batch(:,:,:)
-            real,    allocatable :: sig2(:,:)
-            integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
+            real,    allocatable :: inv_sig2(:)
+            integer :: lims2(2,2), R, batchlims(2), batchsz, ih
             integer :: i, ii, iptcl, ibatch
             real    :: shift(2), crop_factor
 
@@ -366,19 +366,14 @@ contains
             call pcgop%set_sym(build%pgrpsyms)
             lims2 = pcgop%get_lims2()
             R     = lims2(1,2)
-            allocate(sig2(0:R,size(pinds)), source=1.0)
+            ! every particle of the call is in half eo_here: one inverse spectrum at the native shells 0:R, read
+            ! from the spectra's plane grid at the padded shells OSMPL_PAD_FAC*n, which hold exactly sigma2(n)
             if( params%cc_objfun == OBJFUN_EUCLID )then
-                kfromto = build%esig%get_kfromto()
-                do i = 1, size(pinds)
-                    call resample_sigma2(kfromto(1), kfromto(2), &
-                        &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, 1.0, sig2(0:R,i))
-                enddo
-            endif
-            if( l_weighted )then
-                ! the state weight as an inverse noise scale: it multiplies the B term and |T|^2 alike
-                do i = 1, size(pinds)
-                    sig2(:,i) = sig2(:,i) / half_w(i)
-                enddo
+                call build%esig%prep_fplane_grid(params%box_croppd, lbound(build%esig%sigma2_noise,1))
+                ih = sigma2_half(eo_here)
+                allocate(inv_sig2(0:R))
+                if( OSMPL_PAD_FAC*R > build%esig%fplane%nyq ) THROW_HARD('the plane grid does not reach the PCG shells')
+                inv_sig2(0:R) = build%esig%fplane%inv_sig2(0:OSMPL_PAD_FAC*R:OSMPL_PAD_FAC, ih)
             endif
             call selection%new(size(pinds), .true.)
             call orientation%new(.false.)
@@ -393,7 +388,20 @@ contains
                 call orientation%set_shift(shift)
                 call selection%set_ori(i, orientation)
             enddo
-            call pcgop%prep_particles(selection, use_ctf=.true., sig2=sig2)
+            ! the state weight acts as an inverse noise scale: it multiplies the B term and |T|^2 alike
+            if( allocated(inv_sig2) )then
+                if( l_weighted )then
+                    call pcgop%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2, weights=half_w)
+                else
+                    call pcgop%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2)
+                endif
+            else
+                if( l_weighted )then
+                    call pcgop%prep_particles(selection, use_ctf=.true., weights=half_w)
+                else
+                    call pcgop%prep_particles(selection, use_ctf=.true.)
+                endif
+            endif
             allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
             call pcgop%begin_accum
             call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
@@ -421,7 +429,8 @@ contains
             call selection%kill
             call orientation%kill
             call fname%kill
-            deallocate(y_batch, sig2)
+            deallocate(y_batch)
+            if( allocated(inv_sig2) ) deallocate(inv_sig2)
         end subroutine accumulate_worker_state_half
 
     end subroutine execute_rec3D_pcg_worker
@@ -459,7 +468,7 @@ contains
         real, allocatable :: realized_fractions(:), update_weights(:), chain_weights(:), current_scales(:)
         integer, allocatable :: nrep(:), nsmp(:), rep_rows(:), smp_rows(:), rec_rows(:)
         real,    allocatable :: rnrep(:), rnsmp(:) !< N(s), n(s) of the population rule: applied masses
-        logical, allocatable :: state_written(:), state_carried(:)
+        logical, allocatable :: state_written(:), state_carried(:), state_empty(:)
         type(state_weight_set) :: wset
         integer(int64) :: wset_id(2)
         real(dp)       :: chain_mass(2)
@@ -565,9 +574,32 @@ contains
         allocate(cfars(params%nstates),    source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         allocate(state_carried(params%nstates), source=.false.)
+        call find_empty_states(state_empty)
         do state = 1, params%nstates
             ! state= reconstructs that state alone: the other states' parts are empty by construction
             if( params%l_state_defined .and. state /= params%state ) cycle
+            ! the gridding rule (volassemble's dropped states): a state without particles, while
+            ! another state has some, is dropped for this iteration and its previous maps are
+            ! carried forward; a trailing chain it still has is carried by the chain path below
+            if( state_empty(state) )then
+                l_even_chain = .false.
+                if( params%l_trail_rec )then
+                    call discard_stale_trail_chain_pair(state)
+                    raw_fname    = refine3D_pcg_trail_accum_fname(state, 'even')
+                    l_even_chain = file_exists(raw_fname)
+                endif
+                if( .not. l_even_chain )then
+                    if( .not. previous_state_maps_exist(state) )then
+                        errmsg = 'state '//int2str(state)//' has no particles and no previous maps in this '//&
+                            &'directory to carry forward; distributed PCG'
+                        THROW_HARD(errmsg)
+                    endif
+                    write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
+                        &' HAS NO PARTICLES; DROPPING AND CARRYING PREVIOUS VOLUME FORWARD'
+                    state_carried(state) = .true.
+                    cycle
+                endif
+            endif
             ! l_sample_seed: no chain yet, so the chain is seeded from the current
             ! sample at full mass and this iteration ships the current sample's map;
             ! l_chain_carry: a sample below 0.001 of the state, so the chain carries
@@ -820,7 +852,8 @@ contains
         call state_support_msk%kill_bimg
         call frozen_ctx%kill
         call wset%kill
-        deallocate(res0143s, res05s, cfars, state_written, state_carried, realized_fractions, update_weights, align_lps)
+        deallocate(res0143s, res05s, cfars, state_written, state_carried, state_empty, realized_fractions, update_weights,&
+            &align_lps)
         deallocate(chain_weights, current_scales)
         if( allocated(nrep) ) deallocate(nrep, nsmp)
         !$ call omp_set_num_threads(params%nthr)
@@ -903,6 +936,35 @@ contains
             call even_fname%kill
             call odd_fname%kill
         end subroutine discard_stale_trail_chain_pair
+
+        !> The states without particles in this iteration (no particle in the raw accumulator headers
+        !! of any part, either half) while another state has some. None in a single-state run, an
+        !! add-on assembly (every inherited state carries its frozen term) or a state= run.
+        subroutine find_empty_states( l_empty )
+            logical, allocatable, intent(out) :: l_empty(:)
+            integer :: nptcls_state(params%nstates), istate_here, part_here, eo_here, status
+            integer :: hstate, heo, hpart, hnparts, hnptcls, hbox
+            real    :: hsmpd
+            character(len=256) :: hprov
+            type(string) :: fname
+            allocate(l_empty(params%nstates), source=.false.)
+            if( params%nstates <= 1 .or. l_frozen_rec .or. params%l_state_defined ) return
+            nptcls_state = 0
+            do istate_here = 1, params%nstates
+                do eo_here = 0, 1
+                    do part_here = 1, params%nparts
+                        fname = refine3D_pcg_raw_accum_fname(istate_here, part_here, params%numlen, &
+                            &merge('odd ', 'even', eo_here == 1))
+                        call read_pcg_raw_accum_header(fname, hstate, heo, hpart, hnparts, hnptcls, hbox, hsmpd, &
+                            &hprov, status)
+                        if( status == 0 ) nptcls_state(istate_here) = nptcls_state(istate_here) + max(0, hnptcls)
+                    enddo
+                enddo
+            enddo
+            call fname%kill
+            if( .not. any(nptcls_state > 0) ) return
+            l_empty = nptcls_state == 0
+        end subroutine find_empty_states
 
         !> the shipped volume and half maps a carried-forward state keeps on disk
         logical function previous_state_maps_exist( state_here ) result( l_exists )

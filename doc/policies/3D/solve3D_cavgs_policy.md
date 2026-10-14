@@ -21,7 +21,6 @@ Only refinement and reconstruction children are distributed. The
 
 The route sets:
 
-- `sigma_est=global`
 - initial `oritype=out`, then `ptcl3D` for the temporary project
 - `bfac=0`
 - `filt_mode=none`
@@ -63,9 +62,9 @@ file for the temporary class-average particle lineage. That file is rebuilt at
 startup and removed with the temporary project after successful completion.
 
 The staged matcher and subsequent standalone reconstruction children resolve
-that registered state through the shared sigma-group loader. Canonical loads
-validate the committed state against the temporary project's native grid,
-ordered particle layout, and grouping policy before reconstruction begins.
+that registered state through the shared sigma2 loader. Canonical loads
+validate the committed state against the temporary project's native grid and
+ordered particle layout before reconstruction begins.
 
 The temporary project is deleted at the end of the workflow.
 

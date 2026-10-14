@@ -3,17 +3,12 @@
 ! the particle rows and hands them to simple_rec3D_service, which reconstructs, assembles, post-processes
 ! and registers the state maps.
 module simple_rec3D_strategy
-use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_builder,           only: builder
 use simple_parameters,        only: parameters
 use simple_cmdline,           only: cmdline
 use simple_rec3D_service,     only: rec3D_service, rec3D_request, rec3D_backend_id, REC3D_BACKEND_GRIDDING, &
     &REC3D_BACKEND_PCG, REC3D_DISPATCH_INPROC, REC3D_DISPATCH_QUEUE, REC3D_WEIGHTS_HARD, REC3D_WEIGHTS_SET
-use simple_ptcl_layout,       only: ptcl_layout_digest
-use simple_sigma2_state,      only: sigma2_state_validate_identity
-use simple_sigma2_state_file, only: sigma2_state_validate_file, SIGMA2_GROUP_GLOBAL, &
-    &SIGMA2_GROUP_STACK, SIGMA2_STATE_COMMITTED
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -295,61 +290,21 @@ contains
         endif
     end subroutine sample_rows
 
+    !> The canonical sigma2 state at reconstruction entry, through the one rebuild entry; the parts
+    !! of a distributed run consume what their master ensured
     subroutine ensure_canonical_sigma_state(params, build, cline)
-        use simple_commanders_euclid, only: commander_calc_pspec
+        use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        type(commander_calc_pspec) :: xcalc_pspec
-        type(cmdline) :: cline_pspec
-        type(string) :: state_path
-        integer(int64) :: layout_digest
-        integer :: iptcl, ngroups, status
-        logical :: found, rebuild
-        character(len=STDLEN) :: message
+        logical :: l_rebuilt
         if( params%cc_objfun /= OBJFUN_EUCLID ) return
+        if( cline%defined('part') ) return
         if( trim(params%oritype) /= 'ptcl3D' ) &
             &THROW_HARD('canonical sigma2 reconstruction requires oritype=ptcl3D')
-        rebuild = .true.
-        call build%spproj%get_sigma2_state_path(state_path, found)
-        if( found )then
-            call sigma2_state_validate_file(state_path%to_char(), status, message)
-            if( status == 0 )then
-                layout_digest = ptcl_layout_digest(build%spproj, build%spproj_field)
-                if( params%l_sigma_glob )then
-                    call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
-                        &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                        &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_GLOBAL, &
-                        &expected_ngroups=1)
-                else
-                    ngroups = 0
-                    do iptcl = 1, params%nptcls
-                        if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                        ngroups = max(ngroups, build%spproj_field%get_int(iptcl, 'stkind'))
-                    enddo
-                    call sigma2_state_validate_identity(state_path%to_char(), params%box, params%smpd, 1, &
-                        &fdim(params%box)-1, params%nptcls, layout_digest, status, message, &
-                        &expected_state=SIGMA2_STATE_COMMITTED, expected_grouping=SIGMA2_GROUP_STACK, &
-                        &expected_ngroups=ngroups)
-                endif
-                rebuild = status /= 0
-            endif
-        endif
-        if( .not. rebuild )then
-            call state_path%kill
-            return
-        endif
-        write(logfhandle,'(A)') '>>> RECONSTRUCT3D: initializing canonical sigma2 from particle power'
-        cline_pspec = cline
-        call cline_pspec%set('prg', 'calc_pspec')
-        call cline_pspec%set('mkdir', 'no')
-        call cline_pspec%delete('part')
-        call cline_pspec%delete('postprocess')
-        call cline_pspec%delete('trail_rec')
-        call xcalc_pspec%execute(cline_pspec)
-        call build%spproj%read_segment('projinfo', params%projfile)
-        call cline_pspec%kill
-        call state_path%kill
+        call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, params%which_iter, params%box, &
+            &params%smpd, 'RECONSTRUCT3D', l_rebuilt)
+        if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
     end subroutine ensure_canonical_sigma_state
 
     subroutine sync_resolved_rec_params(params, cline)

@@ -58,7 +58,6 @@ RESULT_FIELDS = (
     "extr_lim",
     "eo_stage",
     "refine",
-    "sigma_est",
     "ctf",
     "mskdiam_angstrom",
     "synthetic_noise_sigma",
@@ -330,7 +329,6 @@ def measure_case(
         f"eo_stage={args.eo_stage}",
         f"autoscale={'yes' if case.autoscale else 'no'}",
         f"refine={args.refine}",
-        f"sigma_est={args.sigma_est}",
         "rank_cavgs=no",
         "memreport=yes",
         "memreport_interval=1",
@@ -378,7 +376,6 @@ def measure_case(
         "extr_lim": args.extr_lim,
         "eo_stage": args.eo_stage,
         "refine": args.refine,
-        "sigma_est": args.sigma_est,
         "ctf": "no",
         "mskdiam_angstrom": f"{args.mskdiam:.6f}",
         "synthetic_noise_sigma": f"{args.noise_sigma:.6f}",
@@ -448,7 +445,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--extr-lim", type=positive_int, default=4)
     parser.add_argument("--eo-stage", choices=("yes", "no"), default="no")
     parser.add_argument("--refine", choices=("prob_snhc", "prob", "snhc_smpl"), default="prob_snhc")
-    parser.add_argument("--sigma-est", choices=("global", "group"), default="global")
     parser.add_argument("--repeats", type=positive_int, default=1)
     parser.add_argument("--max-cases", type=positive_int, default=100)
     parser.add_argument("--no-interactions", action="store_true")
@@ -521,7 +517,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "extr_lim": args.extr_lim,
             "eo_stage": args.eo_stage,
             "refine": args.refine,
-            "sigma_est": args.sigma_est,
             "ctf": "no",
         },
     }

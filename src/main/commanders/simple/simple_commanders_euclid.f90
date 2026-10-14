@@ -1,17 +1,10 @@
 !@descr: for sigma2 calculations in objfun=euclid 2D and 3D refinement
 module simple_commanders_euclid
-use, intrinsic :: iso_fortran_env, only: int64, real32
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_commanders_api
-use simple_ptcl_layout, only: ptcl_layout_digest
-use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
-    &sigma2_state_merge_local_ranges, &
-    &sigma2_state_range_path, sigma2_state_reduce_groups, sigma2_state_validate_identity, &
-    &sigma2_state_next_generation
-use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
-    &sigma2_state_init_header, sigma2_state_read_groups, sigma2_state_read_header, &
-    &sigma2_state_validate_file, sigma2_state_write_particles, SIGMA2_GROUP_GLOBAL, &
-    &SIGMA2_GROUP_STACK, SIGMA2_PROV_STAR_SEED, &
-    &SIGMA2_STATE_COMMITTED
+use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_assemble_candidate, &
+    &sigma2_state_range_path, sigma2_state_next_generation
+use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, sigma2_state_publish
 implicit none
 #include "simple_local_flags.inc"
 
@@ -20,15 +13,10 @@ type, extends(commander_base) :: commander_calc_pspec
     procedure :: execute      => exec_calc_pspec
 end type commander_calc_pspec
 
-type, extends(commander_base) :: commander_calc_group_sigmas
+type, extends(commander_base) :: commander_commit_sigma2
   contains
-    procedure :: execute      => exec_calc_group_sigmas
-end type commander_calc_group_sigmas
-
-type, extends(commander_base) :: commander_sigma2_convert
-  contains
-    procedure :: execute => exec_sigma2_convert
-end type commander_sigma2_convert
+    procedure :: execute      => exec_commit_sigma2
+end type commander_commit_sigma2
 
 contains
 
@@ -53,8 +41,8 @@ contains
         if( allocated(strategy) ) deallocate(strategy)
     end subroutine exec_calc_pspec
 
-    subroutine exec_calc_group_sigmas( self, cline )
-        class(commander_calc_group_sigmas), intent(inout) :: self
+    subroutine exec_commit_sigma2( self, cline )
+        class(commander_commit_sigma2), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)      :: params
         type(builder)         :: build
@@ -64,23 +52,28 @@ contains
         call consolidate_canonical
         ! cleanup
         call build%kill_general_tbox
-        call simple_touch('CALC_GROUP_SIGMAS_FINISHED')
-        call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
+        call simple_touch('COMMIT_SIGMA2_FINISHED')
+        call simple_end('**** SIMPLE_COMMIT_SIGMA2 NORMAL STOP ****', print_simple=.false.)
     contains
 
+        !> the streaming commit: a fresh candidate assembled from the workers' ranges in one pass that
+        !! also forms the global spectra, then published; the ranges are deleted only after publication
         subroutine consolidate_canonical
             type(string) :: state_path, candidate_path
             type(string), allocatable :: range_paths(:)
+            type(sigma2_state_header) :: header
             logical, allocatable :: scheduled(:), active(:)
-            integer, allocatable :: eo_ids(:), group_ids(:)
+            integer, allocatable :: eo_ids(:)
             integer(int64) :: next_gen
+            integer(timer_int_kind) :: t_assemble, t_publish, t_tot
+            real(timer_int_kind)    :: rt_assemble, rt_publish, rt_tot
             integer :: ipart, iptcl, status
             logical :: found
             character(len=STDLEN) :: message
+            if( L_BENCH_GLOB ) t_tot = tic()
             call build%spproj%get_sigma2_state_path(state_path, found)
             if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-            ! the transaction prepared before the workers ran: candidate and
-            ! ranges of the generation this consolidation commits
+            ! the transaction the workers wrote their ranges for: the generation this commit makes
             call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
             candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
@@ -89,170 +82,67 @@ contains
                 range_paths(ipart) = sigma2_state_range_path(state_path%to_char(), next_gen, ipart, params%numlen)
             enddo
             allocate(scheduled(params%nptcls), source=.true.)
-            call sigma2_state_merge_local_ranges(candidate_path%to_char(), range_paths, scheduled, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            allocate(active(params%nptcls), eo_ids(params%nptcls), group_ids(params%nptcls))
+            allocate(active(params%nptcls), eo_ids(params%nptcls))
             do iptcl = 1, params%nptcls
-                active(iptcl)    = build%spproj_field%get_state(iptcl) > 0
-                eo_ids(iptcl)    = build%spproj_field%get_eo(iptcl)
-                group_ids(iptcl) = build%spproj_field%get_int(iptcl, 'stkind')
+                active(iptcl) = build%spproj_field%get_state(iptcl) > 0
+                eo_ids(iptcl) = build%spproj_field%get_eo(iptcl)
             enddo
-            call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, status, message)
+            if( L_BENCH_GLOB ) t_assemble = tic()
+            call sigma2_state_assemble_candidate(state_path%to_char(), candidate_path%to_char(), range_paths, &
+                &scheduled, active, eo_ids, status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
-            call sigma2_state_commit(candidate_path%to_char(), state_path%to_char(), active, eo_ids, &
-                &group_ids, status, message)
+            if( L_BENCH_GLOB )then
+                rt_assemble = toc(t_assemble)
+                t_publish   = tic()
+            endif
+            call sigma2_state_publish(candidate_path%to_char(), state_path%to_char(), status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
+            if( L_BENCH_GLOB ) rt_publish = toc(t_publish)
             do ipart = 1, params%nparts
                 call del_file(range_paths(ipart))
             enddo
+            if( L_BENCH_GLOB )then
+                rt_tot = toc(t_tot)
+                call sigma2_state_read_header(state_path%to_char(), header, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                call write_commit_bench(header, count(scheduled), rt_assemble, rt_publish, rt_tot)
+            endif
             call range_paths(:)%kill
-            deallocate(range_paths, scheduled, active, eo_ids, group_ids)
+            deallocate(range_paths, scheduled, active, eo_ids)
             call state_path%kill
             call candidate_path%kill
         end subroutine consolidate_canonical
 
-    end subroutine exec_calc_group_sigmas
+        !> SIGMA2_COMMIT_BENCH_ITERnnn.txt, named by the which_iter the commit is given (refine2D
+        !! passes the iteration the committed store feeds, refine3D the matcher iteration)
+        subroutine write_commit_bench( header, nrows_merged, rt_assemble, rt_publish, rt_tot )
+            type(sigma2_state_header), intent(in) :: header
+            integer,                   intent(in) :: nrows_merged
+            real(timer_int_kind),      intent(in) :: rt_assemble, rt_publish, rt_tot
+            type(string) :: benchfname
+            real(timer_int_kind) :: rt_accounted
+            integer :: fnr
+            rt_accounted = 0.
+            if( rt_tot > TINY ) rt_accounted = 100. * (rt_assemble + rt_publish) / rt_tot
+            benchfname = string('SIGMA2_COMMIT_BENCH_ITER')//int2str_pad(params%which_iter,3)//TXT_EXT
+            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,i0)') 'sigma2 commit which_iter            : ', params%which_iter
+            write(fnr,'(a,i0)') 'sigma2 commit nparts (range files)  : ', params%nparts
+            write(fnr,'(a,i0)') 'sigma2 store particles              : ', header%nptcls
+            write(fnr,'(a,i0)') 'sigma2 store shells                 : ', header%kto - header%kfrom + 1
+            write(fnr,'(a,i0)') 'sigma2 store bytes                  : ', header%file_bytes
+            write(fnr,'(a,i0)') 'sigma2 rows merged from ranges      : ', nrows_merged
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f0.3)') 'sigma2 commit streaming assembly    :', rt_assemble
+            write(fnr,'(a,1x,f0.3)') 'sigma2 commit publication           :', rt_publish
+            write(fnr,'(a,1x,f0.3)') 'sigma2 commit total time            :', rt_tot
+            write(fnr,'(a,1x,f0.2)') 'sigma2 commit % accounted for       :', rt_accounted
+            call fclose(fnr)
+            call benchfname%kill
+        end subroutine write_commit_bench
 
-    subroutine exec_sigma2_convert( self, cline )
-        use simple_euclid_sigma2, only: read_sigma2_groups_file, write_groups_starfile
-        class(commander_sigma2_convert), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: project
-        class(oris), pointer :: particles
-        type(string) :: state_path, candidate_path
-        type(sigma2_state_header) :: header
-        real, allocatable :: star_groups(:,:,:)
-        real(real32), allocatable :: spectra(:,:), stored_groups(:,:,:)
-        logical, allocatable :: active(:)
-        integer, allocatable :: eo_ids(:), group_ids(:)
-        integer(int64) :: layout_digest
-        integer :: box, kfromto(2), ngroups, grouping, nptcls, project_ngroups
-        integer :: iptcl, eo, igroup, status
-        logical :: found
-        character(len=STDLEN) :: message
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        if( .not. cline%defined('sigma_action') ) THROW_HARD('sigma2_convert requires sigma_action')
-        if( .not. cline%defined('outfile') ) THROW_HARD('sigma2_convert requires outfile')
-        call params%new(cline)
-        call project%read(params%projfile)
-        call project%ptr2oritype(params%oritype, particles)
-        nptcls = particles%get_noris(consider_state=.false.)
-        if( nptcls < 1 ) THROW_HARD('sigma2_convert requires a populated particle field')
-        box = project%get_box()
-        if( box < 2 ) THROW_HARD('sigma2_convert requires valid project dimensions')
-        layout_digest = ptcl_layout_digest(project, particles)
-        if( layout_digest == 0_int64 ) THROW_HARD('cannot derive canonical sigma2 particle layout identity')
-        project_ngroups = 0
-        do iptcl = 1, nptcls
-            if( particles%get_state(iptcl) <= 0 ) cycle
-            project_ngroups = max(project_ngroups, particles%get_int(iptcl, 'stkind'))
-        enddo
-        select case(trim(params%sigma_action))
-            case('star_export')
-                call project%get_sigma2_state_path(state_path, found)
-                if( .not. found ) THROW_HARD('project has no canonical sigma2 state path')
-                call sigma2_state_validate_file(state_path%to_char(), status, message)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                call sigma2_state_read_header(state_path%to_char(), header, status, message)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                if( header%state /= SIGMA2_STATE_COMMITTED ) THROW_HARD('sigma2 export requires committed state')
-                call sigma2_state_validate_identity(state_path%to_char(), box, project%get_smpd(), 1, &
-                    &fdim(box)-1, nptcls, layout_digest, status, message, &
-                    &expected_state=SIGMA2_STATE_COMMITTED)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                call sigma2_state_read_groups(state_path%to_char(), stored_groups, status, message)
-                if( status /= 0 ) THROW_HARD(trim(message))
-                allocate(star_groups(2,int(header%ngroups),int(header%kfrom):int(header%kto)))
-                do igroup = 1, int(header%ngroups)
-                    do eo = 1, 2
-                        star_groups(eo,igroup,:) = real(stored_groups(:,eo,igroup))
-                    enddo
-                enddo
-                call write_groups_starfile(params%outfile, star_groups, int(header%ngroups))
-                deallocate(star_groups, stored_groups)
-                write(logfhandle,'(A)') '>>> SIGMA2 CONVERTER EXPORTED GROUPS TO: '//params%outfile%to_char()
-            case('star_import')
-                if( .not. cline%defined('infile') ) THROW_HARD('sigma2 import requires infile')
-                state_path = params%outfile
-                if( file_exists(state_path) ) THROW_HARD('sigma2 import refuses to replace an existing output state')
-                kfromto = [1, fdim(box)-1]
-                allocate(spectra(kfromto(1):kfromto(2),nptcls), source=0.0_real32)
-                call read_sigma2_groups_file(params%infile, star_groups, kfromto, ngroups)
-                if( kfromto(1) /= 1 .or. kfromto(2) /= fdim(box)-1 ) &
-                    &THROW_HARD('STAR sigma2 seed does not cover the native project shell range')
-                if( params%l_sigma_glob .and. ngroups /= 1 ) &
-                    &THROW_HARD('global sigma estimation requires a one-group STAR seed')
-                if( .not. params%l_sigma_glob )then
-                    if( project_ngroups < 1 ) THROW_HARD('cannot derive sigma2 stack groups from project')
-                    if( ngroups > 1 .and. ngroups /= project_ngroups ) &
-                        &THROW_HARD('STAR sigma2 group count does not match the project')
-                endif
-                do iptcl = 1, nptcls
-                    eo = particles%get_eo(iptcl) + 1
-                    if( ngroups == 1 )then
-                        igroup = 1
-                    else if( particles%get_state(iptcl) <= 0 )then
-                        ! Inactive rows are excluded from reduction and consumption.
-                        ! Give them a valid seed without imposing active-group coverage.
-                        igroup = 1
-                    else
-                        igroup = particles%get_int(iptcl, 'stkind')
-                        if( igroup < 1 .or. igroup > ngroups ) &
-                            &THROW_HARD('STAR sigma2 groups do not cover project stack membership')
-                    endif
-                    spectra(:,iptcl) = real(star_groups(eo,igroup,:), real32)
-                enddo
-                deallocate(star_groups)
-                call publish_star_import
-            case default
-                THROW_HARD('unsupported sigma2 conversion action')
-        end select
-        call project%kill
-        call state_path%kill
-        call candidate_path%kill
-        nullify(particles)
-        call simple_end('**** SIMPLE_SIGMA2_CONVERT NORMAL STOP ****')
-
-      contains
-
-        subroutine publish_star_import
-            real :: smpd
-            smpd = project%get_smpd()
-            allocate(active(nptcls), eo_ids(nptcls), group_ids(nptcls))
-            ngroups = 0
-            do iptcl = 1, nptcls
-                active(iptcl)    = particles%get_state(iptcl) > 0
-                eo_ids(iptcl)    = particles%get_eo(iptcl)
-                group_ids(iptcl) = particles%get_int(iptcl, 'stkind')
-                if( active(iptcl) ) ngroups = max(ngroups, group_ids(iptcl))
-            enddo
-            if( params%l_sigma_glob )then
-                grouping = SIGMA2_GROUP_GLOBAL
-                ngroups = 1
-                group_ids = 1
-            else
-                grouping = SIGMA2_GROUP_STACK
-                if( ngroups < 1 ) THROW_HARD('cannot derive sigma2 stack groups from project')
-            endif
-            call sigma2_state_init_header(header, 1, fdim(box)-1, nptcls, box, smpd, ngroups, &
-                &grouping, 1_int64, layout_digest, SIGMA2_PROV_STAR_SEED)
-            candidate_path = sigma2_state_candidate_path(state_path%to_char(), 1_int64)
-            call sigma2_state_create_candidate(candidate_path%to_char(), header, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            call sigma2_state_write_particles(candidate_path%to_char(), 1, spectra, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            call sigma2_state_commit(candidate_path%to_char(), state_path%to_char(), active, eo_ids, &
-                &group_ids, status, message)
-            if( status /= 0 ) THROW_HARD(trim(message))
-            call project%set_sigma2_state_path(state_path)
-            call project%write_segment_inside('projinfo', params%projfile)
-            deallocate(spectra, active, eo_ids, group_ids)
-            write(logfhandle,'(A)') '>>> SIGMA2 CONVERTER IMPORTED LOSSY GROUPED STAR SEED: '//state_path%to_char()
-        end subroutine publish_star_import
-
-    end subroutine exec_sigma2_convert
+    end subroutine exec_commit_sigma2
 
 end module simple_commanders_euclid

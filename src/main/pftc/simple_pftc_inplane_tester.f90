@@ -147,7 +147,7 @@ contains
         call b%pftc%memoize_refs
         call b%pftc%memoize_ptcls
         if( allocated(sigma2_fixture) ) deallocate(sigma2_fixture)
-        allocate(sigma2_fixture(p%kfromto(1):p%kfromto(2),1), source=1.0_sp)
+        allocate(sigma2_fixture(p%kfromto(1):p%kfromto(2),2), source=1.0_sp)
         call b%pftc%assign_sigma2_noise(sigma2_fixture)
         call b%pftc%memoize_sqsum_ptcl(1)
         call cline%kill
@@ -376,10 +376,10 @@ contains
         call assert_true(joint_angle_err < grid_angle_err - 1.d-4, 'the joint solve improves the angle over the grid')
         call assert_true(shift_rms <= 0.25d0, 'the joint solve recovers the known shift within 0.25 px rms')
         write(*,'(A,3F9.4)') '  grid/joint angle error (deg), shift rms (px): ', grid_angle_err, joint_angle_err, shift_rms
-        ! (f) stress: cavgs-like near-noiseless shell-dependent sigma2, first with stale
-        !     memoised square sums (production updates sigma2 without re-memoising), then fresh
+        ! (f) stress: cavgs-like near-noiseless shell-dependent sigma2; assigning the spectra refreshes the
+        !     shell weights and the memoised self-terms (memoize_sigma2_weights), then re-memoising changes nothing
         do k = p%kfromto(1), p%kfromto(2)
-            sigma2_fixture(k,1) = 1.e-4_sp / real(k,sp)
+            sigma2_fixture(k,:) = 1.e-4_sp / real(k,sp)
         enddo
         call b%pftc%assign_sigma2_noise(sigma2_fixture)
         call series_floor_scan(b, igrid, series_min, stale_parity)

@@ -13,7 +13,7 @@ use simple_matcher_3Drec,        only: calc_3Drec
 use simple_commanders_rec_distr, only: commander_volassemble, filter_pcg_nonuniform_maps
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, refine3D_pcg_raw_accum_fname
 use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
-use simple_sigma2_files,         only: load_sigma2_groups
+use simple_sigma2_files,         only: load_sigma2
 use simple_state_weight_set,     only: state_weight_set, STATE_WEIGHTS_KIND_PARTITION
 implicit none
 
@@ -194,7 +194,7 @@ contains
                 ! FSC/SSNR prior applied by volassemble
                 ! (a table caller works in its own process and has its noise model loaded already)
                 if( params%cc_objfun == OBJFUN_EUCLID .and. .not. (l_table .and. allocated(build%esig%sigma2_noise)) )then
-                    call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
+                    call load_sigma2(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
                         &l_sigma_loaded)
                     if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
                 endif

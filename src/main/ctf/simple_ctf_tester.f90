@@ -9,6 +9,7 @@ use simple_defs                ! sp, dp, PI, PIO2, TWOPI, OSMPL_PAD_FAC
 use simple_type_defs,          only: ctfparams, ctfvars, fplane_type, canonical_phshift, CTFFLAG_YES, CTFFLAG_FLIP
 use simple_string_utils,       only: int2str
 use simple_image,              only: image
+use simple_fplane_grid,        only: fplane_grid
 use simple_ctf,                only: ctf
 use simple_memoize_ft_maps,    only: memoize_ft_maps
 implicit none
@@ -291,6 +292,7 @@ contains
         ! heap-allocated: GCC flags the hidden descriptor fields of a local fplane_type passed to
         ! the intent(out) dummy of gen_fplane4rec as uninitialized (a -Wuninitialized false positive)
         type(fplane_type), allocatable :: fplane
+        type(fplane_grid) :: grid
         real              :: actual
         write(*,'(A)') 'test_restoration_contracts'
         allocate(fplane)
@@ -306,14 +308,15 @@ contains
         ctfparms%angast      = ANGAST
         ctfparms%phshift     = PI/4.
         ctfparms%ctfflag     = CTFFLAG_YES
-        call img%gen_fplane4rec([0,LDIM(1)/(2*OSMPL_PAD_FAC)], SMPD, ctfparms, [0.,0.], fplane)
+        call grid%new(LDIM(1))
+        call img%gen_fplane4rec(SMPD, ctfparms, [0.,0.], fplane, grid)
         ! the planes are stored on the native lattice: (H,-K) holds the padded sample
         ! (OSMPL_PAD_FAC*H, -OSMPL_PAD_FAC*K)
         actual = real(fplane%cmplx_plane(H,-K))
         call assert_real(actual*actual, fplane%ctfsq_plane(H,-K), 5.e-6, &
             &'raw 3D restoration stores H*y over H^2')
         ctfparms%ctfflag = CTFFLAG_FLIP
-        call img%gen_fplane4rec([0,LDIM(1)/(2*OSMPL_PAD_FAC)], SMPD, ctfparms, [0.,0.], fplane)
+        call img%gen_fplane4rec(SMPD, ctfparms, [0.,0.], fplane, grid)
         actual = real(fplane%cmplx_plane(H,-K))
         call assert_true(actual >= 0., 'phase-flipped 3D restoration uses nonnegative |H|')
         call assert_real(actual*actual, fplane%ctfsq_plane(H,-K), 5.e-6, &

@@ -111,7 +111,7 @@ contains
             sess%l_merged        = .false.
             ! distributed master: one particle-index list per part, shipped as pindfile= (no-op otherwise)
             call rounds%plan_partitions(params, sess%sel%pinds)
-            call load_and_validate_sigma(params, build, cline, sess%sel%pinds, sess%sigma_loaded, rounds=rounds)
+            call load_and_validate_sigma(params, build, cline, sess%sigma_loaded, rounds=rounds)
             ! a shared-memory run keeps its prepped planes across every pass; the distributed master
             ! never runs a pass itself and a worker is a fresh process per round
             ! cache=yes: the plane cache is built once by the process that owns the run (workers adopt it)
@@ -466,7 +466,7 @@ contains
         if( .not. allocated(self%plane_store) ) allocate(self%plane_store)
         call validate_covariance_inputs(params, cline%defined('vol1'), cline%defined('pindfile'), &
             &build, sel%pinds, sel%nptcls, rounds=rounds)
-        call load_and_validate_sigma(params, build, cline, sel%pinds, sigma_loaded, rounds=rounds)
+        call load_and_validate_sigma(params, build, cline, sigma_loaded, rounds=rounds)
         select case(params%stage)
             case(PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED)
                 call self%plane_store%adopt_cache(params, build, sel%pinds, sel%nptcls)

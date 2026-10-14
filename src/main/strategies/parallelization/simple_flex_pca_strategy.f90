@@ -175,7 +175,7 @@ contains
         ! at params%nthr, which FLEX sizes its per-thread scratch from
         call set_master_num_threads(self%rounds%nthr_master, string('FLEX_PCA'))
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        ! the canonical sigma2 state, and the grouping the workers load it under, before job_descr
+        ! the canonical sigma2 state the workers load, before job_descr
         call ensure_canonical_sigma_state(params, build, cline)
         self%rounds%l_master   = .true.
         self%rounds%nparts_run = max(1, params%nparts)

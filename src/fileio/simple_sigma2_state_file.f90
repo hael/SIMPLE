@@ -9,16 +9,17 @@ private
 
 public :: sigma2_state_header
 public :: sigma2_state_init_header, sigma2_state_read_header, sigma2_state_create_candidate
-public :: sigma2_state_write_particles, sigma2_state_read_particles
-public :: sigma2_state_write_groups, sigma2_state_read_groups
+public :: sigma2_state_write_particles, sigma2_state_read_particles, sigma2_state_read_particles_into
+public :: sigma2_state_open_candidate, sigma2_state_write_particles_unit, sigma2_state_close_candidate
+public :: sigma2_state_open_store, sigma2_state_read_particles_unit
+public :: sigma2_state_open_local_range, sigma2_state_read_local_range_rows
+public :: sigma2_state_write_global, sigma2_state_read_global
 public :: sigma2_state_write_local_range, sigma2_state_read_local_range
 public :: sigma2_state_validate_file, sigma2_state_publish
 public :: sigma2_state_digest_begin, sigma2_state_digest_text, sigma2_state_digest_integer
 public :: sigma2_state_digest_file, sigma2_state_artifact_signature
 public :: SIGMA2_STATE_FNAME, SIGMA2_STATE_NEXT_FNAME
-public :: SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK
-public :: SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_STAR_SEED
-public :: SIGMA2_RANGE_LOCAL, SIGMA2_RANGE_DIRECT
+public :: SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL
 public :: SIGMA2_STATE_CANDIDATE, SIGMA2_STATE_COMMITTED
 
 character(len=*), parameter :: SIGMA2_STATE_FNAME      = 'sigma2_state.bin'
@@ -26,15 +27,15 @@ character(len=*), parameter :: SIGMA2_STATE_NEXT_FNAME = 'sigma2_state.next'
 character(len=16), parameter :: STATE_MAGIC = 'SIMPLE_SIGMA2_V2'
 character(len=16), parameter :: RANGE_MAGIC = 'SIMPLE_S2_RANGE2'
 
-! version 2 (release 4): no reserved particle-integrity section; version 1 files are refused
+! version 2 (release 4): no reserved particle-integrity section; version 1 files are refused.
+! One global spectrum per even/odd half: the grouping word is the global policy (1) with one group,
+! and the range-mode word is the local mode (1); the retired stack policy (2), STAR-seed
+! provenance (3) and direct range mode (2) are refused.
 integer(int32), parameter :: SIGMA2_STATE_VERSION = 2_int32
 integer(int32), parameter :: SIGMA2_GROUP_GLOBAL  = 1_int32
-integer(int32), parameter :: SIGMA2_GROUP_STACK   = 2_int32
 integer(int32), parameter :: SIGMA2_PROV_PSPEC     = 1_int32
 integer(int32), parameter :: SIGMA2_PROV_RESIDUAL  = 2_int32
-integer(int32), parameter :: SIGMA2_PROV_STAR_SEED = 3_int32
 integer(int32), parameter :: SIGMA2_RANGE_LOCAL  = 1_int32
-integer(int32), parameter :: SIGMA2_RANGE_DIRECT = 2_int32
 integer(int32), parameter :: SIGMA2_STATE_CANDIDATE = 1_int32
 integer(int32), parameter :: SIGMA2_STATE_COMMITTED = 2_int32
 
@@ -48,14 +49,15 @@ integer(int64), parameter :: FNV_PRIME  = int(z'00000100000001B3', int64)
 integer, parameter :: W_VERSION=1, W_HEADER_BYTES=2, W_REAL_BYTES=3, W_KFROM=4, W_KTO=5
 integer, parameter :: W_NPTCLS=6, W_BOX=7, W_NGROUPS=8, W_GROUPING=9, W_GENERATION=10
 integer, parameter :: W_PROVENANCE=11, W_STATE=12, W_RANGE_IO=13, W_LAYOUT_DIGEST=14
-integer, parameter :: W_GROUPED_OFFSET=15, W_PARTICLE_OFFSET=16, W_FILE_BYTES=17
-! Retired checksum words remain in the version-2 layout and are zero in new files.
-integer, parameter :: W_GROUP_CHECKSUM=18, W_SMPD_BITS=19, W_HEADER_CHECKSUM=32
+integer, parameter :: W_GLOBAL_OFFSET=15, W_PARTICLE_OFFSET=16, W_FILE_BYTES=17
+! The retired checksum words (18 and 32) stay in the version-two layout: zero in new files,
+! ignored on read.
+integer, parameter :: W_RETIRED_CHECKSUM=18, W_SMPD_BITS=19, W_RETIRED_HEADER_CHECKSUM=32
 
 integer, parameter :: RW_VERSION=1, RW_HEADER_BYTES=2, RW_REAL_BYTES=3, RW_KFROM=4, RW_KTO=5
 integer, parameter :: RW_FIRST=6, RW_LAST=7, RW_GENERATION=8, RW_LAYOUT_DIGEST=9
 integer, parameter :: RW_DATA_OFFSET=10, RW_FILE_BYTES=11
-integer, parameter :: RW_HEADER_CHECKSUM=16
+integer, parameter :: RW_RETIRED_CHECKSUM=16 !< zero in new range files, ignored on read
 
 type :: sigma2_state_header
     integer(int32) :: version       = SIGMA2_STATE_VERSION
@@ -71,21 +73,19 @@ type :: sigma2_state_header
     integer(int32) :: range_io      = SIGMA2_RANGE_LOCAL
     integer(int64) :: generation    = 0_int64
     integer(int64) :: layout_digest = 0_int64
-    integer(int64) :: grouped_offset   = 0_int64
+    integer(int64) :: global_offset   = 0_int64
     integer(int64) :: particle_offset  = 0_int64
     integer(int64) :: file_bytes       = 0_int64
-    integer(int64) :: group_checksum   = 0_int64
     real(real64)   :: smpd = 0.0_real64
 end type sigma2_state_header
 
 contains
 
-    subroutine sigma2_state_init_header(header, kfrom, kto, nptcls, box, smpd, ngroups, grouping, &
-        &generation, layout_digest, provenance)
+    subroutine sigma2_state_init_header(header, kfrom, kto, nptcls, box, smpd, generation, layout_digest, provenance)
         type(sigma2_state_header), intent(out) :: header
-        integer,                   intent(in)  :: kfrom, kto, nptcls, box, ngroups
+        integer,                   intent(in)  :: kfrom, kto, nptcls, box
         real,                      intent(in)  :: smpd
-        integer(int32),            intent(in)  :: grouping, provenance
+        integer(int32),            intent(in)  :: provenance
         integer(int64),            intent(in)  :: generation, layout_digest
         header%version       = SIGMA2_STATE_VERSION
         header%real_bytes    = int(storage_size(0.0_real32)/8, int32)
@@ -93,26 +93,25 @@ contains
         header%kto           = int(kto, int32)
         header%nptcls        = int(nptcls, int32)
         header%box           = int(box, int32)
-        header%ngroups       = int(ngroups, int32)
-        header%grouping      = grouping
+        header%ngroups       = 1_int32
+        header%grouping      = SIGMA2_GROUP_GLOBAL
         header%generation    = generation
         header%layout_digest = layout_digest
         header%provenance    = provenance
         header%state         = SIGMA2_STATE_CANDIDATE
         header%range_io      = SIGMA2_RANGE_LOCAL
-        header%group_checksum = 0_int64
         header%smpd          = real(smpd, real64)
         call set_state_layout(header)
     end subroutine sigma2_state_init_header
 
     subroutine set_state_layout(header)
         type(sigma2_state_header), intent(inout) :: header
-        integer(int64) :: nshell, grouped_bytes, particle_bytes
+        integer(int64) :: nshell, global_bytes, particle_bytes
         nshell = int(header%kto, int64) - int(header%kfrom, int64) + 1_int64
-        grouped_bytes  = nshell * 2_int64 * int(header%ngroups, int64) * int(header%real_bytes, int64)
+        global_bytes  = nshell * 2_int64 * int(header%ngroups, int64) * int(header%real_bytes, int64)
         particle_bytes = nshell * int(header%nptcls, int64) * int(header%real_bytes, int64)
-        header%grouped_offset   = STATE_HEADER_BYTES + 1_int64
-        header%particle_offset  = header%grouped_offset + grouped_bytes
+        header%global_offset   = STATE_HEADER_BYTES + 1_int64
+        header%particle_offset  = header%global_offset + global_bytes
         header%file_bytes       = header%particle_offset + particle_bytes - 1_int64
     end subroutine set_state_layout
 
@@ -169,12 +168,12 @@ contains
         words(W_STATE)         = int(header%state, int64)
         words(W_RANGE_IO)      = int(header%range_io, int64)
         words(W_LAYOUT_DIGEST) = header%layout_digest
-        words(W_GROUPED_OFFSET)   = header%grouped_offset
+        words(W_GLOBAL_OFFSET)   = header%global_offset
         words(W_PARTICLE_OFFSET)  = header%particle_offset
         words(W_FILE_BYTES)       = header%file_bytes
-        words(W_GROUP_CHECKSUM)   = header%group_checksum
+        words(W_RETIRED_CHECKSUM) = 0_int64
         words(W_SMPD_BITS) = transfer(header%smpd, words(W_SMPD_BITS))
-        words(W_HEADER_CHECKSUM) = 0_int64
+        words(W_RETIRED_HEADER_CHECKSUM) = 0_int64
     end subroutine pack_state_header
 
     subroutine unpack_state_header(words, header)
@@ -193,10 +192,9 @@ contains
         header%state         = int(words(W_STATE), int32)
         header%range_io      = int(words(W_RANGE_IO), int32)
         header%layout_digest = words(W_LAYOUT_DIGEST)
-        header%grouped_offset   = words(W_GROUPED_OFFSET)
+        header%global_offset   = words(W_GLOBAL_OFFSET)
         header%particle_offset  = words(W_PARTICLE_OFFSET)
         header%file_bytes       = words(W_FILE_BYTES)
-        header%group_checksum   = words(W_GROUP_CHECKSUM)
         header%smpd = transfer(words(W_SMPD_BITS), header%smpd)
     end subroutine unpack_state_header
 
@@ -216,24 +214,24 @@ contains
         if( header%kfrom < 0 .or. header%kto < header%kfrom )then
             status = 1; message = 'invalid sigma2 state shell bounds'; return
         endif
-        if( header%nptcls < 1 .or. header%box < 1 .or. header%ngroups < 1 )then
+        if( header%nptcls < 1 .or. header%box < 1 )then
             status = 1; message = 'invalid sigma2 state dimensions'; return
         endif
         if( header%smpd <= 0.0_real64 )then
             status = 1; message = 'invalid sigma2 state sampling distance'; return
         endif
-        if( header%grouping /= SIGMA2_GROUP_GLOBAL .and. header%grouping /= SIGMA2_GROUP_STACK )then
-            status = 1; message = 'invalid sigma2 state grouping policy'; return
+        if( header%grouping /= SIGMA2_GROUP_GLOBAL .or. header%ngroups /= 1 )then
+            status = 1; message = 'sigma2 state is not one global spectrum per half (a retired grouping policy)'; return
         endif
         select case(header%provenance)
-            case(SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL, SIGMA2_PROV_STAR_SEED)
+            case(SIGMA2_PROV_PSPEC, SIGMA2_PROV_RESIDUAL)
             case default
                 status = 1; message = 'invalid sigma2 state provenance'; return
         end select
         if( header%generation < 1_int64 .or. header%layout_digest == 0_int64 )then
             status = 1; message = 'invalid sigma2 state generation or layout identity'; return
         endif
-        if( header%range_io /= SIGMA2_RANGE_LOCAL .and. header%range_io /= SIGMA2_RANGE_DIRECT )then
+        if( header%range_io /= SIGMA2_RANGE_LOCAL )then
             status = 1; message = 'invalid sigma2 state range I/O mode'; return
         endif
         if( header%state /= SIGMA2_STATE_CANDIDATE .and. header%state /= SIGMA2_STATE_COMMITTED )then
@@ -241,119 +239,113 @@ contains
         endif
         expected = header
         call set_state_layout(expected)
-        if( header%grouped_offset /= expected%grouped_offset .or. &
+        if( header%global_offset /= expected%global_offset .or. &
             &header%particle_offset /= expected%particle_offset .or. &
             &header%file_bytes /= expected%file_bytes )then
             status = 1; message = 'invalid sigma2 state section layout'; return
         endif
     end subroutine validate_header_values
 
-    subroutine sigma2_state_create_candidate(path, header, status, message, source_path)
+    !> A fresh candidate at path of the given identity: header written, file at its full size, synced
+    subroutine sigma2_state_create_candidate(path, header, status, message)
         character(len=*),          intent(in)    :: path
         type(sigma2_state_header), intent(inout) :: header
         integer,                   intent(out)   :: status
         character(len=*),          intent(out)   :: message
-        character(len=*), optional, intent(in)   :: source_path
-        type(sigma2_state_header) :: source_header
-        integer(int8), allocatable :: buffer(:)
-        integer(int8) :: zero
-        integer(int64) :: pos, remain
-        integer :: src_unit, dst_unit, io_stat, ncopy
-        status = 0
-        message = ''
-        header%state    = SIGMA2_STATE_CANDIDATE
-        header%range_io = SIGMA2_RANGE_LOCAL
-        call set_state_layout(header)
-        call validate_header_values(header, status, message)
+        integer :: funit, io_stat
+        call sigma2_state_open_candidate(path, header, funit, status, message)
         if( status /= 0 ) return
-        if( present(source_path) )then
-            if( len_trim(source_path) > 0 .and. file_exists(source_path) )then
-                call sigma2_state_validate_file(source_path, status, message)
-                if( status /= 0 ) return
-                call sigma2_state_read_header(source_path, source_header, status, message)
-                if( status /= 0 ) return
-                call validate_copy_compatibility(source_header, header, status, message)
-                if( status /= 0 ) return
-                open(newunit=src_unit, file=trim(source_path), access='stream', form='unformatted', &
-                    &status='old', action='read', iostat=io_stat)
-                if( io_stat /= 0 )then
-                    status = io_stat; message = 'cannot open committed sigma2 state'; return
-                endif
-                open(newunit=dst_unit, file=trim(path), access='stream', form='unformatted', &
-                    &status='replace', action='readwrite', iostat=io_stat)
-                if( io_stat /= 0 )then
-                    close(src_unit)
-                    status = io_stat; message = 'cannot create sigma2 candidate'; return
-                endif
-                allocate(buffer(1048576))
-                pos = 1_int64
-                remain = source_header%file_bytes
-                do while( remain > 0_int64 )
-                    ncopy = int(min(remain, int(size(buffer),int64)))
-                    read(src_unit, pos=pos, iostat=io_stat) buffer(:ncopy)
-                    if( io_stat /= 0 ) exit
-                    write(dst_unit, pos=pos, iostat=io_stat) buffer(:ncopy)
-                    if( io_stat /= 0 ) exit
-                    pos = pos + int(ncopy,int64)
-                    remain = remain - int(ncopy,int64)
-                enddo
-                deallocate(buffer)
-                close(src_unit)
-                if( io_stat /= 0 )then
-                    close(dst_unit)
-                    status = io_stat; message = 'cannot copy committed sigma2 state'; return
-                endif
-                header%group_checksum    = 0_int64
-                call write_header_unit(dst_unit, header, io_stat)
-                flush(dst_unit)
-                close(dst_unit)
-                if( io_stat /= 0 )then
-                    status = io_stat; message = 'cannot finalize copied sigma2 candidate'; return
-                endif
-                call simple_sync_file(path, io_stat)
-                if( io_stat /= 0 )then
-                    status = io_stat; message = 'cannot sync copied sigma2 candidate'; return
-                endif
-                return
-            endif
-        endif
-        header%group_checksum    = 0_int64
-        open(newunit=dst_unit, file=trim(path), access='stream', form='unformatted', &
-            &status='replace', action='readwrite', iostat=io_stat)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot create sigma2 candidate'; return
-        endif
-        call write_header_unit(dst_unit, header, io_stat)
-        zero = 0_int8
-        if( io_stat == 0 ) write(dst_unit, pos=header%file_bytes, iostat=io_stat) zero
-        flush(dst_unit)
-        close(dst_unit)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot size sigma2 candidate'; return
-        endif
+        flush(funit)
+        close(funit)
         call simple_sync_file(path, io_stat)
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot sync sigma2 candidate'
         endif
     end subroutine sigma2_state_create_candidate
 
-    subroutine validate_copy_compatibility(source, target, status, message)
-        type(sigma2_state_header), intent(in)  :: source, target
+    !> Opens a fresh candidate at path for one writer: the header is written
+    !! and the file has its full size. Records (sigma2_state_write_particles_unit) and the global
+    !! spectra (sigma2_state_close_candidate, which closes the unit and syncs once) follow through funit.
+    subroutine sigma2_state_open_candidate(path, header, funit, status, message)
+        character(len=*),          intent(in)    :: path
+        type(sigma2_state_header), intent(inout) :: header
+        integer,                   intent(out)   :: funit
+        integer,                   intent(out)   :: status
+        character(len=*),          intent(out)   :: message
+        integer(int8) :: zero
+        integer :: io_stat
+        status  = 0
+        message = ''
+        funit   = -1
+        header%state           = SIGMA2_STATE_CANDIDATE
+        header%range_io        = SIGMA2_RANGE_LOCAL
+        call set_state_layout(header)
+        call validate_header_values(header, status, message)
+        if( status /= 0 ) return
+        open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
+            &status='replace', action='readwrite', iostat=io_stat)
+        if( io_stat /= 0 )then
+            funit = -1
+            status = io_stat; message = 'cannot create sigma2 candidate'; return
+        endif
+        call write_header_unit(funit, header, io_stat)
+        zero = 0_int8
+        if( io_stat == 0 ) write(funit, pos=header%file_bytes, iostat=io_stat) zero
+        if( io_stat /= 0 )then
+            close(funit)
+            funit = -1
+            status = io_stat; message = 'cannot size sigma2 candidate'
+        endif
+    end subroutine sigma2_state_open_candidate
+
+    !> writes the records spectra(shells, rows) from row first_row through the open candidate unit
+    subroutine sigma2_state_write_particles_unit(funit, header, first_row, spectra, status, message)
+        integer,                   intent(in)  :: funit
+        type(sigma2_state_header), intent(in)  :: header
+        integer,                   intent(in)  :: first_row
+        real(real32),              intent(in)  :: spectra(:,:)
         integer,                   intent(out) :: status
         character(len=*),          intent(out) :: message
-        status = 0
+        integer(int64) :: data_pos
+        integer :: nshell
+        status  = 0
         message = ''
-        if( source%state /= SIGMA2_STATE_COMMITTED )then
-            status = 1; message = 'sigma2 copy source is not committed'; return
+        nshell = int(header%kto-header%kfrom+1)
+        if( size(spectra,1) /= nshell .or. first_row < 1 .or. &
+            &first_row+size(spectra,2)-1 > header%nptcls )then
+            status = 1; message = 'invalid sigma2 particle write range'; return
         endif
-        if( source%kfrom /= target%kfrom .or. source%kto /= target%kto .or. &
-            &source%nptcls /= target%nptcls .or. source%box /= target%box .or. &
-            &source%ngroups /= target%ngroups .or. source%grouping /= target%grouping .or. &
-            &source%layout_digest /= target%layout_digest .or. &
-            &abs(source%smpd-target%smpd) > 1.0e-9_real64 )then
-            status = 1; message = 'committed sigma2 state is incompatible with candidate'
+        data_pos = header%particle_offset + int(first_row-1,int64)*int(nshell*header%real_bytes,int64)
+        write(funit, pos=data_pos, iostat=status) spectra
+        if( status /= 0 ) message = 'cannot write sigma2 particle range'
+    end subroutine sigma2_state_write_particles_unit
+
+    !> writes the two global spectra (shells, half: even, odd) through the open
+    !! candidate unit, closes it and syncs the candidate once
+    subroutine sigma2_state_close_candidate(path, funit, header, spectra, status, message)
+        character(len=*),          intent(in)    :: path
+        integer,                   intent(in)    :: funit
+        type(sigma2_state_header), intent(inout) :: header
+        real(real32),              intent(in)    :: spectra(:,:)
+        integer,                   intent(out)   :: status
+        character(len=*),          intent(out)   :: message
+        integer :: io_stat
+        status  = 0
+        message = ''
+        if( any(shape(spectra) /= [int(header%kto-header%kfrom+1),2]) )then
+            close(funit)
+            status = 1; message = 'invalid sigma2 global section shape'; return
         endif
-    end subroutine validate_copy_compatibility
+        write(funit, pos=header%global_offset, iostat=io_stat) spectra
+        flush(funit)
+        close(funit)
+        if( io_stat /= 0 )then
+            status = io_stat; message = 'cannot write sigma2 global section'; return
+        endif
+        call simple_sync_file(path, io_stat)
+        status = io_stat
+        if( status /= 0 ) message = 'cannot sync sigma2 candidate'
+    end subroutine sigma2_state_close_candidate
 
     subroutine write_header_unit(funit, header, io_stat)
         integer,                   intent(in)  :: funit
@@ -372,35 +364,27 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        integer(int64) :: data_pos
-        integer :: funit, io_stat, nshell
+        integer :: funit, io_stat
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         if( header%state /= SIGMA2_STATE_CANDIDATE )then
             status = 1; message = 'particle writes require a sigma2 candidate'; return
-        endif
-        nshell = int(header%kto-header%kfrom+1)
-        if( size(spectra,1) /= nshell .or. first_row < 1 .or. &
-            &first_row+size(spectra,2)-1 > header%nptcls )then
-            status = 1; message = 'invalid sigma2 particle write range'; return
         endif
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
             status = io_stat; message = 'cannot open sigma2 candidate for particle write'; return
         endif
-        data_pos = header%particle_offset + int(first_row-1,int64)*int(nshell*header%real_bytes,int64)
-        write(funit, pos=data_pos, iostat=io_stat) spectra
+        call sigma2_state_write_particles_unit(funit, header, first_row, spectra, status, message)
         flush(funit)
         close(funit)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot write sigma2 particle range'; return
-        endif
+        if( status /= 0 ) return
         call simple_sync_file(path, io_stat)
         status = io_stat
         if( status /= 0 ) message = 'cannot sync sigma2 particle range'
     end subroutine sigma2_state_write_particles
 
+    !> the records of rows first_row:last_row, into an array the reader allocates (shells, rows)
     subroutine sigma2_state_read_particles(path, first_row, last_row, spectra, status, message)
         character(len=*), intent(in) :: path
         integer,          intent(in) :: first_row, last_row
@@ -408,34 +392,81 @@ contains
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
-        integer(int64) :: data_pos
-        integer :: funit, io_stat, nrows, nshell
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         if( first_row < 1 .or. last_row < first_row .or. last_row > header%nptcls )then
             status = 1; message = 'invalid sigma2 particle read range'; return
         endif
-        nshell = int(header%kto-header%kfrom+1)
-        nrows  = last_row-first_row+1
-        allocate(spectra(nshell,nrows))
-        data_pos = header%particle_offset + int(first_row-1,int64)*int(nshell*header%real_bytes,int64)
+        allocate(spectra(int(header%kto-header%kfrom+1),last_row-first_row+1))
+        call sigma2_state_read_particles_into(path, first_row, spectra, status, message)
+    end subroutine sigma2_state_read_particles
+
+    !> the records of rows first_row:first_row+size(spectra,2)-1 straight into the caller's array
+    !! (shells, rows), whose first extent must be the store's shell count; any lower bounds
+    subroutine sigma2_state_read_particles_into(path, first_row, spectra, status, message)
+        character(len=*), intent(in)  :: path
+        integer,          intent(in)  :: first_row
+        real(real32),     intent(out) :: spectra(:,:)
+        integer,          intent(out) :: status
+        character(len=*), intent(out) :: message
+        type(sigma2_state_header) :: header
+        integer :: funit
+        call sigma2_state_open_store(path, header, funit, status, message)
+        if( status /= 0 ) return
+        call sigma2_state_read_particles_unit(funit, header, first_row, spectra, status, message)
+        close(funit)
+    end subroutine sigma2_state_read_particles_into
+
+    !> opens the store at path for reading through one handle; its header is returned
+    subroutine sigma2_state_open_store(path, header, funit, status, message)
+        character(len=*),          intent(in)  :: path
+        type(sigma2_state_header), intent(out) :: header
+        integer,                   intent(out) :: funit
+        integer,                   intent(out) :: status
+        character(len=*),          intent(out) :: message
+        integer :: io_stat
+        funit = -1
+        call sigma2_state_read_header(path, header, status, message)
+        if( status /= 0 ) return
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='read', iostat=io_stat)
         if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot open sigma2 particle range'; return
+            funit = -1
+            status = io_stat; message = 'cannot open sigma2 particle range'
         endif
-        read(funit, pos=data_pos, iostat=io_stat) spectra
-        close(funit)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot read sigma2 particle range'; return
-        endif
-        status = 0
-        message = ''
-    end subroutine sigma2_state_read_particles
+    end subroutine sigma2_state_open_store
 
-    subroutine sigma2_state_write_groups(path, groups, status, message)
+    !> the records of rows first_row:first_row+size(spectra,2)-1 through an open store unit, into the
+    !! caller's array (shells, rows), whose first extent must be the store's shell count
+    subroutine sigma2_state_read_particles_unit(funit, header, first_row, spectra, status, message)
+        integer,                   intent(in)  :: funit
+        type(sigma2_state_header), intent(in)  :: header
+        integer,                   intent(in)  :: first_row
+        real(real32),              intent(out) :: spectra(:,:)
+        integer,                   intent(out) :: status
+        character(len=*),          intent(out) :: message
+        integer(int64) :: data_pos
+        integer :: nrows, nshell, last_row
+        nshell   = int(header%kto-header%kfrom+1)
+        nrows    = size(spectra,2)
+        last_row = first_row + nrows - 1
+        if( first_row < 1 .or. nrows < 1 .or. last_row > header%nptcls )then
+            status = 1; message = 'invalid sigma2 particle read range'; return
+        endif
+        if( size(spectra,1) /= nshell )then
+            status = 1; message = 'sigma2 particle records have another shell count'; return
+        endif
+        data_pos = header%particle_offset + int(first_row-1,int64)*int(nshell*header%real_bytes,int64)
+        read(funit, pos=data_pos, iostat=status) spectra
+        if( status /= 0 )then
+            message = 'cannot read sigma2 particle range'; return
+        endif
+        message = ''
+    end subroutine sigma2_state_read_particles_unit
+
+    subroutine sigma2_state_write_global(path, spectra, status, message)
         character(len=*), intent(in) :: path
-        real(real32),     intent(in) :: groups(:,:,:)
+        real(real32),     intent(in) :: spectra(:,:) !< (shells, half): even, odd
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
@@ -443,31 +474,31 @@ contains
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         if( header%state /= SIGMA2_STATE_CANDIDATE )then
-            status = 1; message = 'group writes require a sigma2 candidate'; return
+            status = 1; message = 'global spectra writes require a sigma2 candidate'; return
         endif
         nshell = int(header%kto-header%kfrom+1)
-        if( any(shape(groups) /= [nshell,2,int(header%ngroups)]) )then
-            status = 1; message = 'invalid sigma2 grouped section shape'; return
+        if( any(shape(spectra) /= [nshell,2]) )then
+            status = 1; message = 'invalid sigma2 global section shape'; return
         endif
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot open sigma2 grouped section'; return
+            status = io_stat; message = 'cannot open sigma2 global section'; return
         endif
-        write(funit, pos=header%grouped_offset, iostat=io_stat) groups
+        write(funit, pos=header%global_offset, iostat=io_stat) spectra
         flush(funit)
         close(funit)
         if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot write sigma2 grouped section'; return
+            status = io_stat; message = 'cannot write sigma2 global section'; return
         endif
         call simple_sync_file(path, io_stat)
         status = io_stat
-        if( status /= 0 ) message = 'cannot sync sigma2 grouped section'
-    end subroutine sigma2_state_write_groups
+        if( status /= 0 ) message = 'cannot sync sigma2 global section'
+    end subroutine sigma2_state_write_global
 
-    subroutine sigma2_state_read_groups(path, groups, status, message)
+    subroutine sigma2_state_read_global(path, spectra, status, message)
         character(len=*), intent(in) :: path
-        real(real32), allocatable, intent(out) :: groups(:,:,:)
+        real(real32), allocatable, intent(out) :: spectra(:,:) !< (shells, half): even, odd
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
         type(sigma2_state_header) :: header
@@ -475,20 +506,20 @@ contains
         call sigma2_state_read_header(path, header, status, message)
         if( status /= 0 ) return
         nshell = int(header%kto-header%kfrom+1)
-        allocate(groups(nshell,2,int(header%ngroups)))
+        allocate(spectra(nshell,2))
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='read', iostat=io_stat)
         if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot open sigma2 grouped section'; return
+            status = io_stat; message = 'cannot open sigma2 global section'; return
         endif
-        read(funit, pos=header%grouped_offset, iostat=io_stat) groups
+        read(funit, pos=header%global_offset, iostat=io_stat) spectra
         close(funit)
         if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot read sigma2 grouped section'; return
+            status = io_stat; message = 'cannot read sigma2 global section'; return
         endif
         status = 0
         message = ''
-    end subroutine sigma2_state_read_groups
+    end subroutine sigma2_state_read_global
 
     subroutine sigma2_state_validate_file(path, status, message)
         character(len=*), intent(in) :: path
@@ -522,7 +553,6 @@ contains
             status = 1; message = 'only a sigma2 candidate can be published'; return
         endif
         header%state = SIGMA2_STATE_COMMITTED
-        header%group_checksum = 0_int64
         open(newunit=funit, file=trim(candidate_path), access='stream', form='unformatted', &
             &status='old', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
@@ -583,7 +613,7 @@ contains
         words(RW_LAYOUT_DIGEST) = layout_digest
         words(RW_DATA_OFFSET)     = data_offset
         words(RW_FILE_BYTES)      = file_bytes
-        words(RW_HEADER_CHECKSUM) = 0_int64
+        words(RW_RETIRED_CHECKSUM) = 0_int64
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='new', action='readwrite', iostat=io_stat)
         if( io_stat /= 0 )then
@@ -610,12 +640,32 @@ contains
         real(real32), allocatable, intent(out) :: spectra(:,:)
         integer,          intent(out) :: status
         character(len=*), intent(out) :: message
+        integer :: funit
+        call sigma2_state_open_local_range(path, funit, generation, layout_digest, first_row, last_row, &
+            &kfrom, kto, status, message)
+        if( status /= 0 ) return
+        allocate(spectra(kto-kfrom+1,last_row-first_row+1))
+        call sigma2_state_read_local_range_rows(funit, first_row, first_row, spectra, status, message)
+        close(funit)
+    end subroutine sigma2_state_read_local_range
+
+    !> opens the local range at path and validates its header; the unit stays open for
+    !! sigma2_state_read_local_range_rows and the caller closes it
+    subroutine sigma2_state_open_local_range(path, funit, generation, layout_digest, first_row, last_row, &
+        &kfrom, kto, status, message)
+        character(len=*), intent(in)  :: path
+        integer,          intent(out) :: funit
+        integer(int64),   intent(out) :: generation, layout_digest
+        integer,          intent(out) :: first_row, last_row, kfrom, kto
+        integer,          intent(out) :: status
+        character(len=*), intent(out) :: message
         character(len=16) :: magic
         integer(int64) :: words(RANGE_NWORDS), actual_bytes
         integer(int64) :: expected_file_bytes
-        integer :: funit, io_stat, nshell, nrows
+        integer :: io_stat, nshell, nrows
         status = 0
         message = ''
+        funit = -1
         generation = 0_int64; layout_digest = 0_int64
         first_row = 0; last_row = -1; kfrom = 0; kto = -1
         if( .not. file_exists(path) )then
@@ -624,17 +674,19 @@ contains
         open(newunit=funit, file=trim(path), access='stream', form='unformatted', &
             &status='old', action='read', iostat=io_stat)
         if( io_stat /= 0 )then
+            funit = -1
             status = io_stat; message = 'cannot open local sigma2 range file'; return
         endif
         read(funit, pos=1, iostat=io_stat) magic
         if( io_stat == 0 ) read(funit, pos=17, iostat=io_stat) words
         if( io_stat /= 0 )then
-            close(funit)
+            call close_range
             status = io_stat; message = 'cannot read local sigma2 range header'; return
         endif
         if( magic /= RANGE_MAGIC .or. words(RW_VERSION) /= SIGMA2_STATE_VERSION .or. &
             &words(RW_HEADER_BYTES) /= RANGE_HEADER_BYTES .or. words(RW_REAL_BYTES) /= 4_int64 )then
-            close(funit); status = 1; message = 'invalid local sigma2 range header'; return
+            call close_range
+            status = 1; message = 'invalid local sigma2 range header'; return
         endif
         kfrom = int(words(RW_KFROM)); kto = int(words(RW_KTO))
         first_row = int(words(RW_FIRST)); last_row = int(words(RW_LAST))
@@ -646,15 +698,35 @@ contains
             &words(RW_DATA_OFFSET) /= RANGE_HEADER_BYTES+1_int64 .or. &
             &words(RW_FILE_BYTES) /= expected_file_bytes .or. generation < 1_int64 .or. &
             &layout_digest == 0_int64 )then
-            close(funit); status = 1; message = 'invalid local sigma2 range layout'; return
+            call close_range
+            status = 1; message = 'invalid local sigma2 range layout'; return
         endif
-        allocate(spectra(nshell,nrows))
-        read(funit, pos=words(RW_DATA_OFFSET), iostat=io_stat) spectra
-        close(funit)
-        if( io_stat /= 0 )then
-            status = io_stat; message = 'cannot read local sigma2 range data'; return
+
+      contains
+
+        subroutine close_range
+            close(funit)
+            funit = -1
+        end subroutine close_range
+
+    end subroutine sigma2_state_open_local_range
+
+    !> rows first_row:first_row+size(spectra,2)-1 of the open local range whose first row is range_first,
+    !! into the caller's array (shells, rows); the range's bounds were validated when it was opened
+    subroutine sigma2_state_read_local_range_rows(funit, range_first, first_row, spectra, status, message)
+        integer,          intent(in)  :: funit, range_first, first_row
+        real(real32),     intent(out) :: spectra(:,:)
+        integer,          intent(out) :: status
+        character(len=*), intent(out) :: message
+        integer(int64) :: data_pos
+        data_pos = RANGE_HEADER_BYTES + 1_int64 + &
+            &int(first_row-range_first,int64)*int(size(spectra,1),int64)*4_int64
+        read(funit, pos=data_pos, iostat=status) spectra
+        if( status /= 0 )then
+            message = 'cannot read local sigma2 range data'; return
         endif
-    end subroutine sigma2_state_read_local_range
+        message = ''
+    end subroutine sigma2_state_read_local_range_rows
 
     pure integer(int64) function fnv_integer(seed, value, nbytes) result(hash)
         integer(int64), intent(in) :: seed, value

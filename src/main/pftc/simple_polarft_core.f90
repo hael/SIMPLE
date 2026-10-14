@@ -106,8 +106,6 @@ contains
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
-                    &self%heap_vars(ithr)%w_weights(self%nk),&
-                    &self%heap_vars(ithr)%sumsq_cache(self%nk),&
                     &self%heap_vars(ithr)%joint_coeffs(self%pftsz+1,3))
         end do
         self%pfts_refs      = zero
@@ -137,7 +135,6 @@ contains
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,&
-                    &self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache,&
                     &self%heap_vars(ithr)%joint_coeffs)
             end do
             if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
@@ -149,6 +146,8 @@ contains
             call self%kill_memo_refs
             call self%kill_memo_workspace
             nullify(self%sigma2_noise)
+            if( allocated(self%sigma2_wk)  ) deallocate(self%sigma2_wk)
+            if( allocated(self%sigma2_wk8) ) deallocate(self%sigma2_wk8)
             self%p_ptr => null()
             self%existence = .false.
         endif
@@ -171,13 +170,16 @@ contains
             if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
             if( allocated(self%ksqsums_ptcls)) deallocate(self%ksqsums_ptcls)
             if( allocated(self%wsqsums_ptcls)) deallocate(self%wsqsums_ptcls)
+            if( allocated(self%kshell_sqsums_ptcls)) deallocate(self%kshell_sqsums_ptcls)
             if( allocated(self%iseven) )       deallocate(self%iseven)
             if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
             if( allocated(self%ctfmats) )      deallocate(self%ctfmats)
             allocate( self%pfts_ptcls(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                      &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                      &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),&
-                     &self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls))
+                     &self%wsqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),&
+                     &self%kshell_sqsums_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls))
+            self%kshell_sqsums_ptcls = 0.d0
             call self%alloc_memo_ptcls
         endif
         self%pfts_ptcls    = zero
@@ -291,11 +293,6 @@ contains
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine cp_even_ref2ptcl
 
-    module subroutine swap_ptclsevenodd(self)
-        class(polarft_calc), intent(inout) :: self
-        self%iseven = .not.self%iseven
-    end subroutine swap_ptclsevenodd
-
     module subroutine set_eo(self, iptcl, is_even)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
@@ -312,7 +309,10 @@ contains
     module subroutine assign_sigma2_noise(self, sigma2_noise)
         class(polarft_calc),       intent(inout) :: self
         real, allocatable, target, intent(inout) :: sigma2_noise(:,:)
+        if( size(sigma2_noise,2) /= 2 ) THROW_HARD('sigma2 must hold one spectrum per even/odd half')
         self%sigma2_noise => sigma2_noise
+        ! the weights of the spectra as they are now; whoever fills them later refreshes the weights
+        call self%memoize_sigma2_weights
     end subroutine assign_sigma2_noise
 
     module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven)

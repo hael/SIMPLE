@@ -87,8 +87,8 @@ module subroutine exec_test_pcg_recon( self, cline )
     real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
     real,    allocatable    :: env(:,:,:), invenv(:,:,:)
     real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
-    real,    allocatable    :: qplane_re(:,:), qplane_im(:,:), sig2arr(:), sig2_2d(:,:)
-    real,    allocatable    :: sig2_crop(:,:), draw_full(:,:,:), draw_crop(:,:,:), fsc_prior(:)
+    real,    allocatable    :: qplane_re(:,:), qplane_im(:,:), sig2arr(:)
+    real,    allocatable    :: sig2_crop(:), draw_full(:,:,:), draw_crop(:,:,:), fsc_prior(:)
     complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
     complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
     complex, allocatable    :: braw_full(:,:,:), braw_crop(:,:,:)
@@ -180,7 +180,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         ctfparms%angast = ANGAST_VALS(1); ctfparms%phshift = 0.
         shift = [1.7, -2.3]
         allocate(Ti(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-        Ti = pcgop%build_transfer(ctfparms, shift, sig2arr)
+        Ti = pcgop%build_transfer(ctfparms, shift, 1.0/sqrt(sig2arr))
         allocate(mplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
         mplane = Ti * gx_plane
         lhs = sum(real(conjg(mplane)*qplane, dp))
@@ -215,17 +215,13 @@ module subroutine exec_test_pcg_recon( self, cline )
         call e%set_shift([1.0+0.3*real(mod(i-1,5)), -1.0+0.2*real(mod(i-1,7))])
         call projdirs%set_ori(i, e)
     end do
-    allocate(sig2_2d(0:R,NPROJS))
-    do i = 1, NPROJS
-        sig2_2d(:,i) = sig2arr
-    end do
 
     ! ========== STAGE 3: normal operator, symmetry and PSD ==========
     ! CG requires both. Symmetry is checked by the dot-product identity across
     ! two independent random probes; PSD by a single quadratic form.
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 3: normal-operator symmetry and positive-definiteness'
-        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         allocate(p_probe(BOX,BOX,BOX), q_probe(BOX,BOX,BOX))
         call random_number(p_probe); call random_number(q_probe)
         p_probe = p_probe - 0.5; q_probe = q_probe - 0.5
@@ -292,7 +288,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         do i = 1, NPROJS
             call projdirs%get_ori(i, e)
             call pcgop%forward_plane(e, gx_plane)
-            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
+            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), 1.0/sqrt(sig2arr))
             y_planes(:,:,i) = Ti * gx_plane
         end do
         ! build_operators here rather than a bare solve, so stage 7 can compare
@@ -392,7 +388,7 @@ module subroutine exec_test_pcg_recon( self, cline )
             call e%set_shift([-2.0+0.11*real(i), 3.0-0.07*real(i)])
             call projdirs%set_ori(i, e)
         end do
-        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         call pcgop%build_kernel
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
@@ -412,7 +408,7 @@ module subroutine exec_test_pcg_recon( self, cline )
             call e%set_ctfvars(ctfparms)
             call projdirs%set_ori(i, e)
         end do
-        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         call pcgop%build_kernel
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
@@ -446,13 +442,13 @@ module subroutine exec_test_pcg_recon( self, cline )
     ! is exercised.
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 7: streaming accumulation vs monolithic solve'
-        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         ! regenerate observations: stage 6 edited the shifts and CTFs
         call pcgop%set_volume(phantom)
         do i = 1, NPROJS
             call projdirs%get_ori(i, e)
             call pcgop%forward_plane(e, gx_plane)
-            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
+            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), 1.0/sqrt(sig2arr))
             y_planes(:,:,i) = Ti * gx_plane
         end do
         ! BOTH paths run a FIXED number of iterations with the tolerance
@@ -519,7 +515,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         ! end_accum(.true.) -- a branch the runs above never touch, since they
         ! pass .false. Deriving Khat from a streamed accumulator must match
         ! deriving it from a monolithic one, or the default path is untested.
-        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         call pcgop%build_kernel
         khat_a = pcgop%apply_normal_kernel(p_probe)
         do j = 1, 2
@@ -846,10 +842,10 @@ module subroutine exec_test_pcg_recon( self, cline )
         do i = 1, NPROJS
             call projdirs%get_ori(i, e)
             call pcgop%forward_plane(e, gx_plane)
-            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
+            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), 1.0/sqrt(sig2arr))
             y_planes(:,:,i) = Ti * gx_plane
         enddo
-        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         call pcgop%begin_accum
         call pcgop%accumulate_batch(y_planes, NPROJS, 1)
         call pcgop%get_raw_accum(braw_full, draw_full)
@@ -858,15 +854,12 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcg_crop%set_deapod(.true.)
         lims2_crop = pcg_crop%get_lims2()
         lims3_crop = pcg_crop%get_lims3()
-        allocate(sig2_crop(0:CROP_BOX/2,NPROJS))
-        do i = 1, NPROJS
-            sig2_crop(:,i) = sig2arr(0:CROP_BOX/2)
-        enddo
+        allocate(sig2_crop(0:CROP_BOX/2), source=sig2arr(0:CROP_BOX/2))
         allocate(y_crop(lims2_crop(1,1):lims2_crop(1,2), &
                        &lims2_crop(2,1):lims2_crop(2,2), NPROJS))
         y_crop = y_planes(lims2_crop(1,1):lims2_crop(1,2), &
             &lims2_crop(2,1):lims2_crop(2,2),:)
-        call pcg_crop%prep_particles(projdirs_crop, use_ctf=.true., sig2=sig2_crop)
+        call pcg_crop%prep_particles(projdirs_crop, use_ctf=.true., inv_sig2=1.0/sig2_crop)
         call pcg_crop%begin_accum
         call pcg_crop%accumulate_batch(y_crop, NPROJS, 1)
         call pcg_crop%get_raw_accum(braw_crop, draw_crop)
@@ -933,7 +926,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 12: FSC/SSNR ML prior positivity and operator parity'
         call pcg_ml%new(CROP_BOX, CROP_SMPD, 0.0)
         call pcg_ml%set_deapod(.true.)
-        call pcg_ml%prep_particles(projdirs_crop, use_ctf=.true., sig2=sig2_crop)
+        call pcg_ml%prep_particles(projdirs_crop, use_ctf=.true., inv_sig2=1.0/sig2_crop)
         call pcg_ml%begin_reduction
         call pcg_ml%add_raw_accum(raw_ml, 1, 0, 1, 1, 'pcg_ml_prior_v1', nraw)
         allocate(fsc_prior(CROP_BOX/2), source=0.5)
@@ -1062,7 +1055,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcg_c%new(BOX, SMPD, LAMBDA)
         call pcg_c%set_deapod(.false.)
         call pcg_c%set_window_sphere(SUPPORT_MSKRAD)
-        call pcg_c%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcg_c%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         call pcg_c%begin_accum
         call pcg_c%accumulate_batch(y_planes, NPROJS, 1)
         call pcg_c%end_accum(.true.)

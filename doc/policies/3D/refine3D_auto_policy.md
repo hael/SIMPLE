@@ -42,7 +42,6 @@ It also supplies overridable defaults when the user has not provided them:
 
 - `mkdir=yes`
 - `center=no`
-- `sigma_est=global`
 - `combine_eo=no`
 - `prob_inpl=yes`
 - `nsample=25000`

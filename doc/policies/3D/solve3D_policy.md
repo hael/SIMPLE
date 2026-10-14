@@ -28,7 +28,6 @@ assembly implementation.
 `solve3D` sets:
 
 - `objfun=euclid`
-- `sigma_est=global`
 - `bfac=0`
 
 When unset, it supplies:
@@ -440,8 +439,9 @@ search, matching-reference automasking, or reference-filter controls such as
 final reconstruction runs with `filt_mode=none` on both backends.
 
 If the final stage used `objfun=euclid` and `ml_reg=yes`, final reconstruction
-uses compatible grouped sigma estimates when they are local to the workflow.
-If needed, it bootstraps sigmas locally before producing the regularized map.
+uses the committed sigma2 store of the workflow's particles: one noise spectrum
+per even/odd half. A missing or incompatible store is rebuilt through the one
+rebuild entry before the regularized map is produced.
 
 On the PCG backend, a final ML-regularized stage uses the ordinary `P_tau`
 replay in `bootstrap_rec3D`; the `Q_NU` prior, its calibration pass and its
@@ -468,7 +468,7 @@ never fatally, and registers it in `projinfo` by bare name with its run
 identifier (`simple_solve3D_manifest`): the project identity, the particle
 source, the solution, the ladder as planned and emitted, the entry inputs,
 content digests of the state maps, halves and FSCs, and a cheap committed-header
-and grouped-section identity for sigma2. Sigma particle spectra are not scanned
+and global-section identity for sigma2. Sigma particle spectra are not scanned
 to write or validate the manifest. A failed manifest write warns and leaves the
 run as it is.
 

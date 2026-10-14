@@ -62,7 +62,10 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     real,            allocatable  :: symmats(:,:,:)  !< (3,3,nsym) point-group operators, symmats(:,:,1)=I
     type(ctfparams), allocatable  :: ctfparms(:)     !< (nptcls)
     real,            allocatable  :: shifts(:,:)     !< (2,nptcls), pixels
-    real,            allocatable  :: sig2(:,:)       !< (0:R,nptcls) per-particle noise power
+    real,            allocatable  :: inv_sig2(:)     !< (0:R) 1/sigma2 of the half's noise spectrum (1 without one)
+    real,            allocatable  :: rsqrt_sig2(:)   !< (0:R) 1/sqrt(sigma2)
+    real,            allocatable  :: wts(:)          !< (nptcls) particle weights: sigma2_i = sigma2/w_i
+    real,            allocatable  :: sqrt_wts(:)     !< (nptcls) sqrt(w_i)
     ! ---- lookup tables / work buffers ----
     ! (h,k)-only lookup tables over the fixed lims2 disk, see build_hk_luts
     real,    allocatable :: spafreqsq_lut(:,:)       !< spatial frequency squared
@@ -166,7 +169,6 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure :: fourier_dot
     procedure :: adjoint_plane_add
     procedure :: build_transfer
-    procedure :: whiten_observation
     procedure :: extract_native_plane
     procedure :: dot_real_volume
     ! HIGH-LEVEL OPERATOR (uses the cached per-particle state)
@@ -595,7 +597,10 @@ contains
         if( allocated(self%rotmats)  ) deallocate(self%rotmats)
         if( allocated(self%ctfparms) ) deallocate(self%ctfparms)
         if( allocated(self%shifts)   ) deallocate(self%shifts)
-        if( allocated(self%sig2)     ) deallocate(self%sig2)
+        if( allocated(self%inv_sig2)   ) deallocate(self%inv_sig2)
+        if( allocated(self%rsqrt_sig2) ) deallocate(self%rsqrt_sig2)
+        if( allocated(self%wts)        ) deallocate(self%wts)
+        if( allocated(self%sqrt_wts)   ) deallocate(self%sqrt_wts)
         if( allocated(self%symmats)  ) deallocate(self%symmats)
         if( allocated(self%spafreqsq_lut) ) deallocate(self%spafreqsq_lut)
         if( allocated(self%ang_lut)  ) deallocate(self%ang_lut)
@@ -641,16 +646,17 @@ contains
 
     ! SETUP
 
-    !> caches the per-particle quantities that do not depend on the iterate
-    !! (rotation matrices, CTF parameters, shifts, noise spectra); small, constant
-    !! over the solve, and what lets the particle loop be shared across threads
-    subroutine prep_particles( self, orientations, use_ctf, sig2 )
+    !> caches the per-particle quantities that do not depend on the iterate (rotation
+    !! matrices, CTF parameters, shifts) and the noise model: the one spectrum sig2(0:) of the
+    !! half all particles belong to, and a weight per particle, sigma2_i = sig2/weights(i)
+    subroutine prep_particles( self, orientations, use_ctf, inv_sig2, weights )
         class(reconstructor_pcg),           intent(inout) :: self
         class(oris),                        intent(inout) :: orientations
         logical,                  optional, intent(in)    :: use_ctf
-        real,                     optional, intent(in)    :: sig2(0:,:)
+        real,                     optional, intent(in)    :: inv_sig2(0:)  !< 1/sigma2 of the particles' half at shells 0:
+        real,                     optional, intent(in)    :: weights(:)
         type(ori) :: e
-        integer   :: i, R
+        integer   :: i, R, rtop
         R = self%lims2(1,2)
         self%nptcls = orientations%get_noris()
         self%l_use_ctf = .false.
@@ -658,10 +664,14 @@ contains
         if( allocated(self%rotmats)  ) deallocate(self%rotmats)
         if( allocated(self%ctfparms) ) deallocate(self%ctfparms)
         if( allocated(self%shifts)   ) deallocate(self%shifts)
-        if( allocated(self%sig2)     ) deallocate(self%sig2)
+        if( allocated(self%inv_sig2)   ) deallocate(self%inv_sig2)
+        if( allocated(self%rsqrt_sig2) ) deallocate(self%rsqrt_sig2)
+        if( allocated(self%wts)        ) deallocate(self%wts)
+        if( allocated(self%sqrt_wts)   ) deallocate(self%sqrt_wts)
         allocate(self%rotmats(3,3,self%nptcls), self%shifts(2,self%nptcls), &
             &self%ctfparms(self%nptcls))
-        allocate(self%sig2(0:R,self%nptcls), source=1.0)
+        allocate(self%inv_sig2(0:R), self%rsqrt_sig2(0:R), source=1.0)
+        allocate(self%wts(self%nptcls), self%sqrt_wts(self%nptcls), source=1.0)
         call e%new(.false.)
         do i = 1, self%nptcls
             call orientations%get_ori(i, e)
@@ -673,9 +683,15 @@ contains
                 self%shifts(:,i) = 0.
             endif
         end do
-        if( present(sig2) )then
-            if( size(sig2,2) /= self%nptcls ) THROW_HARD('sig2 second dimension must be nptcls; prep_particles')
-            self%sig2(0:min(R,ubound(sig2,1)),:) = sig2(0:min(R,ubound(sig2,1)),:)
+        if( present(inv_sig2) )then
+            rtop = min(R,ubound(inv_sig2,1))
+            self%inv_sig2(0:rtop)   = inv_sig2(0:rtop)
+            self%rsqrt_sig2(0:rtop) = sqrt(self%inv_sig2(0:rtop))
+        endif
+        if( present(weights) )then
+            if( size(weights) /= self%nptcls ) THROW_HARD('one weight per particle; prep_particles')
+            self%wts      = weights
+            self%sqrt_wts = sqrt(weights)
         endif
         call self%ensure_wimg
     end subroutine prep_particles
@@ -796,13 +812,14 @@ contains
         call scatter_plane(self, plane, e_rotmat, vol_accum)
     end subroutine adjoint_plane_add
 
-    !> T_i(h,k) = C_i(h,k) S_i(h,k) / sqrt(sigma2_i(shell)), the full complex
-    !! transfer; needed for the RHS only (absT2_plane serves the normal operator)
-    function build_transfer( self, ctfparms, shift, sig2arr ) result( T )
+    !> T_i(h,k) = C_i(h,k) S_i(h,k) / sqrt(sigma2_i(shell)), the full complex transfer, with
+    !! rsqrt_sig2arr = 1/sqrt(sigma2_i) per shell; needed for the RHS only (absT2_plane serves
+    !! the normal operator)
+    function build_transfer( self, ctfparms, shift, rsqrt_sig2arr ) result( T )
         class(reconstructor_pcg),           intent(in) :: self
         type(ctfparams),                    intent(in) :: ctfparms
         real,                               intent(in) :: shift(2)
-        real,                     optional, intent(in) :: sig2arr(0:)
+        real,                     optional, intent(in) :: rsqrt_sig2arr(0:)
         complex       :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
@@ -845,39 +862,15 @@ contains
                 ! reproduces production's exp(-i shift) correction (gen_fplane4rec)
                 args       = 2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
                 sw        = 1.0
-                if( present(sig2arr) )then
-                    shell = min(self%shell_lut(h,k), ubound(sig2arr,1))
-                    sw    = 1.0 / sqrt(sig2arr(shell))
+                if( present(rsqrt_sig2arr) )then
+                    shell = min(self%shell_lut(h,k), ubound(rsqrt_sig2arr,1))
+                    sw    = rsqrt_sig2arr(shell)
                 endif
                 T(h,k) = cval * cmplx(cos(args), sin(args)) * sw
             end do
         end do
         !$omp end parallel do
     end function build_transfer
-
-    !> y_w = y / sqrt(sigma2(shell)), the production inverse-noise amplitude
-    function whiten_observation( self, plane, sig2arr ) result( whitened )
-        class(reconstructor_pcg), intent(in) :: self
-        complex,                  intent(in) :: plane(self%lims2(1,1):self%lims2(1,2), &
-                                                     &self%lims2(2,1):self%lims2(2,2))
-        real,                     intent(in) :: sig2arr(0:)
-        complex :: whitened(self%lims2(1,1):self%lims2(1,2), &
-                           &self%lims2(2,1):self%lims2(2,2))
-        real    :: sigma2
-        integer :: h, k, shell
-        whitened = cmplx(0.,0.)
-        do k = self%lims2(2,1), self%lims2(2,2)
-            do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h + k*k > self%sqlp ) cycle
-                shell = min(self%shell_lut(h,k),ubound(sig2arr,1))
-                sigma2 = sig2arr(shell)
-                if( .not. ieee_is_finite(sigma2) .or. sigma2 <= 0.0 )then
-                    error stop 'whiten_observation requires finite positive sigma2'
-                endif
-                whitened(h,k) = plane(h,k) / sqrt(sigma2)
-            end do
-        end do
-    end function whiten_observation
 
     !> reads an FFT'd particle image's own Fourier plane into the lims2 disk (no
     !! KB window, no wrap); how y_planes is built for real particles
@@ -1116,7 +1109,7 @@ contains
                             weighted(h,k) = cmplx(0.,0.)
                         else
                             shell = min(nint(sqrt(real(h*h+k*k))), R)
-                            weighted(h,k) = conjg(T(h,k)) * y_planes(h,k,i) / sqrt(self%sig2(shell,i))
+                            weighted(h,k) = conjg(T(h,k)) * y_planes(h,k,i) * (self%sqrt_wts(i) * self%rsqrt_sig2(shell))
                         endif
                     end do
                 end do
@@ -2178,7 +2171,7 @@ contains
                         if( l_flip ) cval = abs(cval)
                     endif
                     shell      = self%shell_lut(h,k)
-                    absT2(h,k) = cval * cval / self%sig2(shell,iptcl)
+                    absT2(h,k) = cval * cval * self%wts(iptcl) * self%inv_sig2(shell)
                 endif
             end do
         end do
@@ -2191,7 +2184,7 @@ contains
         integer,                  intent(in)  :: iptcl
         complex,                  intent(out) :: T(self%lims2(1,1):self%lims2(1,2),&
                                                   &self%lims2(2,1):self%lims2(2,2))
-        T = self%build_transfer(self%ctfparms(iptcl), self%shifts(:,iptcl), self%sig2(:,iptcl))
+        T = self%build_transfer(self%ctfparms(iptcl), self%shifts(:,iptcl), self%sqrt_wts(iptcl) * self%rsqrt_sig2)
     end subroutine transfer_plane_cmplx
 
     !> the two plane values of the fused accumulation, CTF evaluated once; every
@@ -2254,10 +2247,10 @@ contains
                 shell = self%shell_lut(h,k)
                 arg   = 2.0 * PI * (real(h) * self%shifts(1,iptcl) + &
                     &real(k) * self%shifts(2,iptcl)) / real(self%box)
-                sw    = 1.0 / sqrt(self%sig2(shell,iptcl))
+                sw    = self%sqrt_wts(iptcl) * self%rsqrt_sig2(shell)
                 tval  = cval * cmplx(cos(arg), sin(arg)) * sw
                 weighted(h,k) = conjg(tval) * y_plane(h,k) * sw
-                absT2(h,k)    = cval * cval / self%sig2(shell,iptcl)
+                absT2(h,k)    = cval * cval * self%wts(iptcl) * self%inv_sig2(shell)
             end do
         end do
         !$omp end do

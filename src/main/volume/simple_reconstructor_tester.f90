@@ -4,6 +4,7 @@
 module simple_reconstructor_tester
 use simple_defs,            only: OSMPL_PAD_FAC
 use simple_image,           only: image
+use simple_fplane_grid,     only: fplane_grid
 use simple_ori,             only: ori
 use simple_oris,            only: oris
 use simple_parameters,      only: parameters
@@ -40,6 +41,7 @@ contains
         type(sym)                :: c1sym
         type(ctfparams)          :: ctfparms
         type(fplane_type)        :: fplane
+        type(fplane_grid)        :: grid
         type(image)              :: obs, obs_pad
         complex, allocatable     :: cw(:,:,:), cs(:,:,:), cone(:,:,:), cplain(:,:,:)
         real,    allocatable     :: img(:,:,:), dw(:,:,:), ds(:,:,:), done(:,:,:), dplain(:,:,:)
@@ -57,6 +59,7 @@ contains
         call poses%spiral()
         call obs%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call obs_pad%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD, wthreads=.false.)
+        call grid%new(OSMPL_PAD_FAC*BOX)
         call o%new(.false.)
         call c1sym%new('c1')
         call memoize_ft_maps([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD)
@@ -80,7 +83,7 @@ contains
                 call obs%set_rmat(img, .false.)
                 call obs%pad(obs_pad, backgr=0., antialiasing=.false.)
                 call obs_pad%fft()
-                call obs_pad%gen_fplane4rec([0,BOX/2], SMPD, ctfparms, [0.,0.], fplane)
+                call obs_pad%gen_fplane4rec(SMPD, ctfparms, [0.,0.], fplane, grid)
                 call rw%insert_plane_oversamp(c1sym, o, fplane, w=WEIGHTS(iw))
                 call rs%insert_plane_oversamp(c1sym, o, fplane)
                 call rone%insert_plane_oversamp(c1sym, o, fplane, w=1.0)

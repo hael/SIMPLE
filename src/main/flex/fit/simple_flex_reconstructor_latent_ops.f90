@@ -10,6 +10,7 @@ use simple_image,                only: image
 use simple_linalg,               only: solve_real_spd_complex
 use simple_matcher_ptcl_io,      only: discrete_read_imgbatch
 use simple_matcher_3Drec,        only: prep_imgs4rec, gen_rec_plane
+use simple_fplane_grid,          only: fplane_grid
 use simple_memoize_ft_maps,      only: memoize_ft_maps
 use simple_parameters,           only: parameters
 implicit none
@@ -256,6 +257,7 @@ contains
         type(fplane_type), intent(inout) :: fplanes(nptcls)
         logical, optional, intent(in)    :: cached      !< serve reads from the downscaled cache
         class(flex_plane_store), optional, intent(in) :: plane_store
+        type(fplane_grid) :: grid
         integer :: i, ithr, kfromto(2)
         logical :: l_cached
         l_cached = .false.
@@ -273,14 +275,26 @@ contains
         ! a cached particle already lives on the cropped grid, so the pad heap and the map are box_croppd
         call memoize_ft_maps([params%box_croppd, params%box_croppd, 1], params%smpd_crop)
         kfromto(2) = min(kfromto(2), params%box_crop/2)
+        ! the plane grid of the cropped padded box, once for the call: the spectra's cached one when whitening
+        if( params%l_ml_reg )then
+            call build%esig%prep_fplane_grid(params%box_croppd, kfromto(1))
+        else
+            call grid%new(params%box_croppd)
+        endif
         !$omp parallel do default(shared) private(i,ithr) schedule(static) proc_bind(close)
         do i = 1, nptcls
             ithr = omp_get_thread_num() + 1
             call plane_store%fill_cached_image(i, build%img_pad_heap(ithr))
-            call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), .true., kfromto, &
-                &params%l_ml_reg, .true., .true., fplanes(i))
+            if( params%l_ml_reg )then
+                call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), .true., kfromto, &
+                    &build%esig%fplane, .true., .true., .true., fplanes(i))
+            else
+                call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), .true., kfromto, &
+                    &grid, .false., .true., .true., fplanes(i))
+            endif
         end do
         !$omp end parallel do
+        call grid%kill
     end subroutine prep_imgs4projected_model
 
     function projected_model_kfromto( box_crop, smpd_crop, lp ) result( kfromto )

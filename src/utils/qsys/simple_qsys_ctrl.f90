@@ -9,7 +9,7 @@ use simple_qsys_coarray,             only: qsys_coarray
 use simple_cmdline,                  only: cmdline
 use simple_parameters,               only: parameters
 use simple_syslib,                   only: simple_rmfile
-use simple_qsys_job_record,          only: check_job_lost
+use simple_qsys_job_record,          only: check_job_lost, cancel_queued_job, JOB_LOST_EXIT_CODE
 use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task 
 use simple_persistent_worker_server,       only: persistent_worker
 use simple_mem_estimator
@@ -40,8 +40,8 @@ type qsys_ctrl
     type(string),     allocatable :: script_names(:)               !< per-partition script file paths
     type(string),     allocatable :: coarray_job_args(:)           !< direct per-partition command arguments for coarray dispatch
     type(string),     allocatable :: jobs_done_fnames(:)           !< per-partition completion sentinel file paths
-    type(string),     allocatable :: jobs_exit_code_fnames(:)      !< per-partition exit-code file paths (streaming only)
-    integer,          allocatable :: jobs_last_check(:)            !< per-partition latest liveness check (streaming only)
+    type(string),     allocatable :: jobs_exit_code_fnames(:)      !< per-partition exit-code file paths
+    integer,          allocatable :: jobs_last_check(:)            !< per-partition latest liveness check
     integer,          allocatable :: jobs_nmisses(:)               !< per-partition liveness checks in a row that found the job gone
     ! --- scheduler state ---
     class(qsys_base), pointer     :: myqsys     => null()          !< polymorphic scheduler backend (not owned)
@@ -55,6 +55,7 @@ type qsys_ctrl
     ! --- job tracking ---
     logical,          allocatable :: jobs_done(:)                  !< .true. once a partition job has finished
     logical,          allocatable :: jobs_submitted(:)             !< .true. once a partition job has been submitted
+    logical,          allocatable :: jobs_failed(:)                !< .true. once a partition job exited non-zero or vanished (batch)
     ! --- streaming state ---
     class(cmdline),   allocatable :: stream_cline_stack(:)         !< pending command lines waiting for a free slot
     class(cmdline),   allocatable :: stream_cline_submitted(:)     !< command lines currently running in each slot
@@ -91,6 +92,8 @@ type qsys_ctrl
     procedure, private :: declare_coarray_jobs_finished
     ! QUERIES
     procedure, private :: update_queue
+    procedure          :: failed_parts
+    procedure, private :: stop_on_failed_parts
     ! THE MASTER SCHEDULERS
     procedure          :: schedule_jobs
     procedure          :: schedule_array_jobs
@@ -176,6 +179,7 @@ contains
                   self%jobs_exit_code_fnames(fromto_part(1):fromto_part(2)) )
         allocate(self%jobs_last_check(fromto_part(1):fromto_part(2)), self%jobs_nmisses(fromto_part(1):fromto_part(2)),&
             &source=0)
+        allocate(self%jobs_failed(fromto_part(1):fromto_part(2)), source=.false.)
         if( self%stream ) then
             ! In streaming mode jobs start as 'done' (free slot) and are filled on demand.
             self%jobs_done = .true.
@@ -410,8 +414,13 @@ contains
         ! close partsarray definition
         write(funit,'(a)') ')'
         write(funit,'(a)') ''
+        ! the element records itself and its exit status as a partition script does; its part is
+        ! the array index plus one
+        write(funit,'(a)') 'EXIT_CODE_FNAME=EXIT_CODE_JOB_$(printf "%0'//int2str(self%numlen)//'d" $((SLURM_ARRAY_TASK_ID + 1)))'
+        call write_job_record(funit, string('${EXIT_CODE_FNAME}'))
         ! execute command in partsarray with index SLURM_ARRAY_TASK_ID
         write(funit,'(a)') '${partsarray[$SLURM_ARRAY_TASK_ID]}'
+        write(funit,'(a)') 'echo $? > ${EXIT_CODE_FNAME}'
         write(funit,'(a)') ''
         ! exit shell when done
         write(funit,'(a)') 'exit'
@@ -449,6 +458,9 @@ contains
         endif
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
+        ! the part records itself, and its exit status, so that the master sees a part that fails
+        ! or vanishes (update_queue)
+        call write_job_record(funit, self%jobs_exit_code_fnames(ipart))
         ! compose the command line
         job_str = job_descr%chash2str()
         write(funit,'(a)',advance='no') self%exec_binary%to_char()//' '//job_str%to_char()
@@ -456,6 +468,7 @@ contains
         ! master prints one summary line per completed phase instead of
         ! echoing every part (see report_phase_completion)
         write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
+        write(funit,'(a)') 'echo $? > '//self%jobs_exit_code_fnames(ipart)%to_char()
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
@@ -753,6 +766,7 @@ contains
             script_name = filepath(string(PATH_HERE), self%script_names(ipart))
             if( .not. file_exists(script_name) ) &
                 write(logfhandle,'(A,A)') 'FILE DOES NOT EXIST: ', script_name%to_char()
+            if( .not. self%stream ) call clear_job_status(self, ipart)
             select type( pmyqsys => self%myqsys )
                 class is(qsys_local)
                     qsys_cmd = self%myqsys%submit_cmd()//' '//script_name%to_char()//' '//SUPPRESS_MSG//'&'
@@ -901,6 +915,19 @@ contains
             do ipart = self%fromto_part(1), self%fromto_part(2)
                 ! Sentinel file present → job finished.
                 if( .not. self%jobs_done(ipart) ) self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
+                ! a submitted part without its sentinel fails on a non-zero exit status; one without an
+                ! exit status is checked for liveness, and one gone at two checks in a row gets
+                ! JOB_LOST_EXIT_CODE written
+                if( self%jobs_submitted(ipart) .and. .not. self%jobs_done(ipart) .and. .not. self%jobs_failed(ipart) )then
+                    if( .not. file_exists(self%jobs_exit_code_fnames(ipart)) )then
+                        l_lost = check_job_lost(self%jobs_exit_code_fnames(ipart), self%jobs_last_check(ipart),&
+                            &self%jobs_nmisses(ipart))
+                    endif
+                    if( file_exists(self%jobs_exit_code_fnames(ipart)) )then
+                        call read_exit_code(self%jobs_exit_code_fnames(ipart), exit_code, err)
+                        if( err .or. exit_code /= 0 ) self%jobs_failed(ipart) = .true.
+                    endif
+                endif
                 ! Completed jobs must also be marked submitted (in case of external injection).
                 if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
             end do
@@ -920,6 +947,7 @@ contains
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
+            if( any(self%jobs_failed) ) call self%stop_on_failed_parts
             call self%submit_scripts
             call self%service_persistent_worker_warmup()
             call sleep(SHORTTIME)
@@ -931,15 +959,71 @@ contains
     subroutine schedule_array_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
         integer(timer_int_kind) :: t_phase
+        integer :: ipart
         t_phase = tic()
+        do ipart = self%fromto_part(1), self%fromto_part(2)
+            call clear_job_status(self, ipart)
+        end do
+        self%jobs_submitted(:) = .true.
         call self%submit_script(string(ARRAY_SCRIPT))
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
+            if( any(self%jobs_failed) ) call self%stop_on_failed_parts
             call sleep(SHORTTIME)
         end do
         call report_phase_completion(self, real(toc(t_phase)))
     end subroutine schedule_array_jobs
+
+    !> Before a batch part is submitted: no exit status, job record or failure of an earlier
+    !! submission of the same part remains.
+    subroutine clear_job_status( self, ipart )
+        class(qsys_ctrl), intent(inout) :: self
+        integer,          intent(in)    :: ipart
+        call del_file(self%jobs_exit_code_fnames(ipart))
+        call del_file(self%jobs_exit_code_fnames(ipart)//JOB_INFO_EXT)
+        self%jobs_failed(ipart)     = .false.
+        self%jobs_last_check(ipart) = 0
+        self%jobs_nmisses(ipart)    = 0
+    end subroutine clear_job_status
+
+    !> The batch parts that have failed: exited with a non-zero status, or vanished without one
+    !! (a liveness check found them gone twice in a row); the queue is polled first.
+    function failed_parts( self ) result( parts )
+        class(qsys_ctrl), intent(inout) :: self
+        integer, allocatable :: parts(:)
+        integer :: ipart
+        call self%update_queue
+        allocate(parts(0))
+        if( .not. allocated(self%jobs_failed) ) return
+        parts = pack([(ipart, ipart = self%fromto_part(1), self%fromto_part(2))], self%jobs_failed)
+    end function failed_parts
+
+    !> A distributed master whose parts failed stops: the parts still running are cancelled, and
+    !! the error names the failed parts, their exit status, their scripts and the shared log.
+    subroutine stop_on_failed_parts( self )
+        class(qsys_ctrl), intent(inout) :: self
+        type(string) :: msg, label
+        logical      :: err, l_sent
+        integer      :: ipart, exit_code
+        do ipart = self%fromto_part(1), self%fromto_part(2)
+            if( self%jobs_submitted(ipart) .and. .not. self%jobs_done(ipart) .and. .not. self%jobs_failed(ipart) )then
+                l_sent = cancel_queued_job(self%jobs_exit_code_fnames(ipart))
+            endif
+        end do
+        label = 'distributed'
+        if( self%phase_label%is_allocated() ) label = self%phase_label
+        msg = upperCase(label%to_char())//': '//int2str(count(self%jobs_failed))//' PART(S) FAILED;'
+        do ipart = self%fromto_part(1), self%fromto_part(2)
+            if( .not. self%jobs_failed(ipart) ) cycle
+            call read_exit_code(self%jobs_exit_code_fnames(ipart), exit_code, err)
+            msg = msg//' part '//int2str(ipart)//' (exit status '//int2str(exit_code)//', script '//&
+                &self%script_names(ipart)%to_char()//')'
+        end do
+        msg = msg//'; the output of every part is in '//trim(CWD_GLOB)//'/'//SIMPLE_SUBPROC_OUT//&
+            &' (exit status '//int2str(JOB_LOST_EXIT_CODE)//': the part vanished without one)'
+        THROW_HARD(msg%to_char())
+    end subroutine stop_on_failed_parts
 
     !> One-line record of a completed distributed phase. The per-part output
     !! is append-only into SIMPLE_SUBPROC_OUTPUT, so this line is the
@@ -1190,6 +1274,7 @@ contains
                    self%jobs_exit_code_fnames, self%jobs_submitted, self%coarray_job_args)
         if( allocated(self%jobs_last_check) ) deallocate(self%jobs_last_check)
         if( allocated(self%jobs_nmisses)    ) deallocate(self%jobs_nmisses)
+        if( allocated(self%jobs_failed)     ) deallocate(self%jobs_failed)
         ! Deallocate streaming stacks (kill cmdlines before dealloc where required).
         if( allocated(self%stream_cline_stack) )      deallocate(self%stream_cline_stack)
         if( allocated(self%stream_cline_submitted) ) then

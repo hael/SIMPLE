@@ -704,11 +704,6 @@ contains
             case DEFAULT
                 THROW_HARD('internal sigma_commit_deferred must be yes or no')
         end select
-        select case(trim(self%sigma_action))
-            case('','star_import','star_export')
-            case DEFAULT
-                THROW_HARD('sigma_action must be star_import or star_export')
-        end select
         if( self%memreport_interval < 1 ) THROW_HARD('memreport_interval must be at least 1 second')
         if( self%walltime <= 0 )then
             THROW_HARD('Walltime cannot be negative!')
@@ -854,14 +849,6 @@ contains
             case('mass','seg','params')
             case DEFAULT
                 THROW_HARD('Unsupported centering scheme: '//trim(self%center_type))
-        end select
-        select case(trim(self%sigma_est))
-            case('group')
-                self%l_sigma_glob = .false.
-            case('global')
-                self%l_sigma_glob = .true.
-            case DEFAULT
-                THROW_HARD(trim(self%sigma_est)//' is not a supported sigma estimation approach')
         end select
         self%l_lpauto           = .false.
         self%l_nonuniform       = .false.

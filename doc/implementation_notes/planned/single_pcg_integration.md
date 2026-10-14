@@ -8,7 +8,7 @@ implemented. Written against master `04ea41302`. Companion pages:
 ## 0. Constraints that shape the design
 
 SINGLE data sets are small (hundreds to a few thousand particles), the
-objective is `cc` with `sigma_est=global`, `ml_reg=no` is forced
+objective is `cc`, `ml_reg=no` is forced
 (`exec_refine3D_nano`), and the even/odd FSC carries no usable
 information. Consequently, nothing below uses a half-map FSC, a
 half-map noise estimate, or the ML/SSNR prior. The even/odd *particle

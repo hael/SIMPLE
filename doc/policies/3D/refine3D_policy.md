@@ -793,8 +793,9 @@ On each iteration, strategy benchmark files should stay simple: context plus
 one `TIMINGS (s)` section. Labels should include the coarse operation buckets
 setup, probabilistic pre-step, matcher/scheduler, assembly/postprocess, and
 total time, together with separately timed reprojection-model materialization
-and group-sigma consolidation. These two measurements keep a per-iteration
-sigma update distinguishable from reference preparation.
+and the sigma2 transaction (the candidate preparation and the commit). These
+measurements keep a per-iteration sigma update distinguishable from reference
+preparation.
 
 Each refine3D stage also writes one stage-entry benchmark at its first
 iteration. It records the total stage initialization wall time and the nested
@@ -886,9 +887,10 @@ sharpened map is the shipped (prior'd, replayed) map; `imgkind=unfil` and
 `imgkind=solvent` postprocess the respective pair averages with the same
 cutoff.
 
-Grouped sigma files are run-local noise-model state. They may be written and
-consumed inside a running refinement, but they are not registered as `os_out`
-handoff artifacts for a later `refine3D` execution.
+The transaction files of the sigma2 store (the candidate and the workers' range
+files) are run-local. They are written and consumed inside a running
+refinement and are not registered as `os_out` handoff artifacts; only the
+committed store is registered, in `projinfo`.
 
 ## 12. Refactor Rules
 

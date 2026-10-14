@@ -5,14 +5,12 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('other', 'Other Utilities', 190)
 type(ui_program), target :: cif2pdb
-type(ui_program), target :: sigma2_convert
 
 contains
 
     subroutine construct_other_programs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call new_cif2pdb(prgtab)
-        call new_sigma2_convert(prgtab)
     end subroutine construct_other_programs
 
     subroutine new_cif2pdb( prgtab )
@@ -41,30 +39,5 @@ contains
         ! add to ui_hash
         call add_ui_program('cif2pdb', cif2pdb, prgtab, UI_CATEGORY)
     end subroutine new_cif2pdb
-
-    subroutine new_sigma2_convert( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call sigma2_convert%new(&
-        &'sigma2_convert',&
-        &'Import or export canonical sigma2 state explicitly',&
-        &'converts grouped STAR seeds into canonical state, or exports canonical groups to STAR',&
-        &'simple_exec',&
-        &.true., visibility=UI_VIS_DEVELOPER, display_name='Import or Export Sigma2 State')
-        call sigma2_convert%add_input(UI_PARM, 'sigma_action', 'multi', 'Conversion action', &
-        &'Conversion action(star_import|star_export)', '', .true., 'star_export', &
-        &choices=ui_choices([character(len=11) :: 'star_import', 'star_export']), &
-        &visibility=UI_VIS_STANDARD)
-        call sigma2_convert%add_input(UI_PARM, 'oritype', 'multi', 'Particle orientation field', &
-        &'Particle orientation field(ptcl2D|ptcl3D){ptcl3D}', '', .false., 'ptcl3D', &
-        &choices=ui_choices([character(len=6) :: 'ptcl2D', 'ptcl3D']), visibility=UI_VIS_DEVELOPER)
-        call sigma2_convert%add_input(UI_FILE, 'infile', 'file', 'Input path', &
-        &'Grouped STAR input', &
-        &'e.g. sigma2_groups.star', .false., '', visibility=UI_VIS_DEVELOPER)
-        call sigma2_convert%add_input(UI_FILE, 'outfile', 'file', 'Output path', &
-        &'Canonical state output for import, or STAR output for export', 'e.g. sigma2_state.bin', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call sigma2_convert%add_input(UI_SRCH, sigma_est, visibility=UI_VIS_DEVELOPER)
-        call add_ui_program('sigma2_convert', sigma2_convert, prgtab, UI_CATEGORY)
-    end subroutine new_sigma2_convert
 
 end module simple_ui_other

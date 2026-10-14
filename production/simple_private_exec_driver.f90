@@ -218,7 +218,7 @@ contains
         type(commander_refine3D_distr_worker)   :: xrefine3D_worker
         type(commander_calc_pspec)              :: xcalc_pspec
         type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
-        type(commander_calc_group_sigmas)       :: xcalc_group_sigmas
+        type(commander_commit_sigma2)       :: xcommit_sigma2
         type(commander_prob_tab)                :: xprob_tab
         type(commander_prob_tab_neigh)          :: xprob_tab_neigh
         type(commander_prob_align)              :: xprob_align
@@ -315,8 +315,8 @@ contains
                 call xcalc_pspec%execute(cline)
             case( 'calc_pspec_assemble' )
                 call xcalc_pspec_assemble%execute(cline)
-            case( 'calc_group_sigmas' )
-                call xcalc_group_sigmas%execute(cline)
+            case( 'commit_sigma2' )
+                call xcommit_sigma2%execute(cline)
             case( 'prob_tab' )
                 call xprob_tab%execute(cline)
             case( 'prob_tab_neigh' )

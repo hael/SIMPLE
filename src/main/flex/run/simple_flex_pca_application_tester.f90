@@ -421,7 +421,6 @@ contains
         call cline%set('maxits_pcg',        4)
         call cline%set('rtol',              0.0)
         call cline%set('objfun',            'euclid')
-        call cline%set('sigma_est',         'global')
         call cline%set('umap',              'no')
         call cline%set('cache',             'no')
         call cline%set('qsys_name',         'local')

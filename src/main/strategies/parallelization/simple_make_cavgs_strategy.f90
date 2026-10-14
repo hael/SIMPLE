@@ -216,6 +216,21 @@ contains
         endif
     end subroutine generate_cluster_centers
 
+    !> The canonical sigma2 state the ML-regularized restoration reads, through the one rebuild
+    !! entry; a rebuild registers it in the project file, so projinfo is re-read
+    subroutine ensure_canonical_sigma2(params, cline, spproj)
+        use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
+        use simple_sp_project,       only: sp_project
+        type(parameters), intent(in)    :: params
+        class(cmdline),   intent(in)    :: cline
+        type(sp_project), intent(inout) :: spproj
+        logical :: l_rebuilt
+        if( .not. params%l_ml_reg ) return
+        call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, 1, params%box, params%smpd, &
+            &'MAKE_CAVGS SIGMA2', l_rebuilt)
+        if( l_rebuilt ) call spproj%read_segment('projinfo', params%projfile)
+    end subroutine ensure_canonical_sigma2
+
     subroutine setup_evenodd(build)
         type(builder), intent(inout) :: build
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
@@ -302,6 +317,8 @@ contains
         call generate_cluster_centers(self%build, params, cline)
         call setup_evenodd(self%build)
         call write_oritype_segment_for_compute(self%build, params, l_shmem=.true.)
+        ! the rebuild reads the even/odd halves from the project file written above
+        call ensure_canonical_sigma2(params, cline, self%build%spproj)
         call cavger_prepare_and_assemble(params, self%build)
         ! ------------------------------------------
         ! ---- SHMEM TAIL (differs from worker) ----
@@ -414,6 +431,7 @@ contains
             params%ncls = ncls_here
         endif
         call print_raw_source_verification(params, build_tmp, 'MASTER')
+        call ensure_canonical_sigma2(params, cline, build_tmp%spproj)
         call cline%set('mkdir', 'no')  ! avoid nested dirs in workers
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)

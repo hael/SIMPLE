@@ -9,9 +9,10 @@ contains
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl
         real(dp) :: sumsqk
-        integer  :: i, ik
+        integer  :: i, ik, ih
         logical  :: l_sigma
         i       = self%pinds(iptcl)
+        ih      = merge(1, 2, self%iseven(i))
         l_sigma = associated(self%sigma2_noise)
         self%sqsums_ptcls(i)  = 0.d0
         self%ksqsums_ptcls(i) = 0.d0
@@ -22,28 +23,49 @@ contains
             sumsqk                = real(ik,dp) * sumsqk
             self%ksqsums_ptcls(i) = self%ksqsums_ptcls(i) + sumsqk
             self%kshell_sqsums_ptcls(ik,i) = sumsqk
-            if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
+            if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,ih),dp)
         enddo
     end subroutine memoize_sqsum_ptcl
 
-    !> particle self-term under the CURRENT sigma2.  wsqsums_ptcls may be
-    !! stale relative to per-iteration sigma2 updates; any normalization that
-    !! restores the residual via the "+1" identity must use this value or the
-    !! loss becomes unbounded below (and exp(-loss) scores exceed 1)
+    !> The Euclidean shell weights k/sigma2(k,half) of the two spectra the calculator points at, in single
+    !! and double precision (each kernel keeps the precision it always used), and the weighted self-terms of
+    !! the memoised particles under them. Called when the spectra are assigned and again whenever their
+    !! values change (prep_sigmas_objfun after read_global), so the self-term is never stale.
+    module subroutine memoize_sigma2_weights(self)
+        class(polarft_calc), intent(inout) :: self
+        integer :: i, ik, ih
+        if( allocated(self%sigma2_wk)  ) deallocate(self%sigma2_wk)
+        if( allocated(self%sigma2_wk8) ) deallocate(self%sigma2_wk8)
+        ! a calculator that has not been constructed (a pass that only reconstructs) has no kernels to serve
+        if( .not. self%existence .or. .not. associated(self%sigma2_noise) ) return
+        ! spectra not filled yet (euclid_sigma2 allocates them zeroed): the weights come with the values
+        if( any(self%sigma2_noise(self%kfromto(1):self%kfromto(2),:) <= 0.) ) return
+        allocate(self%sigma2_wk(self%kfromto(1):self%kfromto(2),2), self%sigma2_wk8(self%kfromto(1):self%kfromto(2),2))
+        do ih = 1, 2
+            do ik = self%kfromto(1), self%kfromto(2)
+                self%sigma2_wk(ik,ih)  = real(ik,sp) / self%sigma2_noise(ik,ih)
+                self%sigma2_wk8(ik,ih) = real(ik,dp) / real(self%sigma2_noise(ik,ih),dp)
+            enddo
+        enddo
+        ! the self-term exactly as memoize_sqsum_ptcl forms it, from the sigma2-independent shell sums
+        do i = 1, size(self%wsqsums_ptcls)
+            ih = merge(1, 2, self%iseven(i))
+            self%wsqsums_ptcls(i) = 0.d0
+            do ik = self%kfromto(1), self%kfromto(2)
+                self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + self%kshell_sqsums_ptcls(ik,i) / &
+                    &real(self%sigma2_noise(ik,ih),dp)
+            enddo
+        enddo
+    end subroutine memoize_sigma2_weights
+
+    !> The particle self-term under the current sigma2: memoised by memoize_sqsum_ptcl and refreshed by
+    !! memoize_sigma2_weights whenever the spectra change. Any normalisation that restores the residual via
+    !! the "+1" identity must use it, or the loss becomes unbounded below (and exp(-loss) scores exceed 1).
     module function wsqsum_ptcl_now(self, iptcl) result(wsq)
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl
         real(dp) :: wsq
-        integer  :: i, ik
-        i = self%pinds(iptcl)
-        if( .not. associated(self%sigma2_noise) )then
-            wsq = self%wsqsums_ptcls(i)
-            return
-        endif
-        wsq = 0.d0
-        do ik = self%kfromto(1), self%kfromto(2)
-            wsq = wsq + self%kshell_sqsums_ptcls(ik,i) / real(self%sigma2_noise(ik,iptcl),dp)
-        enddo
+        wsq = self%wsqsums_ptcls(self%pinds(iptcl))
     end function wsqsum_ptcl_now
 
     module subroutine memoize_ptcls(self)

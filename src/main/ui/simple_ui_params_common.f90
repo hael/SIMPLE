@@ -142,7 +142,6 @@ type(ui_param) :: score_states
 type(ui_param) :: skip_rejection
 type(ui_param) :: sherr
 type(ui_param) :: sigma
-type(ui_param) :: sigma_est
 type(ui_param) :: smpd
 type(ui_param) :: smpd_downscale
 type(ui_param) :: smpd_target
@@ -725,10 +724,6 @@ subroutine set_ui_params
     call sherr%set_param(          'sherr',           'num',    'Shift error half-width', &
                                    'Uniform rotational origin shift error half-width(in pixels)', &
                                    'shift error in pixels', .false., 0.)
-
-    call sigma_est%set_param(      'sigma_est',       'multi',  'Sigma estimation method', &
-                                   'Sigma estimation method(global|group){global}','', .false., 'global', &
-    &choices=ui_choices([character(len=6) :: 'global', 'group']))
 
     call smpd%set_param(           'smpd',            'num',    'Sampling distance', &
                                    'Distance between neighbouring pixels in Angstroms', &

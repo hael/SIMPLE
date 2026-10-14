@@ -67,13 +67,13 @@ project is built and before any refinement. Particle poses are not read.
 The route fixes:
 
 - `filt_mode=none`, `automsk=no`, `envfsc=no`, `combine_eo=no`
-- `objfun=euclid`, `sigma_est=global`
+- `objfun=euclid`
 - `trail_rec=no`, `balance=none`, `greedy_sampling=no`, `frac_best=1`
 - `lplim_crit=0.5`, `incrreslim=no`
 - `autoscale=yes` (the frequency planner owns downscaling)
 
 A different user value of `filt_mode`, `automsk`, `envfsc`, `combine_eo`,
-`trail_rec`, `objfun`, `sigma_est` or `pcg_solvent` is refused, and so are
+`trail_rec`, `objfun` or `pcg_solvent` is refused, and so are
 `m_estimator` other than `no`, `nsample`, `update_frac`, `cohort_sampling`,
 `trail_seed`, `pcg_mskfile`, `vol1..volN`, `multivol_mode` and
 `prob_neigh_mode`.
@@ -104,6 +104,11 @@ The work project:
   (`eo=0`) and rows `M+1..2M` the odd ones (`eo=1`);
 - takes the selection from the `cls2D` states and mirrors it into `ptcl2D`, so
   the rows of a deselected sub-average are inactive;
+- makes a row inactive when `cls2D` flags its half with state 0
+  (`state_even`, `state_odd`; absent means active), and a sub-average with one
+  active row takes that row (section 8). `cls_expansion` writes the flags: 0
+  for a sub-class half without members, whose average is only the class's half
+  mean, 1 otherwise;
 - owns a transient canonical sigma2 state,
   `refine3D_states_cavgs_sigma2_state.bin`, and never inherits the input
   project's;
@@ -147,8 +152,10 @@ hard labels. The number of states flex delivers becomes the run's `nstates`.
 
 When the selected sub-averages carry two or more populated `cls3D` labels, flex
 is skipped. The labels are numbered consecutively (an empty label is dropped),
-copied to both rows of each sub-class, and the startup state maps are
-reconstructed from them.
+copied to the active rows of each sub-class (a half flagged with state 0 stays
+inactive), and the startup state maps are reconstructed from them. Flex's
+preflight counts the active rows the same way, so a flagged half never counts
+towards a fit.
 
 ## 7. Frequency March
 

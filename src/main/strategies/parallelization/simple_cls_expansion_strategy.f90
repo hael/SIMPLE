@@ -400,8 +400,9 @@ contains
         logical,          intent(in)    :: l_write_project
         type(string)             :: map_fname, assign_fname, frc_fname, stk_fname, stk_even, stk_odd
         type(image), allocatable :: cavgs(:), cavgs_even(:), cavgs_odd(:)
-        integer,     allocatable :: cls_inds(:), cls_pops(:), nsub(:), pinds(:), labels(:)
+        integer,     allocatable :: cls_inds(:), cls_pops(:), nsub(:), pinds(:), labels(:), half_pops(:,:)
         integer,     allocatable :: new_class(:), new_parent(:), parent_of_subcls(:), pop_of_subcls(:)
+        integer,     allocatable :: pop_even_of_subcls(:), pop_odd_of_subcls(:)
         real,        allocatable :: repro(:), frcs(:,:), neff_of_subcls(:), sep_of_subcls(:), repro_of_subcls(:)
         real    :: separation
         integer :: i, iglob, ntot_sub, funit_map, funit_assign, funit_frc, kfit
@@ -426,6 +427,7 @@ contains
             stk_odd   = string(FLEX_CLS_CAVGS_ODD)
             allocate(new_class(spproj%os_ptcl2D%get_noris()), new_parent(spproj%os_ptcl2D%get_noris()), source=0)
             allocate(parent_of_subcls(ntot_sub), pop_of_subcls(ntot_sub), source=0)
+            allocate(pop_even_of_subcls(ntot_sub), pop_odd_of_subcls(ntot_sub), source=0)
             allocate(neff_of_subcls(ntot_sub), sep_of_subcls(ntot_sub), repro_of_subcls(ntot_sub), source=0.)
         else
             map_fname    = string('cls_expansion_class_map_part')//int2str_pad(part, params%numlen)//TXT_EXT
@@ -439,7 +441,7 @@ contains
         endif
         ! in a part the subclass column is the part's row (map, FRCs)
         open(newunit=funit_map, file=map_fname%to_char(), status='replace', action='write')
-        write(funit_map,'(A)') '# subclass parent_class local_subclass pop neff separation repro'
+        write(funit_map,'(A)') '# subclass parent_class local_subclass pop neff separation repro pop_even pop_odd'
         open(newunit=funit_frc, file=frc_fname%to_char(), status='replace', action='write')
         if( l_write_project )then
             write(funit_frc,'(A)') '# row frc(1:nyq): even/odd FRC of the conditional average (row: global)'
@@ -452,9 +454,10 @@ contains
                 &' nsub=', nsub(i)
             call flush(logfhandle)
             call split_class_flex(params, build, spproj, cls_inds(i), nsub(i), params%neigs, kfit, l_sigma, &
-                &pinds, labels, cavgs, separation, repro, cavgs_even, cavgs_odd, frcs)
+                &pinds, labels, cavgs, separation, repro, cavgs_even, cavgs_odd, frcs, half_pops)
             call record_class(cls_inds(i), nsub(i), pinds, labels, cavgs, separation, repro, cavgs_even, cavgs_odd)
             if( allocated(pinds)      ) deallocate(pinds)
+            if( allocated(half_pops)  ) deallocate(half_pops)
             if( allocated(repro)      ) deallocate(repro)
             if( allocated(labels)     ) deallocate(labels)
             if( allocated(frcs)       ) deallocate(frcs)
@@ -469,8 +472,9 @@ contains
             if( iglob /= ntot_sub ) THROW_HARD('cls_expansion: the delivered subclasses differ from the budget')
             call flex_frcs_txt2bin(params, [frc_fname], iglob)
             call apply_split_project_updates(spproj, params, iglob, new_class, new_parent, parent_of_subcls, pop_of_subcls, &
-                &neff_of_subcls, sep_of_subcls, repro_of_subcls, stk_fname)
-            deallocate(new_class, new_parent, parent_of_subcls, pop_of_subcls, neff_of_subcls, sep_of_subcls, repro_of_subcls)
+                &neff_of_subcls, sep_of_subcls, repro_of_subcls, pop_even_of_subcls, pop_odd_of_subcls, stk_fname)
+            deallocate(new_class, new_parent, parent_of_subcls, pop_of_subcls, neff_of_subcls, sep_of_subcls, repro_of_subcls, &
+                &pop_even_of_subcls, pop_odd_of_subcls)
         endif
         call map_fname%kill
         call frc_fname%kill
@@ -501,9 +505,11 @@ contains
                     neff_of_subcls(iglob)   = real(count(labels == j))
                     sep_of_subcls(iglob)    = separation
                     repro_of_subcls(iglob)  = repro(j)
+                    pop_even_of_subcls(iglob) = half_pops(1,j)
+                    pop_odd_of_subcls(iglob)  = half_pops(2,j)
                 endif
-                write(funit_map,'(I8,1X,I8,1X,I8,1X,I8,1X,F12.3,1X,F8.3,1X,F8.3)') iglob, cls_id, j, count(labels == j), &
-                    &real(count(labels == j)), separation, repro(j)
+                write(funit_map,'(I8,1X,I8,1X,I8,1X,I8,1X,F12.3,1X,F8.3,1X,F8.3,2(1X,I8))') iglob, cls_id, j, &
+                    &count(labels == j), real(count(labels == j)), separation, repro(j), half_pops(1,j), half_pops(2,j)
                 write(funit_frc,'(I8,*(1X,F8.5))') iglob, frcs(:,j)
                 ! the sub-class average lands at its row: global index here, local row in a part
                 call cavgs(j)%write(stk_fname, iglob)
@@ -631,45 +637,27 @@ contains
         kfit   = max(2, min(nyq, calc_fourier_index(lp_fit, params%box, params%smpd)))
     end function flex_fit_band
 
-    !> the canonical sigma2 spectra of every particle, loaded over the whole particle field
+    !> the two canonical sigma2 spectra (one per even/odd half)
     subroutine prepare_flex_sigma2( params, build, spproj, cline, loaded )
-        use simple_sigma2_files, only: canonical_sigma2_consumable, load_sigma2_groups
+        use simple_sigma2_files, only: canonical_sigma2_consumable, load_sigma2
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         type(sp_project), intent(inout) :: spproj
         class(cmdline),   intent(inout) :: cline
         logical,          intent(out)   :: loaded
         character(len=STDLEN) :: message
-        integer :: fromp_bak, top_bak
         loaded = .false.
         if( params%cc_objfun /= OBJFUN_EUCLID )then
             write(logfhandle,'(A)') 'Cls expansion flex: objfun=cc, the covariance fit uses unit noise weights'
             return
         endif
-        if( .not. canonical_sigma2_consumable(spproj, spproj%os_ptcl2D, params%box, params%smpd, params%l_sigma_glob, message) )then
-            ! either grouping policy's spectrum serves as the noise weight
-            if( canonical_sigma2_consumable(spproj, spproj%os_ptcl2D, params%box, params%smpd, .not. params%l_sigma_glob, message) )then
-                params%l_sigma_glob = .not. params%l_sigma_glob
-                if( params%l_sigma_glob )then
-                    params%sigma_est = 'global'
-                else
-                    params%sigma_est = 'group'
-                endif
-                write(logfhandle,'(A)') 'Cls expansion flex: canonical sigma2 state found under sigma_est='//trim(params%sigma_est)
-            else
-                write(logfhandle,'(A)') 'Cls expansion flex WARNING: no consumable canonical sigma2 state ('//trim(message)// &
-                    &'); the covariance fit uses the class residual spectrum as noise weights. Run calc_pspec &
-                    &(or a euclid 2D/3D pass) on the project first.'
-                return
-            endif
+        if( .not. canonical_sigma2_consumable(spproj, spproj%os_ptcl2D, params%box, params%smpd, message) )then
+            write(logfhandle,'(A)') 'Cls expansion flex WARNING: no consumable canonical sigma2 state ('//trim(message)// &
+                &'); the covariance fit uses the class residual spectrum as noise weights. Run calc_pspec &
+                &(or a euclid 2D/3D pass) on the project first.'
+            return
         endif
-        fromp_bak = params%fromp
-        top_bak   = params%top
-        params%fromp = 1
-        params%top   = spproj%os_ptcl2D%get_noris()
-        call load_sigma2_groups(params, build%pftc, build%esig, spproj, spproj%os_ptcl2D, loaded)
-        params%fromp = fromp_bak
-        params%top   = top_bak
+        call load_sigma2(params, build%pftc, build%esig, spproj, spproj%os_ptcl2D, loaded)
     end subroutine prepare_flex_sigma2
 
     !> the members of one class as Fourier planes in the class frame (inscribed-circle mask) with their CTF, half-plane
@@ -677,6 +665,7 @@ contains
     subroutine flex_class_planes( params, build, spproj, cls_id, kfit, l_sigma, pinds, y, c, w, wq, &
                                   hidx, kidx, shell, fitmask, gridcorr_img, ldim, ncoeff, nptcls )
         use simple_flex_cls_expansion,  only: flex_cls_shell_noise
+        use simple_euclid_sigma2,       only: sigma2_half
         use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps, ft_map_lims, ft_map_phys_addrh, ft_map_phys_addrk
         use simple_ctf,             only: ctf
         type(parameters),         intent(inout) :: params
@@ -696,7 +685,7 @@ contains
         type(ctfvars)        :: ctfvals
         real(sp),    allocatable :: s2(:)
         real    :: mat(2,2), loc(2), sfsq, ang, df, tval, e3, sum_df, diff_df, angast, phshift, amp_contr, wl, half_wl2_cs
-        integer :: lims(3,2), nyq, i, j, h, k, sh, iptcl
+        integer :: lims(3,2), nyq, i, j, h, k, sh, iptcl, ih
         logical :: l_ctf, l_flip
         integer, allocatable :: members(:)
         nptcls = 0
@@ -763,10 +752,14 @@ contains
                 THROW_HARD('UNSUPPORTED CTF FLAG; flex_class_planes')
         end select
         !$omp parallel do default(shared) schedule(static) proc_bind(close) &
-        !$omp private(i,j,iptcl,e3,mat,loc,sfsq,ang,df,tval,ctfparms,tfun,ctfvals,sum_df,diff_df,angast,phshift,amp_contr,wl,half_wl2_cs)
+        !$omp private(i,j,iptcl,ih,e3,mat,loc,sfsq,ang,df,tval,ctfparms,tfun,ctfvals,sum_df,diff_df,angast,phshift,amp_contr,wl,&
+        !$omp half_wl2_cs)
         do i = 1, nptcls
             iptcl = pinds(i)
             e3    = spproj%os_ptcl2D%e3get(iptcl)
+            ! the column of the member's even/odd half in the two global spectra
+            ih    = 1
+            if( l_sigma ) ih = sigma2_half(spproj%os_ptcl2D%get_eo(iptcl))
             ! the CTF at the particle-frame location of the class-frame coefficient
             call rotmat2d(-e3, mat)
             if( l_ctf )then
@@ -796,7 +789,7 @@ contains
                     c(j,i) = 1.
                 endif
                 if( l_sigma )then
-                    w(j,i) = 1. / max(build%esig%sigma2_noise(shell(j), iptcl), TINY)
+                    w(j,i) = 1. / max(build%esig%sigma2_noise(shell(j), ih), TINY)
                 else
                     w(j,i) = 1.
                 endif
@@ -1057,7 +1050,7 @@ contains
     !! parent (with the half parents and the same filter); otherwise the bands (data-derived without lp=), the model,
     !! placement and the conditional averages of its nsub subclasses
     subroutine split_class_flex( params, build, spproj, cls_id, nsub, ncomp, kfit, l_sigma, pinds, labels, cavgs, &
-                                 separation, repro, cavgs_even, cavgs_odd, frcs )
+                                 separation, repro, cavgs_even, cavgs_odd, frcs, half_pops )
         use simple_flex_cls_expansion,  only: flex_cls_model, flex_cls_fit, flex_cls_half_frc, flex_cls_frc_cutoff, &
             &flex_cls_extend_basis, flex_cls_weighted_mean, flex_cls_pose_tangents, flex_cls_split_floor
         use simple_rnd,             only: seed_rnd_fixed
@@ -1072,6 +1065,7 @@ contains
         real,        allocatable, intent(out)   :: repro(:)
         type(image), allocatable, intent(inout) :: cavgs_even(:), cavgs_odd(:)
         real,        allocatable, intent(inout) :: frcs(:,:)
+        integer,     allocatable, intent(out)   :: half_pops(:,:) !< (2,nsub) members of each subclass in the even, odd half
         type(image)          :: gridcorr_img
         type(flex_cls_model) :: model
         complex(sp), allocatable :: y(:,:)
@@ -1104,6 +1098,12 @@ contains
                 &gridcorr_img, ldim, nptcls, labels, cavgs, cavgs_even, cavgs_odd, frcs, separation, repro)
             call model%kill
         endif
+        ! a subclass half without members is delivered inactive (state 0 in cls2D)
+        allocate(half_pops(2,nsub))
+        do j = 1, nsub
+            half_pops(1,j) = count(labels == j .and. even)
+            half_pops(2,j) = count(labels == j .and. .not. even)
+        end do
         call gridcorr_img%kill
         deallocate(y, c, w, wq, hidx, kidx, shell, fitmask, even)
 
@@ -1220,7 +1220,8 @@ contains
     !> the split into the project: hard subclass and parent per particle, one cls2D/cls3D row per subclass with its
     !! readouts, the sub-class average stack and its FRCs (frc2D)
     subroutine apply_split_project_updates(spproj, params, nsplit, new_class, new_parent, parent_of_subcls, pop_of_subcls, &
-                                           neff_of_subcls, sep_of_subcls, repro_of_subcls, cavgs_stk)
+                                           neff_of_subcls, sep_of_subcls, repro_of_subcls, pop_even_of_subcls, &
+                                           pop_odd_of_subcls, cavgs_stk)
         type(sp_project), intent(inout) :: spproj
         type(parameters), intent(inout) :: params
         integer,          intent(in)    :: nsplit
@@ -1229,6 +1230,7 @@ contains
         real,             intent(in)    :: neff_of_subcls(:)  !< the hard population
         real,             intent(in)    :: sep_of_subcls(:)   !< Ashman's D of the parent's split (same for its subclasses)
         real,             intent(in)    :: repro_of_subcls(:) !< cross-half reproducibility of the subclass difference
+        integer,          intent(in)    :: pop_even_of_subcls(:), pop_odd_of_subcls(:) !< members in the even, odd half
         type(string),     intent(in)    :: cavgs_stk          !< the sub-class average stack to register
         integer :: i
         call spproj%os_ptcl2D%set_all2single('class',   0)
@@ -1248,6 +1250,9 @@ contains
             call spproj%os_cls2D%set(i, 'neff',    neff_of_subcls(i))
             call spproj%os_cls2D%set(i, 'sep',     sep_of_subcls(i))
             call spproj%os_cls2D%set(i, 'repro',   repro_of_subcls(i))
+            ! a half without members is inactive: its average carries no member of the subclass
+            call spproj%os_cls2D%set(i, 'state_even', merge(1, 0, pop_even_of_subcls(i) > 0))
+            call spproj%os_cls2D%set(i, 'state_odd',  merge(1, 0, pop_odd_of_subcls(i)  > 0))
             call spproj%os_cls3D%set(i, 'cluster', parent_of_subcls(i))
             call spproj%os_cls3D%set(i, 'accept',  1)
             call spproj%os_cls3D%set(i, 'state',   1)
@@ -1265,6 +1270,7 @@ contains
         type(sp_project) :: spproj
         integer, allocatable :: part_counts(:), part_parent(:,:), part_local(:,:), part_pop(:,:), part_global(:,:)
         real,    allocatable :: part_neff(:,:), part_sep(:,:), part_repro(:,:)
+        integer, allocatable :: part_pop_even(:,:), part_pop_odd(:,:), pop_even(:), pop_odd(:)
         integer, allocatable :: comb_part(:), comb_row(:), comb_parent(:), comb_local(:), comb_pop(:)
         integer, allocatable :: new_class(:), new_parent(:), first_glob(:), nsub_of(:)
         real,    allocatable :: neff(:), sep(:), repro(:)
@@ -1289,12 +1295,13 @@ contains
         allocate(part_parent(max_count, nparts_run), part_local(max_count, nparts_run), part_pop(max_count, nparts_run), &
                  part_global(max_count, nparts_run), source=0)
         allocate(part_neff(max_count, nparts_run), part_sep(max_count, nparts_run), part_repro(max_count, nparts_run), source=0.)
+        allocate(part_pop_even(max_count, nparts_run), part_pop_odd(max_count, nparts_run), source=0)
         allocate(comb_part(total), comb_row(total), comb_parent(total), comb_local(total), comb_pop(total), source=0)
         idx = 0
         do ipart = 1, nparts_run
             map_fname = string('cls_expansion_class_map_part')//int2str_pad(ipart, params%numlen)//TXT_EXT
             call read_part_map(map_fname, part_counts(ipart), part_parent(:,ipart), part_local(:,ipart), part_pop(:,ipart), &
-                &part_neff(:,ipart), part_sep(:,ipart), part_repro(:,ipart))
+                &part_neff(:,ipart), part_sep(:,ipart), part_repro(:,ipart), part_pop_even(:,ipart), part_pop_odd(:,ipart))
             do i = 1, part_counts(ipart)
                 idx = idx + 1
                 comb_part(idx)   = ipart
@@ -1309,6 +1316,7 @@ contains
         ! a parent's subclasses are consecutive: global = first_glob(parent) + local - 1
         allocate(first_glob(maxval(comb_parent)), nsub_of(maxval(comb_parent)), source=0)
         allocate(neff(total), sep(total), repro(total), source=0.)
+        allocate(pop_even(total), pop_odd(total), source=0)
         do idx = 1, total
             if( idx > 1 )then
                 if( comb_parent(idx) == comb_parent(idx-1) .and. comb_local(idx) == comb_local(idx-1) )then
@@ -1325,13 +1333,15 @@ contains
             neff(idx)  = part_neff(comb_row(idx), comb_part(idx))
             sep(idx)   = part_sep(comb_row(idx), comb_part(idx))
             repro(idx) = part_repro(comb_row(idx), comb_part(idx))
+            pop_even(idx) = part_pop_even(comb_row(idx), comb_part(idx))
+            pop_odd(idx)  = part_pop_odd(comb_row(idx), comb_part(idx))
         end do
         map_fname = string(FLEX_CLS_MAP_FILE)
         open(newunit=funit, file=map_fname%to_char(), status='replace', action='write')
-        write(funit,'(A)') '# subclass parent_class local_subclass pop neff separation repro'
+        write(funit,'(A)') '# subclass parent_class local_subclass pop neff separation repro pop_even pop_odd'
         do idx = 1, total
-            write(funit,'(I8,1X,I8,1X,I8,1X,I8,1X,F12.3,1X,F8.3,1X,F8.3)') idx, comb_parent(idx), comb_local(idx), &
-                &comb_pop(idx), neff(idx), sep(idx), repro(idx)
+            write(funit,'(I8,1X,I8,1X,I8,1X,I8,1X,F12.3,1X,F8.3,1X,F8.3,2(1X,I8))') idx, comb_parent(idx), comb_local(idx), &
+                &comb_pop(idx), neff(idx), sep(idx), repro(idx), pop_even(idx), pop_odd(idx)
         end do
         close(funit)
         call map_fname%kill
@@ -1364,10 +1374,11 @@ contains
         call frc_fnames(:)%kill
         deallocate(frc_fnames)
         call apply_split_project_updates(spproj, params, total, new_class, new_parent, comb_parent, comb_pop, &
-            &neff, sep, repro, string(FLEX_CLS_CAVGS_FILE))
+            &neff, sep, repro, pop_even, pop_odd, string(FLEX_CLS_CAVGS_FILE))
         call spproj%kill
         deallocate(new_class, new_parent, part_counts, part_parent, part_local, part_pop, part_global, part_neff, part_sep, &
-                   part_repro, comb_part, comb_row, comb_parent, comb_local, comb_pop, first_glob, nsub_of, neff, sep, repro)
+                   part_repro, comb_part, comb_row, comb_parent, comb_local, comb_pop, first_glob, nsub_of, neff, sep, repro, &
+                   part_pop_even, part_pop_odd, pop_even, pop_odd)
 
     contains
 
@@ -1434,10 +1445,10 @@ contains
         close(funit)
     end subroutine count_data_lines
 
-    subroutine read_part_map(fname, nrows, parents, locals, pops, neffs, seps, repros)
+    subroutine read_part_map(fname, nrows, parents, locals, pops, neffs, seps, repros, pops_even, pops_odd)
         type(string), intent(in)  :: fname
         integer,      intent(in)  :: nrows
-        integer,      intent(out) :: parents(:), locals(:), pops(:)
+        integer,      intent(out) :: parents(:), locals(:), pops(:), pops_even(:), pops_odd(:)
         real,         intent(out) :: neffs(:), seps(:), repros(:)
         integer :: funit, ios, irow, row
         character(len=XLONGSTRLEN) :: line
@@ -1451,7 +1462,8 @@ contains
             if( line(1:1) == '#' ) cycle
             irow = irow + 1
             if( irow > nrows ) exit
-            read(line,*) row, parents(irow), locals(irow), pops(irow), neffs(irow), seps(irow), repros(irow)
+            read(line,*) row, parents(irow), locals(irow), pops(irow), neffs(irow), seps(irow), repros(irow), &
+                &pops_even(irow), pops_odd(irow)
         end do
         close(funit)
     end subroutine read_part_map

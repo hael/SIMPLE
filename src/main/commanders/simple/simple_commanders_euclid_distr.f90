@@ -3,14 +3,13 @@ module simple_commanders_euclid_distr
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64, real32
 use simple_commanders_api
-use simple_sigma2_binfile, only: sigma2_binfile
 use simple_ptcl_layout, only: ptcl_layout_digest
-use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_commit, &
-    &sigma2_state_reduce_groups
+use simple_sigma2_pspec_sums, only: pspec_part_sums_fname, read_pspec_part_sums, bootstrap_seed_spectra, sum_valid_records
+use simple_sigma2_state, only: sigma2_state_candidate_path
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_create_candidate, &
     &sigma2_state_init_header, sigma2_state_read_header, sigma2_state_read_particles, &
-    &sigma2_state_write_particles, sigma2_state_validate_file, &
-    &SIGMA2_GROUP_GLOBAL, SIGMA2_GROUP_STACK, SIGMA2_PROV_PSPEC, SIGMA2_STATE_FNAME
+    &sigma2_state_write_particles, sigma2_state_write_global, sigma2_state_validate_file, &
+    &sigma2_state_publish, SIGMA2_PROV_PSPEC, SIGMA2_STATE_FNAME
 implicit none
 #include "simple_local_flags.inc"
 
@@ -27,19 +26,19 @@ contains
         type(parameters)                 :: params
         type(image)                      :: avg_img
         type(builder)                    :: build
-        type(sigma2_binfile)             :: binfile
         type(sigma2_state_header)        :: state_header, previous_header
         type(string)                     :: part_fname
         type(string)                     :: state_path,candidate_path
         integer(int64)                   :: generation,layout_digest,prefix_digest
-        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nstks,nyq,pspec_l,pspec_u
-        integer                          :: prefix_first,prefix_last
-        integer                          :: state_status
-        real(dp),          allocatable   :: bootstrap_pspecs(:,:)
-        real,              allocatable   :: pspec_ave(:),sigma2_part(:,:),sigma2_output(:,:)
-        real(real32),      allocatable   :: prefix_spectra(:,:)
-        integer,           allocatable   :: bootstrap_weights(:),eo_ids(:),group_ids(:)
-        logical,           allocatable   :: pspec_covered(:),active(:)
+        integer(int64)                   :: global_counts(2), ninvalid
+        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,nyq,pspec_l,pspec_u
+        integer                          :: first_row,last_row,nprefix,nshell,half,i
+        integer                          :: state_status, nactive(2), part_nimgs, nimgs
+        real(dp),          allocatable   :: seeds(:,:), half_sums(:,:), part_sums(:,:), global_sums(:,:)
+        real,              allocatable   :: pspec_ave(:)
+        real(real32),      allocatable   :: block(:,:), seed_records(:,:), global_means(:,:)
+        integer,           allocatable   :: eo_ids(:)
+        logical,           allocatable   :: pspec_covered(:), active(:)
         logical                          :: state_path_found, preserve_prefix
         character(len=STDLEN)            :: state_message
         call cline%set('mkdir', 'no')
@@ -49,11 +48,10 @@ contains
         ! set Fourier index range
         params%kfromto(1) = 1
         params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%box, params%smpd)
-        ! generate average power spectrum for global sigma bootstrapping
+        ! the partitions' Fourier sums of the sampled images, for the average image
         nptcls     = build%spproj_field%get_noris(consider_state=.false.)
         nptcls_sel = build%spproj_field%count_state_gt_zero()
         if( nptcls_sel < 1 ) THROW_HARD('No active particles found; exec_calc_pspec_assemble')
-        nyq = build%img%get_nyq()
         call avg_img%new([params%box,params%box,1], params%smpd)
         call avg_img%zero_and_flag_ft
         do ipart = 1,params%nparts
@@ -63,39 +61,17 @@ contains
             call avg_img%add(build%img)
             call del_file(part_fname)
         enddo
-        call avg_img%div(real(nptcls_sel))
-        ! calculate power spectrum
-        call avg_img%spectrum('power',pspec_ave,norm=.true.)
-        pspec_ave = pspec_ave / 2.0
         nyq = avg_img%get_nyq()
-        call avg_img%kill
-        ! Bootstrap once from a global E/O sample. The resulting curves are
-        ! replicated into the requested group layout; matcher residual updates
-        ! establish group-specific spectra after the first search pass.
-        if( params%l_sigma_glob )then
-            ngroups = 1
-        else
-            nstks   = build%spproj%get_nstks()
-            ngroups = 0
-            do iptcl = 1,nptcls
-                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                igroup  = build%spproj_field%get_int(iptcl,'stkind')
-                if( igroup < 1 .or. igroup > nstks )then
-                    write(logfhandle,*) 'iptcl/stkind/nstks: ', iptcl, igroup, nstks
-                    THROW_HARD('commander_euclid; exec_calc_pspec_assemble; particle stkind out of range')
-                endif
-                ngroups = max(igroup,ngroups)
-            enddo
-        endif
-        allocate(bootstrap_pspecs(2,nyq), source=0.d0)
-        allocate(bootstrap_weights(2), source=0)
+        ! the partitions' per-half sums of the sampled spectra, over the particle ranges they cover, and the number
+        ! of images their Fourier sums hold
+        allocate(half_sums(nyq,2), source=0.d0)
         allocate(pspec_covered(params%nptcls), source=.false.)
+        nimgs = 0
         do ipart = 1,params%nparts
-            part_fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
-            call binfile%new_from_file(part_fname)
-            call binfile%read(sigma2_part)
-            pspec_l = lbound(sigma2_part,2)
-            pspec_u = ubound(sigma2_part,2)
+            part_fname = pspec_part_sums_fname(ipart)
+            call read_pspec_part_sums(part_fname%to_char(), nyq, pspec_l, pspec_u, part_nimgs, part_sums, &
+                &state_status, state_message)
+            if( state_status /= 0 ) THROW_HARD(trim(state_message))
             if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
                 write(logfhandle,*) 'file/ptcl range/nptcls: ', part_fname%to_char(), pspec_l, pspec_u, params%nptcls
                 THROW_HARD('commander_euclid; exec_calc_pspec_assemble; invalid particle spectra range')
@@ -104,35 +80,31 @@ contains
                 THROW_HARD('commander_euclid; exec_calc_pspec_assemble; overlapping particle spectra ranges')
             endif
             pspec_covered(pspec_l:pspec_u) = .true.
-            do iptcl = pspec_l,pspec_u
-                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                eo = build%spproj_field%get_eo(iptcl) ! 0/1
-                if( .not.all(ieee_is_finite(sigma2_part(:,iptcl)) ) )then
-                    write(logfhandle,*) 'iptcl/eo: ', iptcl, eo
-                    write(logfhandle,*) 'finite: ', all(ieee_is_finite(sigma2_part(:,iptcl)))
-                    THROW_HARD('active particle sigma spectrum was not computed; exec_calc_pspec_assemble')
-                endif
-                bootstrap_pspecs(eo+1,:) = bootstrap_pspecs(eo+1,:) + real(sigma2_part(:, iptcl),dp)
-                bootstrap_weights(eo+1)  = bootstrap_weights(eo+1) + 1
-            end do
-            deallocate(sigma2_part)
+            if( .not. all(ieee_is_finite(part_sums)) ) THROW_HARD('a partition sum of sampled spectra is not finite; exec_calc_pspec_assemble')
+            half_sums = half_sums + part_sums
+            nimgs     = nimgs + part_nimgs
+            deallocate(part_sums)
         end do
+        ! the average image is the mean of the images summed (sampled, with a valid spectrum); with none, the
+        ! sum stays zero and so does its power
+        if( nimgs > 0 ) call avg_img%div(real(nimgs))
+        call avg_img%spectrum('power',pspec_ave,norm=.true.)
+        pspec_ave = pspec_ave / 2.0
+        call avg_img%kill
+        ! every active particle is covered; the halves' sizes are those of the project's active set
+        nactive = 0
         do iptcl = 1,nptcls
             if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
             if( .not.pspec_covered(iptcl) )then
                 write(logfhandle,*) 'iptcl: ', iptcl
                 THROW_HARD('active particle sigma spectrum was not covered; exec_calc_pspec_assemble')
             endif
+            eo = build%spproj_field%get_eo(iptcl)
+            if( eo < 0 .or. eo > 1 ) THROW_HARD('active particle has invalid even/odd assignment; exec_calc_pspec_assemble')
+            nactive(eo+1) = nactive(eo+1) + 1
         enddo
-        do eo = 1,2
-            if( bootstrap_weights(eo) > 0 )then
-                bootstrap_pspecs(eo,:) = bootstrap_pspecs(eo,:) / real(bootstrap_weights(eo),dp)
-                bootstrap_pspecs(eo,:) = bootstrap_pspecs(eo,:) - real(pspec_ave(:),dp)
-                call remove_negative_sigmas(eo)
-            else
-                bootstrap_pspecs(eo,:) = 1.d0
-            endif
-        enddo
+        allocate(seeds(nyq,2))
+        call bootstrap_seed_spectra(half_sums, nactive, pspec_ave, seeds)
         if( trim(params%oritype) /= 'ptcl2D' .and. trim(params%oritype) /= 'ptcl3D' ) &
             &THROW_HARD('canonical sigma2 bootstrap requires a particle orientation field')
         call build%spproj%get_sigma2_state_path(state_path, state_path_found)
@@ -165,123 +137,83 @@ contains
         endif
         layout_digest = ptcl_layout_digest(build%spproj, build%spproj_field)
         if( layout_digest == 0_int64 ) THROW_HARD('cannot derive canonical sigma2 particle layout identity')
-        if( params%l_sigma_glob )then
-            call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &
-                &nptcls, params%box, params%smpd, ngroups, SIGMA2_GROUP_GLOBAL, generation, &
-                &layout_digest, SIGMA2_PROV_PSPEC)
-        else
-            call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &
-                &nptcls, params%box, params%smpd, ngroups, SIGMA2_GROUP_STACK, generation, &
-                &layout_digest, SIGMA2_PROV_PSPEC)
-        endif
+        ! one global spectrum per half, bootstrapped from a global even/odd sample
+        call sigma2_state_init_header(state_header, params%kfromto(1), params%kfromto(2), &
+            &nptcls, params%box, params%smpd, generation, &
+            &layout_digest, SIGMA2_PROV_PSPEC)
         candidate_path = sigma2_state_candidate_path(state_path%to_char(), generation)
         call sigma2_state_create_candidate(candidate_path%to_char(), state_header, state_status, state_message)
         if( state_status /= 0 ) THROW_HARD(trim(state_message))
-        allocate(active(nptcls), eo_ids(nptcls), group_ids(nptcls))
-        do iptcl = 1, nptcls
-            active(iptcl)    = build%spproj_field%get_state(iptcl) > 0
-            eo_ids(iptcl)    = build%spproj_field%get_eo(iptcl)
-            group_ids(iptcl) = build%spproj_field%get_int(iptcl, 'stkind')
+        ! the records in blocks: the retained committed prefix, then every active row of a half with its seed (the
+        ! inactive rows stay zero); the global spectra are the means of the valid active records, summed while
+        ! written, in row order as a reduction would read them
+        nshell = params%kfromto(2) - params%kfromto(1) + 1
+        allocate(seed_records(nshell,2))
+        do half = 1, 2
+            seed_records(:,half) = real(seeds(params%kfromto(1):params%kfromto(2),half), real32)
+            if( .not.(all(ieee_is_finite(seed_records(:,half))) .and. all(seed_records(:,half) > 0.0_real32)) ) &
+                &THROW_HARD('the bootstrap seed spectrum is not finite and positive; exec_calc_pspec_assemble')
         enddo
-        ! write updated sigmas to disc, one partition at a time
-        do ipart = 1,params%nparts
-            part_fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
-            call binfile%new_from_file(part_fname)
-            call binfile%read(sigma2_part)
-            pspec_l = lbound(sigma2_part,2)
-            pspec_u = ubound(sigma2_part,2)
-            if( allocated(sigma2_output) ) deallocate(sigma2_output)
-            allocate(sigma2_output(params%kfromto(1):params%kfromto(2),pspec_l:pspec_u))
-            sigma2_output = sigma2_part(params%kfromto(1):params%kfromto(2),pspec_l:pspec_u)
-            do iptcl = pspec_l, pspec_u
-                if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
-                eo = build%spproj_field%get_eo(iptcl) ! 0/1
-                sigma2_output(params%kfromto(1):params%kfromto(2),iptcl) =&
-                    &real(bootstrap_pspecs(eo+1,params%kfromto(1):params%kfromto(2)))
-            end do
-            call sigma2_state_write_particles(candidate_path%to_char(), pspec_l, &
-                &real(sigma2_output,real32), state_status, state_message)
+        allocate(active(nptcls), eo_ids(nptcls))
+        do iptcl = 1, nptcls
+            active(iptcl) = build%spproj_field%get_state(iptcl) > 0
+            eo_ids(iptcl) = build%spproj_field%get_eo(iptcl)
+        enddo
+        allocate(global_sums(nshell,2), source=0.d0)
+        global_counts = 0_int64
+        ninvalid      = 0_int64
+        nprefix       = 0
+        if( preserve_prefix ) nprefix = int(previous_header%nptcls)
+        do first_row = 1, nprefix, 4096
+            last_row = min(first_row+4095, nprefix)
+            call sigma2_state_read_particles(state_path%to_char(), first_row, last_row, &
+                &block, state_status, state_message)
             if( state_status /= 0 ) THROW_HARD(trim(state_message))
-            call del_file(part_fname)
-            deallocate(sigma2_part)
-        end do
-        if( preserve_prefix )then
-            do prefix_first = 1, int(previous_header%nptcls), 4096
-                prefix_last = min(prefix_first+4095, int(previous_header%nptcls))
-                call sigma2_state_read_particles(state_path%to_char(), prefix_first, prefix_last, &
-                    &prefix_spectra, state_status, state_message)
-                if( state_status /= 0 ) THROW_HARD(trim(state_message))
-                call sigma2_state_write_particles(candidate_path%to_char(), prefix_first, &
-                    &prefix_spectra, state_status, state_message)
-                if( state_status /= 0 ) THROW_HARD(trim(state_message))
-                deallocate(prefix_spectra)
+            call sum_valid_records(block, first_row, active, eo_ids, global_sums, global_counts, ninvalid)
+            call sigma2_state_write_particles(candidate_path%to_char(), first_row, block, state_status, state_message)
+            if( state_status /= 0 ) THROW_HARD(trim(state_message))
+            deallocate(block)
+        enddo
+        if( nprefix > 0 ) write(logfhandle,'(A,I0,A)') '>>> SIGMA2 APPEND: retained ', nprefix, &
+            &' committed particle spectra and bootstrapped the appended suffix'
+        do first_row = nprefix + 1, nptcls, 4096
+            last_row = min(first_row+4095, nptcls)
+            allocate(block(nshell,last_row-first_row+1), source=0.0_real32)
+            do i = 1, size(block,2)
+                iptcl = first_row + i - 1
+                if( active(iptcl) ) block(:,i) = seed_records(:,eo_ids(iptcl)+1)
             enddo
-            write(logfhandle,'(A,I0,A)') '>>> SIGMA2 APPEND: retained ', previous_header%nptcls, &
-                &' committed particle spectra and bootstrapped the appended suffix'
-        endif
-        call sigma2_state_reduce_groups(candidate_path%to_char(), active, eo_ids, group_ids, &
-            &state_status, state_message)
+            call sum_valid_records(block, first_row, active, eo_ids, global_sums, global_counts, ninvalid)
+            call sigma2_state_write_particles(candidate_path%to_char(), first_row, block, state_status, state_message)
+            if( state_status /= 0 ) THROW_HARD(trim(state_message))
+            deallocate(block)
+        enddo
+        if( ninvalid > 0_int64 ) write(logfhandle,'(A,I0,A)') &
+            &'>>> WARNING: canonical sigma2 reduction skipped ', ninvalid, &
+            &' active particle record(s) with non-finite or non-positive values'
+        if( any(global_counts == 0_int64) ) THROW_HARD('canonical sigma2 has an empty even/odd half; exec_calc_pspec_assemble')
+        allocate(global_means(nshell,2))
+        do half = 1, 2
+            global_means(:,half) = real(global_sums(:,half)/real(global_counts(half),dp), real32)
+        enddo
+        call sigma2_state_write_global(candidate_path%to_char(), global_means, state_status, state_message)
         if( state_status /= 0 ) THROW_HARD(trim(state_message))
-        call sigma2_state_commit(candidate_path%to_char(), state_path%to_char(), active, eo_ids, &
-            &group_ids, state_status, state_message)
+        call sigma2_state_publish(candidate_path%to_char(), state_path%to_char(), state_status, state_message)
         if( state_status /= 0 ) THROW_HARD(trim(state_message))
+        ! the partitions' sums stay until the seed is published, so a failed assembly can be rerun
+        do ipart = 1,params%nparts
+            call del_file(pspec_part_sums_fname(ipart))
+        end do
         call build%spproj%set_sigma2_state_path(state_path)
         call build%spproj%write_segment_inside('projinfo', params%projfile)
-        deallocate(active, eo_ids, group_ids)
         ! end gracefully
-        deallocate(bootstrap_pspecs,bootstrap_weights,pspec_covered)
-        if( allocated(sigma2_output) ) deallocate(sigma2_output)
+        deallocate(seeds, half_sums, pspec_covered, seed_records, global_sums, global_means, active, eo_ids)
         if( allocated(pspec_ave) ) deallocate(pspec_ave)
-        call binfile%kill
         call state_path%kill
         call candidate_path%kill
         call build%kill_general_tbox
         call simple_touch('CALC_PSPEC_FINISHED')
         call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
-
-    contains
-
-        subroutine remove_negative_sigmas(eo)
-            integer, intent(in) :: eo
-            logical :: is_positive
-            logical :: fixed_from_prev
-            integer :: nn, idx
-            where( .not. ieee_is_finite(bootstrap_pspecs(eo,:)) ) bootstrap_pspecs(eo,:) = 1.d0
-            if( .not. any(bootstrap_pspecs(eo,:) > DTINY) )then
-                write(logfhandle,*) '>>> WARNING: calc_pspec_assemble floored empty global sigma2 spectrum to 1.0; ', &
-                    'eo/weight: ', eo, bootstrap_weights(eo)
-                bootstrap_pspecs(eo,:) = 1.d0
-                return
-            endif
-            ! remove any negative sigma2 noise values: replace by positive neighboring value
-            do idx = 1, size(bootstrap_pspecs, 2)
-                if( bootstrap_pspecs(eo,idx) <= DTINY )then
-                    ! first try the previous value
-                    fixed_from_prev = .false.
-                    if( idx - 1 >= 1 )then
-                        if( bootstrap_pspecs(eo,idx-1) > DTINY )then
-                            bootstrap_pspecs(eo,idx) = bootstrap_pspecs(eo,idx-1)
-                            fixed_from_prev = .true.
-                        end if
-                    end if
-                    if( .not. fixed_from_prev )then
-                        is_positive = .false.
-                        nn          = idx
-                        do while (.not. is_positive)
-                            nn = nn + 1
-                            if( nn > size(bootstrap_pspecs,2) )then
-                                bootstrap_pspecs(eo,idx) = 1.d0
-                                exit
-                            end if
-                            if( bootstrap_pspecs(eo,nn) > DTINY )then
-                                is_positive = .true.
-                                bootstrap_pspecs(eo,idx) = bootstrap_pspecs(eo,nn)
-                            end if
-                        end do
-                    end if
-                end if
-            end do
-        end subroutine remove_negative_sigmas
 
     end subroutine exec_calc_pspec_assemble
 

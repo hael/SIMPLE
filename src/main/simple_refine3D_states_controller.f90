@@ -583,7 +583,6 @@ contains
         call cline_rec3D%set('prg', 'reconstruct3D')
         call cline_rec3D%delete('trail_rec')
         call cline_rec3D%delete('refine')
-        call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
         call cline_rec3D%delete('ufrac_trec')
         call cline_rec3D%delete('endit')

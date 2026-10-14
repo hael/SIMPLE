@@ -249,7 +249,7 @@ contains
         &'maxits_pcg=5 rtol=1e-3. '//&
         &'Reconstructs one fixed set of particles/orientations/sigma2 with reconstruct3D using the gridding '//&
         &'and the PCG backend, in a numbered execution directory named after the run settings (run it inside '//&
-        &'a refine3D run directory; the sigma2 group files are symlinked in; '//&
+        &'a refine3D run directory; the sigma2 store is the project''s registered one; '//&
         &'mkdir=no runs in the current directory instead), and compares the merged maps: per-shell amplitude '//&
         &'ratio and FSC between '//&
         &'backends, and the radial real-space profile ratio that exposes a deapodization mismatch. Writes '//&

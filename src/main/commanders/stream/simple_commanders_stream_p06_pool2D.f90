@@ -71,7 +71,6 @@ contains
         call cline%set('refine',      'snhc_smpl')
         call cline%set('ml_reg',      'no')
         call cline%set('objfun',      'euclid')
-        call cline%set('sigma_est',   'global')
         call cline%set('cls_init',    'rand')
         call cline%set('numlen',      5)
         if( .not. cline%defined('dynreslim')       ) call cline%set('dynreslim',       'yes')

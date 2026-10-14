@@ -7,13 +7,24 @@ use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgb
 use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached, prepimg4align_cart
 use simple_cartft_calc,     only: cartft_calc
 use simple_ptcl_cache,      only: ptcl_cache_in_use, ptcl_cache_read_batch
+use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header
+use, intrinsic :: iso_fortran_env, only: int64
 implicit none
 
 public :: prep_sigmas_objfun, alloc_ptcl_imgs
+public :: write_sigma2_bench_context, write_sigma2_bench_timings
 public :: build_batch_particles3D, build_batch_particles2D, prep_cart_batch
 public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
+
+! the sigma2 store load of the last prep_sigmas_objfun in this process, for the matcher bench files
+real(timer_int_kind) :: rt_sigma2_read_part   = 0.
+real(timer_int_kind) :: rt_sigma2_read_global = 0.
+integer              :: sigma2_bench_nptcls   = 0
+integer              :: sigma2_bench_nshells  = 0
+integer              :: sigma2_bench_nrows    = 0
+integer(int64)       :: sigma2_bench_nbytes   = 0_int64
 
 contains
 
@@ -23,10 +34,14 @@ contains
     subroutine prep_sigmas_objfun( params, build )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
+        type(sigma2_state_header) :: header
         type(string)      :: fname
+        integer(timer_int_kind) :: t_read
+        integer           :: status
         logical           :: found
+        character(len=STDLEN) :: message
         ! cc_emit_sigma is a CC-only update path. CC does not consume sigma,
-        ! while Euclidean scoring requires populated grouped sigma values.
+        ! while Euclidean scoring requires the populated global sigma2 spectra.
         if( trim(params%cc_emit_sigma) == 'yes' .and. params%cc_objfun == OBJFUN_EUCLID )then
             THROW_HARD('cc_emit_sigma=yes requires objfun=cc; euclid scoring would use unpopulated sigmas')
         endif
@@ -41,13 +56,52 @@ contains
             else
                 call build%esig%new(params, build%pftc, fname, params%box)
             endif
-            call build%esig%read_part(  build%spproj_field)
+            if( L_BENCH_GLOB ) t_read = tic()
+            call build%esig%read_part
             ! a polish overlays its Cartesian residuals on those of the discrete pass it follows
             if( params%l_cont_polish ) call build%esig%read_pending_range
-            call build%esig%read_groups(build%spproj_field)
+            if( L_BENCH_GLOB )then
+                rt_sigma2_read_part = toc(t_read)
+                t_read = tic()
+            endif
+            call build%esig%read_global
+            ! the polar kernels' shell weights and self-terms follow the spectra just read
+            if( .not. params%l_cart_refine ) call build%pftc%memoize_sigma2_weights
+            if( L_BENCH_GLOB )then
+                rt_sigma2_read_global = toc(t_read)
+                call sigma2_state_read_header(fname%to_char(), header, status, message)
+                if( status /= 0 ) THROW_HARD(trim(message))
+                sigma2_bench_nptcls  = header%nptcls
+                sigma2_bench_nshells = header%kto - header%kfrom + 1
+                sigma2_bench_nbytes  = header%file_bytes
+                sigma2_bench_nrows   = params%top - params%fromp + 1
+            endif
             call fname%kill
         end if
     end subroutine prep_sigmas_objfun
+
+    !> Context lines of the sigma2 store I/O for a matcher bench file (prefix 'match2D' or 'match3D')
+    subroutine write_sigma2_bench_context( fnr, prefix, nrows_updated )
+        integer,          intent(in) :: fnr
+        character(len=*), intent(in) :: prefix
+        integer,          intent(in) :: nrows_updated
+        write(fnr,'(a,i0)') prefix//' sigma2 store particles      : ', sigma2_bench_nptcls
+        write(fnr,'(a,i0)') prefix//' sigma2 store shells         : ', sigma2_bench_nshells
+        write(fnr,'(a,i0)') prefix//' sigma2 store bytes          : ', sigma2_bench_nbytes
+        write(fnr,'(a,i0)') prefix//' sigma2 partition rows       : ', sigma2_bench_nrows
+        write(fnr,'(a,i0)') prefix//' sigma2 rows updated         : ', nrows_updated
+    end subroutine write_sigma2_bench_context
+
+    !> Timing lines of the sigma2 store I/O for a matcher bench file: the record read and noise
+    !! spectra read of prep_sigmas_objfun, and the range write the matcher timed
+    subroutine write_sigma2_bench_timings( fnr, prefix, rt_write )
+        integer,              intent(in) :: fnr
+        character(len=*),     intent(in) :: prefix
+        real(timer_int_kind), intent(in) :: rt_write
+        write(fnr,'(a,1x,f0.3)') prefix//' sigma2 record read          :', rt_sigma2_read_part
+        write(fnr,'(a,1x,f0.3)') prefix//' sigma2 global spectra read  :', rt_sigma2_read_global
+        write(fnr,'(a,1x,f0.3)') prefix//' sigma2 range write          :', rt_write
+    end subroutine write_sigma2_bench_timings
 
     !>  imgbatch_box/imgbatch_smpd size the raw read buffer; pass params%box_crop and
     !!  params%smpd_crop when the batch will be filled from the downscaled particle
@@ -107,14 +161,17 @@ contains
     end subroutine build_batch_particles3D
 
     !> The inputs of prep_cart_batch from the project: the stored shifts on the cropped grid, the
-    !! CTF parameters, the noise mask and, under euclid only, the particles' sigma2 (C5).
+    !! CTF parameters, the noise mask and, under euclid only, the two global spectra and the
+    !! particles' halves (C5).
     subroutine prep_cart_batch_of_build( params, build, nptcls_here, pinds_here )
+        use simple_euclid_sigma2, only: sigma2_half
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls_here
         integer,           intent(in)    :: pinds_here(nptcls_here)
         type(ctfparams), allocatable :: ctfparms(:)
-        real,            allocatable :: crop_shifts(:,:), sigma2(:,:)
+        real,            allocatable :: crop_shifts(:,:)
+        integer,         allocatable :: halves(:)
         real    :: crop_factor
         integer :: i, iptcl
         crop_factor = real(params%box_crop) / real(params%box)
@@ -126,13 +183,13 @@ contains
         end do
         if( params%cc_objfun == OBJFUN_EUCLID )then
             if( .not. allocated(build%esig%sigma2_noise) ) THROW_HARD('a Euclidean Cartesian batch requires sigma2')
-            allocate(sigma2(0:params%kfromto(2),nptcls_here), source=1.)
+            call build%cftc%set_sigma2(lbound(build%esig%sigma2_noise,1), build%esig%sigma2_noise)
+            allocate(halves(nptcls_here))
             do i = 1, nptcls_here
-                sigma2(params%kfromto(1):params%kfromto(2),i) = &
-                    &build%esig%sigma2_noise(params%kfromto(1):params%kfromto(2),pinds_here(i))
+                halves(i) = sigma2_half(build%spproj_field%get_eo(pinds_here(i)))
             end do
             call prep_cart_batch(build%cftc, nptcls_here, build%imgbatch(:nptcls_here), build%lmsk, params%box_crop, &
-                &params%smpd_crop, params%msk_crop, crop_shifts, ctfparms, params%kfromto, sigma2)
+                &params%smpd_crop, params%msk_crop, crop_shifts, ctfparms, params%kfromto, halves)
         else
             call prep_cart_batch(build%cftc, nptcls_here, build%imgbatch(:nptcls_here), build%lmsk, params%box_crop, &
                 &params%smpd_crop, params%msk_crop, crop_shifts, ctfparms, params%kfromto)
@@ -142,12 +199,12 @@ contains
     !> Fill particle slots 1..nptcls of the Cartesian calculator, slot i from raw_imgs(i), in
     !! one parallel loop, one particle per iteration (plan section 6.2): prepimg4align_cart on a
     !! thread copy of the raw image (the input is left as read) with the stored shift on the
-    !! cropped grid and the calculator's taper, then set_ptcl for euclid when sigma2 (0:kto,
-    !! nptcls) is present, for cc otherwise (C5). The soft-mask coordinates and Fourier maps of
+    !! cropped grid and the calculator's taper, then set_ptcl for euclid when the particles'
+    !! halves are present (the calculator holds the spectra, set_sigma2), for cc otherwise (C5). The soft-mask coordinates and Fourier maps of
     !! the cropped box are memoized here, serially. THROW_HARD when the calculator has fewer
     !! slots than nptcls.
     subroutine prep_cart_batch( cftc, nptcls, raw_imgs, noise_mask, box_crop, smpd_crop, mskrad, crop_shifts, &
-        &ctfparms, kfromto, sigma2 )
+        &ctfparms, kfromto, halves )
         class(cartft_calc), intent(inout) :: cftc
         integer,            intent(in)    :: nptcls, box_crop
         class(image),       intent(in)    :: raw_imgs(nptcls)
@@ -155,7 +212,7 @@ contains
         real,               intent(in)    :: smpd_crop, mskrad, crop_shifts(2,nptcls)
         type(ctfparams),    intent(in)    :: ctfparms(nptcls)
         integer,            intent(in)    :: kfromto(2)
-        real, optional,     intent(in)    :: sigma2(0:,:)
+        integer, optional,  intent(in)    :: halves(:)
         type(image), allocatable :: raw_work(:), out_work(:)
         type(ctfparams)          :: ctf_crop
         complex,     allocatable :: observed(:,:)
@@ -163,8 +220,8 @@ contains
         integer :: i, ithr, nworkers, ldim_raw(3)
         if( nptcls < 1 ) return
         if( cftc%get_nptcls() < nptcls ) THROW_HARD('Cartesian calculator has fewer particle slots than the batch')
-        if( present(sigma2) )then
-            if( size(sigma2,2) < nptcls ) THROW_HARD('Cartesian batch sigma2 does not cover the batch')
+        if( present(halves) )then
+            if( size(halves) < nptcls ) THROW_HARD('Cartesian batch halves do not cover the batch')
         endif
         nworkers = 1
         !$ nworkers = omp_get_max_threads()
@@ -183,8 +240,8 @@ contains
             call raw_work(ithr)%copy_fast(raw_imgs(i))
             call prepimg4align_cart(raw_work(ithr), noise_mask, out_work(ithr), mskrad, smpd_crop, crop_shifts(:,i), &
                 &taper, ctfparms(i), observed, ctf_crop)
-            if( present(sigma2) )then
-                call cftc%set_ptcl(i, observed, ctf_crop, sigma2(:,i), kfromto)
+            if( present(halves) )then
+                call cftc%set_ptcl(i, observed, ctf_crop, halves(i), kfromto)
             else
                 call cftc%set_ptcl(i, observed, ctf_crop, kfromto)
             endif
@@ -216,8 +273,9 @@ contains
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
-            call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
+            ! the half first: memoizing the particle's self-term reads its half's spectrum
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+            call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
         end do
         !$omp end parallel do
         call forget_ft_maps
@@ -264,8 +322,9 @@ contains
                 call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             endif
-            call build%pftc%polarize_ptcl_pft(ptcl_match_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
+            ! the half first: memoizing the particle's self-term reads its half's spectrum
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+            call build%pftc%polarize_ptcl_pft(ptcl_match_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
         end do
         !$omp end parallel do
         call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl2D')

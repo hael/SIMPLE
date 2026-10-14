@@ -154,8 +154,6 @@ subroutine new_solve3D_nano( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D_nano%add_input(UI_SRCH, pgrp, &
         &visibility=UI_VIS_STANDARD)
-        call refine3D_nano%add_input(UI_SRCH, sigma_est, &
-        &visibility=UI_VIS_ADVANCED)
         call refine3D_nano%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
         &'Refinement mode; cont refines the stored poses continuously(shc|neigh|prob|prob_neigh|cont){neigh}', &
         &'', .false., 'neigh', &

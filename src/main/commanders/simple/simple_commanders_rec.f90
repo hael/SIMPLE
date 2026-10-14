@@ -3,7 +3,7 @@ module simple_commanders_rec
 use simple_commanders_api
 use simple_matcher_2Dprep
 use simple_matcher_3Drec, only: calc_3Drec
-use simple_sigma2_files, only: load_sigma2_groups
+use simple_sigma2_files, only: load_sigma2
 implicit none
 #include "simple_local_flags.inc"
 
@@ -89,7 +89,7 @@ contains
             endif
         else
             if( params%cc_objfun == OBJFUN_EUCLID )then
-                call load_sigma2_groups(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
+                call load_sigma2(params, build%pftc, build%esig, build%spproj, build%spproj_field, &
                     &l_sigma_loaded)
                 if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
             endif

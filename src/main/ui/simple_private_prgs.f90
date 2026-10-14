@@ -252,8 +252,8 @@ contains
         call private_prgs(11)%push_req_key('projfile')
         call private_prgs(11)%push_req_key('nthr')
 
-        ! CALC_GROUP_SIGMAS, for asssembling sigmas for refine3D
-        call private_prgs(12)%set_name('calc_group_sigmas')
+        ! COMMIT_SIGMA2, the commit of the canonical sigma2 state after a matcher pass
+        call private_prgs(12)%set_name('commit_sigma2')
         ! required keys
         call private_prgs(12)%push_req_key('nparts')
         call private_prgs(12)%push_req_key('projfile')

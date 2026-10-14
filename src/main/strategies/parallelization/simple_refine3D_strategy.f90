@@ -12,8 +12,8 @@ use simple_qsys_env,            only: qsys_env
 use simple_convergence,         only: convergence
 use simple_decay_funs,          only: inv_cos_decay, cos_decay
 use simple_cluster_seed,        only: gen_labelling
-use simple_sigma2_state,        only: sigma2_state_candidate_path, sigma2_state_prepare_update, &
-    &sigma2_state_range_path, sigma2_state_next_generation
+use simple_sigma2_state,        only: sigma2_state_prepare_update
+use simple_sigma2_state_file,   only: sigma2_state_header, sigma2_state_read_header
 use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
@@ -43,6 +43,7 @@ type :: refine3D_bench_state
     integer(timer_int_kind) :: t_init      = 0
     integer(timer_int_kind) :: t_model     = 0
     integer(timer_int_kind) :: t_sigma     = 0
+    integer(timer_int_kind) :: t_sigma_prep = 0
     integer(timer_int_kind) :: t_prob      = 0
     integer(timer_int_kind) :: t_sched     = 0
     integer(timer_int_kind) :: t_assemble  = 0
@@ -50,10 +51,16 @@ type :: refine3D_bench_state
     real(timer_int_kind)    :: rt_init     = 0.
     real(timer_int_kind)    :: rt_model    = 0.
     real(timer_int_kind)    :: rt_sigma    = 0.
+    real(timer_int_kind)    :: rt_sigma_prep = 0.
     real(timer_int_kind)    :: rt_prob     = 0.
     real(timer_int_kind)    :: rt_sched    = 0.
     real(timer_int_kind)    :: rt_assemble = 0.
     real(timer_int_kind)    :: rt_tot      = 0.
+    ! the canonical sigma2 store this iteration updated, and the rows its update replaced
+    integer                 :: sigma2_nptcls  = 0
+    integer                 :: sigma2_nshells = 0
+    integer(int64)          :: sigma2_nbytes  = 0_int64
+    integer                 :: sigma2_nrows_updated = 0
 end type refine3D_bench_state
 
 ! ======================================================================
@@ -62,7 +69,7 @@ end type refine3D_bench_state
 
 type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(refine3D_bench_state), private :: bench
-    type(cmdline)     :: cline_calc_group_sigmas
+    type(cmdline)     :: cline_commit_sigma2
     type(convergence) :: conv
     type(parameters), allocatable :: params_polish !< the parameters of the polish pass (pose_cont=yes)
     logical :: l_sigma
@@ -88,9 +95,8 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: l_combine_eo
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_rec3D
-    type(cmdline) :: cline_calc_pspec_distr
     type(cmdline) :: cline_prob_align_distr
-    type(cmdline) :: cline_calc_group_sigmas
+    type(cmdline) :: cline_commit_sigma2
     type(cmdline) :: cline_volassemble
     type(cmdline) :: cline_postprocess
     type(convergence) :: conv
@@ -543,6 +549,7 @@ contains
         bench%t_init      = 0
         bench%t_model     = 0
         bench%t_sigma     = 0
+        bench%t_sigma_prep = 0
         bench%t_prob      = 0
         bench%t_sched     = 0
         bench%t_assemble  = 0
@@ -550,11 +557,40 @@ contains
         bench%rt_init     = 0.
         bench%rt_model    = 0.
         bench%rt_sigma    = 0.
+        bench%rt_sigma_prep = 0.
         bench%rt_prob     = 0.
         bench%rt_sched    = 0.
         bench%rt_assemble = 0.
         bench%rt_tot      = 0.
+        bench%sigma2_nptcls  = 0
+        bench%sigma2_nshells = 0
+        bench%sigma2_nbytes  = 0_int64
+        bench%sigma2_nrows_updated = 0
     end subroutine reset_refine3D_bench
+
+    !> Context of the sigma2 transaction for the strategy bench file: the committed store's
+    !! dimensions and the active rows carrying the current sampling marker (updated this iteration)
+    subroutine record_sigma2_bench_context( build, bench )
+        type(builder),              intent(inout) :: build
+        type(refine3D_bench_state), intent(inout) :: bench
+        type(sigma2_state_header) :: header
+        type(string)          :: state_path
+        integer, allocatable  :: rep_rows(:), smp_rows(:), rec_rows(:)
+        integer               :: status
+        logical               :: found
+        character(len=STDLEN) :: message
+        call build%spproj%get_sigma2_state_path(state_path, found)
+        if( .not. found ) return
+        call sigma2_state_read_header(state_path%to_char(), header, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        bench%sigma2_nptcls  = header%nptcls
+        bench%sigma2_nshells = header%kto - header%kfrom + 1
+        bench%sigma2_nbytes  = header%file_bytes
+        call build%spproj_field%get_update_rows(rep_rows, smp_rows, rec_rows)
+        bench%sigma2_nrows_updated = size(smp_rows)
+        deallocate(rep_rows, smp_rows, rec_rows)
+        call state_path%kill
+    end subroutine record_sigma2_bench_context
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
         type(parameters),             intent(in) :: params
@@ -577,11 +613,16 @@ contains
         write(fnr,'(a,i0)') 'refine3D nstates                    : ', params%nstates
         write(fnr,'(a,i0)') 'refine3D kfrom                      : ', params%kfromto(1)
         write(fnr,'(a,i0)') 'refine3D kto                        : ', params%kfromto(2)
+        write(fnr,'(a,i0)') 'refine3D sigma2 store particles     : ', bench%sigma2_nptcls
+        write(fnr,'(a,i0)') 'refine3D sigma2 store shells        : ', bench%sigma2_nshells
+        write(fnr,'(a,i0)') 'refine3D sigma2 store bytes         : ', bench%sigma2_nbytes
+        write(fnr,'(a,i0)') 'refine3D sigma2 rows updated        : ', bench%sigma2_nrows_updated
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** TIMINGS (s) ***'
         write(fnr,'(a,1x,f0.2)') 'refine3D strategy setup/init        :', bench%rt_init
         write(fnr,'(a,1x,f0.2)') 'refine3D reprojection model         :', bench%rt_model
-        write(fnr,'(a,1x,f0.2)') 'refine3D group-sigma consolidation  :', bench%rt_sigma
+        write(fnr,'(a,1x,f0.3)') 'refine3D sigma2 candidate prep      :', bench%rt_sigma_prep
+        write(fnr,'(a,1x,f0.3)') 'refine3D sigma2 commit              :', bench%rt_sigma
         write(fnr,'(a,1x,f0.2)') 'refine3D probabilistic pre-step     :', bench%rt_prob
         write(fnr,'(a,1x,f0.2)') 'refine3D matcher/scheduler          :', bench%rt_sched
         write(fnr,'(a,1x,f0.2)') 'refine3D assembly/postprocess       :', bench%rt_assemble
@@ -614,17 +655,17 @@ contains
     ! ======================================================================
 
     subroutine inmem_initialize(self, params, build, cline)
-        use simple_commanders_euclid, only: commander_calc_group_sigmas, commander_calc_pspec
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
-        type(commander_calc_pspec)            :: xcalc_pspec
-        type(cmdline)                         :: cline_calc_pspec
         integer                               :: startit
         logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
+        ! the execution directory exists now: every iteration rebuilds its parameters from cline,
+        ! which must not create (and enter) a nested one
+        call cline%set('mkdir', 'no')
         call check_polish_request(params)
         ! startit
         startit = 1
@@ -658,24 +699,16 @@ contains
         if( l_proj_dirty ) call build%spproj%write_segment_inside(params%oritype)
         ! objfun=euclid initialisation
         self%l_sigma = sigma_update_enabled(params)
-        self%cline_calc_group_sigmas = cline
-        call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
-        call self%cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
+        self%cline_commit_sigma2 = cline
+        call strip_refine3D_search_only_args(self%cline_commit_sigma2)
+        call self%cline_commit_sigma2%set('prg', 'commit_sigma2')
         if( self%l_sigma )then
             ! Ensure e/o partitioning prior to calc_pspec
             if( build%spproj_field%get_nevenodd() == 0 )then
                 call build%spproj_field%partition_eo
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( canonical_sigma2_needs_bootstrap(params, build) )then
-                cline_calc_pspec = cline
-                call strip_refine3D_search_only_args(cline_calc_pspec)
-                call cline_calc_pspec%set('prg', 'calc_pspec')
-                call xcalc_pspec%execute(cline_calc_pspec)
-                call build%spproj%read_segment('projinfo', params%projfile)
-            else
-                write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
-            endif
+            call ensure_canonical_sigma2(params, build, cline, startit)
         endif
         ! Keep run-time counters consistent with the new high-level loop
         params%startit    = startit
@@ -689,7 +722,7 @@ contains
 
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
         use simple_strategy3D_matcher,   only: refine3D_exec
-        use simple_commanders_euclid,    only: commander_calc_group_sigmas
+        use simple_commanders_euclid,    only: commander_commit_sigma2
         use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
         use simple_commanders_rec_distr, only: commander_volassemble
         class(refine3D_inmem_strategy), intent(inout) :: self
@@ -697,7 +730,7 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_commit_sigma2) :: xcommit_sigma2
         type(commander_prob_align)        :: xprob_align
         type(commander_prob_align_neigh)  :: xprob_align_neigh
         type(commander_volassemble) :: xvolassemble
@@ -786,7 +819,11 @@ contains
             call remove_partial_rec_files(params)
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
-        if( self%l_sigma ) call prepare_canonical_sigma_update(params, build)
+        if( self%l_sigma )then
+            if( L_BENCH_GLOB ) self%bench%t_sigma_prep = tic()
+            call prepare_canonical_sigma_update(params, build)
+            if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
+        endif
         ! with the polish (pose_cont=yes) one reconstruction per iteration comes from the polished
         ! poses: the discrete pass writes no partial reconstructions
         l_polish = polish_follows(params)
@@ -854,11 +891,12 @@ contains
             if( canonical_sigma_commit_deferred(params, converged) )then
                 write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: deferring final canonical commit to the stage owner'
             else
-                call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
+                call self%cline_commit_sigma2%set('which_iter', params%which_iter)
                 if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-                call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+                call xcommit_sigma2%execute(self%cline_commit_sigma2)
                 if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
             endif
+            if( L_BENCH_GLOB ) call record_sigma2_bench_context(build, self%bench)
         endif
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine inmem_execute_iteration
@@ -961,13 +999,11 @@ contains
     subroutine distr_initialize(self, params, build, cline)
         use simple_exec_helpers,      only: set_master_num_threads
         use simple_commanders_rec,    only: commander_rec3D
-        use simple_commanders_euclid, only: commander_calc_pspec
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         type(commander_rec3D)      :: xrec3D
-        type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
         type(string)  :: prev_refine_path, fname_vol, vol, fsc_file, chain_files(2)
         real    :: smpd
@@ -1008,16 +1044,13 @@ contains
         call self%qenv%new(params, params%nparts, l_active=build%spproj_field%included())
         ! prepare prototype command lines
         self%cline_rec3D = cline
-        self%cline_calc_pspec_distr    = cline
         self%cline_prob_align_distr    = cline
         self%cline_postprocess         = cline
-        self%cline_calc_group_sigmas   = cline
+        self%cline_commit_sigma2   = cline
         call strip_refine3D_search_only_args(self%cline_rec3D)
-        call strip_refine3D_search_only_args(self%cline_calc_pspec_distr)
         call strip_refine3D_search_only_args(self%cline_postprocess)
-        call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
+        call strip_refine3D_search_only_args(self%cline_commit_sigma2)
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
-        call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         if( l_prob_neigh_mode )then
             call self%cline_prob_align_distr%set( 'prg', 'prob_align_neigh' )
@@ -1025,7 +1058,7 @@ contains
             call self%cline_prob_align_distr%set( 'prg', 'prob_align' )
         endif
         call self%cline_postprocess%set(         'prg', 'postprocess' )
-        call self%cline_calc_group_sigmas%set(   'prg', 'calc_group_sigmas' )
+        call self%cline_commit_sigma2%set(   'prg', 'commit_sigma2' )
         call self%cline_postprocess%set('mirr',    'no')
         call self%cline_postprocess%set('mkdir',   'no')
         call self%cline_postprocess%set('imgkind', 'vol')
@@ -1083,12 +1116,7 @@ contains
                 if( params%l_trail_rec ) call carry_over_trail_rec_chains(params, prev_refine_path)
             endif
             if( sigma_update_enabled(params) )then
-                if( canonical_sigma2_needs_bootstrap(params, build) )then
-                    call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
-                    call build%spproj%read_segment('projinfo', params%projfile)
-                else
-                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
-                endif
+                call ensure_canonical_sigma2(params, build, cline, params%startit)
             endif
         else
             ! STATE LABEL INIT (none in a pass that searches nothing, which writes no field)
@@ -1100,12 +1128,7 @@ contains
             ! Base objfun=cc never reads sigmas. Wrapper-owned external-reference
             ! transitions bootstrap before entering this strategy.
             if( sigma_update_enabled(params) )then
-                if( canonical_sigma2_needs_bootstrap(params, build) )then
-                    call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
-                    call build%spproj%read_segment('projinfo', params%projfile)
-                else
-                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
-                endif
+                call ensure_canonical_sigma2(params, build, cline, params%startit)
             endif
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .true.
@@ -1132,7 +1155,6 @@ contains
                     if( params%l_trail_rec .and. params%cc_objfun == OBJFUN_CC ) call cline_tmp%set('trail_seed', 'yes')
                 endif
                 call cline_tmp%delete('objfun')
-                call cline_tmp%delete('sigma_est')
                 call cline_tmp%set('objfun', 'cc')
                 call xrec3D%execute( cline_tmp )
                 do state = 1,params%nstates
@@ -1158,7 +1180,7 @@ contains
             call invalidate_fresh_start_refs_from_volumes(params, cline, params%startit)
             ! euclid first-sigmas
             if( sigma_update_enabled(params) )then
-                call self%cline_calc_group_sigmas%set('nthr', self%nthr_master)
+                call self%cline_commit_sigma2%set('nthr', self%nthr_master)
             endif
         endif
         ! Particle caching is a 2D-only feature; fail loudly rather than silently
@@ -1175,49 +1197,45 @@ contains
         call fsc_file%kill
     end subroutine distr_initialize
 
-    logical function canonical_sigma2_needs_bootstrap(params, build) result(needs_bootstrap)
-        use simple_sigma2_files, only: canonical_sigma2_consumable
+    !> The canonical sigma2 state at refinement entry, through the one rebuild entry; a rebuild
+    !! registers the state in the project file, so projinfo is re-read
+    subroutine ensure_canonical_sigma2(params, build, cline, iter)
+        use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        character(len=STDLEN) :: message
+        type(cmdline),    intent(in)    :: cline
+        integer,          intent(in)    :: iter
+        logical :: l_rebuilt
         if( trim(params%oritype) /= 'ptcl3D' ) &
             &THROW_HARD('canonical sigma2 currently requires oritype=ptcl3D')
-        ! one validation boundary for every canonical consumer (simple_sigma2_files)
-        needs_bootstrap = .not. canonical_sigma2_consumable(build%spproj, build%spproj_field, params%box, &
-            &params%smpd, params%l_sigma_glob, message)
-        if( needs_bootstrap ) write(logfhandle,'(A)') '>>> SIGMA2 INIT: rebuilding canonical state: '//trim(message)
-    end function canonical_sigma2_needs_bootstrap
+        call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, iter, params%box, params%smpd, &
+            &'SIGMA2 INIT', l_rebuilt)
+        if( l_rebuilt )then
+            call build%spproj%read_segment('projinfo', params%projfile)
+        else
+            write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing committed canonical state'
+        endif
+    end subroutine ensure_canonical_sigma2
 
     subroutine prepare_canonical_sigma_update(params, build)
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        type(string) :: state_path, candidate_path, range_path
-        integer(int64) :: next_gen
-        integer :: ipart, status
+        type(string) :: state_path
+        integer :: status
         logical :: found
         character(len=STDLEN) :: message
         call build%spproj%get_sigma2_state_path(state_path, found)
         if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-        ! transaction-scoped names: candidate and ranges carry the generation
-        ! this update commits, so nothing left by another transaction can be merged into it
-        call sigma2_state_next_generation(state_path%to_char(), next_gen, status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
-        candidate_path = sigma2_state_candidate_path(state_path%to_char(), next_gen)
-        do ipart = 1, params%nparts
-            range_path = sigma2_state_range_path(state_path%to_char(), next_gen, ipart, params%numlen)
-            call del_file(range_path)
-        enddo
-        call sigma2_state_prepare_update(state_path%to_char(), candidate_path%to_char(), status, message)
+        ! the committed store validated, nothing left by another transaction of the next generation
+        call sigma2_state_prepare_update(state_path%to_char(), params%nparts, params%numlen, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         call state_path%kill
-        call candidate_path%kill
-        call range_path%kill
     end subroutine prepare_canonical_sigma_update
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_commanders_rec_distr, only: commander_volassemble
         use simple_commanders_volops,    only: commander_postprocess
-        use simple_commanders_euclid,    only: commander_calc_group_sigmas
+        use simple_commanders_euclid,    only: commander_commit_sigma2
         use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
         use simple_fsc,                  only: plot_fsc
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D
@@ -1227,7 +1245,7 @@ contains
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
         type(commander_postprocess)       :: xpostprocess
-        type(commander_calc_group_sigmas) :: xcalc_group_sigmas
+        type(commander_commit_sigma2) :: xcommit_sigma2
         type(commander_prob_align)        :: xprob_align_distr
         type(commander_prob_align_neigh)  :: xprob_align_neigh_distr
         type(commander_volassemble) :: xvolassemble
@@ -1308,7 +1326,9 @@ contains
             if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
         if( sigma_update_enabled(params) )then
+            if( L_BENCH_GLOB ) self%bench%t_sigma_prep = tic()
             call prepare_canonical_sigma_update(params, build)
+            if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
         ! schedule distributed jobs; with the polish (pose_cont=yes) one reconstruction per
         ! iteration comes from the polished poses, so the discrete pass writes no partial
@@ -1461,9 +1481,12 @@ contains
             if( canonical_sigma_commit_deferred(params, converged) )then
                 write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: deferring final canonical commit to the stage owner'
             else
-                call self%cline_calc_group_sigmas%set('which_iter', params%which_iter)
-                call xcalc_group_sigmas%execute(self%cline_calc_group_sigmas)
+                call self%cline_commit_sigma2%set('which_iter', params%which_iter)
+                if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
+                call xcommit_sigma2%execute(self%cline_commit_sigma2)
+                if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
             endif
+            if( L_BENCH_GLOB ) call record_sigma2_bench_context(build, self%bench)
         endif
         ! iteration-dependent updates
         if( params%l_doshift .and. .not.self%job_descr%isthere('trs') )then

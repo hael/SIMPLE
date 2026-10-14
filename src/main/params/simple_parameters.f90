@@ -315,8 +315,6 @@ type :: parameters
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|neigh|greedy|prob|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
-    character(len=STDLEN)     :: sigma_est='global'   !< sigma estimation kind (global|group){global}
-    character(len=STDLEN)     :: sigma_action='' !< explicit sigma conversion(star_import|star_export)
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN)     :: split_mode='even'
@@ -652,7 +650,6 @@ type :: parameters
     logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont)
     logical :: l_cont_polish     = .false. !< the Cartesian pass the polish schedules after a discrete one
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first
-    logical :: l_sigma_glob      = .false.
     logical :: l_cohort_sampling = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided

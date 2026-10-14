@@ -7,7 +7,7 @@ use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
 use simple_qsys_funs,      only: qsys_declare_part_finished
 use simple_image,          only: image, unmemoize_powspec_coords
-use simple_sigma2_binfile, only: sigma2_binfile
+use simple_sigma2_pspec_sums, only: pspec_part_sums_fname, write_pspec_part_sums
 implicit none
 
 public :: calc_pspec_strategy, calc_pspec_inmem_strategy, calc_pspec_partitioned_strategy, create_calc_pspec_strategy
@@ -146,14 +146,14 @@ contains
         type(commander_calc_pspec_assemble) :: xcalc_pspec_assemble
         integer, allocatable :: sel_pinds(:)
         real :: sig2_mul(2)
-        ! Sigma2 is bootstrapped once from a capped, random global E/O sample.
-        ! The resulting two curves are propagated to every particle record;
-        ! matcher residual updates establish any requested group structure later.
+        ! Sigma2 is bootstrapped once from a capped, random global even/odd sample:
+        ! one seed spectrum per half, written to every active particle record of
+        ! the half; the matchers' residual updates replace them later.
         call read_sigma2_bootstrap_selection(params, build, sel_pinds, sig2_mul)
         call compute_pspec_partitions(params, build, [params%part],&
             &reshape([params%fromp, params%top], [1,2]), sel_pinds, sig2_mul)
         deallocate(sel_pinds)
-        ! Group averaging in non-distributed execution
+        ! the seed assembly, in non-distributed execution
         if( .not.cline%defined('nparts') .and. params%part==1 )then
             call xcalc_pspec_assemble%execute(self%cline_calc_pspec_assemble)
         endif
@@ -255,9 +255,10 @@ contains
         call simple_touch(CALCPSPEC_FINISHED)
     end subroutine partitioned_cleanup
 
-    !>  Bootstrap sigma2 spectra (scaled by sig2_mul; unsampled particles stay zero) and Fourier sums of the partitions
-    !!  part_ids, ranges part_ranges, written per partition for calc_pspec_assemble. Images are read once in batches over
-    !!  the selection; each batch reduces per partition run (sel_pinds sorted, ranges disjoint), so partitions never contend.
+    !>  Bootstrap sigma2 spectra (scaled by sig2_mul, sanitised) summed per even/odd half, and Fourier sums with the
+    !!  number of images they hold, of the partitions part_ids, ranges part_ranges, written per partition for
+    !!  calc_pspec_assemble. Images are read once in batches over the selection; each batch reduces per partition
+    !!  run (sel_pinds sorted, ranges disjoint), so partitions never contend.
     subroutine compute_pspec_partitions( params, build, part_ids, part_ranges, sel_pinds, sig2_mul )
         use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch
         type(parameters), intent(in)    :: params
@@ -267,15 +268,14 @@ contains
         integer,          intent(in)    :: sel_pinds(:)
         real,             intent(in)    :: sig2_mul(2)
         type(image)          :: sum_img
-        type(sigma2_binfile) :: binfile
-        type(string)         :: binfname
         complex(dp), allocatable :: cmat_thr_sum(:,:,:,:)
         complex,     allocatable :: cmat_part_sum(:,:,:,:), cmat_dims(:,:,:)
-        integer,     allocatable :: work_pinds(:), work_slot(:), slot_from(:), slot_to(:)
-        real,        allocatable :: sigma2(:,:), sigma2_sel(:,:), sigma2_batch(:,:)
+        integer,     allocatable :: work_pinds(:), work_slot(:), slot_from(:), slot_to(:), nsum_slot(:)
+        real,        allocatable :: sigma2_sel(:,:), sigma2_batch(:,:)
+        real(dp),    allocatable :: half_sums(:,:)
         integer :: batchlims(2)
         integer :: i, nyq, nselected, n_work, batchsz_max, nbatch
-        integer :: islot, nslots, ipart, fromp, top, run_lo, run_hi
+        integer :: islot, nslots, ipart, fromp, top, run_lo, run_hi, eo
         integer :: ninvalid_sigma2
         nslots          = size(part_ids)
         nselected       = size(sel_pinds)
@@ -292,7 +292,7 @@ contains
             work_pinds(n_work) = sel_pinds(i)
             work_slot(n_work)  = islot
         end do
-        allocate(slot_from(nslots), source=0)
+        allocate(slot_from(nslots), nsum_slot(nslots), source=0)
         allocate(slot_to(nslots),   source=-1)
         do i = 1,n_work
             islot = work_slot(i)
@@ -331,29 +331,29 @@ contains
                 ' floored invalid computed sigma spectra to 1.0; count/selected: ', &
                 ninvalid_sigma2, n_work
         endif
-        ! scatter the compact spectra into partition-local geometry and write
+        ! per partition: the sampled spectra summed per even/odd half (in particle order), and the Fourier sum with
+        ! the number of images it holds
+        allocate(half_sums(nyq,2))
         do islot = 1,nslots
             ipart = part_ids(islot)
             fromp = part_ranges(islot,1)
             top   = part_ranges(islot,2)
-            allocate(sigma2(nyq,fromp:top), source=0.)
+            half_sums = 0._dp
             if( slot_from(islot) > 0 )then
                 do i = slot_from(islot), slot_to(islot)
-                    sigma2(:,work_pinds(i)) = sigma2_sel(:,i)
+                    eo = build%spproj_field%get_eo(work_pinds(i))
+                    if( eo < 0 .or. eo > 1 ) THROW_HARD('a sampled particle has no even/odd assignment; compute_pspec_partitions')
+                    half_sums(:,eo+1) = half_sums(:,eo+1) + real(sigma2_sel(:,i),dp)
                 end do
             endif
             call sum_img%zero_and_flag_ft
             call sum_img%set_cmat(cmat_part_sum(:,:,:,islot))
             call sum_img%write(string('sum_img_part')//int2str_pad(ipart,params%numlen)//params%ext%to_char())
-            binfname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
-            call binfile%new(binfname, fromp, top, [1,nyq])
-            call binfile%write(sigma2)
-            call binfile%kill
-            deallocate(sigma2)
+            call write_pspec_part_sums(pspec_part_sums_fname(ipart), fromp, top, nsum_slot(islot), half_sums)
         end do
+        deallocate(half_sums)
         call sum_img%kill
-        call binfname%kill
-        deallocate(work_pinds, work_slot, slot_from, slot_to)
+        deallocate(work_pinds, work_slot, slot_from, slot_to, nsum_slot)
         deallocate(sigma2_sel, cmat_part_sum, cmat_thr_sum, cmat_dims)
 
     contains
@@ -371,16 +371,17 @@ contains
             end do
         end function slot_of
 
-        !>  Reduces work items [run_lo,run_hi], all owned by partition islot, into
-        !!  that partition's Fourier sum. batch_base maps work index to batch slot.
+        !>  Reduces work items [run_lo,run_hi], all owned by partition islot, into that partition's
+        !!  Fourier sum and its image count. batch_base maps work index to batch slot.
         subroutine accumulate_run( islot_here, run_lo_here, run_hi_here, batch_base )
             integer, intent(in) :: islot_here, run_lo_here, run_hi_here, batch_base
-            integer :: j, iwork, imatch, nrun, eo_here, ithr_here, iptcl_here
+            integer :: j, iwork, imatch, nrun, eo_here, ithr_here, iptcl_here, nadd
             logical :: l_add_to_sum
             nrun         = run_hi_here - run_lo_here + 1
+            nadd         = 0
             cmat_thr_sum = dcmplx(0.d0, 0.d0)
             !$omp parallel do default(shared) private(j,iwork,imatch,iptcl_here,ithr_here,eo_here,l_add_to_sum)&
-            !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2)
+            !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2,nadd)
             do j = 1, nrun
                 iwork      = run_lo_here + j - 1
                 imatch     = iwork - batch_base + 1
@@ -391,11 +392,15 @@ contains
                 sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul(eo_here+1)
                 l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
                 if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
-                ! thread average
-                if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:,ithr_here))
+                ! thread sum, of the images whose spectrum was valid before sanitising
+                if( l_add_to_sum )then
+                    call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:,ithr_here))
+                    nadd = nadd + 1
+                endif
             end do
             !$omp end parallel do
-            ! partition-local average
+            nsum_slot(islot_here) = nsum_slot(islot_here) + nadd
+            ! partition sum
             do ithr_here = 1, nthr_glob
                 cmat_part_sum(:,:,:,islot_here) = cmat_part_sum(:,:,:,islot_here)&
                     &+ cmplx(cmat_thr_sum(:,:,:,ithr_here), kind=sp)
@@ -434,7 +439,7 @@ contains
         type(string) :: fname
         integer :: ipart
         do ipart = 1,params%nparts
-            fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
+            fname = pspec_part_sums_fname(ipart)
             call del_file(fname)
             fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext%to_char()
             call del_file(fname)

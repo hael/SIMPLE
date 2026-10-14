@@ -181,7 +181,7 @@ The screening run uses one bounded initialization stage:
 
 ```text
 nstages=1 nits_per_stage=1 extr_lim=4 eo_stage=no
-refine=prob_snhc sigma_est=global ctf=no smpd=1.3 mskdiam=60
+refine=prob_snhc ctf=no smpd=1.3 mskdiam=60
 ```
 
 SIMPLE stage policy executes the first stage with sampled SNHC even though the
