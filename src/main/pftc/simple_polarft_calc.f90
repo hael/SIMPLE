@@ -875,6 +875,5 @@ end interface
 
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter       :: zero            = cmplx(0.,0.) !< just a complex zero
-integer,     parameter       :: FFTW_USE_WISDOM = 16
 
 end module simple_polarft_calc
