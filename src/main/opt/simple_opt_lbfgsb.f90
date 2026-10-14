@@ -97,6 +97,10 @@ contains
         if ( .not. allocated(spec%limits) ) then
             THROW_HARD('limits not allocated in opt_spec; lbfgsb_minimize')
         end if
+        ! START begins a new solve, including when this optimizer is reused.
+        ! The compact Hessian updates can read unused workspace entries when
+        ! the active set changes; never inherit allocator data or a prior solve.
+        self%wa = 0.0_dp
         spec%x_8 = spec%x
         ! initialise nevals counters
         spec%nevals  = 0

@@ -249,10 +249,10 @@ if(BUILD_TESTS)
   # The longer nanoparticle atom-statistics pipeline is an explicit highlevel entry.
   simple_add_test(lib_single library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_single)
-  # lib_stream: the stream stages that run in-process, one thread, with the
-  # arguments the stream gives them (Ruben's stream tests): optics assignment
-  # (a minute: the stream watcher waits LONGTIME = 60 s), picking references,
-  # pick and extract. 
+  # lib_stream: optics assignment, picking references, pick and extract,
+  # plus the sieve-to-3D and movies-to-3D chains. The chains launch local
+  # worker jobs; reserve the machine and allow hosted runners two hours
+  # for the combined suite.
   simple_add_test(lib_stream library 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_stream)
 
@@ -269,15 +269,15 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=6vxx)
   simple_add_test(mini_stream_1jxy highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=1jxy)
-  simple_add_test(simulated_workflow_6vxx highlevel 7200 8 RUN_SERIAL
+  simple_add_test(simulated_workflow_6vxx highlevel 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=6vxx)
-  simple_add_test(simulated_workflow_1jxy highlevel 7200 8 RUN_SERIAL
+  simple_add_test(simulated_workflow_1jxy highlevel 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=1jxy)
   # The FCC Pt and wurtzite CdSe fixtures are independent crystal-system
   # workflows and therefore receive isolated working directories and verdicts.
-  simple_add_test(single_workflow_fcc highlevel 7200 8 RUN_SERIAL
+  simple_add_test(single_workflow_fcc highlevel 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow suite=fcc smpd=0.358)
-  simple_add_test(single_workflow_wurtzite highlevel 7200 8 RUN_SERIAL
+  simple_add_test(single_workflow_wurtzite highlevel 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow suite=wurtzite smpd=0.358)
   simple_add_test(pcg_recon highlevel 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)

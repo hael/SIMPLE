@@ -266,11 +266,14 @@ contains
     end subroutine alloc_memo_refs
 
     module subroutine allocate_memo_workspace(self, nmany_refs)
+        use simple_rnd, only: has_global_seed
         class(polarft_calc),           intent(inout) :: self
         integer,             optional, intent(in)    :: nmany_refs
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
         integer             :: ithr
+        integer(c_int)      :: plan_flags
+        logical             :: l_fixed_seed
         call self%kill_memo_workspace
         allocate(self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%cmat_joint_many(nthr_glob),&
             &self%crmat1_many(nthr_glob), self%crvec1(nthr_glob))
@@ -298,7 +301,15 @@ contains
         else
             allocate(fft_wisdoms_fname, source='fft_wisdoms.dat'//c_null_char)
         endif
-        wsdm_ret = fftwf_import_wisdom_from_filename(fft_wisdoms_fname)
+        l_fixed_seed = has_global_seed()
+        plan_flags = FFTW_MEASURE
+        if( l_fixed_seed )then
+            ! Timing-selected FFT plans defeat exact replay even with identical random draws.
+            call fftwf_forget_wisdom()
+            plan_flags = FFTW_ESTIMATE
+        else
+            wsdm_ret = fftwf_import_wisdom_from_filename(fft_wisdoms_fname)
+        endif
         ! plan the many
         rank       = 1_c_int
         n(1)       = int(self%nrots, c_int)
@@ -312,14 +323,14 @@ contains
         onembed(1) = n(1)
         self%plan_fwd1_many = fftwf_plan_many_dft( rank, n, howmany, &
         &self%cmat2_many(1)%c, inembed, istride, idist, &
-        &self%cmat2_many(1)%c, onembed, ostride, odist, FFTW_FORWARD, FFTW_MEASURE)
+        &self%cmat2_many(1)%c, onembed, ostride, odist, FFTW_FORWARD, plan_flags)
         if( .not. c_associated(self%plan_fwd1_many) ) THROW_HARD('FFTW failed to create plan_fwd1_many')
         ! joint continuous evaluator: objective + d/dsx + d/dsy sections in
         ! one batched execution over 3*nk contiguous columns
         howmany = int(3 * self%nk, c_int)
         self%plan_fwd3_many = fftwf_plan_many_dft( rank, n, howmany, &
         &self%cmat_joint_many(1)%c, inembed, istride, idist, &
-        &self%cmat_joint_many(1)%c, onembed, ostride, odist, FFTW_FORWARD, FFTW_MEASURE)
+        &self%cmat_joint_many(1)%c, onembed, ostride, odist, FFTW_FORWARD, plan_flags)
         if( .not. c_associated(self%plan_fwd3_many) ) THROW_HARD('FFTW failed to create plan_fwd3_many')
         howmany = int(self%nk, c_int)
         ! Input complex length is (n/2+1) = pftsz+1
@@ -329,7 +340,7 @@ contains
         ! We use the same in-place padding convention as your existing code (nrots+2),
         ! but for plan_many we pass onembed=n (FFTW uses stride/dist to walk outputs).
         self%plan_bwd1_single = fftwf_plan_dft_c2r_1d( int(self%nrots, c_int), &
-        &self%crvec1(1)%c, self%crvec1(1)%r, FFTW_MEASURE )
+        &self%crvec1(1)%c, self%crvec1(1)%r, plan_flags )
         if( .not. c_associated(self%plan_bwd1_single) ) THROW_HARD('FFTW failed to create plan_bwd1_single')
         ! Plan the many R2C transforms for CTF2 memoization
         rank       = 1_c_int
@@ -345,7 +356,7 @@ contains
         odist      = int(self%pftsz+1, c_int)
         self%plan_mem_r2c_many = fftwf_plan_many_dft_r2c( rank, n, howmany, &
         &self%crmat1_many(1)%r, inembed, istride, idist, &
-        &self%crmat1_many(1)%c, onembed, ostride, odist, FFTW_MEASURE )
+        &self%crmat1_many(1)%c, onembed, ostride, odist, plan_flags )
         if( .not. c_associated(self%plan_mem_r2c_many) ) THROW_HARD('FFTW failed to create plan_mem_r2c_many')
         if( present(nmany_refs) )then
             if( nmany_refs < 1 )then
@@ -369,15 +380,17 @@ contains
             inembed(1) = idist
             self%plan_bwd_many_refs = fftwf_plan_many_dft_c2r( 1_c_int, n, howmany, &
                                     &self%crmat_many(1)%c, inembed, 1_c_int, idist, &
-                                    &self%crmat_many(1)%r, onembed, 1_c_int, odist, FFTW_MEASURE )
+                                    &self%crmat_many(1)%r, onembed, 1_c_int, odist, plan_flags )
             if( .not. c_associated(self%plan_bwd_many_refs) ) THROW_HARD('FFTW failed to create plan_bwd_many_refs')
         endif
         ! Retain FFTW wisdom
-        wsdm_ret = fftwf_export_wisdom_to_filename(fft_wisdoms_fname)
+        if( .not. l_fixed_seed )then
+            wsdm_ret = fftwf_export_wisdom_to_filename(fft_wisdoms_fname)
+            if( wsdm_ret == 0 )then
+                write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
+            endif
+        endif
         deallocate(fft_wisdoms_fname)
-        if (wsdm_ret == 0) then
-            write (*, *) 'Error: could not write FFTW3 wisdom file! Check permissions.'
-        end if
     end subroutine allocate_memo_workspace
 
     module subroutine kill_memo_ptcls(self)

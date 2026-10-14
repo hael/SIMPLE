@@ -5,7 +5,7 @@
 ! an entry of probability zero. Every test starts from a fixed seed.
 module simple_rnd_tester
 use simple_defs,       only: dp
-use simple_rnd,        only: irnd_uni, shuffle, partial_shuffle, multinomal
+use simple_rnd,        only: irnd_uni, shuffle, partial_shuffle, multinomal, seed_rnd, seed_rnd_fixed, has_global_seed
 use simple_math,       only: hpsort
 use simple_test_utils
 implicit none
@@ -18,11 +18,45 @@ contains
 
     subroutine run_all_rnd_tests()
         write(*,'(A)') '**** running all random draw tests ****'
+        call test_global_seed()
         call test_irnd_uni()
         call test_shuffle()
         call test_partial_shuffle()
         call test_multinomal()
     end subroutine run_all_rnd_tests
+
+    !> Library reseeding and intrinsic draws must replay from the propagated root seed.
+    subroutine test_global_seed()
+        real :: first(16), replay(16), next(16), changed(16)
+        character(len=64) :: seed_value
+        call seed_rnd_fixed(1729, propagate=.true.)
+        call assert_true(has_global_seed(), 'propagated seed enables reproducible library mode')
+        call get_environment_variable('SIMPLE_SEED', seed_value)
+        call assert_char('1729', trim(seed_value), 'library seed is inherited by child processes')
+        call seed_rnd_fixed(99)
+        call get_environment_variable('SIMPLE_SEED', seed_value)
+        call assert_char('1729', trim(seed_value), 'local seeding preserves the global root seed')
+        call seed_rnd_fixed(100, propagate=.false.)
+        call get_environment_variable('SIMPLE_SEED', seed_value)
+        call assert_char('1729', trim(seed_value), 'disabled propagation preserves the global root seed')
+        call seed_rnd()
+        call random_number(first)
+        call seed_rnd()
+        call random_number(next)
+        call seed_rnd_fixed(1729, propagate=.true.)
+        call seed_rnd()
+        call random_number(replay)
+        call assert_true(all(first == replay), 'global seed replays intrinsic random draws')
+        call seed_rnd()
+        call random_number(replay)
+        call assert_true(all(next == replay), 'global seed replays successive library reseeds')
+        call assert_true(any(first /= next), 'successive library reseeds use distinct streams')
+        call seed_rnd_fixed(1730, propagate=.true.)
+        call seed_rnd()
+        call random_number(changed)
+        call assert_true(any(first /= changed), 'changing the global seed changes the stream')
+        call fix_test_seed()
+    end subroutine test_global_seed
 
     !> Guard against single-precision rounding that makes valid indices unreachable for large NP.
     !! Check bounds around 2**23 and 2**24, and huge(0), by comparing each sampled index with

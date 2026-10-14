@@ -49,7 +49,7 @@ contains
         real, allocatable :: fsc_unmasked(:)
         real    :: lp_rand, smpd, denom
         integer :: ldim(3), k, k_rand
-        call random_seed()
+        call seed_rnd()
         ldim = even%get_ldim()
         smpd = even%get_smpd()
         if( n < 1 ) THROW_HARD('phase-randomized FSC requires at least one shell')

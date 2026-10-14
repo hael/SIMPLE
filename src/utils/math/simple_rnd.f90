@@ -7,7 +7,7 @@ implicit none
 
 public :: seed_rnd, seed_rnd_fixed, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
-public :: shuffle, partial_shuffle
+public :: shuffle, partial_shuffle, has_global_seed
 private
 #include "simple_local_flags.inc"
 
@@ -114,15 +114,37 @@ contains
 
     end subroutine seed_rnd
 
-    !>  \brief  seeds the generator with a fixed state: element i of the seed is
-    !>  base + 104729 (i-1) wrapped into [1, huge-1]; it also restarts the SIMPLE_SEED count, so
-    !>  what seed_rnd draws next depends on this call only
-    subroutine seed_rnd_fixed( base )
+    !> Seed the intrinsic generator and restart the library reseed counter.
+    !! propagate exports the root seed for subsequent library reseeds and child processes.
+    !! Without propagation, only the calling thread's intrinsic state is seeded.
+    subroutine seed_rnd_fixed( base, propagate )
         use iso_fortran_env, only: int64
         integer, intent(in) :: base
+        logical, optional, intent(in) :: propagate
+        if( present(propagate) )then
+            if( propagate ) call put_simple_seed(base)
+        endif
         call put_fixed_seed(int(base, int64))
         nseed_rnd_calls = 0
     end subroutine seed_rnd_fixed
+
+    subroutine put_simple_seed( seed )
+        use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
+        integer, intent(in) :: seed
+        character(len=32)   :: seed_string
+        integer(c_int)      :: status
+        interface
+            function c_setenv( name, value, overwrite ) bind(C, name='setenv') result(ierr)
+                import :: c_char, c_int
+                character(kind=c_char), intent(in) :: name(*), value(*)
+                integer(c_int), intent(in), value   :: overwrite
+                integer(c_int)                      :: ierr
+            end function c_setenv
+        end interface
+        write(seed_string,'(i0)') seed
+        status = c_setenv('SIMPLE_SEED'//c_null_char, trim(seed_string)//c_null_char, 1_c_int)
+        if( status /= 0_c_int ) error stop 'Could not set SIMPLE_SEED for the SIMPLE process'
+    end subroutine put_simple_seed
 
     subroutine put_fixed_seed( base )
         use iso_fortran_env, only: int64
@@ -152,6 +174,13 @@ contains
         if( ios /= 0 ) THROW_HARD('SIMPLE_SEED must be an integer: '//trim(val))
         simple_seed_base = .true.
     end function simple_seed_base
+
+    !> Whether the process has opted into a reproducible library root seed.
+    logical function has_global_seed()
+        use iso_fortran_env, only: int64
+        integer(int64) :: base
+        has_global_seed = simple_seed_base(base)
+    end function has_global_seed
 
     !>  \brief  wrapper for the intrinsic Fortran random number generator
     function ran3( ) result( harvest )

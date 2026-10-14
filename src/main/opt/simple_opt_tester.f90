@@ -239,7 +239,8 @@ contains
         class(optimizer), pointer :: opt => null()
         type(opt_factory) :: ofac
         type(opt_spec)    :: spec
-        real :: lowest_cost
+        real :: lowest_cost, first_cost, first_x(2)
+        integer :: first_nevals, i
         write(*,'(A)') 'test_lbfgsb_rosenbrock'
         call spec%specify('lbfgsb', 2, limits=LIMS2, maxits=1000)
         call spec%set_costfun(rosenbrock)
@@ -251,6 +252,20 @@ contains
         call assert_real(1.0, spec%x(2), 4.e-3, 'Rosenbrock minimum from the classic start (y)')
         call assert_true(lowest_cost < 1.e-5, 'Rosenbrock cost at the minimum')
         call assert_true(spec%converged, 'L-BFGS-B converges on Rosenbrock')
+        first_x = spec%x
+        first_cost = lowest_cost
+        first_nevals = spec%nevals
+        do i = 1, 3
+            ! Leave different Hessian history in a reused optimizer, then
+            ! replay the same problem: START must be independent of history.
+            spec%x = [4.0, -4.0]
+            call opt%minimize(spec, opt, lowest_cost)
+            spec%x = [-1.2, 1.0]
+            call opt%minimize(spec, opt, lowest_cost)
+            call assert_true(all(spec%x == first_x), 'reused L-BFGS-B replays the solution exactly')
+            call assert_true(lowest_cost == first_cost, 'reused L-BFGS-B replays the cost exactly')
+            call assert_int(first_nevals, spec%nevals, 'reused L-BFGS-B replays the evaluation count')
+        enddo
         call opt%kill
         deallocate(opt)
         call spec%kill

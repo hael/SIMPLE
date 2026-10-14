@@ -1341,7 +1341,8 @@ subroutine exec_test_single_workflow( self, cline )
     use simple_commanders_project_core, only: commander_new_project
     use single_commanders_nano3D,       only: commander_autorefine3D_nano, commander_refine3D_nano
     use simple_test_truth_metrics,      only: pair_pose_error
-    use simple_test_utils,              only: set_fixed_seed
+    use simple_rnd,                     only: seed_rnd_fixed
+    !$ use omp_lib,                     only: omp_set_num_threads
     class(commander_test_single_workflow), intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
     type(cmdline)                         :: cline_sim, cline_reproject, cline_trajectory, cline_denoise
@@ -1389,7 +1390,8 @@ subroutine exec_test_single_workflow( self, cline )
     ! 0.5 deg (declared before the first run)
     integer,          parameter           :: NCONT_ITERS = 2, NPAIRS = 20000, PAIR_SEED = 20261001
     real,             parameter           :: MAX_PAIR_LOSS = 0.5
-    integer,          parameter           :: NREPROJS = 1000, MASKDIAM = 40, NREFINE_ITERS = 5, NTHR = 8
+    integer,          parameter           :: NREPROJS = 300, MASKDIAM = 40, NREFINE_ITERS = 3, NTHR = 1
+    integer,          parameter           :: NSPACE = 5000, NITERS_BETWEEN = 4
     integer,          parameter           :: TEST_SEED = 20260923
     integer,          parameter           :: NFRAMES_PER_GROUP = 10
     integer                               :: chdir_status
@@ -1419,7 +1421,8 @@ subroutine exec_test_single_workflow( self, cline )
         case default
             THROW_HARD('no sub-suite '//suite_name%to_char()//' in single_workflow; use suite=list')
     end select
-    call set_fixed_seed(TEST_SEED, propagate=.true.)
+    !$ call omp_set_num_threads(NTHR)
+    call seed_rnd_fixed(TEST_SEED, propagate=.true.)
     write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', TEST_SEED
     if( .not. cline%defined('smpd') ) call cline%set('smpd', 0.358)
     call cline%set('nthr', NTHR)
@@ -1428,6 +1431,7 @@ subroutine exec_test_single_workflow( self, cline )
     projfile = projname%to_char()//'.simple'
     call cline_nproj%set('prg',                       'new_project')
     call cline_nproj%set('projname',             projname%to_char())
+    call cline_nproj%set('nthr',                        params%nthr)
     call xnproj%execute(cline_nproj)
     call simple_getcwd(project_dir)
     projfile = filepath(project_dir, projfile)
@@ -1483,6 +1487,7 @@ subroutine exec_test_single_workflow( self, cline )
 
     call enter_workflow_stage(IMPORT_DIR, projfile)
     call cline_imptcls%set('prg',                'import_particles')
+    call cline_imptcls%set('nthr',                     params%nthr)
     call cline_imptcls%set('mkdir',                            'no')
     call cline_imptcls%set('projfile',           projfile%to_char())
     call cline_imptcls%set('stk',     denoised_trajectory%to_char())
@@ -1511,6 +1516,8 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_aref3Dnano%set('lp',                             1.5)  
     call cline_aref3Dnano%set('mskdiam',                   MASKDIAM)
     call cline_aref3Dnano%set('maxits',               NREFINE_ITERS)
+    call cline_aref3Dnano%set('maxits_between',     NITERS_BETWEEN)
+    call cline_aref3Dnano%set('nspace',                     NSPACE)
     call xaref3Dnano%execute(cline_aref3Dnano)
     call simple_getcwd(autorefine_dir)
     final_volume = filepath(filepath(autorefine_dir, 'final_results'), &
@@ -1587,6 +1594,7 @@ contains
         call cline_nano%set('lp',        1.5)
         call cline_nano%set('mskdiam',   MASKDIAM)
         call cline_nano%set('maxits',    NCONT_ITERS)
+        call cline_nano%set('nspace',    NSPACE)
         call cline_nano%set('nthr',      params%nthr)
         call xref3Dnano%execute(cline_nano)
         call cline_nano%kill

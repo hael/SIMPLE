@@ -112,7 +112,7 @@ contains
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
         call fopen(fnr, orifile, status='REPLACE', action='WRITE', iostat=file_stat, iomsg=io_message)
-        call fileiochk(' Error opening file for writing: '//orifile%to_char()//' ; '//trim(io_message), file_stat)
+        if( file_stat /= 0 ) call fileiochk(' Error opening file for writing: '//orifile%to_char()//' ; '//trim(io_message), file_stat)
         cnt = 0
         do i=ffromto(1),ffromto(2)
             cnt = cnt + 1

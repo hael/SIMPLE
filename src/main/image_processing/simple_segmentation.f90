@@ -290,7 +290,7 @@ contains
         n_it = 0
         do while(abs(minval(diff(:))) > 0.005 .and. n_it < N_MAXIT)
             n_it = n_it + 1
-            call random_seed()
+            call seed_rnd()
             call random_number(r)                   !rand # in  [ 0,1 ), uniform distribution
             r = r*(maxval(grad) + minval(grad))/100 !rand # in  [ 0,(max(grad)-min(grad))/100 )
             t(1) = tthresh(1) + r

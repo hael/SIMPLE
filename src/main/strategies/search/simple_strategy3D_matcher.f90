@@ -153,7 +153,10 @@ contains
         endif
         call prepare_refs_sigmas_and_pftc()
         if( ctrl%do_bench ) t_memoize_refs = tic()
-        if( .not. ctrl%do_prob_align .and. .not. p_ptr%l_cart_refine ) &
+        ! Probabilistic assignment skips discrete correlation here, but its
+        ! continuous polish still evaluates the memoized reference terms.
+        if( .not. p_ptr%l_cart_refine .and. &
+            &(.not. ctrl%do_prob_align .or. trim(p_ptr%inpl_cont) == 'yes') ) &
             &call build%pftc%memoize_refs(eulspace=build%eulspace)
         if( ctrl%do_bench )then
             rt_memoize_refs = toc(t_memoize_refs)
@@ -198,7 +201,7 @@ contains
             incr_shifts(:,1:batchsz) = 0.0
             call build_batch_particles_local()
             if( ctrl%do_bench ) t_align = tic()
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,orientation) &
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr) firstprivate(orientation) &
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1, batchsz
                 iptcl_map     = batch_start + iptcl_batch - 1

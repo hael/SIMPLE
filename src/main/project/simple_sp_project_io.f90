@@ -340,7 +340,7 @@ contains
                     if(present(nran)) then
                         if(nran .gt. 0) then
                             ! randomly choose nran particles
-                            call random_seed()
+                            call seed_rnd()
                             allocate(indices(nran))
                             iori = 1
                             do while (iori <= nran)   

@@ -6,6 +6,8 @@ implicit none
 contains
 
 module subroutine exec_test_simulated_workflow( self, cline )
+    !$ use omp_lib, only: omp_set_num_threads
+    use simple_rnd,                only: seed_rnd_fixed
     use simple_atoms,              only: atoms
     use simple_test_truth_metrics, only: validate_reconstructed_volume
     use simple_molecule_data,      only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
@@ -41,7 +43,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     integer,          parameter :: NFRAMES        = 16
     integer,          parameter :: NMOVIES        = 10
     integer,          parameter :: EXTRACT_BOX    = 192
-    integer,          parameter :: NTHR           = 4
+    integer,          parameter :: NTHR           = 1
     integer,          parameter :: TEST_SEED      = 20260923
     real,             parameter :: MIN_VOL_CORR   = 0.80
     real,             parameter :: MAX_FSC0143    = 40.0
@@ -110,7 +112,9 @@ module subroutine exec_test_simulated_workflow( self, cline )
         case default
             THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
-    call set_fixed_seed(TEST_SEED, propagate=.true.)
+    ! Serial execution fixes draw order, including work before the first commander.
+    !$ call omp_set_num_threads(NTHR)
+    call seed_rnd_fixed(TEST_SEED, propagate=.true.)
     write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', TEST_SEED
     test_workdir = 'test_simulated_workflow_'//system_name%to_char()
     call simple_getcwd(cwd_root)
@@ -221,6 +225,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     write(logfhandle,'(a)') '>>> Step 4: create a project and import the movies'
     call cline_new_project%set('projname',              PROJNAME)
     call cline_new_project%set('qsys_name',              'local')
+    call cline_new_project%set('nthr',                     NTHR)
     call xnew_project%execute(cline_new_project)
     call cline_new_project%kill()
     call simple_getcwd(workflow_root)
@@ -235,6 +240,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call cline_import_movies%set('kv',                        KV)
     call cline_import_movies%set('smpd',                    SMPD)
     call cline_import_movies%set('ctf',                    'yes')
+    call cline_import_movies%set('nthr',                   NTHR)
     call ximport_movies%execute(cline_import_movies)
     call cline_import_movies%kill()
     call update_project_path

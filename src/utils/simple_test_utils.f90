@@ -41,39 +41,17 @@ type(test_failure),      allocatable :: failures(:)
 
 contains
 
-    ! seeds the intrinsic generator with a fixed state; propagate also sets SIMPLE_SEED, from which the
-    ! commanders run in process reseed (parameters%new)
+    ! Delegate local and propagated seeding to the library RNG.
     subroutine set_fixed_seed( base_seed, propagate )
         integer,           intent(in) :: base_seed
         logical, optional, intent(in) :: propagate
-        if( present(propagate) )then
-            if( propagate ) call put_simple_seed(base_seed)
-        endif
-        call seed_rnd_fixed(base_seed)
+        call seed_rnd_fixed(base_seed, propagate)
     end subroutine set_fixed_seed
 
     ! SIMPLE_SEED of the test process, whatever the environment holds: a run by hand draws what a CTest run draws
     subroutine fix_test_seed
-        call put_simple_seed(TEST_SEED)
+        call seed_rnd_fixed(TEST_SEED, propagate=.true.)
     end subroutine fix_test_seed
-
-    subroutine put_simple_seed( seed )
-        use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
-        integer, intent(in) :: seed
-        character(len=32)   :: seed_string
-        integer(c_int)      :: status
-        interface
-            function c_setenv( name, value, overwrite ) bind(C, name='setenv') result(ierr)
-                import :: c_char, c_int
-                character(kind=c_char), intent(in) :: name(*), value(*)
-                integer(c_int), intent(in), value   :: overwrite
-                integer(c_int)                      :: ierr
-            end function c_setenv
-        end interface
-        write(seed_string,'(i0)') seed
-        status = c_setenv('SIMPLE_SEED'//c_null_char, trim(seed_string)//c_null_char, 1_c_int)
-        if( status /= 0_c_int ) error stop 'Could not set SIMPLE_SEED for the test process'
-    end subroutine put_simple_seed
 
     subroutine reset_test_report( filename )
         character(len=*), optional, intent(in) :: filename
