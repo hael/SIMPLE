@@ -1,32 +1,25 @@
-!@descr: independent commanders that run solve3D followed by solve3D_addon over consecutive particle chunks
-! emulate_solve3D_stream preserves the explicit stream-emulation workflow; solve3D_chunks derives balanced capped runs.
-! They share only policy-neutral leaf utilities for step projects, forwarded keys and step statistics.
-! Contract: doc/implementation_notes/planned/emulate_solve3D_stream.md.
+!@descr: solve3D_chunks commander, which runs solve3D followed by solve3D_addon over balanced particle chunks
+! The runs are consecutive whole stacks with balanced sizes; the step projects, forwarded keys and step
+! statistics are leaf utilities of this module. Contract: doc/policies/3D/solve3D_chunks_policy.md.
 module simple_commanders_solve3D_chunks
 use simple_commanders_api
 use simple_commanders_solve3D,       only: commander_solve3D, commander_solve3D_addon
 use simple_solve3D_manifest,         only: solve3D_manifest, solve3D_stage_record, manifest_records_input
 use simple_solve3D_addon_report,     only: solve3D_addon_report, ADDON_REPORT_FNAME
-use simple_solve3D_stream_emulation, only: emulation_report, emulation_step, partition_selected, &
-    &partition_selected_balanced, chunk_nsample, prepare_emulation_source, select_emulation_step, &
-    &EMULATION_REPORT_FNAME, CHUNKS_REPORT_FNAME
+use simple_solve3D_chunks_plan, only: chunks_report, chunks_step, &
+    &partition_selected_balanced, chunk_nsample, prepare_chunks_source, select_chunks_step, &
+    &CHUNKS_REPORT_FNAME
 use simple_refine3D_fnames,          only: refine3D_fsc_fname
 use simple_ui,                       only: get_prg_ptr
 use simple_ui_program,               only: ui_program
 implicit none
 
-public :: commander_emulate_solve3D_stream, commander_solve3D_chunks
+public :: commander_solve3D_chunks
 private
 #include "simple_local_flags.inc"
 
-integer,          parameter :: MIN_PTCLS_PER_STATE = 5       !< the stream's minimum per state (base and cohort)
 character(len=*), parameter :: SOURCE_PROJ_NAME    = 'source.simple'
 character(len=*), parameter :: BASE_PROJ_NAME      = 'base.simple'
-
-type, extends(commander_base) :: commander_emulate_solve3D_stream
-    contains
-    procedure :: execute => exec_emulate_solve3D_stream
-end type commander_emulate_solve3D_stream
 
 type, extends(commander_base) :: commander_solve3D_chunks
     contains
@@ -34,182 +27,6 @@ type, extends(commander_base) :: commander_solve3D_chunks
 end type commander_solve3D_chunks
 
 contains
-
-    subroutine exec_emulate_solve3D_stream( self, cline )
-        class(commander_emulate_solve3D_stream), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
-        type(commander_solve3D)       :: xsolve3D
-        type(commander_solve3D_addon) :: xsolve3D_addon
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(emulation_report)        :: report
-        type(emulation_step)          :: step
-        type(cmdline)                 :: cline_entry, cline_base, cline_add
-        type(chash)                   :: job_descr
-        type(ui_program), pointer     :: ui_addon => null()
-        type(string),     allocatable :: keys(:)
-        type(string)                  :: edir, source_in, source_fname, frozen, result_proj, step_proj, cmd_text, report_fname
-        integer,          allocatable :: part(:)
-        logical,          allocatable :: selected(:)
-        character(len=:), allocatable :: key
-        character(len=STDLEN)         :: msg
-        integer(8) :: t0, t1, rate
-        integer    :: i, k, status, nchunks, nbase, naddon, nmin, nselected, nfrozen_sel, nstates
-        logical    :: l_rollback
-        ! ---- the command line: refusals and required inputs, before anything is written
-        if( .not. cline%defined('projfile') )     THROW_HARD('emulate_solve3D_stream requires projfile')
-        if( .not. cline%defined('nptcls_base') )  THROW_HARD('emulate_solve3D_stream requires nptcls_base')
-        if( .not. cline%defined('nptcls_addon') ) THROW_HARD('emulate_solve3D_stream requires nptcls_addon')
-        keys = cline%get_keys()
-        do i = 1, size(keys)
-            key = trim(keys(i)%to_char())
-            select case(key)
-                case('vol1', 'cavg_ini', 'cavg_ini_ext', 'state', 'projfile_frozen')
-                    THROW_HARD(key//' is not supported by emulate_solve3D_stream: it is not an input of the stream''s base run')
-            end select
-        enddo
-        if( cline%defined('mkdir') )then
-            if( .not. (cline%get_carg('mkdir') == 'yes') ) THROW_HARD('emulate_solve3D_stream needs mkdir=yes: its steps live in its execution directory')
-        endif
-        ! the emulation always works in its own numbered execution directory, on a copy of the project
-        call cline%set('mkdir', 'yes')
-        call get_prg_ptr(string('solve3D_addon'), ui_addon)
-        if( .not. associated(ui_addon) ) THROW_HARD('the solve3D_addon user interface is not registered')
-        ! the command line as given, kept for the steps and the report
-        cline_entry = cline
-        call cline_entry%set('mkdir', 'yes')
-        call cline_entry%gen_job_descr(job_descr)
-        cmd_text = job_descr%chash2str()
-        call job_descr%kill
-        source_in = simple_abspath(cline%get_carg('projfile'))
-        ! ---- execution directory: the input project is copied into it
-        call params%new(cline)
-        call simple_getcwd(edir)
-        ! the input project is never written: params%new copied it into the execution directory
-        if( simple_abspath(params%projfile) == source_in )then
-            THROW_HARD('the emulation did not enter its own execution directory; its steps would overwrite the input project')
-        endif
-        nbase      = params%nptcls_base
-        naddon     = params%nptcls_addon
-        nstates    = params%nstates
-        nmin       = MIN_PTCLS_PER_STATE * nstates
-        l_rollback = trim(params%rollback) == 'yes'
-        ! ---- the selection and its partition
-        call spproj%read(params%projfile)
-        if( spproj%os_ptcl2D%get_noris() < 1 ) THROW_HARD('the project has no particles (ptcl2D)')
-        if( spproj%os_ptcl3D%get_noris() /= spproj%os_ptcl2D%get_noris() )then
-            THROW_HARD('ptcl3D and ptcl2D of the project differ in size: the emulation needs one particle index space')
-        endif
-        allocate(selected(spproj%os_ptcl2D%get_noris()), source=.false.)
-        do i = 1, size(selected)
-            selected(i) = spproj%os_ptcl2D%get_state(i) > 0
-        enddo
-        nselected = count(selected)
-        call partition_selected(selected, nbase, naddon, nmin, part, nchunks, status, msg)
-        if( status /= 0 ) THROW_HARD(trim(msg))
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> EMULATE_SOLVE3D_STREAM SELECTED/BASE/ADDON CHUNK/ADDON STEPS: ', &
-            &nselected, '/', nbase, '/', naddon, '/', nchunks
-        ! ---- the source copy: no 3D solution, no run registration
-        call prepare_emulation_source(spproj)
-        source_fname = edir%to_char()//'/'//SOURCE_PROJ_NAME
-        call spproj%projinfo%set(1, 'projfile', source_fname%to_char())
-        call spproj%write(source_fname)
-        call spproj%kill
-        call report%new(cmd_text%to_char(), source_in%to_char(), nselected, nbase, naddon, nchunks, nstates, l_rollback)
-        report_fname = edir%to_char()//'/'//EMULATION_REPORT_FNAME
-        ! ---- the base run
-        write(logfhandle,'(A)') '>>> EMULATE_SOLVE3D_STREAM BASE RUN'
-        step_proj = edir%to_char()//'/'//BASE_PROJ_NAME
-        call write_solve3D_step_project(source_fname, step_proj, part, 0)
-        cline_base = cline_entry
-        call cline_base%set('prg', 'solve3D')
-        call cline_base%set('projfile', step_proj%to_char())
-        call cline_base%delete('nptcls_base')
-        call cline_base%delete('nptcls_addon')
-        call cline_base%delete('rollback')
-        call cline_base%delete('addon_diag')
-        call system_clock(t0, rate)
-        call xsolve3D%execute(cline_base)
-        call system_clock(t1)
-        call simple_chdir(edir)
-        result_proj = simple_abspath(cline_base%get_carg('projfile'))
-        step = emulation_step()
-        step%kind     = 'base'
-        step%ipart    = 0
-        step%nfrozen  = 0
-        step%nadded   = count(part == 0)
-        step%seconds  = real(t1 - t0) / real(rate)
-        step%projfile = result_proj%to_char()
-        call collect_solve3D_step_stats(result_proj, step, .false.)
-        call report%add_step(step)
-        call report%write(report_fname)
-        frozen      = result_proj
-        nfrozen_sel = step%nadded
-        call cline_base%kill
-        ! ---- the add-on steps
-        do k = 1, nchunks
-            write(logfhandle,'(A,I0,A,I0)') '>>> EMULATE_SOLVE3D_STREAM ADDON STEP ', k, ' OF ', nchunks
-            step_proj = edir%to_char()//'/addon_'//int2str_pad(k, 2)//METADATA_EXT
-            call write_solve3D_step_project(source_fname, step_proj, part, k)
-            call cline_add%kill
-            call cline_add%set('prg',             'solve3D_addon')
-            call cline_add%set('projfile',        step_proj%to_char())
-            call cline_add%set('projfile_frozen', frozen%to_char())
-            call cline_add%set('mkdir',           'yes')
-            call forward_keys(cline_add)
-            call system_clock(t0, rate)
-            call xsolve3D_addon%execute(cline_add)
-            call system_clock(t1)
-            call simple_chdir(edir)
-            step = emulation_step()
-            step%kind     = 'addon'
-            step%ipart    = k
-            step%nfrozen  = nfrozen_sel
-            step%nadded   = count(part >= 1 .and. part <= k) + count(part == 0) - nfrozen_sel
-            step%seconds  = real(t1 - t0) / real(rate)
-            step%projfile = step_proj%to_char()
-            call collect_solve3D_step_stats(step_proj, step, .true.)
-            if( l_rollback .and. step%l_regressed )then
-                step%l_adopted = .false.
-                write(logfhandle,'(A,I0,A)') '>>> EMULATE_SOLVE3D_STREAM ADDON STEP ', k, &
-                    &' REGRESSED: NOT ADOPTED, THE PREVIOUS RESULT STAYS FROZEN AND THE CHUNK JOINS THE NEXT STEP'
-            else
-                frozen      = step_proj
-                nfrozen_sel = nfrozen_sel + step%nadded
-            endif
-            call report%add_step(step)
-            call report%write(report_fname)
-        enddo
-        ! ---- cleanup
-        write(logfhandle,'(A,A)') '>>> EMULATE_SOLVE3D_STREAM REPORT WRITTEN: ', report_fname%to_char()
-        write(logfhandle,'(A,A)') '>>> EMULATE_SOLVE3D_STREAM FINAL RESULT: ', frozen%to_char()
-        call report%kill
-        call cline_add%kill
-        call cline_entry%kill
-        call simple_touch(TASK_FINISHED)
-        call simple_end('**** SIMPLE_EMULATE_SOLVE3D_STREAM NORMAL STOP ****')
-
-    contains
-
-        !> The add-on command line takes the keys the solve3D_addon interface accepts and the base run's manifest
-        !! does not record (those reach the add-on through the manifest); the emulation's own keys stay behind
-        subroutine forward_keys( cline_dst )
-            class(cmdline), intent(inout) :: cline_dst
-            type(string), allocatable :: ekeys(:)
-            character(len=:), allocatable :: ekey
-            integer :: j
-            ekeys = cline_entry%get_keys()
-            do j = 1, size(ekeys)
-                ekey = trim(ekeys(j)%to_char())
-                select case(ekey)
-                    case('prg', 'projfile', 'projfile_frozen', 'mkdir', 'nptcls_base', 'nptcls_addon', 'rollback')
-                        cycle
-                end select
-                call copy_forwardable_addon_arg(cline_dst, cline_entry, ui_addon, ekey)
-            enddo
-        end subroutine forward_keys
-
-    end subroutine exec_emulate_solve3D_stream
 
     subroutine exec_solve3D_chunks( self, cline )
         use simple_solve3D_utils, only: solve3D_symsrch_stage
@@ -219,8 +36,8 @@ contains
         type(commander_solve3D_addon) :: xsolve3D_addon
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        type(emulation_report)        :: report
-        type(emulation_step)          :: step
+        type(chunks_report)        :: report
+        type(chunks_step)          :: step
         type(cmdline)                 :: cline_entry, cline_base, cline_add
         type(chash)                   :: job_descr
         type(ui_program), pointer     :: ui_addon => null(), ui_workflow => null()
@@ -313,7 +130,7 @@ contains
             write(logfhandle,'(A,I0,A,I0)') '>>> SOLVE3D_CHUNKS RUN ', k, ' PARTICLES: ', part_sizes(k)
         enddo
         ! ---- the source copy: no 3D solution, no run registration
-        call prepare_emulation_source(spproj)
+        call prepare_chunks_source(spproj)
         source_fname = edir%to_char()//'/'//SOURCE_PROJ_NAME
         call spproj%projinfo%set(1, 'projfile', source_fname%to_char())
         call spproj%write(source_fname)
@@ -333,7 +150,7 @@ contains
         call system_clock(t1)
         call simple_chdir(edir)
         result_proj = simple_abspath(cline_base%get_carg('projfile'))
-        step = emulation_step()
+        step = chunks_step()
         step%kind     = 'base'
         step%ipart    = 0
         step%nfrozen  = 0
@@ -361,7 +178,7 @@ contains
             call xsolve3D_addon%execute(cline_add)
             call system_clock(t1)
             call simple_chdir(edir)
-            step = emulation_step()
+            step = chunks_step()
             step%kind     = 'addon'
             step%ipart    = k
             step%nfrozen  = nfrozen_sel
@@ -421,7 +238,7 @@ contains
         type(sp_project) :: proj
         type(string)     :: pname
         call proj%read(source_fname)
-        call select_emulation_step(proj, part, kmax)
+        call select_chunks_step(proj, part, kmax)
         call proj%projinfo%set(1, 'projfile', fname%to_char())
         pname = get_fbody(basename(fname), string('simple'))
         call proj%projinfo%set(1, 'projname', pname%to_char())
@@ -468,7 +285,7 @@ contains
     !> Read the last stage and limits from the manifest, result FSCs and, for an add-on, its comparison report.
     subroutine collect_solve3D_step_stats( projfile, stp, l_addon )
         class(string),        intent(in)    :: projfile
-        type(emulation_step), intent(inout) :: stp
+        type(chunks_step), intent(inout) :: stp
         logical,              intent(in)    :: l_addon
         type(sp_project)           :: proj
         type(solve3D_manifest)     :: man

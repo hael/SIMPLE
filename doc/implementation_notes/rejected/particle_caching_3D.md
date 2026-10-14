@@ -301,7 +301,7 @@ leaves in "particle preparation".
 
 The global-sigma refactoring is finished and validated first, as planned.
 Then the probabilistic pre-step, which has its own plan:
-`doc/refactoring_notes/planned/prob_search_speedup.md`. Its section 2
+`doc/refactoring_notes/completed/prob_search_speedup.md`. Its section 2
 counts what a sampled particle costs in the pre-step from the code (the
 exhaustive table against 3,000 references, then a 25-point coarse shift
 grid and an L-BFGS-B refinement for each of 17 to 55 best references, the

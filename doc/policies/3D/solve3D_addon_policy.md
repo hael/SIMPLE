@@ -372,23 +372,6 @@ now assigns class averages to fixed reference volumes instead,
 - **Execution.** `mkdir=no` in each update's own directory; `nparts`,
   `worker_server` and `worker_priority` pass through.
 
-### Offline emulation
-
-`simple_exec prg=emulate_solve3D_stream projfile=<project> nptcls_base=<n>
-nptcls_addon=<m> <solve3D inputs>` replays this cycle on an existing project
-to tune the stream's settings (design: `doc/implementation_notes/planned/emulate_solve3D_stream.md`).
-The first `nptcls_base` selected particles are the base `solve3D` run; the rest
-are added by `solve3D_addon` in chunks of `nptcls_addon` selected particles, the
-last chunk taking the remainder when it is at least one chunk, and a remainder
-below one chunk being a single add-on. Every step executes the two commanders
-unchanged on the same row set with the later chunks deselected. It differs from
-the stream in that the cohort size is fixed (no cadence gate, no whole-stack
-rounding), the rows never grow, and the project's own 2D classes and FRCs are
-kept (a look-ahead the stream does not have). With `rollback=yes` (default) a
-REGRESSED add-on is not adopted: the previous result stays frozen and its chunk
-joins the next add-on. `emulate_solve3D_stream_report.txt` lists wall time,
-the last stage and the per-state resolutions and verdicts of every step.
-
 ### Automatic balanced chunks
 
 `simple_exec prg=solve3D_chunks projfile=<project> <solve3D inputs>` runs the
@@ -430,6 +413,6 @@ adopted, and the final union is published over the workflow's project copy. The 
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90`, `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | the frozen add on the gridding and PCG backends |
 | `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_utils.f90` | the add-on context (the registration pass, stage-3 early stopping, the `frozen_rec` handshake), `calc_frozen_rec`, the ladder from the manifest |
 | `src/main/solve/simple_solve3D_addon_report.f90`, `src/main/volume/simple_volpair_metrics.f90` | the validation report |
-| `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90`, `src/main/solve/simple_solve3D_stream_emulation.f90` | `emulate_solve3D_stream` and `solve3D_chunks`: independent legacy and automatic orchestration with shared source preparation, cumulative step-project, statistics, and report leaf utilities |
+| `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90`, `src/main/solve/simple_solve3D_chunks_plan.f90` | `solve3D_chunks`: the automatic orchestration with its source preparation, cumulative step projects, statistics and report leaf utilities |
 | `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` (`exec_bootstrap_rec3D`) | the final reconstruction that bootstraps the union's sigma2 state |
 | `src/utils/simple_map_reduce.f90` (`split_nobjs_active`), `src/utils/qsys/simple_qsys_env.f90` (`new`, `l_active`), `src/main/project/simple_sp_project_core.f90` (`merge_algndocs`) | partitions that balance the active particles, and the range-checked merge |

@@ -58,6 +58,7 @@ type sym
     ! calculators
     procedure, private :: sym_dists_1, sym_dists_2
     generic            :: sym_dists => sym_dists_1, sym_dists_2
+    procedure          :: sym_dist_table
     procedure          :: nearest_sym_neighbors
     ! utils
     procedure, private :: build_eullims
@@ -461,6 +462,81 @@ contains
         euldist     = rad2deg( euldist )
         inplrotdist = rad2deg( inplrotdist )
     end subroutine sym_dists_2
+
+    !>  \brief  table of the symmetry-minimised Euler distance (degrees): distmat(i,j) is the euldist that
+    !!          sym_dists(oref = os_ref(i), oasym = os_asym(j)) returns, with the same tie folding. The symmetry
+    !!          copies of os_asym, the projection normals and the in-plane unit vectors are formed once per
+    !!          orientation (sym_dists forms them once per pair), so a full x subspace table costs dot products.
+    subroutine sym_dist_table( self, os_ref, os_asym, distmat )
+        use simple_math, only: rotmat2d
+        class(sym),  intent(inout) :: self
+        class(oris), intent(inout) :: os_ref, os_asym
+        real,        intent(out)   :: distmat(:,:)
+        real, parameter   :: TIETOL = 1.e-4 ! radians, as in sym_dists
+        real, parameter   :: u(2) = [0., 1.]
+        real, allocatable :: nrm_asym(:,:,:), x_asym(:,:,:), nrm_ref(:,:), x_ref(:,:)
+        type(ori) :: o, osym
+        real      :: mat(2,2), euldist, inplrotdist, dist, inpldist
+        integer   :: nref, nasym, i, j, isym
+        nref  = os_ref%get_noris()
+        nasym = os_asym%get_noris()
+        if( size(distmat,1) /= nref .or. size(distmat,2) /= nasym )then
+            THROW_HARD('distance table shape does not match the orientation sets; sym_dist_table')
+        endif
+        allocate(nrm_asym(3,self%n,nasym), x_asym(2,self%n,nasym), nrm_ref(3,nref), x_ref(2,nref))
+        ! nasym x nsym symmetry copies: in parallel, as sym_dists ran in the pair loop it replaces (60 copies per
+        ! orientation in I)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(j,isym,o,osym,mat)
+        do j = 1,nasym
+            call os_asym%get_ori(j, o)
+            nrm_asym(:,1,j) = o%get_normal()
+            call rotmat2d(o%e3get(), mat)
+            x_asym(:,1,j) = matmul(u, mat)
+            do isym = 2,self%n
+                call self%apply(o, isym, osym)
+                nrm_asym(:,isym,j) = osym%get_normal()
+                call rotmat2d(osym%e3get(), mat)
+                x_asym(:,isym,j) = matmul(u, mat)
+            enddo
+            call o%kill
+            call osym%kill
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,o,mat)
+        do i = 1,nref
+            call os_ref%get_ori(i, o)
+            nrm_ref(:,i) = o%get_normal()
+            call rotmat2d(o%e3get(), mat)
+            x_ref(:,i) = matmul(u, mat)
+            call o%kill
+        enddo
+        !$omp end parallel do
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) &
+        !$omp private(i,j,isym,euldist,inplrotdist,dist,inpldist)
+        do j = 1,nasym
+            do i = 1,nref
+                ! the same order of operands and the same branches as sym_dists_1
+                euldist     = myacos(dot_product(nrm_asym(:,1,j), nrm_ref(:,i)))
+                inplrotdist = myacos(dot_product(x_asym(:,1,j),   x_ref(:,i)))
+                do isym = 2,self%n
+                    dist = myacos(dot_product(nrm_asym(:,isym,j), nrm_ref(:,i)))
+                    if( dist < euldist - TIETOL )then
+                        euldist     = dist
+                        inplrotdist = myacos(dot_product(x_asym(:,isym,j), x_ref(:,i)))
+                    elseif( dist <= euldist + TIETOL )then
+                        inpldist = myacos(dot_product(x_asym(:,isym,j), x_ref(:,i)))
+                        if( inpldist < inplrotdist )then
+                            euldist     = min(euldist, dist)
+                            inplrotdist = inpldist
+                        endif
+                    endif
+                enddo
+                distmat(i,j) = rad2deg(euldist)
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(nrm_asym, x_asym, nrm_ref, x_ref)
+    end subroutine sym_dist_table
 
     !>  \brief  is a getter
     subroutine get_symori( self, symop, e_sym )

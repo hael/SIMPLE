@@ -2,6 +2,9 @@
 
 Implementation note, 2026-10-12. **Plan; nothing implemented.**
 
+Note (2026-10-14): `emulate_solve3D_stream` has been removed. Case F and its
+command line in the run table need restating with `solve3D_chunks`.
+
 **Reviewed 2026-10-13** (a static review, deleted once its changes were in
 this plan; ruling of 2026-10-14) and revised the same day to meet it. The
 review found the diagnosis sound but the plan not ready: two scientific

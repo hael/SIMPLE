@@ -129,7 +129,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Projects')
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, optics_groups, optics_maps, solve3d_manifest, project_superset, solve3d_addon_report, solve3d_stream_emulation, state_weight_set, cavgs_work_project)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, optics_groups, optics_maps, solve3d_manifest, project_superset, solve3d_addon_report, solve3d_chunks_plan, state_weight_set, cavgs_work_project)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 
@@ -207,7 +207,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Polar Alignment')
         call unit_pftc_align2D3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (polar_correlation, continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_io, sigma2_state, sigma2_bootstrap, cavg_registration, cavgs_state_match)', '', .false., '')
+            &'One sub-suite of this area to run alone (polar_correlation, continuous_in_plane, refine3d_in_plane_state, 2d_probability_table_io, 3d_probability_table, sigma2_state, sigma2_bootstrap, cavg_registration, cavgs_state_match)', '', .false., '')
         call add_ui_program('unit_pftc_align2D3D', unit_pftc_align2D3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_pftc_align2D3D
 

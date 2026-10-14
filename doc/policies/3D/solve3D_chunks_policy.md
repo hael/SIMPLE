@@ -5,9 +5,10 @@ from all active particles of a project in balanced chunks: a `solve3D` run on
 the first chunk, then one `solve3D_addon` run per later chunk, each frozen on
 the result before it. The contracts of the two runs are in
 [solve3D_policy.md](solve3D_policy.md) and
-[solve3D_addon_policy.md](solve3D_addon_policy.md). The design record shared
-with `emulate_solve3D_stream` is
-[emulate_solve3D_stream.md](../../implementation_notes/planned/emulate_solve3D_stream.md).
+[solve3D_addon_policy.md](solve3D_addon_policy.md). The design record is
+[emulate_solve3D_stream.md](../../implementation_notes/completed/emulate_solve3D_stream.md);
+the explicit-size emulator it also describes, `emulate_solve3D_stream`, was
+removed on 2026-10-14.
 
 Status (2026-10-11): implemented, not yet compiled or run.
 
@@ -26,8 +27,7 @@ unchanged, in the same process, and reads what they publish.
 It is meant primarily for emulating the stream and finding stream
 parameters. Its runs are formed as the stream forms them, consecutive whole
 stacks in arrival order, with sizes chosen automatically within the limits
-below. It has no cadence gate and no rollback. `emulate_solve3D_stream`
-replays the stream's cycle with caller-chosen chunk sizes.
+below. It has no cadence gate and no rollback.
 
 ## 2. Command Line
 
@@ -41,7 +41,8 @@ replays the stream's cycle with caller-chosen chunk sizes.
 | compute keys (`nparts`, `nthr`) and the execution-environment keys | accepted; they go to the base run and every add-on |
 | `nsample` | not accepted; derived (section 3) |
 | `rec_backend`, `maxits_pcg`, `maxits_ml`, `pcg_solvent`, `pcg_solvent_lambda`, `pcg_solvent_check` | not accepted; reconstruction is always `rec_backend=gridding` |
-| `nptcls_base`, `nptcls_addon`, `rollback` | not accepted; the plan and the adoption rule replace them |
+| `prob_fast` | optional, developer key (default `no`); goes to the base run and every add-on |
+| `nptcls_base` | not accepted; the plan replaces it |
 | `vol1`, `cavg_ini`, `cavg_ini_ext`, `state`, `projfile_frozen` | not accepted |
 
 The workflow checks every key against its own UI entry and refuses anything
@@ -192,8 +193,7 @@ verdict. Each part is searched exactly once, and the frozen union grows by
 exactly that part. A rejected part is never merged into a later cohort, which
 could break the 30000 cap. A regression is logged with the states it affects
 (`SOLVE3D_CHUNKS ADDON STEP k REGRESSED IN STATE(S): ...; ADOPTED ALL THE
-SAME`) and stays visible in the report. For the stream's rollback, use
-`emulate_solve3D_stream rollback=yes`.
+SAME`) and stays visible in the report.
 
 ## 6. Key Routing
 
@@ -313,8 +313,8 @@ The child runs keep their own refusals.
 | `src/main/ui/simple/simple_ui_solve3D.f90` (`new_solve3D_chunks`, `add_solve3D_base_inputs`) | the command-line contract |
 | `src/main/exec/simple_exec_solve3D.f90` | the program entry |
 | `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90` (`exec_solve3D_chunks`, `publish_solve3D_result`) | validation, `nsample`, the defaults, the stack indices for the cuts, the run sequence, key routing, statistics, the regression log, the report file, publication |
-| `src/main/solve/simple_solve3D_stream_emulation.f90` (`chunk_nsample`, `derive_chunk_run_count`, `partition_selected_balanced`, `prepare_emulation_source`, `select_emulation_step`, `emulation_report`) | the sampling constants, the run count, the whole-stack cuts, the source and step projects, the report format |
-| `src/main/solve/simple_solve3D_stream_emulation_tester.f90` | the unit tests |
+| `src/main/solve/simple_solve3D_chunks_plan.f90` (`chunk_nsample`, `derive_chunk_run_count`, `partition_selected_balanced`, `prepare_chunks_source`, `select_chunks_step`, `chunks_report`) | the sampling constants, the run count, the whole-stack cuts, the source and step projects, the report format |
+| `src/main/solve/simple_solve3D_chunks_plan_tester.f90` | the unit tests (suite `solve3d_chunks_plan`) |
 | `src/main/commanders/simple/simple_commanders_solve3D.f90` (`write_solve3D_benchmark`) | the child runs; their `SOLVE3D_BENCH.txt` |
 | `src/main/solve/simple_solve3D_manifest.f90` (`replay`, `read_registered`, `register`) | `nsample`, `nstates` and the recorded inputs reaching the add-ons; the manifest registration of the published project |
 | `src/main/solve/simple_solve3D_utils.f90` (`solve3D_symsrch_stage`) | the lowest supported `nstages` |

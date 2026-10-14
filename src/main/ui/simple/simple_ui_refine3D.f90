@@ -150,6 +150,13 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_MASK, nu_msk_sig, group="mask", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'prob_fast', 'binary', 'Speed-ups of the probabilistic table', &
+        &'Developer key, pending promotion: in the multi-state probabilistic table, score the coarse shift grid from shifted &
+        &copies of the particle and replace the shift search by a quadratic fit to that grid where the fit is well &
+        &conditioned (L-BFGS-B remains the fallback); in the single-state table, apply the shift seed to the particle once &
+        &instead of to every reference and record it as a particle shift. Approximate away from the seed rotation and &
+        &on the grid(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="search", visibility=UI_VIS_DEVELOPER)
         ! computer controls
         call refine3D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call refine3D%add_input(UI_COMP, nthr,                              group="compute", visibility=UI_VIS_STANDARD)

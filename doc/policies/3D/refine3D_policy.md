@@ -656,6 +656,70 @@ them.
 
 The refined map of X, its FSC and the refined poses live in the work project.
 
+### Probabilistic pre-step benchmark files and developer keys
+
+The pre-step has benchmark files of its own, so its time is split into named
+parts instead of being one number in the strategy file:
+
+- `PROB_TAB_BENCH_ITERnnn_PARTppp.txt`, one per table part: wall-clock entries
+  measured outside the parallel regions (setup, reference preparation,
+  particle reading and preparation, table fill, table write), and a separate
+  thread-seconds block (seed estimation, score loop, refinement, their sum, the
+  fill region's wall time and the load balance). Thread-seconds are never part
+  of `% accounted for`. The context lists the references, the references
+  refined per particle, the shift searches, their alternations, the coarse-grid
+  evaluations and the objective and gradient evaluations.
+- `PROB_ALIGN_BENCH_ITERnnn.txt`, written by the driver, all wall time:
+  setup, sampling and project write, scheduling (launch to last part finished),
+  table reads, `ref_assign` and the assignment write.
+
+`prob_fast` (`yes|no`, default `no`) is a developer key pending promotion. It
+switches on three approximations of the probabilistic table, each in its own
+scope, so the same key serves single-state and multi-state runs. It is on
+refine3D, solve3D, solve3D_chunks and solve3D_addon (solve3D_chunks forwards
+it to its add-on runs; the frozen run's manifest does not record it), is read by `fill_tab_range` (and by `ref_assign` for the
+seed), and reaches `prob_tab` and `prob_align` through the command line they
+copy.
+
+Two of them move a shift from the reference to the particle. The kernels shift
+the reference in its own polar frame and correlate over every in-plane
+rotation, so a reference-frame shift s is the particle-frame shift
+`s * R(angle of the rotation)` at that rotation (what `sh_rot` already
+converts). A particle-frame shift is the same at every rotation, so the
+particle can be shifted once, transformed over rotation like `ft_ptcl_ctf`
+(`memoize_shifted_ptcl`), and scored against the unshifted memoised
+references. The kernels that score such an entry (`gen_objfun_vals_bank`,
+`gen_likelihood_val_bank`) sum the angular Nyquist bin too, so a score is exact
+against the true shifted loss; the shifted-reference kernels drop that bin and
+differ from it slightly.
+
+- Particle-frame grid, multi-state table: the 5 x 5 lattice of the coarse shift
+  grid is a lattice of particle-frame shifts, one entry per lattice point built
+  once per particle and shared by its refined references. The grid minimum
+  starts the shift search at the reference-frame shift it corresponds to at its
+  rotation, clamped into the box.
+- Quadratic step, multi-state table: the L-BFGS-B alternations of a refined
+  reference are replaced by a quadratic fit to the lattice, where the grid
+  minimum has a full 3 x 3 stencil, the fitted curvature is positive definite
+  and well conditioned, the step stays inside the centre cell and the search
+  box, and one exact evaluation at the fitted shift (one more lattice entry)
+  beats the grid minimum. Otherwise the alternations run from the grid minimum
+  as before. The particles' costs then differ, so the shifted fill runs with
+  dynamic scheduling.
+- Particle-frame seed, single-state table with a shift search: the seed of
+  `estimate_shift_seed` is converted once at the rotation where its search
+  ended and held as one particle-frame shift. Every reference is scored from
+  one shifted particle (a seed below `SHERRSQ` uses the plain memo as before),
+  a refined reference starts from the seed converted at its own rotation, and
+  an assigned candidate that was not refined records the seed as it is
+  (`record_seed_shift`) instead of the seed rotated by its in-plane angle. The
+  seed table, the table file and `prob_align` keep their layout.
+
+All three are approximate: away from the seed rotation, and on the lattice, the
+scores, starts and recorded shifts differ from the default. The bench file
+records the key, the shifted particle memos built, and (multi-state) the fits
+kept and the fallbacks per reason.
+
 ## 9. Volume Assembly
 
 When `volrec=yes`, matcher workers write partition-local Cartesian partials and

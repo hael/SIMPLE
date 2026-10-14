@@ -3,7 +3,7 @@ module simple_commanders_prob
 use simple_commanders_api
 use simple_pftc_srch_api
 implicit none
-private :: write_empty_prob_tab, write_prob_tab_bench
+private :: write_empty_prob_tab, write_prob_tab_bench, write_prob_align_bench
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_prob_tab
@@ -45,6 +45,7 @@ contains
         use simple_matcher_ptcl_io,      only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
             &ptcl_read_session
         use simple_eul_prob_tab,         only: eul_prob_tab
+        use simple_eul_prob_tab_utils,   only: prob_fill_profile
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -53,6 +54,7 @@ contains
         type(builder)            :: build
         type(parameters)         :: params
         type(eul_prob_tab)       :: eulprob_obj_part
+        type(prob_fill_profile)  :: fill_prof
         type(ptcl_read_counts)   :: reads0
         type(ptcl_read_session)  :: reads
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
@@ -125,12 +127,13 @@ contains
         if( L_BENCH_GLOB ) t = tic()
         call eulprob_obj_part%write_tab(fname)
         if( L_BENCH_GLOB ) rt_write = toc(t)
+        fill_prof = eulprob_obj_part%get_fill_profile()
         call eulprob_obj_part%kill
         if( allocated(batches) ) deallocate(batches)
         call build%pftc%kill
         call clean_batch_particles3D(build, tmp_imgs, tmp_imgs_pad)
         if( L_BENCH_GLOB ) call write_prob_tab_bench(params, nptcls, ptcl_read_counts_since(reads0), &
-            &rt_setup, rt_refs, rt_batch, rt_fill, rt_write, toc(t_tot))
+            &rt_setup, rt_refs, rt_batch, rt_fill, rt_write, toc(t_tot), fill=fill_prof)
         call build%kill_general_tbox
         call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
         call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
@@ -143,6 +146,7 @@ contains
         use simple_matcher_ptcl_io,      only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
             &ptcl_read_session
         use simple_eul_prob_tab_neigh,   only: eul_prob_tab_neigh
+        use simple_eul_prob_tab_utils,   only: prob_fill_profile
         class(commander_prob_tab_neigh), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -151,6 +155,7 @@ contains
         type(builder)            :: build
         type(parameters)         :: params
         type(eul_prob_tab_neigh) :: eulprob_obj_part_neigh
+        type(prob_fill_profile)  :: fill_prof
         type(ptcl_read_counts)   :: reads0
         type(ptcl_read_session)  :: reads
         integer :: nptcls
@@ -238,11 +243,12 @@ contains
             if( L_BENCH_GLOB ) t = tic()
             call eulprob_obj_part_neigh%write_tab(outfname)
             if( L_BENCH_GLOB ) rt_write = toc(t)
+            fill_prof = eulprob_obj_part_neigh%get_fill_profile()
             call eulprob_obj_part_neigh%kill
             if( allocated(batches) ) deallocate(batches)
             call cleanup_prob_neigh_workspace
             if( L_BENCH_GLOB ) call write_prob_tab_bench(params, nptcls, ptcl_read_counts_since(reads0), &
-                &rt_setup, rt_refs, rt_batch, rt_fill, rt_write, toc(t_tot))
+                &rt_setup, rt_refs, rt_batch, rt_fill, rt_write, toc(t_tot), fill=fill_prof)
         end subroutine run_prob_tab_neigh_batch
 
     end subroutine exec_prob_tab_neigh
@@ -264,9 +270,16 @@ contains
         type(qsys_env)           :: qenv
         type(chash)              :: job_descr
         integer :: nptcls, ipart
+        integer(timer_int_kind) :: t_tot, t
+        real(timer_int_kind)    :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write
+        if( L_BENCH_GLOB ) t_tot = tic()
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        if( L_BENCH_GLOB )then
+            rt_setup = toc(t_tot)
+            t        = tic()
+        endif
         ! Reset sampling history only on the very first iteration of the run.
         ! Guarding on startit alone re-cleans every iteration when startit==1,
         ! which prevents updatecnt/sampled from accumulating and makes the
@@ -283,6 +296,10 @@ contains
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
         call cleanup_prob_align_outputs(params, .false.)
+        if( L_BENCH_GLOB )then
+            rt_sample = toc(t)
+            t         = tic()
+        endif
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -296,6 +313,10 @@ contains
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
+        if( L_BENCH_GLOB )then
+            rt_sched = toc(t)
+            t        = tic()
+        endif
         ! Build the global table only after worker tables are complete.  Keeping it
         ! live while workers build dense partition tables roughly doubles peak RSS.
         call eulprob_obj_glob%new(params,build,pinds)
@@ -304,15 +325,26 @@ contains
             fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
             call eulprob_obj_glob%read_tab_to_glob(fname)
         enddo
+        if( L_BENCH_GLOB )then
+            rt_read = toc(t)
+            t       = tic()
+        endif
         call eulprob_obj_glob%ref_assign
+        if( L_BENCH_GLOB )then
+            rt_assign = toc(t)
+            t         = tic()
+        endif
         ! write the iptcl->(iref,istate) assignment
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
+        if( L_BENCH_GLOB ) rt_write = toc(t)
         call eulprob_obj_glob%kill
         ! cleanup
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
+        if( L_BENCH_GLOB ) call write_prob_align_bench(params, nptcls, rt_setup, rt_sample, rt_sched, rt_read, &
+            &rt_assign, rt_write, toc(t_tot))
         call build%kill_general_tbox
         call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_align'))
         call qsys_cleanup(params)
@@ -588,15 +620,18 @@ contains
 
     !> The bench file of a probability-table part (prob_tab_bench_fname); rt_batch is the batch
     !! builds, particle reading included, which is reported apart
-    subroutine write_prob_tab_bench( params, nptcls, reads, rt_setup, rt_refs, rt_batch, rt_fill, rt_write, rt_tot )
-        use simple_matcher_ptcl_io, only: ptcl_read_counts, write_ptcl_read_bench_context, write_mem_bench_context
-        use simple_refine3D_fnames, only: prob_tab_bench_fname
+    subroutine write_prob_tab_bench( params, nptcls, reads, rt_setup, rt_refs, rt_batch, rt_fill, rt_write, rt_tot, fill )
+        use simple_matcher_ptcl_io,    only: ptcl_read_counts, write_ptcl_read_bench_context, write_mem_bench_context
+        use simple_refine3D_fnames,    only: prob_tab_bench_fname
+        use simple_eul_prob_tab_utils, only: prob_fill_profile
         class(parameters),      intent(in) :: params
         integer,                intent(in) :: nptcls
         type(ptcl_read_counts), intent(in) :: reads
         real(timer_int_kind),   intent(in) :: rt_setup, rt_refs, rt_batch, rt_fill, rt_write, rt_tot
+        type(prob_fill_profile), optional, intent(in) :: fill   !< cost record of the 3D table fill
         type(string)         :: fname
         real(timer_int_kind) :: rt_read
+        real(dp) :: ts_sum
         integer :: fnr
         rt_read = reads%rt_read + reads%rt_cache
         fname   = prob_tab_bench_fname(params%prg%to_char(), params%which_iter, params%part, params%numlen)
@@ -610,6 +645,39 @@ contains
         write(fnr,'(a,i0)') 'prob_tab box                        : ', params%box
         write(fnr,'(a,i0)') 'prob_tab box_crop                   : ', params%box_crop
         write(fnr,'(a,i0)') 'prob_tab sampled particles          : ', nptcls
+        if( present(fill) )then
+            if( fill%nscored > 0 )then
+                ! a neighbourhood table scores a different set of references per particle
+                write(fnr,'(a,i0)') 'prob_tab scored references (all)    : ', fill%nscored
+            else
+                write(fnr,'(a,i0)') 'prob_tab references                 : ', fill%nrefs
+                write(fnr,'(a,i0)') 'prob_tab refined refs per particle  : ', fill%projs_ns
+                write(fnr,'(a,i0)') 'prob_tab refined refs (all)         : ', fill%nrefined
+            endif
+            write(fnr,'(a,i0)') 'prob_tab shift searches             : ', fill%minimize_calls
+            write(fnr,'(a,i0)') 'prob_tab alternations               : ', fill%alternations
+            write(fnr,'(a,i0)') 'prob_tab grid evaluations           : ', fill%grid_points
+            write(fnr,'(a,i0)') 'prob_tab objective evaluations      : ', fill%objective_evals
+            write(fnr,'(a,i0)') 'prob_tab gradient evaluations (E)   : ', fill%gradient_evals
+            if( trim(params%prob_fast) == 'yes' .and. params%nstates > 1 )then
+                write(fnr,'(a,i0)') 'prob_tab grid fits kept             : ', fill%fit_counts(0)
+                write(fnr,'(a,i0)') 'prob_tab fit fallback, edge         : ', fill%fit_counts(1)
+                write(fnr,'(a,i0)') 'prob_tab fit fallback, curvature    : ', fill%fit_counts(2)
+                write(fnr,'(a,i0)') 'prob_tab fit fallback, step         : ', fill%fit_counts(3)
+                write(fnr,'(a,i0)') 'prob_tab fit fallback, search box   : ', fill%fit_counts(4)
+                write(fnr,'(a,i0)') 'prob_tab fit fallback, value        : ', fill%fit_counts(5)
+            endif
+            if( trim(params%prob_fast) == 'yes' )then
+                write(fnr,'(a,a)')  'prob_tab prob_fast                  : ', trim(params%prob_fast)
+                write(fnr,'(a,i0)') 'prob_tab shifted particle memos     : ', fill%bank_builds
+            endif
+            if( fill%minimize_calls > 0 )then
+                write(fnr,'(a,1x,f0.2)') 'prob_tab alternations per search      :', &
+                    &real(fill%alternations,dp) / real(fill%minimize_calls,dp)
+                write(fnr,'(a,1x,f0.2)') 'prob_tab gradient evals per search    :', &
+                    &real(fill%gradient_evals,dp) / real(fill%minimize_calls,dp)
+            endif
+        endif
         call write_mem_bench_context(fnr, 'prob_tab')
         call write_ptcl_read_bench_context(fnr, 'prob_tab', reads)
         write(fnr,'(a)') ''
@@ -625,9 +693,67 @@ contains
             write(fnr,'(a,1x,f0.2)') 'prob_tab % accounted for            :', &
                 &((rt_setup + rt_refs + rt_batch + rt_fill + rt_write) / rt_tot) * 100.
         endif
+        if( present(fill) )then
+            ! thread-seconds are never part of '% accounted for'
+            ts_sum = fill%ts_seed + fill%ts_score + fill%ts_refine
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** THREAD-SECONDS (summed over threads; not wall time) ***'
+            write(fnr,'(a,1x,f0.2)') 'prob_tab seed estimation            :', fill%ts_seed
+            write(fnr,'(a,1x,f0.2)') 'prob_tab score loop                 :', fill%ts_score
+            write(fnr,'(a,1x,f0.2)') 'prob_tab refinement                 :', fill%ts_refine
+            write(fnr,'(a,1x,f0.2)') 'prob_tab thread-seconds, sum        :', ts_sum
+            write(fnr,'(a,1x,f0.2)') 'prob_tab fill region wall time      :', fill%wall_region
+            if( fill%wall_region > 0.d0 .and. fill%nthr > 0 )then
+                write(fnr,'(a,1x,f0.3)') 'prob_tab load balance               :', &
+                    &ts_sum / (fill%wall_region * real(fill%nthr,dp))
+            endif
+            if( fill%nscored > 0 )then
+                write(fnr,'(a,1x,es10.3)') 'prob_tab score loop s/(particle*ref) :', &
+                    &fill%ts_score / real(fill%nscored,dp)
+            else if( fill%nptcls > 0 .and. fill%nrefs > 0 )then
+                write(fnr,'(a,1x,es10.3)') 'prob_tab score loop s/(particle*ref) :', &
+                    &fill%ts_score / (real(fill%nptcls,dp) * real(fill%nrefs,dp))
+            endif
+        endif
         call fclose(fnr)
         call fname%kill
     end subroutine write_prob_tab_bench
+
+    !> The bench file of the prob_align driver, all wall time; rt_sched runs from the launch of the parts to the
+    !! last part finished (the in-process table fill in shared memory).
+    subroutine write_prob_align_bench( params, nptcls, rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write, rt_tot )
+        use simple_refine3D_fnames, only: prob_align_bench_fname
+        class(parameters),    intent(in) :: params
+        integer,              intent(in) :: nptcls
+        real(timer_int_kind), intent(in) :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write, rt_tot
+        type(string) :: fname
+        integer :: fnr
+        fname = prob_align_bench_fname(params%which_iter)
+        call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a,i0)') 'prob_align iteration                : ', params%which_iter
+        write(fnr,'(a,i0)') 'prob_align nparts                   : ', params%nparts
+        write(fnr,'(a,i0)') 'prob_align worker threads           : ', params%nthr
+        write(fnr,'(a,i0)') 'prob_align states                   : ', params%nstates
+        write(fnr,'(a,i0)') 'prob_align projection directions    : ', params%nspace
+        write(fnr,'(a,i0)') 'prob_align box_crop                 : ', params%box_crop
+        write(fnr,'(a,i0)') 'prob_align sampled particles        : ', nptcls
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f0.2)') 'prob_align startup/setup            :', rt_setup
+        write(fnr,'(a,1x,f0.2)') 'prob_align sampling, project write  :', rt_sample
+        write(fnr,'(a,1x,f0.2)') 'prob_align scheduling (parts)       :', rt_sched
+        write(fnr,'(a,1x,f0.2)') 'prob_align table reads              :', rt_read
+        write(fnr,'(a,1x,f0.2)') 'prob_align ref_assign               :', rt_assign
+        write(fnr,'(a,1x,f0.2)') 'prob_align assignment write         :', rt_write
+        write(fnr,'(a,1x,f0.2)') 'prob_align total time               :', rt_tot
+        if( rt_tot > 0. )then
+            write(fnr,'(a,1x,f0.2)') 'prob_align % accounted for          :', &
+                &((rt_setup + rt_sample + rt_sched + rt_read + rt_assign + rt_write) / rt_tot) * 100.
+        endif
+        call fclose(fnr)
+        call fname%kill
+    end subroutine write_prob_align_bench
 
     !> The table of a partition without sampled particles: the header, no
     !! candidates, so prob_align reads one table per partition. Written by the

@@ -7,7 +7,6 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('solve
 type(ui_program), target :: solve3D
 type(ui_program), target :: solve3D_cavgs
 type(ui_program), target :: solve3D_addon
-type(ui_program), target :: emulate_solve3D_stream
 type(ui_program), target :: solve3D_chunks
 type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: noisevol
@@ -19,7 +18,6 @@ contains
         call new_solve3D(prgtab)
         call new_solve3D_cavgs(prgtab)
         call new_solve3D_addon(prgtab)
-        call new_emulate_solve3D_stream(prgtab)
         call new_solve3D_chunks(prgtab)
         call new_estimate_lpstages(prgtab)
         call new_noisevol(prgtab)
@@ -174,12 +172,27 @@ contains
             &'from the staged automasking point(yes|nu|no){no}', &
             &'', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
         &choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']))
+        ! developer key of the probabilistic pre-step: solve3D, solve3D_chunks and (forwarded) its add-on runs
+        call add_prob_fast_input(prg)
         ! computer controls
         call prg%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_COMP, nthr,                                 group="compute", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_COMP, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .false., 0., group="compute", visibility=UI_VIS_STANDARD)
     end subroutine add_solve3D_base_inputs
+
+    !> prob_fast on a solve3D-family program; solve3D_chunks forwards it to its add-on runs, which accept it as
+    !! their own input (it is not recorded in the frozen run's manifest)
+    subroutine add_prob_fast_input( prg )
+        type(ui_program), intent(inout) :: prg
+        call prg%add_input(UI_SRCH, 'prob_fast', 'binary', 'Speed-ups of the probabilistic table', &
+        &'Developer key, pending promotion: in the multi-state probabilistic table, score the coarse shift grid from shifted &
+        &copies of the particle and replace the shift search by a quadratic fit to that grid where the fit is well &
+        &conditioned (L-BFGS-B remains the fallback); in the single-state table, apply the shift seed to the particle once &
+        &instead of to every reference and record it as a particle shift. Approximate away from the seed rotation and &
+        &on the grid(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="search", visibility=UI_VIS_DEVELOPER)
+    end subroutine add_prob_fast_input
 
 
     !> Grow a completed solve3D solution with the particles a superset
@@ -228,6 +241,7 @@ contains
         call solve3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of the searched particles'' assignments for early stopping when the last stage is stage 3{0.95}', &
         &'overlap fraction', .false., .95, group="search", visibility=UI_VIS_ADVANCED)
+        call add_prob_fast_input(solve3D_addon)
         ! overridable settings of the frozen run: how the added particles are sampled and masked
         call solve3D_addon%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
         &'Units every fractional-update sample of the searched particles is balanced over (see solve3D); '//&
@@ -250,39 +264,6 @@ contains
         ! add to ui_hash
         call add_ui_program('solve3D_addon', solve3D_addon, prgtab, UI_CATEGORY)
     end subroutine new_solve3D_addon
-
-    !> Replay of the stream's solve3D and solve3D_addon cycle on an existing project: a base run on the first
-    !! nptcls_base selected particles, then add-on runs of nptcls_addon selected particles each.
-    subroutine new_emulate_solve3D_stream( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call emulate_solve3D_stream%new(&
-        &'emulate_solve3D_stream',&                                                              ! name
-        &'Replay the stream''s solve3D and solve3D_addon cycle on an existing project',&         ! summary
-        &'is a workflow that runs solve3D on the first nptcls_base selected particles of a project '//&
-        &'and then solve3D_addon on the remaining selected particles in chunks of nptcls_addon, '//&
-        &'the last chunk taking the remainder, to measure the run time and the map quality of the stream''s '//&
-        &'settings; the steps and their resolutions and verdicts are reported in emulate_solve3D_stream_report.txt',& ! help
-        &'simple_exec',&                                                                         ! executable
-        &.true., visibility=UI_VIS_DEVELOPER, display_name='Emulate the 3D Stream')              ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        call emulate_solve3D_stream%add_input(UI_PARM, 'nptcls_base', 'num', 'Base particles', &
-        &'Number of selected particles (ptcl2D state > 0, in row order) of the base solve3D run', '# particles', .true., 0.)
-        call emulate_solve3D_stream%add_input(UI_PARM, 'nptcls_addon', 'num', 'Add-on particles', &
-        &'Number of selected particles each solve3D_addon run adds; the last run takes the remainder when it is at least this '//&
-        &'many, and a remainder below this many is a single add-on run', '# particles', .true., 0.)
-        call emulate_solve3D_stream%add_input(UI_PARM, 'rollback', 'binary', 'Roll back regressed add-ons', &
-        &'A regressed add-on is not adopted: the previous result stays frozen and its chunk joins the next add-on, as in the '//&
-        &'stream(yes|no){yes}', '', .false., 'yes', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
-        call emulate_solve3D_stream%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
-        &'Also reconstruct the searched particles of every add-on alone, without the frozen term(yes|no){no}', &
-        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call add_solve3D_base_inputs(emulate_solve3D_stream, l_stream_compatible=.true., l_include_nsample=.true., &
-            &l_include_pcg=.true.)
-        ! add to ui_hash
-        call add_ui_program('emulate_solve3D_stream', emulate_solve3D_stream, prgtab, UI_CATEGORY)
-    end subroutine new_emulate_solve3D_stream
 
     !> Analyze the active particles in automatically balanced solve3D/solve3D_addon cohorts.
     subroutine new_solve3D_chunks( prgtab )

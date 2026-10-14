@@ -5,12 +5,14 @@ implicit none
 
 public :: polarft_calc
 public :: vol_pad2ref_pfts, vol_pad2ref_pfts_opt
+public :: SHERRSQ
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: REF_EVEN = 1
 integer, parameter :: REF_ODD  = 2
 integer, parameter :: N_REF_PARITIES = 2
+real,    parameter :: SHERRSQ = 0.00001 !< squared shift below which the memoised unshifted terms are used
 
 type fftw_drvec
     type(c_ptr)                  :: p
@@ -172,12 +174,15 @@ type :: polarft_calc
     procedure          :: memoize_sigma2_weights
     procedure          :: wsqsum_ptcl_now
     procedure          :: memoize_ptcls, memoize_refs
+    procedure          :: memoize_shifted_ptcl
     procedure, private :: kill_memo_ptcls, kill_memo_refs
     procedure, private :: allocate_memo_workspace, kill_memo_workspace
     procedure, private :: alloc_memo_ptcls, alloc_memo_refs
     ! ===== CORR: simple_polarft_corr.f90
     procedure          :: calc_frc
     procedure          :: gen_objfun_vals
+    procedure          :: gen_objfun_vals_bank
+    procedure          :: gen_likelihood_val_bank
     procedure          :: gen_best_objfun_val
     procedure          :: gen_prob_objfun_val
     procedure          :: gen_likelihood_val
@@ -567,6 +572,13 @@ interface
         class(oris),         optional, intent(in)    :: eulspace
     end subroutine memoize_refs
 
+    module subroutine memoize_shifted_ptcl(self, iptcl, shift, bank)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: shift(2)
+        complex(sp),         intent(out)   :: bank(:,:)
+    end subroutine memoize_shifted_ptcl
+
     module subroutine alloc_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self
     end subroutine alloc_memo_ptcls
@@ -607,6 +619,24 @@ interface
         real(sp),            intent(in)    :: shift(2)
         real(sp),            intent(out)   :: vals(self%nrots)
     end subroutine gen_objfun_vals
+
+    module subroutine gen_objfun_vals_bank(self, iref, iptcl, bank, vals)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(out)   :: vals(self%nrots)
+    end subroutine gen_objfun_vals_bank
+
+    module subroutine gen_likelihood_val_bank(self, iref, iptcl, bank, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl, nsample
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(out)   :: dist, corr
+        integer,             intent(out)   :: irot
+        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
+        integer,             intent(inout) :: sorted_inds(self%nrots)
+    end subroutine gen_likelihood_val_bank
 
     module subroutine gen_best_objfun_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), intent(inout) :: self

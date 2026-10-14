@@ -232,11 +232,9 @@ contains
         type(srchspace_map) :: sub_mapper
         type(oris)  :: eulspace_sub !< discrete projection direction search space, reduced
         type(image) :: mskimg
-        type(ori)   :: o, o_sub, osym
-        integer     :: lfny, i, j
+        integer     :: lfny
         logical     :: ddo3d, l_direct_prob_neigh
         real, allocatable :: sub_distmat(:,:)
-        real :: dtmp, inplrotdist
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -264,25 +262,15 @@ contains
                         call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
                         call self%pgrpsyms%build_refspiral(eulspace_sub)
                         allocate(sub_distmat(params%nspace_sub, params%nspace))
-                        !$omp parallel do default(shared) proc_bind(close) private(i,j,o,o_sub,osym,dtmp,inplrotdist) schedule(static)
-                        do i = 1, params%nspace_sub
-                            call eulspace_sub%get_ori(i, o_sub)
-                            do j = 1, params%nspace
-                                call self%eulspace%get_ori(j, o)
-                                call self%pgrpsyms%sym_dists(o_sub, o, osym, dtmp, inplrotdist)
-                                sub_distmat(i,j) = dtmp
-                            enddo
-                        enddo
-                        !$omp end parallel do
+                        ! the sym_dists distance of every (subspace, full) pair, with the per-orientation work done
+                        ! once per orientation: O(nspace_sub x nspace) objects were the cost of this build
+                        call self%pgrpsyms%sym_dist_table(eulspace_sub, self%eulspace, sub_distmat)
                         call sub_mapper%new(params%nspace, params%nspace_sub, sub_distmat)
                         self%subspace_inds         = sub_mapper%get_sub2full_map()
                         self%subspace_full2sub_map = sub_mapper%get_full2sub_map()
                         if( allocated(sub_distmat) ) deallocate(sub_distmat)
                         call sub_mapper%kill
                         call eulspace_sub%kill
-                        call o%kill
-                        call o_sub%kill
-                        call osym%kill
                     endif
             end select
         endif

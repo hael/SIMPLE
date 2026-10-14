@@ -9,11 +9,17 @@ use simple_builder,   only: builder
 implicit none
 
 public :: pftc_shsrch_grad
+public :: fit_quadratic_step, grid_stencil_exists
+public :: shift_ptcl2ref, shift_ref2ptcl
+public :: FIT_EDGE, FIT_CURVATURE, FIT_STEP, FIT_LIMITS, FIT_VALUE, FIT_NREASONS
 private
 #include "simple_local_flags.inc"
 
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
 integer,  parameter :: SHSRCH_SHIFT = 1, SHSRCH_JOINT = 2
+! reasons the quadratic grid step falls back to the L-BFGS-B alternations
+integer,  parameter :: FIT_EDGE = 1, FIT_CURVATURE = 2, FIT_STEP = 3, FIT_LIMITS = 4, FIT_VALUE = 5, FIT_NREASONS = 5
+real(dp), parameter :: FIT_MIN_CURV_RATIO = 0.01d0 ! smallest accepted ratio of the Hessian's eigenvalues
 
 type :: pftc_shsrch_grad
     private
@@ -35,6 +41,21 @@ type :: pftc_shsrch_grad
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
+    integer(int64)            :: profile_alternations    = 0_int64 !< L-BFGS-B / discrete in-plane alternations
+    integer(int64)            :: profile_grid_points     = 0_int64 !< coarse-grid points scored
+    integer(int64)            :: profile_minimize_calls  = 0_int64 !< calls of minimize
+    ! quadratic step from the coarse grid (prob_fast, multi-state)
+    logical                   :: grid_fit     = .false. !< quadratic step from the coarse grid before the alternations
+    real,         allocatable :: grid_corrs(:,:)        !< objective of every grid point over all rotations (nrots, points)
+    integer                   :: grid_ix_star = 0       !< grid point of the lowest cost, x index
+    integer                   :: grid_iy_star = 0       !< grid point of the lowest cost, y index
+    integer(int64)            :: profile_fit(0:FIT_NREASONS) = 0_int64 !< (0) fits kept, (1:5) fallbacks per FIT_* reason
+    ! particle-frame coarse grid (prob_fast, multi-state)
+    logical                   :: grid_ptcl    = .false. !< the grid is the lattice of particle-frame shifts, scored from a bank
+    complex(sp),  allocatable :: grid_bank(:,:,:)       !< shifted particle memos (pftsz+1, nk, lattice points + 1 scratch)
+    integer                   :: grid_bank_ptcl = 0     !< particle the bank was built for (0: none)
+    real(dp)                  :: grid_u_star(2) = 0.d0  !< lattice shift of the grid minimum
+    integer(int64)            :: profile_bank_builds = 0_int64 !< shifted particle memos built
 contains
     procedure          :: new_alternating      => grad_shsrch_new_alternating
     procedure          :: new_fixed       => grad_shsrch_new_fixed
@@ -51,18 +72,24 @@ contains
     procedure          :: coarse_search_opt_angle
     procedure          :: reset_profile     => grad_shsrch_reset_profile
     procedure          :: get_profile       => grad_shsrch_get_profile
+    procedure          :: get_fit_profile   => grad_shsrch_get_fit_profile
+    procedure          :: get_bank_builds   => grad_shsrch_get_bank_builds
+    procedure, private :: try_grid_fit
+    procedure, private :: build_grid_bank
 end type pftc_shsrch_grad
 
 contains
 
-    subroutine grad_shsrch_new_alternating( self, build, lims, lims_init, maxits, coarse_init )
+    subroutine grad_shsrch_new_alternating( self, build, lims, lims_init, maxits, coarse_init, grid_fit, grid_ptcl )
         class(pftc_shsrch_grad),     intent(inout) :: self
         class(builder),      target, intent(in)    :: build
         real,                        intent(in)    :: lims(:,:)
         real,              optional, intent(in)    :: lims_init(:,:)
         integer,           optional, intent(in)    :: maxits
         logical,           optional, intent(in)    :: coarse_init
-        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .true., coarse_init)
+        logical,           optional, intent(in)    :: grid_fit   !< quadratic step from the coarse grid, needs coarse_init
+        logical,           optional, intent(in)    :: grid_ptcl  !< particle-frame coarse grid, needs coarse_init
+        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .true., coarse_init, grid_fit, grid_ptcl)
     end subroutine grad_shsrch_new_alternating
 
     subroutine grad_shsrch_new_fixed( self, build, lims, lims_init, maxits, coarse_init )
@@ -75,7 +102,7 @@ contains
         call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .false., coarse_init)
     end subroutine grad_shsrch_new_fixed
 
-    subroutine grad_shsrch_new_mode( self, build, lims, lims_init, maxits, opt_angle, coarse_init )
+    subroutine grad_shsrch_new_mode( self, build, lims, lims_init, maxits, opt_angle, coarse_init, grid_fit, grid_ptcl )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
         class(builder),      target, intent(in)    :: build          !< builder object for pftc access
@@ -84,7 +111,10 @@ contains
         integer,           optional, intent(in)    :: maxits         !< maximum iterations
         logical,                     intent(in)    :: opt_angle      !< alternate discrete in-plane and shift optimization
         logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
+        logical,           optional, intent(in)    :: grid_fit       !< quadratic step from the coarse grid
+        logical,           optional, intent(in)    :: grid_ptcl      !< particle-frame coarse grid
         type(opt_factory) :: opt_fact
+        integer :: kfromto(2)
         call self%kill
         self%cur_inpl_rotind = 0.
         ! set pointer to pftc instance for cost function evaluations
@@ -102,6 +132,19 @@ contains
         call opt_fact%new(self%ospec, self%opt_obj)
         ! get # rotations
         self%nrots = self%b_ptr%pftc%get_nrots()
+        ! the quadratic step reads the all-rotation grid of the alternating search
+        self%grid_fit = .false.
+        if( present(grid_fit) ) self%grid_fit = grid_fit .and. self%opt_angle .and. self%coarse_init
+        if( self%grid_fit ) allocate(self%grid_corrs(self%nrots, coarse_num_steps*coarse_num_steps), source=0.)
+        ! the bank holds one shifted particle memo per lattice point and a scratch entry for the fitted shift
+        self%grid_ptcl = .false.
+        if( present(grid_ptcl) ) self%grid_ptcl = grid_ptcl .and. self%opt_angle .and. self%coarse_init
+        if( self%grid_ptcl )then
+            kfromto = self%b_ptr%pftc%get_kfromto()
+            allocate(self%grid_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, &
+                &coarse_num_steps*coarse_num_steps+1))
+        endif
+        self%grid_bank_ptcl = 0
         ! set costfun pointers
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
@@ -312,7 +355,7 @@ contains
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost
         integer  :: loc, i, lowest_rot, init_rot
-        logical  :: found_better, l_sh_rot, coarse_init_orig
+        logical  :: found_better, l_sh_rot, coarse_init_orig, l_fitted
         if( self%search_mode /= SHSRCH_SHIFT )then
             THROW_HARD('shift minimization requested from a joint search object')
         endif
@@ -327,11 +370,13 @@ contains
         endif
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
+        self%profile_minimize_calls = self%profile_minimize_calls + 1_int64
         if( self%opt_angle )then
             call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
             self%cur_inpl_idx = maxloc(corrs, dim=1)
             self%cur_inpl_rotind = real(self%cur_inpl_idx)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
+            l_fitted = .false.
             if( self%coarse_init )then
                 call self%coarse_search_opt_angle(init_xy, init_rot)
                 if( init_rot /= 0 )then
@@ -339,17 +384,22 @@ contains
                     self%ospec%x        = real(init_xy)
                     self%cur_inpl_idx   = init_rot
                     self%cur_inpl_rotind = real(init_rot)
+                    ! no fit: the alternations below run from the grid minimum as before
+                    if( self%grid_fit ) call self%try_grid_fit(corrs, l_fitted)
                 endif
             end if
             ! shift search / in-plane rot update
-            do i = 1,self%max_evals
-                call self%opt_obj%minimize(self%ospec, self, lowest_cost)
-                loc = self%cur_inpl_idx
-                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
-                self%cur_inpl_idx = maxloc(corrs, dim=1)
-                self%cur_inpl_rotind = real(self%cur_inpl_idx)
-                if( self%cur_inpl_idx == loc ) exit
-            end do
+            if( .not. l_fitted )then
+                do i = 1,self%max_evals
+                    self%profile_alternations = self%profile_alternations + 1_int64
+                    call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+                    loc = self%cur_inpl_idx
+                    call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                    self%cur_inpl_idx = maxloc(corrs, dim=1)
+                    self%cur_inpl_rotind = real(self%cur_inpl_idx)
+                    if( self%cur_inpl_idx == loc ) exit
+                end do
+            endif
             ! update best
             lowest_cost = -corrs(self%cur_inpl_idx)
             if( lowest_cost < lowest_cost_overall )then
@@ -564,6 +614,7 @@ contains
             do iy = 1,coarse_num_steps
                 y    = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
+                self%profile_grid_points     = self%profile_grid_points + 1_int64
                 cost = -self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
@@ -582,7 +633,10 @@ contains
         integer  :: loc, ix,iy
         init_xy = 0.d0
         irot    = 0
+        self%grid_ix_star = 0
+        self%grid_iy_star = 0
         if (coarse_num_steps .le. 1) return
+        if( self%grid_ptcl .and. self%grid_bank_ptcl /= self%particle ) call self%build_grid_bank
         lowest_cost = huge(lowest_cost)
         stepx = real(self%ospec%limits(1,2)-self%ospec%limits(1,1),dp)/real(coarse_num_steps,dp)
         stepy = real(self%ospec%limits(2,2)-self%ospec%limits(2,1),dp)/real(coarse_num_steps,dp)
@@ -591,7 +645,14 @@ contains
             do iy = 1,coarse_num_steps
                 y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
                 self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
-                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, real([x,y]), corrs)
+                self%profile_grid_points     = self%profile_grid_points + 1_int64
+                if( self%grid_ptcl )then
+                    call self%b_ptr%pftc%gen_objfun_vals_bank(self%reference, self%particle, &
+                        &self%grid_bank(:,:,(ix-1)*coarse_num_steps+iy), corrs)
+                else
+                    call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, real([x,y]), corrs)
+                endif
+                if( self%grid_fit ) self%grid_corrs(:,(ix-1)*coarse_num_steps+iy) = corrs
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
                 if (cost < lowest_cost) then
@@ -599,22 +660,237 @@ contains
                     irot        = loc
                     init_xy(1)  = x
                     init_xy(2)  = y
+                    self%grid_ix_star = ix
+                    self%grid_iy_star = iy
                 end if
             end do
         end do
+        if( self%grid_ptcl .and. irot /= 0 )then
+            ! the lattice point is a particle-frame shift: the search starts from it in the reference frame at irot
+            self%grid_u_star = init_xy
+            init_xy = real(shift_ptcl2ref(real(init_xy), self%b_ptr%pftc%get_rot(irot)), dp)
+            init_xy(1) = max(real(self%ospec%limits(1,1),dp), min(real(self%ospec%limits(1,2),dp), init_xy(1)))
+            init_xy(2) = max(real(self%ospec%limits(2,1),dp), min(real(self%ospec%limits(2,2),dp), init_xy(2)))
+        endif
     end subroutine coarse_search_opt_angle
+
+    !> one shifted particle memo per lattice point of the coarse grid (the shift is the particle-frame shift)
+    subroutine build_grid_bank( self )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real(dp) :: stepx, stepy
+        real     :: u(2)
+        integer  :: ix, iy
+        stepx = real(self%ospec%limits(1,2)-self%ospec%limits(1,1),dp)/real(coarse_num_steps,dp)
+        stepy = real(self%ospec%limits(2,2)-self%ospec%limits(2,1),dp)/real(coarse_num_steps,dp)
+        do ix = 1,coarse_num_steps
+            u(1) = real(self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx)
+            do iy = 1,coarse_num_steps
+                u(2) = real(self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy)
+                call self%b_ptr%pftc%memoize_shifted_ptcl(self%particle, u, self%grid_bank(:,:,(ix-1)*coarse_num_steps+iy))
+            end do
+        end do
+        self%profile_bank_builds = self%profile_bank_builds + int(coarse_num_steps*coarse_num_steps, int64)
+        self%grid_bank_ptcl      = self%particle
+    end subroutine build_grid_bank
+
+    !> a shift of the particle frame as the shift of the reference at in-plane angle rot (degrees);
+    !! inverse of shift_ref2ptcl, the conversion minimize applies with sh_rot
+    pure function shift_ptcl2ref( u, rot ) result( s )
+        real, intent(in) :: u(2), rot
+        real :: s(2), rotmat(2,2)
+        call rotmat2d(rot, rotmat)
+        s(1) = u(1) * rotmat(1,1) + u(2) * rotmat(1,2)
+        s(2) = u(1) * rotmat(2,1) + u(2) * rotmat(2,2)
+    end function shift_ptcl2ref
+
+    !> a shift of the reference at in-plane angle rot (degrees) as the shift of the particle frame
+    pure function shift_ref2ptcl( s, rot ) result( u )
+        real, intent(in) :: s(2), rot
+        real :: u(2), rotmat(2,2)
+        call rotmat2d(rot, rotmat)
+        u(1) = s(1) * rotmat(1,1) + s(2) * rotmat(2,1)
+        u(2) = s(1) * rotmat(1,2) + s(2) * rotmat(2,2)
+    end function shift_ref2ptcl
+
+    !> a grid point has the full 3x3 stencil of the quadratic step unless it lies on the edge of the lattice
+    pure logical function grid_stencil_exists( ix, iy )
+        integer, intent(in) :: ix, iy
+        grid_stencil_exists = ix >= 2 .and. ix <= coarse_num_steps-1 .and. iy >= 2 .and. iy <= coarse_num_steps-1
+    end function grid_stencil_exists
+
+    !> Stationary point (da,db), in grid spacings, of the least-squares quadratic over a 3x3 stencil v(a,b).
+    !! reason: 0 = step, FIT_CURVATURE = H not positive definite or ill conditioned, FIT_STEP = leaves the centre cell.
+    pure subroutine fit_quadratic_step( v, da, db, reason )
+        real(dp), intent(in)  :: v(-1:1,-1:1)
+        real(dp), intent(out) :: da, db
+        integer,  intent(out) :: reason
+        real(dp) :: S, Sa, Sb, Sab, Sa2, Sb2, g1, g2, h11, h22, h12, det, tr, disc, lmax, lmin
+        integer  :: ia, ib
+        da = 0.d0
+        db = 0.d0
+        S = 0.d0; Sa = 0.d0; Sb = 0.d0; Sab = 0.d0; Sa2 = 0.d0; Sb2 = 0.d0
+        do ia = -1,1
+            do ib = -1,1
+                S   = S   + v(ia,ib)
+                Sa  = Sa  + real(ia,dp) * v(ia,ib)
+                Sb  = Sb  + real(ib,dp) * v(ia,ib)
+                Sab = Sab + real(ia*ib,dp) * v(ia,ib)
+                Sa2 = Sa2 + real(ia*ia,dp) * v(ia,ib)
+                Sb2 = Sb2 + real(ib*ib,dp) * v(ia,ib)
+            enddo
+        enddo
+        g1  = Sa / 6.d0
+        g2  = Sb / 6.d0
+        h11 = Sa2 - 2.d0 * S / 3.d0
+        h22 = Sb2 - 2.d0 * S / 3.d0
+        h12 = Sab / 4.d0
+        det  = h11 * h22 - h12 * h12
+        tr   = h11 + h22
+        disc = sqrt(max(0.d0, tr * tr - 4.d0 * det))
+        lmax = 0.5d0 * (tr + disc)
+        lmin = 0.5d0 * (tr - disc)
+        if( .not. (h11 > 0.d0 .and. det > 0.d0 .and. lmax > 0.d0 .and. lmin / lmax >= FIT_MIN_CURV_RATIO) )then
+            reason = FIT_CURVATURE
+            return
+        endif
+        da = -( h22 * g1 - h12 * g2) / det
+        db = -(-h12 * g1 + h11 * g2) / det
+        if( .not. (abs(da) <= 0.5d0 .and. abs(db) <= 0.5d0) )then
+            reason = FIT_STEP
+            return
+        endif
+        reason = 0
+    end subroutine fit_quadratic_step
+
+    !> Quadratic step from the coarse grid minimum: the 3x3 stencil of the grid loss at its rotation, -log(objective)
+    !! for Euclid (the objective is exp(-loss)), -objective otherwise. A failed guard counts its reason and leaves the
+    !! state untouched; see doc/policies/3D/refine3D_policy.md.
+    subroutine try_grid_fit( self, corrs, fitted )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real,                    intent(out)   :: corrs(self%nrots)  !< objective over all rotations at the fitted shift
+        logical,                 intent(out)   :: fitted
+        real(dp) :: v(-1:1,-1:1), da, db, stepx, stepy, fx, fy
+        real     :: fit_xy(2), best_grid_corr
+        integer  :: ix, iy, ia, ib, irot_star, irot_fit, reason
+        logical  :: l_euclid
+        fitted = .false.
+        ix = self%grid_ix_star
+        iy = self%grid_iy_star
+        irot_star = self%cur_inpl_idx
+        if( .not. grid_stencil_exists(ix, iy) )then
+            self%profile_fit(FIT_EDGE) = self%profile_fit(FIT_EDGE) + 1_int64
+            return
+        endif
+        l_euclid = self%b_ptr%pftc%is_euclid_objfun()
+        do ia = -1,1
+            do ib = -1,1
+                v(ia,ib) = real(self%grid_corrs(irot_star,(ix+ia-1)*coarse_num_steps+iy+ib), dp)
+                if( l_euclid )then
+                    v(ia,ib) = -log(max(v(ia,ib), 1.d-30))
+                else
+                    v(ia,ib) = -v(ia,ib)
+                endif
+            enddo
+        enddo
+        call fit_quadratic_step(v, da, db, reason)
+        if( reason /= 0 )then
+            self%profile_fit(reason) = self%profile_fit(reason) + 1_int64
+            return
+        endif
+        stepx = real(self%ospec%limits(1,2) - self%ospec%limits(1,1), dp) / real(coarse_num_steps, dp)
+        stepy = real(self%ospec%limits(2,2) - self%ospec%limits(2,1), dp) / real(coarse_num_steps, dp)
+        best_grid_corr = self%grid_corrs(irot_star,(ix-1)*coarse_num_steps+iy)
+        if( self%grid_ptcl )then
+            ! the stencil lives in the particle frame: the fitted lattice shift is converted to the reference
+            ! frame at the rotation it is kept at, which must keep it inside the box
+            fx = self%grid_u_star(1) + da * stepx
+            fy = self%grid_u_star(2) + db * stepy
+            fit_xy = real([fx,fy])
+            if( .not. in_limits(self, real(shift_ptcl2ref(fit_xy, self%b_ptr%pftc%get_rot(irot_star)),dp)) )then
+                self%profile_fit(FIT_LIMITS) = self%profile_fit(FIT_LIMITS) + 1_int64
+                return
+            endif
+            ! kept only if the exact value at the fitted shift beats the grid minimum
+            call self%b_ptr%pftc%memoize_shifted_ptcl(self%particle, fit_xy, self%grid_bank(:,:,size(self%grid_bank,3)))
+            self%profile_bank_builds     = self%profile_bank_builds + 1_int64
+            self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
+            call self%b_ptr%pftc%gen_objfun_vals_bank(self%reference, self%particle, &
+                &self%grid_bank(:,:,size(self%grid_bank,3)), corrs)
+            irot_fit = maxloc(corrs, dim=1)
+            if( .not. (corrs(irot_fit) > best_grid_corr) )then
+                self%profile_fit(FIT_VALUE) = self%profile_fit(FIT_VALUE) + 1_int64
+                return
+            endif
+            fit_xy = shift_ptcl2ref(fit_xy, self%b_ptr%pftc%get_rot(irot_fit))
+            if( .not. in_limits(self, real(fit_xy,dp)) )then
+                self%profile_fit(FIT_LIMITS) = self%profile_fit(FIT_LIMITS) + 1_int64
+                return
+            endif
+        else
+            fx = real(self%ospec%x_8(1), dp) + da * stepx
+            fy = real(self%ospec%x_8(2), dp) + db * stepy
+            if( .not. in_limits(self, [fx,fy]) )then
+                self%profile_fit(FIT_LIMITS) = self%profile_fit(FIT_LIMITS) + 1_int64
+                return
+            endif
+            ! kept only if the exact value at the fitted shift beats the grid minimum
+            fit_xy = real([fx,fy])
+            self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
+            call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, fit_xy, corrs)
+            irot_fit = maxloc(corrs, dim=1)
+            if( .not. (corrs(irot_fit) > best_grid_corr) )then
+                self%profile_fit(FIT_VALUE) = self%profile_fit(FIT_VALUE) + 1_int64
+                return
+            endif
+        endif
+        self%ospec%x         = fit_xy
+        self%ospec%x_8       = dble(fit_xy)
+        self%cur_inpl_idx    = irot_fit
+        self%cur_inpl_rotind = real(irot_fit)
+        self%profile_fit(0)  = self%profile_fit(0) + 1_int64
+        fitted = .true.
+    end subroutine try_grid_fit
+
+    !> shifted particle memos built by the particle-frame grid
+    pure integer(int64) function grad_shsrch_get_bank_builds( self )
+        class(pftc_shsrch_grad), intent(in) :: self
+        grad_shsrch_get_bank_builds = self%profile_bank_builds
+    end function grad_shsrch_get_bank_builds
+
+    !> a reference-frame shift lies inside the search box
+    logical function in_limits( self, xy )
+        class(pftc_shsrch_grad), intent(in) :: self
+        real(dp),                intent(in) :: xy(2)
+        in_limits = xy(1) >= real(self%ospec%limits(1,1),dp) .and. xy(1) <= real(self%ospec%limits(1,2),dp) .and. &
+                   &xy(2) >= real(self%ospec%limits(2,1),dp) .and. xy(2) <= real(self%ospec%limits(2,2),dp)
+    end function in_limits
+
+    !> fits kept (0) and fallbacks per FIT_* reason (1:5)
+    subroutine grad_shsrch_get_fit_profile( self, counts )
+        class(pftc_shsrch_grad), intent(in)  :: self
+        integer(int64),          intent(out) :: counts(0:FIT_NREASONS)
+        counts = self%profile_fit
+    end subroutine grad_shsrch_get_fit_profile
 
     subroutine grad_shsrch_reset_profile( self )
         class(pftc_shsrch_grad), intent(inout) :: self
         self%profile_objective_evals = 0_int64
         self%profile_gradient_evals  = 0_int64
+        self%profile_alternations    = 0_int64
+        self%profile_grid_points     = 0_int64
+        self%profile_minimize_calls  = 0_int64
+        self%profile_fit             = 0_int64
+        self%profile_bank_builds     = 0_int64
     end subroutine grad_shsrch_reset_profile
 
-    subroutine grad_shsrch_get_profile( self, objective_evals, gradient_evals )
-        class(pftc_shsrch_grad), intent(in) :: self
-        integer(int64), intent(out) :: objective_evals, gradient_evals
+    subroutine grad_shsrch_get_profile( self, objective_evals, gradient_evals, alternations, grid_points, minimize_calls )
+        class(pftc_shsrch_grad), intent(in)  :: self
+        integer(int64),          intent(out) :: objective_evals, gradient_evals, alternations, grid_points, minimize_calls
         objective_evals = self%profile_objective_evals
         gradient_evals  = self%profile_gradient_evals
+        alternations    = self%profile_alternations
+        grid_points     = self%profile_grid_points
+        minimize_calls  = self%profile_minimize_calls
     end subroutine grad_shsrch_get_profile
 
     subroutine grad_shsrch_kill( self )
@@ -625,6 +901,11 @@ contains
         end if
         call self%ospec%kill
         nullify(self%b_ptr)
+        if( allocated(self%grid_corrs) ) deallocate(self%grid_corrs)
+        if( allocated(self%grid_bank)  ) deallocate(self%grid_bank)
+        self%grid_fit       = .false.
+        self%grid_ptcl      = .false.
+        self%grid_bank_ptcl = 0
         self%search_mode = SHSRCH_SHIFT
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.

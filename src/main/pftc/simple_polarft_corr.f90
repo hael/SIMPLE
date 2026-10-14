@@ -5,8 +5,6 @@ use simple_eul_prob_tab_utils, only: sample_bounded_dist, sample_likelihood_dist
 #include "simple_local_flags.inc"
 implicit none
 
-real, parameter :: SHERRSQ = 0.00001
-
 contains
 
     module subroutine calc_frc( self, iref, iptcl, irot, shvec, frc )
@@ -481,6 +479,128 @@ contains
         end function euclid_dist_at_rot
 
     end subroutine gen_prob_power_euclid_val
+
+    ! Kernels of a particle bank entry (memoize_shifted_ptcl): the shifted particle against the unshifted
+    ! memoised reference, so there is no reference shift and no shift matrix. The cross term sums the angular
+    ! Nyquist bin too (p = 1..pftsz+1), which makes the loss exact against the true shifted loss; the
+    ! shifted-reference kernels above drop that bin.
+
+    subroutine gen_euclid_crvec_bank( self, iref, iptcl, bank, norm, ithr )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(dp),            intent(out)   :: norm
+        integer,             intent(out)   :: ithr
+        complex(sp) :: c
+        real(dp)    :: wk
+        integer     :: k, i, kk, k0, p, ieo, ih
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        ih   = merge(1, 2, self%iseven(i))
+        k0   = self%kfromto(1)
+        ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
+        norm = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            wk = self%sigma2_wk8(k,ih)
+            do p = 1,self%pftsz+1
+                c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
+                c = c - 2.0 * bank(p,kk) * conjg(self%ft_ref(p,k,iref,ieo))
+                self%crvec1(ithr)%c(p) = cmplx(self%crvec1(ithr)%c(p) + wk * c, &
+                    &kind=kind(self%crvec1(ithr)%c))
+            enddo
+        enddo
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+    end subroutine gen_euclid_crvec_bank
+
+    subroutine gen_corrs_bank( self, iref, iptcl, bank, cc )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(out)   :: cc(self%nrots)
+        integer :: i, ithr, k, kk, k0, ieo
+        ithr = omp_get_thread_num() + 1
+        i    = self%pinds(iptcl)
+        k0   = self%kfromto(1)
+        ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
+        ! IFFT( sum_k FT(CTF2) x FT(REF2) )
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        do k = self%kfromto(1), self%kfromto(2)
+            self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo)
+        enddo
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        cc = self%crvec1(ithr)%r(1:self%nrots)
+        ! IFFT( sum_k FT(S.X.CTF) x FT(REF)* )
+        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            self%crvec1(ithr)%c = self%crvec1(ithr)%c + bank(:,kk) * conjg(self%ft_ref(:,k,iref,ieo))
+        end do
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        cc = self%crvec1(ithr)%r(1:self%nrots) / &
+            &sqrt(cc * real(self%sqsums_ptcls(i), sp) * real(2*self%nrots, sp))
+    end subroutine gen_corrs_bank
+
+    !> The objective over all rotations (gen_objfun_vals' convention: exp(-loss) for Euclid, cc) of a bank entry.
+    module subroutine gen_objfun_vals_bank( self, iref, iptcl, bank, vals )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(out)   :: vals(self%nrots)
+        real(dp) :: norm, v
+        integer  :: ithr, irot
+        select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                call gen_corrs_bank(self, iref, iptcl, bank, vals)
+            case(OBJFUN_EUCLID)
+                call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr)
+                do irot = 1,self%nrots
+                    ! the loss is a squared residual: a negative value is rounding
+                    v = max(0.d0, 1.d0 + real(self%crvec1(ithr)%r(irot), dp) / norm)
+                    vals(irot) = real(exp(-v), sp)
+                enddo
+        end select
+    end subroutine gen_objfun_vals_bank
+
+    !> gen_likelihood_val for a bank entry.
+    module subroutine gen_likelihood_val_bank( self, iref, iptcl, bank, nsample, dist, corr, irot,&
+        &pvec_sorted, sorted_inds )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl, nsample
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(out)   :: dist, corr
+        integer,             intent(out)   :: irot
+        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
+        integer,             intent(inout) :: sorted_inds(self%nrots)
+        real(sp) :: scores(self%nrots)
+        real(dp) :: norm
+        integer  :: ithr
+        select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                call gen_corrs_bank(self, iref, iptcl, bank, scores)
+                call sample_likelihood_dist(self%nrots, cc_dist_at_rot, nsample, dist, corr, irot,&
+                    &pvec_sorted, sorted_inds)
+                corr = max(0., min(1., scores(irot)))
+            case(OBJFUN_EUCLID)
+                call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr)
+                call sample_likelihood_dist(self%nrots, euclid_dist_at_rot, nsample, dist, corr, irot,&
+                    &pvec_sorted, sorted_inds)
+        end select
+
+    contains
+
+        real function cc_dist_at_rot(p_loc) result(dist_loc)
+            integer, intent(in) :: p_loc
+            dist_loc = 1. - max(0., min(1., scores(p_loc)))
+        end function cc_dist_at_rot
+
+        real function euclid_dist_at_rot(p_loc) result(dist_loc)
+            integer, intent(in) :: p_loc
+            dist_loc = euclid_dist_from_crvec(self, ithr, p_loc, norm)
+        end function euclid_dist_at_rot
+
+    end subroutine gen_likelihood_val_bank
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self

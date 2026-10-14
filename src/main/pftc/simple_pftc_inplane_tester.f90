@@ -12,10 +12,12 @@ use simple_builder,                 only: builder
 use simple_image,                   only: image
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts
-use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad
+use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_exists, FIT_CURVATURE, FIT_STEP, &
+    &shift_ptcl2ref, shift_ref2ptcl
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_test_utils
 use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite, ieee_value, ieee_quiet_nan
+use, intrinsic :: iso_fortran_env,  only: int64
 implicit none
 private
 public :: run_all_pftc_inplane_tests
@@ -57,11 +59,16 @@ contains
 
     subroutine run_all_pftc_inplane_tests()
         write(*,'(A)') '**** running all pftc in-plane tests ****'
+        call test_grid_fit_step()
+        call test_shift_frames()
         call write_phantom()
         call test_euclid_routes_and_recovery()
         call test_euclid_band_edges()
         call test_cc_evaluator()
         call test_strategy2D_route_flags()
+        call test_grid_fit_search()
+        call test_particle_bank()
+        call test_grid_ptcl_search()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
 
@@ -524,5 +531,317 @@ contains
         p%inpl_cont         = 'no'
         call kill_fixture(b)
     end subroutine test_strategy2D_route_flags
+
+    ! ---- quadratic shift step from the coarse grid (prob_fast, multi-state) ---
+
+    !> the pure step: exact recovery of a quadratic's stationary point, and each guard that refuses a fit
+    subroutine test_grid_fit_step()
+        real(dp), parameter :: HESS(2,2) = reshape([2.d0, 0.5d0, 0.5d0, 1.5d0], [2,2])
+        real(dp) :: v(-1:1,-1:1), da, db
+        integer  :: ia, ib, reason
+        write(*,'(A)') 'test_grid_fit_step'
+        ! an exact quadratic with its stationary point inside the centre cell
+        call fill_quadratic([0.3d0, -0.2d0], v)
+        call fit_quadratic_step(v, da, db, reason)
+        call assert_int(0, reason, 'an exact quadratic is accepted')
+        call assert_true(abs(da - 0.3d0) <= 1.d-10 .and. abs(db + 0.2d0) <= 1.d-10, &
+            &'the stationary point of an exact quadratic is recovered (1e-10 grid units)')
+        ! a stationary point outside the centre cell
+        call fill_quadratic([0.8d0, 0.d0], v)
+        call fit_quadratic_step(v, da, db, reason)
+        call assert_int(FIT_STEP, reason, 'a stationary point outside the centre cell is refused')
+        ! not positive definite: a maximum, a saddle, a plane
+        do ia = -1,1
+            do ib = -1,1
+                v(ia,ib) = -real(ia*ia + ib*ib, dp)
+            enddo
+        enddo
+        call fit_quadratic_step(v, da, db, reason)
+        call assert_int(FIT_CURVATURE, reason, 'a maximum is refused')
+        do ia = -1,1
+            do ib = -1,1
+                v(ia,ib) = real(ia*ia - ib*ib, dp)
+            enddo
+        enddo
+        call fit_quadratic_step(v, da, db, reason)
+        call assert_int(FIT_CURVATURE, reason, 'a saddle is refused')
+        do ia = -1,1
+            do ib = -1,1
+                v(ia,ib) = 0.3d0 * real(ia, dp)
+            enddo
+        enddo
+        call fit_quadratic_step(v, da, db, reason)
+        call assert_int(FIT_CURVATURE, reason, 'a plane is refused')
+        ! ill conditioned: eigenvalue ratio 1e-3, below the 1e-2 floor
+        do ia = -1,1
+            do ib = -1,1
+                v(ia,ib) = real(ia*ia, dp) + 1.d-3 * real(ib*ib, dp)
+            enddo
+        enddo
+        call fit_quadratic_step(v, da, db, reason)
+        call assert_int(FIT_CURVATURE, reason, 'an ill-conditioned curvature is refused')
+        ! the stencil exists away from the edge of the 5 x 5 lattice only
+        call assert_true(grid_stencil_exists(3,3) .and. grid_stencil_exists(2,2) .and. grid_stencil_exists(4,4), &
+            &'interior grid points have a full stencil')
+        call assert_false(grid_stencil_exists(1,3) .or. grid_stencil_exists(5,3) .or. grid_stencil_exists(3,1) .or. &
+            &grid_stencil_exists(3,5), 'edge grid points have none')
+
+    contains
+
+        subroutine fill_quadratic( x0, vv )
+            real(dp), intent(in)  :: x0(2)
+            real(dp), intent(out) :: vv(-1:1,-1:1)
+            real(dp) :: d(2)
+            integer  :: i, j
+            do i = -1,1
+                do j = -1,1
+                    d = [real(i,dp), real(j,dp)] - x0
+                    vv(i,j) = 7.d0 + 0.5d0 * dot_product(d, matmul(HESS, d))
+                enddo
+            enddo
+        end subroutine fill_quadratic
+
+    end subroutine test_grid_fit_step
+
+    !> grid_fit against the L-BFGS-B path from the same grid on the phantom: a kept fit is within 0.2 px of its
+    !! shift, a fallback and the option off are bit-identical to it. The printed counts say why a case did not fit.
+    subroutine test_grid_fit_search()
+        integer :: icase
+        write(*,'(A)') 'test_grid_fit_search'
+        do icase = 1, 3
+            call grid_fit_case(icase)
+        enddo
+
+    contains
+
+        !> one phantom fixture per call, so the builder and parameters are fresh every time
+        subroutine grid_fit_case( icase_loc )
+            integer, intent(in) :: icase_loc
+            real(sp), parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
+            type(builder),    target :: b
+            type(parameters), target :: p
+            type(pftc_shsrch_grad) :: base, with_fit, off
+            integer(int64) :: counts(0:5), counts_off(0:5)
+            real    :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_b(3), cxy_c(3)
+            integer :: irot_a, irot_b, irot_c
+            limits(:,1)    = -TRS
+            limits(:,2)    =  TRS
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUE_SHIFTS(:,icase_loc), .false.)
+            call base%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true.)
+            call with_fit%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true., grid_fit=.true.)
+            call off%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true., grid_fit=.false.)
+            call base%set_indices(1, 1)
+            call with_fit%set_indices(1, 1)
+            call off%set_indices(1, 1)
+            irot_a = 1; irot_b = 1; irot_c = 1
+            cxy_a = base%minimize(irot_a, sh_rot=.false.)
+            cxy_b = with_fit%minimize(irot_b, sh_rot=.false.)
+            cxy_c = off%minimize(irot_c, sh_rot=.false.)
+            call with_fit%get_fit_profile(counts)
+            call off%get_fit_profile(counts_off)
+            call assert_int(1, int(sum(counts)), 'each shift search takes exactly one fit decision')
+            call assert_true(all(counts_off == 0_int64), 'no fit decisions without the option')
+            call assert_true(same_result(irot_c, cxy_c, irot_a, cxy_a), &
+                &'option off: identical to the search built without it')
+            if( counts(0) == 1_int64 )then
+                ! irot = 0 flags a search that found nothing better than zero shift; cxy is then undefined
+                if( irot_a > 0 .and. irot_b > 0 )then
+                    call assert_true(all(abs(cxy_b(2:3) - cxy_a(2:3)) <= 0.2), &
+                        &'a kept fit lies within 0.2 px of the L-BFGS-B shift from the same grid point')
+                endif
+            else
+                call assert_true(same_result(irot_b, cxy_b, irot_a, cxy_a), 'a fallback is identical to the L-BFGS-B path')
+            endif
+            write(*,'(A,I0,A,6I4)') '  case ', icase_loc, ' fit counts (kept, edge, curvature, step, box, value): ', int(counts)
+            write(*,'(A,2F8.3,A,2F8.3)') '  L-BFGS-B shift: ', cxy_a(2:3), '   with fit: ', cxy_b(2:3)
+            call base%kill
+            call with_fit%kill
+            call off%kill
+            call kill_fixture(b)
+        end subroutine grid_fit_case
+
+        logical function same_result( irot1, cxy1, irot2, cxy2 )
+            integer, intent(in) :: irot1, irot2
+            real,    intent(in) :: cxy1(3), cxy2(3)
+            same_result = irot1 == irot2
+            if( same_result .and. irot1 > 0 ) same_result = all(cxy1 == cxy2)
+        end function same_result
+
+    end subroutine test_grid_fit_search
+
+    ! ---- particle-frame shifts (prob_fast) -------------------------------------
+
+    !> the two frame conversions: a quarter turn, the round trip, and a lattice corner that leaves the box
+    subroutine test_shift_frames()
+        real :: u(2), s(2), c(2)
+        integer :: irot
+        write(*,'(A)') 'test_shift_frames'
+        u = shift_ref2ptcl([1., 0.], 90.)
+        call assert_true(all(abs(u - [0., 1.]) <= 1.e-5), 'a reference-frame shift at 90 degrees is a quarter turn of the particle shift')
+        s = shift_ptcl2ref([0., 1.], 90.)
+        call assert_true(all(abs(s - [1., 0.]) <= 1.e-5), 'the particle-frame conversion is its inverse')
+        s = [1.7, -2.3]
+        do irot = 0, 7
+            u = shift_ref2ptcl(s, 47.5 * real(irot))
+            c = shift_ptcl2ref(u, 47.5 * real(irot))
+            call assert_true(all(abs(c - s) <= 1.e-5), 'the round trip is the identity')
+            call assert_true(abs(sum(u**2) - sum(s**2)) <= 1.e-4, 'a rotation keeps the length')
+        enddo
+        ! the corner of the 5 x 5 lattice, 0.8 trs in both axes, is 1.13 trs from the origin
+        c = shift_ptcl2ref([0.8 * TRS, 0.8 * TRS], 45.)
+        call assert_true(c(1) > TRS, 'a lattice corner can leave the search box: the start is clamped')
+    end subroutine test_shift_frames
+
+    !> a bank entry (shifted particle memo) against the direct sum at the reference-frame shift it corresponds to
+    !! at every rotation, for both objectives, and the likelihood route on the same entry
+    subroutine test_particle_bank()
+        real(dp), parameter :: TODAY_ATOL = 5.d-2 ! the dropped Nyquist bin separates the two kernels; a frame error is O(1)
+        type(builder),    target :: b
+        type(parameters), target :: p
+        complex(sp), allocatable :: bank(:,:)
+        real(sp),    allocatable :: vals(:), vals_today(:), pvec(:)
+        integer,     allocatable :: inds(:)
+        real(dp) :: max_err, max_today, direct
+        real(sp) :: t(2), s(2), dist, corr
+        integer  :: iobj, ish, irot, irot_s, nrots, kfromto(2), irot_seed
+        write(*,'(A)') 'test_particle_bank'
+        do iobj = OBJ_EUCLID, OBJ_CC
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, [2., -1.5], .false.)
+            nrots   = b%pftc%get_nrots()
+            kfromto = b%pftc%get_kfromto()
+            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), vals(nrots), vals_today(nrots), pvec(nrots), inds(nrots))
+            max_err   = 0.d0
+            max_today = 0.d0
+            do ish = 1, size(PROBE_SHIFTS,2)
+                t = real(PROBE_SHIFTS(:,ish), sp)
+                call b%pftc%memoize_shifted_ptcl(1, t, bank)
+                call b%pftc%gen_objfun_vals_bank(1, 1, bank, vals)
+                do irot = 1, nrots
+                    s = shift_ptcl2ref(t, b%pftc%get_rot(irot))
+                    call b%pftc%gen_objfun_vals(1, 1, s, vals_today)
+                    direct = direct_reference(iobj, s, irot, vals_today)
+                    max_err = max(max_err, abs(real(vals(irot),dp) - direct))
+                    max_today = max(max_today, abs(real(vals(irot) - vals_today(irot),dp)))
+                enddo
+            enddo
+            call assert_true(max_err <= IDENTITY_ATOL, &
+                &'a bank entry scores every rotation as the reference shifted by its particle shift (direct sum)')
+            call assert_true(max_today <= TODAY_ATOL, 'and agrees with the shifted-reference kernel up to the Nyquist bin')
+            write(*,'(A,I0,A,ES10.2,A,ES10.2)') '  objective ', iobj, ': max |bank - direct| ', max_err, &
+                &'   max |bank - shifted-reference kernel| ', max_today
+            ! the likelihood route with one sample takes the best rotation of the same entry
+            call b%pftc%gen_likelihood_val_bank(1, 1, bank, 1, dist, corr, irot_s, pvec, inds)
+            call assert_int(maxloc(vals, dim=1), irot_s, 'the likelihood route picks the best rotation of the entry')
+            call assert_true(abs(corr - vals(irot_s)) <= 1.e-4, 'and reports its score')
+            ! a seed from the shift search: estimated at irot_seed as a reference shift, held as one particle shift
+            irot_seed = nrots / 3
+            s = [1.2, -0.8]
+            t = shift_ref2ptcl(s, b%pftc%get_rot(irot_seed))
+            call b%pftc%memoize_shifted_ptcl(1, t, bank)
+            call b%pftc%gen_objfun_vals_bank(1, 1, bank, vals)
+            call b%pftc%gen_objfun_vals(1, 1, s, vals_today)
+            direct = direct_reference(iobj, s, irot_seed, vals_today)
+            call assert_true(abs(real(vals(irot_seed),dp) - direct) <= IDENTITY_ATOL, &
+                &'a seed scores at its own rotation exactly as the reference-frame seed')
+            call assert_true(abs(vals(irot_seed) - vals_today(irot_seed)) <= TODAY_ATOL, &
+                &'and as today''s kernel up to the Nyquist bin')
+            deallocate(bank, vals, vals_today, pvec, inds)
+            call kill_fixture(b)
+        enddo
+
+    contains
+
+        !> the reference-frame score at one rotation: the direct sum for Euclid; for cc the direct sum is the
+        !! k-weighted correlation, a different objective from the FFT route, so the shifted-reference kernel is the reference
+        real(dp) function direct_reference( iobj_loc, s_loc, irot_loc, today_loc )
+            integer,  intent(in) :: iobj_loc, irot_loc
+            real(sp), intent(in) :: s_loc(2), today_loc(:)
+            if( iobj_loc == OBJ_EUCLID )then
+                direct_reference = b%pftc%gen_corr_for_rot_8(1, 1, real(s_loc,dp), irot_loc)
+            else
+                direct_reference = real(today_loc(irot_loc), dp)
+            endif
+        end function direct_reference
+
+    end subroutine test_particle_bank
+
+    !> the particle-frame grid (prob_fast, multi-state) on the phantom: option off is bit-identical, the bank is built once per particle, the result
+    !! agrees with the reference-frame grid, and the quadratic step works on the lattice
+    subroutine test_grid_ptcl_search()
+        integer :: icase
+        write(*,'(A)') 'test_grid_ptcl_search'
+        ! the interior shift and the one next to the box edge
+        do icase = 1, 3, 2
+            call grid_ptcl_case(icase)
+        enddo
+
+    contains
+
+        subroutine grid_ptcl_case( icase_loc )
+            integer, intent(in) :: icase_loc
+            real(sp), parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
+            type(builder),    target :: b
+            type(parameters), target :: p
+            type(pftc_shsrch_grad) :: base, off, ptcl, ptcl_fit
+            integer(int64) :: counts(0:5)
+            real    :: limits(2,2), lims_init(2,2), cxy_a(3), cxy_o(3), cxy_p(3), cxy_f(3)
+            integer :: irot_a, irot_o, irot_p, irot_f, nrots, drot
+            limits(:,1)    = -TRS
+            limits(:,2)    =  TRS
+            lims_init(:,1) = -SHC_INPL_TRSHWDTH
+            lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUE_SHIFTS(:,icase_loc), .false.)
+            nrots = b%pftc%get_nrots()
+            call base%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true.)
+            call off%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true., grid_ptcl=.false.)
+            call ptcl%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true., grid_ptcl=.true.)
+            call ptcl_fit%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true., grid_ptcl=.true., &
+                &grid_fit=.true.)
+            call base%set_indices(1, 1)
+            call off%set_indices(1, 1)
+            call ptcl%set_indices(1, 1)
+            call ptcl_fit%set_indices(1, 1)
+            irot_a = 1; irot_o = 1; irot_p = 1; irot_f = 1
+            cxy_a = base%minimize(irot_a, sh_rot=.false.)
+            cxy_o = off%minimize(irot_o, sh_rot=.false.)
+            cxy_p = ptcl%minimize(irot_p, sh_rot=.false.)
+            cxy_f = ptcl_fit%minimize(irot_f, sh_rot=.false.)
+            call assert_true(irot_o == irot_a, 'option off: same rotation as the search built without it')
+            if( irot_o > 0 ) call assert_true(all(cxy_o == cxy_a), 'option off: bit-identical to the search built without it')
+            call assert_true(off%get_bank_builds() == 0_int64, 'option off: no shifted particle memos')
+            call assert_true(ptcl%get_bank_builds() == 25_int64, 'one memo per lattice point')
+            ! a second reference of the same particle reuses the bank
+            call ptcl%set_indices(2, 1)
+            irot_p = 1
+            cxy_p = ptcl%minimize(irot_p, sh_rot=.false.)
+            call assert_true(ptcl%get_bank_builds() == 25_int64, 'the bank is built once per particle and shared by its references')
+            call ptcl%set_indices(1, 1)
+            irot_p = 1
+            cxy_p = ptcl%minimize(irot_p, sh_rot=.false.)
+            if( irot_a > 0 .and. irot_p > 0 )then
+                drot = abs(irot_p - irot_a)
+                call assert_true(min(drot, nrots - drot) <= 1, 'the particle-frame grid finds the same rotation')
+                call assert_true(all(abs(cxy_p(2:3) - cxy_a(2:3)) <= 0.3), 'and the same shift within 0.3 px')
+                call assert_true(cxy_p(1) >= cxy_a(1) - 1.e-3, 'and is not worse than the reference-frame grid')
+                call assert_true(all(abs(cxy_p(2:3)) <= TRS + 1.e-3), 'and stays in the search box')
+            endif
+            call ptcl_fit%get_fit_profile(counts)
+            call assert_int(1, int(sum(counts)), 'the quadratic step takes exactly one decision on the lattice')
+            if( irot_p > 0 .and. irot_f > 0 )then
+                call assert_true(all(abs(cxy_f(2:3) - cxy_p(2:3)) <= 0.3), 'with the step the shift agrees with the lattice search')
+            endif
+            write(*,'(A,I0,A,6I4)') '  case ', icase_loc, ' lattice fit counts (kept, edge, curvature, step, box, value): ', int(counts)
+            write(*,'(A,2F8.3,A,2F8.3,A,2F8.3)') '  reference grid: ', cxy_a(2:3), '   particle grid: ', cxy_p(2:3), &
+                &'   with fit: ', cxy_f(2:3)
+            call base%kill
+            call off%kill
+            call ptcl%kill
+            call ptcl_fit%kill
+            call kill_fixture(b)
+        end subroutine grid_ptcl_case
+
+    end subroutine test_grid_ptcl_search
 
 end module simple_pftc_inplane_tester

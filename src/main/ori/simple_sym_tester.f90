@@ -32,6 +32,7 @@ contains
         call test_symrandomize()
         call test_build_refspiral()
         call test_neighbour_searches()
+        call test_sym_dist_table()
         ! call report_summary()
     end subroutine run_all_sym_tests
 
@@ -633,5 +634,54 @@ contains
         end do
         call o_k%kill
     end function related_by_symop
+
+    !---------------- the subspace distance table ----------------
+
+    !> sym_dist_table against sym_dists pair by pair, in every point group: the same distances and the same nearest
+    !! neighbours in both directions (what the subspace map of the 3D toolbox takes from the table)
+    subroutine test_sym_dist_table()
+        integer, parameter :: NREF = 24, NASYM = 90
+        type(sym)  :: se
+        type(oris) :: os_ref, os_asym
+        type(ori)  :: oref, oasym, osym
+        real       :: table(NREF,NASYM), pairwise(NREF,NASYM), dtmp, inplrotdist
+        integer    :: ig, i, j
+        logical    :: l_same_full2sub, l_same_sub2full
+        write(*,'(A)') 'test_sym_dist_table'
+        do ig = 1,size(PGRPS)
+            call se%new(trim(PGRPS(ig)))
+            call os_ref%new(NREF, is_ptcl=.false.)
+            call se%build_refspiral(os_ref)
+            ! half a spiral (symmetry ties in the dihedral groups), half random orientations in the asymmetric unit
+            call os_asym%new(NASYM, is_ptcl=.false.)
+            call se%build_refspiral(os_asym)
+            do j = NASYM/2+1, NASYM
+                call os_asym%get_ori(j, oasym)
+                call se%rnd_euler(oasym)
+                call os_asym%set_ori(j, oasym)
+            enddo
+            do i = 1,NREF
+                call os_ref%get_ori(i, oref)
+                do j = 1,NASYM
+                    call os_asym%get_ori(j, oasym)
+                    call se%sym_dists(oref, oasym, osym, dtmp, inplrotdist)
+                    pairwise(i,j) = dtmp
+                enddo
+            enddo
+            call se%sym_dist_table(os_ref, os_asym, table)
+            call assert_true(maxval(abs(table - pairwise)) <= 1.e-4, &
+                &'sym_dist_table equals sym_dists pair by pair in '//trim(PGRPS(ig))//' (1e-4 deg)')
+            l_same_full2sub = all(minloc(table, dim=1) == minloc(pairwise, dim=1))
+            l_same_sub2full = all(minloc(table, dim=2) == minloc(pairwise, dim=2))
+            call assert_true(l_same_full2sub .and. l_same_sub2full, &
+                &'the nearest neighbours of the table are those of sym_dists in '//trim(PGRPS(ig)))
+            call os_ref%kill
+            call os_asym%kill
+            call se%kill
+        enddo
+        call oref%kill
+        call oasym%kill
+        call osym%kill
+    end subroutine test_sym_dist_table
 
 end module simple_sym_tester

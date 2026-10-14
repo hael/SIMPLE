@@ -1,5 +1,13 @@
 # Offline stream emulation: emulate_solve3D_stream and solve3D_chunks
 
+Status (2026-10-14): `emulate_solve3D_stream` is removed from the code base
+(its commander, UI entry, the parameters `nptcls_addon` and `rollback`, the
+explicit split `partition_selected` and its report). `solve3D_chunks`
+remains; this note stays as its design record. Its leaf module
+`simple_solve3D_stream_emulation` is now `simple_solve3D_chunks_plan`, with
+`chunks_step`, `chunks_report`, `prepare_chunks_source` and
+`select_chunks_step` for the `emulation_*` names below.
+
 Implementation note. `emulate_solve3D_stream` was committed on 2026-10-10
 (`77fb358a0`, `9be7dd841`), `solve3D_chunks` on 2026-10-11 (`da5a17e89`). The
 whole-stack run cuts, the `solve3D_chunks` defaults and UI, and

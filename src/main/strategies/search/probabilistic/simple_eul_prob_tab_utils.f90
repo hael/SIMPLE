@@ -1,7 +1,7 @@
 !@descr: shared utility routines for probabilistic alignment tables
 module simple_eul_prob_tab_utils
 use, intrinsic :: iso_fortran_env, only: int64
-use simple_defs,      only: TINY
+use simple_defs,      only: TINY, dp
 use simple_error,     only: simple_exception
 use simple_math,      only: hpsort, rotmat2d
 use simple_oris,      only: oris
@@ -13,7 +13,7 @@ public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dist, sample_likelihood_dist, sample_power_dist, sample_likelihood_index
-public :: prob_candidate, prob_candidate_buffer, prob_candidate_store
+public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 private
 #include "simple_local_flags.inc"
 
@@ -25,6 +25,28 @@ type :: prob_candidate
     real    :: y      = 0.
     logical :: has_sh = .false.
 end type prob_candidate
+
+! Cost record of a partition's table fill for the bench file: wall time outside the parallel region,
+! thread-seconds summed over threads.
+type :: prob_fill_profile
+    real(dp)       :: wall_region    = 0.d0   !< wall time of the parallel region, summed over batches
+    real(dp)       :: ts_seed        = 0.d0   !< thread-seconds in the shift-seed estimation
+    real(dp)       :: ts_score       = 0.d0   !< thread-seconds in the all-reference score loop
+    real(dp)       :: ts_refine      = 0.d0   !< thread-seconds in the refinement of the best references
+    integer        :: nthr           = 1      !< threads of the parallel region
+    integer        :: nrefs          = 0      !< references scored per particle
+    integer        :: projs_ns       = 0      !< references refined per particle (largest over batches)
+    integer(int64) :: nptcls         = 0_int64 !< particles filled
+    integer(int64) :: nrefined       = 0_int64 !< references handed to the shift search
+    integer(int64) :: objective_evals = 0_int64 !< objective evaluations of the search objects (rotations count nrots)
+    integer(int64) :: gradient_evals  = 0_int64 !< L-BFGS-B gradient evaluations, E
+    integer(int64) :: alternations    = 0_int64 !< L-BFGS-B / in-plane alternations
+    integer(int64) :: grid_points     = 0_int64 !< coarse-grid points scored
+    integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
+    integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built (prob_fast)
+    integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
+    integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero without prob_fast
+end type prob_fill_profile
 
 ! Thread-owned append buffer used while candidate counts are not known in advance.
 ! Keeping this common and mode-independent avoids per-search table variants.

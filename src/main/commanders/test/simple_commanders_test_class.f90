@@ -60,6 +60,7 @@ use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relation
 use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
 use simple_sigma2_bootstrap_tester,          only: run_all_sigma2_bootstrap_tests
 use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
+use simple_eul_prob_tab_tester,              only: run_all_eul_prob_tab_tests
 use simple_cavg_sums_tester,                 only: run_all_cavg_sums_tests
 use simple_trail_chain_manifest_tester,      only: run_all_trail_chain_manifest_tests
 use simple_gauran_tester,                    only: run_all_gauran_tests
@@ -71,7 +72,7 @@ use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_test
 use simple_solve3D_reseed_tester,            only: run_all_solve3D_reseed_tests
 use simple_project_superset_tester,          only: run_all_project_superset_tests
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
-use simple_solve3D_stream_emulation_tester,  only: run_all_solve3D_stream_emulation_tests
+use simple_solve3D_chunks_plan_tester,  only: run_all_solve3D_chunks_plan_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
 use simple_nu_filter_tester,                 only: run_all_nu_filter_tests
 use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
@@ -370,7 +371,7 @@ contains
         call add_suite(s, n, 'solve3D manifest',        run_all_solve3D_manifest_tests)
         call add_suite(s, n, 'project superset',        run_all_project_superset_tests)
         call add_suite(s, n, 'solve3D addon report', run_all_solve3D_addon_report_tests)
-        call add_suite(s, n, 'solve3D stream emulation', run_all_solve3D_stream_emulation_tests)
+        call add_suite(s, n, 'solve3D chunks plan', run_all_solve3D_chunks_plan_tests)
         call add_suite(s, n, 'state weight set',        run_all_state_weight_set_tests)
         call add_suite(s, n, 'cavgs work project',      run_all_cavgs_work_project_tests)
     end subroutine suites_project
@@ -426,6 +427,7 @@ contains
         call add_suite(s, n, 'continuous in-plane',      run_all_pftc_inplane_tests)
         call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
         call add_suite(s, n, '2D probability table I/O', run_all_eul_prob_tab2D_tests)
+        call add_suite(s, n, '3D probability table',     run_all_eul_prob_tab_tests)
         call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
         call add_suite(s, n, 'sigma2 bootstrap',         run_all_sigma2_bootstrap_tests)
         call add_suite(s, n, 'cavg registration',          run_all_cavg_registration_tests)

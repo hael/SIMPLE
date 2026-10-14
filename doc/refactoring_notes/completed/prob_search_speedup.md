@@ -1,9 +1,13 @@
 # The probabilistic search: paying less for the same search
 
-Status: refactoring plan, ready for an unattended arun run
-(`prob_search_speedup`) on the Dell. Written 2026-10-13; revised 14 October
-2026 after review (section 13), with all rulings given (section 9) and the
-code re-verified the same day. No phase has run (section 11).
+Status: completed 14 October 2026 in an interactive session (not the planned
+unattended run); the report is `prob_search_speedup_report.md` beside this
+file. Phases 0-3 landed behind one key, `prob_fast` (ruling 7, which
+supersedes the three keys of the plan below); Phase 4 was skipped on its
+measurements; the subspace-map table of the neighbourhood search was added on
+the default path (ruling 8). The last batch is written but not yet built or
+run (report, "Open"). Section 11 is the record. Written 2026-10-13; revised
+14 October 2026 after review (section 13).
 
 The probabilistic pre-step (`prob_align` and its `prob_tab` parts) was 46% of
 a three-state ribosome `solve3D` run
@@ -236,7 +240,9 @@ lattice of 3.1(a) with it on.
 
 1. **Neighbourhood.** Take the grid minimum g*, its rotation r*, and the
    3 × 3 stencil around g*, all at r*. If g* is on the edge of the 5 × 5
-   lattice, there is no fit (9 of the 25 points have a full stencil).
+   lattice, there is no fit (9 of the 25 points have a full stencil). A
+   stencil shifted inside the lattice for an edge g* was tried and rejected
+   (section 11).
 2. **Fit.** Fit the six-parameter least-squares quadratic over the nine
    values, in units of h: f(a,b) = c + gᵀ(a,b) + ½ (a,b) H (a,b)ᵀ, in closed
    form on the regular stencil.
@@ -351,6 +357,9 @@ leaves the score loop the larger part.
   as after `sh_rot`.
 
 ## 5. The keys
+
+**Superseded (ruling 7, 14 October 2026): one key, `prob_fast`, for all three
+changes.** The text below is the original plan.
 
 `prob_grid_ptcl`, `prob_seed_ptcl` and `prob_grid_fit`, each
 `(yes|no){no}`, one per approximate change. They are registered as
@@ -467,6 +476,14 @@ All given 14 October 2026.
    independently of `prob_grid_ptcl`.
 6. **Blocking's change of the in-plane draw order: accepted on the default
    path, without a key**, on the identity test of section 6.
+7. **One key** (14 October 2026, after the measured runs of section 11):
+   `prob_grid_ptcl`, `prob_grid_fit` and `prob_seed_ptcl` are removed;
+   `prob_fast` switches on all three, each in its own scope (the grid and the
+   fit in the multi-state table, the seed in the single-state table). This
+   replaces ruling 5's separate key.
+8. **The subspace-map table on the default path, without a key** (14 October
+   2026): `sym_dist_table` is a refactoring of the pair loop with the same
+   distances.
 
 ## 10. Execution
 
@@ -730,7 +747,221 @@ change is faster. Otherwise it is rejected.
 
 ## 11. Progress
 
-No phase has run. Verified against the code on 14 October 2026:
+### 14 October 2026, written without a build (interactive session, no Dell)
+
+Source written by Claude from a laptop session that could not compile or run
+anything (no Fortran compiler, no data). The maintainer built it, ran the
+cases below and reported back (see "Measured results" at the end of this
+entry). The unit gate was not re-run after the CC reference fix in
+`test_particle_bank` (see "Open"). Nothing is committed.
+
+- **Phase 0 (source written, unbuilt).** Built on `PROB_TAB_BENCH`, which commit
+  `77a8df9a8` (particle I/O) had already added with the wall-clock entries; the
+  note below that no `prob_tab_bench` names exist is stale. Added: the
+  thread-seconds block, the context counters and the load balance
+  (`prob_fill_profile` in `simple_eul_prob_tab_utils.f90`, filled by
+  `fill_tab_range`, read through `get_fill_profile` before `kill`); the
+  alternation, grid-point and shift-search counters in `pftc_shsrch_grad`
+  (`get_profile` takes them as optional arguments); `PROB_ALIGN_BENCH`
+  (`prob_align_bench_fname`, `write_prob_align_bench`). Thread timing uses
+  `omp_get_wtime` into thread-indexed accumulators.
+- **Phase 3 (source written, unbuilt).** `prob_grid_fit`, 3.2 as specified:
+  `try_grid_fit`, the pure `fit_quadratic_step` and `grid_stencil_exists`,
+  counters per reason, key in `simple_parameters*.f90`, developer entries on
+  refine3D and solve3D, bench lines, tests `test_grid_fit_step` and
+  `test_grid_fit_search` in `simple_pftc_inplane_tester.f90`. Choice not fixed
+  by the plan: the quadratic is fitted to the loss, `-log(objective)` for
+  Euclid (the objective is `exp(-loss)`) and `-objective` for cc. The closed
+  form was checked against `numpy.linalg.lstsq`. The second form of 3.2 is not
+  built. Measured: see "Measured results".
+- **Phases 1 and 2 (source written, unbuilt): the identity of 3.1 is exact only
+  with the Nyquist bin.** A numpy emulation of the kernels shows that the
+  particle-side bank entry is `X*CTF*conj(shmat4aln(t))` with
+  `t = s * rotmat2d(angtab(irot))`, the conversion `sh_rot` already uses, and
+  that with the angular Nyquist bin included on both sides it equals the
+  reference-frame loss at every rotation to 1e-16. The Euclid kernels sum
+  `p = 1..pftsz` into a `pftsz+1` spectrum and so drop that bin, which differs
+  between the two formulations: about 8% of `1+|L|` for white-noise transforms,
+  about 2e-4 for a smooth angular spectrum. Ruling (maintainer, 14 October
+  2026): include the Nyquist bin in the new kernels (exact against the true
+  shifted loss, slightly different from today's shifted-reference kernel).
+  Written to that ruling:
+  - `polarft_calc`: `memoize_shifted_ptcl` (shifted `X*CTF` transformed over
+    rotation, written into a caller-owned array in the calling thread's FFT
+    buffers), `gen_objfun_vals_bank` and `gen_likelihood_val_bank` (Euclid and
+    CC, `p = 1..pftsz+1`). `SHERRSQ` moved to the module so the table can use it.
+    Deviation from the file table: the bank is owned by its user (the search
+    object, the table's per-thread seed array), not by the calculator, so
+    nothing is added to `new`/`kill`.
+  - `pftc_shsrch_grad`: `grid_ptcl` (26 entries: 25 lattice points and a scratch
+    entry for the fit), built lazily when the particle changes, the start
+    converted by `shift_ptcl2ref` and clamped into the box, the quadratic step
+    on the lattice (the fitted lattice shift is converted at its rotation,
+    scored from the scratch entry, and the box test is made at the rotation it
+    is kept at), `get_bank_builds`.
+  - `eul_prob_tab`: `prob_grid_ptcl` passed to the search objects in the
+    multi-state table; `prob_seed_ptcl`: the seed converted with
+    `shift_ref2ptcl` at the rotation `estimate_shift_seed` ends at, one bank
+    entry per particle when above `SHERRSQ`, the refined start converted per
+    reference and clamped, `record_seed_shift` for the unrefined assigned
+    candidate; bench lines for the keys and the memos built.
+  - Tests: `test_shift_frames`, `test_particle_bank` (every rotation against the
+    direct sum, the shifted-reference kernel up to the Nyquist bin at 5e-2, the
+    likelihood route, a seed at its own rotation) and `test_grid_ptcl_search`
+    in the in-plane tester; `simple_eul_prob_tab_tester` ("3D probability
+    table") for `record_seed_shift`. Not written: a table-level test of the
+    seed scoring (needs a project).
+  - Measured: see "Measured results".
+- **Phase 4 (not written; skipped, 14 October 2026).** Its criterion was not
+  met (see "Measured results"), and the one measurement that could have
+  justified it says the score loop is compute-bound. Same two-state case with
+  both keys, one part of 6 threads (`nparts=1`, 13_refine3D): `score loop
+  s/(particle*ref)` 1.93e-5 s, against 2.44e-5 s with 4 parts of 6 threads
+  running together (24 threads; the master reports 20). The 26% difference is
+  the size of the oversubscription (24 threads on 20), so little or none of it is
+  memory contention, and blocking could recover at most about 6 of the score
+  loop's 28 thread-s (about 1 s of 12 s per part). Rejected for the cost: block
+  storage and a new candidate path in the 3D table for at most that. Revisit
+  only if the loop is ever measured memory-bound (efficiency below 0.75 at 16
+  threads on a machine without oversubscription).
+
+- **`prob_fast` (source written, unbuilt; ruling 7).** The only key: the three
+  separate keys are removed from the parameters, the registry and the refine3D
+  and solve3D interfaces, and `fill_tab_range`, `ref_assign` and the bench
+  writer read `prob_fast` (grid and fit when `nstates > 1`, seed when the
+  single-state table has a shift search). The measured runs above were made
+  with the separate keys: `prob_seed_ptcl=yes` is now `prob_fast=yes` in a
+  single-state run, `prob_grid_ptcl=yes prob_grid_fit=yes` is `prob_fast=yes`
+  in a multi-state run; `prob_grid_ptcl` alone has no equivalent any more.
+
+#### Measured results (14 October 2026, bgal bench data, commit `5e1e6aee` plus the working tree)
+
+Both runs on the maintainer's machine, 6 threads per part, 4 parts. Keys not
+named were off.
+
+**Single state, `solve3D`, keys off against `prob_seed_ptcl=yes`.**
+- Whole run 631.1 s to 505.9 s. FSC 0.5 / 0.143 at 4.29 / 3.75 A in both.
+- Table pre-steps over iterations 1-8: 198.1 s to 82.0 s. The score loop fell
+  from 3462 to 907 thread-s (-74%). Seed estimation and refinement are
+  unchanged and gradient evaluations per search are about equal. The fraction
+  of memos sampled is 0.75-1.0.
+- `prob_neigh` time is unchanged (117 s of table time, summed over the slowest
+  part of each iteration). Where the 505.8 s goes, from `SOLVE3D_BENCH` and the
+  per-iteration `REFINE3D_STRATEGY_BENCH` (base run 631.0 s in brackets):
+
+  | | modified | [base] |
+  |---|---|---|
+  | pre-step, `prob` iterations 1-8 | 82.2 s | [198.1] |
+  | pre-step, `prob_neigh` iterations 9-17 | 159.9 s | [159.7] |
+  | refine3D parts and merge (search, per-iteration partial reconstruction) | 142.6 s | [150.3] |
+  | strategy setup, includes the reprojection model | 39.0 s | [39.6] |
+  | assembly and postprocess inside the iterations | 26.0 s | [26.2] |
+  | sigma2 commit | 0.4 s | [0.4] |
+  | refine3D stages, sum of the rows above | 450.1 s | [574.3] |
+  | final reconstruction, includes the sigma pass of iteration 19 (7.8 s) | 48.5 s | [48.4] |
+  | start state and epilogue | 7.0 s | [7.9] |
+
+  The `prob_neigh` pre-step is the largest block left (32% of the run) and no key
+  touches it. Of its 160 s, 117 s is table time; the rest is process launch and
+  the table reads. In iterations 12-17 (`nspace` 5000) a part spends 3.5 s of
+  15.5 s in startup/setup and 11.1 s in the fill. Whether the particle-frame
+  grid applies to the `prob_neigh` table has not been looked at.
+
+**Two states, `refine3D`, 2 iterations, `update_frac=0.2`, `lp=8`, `pgrp=d2`,
+`vol1`/`vol2` the even and odd half-maps of one single-state volume** (5000
+references, 910 sampled particles, 138 refined references per particle).
+
+| | keys off | `prob_grid_ptcl` | `+ prob_grid_fit` |
+|---|---|---|---|
+| table step, iterations 1 / 2 | 34.4 / 33.5 s | 17.3 / 18.5 s | 16.3 / 15.3 s |
+| table fill, wall (part 1, iteration 1) | 28.6 s | 14.7 s | 12.7 s |
+| refinement, thread-s | 141 | 53 | 40 |
+| score loop, thread-s | 27.0 | 27.1 | 27.9 |
+| gradient evaluations per search | 12.2 | 11.9 | 6.1 |
+| load balance | .982 | .916 | .904 |
+| whole run | 96.9 s | not logged | 60.4 s |
+
+- `prob_grid_fit`: the fit was kept for 15206 of 31602 searches (48%). Fallbacks:
+  edge 13114 (41%), step 2073 (6.6%), value 1144 (3.6%), curvature 65 (0.2%),
+  search box 0. Alternations per search fell from 1.00 to 0.52.
+- Search quality, runs not paired (the 20% sample differs between runs):
+  score 0.637 / 0.640 / 0.644 (iteration 1) and 0.548 / 0.553 / 0.556
+  (iteration 2); state populations 814/96, 815/95, 815/95 and 1632/188,
+  1632/188, 1643/177; state 1 FSC 0.5 at 10.2 A in iteration 2 in all three.
+- State 2 has about 95-188 particles and a cFAR of 0.001-0.003. Its resolution
+  at FSC 0.143 varies between runs (13.6, 21.8 and 23.3 A in iteration 1; 14.8,
+  29.7 and 20.4 A in iteration 2) and says nothing about the keys until the
+  spread of the keys-off run itself is known.
+- "Continuous in-plane runs improved" rose from 67-71% to 80% and 86% with
+  `prob_grid_fit`. Not explained. Hypothesis: the fit leaves the table's shift
+  slightly less polished and the post-assignment in-plane route finds more to
+  improve. The score is unchanged.
+- What is left, with every key on (part 1, iteration 1, wall 12.7 s of the
+  fill): the score loop is 28 of 68 thread-s (41%) and refinement 40 (59%). A
+  search whose fit is kept costs about no gradient evaluations and a fallback
+  about 12, so the 41% edge fallbacks are about half the refinement left. The
+  load balance fell from 0.98 to 0.90-0.92 (about 1.2 s idle at the tail of a
+  14.6 s region).
+- Phase 4 is not triggered by its own criterion (score loop 28 thread-s is
+  below refinement 40 thread-s; the 16-thread efficiency was never measured).
+  The maintainer asked for the multi-state gain regardless. The deciding
+  measurement is cheap: `score loop s/(particle*ref)` at 24 concurrent threads
+  is 2.4e-5 s; at 6 threads (`nparts=1`) a lower figure means the loop competes
+  for memory and blocking can help, an equal one means it is compute-bound and
+  blocking cannot.
+- **Tried and rejected: a stencil shifted inside the lattice for an edge grid
+  minimum** (14 October 2026; reverted, the diff is saved in
+  `prob_search_speedup_edge_stencil_rejected.patch`). Estimate: half of the 41%
+  edge fallbacks would convert. Measured (14_refine3D against 12_refine3D, same
+  case, both keys): about 14% convert (1816 of 12854 edge cases in part 1,
+  iteration 1); the rest fall back on curvature (56 to 4537) or step (2046 to
+  6448) instead. Gradient evaluations per search 6.1 to 5.1, fill wall within
+  the part-to-part noise (12.15 / 11.58 s against 11.64 / 11.89 s, slowest part
+  of iterations 1 / 2), whole run 58.9 s against 58.7 s, score and populations
+  unchanged. Unit gate: a kept edge fit was 0.23 px from L-BFGS-B (bound 0.2).
+  Reading: an edge grid minimum mostly means the optimum lies beyond the
+  lattice, where the loss keeps falling outward and no quadratic fits, so the
+  fallbacks are genuine. The edge fallback stays; the fit's remaining cost is
+  the fallbacks' L-BFGS-B runs.
+- Written, unbuilt: `fill_tab_range` runs the shifted fill with
+  `schedule(dynamic)` when `prob_grid_ptcl` or `prob_grid_fit` is on (keys off:
+  static, unchanged). Expected: the idle tail falls from about 1.2 s to the
+  cost of one particle (0.35 thread-s). The random in-plane picks are drawn in
+  a different order per thread, as for any change of assignment of particles to
+  threads.
+  Measured (same two-state case, both keys, 12_refine3D against 10_refine3D):
+  load balance 0.84-0.97 to 0.984-0.989 in all eight parts; slowest part's fill
+  wall 12.76 / 12.82 s to 12.24 / 11.67 s (iterations 1 / 2); table step
+  16.3 / 15.3 s to 15.2 / 14.4 s; whole run 60.4 s to 58.9 s. Score 0.649 /
+  0.551 (against 0.644 / 0.556), populations 808/102 and 1617/203.
+
+**Open.**
+- Repeat the keys-off two-state run once to measure its own spread (state 2).
+- `unit_pftc_align2D3D`: `test_particle_bank` with the CC reference fix passes
+  (differences 2e-7), confirmed on 14 October 2026. The only failure in that
+  run was the 0.2 px bound for the edge-stencil experiment above, since
+  reverted; the gate has to be run once more on the reverted tree.
+- A state left empty by volassemble on iteration 1 stopped the run with
+  `fsc_state02.bin does not exist`. Found when identical `vol1`/`vol2` tied in
+  `ref_assign` (`minloc` picks state 1) and state 2 got no sampled particles.
+  Cause: `determine_dropped_states` / `carry_forward_dropped_state` in
+  `simple_commanders_rec_distr.f90` write nothing, so a state with no earlier
+  volume or FSC has nothing to carry, while the driver
+  (`distr_execute_iteration` in `simple_refine3D_strategy.f90`) takes the
+  project's state population as the test, and with `update_frac<1` the
+  unsampled particles keep their state-2 labels, so state 2 counts as populated
+  and its FSC is read. Existing behaviour, not caused by these keys.
+  Fixed (written, unbuilt, not run): in the driver a populated state whose map or
+  FSC file does not exist keeps its input volume as the reference (`vol<state>`
+  in the command line and job description untouched), logs
+  `>>> STATE n HAS NO RECONSTRUCTION AND NO EARLIER MAP; KEEPING ITS INPUT VOLUME
+  AS REFERENCE`, and skips the FSC plot, the registration in `out` and the
+  postprocess; the shared-memory `inmem_finalize_run` registers a state only when
+  both files exist. Test: the original command (`vol1=vol2=recvol_state01.mrc`,
+  `nstates=2`, `maxits=2`) must now end normally with the log line in each
+  iteration.
+
+Original note, before any phase ran. Verified against the code on 14 October 2026:
 - no `prob_tab_bench` or `prob_align_bench` names exist;
 - `coarse_search_opt_angle` still shifts the reference through
   `gen_objfun_vals` (the fixed-angle `coarse_search` uses
@@ -739,6 +970,56 @@ No phase has run. Verified against the code on 14 October 2026:
   caller;
 - `rt_prob` is the pre-step's only timing;
 - solve3D's stage controller runs `refine=prob` in stages 3–5.
+
+### 14 October 2026, the `prob_neigh` pre-step (single-state solve3D, iterations 9-17)
+
+The largest block left in the single-state run (160 s of 506 s; section 11,
+"Measured results"). Late solve3D stages run `refine=prob_neigh` with
+`prob_neigh_mode=state` (`fill_tab_subspace_range`).
+
+**Found: an O(nspace²) toolbox build in every process.** `build_general_tbox`
+with `l_neigh` builds the subspace map from a table of `sym_dists` over every
+(subspace, full) direction pair, with `nspace_sub` scaled with `nspace`
+(126 per 2500, `apply_refine3D_search_overrides`): 252 x 5000 pairs at
+`nspace` 5000, each forming `ori` objects and `nsym` symmetry copies. The
+bench files show it as the `startup/setup` of every `prob_tab_neigh` part:
+0.85 s at `nspace` 2500, 3.5 s at 5000 (x4.1 for x2 directions). The same build
+runs in the `prob_align_neigh` master and in every refine3D part of those
+iterations (the refine3D scheduler time grows by 2.7 s from 2500 to 5000), so
+an iteration at 5000 pays it about three times on its critical path, roughly
+10 s, and 60-70 s of the 506 s run. It grows with the symmetry order (d2 has 4
+operations; I has 60).
+
+- **Written, unbuilt (default path, no key; ruling 8):** `sym%sym_dist_table`
+  forms the symmetry copies, projection normals and in-plane unit vectors once
+  per orientation (in parallel; 60 copies per orientation in I) and the table
+  from dot products, with the operands, branches and tie folding of
+  `sym_dists_1`; the builder calls it instead of the pair loop. Cost at
+  `nspace` 5000 in d2: 20,000 symmetry copies and 5 million dot products,
+  against 5 million `ori` symmetry copies before. Test `test_sym_dist_table` (symmetry suite, `unit_ori`): table against
+  `sym_dists` pair by pair in all nine point groups of the tester (1e-4 deg)
+  and the same nearest neighbours in both directions. Possible difference: a
+  last-bit difference in a dot product could move a full direction to an
+  equally near subspace; the test checks the maps.
+- Expected: `startup/setup` of the neigh parts from 3.5 s to a fraction of a
+  second at 5000; the neigh pre-step and the refine3D scheduler of iterations
+  12-17 each shorter by about 3 s.
+
+**Instrumented (written, unbuilt): the neighbourhood fill's split.** The
+`PROB_TAB_NEIGH_BENCH` files had no thread-seconds. Both neighbourhood fills
+(`fill_tab_subspace_range`, `fill_tab_stoch_range`) now time the seed, the
+score loop (the subspace representatives and the pooled neighbourhood) and the
+refinement per thread, count the references scored (`nscored`, a new field of
+`prob_fill_profile`), and pass the search objects' counters
+(`record_neigh_fill_profile`); `exec_prob_tab_neigh` hands the profile to the
+bench writer, which prints `scored references (all)` and the score cost per
+scored reference for a neighbourhood table.
+
+**Not done yet: the particle-frame seed in the neighbourhood table.** In the
+single-state `state` mode every score of a particle (252 representatives and
+the pooled neighbourhood) uses the same shift seed, the pattern
+`prob_seed_ptcl` exploits in the full table. Worth building only if the score
+loop is a large part of the neigh fill; the instrumented run answers that.
 
 ## 12. Code map
 

@@ -38,7 +38,7 @@ public :: refine3D_cart_refvols_fname
 public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
 public :: refine3D_volassemble_bench_fname
-public :: rec3D_bench_fname, prob_tab_bench_fname
+public :: rec3D_bench_fname, prob_tab_bench_fname, prob_align_bench_fname
 public :: refine3D_oris_heatmap_fname
 public :: refine3D_reprojs_fname
 
@@ -304,6 +304,12 @@ contains
         integer,          intent(in) :: iter, part, numlen
         fname = string(uppercase(trim(prg)))//'_BENCH_ITER'//iter_tag(iter)//'_PART'//part_tag(part, numlen)//TXT_EXT
     end function prob_tab_bench_fname
+
+    !> per-iteration record of the probabilistic pre-step driver (PROB_ALIGN_BENCH_ITERnnn.txt)
+    type(string) function prob_align_bench_fname( iter ) result(fname)
+        integer, intent(in) :: iter
+        fname = string('PROB_ALIGN_BENCH_ITER')//iter_tag(iter)//TXT_EXT
+    end function prob_align_bench_fname
 
     type(string) function refine3D_oris_heatmap_fname( state ) result(fname)
         integer, intent(in) :: state

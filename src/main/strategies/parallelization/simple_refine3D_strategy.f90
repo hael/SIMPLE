@@ -947,15 +947,18 @@ contains
                     endif
                     call build%spproj%remove_entry_from_osout('fsc', state)
                 else
-                    ! add state volume, fsc to os_out
+                    ! add state volume, fsc to os_out; a state that holds particles but was
+                    ! never reconstructed has no map to register
                     fsc_file  = refine3D_fsc_fname(state)
-                    call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
                     vol       = refine3D_state_vol_fname(state)
-                    vol_iter  = vol
-                    if( trim(params%oritype).eq.'cls3D' )then
-                        call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
-                    else
-                        call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
+                    if( file_exists(vol) .and. file_exists(fsc_file) )then
+                        call build%spproj%add_fsc2os_out(fsc_file, state, params%box_crop)
+                        vol_iter  = vol
+                        if( trim(params%oritype).eq.'cls3D' )then
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol_cavg')
+                        else
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
+                        endif
                     endif
                 endif
             end do
@@ -1264,6 +1267,7 @@ contains
         type(string)  :: fname_vol, volpproc, vollp
         real, allocatable :: res(:), fsc(:)
         integer, allocatable :: state_pops(:), pinds_smpl(:)
+        logical, allocatable :: l_no_new_map(:)
         type(chash) :: job_descr_pass
         integer :: state, iter, nptcls_smpl
         logical :: l_prob_neigh_mode, l_polish
@@ -1391,6 +1395,7 @@ contains
                     if( trim(params%volrec).eq.'yes' )then
                         ! rename & add volumes to project & update job_descr
                         call get_state_pops(params, build, state_pops)
+                        allocate(l_no_new_map(params%nstates), source=.false.)
                         do state = 1,params%nstates
                             if( state_pops(state) == 0 )then
                                 vol_iter = refine3D_state_vol_fname(state)
@@ -1403,6 +1408,18 @@ contains
                             else
                                 vol_iter  = refine3D_state_vol_fname(state)
                                 fsc_file  = refine3D_fsc_fname(state)
+                                if( .not. file_exists(vol_iter) .or. .not. file_exists(fsc_file) )then
+                                    ! The project holds particles in this state (those not sampled this
+                                    ! iteration keep their labels) but volassemble reconstructed none of
+                                    ! them, and no earlier map exists to carry forward (iteration 1 of a
+                                    ! run started from input volumes). The input volume stays the
+                                    ! reference: vol<state> in the command line and the job description
+                                    ! is left as it is, and no FSC, plot or postprocessing is made.
+                                    l_no_new_map(state) = .true.
+                                    write(logfhandle,'(A,I0,A)') '>>> STATE ', state, &
+                                        &' HAS NO RECONSTRUCTION AND NO EARLIER MAP; KEEPING ITS INPUT VOLUME AS REFERENCE'
+                                    cycle
+                                endif
                                 call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
                                 ! FSC plot
                                 res       = get_resarr(params%box_crop, params%smpd_crop)
@@ -1422,7 +1439,7 @@ contains
                         call build%spproj%write_segment_inside('out')
                         ! per-state postprocess (and optional automask)
                         do state = 1,params%nstates
-                            if( state_pops(state) == 0 ) cycle
+                            if( state_pops(state) == 0 .or. l_no_new_map(state) ) cycle
                             call self%cline_postprocess%set('state', state)
                             call self%cline_postprocess%set('nthr',  self%nthr_master)
                             if( cline%defined('lp') ) call self%cline_postprocess%set('lp', params%lp)
@@ -1513,6 +1530,7 @@ contains
         if( allocated(res) ) deallocate(res)
         if( allocated(fsc) ) deallocate(fsc)
         if( allocated(state_pops) ) deallocate(state_pops)
+        if( allocated(l_no_new_map) ) deallocate(l_no_new_map)
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
 

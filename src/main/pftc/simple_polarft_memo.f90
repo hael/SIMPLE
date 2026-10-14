@@ -124,6 +124,39 @@ contains
         !$omp end parallel do
     end subroutine memoize_ptcls
 
+    !> FT of the particle times CTF shifted by -shift in its own (particle) frame, in the layout of ft_ptcl_ctf:
+    !! bank(:,k-kfromto(1)+1) for k = kfromto(1):kfromto(2). Scored against an unshifted reference it equals the
+    !! reference shifted by +shift. Thread-safe: works in the calling thread's FFT buffers, writes only bank.
+    module subroutine memoize_shifted_ptcl(self, iptcl, shift, bank)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: shift(2)
+        complex(sp),         intent(out)   :: bank(:,:)
+        complex(sp), pointer :: shmat(:,:)
+        integer :: ithr, i, k, kk, k0
+        if( size(bank,1) /= self%pftsz+1 .or. size(bank,2) /= self%nk )then
+            THROW_HARD('shifted particle bank has the wrong shape; memoize_shifted_ptcl')
+        endif
+        ithr  =  omp_get_thread_num() + 1
+        i     =  self%pinds(iptcl)
+        k0    =  self%kfromto(1)
+        shmat => self%heap_vars(ithr)%shmat
+        call self%gen_shmat4aln(ithr, shift, shmat)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            if( self%with_ctf )then
+                self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_ptcls(:,k,i) * self%ctfmats(:,k,i) * conjg(shmat(:,k))
+            else
+                self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_ptcls(:,k,i) * conjg(shmat(:,k))
+            endif
+            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+        end do
+        call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+        do kk = 1, self%nk
+            bank(:,kk) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
+        end do
+    end subroutine memoize_shifted_ptcl
+
     module subroutine memoize_refs(self, eulspace)
         class(polarft_calc),           intent(inout) :: self
         class(oris),         optional, intent(in)    :: eulspace

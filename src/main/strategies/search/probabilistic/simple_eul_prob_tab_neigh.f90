@@ -146,6 +146,8 @@ contains
         integer :: iptcl, si, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first
+        real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        integer(int64) :: nscored(nthr_glob)
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
         l_shc_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'shc')
@@ -154,6 +156,10 @@ contains
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
+        ts_seed   = 0.d0
+        ts_score  = 0.d0
+        ts_refine = 0.d0
+        nscored   = 0_int64
         call seed_rnd
         nfull_refs = self%p_ptr%nstates * self%p_ptr%nspace
         allocate(inpl_athres(self%p_ptr%nstates), source=self%p_ptr%prob_athres)
@@ -169,6 +175,7 @@ contains
         do ithr = 1,nthr_glob
             direct_rts(ithr) = ran_tabu(nfull_refs)
         enddo
+        t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
@@ -199,6 +206,8 @@ contains
             enddo
             !$omp end parallel do
         endif
+        call record_neigh_fill_profile(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
+            &nscored, i_to - i_from + 1)
         ! cleanup
         call eval_work%dealloc_eval_ws
         do ithr = 1,nthr_glob
@@ -216,14 +225,22 @@ contains
             real,    intent(inout) :: shift_seed(3)
             type(ori) :: o_prev
             integer   :: prev_state_loc, prev_proj_loc, neval_loc
+            real(dp)  :: t0
             call get_particle_context(self, iptcl_loc, o_prev, prev_state_loc, prev_proj_loc)
+            t0 = omp_get_wtime()
             call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev,&
                 &l_seed_sh_first, shift_seed)
+            ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
+            t0 = omp_get_wtime()
             call evaluate_direct_stochastic_refs(i_loc, ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc,&
                 &shift_seed, l_with_shift, neval_loc)
+            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            nscored(ithr_loc)  = nscored(ithr_loc) + int(neval_loc, int64)
             if( l_with_shift )then
+                t0 = omp_get_wtime()
                 call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first, max_refs_to_refine,&
                 &i_loc, ithr_loc, iptcl_loc, shift_seed, neval_loc)
+                ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             endif
             call o_prev%kill
         end subroutine process_particle_stoch
@@ -343,6 +360,8 @@ contains
         integer :: iptcl, si, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first
+        real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        integer(int64) :: nscored(nthr_glob)
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
         l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
@@ -353,6 +372,10 @@ contains
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
+        ts_seed   = 0.d0
+        ts_score  = 0.d0
+        ts_refine = 0.d0
+        nscored   = 0_int64
         call seed_rnd
         nsubs        = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
@@ -366,6 +389,7 @@ contains
             inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
         enddo
         call coarse_ws%alloc_coarse_ws(npeak_target, npooled_capacity, self%p_ptr%nstates, nthr_glob)
+        t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
@@ -394,6 +418,8 @@ contains
             enddo
             !$omp end parallel do
         endif
+        call record_neigh_fill_profile(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
+            &nscored, i_to - i_from + 1)
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -410,9 +436,13 @@ contains
             real,    intent(inout) :: shift_seed_loc(3)
             type(ori) :: o_prev
             integer   :: prev_state, prev_proj, neval
+            real(dp)  :: t0
             call get_particle_context(self, iptcl_loc, o_prev, prev_state, prev_proj)
+            t0 = omp_get_wtime()
             call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state, prev_proj, o_prev,&
                 &l_seed_sh_first, shift_seed_loc)
+            ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
+            t0 = omp_get_wtime()
             if( l_geom_neigh )then
                 call build_geometric_neighborhood(ithr_loc, prev_proj)
             else
@@ -420,9 +450,13 @@ contains
                 call build_pooled_neighborhood(ithr_loc, prev_proj)
             endif
             call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval)
+            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            nscored(ithr_loc)  = nscored(ithr_loc) + int(neval, int64)
             if( l_with_shift )then
+                t0 = omp_get_wtime()
                 call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first, max_refs_to_refine,&
                     &i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval)
+                ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             endif
             call o_prev%kill
         end subroutine process_particle_subspace
@@ -446,6 +480,7 @@ contains
                     full_ref_subspace = (istate_loc-1)*self%p_ptr%nspace + coarse_proj
                     call score_subspace_ref(full_ref_subspace, ithr_loc, iptcl_loc, shift_seed_loc,&
                         &l_with_shift, dist, irot_loc)
+                    nscored(ithr_loc) = nscored(ithr_loc) + 1_int64
                     call consider_peak_subspace(isub_loc, istate_loc, ithr_loc, dist)
                     ri_loc = eval_work%fullref_to_sparse_ref(full_ref_subspace)
                     if( ri_loc > 0 )&
@@ -1279,6 +1314,34 @@ contains
     end subroutine record_sparse_eval
 
     ! Minimizes shift at the previous best orientation
+    !> the cost record of one neighbourhood fill (bench file): the wall time of the parallel region, thread-seconds of
+    !! the seed, the score loop and the refinement, references scored, and the search objects' counters
+    subroutine record_neigh_fill_profile( self, grad_obj, wall, ts_seed, ts_score, ts_refine, nscored, nfilled )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        type(pftc_shsrch_grad),    intent(inout) :: grad_obj(:)
+        real(dp),                  intent(in)    :: wall, ts_seed(:), ts_score(:), ts_refine(:)
+        integer(int64),            intent(in)    :: nscored(:)
+        integer,                   intent(in)    :: nfilled
+        integer(int64) :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
+        integer        :: ithr
+        self%fill_profile%wall_region = self%fill_profile%wall_region + wall
+        self%fill_profile%ts_seed     = self%fill_profile%ts_seed     + sum(ts_seed)
+        self%fill_profile%ts_score    = self%fill_profile%ts_score    + sum(ts_score)
+        self%fill_profile%ts_refine   = self%fill_profile%ts_refine   + sum(ts_refine)
+        self%fill_profile%nthr        = nthr_glob
+        self%fill_profile%nptcls      = self%fill_profile%nptcls  + int(nfilled, int64)
+        self%fill_profile%nscored     = self%fill_profile%nscored + sum(nscored)
+        if( .not. self%p_ptr%l_doshift ) return
+        do ithr = 1,size(grad_obj)
+            call grad_obj(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
+            self%fill_profile%objective_evals = self%fill_profile%objective_evals + obj_ithr
+            self%fill_profile%gradient_evals  = self%fill_profile%gradient_evals  + grad_ithr
+            self%fill_profile%alternations    = self%fill_profile%alternations    + alt_ithr
+            self%fill_profile%grid_points     = self%fill_profile%grid_points     + grid_ithr
+            self%fill_profile%minimize_calls  = self%fill_profile%minimize_calls  + min_ithr
+        enddo
+    end subroutine record_neigh_fill_profile
+
     subroutine estimate_shift_seed( self, grad_obj, ithr, iptcl, prev_state, prev_proj, o_prev, l_with_shift, shift_seed )
         class(eul_prob_tab_neigh), intent(inout) :: self
         type(pftc_shsrch_grad),    intent(inout) :: grad_obj(:)
