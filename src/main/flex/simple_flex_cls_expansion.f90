@@ -1114,7 +1114,7 @@ contains
             model%prec(:,:,i) = A(1:ncomp,1:ncomp)
             if( nn > 0 ) model%nu(i,:) = m(ncomp+1:ntot)
             ea(0,i)   = 1.d0
-            ea(1:,i)  = m
+            ea(1:,i)  = m(1:ncomp)
             eaa(0,0,i) = 1.d0
             do q = 1, ncomp
                 eaa(q,0,i) = m(q)
