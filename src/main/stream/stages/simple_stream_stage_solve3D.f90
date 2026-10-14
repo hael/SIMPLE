@@ -134,7 +134,8 @@ integer, parameter :: JOB_ASSIGN      = 3 ! a publication's assignment (expansio
 ! a job needs this many selected particles per state
 integer, parameter :: MIN_PTCLS_PER_STATE = 5
 ! the route: solve2D into NCLS2D_FIRST classes, then cls_expansion of the classes the pool model
-! keeps into about NCLS_EXPANDED in all (each publication is expanded into as many)
+! keeps into NCLS_EXPANDED sub-classes in all (each publication is expanded into as many); never
+! fewer than the classes split, which cls_expansion refuses (expansion_budget)
 integer, parameter :: NCLS2D_FIRST        = 150
 integer, parameter :: NCLS_EXPANDED       = 500
 ! solve3D_cavgs' low-pass ramp (A), fixed (force_lp_range) rather than derived from the class FRCs
@@ -301,7 +302,8 @@ contains
     procedure, nopass :: flag_ambiguous
     procedure, nopass :: best_attempt
     procedure, nopass :: is_final_publication
-    procedure, nopass :: subclasses_per_class
+    procedure, nopass :: expansion_budget
+    procedure, nopass :: count_active_classes
     procedure, nopass :: compact_states
     procedure, nopass :: fit_mskdiam
     procedure, nopass :: usable_job_2D
@@ -1263,22 +1265,24 @@ contains
             &' OF ', self%spproj%os_cls2D%get_noris(), ' CLASSES AND ', self%nptcls_selected, ' PARTICLES'
     end subroutine select_first_set_classes
 
-    ! The route's cls_expansion of the first set's selected classes, in cls_expansion/: each split
-    ! into the same number of subclasses (subclasses_per_class), about NCLS_EXPANDED in all, with
-    ! the mask diameter fitted to the particles' box, on the 3D jobs' resources.
+    ! The route's cls_expansion of the first set's selected classes, in cls_expansion/: the classes
+    ! of the selected particles split into expansion_budget sub-classes in all (cls_expansion
+    ! spreads them over groups of similar class averages by population and keeps small classes
+    ! whole; its other settings are its defaults), with the mask diameter fitted to the particles'
+    ! box, on the 3D jobs' resources.
     subroutine start_clsexp( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job
         type(string)  :: cwd, dir
-        integer       :: nsel, nsub
+        integer       :: nsplit, nsub
         call simple_getcwd(cwd)
         dir = cwd//'/'//CLSEXP_DIR
         call fresh_job_dir(dir, CLSEXP_DIR) ! never the directory of a job left unfinished
         call self%spproj%write(dir//'/'//CLSEXP_DIR//METADATA_EXT)
-        nsel = count(self%spproj%os_cls2D%get_all_asint('state') > 0)
-        nsub = subclasses_per_class(nsel)
-        write(logfhandle,'(A,I6,A,I4,A)') '>>> CLS_EXPANSION OF THE FIRST SET: ', nsel, ' CLASSES INTO ', nsub,&
-            &' SUBCLASSES EACH'
+        nsplit = count_active_classes(self%spproj%os_ptcl2D%get_all_asint('state'), self%spproj%os_ptcl2D%get_all_asint('class'))
+        nsub   = expansion_budget(nsplit)
+        write(logfhandle,'(A,I6,A,I6,A)') '>>> CLS_EXPANSION OF THE FIRST SET: ', nsplit, ' CLASSES INTO ', nsub,&
+            &' SUBCLASSES IN ALL'
         call cline_job%set('prg',      'cls_expansion')
         call cline_job%set('mkdir',    'no')
         call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
@@ -1659,14 +1663,14 @@ contains
     !---------------- the assignment of a publication ----------------
 
     ! A publication's assignment starts in assign/it_<n>/: cls_expansion of its classes, in
-    ! expand/, each split into the same number of sub-classes (subclasses_per_class), about
-    ! NCLS_EXPANDED in all, with the mask diameter fitted to the particles' box, on the 3D jobs'
-    ! resources.
+    ! expand/, the classes of the selected particles split into expansion_budget sub-classes in all
+    ! (as the route's, start_clsexp), with the mask diameter fitted to the particles' box, on the 3D
+    ! jobs' resources.
     subroutine start_expand( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job
         type(string)  :: cwd, dir
-        integer       :: nsel, nsub
+        integer       :: nsplit, nsub
         self%nassign      = self%nassign + 1
         self%l_assign_due = .false.
         call simple_getcwd(cwd)
@@ -1676,10 +1680,10 @@ contains
         dir = self%assign_dir//'/'//EXPAND_DIR
         call fresh_job_dir(dir, CLSEXP_DIR)
         call self%spproj%write(dir//'/'//CLSEXP_DIR//METADATA_EXT)
-        nsel = count(self%spproj%os_cls2D%get_all_asint('state') > 0)
-        nsub = subclasses_per_class(nsel)
-        write(logfhandle,'(A,I6,A,I6,A,I4,A)') '>>> ASSIGNMENT ', self%nassign, ': CLS_EXPANSION OF ', nsel, ' CLASSES INTO ',&
-            &nsub, ' SUBCLASSES EACH'
+        nsplit = count_active_classes(self%spproj%os_ptcl2D%get_all_asint('state'), self%spproj%os_ptcl2D%get_all_asint('class'))
+        nsub   = expansion_budget(nsplit)
+        write(logfhandle,'(A,I6,A,I6,A,I6,A)') '>>> ASSIGNMENT ', self%nassign, ': CLS_EXPANSION OF ', nsplit, ' CLASSES INTO ',&
+            &nsub, ' SUBCLASSES IN ALL'
         call cline_job%set('prg',      'cls_expansion')
         call cline_job%set('mkdir',    'no')
         call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
@@ -2596,13 +2600,31 @@ contains
         enddo
     end function is_final_publication
 
-    !> The subclasses cls_expansion splits each of @p nsel selected classes into: about
-    !! NCLS_EXPANDED in all, rounded, and at least 2, cls_expansion's least.
-    pure integer function subclasses_per_class( nsel ) result( nsub )
-        integer, intent(in) :: nsel
-        nsub = 2
-        if( nsel > 0 ) nsub = max(2, nint(real(NCLS_EXPANDED) / real(nsel)))
-    end function subclasses_per_class
+    !> The total number of sub-classes cls_expansion splits @p nsplit classes into (its ncls):
+    !! NCLS_EXPANDED, and never fewer than the classes, which cls_expansion refuses.
+    pure integer function expansion_budget( nsplit ) result( nsub )
+        integer, intent(in) :: nsplit
+        nsub = max(NCLS_EXPANDED, nsplit)
+    end function expansion_budget
+
+    !> The classes cls_expansion splits: the distinct positive class labels @p classes of the rows
+    !! with a positive state @p states (its active particles).
+    pure integer function count_active_classes( states, classes ) result( n )
+        integer, intent(in) :: states(:), classes(:)
+        logical, allocatable :: l_seen(:)
+        integer :: i, cmax
+        n    = 0
+        cmax = 0
+        do i = 1,min(size(states), size(classes))
+            if( states(i) > 0 ) cmax = max(cmax, classes(i))
+        enddo
+        if( cmax < 1 ) return
+        allocate(l_seen(cmax), source=.false.)
+        do i = 1,min(size(states), size(classes))
+            if( states(i) > 0 .and. classes(i) > 0 ) l_seen(classes(i)) = .true.
+        enddo
+        n = count(l_seen)
+    end function count_active_classes
 
     !> The positive states of @p states renumbered from 1 in ascending order, in place; @p newind(s)
     !! is state s's new number (0 for a state none holds) and @p nstates its count.

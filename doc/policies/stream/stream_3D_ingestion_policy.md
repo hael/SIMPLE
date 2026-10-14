@@ -238,7 +238,7 @@ completed iteration left it.
     deselection of a missing stack, the classes), the watch order and mask diameter,
     `test_take_cavgs`, `test_first_publication` (taken whole as the pool selects it, the first
     set kept through later publications and a missing stack, the other rows following them),
-    `test_rules` (the job rule, the check, the best attempt, the renumbering, the subclasses, the
+    `test_rules` (the job rule, the check, the best attempt, the renumbering, the sub-class budget, the
     mask diameter), `test_fit_rules` (the outlier cut, the 30% cap, the worst first, no
     non-candidate rejected, none when all fit; the ambiguity flag), `test_reference_volumes`,
     `test_failed_attempts` (section 9), `test_assignment` (section 10), the retention, the status,
@@ -375,14 +375,17 @@ input and its forwarding are gone.
    session:** they stay first-set rows, whose selection later publications do not change. When
    the model cannot score the classes or keeps none, every populated class is kept, with a
    warning.
-6. **cls_expansion** (`start_clsexp`, `cls_expansion/`) splits each kept class into the same
-   number of subclasses, about `NCLS_EXPANDED` (500) in all: `nint(500 / kept classes)`, at
-   least 2 (`subclasses_per_class`), with the mask diameter fitted to the particles' box. Its
+6. **cls_expansion** (`start_clsexp`, `cls_expansion/`) splits the classes of the selected
+   particles into `NCLS_EXPANDED` (500) subclasses in all, and never fewer than the classes, which
+   cls_expansion refuses (`expansion_budget`; `ncls` is cls_expansion's total since 14 October
+   2026). cls_expansion spreads the total over groups of similar class averages by population and
+   keeps a class too small to split whole; its other settings are its defaults (`minpop` 25,
+   `subcls_avg=model`). The mask diameter is fitted to the particles' box. Its
    subclasses, their class averages, halves and FRCs, and the particles' subclass labels become
    the stage's (`adopt_job_2D`).
 7. **solve3D_cavgs** (`start_cavgs3D`, `solve3D_cavgs/`) makes `nstates` volumes from those class
    averages (`pgrp=c1`, `prune=no`, the mask diameter; one run, no collapse restarts). Its
-   low-pass limits are a fixed ramp from `LPSTART_CAVGS3D` (20 Å) to `LPSTOP_CAVGS3D` (8 Å) over
+   low-pass limits are a fixed ramp from `LPSTART_CAVGS3D` (20 Å) to `LPSTOP_CAVGS3D` (12 Å) over
    its stages (`lpstart`, `lpstop`, `force_lp_range=yes`), not one derived from the class FRCs.
    Its angular sampling window is narrowed after the symmetry search (`prob_athres_taper=yes`: 90
    degrees through stage 3, then halved each stage down to 10; `solve3D_cavgs_policy.md`,
@@ -427,7 +430,7 @@ input and its forwarding are gone.
     its first publication. A job folder a stopped step left is set aside (`fresh_job_dir`).
 14. **Tests:** `test_sieve_publication` in p06's tester (the offsets, selection, class tables and
     populations; the combined files; a box mismatch and a missing half refused); in p07's,
-    `test_rules` (the check, the best attempt, the renumbering, the subclasses per class),
+    `test_rules` (the check, the best attempt, the renumbering, the sub-class budget),
     `test_reference_volumes` (an attempt that fails kept aside and the route run again, one with
     near-duplicate states refused, one that
     passes renumbered with its JPEGs and taken, a restart that takes it),
@@ -452,8 +455,9 @@ Decided 13 October 2026
    (`accept_refs`). Only the newest waiting is assigned (section 4, item 2). Each assignment works
    in `assign/it_<n>/` (`fresh_job_dir`; `n` counts the session's assignments).
 2. **The expansion** (`start_expand`, `assign/it_<n>/expand/`): cls_expansion of the
-   publication's selected classes, each into `subclasses_per_class` sub-classes, about
-   `NCLS_EXPANDED` (500) in all, with the mask diameter fitted to the particles' box, on the 3D
+   publication's selected classes into `NCLS_EXPANDED` (500) sub-classes in all, never fewer than
+   the classes (`expansion_budget`, as for the route), with the mask diameter fitted to the
+   particles' box, on the 3D
    jobs' resources. Pool classes group particles mainly by view, so particles of different states
    with similar projections often share a class; the expansion separates them, and the matching
    compares sub-class averages with references made from sub-class averages. A usable result

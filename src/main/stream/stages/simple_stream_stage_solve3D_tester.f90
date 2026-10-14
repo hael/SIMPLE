@@ -439,7 +439,7 @@ contains
     end subroutine test_rows_problem
 
     !> which job starts when, the check of the reference volumes, the best attempt, and the
-    !! renumbering, subclasses and mask diameter the route uses
+    !! renumbering, sub-class budget and mask diameter the route uses
     subroutine test_rules()
         class(stream_stage_solve3D), allocatable :: stage
         integer, allocatable :: states(:), newind(:)
@@ -481,11 +481,13 @@ contains
         states = [0, 0]
         call stage%compact_states(states, newind, nstates_held)
         call assert_int(0, nstates_held, 'none when no state is held')
-        ! cls_expansion's subclasses per class, about 500 in all
-        call assert_int(5, stage%subclasses_per_class(100), '100 classes: 5 subclasses each, 500 in all')
-        call assert_int(4, stage%subclasses_per_class(120), '120 classes: 4 each, 480 rounded')
-        call assert_int(2, stage%subclasses_per_class(300), '300 classes: 2 each, at least 2')
-        call assert_int(2, stage%subclasses_per_class(0),   'no class: 2, cls_expansion''s least')
+        ! cls_expansion's total of sub-classes, 500 and never fewer than the classes
+        call assert_int(500, stage%expansion_budget(150), '150 classes: 500 sub-classes in all')
+        call assert_int(500, stage%expansion_budget(0),   'no class: 500 (cls_expansion then finds nothing to split)')
+        call assert_int(600, stage%expansion_budget(600), '600 classes: one each at least')
+        ! the classes cls_expansion splits: distinct labels of the selected particles
+        call assert_int(2, stage%count_active_classes([1, 1, 0, 1, 1], [3, 7, 9, 3, 0]), 'classes 3 and 7; a deselected or unlabelled row is not counted')
+        call assert_int(0, stage%count_active_classes([0, 0], [1, 2]),                  'none without a selected particle')
         ! the mask diameter that fits the class averages
         call assert_real(100., stage%fit_mskdiam(100.,  64, 2.0), 1.e-4, 'a mask diameter that fits is kept')
         call assert_real(116., stage%fit_mskdiam(400.,  64, 2.0), 1.e-4, 'one too large for the box gets the box default')
@@ -658,7 +660,7 @@ contains
         type(cmdline)    :: cline
         type(sp_project) :: set, res
         type(string)     :: cwd_saved, root
-        integer          :: nfail0, i
+        integer          :: nfail0
         allocate(stage)
         write(*,'(A)') 'test_assignment'
         nfail0 = tests_failed

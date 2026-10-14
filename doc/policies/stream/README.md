@@ -18,6 +18,20 @@ decided and the policy is updated with the code.
 | [ipc_policy.md](ipc_policy.md) | the stage-to-master pipes, the GUI metadata that crosses them, the master's heartbeat and the GUI's answers |
 | [restart_policy.md](restart_policy.md) | what each stage does when it is started again, by the GUI or in an existing run folder |
 
+Stage overviews: a diagram of each stage for readers who know the technique but not the code.
+They summarise the code and the policies above; where they differ, the policies and the code rule.
+
+| Overview | Stage |
+|---|---|
+| [p00_overview.md](p00_overview.md) | the master: how the stages connect, the GUI loop, the stop sequence |
+| [p01_overview.md](p01_overview.md) | preprocessing: motion correction, CTF, micrograph selection |
+| [p02_overview.md](p02_overview.md) | optics groups |
+| [p03_overview.md](p03_overview.md) | initial analysis: the picking references |
+| [p04_overview.md](p04_overview.md) | reference-based picking and extraction |
+| [p05_overview.md](p05_overview.md) | particle sieving |
+| [p06_overview.md](p06_overview.md) | the 2D pool and its publications for 3D |
+| [p07_overview.md](p07_overview.md) | multistate 3D: reference volumes and assignment |
+
 Related policies elsewhere: the particle sieve (p03, p05) in
 `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`; class-average quality in
 `doc/policies/sieving_and_rejection/model_cavgs_rejection.md`.
