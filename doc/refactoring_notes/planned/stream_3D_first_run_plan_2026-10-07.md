@@ -170,3 +170,24 @@ Where the implementation differs from the plan:
   `start_solve3D` deselects the queued rows, writes the job's project, and selects them again.
 - **`doc/policies/stream/README.md` is unchanged:** its p07 row lists the stage's resources, and
   the cap is not one.
+
+Changed 12 and 13 October 2026 (re-checked against the code 14 October): later commits reversed
+several decisions above, and `stream_3D_ingestion_policy.md` (sections 3, 4, 8 and 9) is now the
+living description. What survives and what does not:
+- **Survives:** the cap (`nptcls3D_max`, p07 only, registered in `simple_parameters.f90`,
+  `simple_parameters_parse.f90` and `simple_ui_stream.f90`), the queue of particles the first
+  `solve3D` leaves out (`queued`, `set_queued_states`, `release_queue`), and the first addon run's
+  cohort.
+- **Default changed:** the cap is 30,000 (`NPTCLS3D_MAX` in the p07 commander), not 100,000.
+- **Reversed:** p07 again keeps a first set (`in_first_set`, `take_first_publication`) and, with
+  `ini3D_cavgs=yes` (the default), runs `solve2D` into 150 classes, the pool model's selection,
+  `cls_expansion` into about 500 classes and `solve3D_cavgs` before the first `solve3D` (commits
+  `a47a1f04c`, `d9286a57a`). "No `solve2D`" and "uncapped first run" no longer hold.
+- **Replaced:** decision 2, the class-balanced draw. `draw_first_run` is gone; `cap_first_run`
+  takes whole stacks in row order (`85afad3f5`), and `balance=none` was removed, so p07's runs
+  take solve3D's default `cavg`.
+- **Replaced:** decision 3. p06 publishes the sieve's 2D as the first set (at 100,000 accepted
+  particles, 500 micrographs, the sieve's final set, or pool iteration 10), and p07 takes it
+  without scoring by the pool model.
+- Still to do before this note closes: `unit_stream` passing and a stream run through the first
+  `solve3D` and addon run. No passing run is recorded in the repository.

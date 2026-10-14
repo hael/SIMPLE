@@ -1,6 +1,9 @@
 # Stream tests in the new test environment: handover to Ruben
 
-Hans, 2026-09-24. Your seven stream test programs (`simple_test_exec test=...` in
+Hans, 2026-09-24. Updated 14 October 2026 against the current source: the delivered items
+are marked as such below, and the sections that still ask for work say what is left.
+
+Your seven stream test programs (`simple_test_exec test=...` in
 `src/main/commanders/test/simple_commanders_test_stream.f90`) have been moved into the
 two-tier test environment (plan: `doc/refactoring_notes/completed/uniform_test_environment_refactoring.md`,
 section 9.7, "stream"). Unlike the SINGLE tests, these already checked real things, and two of
@@ -16,8 +19,8 @@ test lives now, what changed, and what each one should check beyond counts and f
 | `assign_optics` | `src/main/stream/simple_stream_tester.f90`, sub-suite `optics assignment` of `lib_stream` | nightly (`ctest -L library`) |
 | `gen_pickrefs` | same module, sub-suite `picking references` of `lib_stream` | nightly |
 | `pick_extract` | same module, sub-suite `pick and extract` of `lib_stream` | nightly |
-| `master` | `run_stream_heartbeat_tests` in `src/utils/gui/simple_gui_assembler_tester.f90`, sub-suite `stream heartbeat` of `forked_process` | platform entry (`ctest -L platform`) |
-| `preproc` | unchanged commander, CTest entry `stream_preproc` | nightly (`ctest -L workflow`) |
+| `master` | `run_stream_heartbeat_tests` in `src/main/stream/master/simple_stream_master_tester.f90` (`test_fork_gui_status`), sub-suite `stream heartbeat` of `forked_process`; the heartbeat assembly from status records is `test_stream_heartbeat` in `src/utils/gui/simple_gui_assembler_tester.f90` | platform entry (`ctest -L platform`); the assembler test runs in `unit_ui` |
+| `preproc` | unchanged commander, CTest entry `stream_preproc` | nightly (`ctest -L highlevel`) |
 | `abinitio2D_stream` | retired (below) | - |
 
 Why they went where they did:
@@ -30,7 +33,8 @@ Why they went where they did:
 - `master` never started the stream master. It tested `gui_assembler%assemble_stream_heartbeat`
   with seven real forked children. Forking is excluded from the fast gate, so it runs beside the
   forked-process lifecycle tests in the `forked_process` platform entry. Its name is now
-  `stream heartbeat`.
+  `stream heartbeat`. Since the master refactor it forks one child and reads it through
+  `fork_gui_status` (see the heartbeat section below); the seven-child form is gone.
 - `preproc` submits its jobs to the local queue, so it stays a workflow entry of its own.
 
 Running them:
@@ -88,17 +92,19 @@ here"):
 ### `particle sieve`, collect and reject (fast)
 
 This test is already strict: one class kept, one blank class rejected, exact counts, sentinels,
-previews and the latest-product metadata. Three additions:
+previews and the latest-product metadata. Two additions are still open:
 
-1. **The rejection reason.** It is stored as `coarse_reject: <reason>`, but the orientation
-   reader splits character values at blanks. Only `coarse_reject:` comes back, so the test can
-   assert only the tier, not the reason. Either store the reason without blanks (for example
-   `coarse_reject:no_component`) or make the reader keep quoted values. Then assert the full
-   reason for the blank class (NO_COMPONENT).
+1. **The rejection reason (partly done).** The sieve now stores the reason without blanks
+   (`reason_token` in `simple_ptcl_sieve.f90`, for example `coarse_reject:` followed by the reason
+   text with underscores), so the full reason round-trips through the orientation reader. The test
+   still asserts only that the value contains `coarse_reject:` and that something follows it. Open:
+   assert the whole reason for the blank class (NO_COMPONENT).
 2. **The other hard gates.** Add one class for each other hard gate that
    `evaluate_cavg_quality_hard_reject` applies in the sieve context
-   (`CAVG_QUALITY_CONTEXT_SIEVE`). Assert that each is rejected, with its own reason.
-3. **Size.** Keep it small. It runs in the fast gate.
+   (`CAVG_QUALITY_CONTEXT_SIEVE`). Assert that each is rejected, with its own reason. The test
+   fixture still has only the one blank class.
+
+Keep it small. It runs in the fast gate.
 
 ### `optics assignment` (lib_stream)
 
@@ -147,32 +153,34 @@ it, and the positions are never compared with `PARTICLE_COORDS`. Four changes:
 
 ### `stream heartbeat` (forked_process)
 
-It covers only the running and finished states. The master's aggregate status has more branches
-(`assemble_stream_heartbeat`), and `forked_process` can produce each of them:
+The forked-process test (`test_fork_gui_status`, `simple_stream_master_tester.f90`) forks one
+child and covers only the running state and then the finished state of `fork_gui_status`. The
+heartbeat assembly itself (`test_stream_heartbeat`, `simple_gui_assembler_tester.f90`, in `unit_ui`) is
+fed status records, not live processes: it covers all-running, all-finished, and one failed
+record beside running ones (stage `failed`, master `error`). The master's aggregate status has more
+branches (`assemble_stream_heartbeat`), and `forked_process` can produce each of them. Open:
 
-1. **Failed and error.** `kill` one child (SIGKILL) while the others run: that stage reports
-   `failed` and the master reports `error`. When every child has failed or stopped, with at least
-   one failed and none running, the master reports `failed`.
-2. **Skipped.** `skip` one child: it reports `skipped` and does not count as running.
+1. **Failed and error from a live child.** `kill` one child (SIGKILL) while the others run: that
+   stage reports `failed` and the master reports `error`. No heartbeat test kills a child; the failed
+   branch is reached only through a hand-made record. When every child has failed or stopped,
+   with at least one failed and none running, the master reports `failed`; that all-failed case
+   is not tested either.
+2. **Skipped in the heartbeat.** `test_skipped_stays_skipped` (`stream master` suite) checks that a
+   skipped stage stays skipped and forks nothing, but the heartbeat tests never feed a skipped
+   status: assert that it reports `skipped` and does not count as running.
 3. **Shared process.** `initial_picking` and `opening2D` report the same pid, because they share
-   one process in the master.
+   one process in the master. No test compares the two.
 
 ### `preproc` (workflow entry `stream_preproc`)
 
-It checks that files exist and that the CTF values are positive and finite. The movies are
-simulated with known parameters, but the test deletes `simulate_movie_params.txt` and
-`optimal_movie_average.mrc`, the two files that hold the truth. Keep them, renamed beside each
-movie, and then:
-
-1. **Defocus.** Movie i was simulated at `defocus` = 1.5 + 0.25·(i−1) µm. Match micrographs to
-   movies by file name, not by position in the project, because the watcher's order is not the
-   simulation order. Assert `dfx` and `dfy` within 0.1 µm of the simulated value, and the
-   astigmatism near zero.
-2. **Motion.** The params file holds the simulated frame shifts (`x1..xn`, `y1..yn`). The
-   motion-correction STAR file holds the estimated ones. Compare them after removing the
-   reference frame's offset, within 0.5 pixels.
-3. **The integrated micrograph.** Correlate the integrated micrograph with the optimal average:
-   it should reach a floor you measure once and write down with its margin.
+**Delivered.** The test now keeps `simulate_movie_params.txt` and `optimal_movie_average.mrc`
+beside each movie (numbered per movie), matches micrographs to movies by file name, and fails on:
+recovered defocus more than 0.10 µm from the simulator's recorded value (`DEFOCUS_TOL`; the two
+astigmatic axes may be exchanged), recovered frame motion more than 0.50 pixels from the simulated
+shifts (`MOTION_TOL`), and an integrated micrograph whose correlation with its own optimal
+average is below a floor (`CORR_FLOOR`, 0.50) or does not exceed its correlation with another
+movie's average by `CORR_MARGIN` (the wrong-movie control). Whether those checks pass on a given machine is for the
+nightly run to say.
 
 Workflow entries end on the first failed `THROW_HARD`, which CTest reports as a failure, so the
 test can keep its style. If the checks grow, convert them to assertions like the others.
@@ -181,9 +189,11 @@ test can keep its style. If the checks grow, convert them to assertions like the
 
 A useful replacement tests what the stream actually sends to `solve2D`:
 
-1. Build the chunk command line with the chunk code. The construction is inside
-   `simple_stream_chunk2D_utils`; it would have to be factored into a function a test can call
-   (Joseph's code).
+1. Build the chunk command line with the chunk code. `simple_stream_chunk2D_utils` no longer
+   exists (the chunk code moved to `src/main/solve/simple_solve2D_chunk.f90`, which takes its
+   command line from its caller, and the 2D pool is in `src/main/stream/pool2D`); whichever
+   routine builds the stream's chunk command line would have to be factored into a function a
+   test can call (Joseph's code). This replacement is optional.
 2. Use two particle families with noise (seeded) and enough iterations to converge.
 3. Assert class purity: at least 90 % of each family in one class, and the two classes different.
 
@@ -191,7 +201,7 @@ At that size it belongs in `lib_stream`.
 
 ## Chained tests (5 October 2026)
 
-Decision 19 of `doc/refactoring_notes/planned/stream_fix_plan_2026-10-05.md` adds two chained
+Decision 19 of `doc/refactoring_notes/completed/stream_fix_plan_2026-10-05.md` adds two chained
 tests, in `src/main/stream/simple_stream_chain_tester.f90`, sub-suites of `lib_stream`:
 
 | sub-suite | stages | fixture |
@@ -206,7 +216,13 @@ turn until multistate 3D completes its first run or three hours pass. The stages
 jobs to the local queue, so they need the installed executables (`SIMPLE_PATH`), like
 `stream_preproc`, and take tens of minutes. They check that each stage made its product: the
 sieve accepts particles and ends its intake, the pool takes the final set and publishes, 3D
-completes a run with a resolution. They were written without a build and have not been run.
+completes a run with a resolution. They were first written without a build. Fixture fixes since
+then landed in `c03b029fc` and `75cba3c19` (2026-10-06/07) and `eed4f9609` (2026-10-13, stage 4
+after class-average initialization); the Phase 5 note
+(`phase5_workflow_gates_and_nightly_runner_handover.md`) records them. The sub-suites carry
+assertions and a three-hour limit (`TIME_LIMIT_S`) and run inside `lib_stream` (timeout 7200 s
+since 2026-10-13). This note does not record a passing run of either; that evidence belongs to
+the nightly run.
 
 ```text
 simple_test_exec test=lib_stream suite=sieve_to_3d

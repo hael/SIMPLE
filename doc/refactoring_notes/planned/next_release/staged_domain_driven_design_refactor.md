@@ -4,7 +4,17 @@
 
 **Implementation status:** No production refactoring has started
 
-**Date:** 2026-08-17
+**Updated 14 October 2026:** re-checked against the source; no stage M0 to M10 has
+started. `project_state_fixture`, `validate_project_state`,
+`snapshot_project_semantics`, and `domain_refactor_numerical_tolerances` appear
+nowhere in `src/`, `scripts/`, `production/`, or `doc/` except in this note. The
+test inventory in section 10.1 was refreshed to the current
+`src/main/**/*_tester.f90` suites run through `simple_test_exec`, and the
+conflicts to reconcile before starting are recorded in section 11.1. The design
+below is otherwise unchanged.
+
+**Date:** 2026-08-17 (the date of the original revision; first committed
+2026-08-18)
 
 **Review incorporated:** the review findings were folded into this living note;
 there is no separate review document in the repository.
@@ -448,29 +458,43 @@ command is explicitly a repair/migration command.
 - `src/utils/simple_test_utils.f90` provides the shared assertion counter and
   typed scalar assertions. New tests should use it instead of private ad hoc
   pass/fail flags where practical.
-- `src/main/ori/simple_ori_tester.f90`,
-  `production/tests/simple_test_ori.f90`, and
-  `production/tests/simple_test_oris.f90` cover orientation value behavior and
-  serialization.
+- `src/main/ori/simple_ori_tester.f90` and `src/main/ori/simple_oris_tester.f90`
+  (the `orientation` and `orientation collection` sub-suites of
+  `simple_test_exec test=unit_ori`) cover orientation value behavior and
+  serialization. The former `production/tests/simple_test_*.f90` programs no
+  longer exist; all tests are `src/main/**/*_tester.f90` suites registered in
+  `src/main/commanders/test/simple_commanders_test_class.f90` and run through
+  `simple_test_exec`.
 - `src/main/project/simple_sp_project_tester.f90` (the `project records`
-  sub-suite of `simple_test_exec test=unit_project`, formerly
-  `production/tests/simple_test_sp_project.f90`) already covers project
+  sub-suite of `simple_test_exec test=unit_project`) already covers project
   write/read comparison, partial reads, alignment-document merging, phase
   preservation, and non-mutating reads. It is the immediate home for compatible
-  project adapter round trips until dedicated tests are warranted.
-- `production/tests/simple_test_binoris_io.f90` and
-  `production/tests/simple_test_inside_write.f90` exercise binary orientation
-  and in-place segment I/O boundaries.
+  project adapter round trips until dedicated tests are warranted. Its `project
+  merge` neighbor, `src/main/project/simple_project_merge_tester.f90`, covers the
+  `merge_projects` helper (a heterogeneous-CTF merge with stack and particle
+  index remapping) and is the natural base for the merge-collision fixtures.
+- `src/main/project/simple_binoris_tester.f90` (the `binoris` sub-suite) exercises
+  binary orientation I/O and in-place segment writes (its
+  `test_write_segment_inside*` and `test_project_write_segment_inside` tests).
 - `src/main/ctf/simple_ctf_tester.f90` (the `CTF` sub-suite of
-  `simple_test_exec test=unit_image`, formerly `production/tests/simple_test_ctf.f90`)
+  `simple_test_exec test=unit_image`)
   is the numerical oracle for the CTF model and phase convention.
-- `production/tests/simple_test_mini_stream.f90` provides an end-to-end
-  acquisition/preprocessing/selection/particle-analysis path when its external
-  fixtures are available.
-- The deterministic snapshot/comparison pattern in
-  `simple_test_continuous_inplane_refine3D` should be reused for workflow
-  parity. Generate-only mode is not parity; comparison against an independently
-  accepted baseline is required.
+- The `mini_stream` program of `simple_test_exec`
+  (`src/main/commanders/test/simple_commanders_test_highlevel_stream.f90`, UI in
+  `src/main/ui/simple_test/simple_test_ui_highlevel.f90`) is the end-to-end
+  acquisition/preprocessing/selection/particle-analysis path, using embedded 6VXX
+  and 1JXY systems.
+- The in-plane workflow checks replaced the former
+  `simple_test_continuous_inplane_refine3D` program: the `continuous in-plane`
+  sub-suite (`run_all_pftc_inplane_tests`,
+  `src/main/pftc/simple_pftc_inplane_tester.f90`) and the `refine3D in-plane
+  state` sub-suite (`run_all_strategy3D_inplane_tests`,
+  `src/main/strategies/search/simple_strategy3D_inplane_tester.f90`), both in
+  `simple_test_exec test=unit_pftc_align2D3D`. Their snapshot/comparison
+  pattern should be reused for workflow parity, but check first whether they hold
+  an accepted baseline or only declared floors (see section 11.1). Generate-only
+  mode is not parity; comparison against an independently accepted baseline is
+  required.
 
 Existing tests that only print values or use a mutable `test_passed` flag
 without asserting the important result should be strengthened before they are
@@ -665,6 +689,50 @@ A stage that does not touch an optional execution path may mark its gate
 The identifiers below describe independently committable milestones, not one
 large feature branch. If a milestone grows beyond a reviewable diff, split it
 further while preserving the same entry and exit gates.
+
+### 11.1 Conflicts to reconcile before starting
+
+Added 14 October 2026. These are conflicts between this note and documents or
+code that changed after 2026-08-17. They are recorded for the M0 decision; none
+is resolved here.
+
+- **Accepted baselines and tolerance registry versus the test policy.**
+  `doc/policies/test_environment_policy.md` (section 6.2, "How a workflow gate is
+  designed", around line 543) states that floors are declared in the test and that "there are no
+  blessed baselines and no platform keys". This note's accepted-snapshot model
+  (sections 2, 7.2, 10.2) and its file-backed tolerance registry with a
+  "comparison mode/platform scope" column assume the opposite. M0 must either
+  show that the domain-refactor gates are a different class of test from the
+  policy's workflow tests, or move to declared floors. The registry path
+  `production/tests/domain_refactor_numerical_tolerances.tsv` (sections 10.2
+  and M1) is also stale: `production/` now holds only thin entrypoints, and
+  tests live in `src/main/**/*_tester.f90`.
+- **M2 leaf modules versus the compile-time policy.**
+  `doc/policies/compile_time_policy.md` allows one SIMPLE library target, no new
+  CMake targets for subsets of sources, and no new umbrella modules or
+  re-exports. M2's "possible leaf target or separate module directory" is
+  therefore not available as written; the dependency check on leaf modules is,
+  as are `use ..., only:` imports.
+- **A sibling idea that was measured and rejected.**
+  `doc/refactoring_notes/rejected/contract_submodule_architecture.md` (rejected
+  2026-09-21) proposed contract/implementation module splitting for build speed;
+  clean builds were 16% faster and edit rebuilds not at all. It is relevant to M2
+  (leaf contracts) and to M10 (encapsulating legacy internals), and any
+  compile-time claim for either milestone needs a like-for-like
+  `scripts/profile_build.sh` comparison.
+- **Overlap with the multi-microscope CTF work.** The CTF-first slice
+  (section 14) overlaps the project-level CTF resolver proposed in
+  `doc/refactoring_notes/planned/need2basis/multi_microscope_parameters.md`.
+  `doc/policies/microscope_parameters_policy.md` still lists the absence of a
+  single resolver/validator as a gap, while `sp_project%get_ctfparams` already
+  reads `os_stk` and not `os_optics`. Decide which note owns the resolver before
+  M3 starts.
+- **Smallest viable first step.** M1 reduced to a `validate_project_state`
+  oracle, built on `src/main/project/simple_sp_project_tester.f90` and
+  `src/main/project/simple_project_merge_tester.f90`, with the existing
+  `project records` and `project merge` suites as its fixtures. It needs neither
+  the tolerance registry, the performance harness, nor the numerical comparison
+  support, and it does not depend on resolving the baseline-policy conflict above.
 
 ### M0: freeze contracts and establish baselines
 
@@ -978,8 +1046,9 @@ Before each production commit to `master`:
   timing from an optimized, parallel, distributed, persisted, or mapped path;
 - run `git diff --check`, review the complete diff, and stage only intended
   files;
-- update the matching branch-context note with the verified milestone and
-  outstanding platform/data tests;
+- update this note's implementation status with the verified milestone and
+  outstanding platform/data tests (work lands directly on `master`, so there is
+  no branch-context note);
 - create one focused commit with no unrelated cleanup;
 - verify `master` is left in a releasable state;
 - push to `origin/master` only under the repository's explicit push workflow
@@ -1119,7 +1188,7 @@ distributed, streaming, restart, and numerical contracts throughout migration.
 | Self-verifying serial/parallel/persisted benchmark | Adopt: correctness and determinism gates precede timing acceptance |
 | Versioned, fail-closed packed artifact | Defer as a separate infrastructure decision; preserve `.simple` initially and require explicit compatibility approval for new formats |
 | Shallow domain-specific inheritance | Do not generalize into a Movie/Micrograph/Particle hierarchy; prefer composition, services, result types, and lineage |
-| Small-package command specification and one-type-per-module organization | Command specification: see `x_execution_layer_adoption.md`, an independent program that predates this refactor. One-type-per-module: do not transplant |
+| Small-package command specification and one-type-per-module organization | Command specification: see `x_execution_layer_adoption.md`, an independent program that is meant to land before this refactor (that note is dated 2026-09-02, later than this one). One-type-per-module: do not transplant |
 
 The X review also exposed a caution that this plan makes explicit: an abstract
 semantic contract can become decorative if optimized consumers require methods
@@ -1130,4 +1199,6 @@ keeping storage layout and persistence ownership outside the domain API.
 The X command-object, CLI-specification, and distributed-execution
 mechanisms are adopted through a separate, independent program:
 `doc/refactoring_notes/planned/next_release/x_execution_layer_adoption.md`. It does not depend on
-any milestone here and should land first.
+any milestone here and should land first. (It is dated 2026-09-02, after this
+note's 2026-08-17 revision; "predates" in the earlier wording referred to landing
+order, not to the date of the documents.)

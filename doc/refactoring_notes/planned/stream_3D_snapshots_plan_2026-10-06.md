@@ -136,7 +136,8 @@ There is no new SIMPLE program; NICE runs the existing `selection` on p07's fina
    - a view `view_stream_snapshot_solve3D` takes the posted states;
    - in the stream branch of `_cls3D_state_selector.html` (the multistate zoom page), a
      "snapshot" button posts the kept states while the job runs. It works like the batch
-     branch's "save selection": tiles toggle, and at least one state stays selected.
+     branch's "save selection": the checkbox in a state tile's corner toggles it (a click on the
+     tile only shows the state, `85d7f751f`), and at least one state stays selected.
 3. **After the stream has finished:** the same selector posts to a view that calls
    `BatchJob.createStateSelection(project, workspace, <stream>/solve3D_multistate/solve3D_multistate.simple,
    states)`. The page shows this button instead of "snapshot" once the job is no longer running.
@@ -184,9 +185,12 @@ There is no new SIMPLE program; NICE runs the existing `selection` on p07's fina
 ## Status
 
 Implemented, 6 October 2026: SIMPLE 2.1 to 2.3, NICE 3.1 to 3.5, and the docs of section 4,
-including the `simple-main-stream` skill line. Nothing has been compiled or run yet, in SIMPLE or
-NICE.
-The plan moves to `completed/` once `unit_ui`, `unit_stream` and the NICE tests pass.
+including the `simple-main-stream` skill line. Re-checked against the code 14 October 2026: every
+item is present, with its SIMPLE tests (`test_snapshot3D`, `test_store_snapshot3D`,
+`test_gui_commands_snapshot3D`, the assembler test) and NICE tests
+(`nice/nice_lite/test/test_stream_snapshots.py`). No passing run of `unit_ui`, `unit_stream` or
+the NICE tests is recorded in the repository.
+The plan moves to `completed/` once those pass and the two checks of 2.4 below are done.
 
 Where the implementation differs from the plan:
 - **The snapshot's source** is `result_projfile`, the project of p07's latest finished run, which

@@ -232,7 +232,7 @@ segment (`publishes_final`); multistate 3D then runs its final refine3D.
 ## 12. Known gaps
 
 - **One pool per folder:** the pool is a type (review G1 closed by
-  `doc/refactoring_notes/planned/pool2D_encapsulation_plan_2026-10-06.md`), but its files have
+  `doc/refactoring_notes/completed/pool2D_encapsulation_plan_2026-10-06.md`), but its files have
   fixed names (the pool folder, its exit status, its iteration files).
 - **The user's `update_frac`** thins the sample again inside refine2D (about frac of the sample).
 - **Late particles:** the low-pass ramp follows the global iteration, so particles arriving after

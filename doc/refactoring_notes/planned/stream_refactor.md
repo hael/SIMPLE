@@ -1,8 +1,21 @@
 # Stream refactor: the stages as clients of the library
 
 **Status:** planned follow-up. The stage switch-over described below is
-complete, but the note's remaining cleanup, workflow runs, and test-registration
-work are still open; those items keep this record in `planned`.
+complete: production and the tests use these commanders and the old stage modules are
+deleted. What keeps this record in `planned` is short (see "Switch-over"): the
+unregistered `run_all_cavg_quality_selection_tests`; the optics-map directory scan
+`get_latest_optics_map_id`, which is still defined in `simple_stream_utils` (wrapped by
+`simple_optics_maps`, re-exported by `simple_stream_api`); the shared helper modules that are not yet in their final
+homes; the batch `assign_optics`, which still goes through `starproj%assign_optics`; and the
+workflow runs (`stream_preproc`, `lib_stream`, a GUI session), which are not recorded.
+
+Updated 14 October 2026: the stale statements were corrected against the code (the pool as a
+type, the registered testers, what the running pipeline uses). Work since 6 October (the sieve's
+first publication, p07's initial volumes through solve2D and `cls_expansion`, the first-set and
+publication triggers) is in `doc/policies/stream/stream_3D_ingestion_policy.md` and the plan notes
+`stream_3D_first_run_plan_2026-10-07.md` and `stream_3D_snapshots_plan_2026-10-06.md` in this
+folder, and `stream_sieve_ini3D_plan_2026-10-08.md` and `pool2D_encapsulation_plan_2026-10-06.md`
+in `completed/`, not here.
 
 Stream stages rewritten as clients of the library: p01 (preprocessing), p02 (optics
 assignment), p03 (initial analysis and picking references), p04 (reference-based picking
@@ -19,7 +32,8 @@ moved into the library layout:
 - `src/main/stream/stages`: the stage types `simple_stream_stage_<x>` (`stream_stage_<x>`)
   and their testers;
 - `src/main/stream/master`: the master's parts `simple_stream_master_*` (stage ids and
-  pipes, the stage record and its fork, the GUI commands, the metadata store) and its tester;
+  pipes, the stage record and its fork, the GUI commands, the metadata store, the
+  computing resources of the stages in `simple_stream_master_resources`) and its tester;
   the fork runs the commander the master gives it, so these depend on commanders only as
   `commander_base`;
 - `src/main/stream/shared`: the modules the stages share (pipe and pipe descriptors
@@ -52,7 +66,7 @@ are compiled only with `BUILD_TESTS=ON`.
 | `simple_stream_master_meta_store.f90` | `stream_master_meta_store`: the latest metadata each stage sent, by type; list items placed by `i`/`i_max`; `assemble` for the heartbeat | the master's metadata variables and the 11 copies of the resize-and-place code in its listener |
 | `simple_stream_meta_plots.f90` | fill GUI histogram, windowed time-plot and rate metadata from an `oris` segment; recent shifts per optics group | about 125 lines in p01's main loop; p02's per-group shift scan |
 | `simple_mic_selection.f90` | `reject_mics_by_thresholds`: the micrograph ctfres/icefrac/astig rule; `reject_mics_without_particles`: the rule after picking and extraction | 5 inline copies of the first (p01 ×2, p04 ×2, `selection` commander), which disagreed; 2 of the second in p03 |
-| `simple_mic_import.f90` | `append_mics_from_projects`: append the `mic` segments of upstream project files, reading each once | the per-stage import loops (p01 restart, p02, p03's cycle-1 list, which read a file once per micrograph; p04 still has its own) |
+| `simple_mic_import.f90` | `append_mics_from_projects`: append the `mic` segments of upstream project files, reading each once | the per-stage import loops (p01 restart, p02, p03's cycle-1 list, which read a file once per micrograph; p04's own, now also replaced by it) |
 | `simple_optics_groups.f90` | `assign_optics_groups`: optics groups from beam-image shifts within tilt groups | the assignment hidden in `starproject_stream%stream_export_optics` |
 | `simple_optics_maps.f90` | `publish_optics_map`, `import_latest_optics_map`, `latest_optics_map_id`: the optics-map file protocol | p02's pruning loop; for readers, the three "latest map" scans |
 | `simple_stream_sigterm.f90` | `install_sigterm_handler`, `sigterm_received`, `restore_sigterm_handler`: a SIGTERM handler that only sets a flag, polled by the commanders' loops and by long stage steps | a handler and flag in each stage commander |
@@ -73,22 +87,27 @@ are compiled only with `BUILD_TESTS=ON`.
 | `simple_commanders_stream_p04_refpick_extract.f90` | commander `commander_stream_p04_refpick_extract` | `simple_stream_p04_refpick_extract_new` |
 | `simple_stream_stage_sieve.f90` | `stream_stage_sieve`: p05 as watch → import → particle sieve cycle → report. The sieve hands its finished chunks to the completed folder with the newest optics map's groups. Public components and steps, waits as components, as in the other stages. | the `exec_stream_p05_sieve_cavgs` body and its internal procedures |
 | `simple_commanders_stream_p05_sieve_cavgs.f90` | commander `commander_stream_p05_sieve_cavgs` | `simple_stream_p05_sieve_cavgs_new` |
-| `simple_stream_stage_pool2D.f90` | `stream_stage_pool2D`: p06 as watch → refresh → publication of the pool's classified state for 3D (once an iteration has come back, before the next dispatch) → import into the pool → pause rule → pool iteration → GUI updates and snapshots. The pool itself is still the module state of `simple_stream_pool2D_utils` and `simple_stream2D_state` (one stage per process); the stage's command line is a pointer component, which the pool reads as `master_cline`. The import is split into `transfer_sets` (into any project, for the tester) and `start_pool`; the pause rule, the particle targets and the default mask diameter are `nopass` functions. Public components and steps, waits as components, as in the other stages. | the `exec_stream_p06_pool2D` body and its internal procedures |
+| `simple_stream_stage_pool2D.f90` | `stream_stage_pool2D`: p06 as watch → refresh → publication of the pool's classified state for 3D (once an iteration has come back, before the next dispatch) → import into the pool → pause rule → pool iteration → GUI updates and snapshots. The pool itself is the type `stream_pool2D` of `simple_stream_pool2D` (src/main/stream/pool2D), held by the stage as an `allocatable` component `pool`, empty from `init_params` and started at the first import (one pool per folder, see "Known limitation carried over" under pool 2D); the stage's command line is a pointer component, which `start` passes to the pool (it takes `update_frac`, `cenlp` and `lpstop` from it). The import is split into `transfer_sets` (into any project, for the tester) and `start_pool`; the pause rule, the particle targets and the default mask diameter are `nopass` functions. Public components and steps, waits as components, as in the other stages. | the `exec_stream_p06_pool2D` body and its internal procedures |
 | `simple_commanders_stream_p06_pool2D.f90` | commander `commander_stream_p06_pool2D` (launched as `prg=pool2D`) | `simple_stream_p06_pool2D_new` |
 | `simple_stream_stage_solve3D.f90` | `stream_stage_solve3D`: p07 as watch → (no job running) select class averages and import → start or collect a 3D job → report. The jobs are `qsys_async_job`s with an explicit phase (importing, solve3D, idle, addon); which job starts next is the `nopass` function `next_job`, and the mask diameter the class averages get is `fit_mskdiam`. Public components and steps, waits as components, as in the other stages. | the `exec_stream_p07_solve3D_multistate` body and its internal procedures |
 | `simple_commanders_stream_p00_master.f90` | commander `commander_stream_p00_master`: parameters, queue, the stage table, a listener thread filling the store, and the heartbeat loop that applies the GUI's commands; the stages' settings are a table of named constants | the old `simple_commanders_stream_p00_master` |
 | `simple_commanders_stream_p07_solve3D_multistate.f90` | commander `commander_stream_p07_solve3D_multistate` (launched as `prg=solve3D_stream`), with the 3D job settings as named constants | the old `simple_commanders_stream_p07_solve3D_multistate` |
 
-### Testers (the stage and job-set testers are registered in `unit_stream`; the others are not yet, see "Switching over")
+### Testers (all registered, except the class-average selection tester, see "Switch-over")
+
+Registered as of 14 October 2026: the pipe tester in `unit_ipc`; the mic selection, mic import,
+optics groups and optics maps testers in `unit_project`; the stage, job-set, master, meta-plot,
+watcher and pool 2D object (`simple_stream_pool2D_tester`, sub-suite "pool 2D object") testers in
+`unit_stream`.
 
 | file | suite it belongs in |
 |---|---|
 | `simple_stream_pipe_tester.f90`: framing through a real pipe, including the queued-frame regression, the resync after a corrupt length, and `discard` | `unit_ipc`, sub-suite "stream pipe" (**registered**) |
 | `simple_stream_master_tester.f90`: the stage names and keys, the GUI's commands (a stop, a restart and updates; each answer's updates alone; text that is not JSON), the store (a status replaced; a list made, an item out of range dropped, the list remade for a new `i_max`; a volume sent with tiles arriving without), a stage's pipes from both sides and the discard before a restart. Forking, the heartbeat and HTTP are left to the high-level tests. | `unit_stream`, sub-suite "stream master" (**registered**) |
-| `simple_mic_selection_tester.f90`: the threshold rule and the post-extraction rule | `unit_project` |
-| `simple_mic_import_tester.f90`: append order, the accepted-only filter, growth across calls | `unit_project` |
-| `simple_optics_groups_tester.f90`: the stream optics test's two-cluster case with and without beam tilt, the group offset, the CTF constants row | `unit_project` |
-| `simple_optics_maps_tester.f90`: pruning to the newest five, importing the newest map, an empty directory, a project copied with the map's groups or exactly without a map (both renamed into place) | `unit_project` |
+| `simple_mic_selection_tester.f90`: the threshold rule and the post-extraction rule | `unit_project`, "micrograph selection" (**registered**) |
+| `simple_mic_import_tester.f90`: append order, the accepted-only filter, growth across calls | `unit_project`, "micrograph import" (**registered**) |
+| `simple_optics_groups_tester.f90`: the stream optics test's two-cluster case with and without beam tilt, the group offset, the CTF constants row | `unit_project`, "optics groups" (**registered**) |
+| `simple_optics_maps_tester.f90`: pruning to the newest five, importing the newest map, an empty directory, a project copied with the map's groups or exactly without a map (both renamed into place) | `unit_project`, "optics maps" (**registered**) |
 | `simple_stream_stage_preprocess_tester.f90`: p01's steps one at a time, with no queue and no waits: `split_mode` after `init_params`, importing finished jobs (accepted, failed, moved), thresholds and the STAR file after an import, the restart set counter, a movie-set project, the worker command line, a static gain flip, queued GUI updates, one status message, `finished` | `unit_stream`, sub-suite "preprocessing" (**registered**) |
 | `simple_stream_stage_optics_tester.f90`: p02 through its own `new`, with no waits: the segment starts empty on restart, a restart removes a leftover `TERM_STREAM`, `beamtilt=yes` from the command line groups by tilt group, waiting for the upstream folder, importing each completed project once (rejected micrographs included), grouping the two shift clusters with the STAR files, the project and the first map, map ids continuing after a restart, the public loop (waiting, importing, idle, finished at `nmics`, `finalize`), one status message, one shift message per group, `finished` | `unit_stream`, sub-suite "optics assignment" (**registered**) |
 | `simple_stream_stage_initial_analysis_tester.f90`: p03's steps without a queue: the stage project with its computing environment, the paths, waiting for the upstream folder, one record per accepted imported micrograph, the cycle 1 micrographs, cycle 1 set-up then waiting without a job, the public loop up to that point, a GUI selection of references (written, sent back, the stage finished; no cycle or out-of-range indices ignored), the status messages, class balancing to 501 rows with the even/odd stacks, the solve3D restart directory, `finished`. Picking, extraction, the 2D/3D jobs, the sieve and the reprojected references are left to the high-level tests. | `unit_stream`, sub-suite "initial analysis" (**registered**) |
@@ -97,7 +116,7 @@ are compiled only with `BUILD_TESTS=ON`.
 | `simple_stream_stage_sieve_tester.f90`: p05's steps without the chunk workers: `init_params`, a restart's chunked projects in the watcher history once attached, one record per imported micrograph, the mask diameter from `moldiam.txt`, the sieve made with it on the first import (warm-up cycles, no chunk below the threshold), the status message, the public loop up to attaching, `finished`. Chunk 2D and rejection are covered by the ptcl_sieve tests. | `unit_stream`, sub-suite "particle sieving" (**registered**) |
 | `simple_stream_stage_pool2D_tester.f90`: p06's steps without starting the pool: `init_params` (the stage's own command line with `mkdir=no`, the caller's unchanged; stepwise; the optics id offset), the restart clean-up (pool files removed, the project and the snapshots kept), the publication numbering continued after the highest publication, a publication holding only the classified stacks (renumbered, image indices, nothing before any iteration), waiting for the sieve's folder and one record per set with the sieve's mask diameter, the transfer into a project (stacks renumbered, particles as new ones keeping their shifts, the counts, each set once, a later set appended), stepwise import, the sieve's final set, the pause rule and particle targets, the default mask diameter in Angstroms, a GUI mask diameter (taken, resumes, replaces the sieve's; the same again ignored; a snapshot request before the pool ignored), the status message, a snapshot's messages, the public loop up to attaching, `finished`. Pool iterations and snapshots of a running pool are left to the high-level tests. | `unit_stream`, sub-suite "pool 2D" (**registered**) |
 | `simple_stream_stage_solve3D_tester.f90`: p07's steps without a queue: `init_params`, a restart removing a leftover `TERM_STREAM`, waiting for pool 2D's folder, publications recorded in order (each once) with the first one's mask diameter, merging publications into rows that only grow (a new stack appended with both particle segments; a stack held matched by name in any order, taking class and selection in place and keeping its 3D parameters; a missing stack deselected; the newest publication's classes), `next_job` and `fit_mskdiam`, the status message, the volume messages of a fixture project (one per state with a volume, three reprojection tiles, the resolution kept), the public loop up to attaching, `finished`. Class-average selection and the 3D jobs are left to the high-level tests. | `unit_stream`, sub-suite "solve 3D" (**registered**) |
-| `../cavg_quality/simple_cavg_quality_selection_tester.f90`: the selected/rejected stacks, their order, replacement on rewrite | `unit_numerics`, next to the cavg quality relations |
+| `../cavg_quality/simple_cavg_quality_selection_tester.f90`: the selected/rejected stacks, their order, replacement on rewrite | `unit_numerics`, next to the cavg quality relations (**not registered**: `suites_numerics` has only "cavg quality relations"; `run_all_cavg_quality_selection_tests` is defined but not called from `simple_commanders_test_class`) |
 
 ## Library changes beyond these modules
 
@@ -144,8 +163,8 @@ These are live in the library now.
   `completedir` gets the groups of the newest optics map, applied by import index
   (`hand_off`, through `copy_project_with_optics_map`); the chunk's own project is not
   changed, because fine chunks merge coarse ones and the merge offsets group ids per
-  source. Callers that do not pass it (the running p05, p03's sieve) get an exact copy as
-  before. The sieve policy and tester are updated (`test_hand_off_applies_optics_map`; the
+  source. Callers that do not pass it (p03's sieve; p05 passes it whenever `optics_dir` is set) get an
+  exact copy as before. The sieve policy and tester are updated (`test_hand_off_applies_optics_map`; the
   hard-gates test's fixture is now `make_completed_coarse_chunk`, shared by both).
 - **The sieve's hand-off is atomic.** The copy is written as `<stem>.tmp` in `completedir`
   and renamed to `<stem>.simple`, with or without an optics map, so pool 2D never reads a
@@ -154,8 +173,10 @@ These are live in the library now.
 - **`sp_project%write(tempfile=.true.)`** works. It swapped the suffixes the wrong way
   round (`swap_suffix` takes the new suffix first), so the temporary name was `.simple` in
   the current directory; nothing used the option. `copy_project_with_optics_map` now does.
-- **Pool 2D fixes** (`simple_stream_pool2D_utils`, `simple_stream_refine2D_utils`, used by
-  the running p06 and the new one):
+- **Pool 2D fixes** (made in the module `simple_stream_pool2D_utils`, which no longer exists;
+  its code is now the type `stream_pool2D` in `simple_stream_pool2D`, with the stateless helpers
+  in `simple_stream_refine2D_utils`, and the procedure names below are those of the time, for
+  example `update_mskdiam` is now `set_mskdiam` and `iterate_pool` is `iterate`):
   - A new mask diameter (`update_mskdiam`) also sets the cropped mask radius on the pool's
     command line. The workers take `msk_crop` over the one `parameters` derives from
     `mskdiam`, so GUI and automatic mask updates had no effect on the pool. The uncalled
@@ -200,30 +221,36 @@ These are live in the library now.
   forwards it to the optics-assignment stage when the user sets it. Before, the GUI's "Use
   beamtilts in optics group assignment" option never reached `params%beamtilt`, so the
   stream always grouped as if it were `no`. With `beamtilt=yes`, micrographs are now
-  grouped by EPU tilt group before the shift clustering, in the running stage
-  (`simple_stream_p02_assign_optics_new`, through `stream_export_optics`) and in the new
-  one. The batch `assign_optics_groups` reads its command line directly and is unchanged.
+  grouped by EPU tilt group before the shift clustering, in the old running stage
+  (`simple_stream_p02_assign_optics_new`, through `stream_export_optics`; both deleted) and in
+  `stream_stage_optics`, through `assign_optics_groups`. The batch `assign_optics_groups` reads its command line directly and is unchanged.
   The master forwards `tilt_thres` the same way, so a threshold changed in the GUI now
   reaches the optics stage; both defaults are 0.05, so runs that leave it alone are
   unchanged.
-- **`simple_stream_p02_assign_optics_new`** deletes a leftover `TERM_STREAM` on restart
+- **The old `simple_stream_p02_assign_optics_new`** deleted a leftover `TERM_STREAM` on restart
   after `params%new`, in the stage directory its loop reads, instead of before it, in the
-  master's directory.
+  master's directory. `stream_stage_optics` does the same.
 
-### Not yet used by the running pipeline
+### Library pieces that were new here (used by the stages)
+
+These were listed as "not yet used by the running pipeline" until the stages moved over; the
+stages now use them.
 
 - **`simple_qsys_async_job`** (new, `src/utils/qsys`): one program run started with
   `start(qenv, cline, dir, label)` and polled with `status()` (idle, running, done or
-  failed, from the exit status the script writes).
+  failed, from the exit status the script writes). Used by `stream_stage_initial_analysis`
+  (p03), `stream_stage_refpick` (p04: `make_pickrefs`), `stream_stage_solve3D` (p07), the pool
+  (`stream_pool2D`) and the particle sieve (`ptcl_sieve`, one job per chunk).
 - `simple_motion_gain_analysis`: `gain_flip_analyzer%get_flip_mode()` returns `'no'`,
-  `'x'`, `'y'` or `'xy'`. Callers no longer decode `best_idx`.
-- `simple_motion_gain_helpers`:
+  `'x'`, `'y'` or `'xy'`. Callers no longer decode `best_idx`. `stream_stage_preprocess`
+  (p01) calls it.
+- `simple_motion_gain_helpers`, used by `stream_stage_preprocess`:
   - `add_movies_to_gain_sum`: adds one batch of movies to a running frame sum.
   - `write_gain_from_sum`: writes the normalised inverse average as a gain reference.
-- `simple_motion_gain_tester` (`unit_project`, "motion gain") has tests for all three.
-- `simple_starproject_stream`: a new `stream_write_optics` writes `optics.star` from
-  the groups already in the project and assigns nothing. (`stream_export_optics`, which
-  called it after assigning, was removed on 2026-10-05.)
+- `simple_motion_gain_tester` (`unit_motion`, "motion gain") has tests for all three.
+- `simple_starproject_stream`: `stream_write_optics` writes `optics.star` from
+  the groups already in the project and assigns nothing; `stream_stage_optics` (p02) calls it.
+  (`stream_export_optics`, which called it after assigning, was removed on 2026-10-05.)
 - `simple_test_utils`: `enter_fixture` / `leave_fixture` (a per-test directory, kept only
   when a check failed) moved here from `simple_stream_tester`, which now uses these.
 
@@ -267,8 +294,8 @@ The new p01 does what the current one does, apart from these deliberate changes:
    metadata objects are killed at the end. Job projects are killed even when none of
    their micrographs is accepted.
 9. **Micrograph rule.** Unchanged in effect for p01: strictly greater than the threshold,
-   the row's own key, rejected rows left alone. p04 used `threshold - 0.001` and will
-   change slightly when it is switched to the shared rule.
+   the row's own key, rejected rows left alone. The old p04 used `threshold - 0.001`;
+   the new p04 has no thresholds at all (see its section below).
 10. **User-parameter file.** The final `update_user_params` call is gone. It read
     `stream_user_params.txt`, which nothing in the repository writes, NICE included.
 11. **Job sets.** The movie sets go through `stream_job_sets`. A set is written by
@@ -369,7 +396,8 @@ named steps. The differences:
    (`mrc2jpeg_tiled` uses `floor(sqrt(n))` columns). The tile position was computed with
    `merge(0.0, x * (100.0 / (xtiles - 1)), xtiles == 1)`, and `merge` evaluates both values, so
    that case divided by zero, which Debug builds trap. The step is now computed only for two or
-   more tiles. The live p03 (two places) and p04 still have the old expression.
+   more tiles, in the shared `send_cavgs` (`simple_stream_gui_senders`); the old p03 and p04
+   code that had the expression is deleted.
 10. **Not ported:** dead code.
     - `micimporter`, the first `run_cavg_quality_selection` and `run_cavg_size_selection`;
     - the `imgfiles` and `smpd_stk` caches, which nothing read;
@@ -473,7 +501,8 @@ named steps. The differences:
 15. **No `pickrefs` output entry.** Finished sets are no longer given an `os_out` entry
     for the picking references: its only reader, p05, used one field (`mskdiam`), and now
     reads it from `moldiam.txt`, which make_pickrefs writes in this stage's directory. The
-    running p05 still needs the entry, so p04 and p05 must be switched over together.
+    old running p05 needed the entry, so p04 and p05 had to be switched over together; both
+    now are.
 
 ## Behaviour compared with the old `simple_stream_p05_sieve_cavgs_new`
 
@@ -644,28 +673,40 @@ Done: production and the tests use the commanders here, the old stage modules of
 `src/main/stream` are deleted (with their entries in the unused-function warning list of
 `src/CMakeLists.txt`), and the three that carried `_new` have their plain names.
 
+Updated 14 October 2026. Done since the list below was written: the mic selection, mic import,
+optics groups and optics maps testers are registered in `unit_project` (the stage, job-set,
+master and pool testers in `unit_stream`, the pipe tester in `unit_ipc`), and
+`simple_stream_refine2D_utils` (and the pool and the stages) read the newest optics map through
+`import_latest_optics_map`.
+
 Remaining:
 
 1. **Run:** the `stream_preproc` high-level entry, `lib_stream`, and one GUI session through
-   to multistate 3D, including a stop, a stage restart and Ctrl-C.
-2. **Register the testers:**
-   - the mic selection, mic import, optics groups and optics maps testers in `unit_project`
-     (the stage, job-set and master testers are in `unit_stream`, the pipe tester in
-     `unit_ipc`);
-   - `run_all_cavg_quality_selection_tests` in `unit_numerics`.
-
-   Add each to its suite table in `simple_commanders_test_class` and to the suite's
-   `suite=` help in the test UI. `scripts/check_test_registry.py` checks that the table
-   and the help agree.
+   to multistate 3D, including a stop, a stage restart and Ctrl-C. No run of these is recorded in
+   this note; later commits (10 to 13 October, for example the stream chain test fixes and the
+   first-set triggers) build on this code.
+2. **Register the class-average selection tester:** `run_all_cavg_quality_selection_tests`
+   (`src/main/cavg_quality/simple_cavg_quality_selection_tester.f90`) in `unit_numerics`,
+   where `suites_numerics` has only "cavg quality relations". Add it to the suite table in
+   `simple_commanders_test_class` and to the suite's `suite=` help in the test UI.
+   `scripts/check_test_registry.py` checks that the table and the help agree.
 3. **Clean up** (the helpers only the old stages called, the `segdiampick_mics_multi` wrappers
    and `stream_export_optics` with its `assign_optics` / `h_clust` copy were deleted on
    2026-10-05, WS9 of `stream_fix_plan_2026-10-05.md`):
-   - Switch `simple_stream_refine2D_utils` to `import_latest_optics_map`, and delete its
-     `get_latest_optics_map` copies.
-   - Move `simple_mic_selection`, `simple_mic_import`, `simple_optics_groups`,
-     `simple_optics_maps`, `simple_stream_gui_senders` and `simple_stream_job_sets` to
-     their homes, named in each module header.
-   - Decide whether the batch `assign_optics_groups` should use `assign_optics_groups`
-     (it needs its XML tilts on `os_mic` first).
+   - Remove the directory scan `get_latest_optics_map_id` of `simple_stream_utils`, which
+     `latest_optics_map_id` in `simple_optics_maps` wraps and `simple_stream_api` re-exports:
+     the scan belongs in `simple_optics_maps` alone. (The two internal `get_latest_optics_map`
+     copies of `simple_stream_refine2D_utils` are gone.)
+   - Move `simple_mic_selection`, `simple_mic_import`, `simple_optics_groups` and
+     `simple_optics_maps` out of `src/main/stream/shared` to their homes, named in the
+     `HOME:` header of each (they say "in src/main/stream/shared for now").
+     `simple_stream_gui_senders` and `simple_stream_job_sets` carry a header note that they
+     could move (beside the metadata types in `src/utils/gui`, beside `qsys_async_job` in
+     `src/utils/qsys`).
+   - Decide whether the batch `assign_optics_groups` commander
+     (`simple_commanders_starproject.f90`, which calls `starproj%assign_optics`) should use
+     `assign_optics_groups` of `simple_optics_groups` (it needs its XML tilts on `os_mic`
+     first).
 
-None of this has been compiled or run yet.
+The code is in use and has been built on by later commits; this note records no GUI-session run
+and no test result.

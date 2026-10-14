@@ -2,11 +2,51 @@
 
 **Status:** Outline for developer review, 2026-09-02
 
-**Depends on:** nothing. Independent of, and prior to, the staged DDD
-refactor (`staged_domain_driven_design_refactor.md`).
+**Updated 14 October 2026:** nothing in this program has been adopted. E0 is
+partial, E1 to E3 and E5 to E6 are not started, and E4 is not started apart from
+exit-status and liveness pieces that landed incidentally with the stream work
+(see "Implementation status" below). The claims about X in this note are taken
+from the 2026-09-02 outline; X (`/Users/elmlundho/src/X`) was not re-read. The
+2026-10-03 release 4 clean break (no backwards compatibility) eases question 6 in
+section 7.
+
+**Depends on:** nothing. Independent of, and prior (in landing order) to, the
+staged DDD refactor (`staged_domain_driven_design_refactor.md`, whose revision is
+dated 2026-08-17, earlier than this outline).
 
 **Delivery:** small commits on `master`, each behavior-preserving unless it
 adds an opt-in key (default off). The user compiles and runs the gates.
+
+## Implementation status (14 October 2026)
+
+| Step | State | Evidence |
+|---|---|---|
+| E0 | Partial | `src/main/simple_cmdline_tester.f90` (the `command line` sub-suite of `simple_test_exec test=unit_core`) covers get/set, read parsing, `gen_job_descr`, and `set_from_text`; there is no accept/reject matrix. `src/utils/qsys/simple_qsys_env_tester.f90` and `simple_qsys_ctrl_tester.f90` cover part splits and warmup. Not present: golden scripts per backend, the role table, the missing-key-override inventory |
+| E1 | Not started | `cmdline` still has `MAX_CMDARGS = 100` fixed slots and `real(dp)` plus `string` per entry; `simple_cmdline.f90` has 13 bare `stop`s (8 of them in `parse`) |
+| E2 | Not started | `simple_args.f90` is still produced by `scripts/simple_args_generator.pl` at build time (it is not in the source tree) |
+| E3 | Not started | `scripts/default_audit.py` still generates the UI defaults |
+| E4 | Not started as specified; pieces landed | No `exec_role`, `ROLE_MASTER`, `qsys_settings`, job retries, watchdog, or run-dir retention. `set_shmem_flag` is still in `src/main/exec/simple_exec_helpers.f90` (around line 268). Landed through stream and batch work: see below |
+| E5 | Not started | |
+| E6 | Not started | |
+
+E4 pieces that landed incidentally. `generate_script_4` in
+`src/utils/qsys/simple_qsys_ctrl.f90` (around lines 606 to 620) captures
+`${PIPESTATUS[0]}` when `exit_code_fname` is given, so the recorded status is the
+program's and not `tee`'s. `generate_script_1` (batch parts) redirects directly,
+writes `$?` to a per-part exit-code file, and records the scheduler and job id.
+`src/utils/qsys/simple_qsys_job_record.f90` adds lost-job detection (status 254,
+`JOB_LOST_EXIT_CODE`) and cancel of queued jobs (commits `08a46838b` and
+`42dfc3eb5`, 2026-10-05 and 2026-10-06), and the batch `update_queue` now marks a
+part failed on a non-zero or vanished exit and stops with a list of failed parts
+(commit `2307ea96f`, 2026-10-13; unit-tested in `simple_qsys_ctrl_tester.f90`).
+What remains of the E4 text: the worker Fortran still touches the success
+sentinel itself (`simple_qsys_funs.f90`), there are no job retries (the existing
+retry loop is for submission only), the `SIMPLE_QSYS*` environment fallbacks
+remain in `src/main/project/simple_sp_project_core.f90` (around lines 243 to 279),
+and there is no typed settings object.
+
+The next step stays E0: complete the accept/reject matrix, the per-backend golden
+scripts, and the role table.
 
 ## 1. What X is and what we take from it
 
@@ -28,7 +68,7 @@ executable.
 |---|---|---|
 | Typed command entries (int/real/str/flag tag), growable, strict typed getters | `cmdline`: 100 fixed slots, `real(dp)` + `string` per entry, type sniffed, `get_iarg = nint(rarg)` | Adopt, in place |
 | `to_string`: exact round trip; the command object is the unit of invocation and of distribution | `gen_job_descr` to `chash` to script text; a second serialization | Adopt; one serialization, `prg=key=val` grammar kept |
-| Parse returns status + message; the driver maps it to exit 2, no backtrace | `cmdline%parse` has eleven bare `stop`s and `THROW_HARD`s; not usable as a library | Adopt |
+| Parse returns status + message; the driver maps it to exit 2, no backtrace | `cmdline%parse` has bare `stop`s and `THROW_HARD`s (13 `stop`s in `simple_cmdline.f90` on 2026-10-14, 8 of them in `parse`); not usable as a library | Adopt |
 | Overlength argument refused with a named error | Silent truncation at `XLONGSTRLEN` | Adopt |
 | One spec per subcommand = whitelist + validator + defaulter + help; options declare unit, inclusive/exclusive range, closed value set; NaN/Infinity rejected; help prints exactly what parse enforces | `ui_program`/`ui_param` (about 14k lines) hold type, choices, units, required-ness, display defaults; parse whitelist is a separate generated `simple_args.f90`; no ranges anywhere; non-finite reals pass; range checks scattered | Adapt: put ranges/strictness/finiteness on `ui_param`, make the registered program the parse authority, render the domain in help and JSON, retire `simple_args.f90` |
 | Defaults declared once (typed constant + string form) and written by the spec into the command object; presence-semantic keys deliberately undefaulted | Four default sources; `default_audit.py` generates 3k lines to recover display defaults; CLI/GUI divergence accepted by policy | Adapt: per program, literal `if(.not. defined) set` overrides become declared defaults; `derived` marker for data-dependent ones; explicit presence-semantic list |
@@ -40,7 +80,7 @@ executable.
 | X | SIMPLE today | Decision |
 |---|---|---|
 | One `exec_role(cline)`: worker if `part`, master if a concurrency bound, else shared-memory; same commander for all roles | The role decision is written locally in each of the fifteen strategy factories (three variants that disagree on edge cases), in `set_shmem_flag`, and in the `parameters` worker flag | Adopt one resolver used by all of them (section 3.1); the strategy modules and their scheduling, merge, and shared-memory code stay; keep `simple_private_exec` as the worker entry |
-| Exit status captured before any pipe; exit-code file always; success sentinel only on success; controller sees running/done/failed; bounded retries; watchdog; run dir kept on failure | Batch scripts pipe through `tee`; exit-code files only in streaming; sentinel touched by the worker Fortran itself, so a crash polls forever; no retries | Adopt; retries and watchdog as opt-in keys, default off |
+| Exit status captured before any pipe; exit-code file always; success sentinel only on success; controller sees running/done/failed; bounded retries; watchdog; run dir kept on failure | As written 2026-09-02: batch scripts pipe through `tee`; exit-code files only in streaming; sentinel touched by the worker Fortran itself, so a crash polls forever; no retries. Since then (see "Implementation status"): chained scripts capture `${PIPESTATUS[0]}`, batch parts write an exit-code file, lost jobs are detected (status 254) and cancellable, and a failed part stops the batch; the sentinel is still touched by the worker and there are no job retries | Adopt the remainder; retries and watchdog as opt-in keys, default off |
 | Slots + part-size floor; part count derived; queue topped up (self-balancing) | `nparts`, `ncunits` user knobs; refill loop already exists; part count is persistence-visible (algndocs, partial recs, chunks, restart) | Adapt as opt-in only; derived count recorded for restart; pilot on preprocessing |
 | Chunk commit: tmp file, atomic rename, manifest (hash + row count); merge refuses uncommitted or mismatched parts | Parts written directly under final names; presence is trusted | Adopt per workflow; hash mandatory for metadata docs, opt-in for large binaries |
 | Merged distributed output byte-identical to serial, gated on two split geometries; every parallel path has a bit-identity test | Equivalence required in principle; many reductions are order-dependent | Adopt with a declared class per path: `bit_identical` or `governed_tolerance`; new kernels reduce lane-locally and merge in fixed order |
@@ -137,7 +177,7 @@ Each step has a characterization gate captured on unchanged `master` first.
 
 | Step | Content | Gate |
 |---|---|---|
-| E0 | Characterize: `simple_test_cmdline` accept/reject matrix; golden scripts for local/SLURM/PBS/SGE/LSF/persistent-worker/coarray; job-description round trip; role table (command-line shape x factory, including `nparts=1` and `fromp`/`top` without `part`, section 3.1); inventory of missing-key overrides and command-object read-backs | Passes on unchanged master; each role disagreement has a recorded decision |
+| E0 | Characterize: accept/reject matrix in the `command line` sub-suite (`simple_cmdline_tester.f90`); golden scripts for local/SLURM/PBS/SGE/LSF/persistent-worker/coarray; job-description round trip; role table (command-line shape x factory, including `nparts=1` and `fromp`/`top` without `part`, section 3.1); inventory of missing-key overrides and command-object read-backs | Passes on unchanged master; each role disagreement has a recorded decision |
 | E1 | Typed `cmdline` (tag, growable, strict getters); `to_string` as the only job description; status-returning parse; exit codes in the executables; overlength refusal | E0 matrix unchanged except documented exit-code changes; golden scripts byte-identical |
 | E2 | Ranges/strictness/finiteness on `ui_param`; registered program is the parse authority; help and JSON render the domain; retire `simple_args.f90` after a superset check | Enforced domain equals advertised domain per program; JSON gains fields only; no default changes |
 | E3 | Per program: literal missing-key overrides become declared defaults; `derived` marker; presence-semantic key list; `default_audit.py` reports nothing for migrated programs | CLI behavior unchanged; JSON defaults unchanged except where the audit previously failed |
@@ -161,7 +201,10 @@ gates (local end to end; schedulers at script level until a cluster run).
    preprocessing once piloted?
 5. Hash policy for large binary partials in E6: size-only, sampled, or full.
 6. Are there consumers of `simple_args.f90` or the `chash` job description
-   outside the tree (NICE, scripts) that E1/E2 would break?
+   outside the tree (NICE, scripts) that E1/E2 would break? (Since the
+   2026-10-03 release 4 clean break, no backwards compatibility is kept, so this
+   is a question of coordinating with NICE and scripts, not of preserving old
+   interfaces.)
 
 ## 8. Not in scope
 

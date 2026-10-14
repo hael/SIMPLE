@@ -362,7 +362,7 @@ the first set's initial volumes from class averages of its own (items 3 to 9), u
 `ini3D_cavgs=no`. Decided 12 October 2026: this replaced the route of 8 October, on which p06
 marked the first publication (`sieve_ini3D=yes`, a master input passed to p06) and p07 ran
 `solve3D_cavgs` on the sieve's combined classes
-(`doc/refactoring_notes/planned/stream_sieve_ini3D_plan_2026-10-08.md`). The marker, the master's
+(`doc/refactoring_notes/completed/stream_sieve_ini3D_plan_2026-10-08.md`). The marker, the master's
 input and its forwarding are gone.
 
 1. **p06 collects the sieve's 2D.** While it has published nothing, each set the sieve hands off

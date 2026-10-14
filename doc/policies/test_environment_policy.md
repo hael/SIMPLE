@@ -45,8 +45,8 @@ runs `scripts/check_test_registry.py`, `scripts/check_descr.py` and
 `scripts/check_flex_dag.py` (section 4.5), then
 `ctest -L fast` with half the cores rounded up, then
 `scripts/ctest_budget.py`, which
-fails the build when an entry fails or the gate takes more than 30 s of real
-time. A failed gate installs nothing. The per-entry timings are kept in
+fails the build when an entry fails or the gate takes more than 60 s of real
+time (`scripts/run_fast_gate.sh`, `scripts/ctest_budget.py`). A failed gate installs nothing. The per-entry timings are kept in
 `build/test_runs/ctest_fast.log.timing.txt`; the gate takes about 5 s on the
 reference Mac in Debug. Tests are on by default in every compile script;
 `--exclude-tests` (`BUILD_TESTS=OFF`) builds the library and executables only
@@ -263,7 +263,7 @@ All of them:
    be released: `unmemoize_mask_coords`). A sub-suite whose subject is a
    threaded path opens its own small team with `num_threads` (three is the
    convention); the entry's `OMP_NUM_THREADS` stays 1.
-4. It is cheap. The whole gate must stay under 30 s of real time; keep every
+4. It is cheap. The whole gate must stay under 60 s of real time; keep every
    sub-suite well under a second, with the smallest fixture that exercises
    the path (a 64-pixel box tests an FFT as well as a 256-pixel one).
 5. It uses no sleeps, polls or real timers.
@@ -719,7 +719,7 @@ written as `sub-suite` (entry).
 | `ansi_colors` | `string` (`unit_core`) |
 | `assign_optics` | `optics assignment` (`lib_stream`) |
 | `atomfit` | deleted, with `atoms%fit_bfactors`, which nothing called |
-| `atoms_stats` | `nanoparticle atoms` (`lib_single`); high-level route `simple_test_exec test=single_atoms_stats` |
+| `atoms_stats` | the high-level entries `single_atoms_stats` (Pt) and `single_atoms_stats_cdsew`, `_cdsez`, `_cdser` (`simple_test_exec test=single_atoms_stats`); the `nanoparticle atoms` sub-suite of `lib_single` no longer exists |
 | `binoris`, `binoris_io`, `inside_write` | `binoris` (`unit_project`) |
 | `binoris_test`, `binoris_io_test` | deleted (empty stubs); see `binoris` |
 | `bounds_from_mask3D`, `bounds_from_mask3D_test`, `graphene_mask`, `mask`, `msk_routines` | `masks` (`unit_image`) |
@@ -739,7 +739,7 @@ written as `sub-suite` (entry).
 | `corrs2weights`, `corrs2weights_test`, `rank_weights` | `statistics` (`unit_numerics`) |
 | `create_gain`, `search_gain_flips` | `motion gain` (`unit_motion`) |
 | `ctf`, `ctf_test` | `CTF` (`unit_image`) |
-| `detect_atoms`, `simulate_nanoparticle` | `nanoparticle atoms` (`lib_single`) |
+| `detect_atoms`, `simulate_nanoparticle` | no test of their own; they run as stages of the high-level `single_atoms_stats` entries, `detect_atoms` also in `species_discovery`, and `simulate_nanoparticle` also in `single_workflow_fcc` and `single_workflow_wurtzite` |
 | `detect_calpha` | `C-alpha finder` (`unit_single`) |
 | `detect_calpha_molecules` | deleted; quantitative synthetic coverage remains in `C-alpha finder` (`unit_single`) |
 | `diff_map_graphs` | `diffusion-map graphs` (`unit_numerics`) |

@@ -2,7 +2,17 @@
 
 ## Implementation Status
 
-The first implementation phase is in place:
+Updated 14 October 2026: phase 1 (the project-file merge and the thin
+`merge_projects` commander) is implemented and was checked against the source
+today; the resolver, audit, and test items are the residual work, listed under
+"Remaining Work" below. This note moved to `need2basis/` on 2026-10-07 by a pure
+rename. Its stable contract content (project field contract, optics and index
+contracts, CTF-resolver policy) is a candidate for a policy document alongside
+`doc/policies/microscope_parameters_policy.md` once the residual items close; it
+has not been moved.
+
+The first implementation phase is in place (commits `e04ff2816`, 2026-05-29, and
+`2d967ac63`, 2026-05-30):
 
 - `src/main/commanders/simple/simple_commanders_project_core.f90` routes
   `merge_projects` through the dedicated project table parameter `projtab` and
@@ -26,8 +36,10 @@ project shape whose populated data segments match across all inputs:
 - movie/micrograph-only projects through `os_mic`
 - stack-only projects through `os_stk`
 - particle projects through `os_ptcl2D` and/or `os_ptcl3D`
-- class/output/optics-bearing projects when those segments are present in all
-  inputs
+- optics-bearing projects when `os_optics` is present in all inputs
+
+`os_cls2D`, `os_cls3D`, and `os_out` are not part of the matched shape: they are
+ignored on input and left empty in the merged output.
 
 Top-level project files that contain only metadata segments such as `projinfo`
 and `compenv` are rejected because there is no data segment to merge.
@@ -56,11 +68,51 @@ The helper currently:
   ptcl2D-only input shape, then removes 2D-clustering fields from `ptcl3D`;
   this synthetic `ptcl3D` row construction is also parallelized
 
-No `os_optics` backfill path was added. `sp_project%get_ctfparams` already
-reads `smpd`, `ctf`, `kv`, `cs`, `fraca`, and `phaseplate` from `os_stk` for
-particle analysis and particle-specific defocus from particle rows, so the
-remaining resolver-related work is an audit of direct CTF construction outside
-that project API plus dedicated merge tests.
+The helper also merges the canonical sigma2 state (`sigma2_state.bin`) of the
+inputs: `validate_selected_source_sigma` requires each source's canonical state to
+be committed and to match that source's particle layout, and the states are then
+concatenated into the merged project. This is newer than the rest of the helper
+(canonical-sigma2 work, commit `0d7b5f09a`, 2026-09-05) and is not part of the original design below.
+
+The validators and remap logic are nested inside `merge_selected_project_files`
+(`src/fileio/simple_projfile_utils.f90`) rather than being separate project-level
+procedures. The relevant nested procedures are `validate_field_presence`,
+`validate_source_project` (includes the row-level CTF-completeness checks for
+`os_mic` and `os_stk`), `validate_particle_field`,
+`validate_stack_particle_ranges`, `validate_stack_dimensions`,
+`validate_mic_sampling`, and the `ogid` helpers `source_max_ogid`,
+`max_ogid_in_oris`, and `remap_row_ogid`. The names in the "Core Refactor"
+section below (`validate_project_field_shape`, `build_ogid_remap`, and so on) are
+design names and do not exist in the source.
+
+No `os_optics` backfill path was added. `sp_project%get_ctfparams`
+(`src/main/project/simple_sp_project_core.f90`) already reads `smpd`, `ctf`, `kv`,
+`cs`, `fraca`, and `phaseplate` from `os_stk` for particle analysis and
+particle-specific defocus from particle rows, and never reads `os_optics`. A
+separate `src/main/project` CTF resolver is therefore probably unnecessary; the
+"Core Refactor" section below should be read as a possible audit of direct CTF
+construction rather than a required new module.
+
+## Remaining Work
+
+- Audit direct `ctf(params%smpd, params%kv, ...)` construction in the areas listed
+  under "2D and 3D Analysis" and route any hits through `get_ctfparams`. Not
+  started.
+- Decide whether the "Core Refactor" resolver is still wanted. The staged
+  domain-driven design note
+  (`doc/refactoring_notes/planned/next_release/staged_domain_driven_design_refactor.md`)
+  has a CTF-first slice that overlaps it, and `doc/policies/microscope_parameters_policy.md`
+  still lists the missing single resolver as a gap.
+- Tests: `src/main/project/simple_project_merge_tester.f90`
+  (`test_merge_pruned_stack_indexing_heterogeneous_ctf`) is the only merge test.
+  It covers part of the particle-project, heterogeneous `kv`/`cs`/`fraca`,
+  stack `fromp`/`top`/particle `stkind` remap, and empty `cls2D`/`cls3D`/`out`
+  bullets in the "Tests" section. Not started: stack-only and mic-only merges,
+  field-shape mismatch, metadata-only input error, `smpd`/box mismatch, incomplete
+  row-level CTF failure, `ptcl2D%state` vector with `0` entries, `ogid`
+  collision without `os_optics`, mixed `os_optics` presence, and commander-level
+  `projtab`/`projfile_merged` tests.
+- Open Questions at the end of this note remain open.
 
 ## Goal
 
@@ -165,12 +217,16 @@ right abstraction:
 - It remapped `ogid` only inside the `os_optics` branch, missing projects that
   carry row-level optics-group assignments without an `os_optics` table.
 
-The stream `cluster2D_subsets` path has a better framework for project
-aggregation:
+The chunk-merge path used by streaming has a better framework for project
+aggregation (as found when this note was written; the original caller,
+`src/main/stream/simple_stream_cluster2D_subsets.f90`, no longer exists):
 
-- `src/main/stream/simple_stream_cluster2D_subsets.f90` tracks project files in
-  `rec_list` / `chunk_rec` and passes arrays of project filenames into a merge
-  utility.
+- Callers pass arrays of project filenames into a merge utility. Today
+  `merge_chunk_projfiles` and `merge_chunk_projfiles_without_sigma2` are called
+  from `src/main/sieve/simple_ptcl_sieve.f90`, and `merge_chunk_projfiles` from
+  `src/main/commanders/simple/simple_commanders_cavgs.f90` (`match_cavgs`) and
+  `src/main/commanders/simple/simple_commanders_project_core.f90`
+  (`aggregate_chunks`).
 - `src/fileio/simple_projfile_utils.f90::merge_chunk_projfiles` accepts an
   array of project files, allocates output project segments, transfers
   orientations with `transfer_ori`, remaps stack and particle indices, and
@@ -252,9 +308,10 @@ For stack-only projects, stack rows are transferred as-is. The absence of
 particles should not make the stack field unmergeable, and stack-only merges do
 not rewrite `fromp` / `top`.
 
-When class segments are present, class rows and particle `class` assignments
-must be offset into the merged class namespace. The helper should not infer
-selection from class rows.
+Class segments are not merged by `merge_projects` (`cls2D`, `cls3D`, and `out`
+are dropped, see "Project Field Contract"), so no class namespace offset is
+applied and `copy_particle_row` is called with a class offset of zero. The helper
+does not infer selection from class rows.
 
 ## Optics Assignment Contract
 
@@ -292,7 +349,10 @@ logic remains. That change covers the major CTF-aware 2D/3D consumers because
 polar-FT CTF matrix generation, class averaging, and reconstruction helper
 paths already call `get_ctfparams`.
 
-Add validation helpers:
+Add validation helpers (design names; as of 14 October 2026 the equivalent logic
+is nested in `merge_selected_project_files`, see "Implementation Status", and
+`validate_ptcl2D_state_rows` and `validate_particle_ctf_rows` have no nested
+counterpart):
 
 - `validate_project_field_shape`: ensure all inputs have matching populated
   data segments.
@@ -324,8 +384,8 @@ merge utility:
    project is not written over one of the inputs.
 3. Resolve a relative `projfile_merged` against the execution directory without
    calling an existence-based canonicalizer; the output file may not exist yet.
-4. Build an ordered `project_fnames(:)` array, analogous to the stream
-   `cluster2D_subsets` / `merge_chunk_projfiles` call sites.
+4. Build an ordered `project_fnames(:)` array, analogous to the
+   `merge_chunk_projfiles` call sites.
 5. Read each source through existing `sp_project` segment-info and
    segment-read methods so `merge_projects` can inspect arbitrary populated
    fields without rewriting source project metadata.
@@ -436,11 +496,12 @@ Add project-level and commander-level tests for matching field shapes:
   correctly after append.
 - For every output stack row, all output particles in that stack's `fromp` /
   `top` range have `stkind` equal to the output stack index.
-- Class rows and particle `class` values are offset when class segments are
-  part of the matching input field set.
+- The merged project has empty `cls2D`, `cls3D`, and `out` segments, and the
+  stale particle clustering fields are cleared (the single existing test
+  asserts the empty segments).
 - `sp_project%get_ctfparams('ptcl2D', iptcl)` returns different `kv`/`cs` for
   particles originating from different projects.
-- Cluster2D and refine3D CTF matrix construction call through the resolver.
+- refine2D and refine3D CTF matrix construction call through the resolver.
 - The merger works when no source project has `os_optics`.
 - The merger remaps row-level `ogid` assignments even when no source project
   has `os_optics`.
@@ -455,6 +516,9 @@ Add project-level and commander-level tests for matching field shapes:
   by this refactor.
 
 ## Suggested Migration Plan
+
+Status on 14 October 2026: steps 3 to 8 are implemented; steps 1, 2, 9 (beyond
+one test), and 10 are open; step 11 is a non-goal here.
 
 1. Add resolver and validation helpers with no behavior change.
 2. Route `get_ctfparams` through the resolver without introducing an
@@ -484,5 +548,6 @@ Add project-level and commander-level tests for matching field shapes:
   rule?
 - Should phase-plate state be required to be stack-level for merged particle
   projects, or should per-particle phase-plate state be allowed?
-- Should selected class provenance be retained as optional annotations after
-  class/output segments are concatenated?
+- Should selected class provenance be retained as optional annotations? (The
+  implemented `merge_projects` drops class and output segments rather than
+  concatenating them, so this applies only if that decision is revisited.)

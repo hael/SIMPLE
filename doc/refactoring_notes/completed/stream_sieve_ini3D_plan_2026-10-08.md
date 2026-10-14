@@ -1,5 +1,12 @@
 # Stream initial 3D from the sieve's class averages, plan, 8 October 2026
 
+> **Superseded 12 and 13 October 2026; kept as history.** The `sieve_ini3D` input, p06's marker and
+> the master's forwarding no longer exist (nothing in `src`, `nice` or `production` names them).
+> p06's `build_sieve_publication` stays and is unconditional, and the first publication is always
+> the sieve's 2D. p07 makes the first set's initial volumes by default (`ini3D_cavgs=yes`): solve2D,
+> `cls_expansion`, `solve3D_cavgs`, then `solve3D` with `cavg_ini_ext`. The living description is
+> `doc/policies/stream/stream_3D_ingestion_policy.md`, sections 3 and 9.
+
 An optional route for the stream's first 3D. p06 builds its first publication from the sieve's own
 2D: the class averages, FRCs, class table and per-particle 2D parameters of the sets it has
 imported, combined. p07 then runs `solve3D_cavgs` on those class averages to make the initial

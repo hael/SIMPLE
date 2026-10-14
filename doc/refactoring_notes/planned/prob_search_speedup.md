@@ -1,387 +1,782 @@
-# The probabilistic search: paying less for the same table
+# The probabilistic search: paying less for the same search
 
-Status: refactoring plan, 2026-10-13. No code yet. It follows the ribosome
-tally of `doc/implementation_notes/planned/particle_caching_3D.md`, which
-put the probabilistic pre-step at 46% of a `solve3D` chunk run, and the
-code review of the same day (folded into section 2 below). The approach is
-unchanged: the same exhaustive table, the same likelihood sampling, the same
-assignment. What changes is where the shift ramp is applied, how the
-sub-pixel shift is found, and how the table loop walks memory.
+Status: refactoring plan, ready for an unattended arun run
+(`prob_search_speedup`) on the Dell. Written 2026-10-13; revised 14 October
+2026 after review (section 13), with all rulings given (section 9) and the
+code re-verified the same day. No phase has run (section 11).
 
-Rulings sought (section 9): none given yet. Phase 0 (section 10) runs
-without any.
+The probabilistic pre-step (`prob_align` and its `prob_tab` parts) was 46% of
+a three-state ribosome `solve3D` run
+(`doc/implementation_notes/rejected/particle_caching_3D.md`). This plan
+times it, then makes it cheaper:
+
+| Phase | Change | Kind | Key |
+| --- | --- | --- | --- |
+| 0 | Benchmark files, baseline, thread scaling (3.4) | exact | none |
+| 1 | Particle-frame coarse grid in the multi-state refinement (3.1(a)) | approximate | `prob_grid_ptcl` |
+| 2 | Particle-frame seed in the single-state table (3.1(b)) | approximate | `prob_seed_ptcl` |
+| 3 | Quadratic shift step after the coarse grid (3.2) | approximate | `prob_grid_fit` |
+| 4 | Blocked table loop, if Phase 0 or 3 calls for it (3.3) | exact | none |
+| 5 | Documents and close | | |
+
+Each approximate change has its own default-off developer key and is
+validated on its own against the baseline. The keys are temporary: after
+review the maintainer either promotes a method, removing its key, or removes
+the method with its key.
 
 ## 1. Aim
 
-- Cut the time of the `prob_tab` parts without changing which references,
-  rotations and shifts the table records, except where section 3.2 says so
-  and the validation of section 6 accepts it.
-- Give the pre-step benchmark files of its own, so its time is split into
-  named parts instead of being one number in the refine3D strategy file.
-- Decide the table-loop change by a measurement, not by an argument.
+- **Faster pre-step, same search.** An exact change keeps the table's
+  contents, up to the order of random draws inside a thread (3.3).
+- **A breakdown of the pre-step's time.** The pre-step gets benchmark files
+  of its own, so its time is split into named parts instead of being one
+  number in the refine3D strategy file.
+- **Measurement over argument.** The table-loop change is decided by a
+  measurement.
 
 ## 2. What the pre-step costs today
 
 Measured (the ribosome chunk, consolidated layout, 29,101 particles, three
 states, `nspace` 1,000, 5 parts of 16 threads, box 336): the pre-step is
 3,033 of 6,572 s over 78 iterations, 37 s per iteration at `box_crop` 132,
-50 s at 160 and 138 s of a 190 s iteration at 182. Inside it only the whole
-is timed (`rt_prob` in `simple_refine3D_strategy.f90`).
+50 s at 160 and 138 s of a 190 s iteration at 182. Those are the run's
+`refine=prob` stages. In today's `solve3D`, `refine=prob` runs in the middle
+stages (3–5). Single-state runs use `prob_neigh` before and after them;
+multi-state runs stop after stage 5 by default (`solve3D_policy.md` sections
+3 and 6). Inside the pre-step only the whole is timed (`rt_prob` in
+`simple_refine3D_strategy.f90`).
 
-Counted from the code, per sampled particle, with more than one state, at
-`box_crop` 182 (`nk` 60 shells, `pftsz` 254, `nrots` 508):
+Counted from the code, per sampled particle, at `box_crop` 182 (`nk` 60
+shells, `pftsz` 254, `nrots` 508):
 
-- **The table** (`fill_tab_range`, `simple_eul_prob_tab.f90`;
-  `process_particle_with_shift`). One thread per particle. The shift seed is
-  single-state only (`l_sh_first`), so every one of the 3,000 references is
-  scored at zero shift by `gen_prob_likelihood_euclid_val`: the memoised
-  contraction `ft_ctf2 · ft_ref2 − 2 ft_ptcl_ctf · conj(ft_ref)` over
-  `nk × (pftsz+1)`, one real inverse FFT of length `nrots`, and a bounded
-  heap for the best `nsample` rotations (`sample_likelihood_dist`, already
-  O(n log nsample)). Call the contraction plus inverse FFT the base kernel:
-  about 0.32 Mflop, reading 248 KB of reference and 248 KB of particle
-  memos. 3,000 base kernels per particle.
-- **The refinement** (`refine_best_refs`). The `projs_ns` best references,
-  `projs_ns = athres/180 × nspace` with `athres` the smaller of
-  `prob_athres` (10°) and the mean angular move of the sampled particles:
-  17 to 55 references. Each gets `grad_shsrch_minimize`
-  (`simple_pftc_shsrch_grad.f90`) in alternating mode with `coarse_init`
-  on, which the `xy_in` path of the single-state case turns off. Per
+- **The multi-state table.** `fill_tab_range` in `simple_eul_prob_tab.f90`
+  (`process_particle_with_shift`) uses one thread per particle. The shift
+  seed is single-state only (`l_sh_first`), so with more than one state
+  every one of the 3,000 references is scored at zero shift by
+  `gen_prob_likelihood_euclid_val`. That is three steps:
+  - the memoised contraction `ft_ctf2 · ft_ref2 − 2 ft_ptcl_ctf ·
+    conj(ft_ref)` over `nk × (pftsz+1)`;
+  - one real inverse FFT of length `nrots`;
+  - a bounded heap for the best `nsample` rotations
+    (`sample_likelihood_dist`, O(n log nsample)).
+
+  Call the contraction plus the inverse FFT the base kernel: about 0.32
+  Mflop, reading 248 KB of reference and 248 KB of particle memos. 3,000 base
+  kernels per particle.
+- **The single-state table.** The seed comes from `estimate_shift_seed`: one
+  coarse grid and L-BFGS-B per particle against the particle's previous
+  reference. In alternating mode the search starts from the best rotation at
+  zero shift, not from the incoming one. The seed is a reference-frame shift, and every reference is scored
+  at it, so `gen_euclid_crvec` takes its shifted-reference branch. That
+  branch builds the shift matrix, multiplies the reference by it, and runs
+  `nk` complex FFTs of length `nrots` before the contraction. It costs about
+  5.3 base kernels per reference, `nspace` × 5.3 per particle.
+- **The refinement** (`refine_best_refs`). It refines the `projs_ns` best
+  references, `projs_ns = athres/180 × nspace`, where `athres` is the smaller
+  of `prob_athres` (10°) and the sampled particles' mean angular move: 17 to
+  55 references. Each gets `grad_shsrch_minimize`
+  (`simple_pftc_shsrch_grad.f90`) in alternating mode with `coarse_init` on.
+  The single-state case turns `coarse_init` off by passing `xy_in`. Per
   refined reference:
   - one base kernel at zero shift;
   - the coarse grid: `coarse_num_steps`² = 25 calls of `gen_objfun_vals`,
-    each shifting the *reference* (`gen_shmat4aln`, then `nk` complex FFTs
-    of length `nrots` on `plan_fwd1_many`) before the contraction: about
-    1.7 Mflop, five base kernels, the FFTs four fifths of it;
-  - up to `max_evals` = 5 alternations of L-BFGS-B (`maxits_sh` = 60) and a
-    shifted `gen_objfun_vals` each; every L-BFGS-B evaluation
+    each shifting the reference (`gen_shmat4aln`, then `nk` complex FFTs on
+    `plan_fwd1_many`) before the contraction. About 1.7 Mflop each (5.3 base
+    kernels), the FFTs four fifths of it.
+  - up to `max_evals` = 5 alternations of L-BFGS-B (`maxits_sh` = 60), each
+    followed by one shifted `gen_objfun_vals`. Every L-BFGS-B evaluation
     (`gen_corr_grad_for_rot_8` → `gen_euclid_grad_for_rot_8`) copies the
     reference to double precision (244 KB) and sums residual and gradient
-    directly over `nk × pftsz` with the ramp regenerated: about 0.6 Mflop in
-    double. The evaluations per run, E, are counted by the search object
-    (`profile_objective_evals`, `profile_gradient_evals`) and printed
-    nowhere.
+    directly over `nk × pftsz`: about 0.6 Mflop in double.
+  - The search object counts the evaluations per run, E
+    (`profile_objective_evals`, `profile_gradient_evals`), and has a getter
+    and a reset (`get_profile`, `reset_profile`), but nothing calls them.
+    Alternations are not counted.
 
-  In base kernels per refined reference: 1 + 25 × 5.3 + alternations ×
-  (2E + 5.3), about 250 to 450 for two to three alternations and E between
-  20 and 50. Per particle: 4,000 to 25,000, against 3,000 for the table.
+  Per refined reference that is 1 + 25 × 5.3 + alternations × (2E + 5.3) base
+  kernels: about 250 to 450, for two to three alternations and E of 20 to 50.
+  Per particle it is 4,000 to 25,000, against 3,000 for the table.
 
-The consistency check: 5,000 particles × about 13,000 base kernels × 0.32
-Mflop is 2 × 10¹³ flop per iteration, 1.9 Gflop/s per thread over 138 s on
-80 threads, a plausible rate for these loops. The counts and the measured
-time agree, so the pre-step is these two loops plus, of the order of 10 to
-15 s per iteration, the second process launch, the second reprojection-model
-read and memoisation per part, the table write and read, and `ref_assign`.
+**Consistency check.** 5,000 particles × about 13,000 base kernels × 0.32
+Mflop is 2 × 10¹³ flop per iteration. Over 138 s on 80 threads that is 1.9
+Gflop/s per thread, a plausible rate for these loops. So the pre-step is
+these two loops plus 10 to 15 s per iteration of process launches,
+reprojection-model reads and memoisation, the table write and read, and
+`ref_assign`.
 
-The same grid runs once per particle in the matcher
-(`grad_shsrch_first_obj` in `simple_strategy3D_srch.f90`, then the peaks
-with `xy_in`), in the 2D search (`simple_strategy2D_srch.f90`), in the 2D
-table (`simple_eul_prob_tab2D.f90`) and in the neighbourhood table
-(`simple_eul_prob_tab_neigh.f90`). The multi-state 3D table is the one place
-that runs it per refined reference.
+**Where the grid runs.** It runs once per particle in:
+- the matcher (`grad_shsrch_first_obj` in `simple_strategy3D_srch.f90`);
+- the 2D search;
+- the 2D table (`simple_eul_prob_tab2D.f90`);
+- every single-state seed.
+
+It runs once per refined reference in the multi-state 3D table, and in the
+multi-state path of the neighbourhood table (`simple_eul_prob_tab_neigh.f90`).
+The neighbourhood table is out of scope.
 
 ## 3. Target design
 
-### 3.1 The coarse grid on the particle side (exact)
+### 3.1 Particle-frame shifts in the table (approximate; two keys)
 
-For a unit-modulus shift ramp S and a real CTF,
-`|X·S(s) − CTF·R|² = |X − CTF·R·S(−s)|²` at every polar sample, so
-shifting the particle by s gives the same Euclidean distances, at every
-rotation, as shifting the reference by −s; `ft_ctf2` and the particle's
-weighted power are unchanged (|S| = 1). The 25 grid shifts are fixed by
-`trs` and the same for every reference of a particle.
+Two changes, both in the 3D table's `fill_tab_range`, each under its own key:
+- (a) the coarse grid of the multi-state refinement (`prob_grid_ptcl`);
+- (b) the seeded scoring of the single-state table (`prob_seed_ptcl`).
 
-- The search object pre-shifts the particle at the 25 grid positions once
-  per particle: per position a ramp and the `nk` FFTs over rotation of
-  `X·S·CTF`, kept as 25 memoised `ft_ptcl_ctf` sets in a per-thread
-  workspace of the polar calculator (25 × `(pftsz+1) × nk` complex, 3 MB
-  per thread at `box_crop` 182). They are built when the object is set to a
-  new particle (`set_indices` with a changed particle) and reused for every
-  reference refined for that particle.
-- `coarse_search_opt_angle` and `coarse_search` evaluate each grid point
-  with a variant of the unshifted branch of `gen_raw_euclid_vals_impl` (and
-  of the CC path in `gen_corrs`) that takes the pre-shifted particle memo
-  in place of `ft_ptcl_ctf(:,:,i)`: a base kernel per grid point.
-- The grid's shift is reported as today, as a reference shift: the particle
-  memo at grid position s stands for the reference shift −s. The sign lives
-  in one place, the workspace builder.
-- Per refined reference the grid costs 25 base kernels instead of 25 × 5.3;
-  the 25 ramps and FFT sets are paid once per particle. For `projs_ns` = 30
-  that removes about 1,000 of the roughly 3,400 Mflop per particle of
-  section 2.
-- Every consumer of `coarse_init` gains; the per-particle case (matcher,
-  2D) gains less, since there the grid was already once per particle.
+They share the polar calculator's builder of shifted particle memos. They
+never act on the same particle: (a) needs more than one state, (b) exactly
+one.
 
-### 3.2 The sub-pixel step from the grid (approximate, validated)
+**No exact particle-side form.** The kernels shift the reference in its own
+polar frame (`shmat(:,k) * pfts_refs(:,k,iref,ieo)` in
+`gen_raw_euclid_vals_impl` and `gen_euclid_crvec`), then correlate over every
+in-plane rotation by FFT. At rotation r, a reference-frame shift s therefore
+acts as the particle-frame shift R_r s. The code converts this way itself:
+`grad_shsrch_minimize` rotates the shift by `get_rot(irot)` when `sh_rot` is
+set, and `materialize_seed_shift` rotates the seed by the assigned in-plane
+angle. A fixed particle shift is a different reference-frame shift at every
+rotation, so a fixed bank of particle shifts reproduces the reference-frame
+grid at one rotation only. Restricting the change to fixed-angle searches
+gains nothing: the table uses the alternating object, and the fixed-angle
+`coarse_search` scores single rotations by direct sums with no FFT to save.
+Caching the grid's 25 shift matrices would be exact, but it is worth about 5%
+of a grid point and is not pursued.
 
-The grid spacing is `2·trs/5`. Around the grid minimum the cost is smooth in
-the shift, and the 3 × 3 neighbouring grid values are already computed: a
-quadratic fit through them gives the minimum to a fraction of the spacing
-in one step. The values used are those at the rotation that is best at the
-centre point (the kernel returns all rotations for every grid point, so
-this costs nothing). One exact kernel at the fitted shift then gives the
-distance that the table records; the fit is never trusted for the value.
+**Exact pointwise.** For one particle shift t and one rotation r, the
+particle-side value equals the reference-side value at the reference-frame
+shift that t corresponds to at r, to single-precision rounding:
+|X·S(t) − CTF·R|² = |X − CTF·R·S(−t)|², with |S| = 1 and a real CTF, so
+`ft_ctf2` and the particle's weighted power are unchanged. Both changes rest
+on this identity, and a test pins it.
 
-What follows the fit is a ruling (section 9): either L-BFGS-B starts from
-the fitted shift and converges in a few evaluations, or the table fill
-records the fitted shift and leaves the continuous refinement to the
-matcher, which refines the assigned candidate anyway. Either way this
-replaces alternations × 2E ≈ 100 to 300 base kernels per refined reference
-with about one, or with a few.
+**(a) The multi-state coarse grid (`prob_grid_ptcl`).**
 
-This changes the recorded shifts by less than the grid spacing, so it is
-validated as section 6 says, not assumed.
+- **Lattice.** The grid's points are recorded shifts u, in the particle
+  frame like every recorded shift: today's 5 × 5 lattice (spacing h =
+  2·trs/5, at 0, ±0.4·trs and ±0.8·trs), 25 points. Converted to the
+  reference frame at a rotation, a corner point (|u| = 1.13·trs) can fall
+  outside the search box; the start is then clamped into the box.
+- **Bank.** A search object built with the option makes, when its particle
+  changes in `set_indices`, one bank entry per lattice point. Entry u holds
+  the particle's `X·CTF` shifted by −u and transformed over rotation, as
+  `ft_ptcl_ctf` is in `memoize_ptcls`. It scores as the reference shifted by
+  u in the particle frame. The sign lives in the builder only. Size: 25 ×
+  (pftsz+1) × nk complex, 3.1 MB per thread at `box_crop` 182.
+- **Grid.** Each entry is scored by a variant of the unshifted branch (Euclid
+  and CC) that takes the entry in place of `ft_ptcl_ctf(:,:,i)`: one base
+  kernel per lattice point, all rotations. The grid keeps the lowest
+  (u*, r*) and every point's loss vector (for 3.2).
+- **Start.** The search starts at rotation r* from the reference-frame shift
+  that u* corresponds to there (the inverse of the `sh_rot` conversion),
+  clamped into the box. It then continues as today, with today's acceptance
+  against the zero-shift cost.
+- **Scope.** `fill_tab_range` passes the option at construction only when the
+  key is on and the table has more than one state. Every other
+  `new_alternating` caller is unchanged by construction. A
+  one-grid-per-particle consumer would gain nothing, because its bank costs
+  what its grid costs.
+- **What changes.** The lattice samples the particle's own shift, the same at
+  every rotation, with the same 25 points as today. Today's grid samples a fixed reference shift, which is a
+  different particle shift at every rotation. So the start of L-BFGS-B, and
+  through it the recorded distances, may change.
+- **Cost.** Per refined reference: 25 base kernels instead of 25 × 5.3 ≈ 133.
+  Per particle: 25 ramps and FFT sets (about 25 × 4.3 base kernels' worth),
+  shared by the 17 to 55 refined references.
 
-### 3.3 The table loop and memory (decided by Phase 0)
+**(b) The single-state seeded table (`prob_seed_ptcl`).** `estimate_shift_seed`
+finds a reference-frame shift s at the rotation r_s where its search ends
+(`minimize` returns it in `irot`, or 0 with a zero shift). Today every reference is scored at s as a
+shift of the reference, and every refined reference starts from s (`xy_in`).
+An unrefined assigned candidate gets s rotated by its own in-plane angle
+(`materialize_seed_shift`). Away from r_s, s is a different particle shift.
+With the key on, the seed is used throughout as one particle-frame shift u_s,
+which is s converted at r_s (what `sh_rot` gives). Three things change
+together, so that every recorded shift matches how its candidate was scored:
+
+- **Scoring.** The particle's `X·CTF` is shifted once by −u_s into a
+  one-entry bank (the builder of (a)). Every reference is scored with the
+  unshifted-kernel variant taking that entry, in place of the
+  shifted-reference branch (Euclid and CC). A seed below `SHERRSQ` uses the
+  plain memo, as today.
+- **Refinement start.** A refined reference at rotation r starts from u_s
+  converted to the reference frame at r.
+- **Assignment.** The seed table holds u_s.
+  - In `ref_assign`, `assign_current_ref` records u_s for an unrefined
+    candidate, whatever its in-plane angle, instead of calling
+    `materialize_seed_shift`. The rule is a small module procedure of
+    `simple_eul_prob_tab.f90`, so it can be tested without a project.
+  - `materialize_seed_shift` stays as it is for the 2D and neighbourhood
+    tables.
+  - `prob_tab` and `prob_align` read the same command line, so the table file
+    format does not change.
+
+The seed's estimation is unchanged. At r_s, every score, start and recorded
+shift equals today's; elsewhere they differ. Cost: `nspace` × 5.3 base
+kernels per particle become `nspace` + about 4.3, so with a non-zero seed
+about a fifth of today's.
+
+### 3.2 A quadratic shift step from the grid (approximate; `prob_grid_fit`)
+
+**The table's refinement can be made cheaper, not dropped.** `ref_assign`
+consumes the refined distances, because `refine_best_refs` replaces the
+`projs_ns` entries of `loc_tab`:
+- with more than one state, the state is the argmin distance over all
+  references (`assign_greedy_state_labels`);
+- the projection is drawn from the distances within that state
+  (`assign_refs_for_state`).
+
+The matcher then takes state, projection and in-plane index as given
+(`srch_prob` in `simple_strategy3D_prob.f90`) and only polishes the pose.
+
+**Scope.** The step runs in the multi-state refinement, in the objects
+3.1(a) scopes, after the coarse grid. The grid keeps its 25 loss vectors in
+either frame: the reference-frame grid with `prob_grid_ptcl` off, the
+lattice of 3.1(a) with it on.
+
+**The step.**
+
+1. **Neighbourhood.** Take the grid minimum g*, its rotation r*, and the
+   3 × 3 stencil around g*, all at r*. If g* is on the edge of the 5 × 5
+   lattice, there is no fit (9 of the 25 points have a full stencil).
+2. **Fit.** Fit the six-parameter least-squares quadratic over the nine
+   values, in units of h: f(a,b) = c + gᵀ(a,b) + ½ (a,b) H (a,b)ᵀ, in closed
+   form on the regular stencil.
+3. **Curvature.** H must be positive definite, with λmin/λmax ≥ 0.01;
+   otherwise there is no fit.
+4. **Step.** δ = −H⁻¹g must lie in the centre cell, |δa|, |δb| ≤ ½;
+   otherwise there is no fit. A stationary point outside it contradicts g*
+   being the grid minimum.
+5. **Limits.** The fitted shift, converted to the reference frame at r*,
+   must lie in the search box; otherwise there is no fit.
+6. **Value.** Evaluate exactly once at the fitted shift over all rotations
+   (about 5.3 base kernels); the rotation is its argmin. The fit is kept only
+   if its cost is below the grid minimum's; otherwise there is no fit.
+
+"No fit" falls back to today's L-BFGS-B alternations from the grid minimum.
+Either way the result passes today's acceptance against the zero-shift cost.
+The search object counts fits, and fallbacks per reason (steps 1, 3, 4, 5
+and 6).
+
+**Second form.** It is built only if the fit alone fails the case
+acceptance of section 10 (Phase 3): the fit, then L-BFGS-B from the fitted
+shift with `maxits` 10 and one alternation.
+
+**Cost.** On the fitted fraction, about 5.3 base kernels replace
+alternations × (2E + 5.3) ≈ 100 to 300 per refined reference. The fallback
+fraction keeps today's cost.
+
+### 3.3 The table loop (exact; Phase 4)
 
 The table loop streams, per particle and thread, the whole memoised
-reference bank of the particle's parity (3,000 × 248 KB = 744 MB) at under
-one flop per byte; the particle's own memos stay in cache. Two forms:
+reference bank of the particle's parity (3,000 × 248 KB = 744 MB), at under
+one flop per byte.
 
-- **Blocking.** A thread takes a block of B particles and, for each
-  reference, evaluates the B pairs before moving to the next reference, so a
-  reference's memos are loaded once per block. The per-pair work (contraction,
-  inverse FFT, heap, candidate record) is unchanged; only the loop order in
-  `process_particle_with_shift`/`process_particle_without_shift` changes.
-- **The product form.** For each of the `pftsz+1` rotation frequencies the
-  contraction is a complex matrix product over the `nk` shells (particles ×
-  shells times shells × references); a BLAS routine runs it at a multiple of
-  the hand loop's rate. More invasive: a new kernel in the polar calculator
-  with a block of particles as input.
+**Blocking.** A thread takes B particles and, for each reference, evaluates
+the B pairs before moving on. A reference's memos are then loaded once per
+block. The per-pair work is unchanged.
 
-Phase 0's thread-scaling run decides: if one `prob_tab` part scales linearly
-from 1 to 16 threads the loop is compute-bound and only the product form
-helps; if the scaling flattens it is bandwidth-bound and blocking alone
-helps. Blocking first in either case; the product form only if blocking
-leaves the table the larger part.
+**Candidate storage comes with it.** Today's buffers are append-only, and
+`prob_candidate_buffer%append_or_replace` finds a particle's earlier
+candidate by scanning back while the particle index matches. Reference-major
+blocking interleaves particles, so refined candidates would be appended as
+duplicates. `read_tab_to_glob` would then refuse the table, because every
+particle must have exactly `nrefs` candidates. So blocking uses block-local
+dense storage:
+- per thread, arrays over (`nrefs`, B) for distance and in-plane index (as
+  `dists_refs` and `inpl_refs` today), plus shift and `has_sh` for refined
+  entries;
+- the score loop fills them reference-major;
+- then, particle by particle, `refine_best_refs` writes its refined entries
+  in place, and the particle's `nrefs` candidates are emitted with `append`
+  in reference order.
+
+The stream keeps today's layout and contents, and the 3D table no longer
+calls `append_or_replace`. Memory: `nrefs` × B × 24 bytes per thread, 1.2 MB
+at 3,000 references and B = 16.
+
+**Scope.** Every table scored with the unshifted kernel: the multi-state
+table, `doshift=no`, and the single-state table with `prob_seed_ptcl` on,
+which needs one seed entry per block particle (B entries per thread).
+The single-state table with that key off shifts the reference per pair, so a
+block would share no memos there, and it keeps today's loop.
+
+**Determinism** (ruled: default path, no key). Within a thread, the order of
+the `ran3` draws that pick the in-plane rotation changes, so the picks are
+the same in distribution, not draw for draw.
+
+**Product form.** Writing the contraction as BLAS matrix products over
+blocks of particles is not in this run. A later plan takes it up if blocking
+leaves the score loop the larger part.
 
 ### 3.4 Benchmark files
 
-- `PROB_TAB_BENCH_ITER###_PART##.txt`, written by `exec_prob_tab` in the
-  matcher's format (`CONTEXT`, `TIMINGS`, `% accounted for`): project read,
-  reprojection-model read, reference memoisation, particle preparation, the
-  score loop, the refinement, the table write; and in the context the
-  counts: references, sampled particles, `projs_ns`, the search object's
-  objective and gradient evaluations summed over threads, the number of
-  alternations, the grid evaluations.
-- `PROB_ALIGN_BENCH_ITER###.txt`, written by `exec_prob_align`: sampling and
-  project write, scheduling (launch to last part finished), table reads,
-  `ref_assign`, assignment write.
-- The score loop and the refinement are timed inside the parallel loop with
-  per-thread accumulators summed after it; the counters come from the
-  per-thread search objects after the loop. Names in
-  `simple_refine3D_fnames.f90` next to `refine3D_bench_fname`.
+- **`PROB_TAB_BENCH_ITER###_PART##.txt`**, written by `exec_prob_tab` in the
+  matcher's format (`CONTEXT`, `TIMINGS`, `% accounted for`):
+  - **Wall-clock entries**, measured outside parallel regions: project read,
+    reprojection-model read, reference memoisation, particle preparation
+    (summed over batches), the table fill (the parallel region of
+    `fill_tab_range`, summed over batches), the table write. `% accounted
+    for` uses only these and the total.
+  - **A separate thread-seconds block.**
+    - Contents: seed estimation, score loop and refinement, each summed over
+      threads; their sum; and the load balance, which is that sum divided by
+      the fill region's wall time × `nthr`.
+    - Per-thread accumulators read `system_clock` into thread-local
+      variables. They do not use `tic`/`toc`, which write the module
+      variable `last_time_point`.
+    - These are labelled thread-seconds and never enter `% accounted for`.
+  - **Context:** references, sampled particles, `projs_ns`, alternations (a
+    new counter in `grad_shsrch_minimize`), grid evaluations; the search
+    objects' counts from `get_profile`, summed after the loop. E is the
+    gradient count, one per L-BFGS-B evaluation; the objective count adds
+    `nrots` per all-rotation evaluation. With the keys on, the file also
+    records fits and fallbacks per reason; Phases 1 and 3 add those lines.
+- **`PROB_ALIGN_BENCH_ITER###.txt`**, written by `exec_prob_align`, all wall
+  time: sampling and project write, scheduling (launch to last part
+  finished), table reads, `ref_assign`, assignment write.
+- The file names go in `simple_refine3D_fnames.f90`, beside
+  `refine3D_bench_fname`.
 
 ## 4. What does not change
 
-- The table's contents: every reference scored, the same rotations kept by
-  the same heap, the same likelihood sampling, the same assignment.
-- The single-state seed path and the matcher's seed-then-refine pattern.
-- The reference-shift convention in every recorded shift.
-- The 2D table and the neighbourhood table, beyond gaining 3.1 through the
-  search object.
+- **With every key off (the default):** the search, the table's contents (up
+  to the in-plane draw order once blocking is in), and the table file format.
+- **With or without the keys:**
+  - the estimation of the single-state seed;
+  - the matcher;
+  - every one-grid-per-particle consumer;
+  - the 2D and neighbourhood tables;
+  - the multi-state rule of `refine3D_policy.md`, that no seed from the
+    particle's previous state scores other states.
+- **The shift convention:** every recorded shift is in the particle frame,
+  as after `sh_rot`.
 
-## 5. Order of work
+## 5. The keys
 
-1. Benchmark files (3.4), the thread-scaling run, the baseline: Phase 0.
-2. The particle-side grid (3.1), exact; tested for equality against the
-   reference-side grid: Phase 1.
-3. The sub-pixel step (3.2), after its ruling, validated against ground
-   truth: Phase 2.
-4. The table loop (3.3), if Phase 0 says it is bandwidth-bound or if the
-   table is the larger part after Phase 2: Phase 3.
-5. Documents and close: Phase 4.
+`prob_grid_ptcl`, `prob_seed_ptcl` and `prob_grid_fit`, each
+`(yes|no){no}`, one per approximate change. They are registered as
+`prob_athres_taper` was (commit `cfbc56bf3`):
+- the parameter in `simple_parameters.f90` and its registration in
+  `simple_parameters_parse.f90`;
+- a `UI_VIS_DEVELOPER` entry on refine3D and on solve3D (in `new_solve3D`,
+  not in `add_solve3D_base_inputs`, which the stream emulators share).
 
-Each step is measured on the same case before and after; a step is kept if
-it is faster beyond the run-to-run spread and the acceptance holds.
+solve3D's stages copy its command line into refine3D's
+(`simple_solve3D_utils.f90`), and refine3D's reaches `prob_tab` through
+`prob_align`. The keys are read in `fill_tab_range`, and `prob_seed_ptcl`
+also in `ref_assign`. No key stays: on the maintainer's decision after review
+a validated method becomes the only path and its key is removed (release 4
+keeps no backward compatibility); a method that is not promoted is removed
+with its key.
 
 ## 6. Tests
 
-- **The particle-side grid.** In `simple_pftc_inplane_tester.f90`: for
-  random particle and reference polar transforms with CTF, the distances
-  over all rotations from the reference-side evaluation at shift s and from
-  the particle-side evaluation at −s agree to single-precision rounding
-  (relative 1e-5), under both objectives; and the grid minimum, its rotation
-  and its shift from `coarse_search_opt_angle` are identical before and
-  after the change on the same inputs (same evaluation order, same
-  arithmetic up to the rounding above; the test asserts the same grid point
-  and rotation).
-- **The sub-pixel step.** A tester case on a synthetic particle with a known
-  shift: the fitted shift lies within 0.2 pixel of the L-BFGS-B result from
-  the same grid point, over a range of true shifts and noise levels; and
-  the workflow validation of the test protocol: on a small noisy simulated
-  set (2,000 particles or fewer) the orientation and shift errors against
-  ground truth before and after lie within the baseline spread; on
-  beta-galactosidase the final FSC 0.143 resolution of every state lies
-  within the larger of the baseline spread and 3% of the baseline.
-- **The table loop.** The per-pair minimum distance and its rotation are
-  identical before and after blocking (the deterministic part of
-  `sample_likelihood_dist`); the sampled rotation draws `ran3` in a
-  different order per thread, so the sampled picks are compared as
-  distributions (fraction of particles whose assignment changes, against the
-  run-to-run fraction).
-- **Benchmark files.** Their `% accounted for` is above 90% on the timed
-  cases.
-- `python3 scripts/check_test_registry.py .` whenever tests or their
-  registration change.
+The new tests run on one thread on small synthetic polar transforms, within
+the fast gate's budget.
+
+- **Particle-frame grid** (Phase 1), in `simple_pftc_inplane_tester.f90`:
+  - *Identity.* On random particle and reference transforms with CTF, for
+    lattice points u and rotations r (every r for a few u), the bank entry's
+    loss L at r and the reference-side loss at the converted reference-frame
+    shift agree within the tester's existing route tolerance,
+    5e-4·(1+|L|), under both objectives.
+  - *Clamping.* A converted start outside the box is clamped into it; one
+    inside is unchanged.
+  - *Recovery.* Synthetic particles with known shift and rotation, on and off
+    the lattice, noise-free and noisy. Grid plus L-BFGS-B recovers them as
+    well as the reference-frame grid, at the tolerances of
+    `test_euclid_routes_and_recovery`.
+  - *Option off.* Without the option there is no bank and today's result.
+- **Particle-frame seed** (Phase 2):
+  - *At r_s* (inplane tester). Scoring with the one-entry bank gives today's
+    shifted-reference loss at r_s, within 5e-4·(1+|L|), under both
+    objectives.
+  - *Start* (inplane tester). The start converted from u_s at r_s equals s.
+  - *Assignment* (3D table tester, below). With the key on, the recording
+    rule gives u_s whatever the in-plane angle; with it off, today's
+    `materialize_seed_shift` value.
+- **Quadratic step** (Phase 3), in the same tester:
+  - *Guards.* An edge minimum, a non-positive-definite or ill-conditioned H,
+    a step outside the cell, a shift outside the box, and a worse exact
+    value. Each takes the fallback, with a result identical to today's path.
+  - *Accuracy.* Noise-free, over a range of true shifts, the fitted shift
+    lies within 0.2 pixel of L-BFGS-B from the same grid point.
+- **3D table tester.** A new `simple_eul_prob_tab_tester.f90` (the 3D table
+  has none). Phase 2 creates it with the assignment case. It is registered as
+  the sub-suite "3D probability table" after "2D probability table I/O" in
+  `suites_pftc_align2D3D`, and listed in that suite's `suite=` help in the
+  test UI.
+- **Blocked loop** (Phase 4), in the 3D table tester:
+  - *Placement.* The blocked score loop is a module procedure of
+    `simple_eul_prob_tab.f90` over the polar calculator, a block of
+    particles and the references.
+  - *Identity.* With the in-plane sample size forced to 1 (a tiny
+    `prob_athres`), `sample_likelihood_dist` picks the argmin. It still draws
+    one `ran3` number, which cannot change the pick. The blocked and
+    per-particle paths must then emit identical candidate streams, field by
+    field, with exactly `nrefs` candidates per particle, and the stream must
+    read back with `read_tab_to_glob`.
+- **Benchmark files.** `% accounted for` above 90% of the wall time; the load
+  balance printed.
 
 ## 7. Documents
 
-- `doc/policies/3D/refine3D_policy.md`: the pre-step's benchmark files; the
-  particle-side grid stated as an implementation of the same objective; the
-  sub-pixel step if ruled.
-- `.github/skills/simple-main-pftc/SKILL.md`: the pre-shifted particle
-  workspace as part of the memoisation design (text proposed in the report,
-  applied on approval).
-- `doc/implementation_notes/planned/particle_caching_3D.md`: a pointer to
-  this plan replaces its "what the measurement puts first" paragraph on the
-  pre-step.
+- `doc/policies/3D/refine3D_policy.md`: the pre-step's benchmark files; each
+  key while it exists (what it changes, developer key pending promotion).
+- `.github/skills/simple-main-pftc/SKILL.md`: the shifted particle memos as
+  part of the memoisation design, if a particle-frame key is promoted. The
+  text is proposed in the report and applied on approval.
 - On completion this plan moves to `doc/refactoring_notes/completed/` with
   its report.
 
 ## 8. Consequences
 
-- Memory: 3 MB per thread of pre-shifted particle memos; nothing else.
-- The prob-stage iteration on the ribosome chunk: by the counts of section
-  2, the grid change alone is worth a quarter to a third of the pre-step and
-  the sub-pixel step another quarter to a half; the table-loop change is
-  worth something only if Phase 0 shows the loop bandwidth-bound. These are
-  estimates; Phase 0 replaces them with numbers before anything is built.
-- The matcher's discrete search and the 2D paths gain the grid change for
-  free, per particle rather than per reference, so less.
+- **Memory per thread:**
+  - `prob_grid_ptcl`: 3.1 MB of bank;
+  - `prob_grid_fit`: 25 loss vectors (51 KB);
+  - `prob_seed_ptcl`: one 122 KB entry, B with blocking;
+  - blocking: 1.2 MB.
+- **Keys off:** nothing changes but the benchmark files and, after Phase 4,
+  the loop order.
+- **Estimates by the counts of section 2:**
+  - Phase 1 removes a quarter to two fifths of the multi-state refinement.
+  - Phase 2 cuts the single-state table to about a fifth, in the `refine=prob`
+    stages only.
+  - Phase 3 replaces 100 to 300 base kernels per refined reference with about
+    5 on the fitted fraction.
+  - Phase 4 pays only if the loop is bandwidth-bound.
+  - Phase 0 replaces these estimates with numbers.
 
-## 9. Open rulings
+## 9. Rulings
 
-1. After the quadratic fit: L-BFGS-B from the fitted shift, or no
-   continuous refinement in the table fill at all (the matcher refines the
-   assigned candidate).
-2. Per-state seeds for more than one state: the refine3D policy forbids a
-   seed from the particle's previous *state*; a seed estimated per state at
-   the particle's previous projection direction would remove the grid from
-   the multi-state table as the single-state path already does, at one grid
-   per state per particle. This changes the search and is not in the plan
-   until ruled.
-3. The search object's evaluation counters: printed in the benchmark files
-   (this plan) rather than deleted as unused.
-4. Deferred until the global sigma2 refactoring has landed: with one shell
-   weight for all particles, the `ft_ctf2 · ft_ref2` half of the contraction
-   depends on the particle only through its CTF, so for the particles of one
-   micrograph it is one computation per reference; worth about a third of
-   the table's contraction on the ribosome chunk (about four sampled
-   particles per micrograph). Not in this plan.
+All given 14 October 2026.
+
+1. **Dropping the table's continuous refinement: withdrawn.** The refined
+   distances decide state and projection (3.2); the build order of 3.2 takes
+   its place.
+2. **Per-state seeds for more than one state: refused.** The multi-state
+   rule of `refine3D_policy.md` stands, and the multi-state refinement keeps
+   a grid per refined reference.
+3. **The search counters: void.** They have `get_profile` and
+   `reset_profile`, and the benchmark files print them.
+4. **The `ft_ctf2 · ft_ref2` term shared per micrograph: dropped.** With patch
+   CTF (`ctfpatch=yes`, the default), extraction gives every particle its own
+   defocus (`pix2polyvals` in `simple_extract_strategy.f90`), so the term
+   differs per particle.
+5. **The single-state seeded table in the particle frame: accepted, under its
+   own key** (`prob_seed_ptcl`, Phase 2). It is validated, kept or removed
+   independently of `prob_grid_ptcl`.
+6. **Blocking's change of the in-plane draw order: accepted on the default
+   path, without a key**, on the identity test of section 6.
 
 ## 10. Execution
 
-Carried out as an unattended run on the Oracle Linux test machine (arun
-run `prob_search_speedup`) for the code, the tests and the relative
-timings; the ribosome chunk timing on the production server is the
-maintainer's, before Phase 0 closes and after Phase 2. Nothing is committed;
-the maintainer reviews the complete diff. Every phase records itself in
-section 11.
+An unattended arun run, `prob_search_speedup`, on the Dell (Oracle Linux
+8.10, 24 cores). Nothing is committed; the maintainer reviews the complete
+diff. Every phase records itself in section 11. Evidence goes under the
+run's `scratch/`, kept projects and benchmark files under `scratch/keep/`.
 
-Common to every phase:
+**Build.** As recorded in `global_sigma2_only.md` (section 13, Phase 0):
+- GCC 15.2 (gcc-toolset-15), CMake 3.26.5, `OPENBLAS_CORETYPE=Haswell`, and
+  Python 3.12 as `python3` for the gate's checkers;
+- `./compile_debug.sh` (Debug, runs the fast gate);
+- an out-of-tree Release build with tests (`BUILD_TESTS=ON`,
+  `USE_ARCHOPT=ON`, installed in its own tree) for every case;
+- every case sets `SIMPLE_PATH` to the Release build and puts its `bin` and
+  `scripts` first on `PATH`.
 
-- **Data.** Beta-galactosidase (5,513 particles, box 256 at 1.275 Å per
-  pixel, `mskdiam=180 pgrp=d2`, 50 selected class averages), copied fresh
-  for every run; the originals are never written.
-- **Execution settings.** `nparts=4 nthr=6` distributed, identical in every
-  phase; timed runs on an out-of-tree Release build with tests built,
-  nothing else heavy running.
-- **Cases.**
-  - **S.** `solve3D_cavgs`, single state; kept as the common start.
-  - **P1.** `solve3D nsample=2500 cavg_ini_ext=yes` from S, single state:
-    the seed path.
-  - **P3.** The same with `nstates=3`: the multi-state table, the case of
-    the ribosome run.
-  - **T.** One `prob_tab` part of a P3 prob-stage iteration, rerun alone on
-    the same particles at `nthr` 1, 2, 4, 8 and 16 (the saved project and
-    reprojection model of that iteration; `part=1`).
-  - **W.** The simulated workflow tests with the Euclidean objective, for
-    the ground-truth errors.
-- **Acceptance of a repeated case.** As the test protocol: P1 and P3 by the
-  final FSC 0.143 resolution of every state within the larger of the Phase 0
-  spread and 3%; W by orientation and shift errors within the Phase 0
-  values plus the same margin.
-- **Gates.** The fast gate (`./compile_debug.sh`), the CTest unit suites of
-  the touched areas, and the registry check whenever tests change.
+**Data.** Every case starts from a fresh copy, named `bgal.simple`, of
+`/data2/bgal_addon/control/bgal_addon.simple` (beta-galactosidase after 2D
+classification: 5,513 particles, box 256 at 1.275 Å per pixel, 50 selected
+class averages), or from a project kept in `scratch/keep/`. The originals
+are never written. `scratch/run_case.sh <case>` holds the exact command
+lines and prepares each run directory, as in that run.
+
+**Cases.** Distributed runs use `nparts=4 nthr=6`. Cases run one at a time on
+the otherwise idle machine.
+
+| Case | Starts from | Command line | Exercises |
+| --- | --- | --- | --- |
+| S1 | the control project | `simple_exec prg=solve3D_cavgs projfile=bgal.simple mskdiam=180 pgrp=d2 nparts=4 nthr=6` | the start of P1 |
+| S3 | the control project | S1's line with `nstates=3` | the start of P3 (`cavg_ini_ext` with `nstates=3` needs particles carrying three states, so P3 cannot start from S1) |
+| P1 | S1's final project | `simple_exec prg=solve3D projfile=bgal.simple mskdiam=180 pgrp=d2 nsample=2500 cavg_ini_ext=yes nparts=4 nthr=6` | stages 4–8; the single-state table in stages 4–5 (`refine=prob`), `prob_neigh` in 6–8 |
+| P3 | S3's final project | P1's line with `nstates=3` | stages 4–5, both `refine=prob`: the multi-state table and refinement |
+| T | a copy of P3's final project | `simple_exec prg=refine3D projfile=bgal.simple vol1=… vol2=… vol3=… mskdiam=180 pgrp=d2 nstates=3 refine=prob objfun=euclid update_frac=0.2 maxits=1 box_crop=… lp=… trs=… nspace=… nthr=N mkdir=no`, shared memory, N = 1, 2, 4, 8, 16 | the table fill's thread scaling |
+| W | | `simulated_workflow_1jxy`, `simulated_workflow_6vxx`, `solve3D_addon`, each alone: `ctest -R '^<name>$' -V` in the Release build directory | ground-truth errors of single-state `solve3D` |
+
+- **S3.** If S3 leaves a state empty, P3 cannot start (`cavg_ini_ext` needs
+  every state populated). Rerun S3 once with `reseed_states=yes` and record
+  it; if a state is still empty, stop.
+- **T.** T takes `vol1` to `vol3` from P3's final state volumes. It takes
+  `box_crop`, `lp` and `trs` from P3's last stage, which its
+  `solve3D_manifest.txt` records (crop, low-pass, shift limit), and that
+  stage's `nspace` from `simple_solve3D_controller.f90`. It runs in shared
+  memory because `prob_align` without `nparts` fills the table in process,
+  so `PROB_TAB_BENCH` holds the whole fill. `mkdir=no` runs it in place on
+  the copy.
+- **W.** W's three entries run single-state `solve3D`, so they reach only
+  Phase 2's key, and Phase 4's loop with it. Phase 0 confirms from their logs
+  that they reach `refine=prob`. If Phase 0 finds a high-level entry that
+  runs the multi-state table, it is recorded and run in Phases 1 and 3 under
+  W's rule. Otherwise those phases are judged on P3 alone, and the report
+  says so.
+
+**Measures per case.** Record the command line, the wall time, the final FSC
+0.143 resolution per state, and the peak memory. From the benchmark files,
+per prob-stage iteration, record:
+- the fill region's wall time;
+- the thread-seconds of seed, score loop and refinement;
+- the load balance, E, the alternations and the grid evaluations;
+- with a key on, the fits and fallbacks.
+
+**Acceptance of a repeated case.** A case's Phase 0 value is the mean of its
+two Phase 0 runs, and its spread is their difference. W runs once, so its
+Phase 0 value is that run.
+- P1 and P3: the final FSC 0.143 resolution of every state is no worse than
+  its Phase 0 value by more than the larger of the spread and 3%.
+- W: `simulated_workflow_1jxy` and `simulated_workflow_6vxx` pass, with
+  whole-volume correlation against the truth ≥ 0.97 × Phase 0's and truth
+  FSC 0.143 resolution ≤ 1.03 × Phase 0's.
+  - `solve3D_addon` is recorded, not judged: its pose-error excess varies by
+    about 1° between runs of one build (`global_sigma2_only.md`, section 13).
+  - A W entry that fails on the base build is recorded and left out, not a
+    stop.
+- Control runs and key-off runs are recorded and must meet acceptance; they
+  are not judged for speed.
+
+**Faster.** A change counts as faster when all of these hold:
+- its target measure is below the Phase 0 value by more than the Phase 0
+  spread;
+- that drop is at least 5%;
+- the case's wall time is not longer than the longer Phase 0 run.
+
+A target measure is thread-seconds summed over the parts, averaged per
+iteration within each `refine=prob` stage, and summed over those stages
+with Phase 0's iteration counts as weights. That way a run that stops
+earlier or later does not count as faster or slower.
+
+The targets:
+- Phases 1 and 3: P3's refinement thread-seconds.
+- Phase 2: P1's score-loop thread-seconds.
+- Phase 4: P3's score-loop thread-seconds.
+
+**A rejected change.** A change that fails acceptance or is not faster is
+not kept:
+1. the phase saves it with `git diff` (read-only) as
+   `scratch/keep/phase_<N>_rejected.diff`;
+2. it reverts the change and its key with
+   `patch -R -p1 < scratch/keep/phase_<N>_rejected.diff`, since git commands
+   that write are refused;
+3. it records the numbers and the reason in section 11;
+4. the run continues with the next phase.
+
+A phase that comes later and needs code from a rejected phase (the shifted
+memo builder) writes that code itself.
+
+**Stop and write a stop report** when:
+- the base build, the fast gate, or S1, S3, P1, P3 or T fails on unchanged
+  code;
+- an identity test fails for a reason other than a bug in the new code
+  (never loosen its tolerance);
+- a change needs a file outside the file table;
+- a case cannot run as written.
+
+**Gates** in every phase that changes source:
+- `./compile_debug.sh` (the Debug build and the fast gate, every unit suite);
+- the Release build;
+- `python3 scripts/check_test_registry.py .` whenever tests or their
+  registration change.
+
+**Not in this run:**
+- the neighbourhood table and the product form;
+- the generated indexes under `doc/code_overview/`;
+- the skill file (its text goes into the report);
+- the ribosome timing on the production server, which is the maintainer's;
+- promoting or removing a kept key, which is the maintainer's after review.
 
 ### 10.1 Phase 0: benchmark files, baseline, thread scaling
 
-1. Build the tree as it is (debug with the fast gate, Release for timing).
-2. The benchmark files of 3.4, the only source change of this phase, in
-   SIMPLE's benchmark conventions (`L_BENCH_GLOB`, `tic`/`toc`, no new test
-   arrays).
-3. P1 and P3 twice each (the spread), W once; record per case the command
-   line, the wall time, the final resolutions, and from the new files the
-   score-loop and refinement times, E, the alternations and the grid
-   evaluations per prob-stage iteration.
-4. T at the five thread counts; record the score-loop and refinement time
-   at each.
+1. Find how SIMPLE builds on the Dell; build the base, Debug with the fast
+   gate and Release.
+2. Write the benchmark files of 3.4 and the alternation counter, the only
+   source changes of this phase. Use SIMPLE's conventions (`L_BENCH_GLOB`;
+   `tic`/`toc` outside parallel regions only). Rebuild both.
+3. Run S1 and S3 once each and keep them; P1 and P3 twice each (the spread);
+   each W entry once; T at the five thread counts.
+4. Record in section 11:
+   - the measures of every case;
+   - the score loop's efficiency at 16 threads in T (its thread-seconds at 1
+     thread divided by those at 16);
+   - P1's score-loop thread-seconds per reference;
+   - which W entries reach `refine=prob`, and with how many states.
 
-Exit: the files appear with `% accounted for` above 90%; the split and the
-scaling are in section 11 with the decision for Phase 3 (compute- or
-bandwidth-bound) written down.
+Exit:
+- the builds and the fast gate pass;
+- the benchmark files appear in every prob-stage iteration with `% accounted
+  for` above 90%;
+- every case is recorded;
+- S1, S3 and P3's final project are kept.
 
-### 10.2 Phase 1: the particle-side grid
+### 10.2 Phase 1: particle-frame grid (`prob_grid_ptcl`)
 
-3.1 in the search object and the polar calculator; the tester case of
-section 6. P3 repeated: the acceptance holds and the refinement time is
-compared with Phase 0. P1 and the matcher's cases are not expected to
-change beyond the spread; P1 repeated once to confirm.
+Source:
+- the key (section 5);
+- the shifted memo storage, builder and kernel variants;
+- the grid option and the converted start (3.1(a));
+- the tests of section 6.
 
-Exit: the equality test passes; P3's before-and-after is in section 11.
+Runs:
+- P3 twice with `prob_grid_ptcl=yes` and every other key off (with W's
+  multi-state entry, if Phase 0 found one);
+- P3 once with every key off;
+- P1 once as a control, unchanged by construction.
 
-### 10.3 Phase 2: the sub-pixel step
+Exit: the gates; the identity, clamping, recovery and option-off tests pass;
+acceptance holds; the change is faster. Otherwise it is rejected.
 
-After ruling 1. 3.2 in the search object; the tester case and the
-validation of section 6 (W, then P3 and P1). Kept only if the acceptance
-holds.
+### 10.3 Phase 2: particle-frame seed (`prob_seed_ptcl`)
 
-Exit: W within acceptance; P3 and P1 within acceptance; the
-before-and-after in section 11.
+Source:
+- the key;
+- the one-entry bank on the shifted memo builder (3.1(b));
+- the converted refinement start;
+- the recording of u_s in `ref_assign`;
+- the tests of section 6, including the new 3D table tester and its
+  registration.
 
-### 10.4 Phase 3: the table loop
+Runs, with `prob_seed_ptcl=yes` and every other key off: P1 twice and W
+once. Then P1 once with every key off. P3 once as a control.
 
-If Phase 0 showed the loop bandwidth-bound, or if after Phase 2 the score
-loop is the larger part: blocking in `fill_tab_range`, B chosen from T at
-8, 16 and 32; the test of section 6. The product form only if blocking
-leaves the table the larger part, as its own entry.
+Exit: the gates; the seed tests pass; acceptance holds; the change is faster.
+Otherwise it is rejected.
 
-Exit: the test passes; T and P3 before-and-after in section 11.
+### 10.4 Phase 3: quadratic step (`prob_grid_fit`)
 
-### 10.5 Phase 4: documents and close
+Source:
+- the key;
+- steps 1 to 6, the fallback and the counters (3.2);
+- the tests of section 6.
 
-The documents of section 7 except the skill file and the generated indexes;
-P1 and P3 once more on the final build; the plan moved to
-`doc/refactoring_notes/completed/` with the report beside it, which reads on
-its own: what changed and why, the evidence against Phase 0 in tables, every
-decision taken and where it is recorded, the proposed skill text, what is
-left open.
+Runs:
+- P3 twice with `prob_grid_fit=yes` and every other key off (with W's
+  multi-state entry, if Phase 0 found one). These are the runs that judge the
+  step.
+- If Phase 1 kept its key: P3 once with both keys on. This checks that the
+  two combine and is not judged.
+- Record the fallback fractions per reason.
+
+If the fit alone fails the case acceptance, build the second form of 3.2
+and run the same cases. If that fails too, the step is rejected.
+
+Exit: the gates; the guard and accuracy tests pass; acceptance holds; the
+change is faster. Otherwise it is rejected.
+
+### 10.5 Phase 4: blocked table loop (conditional)
+
+Phase 4 runs only if either holds:
+- Phase 0's efficiency at 16 threads is below 0.75;
+- after Phase 3, P3's score-loop thread-seconds exceed its refinement
+  thread-seconds. Use P3's last run with every kept key on, or Phase 0's runs
+  if none was kept.
+
+Otherwise it is skipped, with the reason in section 11.
+
+Source:
+- block-local storage and the blocked loop in `fill_tab_range`, for the
+  scope of 3.3, with B a module parameter;
+- if Phase 2 kept its key, seed storage for B entries;
+- the blocked-loop case in the 3D table tester (section 6).
+
+Runs:
+- T at 16 threads with B = 8, 16 and 32, every key off; choose the fastest B.
+- P3 twice with every key off.
+- If Phase 2 kept its key: P1 and W once with `prob_seed_ptcl=yes`.
+
+Exit: the gates; the stream-identity test passes; acceptance holds; the
+change is faster. Otherwise it is rejected.
+
+### 10.6 Phase 5: documents and close
+
+1. Write the documents of section 7, except the skill file.
+2. Run P1 and P3 once more on the final build: once with every kept key on,
+   once with every key off. These runs are recorded and must meet
+   acceptance.
+3. Write the report, `doc/refactoring_notes/completed/prob_search_speedup_report.md`.
+   It reads on its own and covers:
+   - what changed and why;
+   - the evidence against Phase 0, in tables;
+   - every decision and where it is recorded;
+   - the rejected changes and their saved diffs;
+   - the proposed skill text;
+   - what is left open.
+4. Move this plan beside the report.
 
 ### File table
 
 | File | Change | Phases |
 | --- | --- | --- |
-| `src/main/commanders/simple/simple_commanders_prob.f90` | Benchmark files of `exec_prob_tab` and `exec_prob_align`. | 0 |
+| `src/main/commanders/simple/simple_commanders_prob.f90` | Benchmark files of `exec_prob_tab` and `exec_prob_align`; wall timers outside the parallel regions (0); the fit, fallback and block lines (1, 3, 4). | 0 1 3 4 |
 | `src/defs/simple_refine3D_fnames.f90` | `prob_tab_bench_fname`, `prob_align_bench_fname`. | 0 |
-| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | Per-thread timers and counters in `fill_tab_range` with getters; blocked loop order. | 0 3 |
-| `src/main/pftc/simple_pftc_shsrch_grad.f90` | Counter getters; pre-shifted particle workspace on `set_indices`; grid on the particle side; the quadratic step. | 0 1 2 |
-| `src/main/pftc/simple_polarft_calc.f90`, `simple_polarft_memo.f90`, `simple_polarft_corr.f90` | Per-thread pre-shifted particle memos; the evaluation variants taking a particle memo (Euclid and CC); a blocked table kernel if the product form is built. | 1 3 |
-| `src/main/pftc/simple_pftc_inplane_tester.f90` | The equality and sub-pixel cases. | 1 2 |
-| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | Nothing unless the blocked loop needs a block-wise candidate record. | 3 |
-| `doc/policies/3D/refine3D_policy.md`, `doc/implementation_notes/planned/particle_caching_3D.md` | Section 7. | 4 |
-| `doc/refactoring_notes/completed/prob_search_speedup.md`, `prob_search_speedup_report.md` | The plan moved on completion, and the report. | 4 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | Thread-seconds and counters (0); the grid option and the step under their keys, multi-state only (1, 3); the seed in the particle frame, including u_s in `ref_assign` (2); the blocked loop with block-local storage (4). | 0 1 2 3 4 |
+| `src/main/pftc/simple_pftc_shsrch_grad.f90` | Alternation counter (0); the grid option, its bank and the converted start (1); the quadratic step, its guards, fallback and counters (3). | 0 1 3 |
+| `src/main/pftc/simple_polarft_calc.f90`, `simple_polarft_core.f90`, `simple_polarft_memo.f90`, `simple_polarft_corr.f90`, `simple_polarft_geom.f90` | Per-thread storage and builder of shifted particle memos; the kernel variants taking such a memo (Euclid and CC); seed storage for B entries (4). | 1 2 4 |
+| `src/main/params/simple_parameters.f90`, `simple_parameters_parse.f90` | `prob_grid_ptcl`, `prob_seed_ptcl`, `prob_grid_fit`. | 1 2 3 |
+| `src/main/ui/simple/simple_ui_refine3D.f90`, `simple_ui_solve3D.f90` | Developer entries for the keys. | 1 2 3 |
+| `src/main/pftc/simple_pftc_inplane_tester.f90` | The grid, seed, guard and accuracy cases. | 1 2 3 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_tester.f90` (new) | The assignment case (2); the blocked-loop stream case (4). | 2 4 |
+| `src/main/commanders/test/simple_commanders_test_class.f90` | "3D probability table" in `suites_pftc_align2D3D`. | 2 4 |
+| `src/main/ui/simple_test/simple_test_ui_class.f90` | The new sub-suite in the `suite=` help of `unit_pftc_align2D3D`. | 2 4 |
+| `doc/policies/3D/refine3D_policy.md` | Section 7. | 1 2 3 5 |
+| `doc/refactoring_notes/completed/prob_search_speedup.md`, `prob_search_speedup_report.md` | The plan moved on completion, and the report. | 5 |
 
 ## 11. Progress
 
-No phase has run yet.
+No phase has run. Verified against the code on 14 October 2026:
+- no `prob_tab_bench` or `prob_align_bench` names exist;
+- `coarse_search_opt_angle` still shifts the reference through
+  `gen_objfun_vals` (the fixed-angle `coarse_search` uses
+  `gen_corr_for_rot_8`);
+- the search counters have `get_profile` and `reset_profile`, with no
+  caller;
+- `rt_prob` is the pre-step's only timing;
+- solve3D's stage controller runs `refine=prob` in stages 3–5.
 
 ## 12. Code map
 
+After the global sigma2 commit `2307ea96f`, the kernels' shell weight is
+`sigma2_wk(k,ih)` / `sigma2_wk8(k,ih)`, two global spectra formed by
+`memoize_sigma2_weights`. `ft_ctf2 · ft_ref2` appears in
+`gen_raw_euclid_vals_impl`, `gen_euclid_crvec` and
+`gen_raw_euclid_grad_at_angle`.
+
 | Area | Files |
 | --- | --- |
-| Pre-step orchestration | `src/main/strategies/parallelization/simple_refine3D_strategy.f90` (`distr_execute_iteration`, `rt_prob`), `src/main/commanders/simple/simple_commanders_prob.f90` (`exec_prob_align`, `exec_prob_tab`) |
-| The table | `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` (`fill_tab_range`, `refine_best_refs`, `ref_assign`), `simple_eul_prob_tab_utils.f90` (`sample_likelihood_dist`, `calc_num2sample`) |
-| The shift search | `src/main/pftc/simple_pftc_shsrch_grad.f90` (`grad_shsrch_minimize`, `coarse_search_opt_angle`, `coarse_search`, the counters) |
-| The kernels | `src/main/pftc/simple_polarft_corr.f90` (`gen_raw_euclid_vals_impl`, `gen_corrs`, `gen_prob_likelihood_euclid_val`, `gen_euclid_grad_for_rot_8`), `simple_polarft_memo.f90` (`memoize_refs`, `memoize_ptcls`) |
-| Other grid users | `src/main/strategies/search/simple_strategy3D_srch.f90`, `simple_strategy2D_srch.f90`, `probabilistic/simple_eul_prob_tab2D.f90`, `simple_eul_prob_tab_neigh.f90` |
+| Pre-step orchestration | `src/main/strategies/parallelization/simple_refine3D_strategy.f90` (`rt_prob`), `src/main/commanders/simple/simple_commanders_prob.f90` (`exec_prob_align`, `exec_prob_tab`) |
+| Stage modes | `src/main/solve/simple_solve3D_controller.f90` (`set_refine3D_mode_policy`) |
+| The table | `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` (`fill_tab_range`, `estimate_shift_seed`, `refine_best_refs`, `ref_assign`, `read_tab_to_glob`), `simple_eul_prob_tab_utils.f90` (`sample_likelihood_dist`, `calc_num2sample`, `prob_candidate_buffer`, `materialize_seed_shift`) |
+| The assignment's consumer | `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90` (`srch_prob`) |
+| The shift search | `src/main/pftc/simple_pftc_shsrch_grad.f90` (`grad_shsrch_minimize` and its `sh_rot` conversion, `coarse_search_opt_angle`, `get_profile`) |
+| The kernels | `src/main/pftc/simple_polarft_corr.f90` (`gen_raw_euclid_vals_impl`, `gen_euclid_crvec`, `gen_corrs`, `gen_prob_likelihood_euclid_val`, `gen_prob_likelihood_cc_val`), `simple_polarft_geom.f90` (`gen_shmat4aln_8`), `simple_polarft_memo.f90` (`memoize_ptcls`, `memoize_refs`) |
+| Test registration | `src/main/commanders/test/simple_commanders_test_class.f90` (`suites_pftc_align2D3D`), `src/main/ui/simple_test/simple_test_ui_class.f90`, `scripts/check_test_registry.py` |
+| Precedents | `prob_athres_taper` (commit `cfbc56bf3`) for a key; `doc/refactoring_notes/completed/global_sigma2_only.md` section 13 for the Dell build, data and command lines |
+
+## 13. Review of 14 October 2026
+
+The review found six problems in the first version. Each was checked against
+the code and accepted.
+
+| Finding | Resolution |
+| --- | --- |
+| The particle-side grid is not exact across rotations (the reference is shifted in its own frame before the FFT over rotations). | 3.1: a different grid behind a key, with a pointwise identity test and validation. |
+| The matcher cannot replace the table's refinement (`ref_assign` uses the refined distances; `srch_prob` treats the assignment as given). | 3.2 makes the refinement cheaper; the option to drop it is withdrawn. |
+| Blocking breaks `append_or_replace` and the reader's `nrefs` check. | 3.3: block-local dense storage and particle-major emission. |
+| The benchmark mixed thread-seconds with wall time. | 3.4: wall entries outside parallel regions; thread-seconds apart. |
+| The quadratic fit had no guards. | 3.2: six steps with a defined fallback, each tested. |
+| Approximate changes need default-off keys. | One key per change (section 5). |
+
+Found in the same re-check:
+- the counters already have getters;
+- the single-state table pays a shifted reference per pair (section 2,
+  Phase 2);
+- under patch CTF, ruling 4's premise fails;
+- the multi-state neighbourhood table also grids per refined reference (out
+  of scope).

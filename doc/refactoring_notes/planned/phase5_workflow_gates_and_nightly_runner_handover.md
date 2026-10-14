@@ -7,6 +7,11 @@ is closed or its remaining requirements are explicitly deferred by the owners.
 This is the single living Phase 5 record, replacing the September handover's
 implementation to-do list. Source audit baseline: `43808e946`.
 
+Updated 14 October 2026: registry manifest (38 entries), the `lib_stream`
+timeout, the new high-level entries and the chain-test fixture history are
+re-read against `production/CMakeLists.txt` and the history below. No new run
+evidence was attached; the 2026-10-08 observations are unchanged.
+
 The original contract is in
 [the completed test-environment plan](../completed/uniform_test_environment_refactoring.md),
 sections 5.2.2, 5.2.3 and 12. Day-to-day rules live in
@@ -19,7 +24,8 @@ workflow has passed on every platform.
 ## Current test manifest
 
 `simple_test_exec` remains the only test executable. The authoritative registry
-is `production/CMakeLists.txt`: **34 baseline entries**, with additional
+is `production/CMakeLists.txt`: **38 baseline entries** (`SIMPLE_CTEST_BUDGET`:
+15 fast, 5 library, 17 highlevel, 1 platform), with additional
 capability-gated coarray and OpenMP-offload entries. Working directories are
 `build/test_runs/<entry>`; registered environments include explicit thread
 counts, and `simple_test_exec` fixes `SIMPLE_SEED=20260923` for its process.
@@ -28,14 +34,18 @@ counts, and `simple_test_exec` fixes `SIMPLE_SEED=20260923` for its process.
 |---|---|---|
 | `fast` | 15 `unit_<area>` suites | Every normal compile script, before installation |
 | `library` | `lib_reconstruction`, `lib_cart_align3D`, `lib_heterogeneity`, `lib_single`, `lib_stream` | Scheduled CI and explicit runs |
-| `highlevel` | 13 entries listed below | Scheduled CI explicitly selects this label; excluded from the build gate |
+| `highlevel` | 17 entries listed below | Scheduled CI explicitly selects this label; excluded from the build gate |
 | `platform` | `forked_process`; capability-gated `coarrays`, `openmp_offload` | Scheduled CI selects registered platform tests |
 
 The high-level entries are `mini_stream_6vxx`, `mini_stream_1jxy`,
 `simulated_workflow_6vxx`, `simulated_workflow_1jxy`, `single_workflow_fcc`,
 `single_workflow_wurtzite`, `pcg_recon`, `simulate_particles`, `solve3D_addon`,
-`cont_refine3D_1jxy`, `single_atoms_stats`, `stream_preproc`, and `flex_pca_blobs`.
-The old `workflow` label and single combined `single_workflow` registration
+`cont_refine3D_1jxy`, `single_atoms_stats`, `single_atoms_stats_cdsew`,
+`single_atoms_stats_cdsez`, `single_atoms_stats_cdser`, `species_discovery`,
+`stream_preproc`, and `flex_pca_blobs`. The three CdSe entries run the
+`single_atoms_stats` test on the wurtzite, zincblende and rocksalt lattices;
+`species_discovery` judges `detect_atoms` species discovery on Pt, Pt/Ni and
+Pt/Al particles against their generating models. The old `workflow` label and single combined `single_workflow` registration
 are superseded. New entries still require a justified process-budget change;
 new checks should normally extend existing suites.
 
@@ -43,8 +53,10 @@ The executable fast-gate budget is now **60 seconds for the whole run**, not
 60 seconds per test or a required duration. Failed assertions still fail the
 build. The change is limited to `scripts/run_fast_gate.sh` and the default in
 `scripts/ctest_budget.py` (`43808e946`); older comments elsewhere may still say
-30 seconds. Individual CTest timeouts are separate limits. `lib_stream` now
-has 3600 seconds and `flex_pca_blobs` 7200 seconds.
+30 seconds (for example the `production/CMakeLists.txt` header comment).
+Individual CTest timeouts are separate limits. `lib_stream` now has
+7200 seconds (raised from 3600 on 2026-10-13, `0235f5a03`, which also made the
+entry `RUN_SERIAL`) and `flex_pca_blobs` 7200 seconds.
 
 ## Part A: implementation and remaining coverage
 
@@ -57,7 +69,8 @@ has 3600 seconds and `flex_pca_blobs` 7200 seconds.
 | Mini-stream | `simple_commanders_test_highlevel_stream.f90` now provides generated-data 6VXX/1JXY suites with quantitative checks | The original statement that mini-stream is only a manual user-data program no longer describes these registered suites |
 | Particle simulation | The same high-level stream submodule checks stack dimensions, counts, sampling, finite nonconstant density, orientation records, CTF metadata and shift bounds | Bounds and nonzero variance are not an independent measurement of requested SNR or proof of exact applied CTF/orientation identity |
 | PCG reconstruction | The staged fixed-seed operator gate remains a `highlevel` entry in `simple_commanders_test_highlevel_pcg.f90` | Retain it there until measured runtime and any proposed reclassification are reviewed |
-| Add-on, continuous refinement and FLEX | Dedicated high-level gates exercise truth comparisons and application paths; their implementations use `simple_test_gate` and write `metrics.tsv` | Full current runs and archived metrics remain part of nightly sign-off |
+| Add-on, continuous refinement and FLEX | Dedicated high-level gates exercise truth comparisons and application paths; their implementations use `simple_test_gate` and write `metrics.tsv` | Full current runs and archived metrics remain part of nightly sign-off. Since the 2026-10-08 audit the production `solve3D_addon` policy changed (`961ddfe7f`, 2026-10-10: one `refine=prob` pass for cohort initialization, re-execution of only the frozen last stage); `flex_pca_blobs` gained a class-average state-refinement phase (`cls_expansion`, then `refine3D_states_cavgs`), and `cls_expansion` itself was changed on 2026-10-12/13 (`c8662fb2a`, `8e727d8ae`). These gates have not been re-run on record since |
+| Nanoparticle species and lattices | `species_discovery` and `single_atoms_stats` on Pt plus CdSe wurtzite, zincblende and rocksalt are registered high-level entries (above) | No run evidence is attached for any of these entries |
 
 `simple_test_gate.f90` defines the machine-readable columns
 `name`, `value`, `floor`, `pass`, with finite-value checking and accumulated
@@ -79,7 +92,7 @@ suite has passed after every commit. The earlier shared-truth work
 | Deterministic atomic density convolution | `931264408` | Removes an OpenMP source of simulation variability |
 | Command vocabulary migration | `5b8ad9f06` | Current workflows use `solve2D`, `solve3D`, `refine2D`; historical names are not supported aliases |
 | Sparse 2D assignment correction | `9145b617e` | Selects the best frontier for top-1 assignment |
-| Stream chain fixture stabilization | `c03b029fc`, `75cba3c19` | Repairs multistate sieve-to-3D and movies-to-3D fixtures |
+| Stream chain fixture stabilization | `c03b029fc`, `75cba3c19`, `eed4f9609` | Repairs multistate sieve-to-3D and movies-to-3D fixtures; `eed4f9609` (2026-10-13) lets the chain test run stage 4 after class-average initialization. A passing chain run is not recorded here |
 | Sieve cleanup correction | `97984a77b` | Preserves registered class averages needed downstream |
 | Empty-state reconstruction lifecycle | `ed3cb0e41`, `e1577a335`, `bd78813fd` | Retains required volumes, removes stale final artifacts and avoids postprocessing empty states |
 | Add-on gate and stream cohort rules | `adfbd36cf`, `85afad3f5`, `90bc27f32` | Aligns class balancing, first ingestion and add-on cohort limits with production behavior |
@@ -87,7 +100,7 @@ suite has passed after every commit. The earlier shared-truth work
 | Motion model migration | `3666eb7fc` | Consolidates motion metadata and adds motion-model unit coverage; extensive workflow compatibility still needs run evidence |
 | Continuous-pose aftermath fixes | `bb67eb88d` | Repairs refinement/convergence behavior and updates quantitative tester coverage; details are in the completed pose-cont aftermath note |
 | FLEX integration and Linux compatibility | `b744c4a9c`, `457e33c3c` | Integrates fractional state weights/per-state estimation and fixes Linux compilation issues in the PCG fit path |
-| Extensive-tier timeouts | `1aaa42ba4`, `92d684c6f` | Gives progressing stream/FLEX workflows appropriate time without changing their assertions |
+| Extensive-tier timeouts | `1aaa42ba4`, `92d684c6f`, `0235f5a03` | Gives progressing stream/FLEX workflows appropriate time without changing their assertions; `0235f5a03` (2026-10-13) raises `lib_stream` to 7200 s |
 | Fast-gate portability | `43808e946` | Raises the aggregate time ceiling to 60 seconds for cross-system runtime variation |
 
 The old blanket claims that `lib_single` and stream tests cannot fail are
@@ -206,8 +219,13 @@ in-progress runs need their final verdict added before sign-off.
 This closes the absence of any recorded cross-platform build evidence in the
 old handover. It does not close the full extensive-tier run requirement. The
 source contains scheduled automation rather than a dedicated
-`scripts/nightly_run.sh`; acceptance of Actions as the replacement operational
-contract should be explicit.
+`scripts/nightly_run.sh` (no such script exists in `scripts/`, 2026-10-14).
+`.github/workflows/ci_build.yml` and `.github/workflows/ci_test.yml` exist
+(the latter runs `ctest -L platform`, `-L library` and `-L highlevel`).
+**Open decision:** whether these workflows replace the dedicated-machine
+`nightly_run.sh` contract of the original plan, or whether that runner is still
+to be built. Acceptance of Actions as the replacement operational contract
+should be explicit.
 
 ### Original runner contract: remaining differences
 
@@ -264,7 +282,7 @@ complements, but does not replace, generated-data nightly validation.
 
 ## Closeout checklist before moving to completed
 
-- [x] Replace the stale 25-entry/13-fast manifest with the current 34-entry registry.
+- [x] Replace the stale 25-entry/13-fast manifest with the current registry (38 baseline entries as of 2026-10-14).
 - [x] Record implemented map-truth, stream-preprocessing, SINGLE pose and newer application gates.
 - [x] Record scheduled CI, this week's defect fixes and verified x3 build/fast-gate results.
 - [ ] Attach a complete current Linux/macOS nightly run, commit, per-entry verdicts and runtimes; explicitly identify unsupported platform cases.

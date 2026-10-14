@@ -9,7 +9,7 @@ proposal R6) and step B of `stream_refactor.md`.
 
 ## Status
 
-Step 1 is implemented (6 October 2026), not yet compiled:
+Step 1 is implemented (6 October 2026):
 - `simple_stream_pool2D` holds `stream_pool2D`; `simple_stream2D_state` is deleted;
   `solve2D_chunks` owns its chunk state; p06 holds the pool.
 - `simple_stream_pool2D_tester` runs within the "pool 2D" sub-suite (called from p06's tester),
@@ -21,7 +21,7 @@ Step 1 is implemented (6 October 2026), not yet compiled:
   - p06's `cline` stays, since it starts the pool;
   - `get_mask` is a query added for the mask test.
 
-Step 2 is implemented (6 October 2026), not yet compiled:
+Step 2 is implemented (6 October 2026):
 - `stats()` returns `stream_pool2D_stats`, which p06's `send_status` and `send_pool_cavgs` read;
   the single getters are gone.
 - The append is the pool's; `project_ptr` and p06's `target` are gone.
@@ -38,6 +38,16 @@ Step 2 is implemented (6 October 2026), not yet compiled:
   - `draw_new_classes` moved to `simple_stream_refine2D_utils` (stateless), and `stats` carries
     the mask, which replaces step 1's `get_mask`;
   - the history ring and `stats` after an iteration need a queue, so they have no unit test.
+
+Closed 14 October 2026. Both steps are in the code as described, and later stream commits (7 to 13
+October, among them the pool fix `bfe4bc835` and the first-set triggers `d9286a57a`) build on the
+type. Re-checked against the code: `simple_stream_pool2D_utils` and `simple_stream2D_state` are
+deleted, p06 holds `allocatable :: pool`, `master_cline` is gone, and the pool sub-suite is
+registered in `unit_stream`. Two things are not recorded anywhere as done: the one-off check of
+`solve2D_chunks` on a small project that step 1 asked for (no tester references `solve2D_chunk`),
+and a passing `unit_stream` run. The history ring, `stats()` after an iteration and a publication
+from a synthetic project need a queue and have no unit test; `pool2D_policy.md` section 11 records
+that.
 
 ## Decisions
 
