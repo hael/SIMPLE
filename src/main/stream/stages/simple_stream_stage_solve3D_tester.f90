@@ -42,12 +42,13 @@ use simple_stream_stage_solve3D,                   only: stream_stage_solve3D, P
                                                            &JOB_ASSIGN, ROUTE_TRIES
 implicit none
 private
-public :: run_all_stream_stage_solve3D_tests
+public :: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_solve3D.simple'
 character(len=*), parameter :: UPSTREAM      = 'pool2D' ! the pool 2D stage directory (dir_target)
 integer,          parameter :: NSTATES       = 3
 integer,          parameter :: VOL_BOX       = 16
+integer,          parameter :: DOCK_BOX      = 64   ! the docking's smallest box (dock_vols)
 real,             parameter :: VOL_SMPD      = 2.0
 
 contains
@@ -76,6 +77,102 @@ contains
         call test_iterate_waits()
         call test_finished()
     end subroutine run_all_stream_stage_solve3D_tests
+
+    !> the library tests: what takes the docking's time
+    subroutine run_all_stream_stage_solve3D_lib_tests()
+        write(*,'(A)') '**** running all stream solve 3D stage library tests ****'
+        call test_reference_docking()
+    end subroutine run_all_stream_stage_solve3D_lib_tests
+
+    !> the states of an attempt compared after docking, in both hands (at the docking's smallest
+    !! box): two different structures are distinct; a structure and a rotated, mirrored copy of it,
+    !! as an independently refined state in another frame and hand would be, are near-duplicates
+    subroutine test_reference_docking()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: res
+        type(string)     :: cwd_saved, root
+        real, parameter  :: TRIPOD(3,3)     = reshape([12., 0., 0.,  -12., 4., 0.,  0., -6., 10.], [3,3])
+        real, parameter  :: TRIPOD_AMPS(3)  = [1.0, 0.6, 0.8], TRIPOD_SIGS(3) = [4.0, 2.5, 3.0]
+        real, parameter  :: CHAIN(3,4)      = reshape([-18., 0., 0.,  -6., 0., 0.,  6., 0., 0.,  18., 0., 0.], [3,4])
+        real, parameter  :: CHAIN_AMPS(4)   = 1., CHAIN_SIGS(4) = 3.
+        real    :: tripod_copy(3,3)
+        integer :: nfail0, i
+        allocate(stage)
+        write(*,'(A)') 'test_reference_docking'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_reference_docking', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        stage%l_dock_refs = .true.
+        ! two different structures: a tripod and a chain of four blobs
+        call make_docking_result(res, TRIPOD, TRIPOD_AMPS, TRIPOD_SIGS, CHAIN, CHAIN_AMPS, CHAIN_SIGS)
+        call assert_true(stage%register_attempt(res, 1), 'two different structures are distinct states')
+        ! the tripod and its copy rotated and mirrored, (x, y, z) -> (-y, -x, z): one structure twice
+        do i = 1,3
+            tripod_copy(:,i) = [-TRIPOD(2,i), -TRIPOD(1,i), TRIPOD(3,i)]
+        enddo
+        call make_docking_result(res, TRIPOD, TRIPOD_AMPS, TRIPOD_SIGS, tripod_copy, TRIPOD_AMPS, TRIPOD_SIGS)
+        call assert_false(stage%register_attempt(res, 2), 'a rotated, mirrored copy is a near-duplicate')
+        call res%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+
+    contains
+
+        ! solve3D_cavgs' result in memory: four class averages in its states 1, 1, 2 and 2, a
+        ! volume of Gaussian blobs per state (@p c1, @p a1, @p s1 and @p c2, @p a2, @p s2: centres in
+        ! voxels from the centre, amplitudes, widths in voxels) at the docking's smallest box, and
+        ! halves that agree
+        subroutine make_docking_result( proj, c1, a1, s1, c2, a2, s2 )
+            type(sp_project), intent(inout) :: proj
+            real,             intent(in)    :: c1(:,:), a1(:), s1(:), c2(:,:), a2(:), s2(:)
+            integer :: j
+            call proj%kill
+            call proj%os_cls3D%new(4, is_ptcl=.false.)
+            do j = 1,4
+                call proj%os_cls3D%set(j, 'e1', 30.)
+                call proj%os_cls3D%set_state(j, merge(1, 2, j <= 2))
+            enddo
+            call simple_mkdir('dock')
+            call write_blob_volume(string('dock/state01.mrc'), c1, a1, s1)
+            call write_blob_volume(string('dock/state02.mrc'), c2, a2, s2)
+            call proj%add_vol2os_out(string('dock/state01.mrc'), VOL_SMPD, 1, 'vol_cavg')
+            call proj%add_vol2os_out(string('dock/state02.mrc'), VOL_SMPD, 2, 'vol_cavg')
+            do j = 1,proj%os_out%get_noris()
+                call proj%os_out%set(j, 'eo_angdist',       12.)
+                call proj%os_out%set(j, 'eo_state_overlap', 85.)
+            enddo
+        end subroutine make_docking_result
+
+        ! a DOCK_BOX volume of Gaussian blobs at @p centres (voxels from the centre), amplitudes
+        ! @p amps and widths @p sigs (voxels)
+        subroutine write_blob_volume( fname, centres, amps, sigs )
+            class(string), intent(in) :: fname
+            real,          intent(in) :: centres(:,:), amps(:), sigs(:)
+            type(image)       :: vol
+            real, allocatable :: rmat(:,:,:)
+            real    :: r(3)
+            integer :: x, y, z, k
+            allocate(rmat(DOCK_BOX,DOCK_BOX,DOCK_BOX), source=0.)
+            do z = 1,DOCK_BOX
+                do y = 1,DOCK_BOX
+                    do x = 1,DOCK_BOX
+                        r = real([x, y, z] - (DOCK_BOX / 2 + 1))
+                        do k = 1,size(amps)
+                            rmat(x,y,z) = rmat(x,y,z) + amps(k) * exp(-sum((r - centres(:,k))**2) / (2. * sigs(k)**2))
+                        enddo
+                    enddo
+                enddo
+            enddo
+            call vol%new([DOCK_BOX,DOCK_BOX,DOCK_BOX], VOL_SMPD)
+            call vol%set_rmat(rmat, .false.)
+            call vol%write(fname)
+            call vol%kill
+        end subroutine write_blob_volume
+
+    end subroutine test_reference_docking
 
     subroutine test_init_params()
         class(stream_stage_solve3D), allocatable :: stage
@@ -459,8 +556,8 @@ contains
         call assert_int(JOB_NONE,     stage%next_job(PHASE_ASSIGN,    2, .false., .false., .true.,  100, 3), 'nothing while the matching runs')
         ! the check: even/odd angular distance, state agreement, distinct states, two states of 5%
         call assert_true(stage%refs_usable(12., 85., [40, 30, 30], 0.5),   'halves that agree, three distinct states')
-        call assert_true(stage%refs_usable(20., 70., [50, 50], 0.97),      'at the thresholds')
-        call assert_false(stage%refs_usable(25., 85., [40, 30, 30], 0.5),  'halves too far apart')
+        call assert_true(stage%refs_usable(50., 70., [50, 50], 0.97),      'at the thresholds')
+        call assert_false(stage%refs_usable(55., 85., [40, 30, 30], 0.5),  'halves too far apart')
         call assert_false(stage%refs_usable(12., 60., [40, 30, 30], 0.5),  'states that disagree between the halves')
         call assert_false(stage%refs_usable(-1., 85., [40, 30, 30], 0.5),  'an angular distance not measured')
         call assert_false(stage%refs_usable(12., -1., [40, 30, 30], 0.5),  'an agreement not measured')
@@ -540,9 +637,9 @@ contains
     end subroutine test_fit_rules
 
     !> solve3D_cavgs' volumes as attempts: the states that hold class averages renumbered from 1
-    !! and copied with their reprojections into state_refs/try_<n>/; a failing attempt (halves
-    !! apart, or near-duplicate states) is kept aside and the route runs again; a passing one
-    !! gives the references, which a restart takes
+    !! and copied with their reprojections into state_refs/try_<n>/; a failing attempt is kept
+    !! aside and the route runs again; a passing one gives the references, which a restart takes
+    !! (the comparison of the states after docking: test_reference_docking, a library test)
     subroutine test_reference_volumes()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)    :: cline
@@ -555,27 +652,28 @@ contains
         call enter_fixture('a3_stage_reference_volumes', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
-        ! attempt 1: halves 40 degrees apart
-        call make_cavgs3D_result(res, 40., 85.)
-        call assert_false(stage%register_attempt(res, 1), 'halves 40 degrees apart fail the check')
+        ! attempt 1: halves 60 degrees apart
+        call make_cavgs3D_result(res, 60., 85.)
+        call assert_false(stage%register_attempt(res, 1), 'halves 60 degrees apart fail the check')
         call assert_int(1, size(stage%try_angdist), 'the attempt is counted')
-        if( size(stage%try_angdist) == 1 ) call assert_real(40., stage%try_angdist(1), 1.e-4, 'with its angular distance')
+        if( size(stage%try_angdist) == 1 ) call assert_real(60., stage%try_angdist(1), 1.e-4, 'with its angular distance')
         call assert_true(file_exists(string('state_refs/try_1/vol_state01.mrc')), 'its volumes are kept aside')
         stage%nroute_tries = 1
         call stage%next_attempt()
         call assert_true(stage%l_route_due, 'the route runs again')
         call assert_int(0, stage%n_refs(),  'without references')
-        ! attempt 2: halves that agree, but the two states are one volume twice
-        call make_cavgs3D_result(res, 12., 85., l_same=.true.)
-        call assert_false(stage%register_attempt(res, 2), 'near-duplicate states fail the check')
-        ! attempt 3 passes: solve3D_cavgs' states 1 and 3 hold class averages, its state 2 none
-        call make_cavgs3D_result(res, 12., 85.)
-        call assert_true(stage%register_attempt(res, 3), 'halves that agree and distinct states pass')
-        call assert_true(file_exists(string('state_refs/try_3/vol_state01.mrc')),  'its state 1 is state 1')
-        call assert_true(file_exists(string('state_refs/try_3/vol_state02.mrc')),  'its state 3 is state 2')
-        call assert_false(file_exists(string('state_refs/try_3/vol_state03.mrc')), 'its state 2, empty, is left out')
-        call assert_true(file_exists(string('state_refs/try_3/')//refine3D_reprojs_fname(2)), 'its state 3''s reprojections are state 2''s')
-        call stage%accept_refs(3, .false.)
+        ! attempt 2 passes: its mean over every class is 60 degrees, but the median over the classes
+        ! whose halves are in one state, the distance checked, is 30; solve3D_cavgs' states 1 and 3
+        ! hold class averages, its state 2 none
+        call make_cavgs3D_result(res, 60., 85., angdist_median=30.)
+        call assert_true(stage%register_attempt(res, 2), 'halves in one state that agree pass')
+        if( size(stage%try_angdist) == 2 ) call assert_real(30., stage%try_angdist(2), 1.e-4,&
+            &'the median over the halves in one state is the distance checked')
+        call assert_true(file_exists(string('state_refs/try_2/vol_state01.mrc')),  'its state 1 is state 1')
+        call assert_true(file_exists(string('state_refs/try_2/vol_state02.mrc')),  'its state 3 is state 2')
+        call assert_false(file_exists(string('state_refs/try_2/vol_state03.mrc')), 'its state 2, empty, is left out')
+        call assert_true(file_exists(string('state_refs/try_2/')//refine3D_reprojs_fname(2)), 'its state 3''s reprojections are state 2''s')
+        call stage%accept_refs(2, .false.)
         call assert_int(2, stage%n_refs(),          'two references')
         call assert_int(2, stage%params%nstates,    'the stage''s states are theirs')
         call assert_int(PHASE_IDLE, stage%phase,    'the stage waits for a publication')
@@ -618,7 +716,7 @@ contains
         ! the route's last attempt failed: the fallback waits for a publication
         stage%l_fallback_done = .false.
         stage%nroute_tries    = ROUTE_TRIES
-        call make_cavgs3D_result(res, 40., 85.)
+        call make_cavgs3D_result(res, 60., 85.)
         call assert_false(stage%register_attempt(res, 2), 'an attempt that fails the check')
         call stage%next_attempt()
         call assert_false(stage%l_route_due,       'the route does not run again')
@@ -639,7 +737,7 @@ contains
         call assert_int(0, stage%n_refs(), 'no references to restore')
         stage%l_final_seen = .true.
         stage%nroute_tries = ROUTE_TRIES
-        stage%try_angdist  = [-1., 40.]
+        stage%try_angdist  = [-1., 60.]
         call stage%next_attempt()
         call assert_false(stage%l_fallback_pending, 'no fallback when the pool publishes no more')
         call assert_int(2, stage%n_refs(),          'the best attempt gives the references')
@@ -1252,9 +1350,10 @@ contains
         type(cmdline),                 intent(inout) :: cline
         call stage%init_params(cline)
         call stage%init_gui(-1, -1)
-        stage%settle_s = -1
-        stage%wait_s   = 0
-        stage%l_exists = .true.
+        stage%settle_s    = -1
+        stage%wait_s      = 0
+        stage%l_dock_refs = .false. ! the docking takes too long for a unit test (test_reference_docking)
+        stage%l_exists    = .true.
     end subroutine make_test_stage
 
     subroutine write_export( id, mskdiam )
@@ -1321,22 +1420,20 @@ contains
 
     ! solve3D_cavgs' result in memory: four class averages in its states 3, none, 1 and 3 (its
     ! state 2 holds none), a volume for each of its states 1 to 3 with the even/odd values
-    ! @p angdist and @p overlap, and the reprojections of its state 3. Each state's volume is a
-    ! wave of the second Fourier shell along its own axis, so the states are distinct at 15 A;
-    ! with @p l_same every state's is the first's.
-    subroutine make_cavgs3D_result( res, angdist, overlap, l_same )
+    ! @p angdist (the mean over every class) and @p overlap, with @p angdist_median (the median
+    ! over the classes whose halves are in one state) when given, and the reprojections of its
+    ! state 3. Each state's volume is a wave along its own axis (the fast tests compare no states:
+    ! no docking).
+    subroutine make_cavgs3D_result( res, angdist, overlap, angdist_median )
         type(sp_project),  intent(inout) :: res
         real,              intent(in)    :: angdist, overlap
-        logical, optional, intent(in)    :: l_same
+        real, optional,    intent(in)    :: angdist_median
         integer, parameter :: CLS_STATES(4) = [3, 0, 1, 3]
         real,    parameter :: TWOPI = 6.2831853
         type(image)  :: vol
         type(string) :: volfile
         real, allocatable :: rmat(:,:,:)
-        integer      :: s, i, x, y, z, iaxis, r(3)
-        logical      :: l_same_here
-        l_same_here = .false.
-        if( present(l_same) ) l_same_here = l_same
+        integer      :: s, i, x, y, z, r(3)
         allocate(rmat(VOL_BOX,VOL_BOX,VOL_BOX))
         call res%kill
         call res%os_cls3D%new(size(CLS_STATES), is_ptcl=.false.)
@@ -1346,13 +1443,11 @@ contains
         enddo
         call simple_mkdir('cavgs3D')
         do s = 1,3
-            iaxis = s
-            if( l_same_here ) iaxis = 1
             do z = 1,VOL_BOX
                 do y = 1,VOL_BOX
                     do x = 1,VOL_BOX
                         r = [x, y, z] - (VOL_BOX / 2 + 1)
-                        rmat(x,y,z) = cos(TWOPI * 2. * real(r(iaxis)) / real(VOL_BOX))
+                        rmat(x,y,z) = cos(TWOPI * 2. * real(r(s)) / real(VOL_BOX))
                     enddo
                 enddo
             enddo
@@ -1367,6 +1462,7 @@ contains
         do i = 1,res%os_out%get_noris()
             call res%os_out%set(i, 'eo_angdist',       angdist)
             call res%os_out%set(i, 'eo_state_overlap', overlap)
+            if( present(angdist_median) ) call res%os_out%set(i, 'eo_angdist_median', angdist_median)
         enddo
     end subroutine make_cavgs3D_result
 

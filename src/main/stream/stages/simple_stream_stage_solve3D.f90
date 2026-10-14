@@ -72,6 +72,7 @@ use simple_fileio,                                    only: add2fbody, basename,
                                                            &get_fpath, simple_abspath, simple_getcwd, swap_suffix, simple_copy_file
 use simple_syslib,                                    only: dir_exists, simple_mkdir, simple_list_dirs, simple_rmdir
 use simple_math,                                      only: round2even
+use, intrinsic :: ieee_arithmetic,                    only: ieee_is_finite
 use simple_math_ft,                                   only: get_resarr
 use simple_estimate_ssnr,                             only: get_resolution
 use simple_imghead,                                   only: get_mrc_minmax, find_ldim_nptcls
@@ -95,7 +96,7 @@ use simple_stream_utils,                              only: create_stream_projec
 use simple_cavg_quality_model,                        only: cavg_quality_model, CAVG_QUALITY_MODEL_POOL_DEFAULT
 use simple_cavg_quality_types,                        only: cavg_quality_result
 use simple_cavg_quality_selection,                    only: score_project_cavgs, write_cavg_selection_stacks
-use simple_volpair_metrics,                           only: compare_volpair
+use simple_dock_vols,                                 only: dock_vols
 use simple_gui_utils,                                 only: mrc2jpeg_tiled
 use simple_gui_metadata_utils,                        only: max_metadata_size
 use simple_gui_metadata_types,                        only: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE, GUI_METADATA_VOL3D_TYPE,&
@@ -138,15 +139,19 @@ integer, parameter :: MIN_PTCLS_PER_STATE = 5
 ! fewer than the classes split, which cls_expansion refuses (expansion_budget)
 integer, parameter :: NCLS2D_FIRST        = 150
 integer, parameter :: NCLS_EXPANDED       = 500
+! cls_expansion's sub-class averages, for the route and every publication alike (the references are
+! made from sub-class averages and matched against sub-class averages): kernel pre-images of members
+character(len=*), parameter :: SUBCLS_AVG = 'kernel'
 ! solve3D_cavgs' low-pass ramp (A), fixed (force_lp_range) rather than derived from the class FRCs
 real,    parameter :: LPSTART_CAVGS3D     = 20.
 real,    parameter :: LPSTOP_CAVGS3D      = 12.
 ! the check of the reference volumes (provisional, until a validation run sets them)
-real,    parameter :: EO_ANGDIST_MAX      = 20.  ! the class averages' even/odd angular distance at most (degrees)
+real,    parameter :: EO_ANGDIST_MAX      = 50.  ! the class averages' even/odd angular distance at most (degrees)
 real,    parameter :: EO_OVERLAP_MIN      = 70.  ! their even/odd state agreement at least (%)
 real,    parameter :: STATE_FRAC_MIN      = 0.05 ! a state counts when it holds this fraction of the class averages
 integer, parameter :: NSTATES_MIN         = 2    ! states that count, at least
-real,    parameter :: REFS_PAIR_CC_MAX    = 0.97 ! two states' correlation at the matching's limit at most (distinct states)
+real,    parameter :: REFS_PAIR_CC_MAX    = 0.97 ! two states' correlation after docking, at most (distinct states)
+real,    parameter :: DOCK_HP_REFS        = 100. ! the docking band: from this high-pass to the matching's limit (A)
 integer, parameter :: ROUTE_TRIES         = 2    ! the route's attempts, before the fallback
 ! the assignment (provisional)
 real,    parameter :: LP_ASSIGN           = 15.  ! the matching's low-pass limit (A), the same for every state
@@ -217,6 +222,8 @@ type :: stream_stage_solve3D
     logical :: l_assign_due       = .false. ! a publication waits for its assignment
     logical :: l_expanded         = .false. ! the running assignment matches cls_expansion's sub-classes
     logical :: l_final_seen       = .false. ! the newest publication taken is the pool's final one
+    logical :: l_dock_refs        = .true.  ! the references are compared after docking (a test without the docking's
+                                            ! time sets it .false.: no comparison)
     real    :: mskdiam            = 0. ! pool 2D's mask diameter (A), from the latest publication taken
     logical :: l_restart          = .false.
     logical :: l_attached         = .false. ! pool 2D's completed folder exists and is watched
@@ -267,6 +274,7 @@ contains
     procedure :: start_cavgs3D
     procedure :: finish_cavgs3D
     procedure :: register_attempt
+    procedure :: docked_pair_cc
     procedure :: next_attempt
     procedure :: accept_best
     procedure :: accept_refs
@@ -475,6 +483,7 @@ contains
         self%l_assign_due       = .false.
         self%l_expanded         = .false.
         self%l_final_seen       = .false.
+        self%l_dock_refs        = .true.
         self%mskdiam            = 0.
         self%l_restart          = .false.
         self%l_attached         = .false.
@@ -1268,8 +1277,8 @@ contains
     ! The route's cls_expansion of the first set's selected classes, in cls_expansion/: the classes
     ! of the selected particles split into expansion_budget sub-classes in all (cls_expansion
     ! spreads them over groups of similar class averages by population and keeps small classes
-    ! whole; its other settings are its defaults), with the mask diameter fitted to the particles'
-    ! box, on the 3D jobs' resources.
+    ! whole), their averages kernel pre-images of members (SUBCLS_AVG; its other settings are its
+    ! defaults), with the mask diameter fitted to the particles' box, on the 3D jobs' resources.
     subroutine start_clsexp( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job
@@ -1287,6 +1296,7 @@ contains
         call cline_job%set('mkdir',    'no')
         call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
         call cline_job%set('ncls',     nsub)
+        call cline_job%set('subcls_avg', SUBCLS_AVG)
         call cline_job%set('mskdiam',  fit_mskdiam(self%mskdiam, self%spproj%get_box(), self%spproj%get_smpd()))
         call self%set_job_resources(cline_job, .true.)
         call cline_job%printline()
@@ -1435,26 +1445,26 @@ contains
     ! The volumes of solve3D_cavgs' result @p res as attempt @p itry: the states that hold class
     ! averages (cls3D) renumbered from 1 (compact_states), their volumes (vol_cavg entries) and the
     ! JPEGs beside them copied into state_refs/try_<itry>/ with a record (REFS_RECORD: the count,
-    ! box and pixel size, the even/odd values and the largest correlation between two states, the
-    ! file names), and the attempt's even/odd angular distance appended to try_angdist (-1
-    ! without volumes; huge when not measured). Every pair of states is compared at the
-    ! matching's limit within the particle's mask (compare_volpair: their correlation from the
-    ! second Fourier shell to LP_ASSIGN); a pair that cannot be compared counts as identical.
-    ! .true. when the attempt passes the check (refs_usable).
+    ! box and pixel size; the angular distance checked, the state agreement, the largest correlation
+    ! between two docked states and the mean angular distance over every class; the file names),
+    ! and the attempt's checked even/odd angular distance appended to try_angdist (-1
+    ! without volumes; huge when not measured). The states are refined independently, so each is
+    ! in a frame and hand of its own: every pair is compared after docking, in both hands
+    ! (docked_pair_cc); a pair whose correlation is not finite counts as identical. .true. when
+    ! the attempt passes the check (refs_usable).
     logical function register_attempt( self, res, itry ) result( l_pass )
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: res
         integer,                     intent(in)    :: itry
         integer, allocatable :: cls_states(:), newind(:), counts(:)
         type(string), allocatable :: names(:)
-        real,         allocatable :: fsc(:), res_fsc(:)
         type(string)         :: dir, volpath, src
-        real                 :: angdist, overlap, smpd, smpd_try, cc, cc_max, mskdiam
+        real                 :: angdist, angdist_all, overlap, smpd, smpd_try, cc, cc_direct, cc_mirror, cc_max, mskdiam
         integer              :: nheld, s, s2, i, box, box_try, ncopied, funit, ios
-        logical              :: l_cmp
-        l_pass  = .false.
-        angdist = -1.
-        overlap = -1.
+        l_pass      = .false.
+        angdist     = -1.
+        angdist_all = -1.
+        overlap     = -1.
         allocate(names(size(self%state_res)))
         if( res%os_cls3D%get_noris() > 0 ) cls_states = res%os_cls3D%get_all_asint('state')
         if( .not. allocated(cls_states) ) allocate(cls_states(0))
@@ -1469,14 +1479,19 @@ contains
             if( cls_states(i) > 0 ) counts(cls_states(i)) = counts(cls_states(i)) + 1
         enddo
         ! the even/odd agreement solve3D_cavgs records with its volumes: the same values on every
-        ! vol_cavg entry (solve3D_cavgs_policy.md, section 7), so the first is read
+        ! vol_cavg entry (solve3D_cavgs_policy.md, section 7), so the first is read. The angular
+        ! distance checked is the median over the class averages whose halves are in one state
+        ! (eo_angdist_median); the mean over every class (eo_angdist), which compares poses across
+        ! states' frames too, is logged, and checked only when the median is missing
         do i = 1,res%os_out%get_noris()
             if( .not. res%os_out%isthere(i, 'imgkind') ) cycle
             if( res%os_out%get_str(i, 'imgkind') /= 'vol_cavg' ) cycle
-            if( res%os_out%isthere(i, 'eo_angdist') )       angdist = res%os_out%get(i, 'eo_angdist')
-            if( res%os_out%isthere(i, 'eo_state_overlap') ) overlap = res%os_out%get(i, 'eo_state_overlap')
+            if( res%os_out%isthere(i, 'eo_angdist') )        angdist_all = res%os_out%get(i, 'eo_angdist')
+            if( res%os_out%isthere(i, 'eo_angdist_median') ) angdist     = res%os_out%get(i, 'eo_angdist_median')
+            if( res%os_out%isthere(i, 'eo_state_overlap') )  overlap     = res%os_out%get(i, 'eo_state_overlap')
             exit
         enddo
+        if( angdist < 0. ) angdist = angdist_all
         ! the volumes, renumbered
         dir = string(REFS_DIR//'/try_')//int2str(itry)
         call simple_mkdir(REFS_DIR)
@@ -1505,25 +1520,26 @@ contains
             self%try_angdist = [self%try_angdist, -1.]
             return
         endif
-        ! every pair of states compared at the matching's limit: near-duplicates are no states
+        ! every pair of states compared after docking: near-duplicates are no states
         mskdiam = fit_mskdiam(self%mskdiam, box_try, smpd_try)
         cc_max  = -1.
-        do s = 1,nheld - 1
-            do s2 = s + 1,nheld
-                call compare_volpair(dir//'/'//names(s)%to_char(), dir//'/'//names(s2)%to_char(), mskdiam, LP_ASSIGN,&
-                    &cc, fsc, res_fsc, l_cmp)
-                if( .not. l_cmp )then
-                    write(logfhandle,'(A,I3,A,I3,A)') '>>> WARNING: STATES ', s, ' AND ', s2, ' COULD NOT BE COMPARED; COUNTED AS IDENTICAL'
-                    cc = 1.
-                endif
-                write(logfhandle,'(A,I3,A,I3,A,F7.4)') '>>>   STATES ', s, ' AND ', s2, ': CORRELATION AT THE MATCHING''S LIMIT ', cc
-                cc_max = max(cc_max, cc)
+        if( self%l_dock_refs )then
+            do s = 1,nheld - 1
+                do s2 = s + 1,nheld
+                    cc = self%docked_pair_cc(dir//'/'//names(s)%to_char(), dir//'/'//names(s2)%to_char(), smpd_try, mskdiam,&
+                        &cc_direct, cc_mirror)
+                    write(logfhandle,'(A,I3,A,I3,A,F7.4,A,F7.4,A)') '>>>   STATES ', s, ' AND ', s2, ': CORRELATION AFTER DOCKING ',&
+                        &cc_direct, ' (', cc_mirror, ' MIRRORED)'
+                    cc_max = max(cc_max, cc)
+                enddo
             enddo
-        enddo
+        else
+            write(logfhandle,'(A)') '>>> THE STATES ARE NOT COMPARED (NO DOCKING)'
+        endif
         open(newunit=funit, file=dir%to_char()//'/'//REFS_RECORD, status='replace', action='write', iostat=ios)
         if( ios /= 0 ) THROW_HARD('cannot write the record of '//dir%to_char())
         write(funit,'(I0,1X,I0,1X,F12.6)') nheld, box_try, smpd_try
-        write(funit,'(F12.4,1X,F12.4,1X,F12.4)') angdist, overlap, cc_max
+        write(funit,'(F12.4,1X,F12.4,1X,F12.4,1X,F12.4)') angdist, overlap, cc_max, angdist_all
         do s = 1,nheld
             write(funit,'(A)') names(s)%to_char()
         enddo
@@ -1534,9 +1550,9 @@ contains
             self%try_angdist = [self%try_angdist, huge(angdist)]
         endif
         l_pass = refs_usable(angdist, overlap, counts, cc_max)
-        write(logfhandle,'(A,I3,A,I3,A,F7.2,A,F7.2,A,F7.4)') '>>> SOLVE3D_CAVGS, ATTEMPT ', itry, ': ', nheld,&
-            &' STATES HOLD CLASS AVERAGES; EVEN/ODD ANGULAR DISTANCE ', angdist, ' DEGREES, STATE AGREEMENT ', overlap,&
-            &'%, LARGEST CORRELATION BETWEEN TWO STATES ', cc_max
+        write(logfhandle,'(A,I3,A,I3,A,F7.2,A,F7.2,A,F7.2,A,F7.4)') '>>> SOLVE3D_CAVGS, ATTEMPT ', itry, ': ', nheld,&
+            &' STATES HOLD CLASS AVERAGES; EVEN/ODD ANGULAR DISTANCE ', angdist, ' DEGREES (MEDIAN, HALVES IN ONE STATE; ',&
+            &angdist_all, ' MEAN OVER ALL), STATE AGREEMENT ', overlap, '%, LARGEST CORRELATION BETWEEN TWO DOCKED STATES ', cc_max
         do s = 1,nheld
             write(logfhandle,'(A,I3,A,I6,A)') '>>>   STATE ', s, ': ', counts(s), ' CLASS AVERAGES'
         enddo
@@ -1546,6 +1562,46 @@ contains
             write(logfhandle,'(A)') '>>> THE VOLUMES FAIL THE CHECK'
         endif
     end function register_attempt
+
+    ! The correlation of the volumes @p vol1 and @p vol2 (pixel size @p smpd, mask diameter
+    ! @p mskdiam in A) once @p vol2 is docked onto @p vol1 over rotations and shifts, from
+    ! DOCK_HP_REFS to the matching's limit (LP_ASSIGN): the better of @p vol2 as it is
+    ! (@p cc_direct) and mirrored (@p cc_mirror), since independently refined states may differ in
+    ! hand. A correlation that is not finite counts as identical (1), with a warning.
+    real function docked_pair_cc( self, vol1, vol2, smpd, mskdiam, cc_direct, cc_mirror ) result( cc )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(string),               intent(in)    :: vol1, vol2
+        real,                        intent(in)    :: smpd, mskdiam
+        real,                        intent(out)   :: cc_direct, cc_mirror
+        type(dock_vols) :: docker
+        type(image)     :: vol
+        type(string)    :: mirror
+        real    :: eul(3), shift(3)
+        integer :: ldim(3), nimgs
+        ! vol2 mirrored, beside it
+        mirror = add2fbody(vol2, MRC_EXT, '_mirror')
+        call find_ldim_nptcls(vol2, ldim, nimgs)
+        call vol%new(ldim, smpd)
+        call vol%read(vol2)
+        call vol%mirror('x')
+        call vol%write(mirror)
+        call vol%kill
+        call docker%new(vol1, vol2, smpd, DOCK_HP_REFS, LP_ASSIGN, mskdiam)
+        call docker%srch()
+        call docker%get_dock_info(eul, shift, cc_direct)
+        call docker%kill()
+        call docker%new(vol1, mirror, smpd, DOCK_HP_REFS, LP_ASSIGN, mskdiam)
+        call docker%srch()
+        call docker%get_dock_info(eul, shift, cc_mirror)
+        call docker%kill()
+        call del_file(mirror)
+        if( .not. ieee_is_finite(cc_direct) .or. .not. ieee_is_finite(cc_mirror) )then
+            THROW_WARN('a docked correlation is not finite; the states count as identical')
+            if( .not. ieee_is_finite(cc_direct) ) cc_direct = 1.
+            if( .not. ieee_is_finite(cc_mirror) ) cc_mirror = 1.
+        endif
+        cc = max(cc_direct, cc_mirror)
+    end function docked_pair_cc
 
     ! After an attempt that failed: the route again while it has attempts left; then the fallback
     ! on the next publication; when the pool has published its last, or after the fallback, the
@@ -1688,6 +1744,7 @@ contains
         call cline_job%set('mkdir',    'no')
         call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
         call cline_job%set('ncls',     nsub)
+        call cline_job%set('subcls_avg', SUBCLS_AVG)
         call cline_job%set('mskdiam',  fit_mskdiam(self%mskdiam, self%spproj%get_box(), self%spproj%get_smpd()))
         call self%set_job_resources(cline_job, .true.)
         call cline_job%printline()
@@ -2471,8 +2528,8 @@ contains
 
     !> .true. when reference volumes may be used: the class averages' even/odd angular distance
     !! @p angdist (degrees) at most EO_ANGDIST_MAX (not negative: measured), their even/odd state
-    !! agreement @p overlap (%) at least EO_OVERLAP_MIN, the largest correlation between two
-    !! states at the matching's limit @p cc_max at most REFS_PAIR_CC_MAX (distinct states), and at
+    !! agreement @p overlap (%) at least EO_OVERLAP_MIN, the largest correlation between two docked
+    !! states @p cc_max at most REFS_PAIR_CC_MAX (distinct states; negative: not compared), and at
     !! least NSTATES_MIN states each holding STATE_FRAC_MIN of the class averages (@p counts per
     !! state).
     pure logical function refs_usable( angdist, overlap, counts, cc_max )

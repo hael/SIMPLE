@@ -83,6 +83,7 @@ contains
         integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates
         real                      :: cavg_smpd
         real                      :: eo_angdist, eo_state_overlap ! the last stage's even/odd agreement (-1: not measured)
+        real                      :: eo_angdist_same, eo_angdist_median ! the angular distance over the halves in one state
         logical                   :: l_reseed, l_reseeded
         if( cline%defined('part') )then
             THROW_HARD('solve3D_cavgs distributed execution is master-only; remove part from command line')
@@ -301,8 +302,10 @@ contains
             cavg_smpd = params%smpd
             if( cavg_nimgs < ncavgs ) THROW_HARD('fewer images in cavgs stack than expected; solve3D_cavgs')
             ! check even odd convergence
-            eo_angdist       = -1.
-            eo_state_overlap = -1.
+            eo_angdist        = -1.
+            eo_state_overlap  = -1.
+            eo_angdist_same   = -1.
+            eo_angdist_median = -1.
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
             ! calculate 3D reconstruction at original sampling
@@ -322,8 +325,10 @@ contains
             do s = 1,spproj%os_out%get_noris()
                 if( .not. spproj%os_out%isthere(s, 'imgkind') ) cycle
                 if( spproj%os_out%get_str(s, 'imgkind') /= 'vol_cavg' ) cycle
-                call spproj%os_out%set(s, 'eo_angdist',       eo_angdist)
-                call spproj%os_out%set(s, 'eo_state_overlap', eo_state_overlap)
+                call spproj%os_out%set(s, 'eo_angdist',        eo_angdist)
+                call spproj%os_out%set(s, 'eo_state_overlap',  eo_state_overlap)
+                call spproj%os_out%set(s, 'eo_angdist_same',   eo_angdist_same)
+                call spproj%os_out%set(s, 'eo_angdist_median', eo_angdist_median)
             enddo
             ! reprojections
             call spproj%os_cls3D%write(string('final_oris.txt'))
@@ -466,20 +471,30 @@ contains
                 call local_cline_rec%kill
             end subroutine rndstart
 
+            ! The angle between the projection directions of each class average's even and odd halves:
+            ! the mean over every class (eo_angdist, the original measure), and the mean and median over
+            ! the classes whose halves are in one state (eo_angdist_same, eo_angdist_median). States are
+            ! refined independently, each in a frame of its own, so a pose compared across states is
+            ! noise; the state agreement itself is conv_eo_states'. With one state the two means agree.
             subroutine conv_eo( os )
                 class(oris), intent(in) :: os
                 type(sym) :: se
                 type(ori) :: o_odd, o_even
+                real, allocatable :: dists_same(:)
                 real      :: avg_euldist, euldist
-                integer   :: icls, ncls
+                integer   :: icls, ncls, nsame
+                logical   :: l_same
                 call se%new(params%pgrp)
+                allocate(dists_same(max(1, os%get_noris()/2)))
                 avg_euldist = 0.
-                ncls = 0
+                ncls  = 0
+                nsame = 0
                 do icls=1,os%get_noris()/2
                     call os%get_ori(icls, o_even)
                     if( o_even%get_state() == 0 )cycle
                     ncls    = ncls + 1
                     call os%get_ori(ncavgs+icls, o_odd)
+                    l_same  = o_odd%get_state() == o_even%get_state()
                     euldist = rad2deg(o_odd.euldist.o_even)
                     if( se%get_nsym() > 1 )then
                         call o_odd%mirror2d
@@ -487,11 +502,26 @@ contains
                         euldist = min(rad2deg(o_odd.euldist.o_even), euldist)
                     endif
                     avg_euldist = avg_euldist + euldist
+                    if( l_same )then
+                        nsame = nsame + 1
+                        dists_same(nsame) = euldist
+                    endif
                 enddo
                 if( ncls > 0 ) avg_euldist = avg_euldist/real(ncls)
                 eo_angdist = avg_euldist
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
+                if( nsame > 0 )then
+                    eo_angdist_same   = sum(dists_same(:nsame)) / real(nsame)
+                    eo_angdist_median = median_nocopy(dists_same(:nsame))
+                    write(logfhandle,'(A,I6,A,I6,A,F6.1,A,F6.1)')'>>> EVEN/ODD ANGULAR DISTANCE, HALVES IN ONE STATE (', nsame,&
+                        &' OF ', ncls, '): MEAN ', eo_angdist_same, ', MEDIAN ', eo_angdist_median
+                else
+                    write(logfhandle,'(A)')'>>> EVEN/ODD ANGULAR DISTANCE, HALVES IN ONE STATE: NONE'
+                endif
+                call o_odd%kill
+                call o_even%kill
+                call se%kill
             end subroutine conv_eo
 
             subroutine conv_eo_states( os )

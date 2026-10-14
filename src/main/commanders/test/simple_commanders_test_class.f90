@@ -131,7 +131,7 @@ use simple_stream_stage_refpick_tester,      only: run_all_stream_stage_refpick_
 use simple_stream_stage_sieve_tester,        only: run_all_stream_stage_sieve_tests
 use simple_stream_stage_pool2D_tester,       only: run_all_stream_stage_pool2D_tests
 use simple_stream_pool2D_tester,             only: run_all_stream_pool2D_tests
-use simple_stream_stage_solve3D_tester,   only: run_all_stream_stage_solve3D_tests
+use simple_stream_stage_solve3D_tester,   only: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
 use simple_stream_master_tester,             only: run_all_stream_master_tests, run_stream_heartbeat_tests
 use simple_stream_job_sets_tester,           only: run_all_stream_job_sets_tests
 use simple_stream_meta_plots_tester,         only: run_all_stream_meta_plots_tests
@@ -502,6 +502,7 @@ contains
         call add_suite(s, n, 'optics assignment',  run_all_stream_optics_tests)
         call add_suite(s, n, 'picking references', run_all_stream_pickrefs_tests)
         call add_suite(s, n, 'pick and extract',   run_all_stream_pick_extract_tests)
+        call add_suite(s, n, 'solve 3D reference docking', run_all_stream_stage_solve3D_lib_tests)
         ! decision 19 of the 5 October 2026 fix plan: the stages chained without the master; they
         ! submit jobs to the local queue (installed executables) and take tens of minutes
         call add_suite(s, n, 'sieve to 3D',        run_all_stream_chain_sieve_tests)

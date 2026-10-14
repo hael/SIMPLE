@@ -379,8 +379,11 @@ input and its forwarding are gone.
    particles into `NCLS_EXPANDED` (500) subclasses in all, and never fewer than the classes, which
    cls_expansion refuses (`expansion_budget`; `ncls` is cls_expansion's total since 14 October
    2026). cls_expansion spreads the total over groups of similar class averages by population and
-   keeps a class too small to split whole; its other settings are its defaults (`minpop` 25,
-   `subcls_avg=model`). The mask diameter is fitted to the particles' box. Its
+   keeps a class too small to split whole. Its sub-class averages are kernel pre-images of members
+   (`subcls_avg=kernel`, `SUBCLS_AVG`: kernel-weighted, CTF-corrected means of the particles, the
+   latent rank and bandwidth chosen by cross-validation), for the route and every publication
+   alike; its other settings are its defaults (`minpop` 25). The mask diameter is fitted to the
+   particles' box. Its
    subclasses, their class averages, halves and FRCs, and the particles' subclass labels become
    the stage's (`adopt_job_2D`).
 7. **solve3D_cavgs** (`start_cavgs3D`, `solve3D_cavgs/`) makes `nstates` volumes from those class
@@ -393,15 +396,21 @@ input and its forwarding are gone.
    their states from the assignments (section 10).
 8. **The check** (`finish_cavgs3D`, `register_attempt`, `refs_usable`). `solve3D_cavgs` records
    the even/odd angular distance and state agreement of the class averages on its `vol_cavg`
-   entries (`eo_angdist`, `eo_state_overlap`; `solve3D_cavgs_policy.md`, section 7). The states
+   entries (`solve3D_cavgs_policy.md`, section 7). The angular distance checked is the median over
+   the class averages whose halves are in one state (`eo_angdist_median`): the states are in
+   frames of their own, so the mean over every class (`eo_angdist`, logged beside it, and checked
+   only for a result without the median) mixes in poses compared across frames. The states
    that hold class averages are renumbered from 1 (`compact_states`), and their volumes, with the
    reprojection and orientation JPEGs beside them, copied into `state_refs/try_<n>/` with a
    record (`state_refs.txt`: the count, box and pixel size, the even/odd values and the largest
-   correlation between two states, the file names). Every pair of states is compared within the
-   particle's mask from the second Fourier shell to 15 Å, the matching's limit
-   (`compare_volpair`); a pair that cannot be compared counts as identical. The volumes pass when
-   the angular distance is at most `EO_ANGDIST_MAX` (20 degrees), the agreement at least
-   `EO_OVERLAP_MIN` (70%), no two states correlate above `REFS_PAIR_CC_MAX` (0.97: near-duplicate
+   correlation between two docked states, the file names). solve3D_cavgs refines its states
+   independently, so each volume is in a frame and hand of its own: every pair of states is
+   compared after docking the second onto the first, as it is and mirrored, over rotations and
+   shifts, from 100 Å to 15 Å, the matching's limit (`docked_pair_cc`, `dock_vols`); the better
+   of the two hands counts, and a correlation that is not finite counts as identical. The volumes
+   pass when the angular distance is at most `EO_ANGDIST_MAX` (50 degrees since 14 October 2026,
+   20 before; the first runs measured about 40 on volumes that looked usable), the agreement at least
+   `EO_OVERLAP_MIN` (70%), no two docked states correlate above `REFS_PAIR_CC_MAX` (0.97: near-duplicate
    states would split the particles by noise), and at least `NSTATES_MIN` (2) states each hold
    `STATE_FRAC_MIN` (5%) of the class averages (provisional constants, until a validation run
    sets them). The run of 13 October 2026 that collapsed ended with the halves 90.6 degrees
@@ -431,13 +440,15 @@ input and its forwarding are gone.
 14. **Tests:** `test_sieve_publication` in p06's tester (the offsets, selection, class tables and
     populations; the combined files; a box mismatch and a missing half refused); in p07's,
     `test_rules` (the check, the best attempt, the renumbering, the sub-class budget),
-    `test_reference_volumes` (an attempt that fails kept aside and the route run again, one with
-    near-duplicate states refused, one that
+    `test_reference_volumes` (an attempt that fails kept aside and the route run again, one that
     passes renumbered with its JPEGs and taken, a restart that takes it),
     `test_failed_attempts` (the fallback waiting for a publication, the best attempt after it or
     after the last publication, none without volumes), `test_send_refs` (the references sent
-    under their states, without FSCs or populations, not registered) and `test_take_cavgs`. The
-    jobs and the pool model's selection of the first set run only in a stream.
+    under their states, without FSCs or populations, not registered) and `test_take_cavgs`; in the
+    nightly `lib_stream` "solve 3D reference docking", `test_reference_docking` (two different
+    structures distinct, a rotated and mirrored copy a near-duplicate). The fast tests compare no
+    states (`l_dock_refs` off: the docking takes too long for them). The jobs and the pool
+    model's selection of the first set run only in a stream.
 
 ## 10. The assignment of a publication
 
@@ -456,7 +467,8 @@ Decided 13 October 2026
    in `assign/it_<n>/` (`fresh_job_dir`; `n` counts the session's assignments).
 2. **The expansion** (`start_expand`, `assign/it_<n>/expand/`): cls_expansion of the
    publication's selected classes into `NCLS_EXPANDED` (500) sub-classes in all, never fewer than
-   the classes (`expansion_budget`, as for the route), with the mask diameter fitted to the
+   the classes (`expansion_budget`), with kernel sub-class averages (`subcls_avg=kernel`), both as
+   for the route, with the mask diameter fitted to the
    particles' box, on the 3D
    jobs' resources. Pool classes group particles mainly by view, so particles of different states
    with similar projections often share a class; the expansion separates them, and the matching

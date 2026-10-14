@@ -282,11 +282,11 @@ contains
         call lib_stream%new(&
         &'lib_stream',&
         &'library tests: in-process stream stages',&
-        &'is the nightly library suite for the stream stages that run in-process: optics assignment on two beam-shift clusters, picking-reference generation and reference picking with extraction on a synthetic micrograph',&
+        &'is the nightly library suite for the stream stages that run in-process: optics assignment on two beam-shift clusters, picking-reference generation and reference picking with extraction on a synthetic micrograph, and the docking of multistate 3D''s reference volumes',&
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Stream')
         call lib_stream%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract, sieve_to_3d, movies_to_3d)', '', .false., '')
+            &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract, solve_3d_reference_docking, sieve_to_3d, movies_to_3d)', '', .false., '')
         call add_ui_program('lib_stream', lib_stream, tsttab, UI_CATEGORY)
     end subroutine new_lib_stream
 

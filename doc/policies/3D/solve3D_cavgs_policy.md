@@ -213,10 +213,21 @@ artifacts:
 - a shifted class-average stack registered as `cavg_shifted`
 - optional class-average ranking by cavg-vs-reprojection correlation
 
-Even/odd convergence diagnostics report average angular distance. Multi-state
-runs also report even/odd state overlap. Both are also written on every
-`vol_cavg` entry of `os_out`, as `eo_angdist` (degrees) and `eo_state_overlap`
-(%), -1 when not measured (the overlap with one state), so a caller can check
-the volumes before using them: stream p07 refuses halves more than 20 degrees
-apart or agreeing on fewer than 70% of the states
+Even/odd convergence diagnostics report the angle between the projection
+directions of each class average's even and odd halves, on two lines:
+
+- `EVEN/ODD AVERAGE ANGULAR DISTANCE`: the mean over every class, the original
+  measure;
+- `EVEN/ODD ANGULAR DISTANCE, HALVES IN ONE STATE (n OF m)`: the mean and the
+  median over the classes whose halves are in the same state (since 14 October
+  2026). States are refined independently, each in a frame of its own, so a
+  pose compared across states is noise, and the first line mixes it in; the
+  state agreement itself is the overlap below. With one state both means agree.
+
+Multi-state runs also report even/odd state overlap. All are written on every
+`vol_cavg` entry of `os_out`: `eo_angdist` (the mean over every class),
+`eo_angdist_same` and `eo_angdist_median` (over the halves in one state; degrees)
+and `eo_state_overlap` (%), -1 when not measured, so a caller can check the
+volumes before using them: stream p07 refuses a median above 50 degrees or halves
+agreeing on fewer than 70% of the states
 (`doc/policies/stream/stream_3D_ingestion_policy.md`, section 9).

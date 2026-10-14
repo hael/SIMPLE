@@ -17,7 +17,7 @@ flowchart TD
         A2["<b>2. Class selection</b><br/>quality model keeps good class averages;<br/>particles of rejected classes dropped for the session"]
         A3["<b>3. Split classes into sub-classes</b><br/>~500 sub-class averages in total, with even/odd halves"]
         A4["<b>4. Ab initio multi-state 3D from class averages</b><br/>up to 3 states; low-pass 20 → 12 Å;<br/>angular window narrowed in later stages"]
-        A5{"<b>5. Check the volumes</b><br/>halves agree on orientations ≤ 20°<br/>and on states ≥ 70%<br/>states distinct: correlation ≤ 0.97 at 15 Å<br/>≥ 2 states with ≥ 5% of the averages"}
+        A5{"<b>5. Check the volumes</b><br/>halves in one state agree on orientations:<br/>median ≤ 50°<br/>and on states ≥ 70%<br/>states distinct: correlation ≤ 0.97 at 15 Å<br/>after docking (both hands)<br/>≥ 2 states with ≥ 5% of the averages"}
         AF["<b>Failed</b><br/>run 1–5 again (2 attempts in all),<br/>then ab initio on the next publication's class averages,<br/>still failing: keep the attempt whose halves agree best (warning)"]
         REF[("<b>Reference volumes</b><br/>states that hold class averages;<br/>fixed for the session, reused on restart")]
         A1 --> A2 --> A3 --> A4 --> A5
@@ -82,5 +82,5 @@ flowchart TD
 - **Why 15 Å and a full sphere.** Matching every state at one coarse limit stops sharper or
   smoother volumes from winning by resolution alone. Covering the whole sphere handles mirrored
   class averages without a separate mirror search.
-- **Thresholds are provisional.** 20°, 70%, 0.97, 5%, 15 Å, 3×MAD, 30% and 0.02 are first guesses,
+- **Thresholds are provisional.** 50°, 70%, 0.97, 5%, 15 Å, 3×MAD, 30% and 0.02 are first guesses,
   to be set from a validation run on a known heterogeneous data set.
