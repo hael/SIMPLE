@@ -72,7 +72,6 @@ type :: parameters
     character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
     character(len=3)          :: rec_states='yes'     !< flex_pca: reconstruct the state volumes, or deliver the embedding only(yes|no){yes}
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
-    character(len=3)          :: ini3D_cavgs='yes'    !< stream multistate 3D: initial volumes from the first set's class averages (solve2D, selection, cls_expansion, solve3D_cavgs)(yes|no){yes}
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
     character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
@@ -412,8 +411,6 @@ type :: parameters
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_base=0       !< # particles in the initial solve3D snapshot
-    integer :: nptcls3D_max=0      !< # particles of stream 3D's first solve3D at most (0: no cap; the stage's commander sets one)
-    integer :: nptcls_addon_max=0  !< # cohort particles of each stream 3D addon run at most (0: no cap; the stage's commander sets one)
     integer :: nptcls_addon=0      !< # selected particles each emulate_solve3D_stream addon step adds (the last step takes the remainder)
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection

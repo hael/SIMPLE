@@ -344,19 +344,21 @@ to `solve3D_addon_report.txt`:
 - both runs' limits for every stage.
 
 A regression is warned about and the result is published all the same;
-rejecting it is the caller's call. The stream's multistate stage rolls such a
-run back (`doc/policies/stream/stream_3D_ingestion_policy.md`, section 4,
-item 8).
+rejecting it is the caller's call. The stream's multistate stage rolled such a
+run back until 13 October 2026, when it stopped running `solve3D_addon`
+(`doc/policies/stream/stream_3D_ingestion_policy.md`, section 4, item 11).
 
 ## 12. Streaming Integration
 
-For `commander_stream_p07_solve3D_multistate` or any driver that grows a pool:
+For any driver that grows a pool (stream p07 was one until 13 October 2026; it
+now assigns class averages to fixed reference volumes instead,
+`doc/policies/stream/stream_3D_ingestion_policy.md`):
 
 - **Pool per update.** Build each update's current project as the previous
   solution's project (all its rows, in order) with the new classified sets
-  appended as rows: their `ptcl2D` records and 2D class labels kept. p07 does
+  appended as rows: their `ptcl2D` records and 2D class labels kept. p07 did
   this by merging each pool publication into its rows and taking the
-  publication's class table (`doc/policies/stream/stream_3D_ingestion_policy.md`).
+  publication's class table.
   `merge_projects` is not a substitute: it drops the 2D classification, and
   `solve3D` requires it.
 - **Separate files.** The frozen and current projects are different files;

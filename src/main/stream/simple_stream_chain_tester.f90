@@ -71,8 +71,6 @@ integer, parameter :: NCLS2D        = 10
 integer, parameter :: NPTCLS_COARSE = 300
 integer, parameter :: NPTCLS_FINE   = 600
 integer, parameter :: NSTATES3D     = 2
-! External class-average initialization starts solve3D after symmetry stage 3.
-integer, parameter :: NSTAGES3D     = 4
 integer, parameter :: NTHR_JOBS     = 4
 integer, parameter :: MIN_PTCLS_3D  = 5 * NSTATES3D
 real,    parameter :: SIM_SNR       = 0.5
@@ -155,8 +153,8 @@ contains
             call pool%iterate()
             call enter(dir_3D)
             call s3D%iterate()
-            l_done = s3D%frozen_projfile%strlen() > 0
-            l_cannot_start_3D = .not. l_done .and. s3D%l_final_pending .and. s3D%nptcls_selected < MIN_PTCLS_3D
+            l_done = s3D%result_projfile%strlen() > 0
+            l_cannot_start_3D = .not. l_done .and. s3D%l_final_seen .and. s3D%nptcls_selected < MIN_PTCLS_3D
             if( l_done .or. l_cannot_start_3D ) exit
             if( simple_gettime() - t0 > TIME_LIMIT_S ) exit
             call sleep(PASS_WAIT_S)
@@ -168,7 +166,7 @@ contains
         call assert_true(pool%l_sieve_final,     'chain: the pool takes the sieve''s final set')
         call assert_true(pool%last_export_id > 1, 'chain: the pool publishes for 3D')
         call assert_false(l_cannot_start_3D,      'chain: the final publication has enough selected particles for 3D')
-        call assert_true(l_done,                 'chain: 3D completes its first run within the time limit')
+        call assert_true(l_done,                 'chain: 3D reconstructs its first assignment within the time limit')
         if( allocated(s3D%state_res) ) call assert_true(any(s3D%state_res > 0.), 'chain: a state has a resolution')
         ! stop, cancelling what still runs
         call enter(dir_3D)
@@ -283,8 +281,8 @@ contains
             call pool%iterate()
             call enter(dir_3D)
             call s3D%iterate()
-            l_done = s3D%frozen_projfile%strlen() > 0
-            l_cannot_start_3D = .not. l_done .and. s3D%l_final_pending .and. s3D%nptcls_selected < MIN_PTCLS_3D
+            l_done = s3D%result_projfile%strlen() > 0
+            l_cannot_start_3D = .not. l_done .and. s3D%l_final_seen .and. s3D%nptcls_selected < MIN_PTCLS_3D
             if( l_done .or. l_cannot_start_3D ) exit
             if( simple_gettime() - t0 > TIME_LIMIT_S ) exit
             call sleep(PASS_WAIT_S)
@@ -298,7 +296,7 @@ contains
         if( allocated(sieve%sieve) ) call assert_true(sieve%sieve%get_n_accepted_ptcls() > 0, 'chain: the sieve accepts particles')
         call assert_true(pool%last_export_id > 1,     'chain: the pool publishes for 3D')
         call assert_false(l_cannot_start_3D,          'chain: the final publication has enough selected particles for 3D')
-        call assert_true(l_done,                      'chain: 3D completes its first run within the time limit')
+        call assert_true(l_done,                      'chain: 3D reconstructs its first assignment within the time limit')
         ! stop, cancelling what still runs
         call enter(dir_3D)
         call s3D%finalize()
@@ -426,7 +424,6 @@ contains
         call cline%set('nthr',       NTHR_JOBS)
         call cline%set('nparts',     1)
         call cline%set('nstates',    NSTATES3D)
-        call cline%set('nstages',    NSTAGES3D)
         call cline%set('nthr3D',     NTHR_JOBS)
         call cline%set('nparts3D',   1)
         call set_solve3D_cline(cline)

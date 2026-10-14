@@ -2,12 +2,13 @@
 ! Each test assembles a stage in a fresh fixture directory from init_params and init_gui: no queue
 ! environment, no waits, and a settle time of -1. The command line names no registered program
 ! and carries qsys_name=local for the stage project's computing environment. The upstream is a pool
-! 2D directory whose completed folder holds exports. The class-average selection and the 3D jobs
-! (which need a queue) are left to the high-level stream tests; the import is tested on sets made
-! in memory, the class averages a publication brings on fixture stacks, the first run's cap and
-! queue on fixture rows, and the volume messages on a fixture project with a volume and an FSC; a
-! 3D snapshot is written from a fixture result project, on a request sent through the stage's
-! update pipe.
+! 2D directory whose completed folder holds exports. The class-average scoring and the jobs (which
+! need a queue) are left to the high-level stream tests; the import is tested on sets made in
+! memory, the class averages a publication brings on fixture stacks, the reference volumes on a
+! fixture solve3D_cavgs result, an assignment on a fixture matching, the local refinement's seeds
+! and result on fixture rows and a fixture refine3D project, the rules on fixed numbers, and the
+! volume messages on a fixture project with a volume and an FSC; a 3D snapshot is written from a
+! fixture result project, on a request sent through the stage's update pipe.
 module simple_stream_stage_solve3D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
@@ -23,6 +24,8 @@ use simple_syslib,                                    only: simple_mkdir, dir_ex
 use simple_math_ft,                                   only: get_resarr
 use simple_cmdline,                                   only: cmdline
 use simple_image,                                     only: image
+use simple_ori,                                       only: ori
+use simple_strategy3D_cont,                           only: cont_seed_is_valid
 use simple_sp_project,                                only: sp_project
 use simple_rec_list,                                  only: rec_iterator, chunk_rec
 use simple_gui_metadata_utils,                        only: max_metadata_size
@@ -34,8 +37,9 @@ use simple_gui_metadata_stream_snapshot,              only: gui_metadata_stream_
 use simple_gui_metadata_stream_update,                only: gui_metadata_stream_update
 use simple_gui_metadata_vol3D,                        only: gui_metadata_vol3D
 use simple_stream_pipe,                               only: stream_pipe
-use simple_stream_stage_solve3D,                   only: stream_stage_solve3D, PHASE_IMPORTING, PHASE_SOLVE3D,&
-                                                           &PHASE_IDLE, PHASE_ADDON, JOB_NONE, JOB_SOLVE3D, JOB_ADDON
+use simple_stream_stage_solve3D,                   only: stream_stage_solve3D, PHASE_IMPORTING, PHASE_CAVGS3D,&
+                                                           &PHASE_IDLE, PHASE_ASSIGN, JOB_NONE, JOB_ROUTE, JOB_FALLBACK,&
+                                                           &JOB_ASSIGN, ROUTE_TRIES
 implicit none
 private
 public :: run_all_stream_stage_solve3D_tests
@@ -56,18 +60,18 @@ contains
         call test_merge_publications()
         call test_take_cavgs()
         call test_first_publication()
-        call test_first_run_cap()
-        call test_addon_cohort_cap()
-        call test_cavgs3D()
-        call test_first_set_deselection_stays()
         call test_mskdiam_from_each_publication()
         call test_rows_problem()
         call test_rules()
-        call test_cohort()
+        call test_fit_rules()
+        call test_reference_volumes()
+        call test_failed_attempts()
+        call test_assignment()
+        call test_local_refinement()
         call test_retention()
         call test_send_status()
         call test_send_volumes()
-        call test_send_cavgs3D_volumes()
+        call test_send_refs()
         call test_snapshot3D()
         call test_iterate_waits()
         call test_finished()
@@ -91,6 +95,7 @@ contains
         call assert_int(NSTATES, size(stage%state_res),     'one resolution per state')
         call assert_int(NSTATES, size(stage%state_pop),     'and one population')
         call assert_int(0, size(stage%stk_names),           'no stack yet')
+        call assert_int(0, stage%n_refs(),                  'no reference volumes yet')
         call stage%kill
         call assert_false(allocated(stage%params), 'cleanup releases the owned parameters')
         call cline%kill
@@ -236,181 +241,6 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_merge_publications
 
-    !> an addon run takes at most nptcls_addon_max of its cohort (the selected rows not frozen):
-    !! whole stacks in row order, the oldest first, up to the first that no longer fits; the
-    !! frozen particles are never queued, and a cohort within the cap queues nothing
-    subroutine test_addon_cohort_cap()
-        class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)      :: cline
-        type(string)       :: cwd_saved, root
-        integer            :: nfail0, i, istk
-        integer, parameter :: N = 12, FROMP(4) = [1, 5, 9, 11], TOP(4) = [4, 8, 10, 12]
-        ! stack 1 frozen, stack 2 half frozen (rows 5, 6 selected again since), stacks 3 and 4 new
-        logical, parameter :: FROZEN(N) = [.true., .true., .true., .true., .false., .false., .true., .true.,&
-            &.false., .false., .false., .false.]
-        allocate(stage)
-        write(*,'(A)') 'test_addon_cohort_cap'
-        nfail0 = tests_failed
-        call enter_fixture('a3_stage_addon_cap', cwd_saved, root)
-        call set_test_cline(cline)
-        call make_test_stage(stage, cline)
-        call stage%spproj%os_stk%new(size(FROMP), is_ptcl=.false.)
-        do istk = 1,size(FROMP)
-            call stage%spproj%os_stk%set(istk, 'fromp', FROMP(istk))
-            call stage%spproj%os_stk%set(istk, 'top',   TOP(istk))
-        enddo
-        call stage%spproj%os_ptcl2D%new(N, is_ptcl=.true.)
-        call stage%spproj%os_ptcl3D%new(N, is_ptcl=.true.)
-        do i = 1,N
-            call stage%spproj%os_ptcl2D%set_state(i, 1)
-            call stage%spproj%os_ptcl3D%set_state(i, 1)
-        enddo
-        allocate(stage%frozen_active(N), source=FROZEN)
-        ! no cap
-        stage%params%nptcls_addon_max = 0
-        call stage%cap_addon_cohort()
-        call assert_false(allocated(stage%queued), 'without a cap nothing is queued')
-        ! the cohort of six within a cap of six
-        stage%params%nptcls_addon_max = 6
-        call stage%cap_addon_cohort()
-        call assert_false(allocated(stage%queued), 'a cohort within the cap queues nothing')
-        ! a cap of four: stack 2's two and stack 3's two cohort rows; stack 4 waits
-        stage%params%nptcls_addon_max = 4
-        call stage%cap_addon_cohort()
-        call assert_true(allocated(stage%queued), 'a cohort over the cap queues the rest')
-        if( allocated(stage%queued) )then
-            call assert_int(2, count(stage%queued),      'the run takes whole stacks of its cohort in order')
-            call assert_true(all(stage%queued(11:12)),   'the newest stack waits')
-            call assert_false(any(stage%queued(1:10)),   'the older ones are taken')
-            call assert_false(any(stage%queued .and. FROZEN), 'no frozen particle is ever queued')
-        endif
-        ! a cap of three: stack 3 no longer fits, so the run takes fewer than the cap
-        stage%params%nptcls_addon_max = 3
-        call stage%cap_addon_cohort()
-        if( allocated(stage%queued) )then
-            call assert_int(4, count(stage%queued),    'no stack is split to fill the cap')
-            call assert_true(all(stage%queued(9:12)),  'stacks 3 and 4 wait')
-        endif
-        call stage%kill
-        call cline%kill
-        call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_addon_cohort_cap
-
-    !> the first set's initial volumes from its class averages (ini3D_cavgs): the subclasses per
-    !! class of cls_expansion; the states renumbered from 1; and solve3D_cavgs' classes mapped onto
-    !! the first set, the states its particles hold becoming the stage's, so solve3D starts from them
-    subroutine test_cavgs3D()
-        class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)        :: cline
-        type(sp_project)     :: set, res
-        type(string)         :: cwd_saved, root
-        integer, allocatable :: states(:), newind(:)
-        integer              :: nfail0, nstates, i
-        allocate(stage)
-        write(*,'(A)') 'test_cavgs3D'
-        nfail0 = tests_failed
-        ! the states renumbered from 1
-        states = [0, 3, 1, 3, 0]
-        call stage%compact_states(states, newind, nstates)
-        call assert_int(2, nstates, 'two states are held')
-        call assert_true(all(states == [0, 2, 1, 2, 0]), 'renumbered from 1 in order')
-        call assert_true(all(newind == [1, 0, 2]),        'state 2, held by none, gets no number')
-        states = [0, 0]
-        call stage%compact_states(states, newind, nstates)
-        call assert_int(0, nstates, 'none when no state is held')
-        ! cls_expansion's subclasses per class, about 500 in all
-        call assert_int(5, stage%subclasses_per_class(100), '100 classes: 5 subclasses each, 500 in all')
-        call assert_int(4, stage%subclasses_per_class(120), '120 classes: 4 each, 480 rounded')
-        call assert_int(2, stage%subclasses_per_class(300), '300 classes: 2 each, at least 2')
-        call assert_int(2, stage%subclasses_per_class(0),   'no class: 2, cls_expansion''s least')
-        ! a first set of rows 2 to 5 (row 1 never updated), classes 1 (rows 1 to 3) and 2 (rows 4, 5)
-        call enter_fixture('a3_stage_cavgs3D', cwd_saved, root)
-        call set_test_cline(cline)
-        call make_test_stage(stage, cline)
-        call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
-        call set%os_ptcl2D%set_class(4, 2)
-        call set%os_ptcl2D%set_class(5, 2)
-        ! the sieve's 2D alignment, without which map2ptcls maps nothing
-        do i = 1,5
-            call set%os_ptcl2D%set(i, 'corr', 0.5)
-        enddo
-        call stage%take_first_publication(set, 1)
-        call set%kill
-        ! no class with a state: nothing changes
-        call res%os_cls3D%new(2, is_ptcl=.false.)
-        do i = 1,2
-            call res%os_cls3D%set(i, 'e1', 30.)
-            call res%os_cls3D%set_state(i, 0)
-        enddo
-        call assert_false(stage%take_cavgs3D_result(res), 'a result without states is not taken')
-        call assert_false(stage%l_cavg_ini_ext,            'and solve3D does not start from it')
-        call assert_int(3, stage%params%nstates,           'nor do the stage''s states change')
-        ! class 1 in state 3, class 2 in state 1: two states, renumbered
-        call res%os_cls3D%set_state(1, 3)
-        call res%os_cls3D%set_state(2, 1)
-        call assert_true(stage%take_cavgs3D_result(res),        'the classes are mapped onto the first set')
-        call assert_int(2, stage%spproj%os_ptcl3D%get_state(2), 'class 1''s particles in state 3, renumbered 2')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(4), 'class 2''s in state 1')
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(1), 'a deselected row stays deselected')
-        call assert_false(stage%spproj%is_virgin_field('ptcl3D'), 'the particles carry the classes'' poses')
-        call assert_int(2, stage%params%nstates,                'the states held are the stage''s')
-        call assert_int(2, stage%spproj%os_cls3D%get_state(1),  'the classes'' states are renumbered too')
-        call assert_int(4, stage%nptcls_selected,               'the first set stays selected')
-        call assert_true(stage%l_cavg_ini_ext,                  'solve3D starts from them')
-        call res%kill
-        call stage%kill
-        call cline%kill
-        call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_cavgs3D
-
-    !> a first-set row deselected on the way to the initial volumes (its class rejected, or left
-    !! without a state by solve3D_cavgs) stays a first-set row, deselected for the session: a later
-    !! publication that selects it does not select it again
-    subroutine test_first_set_deselection_stays()
-        class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: set, res
-        type(string)     :: cwd_saved, root
-        integer          :: nfail0, i
-        allocate(stage)
-        write(*,'(A)') 'test_first_set_deselection_stays'
-        nfail0 = tests_failed
-        call enter_fixture('a3_stage_first_set_deselection', cwd_saved, root)
-        call set_test_cline(cline)
-        call make_test_stage(stage, cline)
-        ! a first set of rows 1 to 5, classes 1 (rows 1 to 3) and 2 (rows 4, 5)
-        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
-        call set%os_ptcl2D%set_class(4, 2)
-        call set%os_ptcl2D%set_class(5, 2)
-        do i = 1,5
-            call set%os_ptcl2D%set(i, 'corr', 0.5)
-        enddo
-        call stage%take_first_publication(set, 1)
-        call set%kill
-        ! class 1 in state 1, class 2 without a state
-        call res%os_cls3D%new(2, is_ptcl=.false.)
-        do i = 1,2
-            call res%os_cls3D%set(i, 'e1', 30.)
-        enddo
-        call res%os_cls3D%set_state(1, 1)
-        call res%os_cls3D%set_state(2, 0)
-        call assert_true(stage%take_cavgs3D_result(res),        'the classes are mapped onto the first set')
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(4), 'class 2''s particles are deselected')
-        call assert_true(stage%in_first_set(4),                 'and stay first-set rows')
-        call assert_int(3, stage%nptcls_selected,               'class 1''s stay selected')
-        ! a later publication of the same stacks selects every particle
-        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
-        call stage%merge_publication(set, 2)
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(4), 'a later publication does not select them again')
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(5), 'neither of them')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'class 1''s particles stay selected')
-        call set%kill
-        call res%kill
-        call stage%kill
-        call cline%kill
-        call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_first_set_deselection_stays
-
     !> a publication's class averages and FRCs are copied into its quality folder and replace the
     !! stage's earlier ones, whose state volume stays; a publication without FRCs cannot be used
     subroutine test_take_cavgs()
@@ -490,10 +320,9 @@ contains
 
     end subroutine test_take_cavgs
 
-    !> the first publication is taken as the pool selects it: at most nptcls3D_max of its
-    !! particles, whole stacks in order, the others deselected. The rows kept are the first set,
+    !> the first publication is taken as the pool selects it: its selected rows are the first set,
     !! whose selection later publications do not change (also when they lack its stack); the
-    !! deselected rows follow them.
+    !! other rows follow them
     subroutine test_first_publication()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
@@ -506,28 +335,22 @@ contains
         call enter_fixture('a3_stage_first_publication', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
-        ! publication 1: stacks A (3) and B (2), the first particle never updated (deselected), and
-        ! a cap of 3: stack A's two selected particles fit, stack B's two would not
+        ! publication 1: stacks A (3) and B (2), the first particle never updated (deselected)
         call make_set(set, ['A', 'B'], [3, 2], 2, nrejected=1, icls=1)
-        stage%params%nptcls3D_max = 3
         call stage%take_first_publication(set, 1)
         call set%kill
         call assert_int(5, stage%spproj%os_ptcl3D%get_noris(), 'the first publication''s rows')
-        call assert_int(2, stage%nptcls_selected,              'whole stacks in order under the cap')
-        call assert_int(0, stage%spproj%os_ptcl3D%get_state(4), 'the stack that no longer fits is deselected')
-        call assert_int(0, stage%spproj%os_ptcl2D%get_state(5), 'in both segments')
-        call assert_true(allocated(stage%first_set),           'the rows kept are the first set')
+        call assert_int(4, stage%nptcls_selected,              'every selected particle, without a cap')
+        call assert_true(allocated(stage%first_set),           'the selected rows are the first set')
         if( allocated(stage%first_set) )then
-            call assert_true(all(stage%first_set .eqv. [.false., .true., .true., .false., .false.]), 'rows 2 and 3')
+            call assert_true(all(stage%first_set .eqv. [.false., .true., .true., .true., .true.]), 'rows 2 to 5')
         endif
-        call assert_false(allocated(stage%queued),             'nothing is queued')
-        call assert_int(PHASE_IMPORTING, stage%phase,          'no job is due but solve3D''s')
+        call assert_int(PHASE_IMPORTING, stage%phase,          'no job yet')
         ! publication 2 selects every particle, in class 2
         call make_set(set, ['A', 'B'], [3, 2], 2, icls=2)
         call stage%merge_publication(set, 2)
         call set%kill
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(4), 'a row deselected over the cap follows a later publication')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'as does one the first never updated')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'a row the first never selected follows a later publication')
         call assert_int(2, stage%spproj%os_ptcl2D%get_class(3), 'a first-set row takes the 2D parameters')
         call assert_int(5, stage%nptcls_selected,               'the selected rows are counted')
         ! publication 3 deselects the first three particles
@@ -549,91 +372,6 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_first_publication
 
-    !> the first run takes at most nptcls3D_max of the selected particles: whole stacks in row
-    !! order up to the first that no longer fits, so it may hold fewer than the cap (the first
-    !! stack's first particles when not even it fits); the others are queued, and once the run is
-    !! done they are selected again as the first addon run's cohort. A selection within the cap
-    !! queues nothing.
-    subroutine test_first_run_cap()
-        class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)      :: cline
-        type(string)       :: cwd_saved, root
-        integer            :: nfail0, i
-        integer, parameter :: N = 23 ! stacks of rows 1-5, 6-10, 11-12, 13-22 and 23; rows 7 and 23 deselected
-        allocate(stage)
-        write(*,'(A)') 'test_first_run_cap'
-        nfail0 = tests_failed
-        call enter_fixture('a3_stage_first_run_cap', cwd_saved, root)
-        call set_test_cline(cline)
-        call make_test_stage(stage, cline)
-        call make_rows()
-        ! within the cap
-        stage%params%nptcls3D_max = 21
-        call stage%cap_first_run()
-        call assert_false(allocated(stage%queued), 'a selection within the cap queues nothing')
-        ! a cap of 11: the first three stacks' 5 + 4 + 2 selected particles
-        stage%params%nptcls3D_max = 11
-        call stage%cap_first_run()
-        call assert_true(allocated(stage%queued), 'a selection over the cap queues the rest')
-        if( allocated(stage%queued) )then
-            call assert_int(10, count(stage%queued),     'the run takes whole stacks in order')
-            call assert_false(any(stage%queued(1:12)),   'the first three')
-            call assert_true(all(stage%queued(13:22)),   'up to the one that no longer fits')
-            call assert_false(stage%queued(7),           'a deselected row is not queued')
-            call assert_false(stage%queued(23),          'nor one in a later stack')
-        endif
-        ! the run's result has the queued rows deselected; once it is done they are the cohort
-        call stage%set_queued_states(0)
-        allocate(stage%frozen_active(N))
-        do i = 1,N
-            stage%frozen_active(i) = stage%spproj%os_ptcl3D%get_state(i) > 0
-        enddo
-        call stage%release_queue()
-        call assert_false(allocated(stage%queued),               'the queue is released')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_state(13), 'its rows are selected again')
-        call assert_int(1, stage%spproj%os_ptcl2D%get_state(22), 'in both segments')
-        call assert_int(11, stage%count_frozen(),                'the run''s particles are frozen')
-        call assert_int(10, stage%count_cohort(),                'the queued ones are the first addon run''s cohort')
-        call assert_int(21, stage%nptcls_selected,               'and the selection is whole again')
-        deallocate(stage%frozen_active)
-        ! a cap of 12: the fourth stack does not fit, so the run holds fewer than the cap
-        stage%params%nptcls3D_max = 12
-        call stage%cap_first_run()
-        if( allocated(stage%queued) )then
-            call assert_int(10, count(stage%queued), 'no stack is split to fill the cap')
-        endif
-        ! a cap of 3, below the first stack's 5: its first three particles
-        stage%params%nptcls3D_max = 3
-        call stage%cap_first_run()
-        if( allocated(stage%queued) )then
-            call assert_int(18, count(stage%queued),   'a first stack over the cap is cut to it')
-            call assert_false(any(stage%queued(1:3)),  'at its first particles')
-            call assert_true(stage%queued(4),          'and no further')
-        endif
-        call stage%kill
-        call cline%kill
-        call leave_fixture(cwd_saved, root, nfail0)
-
-    contains
-
-        subroutine make_rows()
-            integer, parameter :: FROMP(5) = [1, 6, 11, 13, 23], TOP(5) = [5, 10, 12, 22, 23]
-            integer :: iptcl, istk, s
-            call stage%spproj%os_stk%new(size(FROMP), is_ptcl=.false.)
-            do istk = 1,size(FROMP)
-                call stage%spproj%os_stk%set(istk, 'fromp', FROMP(istk))
-                call stage%spproj%os_stk%set(istk, 'top',   TOP(istk))
-            enddo
-            call stage%spproj%os_ptcl2D%new(N, is_ptcl=.true.)
-            call stage%spproj%os_ptcl3D%new(N, is_ptcl=.true.)
-            do iptcl = 1,N
-                s = merge(0, 1, iptcl == 7 .or. iptcl == 23)
-                call stage%spproj%os_ptcl2D%set_state(iptcl, s)
-                call stage%spproj%os_ptcl3D%set_state(iptcl, s)
-            enddo
-        end subroutine make_rows
-
-    end subroutine test_first_run_cap
     !> the mask diameter comes from every publication taken; a change is taken for the next run, and
     !! a publication without one leaves it
     subroutine test_mskdiam_from_each_publication()
@@ -700,31 +438,395 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_rows_problem
 
-    !> the addon's cohort: selected rows not active in the frozen solution, appended or selected again
-    subroutine test_cohort()
+    !> which job starts when, the check of the reference volumes, the best attempt, and the
+    !! renumbering, subclasses and mask diameter the route uses
+    subroutine test_rules()
         class(stream_stage_solve3D), allocatable :: stage
-        integer, parameter :: STATES(6) = [1, 1, 0, 1, 1, 0]
-        integer :: i
+        integer, allocatable :: states(:), newind(:)
+        integer :: nstates_held
         allocate(stage)
-        allocate(stage%spproj) ! made by init_params in the stage; this test sets rows directly
-        write(*,'(A)') 'test_cohort'
-        call assert_int(0, stage%count_frozen(), 'before a run nothing is frozen')
-        call stage%spproj%os_ptcl3D%new(6, is_ptcl=.true.)
-        do i = 1,6
-            call stage%spproj%os_ptcl3D%set_state(i, STATES(i))
-        enddo
-        call assert_int(4, stage%count_cohort(), 'before a run every selected particle is in the cohort')
-        ! rows 1 to 4 were in the latest result, row 4 deselected there
-        stage%frozen_active = [.true., .true., .true., .false.]
-        call assert_int(3, stage%count_frozen(), 'the frozen particles are those active in the result')
-        call assert_int(2, stage%count_cohort(), 'a particle selected again and one appended')
-        call stage%spproj%kill
-        deallocate(stage%spproj)
-        deallocate(stage%frozen_active)
-    end subroutine test_cohort
+        write(*,'(A)') 'test_rules'
+        ! next_job(phase, references, route due, fallback due, assignment due, selected, states)
+        call assert_int(JOB_NONE,     stage%next_job(PHASE_IMPORTING, 0, .false., .false., .false., 100, 3), 'nothing due: no job')
+        call assert_int(JOB_NONE,     stage%next_job(PHASE_IMPORTING, 0, .true.,  .false., .false., 14,  3), 'fewer than 5 per state: no route')
+        call assert_int(JOB_ROUTE,    stage%next_job(PHASE_IMPORTING, 0, .true.,  .false., .false., 15,  3), 'the route once 5 per state are selected')
+        call assert_int(JOB_FALLBACK, stage%next_job(PHASE_IMPORTING, 0, .false., .true.,  .false., 15,  3), 'the fallback when it is due')
+        call assert_int(JOB_NONE,     stage%next_job(PHASE_CAVGS3D,   0, .true.,  .true.,  .false., 100, 3), 'nothing starts while a job runs')
+        call assert_int(JOB_NONE,     stage%next_job(PHASE_IDLE,      2, .false., .false., .false., 100, 3), 'references without a publication: no job')
+        call assert_int(JOB_ASSIGN,   stage%next_job(PHASE_IDLE,      2, .false., .false., .true.,  10,  3), 'a publication''s assignment, 5 per reference')
+        call assert_int(JOB_NONE,     stage%next_job(PHASE_IDLE,      2, .false., .false., .true.,  9,   3), 'fewer wait')
+        call assert_int(JOB_ASSIGN,   stage%next_job(PHASE_IDLE,      2, .true.,  .true.,  .true.,  100, 3), 'with references neither route nor fallback')
+        call assert_int(JOB_NONE,     stage%next_job(PHASE_ASSIGN,    2, .false., .false., .true.,  100, 3), 'nothing while the matching runs')
+        ! the check: even/odd angular distance, state agreement, distinct states, two states of 5%
+        call assert_true(stage%refs_usable(12., 85., [40, 30, 30], 0.5),   'halves that agree, three distinct states')
+        call assert_true(stage%refs_usable(20., 70., [50, 50], 0.97),      'at the thresholds')
+        call assert_false(stage%refs_usable(25., 85., [40, 30, 30], 0.5),  'halves too far apart')
+        call assert_false(stage%refs_usable(12., 60., [40, 30, 30], 0.5),  'states that disagree between the halves')
+        call assert_false(stage%refs_usable(-1., 85., [40, 30, 30], 0.5),  'an angular distance not measured')
+        call assert_false(stage%refs_usable(12., -1., [40, 30, 30], 0.5),  'an agreement not measured')
+        call assert_false(stage%refs_usable(12., 85., [40, 30, 30], 0.99), 'two near-duplicate states')
+        call assert_false(stage%refs_usable(12., 85., [96, 4], 0.5),       'a state under 5%: one state counts')
+        call assert_true(stage%refs_usable(12., 85., [95, 5], 0.5),        'two states of 5%')
+        call assert_false(stage%refs_usable(12., 85., [100], -1.),         'one state')
+        ! the best attempt: the smallest angular distance among those with volumes
+        call assert_int(3, stage%best_attempt([-1., 30., 25., huge(1.)]), 'the smallest distance')
+        call assert_int(0, stage%best_attempt([-1., -1.]),                'none without volumes')
+        call assert_int(1, stage%best_attempt([huge(1.), -1.]),           'one not measured, when alone')
+        ! the states renumbered from 1
+        states = [0, 3, 1, 3, 0]
+        call stage%compact_states(states, newind, nstates_held)
+        call assert_int(2, nstates_held, 'two states are held')
+        call assert_true(all(states == [0, 2, 1, 2, 0]), 'renumbered from 1 in order')
+        call assert_true(all(newind == [1, 0, 2]),        'state 2, held by none, gets no number')
+        states = [0, 0]
+        call stage%compact_states(states, newind, nstates_held)
+        call assert_int(0, nstates_held, 'none when no state is held')
+        ! cls_expansion's subclasses per class, about 500 in all
+        call assert_int(5, stage%subclasses_per_class(100), '100 classes: 5 subclasses each, 500 in all')
+        call assert_int(4, stage%subclasses_per_class(120), '120 classes: 4 each, 480 rounded')
+        call assert_int(2, stage%subclasses_per_class(300), '300 classes: 2 each, at least 2')
+        call assert_int(2, stage%subclasses_per_class(0),   'no class: 2, cls_expansion''s least')
+        ! the mask diameter that fits the class averages
+        call assert_real(100., stage%fit_mskdiam(100.,  64, 2.0), 1.e-4, 'a mask diameter that fits is kept')
+        call assert_real(116., stage%fit_mskdiam(400.,  64, 2.0), 1.e-4, 'one too large for the box gets the box default')
+        call assert_real(116., stage%fit_mskdiam(0.,    64, 2.0), 1.e-4, 'none gets the box default')
+        call assert_real(116., stage%fit_mskdiam(-7.8,  64, 2.0), 1.e-4, 'a negative one too')
+        call check_final_publication()
+    end subroutine test_rules
 
-    !> the newest quality folders and those runs started from are kept, and so is the latest addon
-    !! iteration; earlier iterations and folders set aside for unfinished jobs go
+    !> the rejection by fit (below the median less 3 MADs, the worst first, at most 30% of the
+    !! candidates, never a class that is no candidate) and the ambiguity flag
+    subroutine test_fit_rules()
+        class(stream_stage_solve3D), allocatable :: stage
+        logical, allocatable :: l_rej(:), l_cand(:)
+        real    :: med, mad, thres
+        integer :: nmax
+        real,    parameter   :: CORRS_TWO(10)  = [0.50, 0.52, 0.48, 0.51, 0.49, 0.50, 0.53, 0.47, 0.10, 0.20]
+        real,    parameter   :: CORRS_FOUR(10) = [0.50, 0.51, 0.49, 0.50, 0.52, 0.48, 0.10, 0.12, 0.11, 0.13]
+        allocate(stage)
+        write(*,'(A)') 'test_fit_rules'
+        allocate(l_cand(10), source=.true.)
+        ! two outliers, under the cap; the statistics for the log
+        call stage%reject_by_fit(CORRS_TWO, l_cand, l_rej, med, mad, thres, nmax)
+        call assert_int(2, count(l_rej),           'two outliers are rejected')
+        call assert_true(l_rej(9) .and. l_rej(10), 'the two that fit worst')
+        call assert_real(0.495, med,   1.e-5, 'the candidates'' median')
+        call assert_real(0.02,  mad,   1.e-5, 'their median absolute deviation')
+        call assert_real(0.435, thres, 1.e-5, 'the threshold, 3 MADs below the median')
+        call assert_int(3, nmax,                   'the cap, 30% of 10')
+        ! four outliers: the cap of 3 of 10, the worst first
+        call stage%reject_by_fit(CORRS_FOUR, l_cand, l_rej)
+        call assert_int(3, count(l_rej),                         'at most 30% of the candidates')
+        call assert_true(l_rej(7) .and. l_rej(9) .and. l_rej(8), 'the worst three')
+        call assert_false(l_rej(10),                             'the fourth is kept')
+        ! a class that is no candidate is never rejected, and the statistics are the candidates'
+        l_cand(7) = .false.
+        call stage%reject_by_fit(CORRS_FOUR, l_cand, l_rej)
+        call assert_false(l_rej(7),     'a class that is no candidate is not rejected')
+        call assert_int(2, count(l_rej), 'two of the nine candidates, the cap')
+        call assert_true(l_rej(9) .and. l_rej(8), 'the worst two candidates')
+        ! none when every class fits
+        call stage%reject_by_fit([0.50, 0.51, 0.49, 0.50], [.true., .true., .true., .true.], l_rej)
+        call assert_int(0, count(l_rej), 'none when every class fits')
+        ! no candidate: nothing, and zero statistics
+        call stage%reject_by_fit([0.5, 0.1], [.false., .false.], l_rej, med, mad, thres, nmax)
+        call assert_int(0, count(l_rej), 'none without candidates')
+        call assert_int(0, nmax,         'and no cap')
+        ! the margin flags the kept classes below 0.02
+        call assert_true(all(stage%flag_ambiguous([0.01, 0.05, 0.0, 0.019], [.true., .true., .false., .true.]) .eqv.&
+            &[.true., .false., .false., .true.]), 'small margins of kept classes are ambiguous')
+    end subroutine test_fit_rules
+
+    !> solve3D_cavgs' volumes as attempts: the states that hold class averages renumbered from 1
+    !! and copied with their reprojections into state_refs/try_<n>/; a failing attempt (halves
+    !! apart, or near-duplicate states) is kept aside and the route runs again; a passing one
+    !! gives the references, which a restart takes
+    subroutine test_reference_volumes()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: res
+        type(string)     :: cwd_saved, root
+        integer          :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_reference_volumes'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_reference_volumes', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        ! attempt 1: halves 40 degrees apart
+        call make_cavgs3D_result(res, 40., 85.)
+        call assert_false(stage%register_attempt(res, 1), 'halves 40 degrees apart fail the check')
+        call assert_int(1, size(stage%try_angdist), 'the attempt is counted')
+        if( size(stage%try_angdist) == 1 ) call assert_real(40., stage%try_angdist(1), 1.e-4, 'with its angular distance')
+        call assert_true(file_exists(string('state_refs/try_1/vol_state01.mrc')), 'its volumes are kept aside')
+        stage%nroute_tries = 1
+        call stage%next_attempt()
+        call assert_true(stage%l_route_due, 'the route runs again')
+        call assert_int(0, stage%n_refs(),  'without references')
+        ! attempt 2: halves that agree, but the two states are one volume twice
+        call make_cavgs3D_result(res, 12., 85., l_same=.true.)
+        call assert_false(stage%register_attempt(res, 2), 'near-duplicate states fail the check')
+        ! attempt 3 passes: solve3D_cavgs' states 1 and 3 hold class averages, its state 2 none
+        call make_cavgs3D_result(res, 12., 85.)
+        call assert_true(stage%register_attempt(res, 3), 'halves that agree and distinct states pass')
+        call assert_true(file_exists(string('state_refs/try_3/vol_state01.mrc')),  'its state 1 is state 1')
+        call assert_true(file_exists(string('state_refs/try_3/vol_state02.mrc')),  'its state 3 is state 2')
+        call assert_false(file_exists(string('state_refs/try_3/vol_state03.mrc')), 'its state 2, empty, is left out')
+        call assert_true(file_exists(string('state_refs/try_3/')//refine3D_reprojs_fname(2)), 'its state 3''s reprojections are state 2''s')
+        call stage%accept_refs(3, .false.)
+        call assert_int(2, stage%n_refs(),          'two references')
+        call assert_int(2, stage%params%nstates,    'the stage''s states are theirs')
+        call assert_int(PHASE_IDLE, stage%phase,    'the stage waits for a publication')
+        call assert_int(VOL_BOX, stage%ref_box,     'their box')
+        call assert_real(VOL_SMPD, stage%ref_smpd, 1.e-4, 'and pixel size')
+        if( stage%n_refs() == 2 ) call assert_true(stage%ref_vols(2)%has_substr('state_refs/vol_state02.mrc'), 'in state_refs')
+        call assert_true(file_exists(string('state_refs/state_refs.txt')), 'with their record')
+        ! a restart takes them
+        call stage%kill
+        call make_test_stage(stage, cline)
+        call assert_int(2, stage%n_refs(),       'a restart takes the references')
+        call assert_int(2, stage%params%nstates, 'and their states')
+        call assert_int(PHASE_IDLE, stage%phase, 'and skips the route')
+        call res%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_reference_volumes
+
+    !> after the route's last attempt the fallback waits for a publication; after the fallback,
+    !! or when the pool publishes no more, the attempt with the smallest angular distance gives the
+    !! references; without any volumes there are none
+    subroutine test_failed_attempts()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: res
+        type(string)     :: cwd_saved, root
+        integer          :: nfail0
+        allocate(stage)
+        write(*,'(A)') 'test_failed_attempts'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_failed_attempts', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        ! no attempt with volumes, after the fallback: no references
+        stage%try_angdist     = [-1.]
+        stage%l_fallback_done = .true.
+        call stage%next_attempt()
+        call assert_int(0, stage%n_refs(), 'no volumes, no references')
+        ! the route's last attempt failed: the fallback waits for a publication
+        stage%l_fallback_done = .false.
+        stage%nroute_tries    = ROUTE_TRIES
+        call make_cavgs3D_result(res, 40., 85.)
+        call assert_false(stage%register_attempt(res, 2), 'an attempt that fails the check')
+        call stage%next_attempt()
+        call assert_false(stage%l_route_due,       'the route does not run again')
+        call assert_true(stage%l_fallback_pending, 'the fallback waits for the next publication')
+        ! after the fallback, which failed too: the best attempt, with a warning
+        stage%l_fallback_pending = .false.
+        stage%l_fallback_done    = .true.
+        stage%try_angdist        = [stage%try_angdist, -1.]
+        call stage%next_attempt()
+        call assert_int(2, stage%n_refs(),       'the attempt with volumes gives the references')
+        call assert_int(PHASE_IDLE, stage%phase, 'and the stage waits for a publication')
+        ! the pool's final publication is in: it is assigned at once
+        call assert_false(stage%l_assign_due, 'no assignment without the final publication')
+        ! a stage without references (their record gone), whose pool has published its last
+        call stage%kill
+        call del_file('state_refs/state_refs.txt')
+        call make_test_stage(stage, cline)
+        call assert_int(0, stage%n_refs(), 'no references to restore')
+        stage%l_final_seen = .true.
+        stage%nroute_tries = ROUTE_TRIES
+        stage%try_angdist  = [-1., 40.]
+        call stage%next_attempt()
+        call assert_false(stage%l_fallback_pending, 'no fallback when the pool publishes no more')
+        call assert_int(2, stage%n_refs(),          'the best attempt gives the references')
+        call assert_true(stage%l_assign_due,        'and the final publication is assigned')
+        call res%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_failed_attempts
+
+    !> a matching mapped onto the rows: each particle takes its sub-class's state and pose, so one
+    !! pool class may split across states; a sub-class that fits badly is rejected and its
+    !! particles deselected until the next publication (a first-set row is selected again by its
+    !! merge and judged again); a small margin is flagged; a later matching moves particles with
+    !! their sub-classes; a matching of other rows is not taken
+    subroutine test_assignment()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: set, res
+        type(string)     :: cwd_saved, root
+        integer          :: nfail0, i
+        allocate(stage)
+        write(*,'(A)') 'test_assignment'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_assignment', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        ! the first set: rows 1 to 5, pool classes 1 (rows 1 to 3) and 2 (rows 4, 5)
+        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
+        call set%os_ptcl2D%set_class(4, 2)
+        call set%os_ptcl2D%set_class(5, 2)
+        call stage%take_first_publication(set, 1)
+        call set%kill
+        allocate(stage%ref_vols(2))
+        ! sub-classes 1 (rows 1, 2) and 2 (row 3) of pool class 1, 3 (row 4) and 4 (row 5) of class 2;
+        ! sub-class 4 fits badly, sub-class 2 has a small margin
+        call make_matching(res, [1, 1, 2, 3, 4], [1, 2, 2, 1], [0.50, 0.51, 0.49, 0.10], [0.1, 0.01, 0.1, 0.1])
+        call assert_true(stage%take_assignment(res), 'the matching is taken')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(1), 'sub-class 1''s particles in state 1')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(2), 'both')
+        call assert_int(2, stage%spproj%os_ptcl3D%get_state(3), 'row 3, of the same pool class, in state 2')
+        call assert_int(2, stage%spproj%os_ptcl3D%get_state(4), 'sub-class 3''s particle in state 2')
+        call assert_int(2, stage%spproj%os_ptcl2D%get_state(3), 'in both particle segments')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(5), 'the badly fitting sub-class''s particle is deselected')
+        call assert_real(45., stage%spproj%os_ptcl3D%get(1, 'e2'), 1.e-3, 'a particle takes its sub-class''s direction')
+        call assert_int(0, res%os_cls3D%get_state(4),             'the rejected sub-class has no state')
+        call assert_int(1, res%os_cls2D%get_int(2, 'ambiguous'),  'the small margin is flagged')
+        call assert_int(0, res%os_cls2D%get_int(1, 'ambiguous'),  'a large one is not')
+        call assert_int(4, stage%nptcls_at_last_run,              'four particles have a state')
+        call assert_int(4, stage%nptcls_selected,                 'and are selected')
+        call res%kill
+        call assert_true(stage%fit_deselected(5),  'the deselection is recorded')
+        call assert_false(stage%fit_deselected(1), 'an assigned row is not')
+        ! a later publication: the first-set row the fit deselected is selected again
+        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
+        call stage%merge_publication(set, 2)
+        call set%kill
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(5), 'a first-set row deselected by the fit is selected again')
+        call assert_int(1, stage%spproj%os_ptcl2D%get_state(5), 'in both particle segments')
+        call assert_false(stage%fit_deselected(5),              'and no longer recorded')
+        ! a later matching with the sub-classes' states swapped moves their particles
+        call make_matching(res, [1, 1, 2, 3, 4], [2, 1, 1, 2], [0.50, 0.50, 0.50, 0.50], [0.1, 0.1, 0.1, 0.1])
+        call assert_true(stage%take_assignment(res), 'the later matching is taken')
+        call assert_int(2, stage%spproj%os_ptcl3D%get_state(1), 'a particle follows its sub-class to state 2')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_state(3), 'and another to state 1')
+        call assert_int(2, stage%spproj%os_ptcl3D%get_state(5), 'the row the fit deselected is judged again, here kept')
+        call res%kill
+        ! a matching of other rows changes nothing
+        call make_matching(res, [1, 1, 2, 3], [1, 1, 1, 1], [0.50, 0.50, 0.50, 0.50], [0.1, 0.1, 0.1, 0.1])
+        call assert_false(stage%take_assignment(res), 'a matching of other rows is not taken')
+        call assert_int(2, stage%spproj%os_ptcl3D%get_state(1), 'and the rows are unchanged')
+        call res%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+
+    contains
+
+        ! a matched copy of the stage's rows: particle i in sub-class @p icls(i) (its 2D alignment
+        ! set, as map2ptcls needs), and per sub-class its state, best correlation and margin, its
+        ! population, and a direction with e2 = 45
+        subroutine make_matching( proj, icls, states, corrs, margins )
+            type(sp_project), intent(inout) :: proj
+            integer,          intent(in)    :: icls(:), states(:)
+            real,             intent(in)    :: corrs(:), margins(:)
+            integer :: j, ncls
+            ncls = size(states)
+            call proj%os_ptcl2D%new(size(icls), is_ptcl=.true.)
+            call proj%os_ptcl3D%new(size(icls), is_ptcl=.true.)
+            do j = 1,size(icls)
+                call proj%os_ptcl2D%set_class(j, icls(j))
+                call proj%os_ptcl2D%set(j, 'corr', 0.5)
+                call proj%os_ptcl2D%set_state(j, stage%spproj%os_ptcl3D%get_state(j))
+                call proj%os_ptcl3D%set_state(j, stage%spproj%os_ptcl3D%get_state(j))
+            enddo
+            call proj%os_cls2D%new(ncls, is_ptcl=.false.)
+            call proj%os_cls3D%new(ncls, is_ptcl=.false.)
+            do j = 1,ncls
+                call proj%os_cls2D%set(j, 'pop', count(icls == j))
+                call proj%os_cls2D%set_state(j, 1)
+                call proj%os_cls3D%set_euler(j, [10. * real(j), 45., 0.])
+                call proj%os_cls3D%set(j, 'corr',   corrs(j))
+                call proj%os_cls3D%set(j, 'margin', margins(j))
+                call proj%os_cls3D%set_state(j, states(j))
+            enddo
+        end subroutine make_matching
+
+    end subroutine test_assignment
+
+
+    !> the local refinement: the assigned rows are valid refine=cont seeds (state, half-set by row
+    !! parity, projection direction); its result comes back under the stage's states, those the
+    !! job held renumbered from 1 (an empty state left out), with the refined poses; a result of
+    !! other rows is not taken
+    subroutine test_local_refinement()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(cmdline)    :: cline
+        type(sp_project) :: set, res
+        type(ori)        :: o
+        type(image)      :: vol
+        type(string)     :: cwd_saved, root, volfile, fscfile
+        real, allocatable :: fsc(:)
+        integer, parameter :: STATES(5) = [1, 1, 3, 3, 0], JOB_STATES(5) = [1, 1, 2, 2, 0]
+        integer          :: nfail0, i, k
+        logical          :: l_valid
+        allocate(stage)
+        write(*,'(A)') 'test_local_refinement'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_local_refinement', cwd_saved, root)
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        ! assigned rows: states 1, 1, 3, 3 (none in state 2) and one deselected, with mapped poses
+        call make_set(set, ['A', 'B'], [3, 2], 2, icls=1)
+        call stage%take_first_publication(set, 1)
+        call set%kill
+        allocate(stage%ref_vols(3))
+        do i = 1,5
+            call stage%spproj%os_ptcl3D%set_state(i, STATES(i))
+            call stage%spproj%os_ptcl3D%set_euler(i, [10. * real(i), 45., 30.])
+        enddo
+        call stage%prepare_refine_seeds()
+        l_valid = .true.
+        do i = 1,4
+            call stage%spproj%os_ptcl3D%get_ori(i, o)
+            l_valid = l_valid .and. cont_seed_is_valid(o)
+        enddo
+        call o%kill
+        call assert_true(l_valid, 'every assigned row is a valid refine=cont seed')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_eo(1), 'half-sets by row parity: row 1 even')
+        call assert_int(1, stage%spproj%os_ptcl3D%get_eo(2), 'row 2 odd')
+        call assert_int(3, stage%spproj%os_ptcl3D%get_state(3), 'and keeps its state')
+        ! the job's project: the rows in the job's states 1 and 2 (the stage's 1 and 3), refined
+        res%os_ptcl3D = stage%spproj%os_ptcl3D
+        do i = 1,5
+            call res%os_ptcl3D%set_state(i, JOB_STATES(i))
+            call res%os_ptcl3D%set_euler(i, [10. * real(i) + 1., 46., 31.])
+        enddo
+        allocate(fsc(size(get_resarr(VOL_BOX, VOL_SMPD))), source=0.5)
+        do k = 1,2
+            volfile = 'refine3D_vol_state'//int2str_pad(k, 2)//'.mrc'
+            fscfile = 'refine3D_fsc_state'//int2str_pad(k, 2)//'.bin'
+            call vol%new([VOL_BOX, VOL_BOX, VOL_BOX], VOL_SMPD)
+            call vol%write(volfile)
+            call vol%kill
+            call arr2file(fsc, fscfile)
+            call res%add_vol2os_out(volfile, VOL_SMPD, k, 'vol')
+            call res%add_fsc2os_out(fscfile, k, VOL_BOX)
+        enddo
+        call assert_int(2, stage%take_refine_result(res), 'two state volumes are taken')
+        call assert_true(stage%spproj%isthere_in_osout('vol', 1),  'the job''s state 1 is the stage''s 1')
+        call assert_true(stage%spproj%isthere_in_osout('vol', 3),  'the job''s state 2 is the stage''s 3')
+        call assert_false(stage%spproj%isthere_in_osout('vol', 2), 'the empty state has no volume')
+        call assert_true(stage%spproj%isthere_in_osout('fsc', 3),  'with their FSCs')
+        call assert_real(31., stage%spproj%os_ptcl3D%get(3, 'e1'), 1.e-3, 'a row takes its refined pose')
+        call assert_real(46., stage%spproj%os_ptcl3D%get(4, 'e2'), 1.e-3, 'every refined row')
+        call assert_int(3, stage%spproj%os_ptcl3D%get_state(3), 'its state stays the stage''s')
+        call assert_int(0, stage%spproj%os_ptcl3D%get_state(5), 'a deselected row stays deselected')
+        ! a result of other rows
+        call res%os_ptcl3D%new(4, is_ptcl=.true.)
+        call assert_int(0, stage%take_refine_result(res), 'a result of other rows is not taken')
+        call assert_true(stage%spproj%isthere_in_osout('vol', 3), 'and the volumes stay')
+        call res%kill
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_local_refinement
+
+    !> the newest quality folders and those the route started from are kept, and so is the latest
+    !! assignment; earlier assignments and folders set aside for unfinished jobs go
     subroutine test_retention()
         class(stream_stage_solve3D), allocatable :: stage
         type(string) :: cwd_saved, root
@@ -742,57 +844,25 @@ contains
         close(funit)
         call stage%prune_quality_dirs()
         call assert_false(dir_exists('quality_selection/00001'), 'an old quality folder goes')
-        call assert_true(dir_exists('quality_selection/00002'),  'one a run started from stays')
+        call assert_true(dir_exists('quality_selection/00002'),  'one the route started from stays')
         call assert_false(dir_exists('quality_selection/00003'), 'like every other old one')
         call assert_true(dir_exists('quality_selection/00004'),  'the newest three stay')
         call assert_true(dir_exists('quality_selection/00006'),  'up to the newest')
-        call simple_mkdir('solve3D_addon')
+        call simple_mkdir('assign')
         do i = 1,3
-            call simple_mkdir('solve3D_addon/it_'//int2str_pad(i, 1))
+            call simple_mkdir('assign/it_'//int2str_pad(i, 1))
         enddo
-        call simple_mkdir('solve3D_addon/it_2_unfinished1')
-        call simple_mkdir('solve3D_unfinished1')
-        stage%naddon_runs = 3
+        call simple_mkdir('assign/it_2_unfinished1')
+        call simple_mkdir('solve3D_cavgs_unfinished1')
+        stage%nassign = 3
         call stage%prune_run_dirs()
-        call assert_false(dir_exists('solve3D_addon/it_1'), 'an addon iteration before the frozen base goes')
-        call assert_false(dir_exists('solve3D_addon/it_2'), 'every one')
-        call assert_true(dir_exists('solve3D_addon/it_3'),  'the frozen base stays')
-        call assert_false(dir_exists('solve3D_addon/it_2_unfinished1'), 'a folder set aside for an unfinished job goes')
-        call assert_false(dir_exists('solve3D_unfinished1'), 'for solve3D too')
+        call assert_false(dir_exists('assign/it_1'), 'an earlier assignment goes')
+        call assert_false(dir_exists('assign/it_2'), 'every one')
+        call assert_true(dir_exists('assign/it_3'),  'the latest stays')
+        call assert_false(dir_exists('assign/it_2_unfinished1'),   'a folder set aside for an unfinished job goes')
+        call assert_false(dir_exists('solve3D_cavgs_unfinished1'), 'for solve3D_cavgs too')
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_retention
-
-    !> which job starts when, and the mask diameter that fits the class averages
-    subroutine test_rules()
-        class(stream_stage_solve3D), allocatable :: stage
-        allocate(stage)
-        write(*,'(A)') 'test_rules'
-        ! next_job(phase, selected, cohort, frozen, nstates, cohort of the last refused addon run)
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_IMPORTING, 0,   0, 0, 3, -1), 'no particles: no job')
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_IMPORTING, 14,  0, 0, 3, -1), 'fewer than 5 per state: no solve3D')
-        call assert_int(JOB_SOLVE3D, stage%next_job(PHASE_IMPORTING, 15,  0, 0, 3, -1), '5 per state start solve3D')
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_SOLVE3D,   100, 0, 0, 3, -1), 'nothing starts while solve3D runs')
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 100, 0,   100,  3, -1), 'no cohort: no addon run')
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 114, 14,  100,  3, -1), 'a cohort under 5 per state waits')
-        call assert_int(JOB_ADDON,   stage%next_job(PHASE_IDLE, 115, 15,  100,  3, -1), '5 per state start an addon run')
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 1099, 99, 1000, 3, -1), 'under 10% of the frozen particles waits')
-        call assert_int(JOB_ADDON,   stage%next_job(PHASE_IDLE, 1100, 100, 1000, 3, -1), '10% of them start it')
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_IDLE, 120, 20,  100,  3, 20), 'after a failed run, the same cohort waits')
-        call assert_int(JOB_ADDON,   stage%next_job(PHASE_IDLE, 121, 21,  100,  3, 20), 'a larger one starts the next')
-        call assert_int(JOB_NONE,    stage%next_job(PHASE_ADDON, 200, 100, 100, 3, -1), 'nothing starts while it runs')
-        call assert_real(100., stage%fit_mskdiam(100.,  64, 2.0), 1.e-4, 'a mask diameter that fits is kept')
-        call assert_real(116., stage%fit_mskdiam(400.,  64, 2.0), 1.e-4, 'one too large for the box gets the box default')
-        call assert_real(116., stage%fit_mskdiam(0.,    64, 2.0), 1.e-4, 'none gets the box default')
-        call assert_real(116., stage%fit_mskdiam(-7.8,  64, 2.0), 1.e-4, 'a negative one too')
-        ! after a rolled-back addon run of 120 with 1000 frozen and 3 states, the next waits for
-        ! the cadence step (max(15, 100)) beyond it
-        call assert_int(219, stage%retry_cohort(120, 1000, 3), 'the cohort to exceed after a rollback')
-        call assert_int(JOB_NONE,  stage%next_job(PHASE_IDLE, 1219, 219, 1000, 3, stage%retry_cohort(120, 1000, 3)),&
-            &'a few more particles do not start a retry')
-        call assert_int(JOB_ADDON, stage%next_job(PHASE_IDLE, 1220, 220, 1000, 3, stage%retry_cohort(120, 1000, 3)),&
-            &'a cadence step more does')
-        call check_final_publication()
-    end subroutine test_rules
 
     !> a publication flagged pool_final=yes in its out segment is the pool's final one
     subroutine check_final_publication()
@@ -848,7 +918,7 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_send_status
 
-    !> after a run, each state with a volume is sent with its reprojection tiles, and its
+    !> after a reconstruction, each state with a volume is sent with its reprojection tiles, and its
     !! resolution is kept; a state without a volume is not sent, and a state without an FSC
     !! curve is sent without one (not with the previous state's)
     subroutine test_send_volumes()
@@ -925,10 +995,10 @@ contains
         call assert_int(4, stage%state_pop(1), 'the population of state 1 is kept for the status')
         call assert_int(2, stage%state_pop(2), 'and that of state 2')
         call assert_int(0, stage%state_pop(3), 'a state without a volume has none')
-        ! a later merge labels a particle state 1 before any map holds it: the status reports the
-        ! result's populations, not the rows' labels
+        ! a later merge labels a particle state 1 before any assignment: the status reports the
+        ! reconstruction's populations, not the rows' labels
         call stage%spproj%os_ptcl3D%set_state(5, 1)
-        stage%frozen_projfile = 'result.simple'
+        allocate(stage%ref_vols(2))
         call stage%send_status()
         l_found = .false.
         pop_got = -1
@@ -949,47 +1019,32 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_send_volumes
 
-    !> solve3D_cavgs' initial volumes go to the GUI under the stage's renumbered states, without
-    !! FSCs, with the reprojections named after solve3D_cavgs' own state; a state no particle
-    !! holds is not sent, and the stage's project does not register them
-    subroutine test_send_cavgs3D_volumes()
+    !> the reference volumes go to the GUI under their states, without FSCs, populations or
+    !! orientations, with the reprojections copied beside them
+    subroutine test_send_refs()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)                 :: cline
         type(sp_project)              :: res
         type(stream_pipe)             :: reader
-        type(image)                   :: vol
         type(gui_metadata_vol3D)      :: meta_vol
         character(len=:), allocatable :: buffer
         real,             allocatable :: invres_got(:), fsc_got(:)
-        type(string)                  :: cwd_saved, root, volfile
+        type(string)                  :: cwd_saved, root
         integer(c_int)                :: fds(2)
-        integer                       :: nfail0, meta_type, nvols, ntiles, iptcl, s
+        integer                       :: nfail0, meta_type, nvols, ntiles
         logical                       :: l_sent(3), l_fsc
         allocate(stage)
-        write(*,'(A)') 'test_send_cavgs3D_volumes'
+        write(*,'(A)') 'test_send_refs'
         nfail0 = tests_failed
-        call enter_fixture('a3_stage_cavgs3D_volumes', cwd_saved, root)
+        call enter_fixture('a3_stage_send_refs', cwd_saved, root)
         call set_test_cline(cline)
         call make_test_stage(stage, cline)
         call open_loopback(fds)
         call stage%init_gui(-1, int(fds(2)))
         call reader%new(int(fds(1)), -1, max_metadata_size(), 'test reader')
-        ! solve3D_cavgs' volumes of its states 1 to 3; its state 2 is held by no particle, and its
-        ! state 3 has reprojections; the stage's states 1 and 2 are its 1 and 3
-        do s = 1,3
-            volfile = 'rec_final_state'//int2str_pad(s, 2)//'.mrc'
-            call vol%new([VOL_BOX, VOL_BOX, VOL_BOX], VOL_SMPD)
-            call vol%write(volfile)
-            call vol%kill
-            call res%add_vol2os_out(volfile, VOL_SMPD, s, 'vol_cavg')
-        enddo
-        call simple_touch(refine3D_reprojs_fname(3))
-        stage%params%nstates = 2
-        call stage%spproj%os_ptcl3D%new(5, is_ptcl=.true.)
-        do iptcl = 1,5
-            call stage%spproj%os_ptcl3D%set_state(iptcl, merge(1, 2, iptcl <= 3))
-        enddo
-        call stage%send_cavgs3D_volumes(res, [1, 0, 2])
+        call make_cavgs3D_result(res, 12., 85.)
+        call assert_true(stage%register_attempt(res, 1), 'the attempt passes')
+        call stage%accept_refs(1, .false.)
         nvols  = 0
         ntiles = 0
         l_sent = .false.
@@ -1004,14 +1059,13 @@ contains
             endif
             if( meta_type == GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE ) ntiles = ntiles + 1
         enddo
-        call assert_int(2, nvols, 'one volume per state a particle holds')
-        call assert_true(l_sent(1) .and. l_sent(2), 'under the stage''s states 1 and 2')
+        call assert_int(2, nvols,                   'one volume per reference')
+        call assert_true(l_sent(1) .and. l_sent(2), 'under states 1 and 2')
         call assert_false(l_sent(3),                'none under solve3D_cavgs'' own state 3')
         call assert_false(l_fsc,                    'without an FSC curve')
-        call assert_int(3, ntiles,                  'the reprojection tiles of its state 3, the stage''s 2')
-        call assert_int(3, stage%state_pop(1),      'the populations are kept for the status')
-        call assert_int(2, stage%state_pop(2),      'for each state')
-        call assert_real(0., stage%state_res(1), 1.e-6, 'with no resolution')
+        call assert_int(3, ntiles,                  'the reprojection tiles of state 2')
+        call assert_int(0, stage%state_pop(1),      'without a population')
+        call assert_real(0., stage%state_res(1), 1.e-6, 'or a resolution')
         call assert_false(stage%spproj%isthere_in_osout('vol', 1), 'the stage''s project does not register them')
         call res%kill
         call reader%kill
@@ -1019,7 +1073,7 @@ contains
         call close_loopback(fds)
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_send_cavgs3D_volumes
+    end subroutine test_send_refs
 
     !> a 3D snapshot request: before a result, answered as not written; from a result, the
     !! particles of the selected states merged into state 1, the state volumes out of the project
@@ -1178,8 +1232,6 @@ contains
 
     ! ---- fixtures ------------------------------------------------------------
 
-    ! the stage's command line under a program name outside every UI table, with a local queue
-    ! system for the computing environment of the stage's project
     subroutine set_test_cline( cline )
         type(cmdline), intent(inout) :: cline
         call cline%set('prg',        'stream_solve3D_stage_tester')
@@ -1193,8 +1245,6 @@ contains
         call cline%set('qsys_name',  'local')
     end subroutine set_test_cline
 
-    ! a stage without a queue environment or a pipe, with no waits and a settle time that takes
-    ! files written in the same second
     subroutine make_test_stage( stage, cline )
         class(stream_stage_solve3D), intent(inout) :: stage
         type(cmdline),                 intent(inout) :: cline
@@ -1205,7 +1255,6 @@ contains
         stage%l_exists = .true.
     end subroutine make_test_stage
 
-    ! export number @p id of pool 2D, with only the class averages' entry and its mask diameter
     subroutine write_export( id, mskdiam )
         integer, intent(in) :: id
         real,    intent(in) :: mskdiam
@@ -1223,10 +1272,6 @@ contains
         call proj%kill
     end subroutine write_export
 
-    ! a publication in memory: one micrograph and stack per entry of @p stks (stack name
-    ! 'stack_<name>.mrcs') with @p nptcls_stk particles each, whose 'x' is the stack's position in
-    ! the alphabet; the first @p nrejected particles deselected (as the class-average selection
-    ! leaves them, in both segments); every particle in class @p icls when given; @p ncls classes
     subroutine make_set( set, stks, nptcls_stk, ncls, nrejected, icls )
         type(sp_project),  intent(inout) :: set
         character(len=1),  intent(in)    :: stks(:)
@@ -1262,7 +1307,6 @@ contains
         endif
     end subroutine make_set
 
-    ! a publication's class averages entry with mask diameter @p mskdiam (none when 0)
     subroutine add_cavgs_entry( set, mskdiam )
         type(sp_project), intent(inout) :: set
         real,             intent(in)    :: mskdiam
@@ -1273,7 +1317,57 @@ contains
         if( mskdiam > 0. ) call set%os_out%set(1, 'mskdiam', mskdiam)
     end subroutine add_cavgs_entry
 
-    ! a pipe with a non-blocking read end
+    ! solve3D_cavgs' result in memory: four class averages in its states 3, none, 1 and 3 (its
+    ! state 2 holds none), a volume for each of its states 1 to 3 with the even/odd values
+    ! @p angdist and @p overlap, and the reprojections of its state 3. Each state's volume is a
+    ! wave of the second Fourier shell along its own axis, so the states are distinct at 15 A;
+    ! with @p l_same every state's is the first's.
+    subroutine make_cavgs3D_result( res, angdist, overlap, l_same )
+        type(sp_project),  intent(inout) :: res
+        real,              intent(in)    :: angdist, overlap
+        logical, optional, intent(in)    :: l_same
+        integer, parameter :: CLS_STATES(4) = [3, 0, 1, 3]
+        real,    parameter :: TWOPI = 6.2831853
+        type(image)  :: vol
+        type(string) :: volfile
+        real, allocatable :: rmat(:,:,:)
+        integer      :: s, i, x, y, z, iaxis, r(3)
+        logical      :: l_same_here
+        l_same_here = .false.
+        if( present(l_same) ) l_same_here = l_same
+        allocate(rmat(VOL_BOX,VOL_BOX,VOL_BOX))
+        call res%kill
+        call res%os_cls3D%new(size(CLS_STATES), is_ptcl=.false.)
+        do i = 1,size(CLS_STATES)
+            call res%os_cls3D%set(i, 'e1', 30.)
+            call res%os_cls3D%set_state(i, CLS_STATES(i))
+        enddo
+        call simple_mkdir('cavgs3D')
+        do s = 1,3
+            iaxis = s
+            if( l_same_here ) iaxis = 1
+            do z = 1,VOL_BOX
+                do y = 1,VOL_BOX
+                    do x = 1,VOL_BOX
+                        r = [x, y, z] - (VOL_BOX / 2 + 1)
+                        rmat(x,y,z) = cos(TWOPI * 2. * real(r(iaxis)) / real(VOL_BOX))
+                    enddo
+                enddo
+            enddo
+            volfile = 'cavgs3D/rec_final_state'//int2str_pad(s, 2)//'.mrc'
+            call vol%new([VOL_BOX, VOL_BOX, VOL_BOX], VOL_SMPD)
+            call vol%set_rmat(rmat, .false.)
+            call vol%write(volfile)
+            call vol%kill
+            call res%add_vol2os_out(volfile, VOL_SMPD, s, 'vol_cavg')
+        enddo
+        call simple_touch(string('cavgs3D/')//refine3D_reprojs_fname(3))
+        do i = 1,res%os_out%get_noris()
+            call res%os_out%set(i, 'eo_angdist',       angdist)
+            call res%os_out%set(i, 'eo_state_overlap', overlap)
+        enddo
+    end subroutine make_cavgs3D_result
+
     subroutine open_loopback( fds )
         integer(c_int), intent(inout) :: fds(2)
         integer(c_int) :: rc, flags

@@ -140,6 +140,7 @@ contains
         call cmd_dict%push('infile',        'file with inputs(.txt)')
         call cmd_dict%push('infile2',       'file with inputs(.txt)')
         call cmd_dict%push('keys',          'keys of values to print')
+        call cmd_dict%push('lp',            'low-pass limit(in A)')
         call cmd_dict%push('maxits',        'maximum # iterations')
         call cmd_dict%push('mirr',          'mirror(no|x|y){no}')
         call cmd_dict%push('mskdiam',       'mask diameter(in A)')
@@ -148,6 +149,7 @@ contains
         call cmd_dict%push('nparts',        '# partitions in distributed exection')
         call cmd_dict%push('nptcls',        '# images in stk/# orientations in oritab')
         call cmd_dict%push('nrots',         '# rotations in 2D analysis{0}')
+        call cmd_dict%push('nspace',        '# projection directions')
         call cmd_dict%push('nstates',       '# states to reconstruct')
         call cmd_dict%push('nthr',          '# OpenMP threads{1}')
         call cmd_dict%push('oritype',       'SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D|projinfo|jobproc|compenv)')
@@ -157,8 +159,10 @@ contains
         call cmd_dict%push('projfile',      'SIMPLE *.simple project file')
         call cmd_dict%push('refs',          'initial2Dreferences.ext')
         call cmd_dict%push('stk',           'particle stack with all images(ptcls.ext)')
+        call cmd_dict%push('trs',           'maximum halfwidth shift(in pixels)')
         call cmd_dict%push('trust_header',  'trust the smpd value in the image header(yes|no){no}')
         call cmd_dict%push('vol1',          'input volume no1(invol1.ext)')
+        call cmd_dict%push('vol2',          'input volume no2(invol2.ext)')
         call cmd_dict%push('which_iter',    'iteration nr')
     end subroutine init_cmd_dict
 
@@ -284,7 +288,21 @@ contains
         ! optional keys
         call private_prgs(16)%push_opt_key('nthr')
 
-        n_private_prgs = 16
+        ! the project's class averages matched against state volumes vol1..volN (stream multistate 3D)
+        call private_prgs(17)%set_name('assign_cavgs_states')
+        ! required keys
+        call private_prgs(17)%push_req_key('projfile')
+        call private_prgs(17)%push_req_key('nstates')
+        call private_prgs(17)%push_req_key('vol1')
+        call private_prgs(17)%push_req_key('mskdiam')
+        ! optional keys
+        call private_prgs(17)%push_opt_key('vol2')
+        call private_prgs(17)%push_opt_key('nthr')
+        call private_prgs(17)%push_opt_key('lp')
+        call private_prgs(17)%push_opt_key('trs')
+        call private_prgs(17)%push_opt_key('nspace')
+
+        n_private_prgs = 17
     end subroutine new_private_prgs
 
 end module simple_private_prgs

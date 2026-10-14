@@ -855,11 +855,15 @@ contains
         call build%pftc%kill
     end function match_imgs2ref
 
-    function match_imgs( params, hp, lp, trs, imgs_ref, imgs_targ ) result( algninfo )
+    !> @p l_nomirr (default .false.): the targets are matched as they are, without their mirrors (a
+    !! reference set that holds every view, such as the projections of a volume over the whole
+    !! sphere, has each mirrored view already)
+    function match_imgs( params, hp, lp, trs, imgs_ref, imgs_targ, l_nomirr ) result( algninfo )
         use simple_parameters, only: parameters
         class(parameters), intent(in)    :: params
         real,              intent(in)    :: hp, lp, trs
         class(image),       intent(inout) :: imgs_ref(:), imgs_targ(:)
+        logical, optional,  intent(in)    :: l_nomirr
         integer,      parameter         :: MAXITS_SH = 60
         real,         parameter         :: FRC_CRIT = 0.5
         real,         allocatable       :: inpl_corrs(:), frc(:)
@@ -871,17 +875,22 @@ contains
         real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), joint_lims_loc(3,2)
         real    :: cxy(3), rotmat(2,2), inpl_angle
         real(dp):: rotind_frac
-        logical :: l_rot_shvec
+        logical :: l_rot_shvec, l_mirr_srch
+        integer :: npfts
         nrefs      = size(imgs_ref)
         ntargets   = size(imgs_targ)
+        l_mirr_srch = .true.
+        if( present(l_nomirr) ) l_mirr_srch = .not. l_nomirr
+        npfts = ntargets
+        if( l_mirr_srch ) npfts = 2 * ntargets
         ldim       = imgs_ref(1)%get_ldim()
         box        = ldim(1)
         smpd       = imgs_ref(1)%get_smpd()
         kfromto(1) = max(2, calc_fourier_index(hp, box, smpd))
         kfromto(2) =        calc_fourier_index(lp, box, smpd)
-        ! initialize mirrores images, pftc, polarizer
-        call alloc_imgarr(ntargets, ldim, smpd, imgs_targ_mirr)
-        call build%pftc%new(params, nrefs, [1,2*ntargets], kfromto) ! 2*ntargets because of mirroring
+        ! initialize mirrored images, pftc, polarizer
+        if( l_mirr_srch ) call alloc_imgarr(ntargets, ldim, smpd, imgs_targ_mirr)
+        call build%pftc%new(params, nrefs, [1,npfts], kfromto) ! 2*ntargets with the mirrors
         pdim_srch = build%pftc%get_pdim_srch()
         call imgs_ref(1)%memoize4polarize(pdim_srch)
         ! in-plane search object objects for parallel execution
@@ -916,6 +925,7 @@ contains
             call imgs_targ(i)%fft()
             call build%pftc%polarize_ptcl_pft(imgs_targ(i), i, pdim=pdim_srch, oversamp=.false.)
             call imgs_targ(i)%ifft
+            if( .not. l_mirr_srch ) cycle
             ! target mirror
             m = ntargets+i
             call imgs_targ_mirr(i)%copy(imgs_targ(i))
@@ -925,7 +935,7 @@ contains
         end do
         !$omp end do
         !$omp end parallel
-        call dealloc_imgarr(imgs_targ_mirr) ! no longer needed
+        if( l_mirr_srch ) call dealloc_imgarr(imgs_targ_mirr) ! no longer needed
         call build%pftc%memoize_refs
         call build%pftc%memoize_ptcls
         ! register imgs
@@ -933,7 +943,7 @@ contains
         &algninfo_mirr(nrefs,ntargets), frc(kfromto(1):kfromto(2)))
         !$omp parallel do private(i,j,k,m,ithr,inpl_corrs,loc,irot,cxy,frc,l_rot_shvec,rotind_frac,inpl_angle,joint_lims_loc)&
         !$omp default(shared) collapse(2) schedule(static) proc_bind(close)
-        do i = 1, 2 * ntargets ! ptcls
+        do i = 1, npfts        ! ptcls, then their mirrors
             do j = 1, nrefs    ! refs
                 ithr = omp_get_thread_num() + 1
                 call build%pftc%gen_objfun_vals(j, i, [0.,0.], inpl_corrs)
@@ -1007,7 +1017,9 @@ contains
         end do
         !$omp end parallel do
         ! select for mirroring
-        where( algninfo_mirr(:,:)%corr > algninfo(:,:)%corr ) algninfo = algninfo_mirr
+        if( l_mirr_srch )then
+            where( algninfo_mirr(:,:)%corr > algninfo(:,:)%corr ) algninfo = algninfo_mirr
+        endif
         ! destruct
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill

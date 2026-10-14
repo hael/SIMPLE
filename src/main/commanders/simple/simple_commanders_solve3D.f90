@@ -82,6 +82,7 @@ contains
         integer                   :: nstates_target, pop
         integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates
         real                      :: cavg_smpd
+        real                      :: eo_angdist, eo_state_overlap ! the last stage's even/odd agreement (-1: not measured)
         logical                   :: l_reseed, l_reseeded
         if( cline%defined('part') )then
             THROW_HARD('solve3D_cavgs distributed execution is master-only; remove part from command line')
@@ -300,6 +301,8 @@ contains
             cavg_smpd = params%smpd
             if( cavg_nimgs < ncavgs ) THROW_HARD('fewer images in cavgs stack than expected; solve3D_cavgs')
             ! check even odd convergence
+            eo_angdist       = -1.
+            eo_state_overlap = -1.
             if( params%nstates > 1 ) call conv_eo_states(work_proj%os_ptcl3D)
             call conv_eo(work_proj%os_ptcl3D)
             ! calculate 3D reconstruction at original sampling
@@ -314,6 +317,13 @@ contains
                 if( file_exists(final_vol) )then
                     call spproj%add_vol2os_out(final_vol, cavg_smpd, s, 'vol_cavg')
                 endif
+            enddo
+            ! the even/odd agreement with the volumes, for a caller that checks them (stream p07)
+            do s = 1,spproj%os_out%get_noris()
+                if( .not. spproj%os_out%isthere(s, 'imgkind') ) cycle
+                if( spproj%os_out%get_str(s, 'imgkind') /= 'vol_cavg' ) cycle
+                call spproj%os_out%set(s, 'eo_angdist',       eo_angdist)
+                call spproj%os_out%set(s, 'eo_state_overlap', eo_state_overlap)
             enddo
             ! reprojections
             call spproj%os_cls3D%write(string('final_oris.txt'))
@@ -478,7 +488,8 @@ contains
                     endif
                     avg_euldist = avg_euldist + euldist
                 enddo
-                avg_euldist = avg_euldist/real(ncls)
+                if( ncls > 0 ) avg_euldist = avg_euldist/real(ncls)
+                eo_angdist = avg_euldist
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
             end subroutine conv_eo
@@ -494,6 +505,7 @@ contains
                     if( se == so ) nsame_state = nsame_state + 1
                 enddo
                 score = 100.0 * real(nsame_state) / real(ncavgs)
+                eo_state_overlap = score
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A,F6.1,A1)')'>>> EVEN/ODD STATES OVERLAP: ', score,'%'
             end subroutine conv_eo_states

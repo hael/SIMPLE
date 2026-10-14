@@ -214,6 +214,7 @@ contains
         type(commander_rank_cavgs)              :: xrank_cavgs
         type(commander_export_cavgs)            :: xexport_cavgs
         type(commander_cls_expansion)               :: xcls_expansion
+        type(commander_assign_cavgs_states)     :: xassign_cavgs_states
         ! REFINE3D PROGRAMS
         type(commander_refine3D_distr_worker)   :: xrefine3D_worker
         type(commander_calc_pspec)              :: xcalc_pspec
@@ -308,6 +309,8 @@ contains
                 call xexport_cavgs%execute(cline)
             case( 'cls_expansion' )
                 call xcls_expansion%execute(cline)
+            case( 'assign_cavgs_states' )
+                call xassign_cavgs_states%execute(cline)
             ! REFINE3D PROGRAMS
             case( 'refine3D' )
                 call xrefine3D_worker%execute(cline)

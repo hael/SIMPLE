@@ -37,7 +37,7 @@ commander_cavgassemble
 use simple_commanders_denoise, only: commander_cls_expansion
 
 ! cavgs commanders, for operations on class averages
-use simple_commanders_cavgs, only: commander_rank_cavgs, commander_shape_rank_cavgs
+use simple_commanders_cavgs, only: commander_rank_cavgs, commander_shape_rank_cavgs, commander_assign_cavgs_states
 
 ! project commanders, operations on projects (sp_project) and associated files
 use simple_commanders_project_core, only: commander_print_project_vals

@@ -1,4 +1,4 @@
-!@descr: task 7 in the stream pipeline: multistate 3D reconstruction of the particles pool 2D exports
+!@descr: task 7 in the stream pipeline: multistate 3D of the particles pool 2D exports, by class-average assignment to reference volumes
 !==============================================================================
 ! MODULE: simple_commanders_stream_p07_solve3D_multistate
 !
@@ -9,13 +9,13 @@
 !   lives in simple_stream_stage_solve3D.
 !
 ! 3D JOBS:
-!   The settings of the solve3D and solve3D_addon runs are the named
-!   constants below; a command line overrides them with nstates, nstages,
-!   nptcls3D_max (the first set's particles at most, whole stacks in order),
-!   nptcls_addon_max (each addon run's cohort particles at most, the oldest
-!   whole stacks first, the rest waiting for the next run), and nparts3D and nthr3D (the jobs' parts and threads; the stage's own
-!   nparts and nthr are the master's settings for the stage). The 3D jobs set
-!   their own low-pass limits.
+!   The settings of the jobs (the route to the reference volumes, each
+!   publication's expansion, matching and reconstruction) are the named
+!   constants below; a command line overrides them with nstates (the
+!   reference volumes' states at most), and nparts3D and nthr3D (the jobs'
+!   parts and threads; the stage's own nparts and nthr are the master's
+!   settings for the stage). nspace, when given, sizes the grid of the local
+!   refinement's seeds and job, and must be even (the reference spiral's).
 !
 ! ENTRY POINT:
 !   commander_stream_p07_solve3D_multistate%execute(cline)
@@ -32,7 +32,7 @@ use simple_defs_fname,              only: METADATA_EXT
 use simple_jiffys,                  only: simple_end
 use simple_cmdline,                 only: cmdline
 use simple_commander_base,          only: commander_base
-use simple_stream_stage_solve3D, only: stream_stage_solve3D, MIN_PTCLS_PER_STATE
+use simple_stream_stage_solve3D, only: stream_stage_solve3D
 use simple_stream_sigterm,          only: install_sigterm_handler, restore_sigterm_handler, sigterm_received
 use simple_gui_metadata_stream_solve3D_multistate, only: MAX_STATES_SOLVE3D_MULTISTATE
 implicit none
@@ -42,12 +42,9 @@ public :: commander_stream_p07_solve3D_multistate
 public :: set_solve3D_cline ! the stage's command-line defaults, for the chained stream tests
 private
 
-integer, parameter :: NSTATES3D        = 3      ! states of the 3D
-integer, parameter :: NSTAGES3D        = 5      ! solve3D stages
-integer, parameter :: NPARTS3D         = 8      ! parts and threads of each 3D job
-integer, parameter :: NTHR3D           = 8
-integer, parameter :: NPTCLS3D_MAX     = 30000  ! the first solve3D's particles at most (p06's first set may hold more)
-integer, parameter :: NPTCLS_ADDON_MAX = 60000  ! each addon run's cohort particles at most
+integer, parameter :: NSTATES3D = 3 ! states of the reference volumes at most
+integer, parameter :: NPARTS3D  = 8 ! parts and threads of each 3D job
+integer, parameter :: NTHR3D    = 8
 
 type, extends(commander_base) :: commander_stream_p07_solve3D_multistate
   contains
@@ -80,9 +77,8 @@ contains
 
     ! Everything the stage needs on its command line before params%new: the 3D job settings
     ! unless given, and the project name when none is. The states are checked: a multistate run
-    ! needs two at least, and the GUI's status holds MAX_STATES_SOLVE3D_MULTISTATE (20). So are
-    ! the first solve3D's cap and the addon runs' cohort cap: each must allow the run's minimum,
-    ! MIN_PTCLS_PER_STATE per state.
+    ! needs two at least, and the GUI's status holds MAX_STATES_SOLVE3D_MULTISTATE (20). So is a
+    ! given nspace, which the local refinement's reference spiral needs even.
     subroutine set_solve3D_cline( cline )
         class(cmdline), intent(inout) :: cline
         call cline%set('oritype', 'mic')
@@ -90,13 +86,11 @@ contains
         if( .not. cline%defined('nstates')  ) call cline%set('nstates',  NSTATES3D)
         if( cline%get_iarg('nstates') < 2 ) THROW_HARD('multistate 3D needs nstates of 2 at least')
         if( cline%get_iarg('nstates') > MAX_STATES_SOLVE3D_MULTISTATE ) THROW_HARD('multistate 3D takes nstates of 20 at most')
-        if( .not. cline%defined('nstages')  ) call cline%set('nstages',  NSTAGES3D)
+        if( cline%defined('nspace') )then
+            if( mod(cline%get_iarg('nspace'), 2) /= 0 .or. cline%get_iarg('nspace') < 2 ) THROW_HARD('multistate 3D needs an even nspace of 2 at least')
+        endif
         if( .not. cline%defined('nparts3D') ) call cline%set('nparts3D', NPARTS3D)
         if( .not. cline%defined('nthr3D')   ) call cline%set('nthr3D',   NTHR3D)
-        if( .not. cline%defined('nptcls3D_max') ) call cline%set('nptcls3D_max', NPTCLS3D_MAX)
-        if( cline%get_iarg('nptcls3D_max') < MIN_PTCLS_PER_STATE * cline%get_iarg('nstates') ) THROW_HARD('nptcls3D_max is below the first solve3D''s minimum of 5 particles per state')
-        if( .not. cline%defined('nptcls_addon_max') ) call cline%set('nptcls_addon_max', NPTCLS_ADDON_MAX)
-        if( cline%get_iarg('nptcls_addon_max') < MIN_PTCLS_PER_STATE * cline%get_iarg('nstates') ) THROW_HARD('nptcls_addon_max is below an addon run''s minimum cohort of 5 particles per state')
         if( .not. cline%defined('projfile') )then
             call cline%set('projname', 'stream_3Dmultistate')
             call cline%set('projfile', 'stream_3Dmultistate'//METADATA_EXT)

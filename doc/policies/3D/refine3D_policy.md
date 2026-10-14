@@ -498,7 +498,11 @@ no in-plane table. It is a continuation mode: every active particle must hold
 a pose from a discrete workflow (positive state, half-set, projection
 direction, finite angles and shifts); `check_cont_seeds` stops the run at
 entry otherwise, before the random-orientation fallback of an unsearched
-field.
+field. It searches no state: each pose is refined against its own state's
+reference, and a multi-state start seeds and writes no labels for it
+(`labels_may_change`, as for `refine=sigma` and `eval`), so a state left
+empty, or a project in one state, is kept as it is (since 14 October 2026;
+stream p07's local refinement relies on it).
 
 Ownership:
 

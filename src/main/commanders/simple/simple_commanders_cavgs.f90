@@ -61,6 +61,11 @@ type, extends(commander_base) :: commander_shape_rank_cavgs
     procedure :: execute      => exec_shape_rank_cavgs
 end type commander_shape_rank_cavgs
 
+type, extends(commander_base) :: commander_assign_cavgs_states
+  contains
+    procedure :: execute      => exec_assign_cavgs_states
+end type commander_assign_cavgs_states
+
 contains
 
     subroutine exec_rank_cavgs( self, cline )
@@ -1215,6 +1220,74 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MAP_CAVGS_SELECTION NORMAL STOP ****')
     end subroutine exec_map_cavgs_states
+
+    !> The class averages of the project matched against the state volumes vol1..volN
+    !! (simple_cavgs_state_match): per class its best state, 3D pose, correlation and margin, written
+    !! to the project's cls3D (state 0 for a class cls2D deselects). Run by stream multistate 3D
+    !! (simple_private_exec).
+    subroutine exec_assign_cavgs_states( self, cline )
+        use simple_cavgs_state_match, only: match_cavgs_to_states
+        class(commander_assign_cavgs_states), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        real,    parameter :: LP_DEFAULT  = 15.   ! the matching low-pass limit (A)
+        real,    parameter :: TRS_DEFAULT = 10.   ! the shift limit (pixels)
+        integer, parameter :: NSPACE_DEFAULT = 1000
+        type(parameters)         :: params
+        type(sp_project)         :: spproj
+        type(image), allocatable :: cavg_imgs(:), vols(:)
+        integer,     allocatable :: states(:), cls_states(:), counts(:)
+        real,        allocatable :: eulers(:,:), shifts(:,:), corrs(:), margins(:)
+        integer :: ncls, s, icls, ldim(3), nimgs
+        call cline%set('oritype', 'cls2D')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
+        if( .not. cline%defined('lp')     ) call cline%set('lp',     LP_DEFAULT)
+        if( .not. cline%defined('trs')    ) call cline%set('trs',    TRS_DEFAULT)
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', NSPACE_DEFAULT)
+        if( .not. cline%defined('nstates') ) THROW_HARD('assign_cavgs_states needs nstates and vol1..volN')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        ncls = spproj%os_cls2D%get_noris()
+        if( ncls < 1 ) THROW_HARD('no classes in the project; assign_cavgs_states')
+        cavg_imgs = read_cavgs_into_imgarr(spproj)
+        if( size(cavg_imgs) /= ncls ) THROW_HARD('# class averages /= # cls2D entries; assign_cavgs_states')
+        allocate(vols(params%nstates))
+        do s = 1,params%nstates
+            if( .not. file_exists(params%vols(s)) ) THROW_HARD('state volume missing: '//params%vols(s)%to_char())
+            call find_ldim_nptcls(params%vols(s), ldim, nimgs)
+            call vols(s)%new(ldim, find_img_smpd(params%vols(s)))
+            call vols(s)%read(params%vols(s))
+        enddo
+        call match_cavgs_to_states(cavg_imgs, vols, params%nspace, params%lp, params%trs, params%mskdiam, params%nthr,&
+            &states, eulers, shifts, corrs, margins)
+        ! each class's match; a class cls2D deselects gets no state (one without a state is selected)
+        allocate(cls_states(ncls), source=1)
+        do icls = 1,ncls
+            if( spproj%os_cls2D%isthere(icls, 'state') ) cls_states(icls) = spproj%os_cls2D%get_state(icls)
+        enddo
+        call spproj%os_cls3D%new(ncls, is_ptcl=.false.)
+        allocate(counts(params%nstates), source=0)
+        do icls = 1,ncls
+            call spproj%os_cls3D%set(icls, 'class', icls)
+            call spproj%os_cls3D%set_euler(icls, eulers(:,icls))
+            call spproj%os_cls3D%set_shift(icls, shifts(:,icls))
+            call spproj%os_cls3D%set(icls, 'corr',   corrs(icls))
+            call spproj%os_cls3D%set(icls, 'margin', margins(icls))
+            if( cls_states(icls) > 0 )then
+                call spproj%os_cls3D%set_state(icls, states(icls))
+                counts(states(icls)) = counts(states(icls)) + 1
+            else
+                call spproj%os_cls3D%set_state(icls, 0)
+            endif
+        enddo
+        do s = 1,params%nstates
+            write(logfhandle,'(A,I3,A,I6,A)') '>>> STATE ', s, ': ', counts(s), ' CLASS AVERAGES'
+        enddo
+        call spproj%write_segment_inside('cls3D', params%projfile)
+        call dealloc_imgarr(cavg_imgs)
+        call dealloc_imgarr(vols)
+        call spproj%kill
+        call simple_end('**** SIMPLE_ASSIGN_CAVGS_STATES NORMAL STOP ****')
+    end subroutine exec_assign_cavgs_states
 
     subroutine exec_shape_rank_cavgs( self, cline )
         class(commander_shape_rank_cavgs), intent(inout) :: self

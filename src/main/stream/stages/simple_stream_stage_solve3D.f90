@@ -1,63 +1,63 @@
-!@descr: state and steps of stream task 7 (multistate 3D): import the particles pool 2D exports, run solve3D and then solve3D_addon as they grow, report to the GUI
+!@descr: state and steps of stream task 7 (multistate 3D): import the particles pool 2D publishes, make reference volumes from class averages once, then assign each publication's (sub-)classes to them, refine the particles' poses locally with the states fixed and report to the GUI
 !==============================================================================
 ! MODULE: simple_stream_stage_solve3D
 !
 ! PURPOSE:
-!   The body of stream p07 as a type. Pool 2D publishes its classified state
-!   after each completed iteration (doc/policies/stream/stream_3D_ingestion_policy.md).
-!   Each pass in which no job runs takes the newest publication. The first (in
-!   a fresh pool, the sieve's own 2D of the sets handed off, published once they
-!   hold NPTCLS_FIRST3D accepted particles or cover 500 micrographs, the final
-!   set has come, or pool iteration 10; the pool's when that cannot be built)
-!   is taken as published, without the pool model: at most nptcls3D_max of its
-!   particles, whole stacks in order, the others deselected for a later
-!   publication to select. Those rows are the first set, whose selection stays
-!   for the session. Every later publication's class averages are selected once
-!   with the pool model, and the selection and 2D parameters are merged into
-!   the stage's rows (the first set's rows take only the 2D parameters). Its
-!   class averages and FRCs, copied into the stage's folder, come with its
-!   classes. The selected particles start solve3D (at most nptcls3D_max, the
-!   others queued for the first addon run); p07 gives no balance, so solve3D and
-!   the addon runs sample by their default (balance=cavg, over the classes of
-!   the publication taken). With ini3D_cavgs=yes (the default) the first set's
-!   class averages make the initial volumes first: solve2D classifies it into 150
-!   classes, the pool model selects them (the particles of a rejected class are
-!   deselected for the session), cls_expansion splits the kept ones into about
-!   500 in all, and solve3D_cavgs reconstructs the volumes from those; the
-!   classes' poses and states are mapped to the particles, and solve3D starts
-!   from them (cavg_ini_ext), with the states the first set holds. A failed step
-!   is skipped. Once it is done, every growth of
-!   the rows starts an solve3D_addon run from the latest result. An addon run whose verdict has a REGRESSED state is rolled
-!   back: the previous result stays. Once the pool's final publication is in
-!   (pool_final), one multistate refine3D realigns every selected particle from
-!   the current state volumes. After each run the stage's project holds the
-!   result, and the GUI gets each state's volume, resolution, reprojections and
-!   orientation distribution. The commander (simple_commanders_stream_p07_solve3D_multistate)
-!   only normalises the command line and loops over iterate() until finished().
+!   The body of stream p07 as a type (doc/policies/stream/stream_3D_ingestion_policy.md;
+!   doc/refactoring_notes/planned/stream_p07_state_assignment_plan_2026-10-13.md). Pool 2D
+!   publishes its classified state; each pass in which no job runs takes the newest publication.
+!   The first (in a fresh pool, the sieve's own 2D of the sets handed off) is taken as published,
+!   without the pool model: its rows are the first set, whose selection stays for the session.
+!
+!   The first set makes the states' reference volumes once, from class averages (the route):
+!   solve2D classifies it into 150 classes, the pool model selects them (the particles of a
+!   rejected class are deselected for the session), cls_expansion splits the kept ones into
+!   about 500 in all, and solve3D_cavgs reconstructs the volumes from those. Its result is
+!   checked (refs_usable: the even/odd angular distance and state agreement of the class
+!   averages, and at least two states each holding 5% of them); passed, the volumes of the
+!   states that hold class averages are copied into state_refs/, renumbered from 1, and are the
+!   references for the session. Failed, the route runs again (ROUTE_TRIES in all), then
+!   solve3D_cavgs runs once on the next publication's pool class averages (the fallback); when
+!   every attempt fails, the attempt with the smallest even/odd angular distance is taken, with
+!   a warning.
+!
+!   Every later publication is merged into the stage's rows; its class averages are scored with
+!   the pool model, which is logged but not applied. Once the references exist, each is
+!   assigned in assign/it_<n>/: cls_expansion splits its classes into about 500 sub-classes
+!   (expand/; when it fails, the pool's class averages are matched instead), assign_cavgs_states
+!   (simple_private_exec) matches every sub-class average against the references at 15 A, a
+!   (sub-)class whose best correlation is an outlier of the publication is rejected
+!   (reject_by_fit) and one with a small margin flagged ambiguous (flag_ambiguous), each kept
+!   one's pose and state are mapped onto its particles (map2ptcls), and refine3D refine=cont
+!   refines each particle's pose locally from there, against its own state, which stays, until
+!   it converges, reconstructing the states from the particles (refine3D/). The GUI gets the
+!   references, then each assignment's volumes, populations, resolutions and orientations.
+!   The commander (simple_commanders_stream_p07_solve3D_multistate) only normalises the
+!   command line and loops over iterate() until finished().
 !
 !   What happens is delegated:
-!     - class-average selection -> simple_cavg_quality_selection
-!     - jobs                    -> simple_qsys_async_job (solve2D, cls_expansion, solve3D_cavgs,
-!                                  solve3D, solve3D_addon, refine3D)
-!     - GUI                     -> simple_stream_pipe, simple_stream_gui_senders,
-!                                  simple_oris_utils (the orientation histograms)
+!     - class-average scoring -> simple_cavg_quality_selection
+!     - jobs                  -> simple_qsys_async_job (solve2D, cls_expansion, solve3D_cavgs,
+!                                assign_cavgs_states, refine3D)
+!     - GUI                   -> simple_stream_pipe, simple_stream_gui_senders,
+!                                simple_oris_utils (the orientation histograms)
 !
-!   The stage's rows only ever grow, as solve3D_addon requires (rows are
-!   read by index, never renumbered): a publication's stacks are matched to
-!   the rows by stack name, so the order of a restarted pool does not matter.
+!   The stage's rows only ever grow (rows are read by index, never renumbered): a publication's
+!   stacks are matched to the rows by stack name, so the order of a restarted pool does not
+!   matter.
 !
 ! LIFECYCLE:
 !   new(cline) -> { iterate() } until finished() -> finalize() -> kill()
 !
-!   A publication the stage cannot use (its stacks disagree with the rows, its
-!   class averages or FRCs are missing) is passed over with a warning and listed in
-!   REJECTED_PUBLICATIONS, and the stage waits for the next one.
+!   A publication the stage cannot use (its stacks disagree with the rows, its class averages
+!   or FRCs are missing) is passed over with a warning and listed in REJECTED_PUBLICATIONS, and
+!   the stage waits for the next one.
 !
 ! RESTART:
-!   A stop cancels the running job (finalize). A restart removes a leftover
-!   TERM_STREAM and starts again from the newest publication not rejected;
-!   solve3D runs again in its folder, which is first moved aside when it holds
-!   a job left unfinished (fresh_job_dir), as is an addon iteration folder.
+!   A stop cancels the running job (finalize). A restart removes a leftover TERM_STREAM, takes
+!   the references in state_refs/ when there are (the route is skipped), and starts again from
+!   the newest publication not rejected, which is assigned (or makes the references). A job
+!   folder left unfinished is first moved aside (fresh_job_dir).
 !==============================================================================
 module simple_stream_stage_solve3D
 use simple_defs,                                      only: logfhandle, COSMSKHALFWIDTH
@@ -77,6 +77,8 @@ use simple_estimate_ssnr,                             only: get_resolution
 use simple_imghead,                                   only: get_mrc_minmax, find_ldim_nptcls
 use simple_refine3D_fnames,                           only: refine3D_oris_heatmap_fname, refine3D_reprojs_fname
 use simple_oris_utils,                                only: oridist_from_oris
+use simple_oris,                                      only: oris
+use simple_sym,                                       only: sym
 use simple_cmdline,                                   only: cmdline
 use simple_parameters,                                only: parameters
 use simple_sp_project,                                only: sp_project
@@ -93,6 +95,7 @@ use simple_stream_utils,                              only: create_stream_projec
 use simple_cavg_quality_model,                        only: cavg_quality_model, CAVG_QUALITY_MODEL_POOL_DEFAULT
 use simple_cavg_quality_types,                        only: cavg_quality_result
 use simple_cavg_quality_selection,                    only: score_project_cavgs, write_cavg_selection_stacks
+use simple_volpair_metrics,                           only: compare_volpair
 use simple_gui_utils,                                 only: mrc2jpeg_tiled
 use simple_gui_metadata_utils,                        only: max_metadata_size
 use simple_gui_metadata_types,                        only: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE, GUI_METADATA_VOL3D_TYPE,&
@@ -108,48 +111,65 @@ use simple_stream_gui_senders,                        only: send_reproj_tiles
 implicit none
 
 public :: stream_stage_solve3D
-public :: PHASE_IMPORTING, PHASE_SOLVE3D, PHASE_IDLE, PHASE_ADDON, PHASE_FINAL, PHASE_CAVGS3D, PHASE_SOLVE2D, PHASE_CLSEXP
-public :: JOB_NONE, JOB_SOLVE3D, JOB_ADDON, MIN_PTCLS_PER_STATE
+public :: PHASE_IMPORTING, PHASE_SOLVE2D, PHASE_CLSEXP, PHASE_CAVGS3D, PHASE_IDLE, PHASE_EXPAND, PHASE_ASSIGN, PHASE_REFINE
+public :: JOB_NONE, JOB_ROUTE, JOB_FALLBACK, JOB_ASSIGN, MIN_PTCLS_PER_STATE, ROUTE_TRIES
 private
 #include "simple_local_flags.inc"
 
 ! phases of the stage
-integer, parameter :: PHASE_IMPORTING = 0 ! no 3D yet
-integer, parameter :: PHASE_SOLVE3D   = 1 ! solve3D runs
-integer, parameter :: PHASE_IDLE      = 2 ! a result exists; waiting for more particles
-integer, parameter :: PHASE_ADDON     = 3 ! solve3D_addon runs
-integer, parameter :: PHASE_FINAL     = 4 ! the final refine3D runs
-integer, parameter :: PHASE_CAVGS3D   = 5 ! solve3D_cavgs runs on the first set's class averages (ini3D_cavgs; no 3D yet)
-integer, parameter :: PHASE_SOLVE2D   = 6 ! solve2D runs on the first set (ini3D_cavgs; no 3D yet)
-integer, parameter :: PHASE_CLSEXP    = 7 ! cls_expansion runs on the first set's selected classes (ini3D_cavgs; no 3D yet)
+integer, parameter :: PHASE_IMPORTING = 0 ! no reference volumes and no job
+integer, parameter :: PHASE_SOLVE2D   = 1 ! the route's solve2D on the first set
+integer, parameter :: PHASE_CLSEXP    = 2 ! the route's cls_expansion of the first set's selected classes
+integer, parameter :: PHASE_CAVGS3D   = 3 ! solve3D_cavgs: the route's, or the fallback's on a publication's classes
+integer, parameter :: PHASE_IDLE      = 4 ! the reference volumes exist; waiting for a publication
+integer, parameter :: PHASE_EXPAND    = 5 ! cls_expansion of a publication's classes
+integer, parameter :: PHASE_ASSIGN    = 6 ! assign_cavgs_states: the (sub-)class averages matched against the references
+integer, parameter :: PHASE_REFINE    = 7 ! refine3D refine=cont: the particles' poses refined locally, the states fixed
 ! the job to start next (next_job)
 integer, parameter :: JOB_NONE        = 0
-integer, parameter :: JOB_SOLVE3D     = 1
-integer, parameter :: JOB_ADDON       = 2
+integer, parameter :: JOB_ROUTE       = 1 ! the route to the reference volumes, on the first set
+integer, parameter :: JOB_FALLBACK    = 2 ! solve3D_cavgs on a later publication's pool class averages
+integer, parameter :: JOB_ASSIGN      = 3 ! a publication's assignment (expansion, matching, local refinement)
 
-! the first run waits for this many selected particles per state, and an addon run for a cohort of
-! as many, solve3D_addon's own floor, and at least ADDON_COHORT_FRAC of the frozen particles
+! a job needs this many selected particles per state
 integer, parameter :: MIN_PTCLS_PER_STATE = 5
-real,    parameter :: ADDON_COHORT_FRAC   = 0.10
-! the first set's initial volumes from its class averages (ini3D_cavgs): solve2D into NCLS2D_FIRST
-! classes, then cls_expansion of the classes the pool model keeps into about NCLS_EXPANDED in all
+! the route: solve2D into NCLS2D_FIRST classes, then cls_expansion of the classes the pool model
+! keeps into about NCLS_EXPANDED in all (each publication is expanded into as many)
 integer, parameter :: NCLS2D_FIRST        = 150
 integer, parameter :: NCLS_EXPANDED       = 500
 ! solve3D_cavgs' low-pass ramp (A), fixed (force_lp_range) rather than derived from the class FRCs
 real,    parameter :: LPSTART_CAVGS3D     = 20.
-real,    parameter :: LPSTOP_CAVGS3D      = 8.
+real,    parameter :: LPSTOP_CAVGS3D      = 12.
+! the check of the reference volumes (provisional, until a validation run sets them)
+real,    parameter :: EO_ANGDIST_MAX      = 20.  ! the class averages' even/odd angular distance at most (degrees)
+real,    parameter :: EO_OVERLAP_MIN      = 70.  ! their even/odd state agreement at least (%)
+real,    parameter :: STATE_FRAC_MIN      = 0.05 ! a state counts when it holds this fraction of the class averages
+integer, parameter :: NSTATES_MIN         = 2    ! states that count, at least
+real,    parameter :: REFS_PAIR_CC_MAX    = 0.97 ! two states' correlation at the matching's limit at most (distinct states)
+integer, parameter :: ROUTE_TRIES         = 2    ! the route's attempts, before the fallback
+! the assignment (provisional)
+real,    parameter :: LP_ASSIGN           = 15.  ! the matching's low-pass limit (A), the same for every state
+integer, parameter :: NSPACE_ASSIGN       = 1000 ! the matching's directions per state, about 6 degrees apart
+real,    parameter :: FIT_NMAD            = 3.   ! a best correlation below the median less this many MADs is rejected
+real,    parameter :: FIT_REJECT_MAX      = 0.30 ! of a publication's (sub-)classes rejected by fit, at most
+real,    parameter :: MARGIN_AMBIGUOUS    = 0.02 ! a margin below this flags a (sub-)class ambiguous
+logical, parameter :: L_MODEL_LOGGED      = .true. ! the pool model scores each publication, logged beside the fit
 
-character(len=*), parameter :: SOLVE3D_DIR      = 'solve3D'
-character(len=*), parameter :: CAVGS3D_DIR      = 'solve3D_cavgs'
 character(len=*), parameter :: SOLVE2D_DIR      = 'solve2D'
 character(len=*), parameter :: CLSEXP_DIR       = 'cls_expansion'
-character(len=*), parameter :: ADDON_DIR        = 'solve3D_addon'
-character(len=*), parameter :: FINAL_DIR        = 'refine3D_final'
+character(len=*), parameter :: CAVGS3D_DIR      = 'solve3D_cavgs'
+character(len=*), parameter :: ASSIGN_DIR       = 'assign'
+character(len=*), parameter :: ASSIGN_LABEL     = 'assign_cavgs_states'
+character(len=*), parameter :: EXPAND_DIR       = 'expand'
+character(len=*), parameter :: REFINE_DIR       = 'refine3D'
+character(len=*), parameter :: RESULT_PROJ      = 'assignment' ! the latest assignment's rows, refined: 3D snapshots' source
+character(len=*), parameter :: REFS_DIR         = 'state_refs'
+character(len=*), parameter :: REFS_RECORD      = 'state_refs.txt'
 character(len=*), parameter :: QUALITY_DIR      = 'quality_selection'
 character(len=*), parameter :: SELECTED_CAVGS   = 'quality_selected_cavgs'
 character(len=*), parameter :: REJECTED_CAVGS   = 'quality_rejected_cavgs'
-! the quality folders kept: the newest NQUALITY_KEPT, and those of the publications a run started
-! from, listed in QUALITY_RUNS (stream fix plan, decision 31)
+! the quality folders kept: the newest NQUALITY_KEPT, and those of the publications the route or
+! the fallback started from, listed in QUALITY_RUNS
 integer,          parameter :: NQUALITY_KEPT    = 3
 character(len=*), parameter :: QUALITY_RUNS     = 'quality_selection/runs.txt'
 ! the publications passed over as unusable, one file name a line (a restart passes them over too)
@@ -160,37 +180,42 @@ character(len=*), parameter :: REJECTED_PUBLICATIONS = 'rejected_publications.tx
 type :: stream_stage_solve3D
     type(parameters), allocatable                   :: params
     ! allocatable (compile-time policy), allocated in init_params and released in kill
-    type(sp_project), allocatable                   :: spproj        ! the pool: imported particles, then each run's result
+    type(sp_project), allocatable                   :: spproj        ! the rows: imported particles, their states and poses
     type(qsys_env),   allocatable                   :: qenv
-    type(qsys_async_job)                            :: job           ! the running 3D job
+    type(qsys_async_job)                            :: job           ! the running job
     type(stream_watcher)                            :: project_buff  ! the publications of pool 2D
     type(rec_list)                                  :: setslist      ! one record per publication; included once taken or passed over
     type(stream_pipe)                               :: pipe          ! to the master
-    type(gui_metadata_stream_solve3D_multistate) :: meta_status
+    type(gui_metadata_stream_solve3D_multistate)    :: meta_status
     type(gui_metadata_cavg2D)                       :: meta_reproj
     type(gui_metadata_stream_snapshot)              :: meta_snapshot
     type(string),   allocatable :: stk_names(:)    ! the stacks in the pool
-    real,           allocatable :: state_res(:)    ! FSC=0.143 resolution per state of the latest run (0: none)
-    integer,        allocatable :: state_pop(:)    ! population per state of the latest run's result (0: none)
-    type(string)                :: frozen_projfile ! the latest run's project, which the next addon run builds on
-    type(string)                :: result_projfile ! the latest finished run's project (solve3D, addon or final): 3D snapshots' source
-    logical,        allocatable :: frozen_active(:) ! the rows active in that project: the frozen particles
-    logical,        allocatable :: queued(:)        ! the selected rows the first solve3D leaves to the first addon run
-    logical,        allocatable :: first_set(:)     ! the rows the first publication left selected: their selection stays
-    type(string)                :: addon_verdict   ! the latest addon run's verdict per state, for the status
+    real,           allocatable :: state_res(:)    ! FSC=0.143 resolution per state of the latest refinement (0: none)
+    integer,        allocatable :: state_pop(:)    ! population per state of the latest refinement (0: none)
+    type(string),   allocatable :: ref_vols(:)     ! the reference volumes, one per state (state_refs/); none before
+    real,           allocatable :: try_angdist(:)  ! each attempt's even/odd angular distance (-1: no volumes)
+    logical,        allocatable :: first_set(:)    ! the rows the first publication left selected: their selection stays
+    logical,        allocatable :: model_rej(:)    ! the selected rows the pool model rejects in the newest publication (logged)
+    logical,        allocatable :: fit_desel(:)    ! the rows the latest assignment deselected: a first-set row among them is selected again by the next merge
+    type(string)                :: result_projfile ! the latest local refinement's project: 3D snapshots' source
+    type(string)                :: assign_dir      ! the running assignment's folder (assign/it_<n>)
     type(string)                :: last_stem       ! the latest publication taken (its quality folder's name)
     integer :: phase              = PHASE_IMPORTING
-    integer :: naddon_runs        = 0
-    integer :: nptcls_at_last_run = 0 ! particles the latest run took: those selected at its start, less the queued
-    integer :: nptcls_selected    = 0 ! selected particles in the rows
-    integer :: ncohort_refused    = -1 ! the next addon run needs a larger cohort (after a failed or rolled-back one)
-    integer :: n_rollbacks        = 0  ! addon runs rolled back in a row
-    integer :: nptcls_at_full     = -1 ! selected particles at the last run that aligned all (solve3D, the final run)
+    integer :: nassign            = 0  ! assignments started
+    integer :: nroute_tries       = 0  ! the route's attempts started
+    integer :: nptcls_at_last_run = 0  ! particles the latest assignment gave a state
+    integer :: nptcls_selected    = 0  ! selected particles in the rows
+    integer :: ref_box            = 0  ! the reference volumes' box and pixel size (A)
+    real    :: ref_smpd           = 0.
     integer :: last_snapshot_id   = 0  ! the latest 3D snapshot request answered; each is written once
     integer :: optics_id_offset   = 0  ! optics group ids of the snapshots' STAR files, per GUI display
-    logical :: l_final_pending    = .false. ! the pool's final publication is in; the final run is due
-    logical :: l_ini3D_due        = .false. ! the first set's initial volumes from its class averages are to come (ini3D_cavgs)
-    logical :: l_cavg_ini_ext     = .false. ! the first solve3D starts from the class averages' poses and states
+    logical :: l_route_due        = .false. ! the route is to run on the first set
+    logical :: l_fallback_pending = .false. ! the route failed: the fallback waits for a later publication
+    logical :: l_fallback_due     = .false. ! that publication is in: the fallback is to run
+    logical :: l_fallback_done    = .false. ! the fallback has run (once a session)
+    logical :: l_assign_due       = .false. ! a publication waits for its assignment
+    logical :: l_expanded         = .false. ! the running assignment matches cls_expansion's sub-classes
+    logical :: l_final_seen       = .false. ! the newest publication taken is the pool's final one
     real    :: mskdiam            = 0. ! pool 2D's mask diameter (A), from the latest publication taken
     logical :: l_restart          = .false.
     logical :: l_attached         = .false. ! pool 2D's completed folder exists and is watched
@@ -217,36 +242,46 @@ contains
     procedure :: import_sets
     procedure :: publication_problem
     procedure :: rows_problem
-    procedure :: select_cavgs
+    procedure :: score_with_model
     procedure :: select_with_model
+    procedure :: flag_model_rows
     procedure :: take_first_publication
     procedure :: in_first_set
+    procedure :: fit_deselected
     procedure :: merge_publication
     procedure :: take_cavgs
     procedure :: stack_index
     procedure :: advance_jobs
+    procedure :: job_failed
+    procedure :: job_done
+    procedure :: set_job_resources
+    ! the route to the reference volumes
     procedure :: start_solve2D_first
     procedure :: finish_solve2D_first
     procedure :: select_first_set_classes
     procedure :: start_clsexp
     procedure :: finish_clsexp
     procedure :: adopt_job_2D
+    procedure :: start_fallback
     procedure :: start_cavgs3D
     procedure :: finish_cavgs3D
-    procedure :: take_cavgs3D_result
-    procedure :: cap_first_run
-    procedure :: cap_addon_cohort
-    procedure :: cap_rows
-    procedure :: set_queued_states
-    procedure :: release_queue
-    procedure :: start_solve3D
-    procedure :: start_addon
-    procedure :: finish_run
-    procedure :: start_final_run
-    procedure :: roll_back_addon
-    procedure :: read_addon_verdict
-    procedure :: count_cohort
-    procedure :: count_frozen
+    procedure :: register_attempt
+    procedure :: next_attempt
+    procedure :: accept_best
+    procedure :: accept_refs
+    procedure :: restore_refs
+    procedure :: n_refs
+    ! the assignment of a publication
+    procedure :: start_expand
+    procedure :: finish_expand
+    procedure :: start_assign
+    procedure :: finish_assign
+    procedure :: take_assignment
+    procedure :: prepare_refine_seeds
+    procedure :: start_refine
+    procedure :: finish_refine
+    procedure :: take_refine_result
+    ! records
     procedure :: record_run_publication
     procedure :: prune_quality_dirs
     procedure :: prune_run_dirs
@@ -256,41 +291,47 @@ contains
     procedure :: write_snapshot
     procedure :: send_status
     procedure :: send_volumes
-    procedure :: send_cavgs3D_volumes
+    procedure :: send_refs
     procedure :: send_state_volume
     procedure :: read_state_fsc
     ! rules that use no stage state
     procedure, nopass :: next_job
-    procedure, nopass :: retry_cohort
+    procedure, nopass :: refs_usable
+    procedure, nopass :: reject_by_fit
+    procedure, nopass :: flag_ambiguous
+    procedure, nopass :: best_attempt
     procedure, nopass :: is_final_publication
     procedure, nopass :: subclasses_per_class
     procedure, nopass :: compact_states
     procedure, nopass :: fit_mskdiam
+    procedure, nopass :: usable_job_2D
 end type stream_stage_solve3D
 
 contains
 
     !---------------- lifecycle ----------------
 
-    !> Builds the parameters from the normalised @p cline, the queue environment of the 3D jobs
-    !! and the GUI.
+    !> Builds the parameters from the normalised @p cline, the queue environment of the jobs and
+    !! the GUI.
     subroutine new( self, cline )
         class(stream_stage_solve3D), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
         call self%kill()
         call self%init_params(cline)
         self%l_exists = .true. ! from here kill() releases what has been built
         call self%init_queue()
         call self%init_gui(ipc_pipe_solve3D_multistate_out(1), ipc_pipe_solve3D_multistate_in(2))
         call self%send_status()
+        if( self%n_refs() > 0 ) call self%send_refs()
     end subroutine new
 
     !> The stage's project file (made and given a computing environment) and its parameters; the
     !! project must start without micrographs. A restart's leftover TERM_STREAM is removed in the
-    !! stage's folder, where the loop looks for it.
+    !! stage's folder, where the loop looks for it. Reference volumes a previous run left in
+    !! state_refs/ are taken (restore_refs).
     subroutine init_params( self, cline )
         class(stream_stage_solve3D), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
         type(string) :: outdir, dir_exec
         ! a restart is recognised by its output directory (or dir_exec), before params%new makes one
         self%l_restart = .false.
@@ -316,14 +357,20 @@ contains
         if( self%spproj%os_mic%get_noris() /= 0 )then
             THROW_HARD('commander_stream_p07_solve3D_multistate must start from an empty project (e.g. from root project folder)')
         endif
-        allocate(self%stk_names(0))
+        allocate(self%stk_names(0), self%try_angdist(0))
         allocate(self%state_res(self%params%nstates), source=0.)
         allocate(self%state_pop(self%params%nstates), source=0)
         self%optics_id_offset = max(self%params%nicedispid - 1, 0) * OPTICS_ID_DELTA
+        ! the references of a previous run: the route is skipped
+        if( self%restore_refs(string(REFS_DIR)) )then
+            self%params%nstates = self%n_refs()
+            self%phase          = PHASE_IDLE
+            write(logfhandle,'(A,I3,A)') '>>> ', self%n_refs(), ' REFERENCE VOLUMES TAKEN FROM '//REFS_DIR//'; THE ROUTE IS SKIPPED'
+        endif
     end subroutine init_params
 
-    !> The queue environment the 3D jobs are submitted through; on the preprocessing partition,
-    !! as before.
+    !> The queue environment the jobs are submitted through; on the preprocessing partition, as
+    !! before.
     subroutine init_queue( self )
         class(stream_stage_solve3D), intent(inout) :: self
         call init_stream_qenv(self%params, self%qenv, string(SIMPLE_STREAM_SOLVE3D_PARTITION))
@@ -332,14 +379,14 @@ contains
     !> The GUI metadata objects and the pipe ends from and to the master (-1: none).
     subroutine init_gui( self, fd_read, fd_write )
         class(stream_stage_solve3D), intent(inout) :: self
-        integer,                        intent(in)    :: fd_read, fd_write
+        integer,                     intent(in)    :: fd_read, fd_write
         call self%meta_status%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE)
         call self%meta_reproj%new(GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE)
         call self%meta_snapshot%new(GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE)
         call self%pipe%new(fd_read, fd_write, max_metadata_size(), 'solve3D_multistate')
     end subroutine init_gui
 
-    !> One pass: wait for pool 2D's folder; take new exports (unless a job runs); advance the 3D
+    !> One pass: wait for pool 2D's folder; take new exports (unless a job runs); advance the
     !! jobs; answer the GUI; report.
     subroutine iterate( self )
         class(stream_stage_solve3D), intent(inout) :: self
@@ -354,8 +401,7 @@ contains
         endif
         call self%watch_sets()
         ! no import while a job runs on the rows
-        if( self%phase /= PHASE_SOLVE3D .and. self%phase /= PHASE_ADDON .and. self%phase /= PHASE_CAVGS3D .and.&
-            &self%phase /= PHASE_SOLVE2D .and. self%phase /= PHASE_CLSEXP ) call self%import_sets()
+        if( self%phase == PHASE_IMPORTING .or. self%phase == PHASE_IDLE ) call self%import_sets()
         call self%advance_jobs()
         call self%apply_gui_updates()
         call self%send_status()
@@ -368,8 +414,8 @@ contains
         finished = file_exists(TERM_STREAM)
     end function finished
 
-    !> The last status, and the stage's project with the latest result and the particles imported
-    !! since. A running job is cancelled: a restart starts a new run in a fresh directory.
+    !> The last status, and the stage's project with the latest assignment and the particles
+    !! imported since. A running job is cancelled: a restart starts it again in a fresh directory.
     subroutine finalize( self )
         class(stream_stage_solve3D), intent(inout) :: self
         call self%job%cancel()
@@ -399,29 +445,34 @@ contains
         call self%meta_status%kill
         call self%meta_reproj%kill
         call self%meta_snapshot%kill
-        call self%frozen_projfile%kill
         call self%result_projfile%kill
-        call self%addon_verdict%kill
+        call self%assign_dir%kill
         call self%last_stem%kill
-        if( allocated(self%frozen_active) ) deallocate(self%frozen_active)
-        if( allocated(self%queued) ) deallocate(self%queued)
-        if( allocated(self%first_set) ) deallocate(self%first_set)
-        if( allocated(self%stk_names) ) deallocate(self%stk_names)
-        if( allocated(self%state_res) ) deallocate(self%state_res)
-        if( allocated(self%state_pop) ) deallocate(self%state_pop)
-        if( allocated(self%params) ) deallocate(self%params)
+        if( allocated(self%ref_vols)    ) deallocate(self%ref_vols)
+        if( allocated(self%try_angdist) ) deallocate(self%try_angdist)
+        if( allocated(self%first_set)   ) deallocate(self%first_set)
+        if( allocated(self%model_rej)   ) deallocate(self%model_rej)
+        if( allocated(self%fit_desel)   ) deallocate(self%fit_desel)
+        if( allocated(self%stk_names)   ) deallocate(self%stk_names)
+        if( allocated(self%state_res)   ) deallocate(self%state_res)
+        if( allocated(self%state_pop)   ) deallocate(self%state_pop)
+        if( allocated(self%params)      ) deallocate(self%params)
         self%phase              = PHASE_IMPORTING
-        self%naddon_runs        = 0
+        self%nassign            = 0
+        self%nroute_tries       = 0
         self%nptcls_at_last_run = 0
         self%nptcls_selected    = 0
-        self%ncohort_refused    = -1
-        self%n_rollbacks        = 0
-        self%nptcls_at_full     = -1
+        self%ref_box            = 0
+        self%ref_smpd           = 0.
         self%last_snapshot_id   = 0
         self%optics_id_offset   = 0
-        self%l_final_pending    = .false.
-        self%l_ini3D_due        = .false.
-        self%l_cavg_ini_ext     = .false.
+        self%l_route_due        = .false.
+        self%l_fallback_pending = .false.
+        self%l_fallback_due     = .false.
+        self%l_fallback_done    = .false.
+        self%l_assign_due       = .false.
+        self%l_expanded         = .false.
+        self%l_final_seen       = .false.
         self%mskdiam            = 0.
         self%l_restart          = .false.
         self%l_attached         = .false.
@@ -467,7 +518,7 @@ contains
     end subroutine watch_sets
 
     ! The mask diameter pool 2D records with the class averages of publication @p set, taken from
-    ! every publication: a change applies from the next run (a running one keeps its own) and is
+    ! every publication: a change applies from the next job (a running one keeps its own) and is
     ! logged. Without one, the latest stays (the box default before any).
     subroutine take_mskdiam( self, set )
         class(stream_stage_solve3D), intent(inout) :: self
@@ -483,27 +534,31 @@ contains
         if( abs(mskdiam - self%mskdiam) < 0.5 ) return
         if( self%mskdiam > 0. )then
             write(logfhandle,'(A,F8.2,A,F8.2,A)') '>>> MASK DIAMETER CHANGED FROM ', self%mskdiam, ' TO ', mskdiam,&
-                &' A; IT APPLIES FROM THE NEXT RUN'
+                &' A; IT APPLIES FROM THE NEXT JOB'
         else
             write(logfhandle,'(A,F8.2)') '>>> MASK DIAMETER SET TO : ', mskdiam
         endif
         self%mskdiam = mskdiam
     end subroutine take_mskdiam
 
-    ! The newest publication not yet taken: into a stage without rows it is the first, taken as the
-    ! pool selects it (take_first_publication); every later one has its class averages selected
-    ! with the pool model and is merged into the rows. Its class averages and FRCs come with its
-    ! classes (take_cavgs). Older publications
-    ! not taken are passed over: the newest holds what they held. A publication the stage cannot
-    ! use (publication_problem) is passed over with a warning and listed in REJECTED_PUBLICATIONS,
-    ! so a restart passes it over too; the next one is waited for.
+    ! The newest publication not yet taken. Into a stage without rows it is the first set, taken
+    ! as the pool selects it (take_first_publication): without references the route is due on
+    ! it, with references (a restart) its assignment. Every later one is scored with the pool
+    ! model (logged, not applied) and merged into the rows; once the references exist its
+    ! assignment is due, and while the fallback waits for a publication, the fallback is.
+    ! Its class averages and FRCs come with its classes (take_cavgs). Older publications not
+    ! taken are passed over: the newest holds what they held. A publication the stage cannot use
+    ! (publication_problem) is passed over with a warning and listed in REJECTED_PUBLICATIONS, so
+    ! a restart passes it over too; the next one is waited for.
     subroutine import_sets( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        type(sp_project)   :: set
-        type(rec_iterator) :: it
-        type(chunk_rec)    :: crec, newest
-        type(string)       :: stem, problem
-        integer            :: irec, inewest
+        type(sp_project)     :: set
+        type(rec_iterator)   :: it
+        type(chunk_rec)      :: crec, newest
+        type(string)         :: stem, problem
+        integer, allocatable :: model_states(:)
+        integer              :: irec, inewest
+        logical              :: l_scored
         if( self%setslist%size() == 0 ) return
         ! the records are in publication order: the last one not taken is the newest
         inewest = 0
@@ -530,19 +585,35 @@ contains
                 call self%take_mskdiam(set)
                 if( self%spproj%os_ptcl3D%get_noris() == 0 )then
                     call self%take_first_publication(set, newest%id)
-                    ! the initial volumes from the first set's class averages, before solve3D
-                    self%l_ini3D_due = self%params%ini3D_cavgs == 'yes'
-                    if( self%l_ini3D_due ) write(logfhandle,'(A)') '>>> THE FIRST SET''S INITIAL VOLUMES: SOLVE2D, '//&
-                        &'THE POOL MODEL''S SELECTION, CLS_EXPANSION AND SOLVE3D_CAVGS'
+                    if( self%n_refs() > 0 )then
+                        self%l_assign_due = .true.
+                    else
+                        self%l_route_due  = .true.
+                        write(logfhandle,'(A)') '>>> THE FIRST SET''S REFERENCE VOLUMES: SOLVE2D, THE POOL MODEL''S SELECTION, '//&
+                            &'CLS_EXPANSION AND SOLVE3D_CAVGS'
+                    endif
                 else
-                    call self%select_cavgs(set, stem)
+                    ! the pool model's verdict, logged beside the fit's, not applied
+                    l_scored = .false.
+                    if( L_MODEL_LOGGED ) l_scored = self%score_with_model(set, CAVG_QUALITY_MODEL_POOL_DEFAULT,&
+                        &string(QUALITY_DIR//'/')//stem, model_states)
                     call self%merge_publication(set, newest%id)
+                    if( l_scored )then
+                        call self%flag_model_rows(model_states)
+                    else if( allocated(self%model_rej) )then
+                        deallocate(self%model_rej)
+                    endif
+                    if( self%n_refs() > 0 )then
+                        self%l_assign_due = .true.
+                    else if( self%l_fallback_pending )then
+                        self%l_fallback_due = .true.
+                    endif
                 endif
                 call self%take_cavgs(set, stem)
-                ! the pool's final publication makes the final run due; a later one that is not
-                ! final (the sieve took finality back) withdraws it
-                self%l_final_pending = is_final_publication(set)
-                if( self%l_final_pending ) write(logfhandle,'(A,A)') '>>> THE POOL''S FINAL PUBLICATION: ', stem%to_char()
+                ! the pool's final publication; a later one that is not final (the sieve took
+                ! finality back) withdraws it
+                self%l_final_seen = is_final_publication(set)
+                if( self%l_final_seen ) write(logfhandle,'(A,A)') '>>> THE POOL''S FINAL PUBLICATION: ', stem%to_char()
                 self%last_stem = stem
                 call self%prune_quality_dirs()
             endif
@@ -591,9 +662,8 @@ contains
 
     end subroutine import_sets
 
-    ! Why publication @p set cannot be used, '' when it can: what select_cavgs, merge_publication and
-    ! take_cavgs require of it, checked before any changes anything (class averages, FRCs,
-    ! rows_problem).
+    ! Why publication @p set cannot be used, '' when it can: what merge_publication and take_cavgs
+    ! require of it, checked before anything changes (class averages, FRCs, rows_problem).
     function publication_problem( self, set ) result( problem )
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: set
@@ -673,31 +743,19 @@ contains
         enddo
     end function rows_problem
 
-    ! The class averages of publication @p set are scored once with the pool quality model, and
-    ! the selection is mapped to its particles by class; the selected and rejected class averages
-    ! are written with JPEGs in QUALITY_DIR/<stem>.
-    subroutine select_cavgs( self, set, stem )
-        class(stream_stage_solve3D), intent(inout) :: self
-        class(sp_project),              intent(inout) :: set
-        class(string),                  intent(in)    :: stem
-        if( set%os_cls2D%get_noris() == 0 ) THROW_HARD('no cls2D entries in the export '//stem%to_char())
-        if( .not. self%select_with_model(set, CAVG_QUALITY_MODEL_POOL_DEFAULT, string(QUALITY_DIR//'/')//stem) )&
-            &THROW_HARD('no class averages in the export '//stem%to_char())
-    end subroutine select_cavgs
-
     ! The class averages of @p proj scored with the quality model @p preset, with a mask diameter
-    ! fitted to their box; the selection mapped to its selected particles by class. The selected
-    ! and rejected class averages are written with JPEGs in @p dir. .false. when @p proj has no
-    ! class averages.
-    logical function select_with_model( self, proj, preset, dir ) result( l_ok )
+    ! fitted to their box: @p cls_states is the model's verdict per class (0 rejected). The
+    ! selected and rejected class averages are written with JPEGs in @p dir. Nothing in @p proj
+    ! changes. .false. when @p proj has no class averages.
+    logical function score_with_model( self, proj, preset, dir, cls_states ) result( l_ok )
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: proj
         character(len=*),            intent(in)    :: preset
         class(string),               intent(in)    :: dir
+        integer, allocatable,        intent(inout) :: cls_states(:)
         type(cavg_quality_model)  :: model
         type(cavg_quality_result) :: quality
         type(image), allocatable  :: cavg_imgs(:)
-        integer,     allocatable  :: states(:)
         type(string)              :: stk, fname
         real                      :: smpd, mskdiam, box_stk
         integer                   :: ncls
@@ -710,12 +768,11 @@ contains
         call score_project_cavgs(proj, model, mskdiam, cavg_imgs, quality, smpd=smpd)
         call model%kill
         if( size(cavg_imgs) /= proj%os_cls2D%get_noris() ) THROW_HARD('# class averages /= # cls2D entries in '//dir%to_char())
-        call proj%map_cavgs_selection(quality%states)
+        cls_states = quality%states
         call quality%kill
-        states = proj%os_cls2D%get_all_asint('state')
         call simple_mkdir(QUALITY_DIR)
         call simple_mkdir(dir)
-        call write_cavg_selection_stacks(cavg_imgs, states, dir//'/'//SELECTED_CAVGS//MRC_EXT,&
+        call write_cavg_selection_stacks(cavg_imgs, cls_states, dir//'/'//SELECTED_CAVGS//MRC_EXT,&
             &dir//'/'//REJECTED_CAVGS//MRC_EXT)
         call mrc2jpeg_tiled(dir//'/'//SELECTED_CAVGS//MRC_EXT, dir//'/'//SELECTED_CAVGS//JPG_EXT)
         call mrc2jpeg_tiled(dir//'/'//REJECTED_CAVGS//MRC_EXT, dir//'/'//REJECTED_CAVGS//JPG_EXT)
@@ -723,41 +780,62 @@ contains
         if( file_exists(fname) ) write(logfhandle,'(A,A)') '>>> QUALITY SELECTED CLASS AVERAGES JPEG ', fname%to_char()
         fname = simple_abspath(dir//'/'//REJECTED_CAVGS//JPG_EXT, check_exists=.false.)
         if( file_exists(fname) ) write(logfhandle,'(A,A)') '>>> QUALITY REJECTED CLASS AVERAGES JPEG ', fname%to_char()
-        write(logfhandle,'(A,A,A,I6,A,I6)') '>>> CAVG QUALITY (', preset, ') SELECTED / REJECTED : ', count(states > 0), ' / ',&
-            &count(states <= 0)
+        write(logfhandle,'(A,A,A,I6,A,I6)') '>>> CAVG QUALITY (', preset, ') SELECTED / REJECTED : ', count(cls_states > 0), ' / ',&
+            &count(cls_states <= 0)
         call dealloc_imgarr(cavg_imgs)
         l_ok = .true.
+    end function score_with_model
+
+    ! The class averages of @p proj scored with the quality model @p preset (score_with_model) and
+    ! the selection mapped to its selected particles by class. .false. when @p proj has no class
+    ! averages.
+    logical function select_with_model( self, proj, preset, dir ) result( l_ok )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(sp_project),           intent(inout) :: proj
+        character(len=*),            intent(in)    :: preset
+        class(string),               intent(in)    :: dir
+        integer, allocatable :: cls_states(:)
+        l_ok = self%score_with_model(proj, preset, dir, cls_states)
+        if( l_ok ) call proj%map_cavgs_selection(cls_states)
     end function select_with_model
+
+    ! The selected rows whose class (the newest publication's, merged) the pool model rejects,
+    ! @p cls_states its verdict per class: logged beside the fit's rejection (take_assignment).
+    subroutine flag_model_rows( self, cls_states )
+        class(stream_stage_solve3D), intent(inout) :: self
+        integer,                     intent(in)    :: cls_states(:)
+        integer :: n, i, icls
+        n = self%spproj%os_ptcl2D%get_noris()
+        if( allocated(self%model_rej) ) deallocate(self%model_rej)
+        allocate(self%model_rej(n), source=.false.)
+        do i = 1,n
+            if( self%spproj%os_ptcl3D%get_state(i) <= 0 ) cycle
+            icls = self%spproj%os_ptcl2D%get_class(i)
+            if( icls < 1 .or. icls > size(cls_states) ) cycle
+            self%model_rej(i) = cls_states(icls) <= 0
+        enddo
+    end subroutine flag_model_rows
 
     ! The first publication @p set (number @p id), into a stage without rows: merged as published
     ! (the sieve's selection, or the pool's when p06 published its own), without the pool model's
-    ! decision. At most nptcls3D_max of them stay selected, whole stacks in order
-    ! (cap_first_run); the others are deselected, for a later publication's selection to take.
-    ! The rows left selected are the first set: their selection stays for the session, and later
-    ! publications change only their 2D parameters (merge_publication).
+    ! decision. Its selected rows are the first set: their selection stays for the session, and
+    ! later publications change only their 2D parameters (merge_publication).
     subroutine take_first_publication( self, set, id )
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: set
         integer,                     intent(in)    :: id
-        integer :: i, n, ndeselected
+        integer :: i, n
         if( self%spproj%os_ptcl3D%get_noris() > 0 ) THROW_HARD('the first publication needs a stage without rows')
         if( allocated(self%first_set) ) deallocate(self%first_set)
         call self%merge_publication(set, id)
-        ndeselected = 0
-        call self%cap_first_run()
-        if( allocated(self%queued) )then
-            ndeselected = count(self%queued)
-            call self%set_queued_states(0)
-            deallocate(self%queued)
-        endif
         n = self%spproj%os_ptcl3D%get_noris()
         allocate(self%first_set(n))
         do i = 1,n
             self%first_set(i) = self%spproj%os_ptcl3D%get_state(i) > 0
         enddo
         self%nptcls_selected = count(self%first_set)
-        write(logfhandle,'(A,I6,A,I8,A,I8,A)') '>>> PUBLICATION ', id, ' IS THE FIRST SET: ', self%nptcls_selected,&
-            &' PARTICLES AS PUBLISHED; ', ndeselected, ' OVER THE CAP DESELECTED'
+        write(logfhandle,'(A,I6,A,I8,A)') '>>> PUBLICATION ', id, ' IS THE FIRST SET: ', self%nptcls_selected,&
+            &' PARTICLES AS PUBLISHED'
     end subroutine take_first_publication
 
     ! .true. for row @p iptcl of the first set, whose selection stays for the session.
@@ -770,18 +848,31 @@ contains
         in_first_set = self%first_set(iptcl)
     end function in_first_set
 
-    ! Merges the publication @p set (number @p id) into the stage's rows, which only ever grow
-    ! (solve3D_addon reads them by index). A stack the stage holds is matched by name and its
-    ! particles by image index in the stack: they take the publication's 2D parameters and
-    ! selection in place, and keep their 3D parameters, multistate label, CTF and optics group.
-    ! A row of the first set takes the 2D parameters only: its selection stays. A new stack is
-    ! appended with its micrograph and particles (2D and 3D). A stack the publication lacks keeps
-    ! its rows, deselected (the first set's keep their selection). The classes are the
-    ! publication's; take_cavgs then registers its class averages and FRCs with them.
+    ! .true. for row @p iptcl when the latest assignment deselected it (take_assignment): its
+    ! sub-class was rejected by fit or it had no class of the matching.
+    logical function fit_deselected( self, iptcl )
+        class(stream_stage_solve3D), intent(in) :: self
+        integer,                     intent(in) :: iptcl
+        fit_deselected = .false.
+        if( .not. allocated(self%fit_desel) ) return
+        if( iptcl < 1 .or. iptcl > size(self%fit_desel) ) return
+        fit_deselected = self%fit_desel(iptcl)
+    end function fit_deselected
+
+    ! Merges the publication @p set (number @p id) into the stage's rows, which only ever grow. A
+    ! stack the stage holds is matched by name and its particles by image index in the stack:
+    ! they take the publication's 2D parameters and selection in place, and keep their 3D
+    ! parameters, state, CTF and optics group (the next assignment gives the state). A row of the
+    ! first set takes the 2D parameters only: its selection stays, but a deselection by the latest
+    ! assignment's fit lasts only until this publication (the row is selected again, as state 1,
+    ! and judged again by the next assignment). A new stack is appended with
+    ! its micrograph and particles (2D and 3D). A stack the publication lacks keeps its rows,
+    ! deselected (the first set's keep their selection). The classes are the publication's;
+    ! take_cavgs then registers its class averages and FRCs with them.
     subroutine merge_publication( self, set, id )
         class(stream_stage_solve3D), intent(inout) :: self
-        class(sp_project),              intent(inout) :: set
-        integer,                        intent(in)    :: id
+        class(sp_project),           intent(inout) :: set
+        integer,                     intent(in)    :: id
         integer,      allocatable :: kstk(:)   ! the stage's stack of each publication stack, 0 when new
         logical,      allocatable :: l_seen(:) ! the stage's stacks the publication holds
         type(string), allocatable :: new_names(:)
@@ -833,14 +924,20 @@ contains
                     ! the selection is the first set's own; only the 2D parameters change
                     s = self%spproj%os_ptcl2D%get_state(iptcl)
                     call self%spproj%os_ptcl2D%transfer_2Dparams(iptcl, set%os_ptcl2D, jptcl)
+                    ! the fit's deselection lasts until the next publication: judged again
+                    if( self%fit_deselected(iptcl) )then
+                        s = 1
+                        call self%spproj%os_ptcl3D%set_state(iptcl, 1)
+                        self%fit_desel(iptcl) = .false.
+                    endif
                     call self%spproj%os_ptcl2D%set_state(iptcl, s)
                     cycle
                 endif
                 s     = set%os_ptcl2D%get_state(jptcl)
                 call self%spproj%os_ptcl2D%transfer_2Dparams(iptcl, set%os_ptcl2D, jptcl)
                 call self%spproj%os_ptcl2D%set_state(iptcl, s)
-                ! the 3D state is a run's multistate label: a deselected particle loses it, a
-                ! selected one keeps it, and one without a label (state 0) is selected as state 1
+                ! the 3D state is an assignment's: a deselected particle loses it, a selected one
+                ! keeps it, and one without (state 0) is selected as state 1 until it is assigned
                 if( s == 0 )then
                     call self%spproj%os_ptcl3D%set_state(iptcl, 0)
                 else if( self%spproj%os_ptcl3D%get_state(iptcl) == 0 )then
@@ -918,8 +1015,8 @@ contains
     ! is usually the next stack.
     integer function stack_index( self, name, hint )
         class(stream_stage_solve3D), intent(in) :: self
-        class(string),                  intent(in) :: name
-        integer,                        intent(in) :: hint
+        class(string),               intent(in) :: name
+        integer,                     intent(in) :: hint
         integer :: n, i, k
         stack_index = 0
         n = size(self%stk_names)
@@ -934,11 +1031,11 @@ contains
     end function stack_index
 
     ! The class averages and FRCs of publication @p set, the stage's classes since merge_publication,
-    ! copied into its quality folder (QUALITY_DIR/<stem>) and registered in the stage's out segment
-    ! in place of the earlier ones; the volumes and FSCs stay. A run's class-average balancing
-    ! (balance=cavg) reads the class averages and FRCs of its classes. The copies outlive pool 2D's
-    ! retention of its publications, and are pruned with the quality folder, which stays as long
-    ! as a run started from the publication (prune_quality_dirs).
+    ! copied into its quality folder (QUALITY_DIR/<stem>) with their halves, and registered in the
+    ! stage's out segment in place of the earlier ones; the volumes and FSCs stay. The route's
+    ! solve2D and the fallback's solve3D_cavgs read them, and an assignment matches them when the
+    ! expansion fails. The copies outlive pool 2D's retention of its publications, and are pruned
+    ! with the quality folder (prune_quality_dirs).
     subroutine take_cavgs( self, set, stem )
         class(stream_stage_solve3D), intent(inout) :: self
         class(sp_project),           intent(inout) :: set
@@ -971,146 +1068,157 @@ contains
         call self%spproj%add_frcs2os_out(frcs_copy, 'frc2D')
     end subroutine take_cavgs
 
-    ! A running job is checked: done, its result becomes the pool; a failed solve3D stops the
-    ! stage, a failed addon run leaves the latest result the base. The first set's initial volumes
-    ! (ini3D_cavgs) go step by step in the same pass: solve2D, then the pool model's selection and
-    ! cls_expansion, then solve3D_cavgs, then solve3D from its poses and states. A failed step is
-    ! skipped: without solve2D or solve3D_cavgs, solve3D starts on the first set as without them;
-    ! without cls_expansion, solve3D_cavgs runs on the selected classes. Without a job, next_job
-    ! decides whether to start solve3D (or the first set's solve2D) or an addon run; it starts in
-    ! the pass that takes enough particles for it, before a later publication is taken.
+    ! A running job is checked: failed or done, the next step follows in the same pass
+    ! (job_failed, job_done). Without a job, next_job decides whether the route, the fallback or
+    ! an assignment starts; it starts in the pass that takes the publication it needs.
     subroutine advance_jobs( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        type(string) :: logfile
-        if( self%phase == PHASE_SOLVE3D .or. self%phase == PHASE_ADDON .or. self%phase == PHASE_FINAL&
-            &.or. self%phase == PHASE_CAVGS3D .or. self%phase == PHASE_SOLVE2D .or. self%phase == PHASE_CLSEXP )then
+        if( self%phase /= PHASE_IMPORTING .and. self%phase /= PHASE_IDLE )then
             select case(self%job%status())
                 case(ASYNC_JOB_RUNNING)
                     return
                 case(ASYNC_JOB_FAILED)
-                    logfile = self%job%get_log()
-                    if( self%phase == PHASE_SOLVE2D )then
-                        ! no classes: the first solve3D as without the initial volumes, in this pass
-                        write(logfhandle,'(A,A,A)') '>>> WARNING: THE FIRST SET''S SOLVE2D FAILED (SEE ', logfile%to_char(),&
-                            &'); SOLVE3D STARTS WITHOUT INITIAL VOLUMES'
-                        call self%job%kill()
-                        self%phase = PHASE_IMPORTING
-                        call self%start_solve3D()
-                        return
-                    endif
-                    if( self%phase == PHASE_CLSEXP )then
-                        ! no subclasses: solve3D_cavgs on the selected classes, in this pass
-                        write(logfhandle,'(A,A,A)') '>>> WARNING: CLS_EXPANSION FAILED (SEE ', logfile%to_char(),&
-                            &'); SOLVE3D_CAVGS RUNS ON THE SELECTED CLASSES'
-                        call self%job%kill()
-                        self%phase = PHASE_IMPORTING
-                        call self%start_cavgs3D()
-                        return
-                    endif
-                    if( self%phase == PHASE_CAVGS3D )then
-                        ! no initial volumes: the first solve3D as without them, in this pass
-                        write(logfhandle,'(A,A,A)') '>>> WARNING: SOLVE3D_CAVGS FAILED (SEE ', logfile%to_char(),&
-                            &'); SOLVE3D STARTS WITHOUT ITS VOLUMES'
-                        call self%job%kill()
-                        self%phase = PHASE_IMPORTING
-                        call self%start_solve3D()
-                        return
-                    endif
-                    if( self%phase == PHASE_SOLVE3D ) THROW_HARD('solve3D failed; see '//logfile%to_char())
-                    if( self%phase == PHASE_FINAL )then
-                        ! the latest result stays; the next final publication may try again
-                        write(logfhandle,'(A,A,A)') '>>> WARNING: THE FINAL REFINE3D FAILED (SEE ', logfile%to_char(),&
-                            &'); THE LATEST RESULT STAYS'
-                        call self%job%kill()
-                        self%phase = PHASE_IDLE
-                        return
-                    endif
-                    ! a refused or failed addon run: the latest result stays the base, and the
-                    ! next run waits for a larger cohort
-                    self%ncohort_refused = self%count_cohort()
-                    write(logfhandle,'(A,A,A,I8,A)') '>>> WARNING: THE ADDON RUN FAILED (SEE ', logfile%to_char(),&
-                        &'); THE NEXT WAITS FOR A COHORT LARGER THAN ', self%ncohort_refused, ' PARTICLES'
-                    call self%release_queue()
-                    call self%job%kill()
-                    self%phase = PHASE_IDLE
+                    call self%job_failed()
                 case(ASYNC_JOB_DONE)
-                    select case(self%phase)
-                        case(PHASE_SOLVE2D)
-                            ! the selection and cls_expansion, in this pass
-                            call self%finish_solve2D_first()
-                        case(PHASE_CLSEXP)
-                            ! solve3D_cavgs, in this pass
-                            call self%finish_clsexp()
-                        case(PHASE_CAVGS3D)
-                            ! the poses and states onto the first set, and solve3D from them, in this pass
-                            call self%finish_cavgs3D()
-                            call self%start_solve3D()
-                        case DEFAULT
-                            call self%finish_run()
-                    end select
+                    call self%job_done()
             end select
             return
         endif
-        ! the final run, once a result exists, unless the last full alignment had these particles
-        if( self%l_final_pending .and. self%phase == PHASE_IDLE )then
-            if( self%nptcls_selected /= self%nptcls_at_full )then
-                call self%start_final_run()
-                return
-            endif
-            write(logfhandle,'(A)') '>>> THE LAST FULL ALIGNMENT HAD THESE PARTICLES; NO FINAL RUN'
-            self%l_final_pending = .false.
-        endif
-        select case(next_job(self%phase, self%nptcls_selected, self%count_cohort(), self%count_frozen(),&
-            &self%params%nstates, self%ncohort_refused))
-            case(JOB_SOLVE3D)
-                if( self%l_ini3D_due )then
-                    call self%start_solve2D_first()
-                else
-                    call self%start_solve3D()
-                endif
-            case(JOB_ADDON)
-                call self%start_addon()
+        select case(next_job(self%phase, self%n_refs(), self%l_route_due, self%l_fallback_due, self%l_assign_due,&
+            &self%nptcls_selected, self%params%nstates))
+            case(JOB_ROUTE)
+                call self%start_solve2D_first()
+            case(JOB_FALLBACK)
+                call self%start_fallback()
+            case(JOB_ASSIGN)
+                call self%start_expand()
         end select
     end subroutine advance_jobs
 
-    ! The first set's solve2D (ini3D_cavgs), in solve2D/: the selected particles classified into
-    ! NCLS2D_FIRST classes with the pool's mask diameter, on the 3D jobs' resources, otherwise with
-    ! solve2D's defaults. Every selected row is classified, not only the first run's
-    ! (start_solve3D caps it afterwards), so the rows the cap leaves queued carry the class
-    ! averages' poses too.
-    subroutine start_solve2D_first( self )
+    ! A failed job: the route goes on without the step (solve3D_cavgs on the first set's classes
+    ! without solve2D, on the selected classes without cls_expansion); a failed solve3D_cavgs is
+    ! an attempt without volumes (next_attempt); a publication whose expansion failed has its
+    ! pool class averages matched; a failed matching leaves the states as they are until the next
+    ! publication, and a failed refinement the assignment at the classes' poses.
+    subroutine job_failed( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        type(cmdline) :: cline_job
-        type(string)  :: cwd, dir, server_address
-        call simple_getcwd(cwd)
-        dir = cwd//'/'//SOLVE2D_DIR
-        call fresh_job_dir(dir, SOLVE2D_DIR) ! never the directory of a job left unfinished
-        call self%spproj%write(dir//'/'//SOLVE2D_DIR//METADATA_EXT)
-        call cline_job%set('prg',             'solve2D')
-        call cline_job%set('mkdir',           'no')
-        call cline_job%set('projfile',        SOLVE2D_DIR//METADATA_EXT)
-        call cline_job%set('ncls',            NCLS2D_FIRST)
-        if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
-        call cline_job%set('cache',           'yes')
-        call cline_job%set('nthr',            self%params%nthr3D)
-        ! nparts makes it distributed even at 1; one part runs in shared memory
-        if( self%params%nparts3D > 1 ) call cline_job%set('nparts', self%params%nparts3D)
+        type(string) :: logfile
+        integer      :: iphase
+        logfile = self%job%get_log()
+        iphase  = self%phase
+        call self%job%kill()
+        select case(iphase)
+            case(PHASE_SOLVE2D)
+                write(logfhandle,'(A,A,A)') '>>> WARNING: THE FIRST SET''S SOLVE2D FAILED (SEE ', logfile%to_char(),&
+                    &'); SOLVE3D_CAVGS RUNS ON ITS OWN CLASS AVERAGES'
+                self%phase = PHASE_IMPORTING
+                call self%start_cavgs3D()
+            case(PHASE_CLSEXP)
+                write(logfhandle,'(A,A,A)') '>>> WARNING: CLS_EXPANSION FAILED (SEE ', logfile%to_char(),&
+                    &'); SOLVE3D_CAVGS RUNS ON THE SELECTED CLASSES'
+                self%phase = PHASE_IMPORTING
+                call self%start_cavgs3D()
+            case(PHASE_CAVGS3D)
+                write(logfhandle,'(A,A,A)') '>>> WARNING: SOLVE3D_CAVGS FAILED (SEE ', logfile%to_char(), ')'
+                self%phase       = PHASE_IMPORTING
+                self%try_angdist = [self%try_angdist, -1.]
+                call self%next_attempt()
+            case(PHASE_EXPAND)
+                write(logfhandle,'(A,A,A)') '>>> WARNING: THE PUBLICATION''S CLS_EXPANSION FAILED (SEE ', logfile%to_char(),&
+                    &'); ITS POOL CLASS AVERAGES ARE MATCHED'
+                self%phase      = PHASE_IDLE
+                self%l_expanded = .false.
+                call self%start_assign(self%spproj)
+            case(PHASE_ASSIGN)
+                write(logfhandle,'(A,A,A)') '>>> WARNING: THE MATCHING FAILED (SEE ', logfile%to_char(),&
+                    &'); THE STATES STAY AS THEY WERE UNTIL THE NEXT PUBLICATION'
+                self%phase = PHASE_IDLE
+            case(PHASE_REFINE)
+                write(logfhandle,'(A,A,A)') '>>> WARNING: THE LOCAL REFINEMENT FAILED (SEE ', logfile%to_char(),&
+                    &'); THE ASSIGNMENT STAYS AT THE CLASSES'' POSES, THE VOLUMES ARE THE PREVIOUS ONES'
+                self%phase = PHASE_IDLE
+        end select
+    end subroutine job_failed
+
+    ! A job done: its result is taken and the next step starts in the same pass.
+    subroutine job_done( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        select case(self%phase)
+            case(PHASE_SOLVE2D)
+                call self%finish_solve2D_first()
+            case(PHASE_CLSEXP)
+                call self%finish_clsexp()
+            case(PHASE_CAVGS3D)
+                call self%finish_cavgs3D()
+            case(PHASE_EXPAND)
+                call self%finish_expand()
+            case(PHASE_ASSIGN)
+                call self%finish_assign()
+            case(PHASE_REFINE)
+                call self%finish_refine()
+        end select
+    end subroutine job_done
+
+    ! The 3D jobs' resources on @p cline_job: their threads, their parts when @p l_parts and more
+    ! than one (nparts makes a job distributed even at 1; one part runs in shared memory), and the
+    ! persistent worker server.
+    subroutine set_job_resources( self, cline_job, l_parts )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline_job
+        logical,                     intent(in)    :: l_parts
+        type(string) :: server_address
+        call cline_job%set('nthr', self%params%nthr3D)
+        if( l_parts .and. self%params%nparts3D > 1 ) call cline_job%set('nparts', self%params%nparts3D)
         call cline_job%set('worker_priority', 'high')
         server_address = self%qenv%get_persistent_worker_server_address()
         if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
         if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
+    end subroutine set_job_resources
+
+    !---------------- the route to the reference volumes ----------------
+
+    ! The route's solve2D, in solve2D/: the first set's selected particles classified into
+    ! NCLS2D_FIRST classes with the pool's mask diameter, on the 3D jobs' resources, otherwise with
+    ! solve2D's defaults. Each attempt starts afresh from here.
+    subroutine start_solve2D_first( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(cmdline) :: cline_job
+        type(string)  :: cwd, dir
+        integer       :: i, nfirst, nfirst_all
+        self%nroute_tries = self%nroute_tries + 1
+        self%l_route_due  = .false.
+        write(logfhandle,'(A,I2,A,I2)') '>>> THE ROUTE TO THE REFERENCE VOLUMES, ATTEMPT ', self%nroute_tries, ' OF ', ROUTE_TRIES
+        ! an earlier attempt's model selection deselected first-set rows for the session
+        nfirst = 0
+        do i = 1,self%spproj%os_ptcl3D%get_noris()
+            if( self%in_first_set(i) .and. self%spproj%os_ptcl3D%get_state(i) > 0 ) nfirst = nfirst + 1
+        enddo
+        nfirst_all = 0
+        if( allocated(self%first_set) ) nfirst_all = count(self%first_set)
+        write(logfhandle,'(A,I8,A,I8,A,I8,A)') '>>> THE FIRST SET: ', nfirst, ' OF ITS ', nfirst_all,&
+            &' PARTICLES SELECTED (', self%nptcls_selected, ' SELECTED IN ALL)'
+        call simple_getcwd(cwd)
+        dir = cwd//'/'//SOLVE2D_DIR
+        call fresh_job_dir(dir, SOLVE2D_DIR) ! never the directory of a job left unfinished
+        call self%spproj%write(dir//'/'//SOLVE2D_DIR//METADATA_EXT)
+        call cline_job%set('prg',      'solve2D')
+        call cline_job%set('mkdir',    'no')
+        call cline_job%set('projfile', SOLVE2D_DIR//METADATA_EXT)
+        call cline_job%set('ncls',     NCLS2D_FIRST)
+        if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
+        call cline_job%set('cache',    'yes')
+        call self%set_job_resources(cline_job, .true.)
         call cline_job%printline()
         call self%record_run_publication()
         call self%job%start(self%qenv, cline_job, dir, SOLVE2D_DIR, exec_bin=string('simple_exec'))
-        self%l_ini3D_due = .false.
-        self%phase       = PHASE_SOLVE2D
+        self%phase = PHASE_SOLVE2D
         call cline_job%kill
     end subroutine start_solve2D_first
 
-    ! The first set's solve2D is done: its classes, class averages and the particles' 2D parameters
+    ! The route's solve2D is done: its classes, class averages and the particles' 2D parameters
     ! become the rows' (adopt_job_2D), the classes are selected with the pool model
     ! (select_first_set_classes), and cls_expansion starts on the selected ones. Without a usable
-    ! result, solve3D starts on the first set as without the initial volumes.
+    ! result, solve3D_cavgs runs on the first set's own class averages.
     subroutine finish_solve2D_first( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string) :: projfile
@@ -1119,8 +1227,8 @@ contains
         self%phase = PHASE_IMPORTING
         if( .not. self%adopt_job_2D(projfile) )then
             write(logfhandle,'(A,A,A)') '>>> WARNING: NO USABLE RESULT FROM THE FIRST SET''S SOLVE2D (', projfile%to_char(),&
-                &'); SOLVE3D STARTS WITHOUT INITIAL VOLUMES'
-            call self%start_solve3D()
+                &'); SOLVE3D_CAVGS RUNS ON ITS OWN CLASS AVERAGES'
+            call self%start_cavgs3D()
             return
         endif
         call self%select_first_set_classes()
@@ -1155,13 +1263,13 @@ contains
             &' OF ', self%spproj%os_cls2D%get_noris(), ' CLASSES AND ', self%nptcls_selected, ' PARTICLES'
     end subroutine select_first_set_classes
 
-    ! cls_expansion of the first set's selected classes, in cls_expansion/: each split into the
-    ! same number of subclasses (subclasses_per_class), about NCLS_EXPANDED in all, with the mask
-    ! diameter fitted to the particles' box, on the 3D jobs' resources.
+    ! The route's cls_expansion of the first set's selected classes, in cls_expansion/: each split
+    ! into the same number of subclasses (subclasses_per_class), about NCLS_EXPANDED in all, with
+    ! the mask diameter fitted to the particles' box, on the 3D jobs' resources.
     subroutine start_clsexp( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job
-        type(string)  :: cwd, dir, server_address
+        type(string)  :: cwd, dir
         integer       :: nsel, nsub
         call simple_getcwd(cwd)
         dir = cwd//'/'//CLSEXP_DIR
@@ -1171,26 +1279,21 @@ contains
         nsub = subclasses_per_class(nsel)
         write(logfhandle,'(A,I6,A,I4,A)') '>>> CLS_EXPANSION OF THE FIRST SET: ', nsel, ' CLASSES INTO ', nsub,&
             &' SUBCLASSES EACH'
-        call cline_job%set('prg',             'cls_expansion')
-        call cline_job%set('mkdir',           'no')
-        call cline_job%set('projfile',        CLSEXP_DIR//METADATA_EXT)
-        call cline_job%set('ncls',            nsub)
-        call cline_job%set('mskdiam',         fit_mskdiam(self%mskdiam, self%spproj%get_box(), self%spproj%get_smpd()))
-        call cline_job%set('nthr',            self%params%nthr3D)
-        if( self%params%nparts3D > 1 ) call cline_job%set('nparts', self%params%nparts3D)
-        call cline_job%set('worker_priority', 'high')
-        server_address = self%qenv%get_persistent_worker_server_address()
-        if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
-        if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
+        call cline_job%set('prg',      'cls_expansion')
+        call cline_job%set('mkdir',    'no')
+        call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
+        call cline_job%set('ncls',     nsub)
+        call cline_job%set('mskdiam',  fit_mskdiam(self%mskdiam, self%spproj%get_box(), self%spproj%get_smpd()))
+        call self%set_job_resources(cline_job, .true.)
         call cline_job%printline()
         call self%job%start(self%qenv, cline_job, dir, CLSEXP_DIR, exec_bin=string('simple_exec'))
         self%phase = PHASE_CLSEXP
         call cline_job%kill
     end subroutine start_clsexp
 
-    ! cls_expansion is done: its subclasses, their class averages and the particles' labels become
-    ! the rows' (adopt_job_2D), and solve3D_cavgs starts on them. Without a usable result,
-    ! solve3D_cavgs runs on the selected classes of solve2D.
+    ! The route's cls_expansion is done: its subclasses, their class averages and the particles'
+    ! labels become the rows' (adopt_job_2D), and solve3D_cavgs starts on them. Without a usable
+    ! result, solve3D_cavgs runs on the selected classes of solve2D.
     subroutine finish_clsexp( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string) :: projfile
@@ -1207,16 +1310,15 @@ contains
         call self%start_cavgs3D()
     end subroutine finish_clsexp
 
-    ! The 2D of a first-set job's project @p projfile (solve2D, cls_expansion) into the rows: each
+    ! The 2D of a route job's project @p projfile (solve2D, cls_expansion) into the rows: each
     ! selected row's 2D parameters and selection (in both segments), the classes, and the class
     ! averages and FRCs, which solve3D_cavgs reads with the halves beside them. .false., with the
-    ! rows unchanged, when the project is missing or holds other rows, or its class averages, their
-    ! halves or FRCs are missing, or the class averages are not one per class.
+    ! rows unchanged, when the project is missing or unusable (usable_job_2D).
     logical function adopt_job_2D( self, projfile ) result( l_ok )
         class(stream_stage_solve3D), intent(inout) :: self
         class(string),               intent(in)    :: projfile
         type(sp_project) :: res
-        type(string)     :: stk, frcs, ext
+        type(string)     :: stk, frcs
         real             :: smpd, mskdiam
         integer          :: ncls, n, i, s
         l_ok = .false.
@@ -1225,19 +1327,12 @@ contains
         call res%read_segment('cls2D',  projfile)
         call res%read_segment('out',    projfile)
         n = self%spproj%os_ptcl2D%get_noris()
-        ncls = 0
-        call res%get_cavgs_stk(stk, ncls, smpd, fail=.false.)
-        call res%get_frcs(frcs, 'frc2D', fail=.false.)
-        if( res%os_ptcl2D%get_noris() == n .and. ncls > 0 .and. ncls == res%os_cls2D%get_noris() )then
-            ext  = string('.')//fname2ext(stk)
-            l_ok = file_exists(stk) .and. file_exists(frcs)
-            if( l_ok ) l_ok = file_exists(add2fbody(stk, ext%to_char(), '_even')) .and.&
-                &file_exists(add2fbody(stk, ext%to_char(), '_odd'))
-        endif
-        if( .not. l_ok )then
+        if( .not. usable_job_2D(res, n) )then
             call res%kill
             return
         endif
+        call res%get_cavgs_stk(stk, ncls, smpd, fail=.false.)
+        call res%get_frcs(frcs, 'frc2D', fail=.false.)
         do i = 1,n
             if( self%spproj%os_ptcl2D%get_state(i) <= 0 ) cycle
             s = res%os_ptcl2D%get_state(i)
@@ -1255,41 +1350,47 @@ contains
         endif
         call self%spproj%add_frcs2os_out(frcs, 'frc2D')
         self%nptcls_selected = self%spproj%os_ptcl3D%count_state_gt_zero()
+        l_ok = .true.
         call res%kill
     end function adopt_job_2D
 
-    ! solve3D_cavgs on the first set's class averages (ini3D_cavgs), in solve3D_cavgs/: the
-    ! subclasses cls_expansion made of the classes the pool model kept (the kept classes of
-    ! solve2D when cls_expansion gave nothing), with their halves and FRCs, for nstates initial
-    ! volumes. The quality folder of the publication is kept as a run's (record_run_publication).
+    ! The fallback: solve3D_cavgs once on the pool class averages of the publication just merged,
+    ! after the route failed on every attempt.
+    subroutine start_fallback( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        self%l_fallback_due     = .false.
+        self%l_fallback_pending = .false.
+        self%l_fallback_done    = .true.
+        write(logfhandle,'(A)') '>>> THE FALLBACK: SOLVE3D_CAVGS ON THE PUBLICATION''S POOL CLASS AVERAGES'
+        call self%start_cavgs3D()
+    end subroutine start_fallback
+
+    ! solve3D_cavgs on the stage's class averages, in solve3D_cavgs/: the route's subclasses (the
+    ! kept classes of solve2D when cls_expansion gave nothing, the first set's own classes
+    ! without solve2D), or the fallback's publication's pool classes, with their halves and FRCs,
+    ! for nstates volumes. The quality folder of the publication is kept (record_run_publication).
     subroutine start_cavgs3D( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job
-        type(string)  :: cwd, dir, server_address
+        type(string)  :: cwd, dir
         call simple_getcwd(cwd)
         dir = cwd//'/'//CAVGS3D_DIR
         call fresh_job_dir(dir, CAVGS3D_DIR) ! never the directory of a job left unfinished
         call self%spproj%write(dir//'/'//CAVGS3D_DIR//METADATA_EXT)
-        call cline_job%set('prg',             'solve3D_cavgs')
-        call cline_job%set('mkdir',           'no')
-        call cline_job%set('projfile',        CAVGS3D_DIR//METADATA_EXT)
-        call cline_job%set('pgrp',            'c1')
-        call cline_job%set('nstates',         self%params%nstates)
-        call cline_job%set('prune',           'no')
+        call cline_job%set('prg',               'solve3D_cavgs')
+        call cline_job%set('mkdir',             'no')
+        call cline_job%set('projfile',          CAVGS3D_DIR//METADATA_EXT)
+        call cline_job%set('pgrp',              'c1')
+        call cline_job%set('nstates',           self%params%nstates)
+        call cline_job%set('prune',             'no')
         ! a fixed low-pass ramp, not one derived from the class FRCs
-        call cline_job%set('lpstart',         LPSTART_CAVGS3D)
-        call cline_job%set('lpstop',          LPSTOP_CAVGS3D)
-        call cline_job%set('force_lp_range',  'yes')
+        call cline_job%set('lpstart',           LPSTART_CAVGS3D)
+        call cline_job%set('lpstop',            LPSTOP_CAVGS3D)
+        call cline_job%set('force_lp_range',    'yes')
         ! the angular sampling window narrowed after the symmetry search, so the poses settle
         call cline_job%set('prob_athres_taper', 'yes')
         if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
-        call cline_job%set('nthr',            self%params%nthr3D)
-        ! nparts makes it distributed even at 1; one part runs in shared memory
-        if( self%params%nparts3D > 1 ) call cline_job%set('nparts', self%params%nparts3D)
-        call cline_job%set('worker_priority', 'high')
-        server_address = self%qenv%get_persistent_worker_server_address()
-        if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
-        if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
+        call self%set_job_resources(cline_job, .true.)
         call cline_job%printline()
         call self%record_run_publication()
         call self%job%start(self%qenv, cline_job, dir, CAVGS3D_DIR, exec_bin=string('simple_exec'))
@@ -1297,452 +1398,683 @@ contains
         call cline_job%kill
     end subroutine start_cavgs3D
 
-    ! solve3D_cavgs is done: its classes' poses and states onto the first set
-    ! (take_cavgs3D_result), and its initial volumes to the GUI (send_cavgs3D_volumes). Without a
-    ! result, solve3D starts as it would without it.
+    ! solve3D_cavgs is done: its volumes are an attempt (register_attempt), checked; passed, they
+    ! are the references (accept_refs), failed, the next attempt follows (next_attempt).
     subroutine finish_cavgs3D( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        type(sp_project)     :: res
-        type(string)         :: projfile
-        integer, allocatable :: newind(:)
+        type(sp_project) :: res
+        type(string)     :: projfile
+        integer          :: itry
+        logical          :: l_pass
         projfile = self%job%get_dir()//'/'//CAVGS3D_DIR//METADATA_EXT
         call self%job%kill
         self%phase = PHASE_IMPORTING
-        if( .not. file_exists(projfile) )then
-            write(logfhandle,'(A,A,A)') '>>> WARNING: NO PROJECT FROM SOLVE3D_CAVGS (', projfile%to_char(), '); SOLVE3D STARTS WITHOUT IT'
-            return
-        endif
-        call res%read_segment('cls3D', projfile)
-        call res%read_segment('out',   projfile)
-        if( self%take_cavgs3D_result(res, newind) )then
-            call self%send_cavgs3D_volumes(res, newind)
+        call self%send_status(string('checking the initial volumes'))
+        itry   = size(self%try_angdist) + 1
+        l_pass = .false.
+        if( file_exists(projfile) )then
+            call res%read_segment('cls3D', projfile)
+            call res%read_segment('out',   projfile)
+            l_pass = self%register_attempt(res, itry)
+            call res%kill
         else
-            write(logfhandle,'(A)') '>>> WARNING: SOLVE3D_CAVGS LEFT NO CLASS WITH A STATE; SOLVE3D STARTS WITHOUT IT'
+            write(logfhandle,'(A,A,A)') '>>> WARNING: NO PROJECT FROM SOLVE3D_CAVGS (', projfile%to_char(), ')'
+            self%try_angdist = [self%try_angdist, -1.]
         endif
-        call res%kill
-        call self%write_stage_project()
+        if( l_pass )then
+            call self%accept_refs(itry, .false.)
+        else
+            call self%next_attempt()
+        endif
     end subroutine finish_cavgs3D
 
-    ! The class averages' 3D (the cls3D of solve3D_cavgs' result @p res) onto the stage's rows: each
-    ! class's pose and state mapped to its selected particles (map2ptcls); the states the selected
-    ! particles hold renumbered from 1 (compact_states), in both particle segments and the classes,
-    ! and taken as the stage's states (params%nstates, the run's and every later one's). A first-set
-    ! row the mapping leaves deselected (its class has no state) stays a first-set row, deselected
-    ! for the session. The next solve3D starts from them (cavg_ini_ext, which
-    ! needs every state populated). .false., with the rows unchanged, when no class has a state or
-    ! no pose could be mapped (particles without a 2D alignment). @p newind_out, when present, is
-    ! the renumbering: solve3D_cavgs' state to the stage's, 0 for one no selected particle holds.
-    logical function take_cavgs3D_result( self, res, newind_out ) result( l_ok )
-        class(stream_stage_solve3D),    intent(inout) :: self
-        class(sp_project),              intent(inout) :: res
-        integer, allocatable, optional, intent(inout) :: newind_out(:)
-        integer, allocatable :: cls_states(:), states(:), newind(:)
-        integer :: n, i, s, nstates_new
-        l_ok = .false.
-        if( res%os_cls3D%get_noris() == 0 ) return
-        cls_states = res%os_cls3D%get_all_asint('state')
-        if( .not. any(cls_states > 0) ) return
-        self%spproj%os_cls3D = res%os_cls3D
-        call self%spproj%map2ptcls()
-        ! map2ptcls maps nothing onto particles without a 2D alignment (a virgin ptcl2D)
-        if( self%spproj%is_virgin_field('ptcl3D') ) return
-        ! the states the selected particles hold, renumbered from 1
-        n = self%spproj%os_ptcl3D%get_noris()
-        allocate(states(n))
-        do i = 1,n
-            states(i) = self%spproj%os_ptcl3D%get_state(i)
-        enddo
-        call compact_states(states, newind, nstates_new)
-        if( nstates_new < 1 ) return
-        do i = 1,n
-            if( states(i) <= 0 ) cycle
-            call self%spproj%os_ptcl3D%set_state(i, states(i))
-            call self%spproj%os_ptcl2D%set_state(i, states(i))
-        enddo
-        do i = 1,self%spproj%os_cls3D%get_noris()
-            s = self%spproj%os_cls3D%get_state(i)
-            if( s < 1 ) cycle
-            if( s <= size(newind) )then
-                call self%spproj%os_cls3D%set_state(i, newind(s))
-            else
-                call self%spproj%os_cls3D%set_state(i, 0)
-            endif
-        enddo
-        write(logfhandle,'(A,I3,A,I3,A)') '>>> SOLVE3D_CAVGS: ', nstates_new, ' OF ', self%params%nstates,&
-            &' STATES HOLD SELECTED PARTICLES; SOLVE3D STARTS FROM THEIR POSES AND STATES'
-        ! the stage's states from here on: the run's and every later one's (the addon runs replay theirs)
-        self%params%nstates  = nstates_new
-        self%nptcls_selected = self%spproj%os_ptcl3D%count_state_gt_zero()
-        self%l_cavg_ini_ext  = .true.
-        if( present(newind_out) ) newind_out = newind
-        l_ok = .true.
-    end function take_cavgs3D_result
-
-    ! The first run's particles: at most nptcls3D_max of the selected ones (cap_rows). The caller
-    ! deselects the rows left out (take_first_publication) or leaves them to the first addon run
-    ! (start_solve3D).
-    subroutine cap_first_run( self )
+    ! The volumes of solve3D_cavgs' result @p res as attempt @p itry: the states that hold class
+    ! averages (cls3D) renumbered from 1 (compact_states), their volumes (vol_cavg entries) and the
+    ! JPEGs beside them copied into state_refs/try_<itry>/ with a record (REFS_RECORD: the count,
+    ! box and pixel size, the even/odd values and the largest correlation between two states, the
+    ! file names), and the attempt's even/odd angular distance appended to try_angdist (-1
+    ! without volumes; huge when not measured). Every pair of states is compared at the
+    ! matching's limit within the particle's mask (compare_volpair: their correlation from the
+    ! second Fourier shell to LP_ASSIGN); a pair that cannot be compared counts as identical.
+    ! .true. when the attempt passes the check (refs_usable).
+    logical function register_attempt( self, res, itry ) result( l_pass )
         class(stream_stage_solve3D), intent(inout) :: self
-        logical, allocatable :: l_cand(:)
-        integer :: i, n
-        n = self%spproj%os_ptcl3D%get_noris()
-        allocate(l_cand(n))
-        do i = 1,n
-            l_cand(i) = self%spproj%os_ptcl3D%get_state(i) > 0
-        enddo
-        call self%cap_rows(self%params%nptcls3D_max, l_cand, 'FIRST RUN')
-    end subroutine cap_first_run
-
-    ! An addon run's cohort: at most nptcls_addon_max of the selected rows not frozen (cap_rows);
-    ! the frozen particles are always in the run. The rows left out wait for the next run.
-    subroutine cap_addon_cohort( self )
-        class(stream_stage_solve3D), intent(inout) :: self
-        logical, allocatable :: l_cand(:)
-        integer :: i, n, nfrozen_rows
-        n = self%spproj%os_ptcl3D%get_noris()
-        nfrozen_rows = 0
-        if( allocated(self%frozen_active) ) nfrozen_rows = size(self%frozen_active)
-        allocate(l_cand(n))
-        do i = 1,n
-            l_cand(i) = self%spproj%os_ptcl3D%get_state(i) > 0
-            if( i <= nfrozen_rows ) l_cand(i) = l_cand(i) .and. .not. self%frozen_active(i)
-        enddo
-        call self%cap_rows(self%params%nptcls_addon_max, l_cand, 'ADDON COHORT')
-    end subroutine cap_addon_cohort
-
-    ! At most @p ncap of the candidate rows @p l_cand (none below 1 caps them), when there are
-    ! more: whole stacks in row order (the pool's stack order, the earliest imported first), up to
-    ! the first whose candidates no longer fit under the cap, so that no micrograph is split and
-    ! the run may hold fewer than the cap. When not even the first stack fits, its first
-    ! candidates up to the cap. The candidates left out are marked in queued (unallocated when
-    ! none is); @p label names the run in the log.
-    subroutine cap_rows( self, ncap, l_cand, label )
-        class(stream_stage_solve3D), intent(inout) :: self
-        integer,                     intent(in)    :: ncap
-        logical,                     intent(in)    :: l_cand(:)
-        character(len=*),            intent(in)    :: label
-        logical, allocatable :: l_taken(:)
-        integer :: n, ncand, ntaken, nstk_cand, istk, fromp, top, iptcl
-        if( allocated(self%queued) ) deallocate(self%queued)
-        n     = size(l_cand)
-        ncand = count(l_cand)
-        if( ncap < 1 .or. ncand <= ncap ) return
-        allocate(l_taken(n), source=.false.)
-        ntaken = 0
-        do istk = 1,self%spproj%os_stk%get_noris()
-            fromp     = self%spproj%os_stk%get_fromp(istk)
-            top       = min(self%spproj%os_stk%get_top(istk), n)
-            nstk_cand = count(l_cand(fromp:top))
-            if( nstk_cand == 0 ) cycle
-            if( ntaken + nstk_cand > ncap )then
-                if( ntaken == 0 )then
-                    ! not even the first stack fits: its first candidates up to the cap
-                    do iptcl = fromp,top
-                        if( ntaken == ncap ) exit
-                        if( .not. l_cand(iptcl) ) cycle
-                        l_taken(iptcl) = .true.
-                        ntaken = ntaken + 1
-                    enddo
-                endif
-                exit
-            endif
-            l_taken(fromp:top) = l_cand(fromp:top)
-            ntaken = ntaken + nstk_cand
-        enddo
-        allocate(self%queued(n))
-        self%queued = l_cand .and. .not. l_taken
-        write(logfhandle,'(A,A,A,I8,A,I8,A,I8,A)') '>>> ', label, ': ', ntaken, ' OF ', ncand,&
-            &' PARTICLES, WHOLE STACKS IN ORDER (CAP ', ncap, ')'
-    end subroutine cap_rows
-
-    ! State @p s for the queued rows, in both particle segments.
-    subroutine set_queued_states( self, s )
-        class(stream_stage_solve3D), intent(inout) :: self
-        integer,                     intent(in)    :: s
-        integer :: i
-        if( .not. allocated(self%queued) ) return
-        do i = 1,min(size(self%queued), self%spproj%os_ptcl3D%get_noris())
-            if( .not. self%queued(i) ) cycle
-            call self%spproj%os_ptcl2D%set_state(i, s)
-            call self%spproj%os_ptcl3D%set_state(i, s)
-        enddo
-    end subroutine set_queued_states
-
-    ! After a run that left them queued (the first solve3D, or a capped addon run), whose result
-    ! has them deselected: the queued rows are selected again, with state 1 as merge_publication
-    ! gives a selected row without a multistate label. They are not among the result's active rows
-    ! (frozen_active), so they are the next addon run's cohort. After a failed or rolled-back run,
-    ! which leaves the stage's rows as they were, the queue is only dropped.
-    subroutine release_queue( self )
-        class(stream_stage_solve3D), intent(inout) :: self
-        if( .not. allocated(self%queued) ) return
-        call self%set_queued_states(1)
-        write(logfhandle,'(A,I8,A)') '>>> ', count(self%queued), ' QUEUED PARTICLES ARE THE NEXT ADDON RUN''S COHORT'
-        deallocate(self%queued)
-        self%nptcls_selected = self%spproj%os_ptcl3D%count_state_gt_zero()
-    end subroutine release_queue
-
-    ! solve3D on the pool, in solve3D/, on at most nptcls3D_max of the selected particles
-    ! (cap_first_run): the queued ones are deselected in the job's project only.
-    subroutine start_solve3D( self )
-        class(stream_stage_solve3D), intent(inout) :: self
-        type(cmdline) :: cline_job
-        type(string)  :: cwd, dir, server_address
-        call simple_getcwd(cwd)
-        dir = cwd//'/'//SOLVE3D_DIR
-        call fresh_job_dir(dir, SOLVE3D_DIR) ! never the directory of a job left unfinished
-        call self%cap_first_run()
-        if( allocated(self%queued) ) write(logfhandle,'(A,I8,A)') '>>> ', count(self%queued),&
-            &' SELECTED PARTICLES ARE QUEUED FOR THE FIRST ADDON RUN'
-        call self%set_queued_states(0)
-        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
-        call self%spproj%write(dir//'/'//SOLVE3D_DIR//METADATA_EXT)
-        call self%set_queued_states(1)
-        ! a run that leaves particles queued does not align every selected particle
-        self%nptcls_at_full = self%nptcls_selected
-        if( allocated(self%queued) ) self%nptcls_at_full = -1
-        call cline_job%set('prg',             'solve3D')
-        call cline_job%set('mkdir',           'no')
-        call cline_job%set('projfile',        SOLVE3D_DIR//METADATA_EXT)
-        call cline_job%set('pgrp',            'c1')
-        call cline_job%set('nstates',         self%params%nstates)
-        call cline_job%set('nstages',         self%params%nstages)
-        ! from the class averages' poses and states (solve3D_cavgs, ini3D_cavgs): after the symmetry stage
-        if( self%l_cavg_ini_ext ) call cline_job%set('cavg_ini_ext', 'yes')
-        self%l_cavg_ini_ext = .false.
-        ! no balance: solve3D's default, cavg with the 2D solution every publication brings (the
-        ! first set's class averages are the sieve's, from p06's first publication)
-        if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
-        call cline_job%set('nparts',          self%params%nparts3D)
-        call cline_job%set('nthr',            self%params%nthr3D)
-        call cline_job%set('worker_priority', 'high')
-        server_address = self%qenv%get_persistent_worker_server_address()
-        if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
-        if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
-        call cline_job%printline()
-        call self%record_run_publication()
-        call self%job%start(self%qenv, cline_job, dir, SOLVE3D_DIR, exec_bin=string('simple_exec'))
-        self%phase = PHASE_SOLVE3D
-        call cline_job%kill
-    end subroutine start_solve3D
-
-    ! solve3D_addon on the grown pool, from the latest result, in solve3D_addon/it_<n>/, on at
-    ! most nptcls_addon_max of the cohort (cap_addon_cohort). The base run's settings come from its
-    ! manifest, not this command line. The manifest records no balance, as start_solve3D gives
-    ! none, so the run takes solve3D's default (cavg, over the newest publication's classes).
-    subroutine start_addon( self )
-        class(stream_stage_solve3D), intent(inout) :: self
-        type(cmdline) :: cline_job
-        type(string)  :: cwd, dir, server_address
-        self%naddon_runs = self%naddon_runs + 1
-        write(logfhandle,'(A,I0)') '>>> ENTERING ADDON STAGE ', self%naddon_runs
-        call simple_getcwd(cwd)
-        call simple_mkdir(cwd//'/'//ADDON_DIR)
-        dir = cwd//'/'//ADDON_DIR//'/it_'//int2str(self%naddon_runs)
-        call fresh_job_dir(dir, ADDON_DIR) ! never the directory of a job left unfinished
-        ! at most nptcls_addon_max of the cohort, deselected in the job's project only; the rest
-        ! wait for the next run
-        call self%cap_addon_cohort()
-        if( allocated(self%queued) ) write(logfhandle,'(A,I8,A)') '>>> ', count(self%queued),&
-            &' COHORT PARTICLES WAIT FOR THE NEXT ADDON RUN'
-        call self%set_queued_states(0)
-        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
-        call self%spproj%write(dir//'/'//ADDON_DIR//METADATA_EXT)
-        call self%set_queued_states(1)
-        call cline_job%set('prg',             'solve3D_addon')
-        call cline_job%set('mkdir',           'no')
-        call cline_job%set('projfile',        ADDON_DIR//METADATA_EXT)
-        call cline_job%set('projfile_frozen', self%frozen_projfile)
-        call cline_job%set('nparts',          self%params%nparts3D)
-        call cline_job%set('nthr',            self%params%nthr3D)
-        call cline_job%set('worker_priority', 'high')
-        server_address = self%qenv%get_persistent_worker_server_address()
-        if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
-        if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
-        call cline_job%printline()
-        call self%record_run_publication()
-        call self%job%start(self%qenv, cline_job, dir, ADDON_DIR, exec_bin=string('simple_exec'))
-        self%phase = PHASE_ADDON
-        call cline_job%kill
-    end subroutine start_addon
-
-    ! The finished run's result. An addon run's verdict is read first, and a REGRESSED state rolls
-    ! the run back (roll_back_addon). Otherwise the job's data become the stage's (the stage keeps
-    ! its own project information and computing environment, which the job's project names after
-    ! the job, and its optics table) and go to the GUI state by state. A solve3D or addon result is
-    ! also the base of the next addon run; the final refine3D's is not, as solve3D_addon needs a
-    ! solve3D base: when the sieve takes finality back, the addon runs go on from theirs.
-    subroutine finish_run( self )
-        class(stream_stage_solve3D), intent(inout) :: self
-        type(string)      :: dir, projfile
-        real, allocatable :: res_before(:)
-        integer           :: i, n
-        logical           :: l_addon, l_final, l_regressed
-        dir     = self%job%get_dir()
-        l_addon = self%phase == PHASE_ADDON
-        l_final = self%phase == PHASE_FINAL
-        if( l_addon )then
-            projfile = dir//'/'//ADDON_DIR//METADATA_EXT
-        else if( l_final )then
-            projfile = dir//'/'//FINAL_DIR//METADATA_EXT
-        else
-            projfile = dir//'/'//SOLVE3D_DIR//METADATA_EXT
-        endif
-        if( .not. file_exists(projfile) ) THROW_HARD('no project from the 3D job: '//projfile%to_char())
-        if( l_addon )then
-            call self%read_addon_verdict(dir, l_regressed)
-            if( l_regressed )then
-                call self%roll_back_addon()
-                return
-            endif
-            self%n_rollbacks = 0
-        endif
-        call self%spproj%read_segment('mic',    projfile)
-        call self%spproj%read_segment('stk',    projfile)
-        call self%spproj%read_segment('ptcl2D', projfile)
-        call self%spproj%read_segment('ptcl3D', projfile)
-        call self%spproj%read_segment('cls2D',  projfile)
-        call self%spproj%read_segment('cls3D',  projfile)
-        call self%spproj%read_segment('out',    projfile)
-        self%result_projfile = projfile
-        if( .not. l_final )then
-            self%frozen_projfile = projfile
-            ! the rows active in this result are the next addon run's frozen particles
-            n = self%spproj%os_ptcl3D%get_noris()
-            if( allocated(self%frozen_active) ) deallocate(self%frozen_active)
-            allocate(self%frozen_active(n))
-            do i = 1,n
-                self%frozen_active(i) = self%spproj%os_ptcl3D%get_state(i) > 0
-            enddo
-            self%ncohort_refused = -1
-            call self%prune_run_dirs()
-        endif
-        call self%job%kill
-        self%phase = PHASE_IDLE
-        ! the GUI gets the result's states, populations and orientations as the run left them
-        if( allocated(self%state_res) ) res_before = self%state_res
-        call self%send_volumes()
-        ! then the particles the first solve3D left queued are the first addon run's cohort
-        call self%release_queue()
-        call self%write_stage_project()
-        if( l_final .and. allocated(res_before) )then
-            do i = 1,min(size(res_before), size(self%state_res))
-                write(logfhandle,'(A,I3,A,F8.2,A,F8.2,A)') '>>> FINAL REFINE3D STATE ', i, ': RESOLUTION ', res_before(i),&
-                    &' A BEFORE, ', self%state_res(i), ' A AFTER'
-            enddo
-        endif
-    end subroutine finish_run
-
-    ! The final run (decisions 23 and 24 of the follow-up plan): a multistate refine3D of every
-    ! selected particle, started from the current state volumes, in refine3D_final/, once the
-    ! pool's final publication is in. refine3D sets its low-pass limits from the FSC.
-    subroutine start_final_run( self )
-        class(stream_stage_solve3D), intent(inout) :: self
-        type(cmdline) :: cline_job
-        type(string)  :: cwd, dir, server_address, volpath
-        real          :: smpd
-        integer       :: box, istate
-        write(logfhandle,'(A,I8,A)') '>>> STARTING THE FINAL REFINE3D OF ', self%nptcls_selected, ' SELECTED PARTICLES'
-        call simple_getcwd(cwd)
-        dir = cwd//'/'//FINAL_DIR
-        call fresh_job_dir(dir, FINAL_DIR) ! never the directory of a job left unfinished
-        call self%spproj%write(dir//'/'//FINAL_DIR//METADATA_EXT)
-        call cline_job%set('prg',             'refine3D')
-        call cline_job%set('mkdir',           'no')
-        call cline_job%set('projfile',        FINAL_DIR//METADATA_EXT)
-        call cline_job%set('pgrp',            'c1')
-        call cline_job%set('nstates',         self%params%nstates)
-        do istate = 1,self%params%nstates
-            if( .not. self%spproj%isthere_in_osout('vol', istate) ) cycle
-            call self%spproj%get_vol('vol', istate, volpath, smpd, box)
-            if( volpath%strlen() > 0 ) call cline_job%set('vol'//int2str(istate), simple_abspath(volpath))
-        enddo
-        if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
-        call cline_job%set('nparts',          self%params%nparts3D)
-        call cline_job%set('nthr',            self%params%nthr3D)
-        call cline_job%set('worker_priority', 'high')
-        server_address = self%qenv%get_persistent_worker_server_address()
-        if( server_address%strlen() > 0 ) call cline_job%set('worker_server', server_address)
-        if( self%qenv%get_persistent_worker_nthr() > 0 ) call cline_job%set('worker_server_nthr', self%qenv%get_persistent_worker_nthr())
-        call cline_job%printline()
-        self%nptcls_at_last_run = self%spproj%os_ptcl3D%count_state_gt_zero()
-        self%nptcls_at_full     = self%nptcls_selected
-        self%l_final_pending    = .false.
-        call self%record_run_publication()
-        call self%job%start(self%qenv, cline_job, dir, FINAL_DIR, exec_bin=string('simple_exec'))
-        self%phase = PHASE_FINAL
-        call cline_job%kill
-    end subroutine start_final_run
-
-    ! A REGRESSED addon run (decision 22 of the follow-up plan) is not adopted: the frozen base, its
-    ! active rows, the stage's project and the GUI's volumes stay the previous run's (the run's
-    ! folder stays until a later run is adopted). The next attempt waits until the cohort has grown
-    ! by the cadence step again (retry_cohort).
-    subroutine roll_back_addon( self )
-        class(stream_stage_solve3D), intent(inout) :: self
-        self%n_rollbacks     = self%n_rollbacks + 1
-        self%ncohort_refused = retry_cohort(self%count_cohort(), self%count_frozen(), self%params%nstates)
-        self%addon_verdict   = self%addon_verdict//' - rolled back ('//int2str(self%n_rollbacks)//' in a row)'
-        write(logfhandle,'(A,I3,A,I8,A)') '>>> THE ADDON RUN REGRESSED A STATE AND IS ROLLED BACK (', self%n_rollbacks,&
-            &' IN A ROW); THE NEXT WAITS FOR A COHORT LARGER THAN ', self%ncohort_refused, ' PARTICLES'
-        call self%release_queue()
-        call self%job%kill
-        self%phase = PHASE_IDLE
-    end subroutine roll_back_addon
-
-    ! The verdict of the addon run in @p dir (solve3D_addon_report.txt), per state: logged and kept
-    ! for the status; @p l_regressed when a state REGRESSED, which rolls the run back (finish_run).
-    ! A run that wrote no report is not rolled back.
-    subroutine read_addon_verdict( self, dir, l_regressed )
-        use simple_solve3D_addon_report, only: solve3D_addon_report, ADDON_REPORT_FNAME
-        class(stream_stage_solve3D), intent(inout) :: self
-        class(string),               intent(in)    :: dir
-        logical,                     intent(out)   :: l_regressed
-        type(solve3D_addon_report) :: report
-        type(string)               :: fname
-        integer                    :: istate
-        l_regressed = .false.
-        call self%addon_verdict%kill()
-        fname = dir//'/'//ADDON_REPORT_FNAME
-        if( .not. file_exists(fname) )then
-            THROW_WARN('the addon run wrote no report: '//fname%to_char())
+        class(sp_project),           intent(inout) :: res
+        integer,                     intent(in)    :: itry
+        integer, allocatable :: cls_states(:), newind(:), counts(:)
+        type(string), allocatable :: names(:)
+        real,         allocatable :: fsc(:), res_fsc(:)
+        type(string)         :: dir, volpath, src
+        real                 :: angdist, overlap, smpd, smpd_try, cc, cc_max, mskdiam
+        integer              :: nheld, s, s2, i, box, box_try, ncopied, funit, ios
+        logical              :: l_cmp
+        l_pass  = .false.
+        angdist = -1.
+        overlap = -1.
+        allocate(names(size(self%state_res)))
+        if( res%os_cls3D%get_noris() > 0 ) cls_states = res%os_cls3D%get_all_asint('state')
+        if( .not. allocated(cls_states) ) allocate(cls_states(0))
+        call compact_states(cls_states, newind, nheld)
+        if( nheld < 1 .or. nheld > size(names) )then
+            write(logfhandle,'(A,I3,A)') '>>> WARNING: SOLVE3D_CAVGS (ATTEMPT ', itry, ') LEFT NO CLASS AVERAGE WITH A STATE'
+            self%try_angdist = [self%try_angdist, -1.]
             return
         endif
-        call report%read(fname)
-        self%addon_verdict = 'addon run '//int2str(self%naddon_runs)//':'
-        do istate = 1,report%get_nstates()
-            self%addon_verdict = self%addon_verdict//' state '//int2str(istate)//' '//trim(report%get_verdict(istate))
+        allocate(counts(nheld), source=0)
+        do i = 1,size(cls_states)
+            if( cls_states(i) > 0 ) counts(cls_states(i)) = counts(cls_states(i)) + 1
         enddo
-        write(logfhandle,'(A,A)') '>>> VERDICT OF THE ', self%addon_verdict%to_char()
-        l_regressed = report%any_regressed()
-        call report%kill()
-    end subroutine read_addon_verdict
+        ! the even/odd agreement solve3D_cavgs records with its volumes: the same values on every
+        ! vol_cavg entry (solve3D_cavgs_policy.md, section 7), so the first is read
+        do i = 1,res%os_out%get_noris()
+            if( .not. res%os_out%isthere(i, 'imgkind') ) cycle
+            if( res%os_out%get_str(i, 'imgkind') /= 'vol_cavg' ) cycle
+            if( res%os_out%isthere(i, 'eo_angdist') )       angdist = res%os_out%get(i, 'eo_angdist')
+            if( res%os_out%isthere(i, 'eo_state_overlap') ) overlap = res%os_out%get(i, 'eo_state_overlap')
+            exit
+        enddo
+        ! the volumes, renumbered
+        dir = string(REFS_DIR//'/try_')//int2str(itry)
+        call simple_mkdir(REFS_DIR)
+        call simple_mkdir(dir)
+        ncopied  = 0
+        box_try  = 0
+        smpd_try = 0.
+        do s = 1,size(newind)
+            if( newind(s) < 1 ) cycle
+            if( .not. res%isthere_in_osout('vol_cavg', s) ) cycle
+            call res%get_vol('vol_cavg', s, volpath, smpd, box)
+            if( .not. file_exists(volpath) ) cycle
+            names(newind(s)) = 'vol_state'//int2str_pad(newind(s), 2)//MRC_EXT
+            call simple_copy_file(volpath, dir//'/'//names(newind(s))%to_char())
+            src = get_fpath(volpath)//refine3D_reprojs_fname(s)
+            if( file_exists(src) ) call simple_copy_file(src, dir//'/'//refine3D_reprojs_fname(newind(s)))
+            src = get_fpath(volpath)//refine3D_oris_heatmap_fname(s)
+            if( file_exists(src) ) call simple_copy_file(src, dir//'/'//refine3D_oris_heatmap_fname(newind(s)))
+            ncopied  = ncopied + 1
+            box_try  = box
+            smpd_try = smpd
+        enddo
+        if( ncopied /= nheld )then
+            write(logfhandle,'(A,I3,A,I3,A,I3,A)') '>>> WARNING: SOLVE3D_CAVGS (ATTEMPT ', itry, ') HAS VOLUMES FOR ', ncopied,&
+                &' OF THE ', nheld, ' STATES HOLDING CLASS AVERAGES'
+            self%try_angdist = [self%try_angdist, -1.]
+            return
+        endif
+        ! every pair of states compared at the matching's limit: near-duplicates are no states
+        mskdiam = fit_mskdiam(self%mskdiam, box_try, smpd_try)
+        cc_max  = -1.
+        do s = 1,nheld - 1
+            do s2 = s + 1,nheld
+                call compare_volpair(dir//'/'//names(s)%to_char(), dir//'/'//names(s2)%to_char(), mskdiam, LP_ASSIGN,&
+                    &cc, fsc, res_fsc, l_cmp)
+                if( .not. l_cmp )then
+                    write(logfhandle,'(A,I3,A,I3,A)') '>>> WARNING: STATES ', s, ' AND ', s2, ' COULD NOT BE COMPARED; COUNTED AS IDENTICAL'
+                    cc = 1.
+                endif
+                write(logfhandle,'(A,I3,A,I3,A,F7.4)') '>>>   STATES ', s, ' AND ', s2, ': CORRELATION AT THE MATCHING''S LIMIT ', cc
+                cc_max = max(cc_max, cc)
+            enddo
+        enddo
+        open(newunit=funit, file=dir%to_char()//'/'//REFS_RECORD, status='replace', action='write', iostat=ios)
+        if( ios /= 0 ) THROW_HARD('cannot write the record of '//dir%to_char())
+        write(funit,'(I0,1X,I0,1X,F12.6)') nheld, box_try, smpd_try
+        write(funit,'(F12.4,1X,F12.4,1X,F12.4)') angdist, overlap, cc_max
+        do s = 1,nheld
+            write(funit,'(A)') names(s)%to_char()
+        enddo
+        close(funit)
+        if( angdist >= 0. )then
+            self%try_angdist = [self%try_angdist, angdist]
+        else
+            self%try_angdist = [self%try_angdist, huge(angdist)]
+        endif
+        l_pass = refs_usable(angdist, overlap, counts, cc_max)
+        write(logfhandle,'(A,I3,A,I3,A,F7.2,A,F7.2,A,F7.4)') '>>> SOLVE3D_CAVGS, ATTEMPT ', itry, ': ', nheld,&
+            &' STATES HOLD CLASS AVERAGES; EVEN/ODD ANGULAR DISTANCE ', angdist, ' DEGREES, STATE AGREEMENT ', overlap,&
+            &'%, LARGEST CORRELATION BETWEEN TWO STATES ', cc_max
+        do s = 1,nheld
+            write(logfhandle,'(A,I3,A,I6,A)') '>>>   STATE ', s, ': ', counts(s), ' CLASS AVERAGES'
+        enddo
+        if( l_pass )then
+            write(logfhandle,'(A)') '>>> THE VOLUMES PASS THE CHECK'
+        else
+            write(logfhandle,'(A)') '>>> THE VOLUMES FAIL THE CHECK'
+        endif
+    end function register_attempt
 
-    ! The addon's cohort: the selected rows (3D state > 0) that were not active in the frozen
-    ! solution, appended since or selected again.
-    integer function count_cohort( self )
+    ! After an attempt that failed: the route again while it has attempts left; then the fallback
+    ! on the next publication; when the pool has published its last, or after the fallback, the
+    ! best attempt (accept_best).
+    subroutine next_attempt( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        if( self%l_fallback_done )then
+            call self%accept_best()
+        else if( self%nroute_tries < ROUTE_TRIES )then
+            self%l_route_due = .true.
+            write(logfhandle,'(A)') '>>> THE ROUTE RUNS AGAIN, FROM ITS SOLVE2D'
+        else if( self%l_final_seen )then
+            write(logfhandle,'(A)') '>>> THE POOL PUBLISHES NO MORE: NO FALLBACK'
+            call self%accept_best()
+        else
+            self%l_fallback_pending = .true.
+            write(logfhandle,'(A)') '>>> SOLVE3D_CAVGS RUNS ON THE NEXT PUBLICATION''S POOL CLASS AVERAGES'
+        endif
+    end subroutine next_attempt
+
+    ! No attempt passed the check: the one with the smallest even/odd angular distance is taken,
+    ! with a warning, rather than run with no states. Without any volumes the stage assigns none.
+    subroutine accept_best( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        integer :: ibest
+        ibest = best_attempt(self%try_angdist)
+        if( ibest == 0 )then
+            THROW_WARN('no attempt made reference volumes; the stage assigns no states')
+            return
+        endif
+        write(logfhandle,'(A,I3,A)') '>>> WARNING: NO ATTEMPT PASSED THE CHECK; ATTEMPT ', ibest,&
+            &', WITH THE SMALLEST EVEN/ODD ANGULAR DISTANCE, GIVES THE REFERENCES'
+        call self%accept_refs(ibest, .true.)
+    end subroutine accept_best
+
+    ! Attempt @p itry's volumes, the JPEGs beside them and its record, copied from
+    ! state_refs/try_<itry>/ into state_refs/, are the references from here on (restore_refs):
+    ! the stage's states are theirs, and the GUI gets them (send_refs). @p l_forced when they did
+    ! not pass the check. When the pool's final publication is in, it is assigned at once.
+    subroutine accept_refs( self, itry, l_forced )
+        class(stream_stage_solve3D), intent(inout) :: self
+        integer,                     intent(in)    :: itry
+        logical,                     intent(in)    :: l_forced
+        type(string) :: dir, src
+        integer      :: s
+        dir = string(REFS_DIR//'/try_')//int2str(itry)
+        if( .not. self%restore_refs(dir) ) THROW_HARD('the volumes of attempt '//int2str(itry)//' are missing')
+        do s = 1,self%n_refs()
+            call simple_copy_file(self%ref_vols(s), string(REFS_DIR//'/')//basename(self%ref_vols(s)))
+            src = dir//'/'//refine3D_reprojs_fname(s)
+            if( file_exists(src) ) call simple_copy_file(src, string(REFS_DIR//'/')//refine3D_reprojs_fname(s))
+            src = dir//'/'//refine3D_oris_heatmap_fname(s)
+            if( file_exists(src) ) call simple_copy_file(src, string(REFS_DIR//'/')//refine3D_oris_heatmap_fname(s))
+        enddo
+        call simple_copy_file(dir//'/'//REFS_RECORD, string(REFS_DIR//'/'//REFS_RECORD))
+        if( .not. self%restore_refs(string(REFS_DIR)) ) THROW_HARD('the references could not be copied to '//REFS_DIR)
+        self%params%nstates = self%n_refs()
+        self%phase          = PHASE_IDLE
+        if( l_forced )then
+            write(logfhandle,'(A,I3,A,I3,A)') '>>> THE REFERENCES: ', self%n_refs(), ' STATES (ATTEMPT ', itry, ', NOT PASSED)'
+        else
+            write(logfhandle,'(A,I3,A,I3,A)') '>>> THE REFERENCES: ', self%n_refs(), ' STATES (ATTEMPT ', itry, ')'
+        endif
+        call self%send_refs()
+        if( self%l_final_seen ) self%l_assign_due = .true.
+    end subroutine accept_refs
+
+    ! The reference volumes recorded in @p dir (REFS_RECORD), taken when every one is on disk:
+    ! ref_vols, ref_box and ref_smpd. .false., with none taken, otherwise.
+    logical function restore_refs( self, dir ) result( l_ok )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(string),               intent(in)    :: dir
+        type(string), allocatable :: vols(:)
+        character(len=1024) :: line
+        real    :: smpd
+        integer :: funit, ios, n, box, s
+        l_ok = .false.
+        if( .not. file_exists(dir//'/'//REFS_RECORD) ) return
+        open(newunit=funit, file=dir%to_char()//'/'//REFS_RECORD, status='old', action='read', iostat=ios)
+        if( ios /= 0 ) return
+        read(funit,*,iostat=ios) n, box, smpd
+        if( ios /= 0 .or. n < 1 .or. n > size(self%state_res) )then
+            close(funit)
+            return
+        endif
+        read(funit,'(A)',iostat=ios) line ! the even/odd values
+        allocate(vols(n))
+        do s = 1,n
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            vols(s) = dir//'/'//trim(adjustl(line))
+            if( .not. file_exists(vols(s)) ) ios = 1
+            if( ios /= 0 ) exit
+            vols(s) = simple_abspath(vols(s))
+        enddo
+        close(funit)
+        if( ios /= 0 ) return
+        if( allocated(self%ref_vols) ) deallocate(self%ref_vols)
+        allocate(self%ref_vols(n))
+        do s = 1,n
+            self%ref_vols(s) = vols(s)
+        enddo
+        self%ref_box  = box
+        self%ref_smpd = smpd
+        l_ok = .true.
+    end function restore_refs
+
+    ! The number of reference volumes (0 before they exist).
+    integer function n_refs( self )
         class(stream_stage_solve3D), intent(in) :: self
-        integer :: i, nfrozen_rows
-        count_cohort = 0
-        nfrozen_rows = 0
-        if( allocated(self%frozen_active) ) nfrozen_rows = size(self%frozen_active)
-        do i = 1,self%spproj%os_ptcl3D%get_noris()
-            if( self%spproj%os_ptcl3D%get_state(i) == 0 ) cycle
-            if( i <= nfrozen_rows )then
-                if( self%frozen_active(i) ) cycle
+        n_refs = 0
+        if( allocated(self%ref_vols) ) n_refs = size(self%ref_vols)
+    end function n_refs
+
+    !---------------- the assignment of a publication ----------------
+
+    ! A publication's assignment starts in assign/it_<n>/: cls_expansion of its classes, in
+    ! expand/, each split into the same number of sub-classes (subclasses_per_class), about
+    ! NCLS_EXPANDED in all, with the mask diameter fitted to the particles' box, on the 3D jobs'
+    ! resources.
+    subroutine start_expand( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(cmdline) :: cline_job
+        type(string)  :: cwd, dir
+        integer       :: nsel, nsub
+        self%nassign      = self%nassign + 1
+        self%l_assign_due = .false.
+        call simple_getcwd(cwd)
+        call simple_mkdir(cwd//'/'//ASSIGN_DIR)
+        self%assign_dir = cwd//'/'//ASSIGN_DIR//'/it_'//int2str(self%nassign)
+        call fresh_job_dir(self%assign_dir, ASSIGN_LABEL) ! never the directory of a job left unfinished
+        dir = self%assign_dir//'/'//EXPAND_DIR
+        call fresh_job_dir(dir, CLSEXP_DIR)
+        call self%spproj%write(dir//'/'//CLSEXP_DIR//METADATA_EXT)
+        nsel = count(self%spproj%os_cls2D%get_all_asint('state') > 0)
+        nsub = subclasses_per_class(nsel)
+        write(logfhandle,'(A,I6,A,I6,A,I4,A)') '>>> ASSIGNMENT ', self%nassign, ': CLS_EXPANSION OF ', nsel, ' CLASSES INTO ',&
+            &nsub, ' SUBCLASSES EACH'
+        call cline_job%set('prg',      'cls_expansion')
+        call cline_job%set('mkdir',    'no')
+        call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
+        call cline_job%set('ncls',     nsub)
+        call cline_job%set('mskdiam',  fit_mskdiam(self%mskdiam, self%spproj%get_box(), self%spproj%get_smpd()))
+        call self%set_job_resources(cline_job, .true.)
+        call cline_job%printline()
+        call self%job%start(self%qenv, cline_job, dir, CLSEXP_DIR, exec_bin=string('simple_exec'))
+        self%phase = PHASE_EXPAND
+        call cline_job%kill
+    end subroutine start_expand
+
+    ! The publication's expansion is done: its sub-classes are matched (start_assign on its
+    ! project); without a usable result, the pool's class averages are.
+    subroutine finish_expand( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(sp_project) :: res
+        type(string)     :: projfile
+        projfile = self%job%get_dir()//'/'//CLSEXP_DIR//METADATA_EXT
+        call self%job%kill
+        self%phase      = PHASE_IDLE
+        self%l_expanded = .false.
+        if( file_exists(projfile) )then
+            call res%read(projfile)
+            self%l_expanded = usable_job_2D(res, self%spproj%os_ptcl2D%get_noris())
+        endif
+        if( self%l_expanded )then
+            write(logfhandle,'(A,I6,A)') '>>> THE PUBLICATION EXPANDED INTO ', res%os_cls2D%get_noris(), ' SUBCLASSES'
+            call self%start_assign(res)
+        else
+            write(logfhandle,'(A,A,A)') '>>> WARNING: NO USABLE RESULT FROM THE PUBLICATION''S CLS_EXPANSION (', projfile%to_char(),&
+                &'); ITS POOL CLASS AVERAGES ARE MATCHED'
+            call self%start_assign(self%spproj)
+        endif
+        call res%kill
+    end subroutine finish_expand
+
+    ! The matching, in the assignment's folder: assign_cavgs_states (simple_private_exec) on a copy
+    ! of @p proj (the expansion's project, or the stage's), every class average of it against the
+    ! references at LP_ASSIGN over NSPACE_ASSIGN directions per state, with the mask diameter
+    ! fitted to the class averages' box, on the 3D jobs' threads.
+    subroutine start_assign( self, proj )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(sp_project),           intent(inout) :: proj
+        type(cmdline) :: cline_job
+        type(string)  :: stk
+        real          :: smpd, box_stk
+        integer       :: ncls, s
+        call proj%write(self%assign_dir//'/'//ASSIGN_LABEL//METADATA_EXT)
+        box_stk = 0.
+        call proj%get_cavgs_stk(stk, ncls, smpd, fail=.false., box=box_stk)
+        write(logfhandle,'(A,I6,A,I3,A)') '>>> MATCHING ', ncls, ' CLASS AVERAGES AGAINST THE ', self%n_refs(), ' REFERENCES'
+        call cline_job%set('prg',      ASSIGN_LABEL)
+        call cline_job%set('mkdir',    'no')
+        call cline_job%set('projfile', ASSIGN_LABEL//METADATA_EXT)
+        call cline_job%set('nstates',  self%n_refs())
+        do s = 1,self%n_refs()
+            call cline_job%set('vol'//int2str(s), self%ref_vols(s))
+        enddo
+        call cline_job%set('mskdiam',  fit_mskdiam(self%mskdiam, nint(box_stk), smpd))
+        call cline_job%set('lp',       LP_ASSIGN)
+        call cline_job%set('nspace',   NSPACE_ASSIGN)
+        call cline_job%set('nthr',     self%params%nthr3D)
+        call cline_job%printline()
+        call self%job%start(self%qenv, cline_job, self%assign_dir, ASSIGN_LABEL, exec_bin=string('simple_private_exec'))
+        self%phase = PHASE_ASSIGN
+        call cline_job%kill
+    end subroutine start_assign
+
+    ! The matching is done: the rejection, the flags and the mapping onto the rows
+    ! (take_assignment), recorded in the matched project, then the local refinement. Without a
+    ! usable result the states stay as they were.
+    subroutine finish_assign( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(sp_project) :: res
+        type(string)     :: projfile
+        projfile = self%assign_dir//'/'//ASSIGN_LABEL//METADATA_EXT
+        call self%job%kill
+        self%phase = PHASE_IDLE
+        if( .not. file_exists(projfile) )then
+            write(logfhandle,'(A,A,A)') '>>> WARNING: NO PROJECT FROM THE MATCHING (', projfile%to_char(), '); THE STATES STAY'
+            return
+        endif
+        call res%read(projfile)
+        if( .not. self%take_assignment(res) )then
+            write(logfhandle,'(A,A,A)') '>>> WARNING: NO USABLE MATCHING IN ', projfile%to_char(), '; THE STATES STAY'
+            call res%kill
+            return
+        endif
+        call res%write(projfile)
+        call res%kill
+        call self%write_stage_project()
+        call self%start_refine()
+    end subroutine finish_assign
+
+    ! The matching in @p res (a copy of the rows, with the matched classes' cls2D, cls3D and the
+    ! particles' class labels) onto the rows. Over the classes with a state and particles, those
+    ! whose best correlation is an outlier are rejected (reject_by_fit: state 0) and the kept ones
+    ! with a small margin flagged (flag_ambiguous: cls2D key 'ambiguous'); each kept class's pose
+    ! and state are mapped onto its selected particles (map2ptcls), and each row selected before
+    ! takes its particle's state, pose and correlation (state 0 when its class is rejected or it
+    ! has none), in both particle segments: a particle follows its (sub-)class. A row deselected
+    ! here is recorded (fit_desel): one of the first set is selected again by the next merge. The
+    ! fit's statistics, each rejected class's correlation and population, and how the correlation
+    ! follows the population are logged, and the counts beside the pool model's verdict
+    ! (model_rej). .false., with the rows unchanged, when @p res holds other rows or no matching.
+    logical function take_assignment( self, res ) result( l_ok )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(sp_project),           intent(inout) :: res
+        integer, allocatable :: cls_states(:), counts(:)
+        real,    allocatable :: corrs(:), margins(:), pops(:)
+        logical, allocatable :: l_cand(:), l_rej(:), l_amb(:), l_sel(:), l_mapped(:)
+        real    :: med, mad, thres
+        integer :: n, ncls, icls, i, s, nboth, nmodel, nfit, nrej_ptcls, nmax
+        l_ok = .false.
+        n    = self%spproj%os_ptcl3D%get_noris()
+        ncls = res%os_cls2D%get_noris()
+        if( n == 0 .or. res%os_ptcl2D%get_noris() /= n ) return
+        if( ncls == 0 .or. res%os_cls3D%get_noris() /= ncls ) return
+        cls_states = res%os_cls3D%get_all_asint('state')
+        corrs      = res%os_cls3D%get_all('corr')
+        margins    = res%os_cls3D%get_all('margin')
+        ! the candidates: classes with a state and particles
+        allocate(l_cand(ncls))
+        do icls = 1,ncls
+            l_cand(icls) = cls_states(icls) > 0 .and. cls_states(icls) <= self%n_refs()
+            if( res%os_cls2D%isthere(icls, 'pop') ) l_cand(icls) = l_cand(icls) .and. res%os_cls2D%get_int(icls, 'pop') > 0
+        enddo
+        if( .not. any(l_cand) ) return
+        call reject_by_fit(corrs, l_cand, l_rej, med, mad, thres, nmax)
+        l_amb = flag_ambiguous(margins, l_cand .and. .not. l_rej)
+        ! the populations, for the log: whether the rejection follows the classes' sizes
+        allocate(pops(ncls), source=0.)
+        do icls = 1,ncls
+            if( res%os_cls2D%isthere(icls, 'pop') ) pops(icls) = real(res%os_cls2D%get_int(icls, 'pop'))
+        enddo
+        do icls = 1,ncls
+            if( .not. l_cand(icls) .or. l_rej(icls) ) call res%os_cls3D%set_state(icls, 0)
+            call res%os_cls2D%set(icls, 'ambiguous', merge(1, 0, l_amb(icls)))
+        enddo
+        ! the particles each kept class maps onto: selected, with a class of the matching
+        allocate(l_sel(n), l_mapped(n))
+        do i = 1,n
+            l_sel(i)    = self%spproj%os_ptcl3D%get_state(i) > 0
+            icls        = res%os_ptcl2D%get_class(i)
+            l_mapped(i) = res%os_ptcl2D%get_state(i) > 0 .and. icls >= 1 .and. icls <= ncls
+        enddo
+        call res%map2ptcls()
+        ! map2ptcls maps nothing onto particles without a 2D alignment (a virgin ptcl2D)
+        if( res%is_virgin_field('ptcl3D') ) return
+        allocate(counts(self%n_refs()), source=0)
+        if( allocated(self%fit_desel) ) deallocate(self%fit_desel)
+        allocate(self%fit_desel(n), source=.false.)
+        nrej_ptcls = 0
+        nboth      = 0
+        nmodel     = 0
+        nfit       = 0
+        do i = 1,n
+            if( .not. l_sel(i) ) cycle
+            s = 0
+            if( l_mapped(i) ) s = res%os_ptcl3D%get_state(i)
+            if( s > self%n_refs() ) s = 0
+            if( s > 0 )then
+                call self%spproj%os_ptcl3D%set_euler(i, res%os_ptcl3D%get_euler(i))
+                call self%spproj%os_ptcl3D%set_shift(i, res%os_ptcl3D%get_2Dshift(i))
+                call self%spproj%os_ptcl3D%set(i, 'corr', res%os_ptcl3D%get(i, 'corr'))
+                counts(s) = counts(s) + 1
+            else
+                nrej_ptcls = nrej_ptcls + 1
+                self%fit_desel(i) = .true.
             endif
-            count_cohort = count_cohort + 1
+            call self%spproj%os_ptcl3D%set_state(i, s)
+            call self%spproj%os_ptcl2D%set_state(i, s)
+            ! the fit's rejection beside the pool model's
+            if( allocated(self%model_rej) )then
+                if( i <= size(self%model_rej) )then
+                    if( s == 0 .and. self%model_rej(i) ) nboth  = nboth  + 1
+                    if( s >  0 .and. self%model_rej(i) ) nmodel = nmodel + 1
+                    if( s == 0 .and. .not. self%model_rej(i) ) nfit = nfit + 1
+                endif
+            endif
         enddo
-    end function count_cohort
+        self%nptcls_selected    = self%spproj%os_ptcl3D%count_state_gt_zero()
+        self%nptcls_at_last_run = sum(counts)
+        if( self%l_expanded )then
+            write(logfhandle,'(A,I6,A)') '>>> ASSIGNMENT OF ', ncls, ' SUBCLASSES'
+        else
+            write(logfhandle,'(A,I6,A)') '>>> ASSIGNMENT OF ', ncls, ' POOL CLASSES'
+        endif
+        write(logfhandle,'(A,I6,A,I6,A,I6,A)') '>>> ', count(l_cand), ' CANDIDATES: ', count(l_rej), ' REJECTED BY FIT, ',&
+            &count(l_amb), ' AMBIGUOUS (ASSIGNED)'
+        call log_fit(corrs, pops, l_cand, l_rej, med, mad, thres, nmax)
+        do s = 1,self%n_refs()
+            write(logfhandle,'(A,I3,A,I8,A)') '>>>   STATE ', s, ': ', counts(s), ' PARTICLES'
+        enddo
+        write(logfhandle,'(A,I8,A)') '>>> ', nrej_ptcls, ' PARTICLES DESELECTED'
+        if( allocated(self%model_rej) )then
+            write(logfhandle,'(A,I8,A,I8,A,I8)') '>>> PARTICLES REJECTED BY THE FIT AND THE POOL MODEL: ', nboth,&
+                &'; THE MODEL ALONE (NOT APPLIED): ', nmodel, '; THE FIT ALONE: ', nfit
+        endif
+        l_ok = .true.
 
-    ! The frozen particles: the rows active in the latest result.
-    integer function count_frozen( self )
-        class(stream_stage_solve3D), intent(in) :: self
-        count_frozen = 0
-        if( allocated(self%frozen_active) ) count_frozen = count(self%frozen_active)
-    end function count_frozen
+    contains
 
-    ! The publication a run starts from keeps its quality folder (QUALITY_RUNS).
+        ! the fit's statistics; each rejected class's correlation, population and state; the
+        ! median population of the kept and rejected candidates; and the correlation of the best
+        ! correlation with the log of the population over the candidates (a strong positive one:
+        ! the rejection follows the classes' sizes more than their fit)
+        subroutine log_fit( corrs, pops, l_cand, l_rej, med, mad, thres, nmax )
+            real,    intent(in) :: corrs(:), pops(:), med, mad, thres
+            logical, intent(in) :: l_cand(:), l_rej(:)
+            integer, intent(in) :: nmax
+            real, allocatable :: x(:), y(:)
+            real    :: r, sx, sy
+            integer :: j
+            write(logfhandle,'(A,F7.4,A,F7.4,A,F7.4,A,I6,A,I6,A)') '>>> FIT: MEDIAN BEST CORRELATION ', med, ', MAD ', mad,&
+                &', THRESHOLD ', thres, ' (', count(l_cand .and. corrs < thres), ' CANDIDATES BELOW IT, AT MOST ', nmax, ' REJECTED)'
+            do j = 1,size(corrs)
+                if( .not. l_rej(j) ) cycle
+                write(logfhandle,'(A,I6,A,F7.4,A,I8,A,I3)') '>>>   REJECTED CLASS ', j, ': CORRELATION ', corrs(j),&
+                    &', POPULATION ', nint(pops(j)), ', STATE ', cls_states(j)
+            enddo
+            if( .not. any(pops > 0.) ) return
+            if( any(l_cand .and. .not. l_rej) .and. any(l_rej) )then
+                write(logfhandle,'(A,F10.1,A,F10.1)') '>>> MEDIAN POPULATION OF THE KEPT / REJECTED CANDIDATES: ',&
+                    &median_of(pack(pops, l_cand .and. .not. l_rej)), ' / ', median_of(pack(pops, l_rej))
+            endif
+            if( count(l_cand) < 3 ) return
+            x  = pack(corrs, l_cand)
+            y  = log(max(pack(pops, l_cand), 1.))
+            x  = x - sum(x) / real(size(x))
+            y  = y - sum(y) / real(size(y))
+            sx = sqrt(sum(x**2))
+            sy = sqrt(sum(y**2))
+            r  = 0.
+            if( sx > 0. .and. sy > 0. ) r = sum(x * y) / (sx * sy)
+            write(logfhandle,'(A,F7.4)') '>>> CORRELATION OF THE BEST CORRELATION WITH LOG POPULATION OVER THE CANDIDATES: ', r
+        end subroutine log_fit
+
+    end function take_assignment
+
+    ! The seeds of the local refinement on the rows (refine=cont continues from a discrete pose:
+    ! state, half-set, projection direction): the half-sets by row parity (partition_eo), the
+    ! same for every assignment since rows are never renumbered, and the projection direction
+    ! closest to each mapped pose in the job's grid (nspace directions, c1). refine3D clears the
+    ! update counts at its first iteration, so its starting reconstruction takes every row with a
+    ! state.
+    subroutine prepare_refine_seeds( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(oris) :: eulspace
+        type(sym)  :: c1
+        call self%spproj%os_ptcl3D%partition_eo()
+        call c1%new('c1')
+        call eulspace%new(self%params%nspace, is_ptcl=.false.)
+        call c1%build_refspiral(eulspace)
+        call self%spproj%os_ptcl3D%set_projs(eulspace)
+        call eulspace%kill
+        call c1%kill
+    end subroutine prepare_refine_seeds
+
+    ! The local refinement, in the assignment's refine3D/: one iteration (maxits=1) of refine3D
+    ! refine=cont over every selected row from its mapped pose (prepare_refine_seeds), each
+    ! particle's pose refined continuously against its own state, which stays, within
+    ! refine=cont's bounds (athres_cont, trs); the iteration ends with the states reconstructed
+    ! from the refined poses. The starting volumes are reconstructed from the mapped poses; the
+    ! low-pass limits come from the FSC; no sigma2 (objfun=cc). Distributed
+    ! even with one part: the distributed refine3D reconstructs its starting volumes, the
+    ! shared-memory one needs them given. The job holds the states the particles hold,
+    ! renumbered from 1 (compact_states) in its project only, since refine3D reconstructs no
+    ! volume for an empty state; take_refine_result maps them back.
+    subroutine start_refine( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(cmdline)        :: cline_job
+        type(string)         :: dir
+        integer, allocatable :: states(:), states_job(:), newind(:)
+        integer              :: nheld
+        call self%prepare_refine_seeds()
+        states     = self%spproj%os_ptcl3D%get_all_asint('state')
+        states_job = states
+        call compact_states(states_job, newind, nheld)
+        if( nheld < 1 )then
+            write(logfhandle,'(A)') '>>> WARNING: NO PARTICLE HAS A STATE; NO LOCAL REFINEMENT'
+            return
+        endif
+        dir = self%assign_dir//'/'//REFINE_DIR
+        call fresh_job_dir(dir, REFINE_DIR) ! never the directory of a job left unfinished
+        call self%spproj%os_ptcl3D%set_all('state', states_job)
+        call self%spproj%write(dir//'/'//REFINE_DIR//METADATA_EXT)
+        call self%spproj%os_ptcl3D%set_all('state', states)
+        write(logfhandle,'(A,I8,A,I3,A)') '>>> REFINING ', self%nptcls_selected, ' PARTICLES LOCALLY IN ', nheld,&
+            &' FIXED STATES'
+        call cline_job%set('prg',      'refine3D')
+        call cline_job%set('mkdir',    'no')
+        call cline_job%set('projfile', REFINE_DIR//METADATA_EXT)
+        call cline_job%set('refine',   'cont')
+        call cline_job%set('maxits',   1)
+        call cline_job%set('pgrp',     'c1')
+        call cline_job%set('nstates',  nheld)
+        call cline_job%set('nspace',   self%params%nspace)
+        call cline_job%set('objfun',   'cc')
+        if( self%mskdiam > 0. ) call cline_job%set('mskdiam', self%mskdiam)
+        call self%set_job_resources(cline_job, .false.)
+        call cline_job%set('nparts',   self%params%nparts3D)
+        call cline_job%printline()
+        call self%job%start(self%qenv, cline_job, dir, REFINE_DIR, exec_bin=string('simple_exec'))
+        self%phase = PHASE_REFINE
+        call cline_job%kill
+    end subroutine start_refine
+
+    ! The local refinement is done: its volumes, FSCs and the refined poses are the stage's
+    ! (take_refine_result), the stage's project is written beside it as the snapshots' source
+    ! (result_projfile, RESULT_PROJ in the assignment's folder; refine3D's own project is kept as
+    ! the job left it), and the GUI gets the states (send_volumes). Older assignment folders go
+    ! (prune_run_dirs).
+    subroutine finish_refine( self )
+        class(stream_stage_solve3D), intent(inout) :: self
+        type(sp_project) :: res
+        type(string)     :: dir, projfile
+        integer          :: nreg
+        dir      = self%job%get_dir()
+        projfile = dir//'/'//REFINE_DIR//METADATA_EXT
+        call self%job%kill
+        self%phase = PHASE_IDLE
+        nreg = 0
+        if( file_exists(projfile) )then
+            call res%read_segment('ptcl3D', projfile)
+            call res%read_segment('out',    projfile)
+            nreg = self%take_refine_result(res)
+            call res%kill
+        endif
+        if( nreg == 0 )then
+            write(logfhandle,'(A,A,A)') '>>> WARNING: THE LOCAL REFINEMENT IN ', dir%to_char(), ' GAVE NO USABLE RESULT'
+            return
+        endif
+        self%result_projfile = self%assign_dir//'/'//RESULT_PROJ//METADATA_EXT
+        call self%spproj%write(self%result_projfile)
+        call self%send_volumes()
+        call self%write_stage_project()
+        call self%prune_run_dirs()
+    end subroutine finish_refine
+
+    ! The local refinement's project @p res onto the stage, its states mapped back to the stage's
+    ! (start_refine renumbered the states the rows hold, compact_states): each state's volume and
+    ! FSC it registered, in place of every earlier state's, and each selected row's refined pose
+    ! (Euler angles and shift) where its state is the row's. The number of states registered; 0,
+    ! with the stage unchanged, when @p res holds other rows or no volume.
+    integer function take_refine_result( self, res ) result( nreg )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(sp_project),           intent(inout) :: res
+        integer, allocatable :: states_job(:), newind(:)
+        logical, allocatable :: l_vol(:)
+        type(string) :: vol, fsc
+        real         :: smpd
+        integer      :: n, s, i, box, fsc_box, nposes, nheld
+        nreg = 0
+        n    = self%spproj%os_ptcl3D%get_noris()
+        if( n == 0 .or. res%os_ptcl3D%get_noris() /= n ) return
+        ! the job's state of each stage state (0: none)
+        states_job = self%spproj%os_ptcl3D%get_all_asint('state')
+        call compact_states(states_job, newind, nheld)
+        allocate(l_vol(size(newind)), source=.false.)
+        do s = 1,size(newind)
+            if( newind(s) < 1 ) cycle
+            if( .not. res%isthere_in_osout('vol', newind(s)) .or. .not. res%isthere_in_osout('fsc', newind(s)) ) cycle
+            call res%get_vol('vol', newind(s), vol, smpd, box)
+            call res%get_fsc(newind(s), fsc, fsc_box)
+            l_vol(s) = file_exists(vol) .and. file_exists(fsc)
+        enddo
+        if( .not. any(l_vol) ) return
+        do s = 1,size(self%state_res)
+            call self%spproj%remove_state_artifacts_from_osout(s)
+        enddo
+        do s = 1,size(l_vol)
+            if( .not. l_vol(s) ) cycle
+            call res%get_vol('vol', newind(s), vol, smpd, box)
+            call res%get_fsc(newind(s), fsc, fsc_box)
+            call self%spproj%add_vol2os_out(vol, smpd, s, 'vol')
+            call self%spproj%add_fsc2os_out(fsc, s, fsc_box)
+            nreg = nreg + 1
+        enddo
+        nposes = 0
+        do i = 1,n
+            s = self%spproj%os_ptcl3D%get_state(i)
+            if( s <= 0 .or. s > size(newind) ) cycle
+            if( res%os_ptcl3D%get_state(i) /= newind(s) ) cycle
+            call self%spproj%os_ptcl3D%set_euler(i, res%os_ptcl3D%get_euler(i))
+            call self%spproj%os_ptcl3D%set_shift(i, res%os_ptcl3D%get_2Dshift(i))
+            nposes = nposes + 1
+        enddo
+        write(logfhandle,'(A,I3,A,I8,A)') '>>> LOCAL REFINEMENT: ', nreg, ' STATE VOLUMES, ', nposes, ' REFINED POSES'
+    end function take_refine_result
+
+    !---------------- records ----------------
+
+    ! The publication the route or the fallback starts from keeps its quality folder (QUALITY_RUNS).
     subroutine record_run_publication( self )
         class(stream_stage_solve3D), intent(inout) :: self
         integer :: funit, ios
@@ -1754,8 +2086,8 @@ contains
         close(funit)
     end subroutine record_run_publication
 
-    ! The quality folders kept are the newest NQUALITY_KEPT and those of the publications a run
-    ! started from; the others go.
+    ! The quality folders kept are the newest NQUALITY_KEPT and those of the publications the
+    ! route or the fallback started from; the others go.
     subroutine prune_quality_dirs( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string), allocatable :: dirs(:), runs(:)
@@ -1800,31 +2132,30 @@ contains
         enddo
     end subroutine prune_quality_dirs
 
-    ! Once a run has completed and is the frozen base, the addon iteration folders before it and
-    ! the folders set aside for jobs left unfinished go (stream fix plan, decision 31).
+    ! Once an assignment is refined, the assignment folders before it and the folders set aside
+    ! for jobs left unfinished go.
     subroutine prune_run_dirs( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string), allocatable :: dirs(:)
         integer :: i, k
-        do k = 1,self%naddon_runs - 1
-            if( dir_exists(ADDON_DIR//'/it_'//int2str(k)) ) call simple_rmdir(ADDON_DIR//'/it_'//int2str(k))
+        do k = 1,self%nassign - 1
+            if( dir_exists(ASSIGN_DIR//'/it_'//int2str(k)) ) call simple_rmdir(ASSIGN_DIR//'/it_'//int2str(k))
         enddo
         dirs = simple_list_dirs('.')
         do i = 1,size(dirs)
-            if( dirs(i)%has_substr(SOLVE3D_DIR//'_unfinished') ) call simple_rmdir(dirs(i)%to_char())
             if( dirs(i)%has_substr(CAVGS3D_DIR//'_unfinished') ) call simple_rmdir(dirs(i)%to_char())
             if( dirs(i)%has_substr(SOLVE2D_DIR//'_unfinished') ) call simple_rmdir(dirs(i)%to_char())
             if( dirs(i)%has_substr(CLSEXP_DIR//'_unfinished')  ) call simple_rmdir(dirs(i)%to_char())
         enddo
-        if( dir_exists(ADDON_DIR) )then
-            dirs = simple_list_dirs(ADDON_DIR)
+        if( dir_exists(ASSIGN_DIR) )then
+            dirs = simple_list_dirs(ASSIGN_DIR)
             do i = 1,size(dirs)
-                if( dirs(i)%has_substr('_unfinished') ) call simple_rmdir(ADDON_DIR//'/'//dirs(i)%to_char())
+                if( dirs(i)%has_substr('_unfinished') ) call simple_rmdir(ASSIGN_DIR//'/'//dirs(i)%to_char())
             enddo
         endif
     end subroutine prune_run_dirs
 
-    ! The pool as the stage's project, written as a temporary file and renamed.
+    ! The rows as the stage's project, written as a temporary file and renamed.
     subroutine write_stage_project( self )
         class(stream_stage_solve3D), intent(inout) :: self
         call self%spproj%write(self%params%projfile, tempfile=.true.)
@@ -1844,12 +2175,12 @@ contains
         enddo
     end subroutine apply_gui_updates
 
-    ! A 3D snapshot the GUI asked for, from the latest finished run's result: the particles of the
-    ! selected states merged into state 1 (the others deselected, and the state volumes and FSCs
-    ! out of the project), written with micrograph and particle STAR files and the optics table to
-    ! snapshots/<name>/, beside copies of the selected states' volumes (vol_state<NN>.mrc). Each
-    ! request is written once. Before a result, or with no particle in the selected states, it is
-    ! reported with no particles and no file.
+    ! A 3D snapshot the GUI asked for, from the latest local refinement's project: the particles of
+    ! the selected states merged into state 1 (the others deselected, and the state volumes and
+    ! FSCs out of the project), written with micrograph and particle STAR files and the optics
+    ! table to snapshots/<name>/, beside copies of the selected states' volumes
+    ! (vol_state<NN>.mrc). Each request is written once. Before a refinement, or with no
+    ! particle in the selected states, it is reported with no particles and no file.
     subroutine write_snapshot( self, update )
         class(stream_stage_solve3D),      intent(inout) :: self
         type(gui_metadata_stream_update), intent(in)    :: update
@@ -1920,11 +2251,11 @@ contains
         call self%pipe%send_meta(self%meta_snapshot)
     end subroutine write_snapshot
 
-    ! The phase, the run count, the particle counts and, once a run is done, each state's
-    ! population and resolution.
+    ! The phase, the assignments, the particle counts and, once the references exist, each
+    ! state's population and resolution (of the latest refinement; none for the references).
     subroutine send_status( self, stage )
         class(stream_stage_solve3D), intent(inout) :: self
-        type(string), optional,         intent(in)    :: stage
+        type(string), optional,      intent(in)    :: stage
         type(string) :: stage_here
         integer      :: istate, progress
         select case(self%phase)
@@ -1937,40 +2268,41 @@ contains
                 stage_here = 'running cls_expansion on the first set'
             case(PHASE_CAVGS3D)
                 stage_here = 'running solve3D_cavgs'
-            case(PHASE_SOLVE3D)
-                stage_here = 'running solve3D'
-            case(PHASE_ADDON)
-                stage_here = 'running solve3D_addon'
-            case(PHASE_FINAL)
-                stage_here = 'running final refine3D'
+            case(PHASE_EXPAND)
+                stage_here = 'expanding the classes'
+            case(PHASE_ASSIGN)
+                stage_here = 'assigning class averages'
+            case(PHASE_REFINE)
+                stage_here = 'refining the poses locally'
             case default
                 stage_here = 'idle'
         end select
-        ! the latest addon run's verdict, per state
-        if( self%addon_verdict%strlen() > 0 ) stage_here = stage_here//'; '//self%addon_verdict%to_char()
         if( present(stage) ) stage_here = stage
-        ! the GUI's 3D progress: 0 none yet, 1 solve3D, 2 a result
-        progress = min(self%phase, PHASE_IDLE)
-        if( self%phase == PHASE_CAVGS3D .or. self%phase == PHASE_SOLVE2D .or. self%phase == PHASE_CLSEXP ) progress = PHASE_SOLVE3D
-        ! particles_imported is the particles selected now, merged or not; particles_at_last_refine
-        ! those the latest run took
+        ! the GUI's 3D progress: 0 none yet, 1 the reference volumes on their way, 2 they exist
+        progress = 0
+        if( self%n_refs() > 0 )then
+            progress = 2
+        else if( self%phase == PHASE_SOLVE2D .or. self%phase == PHASE_CLSEXP .or. self%phase == PHASE_CAVGS3D )then
+            progress = 1
+        endif
+        ! particles_imported is the particles selected now; particles_at_last_refine those the
+        ! latest assignment gave a state
         call self%meta_status%set(stage=stage_here, solve3D_stage=progress,&
-            &refine_iteration=self%naddon_runs, nstates=self%params%nstates,&
+            &refine_iteration=self%nassign, nstates=self%params%nstates,&
             &particles_imported=self%spproj%os_ptcl3D%count_state_gt_zero(), particles_at_last_refine=self%nptcls_at_last_run,&
             &resolution=0.)
-        ! each state's population and resolution in the latest result (send_volumes): the rows'
-        ! current labels also count the particles merged since, which no map holds yet
-        if( self%frozen_projfile%strlen() > 0 .and. allocated(self%state_res) .and. allocated(self%state_pop) )then
-            do istate = 1,self%params%nstates
+        ! each state's population and resolution as sent with its volume (send_volumes, send_refs)
+        if( self%n_refs() > 0 .and. allocated(self%state_res) .and. allocated(self%state_pop) )then
+            do istate = 1,min(self%params%nstates, size(self%state_res))
                 call self%meta_status%set_state_stats(istate, self%state_pop(istate), self%state_res(istate))
             enddo
         endif
         call self%pipe%send_meta(self%meta_status)
     end subroutine send_status
 
-    ! Each state with a volume in the pool's project (send_state_volume, with its FSC). The
-    ! resolutions and populations are kept for the status. Called on a run's result, before any
-    ! particle merged or queued since rejoins a state.
+    ! Each state with a volume in the stage's project (send_state_volume, with its FSC). The
+    ! resolutions and populations are kept for the status. Called on a local refinement's result,
+    ! before any particle merged since joins a state.
     subroutine send_volumes( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(string) :: volpath
@@ -1986,52 +2318,45 @@ contains
         enddo
     end subroutine send_volumes
 
-    ! The initial volumes solve3D_cavgs made (the vol_cavg entries of its project @p res) under the
-    ! stage's states (@p newind: solve3D_cavgs' state to the stage's, 0 for one no selected particle
-    ! holds; take_cavgs3D_result), without FSCs (send_state_volume). They are shown only: the
-    ! stage's project does not register them, and the first solve3D makes its own. The populations
-    ! are kept for the status, with no resolution.
-    subroutine send_cavgs3D_volumes( self, res, newind )
+    ! The reference volumes (state_refs/) to the GUI, without FSCs, populations or orientations
+    ! (send_state_volume): they come from class averages, not from the particles.
+    subroutine send_refs( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        class(sp_project),           intent(inout) :: res
-        integer,                     intent(in)    :: newind(:)
-        type(string) :: volpath
-        real         :: smpd
-        integer      :: s, box, nsent
+        integer :: s, nsent
         self%state_res = 0.
         self%state_pop = 0
         nsent = 0
-        do s = 1,size(newind)
-            if( newind(s) < 1 ) cycle
-            if( .not. res%isthere_in_osout('vol_cavg', s) ) cycle
-            call res%get_vol('vol_cavg', s, volpath, smpd, box)
-            if( volpath%strlen() == 0 ) cycle
-            if( .not. file_exists(volpath) ) cycle
-            call self%send_state_volume(newind(s), volpath, smpd, box, s, .false.)
+        do s = 1,self%n_refs()
+            if( .not. file_exists(self%ref_vols(s)) ) cycle
+            call self%send_state_volume(s, self%ref_vols(s), self%ref_smpd, self%ref_box, s, .false., l_rows=.false.)
             nsent = nsent + 1
         enddo
-        write(logfhandle,'(A,I3,A)') '>>> SOLVE3D_CAVGS: ', nsent, ' INITIAL VOLUME(S) SENT TO THE GUI'
-    end subroutine send_cavgs3D_volumes
+        write(logfhandle,'(A,I3,A)') '>>> ', nsent, ' REFERENCE VOLUME(S) SENT TO THE GUI'
+    end subroutine send_refs
 
     ! State @p istate's volume @p volpath (pixel size @p smpd, box @p box) to the GUI: its products,
-    ! population, the minimum and maximum of each volume, the orientation distribution of its
-    ! particles, its three reprojections as tiles, and, with @p l_with_fsc, its resolution and FSC
-    ! curve. The reprojection and heatmap JPEGs beside the volume are named after the 3D's state
-    ! @p ifile, which may differ from the stage's.
-    subroutine send_state_volume( self, istate, volpath, smpd, box, ifile, l_with_fsc )
+    ! the minimum and maximum of each volume, its three reprojections as tiles, with @p l_with_fsc
+    ! its resolution and FSC curve, and unless @p l_rows is .false. its population and the
+    ! orientation distribution of its particles. The reprojection and heatmap JPEGs beside the
+    ! volume are named after the state @p ifile, which may differ from the stage's.
+    subroutine send_state_volume( self, istate, volpath, smpd, box, ifile, l_with_fsc, l_rows )
         class(stream_stage_solve3D), intent(inout) :: self
         integer,                     intent(in)    :: istate, box, ifile
         type(string),                intent(in)    :: volpath
         real,                        intent(in)    :: smpd
         logical,                     intent(in)    :: l_with_fsc
+        logical, optional,           intent(in)    :: l_rows
         type(gui_metadata_vol3D) :: meta, fresh_meta
         type(string)             :: pprocpath, lppath, pprocmirrpath, reprojpath, oridistpath
         real, allocatable        :: fsc(:), res(:)
         real                     :: res05, res0143, vmin, vmax
         integer                  :: pop, n
         integer                  :: hist(ORIDIST_NBINS_X, ORIDIST_NBINS_Y)
-        logical                  :: l_fsc
-        pop = self%spproj%os_ptcl3D%get_pop(istate, 'state')
+        logical                  :: l_fsc, l_rows_here
+        l_rows_here = .true.
+        if( present(l_rows) ) l_rows_here = l_rows
+        pop = 0
+        if( l_rows_here ) pop = self%spproj%os_ptcl3D%get_pop(istate, 'state')
         self%state_pop(istate) = pop
         ! products of a postprocessing, when on disk (none runs in this stage)
         pprocpath = add2fbody(volpath, MRC_EXT, PPROC_SUFFIX)
@@ -2043,7 +2368,7 @@ contains
             pprocmirrpath = add2fbody(pprocpath, MRC_EXT, MIRR_SUFFIX)
             if( .not. file_exists(pprocmirrpath) ) pprocmirrpath = ''
         endif
-        ! JPEGs the 3D writes beside the volume
+        ! JPEGs beside the volume
         reprojpath = get_fpath(volpath)//refine3D_reprojs_fname(ifile)
         if( .not. file_exists(reprojpath) ) reprojpath = ''
         oridistpath = get_fpath(volpath)//refine3D_oris_heatmap_fname(ifile)
@@ -2081,20 +2406,22 @@ contains
             call get_mrc_minmax(pprocmirrpath, vmin, vmax)
             call meta%set_minmax('pprocmirrpath', vmin, vmax)
         endif
-        call oridist_from_oris(self%spproj%os_ptcl3D, istate, hist)
-        call meta%set_oridist(hist)
+        if( l_rows_here )then
+            call oridist_from_oris(self%spproj%os_ptcl3D, istate, hist)
+            call meta%set_oridist(hist)
+        endif
         call self%pipe%send_meta(meta)
         call meta%kill
     end subroutine send_state_volume
 
-    ! The FSC of state @p istate in the pool's project, its resolutions at 1/(Fourier index) for
+    ! The FSC of state @p istate in the stage's project, its resolutions at 1/(Fourier index) for
     ! pixel size @p smpd, and the FSC=0.5 and FSC=0.143 resolutions; .false. without an FSC file.
     logical function read_state_fsc( self, istate, smpd, fsc, res, res05, res0143 ) result( l_fsc )
         class(stream_stage_solve3D), intent(in)    :: self
-        integer,                        intent(in)    :: istate
-        real,                           intent(in)    :: smpd
-        real, allocatable,              intent(inout) :: fsc(:), res(:)
-        real,                           intent(out)   :: res05, res0143
+        integer,                     intent(in)    :: istate
+        real,                        intent(in)    :: smpd
+        real, allocatable,           intent(inout) :: fsc(:), res(:)
+        real,                        intent(out)   :: res05, res0143
         type(string) :: fsc_fname
         integer      :: fsc_box, n
         l_fsc   = .false.
@@ -2116,30 +2443,142 @@ contains
 
     !---------------- rules ----------------
 
-    !> The job to start in @p phase: solve3D once @p nselected particles are selected, at least
-    !! MIN_PTCLS_PER_STATE per state; an addon run once the cohort (@p ncohort, selected particles
-    !! not frozen) reaches max(MIN_PTCLS_PER_STATE * @p nstates, ADDON_COHORT_FRAC of the
-    !! @p nfrozen frozen particles) and exceeds the cohort a failed addon run had
-    !! (@p ncohort_refused, -1 for none); none while a job runs.
-    pure integer function next_job( phase, nselected, ncohort, nfrozen, nstates, ncohort_refused )
-        integer, intent(in) :: phase, nselected, ncohort, nfrozen, nstates, ncohort_refused
+    !> The job to start in @p phase (none while a job runs). Without references (@p nrefs 0), once
+    !! @p nselected particles are selected, MIN_PTCLS_PER_STATE for each of @p nstates: the route
+    !! when @p l_route_due, else the fallback when @p l_fallback_due. With references, a
+    !! publication's assignment when @p l_assign_due and MIN_PTCLS_PER_STATE particles per
+    !! reference are selected.
+    pure integer function next_job( phase, nrefs, l_route_due, l_fallback_due, l_assign_due, nselected, nstates )
+        integer, intent(in) :: phase, nrefs, nselected, nstates
+        logical, intent(in) :: l_route_due, l_fallback_due, l_assign_due
         next_job = JOB_NONE
-        select case(phase)
-            case(PHASE_IMPORTING)
-                if( nselected >= MIN_PTCLS_PER_STATE * nstates ) next_job = JOB_SOLVE3D
-            case(PHASE_IDLE)
-                if( ncohort <= ncohort_refused ) return
-                if( ncohort >= max(MIN_PTCLS_PER_STATE * nstates, ceiling(ADDON_COHORT_FRAC * real(nfrozen))) )&
-                    &next_job = JOB_ADDON
-        end select
+        if( phase /= PHASE_IMPORTING .and. phase /= PHASE_IDLE ) return
+        if( nrefs < 1 )then
+            if( nselected < MIN_PTCLS_PER_STATE * nstates ) return
+            if( l_route_due )then
+                next_job = JOB_ROUTE
+            else if( l_fallback_due )then
+                next_job = JOB_FALLBACK
+            endif
+        else if( l_assign_due .and. nselected >= MIN_PTCLS_PER_STATE * nrefs )then
+            next_job = JOB_ASSIGN
+        endif
     end function next_job
 
-    !> After a rolled-back addon run of cohort @p ncohort: the cohort the next attempt must exceed,
-    !! one cadence step (next_job's threshold, with @p nfrozen frozen particles) beyond it less one.
-    pure integer function retry_cohort( ncohort, nfrozen, nstates )
-        integer, intent(in) :: ncohort, nfrozen, nstates
-        retry_cohort = ncohort + max(MIN_PTCLS_PER_STATE * nstates, ceiling(ADDON_COHORT_FRAC * real(nfrozen))) - 1
-    end function retry_cohort
+    !> .true. when reference volumes may be used: the class averages' even/odd angular distance
+    !! @p angdist (degrees) at most EO_ANGDIST_MAX (not negative: measured), their even/odd state
+    !! agreement @p overlap (%) at least EO_OVERLAP_MIN, the largest correlation between two
+    !! states at the matching's limit @p cc_max at most REFS_PAIR_CC_MAX (distinct states), and at
+    !! least NSTATES_MIN states each holding STATE_FRAC_MIN of the class averages (@p counts per
+    !! state).
+    pure logical function refs_usable( angdist, overlap, counts, cc_max )
+        real,    intent(in) :: angdist, overlap, cc_max
+        integer, intent(in) :: counts(:)
+        integer :: ntot
+        refs_usable = .false.
+        if( angdist < 0. .or. angdist > EO_ANGDIST_MAX ) return
+        if( overlap < EO_OVERLAP_MIN ) return
+        if( cc_max > REFS_PAIR_CC_MAX ) return
+        ntot = sum(counts)
+        if( ntot < 1 ) return
+        refs_usable = count(real(counts) >= STATE_FRAC_MIN * real(ntot)) >= NSTATES_MIN
+    end function refs_usable
+
+    !> Of the candidate classes @p l_cand, those whose best correlation @p corrs falls below the
+    !! candidates' median less FIT_NMAD times their median absolute deviation are rejected
+    !! (@p l_rej), the worst first, at most FIT_REJECT_MAX of the candidates (@p nmax_out). The
+    !! median, the deviation and the threshold are returned for the log (0 without candidates).
+    pure subroutine reject_by_fit( corrs, l_cand, l_rej, med_out, mad_out, thres_out, nmax_out )
+        real,                 intent(in)    :: corrs(:)
+        logical,              intent(in)    :: l_cand(:)
+        logical, allocatable, intent(inout) :: l_rej(:)
+        real,    optional,    intent(out)   :: med_out, mad_out, thres_out
+        integer, optional,    intent(out)   :: nmax_out
+        real, allocatable :: vals(:)
+        real    :: med, mad, thres, worst
+        integer :: ncand, nmax, i, iworst
+        if( allocated(l_rej) ) deallocate(l_rej)
+        allocate(l_rej(size(corrs)), source=.false.)
+        if( present(med_out)   ) med_out   = 0.
+        if( present(mad_out)   ) mad_out   = 0.
+        if( present(thres_out) ) thres_out = 0.
+        if( present(nmax_out)  ) nmax_out  = 0
+        ncand = count(l_cand)
+        if( ncand < 1 ) return
+        vals  = pack(corrs, l_cand)
+        med   = median_of(vals)
+        vals  = abs(vals - med)
+        mad   = median_of(vals)
+        thres = med - FIT_NMAD * mad
+        nmax  = int(FIT_REJECT_MAX * real(ncand))
+        if( present(med_out)   ) med_out   = med
+        if( present(mad_out)   ) mad_out   = mad
+        if( present(thres_out) ) thres_out = thres
+        if( present(nmax_out)  ) nmax_out  = nmax
+        ! the worst first, while below the threshold and under the cap
+        do while( count(l_rej) < nmax )
+            iworst = 0
+            worst  = thres
+            do i = 1,size(corrs)
+                if( .not. l_cand(i) .or. l_rej(i) ) cycle
+                if( corrs(i) < worst )then
+                    worst  = corrs(i)
+                    iworst = i
+                endif
+            enddo
+            if( iworst == 0 ) exit
+            l_rej(iworst) = .true.
+        enddo
+    end subroutine reject_by_fit
+
+    !> The median of @p x (none empty).
+    pure real function median_of( x )
+        real, intent(in) :: x(:)
+        real    :: y(size(x)), t
+        integer :: n, i, j
+        n = size(x)
+        y = x
+        do i = 2,n
+            t = y(i)
+            j = i - 1
+            do while( j >= 1 )
+                if( y(j) <= t ) exit
+                y(j+1) = y(j)
+                j = j - 1
+            enddo
+            y(j+1) = t
+        enddo
+        if( mod(n, 2) == 1 )then
+            median_of = y((n + 1) / 2)
+        else
+            median_of = 0.5 * (y(n / 2) + y(n / 2 + 1))
+        endif
+    end function median_of
+
+    !> The classes @p l_kept whose @p margins (best less second-best state) fall below
+    !! MARGIN_AMBIGUOUS: ambiguous, assigned as any other.
+    pure function flag_ambiguous( margins, l_kept ) result( l_amb )
+        real,    intent(in) :: margins(:)
+        logical, intent(in) :: l_kept(:)
+        logical :: l_amb(size(margins))
+        l_amb = l_kept .and. margins < MARGIN_AMBIGUOUS
+    end function flag_ambiguous
+
+    !> The attempt with the smallest even/odd angular distance @p angdists among those with
+    !! volumes (not negative), 0 when there is none; the first of equals.
+    pure integer function best_attempt( angdists )
+        real, intent(in) :: angdists(:)
+        integer :: i
+        best_attempt = 0
+        do i = 1,size(angdists)
+            if( angdists(i) < 0. ) cycle
+            if( best_attempt == 0 )then
+                best_attempt = i
+            else if( angdists(i) < angdists(best_attempt) )then
+                best_attempt = i
+            endif
+        enddo
+    end function best_attempt
 
     !> .true. for the pool's final publication (pool_final=yes in an entry of its out segment).
     logical function is_final_publication( set )
@@ -2203,5 +2642,25 @@ contains
         if( smpd > 0. ) msk = round2even((mskdiam / smpd) / 2.)
         if( msk < 0.1 .or. msk > msk_default ) fit_mskdiam = (real(box) - COSMSKHALFWIDTH) * smpd
     end function fit_mskdiam
+
+    !> .true. when the 2D job's project @p res (solve2D, cls_expansion) can be used: @p n particles
+    !! (the stage's rows), one class average per class, and the class averages, their halves and
+    !! the FRCs on disk.
+    logical function usable_job_2D( res, n ) result( l_ok )
+        class(sp_project), intent(inout) :: res
+        integer,           intent(in)    :: n
+        type(string) :: stk, frcs, ext
+        real         :: smpd
+        integer      :: ncls
+        l_ok = .false.
+        ncls = 0
+        call res%get_cavgs_stk(stk, ncls, smpd, fail=.false.)
+        if( res%os_ptcl2D%get_noris() /= n .or. ncls <= 0 .or. ncls /= res%os_cls2D%get_noris() ) return
+        call res%get_frcs(frcs, 'frc2D', fail=.false.)
+        ext  = string('.')//fname2ext(stk)
+        l_ok = file_exists(stk) .and. file_exists(frcs)
+        if( l_ok ) l_ok = file_exists(add2fbody(stk, ext%to_char(), '_even')) .and.&
+            &file_exists(add2fbody(stk, ext%to_char(), '_odd'))
+    end function usable_job_2D
 
 end module simple_stream_stage_solve3D

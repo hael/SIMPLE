@@ -118,6 +118,7 @@ use simple_nano_species_tester,              only: run_all_nano_species_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
+use simple_cavgs_state_match_tester,         only: run_all_cavgs_state_match_tests
 use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
@@ -428,6 +429,7 @@ contains
         call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
         call add_suite(s, n, 'sigma2 bootstrap',         run_all_sigma2_bootstrap_tests)
         call add_suite(s, n, 'cavg registration',          run_all_cavg_registration_tests)
+        call add_suite(s, n, 'cavgs state match',          run_all_cavgs_state_match_tests)
     end subroutine suites_pftc_align2D3D
 
     !> the Cartesian (continuous) 3D registration: the neutral Cartesian Fourier layer (shared

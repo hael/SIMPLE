@@ -126,33 +126,18 @@ subroutine new_pool2D( prgtab )
         ! which default_audit.py does not trace
         ! search controls
         call solve3D_stream%add_input(UI_SRCH, 'nstates', 'num', 'Number of states', &
-        &'Number of states reconstructed by each streaming solve3D run{3}', '# states', .false., 3., group="search", &
-        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
-        call solve3D_stream%add_input(UI_SRCH, 'nstages', 'num', 'Number of solve3D stages', &
-        &'Number of low-pass limit stages of each streaming solve3D run{5}', '# stages', .false., 5., group="search", &
-        &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
-        call solve3D_stream%add_input(UI_SRCH, 'nptcls3D_max', 'num', 'Particles of the first solve3D', &
-        &'Maximum number of particles of the first streaming solve3D run, whole stacks in order; the others wait for later publications{30000}', &
-        &'max # particles', .false., 30000., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
-        call solve3D_stream%add_input(UI_SRCH, 'ini3D_cavgs', 'binary', 'Initial volumes from class averages', &
-        &'Initial volumes of the first set from its class averages: solve2D into 150 classes, the pool model''s selection, &
-        &cls_expansion into about 500 classes and solve3D_cavgs, whose poses and states start the first solve3D; no runs &
-        &solve3D on the first set directly(yes|no){yes}', '', .false., 'yes', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="search", visibility=UI_VIS_DEVELOPER)
-        call solve3D_stream%add_input(UI_SRCH, 'nptcls_addon_max', 'num', 'Cohort particles of each addon run', &
-        &'Maximum number of new particles each streaming solve3D_addon run aligns, the oldest whole stacks first; the &
-        &others wait for the next run{60000}', 'max # particles', .false., 60000., group="search", &
+        &'Number of states of the reference volumes, at most; the states that hold class averages are kept{3}', '# states', .false., 3., group="search", &
         &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         ! filter controls
-        ! <empty>: the 3D jobs set their own low-pass limits
+        ! <empty>: the jobs' low-pass limits are the stage's constants
         ! mask controls
         ! computer controls
         call solve3D_stream%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         call solve3D_stream%add_input(UI_COMP, 'nparts3D', 'num', 'Partitions of each 3D job', &
-        &'Number of partitions of each solve3D and solve3D_addon job{8}', '# partitions', .false., 8., group="compute", &
+        &'Number of partitions of each 3D job (solve2D, cls_expansion, solve3D_cavgs, reconstruct3D){8}', '# partitions', .false., 8., group="compute", &
         &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call solve3D_stream%add_input(UI_COMP, 'nthr3D', 'num', 'Threads of each 3D job', &
-        &'Number of OpenMP threads of each solve3D and solve3D_addon job{8}', '# threads', .false., 8., group="compute", &
+        &'Number of OpenMP threads of each 3D job{8}', '# threads', .false., 8., group="compute", &
         &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call solve3D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., group="compute", &

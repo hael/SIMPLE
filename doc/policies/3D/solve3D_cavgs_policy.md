@@ -214,4 +214,9 @@ artifacts:
 - optional class-average ranking by cavg-vs-reprojection correlation
 
 Even/odd convergence diagnostics report average angular distance. Multi-state
-runs also report even/odd state overlap.
+runs also report even/odd state overlap. Both are also written on every
+`vol_cavg` entry of `os_out`, as `eo_angdist` (degrees) and `eo_state_overlap`
+(%), -1 when not measured (the overlap with one state), so a caller can check
+the volumes before using them: stream p07 refuses halves more than 20 degrees
+apart or agreeing on fewer than 70% of the states
+(`doc/policies/stream/stream_3D_ingestion_policy.md`, section 9).
