@@ -37,7 +37,7 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
     use simple_image,              only: image
     use simple_reconstructor_pcg,  only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE, PCG_LAMBDA
     use simple_rec3D_pcg_strategy, only: validate_pcg_common
-    use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, killimgbatch, prep_rec_observation
+    use simple_matcher_ptcl_io,    only: prepimgbatch, ptcl_read_session, killimgbatch, prep_rec_observation
     use simple_sigma2_files,       only: load_sigma2
     use simple_euclid_sigma2,      only: sigma2_half
     type(parameters), intent(inout) :: params
@@ -309,6 +309,7 @@ contains
         integer              :: lims2(2,2), R, batchlims(2), batchsz, ih
         integer              :: i, ii, iptcl, ibatch
         real                 :: shift(2), crop_factor
+        type(ptcl_read_session) :: reads
         call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
         call op%set_sym(build%pgrpsyms)
         call op%set_window_sphere(params%msk_crop)
@@ -339,10 +340,11 @@ contains
         allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
         call op%begin_accum
         call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
+        call reads%new(params)
         do ibatch = 1, size(pinds), MAXIMGBATCHSZ
             batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
             batchsz = batchlims(2)-batchlims(1)+1
-            call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
+            call reads%read(params, build, size(pinds), pinds, batchlims)
             do ii = 1, batchsz
                 ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
                 call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
@@ -351,6 +353,7 @@ contains
             enddo
             call op%accumulate_batch(y_batch, batchsz, batchlims(1))
         enddo
+        call reads%kill
         call obs%kill
         call selection%kill
         call orientation%kill

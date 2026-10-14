@@ -599,6 +599,7 @@ contains
     end subroutine record_sigma2_bench_context
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
+        use simple_matcher_ptcl_io, only: write_mem_bench_context
         type(parameters),             intent(in) :: params
         type(refine3D_bench_state),   intent(in) :: bench
         character(len=*),             intent(in) :: execution_mode
@@ -623,6 +624,7 @@ contains
         write(fnr,'(a,i0)') 'refine3D sigma2 store shells        : ', bench%sigma2_nshells
         write(fnr,'(a,i0)') 'refine3D sigma2 store bytes         : ', bench%sigma2_nbytes
         write(fnr,'(a,i0)') 'refine3D sigma2 rows updated        : ', bench%sigma2_nrows_updated
+        call write_mem_bench_context(fnr, 'refine3D')
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** TIMINGS (s) ***'
         write(fnr,'(a,1x,f0.2)') 'refine3D strategy setup/init        :', bench%rt_init

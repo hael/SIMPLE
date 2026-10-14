@@ -29,7 +29,7 @@ implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
 public :: find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info, get_mrc_minmax
-public :: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141
+public :: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141, MRCHEADSZ
 private
 #include "simple_local_flags.inc"
 
@@ -56,6 +56,7 @@ contains
     ! I/O
     procedure          :: print_imghead
     procedure          :: read
+    procedure          :: decode
     procedure          :: read_tiff
     procedure          :: write
     ! byte array conversions
@@ -416,6 +417,20 @@ contains
                 THROW_HARD('format not supported')
         end select
     end subroutine read
+
+    !> An MRC header from the first bytes of its file, decoded as read decodes them
+    subroutine decode( self, bytes )
+        class(ImgHead),  intent(inout) :: self
+        integer(kind=1), intent(in)    :: bytes(:)
+        select type( self )
+            type is( MrcImgHead )
+                if( size(bytes) < size(self%byte_array) ) THROW_HARD('too few header bytes; decode')
+                self%byte_array = bytes(1:size(self%byte_array))
+                call self%transfer_byte_array2obj
+            class DEFAULT
+                THROW_HARD('only MRC headers decode from bytes; decode')
+        end select
+    end subroutine decode
 
     !>  \brief  Read the header data from disk
     subroutine read_tiff( self, fname )

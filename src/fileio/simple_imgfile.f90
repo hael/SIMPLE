@@ -19,7 +19,7 @@ use simple_tifflib
 use gnufor2
 implicit none
 
-public :: imgfile
+public :: imgfile, simple_float16_to_float32
 private
 #include "simple_local_flags.inc"
 
@@ -99,7 +99,7 @@ contains
         logical,          optional, intent(in)    :: readhead      !< header read indicator
         character(len=*), optional, intent(in)    :: rwaction      !< action flag
         character(len=1) :: format_descriptor
-        logical          :: rreadhead, write_enabled
+        logical          :: rreadhead, write_enabled, l_exists
         rreadhead = .true.
         if( present(readhead) ) rreadhead = readhead
         write_enabled = .true.
@@ -135,10 +135,12 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported file format')
         end select
-        ! open the file
+        ! open the file; a read-only open of a unit fails on a missing file, so it needs no existence check
         call self%open_local(del_if_exists, rwaction)
+        l_exists = .true.
+        if( write_enabled .or. self%overall_head%isTiff() ) l_exists = file_exists(self%fname)
         ! read/write the header
-        if( file_exists(self%fname) )then
+        if( l_exists )then
             ! read header
             if( rreadhead )then
                 select case(self%head_format)
@@ -183,6 +185,7 @@ contains
             endif
             ! What is the status of the file?
             stat_str = 'UNKNOWN'
+            if( trim(rw_str) == 'READ' ) stat_str = 'OLD'
             if( present(del_if_exists) )then
                 if( del_if_exists )then
                     call del_file(self%fname)

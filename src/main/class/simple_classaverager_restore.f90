@@ -317,18 +317,31 @@ contains
 
     !>  \brief  is for generating class averages offline
     module subroutine cavger_assemble_sums()
-        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+        use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, &
+            &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since
         class(oris), pointer :: spproj_field
         type(string)         :: source_stk
+        type(ptcl_read_counts) :: reads0
+        type(ptcl_read_session) :: reads
         integer :: pinds(READBUFFSZ)
         integer :: iptcl, i, ind_in_stk, nptcls_eff, batchind, ibatch_start, ibatch_end
-        integer :: first_stkind, fromp, istk, nptcls_in_stk, last_stkind, ibatch, nbatches
+        integer :: first_stkind, fromp, istk, nptcls_in_stk, last_stkind, ibatch, nbatches, nptcls_tot
+        integer(timer_int_kind) :: t_tot, t
+        real(timer_int_kind)    :: rt_init, rt_transf, rt_sums
+        if( L_BENCH_GLOB )then
+            t_tot     = tic()
+            reads0    = ptcl_read_counts_now()
+            rt_transf = 0.
+            rt_sums   = 0.
+        endif
+        nptcls_tot = 0
         ! fetch data from project
         call b_ptr%spproj%ptr2oritype(p_ptr%oritype, spproj_field)
         ! Initialize temporary arrays
         call cavger_init_online(READBUFFSZ)
         ! Prep for image reading
         call prepimgbatch(p_ptr, b_ptr, READBUFFSZ)
+        call reads%new(p_ptr)
         ! Stack & batch loops
         call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, p_ptr%fromp, first_stkind, ind_in_stk)
         call b_ptr%spproj%map_ptcl_ind2stk_ind(p_ptr%oritype, p_ptr%top,   last_stkind,  ind_in_stk)
@@ -337,6 +350,7 @@ contains
             trim(p_ptr%oritype), ' particles=', p_ptr%fromp, '-', &
             p_ptr%top, ' stack=', trim(source_stk%to_char()), ' indstk(first)=', ind_in_stk
         call flush(logfhandle)
+        if( L_BENCH_GLOB ) rt_init = toc(t_tot)
         do istk = first_stkind,last_stkind
             ! Particles range in stack
             fromp         = b_ptr%spproj%os_stk%get_fromp(istk)
@@ -358,20 +372,61 @@ contains
                 enddo
                 nptcls_eff = batchind                                       ! # valid particles in batch
                 if( nptcls_eff == 0 ) cycle
+                nptcls_tot = nptcls_tot + nptcls_eff
                 ! Transfer orientation parameters
+                if( L_BENCH_GLOB ) t = tic()
                 call cavger_transf_oridat( nptcls_eff, pinds(1:nptcls_eff) )
+                if( L_BENCH_GLOB ) rt_transf = rt_transf + toc(t)
                 ! Read images
-                call discrete_read_imgbatch(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
+                call reads%read(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
                 ! Interpolate images and update class sums
+                if( L_BENCH_GLOB ) t = tic()
                 call cavger_update_sums(nptcls_eff, b_ptr%imgbatch(1:nptcls_eff))
+                if( L_BENCH_GLOB ) rt_sums = rt_sums + toc(t)
             enddo   ! batch loop
         enddo       ! stack loop
         ! cleanup
         call source_stk%kill
         nullify(spproj_field)
+        call reads%kill
         call cavger_dealloc_online
         call killimgbatch(b_ptr)
+        if( L_BENCH_GLOB ) call write_assemble_sums_bench(nptcls_tot, ptcl_read_counts_since(reads0), &
+            &rt_init, rt_transf, rt_sums, toc(t_tot))
     end subroutine cavger_assemble_sums
+
+    !> The bench file of a part's offline class sums (CAVGSUMS_BENCH_PARTppp.txt)
+    subroutine write_assemble_sums_bench( nptcls, reads, rt_init, rt_transf, rt_sums, rt_tot )
+        use simple_matcher_ptcl_io, only: ptcl_read_counts, write_ptcl_read_bench_context, write_mem_bench_context
+        integer,                intent(in) :: nptcls
+        type(ptcl_read_counts), intent(in) :: reads
+        real(timer_int_kind),   intent(in) :: rt_init, rt_transf, rt_sums, rt_tot
+        type(string) :: fname
+        integer :: fnr
+        fname = string('CAVGSUMS_BENCH_PART')//int2str_pad(p_ptr%part, max(1, p_ptr%numlen))//TXT_EXT
+        call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a,a)')  'cavgsums program                    : ', p_ptr%prg%to_char()
+        write(fnr,'(a,i0)') 'cavgsums process partition          : ', p_ptr%part
+        write(fnr,'(a,i0)') 'cavgsums worker threads             : ', p_ptr%nthr
+        write(fnr,'(a,i0)') 'cavgsums nclasses                   : ', ncls
+        write(fnr,'(a,i0)') 'cavgsums particles                  : ', nptcls
+        call write_mem_bench_context(fnr, 'cavgsums')
+        call write_ptcl_read_bench_context(fnr, 'cavgsums', reads)
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f0.2)') 'cavgsums initialisation             :', rt_init
+        write(fnr,'(a,1x,f0.2)') 'cavgsums orientation transfer       :', rt_transf
+        write(fnr,'(a,1x,f0.2)') 'cavgsums particle reading           :', reads%rt_read
+        write(fnr,'(a,1x,f0.2)') 'cavgsums interpolation and sums     :', rt_sums
+        write(fnr,'(a,1x,f0.2)') 'cavgsums total time                 :', rt_tot
+        if( rt_tot > 0. )then
+            write(fnr,'(a,1x,f0.2)') 'cavgsums % accounted for            :', &
+                &((rt_init + rt_transf + reads%rt_read + rt_sums) / rt_tot) * 100.
+        endif
+        call fclose(fnr)
+        call fname%kill
+    end subroutine write_assemble_sums_bench
 
     !>  \brief  merges the even/odd pairs and normalises the sums, merge low resolution
     !    frequencies, calculates & writes FRCs and optionally applies regularization
@@ -786,7 +841,7 @@ contains
     module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, pinds_in, &
         &keep_ft, gridcorr)
         use simple_sp_project,          only: sp_project
-        use simple_matcher_ptcl_io,     only: discrete_read_imgbatch, prepimgbatch, killimgbatch
+        use simple_matcher_ptcl_io,     only: ptcl_read_session, prepimgbatch, killimgbatch
         use simple_memoize_ft_maps
         class(parameters), target,          intent(in)    :: params
         class(builder),                     target, intent(inout) :: build
@@ -804,6 +859,7 @@ contains
         class(oris), pointer :: pos
         type(kbinterpol)     :: kbwin
         type(image)          :: img(nthr_glob), gridcorr_img
+        type(ptcl_read_session) :: reads
         type(ctfparams)      :: ctfparms
         type(ctf)            :: tfun
         type(string)         :: str
@@ -895,7 +951,9 @@ contains
         !$omp end parallel do
         if( l_ori_imgs ) call alloc_imgarr(pop, ldim, p_ptr%smpd, imgs_ori)
         ! Read all images
-        call discrete_read_imgbatch(p_ptr, b_ptr, pop, pinds(:), [1,pop])
+        call reads%new(p_ptr)
+        call reads%read(p_ptr, b_ptr, pop, pinds(:), [1,pop])
+        call reads%kill
         ! Transformation and rotation loop
         !$omp parallel do private(i,ithr,iptcl,shift,e3,ctfparms,tfun,mat,&
         !$omp& h,k,hh,kk,hp,kp,loc,win,l,m,physh,physk,kbw,fcomp,fcompl,l_conjg) &

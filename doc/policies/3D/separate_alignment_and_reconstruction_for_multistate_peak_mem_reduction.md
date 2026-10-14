@@ -63,12 +63,20 @@ membership threshold of 0.01 (`PCG_WEIGHT_THRESHOLD`).
 | Barrier | Final orientation/state/half metadata, selected particle indices, CTF/project metadata, symmetry, Euclidean sigma data | PFTC/reprojections, matching images, search strategies, particle PFTs, correlation caches, alignment batches |
 | Worker reconstruction | One half-map reconstructor, bounded reconstruction image/Fourier buffers, one `(state, half)` index range (with its weights under a weight set) | EO composite, another state/half reconstructor, alignment objects |
 | Assembly | EO composite and state-local postprocessing objects | Worker alignment state and arrays of state volumes |
+| All three worker phases (alignment, barrier, reconstruction) | The particle buffer: the decoded raw images of the pass's share, one immutable slab filled before the search and read by copy into the bounded batches of the search and the reconstruction, released after the reconstruction | Anything derived from those images (prepared, filtered or transformed particles) |
 
 The worker memory target is therefore:
 
 ```text
-max(alignment working set, one state/half reconstruction working set)
+max(alignment working set, one state/half reconstruction working set) + particle buffer
 ```
+
+The particle buffer is allocated only within its budget: half the task memory a queue system grants
+(`job_memory_per_task` of the computing environment), and otherwise the node's physical memory divided by twice the number of processes it runs (the parts and their
+master, or one process in shared memory). A share above the budget, or an allocation that fails, leaves the
+buffer empty, and the search and the reconstruction read their batches from the stacks as before. The
+budget, the buffer's size and the outcome are in the search's benchmark file. Plan:
+`doc/implementation_notes/planned/particle_io_few_particle_stacks.md`, section 3.1.
 
 It must be independent of `nstates` in cubic reconstruction storage.
 

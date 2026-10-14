@@ -9,7 +9,7 @@ use simple_flex_reconstructor_latent_ops, only: planes_batch_load
 use simple_reconstructor,                 only: exp_samples
 use simple_flex_pca_posterior,            only: probe_solve_plain, probe_solve_mix, mcfa_init, mcfa_condition, mcfa_mstep
 use simple_matcher_3Drec,                 only: init_rec, cleanup_rec_buffers
-use simple_matcher_ptcl_io,               only: prepimgbatch
+use simple_matcher_ptcl_io,               only: prepimgbatch, ptcl_read_session
 implicit none
 #include "simple_local_flags.inc"
 
@@ -436,6 +436,7 @@ contains
         real(timer_int_kind) :: sec_read, sec_prep, sec_estep, sec_ins
         logical  :: l_pcache
         integer(timer_int_kind) :: t_sec
+        type(ptcl_read_session) :: reads
         pfx = 'PROBE'
         if( nfits == 2 ) pfx = 'PAIRED'
         sec_read = 0.; sec_prep = 0.; sec_estep = 0.; sec_ins = 0.
@@ -469,11 +470,12 @@ contains
         else
             call prepimgbatch(params, build, MAXIMGBATCHSZ)
         endif
+        call reads%new(params)
         do ibatch = 1, nmrg, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nmrg, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
             call planes_batch_load(plane_store, params, build, nmrg, mrg_pinds, batchlims, fpls, &
-                &l_pcache, sec_read, sec_prep)
+                &l_pcache, reads, sec_read, sec_prep)
             do i = 1, batchsz
                 call build%spproj_field%get_ori(mrg_pinds(batchlims(1)+i-1), orientations(i))
                 eo(i) = build%spproj_field%get_eo(mrg_pinds(batchlims(1)+i-1))
@@ -511,6 +513,7 @@ contains
                 call flush(logfhandle)
             endif
         end do
+        call reads%kill
         write(logfhandle,'(A,F7.1,A,F7.1,A,F7.1,A,F7.1)') '>>> FLEX_PCA '//pfx//' E-STEP WALL &
             &(wall-seconds): read=', sec_read, '  prep=', sec_prep, '  project+solve=', sec_estep, &
             &'  insert=', sec_ins

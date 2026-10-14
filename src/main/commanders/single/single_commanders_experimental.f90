@@ -229,7 +229,7 @@ contains
     end subroutine exec_cavgseoproc_nano
 
     subroutine exec_ptclsproc_nano( self, cline )
-        use simple_matcher_ptcl_io,     only: read_imgbatch, prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io,     only: prepimgbatch, ptcl_read_session
         class(commander_ptclsproc_nano), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,       allocatable :: pinds(:)
@@ -241,6 +241,7 @@ contains
         type(string)         :: cavgs_stk
         integer              :: cnt, iptcl, icavgs, ncavgs, nptcls
         real                 :: smpd, corr
+        type(ptcl_read_session) :: reads
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_ptclsproc_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -252,6 +253,7 @@ contains
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         !sz_cls2D = spproj%os_cls2D%get_noris()
         print *, "Number of cavgs ", ncavgs
+        call reads%new(params)
         do icavgs = 1, ncavgs
             cnt = 0
             call spproj%os_ptcl2D%get_pinds(icavgs, 'class', pinds)
@@ -266,14 +268,14 @@ contains
                 cnt = cnt + 1
                 ! compute cross-correlation between particle image and the class average image
                 call prepimgbatch(params, build, nptcls)
-                call read_imgbatch(params, build, [1, nptcls])
-                call discrete_read_imgbatch(params, build, nptcls, pinds(:), [1,nptcls] )
+                call reads%read(params, build, nptcls, pinds(:), [1,nptcls] )
                 corr = build%imgbatch(iptcl)%real_corr(cavg_img)
                 write(25,'(2i6, 2F18.6)') icavgs, pinds(cnt), real(cnt)/real(nptcls), corr
             enddo
             write(25, '(A)') "          "
             call cavg_img%kill
         enddo
+        call reads%kill
         command_plot = "gnuplot -e "//'"'//"set view map; set zrange[-.4:1]; splot " //"'"//"ptcls_cc_analysis.csv"//"'"// &
             " u 1:2:4 ; set term png; set xlabel " //"'"//"Class average"//"'"// "; set ylabel " //"'"//"Time"// &
             "'"// "; set title " //"'"//"Time Particles Class Analysis"//"'"// "; set nokey; set output 'ptcl_analysis.png'; replot" //'"'
@@ -361,7 +363,7 @@ contains
 
     subroutine exec_trajectory_make_projavgs( self, cline )
         use simple_matcher_2Dprep
-        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session
         class(commander_trajectory_make_projavgs), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)               :: params
@@ -375,6 +377,7 @@ contains
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, cnt
         integer :: iptcl, iref, ibatch, nptcls2update, i
         logical :: fall_over
+        type(ptcl_read_session) :: reads
         call cline%set('tseries', 'yes')
         call cline%set('pgrp',    'c1')
         call cline%set('oritype', 'ptcl3D')
@@ -434,6 +437,7 @@ contains
         euls           = [0.,params%athres,0.]
         dist_threshold = geodesic_frobdev(euls_ref,euls) / (2.*sqrt(2.))
         spiral_step    = rad2deg(3.809/sqrt(real(params%nspace)))
+        call reads%new(params)
         do ibatch=1,nbatches
             call progress_gfortran(ibatch,nbatches)
             batch_start = batches(ibatch,1)
@@ -456,7 +460,7 @@ contains
                 enddo
             enddo
             ! Images prep
-            call discrete_read_imgbatch(params, build, batchsz, pinds(batch_start:batch_end), [1,batchsz])
+            call reads%read(params, build, batchsz, pinds(batch_start:batch_end), [1,batchsz])
             !$omp parallel do default(shared) private(i,iptcl,x,y,sdev_noise) proc_bind(close) schedule(static)
             do i = 1, batchsz
                 iptcl = pinds(batch_start+i-1)
@@ -483,6 +487,7 @@ contains
             enddo
             !$omp end parallel do
         enddo
+        call reads%kill
         ! Weights normalization
         !$omp parallel do default(shared) private(iref,w) proc_bind(close) schedule(static)
         do iref = 1,params%nspace

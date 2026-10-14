@@ -8,7 +8,9 @@ use simple_parameters,          only: parameters
 use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_LAMBDA, PCG_WEIGHT_THRESHOLD, &
     &pcg_raw_accum_compatible, measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, &
     &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map, read_pcg_raw_accum_header
-use simple_matcher_ptcl_io,     only: prepimgbatch, discrete_read_imgbatch, killimgbatch, prep_rec_observation
+use simple_matcher_ptcl_io,     only: prepimgbatch, ptcl_read_session, killimgbatch, prep_rec_observation, &
+    &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since
+use simple_matcher_3Drec,       only: write_rec3D_bench
 use simple_sigma2_files,        only: load_sigma2
 use simple_euclid_sigma2,       only: sigma2_half
 use simple_image,               only: image
@@ -242,9 +244,20 @@ contains
         logical :: l_weighted
         character(len=256) :: provenance
         integer(int64)     :: wset_id(2)
-        integer :: state, eo, n_half
+        integer :: state, eo, n_half, nimgs
         logical :: l_sigma_loaded
+        type(ptcl_read_counts)  :: reads0, reads
+        type(ptcl_read_session) :: rsess
+        integer(timer_int_kind) :: t0, t_half, t_prep
+        real(timer_int_kind)    :: rt_init, rt_half, rt_prep
 
+        if( L_BENCH_GLOB )then
+            t0      = tic()
+            reads0  = ptcl_read_counts_now()
+            rt_half = 0.
+            rt_prep = 0.
+        endif
+        nimgs = 0
         call validate_pcg_common(params, check_solver=.false.)
         provenance = pcg_raw_provenance(params)
         if( params%cc_objfun == OBJFUN_EUCLID )then
@@ -258,6 +271,7 @@ contains
         if( size(selected_pinds) > 0 )then
             call prepimgbatch(params, build, MAXIMGBATCHSZ)
         endif
+        call rsess%new(params)
         wset_id = 0_int64
         if( present(wset) )then
             if( wset%get_nstates() /= params%nstates ) THROW_HARD('nstates differs from the state weight set; PCG worker')
@@ -267,6 +281,7 @@ contains
             if( size(wtab,1) /= size(selected_pinds) .or. size(wtab,2) /= params%nstates ) THROW_HARD('weight table shape; PCG worker')
         endif
         l_weighted = present(wset) .or. present(wtab)
+        if( L_BENCH_GLOB ) rt_init = toc(t0)
         do state = 1, params%nstates
             do eo = 0, 1
                 if( l_weighted )then
@@ -275,7 +290,10 @@ contains
                     call collect_worker_state_half(state, eo, selected_pinds, half_pinds)
                 endif
                 n_half = size(half_pinds)
+                nimgs  = nimgs + n_half
+                if( L_BENCH_GLOB ) t_half = tic()
                 call accumulate_worker_state_half(state, eo, half_pinds, provenance)
+                if( L_BENCH_GLOB ) rt_half = rt_half + toc(t_half)
                 deallocate(half_pinds)
                 if( allocated(half_w) ) deallocate(half_w)
                 if( DEBUG )then
@@ -284,7 +302,13 @@ contains
                 endif
             enddo
         enddo
+        call rsess%kill
         if( size(selected_pinds) > 0 ) call killimgbatch(build)
+        if( L_BENCH_GLOB )then
+            reads = ptcl_read_counts_since(reads0)
+            call write_rec3D_bench(params, 'pcg', size(selected_pinds), nimgs, &
+                &reads, rt_init, rt_prep, rt_half - reads%rt_read - rt_prep, toc(t0))
+        endif
 
     contains
 
@@ -408,13 +432,15 @@ contains
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
-                call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
+                call rsess%read(params, build, size(pinds), pinds, batchlims)
+                if( L_BENCH_GLOB ) t_prep = tic()
                 do ii = 1, batchsz
                     ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
                     call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
                     call obs%fft
                     y_batch(:,:,ii) = pcgop%extract_native_plane(obs)
                 enddo
+                if( L_BENCH_GLOB ) rt_prep = rt_prep + toc(t_prep)
                 call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
             enddo
             call obs%kill

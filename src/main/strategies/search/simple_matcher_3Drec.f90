@@ -3,16 +3,19 @@ module simple_matcher_3Drec
 use simple_core_module_api
 use simple_timer
 use simple_builder,         only: builder
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch, prep_rec_observation, killimgbatch
+use simple_matcher_ptcl_io, only: ptcl_read_session, prepimgbatch, prep_rec_observation, killimgbatch, &
+    &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, write_ptcl_read_bench_context, &
+    &write_mem_bench_context
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_fplane_grid,     only: fplane_grid
 use simple_parameters,      only: parameters
 use simple_reconstructor,   only: reconstructor
-use simple_refine3D_fnames, only: refine3D_partial_rec_fbody
+use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, rec3D_bench_fname
 use simple_state_weight_set, only: state_weight_set
 implicit none
 
 public :: init_rec, prep_imgs4rec, gen_rec_plane, cleanup_rec_buffers, write_state_half_partial, calc_3Drec
+public :: write_rec3D_bench
 private
 #include "simple_local_flags.inc"
 
@@ -38,11 +41,15 @@ contains
         integer, allocatable :: grouped_pinds(:), state_eo_offsets(:)
         real,    allocatable :: grouped_w(:)
         integer :: batchlims(2), ibatch, batchsz, state, eo, group
-        logical :: DEBUG = .false.
+        type(ptcl_read_counts)  :: reads0
+        type(ptcl_read_session) :: reads
         integer(timer_int_kind) :: t, t0
-        real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
+        real(timer_int_kind)    :: rt_init, rt_prep, rt_grid
         if( nptcls < 1 ) return
-        if( DEBUG ) t0 = tic()
+        if( L_BENCH_GLOB )then
+            t0     = tic()
+            reads0 = ptcl_read_counts_now()
+        endif
         if( present(wset) .or. present(wtab) )then
             call group_pinds_by_weights(params, build, nptcls, pinds, grouped_pinds, grouped_w, state_eo_offsets, &
                 &wset=wset, wtab=wtab)
@@ -51,7 +58,7 @@ contains
         endif
         ! Initialize state-independent reconstruction buffers only after
         ! registration and assignment are complete.
-        if( DEBUG ) t = tic()
+        if( L_BENCH_GLOB ) t = tic()
         call init_rec(params, build, MAXIMGBATCHSZ, fpls, &
             &cropped=params%box_crop < params%box)
         if( params%box_crop < params%box )then
@@ -59,11 +66,11 @@ contains
                 &params%smpd_crop, crop_imgs)
         endif
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        if( DEBUG ) t_init = toc(t)
-        if( DEBUG ) then
-            t_read = 0.d0
-            t_prep = 0.d0
-            t_grid = 0.d0
+        call reads%new(params)
+        if( L_BENCH_GLOB )then
+            rt_init = toc(t)
+            rt_prep = 0.
+            rt_grid = 0.
         endif
         do state = 1,params%nstates
             if( state_eo_offsets(2*state+1) <= state_eo_offsets(2*state-1) )then
@@ -76,15 +83,15 @@ contains
                 do ibatch = state_eo_offsets(group),state_eo_offsets(group+1)-1,MAXIMGBATCHSZ
                     batchlims = [ibatch, min(state_eo_offsets(group+1)-1, ibatch+MAXIMGBATCHSZ-1)]
                     batchsz   = batchlims(2) - batchlims(1) + 1
-                    if( DEBUG ) t = tic()
-                    call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
-                    if( DEBUG ) t_read = t_read + toc(t)
-                    if( DEBUG ) t = tic()
+                    call reads%read(params, build, size(grouped_pinds), grouped_pinds, batchlims)
+                    if( L_BENCH_GLOB ) t = tic()
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
                         &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), &
                         &crop_imgs=crop_imgs)
-                    if( DEBUG ) t_prep = t_prep + toc(t)
-                    if( DEBUG ) t = tic()
+                    if( L_BENCH_GLOB )then
+                        rt_prep = rt_prep + toc(t)
+                        t       = tic()
+                    endif
                     if( allocated(grouped_w) )then
                         call update_state_half_rec(state, eo, build, batchsz, &
                             &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), recvol, &
@@ -93,7 +100,7 @@ contains
                         call update_state_half_rec(state, eo, build, batchsz, &
                             &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), recvol)
                     endif
-                    if( DEBUG ) t_grid = t_grid + toc(t)
+                    if( L_BENCH_GLOB ) rt_grid = rt_grid + toc(t)
                 enddo
                 ! Preserve the paired Cartesian partial contract even when a
                 ! populated state has no particles in one half.
@@ -101,19 +108,55 @@ contains
                 call kill_state_half_rec(recvol)
             enddo
         enddo
+        call reads%kill
         call cleanup_rec_buffers(build, fpls)
         if( allocated(crop_imgs) ) call dealloc_imgarr(crop_imgs)
+        if( L_BENCH_GLOB ) call write_rec3D_bench(params, 'gridding', nptcls, size(grouped_pinds), &
+            &ptcl_read_counts_since(reads0), rt_init, rt_prep, rt_grid, toc(t0))
         deallocate(grouped_pinds, state_eo_offsets)
         if( allocated(grouped_w) ) deallocate(grouped_w)
-        if( DEBUG .and. (params%part==1) )then
-            t_tot = toc(t0)
-            print *,'Init          : ', t_init
-            print *,'Read          : ', t_read
-            print *,'Prep          : ', t_prep
-            print *,'Grid          : ', t_grid
-            print *,'Total rec time: ', t_tot
-        endif
     end subroutine calc_3Drec
+
+    !> Appends one reconstruction pass to the process's REC3D bench file: reading, preparation and
+    !! accumulation (gridding or PCG) timed apart, with the pass's read counts
+    subroutine write_rec3D_bench( params, backend, nptcls, nimgs, reads, rt_init, rt_prep, rt_accum, rt_tot )
+        class(parameters),      intent(in) :: params
+        character(len=*),       intent(in) :: backend
+        integer,                intent(in) :: nptcls, nimgs
+        type(ptcl_read_counts), intent(in) :: reads
+        real(timer_int_kind),   intent(in) :: rt_init, rt_prep, rt_accum, rt_tot
+        type(string) :: fname
+        integer :: fnr
+        fname = rec3D_bench_fname(params%which_iter, params%part, params%numlen)
+        call fopen(fnr, FILE=fname, STATUS='UNKNOWN', POSITION='APPEND', action='WRITE')
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a,a)')  'rec3D program                       : ', params%prg%to_char()
+        write(fnr,'(a,a)')  'rec3D backend                       : ', backend
+        write(fnr,'(a,i0)') 'rec3D process partition             : ', params%part
+        write(fnr,'(a,i0)') 'rec3D process pid                   : ', params%pid
+        write(fnr,'(a,i0)') 'rec3D worker threads                : ', params%nthr
+        write(fnr,'(a,i0)') 'rec3D nstates                       : ', params%nstates
+        write(fnr,'(a,i0)') 'rec3D box                           : ', params%box
+        write(fnr,'(a,i0)') 'rec3D box_crop                      : ', params%box_crop
+        write(fnr,'(a,i0)') 'rec3D particles                     : ', nptcls
+        write(fnr,'(a,i0)') 'rec3D particle images inserted      : ', nimgs
+        call write_mem_bench_context(fnr, 'rec3D')
+        call write_ptcl_read_bench_context(fnr, 'rec3D', reads)
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f0.3)') 'rec3D initialisation                :', rt_init
+        write(fnr,'(a,1x,f0.3)') 'rec3D particle reading              :', reads%rt_read
+        write(fnr,'(a,1x,f0.3)') 'rec3D particle preparation          :', rt_prep
+        write(fnr,'(a,1x,f0.3)') 'rec3D accumulation                  :', rt_accum
+        write(fnr,'(a,1x,f0.3)') 'rec3D total time                    :', rt_tot
+        if( rt_tot > 0. )then
+            write(fnr,'(a,1x,f0.2)') 'rec3D % accounted for               :', &
+                &((rt_init + reads%rt_read + rt_prep + rt_accum) / rt_tot) * 100.
+        endif
+        write(fnr,'(a)') ''
+        call fclose(fnr)
+        call fname%kill
+    end subroutine write_rec3D_bench
 
     pure integer function state_eo_group( state, eo )
         integer, intent(in) :: state, eo

@@ -928,6 +928,346 @@ int64_t simple_current_rss_bytes(void)
 #endif
 }
 
+/* Memory in use on the node, MemTotal minus MemAvailable, in bytes; -1 where
+ * /proc/meminfo does not exist.  Benchmarks report it beside the process RSS. */
+int64_t simple_node_mem_in_use_bytes(void)
+{
+#if defined(__linux__)
+    FILE *stream;
+    char line[256];
+    long long kib, total_kib = -1, avail_kib = -1;
+    stream = fopen("/proc/meminfo", "r");
+    if (stream == NULL) return -1;
+    while (fgets(line, sizeof(line), stream) != NULL) {
+        if (sscanf(line, "MemTotal: %lld kB", &kib) == 1) total_kib = kib;
+        else if (sscanf(line, "MemAvailable: %lld kB", &kib) == 1) avail_kib = kib;
+    }
+    fclose(stream);
+    if (total_kib < 0 || avail_kib < 0) return -1;
+    return (int64_t)(total_kib - avail_kib) * 1024;
+#else
+    return -1;
+#endif
+}
+
+/* Physical memory of the node, MemTotal, in bytes; -1 where /proc/meminfo does not exist */
+int64_t simple_node_mem_total_bytes(void)
+{
+#if defined(__linux__)
+    FILE *stream;
+    char line[256];
+    long long kib, total_kib = -1;
+    stream = fopen("/proc/meminfo", "r");
+    if (stream == NULL) return -1;
+    while (fgets(line, sizeof(line), stream) != NULL) {
+        if (sscanf(line, "MemTotal: %lld kB", &kib) == 1) {
+            total_kib = kib;
+            break;
+        }
+    }
+    fclose(stream);
+    return total_kib < 0 ? -1 : (int64_t)total_kib * 1024;
+#else
+    return -1;
+#endif
+}
+
+/* ---- Read-only particle stack I/O without Fortran units ------------------------------------
+ * Plan: doc/implementation_notes/planned/particle_io_few_particle_stacks.md, section 3.1. Opens,
+ * positioned reads and closes on plain descriptors, safe to call from many threads at once; a
+ * prefetcher thread serves positioned reads into caller-owned buffers. Failures return -errno. */
+
+/* Test hooks: at most fault_chunk bytes per pread call (0 = no limit), an EINTR every fault_eintr
+ * calls (0 = never), and advice reported unsupported. Set by the unit tests only. */
+static int64_t simple_io_fault_chunk = 0;
+static int     simple_io_fault_eintr = 0;
+static int     simple_io_fault_noadvice = 0;
+static int     simple_io_fault_calls = 0;
+
+void simple_io_set_faults(int64_t max_chunk, int eintr_every, int no_advice)
+{
+    simple_io_fault_chunk    = max_chunk > 0 ? max_chunk : 0;
+    simple_io_fault_eintr    = eintr_every > 0 ? eintr_every : 0;
+    simple_io_fault_noadvice = no_advice;
+    simple_io_fault_calls    = 0;
+}
+
+int simple_ro_open(const char *path, int len)
+{
+#ifdef _WIN32
+    (void)path; (void)len;
+    return -ENOSYS;
+#else
+    char *cpath = F90to_cstring((char *)path, len);
+    int fd;
+    if (cpath == NULL) return -ENOMEM;
+    do {
+        fd = open(cpath, O_RDONLY | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    free(cpath);
+    return fd < 0 ? -errno : fd;
+#endif
+}
+
+int simple_ro_close(int fd)
+{
+#ifdef _WIN32
+    (void)fd;
+    return -ENOSYS;
+#else
+    /* a close interrupted by a signal has still released the descriptor on Linux: never retry */
+    return close(fd) != 0 && errno != EINTR ? -errno : 0;
+#endif
+}
+
+/* All of [off, off+n) into buf: short reads are continued and EINTR retried. Returns the bytes read,
+ * fewer than n only at end of file, or -errno. */
+int64_t simple_pread_full(int fd, void *buf, int64_t n, int64_t off)
+{
+#ifdef _WIN32
+    (void)fd; (void)buf; (void)n; (void)off;
+    return -ENOSYS;
+#else
+    int64_t done = 0;
+    while (done < n) {
+        size_t want = (size_t)(n - done);
+        ssize_t got;
+        if (simple_io_fault_chunk > 0 && (int64_t)want > simple_io_fault_chunk) want = (size_t)simple_io_fault_chunk;
+        if (simple_io_fault_eintr > 0 &&
+            __atomic_add_fetch(&simple_io_fault_calls, 1, __ATOMIC_RELAXED) % simple_io_fault_eintr == 0) {
+            errno = EINTR;
+            got = -1;
+        } else {
+            got = pread(fd, (char *)buf + done, want, (off_t)(off + done));
+        }
+        if (got < 0) {
+            if (errno == EINTR) continue;
+            return -errno;
+        }
+        if (got == 0) break; /* end of file */
+        done += got;
+    }
+    return done;
+#endif
+}
+
+/* Readahead hint for [off, off+len): 0 when given, 1 where the platform has no such advice, -errno */
+int simple_fadvise_willneed(int fd, int64_t off, int64_t len)
+{
+    if (simple_io_fault_noadvice) return 1;
+#if defined(__linux__)
+    int rc = posix_fadvise(fd, (off_t)off, (off_t)len, POSIX_FADV_WILLNEED);
+    return rc == 0 ? 0 : -rc;
+#else
+    (void)fd; (void)off; (void)len;
+    return 1;
+#endif
+}
+
+/* Descriptors open in this process (entries of /proc/self/fd on Linux, /dev/fd on macOS, its own
+ * listing descriptor excluded), -1 where that is not available */
+int simple_open_fd_count(void)
+{
+#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__)
+    DIR *d = opendir("/proc/self/fd");
+#else
+    DIR *d = opendir("/dev/fd");
+#endif
+    struct dirent *e;
+    int n = 0;
+    if (d == NULL) return -1;
+    while ((e = readdir(d)) != NULL) {
+        if (e->d_name[0] != '.') n++;
+    }
+    closedir(d);
+    return n - 1;
+#else
+    return -1;
+#endif
+}
+
+/* Soft limit on open descriptors (the unit tests' descriptor-exhaustion child); 0 or -errno */
+int simple_set_open_files_limit(int nmax)
+{
+#ifdef _WIN32
+    (void)nmax;
+    return -ENOSYS;
+#else
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_NOFILE, &rl) != 0) return -errno;
+    rl.rlim_cur = (rlim_t)nmax;
+    return setrlimit(RLIMIT_NOFILE, &rl) == 0 ? 0 : -errno;
+#endif
+}
+
+/* The prefetcher: one thread serving positioned reads in submission order into the window buffer it
+ * owns. A job reads [off, off+n) of fd into dst; the caller keeps fd open until the job is done. */
+typedef struct {
+    int     fd;
+    int64_t off, n;
+    void   *dst;
+    int64_t result;
+    int     done;
+} simple_prefetch_job;
+
+typedef struct {
+    pthread_t            thread;
+    pthread_mutex_t      mutex;
+    pthread_cond_t       cond;
+    simple_prefetch_job *jobs;
+    int                  njobs, cap, next, stop;
+    void                *window;
+    int64_t              window_bytes;
+} simple_prefetcher;
+
+static void *simple_prefetch_main(void *arg)
+{
+    simple_prefetcher *p = (simple_prefetcher *)arg;
+    pthread_mutex_lock(&p->mutex);
+    for (;;) {
+        while (p->next >= p->njobs && !p->stop) pthread_cond_wait(&p->cond, &p->mutex);
+        if (p->next >= p->njobs && p->stop) break;
+        {
+            int i = p->next++;
+            simple_prefetch_job job = p->jobs[i];
+            int64_t r;
+            pthread_mutex_unlock(&p->mutex);
+            r = simple_pread_full(job.fd, job.dst, job.n, job.off);
+            pthread_mutex_lock(&p->mutex);
+            p->jobs[i].result = r;
+            p->jobs[i].done   = 1;
+            pthread_cond_broadcast(&p->cond);
+        }
+    }
+    pthread_mutex_unlock(&p->mutex);
+    return NULL;
+}
+
+void *simple_prefetch_new(void)
+{
+#ifdef _WIN32
+    return NULL;
+#else
+    simple_prefetcher *p = (simple_prefetcher *)calloc(1, sizeof(simple_prefetcher));
+    int created = 0;
+    if (p == NULL) return NULL;
+    if (pthread_mutex_init(&p->mutex, NULL) != 0) {
+        free(p);
+        return NULL;
+    }
+    if (pthread_cond_init(&p->cond, NULL) != 0) {
+        pthread_mutex_destroy(&p->mutex);
+        free(p);
+        return NULL;
+    }
+#if defined(__linux__)
+    {
+        /* free of the creating thread's binding: an OpenMP master bound to one core would otherwise
+         * share it with the producer */
+        pthread_attr_t attr;
+        cpu_set_t      cpus;
+        long           ncpu = sysconf(_SC_NPROCESSORS_ONLN), c;
+        CPU_ZERO(&cpus);
+        for (c = 0; c < ncpu && c < CPU_SETSIZE; c++) CPU_SET((int)c, &cpus);
+        if (pthread_attr_init(&attr) == 0) {
+            if (pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus) == 0)
+                created = pthread_create(&p->thread, &attr, simple_prefetch_main, p) == 0;
+            pthread_attr_destroy(&attr);
+        }
+    }
+#endif
+    if (!created && pthread_create(&p->thread, NULL, simple_prefetch_main, p) != 0) {
+        pthread_cond_destroy(&p->cond);
+        pthread_mutex_destroy(&p->mutex);
+        free(p);
+        return NULL;
+    }
+    return p;
+#endif
+}
+
+/* The window buffer, at least nbytes long; call only with no job pending (after a drain). NULL when
+ * it cannot be allocated. */
+void *simple_prefetch_window(void *h, int64_t nbytes)
+{
+    simple_prefetcher *p = (simple_prefetcher *)h;
+    if (nbytes > p->window_bytes) {
+        free(p->window);
+        p->window       = malloc((size_t)nbytes);
+        p->window_bytes = p->window != NULL ? nbytes : 0;
+    }
+    return p->window;
+}
+
+/* Queues one read; returns its job id, or -ENOMEM */
+int simple_prefetch_submit(void *h, int fd, int64_t off, int64_t n, void *dst)
+{
+    simple_prefetcher *p = (simple_prefetcher *)h;
+    int id;
+    pthread_mutex_lock(&p->mutex);
+    if (p->njobs == p->cap) {
+        int cap = p->cap > 0 ? 2 * p->cap : 64;
+        simple_prefetch_job *jobs = (simple_prefetch_job *)realloc(p->jobs, (size_t)cap * sizeof(simple_prefetch_job));
+        if (jobs == NULL) {
+            pthread_mutex_unlock(&p->mutex);
+            return -ENOMEM;
+        }
+        p->jobs = jobs;
+        p->cap  = cap;
+    }
+    id = p->njobs++;
+    p->jobs[id].fd = fd; p->jobs[id].off = off; p->jobs[id].n = n; p->jobs[id].dst = dst;
+    p->jobs[id].result = 0; p->jobs[id].done = 0;
+    pthread_cond_broadcast(&p->cond);
+    pthread_mutex_unlock(&p->mutex);
+    return id;
+}
+
+/* Blocks until job id is done; returns its pread result (bytes read or -errno) */
+int64_t simple_prefetch_wait(void *h, int id)
+{
+    simple_prefetcher *p = (simple_prefetcher *)h;
+    int64_t r;
+    pthread_mutex_lock(&p->mutex);
+    if (id < 0 || id >= p->njobs) {
+        pthread_mutex_unlock(&p->mutex);
+        return -EINVAL;
+    }
+    while (!p->jobs[id].done) pthread_cond_wait(&p->cond, &p->mutex);
+    r = p->jobs[id].result;
+    pthread_mutex_unlock(&p->mutex);
+    return r;
+}
+
+/* Waits for every queued job and forgets them, so the buffers and descriptors may be reused */
+void simple_prefetch_drain(void *h)
+{
+    simple_prefetcher *p = (simple_prefetcher *)h;
+    pthread_mutex_lock(&p->mutex);
+    while (p->next < p->njobs || (p->njobs > 0 && !p->jobs[p->njobs - 1].done)) pthread_cond_wait(&p->cond, &p->mutex);
+    p->njobs = 0;
+    p->next  = 0;
+    pthread_mutex_unlock(&p->mutex);
+}
+
+void simple_prefetch_free(void *h)
+{
+    simple_prefetcher *p = (simple_prefetcher *)h;
+    if (p == NULL) return;
+    simple_prefetch_drain(h);
+    pthread_mutex_lock(&p->mutex);
+    p->stop = 1;
+    pthread_cond_broadcast(&p->cond);
+    pthread_mutex_unlock(&p->mutex);
+    pthread_join(p->thread, NULL);
+    pthread_cond_destroy(&p->cond);
+    pthread_mutex_destroy(&p->mutex);
+    free(p->jobs);
+    free(p->window);
+    free(p);
+}
+
 /* Is the block device backing PATH a spinning disk?  Returns 1 for rotational,
  * 0 for solid state and -1 when the question cannot be answered -- which covers
  * macOS, Windows, network and distributed filesystems, and device-mapper stacks

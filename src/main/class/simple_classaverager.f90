@@ -352,7 +352,6 @@ interface
     module subroutine transform_ptcls( params, build, spproj, oritype, icls, timgs, pinds, phflip, cavg, imgs_ori, pinds_in, &
         &keep_ft, gridcorr)
         use simple_sp_project,          only: sp_project
-        use simple_matcher_ptcl_io,      only: discrete_read_imgbatch, prepimgbatch
         use simple_memoize_ft_maps
         class(parameters), target,          intent(in)    :: params
         class(builder),             target, intent(inout) :: build

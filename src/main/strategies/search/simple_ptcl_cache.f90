@@ -10,7 +10,7 @@ use simple_cmdline,           only: cmdline
 use simple_discrete_stack_io, only: dstack_io
 use simple_stack_io,          only: stack_io
 use simple_imgarr_utils,      only: alloc_imgarr, dealloc_imgarr
-use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+use simple_matcher_ptcl_io,   only: prepimgbatch, ptcl_read_session, killimgbatch
 use simple_syslib,            only: simple_mkdir, dir_exists, simple_file_stat, simple_rename, fs_avail_bytes
 implicit none
 #include "simple_local_flags.inc"
@@ -478,6 +478,7 @@ contains
         type(image), allocatable :: cache_imgs(:)
         type(image)     :: mskimg
         type(stack_io)  :: stkio_w
+        type(ptcl_read_session) :: reads
         type(string)    :: stkname, dirname, keyfile, idxname, tmpstk, tmpidx
         integer(kind=8) :: want_bytes
         logical, allocatable :: lmsk(:,:,:)
@@ -605,13 +606,14 @@ contains
             call mskimg%kill
         endif
         call prepimgbatch(params, build, batchsz)
+        call reads%new(params)
         call alloc_imgarr(batchsz, [params%box_crop, params%box_crop, 1], params%smpd_crop, cache_imgs)
         call stkio_w%open(tmpstk, params%smpd_crop, 'write', box=params%box_crop, is_ft=.false.)
         do ibatch = 1, nbatches
             batch_start = (ibatch - 1) * batchsz + 1
             batch_end   = min(batch_start + batchsz - 1, nsel)
             nbatch      = batch_end - batch_start + 1
-            call discrete_read_imgbatch(params, build, nsel, pinds, [batch_start, batch_end])
+            call reads%read(params, build, nsel, pinds, [batch_start, batch_end])
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1, nbatch
                 ! iteration-independent prefix of prepimg4align, with no shift, then
@@ -626,6 +628,7 @@ contains
             call progress(ibatch, nbatches)
         end do
         call stkio_w%close
+        call reads%kill
         call dealloc_imgarr(cache_imgs)
         call killimgbatch(build)
         deallocate(pinds, lmsk)
@@ -683,8 +686,6 @@ contains
         ! One handle, read serially: Fortran connects a file to at most one unit, and with small records
         ! and sorted pinds this is a forward scan of a file far smaller than the originals.
         call dstkio%new(params%smpd_crop, params%box_crop)
-        call dstkio%cache_stack_info(stkname, &
-            &[params%box_crop, params%box_crop, 1], cache_nrecs)
         call dstkio%open(stkname)
         do i = batchlims(1), batchlims(2)
             ii   = i - batchlims(1) + 1

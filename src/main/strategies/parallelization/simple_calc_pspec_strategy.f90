@@ -260,7 +260,7 @@ contains
     !!  calc_pspec_assemble. Images are read once in batches over the selection; each batch reduces per partition
     !!  run (sel_pinds sorted, ranges disjoint), so partitions never contend.
     subroutine compute_pspec_partitions( params, build, part_ids, part_ranges, sel_pinds, sig2_mul )
-        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch
+        use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         integer,          intent(in)    :: part_ids(:)
@@ -268,6 +268,7 @@ contains
         integer,          intent(in)    :: sel_pinds(:)
         real,             intent(in)    :: sig2_mul(2)
         type(image)          :: sum_img
+        type(ptcl_read_session) :: reads
         complex(dp), allocatable :: cmat_thr_sum(:,:,:,:)
         complex,     allocatable :: cmat_part_sum(:,:,:,:), cmat_dims(:,:,:)
         integer,     allocatable :: work_pinds(:), work_slot(:), slot_from(:), slot_to(:), nsum_slot(:)
@@ -311,10 +312,11 @@ contains
             allocate(sigma2_batch(nyq,batchsz_max), source=0.)
             ! mask and radial-shell memoization for the calc_pspec fused kernel
             call build%imgbatch(1)%memoize_powspec_coords(params%msk)
+            call reads%new(params)
             do i = 1, n_work, batchsz_max
                 batchlims = [i, min(i+batchsz_max-1, n_work)]
                 nbatch    = batchlims(2) - batchlims(1) + 1
-                call discrete_read_imgbatch(params, build, nbatch, work_pinds(batchlims(1):batchlims(2)), [1,nbatch])
+                call reads%read(params, build, n_work, work_pinds(1:n_work), batchlims)
                 ! reduce the batch one partition-run at a time
                 do islot = 1,nslots
                     if( slot_from(islot) == 0 ) cycle
@@ -324,6 +326,7 @@ contains
                     call accumulate_run(islot, run_lo, run_hi, batchlims(1))
                 end do
             end do
+            call reads%kill
             deallocate(sigma2_batch)
         endif
         if( ninvalid_sigma2 > 0 )then

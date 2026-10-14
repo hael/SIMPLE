@@ -2,16 +2,24 @@
 module simple_matcher_ptcl_io
 use simple_pftc_srch_api
 use simple_builder,           only: builder
-use simple_discrete_stack_io, only: dstack_io
-use simple_imghead,           only: find_ldim_nptcls
-use simple_syslib,            only: io_read_nstreams
+use simple_stack_read_session, only: stack_read_session, stack_read_counts
+use simple_syslib,            only: get_peak_rss_bytes, get_node_mem_in_use_bytes, get_node_mem_total_bytes
+use simple_image_slab,        only: image_slab, SLAB_OK, SLAB_OVER_BUDGET, SLAB_NO_MEMORY
 use simple_image,             only: image
+use, intrinsic :: iso_fortran_env, only: int64
 implicit none
 #include "simple_local_flags.inc"
 
-public :: prepimgbatch, killimgbatch, read_imgbatch, discrete_read_imgbatch
+public :: prepimgbatch, killimgbatch, read_imgbatch, ptcl_read_session
 public :: prep_rec_observation
+public :: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, add_ptcl_cache_read_time
+public :: write_ptcl_read_bench_context, write_mem_bench_context
+public :: ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, pass_buffer_status_name, pass_buffer_bytes
+public :: BUFFER_FILLED, BUFFER_OFF, BUFFER_OVER_BUDGET, BUFFER_NO_MEMORY
 private
+
+! outcomes of filling the particle buffer
+integer, parameter :: BUFFER_FILLED = 0, BUFFER_OFF = 1, BUFFER_OVER_BUDGET = 2, BUFFER_NO_MEMORY = 3
 
 interface read_imgbatch
     module procedure read_imgbatch_1
@@ -21,63 +29,97 @@ end interface read_imgbatch
 
 type(stack_io) :: stkio_r
 
-! Per-stack dimensions, memoized by stack index and filename.
-! The physical MRC header stays the source of truth -- os_stk's 'box' and
-! 'nptcls_stk' are bookkeeping that nothing re-checks against the file, so
-! trusting either would risk wrong record offsets. Including the
-! filename prevents cache reuse when successive workflows have the same number
-! of stack rows but refer to different physical files.
-integer, allocatable :: memo_ldim(:,:), memo_nptcls(:)
-type(string), allocatable :: memo_stknames(:)
+!> The particle reads of every read session, cumulative over the process and updated by the
+!! master thread; a pass's counts are the difference of two snapshots (ptcl_read_counts_since).
+!! The downscaled 2D cache has its own reader: only its read time is kept.
+type :: ptcl_read_counts
+    integer(int64)       :: nopens     = 0_int64 !< stacks opened
+    integer(int64)       :: nrequests  = 0_int64 !< read requests
+    integer(int64)       :: bytes_req  = 0_int64 !< file bytes of the images delivered
+    integer(int64)       :: bytes_read = 0_int64 !< file bytes read, the gaps spans bridge and the window included
+    integer(int64)       :: bytes_prefetched    = 0_int64 !< file bytes read ahead into the prefetch window
+    integer(int64)       :: bytes_prefetch_used = 0_int64 !< window bytes images were decoded from
+    integer(int64)       :: bytes_advised       = 0_int64 !< file bytes hinted to the kernel beyond the window
+    integer(int64)       :: nbuffered  = 0_int64 !< images copied from the particle buffer, no file touched
+    real(timer_int_kind) :: rt_read    = 0.      !< wall time reading stacks (L_BENCH_GLOB)
+    real(timer_int_kind) :: rt_cache   = 0.      !< wall time reading the downscaled 2D cache (L_BENCH_GLOB)
+end type ptcl_read_counts
+
+type(ptcl_read_counts) :: read_totals
+
+! The particle buffer of one 3D search pass: its share's images, read once into an immutable slab and copied
+! from it by the search batches and the reconstruction of the same process (section 3.1 of the plan).
+type(image_slab)     :: pass_slab
+integer, allocatable :: pass_slot(:)    !< slab slot of particle p at pass_slot(p - pass_lo + 1), 0 when absent
+integer              :: pass_lo  = 0
+integer              :: pass_box = 0
+logical              :: l_pass_ready = .false.
+
+!> The particle images of one pass (a search, a reconstruction, a probability table), read through a
+!! stack read session. One per pass: new before its first batch, kill after its last. After each batch
+!! the session reads the next one ahead: the batch after batchlims when read is given the pass's whole
+!! index list, or the next batch of the list given to expect.
+type :: ptcl_read_session
+    private
+    type(stack_read_session) :: stacks
+    integer, allocatable     :: pass(:)   !< the pass's particles in read order (expect)
+    integer                  :: cursor = 1
+contains
+    procedure :: new    => new_ptcl_read_session
+    procedure :: expect => expect_ptcl_pass
+    procedure :: read   => read_ptcl_batch
+    procedure :: kill   => kill_ptcl_read_session
+end type ptcl_read_session
 
 contains
 
-    !>  Logical dimensions and image count of a particle stack, read from the file once
-    !!  per stack per process. stkind < 1 means the caller has no os_stk row to key on
-    !!  (cls3D) and the header is read every time.
-    subroutine stk_dims( params, build, stkind, stkname, ldim, nptcls )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: stkind
-        class(string),     intent(in)    :: stkname
-        integer,           intent(out)   :: ldim(3), nptcls
-        integer :: nstks
-        if( stkind < 1 )then
-            call find_ldim_nptcls(stkname, ldim, nptcls)
-        else
-            nstks = build%spproj%os_stk%get_noris()
-            if( allocated(memo_nptcls) )then
-                if( size(memo_nptcls) /= nstks ) call forget_stk_dims
-            endif
-            if( .not. allocated(memo_nptcls) )then
-                allocate(memo_ldim(3,nstks), source=0)
-                allocate(memo_nptcls(nstks), source=0)
-                allocate(memo_stknames(nstks))
-            endif
-            if( stkind > nstks )then
-                call find_ldim_nptcls(stkname, ldim, nptcls)
-            else
-                if( memo_nptcls(stkind) < 1 .or. memo_stknames(stkind) /= stkname )then
-                    call find_ldim_nptcls(stkname, memo_ldim(:,stkind), memo_nptcls(stkind))
-                    memo_stknames(stkind) = stkname
-                endif
-                ldim   = memo_ldim(:,stkind)
-                nptcls = memo_nptcls(stkind)
-            endif
-        endif
-        if( (ldim(1) /= params%box) .or. (ldim(2) /= params%box) )then
-            write(logfhandle,*) 'ldim ', ldim
-            write(logfhandle,*) 'box ', params%box
-            write(logfhandle,*) 'stkname ', stkname%to_char()
-            THROW_HARD('Incompatible dimensions! stk_dims')
-        endif
-    end subroutine stk_dims
+    type(ptcl_read_counts) function ptcl_read_counts_now()
+        ptcl_read_counts_now = read_totals
+    end function ptcl_read_counts_now
 
-    subroutine forget_stk_dims
-        if( allocated(memo_ldim)   ) deallocate(memo_ldim)
-        if( allocated(memo_nptcls) ) deallocate(memo_nptcls)
-        if( allocated(memo_stknames) ) deallocate(memo_stknames)
-    end subroutine forget_stk_dims
+    !> The reads since the snapshot t0
+    type(ptcl_read_counts) function ptcl_read_counts_since( t0 ) result( d )
+        type(ptcl_read_counts), intent(in) :: t0
+        d%nopens     = read_totals%nopens     - t0%nopens
+        d%nrequests  = read_totals%nrequests  - t0%nrequests
+        d%bytes_req  = read_totals%bytes_req  - t0%bytes_req
+        d%bytes_read = read_totals%bytes_read - t0%bytes_read
+        d%bytes_prefetched    = read_totals%bytes_prefetched    - t0%bytes_prefetched
+        d%bytes_prefetch_used = read_totals%bytes_prefetch_used - t0%bytes_prefetch_used
+        d%bytes_advised       = read_totals%bytes_advised       - t0%bytes_advised
+        d%nbuffered           = read_totals%nbuffered           - t0%nbuffered
+        d%rt_read    = read_totals%rt_read    - t0%rt_read
+        d%rt_cache   = read_totals%rt_cache   - t0%rt_cache
+    end function ptcl_read_counts_since
+
+    !> The 2D cache has its own reader (simple_ptcl_cache); its callers time it
+    subroutine add_ptcl_cache_read_time( rt )
+        real(timer_int_kind), intent(in) :: rt
+        read_totals%rt_cache = read_totals%rt_cache + rt
+    end subroutine add_ptcl_cache_read_time
+
+    !> Context lines of a pass's particle reads for a bench file
+    subroutine write_ptcl_read_bench_context( fnr, prefix, counts )
+        integer,                intent(in) :: fnr
+        character(len=*),       intent(in) :: prefix
+        type(ptcl_read_counts), intent(in) :: counts
+        write(fnr,'(a,i0)') prefix//' particle stacks opened      : ', counts%nopens
+        write(fnr,'(a,i0)') prefix//' particle read requests      : ', counts%nrequests
+        write(fnr,'(a,i0)') prefix//' particle bytes requested    : ', counts%bytes_req
+        write(fnr,'(a,i0)') prefix//' particle bytes read         : ', counts%bytes_read
+        write(fnr,'(a,i0)') prefix//' particle bytes prefetched   : ', counts%bytes_prefetched
+        write(fnr,'(a,i0)') prefix//' particle bytes prefetch used: ', counts%bytes_prefetch_used
+        write(fnr,'(a,i0)') prefix//' particle bytes advised      : ', counts%bytes_advised
+        write(fnr,'(a,i0)') prefix//' particle images from buffer : ', counts%nbuffered
+    end subroutine write_ptcl_read_bench_context
+
+    !> Context lines of the process's peak RSS and the node's memory in use, sampled together
+    subroutine write_mem_bench_context( fnr, prefix )
+        integer,          intent(in) :: fnr
+        character(len=*), intent(in) :: prefix
+        write(fnr,'(a,i0)') prefix//' peak RSS (bytes)            : ', get_peak_rss_bytes()
+        write(fnr,'(a,i0)') prefix//' node memory in use (bytes)  : ', get_node_mem_in_use_bytes()
+    end subroutine write_mem_bench_context
 
     subroutine prepimgbatch( params, build, batchsz, box, smpd )
         class(parameters), intent(in)    :: params
@@ -186,175 +228,209 @@ contains
         call stkio_r%close
     end subroutine read_imgbatch_3
 
-    subroutine discrete_read_imgbatch( params, build, n, pinds, batchlims )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: n, pinds(n), batchlims(2)
-        type(dstack_io), allocatable :: dstkios(:)
-        type(string), allocatable :: stknames(:), uniq_stknames(:)
-        integer,      allocatable :: inds_in_stk(:), stk_ids(:), uniq_ldims(:,:), uniq_nptcls(:), uniq_stkinds(:)
-        integer :: i, ii, istk, nbatch, nstks, nthr_read, stk_from, stk_to, iopen, nopen, stkind, ind_in_stk
-        logical :: l_known_stack, l_verbose, l_cls3D
+    subroutine new_ptcl_read_session( self, params )
+        class(ptcl_read_session), intent(inout) :: self
+        class(parameters),        intent(in)    :: params
+        call self%stacks%new(params%box, params%smpd, report=params%part == 1)
+        if( allocated(self%pass) ) deallocate(self%pass)
+        self%cursor = 1
+    end subroutine new_ptcl_read_session
+
+    !> The pass's particles in the order its batches will ask for them, for reading ahead
+    subroutine expect_ptcl_pass( self, pinds )
+        class(ptcl_read_session), intent(inout) :: self
+        integer,                  intent(in)    :: pinds(:)
+        self%pass   = pinds
+        self%cursor = 1
+    end subroutine expect_ptcl_pass
+
+    !> build%imgbatch(1:batchlims(2)-batchlims(1)+1) receives the particles pinds(batchlims(1):batchlims(2))
+    subroutine read_ptcl_batch( self, params, build, n, pinds, batchlims )
+        class(ptcl_read_session), intent(inout) :: self
+        class(parameters),        intent(in)    :: params
+        class(builder),           intent(inout) :: build
+        integer,                  intent(in)    :: n, pinds(n), batchlims(2)
+        type(stack_read_counts)   :: c0, c1
+        integer(timer_int_kind)   :: t_read
+        integer :: nbatch, nexp, i
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
             write(logfhandle,*) 'n        : ', n
-            THROW_HARD('invalid batchlims; discrete_read_imgbatch')
+            THROW_HARD('invalid batchlims; read_ptcl_batch')
         endif
+        if( L_BENCH_GLOB ) t_read = tic()
         nbatch = batchlims(2) - batchlims(1) + 1
-        l_verbose = params%prg .eq. 'cls_expansion'
-        if( l_verbose )then
-            write(logfhandle,'(A,I8,A,I8,A,I8,A,I8)') 'discrete_read_imgbatch: n=', n, &
-                &' pinds[min,max]=', minval(pinds(batchlims(1):batchlims(2))), &
-                &' ', maxval(pinds(batchlims(1):batchlims(2))), ' batch_to=', batchlims(2)
-            call flush(logfhandle)
+        if( buffer_covers(params, pinds(batchlims(1):batchlims(2))) )then
+            do i = batchlims(1), batchlims(2)
+                call pass_slab%get(pass_slot(pinds(i) - pass_lo + 1), build%imgbatch(i - batchlims(1) + 1))
+            end do
+            read_totals%nbuffered = read_totals%nbuffered + int(nbatch,int64)
+            if( L_BENCH_GLOB ) read_totals%rt_read = read_totals%rt_read + toc(t_read)
+            return
         endif
-        if( read_sorted_stack_runs() ) return
-        allocate(stknames(nbatch), inds_in_stk(nbatch), stk_ids(nbatch))
-        allocate(uniq_stknames(nbatch), uniq_ldims(3,nbatch), uniq_nptcls(nbatch), uniq_stkinds(nbatch))
-        l_cls3D = trim(params%oritype) == 'cls3D'
-        nstks   = 0
-        do i=batchlims(1),batchlims(2)
-            ii = i - batchlims(1) + 1
-            call build%spproj%get_stkname_and_ind(params%oritype, pinds(i), stknames(ii), inds_in_stk(ii))
-            l_known_stack = .false.
-            do istk = 1,nstks
-                if( uniq_stknames(istk) .eq. stknames(ii) )then
-                    l_known_stack = .true.
-                    stk_ids(ii) = istk
-                    exit
-                endif
-            enddo
-            if( .not.l_known_stack )then
-                nstks = nstks + 1
-                uniq_stknames(nstks) = stknames(ii)
-                stk_ids(ii) = nstks
-                ! os_stk row backing this stack, so its dimensions can be read from
-                ! the project rather than from the file header; cls3D has no such row
-                uniq_stkinds(nstks) = 0
-                if( .not. l_cls3D )then
-                    call build%spproj%map_ptcl_ind2stk_ind(params%oritype, pinds(i), stkind, ind_in_stk)
-                    uniq_stkinds(nstks) = stkind
+        c0 = self%stacks%get_counts()
+        call read_particles(pinds(batchlims(1):batchlims(2)), .false.)
+        ! the next batch: the rest of a whole-pass list, or the next stretch of the expected pass
+        if( allocated(self%pass) )then
+            nexp = size(self%pass)
+            ! a batch off the expected order finds its place in the pass again
+            if( self%cursor + nbatch - 1 > nexp .or. self%cursor < 1 )then
+                self%cursor = findloc(self%pass, pinds(batchlims(1)), dim=1)
+            else if( self%pass(self%cursor) /= pinds(batchlims(1)) )then
+                self%cursor = findloc(self%pass, pinds(batchlims(1)), dim=1)
+            endif
+            if( self%cursor >= 1 .and. self%cursor + nbatch - 1 <= nexp )then
+                if( all(self%pass(self%cursor:self%cursor+nbatch-1) == pinds(batchlims(1):batchlims(2))) )then
+                    self%cursor = self%cursor + nbatch
+                    if( self%cursor <= nexp ) call read_particles(self%pass(self%cursor:min(nexp,self%cursor+nbatch-1)), .true.)
                 endif
             endif
-            if( l_verbose .and. n <= 32 )then
-                write(logfhandle,'(A,I8,A,I8,A,I8,A,A)') 'discrete_read_imgbatch item: batch_i=', i, &
-                    &' iptcl=', pinds(i), ' indstk=', inds_in_stk(ii), ' stk=', trim(stknames(ii)%to_char())
-                call flush(logfhandle)
-            endif
-        end do
-        do istk = 1,nstks
-            call stk_dims(params, build, uniq_stkinds(istk), uniq_stknames(istk), &
-                &uniq_ldims(:,istk), uniq_nptcls(istk))
-        enddo
-        nthr_read = io_read_nstreams(uniq_stknames(1), nstks, params%part == 1)
-        allocate(dstkios(nthr_read))
-        ! A batch can touch hundreds of stacks; keep simultaneous file handles bounded.
-        do stk_from = 1,nstks,nthr_read
-            stk_to = min(stk_from + nthr_read - 1, nstks)
-            nopen  = stk_to - stk_from + 1
-            do iopen = 1,nopen
-                istk = stk_from + iopen - 1
-                call dstkios(iopen)%new(params%smpd, params%box)
-                call dstkios(iopen)%cache_stack_info(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
-                call dstkios(iopen)%open(uniq_stknames(istk))
-            enddo
-            !$omp parallel do default(shared) private(iopen,istk,ii) schedule(static) proc_bind(close) &
-            !$omp& num_threads(nopen) if(nopen > 1)
-            do iopen = 1,nopen
-                istk = stk_from + iopen - 1
-                do ii = 1,nbatch
-                    if( stk_ids(ii) == istk ) call dstkios(iopen)%read(stknames(ii), inds_in_stk(ii), build%imgbatch(ii))
-                enddo
-            enddo
-            !$omp end parallel do
-            do iopen = 1,nopen
-                call dstkios(iopen)%kill
-            enddo
-        enddo
-        call stknames(:)%kill
-        call uniq_stknames(:)%kill
-        deallocate(dstkios, stknames, inds_in_stk, stk_ids, uniq_stknames, uniq_ldims, uniq_nptcls, uniq_stkinds)
+        else if( batchlims(2) < n )then
+            call read_particles(pinds(batchlims(2)+1:min(n,batchlims(2)+nbatch)), .true.)
+        endif
+        c1 = self%stacks%get_counts()
+        read_totals%nopens     = read_totals%nopens     + c1%nopens     - c0%nopens
+        read_totals%nrequests  = read_totals%nrequests  + c1%nrequests  - c0%nrequests
+        read_totals%bytes_req  = read_totals%bytes_req  + c1%bytes_req  - c0%bytes_req
+        read_totals%bytes_read = read_totals%bytes_read + c1%bytes_read - c0%bytes_read
+        read_totals%bytes_prefetched    = read_totals%bytes_prefetched    + c1%bytes_prefetched    - c0%bytes_prefetched
+        read_totals%bytes_prefetch_used = read_totals%bytes_prefetch_used + c1%bytes_prefetch_used - c0%bytes_prefetch_used
+        read_totals%bytes_advised       = read_totals%bytes_advised       + c1%bytes_advised       - c0%bytes_advised
+        if( L_BENCH_GLOB ) read_totals%rt_read = read_totals%rt_read + toc(t_read)
 
     contains
 
-        logical function read_sorted_stack_runs() result(handled)
-            type(dstack_io), allocatable :: dstkios_run(:)
-            type(string),    allocatable :: run_stknames(:)
-            integer,         allocatable :: run_stkinds(:), run_from(:), run_to(:), run_ldims(:,:), run_nptcls(:)
-            integer,         allocatable :: inds_in_stk_run(:)
-            type(string) :: run_name
-            integer :: i, ii, irun, stkind, prev_stkind, ind_in_stk, nthr_run, run_from_i, run_to_i, iopen, nopen
-            handled = .false.
-            if( trim(params%oritype) == 'cls3D' ) return
-            do i = batchlims(1)+1, batchlims(2)
-                if( pinds(i) < pinds(i-1) ) return
+        !> reads the particles into build%imgbatch, or (ahead) opens their stacks and reads them into the window
+        subroutine read_particles( pinds_here, l_ahead )
+            integer, intent(in) :: pinds_here(:)
+            logical, intent(in) :: l_ahead
+            type(string), allocatable :: stknames(:)
+            integer,      allocatable :: inds_in_stk(:)
+            integer :: i
+            allocate(stknames(size(pinds_here)), inds_in_stk(size(pinds_here)))
+            do i = 1, size(pinds_here)
+                call build%spproj%get_stkname_and_ind(params%oritype, pinds_here(i), stknames(i), inds_in_stk(i))
             end do
-            allocate(inds_in_stk_run(nbatch), run_stkinds(nbatch), run_from(nbatch), run_to(nbatch), run_stknames(nbatch))
-            nstks = 0
-            prev_stkind = -1
-            do i = batchlims(1), batchlims(2)
-                ii = i - batchlims(1) + 1
-                call build%spproj%map_ptcl_ind2stk_ind(params%oritype, pinds(i), stkind, ind_in_stk)
-                if( stkind < prev_stkind )then
-                    deallocate(inds_in_stk_run, run_stkinds, run_from, run_to, run_stknames)
+            if( l_ahead )then
+                call self%stacks%prefetch(stknames, inds_in_stk)
+            else
+                call self%stacks%read(stknames, inds_in_stk, build%imgbatch(1:size(pinds_here)))
+            endif
+            call stknames(:)%kill
+        end subroutine read_particles
+
+    end subroutine read_ptcl_batch
+
+    !> The particle buffer's budget in bytes: half the task memory a queue system grants (job_memory_per_task);
+    !! otherwise the node's physical memory over twice the processes it runs (the parts and their master, or one
+    !! process in shared memory)
+    integer(int64) function ptcl_buffer_budget( params, build ) result( budget )
+        class(parameters), intent(in) :: params
+        class(builder),    intent(in) :: build
+        type(string)      :: qsys
+        integer(int64)    :: total
+        integer           :: nprocs
+        if( build%spproj%compenv%get_noris() > 0 )then
+            if( build%spproj%compenv%isthere(1, 'qsys_name') .and. build%spproj%compenv%isthere(1, 'job_memory_per_task') )then
+                qsys = build%spproj%compenv%get_str(1, 'qsys_name')
+                if( .not. (qsys .eq. 'local' .or. qsys .eq. 'coarray') )then
+                    budget = int(build%spproj%compenv%get_int(1, 'job_memory_per_task'),int64) * 1024_int64**2 / 2_int64
                     return
                 endif
-                inds_in_stk_run(ii) = ind_in_stk
-                if( stkind /= prev_stkind )then
-                    prev_stkind = stkind
-                    run_name    = build%spproj%os_stk%get_str(stkind, 'stk')
-                    ! stack rows sharing one file stay in one run: Fortran connects a file to one unit
-                    if( nstks > 0 )then
-                        if( run_name .eq. run_stknames(nstks) ) cycle
-                    endif
-                    nstks = nstks + 1
-                    run_stkinds(nstks)  = stkind
-                    run_stknames(nstks) = run_name
-                    run_from(nstks)     = ii
-                    if( nstks > 1 ) run_to(nstks-1) = ii - 1
-                endif
-            end do
-            call run_name%kill
-            if( nstks < 1 )then
-                deallocate(inds_in_stk_run, run_stkinds, run_from, run_to, run_stknames)
-                handled = .true.
-                return
             endif
-            run_to(nstks) = nbatch
-            allocate(run_ldims(3,nstks), run_nptcls(nstks))
-            do irun = 1, nstks
-                call stk_dims(params, build, run_stkinds(irun), run_stknames(irun), &
-                    &run_ldims(:,irun), run_nptcls(irun))
+        endif
+        nprocs = 1
+        if( params%nparts > 1 ) nprocs = params%nparts + 1
+        total  = get_node_mem_total_bytes()
+        budget = max(0_int64, total) / int(2 * nprocs,int64)
+    end function ptcl_buffer_budget
+
+    !> Reads the pass's share pinds(1:n) once, in order through reads, into the particle buffer; then every
+    !! batch of these particles is copied from it. Returns BUFFER_FILLED, or BUFFER_OFF (no budget or no particle),
+    !! BUFFER_OVER_BUDGET or BUFFER_NO_MEMORY with the buffer left empty and the batches read from the stacks.
+    integer function fill_pass_buffer( params, build, reads, n, pinds, budget ) result( status )
+        class(parameters),        intent(in)    :: params
+        class(builder),           intent(inout) :: build
+        class(ptcl_read_session), intent(inout) :: reads
+        integer,                  intent(in)    :: n, pinds(n)
+        integer(int64),           intent(in)    :: budget
+        integer :: slab_status, i, k, nb, ldim(3)
+        call release_pass_buffer
+        status = BUFFER_OFF
+        if( n < 1 .or. budget <= 0_int64 ) return
+        status = BUFFER_FILLED
+        if( .not. allocated(build%imgbatch) ) THROW_HARD('the image batch is not allocated; fill_pass_buffer')
+        ldim = build%imgbatch(1)%get_ldim()
+        if( ldim(1) /= params%box ) THROW_HARD('the image batch is not at the particle box; fill_pass_buffer')
+        call pass_slab%new(params%box, n, budget, slab_status)
+        select case(slab_status)
+            case(SLAB_OVER_BUDGET)
+                status = BUFFER_OVER_BUDGET
+                return
+            case(SLAB_NO_MEMORY)
+                status = BUFFER_NO_MEMORY
+                return
+        end select
+        pass_lo = minval(pinds)
+        allocate(pass_slot(maxval(pinds) - pass_lo + 1), source=0)
+        nb = size(build%imgbatch)
+        do i = 1, n, nb
+            call reads%read(params, build, n, pinds, [i, min(n, i + nb - 1)])
+            do k = i, min(n, i + nb - 1)
+                call pass_slab%put(k, build%imgbatch(k - i + 1))
+                pass_slot(pinds(k) - pass_lo + 1) = k
             end do
-            nthr_run = io_read_nstreams(run_stknames(1), nstks, params%part == 1)
-            allocate(dstkios_run(nthr_run))
-            do run_from_i = 1,nstks,nthr_run
-                run_to_i = min(run_from_i + nthr_run - 1, nstks)
-                nopen    = run_to_i - run_from_i + 1
-                do iopen = 1,nopen
-                    irun = run_from_i + iopen - 1
-                    call dstkios_run(iopen)%new(params%smpd, params%box)
-                    call dstkios_run(iopen)%cache_stack_info(run_stknames(irun), run_ldims(:,irun), run_nptcls(irun))
-                    call dstkios_run(iopen)%open(run_stknames(irun))
-                end do
-                !$omp parallel do default(shared) private(iopen,irun,ii) schedule(static) proc_bind(close) &
-                !$omp& num_threads(nopen) if(nopen > 1)
-                do iopen = 1,nopen
-                    irun = run_from_i + iopen - 1
-                    do ii = run_from(irun), run_to(irun)
-                        call dstkios_run(iopen)%read(run_stknames(irun), inds_in_stk_run(ii), build%imgbatch(ii))
-                    end do
-                end do
-                !$omp end parallel do
-                do iopen = 1,nopen
-                    call dstkios_run(iopen)%kill
-                end do
-            end do
-            call run_stknames(:)%kill
-            deallocate(dstkios_run, run_stknames, run_stkinds, run_from, run_to, run_ldims, run_nptcls, inds_in_stk_run)
-            handled = .true.
-        end function read_sorted_stack_runs
-    end subroutine discrete_read_imgbatch
+        end do
+        call pass_slab%seal
+        pass_box     = params%box
+        l_pass_ready = .true.
+    end function fill_pass_buffer
+
+    subroutine release_pass_buffer
+        call pass_slab%kill
+        if( allocated(pass_slot) ) deallocate(pass_slot)
+        pass_lo      = 0
+        pass_box     = 0
+        l_pass_ready = .false.
+    end subroutine release_pass_buffer
+
+    integer(int64) function pass_buffer_bytes()
+        pass_buffer_bytes = pass_slab%bytes()
+    end function pass_buffer_bytes
+
+    function pass_buffer_status_name( status ) result( name )
+        integer, intent(in) :: status
+        character(len=:), allocatable :: name
+        select case(status)
+            case(BUFFER_FILLED);      name = 'filled'
+            case(BUFFER_OFF);         name = 'off, batch reads'
+            case(BUFFER_OVER_BUDGET); name = 'over budget, batch reads'
+            case default;             name = 'allocation failed, batch reads'
+        end select
+    end function pass_buffer_status_name
+
+    !> Does the particle buffer hold every one of these particles at this box
+    logical function buffer_covers( params, pinds )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: pinds(:)
+        integer :: i, j
+        buffer_covers = .false.
+        if( .not. l_pass_ready ) return
+        if( params%box /= pass_box ) return
+        do i = 1, size(pinds)
+            j = pinds(i) - pass_lo + 1
+            if( j < 1 .or. j > size(pass_slot) ) return
+            if( pass_slot(j) < 1 ) return
+        end do
+        buffer_covers = .true.
+    end function buffer_covers
+
+    subroutine kill_ptcl_read_session( self )
+        class(ptcl_read_session), intent(inout) :: self
+        call self%stacks%kill
+        if( allocated(self%pass) ) deallocate(self%pass)
+        self%cursor = 1
+    end subroutine kill_ptcl_read_session
 
     !> The reconstruction observation of both backends. Cropped: noise-normalized at the native box against lmsk,
     !! Fourier-cropped to obs, back in real space, then tapered at the cropped box if l_taper; uncropped: tapered,

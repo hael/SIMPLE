@@ -8,7 +8,7 @@ use simple_reconstructor,        only: reconstructor, exp_samples
 use simple_builder,              only: builder
 use simple_image,                only: image
 use simple_linalg,               only: solve_real_spd_complex
-use simple_matcher_ptcl_io,      only: discrete_read_imgbatch
+use simple_matcher_ptcl_io,      only: ptcl_read_session
 use simple_matcher_3Drec,        only: prep_imgs4rec, gen_rec_plane
 use simple_fplane_grid,          only: fplane_grid
 use simple_memoize_ft_maps,      only: memoize_ft_maps
@@ -215,13 +215,14 @@ contains
     end subroutine add_invtausq2rho_coupled
 
     !> Serve a batch from the resident store when possible; otherwise read, prepare and retain it.
-    subroutine planes_batch_load( plane_store, params, build, n, pinds, batchlims, fpls, cached, sec_read, sec_prep )
+    subroutine planes_batch_load( plane_store, params, build, n, pinds, batchlims, fpls, cached, reads, sec_read, sec_prep )
         class(flex_plane_store),        intent(inout) :: plane_store
         class(parameters),              intent(in)    :: params
         class(builder),                 intent(inout) :: build
         integer,                        intent(in)    :: n, pinds(n), batchlims(2)
         type(fplane_type),              intent(inout) :: fpls(:)
         logical,                        intent(in)    :: cached
+        class(ptcl_read_session),       intent(inout) :: reads   !< the read session of the pass
         real(timer_int_kind), optional, intent(inout) :: sec_read, sec_prep
         integer(timer_int_kind) :: t
         integer :: batchsz
@@ -233,7 +234,7 @@ contains
         if( cached )then
             call plane_store%read_cache_batch(params, n, pinds, batchlims)
         else
-            call discrete_read_imgbatch(params, build, n, pinds, batchlims)
+            call reads%read(params, build, n, pinds, batchlims)
         endif
         if( present(sec_read) ) sec_read = sec_read + toc(t)
         t = tic()

@@ -8,7 +8,9 @@ use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_bat
                                            s2D, set_strategy2D_stoch_bound, is_fresh_2D_start
 use simple_builder,                  only: builder
 use simple_qsys_funs,                only: qsys_declare_part_finished
-use simple_syslib,                   only: get_peak_rss_bytes
+use simple_syslib,                   only: get_peak_rss_bytes, get_node_mem_in_use_bytes
+use simple_matcher_ptcl_io,          only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
+    &write_ptcl_read_bench_context, ptcl_read_session
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
@@ -94,6 +96,8 @@ contains
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
+        type(ptcl_read_counts) :: reads0, reads_srch
+        type(ptcl_read_session) :: reads
         p_ptr => params
         b_ptr => build
         call init_ctrl()
@@ -142,6 +146,9 @@ contains
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
         endif
         allocate(strategy2Dsrch(batchsz_max))
+        if( ctrl%do_bench ) reads0 = ptcl_read_counts_now()
+        call reads%new(p_ptr)
+        call reads%expect(pinds(1:nptcls2update))
         rt_align = 0.0
         rt_cavg  = 0.0
         rt_cavg_interp_splat = 0.0
@@ -188,6 +195,8 @@ contains
             call restore_class_averages_for_batch()
             if( ctrl%do_bench ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo
+        call reads%kill
+        if( ctrl%do_bench ) reads_srch = ptcl_read_counts_since(reads0)
         call cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, batchsz_max, orientation)
         rt_sigma2_write = 0.0
         if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
@@ -307,7 +316,7 @@ contains
 
         subroutine build_batch_particles_local()
             if( ctrl%do_bench ) t_build_batch_particles2D = tic()
-            call build_batch_particles2D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
+            call build_batch_particles2D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), reads, &
                 ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
             if( ctrl%do_bench ) rt_build_batch_particles2D = rt_build_batch_particles2D + toc(t_build_batch_particles2D)
         end subroutine build_batch_particles_local
@@ -484,13 +493,18 @@ contains
             write(fnr,'(a,i0)') 'match2D process pid                 : ', p_ptr%pid
             write(fnr,'(a,i0)') 'match2D peak RSS (bytes)            : ', peak_rss
             write(fnr,'(a,f0.3)') 'match2D peak RSS (GiB)              : ', peak_rss_gib
+            write(fnr,'(a,i0)') 'match2D node memory in use (bytes)  : ', get_node_mem_in_use_bytes()
+            write(fnr,'(a,l1)') 'match2D particles from the 2D cache : ', ctrl%l_cached
             call write_sigma2_bench_context(fnr, 'match2D', nptcls2update)
+            call write_ptcl_read_bench_context(fnr, 'match2D search', reads_srch)
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'match2D startup/setup               :', rt_startup
             write(fnr,'(a,1x,f0.2)') 'match2D particle allocation         :', rt_alloc_ptcl_imgs2D
             write(fnr,'(a,1x,f0.2)') 'match2D reference preparation       :', rt_prep_pftc_refs2D
-            write(fnr,'(a,1x,f0.2)') 'match2D particle preparation        :', rt_build_batch_particles2D
+            write(fnr,'(a,1x,f0.2)') 'match2D particle reading            :', reads_srch%rt_read + reads_srch%rt_cache
+            write(fnr,'(a,1x,f0.2)') 'match2D particle preparation        :', &
+                &rt_build_batch_particles2D - reads_srch%rt_read - reads_srch%rt_cache
             write(fnr,'(a,1x,f0.2)') 'match2D alignment search            :', rt_align
             write(fnr,'(a,1x,f0.2)') 'match2D class averaging             :', rt_cavg
             write(fnr,'(a,1x,f0.2)') 'match2D cavg FFT/CTF/interpolation  :', rt_cavg_interp_splat

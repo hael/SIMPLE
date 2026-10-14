@@ -18,7 +18,7 @@ use simple_flex_pca_basis,                only: cov_herm_inner
 use simple_stat,                          only: pearsn_serial_8
 use simple_flex_pca_fit_types,            only: cleanup_plane
 use simple_matcher_3Drec,                 only: init_rec, cleanup_rec_buffers
-use simple_matcher_ptcl_io,               only: prepimgbatch
+use simple_matcher_ptcl_io,               only: prepimgbatch, ptcl_read_session
 use simple_flex_pca_planes,               only: flex_plane_store
 implicit none
 private
@@ -69,6 +69,7 @@ contains
         real(dp), allocatable :: Ainv_th(:,:,:)     ! posterior covariance, for the tr(G A^-1) term
         integer  :: icm
         integer(timer_int_kind) :: t_phase
+        type(ptcl_read_session) :: reads
         real(dp), allocatable :: Gth(:,:,:), Ath(:,:,:), zth(:,:), zbest(:,:), cth(:,:), bth(:,:), myth(:)
         real(dp), allocatable :: Gtilth(:,:,:)   ! per-thread noise-whitened projected Gram
         real(dp), allocatable :: gwork(:,:,:), gvec(:,:,:), gev(:,:), gspec_thr(:,:), gspec(:)
@@ -149,10 +150,11 @@ contains
         else
             write(logfhandle,'(A)') '>>> FLEX_PCA CONTRAST-AWARE EMBEDDING'
             call flush(logfhandle)
+            call reads%new(params)
             do ibatch = 1, sel%nptcls, MAXIMGBATCHSZ
                 batchlims = [ibatch, min(sel%nptcls, ibatch + MAXIMGBATCHSZ - 1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
-                call planes_batch_load(plane_store, params, build, sel%nptcls, sel%pinds, batchlims, fpls, l_pcache)
+                call planes_batch_load(plane_store, params, build, sel%nptcls, sel%pinds, batchlims, fpls, l_pcache, reads)
                 do i = 1, batchsz
                     call build%spproj_field%get_ori(sel%pinds(batchlims(1)+i-1), orientations(i))
                 end do
@@ -275,6 +277,7 @@ contains
                     call flush(logfhandle)
                 endif
             end do
+            call reads%kill
         endif
         ! both branches continue here, so the reducing master still frees the per-thread Gram workspace;
         ! gcnt_thr is all zero when no batch loop ran, so the per-particle spectrum report below skips itself

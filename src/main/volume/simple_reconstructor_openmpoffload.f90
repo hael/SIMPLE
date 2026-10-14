@@ -3,7 +3,7 @@ module simple_reconstructor_openmpoffload
 use simple_core_module_api
 use simple_builder,          only: builder
 use simple_parameters,       only: parameters
-use simple_matcher_ptcl_io,  only: prepimgbatch, discrete_read_imgbatch
+use simple_matcher_ptcl_io,  only: prepimgbatch, ptcl_read_session
 use simple_matcher_3Drec,    only: calc_3Drec, prep_imgs4rec, init_rec, write_state_half_partial, &
     &cleanup_rec_buffers
 use simple_reconstructor,    only: reconstructor
@@ -133,8 +133,10 @@ contains
         real(timer_int_kind)    :: dt_h2d, dt_launch, dt_wait
         integer :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
         integer :: ibatch, batchsz, sz, nbatch
+        type(ptcl_read_session) :: reads
         ! prep first batch
         nbatch = ceiling(real(nptcls)/real(MAXIMGBATCHSZ))
+        call reads%new(params)
         call prep_batch(1, batchsz, batchlims)
         if( DEBUG ) t = tic()
         fpllims_pd   = fpls(1)%frlims
@@ -215,6 +217,7 @@ contains
         !$omp target exit data map(from: rhoexp_e(1:cdim(1),1:cdim(2),1:cdim(3)),&
         !$omp& rhoexp_o(1:cdim(1),1:cdim(2),1:cdim(3)), cmatexp_e(1:cdim(1),1:cdim(2),1:cdim(3)),&
         !$omp& cmatexp_o(1:cdim(1),1:cdim(2),1:cdim(3))) map(release: symmats(1:3,1:3,1:nsym))
+        call reads%kill
         deallocate(fplanes, ctfsqplanes, even)
         if( DEBUG ) t_finalize = t_finalize + toc(t)
         contains
@@ -228,7 +231,7 @@ contains
                 sz      = lims(2) - lims(1) + 1
                 ! read images
                 if( DEBUG ) t_local = tic()
-                call discrete_read_imgbatch(params, build, nptcls, pinds, lims)
+                call reads%read(params, build, nptcls, pinds, lims)
                 if( DEBUG ) t_read = t_read + toc(t_local)
                 ! preprocess images into padded objects
                 if( DEBUG ) t_local = tic()

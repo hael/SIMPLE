@@ -13,7 +13,10 @@ use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
 use simple_matcher_smpl_and_lplims,    only: sample_ptcls4iter3D, master_draws_sample3D
 use simple_qsys_funs,                  only: qsys_declare_part_finished
 use simple_refine3D_fnames,            only: refine3D_bench_fname
-use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes
+use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes, get_node_mem_in_use_bytes
+use simple_matcher_ptcl_io,            only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
+    &write_ptcl_read_bench_context, ptcl_read_session, ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, &
+    &pass_buffer_status_name, pass_buffer_bytes
 use simple_strategy3D_eval,            only: strategy3D_eval
 use simple_strategy3D_greedy_sub,      only: strategy3D_greedy_sub
 use simple_strategy3D_greedy,          only: strategy3D_greedy
@@ -79,6 +82,12 @@ contains
         real(timer_int_kind)    :: rt_startup, rt_build_batch_ptcls, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
         real(timer_int_kind)    :: rt_alloc_ptcl_imgs
         real(timer_int_kind)    :: rt_prep_refs, rt_memoize_refs, rt_rec_accum, rt_rec_write, rt_sigma2_write
+        type(ptcl_read_counts)  :: reads0, reads_srch, reads_rec, reads_fill
+        type(ptcl_read_session) :: reads
+        integer(int64)          :: buffer_budget, buffer_bytes
+        integer                 :: buffer_status
+        integer(timer_int_kind) :: t_fill
+        real(timer_int_kind)    :: rt_fill
         p_ptr => params
         b_ptr => build
         rss_after_teardown      = -1_int64
@@ -167,6 +176,21 @@ contains
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
         endif
         allocate(incr_shifts(2,batchsz_max), source=0.0)
+        call reads%new(p_ptr)
+        call reads%expect(pinds(1:nptcls2update))
+        ! the share read once into the particle buffer, for the batches and the reconstruction below
+        if( ctrl%do_bench )then
+            t_fill     = tic()
+            reads_fill = ptcl_read_counts_now()
+        endif
+        buffer_budget = ptcl_buffer_budget(p_ptr, b_ptr)
+        buffer_status = fill_pass_buffer(p_ptr, b_ptr, reads, nptcls2update, pinds, buffer_budget)
+        buffer_bytes  = pass_buffer_bytes()
+        if( ctrl%do_bench )then
+            rt_fill    = toc(t_fill)
+            reads_fill = ptcl_read_counts_since(reads_fill)
+            reads0     = ptcl_read_counts_now()
+        endif
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
@@ -194,6 +218,8 @@ contains
             !$omp end parallel do
             if( ctrl%do_bench ) rt_align = rt_align + toc(t_align)
         enddo
+        call reads%kill
+        if( ctrl%do_bench ) reads_srch = ptcl_read_counts_since(reads0)
         frac_greedy = 0.0
         if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
@@ -226,10 +252,17 @@ contains
         if( b_ptr%pftc%exists() ) THROW_HARD('PFTC still allocated at reconstruction phase boundary')
         if( ctrl%do_bench ) rss_after_teardown = get_current_rss_bytes()
         if( ctrl%do_write_partial_recs )then
-            if( ctrl%do_bench ) t_rec = tic()
+            if( ctrl%do_bench )then
+                t_rec  = tic()
+                reads0 = ptcl_read_counts_now()
+            endif
             call write_partial_recs(params, build, cline, nptcls2update, pinds)
-            if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
+            if( ctrl%do_bench )then
+                rt_rec_write = rt_rec_write + toc(t_rec)
+                reads_rec    = ptcl_read_counts_since(reads0)
+            endif
         endif
+        call release_pass_buffer
         call b_ptr%esig%kill
         if( ctrl%do_bench ) rss_after_reconstruction = get_current_rss_bytes()
         call qsys_declare_part_finished(p_ptr, string('simple_strategy3D_matcher :: refine3D_exec'))
@@ -280,21 +313,32 @@ contains
             write(fnr,'(a,f0.3)') 'match3D RSS after align teardown (GiB)  : ', rss_after_teardown_gib
             write(fnr,'(a,i0)') 'match3D RSS after reconstruction (bytes): ', rss_after_reconstruction
             write(fnr,'(a,f0.3)') 'match3D RSS after reconstruction (GiB)  : ', rss_after_reconstruction_gib
+            write(fnr,'(a,i0)') 'match3D node memory in use (bytes)  : ', get_node_mem_in_use_bytes()
             call write_sigma2_bench_context(fnr, 'match3D', nptcls2update)
+            write(fnr,'(a,i0)') 'match3D particle buffer budget (bytes): ', buffer_budget
+            write(fnr,'(a,i0)') 'match3D particle buffer (bytes)     : ', buffer_bytes
+            write(fnr,'(a,a)')  'match3D particle buffer             : ', pass_buffer_status_name(buffer_status)
+            call write_ptcl_read_bench_context(fnr, 'match3D buffer fill', reads_fill)
+            call write_ptcl_read_bench_context(fnr, 'match3D search', reads_srch)
+            call write_ptcl_read_bench_context(fnr, 'match3D reconstruction', reads_rec)
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'match3D startup/setup              :', rt_startup
-            write(fnr,'(a,1x,f0.2)') 'match3D particle preparation       :', rt_build_batch_ptcls + rt_alloc_ptcl_imgs
+            write(fnr,'(a,1x,f0.2)') 'match3D particle buffer fill       :', rt_fill
+            write(fnr,'(a,1x,f0.2)') 'match3D particle reading           :', reads_srch%rt_read
+            write(fnr,'(a,1x,f0.2)') 'match3D particle preparation       :', &
+                &rt_build_batch_ptcls + rt_alloc_ptcl_imgs - reads_srch%rt_read
             write(fnr,'(a,1x,f0.2)') 'match3D reference preparation      :', rt_prep_refs + rt_memoize_refs
             write(fnr,'(a,1x,f0.2)') 'match3D orientation search         :', rt_prep_orisrch + rt_align
             write(fnr,'(a,1x,f0.2)') 'match3D project metadata I/O       :', rt_projio
             write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction     :', rt_rec
+            write(fnr,'(a,1x,f0.2)') 'match3D partial rec particle reading:', reads_rec%rt_read
             write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction thread-s:', rt_rec * real(p_ptr%nthr, kind(rt_rec))
             call write_sigma2_bench_timings(fnr, 'match3D', rt_sigma2_write)
             write(fnr,'(a,1x,f0.2)') 'match3D total time                 :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'match3D total thread-s             :', rt_tot * real(p_ptr%nthr, kind(rt_tot))
             write(fnr,'(a,1x,f0.2)') 'match3D % accounted for            :', &
-                &((rt_startup + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
+                &((rt_startup + rt_fill + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
                 &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec) / rt_tot) * 100.
             call fclose(fnr)
         end subroutine write_bench_file
@@ -375,7 +419,7 @@ contains
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
             ! one read prepares the particles of the pass's representation(s)
             call build_batch_particles3D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), &
-                ptcl_match_imgs, ptcl_match_imgs_pad)
+                ptcl_match_imgs, ptcl_match_imgs_pad, reads)
             ! a Cartesian strategy finds its particle's slot by particle index
             if( p_ptr%l_cart_refine ) call b_ptr%cftc%set_ptcl_inds(pinds(batch_start:batch_end))
             if( ctrl%do_bench ) rt_build_batch_ptcls = rt_build_batch_ptcls + toc(t_build_batch_ptcls)

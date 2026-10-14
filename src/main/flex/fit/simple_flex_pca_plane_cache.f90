@@ -15,7 +15,7 @@ use simple_builder,         only: builder
 use simple_parameters,      only: parameters
 use simple_image,           only: image
 use simple_matcher_3Drec,   only: init_rec, cleanup_rec_buffers
-use simple_matcher_ptcl_io, only: discrete_read_imgbatch, prepimgbatch
+use simple_matcher_ptcl_io, only: ptcl_read_session, prepimgbatch
 use simple_ptcl_cache,      only: ptcl_cache_dir, ptcl_cache_run_token, ptcl_cache_space_ok
 implicit none
 private
@@ -338,6 +338,7 @@ contains
         type(string) :: dirname, tmpname
         complex, allocatable :: blk1(:,:,:)
         integer(8)  :: key(NHEAD), want_bytes
+        type(ptcl_read_session) :: reads
         integer(timer_int_kind) :: t0
         integer :: ibatch, batchlims(2), batchsz, i, ithr, h, k, kp, io, u
         real    :: maxdiff
@@ -376,10 +377,11 @@ contains
         if( io /= 0 ) THROW_HARD('could not create the plane cache: '//tmpname%to_char())
         key = 0_8
         write(u, rec=1) key          ! placeholder: the real header is written when every record is in
+        call reads%new(params)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            call reads%read(params, build, nptcls, pinds, batchlims)
             if( ibatch == 1 )then
                 ! layout self-check on a COPY of the first particle (the prep tapers its input in place):
                 ! a box_croppd image loaded from the extracted block must return the same components the
@@ -431,6 +433,7 @@ contains
                 call flush(logfhandle)
             endif
         end do
+        call reads%kill
         ! publication: the contract last, then the rename, so a reader finds either no cache or a complete one
         key = header_key(params, build, pinds, nptcls)
         write(u, rec=1) key

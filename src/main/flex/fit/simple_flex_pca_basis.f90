@@ -23,7 +23,7 @@ use simple_flex_pca_util,                 only: cov_signal_rank, cov_stage_subsa
     &cov_dim_budget
 use simple_flex_pca_fit_types,            only: cleanup_plane
 use simple_matcher_3Drec,                 only: init_rec, cleanup_rec_buffers
-use simple_matcher_ptcl_io,               only: discrete_read_imgbatch, prepimgbatch
+use simple_matcher_ptcl_io,               only: ptcl_read_session, prepimgbatch
 use simple_flex_pca_planes,               only: flex_plane_store
 implicit none
 private
@@ -91,6 +91,7 @@ contains
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, used
         logical :: l_pcache
         integer(timer_int_kind) :: t_phase
+        type(ptcl_read_session) :: reads
         call init_basis_reconstructor(params, build, mean_rec)
         ! one read path for every pass of the run: the downscaled cache when it is in use
         l_pcache = plane_store%cache_in_use()
@@ -104,10 +105,11 @@ contains
         t_phase = tic()
         write(logfhandle,'(A)') '>>> FLEX_PCA MEAN ESTIMATION (eq. S.1 kernel regression)'
         call flush(logfhandle)
+        call reads%new(params)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call planes_batch_load(plane_store, params, build, nptcls, pinds, batchlims, fpls, l_pcache)
+            call planes_batch_load(plane_store, params, build, nptcls, pinds, batchlims, fpls, l_pcache, reads)
             do i = 1, batchsz
                 iptcl = pinds(batchlims(1)+i-1)
                 call build%spproj_field%get_ori(iptcl, orientation)
@@ -117,6 +119,7 @@ contains
                 used = used + 1
             end do
         end do
+        call reads%kill
         call orientation%kill
         call cleanup_plane(num_fpl)
         call cleanup_rec_buffers(build, fpls)
@@ -185,6 +188,7 @@ contains
         real(dp), allocatable :: s_my_t(:), s_mm_t(:), smy_sh_t(:,:), smm_sh_t(:,:)
         real,     allocatable :: filt(:)
         logical  :: l_pcache
+        type(ptcl_read_session) :: reads
         nyq = max(1, fdim(params%box_crop) - 1)
         allocate(smy_sh(0:nyq), smm_sh(0:nyq), source=0.d0)
         stride = max(1, nptcls / NSAMPLE)
@@ -219,10 +223,11 @@ contains
             nsub = nsub + 1
             sub_pinds(nsub) = pinds(j)
         end do
+        call reads%new(params)
         do ibatch = 1, nsub, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nsub, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call planes_batch_load(plane_store, params, build, nsub, sub_pinds, batchlims, fpls, l_pcache)
+            call planes_batch_load(plane_store, params, build, nsub, sub_pinds, batchlims, fpls, l_pcache, reads)
             !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
             do i = 1, batchsz
                 ithr  = omp_get_thread_num() + 1
@@ -238,6 +243,7 @@ contains
             end do
             !$omp end parallel do
         end do
+        call reads%kill
         deallocate(sub_pinds)
         do t = 1, nthr_here
             s_my   = s_my + s_my_t(t)
@@ -598,6 +604,7 @@ contains
         real(dp), allocatable :: res_thr(:), trg_thr(:), hfp_thr(:), hfc_thr(:), aa_thr(:)
         integer,  allocatable :: nval_thr(:)
         integer  :: nthr, ithr, i, q, ibatch, batchlims(2), batchsz, nyq_rec, nval
+        type(ptcl_read_session) :: reads
         real(dp) :: a, aa, e_mm, e_yy, myv, res, trg, pw, cnt, wcnt
         real(dp) :: res_sum, trg_sum, aa_sum, hfpw, hfcnt
         nthr    = omp_get_max_threads()
@@ -612,10 +619,11 @@ contains
         allocate(res_thr(nthr), trg_thr(nthr), hfp_thr(nthr), hfc_thr(nthr), aa_thr(nthr), source=0.d0)
         allocate(nval_thr(nthr), source=0)
         wcnt = 0.d0
+        call reads%new(params)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            call reads%read(params, build, nptcls, pinds, batchlims)
             call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
                 &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
             do i = 1, batchsz
@@ -649,6 +657,7 @@ contains
             end do
             !$omp end parallel do
         end do
+        call reads%kill
         res_sum = sum(res_thr); trg_sum = sum(trg_thr); aa_sum = sum(aa_thr)
         hfpw    = sum(hfp_thr); hfcnt   = sum(hfc_thr); nval = sum(nval_thr)
         if( nval < 1 ) THROW_HARD('flex_pca EM calibration saw no valid particles')

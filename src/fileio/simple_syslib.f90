@@ -193,6 +193,106 @@ interface
         integer(c_int64_t) :: get_current_rss_bytes
     end function get_current_rss_bytes
 
+    function get_node_mem_in_use_bytes() bind(c,name="simple_node_mem_in_use_bytes")
+        use, intrinsic :: iso_c_binding, only: c_int64_t
+        implicit none
+        integer(c_int64_t) :: get_node_mem_in_use_bytes
+    end function get_node_mem_in_use_bytes
+
+    function get_node_mem_total_bytes() bind(c,name="simple_node_mem_total_bytes")
+        use, intrinsic :: iso_c_binding, only: c_int64_t
+        implicit none
+        integer(c_int64_t) :: get_node_mem_total_bytes
+    end function get_node_mem_total_bytes
+
+    ! read-only particle stack I/O without Fortran units (simple_posix.c); failures return -errno
+    function ro_open_c(path, len) bind(c,name="simple_ro_open")
+        import :: c_char, c_int
+        character(kind=c_char), dimension(*), intent(in) :: path
+        integer(c_int), value :: len
+        integer(c_int) :: ro_open_c
+    end function ro_open_c
+
+    function ro_close(fd) bind(c,name="simple_ro_close")
+        import :: c_int
+        integer(c_int), value :: fd
+        integer(c_int) :: ro_close
+    end function ro_close
+
+    !> all n bytes at offset off into buf: bytes read (fewer only at end of file) or -errno
+    function pread_full(fd, buf, n, off) bind(c,name="simple_pread_full")
+        import :: c_int, c_ptr, c_int64_t
+        integer(c_int),     value :: fd
+        type(c_ptr),        value :: buf
+        integer(c_int64_t), value :: n, off
+        integer(c_int64_t) :: pread_full
+    end function pread_full
+
+    !> readahead hint: 0 given, 1 not available on the platform, -errno
+    function fadvise_willneed(fd, off, len) bind(c,name="simple_fadvise_willneed")
+        import :: c_int, c_int64_t
+        integer(c_int),     value :: fd
+        integer(c_int64_t), value :: off, len
+        integer(c_int) :: fadvise_willneed
+    end function fadvise_willneed
+
+    function open_fd_count() bind(c,name="simple_open_fd_count")
+        import :: c_int
+        integer(c_int) :: open_fd_count
+    end function open_fd_count
+
+    function set_open_files_limit(nmax) bind(c,name="simple_set_open_files_limit")
+        import :: c_int
+        integer(c_int), value :: nmax
+        integer(c_int) :: set_open_files_limit
+    end function set_open_files_limit
+
+    !> unit-test hooks: at most max_chunk bytes per read call, an EINTR every eintr_every calls, no advice
+    subroutine io_set_faults(max_chunk, eintr_every, no_advice) bind(c,name="simple_io_set_faults")
+        import :: c_int, c_int64_t
+        integer(c_int64_t), value :: max_chunk
+        integer(c_int),     value :: eintr_every, no_advice
+    end subroutine io_set_faults
+
+    ! the prefetcher: one thread serving positioned reads into caller-owned buffers, in order
+    function prefetch_new() bind(c,name="simple_prefetch_new")
+        import :: c_ptr
+        type(c_ptr) :: prefetch_new
+    end function prefetch_new
+
+    !> the prefetcher's window buffer, at least nbytes long (only with no job pending); null when unavailable
+    function prefetch_window(h, nbytes) bind(c,name="simple_prefetch_window")
+        import :: c_ptr, c_int64_t
+        type(c_ptr),        value :: h
+        integer(c_int64_t), value :: nbytes
+        type(c_ptr) :: prefetch_window
+    end function prefetch_window
+
+    function prefetch_submit(h, fd, off, n, dst) bind(c,name="simple_prefetch_submit")
+        import :: c_ptr, c_int, c_int64_t
+        type(c_ptr),        value :: h, dst
+        integer(c_int),     value :: fd
+        integer(c_int64_t), value :: off, n
+        integer(c_int) :: prefetch_submit
+    end function prefetch_submit
+
+    function prefetch_wait(h, id) bind(c,name="simple_prefetch_wait")
+        import :: c_ptr, c_int, c_int64_t
+        type(c_ptr),    value :: h
+        integer(c_int), value :: id
+        integer(c_int64_t) :: prefetch_wait
+    end function prefetch_wait
+
+    subroutine prefetch_drain(h) bind(c,name="simple_prefetch_drain")
+        import :: c_ptr
+        type(c_ptr), value :: h
+    end subroutine prefetch_drain
+
+    subroutine prefetch_free(h) bind(c,name="simple_prefetch_free")
+        import :: c_ptr
+        type(c_ptr), value :: h
+    end subroutine prefetch_free
+
     function memory_monitor_start_c(filename, filename_length, program, program_length, &
         &interval_seconds, run_id) bind(c,name="simple_memory_monitor_start_c")
         use, intrinsic :: iso_c_binding, only: c_char, c_int
@@ -401,6 +501,12 @@ contains
                 rotational = -1
         end select
     end function fs_is_rotational
+
+    !> Opens a file read-only on a plain descriptor: the descriptor, or -errno
+    integer function ro_open( fname ) result( fd )
+        class(string), intent(in) :: fname
+        fd = int(ro_open_c(fname%to_char(), int(fname%strlen_trim(), c_int)))
+    end function ro_open
 
     !> \brief Bytes available to an unprivileged writer on the filesystem holding fname.
     !!  Returns -1 when unknown (e.g. statvfs failure); callers must treat that as

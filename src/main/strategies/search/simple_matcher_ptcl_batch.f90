@@ -2,7 +2,7 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
-use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, add_ptcl_cache_read_time
 !$ use omp_lib, only: omp_get_max_threads
 use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached, prepimg4align_cart
 use simple_cartft_calc,     only: cartft_calc
@@ -142,17 +142,18 @@ contains
     !! users, the probability-table commanders, build none) and the polar particles unless the
     !! pass is Cartesian (l_cart_refine). The Cartesian slots are prepared first, from copies,
     !! because the polar preparation normalizes the images in place.
-    subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad )
+    subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, reads )
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
+        class(ptcl_read_session), intent(inout) :: reads   !< the read session of the pass
         logical :: l_polar, l_cart
         l_polar   = .not. params%l_cart_refine
         l_cart    = build%cftc%has_refs()
         if( l_polar ) call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
+        call reads%read(params, build, nptcls_here, pinds_here, [1,nptcls_here])
         if( l_cart ) call prep_cart_batch_of_build(params, build, nptcls_here, pinds_here)
         if( params%l_cart_refine .and. .not. l_cart ) THROW_HARD('a Cartesian pass requires its references in build%cftc')
         if( .not. l_polar ) return
@@ -285,25 +286,29 @@ contains
 
     !>  ptcl_imgs receives the raw full-size images, which only callers that restore
     !!  class averages from them need; omit it to skip both the buffer and the copy.
-    subroutine build_batch_particles2D( params, build, nptcls_here, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
+    subroutine build_batch_particles2D( params, build, nptcls_here, pinds, reads, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds(nptcls_here)
+        class(ptcl_read_session), intent(inout) :: reads   !< the read session of the pass
         class(image), optional, intent(inout) :: ptcl_imgs(nptcls_here)
         class(image),           intent(inout) :: ptcl_match_imgs(params%nthr)
         class(image),           intent(inout) :: ptcl_match_imgs_pad(params%nthr)
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
         logical :: l_keep_raw, l_cached
+        integer(timer_int_kind) :: t_cache
         l_keep_raw = present(ptcl_imgs)
         ! When cached, ptcl_imgs receives the Fourier-cropped particle rather than the
         ! full-size original, so callers that pass it must have sized it at box_crop and
         ! told cavger_init_online to expect cropped particles.
         l_cached   = ptcl_cache_in_use(params, build)
         if( l_cached )then
+            if( L_BENCH_GLOB ) t_cache = tic()
             call ptcl_cache_read_batch(params, build, nptcls_here, pinds, [1,nptcls_here])
+            if( L_BENCH_GLOB ) call add_ptcl_cache_read_time(toc(t_cache))
         else
-            call discrete_read_imgbatch(params, build, nptcls_here, pinds, [1,nptcls_here])
+            call reads%read(params, build, nptcls_here, pinds, [1,nptcls_here])
         endif
         call build%pftc%reallocate_ptcls(nptcls_here, pinds)
         pdim_interp = build%pftc%get_pdim_interp()
