@@ -21,9 +21,11 @@ goal is a data path that lets any sampling scheme read cheaply. Workflows
 should not have to be designed around disk latency. Nothing here changes
 which particles are drawn.
 
-**When.** The measurements of section 4 run once the global-sigma
-refactoring has been validated (Hans, 2026-10-12). Their numbers set the
-order of the read-path steps of section 3.1.
+**When.** The global-sigma refactoring is on master (`2307ea96f`). The whole
+plan is carried out by the unattended run of section 10 on the Oracle Linux
+test machine, on beta-galactosidase and without timing claims (Hans,
+2026-10-14). The production measurements of section 4 follow on the
+ribosome project.
 
 **The consolidated-stack experiment is done** (2026-10-13, section 4). One
 file instead of 19,520 shortened the refine3D stages of the ribosome base
@@ -552,7 +554,13 @@ reads through `discrete_read_imgbatch`, so the build gains too.
   extraction makes it one micrograph, but imports can lay particles out
   otherwise, and several stack rows can share one physical file
   (`consolidate_particles`). The grouping follows the micrograph or
-  filament identity where the project has it, not the physical path.
+  filament identity where the project has it, not the physical path:
+  - a stack row is a group when it maps to a micrograph row
+    (`get_mic2stk_inds`), as native extraction writes;
+  - a field in which an active stack row has no micrograph row (imported
+    particle stacks, such as the beta-galactosidase test set) has no known
+    scientific grouping and takes the per-index route, as today. The route
+    is logged. This is a rule of provenance, not of size.
 - **Placement.** Largest group first, to the half with fewer active
   particles, with deterministic random tie-breaking. The imbalance is
   bounded by the largest group. It is logged, and the transaction warns, or
@@ -614,13 +622,20 @@ Their noise weighting does:
   the native box, as `addon_starting_state` (`simple_commanders_solve3D.f90`)
   does today, and writes the first carried sums. `solve3D` does not change.
 - **Gridding only (ruled 2026-10-13).** Add-on chains look for initial
-  solutions and speed, not PCG-level precision. `solve3D_addon` refuses
-  `rec_backend=pcg`, as `solve3D_chunks` already forces gridding. The PCG
-  side of the frozen sets (the `B`/`D` payloads in `simple_frozen_accum.f90`
-  and the frozen add in the PCG backend) is then dead and is deleted. This
-  step does not wait for the global-sigma refactoring. It also removes the
-  question of how a PCG chain would seed `bootstrap_rec3D`, which forces its
-  bootstrap map through gridding.
+  solutions and speed, not PCG-level precision.
+  - `solve3D_addon` replays the base run's backend today and offers PCG
+    controls (`maxits_pcg`, `maxits_ml`, `pcg_solvent_check`). It drops
+    them and refuses a frozen project whose base run used PCG, naming the
+    base run's backend.
+  - `emulate_solve3D_stream` drops its PCG inputs
+    (`add_solve3D_base_inputs` with `l_include_pcg=.false.`) and forces
+    gridding, as `solve3D_chunks` already does.
+  - The PCG side of the frozen sets (the `B`/`D` payloads in
+    `simple_frozen_accum.f90` and the frozen add in the PCG backend) is then
+    dead and is deleted. A base `solve3D` keeps both backends.
+  - This step does not wait for the global-sigma refactoring. It also
+    removes the question of how a PCG chain would seed `bootstrap_rec3D`,
+    which forces its bootstrap map through gridding.
 
 **The noise model.**
 
@@ -781,15 +796,22 @@ would remove that, and the cold memo with it. That is out of scope here.
 
 ## 4. Measurements: the basis for the next decision
 
-These run after the global-sigma refactoring has been validated, on the code
-as it then stands. They need no change to the read path. The only code is
-the benchmark split of section 5, which the time-share measurement needs.
-Their numbers then decide:
+The benchmark split of section 5 and a regression baseline on
+beta-galactosidase are Phase 0 of the unattended run (section 10). The
+measurements below that need the production machine and the ribosome project
+are the maintainer's, after the run:
 
-- the order of the read-path steps, and which of them are worth doing;
-- whether stacks need to be kept open from the search into the
-  reconstruction;
-- whether the stream-count cap on spinning disks changes.
+- the open latency on the cluster file system and the positioned-read
+  latency on the spinning disk, which set the production gap budget for
+  coalesced spans;
+- the access-trace replay, which decides whether stacks are kept open from
+  the search into the reconstruction;
+- the stream-count sweep, which decides whether the cap on spinning disks
+  changes;
+- the whole-stack ribosome run.
+
+The beta-galactosidase set on the test machine is one stack, so none of
+these can be measured there.
 
 **The consolidated-stack experiment (done, 2026-10-13).**
 
@@ -854,8 +876,11 @@ The measurements:
 ## 5. Benchmarks
 
 - **Where:** `REFINE2D_BENCH_ITERnnn.txt`, the refine3D matcher's
-  per-partition files, the refine3D strategy file and `SOLVE3D_BENCH.txt`,
-  in SIMPLE's format (CONTEXT, TIMINGS, % accounted for).
+  per-partition files, the refine3D strategy file, `SOLVE3D_BENCH.txt`, and
+  a per-partition file of the probability-table parts (`prob_tab`,
+  `prob_tab2D`), which make the first read of every iteration and have no
+  benchmark file today; all in SIMPLE's format (CONTEXT, TIMINGS,
+  % accounted for).
 - **Timings:** particle reading, separate from particle preparation;
   conversion and copy time; buffer allocation time.
 - **Counts, in the context sections, for each pass:**
@@ -893,7 +918,8 @@ The measurements:
     truncated files, short reads, `EINTR`, end of file, advice the platform
     does not support, and the fallback modes.
   - The POSIX path opens in parallel, many times over, on more stacks than
-    streams. Descriptor exhaustion, leaks and pool eviction are covered.
+    streams. Descriptor exhaustion and leaks are covered (pool eviction too,
+    once a descriptor pool exists).
   - Prefetching changes no byte read.
 - **Half-sets per stack.**
   - The halves differ by at most the largest group.
@@ -935,32 +961,26 @@ The measurements:
 
 ## 7. Order of work
 
-1. **The global-sigma refactoring is validated** first
-   (`global_sigma2_only.md`).
-2. **Measurements** (section 4): the benchmark split, then the file
-   operations, the time share, the open and positioned-read latencies, the
-   access-trace replay, the stream-count sweep and the whole-stack ribosome
-   run.
-3. **The read path.** The numbers set the order of its steps. The order shown
-   is provisional:
-   - the pass-scoped read session (one open per stack per pass);
-   - bounded coalesced reads within a stack run;
-   - the POSIX read-only path: concurrent opens, then the bounded prefetch
-     window;
-   - the pass-sized particle buffer in 3D, with its budget and the policy
-     line;
-   - stacks kept open from the search into the reconstruction, only if the
-     trace replay supports it.
-4. **Half-sets per stack** are ruled and do not wait for the numbers. The
-   project-owned partition transaction is written first; the labels land
-   with the first read-path step, and their effect on reconstruction opens is
-   measured with it.
-5. **Add-on passes,** as a separate track that builds on the global-sigma
-   refactoring. Removing PCG from the add-on chains can land before, on its
-   own.
+The global-sigma refactoring, the prerequisite of the add-on track, is on
+master (`2307ea96f`). The rest is carried out by the unattended run of
+section 10, in this order (Hans, 2026-10-14: everything in one run, every
+read-path step implemented and kept unless it is slower):
 
-Each step ends with a review of its numbers against the measurements of
-step 2.
+1. **The benchmark split** and a regression baseline on beta-galactosidase.
+2. **The read path:** the pass-scoped read session and bounded coalesced
+   reads; then the POSIX read-only path with concurrent opens and the
+   bounded prefetch window; then the pass-sized particle buffer in 3D, with
+   its budget and the policy line.
+3. **Half-sets per stack:** the project-owned partition transaction and its
+   consumers.
+4. **PCG out of the add-on chains.**
+5. **The add-on passes.**
+6. **Documents and close.**
+
+Each step ends with the regression cases of section 10 against the
+baseline. Stacks kept open from the search into the reconstruction are not
+in the run: they wait for the access-trace replay on the ribosome project
+(section 4).
 
 ## 8. Decisions
 
@@ -995,3 +1015,272 @@ None is open. The review's contracts were ruled by Hans on 2026-10-13:
 | Add-on passes | `simple_commanders_solve3D.f90` (`addon_starting_state`), `simple_solve3D_utils.f90`, `simple_frozen_accum.f90`, `src/main/project/simple_project_superset.f90` (retirement), `src/main/simple_final_rec.f90`, `exec_bootstrap_rec3D` (`simple_commanders_refine3D.f90`), `simple_commanders_solve3D_chunks.f90`, `src/main/sigma2/` |
 | Policies | `doc/policies/3D/solve3D_addon_policy.md` (sections 3, 5, 7, 8; frozen membership under retirement; the PCG frozen add removed), `doc/policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md` (the raw-image buffer across the assignment barrier), the documents that describe half-set assignment, a short policy for the particle read path |
 | Tests | `src/fileio/simple_stack_io_tester.f90`, the `oris` setter testers, `src/main/volume/simple_frozen_accum_tester.f90` |
+
+## 10. Execution
+
+This plan is carried out as an unattended run on the Oracle Linux test
+machine (arun run `particle_io`), in eight phases. Nothing is committed; the
+maintainer reviews the complete diff when all phases are done. Every phase
+records itself in section 11.
+
+Common to every phase:
+
+- **Data.** Beta-galactosidase (5,513 particles, box 256 at 1.275 Å per
+  pixel, `mskdiam=180 pgrp=d2`, 50 selected class averages), copied into a
+  fresh directory under the run's scratch directory for each run; the
+  originals are never written. The set is one imported stack without
+  micrograph rows, so it takes the per-index half-set route and exercises
+  the read path only lightly. Few-particle stacks, micrograph groups and
+  shared physical files are covered by the unit-test fixtures of section 6.
+- **Execution settings.** `nparts=4 nthr=6` for distributed runs and
+  `nthr=24` for shared-memory runs, identical in every phase. Timed runs
+  use an out-of-tree Release build with tests built; nothing else heavy
+  runs while a run is timed.
+- **No timing claims.** No gain is claimed from this machine (Hans,
+  2026-10-14): its test set is one stack, which these changes barely touch.
+  The I/O gains are measured later by the maintainer on the ribosome project
+  (section 4). Timings here guard against regressions only:
+  - every read-path step is implemented, in the order of section 7;
+  - a step is kept unless the case that exercises it is slower than the
+    build without it beyond the run-to-run spread, measured at least twice
+    each way when the difference is within the spread;
+  - a dropped step is recorded in section 11 with its numbers.
+- **Validation.** Every `solve3D` run uses `nsample=2500` and starts from the
+  one common `solve3D_cavgs` result with `cavg_ini_ext=yes`. Beta-galactosidase
+  is large enough for the Fourier shell correlation (FSC). The simulated
+  workflow tests are judged by their ground-truth orientation and shift
+  errors.
+- **Acceptance of a repeated case.**
+  - `solve3D` and `refine3D` (cases A, B, C): the final FSC 0.143
+    resolution of every state lies within the larger of the Phase 0 spread
+    and 3 % of its Phase 0 value.
+  - `solve2D` (case E), as in the global-sigma run: the last iteration's
+    mean score is no lower than 0.97 times the lowest Phase 0 run, and the
+    particle-weighted mean class resolution of the last iteration is no
+    worse than 1.03 times the worst Phase 0 run.
+  - The add-on chain (case F): every step completes, and the FSC 0.143
+    resolution of every step's union map lies within the larger of the
+    Phase 0 spread and 5 % of its Phase 0 value. The wider margin is for
+    the accepted old weighting of frozen contributions.
+  - High-level tests: each by its own checks. `simulated_workflow_6vxx` is
+    recorded, not judged (flaky on unchanged code).
+- **Gates.** The fast gate (run by `./compile_debug.sh`), the CTest unit
+  suites of the touched areas, and `python3 scripts/check_test_registry.py .`
+  whenever tests or their registration change.
+- **Not in this run.** The generated indexes under `doc/code_overview/`
+  (the maintainer regenerates them); stacks kept open from the search into
+  the reconstruction (they wait for the access-trace replay); the production
+  measurements of section 4; skill files (proposed text goes into the
+  report).
+
+### 10.1 Phase 0: benchmark split and baseline
+
+1. Find how SIMPLE is built on this machine and build the tree as it is
+   (`./compile_debug.sh`, which also runs the fast gate), plus the Release
+   build for timed runs.
+2. Add the benchmark split of section 5, the only source change of this
+   phase, in SIMPLE's benchmark conventions (`L_BENCH_GLOB`, `tic`/`toc`):
+   - particle reading timed separately from particle preparation, in the
+     refine2D and refine3D matcher files, in the reconstruction (the read
+     timer of `calc_3Drec` moves from `DEBUG` to the benchmark flag), in the
+     PCG worker and in class-average restoration;
+   - a per-partition benchmark file for the probability-table parts;
+   - per pass, in the context sections: stacks opened, read requests, bytes
+     requested and bytes read (prefetch lines join in Phase 2);
+   - the process's peak resident memory and the node's memory in use at the
+     same point.
+3. Run the baseline cases on the Release build with the split:
+   - **S.** `solve3D_cavgs`, single state; its final project and maps are
+     kept as the common start.
+   - **A.** `solve3D nsample=2500 cavg_ini_ext=yes` from S, distributed,
+     twice (the spread).
+   - **B.** `refine3D` from A's final project with `objfun=euclid` and
+     `update_frac=0.2`, five iterations, distributed, twice.
+   - **C.** B's command line in shared memory, once.
+   - **E.** `solve2D` on the particles, distributed, twice.
+   - **F.** `emulate_solve3D_stream nptcls_base=2000 nptcls_addon=1200
+     rollback=no addon_diag=yes` (a base run and three add-ons), with A's
+     `solve3D` settings where the program takes them, gridding, twice.
+   - **P.** A's command line with `rec_backend=pcg`, once; its final
+     project is kept for the refusal check of Phase 5.
+   For every case record the exact command line, the wall time, the final
+   FSC 0.5 and 0.143 resolutions per state (for E the score and class
+   resolution of the acceptance), the peak memory, and the benchmark
+   timings with the read time and counts. For F also each step's wall
+   time, seconds per 1,000 added particles, union FSC, and the frozen
+   particle images each add-on reads.
+4. Run `solve3D_addon`, `simulated_workflow_1jxy`, `simulated_workflow_6vxx`
+   and `cont_refine3D_1jxy`, and record their results.
+
+Exit criteria:
+
+- the build and the fast gate pass;
+- the read time and the counts appear in every benchmark file listed in
+  step 2;
+- every case is recorded with its command line in section 11, with the
+  spreads of A, B, E and F;
+- S and P are kept for the later phases.
+
+### 10.2 Phase 1: the read session and coalesced spans
+
+The first two read-path steps of section 3.1: the pass-scoped read session
+(one header decode per open, read-only opens without the second existence
+check, reusable scratch, counters, the boundary descriptor carried to the
+next batch) and the bounded coalesced spans. Every reader of
+`discrete_read_imgbatch` moves to the session. The gap budget starts at 2 MB
+and the scratch cap at 64 MB, as named constants; the over-read of a span is
+at most the bytes it needs. The production values follow the maintainer's
+measurement.
+
+Exit criteria:
+
+- the Release and the debug builds, the fast gate, the unit suites of the
+  touched areas and the registry check pass;
+- the read-path tests of section 6 that cover the session and the spans
+  pass, including one open per stack per pass across a batch boundary and
+  two stack rows sharing one file;
+- cases A and E repeated: the acceptance holds, and each step is kept or
+  dropped by the timing rule.
+
+### 10.3 Phase 2: the POSIX path and the prefetch window
+
+The POSIX read-only path with concurrent opens and the bounded prefetch
+window of section 3.1, with its edge cases, and the prefetch counts in the
+benchmark files.
+
+Exit criteria:
+
+- the builds, the fast gate, the unit suites and the registry check pass;
+- the POSIX-path tests of section 6 pass, including descriptor exhaustion,
+  leaks and the fallback modes;
+- cases A and E repeated: the acceptance holds, and the step is kept or
+  dropped by the timing rule.
+
+### 10.4 Phase 3: the particle buffer
+
+The pass-sized particle buffer of section 3.1: the immutable slab with its
+index map, copied into the existing image batches; the budget (the
+computing environment's per-task memory where defined, otherwise physical
+memory divided by twice the number of processes the node runs); the
+fallback to batch reads; the line in the memory policy.
+
+Exit criteria:
+
+- the builds, the fast gate, the unit suites and the registry check pass;
+- the particle-buffer tests of section 6 pass;
+- cases A, B and C repeated: the acceptance holds, the peak memory of each
+  is recorded against Phase 0 and stays within the budget plus the Phase 0
+  peak, and the step is kept or dropped by the timing rule.
+
+### 10.5 Phase 4: project-owned half-sets
+
+The partition transaction of section 3.2 and its consumers; the per-index
+route for fields without micrograph rows, class averages and time series.
+
+Exit criteria:
+
+- the builds, the fast gate, the unit suites and the registry check pass;
+- the half-set tests of section 6 pass;
+- on beta-galactosidase the log shows the per-index route, and cases A and
+  E repeated meet the acceptance;
+- `solve3D_addon`, `simulated_workflow_1jxy`, `simulated_workflow_6vxx` and
+  `cont_refine3D_1jxy` run, each judged as in the common rules.
+
+### 10.6 Phase 5: PCG out of the add-on chains
+
+The "Gridding only" ruling of section 3.3: the PCG inputs leave
+`solve3D_addon` and `emulate_solve3D_stream`, `solve3D_addon` refuses a PCG
+base run, and the PCG side of the frozen sets is deleted with its tests.
+
+Exit criteria:
+
+- the builds, the fast gate, the unit suites and the registry check pass;
+- `solve3D_addon` on a copy of a PCG base run stops with the refusal before
+  any work; on a gridding base it runs and passes its own checks;
+- outside history documents, the tree holds no frozen PCG payload.
+
+### 10.7 Phase 6: the add-on passes
+
+Section 3.3 as ruled: the first add-on reads the base particles once and
+writes the first bundle; later add-ons read only their own particles; the
+incremental final reconstruction; the copy-on-write sigma2 transaction;
+retirement with carried sums; the bundle manifest; the offline chains
+publish their last add-on as it is. The add-on policy changes with it.
+
+Exit criteria:
+
+- the builds, the fast gate, the unit suites and the registry check pass;
+- the add-on tests of section 6 pass;
+- `solve3D_addon` passes its own checks;
+- case F repeated twice: the acceptance holds; add-ons after the first read
+  no frozen particle image (by the counts); each step's wall time and
+  seconds per 1,000 added particles are reported against Phase 0.
+
+### 10.8 Phase 7: documents and close
+
+1. The documents of section 9: the short read-path policy, the reader
+   policy in the stack-indexing policy, the half-set documents, the add-on
+   and chunk policies.
+2. Cases A, B, C, E and F once each, and the four high-level tests, against
+   Phase 0: the acceptance holds.
+3. Move this plan to `doc/implementation_notes/completed/` with `mv`, and
+   write the review report beside it. The report reads on its own: what
+   changed and why, in plain words; the evidence against Phase 0 in tables,
+   with no timing claim beyond regression; every decision taken during the
+   run and where it is recorded; which read-path steps were kept or
+   dropped; what the maintainer measures next on the ribosome project
+   (section 4). SIMPLE terms are explained and acronyms spelled out on first
+   use; no run-internal labels.
+
+Exit criteria:
+
+- the build, the fast gate and the registry check pass;
+- the acceptance of step 2 holds;
+- steps 1 and 3 are done.
+
+### File table
+
+| File | Change | Phases |
+| --- | --- | --- |
+| `src/main/strategies/search/simple_matcher_ptcl_io.f90` | Read timers and counts; the read session; coalesced spans; the POSIX path; the particle buffer. | 0 1 2 3 |
+| `src/main/strategies/search/simple_matcher_ptcl_batch.f90`, `simple_strategy3D_matcher.f90`, `simple_strategy2D_matcher.f90`, `simple_matcher_3Drec.f90` | Benchmark split; sessions per pass; prefetch; the buffer filled before the search and read by the reconstruction; consumers of the partition. | 0 1 2 3 4 |
+| `src/main/strategies/search/simple_ptcl_cache.f90` | Its build reads through the session. | 1 2 |
+| `src/main/commanders/simple/simple_commanders_prob.f90` | The probability-table benchmark file; sessions; consumer of the partition. | 0 1 2 4 |
+| `src/main/strategies/parallelization/simple_refine3D_strategy.f90`, `simple_refine2D_strategy.f90` | Benchmark split; the partition preflight; frozen PCG plumbing out; carried sums. | 0 4 5 6 |
+| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | Read timers; sessions; the buffer; the frozen add removed. | 0 1 2 3 5 |
+| `src/main/strategies/parallelization/simple_calc_pspec_strategy.f90`, `simple_make_cavgs_strategy.f90`, `simple_rec3D_strategy.f90` | Sessions; consumers of the partition. | 1 2 4 |
+| `src/main/strategies/parallelization/simple_rec3D_service.f90` | Frozen PCG path out; carried sums. | 5 6 |
+| `src/main/class/simple_classaverager.f90`, `simple_classaverager_restore.f90` | Read timers; sessions. | 0 1 2 |
+| `src/main/flex/fit/simple_flex_pca_basis.f90`, `simple_flex_pca_plane_cache.f90`, `simple_flex_reconstructor_latent_ops.f90` | Readers move to the session. | 1 2 |
+| `src/main/volume/simple_reconstructor_openmpoffload.f90`, `src/main/commanders/single/single_commanders_experimental.f90` | Readers move to the session. | 1 2 |
+| `src/fileio/simple_discrete_stack_io.f90`, `simple_imgfile.f90`, `simple_imghead.f90`, `simple_stack_io_tester.f90` | One header decode per open; read-only opens; span reads; the POSIX path; tests. | 1 2 |
+| `src/main/image/simple_image_io.f90` | Span reads into scratch. | 1 2 |
+| `src/fileio/simple_posix.c`, `src/fileio/simple_syslib.f90` | The POSIX read helpers; the memory budget. | 2 3 |
+| `src/main/commanders/simple/simple_commanders_rec_distr.f90` | Read timers in the gridding workers; frozen PCG add removed; carried sums. | 0 5 6 |
+| `src/main/commanders/simple/simple_commanders_solve2D.f90`, `src/main/flex/run/simple_flex_pca_project_gateway.f90` | Consumers of the partition. | 4 |
+| `src/main/ori/simple_oris_setters.f90`, `simple_oris.f90` | The per-index routine kept for its explicit routes. | 4 |
+| `src/main/project/simple_eo_partition.f90` | New: the project-owned partition transaction. | 4 |
+| `src/main/project/simple_sp_project.f90`, `simple_sp_project_ptcl.f90` | Entry of the partition transaction; micrograph mapping. | 4 |
+| `src/main/commanders/test/simple_commanders_test_highlevel_frac.f90` | Follows the session and the partition. | 1 4 |
+| `src/main/commanders/test/simple_commanders_test_class.f90`, `src/main/ui/simple_test/simple_test_ui_class.f90` | New unit testers in the suite tables; frozen PCG cases out. | 1 2 3 4 5 6 |
+| `src/main/ui/simple/simple_ui_solve3D.f90` | PCG inputs out of the add-on and stream-emulation programs. | 5 |
+| `src/main/commanders/simple/simple_commanders_solve3D.f90`, `simple_commanders_solve3D_chunks.f90` | Refusal of a PCG base; frozen PCG plumbing out; first carried sums; incremental final; publication. | 5 6 |
+| `src/main/solve/simple_solve3D_utils.f90`, `simple_solve3D_manifest.f90`, `simple_solve3D_controller.f90` | Frozen PCG plumbing out; bundle manifest; carried sums. | 5 6 |
+| `src/main/volume/simple_frozen_accum.f90` | PCG payloads deleted; the carried bundle. | 5 6 |
+| `src/defs/simple_refine3D_fnames.f90` | Benchmark file names; frozen PCG names out; bundle names. | 0 5 6 |
+| `src/main/params/simple_parameters.f90`, `simple_parameters_parse.f90` | Keys of the frozen PCG path out, if any. | 5 6 |
+| `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` | Incremental final reconstruction; the bootstrap over the cohort. | 6 |
+| `src/main/project/simple_project_superset.f90` | Retirement with carried sums. | 6 |
+| `src/main/sigma2/simple_sigma2_state.f90`, `simple_euclid_sigma2.f90`, `simple_sigma2_bootstrap.f90` | The copy-on-write sigma2 transaction of the growing union. | 6 |
+| `src/fileio/simple_sigma2_state_file.f90`, `simple_sigma2_files.f90` | The candidate extended from the frozen state. | 6 |
+| `src/main/commanders/test/simple_commanders_test_highlevel_addon.f90`, `src/main/ui/simple_test/simple_test_ui_highlevel.f90` | Chain, rollback and bundle cases. | 6 |
+| `doc/policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md` | The buffer across the assignment barrier. | 3 |
+| `doc/policies/3D/solve3D_addon_policy.md`, `solve3D_chunks_policy.md`, `doc/policies/stream/stream_3D_ingestion_policy.md` | Gridding only; retirement; carried sums; incremental final; publication. | 5 6 7 |
+| `doc/policies/3D/refine3D_policy.md`, `reconstruct3D_pcg_policy.md`, `doc/policies/2D/solve2D_policy.md` | Half-set assignment; frozen PCG add removed. | 5 7 |
+| `doc/policies/project_stack_indexing_policy.md`, `doc/policies/particle_read_path_policy.md` | The reader policy; new: the short policy of the read path. | 7 |
+| `doc/implementation_notes/completed/particle_io_few_particle_stacks.md`, `particle_io_few_particle_stacks_report.md` | The plan moved on completion, and the report. | 7 |
+
+## 11. Progress
+
+Each phase adds its entry here: date, files changed, evidence with log
+paths, and how each exit item was met.
