@@ -38,9 +38,10 @@ the production-module layers, and runs before the fast test gate.
 - the folder root: shared helpers (`util`), figures (`plot`, `umap`) and the
   fast-gate testers.
 
-There are 41 source files: 32 production modules, the probe fit's four
-submodule files, the PCG self-test submodule, three testers and
-`cls_expansion` (outside the layering). `scripts/check_flex_dag.py`
+There are 43 source files: 32 production modules, the probe fit's four
+submodule files, the self-test submodules of the PCG operator and of the
+`cls_expansion` kernel route, three testers and `cls_expansion` with its kernel
+route (`simple_flex_cls_kernel`, both outside the layering). `scripts/check_flex_dag.py`
 rejects multiple module units in one source as well as layering violations and
 cycles. CMake discovers `src/main` through a recursive glob without
 `CONFIGURE_DEPENDS`; reconfigure once before building after adding or restoring

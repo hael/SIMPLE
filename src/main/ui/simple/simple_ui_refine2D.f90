@@ -426,7 +426,13 @@ contains
         &subclass (cls_expansion_cavgs.mrc, each filtered by its own even/odd FRC, plus the even/odd halves from &
         &independent half models; the FRCs as class FRCs), and per subclass the population, the split separation and &
         &the cross-half reproducibility (os_cls2D pop, neff = pop, sep, repro); a subclass half without members is &
-        &written inactive (os_cls2D state_even/state_odd 0)',&
+        &written inactive (os_cls2D state_even/state_odd 0). subcls_avg=kernel replaces the &
+        &placement and the conditional averages: the latent of every particle and its uncertainty weigh the other &
+        &particles (every particle''s pre-image), the latent rank and the bandwidth are chosen by predicting held-out &
+        &Fourier coefficients, the subclasses are the pre-images of as many particles as the budget, chosen to cover &
+        &the latent distribution (preferring pre-images of at least minpop effective particles), and their averages &
+        &are kernel-weighted, CTF-corrected means of the particles (neff the effective population, also per half; sep &
+        &the cross-validation z-score of the pre-images over the class mean)',&
         &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED, display_name='Class Expansion')
@@ -445,6 +451,16 @@ contains
             'Minimum particles per subclass: a class holds at most pop/minpop subclasses and is kept whole below &
             &2*minpop particles (and below 3*(neigs+1)){25}', &
             '# particles{25}', .false., 25.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call cls_expansion%add_input(UI_PARM, 'subcls_avg', 'multi', &
+            'Sub-class averages (default model)', &
+            'model: the expected image of the covariance model at the latent centre of each subclass (shared parent &
+            &and basis). kernel: every particle''s latent pre-image weighs the others; the subclasses are the pre-images &
+            &of as many particles as the budget, covering the latent distribution, and their averages are &
+            &kernel-weighted, CTF-corrected means of the particles; the latent rank and the bandwidth come from &
+            &cross-validation on held-out Fourier coefficients(model|kernel){model}', &
+            '', .false., 'model', &
+            &choices=ui_choices([character(len=6) :: 'model', 'kernel']), &
         &visibility=UI_VIS_ADVANCED)
         call cls_expansion%add_input(UI_PARM, 'nclust', 'num', &
             'Number of class-average groups', &

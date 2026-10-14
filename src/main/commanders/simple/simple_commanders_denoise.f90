@@ -30,8 +30,9 @@ contains
         if( allocated(strategy) ) deallocate(strategy)
         call build%kill_general_tbox
         if( .not. cline%defined('part') )then
-            write(logfhandle,'(A)') '>>> CLS_EXPANSION: conditional sub-class averages in cls_expansion_cavgs.mrc (plus even/odd), &
-                &their FRCs in cls_expansion_frcs.bin, the particles'' subclasses in the project (class; parent in cluster)'
+            write(logfhandle,'(A)') '>>> CLS_EXPANSION: sub-class averages (subcls_avg='//trim(params%subcls_avg)// &
+                &') in cls_expansion_cavgs.mrc (plus even/odd), their FRCs in cls_expansion_frcs.bin, the particles'' &
+                &subclasses in the project (class; parent in cluster)'
         endif
         call simple_end('**** SIMPLE_CLS_EXPANSION NORMAL STOP ****')
     end subroutine exec_cls_expansion

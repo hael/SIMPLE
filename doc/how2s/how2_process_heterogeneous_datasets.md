@@ -345,6 +345,21 @@ sub-class averages are the model's conditional averages: the class mean plus
 the model's variation at each sub-class's latent centre, with even and odd
 halves from two independent half models; each particle is labelled with its
 most likely sub-class.
+
+With `subcls_avg=kernel` (experimental) the sub-class averages are made from
+the particles instead of the model: each particle's latent and its uncertainty
+weigh the other particles, so every particle has a pre-image (a weighted
+average of the particles that look like it), and the latent rank and the
+bandwidth are chosen by predicting held-out Fourier coefficients. The
+sub-classes are the pre-images of as many particles as the class's budget,
+chosen to cover the latent distribution, preferring pre-images of at least
+`minpop` effective particles. Their even/odd halves are weighted averages of
+disjoint particles, so their FRCs and the resolution estimates read from them
+are their own. A class with no reproducible variation still delivers its
+budget, as near copies of its mean: in the project, `neff` is the effective
+population and `sep` the cross-validation z-score of the parent (below about 3:
+no variation the held-out data confirm), and the log gives the largest noise
+overlap between two sub-classes of a class.
 Like every program here it writes its result as a new project in its own run
 directory. Then sort the sub-class averages of that project into states:
 

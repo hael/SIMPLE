@@ -86,6 +86,7 @@ use simple_cartft_calc_tester,               only: run_all_cartft_calc_tests
 use simple_cartft_pose_opt_tester,           only: run_all_cartft_pose_opt_tests
 use simple_flex_pca_tester,                  only: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
 use simple_flex_cls_expansion_tester,        only: run_all_flex_cls_expansion_tests
+use simple_flex_cls_kernel,                  only: run_all_flex_cls_kernel_tests
 use simple_flex_pca_application_tester,      only: run_all_flex_pca_application_tests
 use simple_flex_pcg_tester,                  only: run_all_flex_pcg_tests, run_all_flex_pcg_lib_tests, &
     &run_all_flex_pcg_sweep_tests
@@ -514,13 +515,14 @@ contains
     end subroutine suites_parallel
 
     !> heterogeneity analysis (flex_pca): latent model, state weights, deconvolution,
-    !! the PCG M-step operator and the cls_expansion subclass budget
+    !! the PCG M-step operator, the cls_expansion subclass budget and its kernel route
     subroutine suites_heterogeneity( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'flex PCA',          run_all_flex_pca_tests)
         call add_suite(s, n, 'flex PCG operator', run_all_flex_pcg_tests)
         call add_suite(s, n, 'flex cls_expansion', run_all_flex_cls_expansion_tests)
+        call add_suite(s, n, 'flex cls_expansion kernel', run_all_flex_cls_kernel_tests)
     end subroutine suites_heterogeneity
 
     !> nightly: application-level two-state phantom, deconvolution of 20000 particles at realistic

@@ -6,7 +6,9 @@ The flex covariance model replaced the diffusion-map `cls_split` on 2026-10-05. 
 `ncls` is the total number of subclasses (section 0); the benchmarks of section 2 were run with the
 earlier fixed count per class (`ncls=3` meant three per class). Since 2026-10-12 the sub-class averages
 are the model's conditional averages (section 1, steps 4-5); the benchmarks of sections 2-4 were made
-with the earlier soft-weighted member averages and the cross-fit.
+with the earlier soft-weighted member averages and the cross-fit. Since 2026-10-14 `subcls_avg=kernel` replaces
+steps 3-5 of section 1 by the kernel pre-images of as many members as the budget, with a cross-validated
+latent rank and bandwidth (`cls_expansion_kernel_preimages.md`); the default stays `subcls_avg=model`.
 
 ## 0. Subclass budget
 
