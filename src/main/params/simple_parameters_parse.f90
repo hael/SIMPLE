@@ -154,7 +154,6 @@ contains
         call reg%add_char('rec_states', self%rec_states)
         call reg%add_char('rec_states_backend', self%rec_states_backend)
         call reg%add_char('state_placement', self%state_placement)
-        call reg%add_char('subcls_avg', self%subcls_avg)
         call reg%add_char('pcontrast', self%pcontrast)
         call reg%add_char('pickkind', self%pickkind)
         call reg%add_char('pgrp', self%pgrp)

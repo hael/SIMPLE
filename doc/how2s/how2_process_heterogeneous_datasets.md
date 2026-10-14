@@ -340,14 +340,10 @@ default), so classes of one view share that view's budget; a group's share grows
 with the square root of its population, and inside a group the classes share in
 proportion to their populations. A class holds at most `pop/minpop` sub-classes
 (`minpop=25` by default) and is kept whole below `2*minpop` particles (or below
-the covariance model's floor of `3*(neigs+1)`, 51 by default). The
-sub-class averages are the model's conditional averages: the class mean plus
-the model's variation at each sub-class's latent centre, with even and odd
-halves from two independent half models; each particle is labelled with its
-most likely sub-class.
+the covariance model's floor of `3*(neigs+1)`, 51 by default).
 
-With `subcls_avg=kernel` (experimental) the sub-class averages are made from
-the particles instead of the model: each particle's latent and its uncertainty
+The sub-class averages are made from the particles, not from the model: each
+particle's latent and its uncertainty
 weigh the other particles, so every particle has a pre-image (a weighted
 average of the particles that look like it), and the latent rank and the
 bandwidth are chosen by predicting held-out Fourier coefficients. The

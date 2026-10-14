@@ -139,9 +139,6 @@ integer, parameter :: MIN_PTCLS_PER_STATE = 5
 ! fewer than the classes split, which cls_expansion refuses (expansion_budget)
 integer, parameter :: NCLS2D_FIRST        = 150
 integer, parameter :: NCLS_EXPANDED       = 500
-! cls_expansion's sub-class averages, for the route and every publication alike (the references are
-! made from sub-class averages and matched against sub-class averages): kernel pre-images of members
-character(len=*), parameter :: SUBCLS_AVG = 'kernel'
 ! solve3D_cavgs' low-pass ramp (A), fixed (force_lp_range) rather than derived from the class FRCs
 real,    parameter :: LPSTART_CAVGS3D     = 20.
 real,    parameter :: LPSTOP_CAVGS3D      = 12.
@@ -1277,8 +1274,7 @@ contains
     ! The route's cls_expansion of the first set's selected classes, in cls_expansion/: the classes
     ! of the selected particles split into expansion_budget sub-classes in all (cls_expansion
     ! spreads them over groups of similar class averages by population and keeps small classes
-    ! whole), their averages kernel pre-images of members (SUBCLS_AVG; its other settings are its
-    ! defaults), with the mask diameter fitted to the particles' box, on the 3D jobs' resources.
+    ! whole), their averages kernel pre-images of members (its settings are its defaults), with the mask diameter fitted to the particles' box, on the 3D jobs' resources.
     subroutine start_clsexp( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(cmdline) :: cline_job
@@ -1296,7 +1292,6 @@ contains
         call cline_job%set('mkdir',    'no')
         call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
         call cline_job%set('ncls',     nsub)
-        call cline_job%set('subcls_avg', SUBCLS_AVG)
         call cline_job%set('mskdiam',  fit_mskdiam(self%mskdiam, self%spproj%get_box(), self%spproj%get_smpd()))
         call self%set_job_resources(cline_job, .true.)
         call cline_job%printline()
@@ -1744,7 +1739,6 @@ contains
         call cline_job%set('mkdir',    'no')
         call cline_job%set('projfile', CLSEXP_DIR//METADATA_EXT)
         call cline_job%set('ncls',     nsub)
-        call cline_job%set('subcls_avg', SUBCLS_AVG)
         call cline_job%set('mskdiam',  fit_mskdiam(self%mskdiam, self%spproj%get_box(), self%spproj%get_smpd()))
         call self%set_job_resources(cline_job, .true.)
         call cline_job%printline()

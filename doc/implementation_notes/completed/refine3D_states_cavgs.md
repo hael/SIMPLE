@@ -567,11 +567,11 @@ Current behaviour of `cls_expansion` that bears on this program (since
 2026-10-12). `ncls` is the total number of sub-classes, budgeted over
 class-average groups and classes; a class too small to split is kept whole, so
 some rows are whole-class averages (a parent with a single row in `cls2D`). The
-averages are the model's conditional averages (the class mean plus the model's
-variation at the sub-class's latent centre), with even and odd versions from
-two independent half models; `neff` equals `pop` (there are no soft weights),
-`sep` is the split's, and the particle labels are the split's hard, most likely
-sub-class. A sub-class can end with no members (`pop` 0); it keeps its row,
+averages were the model's conditional averages until 2026-10-14; since then they
+are kernel pre-images of members (`cls_expansion_kernel_preimages.md`): kernel-
+weighted means of the particles with even and odd versions over disjoint
+particles, `neff` the effective population, `sep` the cross-validation z-score,
+and each particle labelled with the pre-image of its largest kernel likelihood. A sub-class can end with no members (`pop` 0); it keeps its row,
 with the class mean as its average. `cls2D` is rebuilt with state 1 on every `cls3D` row, so fresh
 output always goes through flex here.
 

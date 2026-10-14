@@ -1,16 +1,14 @@
-!@descr: cls_expansion backend: per-class low-rank covariance model on Fourier coefficients (fit, placement, conditional sub-class averages, reproducibility); arrays in, arrays out
+!@descr: cls_expansion backend: per-class low-rank covariance model on Fourier coefficients (fit, basis extension, band selection, CTF means and FRCs) for the kernel sub-class averages; arrays in, arrays out
 ! Also the subclass budget: how many subclasses each class gets out of a total.
 module simple_flex_cls_expansion
 use simple_defs,               only: sp, dp, PI, DPI, CMPLX_ZERO, DCMPLX_ZERO, logfhandle
 use simple_error,              only: simple_exception
 use simple_rnd,                only: ran3
-use simple_flex_pca_targets,   only: kmeans_latent_targets
-use simple_flex_pca_gmm,       only: gmm_state_weights
 use simple_flex_pca_posterior, only: spd_inv_dp
 implicit none
 
-public :: flex_cls_model, flex_cls_fit, flex_cls_place_states, flex_cls_shell_noise, flex_cls_pose_tangents, flex_cls_weighted_mean
-public :: flex_cls_ctf_mean, flex_cls_extend_basis, flex_cls_conditional_averages, flex_cls_shell_frc, flex_cls_half_frc
+public :: flex_cls_model, flex_cls_fit, flex_cls_shell_noise, flex_cls_pose_tangents, flex_cls_weighted_mean
+public :: flex_cls_ctf_mean, flex_cls_extend_basis, flex_cls_shell_frc, flex_cls_half_frc
 public :: flex_cls_frc_cutoff, flex_cls_allocate_subclasses, flex_cls_split_floor
 private
 #include "simple_local_flags.inc"
@@ -23,7 +21,6 @@ real(dp), parameter :: FLEX_CLS_CONV_TOL   = 1.d-3  !< relative latent change th
 real(dp), parameter :: FLEX_CLS_WIENER_EPS = 0.1d0  !< sub-average denominator ctf^2 + eps, per member
 real(dp), parameter :: FLEX_CLS_NUIS_RIDGE = 1.d-6  !< ridge on the free nuisance block of the E-step, relative to max A(q,q)
 real(dp), parameter :: FLEX_CLS_INV_RIDGE  = 1.d-12 !< ridge before inverting a small SPD matrix, relative to max |A|
-integer,  parameter :: FLEX_CLS_MIN_LEAF   = 8      !< a leaf is cut only when both halves can hold this many members
 real(dp), parameter :: FLEX_CLS_GROUP_ALPHA = 0.5d0 !< a group's subclass total grows as its population**alpha
 
 type flex_cls_model
@@ -319,171 +316,6 @@ contains
         end do
     end subroutine flex_cls_allocate_subclasses
 
-    !> exactly ncls subclasses: divisive bisection of the standardised latent (plus the log fit residual) scored by
-    !! Ashman's D, then a tied-covariance GMM; every member is labelled with its most likely subclass (hard labels:
-    !! the particle -> subclass map, and the members whose latent centre gives each conditional average)
-    subroutine flex_cls_place_states( model, ncls, labels, separation )
-        type(flex_cls_model), intent(in)  :: model
-        integer,              intent(in)  :: ncls
-        integer,              intent(out) :: labels(:)     !< (nptcls)
-        real(sp),             intent(out) :: separation    !< Ashman's D of the first cut (standardised latent)
-        real(dp), allocatable :: tcen(:,:), wcomp(:), zstd(:,:), cen2(:,:,:), dsep_of(:), zaug(:,:)
-        integer,  allocatable :: memb(:), nmemb(:)
-        real(sp), allocatable :: bw(:), weights(:,:), neff(:)
-        real(dp) :: var, dfirst
-        integer  :: i, s, q, nleaf, isplit, nsub, k, nd
-        if( .not. model%exists ) THROW_HARD('flex_cls_place_states: no model')
-        if( ncls < 2 ) THROW_HARD('flex_cls_place_states: ncls must be >= 2')
-        if( size(labels) /= model%nptcls ) THROW_HARD('flex_cls_place_states: labels shape')
-        ! placement latent = model latent + log fit residual
-        nd = model%ncomp + 1
-        allocate(zaug(model%nptcls,nd), source=0.d0)
-        zaug(:,1:model%ncomp) = model%z
-        zaug(:,nd) = log(max(model%resid, 1.d-30))
-        call detrend(zaug(:,nd), model%cpow, model%nptcls)
-        allocate(tcen(nd,ncls), wcomp(nd), bw(ncls), zstd(model%nptcls,nd), weights(model%nptcls,ncls), neff(ncls))
-        allocate(cen2(nd,2,ncls), dsep_of(ncls), memb(model%nptcls), nmemb(ncls))
-        do q = 1, nd
-            var = sum((zaug(:,q) - sum(zaug(:,q))/real(model%nptcls,dp))**2) / real(max(model%nptcls-1,1),dp)
-            zstd(:,q) = (zaug(:,q) - sum(zaug(:,q))/real(model%nptcls,dp)) / sqrt(max(var, 1.d-30))
-        end do
-        memb  = 1
-        nleaf = 1
-        call best_bisection(zstd, model%nptcls, nd, memb, 1, cen2(:,:,1), dsep_of(1))
-        dfirst = dsep_of(1)
-        do while( nleaf < ncls )
-            isplit = maxloc(dsep_of(1:nleaf), dim=1)
-            if( dsep_of(isplit) < 0.d0 ) exit    ! nothing left to cut (leaves too small)
-            nleaf = nleaf + 1
-            do i = 1, model%nptcls
-                if( memb(i) /= isplit ) cycle
-                if( sum((zstd(i,:) - cen2(:,2,isplit))**2) < sum((zstd(i,:) - cen2(:,1,isplit))**2) ) memb(i) = nleaf
-            end do
-            call best_bisection(zstd, model%nptcls, nd, memb, isplit, cen2(:,:,isplit), dsep_of(isplit))
-            call best_bisection(zstd, model%nptcls, nd, memb, nleaf,  cen2(:,:,nleaf),  dsep_of(nleaf))
-        end do
-        if( nleaf < ncls )then
-            ! too few leaves: halve the largest
-            do k = nleaf + 1, ncls
-                isplit = maxloc([(count(memb == s), s=1,k-1)], dim=1)
-                nsub = 0
-                do i = 1, model%nptcls
-                    if( memb(i) == isplit )then
-                        nsub = nsub + 1
-                        if( mod(nsub,2) == 0 ) memb(i) = k
-                    endif
-                end do
-            end do
-            nleaf = ncls
-        endif
-        do s = 1, ncls
-            nmemb(s) = count(memb == s)
-            do q = 1, nd
-                if( nmemb(s) > 0 )then
-                    tcen(q,s) = sum(zaug(:,q), mask=(memb == s)) / real(nmemb(s),dp)
-                else
-                    tcen(q,s) = 0.d0
-                endif
-            end do
-        end do
-        write(logfhandle,'(A,I0,A,F7.3,A,*(1X,I0))') '>>> FLEX_CLS divisive split into ', ncls, &
-            &' subclasses; first cut D=', dfirst, ' leaf populations:', nmemb
-        separation = real(dfirst, sp)
-        wcomp = 1.d0
-        weights = 0.
-        labels  = 0
-        neff    = 0.
-        bw      = 0.
-        call gmm_state_weights(zaug, model%nptcls, nd, nd, ncls, tcen, wcomp, &
-            &weights, neff, bw, labels, respawn=.false.)
-        ! singular GMM covariance: the divisive leaves
-        if( any(sum(weights, dim=2) < 0.5) )then
-            write(logfhandle,'(A)') '>>> FLEX_CLS GMM responsibilities unavailable; hard divisive subclasses'
-            labels = memb
-        endif
-        deallocate(tcen, wcomp, bw, zstd, cen2, dsep_of, memb, nmemb, zaug, weights, neff)
-    end subroutine flex_cls_place_states
-
-    !> the best two-way cut of one leaf: 2-means on the full latent and on each coordinate, scored by Ashman's D; dsep = -1 when too small
-    subroutine best_bisection( zstd, nptcls, ncomp, memb, leaf, cen, dsep )
-        integer,  intent(in)  :: nptcls, ncomp, memb(nptcls), leaf
-        real(dp), intent(in)  :: zstd(nptcls,ncomp)
-        real(dp), intent(out) :: cen(ncomp,2), dsep
-        real(dp), allocatable :: zsub(:,:), ccand(:,:), wcomp(:)
-        real(dp) :: d
-        integer  :: n, i, icand
-        n = count(memb == leaf)
-        cen  = 0.d0
-        dsep = -1.d0
-        if( n < 2 * FLEX_CLS_MIN_LEAF ) return
-        allocate(zsub(n,ncomp), ccand(ncomp,2), wcomp(ncomp))
-        n = 0
-        do i = 1, nptcls
-            if( memb(i) == leaf )then
-                n = n + 1
-                zsub(n,:) = zstd(i,:)
-            endif
-        end do
-        ! candidates: the full latent (without the residual coordinate), then each single coordinate
-        do icand = 0, ncomp
-            wcomp = 0.d0
-            if( icand == 0 )then
-                wcomp = 1.d0
-                if( ncomp > 1 ) wcomp(ncomp) = 0.d0
-            else
-                wcomp(icand) = 1.d0
-            endif
-            call kmeans_latent_targets(zsub, n, ncomp, 2, wcomp, ccand)
-            d = partition_separation(zsub, n, ncomp, 2, wcomp, ccand)
-            if( d > dsep )then
-                dsep = d
-                cen  = ccand
-            endif
-        end do
-        deallocate(zsub, ccand, wcomp)
-    end subroutine best_bisection
-
-    !> Ashman's D of the two best-separated clusters along their centre-to-centre axis
-    function partition_separation( z, nptcls, ncomp, ncls, wcomp, cen ) result( dsep )
-        integer,  intent(in) :: nptcls, ncomp, ncls
-        real(dp), intent(in) :: z(nptcls,ncomp), wcomp(ncomp), cen(ncomp,ncls)
-        real(dp) :: dsep
-        real(dp) :: axis(ncomp), pm(ncls), ps(ncls), d2, best, proj, d
-        integer  :: memb(nptcls), cnt(ncls), i, s, t, ibest
-        do i = 1, nptcls
-            best = huge(1.d0); ibest = 1
-            do s = 1, ncls
-                d2 = sum(wcomp * (z(i,:) - cen(:,s))**2)
-                if( d2 < best )then
-                    best = d2; ibest = s
-                endif
-            end do
-            memb(i) = ibest
-        end do
-        dsep = 0.d0
-        do s = 1, ncls - 1
-            do t = s + 1, ncls
-                axis = wcomp * (cen(:,t) - cen(:,s))
-                if( sum(axis**2) < 1.d-30 ) cycle
-                axis = axis / sqrt(sum(axis**2))
-                pm = 0.d0; ps = 0.d0; cnt = 0
-                do i = 1, nptcls
-                    if( memb(i) /= s .and. memb(i) /= t ) cycle
-                    proj = sum(axis * z(i,:))
-                    pm(memb(i))  = pm(memb(i)) + proj
-                    ps(memb(i))  = ps(memb(i)) + proj * proj
-                    cnt(memb(i)) = cnt(memb(i)) + 1
-                end do
-                if( cnt(s) < 2 .or. cnt(t) < 2 ) cycle
-                pm(s) = pm(s) / real(cnt(s),dp); pm(t) = pm(t) / real(cnt(t),dp)
-                ps(s) = max(ps(s) / real(cnt(s),dp) - pm(s)**2, 1.d-30)
-                ps(t) = max(ps(t) / real(cnt(t),dp) - pm(t)**2, 1.d-30)
-                d = abs(pm(s) - pm(t)) / sqrt(0.5d0 * (ps(s) + ps(t)))
-                dsep = max(dsep, d)
-            end do
-        end do
-    end function partition_separation
-
     !> the CTF-weighted, Wiener-regularised mean
     subroutine flex_cls_weighted_mean( y, c, w, mu )
         complex(sp), intent(in)  :: y(:,:)
@@ -609,7 +441,7 @@ contains
     end subroutine flex_cls_shell_frc
 
     !> the CTF-corrected mean of the members, sum_i w_i c_i y_i / sum_i w_i c_i^2 per coefficient (no regularisation:
-    !! the conditional averages are filtered afterwards by the FRC of their independent halves), blockwise
+    !! the averages are filtered afterwards by the FRC of their independent halves), blockwise
     subroutine flex_cls_ctf_mean( y, c, w, avg )
         complex(sp), intent(in)  :: y(:,:)        !< (ncoeff,nptcls)
         real(sp),    intent(in)  :: c(:,:)        !< (ncoeff,nptcls)
@@ -830,55 +662,6 @@ contains
 
     end subroutine flex_cls_extend_basis
 
-    !> The subclass deviations of the conditional averages, D_s = U z_s (parent + D_s is the model's image at the
-    !! subclass centre): z_s = (I - S)^-1 (zbar_s - zbar), the members' mean latent relative to the class's, undoing
-    !! the posterior shrinkage I - S (S the mean posterior covariance). An empty subclass gets D_s = 0
-    subroutine flex_cls_conditional_averages( model, labels, uext, devs )
-        type(flex_cls_model), intent(in)  :: model
-        integer,              intent(in)  :: labels(:)  !< (nptcls) the subclass of every member, 1..ncls (<= 0: left out)
-        complex(dp),          intent(in)  :: uext(:,:)  !< (ncoeff,ncomp) the basis on every coefficient (flex_cls_extend_basis)
-        complex(sp),          intent(out) :: devs(:,:)  !< (ncoeff,ncls)
-        real(dp)    :: zbar(model%ncomp), zs(model%ncomp), deshrink(model%ncomp,model%ncomp), cov(model%ncomp,model%ncomp)
-        real(dp)    :: wsum, nmemb
-        complex(dp) :: d
-        integer     :: nptcls, ncls, i, j, s, q
-        nptcls = size(labels)
-        ncls   = size(devs,2)
-        if( nptcls /= model%nptcls ) THROW_HARD('flex_cls_conditional_averages: labels/model member count')
-        if( size(devs,1) /= size(uext,1) ) THROW_HARD('flex_cls_conditional_averages: devs shape')
-        ! the members' mean latent and mean posterior covariance S; deshrink = (I - S)^-1
-        zbar = 0.d0; deshrink = 0.d0; nmemb = 0.d0
-        do i = 1, nptcls
-            zbar  = zbar + model%z(i,:)
-            cov   = model%prec(:,:,i)
-            call spd_inverse(cov, model%ncomp)
-            deshrink = deshrink + cov
-            nmemb = nmemb + 1.d0
-        end do
-        if( nmemb > 0.d0 )then
-            zbar = zbar / nmemb; deshrink = -deshrink / nmemb
-        endif
-        do q = 1, model%ncomp
-            deshrink(q,q) = deshrink(q,q) + 1.d0
-        end do
-        call spd_inverse(deshrink, model%ncomp)
-        do s = 1, ncls
-            devs(:,s) = CMPLX_ZERO
-            zs = 0.d0; wsum = 0.d0
-            do i = 1, nptcls
-                if( labels(i) /= s ) cycle
-                zs   = zs + model%z(i,:)
-                wsum = wsum + 1.d0
-            end do
-            if( wsum <= 0.d0 ) cycle
-            zs = matmul(deshrink, zs / wsum - zbar)
-            do j = 1, size(uext,1)
-                d = sum(uext(j,:) * zs)
-                devs(j,s) = cmplx(d, kind=sp)
-            end do
-        end do
-    end subroutine flex_cls_conditional_averages
-
     !> even/odd FRC per shell of the class's CTF-weighted mean, blockwise
     subroutine flex_cls_half_frc( y, c, w, shell, nsh, frc, even )
         complex(sp), intent(in)  :: y(:,:)          !< (ncoeff,nptcls)
@@ -943,20 +726,6 @@ contains
     end function flex_cls_frc_cutoff
 
     ! ===== private
-
-    !> remove the least-squares linear trend of v on x (in place)
-    subroutine detrend( v, x, n )
-        integer,  intent(in)    :: n
-        real(dp), intent(inout) :: v(n)
-        real(dp), intent(in)    :: x(n)
-        real(dp) :: xm, vm, sxx, sxv, b
-        xm  = sum(x) / real(n,dp); vm = sum(v) / real(n,dp)
-        sxx = sum((x - xm)**2);    sxv = sum((x - xm) * (v - vm))
-        if( sxx > 1.d-30 )then
-            b = sxv / sxx
-            v = v - b * (x - xm)
-        endif
-    end subroutine detrend
 
     subroutine weighted_average( yf, cf, wf, nfit, nptcls, eps, mu )
         integer,     intent(in)  :: nfit, nptcls

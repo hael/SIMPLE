@@ -380,9 +380,9 @@ input and its forwarding are gone.
    cls_expansion refuses (`expansion_budget`; `ncls` is cls_expansion's total since 14 October
    2026). cls_expansion spreads the total over groups of similar class averages by population and
    keeps a class too small to split whole. Its sub-class averages are kernel pre-images of members
-   (`subcls_avg=kernel`, `SUBCLS_AVG`: kernel-weighted, CTF-corrected means of the particles, the
-   latent rank and bandwidth chosen by cross-validation), for the route and every publication
-   alike; its other settings are its defaults (`minpop` 25). The mask diameter is fitted to the
+   (kernel-weighted, CTF-corrected means of the particles, the latent rank and bandwidth chosen by
+   cross-validation; cls_expansion's only route since 14 October 2026), for the route and every
+   publication alike; its settings are its defaults (`minpop` 25). The mask diameter is fitted to the
    particles' box. Its
    subclasses, their class averages, halves and FRCs, and the particles' subclass labels become
    the stage's (`adopt_job_2D`).
@@ -467,7 +467,7 @@ Decided 13 October 2026
    in `assign/it_<n>/` (`fresh_job_dir`; `n` counts the session's assignments).
 2. **The expansion** (`start_expand`, `assign/it_<n>/expand/`): cls_expansion of the
    publication's selected classes into `NCLS_EXPANDED` (500) sub-classes in all, never fewer than
-   the classes (`expansion_budget`), with kernel sub-class averages (`subcls_avg=kernel`), both as
+   the classes (`expansion_budget`), with kernel sub-class averages, both as
    for the route, with the mask diameter fitted to the
    particles' box, on the 3D
    jobs' resources. Pool classes group particles mainly by view, so particles of different states

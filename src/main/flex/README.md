@@ -214,9 +214,8 @@ the shared reconstruction implementation.
 
 `simple_flex_cls_expansion.f90` is the per-class covariance model behind `cls_expansion`: a
 CTF- and noise-weighted PPCA on the members of one 2D class in the class frame on a data-derived
-band, divisive placement into the class's subclasses (hard labels), the conditional sub-class
-averages (the model's expected image at each subclass's latent centre, the basis extended to every
-coefficient) and the FRCs behind their even/odd halves, which come from two independent half models.
+band (the band from the basis extended to every coefficient), the CTF-corrected means and the
+FRCs. The sub-class averages are the kernel pre-images of members (`simple_flex_cls_kernel.f90`).
 It also holds the
 subclass budget (`flex_cls_allocate_subclasses`): `ncls` subclasses in total over class-average
 groups (square root of the group population) and their classes (population), at most

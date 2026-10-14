@@ -1,9 +1,12 @@
-# cls_expansion: sub-class averages as kernel pre-images (`subcls_avg=kernel`)
+# cls_expansion: sub-class averages as kernel pre-images
 
-    simple_exec prg=cls_expansion projfile=... ncls=<total subclasses> mskdiam=... subcls_avg=kernel nparts=10 nthr=8
+    simple_exec prg=cls_expansion projfile=... ncls=<total subclasses> mskdiam=... nparts=10 nthr=8
 
-Status (2026-10-14): implemented as an optional route; the default stays `subcls_avg=model`
-(`flex_cls_expansion_2026_10_01.md`). Unit-tested, checked end to end (shared memory and two parts) on the
+Status (2026-10-14): implemented first as an optional route (`subcls_avg=kernel`) beside the model's
+conditional averages (`flex_cls_expansion_2026_10_01.md`); later the same day the conditional averages were
+removed (placement, `flex_cls_place_states`, `flex_cls_conditional_averages`, the half models) together with
+`subcls_avg`, and the kernel pre-images are cls_expansion's only sub-class averages. Section 1 describes the
+removed route as the motivation. Unit-tested, checked end to end (shared memory and two parts) on the
 three-state phantom of the `flex_pca_blobs` gate. Revised the same day after the first real-data run: the
 first version kept a class whole unless the CV gain was significant and capped the representatives by `minpop`
 and noise overlap, and delivered 54 of 500 budgeted averages. The route is a generative model (a pre-image per
@@ -115,9 +118,8 @@ the class's SNR; the rank curve says how many latent directions carry it.
 
 | layer | file | what |
 |---|---|---|
-| params | `simple_parameters.f90`, `_parse.f90`, `_phases.f90` | `subcls_avg` (`model|kernel`, default `model`), validated |
-| ui | `simple_ui_refine2D.f90` (`cls_expansion`) | `subcls_avg` (advanced), the program description |
-| strategy | `simple_cls_expansion_strategy.f90` | `split_class_flex` routes after the class model to its internal `deliver_kernel`: the class's `flex_cls_kernel`, its averages, FRCs, filter and images; a class reports the subclasses it delivered and their `neff`; on this route a class kept whole (step 5) is reported, not an error. The image and resolution helpers are shared with the default route (`flex_planes_to_images`, `flex_res143`) |
+| ui | `simple_ui_refine2D.f90` (`cls_expansion`) | the program description |
+| strategy | `simple_cls_expansion_strategy.f90` | `split_class_flex` fits the class model, then its internal `deliver_kernel`: the class's `flex_cls_kernel`, its averages, FRCs, filter and images; a class reports the subclasses it delivered and their `neff`; a class kept whole (budget 1, or step 5) goes to `flex_class_whole` (CTF-corrected parent and half parents, filtered by their FRC) and is reported, not an error |
 | domain | `src/main/flex/simple_flex_cls_kernel.f90` (new) | the class `flex_cls_kernel`, private state: `new` (ML latents, directions, the two set models, the CV), `select` (the representatives), `average`, `preimage` (any member's), `labels`, `neff`, `report` (the log lines), `kill` |
 | test | `src/main/flex/simple_flex_cls_kernel_tester.f90`, a white-box submodule like the PCG self-test (suite `flex cls_expansion kernel` in `unit_heterogeneity`, built only with `BUILD_TESTS=ON`) | section 5 |
 
