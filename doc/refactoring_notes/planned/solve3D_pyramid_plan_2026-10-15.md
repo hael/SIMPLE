@@ -13,6 +13,12 @@ Status (15 October 2026): implemented, not yet compiled or run. The contract is
   `solve3D_pyramid.simple` (sections 2.12 and 5).
 - The report is rewritten after every step and on a failure, with a status line, so a hard exit
   leaves the numbers so far.
+- The first set is a copy of the project that holds its particles only (`prune_particles`), not
+  the whole project with the other particles deselected (step 2.1). A distributed solve2D splits
+  its parts by rows, so the parts past the first set had no particle, and the 2D matcher stopped
+  on them ("Attempt to DEALLOCATE unallocated 'batches'", simple_strategy2D_matcher.f90:403;
+  found on the first run, 15 October 2026). refine2D's row split and the matcher's missing guard
+  for a part without particles are left as they are.
 - The phantom test takes the whole phantom as the first set, not `nptcls_refs=1200`. The
   phantom is one stack ordered by direction, so the first third would be a cap of 20 of the 60
   directions (section 6).

@@ -13,7 +13,8 @@
 !   exit after its log and files are on disk, with the report so far.
 !
 ! STEPS (folders of the execution directory):
-!   refs_subset/                 the first set: whole stacks in arrival order (cut_whole_stacks)
+!   refs_subset/                 the first set: whole stacks in arrival order (cut_whole_stacks), in a
+!                                copy of the project holding its particles only (prune_particles)
 !   refs_subset/solve2D/         solve2D into NCLS2D_FIRST classes
 !   refs_subset/quality_selection/  the pool model's selection of them (use_model=yes)
 !   refs_subset/cls_expansion/   cls_expansion into expansion_budget sub-classes
@@ -116,7 +117,7 @@ contains
         logical,      allocatable :: selected(:), l_first(:), model_rej(:), desel(:)
         character(len=STDLEN)     :: msg
         real    :: mskdiam, smpd, box_stk, ref_smpd
-        integer :: n, i, s, nstates, nparts, nsplit, nsub, nheld, nreg, ref_box, ncls, nsync
+        integer :: n, i, s, nstates, nparts, nsplit, nsub, nheld, nreg, ref_box, ncls, nsync, nfirst_rows
         ! ---- the command line, normalised before the parameters
         if( .not. cline%defined('projfile') ) THROW_HARD('solve3D_pyramid needs projfile')
         if( .not. cline%defined('nstates')  ) THROW_HARD('solve3D_pyramid needs nstates')
@@ -186,18 +187,31 @@ contains
         rep%nfirst    = count(l_first)
         write(logfhandle,'(A,I8,A,I8,A,I8,A)') '>>> SOLVE3D_PYRAMID: ', rep%nselected, ' SELECTED PARTICLES; THE REFERENCES FROM THE FIRST ',&
             &rep%nfirst, ' (nptcls_refs=', params%nptcls_refs, ', WHOLE STACKS IN ARRIVAL ORDER)'
-        call write_report(rep, report_fname)
-        if( rep%nfirst < MIN_PTCLS_PER_STATE * nstates )then
-            write(msg,'(A,I0,A,I0,A)') 'the first set holds ', rep%nfirst, ' selected particles; ', MIN_PTCLS_PER_STATE * nstates,&
-                &' needed (5 per state)'
-            call fail(trim(msg))
-        endif
+        ! a copy holding the first set's particles only (prune_particles): distributed 2D splits its
+        ! parts by rows, so rows left in deselected would give parts without a particle. The first
+        ! set's 2D is never mapped back onto the project's rows
         call sub%read(params%projfile)
         do i = 1,n
             if( l_first(i) ) cycle
             call sub%os_ptcl2D%set_state(i, 0)
             call sub%os_ptcl3D%set_state(i, 0)
         enddo
+        call sub%prune_particles()
+        nfirst_rows = sub%os_ptcl2D%get_noris()
+        if( nfirst_rows /= rep%nfirst )then
+            ! prune_particles also drops the particles of a stack with state 0
+            write(logfhandle,'(A,I8,A)') '>>> WARNING: ', rep%nfirst - nfirst_rows,&
+                &' PARTICLES OF THE FIRST SET ARE IN DESELECTED STACKS AND ARE LEFT OUT'
+            rep%nfirst = nfirst_rows
+        endif
+        write(logfhandle,'(A,I8,A,I6,A)') '>>> THE FIRST SET''S PROJECT: ', nfirst_rows, ' PARTICLES IN ', sub%get_nstks(),&
+            &' STACKS'
+        call write_report(rep, report_fname)
+        if( rep%nfirst < MIN_PTCLS_PER_STATE * nstates )then
+            write(msg,'(A,I0,A,I0,A)') 'the first set holds ', rep%nfirst, ' selected particles; ', MIN_PTCLS_PER_STATE * nstates,&
+                &' needed (5 per state)'
+            call fail(trim(msg))
+        endif
         call simple_mkdir(REFS_SUBSET_DIR)
         ! ---- 2. the route's solve2D
         dir      = string(REFS_SUBSET_DIR//'/'//SOLVE2D_DIR)
@@ -206,7 +220,7 @@ contains
         call sub%write(projfile)
         call set_solve2D_route_cline(cline_job, SOLVE2D_DIR//METADATA_EXT, mskdiam)
         call run_job(xsolve2D, 'solve2D (first set)', .true.)
-        call take_2D(sub, 'the first set''s solve2D')
+        call take_2D(sub, nfirst_rows, 'the first set''s solve2D')
         ! ---- 3. the pool model's selection of the first set's classes (use_model)
         call select_route_classes(sub, rep%l_model, mskdiam, string(REFS_SUBSET_DIR//'/'//QUALITY_DIR))
         rep%ncls_kept   = count(sub%os_cls2D%get_all_asint('state') > 0)
@@ -222,7 +236,7 @@ contains
         call sub%write(projfile)
         call set_clsexp_cline(cline_job, CLSEXP_DIR//METADATA_EXT, nsub, fit_mskdiam(mskdiam, sub%get_box(), sub%get_smpd()))
         call run_job(xclsexp, 'cls_expansion (first set)', .true.)
-        call take_2D(sub, 'the first set''s cls_expansion')
+        call take_2D(sub, nfirst_rows, 'the first set''s cls_expansion')
         rep%nsub_route = sub%os_cls2D%get_noris()
         ! ---- 5. solve3D_cavgs on the sub-class averages
         dir      = string(REFS_SUBSET_DIR//'/'//CAVGS3D_DIR)
@@ -357,15 +371,16 @@ contains
             call cline_job%kill
         end subroutine run_job
 
-        !> A 2D job's project (projfile: solve2D's, cls_expansion's) as the first set @p proj, or exit
-        !! when it is missing or unusable (usable_job_2D).
-        subroutine take_2D( proj, what )
+        !> A 2D job's project (projfile: solve2D's, cls_expansion's) as the first set @p proj, of
+        !! @p nrows particles, or exit when it is missing or unusable (usable_job_2D).
+        subroutine take_2D( proj, nrows, what )
             class(sp_project), intent(inout) :: proj
+            integer,           intent(in)    :: nrows
             character(len=*),  intent(in)    :: what
             if( .not. file_exists(projfile) ) call fail('no project from '//what//': '//projfile%to_char())
             call proj%kill
             call proj%read(projfile)
-            if( .not. usable_job_2D(proj, n) ) call fail('no usable result from '//what//': '//projfile%to_char())
+            if( .not. usable_job_2D(proj, nrows) ) call fail('no usable result from '//what//': '//projfile%to_char())
         end subroutine take_2D
 
         !> Each refined state's FSC=0.143 and FSC=0.5 resolution (A), for the report.

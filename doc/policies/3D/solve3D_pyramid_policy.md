@@ -57,7 +57,7 @@ program itself.
 
 | # | Folder | What | Exit when |
 | --- | --- | --- | --- |
-| 1 | `refs_subset/` | the first set: whole stacks in arrival order up to `nptcls_refs` selected particles (`cut_whole_stacks`), the other particles deselected in a copy of the project | fewer than `MIN_PTCLS_PER_STATE` (5) × `nstates` |
+| 1 | `refs_subset/` | the first set: whole stacks in arrival order up to `nptcls_refs` selected particles (`cut_whole_stacks`), in a copy of the project that holds its particles only (`prune_particles`; a stack with state 0 is dropped, with a warning) | fewer than `MIN_PTCLS_PER_STATE` (5) × `nstates` |
 | 2 | `refs_subset/solve2D/` | `solve2D`, `NCLS2D_FIRST` (150) classes, `cache=yes` | no project, or no usable 2D (`usable_job_2D`) |
 | 3 | `refs_subset/quality_selection/` | with `use_model=yes`, the pool model's selection of those classes, mapped to their particles; the selected and rejected stacks with JPEGs (`select_route_classes`) | never |
 | 4 | `refs_subset/cls_expansion/` | `cls_expansion` of the kept classes into `expansion_budget` (500) sub-classes in all | no project, or no usable 2D |
@@ -74,6 +74,12 @@ The check passes when the same-state even/odd median angular distance is at most
 agreement is at least 70 %, no two states correlate above 0.97 after docking in both hands, and
 at least two states each hold 5 % of the class averages (`refs_usable`). A failed check leaves
 `state_refs/` with the record, the volumes and the per-state class averages for inspection.
+
+The first set's copy holds no deselected rows, because distributed 2D (`refine2D`, inside
+`solve2D`) splits its parts by rows (`split_nobjs_even`). A copy that kept the other particles
+deselected would give the parts past the first set no particle, and the 2D matcher stops on a
+part without particles. The first set's 2D is never mapped back onto the project's rows, so
+nothing needs the full row count.
 
 When `nptcls_refs` is at least the selected particles, the first set is the whole project. The
 route then classifies and expands every particle, and step 8 expands them again from the
