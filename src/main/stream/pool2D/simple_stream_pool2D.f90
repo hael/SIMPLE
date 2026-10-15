@@ -485,7 +485,12 @@ contains
                 call spproj%os_stk%set(i, 'top', jptcl)
             endif
         enddo
-        call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
+        ! ptcl3D carries the particles' halves (as write_project's): a blank row reads as the even
+        ! half, which the master's half-set check (ensure_field_halves) finds inconsistent with an
+        ! odd stack row
+        spproj%os_ptcl3D = spproj%os_ptcl2D
+        call spproj%os_ptcl3D%delete_2Dclustering
+        call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
         spproj%os_cls2D = self%proj%os_cls2D
         ! the new particles get a populated class, drawn reproducibly
         if( self%iter >= 2 ) call draw_new_classes(spproj, nptcls2update, self%iter, self%ncls)
