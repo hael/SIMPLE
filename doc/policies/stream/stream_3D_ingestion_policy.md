@@ -12,8 +12,8 @@ preserve.
   `delete_pool_publication` in `src/main/stream/pool2D/simple_stream_refine2D_utils.f90`; the
   first set from the sieve's 2D, the stage's `publish_first_set`, `first_set_due`,
   `collect_sieve_set` and `publish_sieve_set` (sections 3 and 9).
-- Their import (p07): `import_sets`, `take_first_publication`, `score_with_model`,
-  `merge_publication` and `take_cavgs` in `src/main/stream/stages/simple_stream_stage_solve3D.f90`.
+- Their import (p07): `import_sets`, `take_first_publication`, `merge_publication` and
+  `take_cavgs` in `src/main/stream/stages/simple_stream_stage_solve3D.f90`.
 - p07's jobs (`next_job`): the route to the reference volumes on the first set, their check,
   the further attempts and the fallback (section 9); each later publication's assignment to the
   references, by cls_expansion, matching, rejection by fit, mapping and a local refinement of the
@@ -21,6 +21,15 @@ preserve.
   `simple_cavgs_state_match` (`src/main/class/`), run by the `simple_private_exec` program
   `assign_cavgs_states` (`exec_assign_cavgs_states` in `simple_commanders_cavgs`).
 - p07's 3D snapshots (section 8): `apply_gui_updates` and `write_snapshot` in the same file.
+- The method's rules, constants, steps on projects and job command lines, without the stage:
+  `simple_state_assignment` (`src/main/solve/`, since 15 October 2026), shared with the batch
+  program `solve3D_pyramid` (`doc/policies/3D/solve3D_pyramid_policy.md`). The stage keeps its
+  phases, jobs, retries, fallbacks, publications and GUI, and calls the shared module for the
+  rest: the pool model's scoring (`score_cavgs_with_model`, `select_route_classes`,
+  `model_rejected_rows`), the check (`check_state_refs`, `refs_usable`, `docked_pair_cc`,
+  `read_refs_record`), the assignment (`map_assignment`, `reject_by_fit`, `flag_ambiguous`,
+  `write_matched_cavgs`), the local refinement (`set_refine_seeds`, `write_refine_project`,
+  `map_refine_result`) and the `set_*_cline` builders. A change there changes both programs.
 
 Since 13 October 2026 p07 runs no `solve3D`, `solve3D_addon` or final `refine3D`
 (`doc/refactoring_notes/planned/stream_p07_state_assignment_plan_2026-10-13.md`); the inputs
@@ -117,7 +126,7 @@ completed iteration left it.
    model; from 12 to 13 October 2026 at most `nptcls3D_max` of it stayed selected.
 4. **The pool model is logged, not applied, on later publications** (since 13 October 2026). A
    publication's class averages are scored once with the pool quality model
-   (`score_with_model`, `CAVG_QUALITY_MODEL_POOL_DEFAULT`), with a mask diameter fitted to their
+   (`score_cavgs_with_model`, `CAVG_QUALITY_MODEL_POOL_DEFAULT`), with a mask diameter fitted to their
    box (`fit_mskdiam`), and the selected and rejected class averages written with JPEGs in
    `quality_selection/<id>/`. The verdict changes no row: the selected rows a rejected class
    holds are flagged (`flag_model_rows`) and counted beside the fit's rejection once the
@@ -222,8 +231,9 @@ completed iteration left it.
 - A change of what a publication holds, or when it is written, updates sections 2 and 3, and
   checks p07's merge against it.
 - A change of the merge keeps the row invariants of section 5.
-- A change of the check, the rejection or the ambiguity flag keeps its rule a pure function of the
-  stage (`refs_usable`, `reject_by_fit`, `flag_ambiguous`, `best_attempt`), tested on fixed numbers.
+- A change of the check, the rejection or the ambiguity flag keeps its rule a pure function
+  (`refs_usable`, `reject_by_fit`, `flag_ambiguous` in `simple_state_assignment`; `best_attempt`
+  of the stage), tested on fixed numbers; it is shared with `solve3D_pyramid`.
 - Tests:
   - `unit_stream` "pool 2D": `test_publication_holds_classified_stacks` (classified stacks only,
     renumbering, image indices, the selected particles counted as published, nothing to publish
@@ -238,11 +248,13 @@ completed iteration left it.
     deselection of a missing stack, the classes), the watch order and mask diameter,
     `test_take_cavgs`, `test_first_publication` (taken whole as the pool selects it, the first
     set kept through later publications and a missing stack, the other rows following them),
-    `test_rules` (the job rule, the check, the best attempt, the renumbering, the sub-class budget, the
-    mask diameter), `test_fit_rules` (the outlier cut, the 30% cap, the worst first, no
-    non-candidate rejected, none when all fit; the ambiguity flag), `test_reference_volumes`,
+    `test_rules` (the job rule, the best attempt, the final publication), `test_reference_volumes`,
     `test_failed_attempts` (section 9), `test_assignment` (section 10), the retention, the status,
     the volumes and the references sent;
+  - `unit_reconstruction` "state assignment rules" (`simple_state_assignment_tester`): the check,
+    the renumbering, the sub-class budget, the mask diameter, the fit rules (the outlier cut, the
+    30% cap, the worst first, no non-candidate rejected, none when all fit; the ambiguity flag),
+    the first set's cut at whole stacks, the class averages by state and the jobs' command lines;
   - `unit_pftc_align2D3D` "cavgs state match": the matching (section 10, item 3);
   - `lib_stream` "sieve to 3D" and "movies to 3D" (`simple_stream_chain_tester`) run the jobs,
     until the first assignment is refined.
@@ -369,7 +381,7 @@ input and its forwarding are gone.
    become the stage's (`adopt_job_2D`); a result without them, or with other rows, counts as
    failed (`usable_job_2D`).
 5. **The pool model's selection** (`select_first_set_classes`): the classes are scored with the
-   pool quality model (`select_with_model`, `CAVG_QUALITY_MODEL_POOL_DEFAULT`), and the
+   pool quality model (`select_route_classes` in `simple_state_assignment`, `CAVG_QUALITY_MODEL_POOL_DEFAULT`), and the
    selection is mapped to their particles; the selected and rejected stacks go to
    `solve2D/quality_selection/`. **A rejected class's particles are deselected for the
    session:** they stay first-set rows, whose selection later publications do not change. When
@@ -558,8 +570,9 @@ Decided 13 October 2026
    refused),
    `test_local_refinement` (the assigned rows valid refine=cont seeds; a result taken under the
    stage's states with an empty state left out, with the refined poses; a result of other rows
-   refused), `test_state_cavgs` (a stack and a JPEG per state, of the rejected and of the
-   ambiguous; none for a state without class averages), `test_fit_rules`, and `unit_pftc_align2D3D` "cavgs state match" (`reduce_state_matches` and
+   refused); `unit_reconstruction` "state assignment rules": `test_state_cavgs` (a stack and a JPEG
+   per state, of the rejected and of the ambiguous; none for a state without class averages) and
+   `test_fit_rules`; and `unit_pftc_align2D3D` "cavgs state match" (`reduce_state_matches` and
    `matched_pose` on fixed numbers; projections of two volumes of Gaussian blobs, each matched to
    its own with a positive margin at its own direction, in-plane angle and no shift, and a
    mirrored one at the opposite view).

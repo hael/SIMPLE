@@ -6,7 +6,8 @@
 ! need a queue) are left to the high-level stream tests; the import is tested on sets made in
 ! memory, the class averages a publication brings on fixture stacks, the reference volumes on a
 ! fixture solve3D_cavgs result, an assignment on a fixture matching, the local refinement's seeds
-! and result on fixture rows and a fixture refine3D project, the rules on fixed numbers, and the
+! and result on fixture rows and a fixture refine3D project, the stage's rules on fixed numbers (the
+! method's rules and the class averages by state: simple_state_assignment_tester), and the
 ! volume messages on a fixture project with a volume and an FSC; a 3D snapshot is written from a
 ! fixture result project, on a request sent through the stage's update pipe.
 module simple_stream_stage_solve3D_tester
@@ -24,7 +25,6 @@ use simple_syslib,                                    only: simple_mkdir, dir_ex
 use simple_math_ft,                                   only: get_resarr
 use simple_cmdline,                                   only: cmdline
 use simple_image,                                     only: image
-use simple_imghead,                                   only: find_ldim_nptcls
 use simple_ori,                                       only: ori
 use simple_strategy3D_cont,                           only: cont_seed_is_valid
 use simple_sp_project,                                only: sp_project
@@ -65,12 +65,10 @@ contains
         call test_mskdiam_from_each_publication()
         call test_rows_problem()
         call test_rules()
-        call test_fit_rules()
         call test_reference_volumes()
         call test_failed_attempts()
         call test_assignment()
         call test_local_refinement()
-        call test_state_cavgs()
         call test_retention()
         call test_send_status()
         call test_send_volumes()
@@ -537,12 +535,10 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_rows_problem
 
-    !> which job starts when, the check of the reference volumes, the best attempt, and the
-    !! renumbering, sub-class budget and mask diameter the route uses
+    !> which job starts when, the best attempt and the final publication (the rules of the method:
+    !! simple_state_assignment_tester)
     subroutine test_rules()
         class(stream_stage_solve3D), allocatable :: stage
-        integer, allocatable :: states(:), newind(:)
-        integer :: nstates_held
         allocate(stage)
         write(*,'(A)') 'test_rules'
         ! next_job(phase, references, route due, fallback due, assignment due, selected, states)
@@ -556,87 +552,12 @@ contains
         call assert_int(JOB_NONE,     stage%next_job(PHASE_IDLE,      2, .false., .false., .true.,  9,   3), 'fewer wait')
         call assert_int(JOB_ASSIGN,   stage%next_job(PHASE_IDLE,      2, .true.,  .true.,  .true.,  100, 3), 'with references neither route nor fallback')
         call assert_int(JOB_NONE,     stage%next_job(PHASE_ASSIGN,    2, .false., .false., .true.,  100, 3), 'nothing while the matching runs')
-        ! the check: even/odd angular distance, state agreement, distinct states, two states of 5%
-        call assert_true(stage%refs_usable(12., 85., [40, 30, 30], 0.5),   'halves that agree, three distinct states')
-        call assert_true(stage%refs_usable(50., 70., [50, 50], 0.97),      'at the thresholds')
-        call assert_false(stage%refs_usable(55., 85., [40, 30, 30], 0.5),  'halves too far apart')
-        call assert_false(stage%refs_usable(12., 60., [40, 30, 30], 0.5),  'states that disagree between the halves')
-        call assert_false(stage%refs_usable(-1., 85., [40, 30, 30], 0.5),  'an angular distance not measured')
-        call assert_false(stage%refs_usable(12., -1., [40, 30, 30], 0.5),  'an agreement not measured')
-        call assert_false(stage%refs_usable(12., 85., [40, 30, 30], 0.99), 'two near-duplicate states')
-        call assert_false(stage%refs_usable(12., 85., [96, 4], 0.5),       'a state under 5%: one state counts')
-        call assert_true(stage%refs_usable(12., 85., [95, 5], 0.5),        'two states of 5%')
-        call assert_false(stage%refs_usable(12., 85., [100], -1.),         'one state')
         ! the best attempt: the smallest angular distance among those with volumes
         call assert_int(3, stage%best_attempt([-1., 30., 25., huge(1.)]), 'the smallest distance')
         call assert_int(0, stage%best_attempt([-1., -1.]),                'none without volumes')
         call assert_int(1, stage%best_attempt([huge(1.), -1.]),           'one not measured, when alone')
-        ! the states renumbered from 1
-        states = [0, 3, 1, 3, 0]
-        call stage%compact_states(states, newind, nstates_held)
-        call assert_int(2, nstates_held, 'two states are held')
-        call assert_true(all(states == [0, 2, 1, 2, 0]), 'renumbered from 1 in order')
-        call assert_true(all(newind == [1, 0, 2]),        'state 2, held by none, gets no number')
-        states = [0, 0]
-        call stage%compact_states(states, newind, nstates_held)
-        call assert_int(0, nstates_held, 'none when no state is held')
-        ! cls_expansion's total of sub-classes, 500 and never fewer than the classes
-        call assert_int(500, stage%expansion_budget(150), '150 classes: 500 sub-classes in all')
-        call assert_int(500, stage%expansion_budget(0),   'no class: 500 (cls_expansion then finds nothing to split)')
-        call assert_int(600, stage%expansion_budget(600), '600 classes: one each at least')
-        ! the classes cls_expansion splits: distinct labels of the selected particles
-        call assert_int(2, stage%count_active_classes([1, 1, 0, 1, 1], [3, 7, 9, 3, 0]), 'classes 3 and 7; a deselected or unlabelled row is not counted')
-        call assert_int(0, stage%count_active_classes([0, 0], [1, 2]),                  'none without a selected particle')
-        ! the mask diameter that fits the class averages
-        call assert_real(100., stage%fit_mskdiam(100.,  64, 2.0), 1.e-4, 'a mask diameter that fits is kept')
-        call assert_real(116., stage%fit_mskdiam(400.,  64, 2.0), 1.e-4, 'one too large for the box gets the box default')
-        call assert_real(116., stage%fit_mskdiam(0.,    64, 2.0), 1.e-4, 'none gets the box default')
-        call assert_real(116., stage%fit_mskdiam(-7.8,  64, 2.0), 1.e-4, 'a negative one too')
         call check_final_publication()
     end subroutine test_rules
-
-    !> the rejection by fit (below the median less 3 MADs, the worst first, at most 30% of the
-    !! candidates, never a class that is no candidate) and the ambiguity flag
-    subroutine test_fit_rules()
-        class(stream_stage_solve3D), allocatable :: stage
-        logical, allocatable :: l_rej(:), l_cand(:)
-        real    :: med, mad, thres
-        integer :: nmax
-        real,    parameter   :: CORRS_TWO(10)  = [0.50, 0.52, 0.48, 0.51, 0.49, 0.50, 0.53, 0.47, 0.10, 0.20]
-        real,    parameter   :: CORRS_FOUR(10) = [0.50, 0.51, 0.49, 0.50, 0.52, 0.48, 0.10, 0.12, 0.11, 0.13]
-        allocate(stage)
-        write(*,'(A)') 'test_fit_rules'
-        allocate(l_cand(10), source=.true.)
-        ! two outliers, under the cap; the statistics for the log
-        call stage%reject_by_fit(CORRS_TWO, l_cand, l_rej, med, mad, thres, nmax)
-        call assert_int(2, count(l_rej),           'two outliers are rejected')
-        call assert_true(l_rej(9) .and. l_rej(10), 'the two that fit worst')
-        call assert_real(0.495, med,   1.e-5, 'the candidates'' median')
-        call assert_real(0.02,  mad,   1.e-5, 'their median absolute deviation')
-        call assert_real(0.435, thres, 1.e-5, 'the threshold, 3 MADs below the median')
-        call assert_int(3, nmax,                   'the cap, 30% of 10')
-        ! four outliers: the cap of 3 of 10, the worst first
-        call stage%reject_by_fit(CORRS_FOUR, l_cand, l_rej)
-        call assert_int(3, count(l_rej),                         'at most 30% of the candidates')
-        call assert_true(l_rej(7) .and. l_rej(9) .and. l_rej(8), 'the worst three')
-        call assert_false(l_rej(10),                             'the fourth is kept')
-        ! a class that is no candidate is never rejected, and the statistics are the candidates'
-        l_cand(7) = .false.
-        call stage%reject_by_fit(CORRS_FOUR, l_cand, l_rej)
-        call assert_false(l_rej(7),     'a class that is no candidate is not rejected')
-        call assert_int(2, count(l_rej), 'two of the nine candidates, the cap')
-        call assert_true(l_rej(9) .and. l_rej(8), 'the worst two candidates')
-        ! none when every class fits
-        call stage%reject_by_fit([0.50, 0.51, 0.49, 0.50], [.true., .true., .true., .true.], l_rej)
-        call assert_int(0, count(l_rej), 'none when every class fits')
-        ! no candidate: nothing, and zero statistics
-        call stage%reject_by_fit([0.5, 0.1], [.false., .false.], l_rej, med, mad, thres, nmax)
-        call assert_int(0, count(l_rej), 'none without candidates')
-        call assert_int(0, nmax,         'and no cap')
-        ! the margin flags the kept classes below 0.02
-        call assert_true(all(stage%flag_ambiguous([0.01, 0.05, 0.0, 0.019], [.true., .true., .false., .true.]) .eqv.&
-            &[.true., .false., .false., .true.]), 'small margins of kept classes are ambiguous')
-    end subroutine test_fit_rules
 
     !> solve3D_cavgs' volumes as attempts: the states that hold class averages renumbered from 1
     !! and copied with their reprojections into state_refs/try_<n>/; a failing attempt is kept
@@ -933,53 +854,6 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_local_refinement
-
-    !> class averages grouped by state: a stack and a JPEG per state, one of the rejected and one of
-    !! the ambiguous ones (the ambiguous also in their state's); a state without class averages
-    !! writes nothing
-    subroutine test_state_cavgs()
-        class(stream_stage_solve3D), allocatable :: stage
-        type(image),  allocatable :: cavgs(:)
-        real,         allocatable :: rmat(:,:,:)
-        type(string)       :: cwd_saved, root
-        integer, parameter :: STATES(5) = [1, 2, 1, 0, 2]
-        logical, parameter :: L_REJ(5)  = [.false., .false., .false., .true., .false.]
-        logical, parameter :: L_AMB(5)  = [.false., .true., .false., .false., .false.]
-        integer :: nfail0, i, x, y, ldim(3), n
-        allocate(stage)
-        write(*,'(A)') 'test_state_cavgs'
-        nfail0 = tests_failed
-        call enter_fixture('a3_stage_state_cavgs', cwd_saved, root)
-        allocate(cavgs(size(STATES)), rmat(VOL_BOX,VOL_BOX,1))
-        do i = 1,size(STATES)
-            do y = 1,VOL_BOX
-                do x = 1,VOL_BOX
-                    rmat(x,y,1) = real(i) * real(x + 2 * y)
-                enddo
-            enddo
-            call cavgs(i)%new([VOL_BOX, VOL_BOX, 1], VOL_SMPD)
-            call cavgs(i)%set_rmat(rmat, .false.)
-        enddo
-        call stage%write_state_cavgs(cavgs, STATES, 3, string('.'), 'TEST', l_rej=L_REJ, l_amb=L_AMB)
-        call find_ldim_nptcls(string('cavgs_state01.mrc'), ldim, n)
-        call assert_int(2, n, 'state 1''s two class averages')
-        call find_ldim_nptcls(string('cavgs_state02.mrc'), ldim, n)
-        call assert_int(2, n, 'state 2''s two, the ambiguous one included')
-        call assert_false(file_exists(string('cavgs_state03.mrc')), 'a state without class averages writes nothing')
-        call find_ldim_nptcls(string('cavgs_rejected.mrc'), ldim, n)
-        call assert_int(1, n, 'the rejected one')
-        call find_ldim_nptcls(string('cavgs_ambiguous.mrc'), ldim, n)
-        call assert_int(1, n, 'the ambiguous one')
-        call assert_true(file_exists(string('cavgs_state01.jpg')) .and. file_exists(string('cavgs_state02.jpg')),&
-            &'a JPEG per state with class averages')
-        call assert_true(file_exists(string('cavgs_rejected.jpg')) .and. file_exists(string('cavgs_ambiguous.jpg')),&
-            &'and of the rejected and the ambiguous')
-        do i = 1,size(cavgs)
-            call cavgs(i)%kill
-        enddo
-        deallocate(stage)
-        call leave_fixture(cwd_saved, root, nfail0)
-    end subroutine test_state_cavgs
 
     !> the newest quality folders and those the route started from are kept, and so is the latest
     !! assignment; earlier assignments and folders set aside for unfinished jobs go

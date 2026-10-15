@@ -8,6 +8,7 @@ type(ui_program), target :: solve3D
 type(ui_program), target :: solve3D_cavgs
 type(ui_program), target :: solve3D_addon
 type(ui_program), target :: solve3D_chunks
+type(ui_program), target :: solve3D_pyramid
 type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: noisevol
 
@@ -19,6 +20,7 @@ contains
         call new_solve3D_cavgs(prgtab)
         call new_solve3D_addon(prgtab)
         call new_solve3D_chunks(prgtab)
+        call new_solve3D_pyramid(prgtab)
         call new_estimate_lpstages(prgtab)
         call new_noisevol(prgtab)
     end subroutine construct_solve3D_programs
@@ -278,6 +280,42 @@ contains
         ! add to ui_hash
         call add_ui_program('solve3D_chunks', solve3D_chunks, prgtab, UI_CATEGORY)
     end subroutine new_solve3D_chunks
+
+    !> Multistate 3D by class-average assignment in one pass: stream p07's method on a 2D-classified project.
+    subroutine new_solve3D_pyramid( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call solve3D_pyramid%new(&
+        &'solve3D_pyramid',&                                                                   ! name
+        &'Multistate 3D by assigning sub-class averages to reference volumes',&               ! summary
+        &'is a workflow that does in one pass what the stream''s multistate 3D stage does: the reference volumes '//&
+        &'are made from the first nptcls_refs selected particles (whole stacks in arrival order) by solve2D into 150 '//&
+        &'classes, the class-average model''s selection, cls_expansion into 500 sub-classes and solve3D_cavgs, and '//&
+        &'checked; every particle''s classes are then split into 500 sub-classes, each sub-class average is matched '//&
+        &'to a state at 15 A, poorly fitting sub-classes are rejected, and one refine3D refine=cont iteration '//&
+        &'refines the poses with the states fixed. The input project must be 2D-classified, with class averages, '//&
+        &'their halves and FRCs. Every failed step stops the program',&                         ! help
+        &'simple_exec',&                                                                       ! executable
+        &.true., visibility=UI_VIS_DEVELOPER, display_name='Multistate 3D by Class Assignment')  ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! parameter input/output
+        call solve3D_pyramid%add_input(UI_PARM, 'nptcls_refs', 'num', 'Particles for the reference volumes', &
+        &'Selected particles, whole stacks in arrival order, the reference volumes are made from{100000}', &
+        &'# particles{100000}', .false., 100000., visibility=UI_VIS_ADVANCED)
+        ! search controls
+        call solve3D_pyramid%add_input(UI_SRCH, nstates, required_override=.true., group="search", visibility=UI_VIS_STANDARD)
+        call solve3D_pyramid%add_input(UI_SRCH, 'use_model', 'binary', 'Select the first classes with the model', &
+        &'Select the classes of the reference particles'' solve2D with the class-average model; with no, every populated '//&
+        &'class is used(yes|no){yes}', '', .false., 'yes', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &group="search", visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call solve3D_pyramid%add_input(UI_MASK, mskdiam, required_override=.false., group="mask", visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call solve3D_pyramid%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call solve3D_pyramid%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('solve3D_pyramid', solve3D_pyramid, prgtab, UI_CATEGORY)
+    end subroutine new_solve3D_pyramid
 
     subroutine new_solve3D_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab

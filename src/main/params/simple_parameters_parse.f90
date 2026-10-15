@@ -432,6 +432,7 @@ contains
         call reg%add_int('nptcls_base', self%nptcls_base)
         call reg%add_int('nptcls_per_cls', self%nptcls_per_cls)
         call reg%add_int('nptcls_per_part', self%nptcls_per_part)
+        call reg%add_int('nptcls_refs', self%nptcls_refs)
         call reg%add_int('nquanta', self%nquanta)
         call reg%add_int('nthr', self%nthr)
         call reg%add_int('nthr2D', self%nthr2D)

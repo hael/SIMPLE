@@ -412,6 +412,7 @@ type :: parameters
     integer :: nptcls_base=0       !< # particles in the initial solve3D snapshot
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
+    integer :: nptcls_refs=0       !< # selected particles solve3D_pyramid makes its reference volumes from (0: its default)
     integer :: npreimages=0        !< # state volumes; 0 = DISCOVER it (over-provision, then two-gate merge)
     integer :: niter=5             !< # alternating low-rank covariance fitting iterations
     integer :: min_neff=2000       !< minimum effective particle count for covariance state kernels

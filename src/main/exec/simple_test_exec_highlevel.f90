@@ -6,7 +6,7 @@ use simple_commanders_test_highlevel, only: commander_test_mini_stream, commande
                                             commander_test_pcg_frac_update, commander_test_rec3D_backends, &
                                             commander_test_solve3D_addon, commander_test_cont_refine3D_1jxy, &
                                             commander_generate_solve3D_addon_snapshots, &
-                                            commander_test_flex_pca_blobs, &
+                                            commander_test_flex_pca_blobs, commander_test_solve3D_pyramid_blobs, &
                                             commander_test_write_state_weights_labels, &
                                             commander_test_write_state_weights_mixed
 implicit none
@@ -24,6 +24,7 @@ type(commander_test_pcg_recon)                   :: xpcg_recon
 type(commander_test_pcg_frac_update)             :: xpcg_frac_update
 type(commander_test_rec3D_backends)              :: xrec3D_backends
 type(commander_test_flex_pca_blobs)              :: xflex_pca_blobs
+type(commander_test_solve3D_pyramid_blobs)       :: xsolve3D_pyramid_blobs
 type(commander_test_write_state_weights_labels)  :: xwrite_state_weights_labels
 type(commander_test_write_state_weights_mixed)   :: xwrite_state_weights_mixed
 
@@ -58,6 +59,8 @@ contains
                 call xrec3D_backends%execute(cline)
             case( 'flex_pca_blobs' )
                 call xflex_pca_blobs%execute(cline)
+            case( 'solve3D_pyramid_blobs' )
+                call xsolve3D_pyramid_blobs%execute(cline)
             case( 'write_state_weights_labels' )
                 call xwrite_state_weights_labels%execute(cline)
             case( 'write_state_weights_mixed' )

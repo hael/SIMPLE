@@ -71,6 +71,7 @@ use simple_reconstructor_tester,             only: run_all_reconstructor_tests
 use simple_rec3D_service_tester,             only: run_all_rec3D_service_lib_tests
 use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_tests
 use simple_solve3D_reseed_tester,            only: run_all_solve3D_reseed_tests
+use simple_state_assignment_tester,          only: run_all_state_assignment_tests
 use simple_project_superset_tester,          only: run_all_project_superset_tests
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
 use simple_solve3D_chunks_plan_tester,  only: run_all_solve3D_chunks_plan_tests
@@ -419,6 +420,7 @@ contains
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
         call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
         call add_suite(s, n, 'solve3D_cavgs stage rules', run_all_solve3D_reseed_tests)
+        call add_suite(s, n, 'state assignment rules',    run_all_state_assignment_tests)
     end subroutine suites_reconstruction
 
     !> registration on the polar Fourier transform, shared by the 2D and 3D searches

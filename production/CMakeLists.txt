@@ -336,6 +336,18 @@ if(BUILD_TESTS)
   simple_add_test(flex_pca_blobs highlevel 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_pca_blobs nthr=4)
 
+  # solve3D_pyramid end to end on the three-state phantom of 3 600 particles in
+  # 60 exact views (as the class-average state refinement above), its class
+  # averages made from the exact classes: the reference check, the assignment's
+  # purity against the planted states and the maps docked onto the truths
+  # (doc/policies/3D/solve3D_pyramid_policy.md; floors provisional until the
+  # first run sets them). Its own process rather than more checks in
+  # flex_pca_blobs: a separate program run end to end on its own phantom, which
+  # would double that entry's wall time (owner decision, 2026-10-15, recorded in
+  # doc/refactoring_notes/planned/solve3D_pyramid_plan_2026-10-15.md).
+  simple_add_test(solve3D_pyramid_blobs highlevel 7200 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=solve3D_pyramid_blobs nthr=8)
+
   # ---- platform cases -------------------------------------------------------
   # Own process, own launcher; not part of the build gate.
   # forked process: real child processes polled on a clock (12.9 s of it),
@@ -366,7 +378,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 38)   # 15 fast + 1 platform + 17 highlevel + 5 library
+  set(SIMPLE_CTEST_BUDGET 39)   # 15 fast + 1 platform + 18 highlevel + 5 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

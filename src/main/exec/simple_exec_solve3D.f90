@@ -6,6 +6,7 @@ use simple_exec_helpers,        only: restarted_exec, exec_screen
 use simple_commanders_solve3D, only: commander_solve3D_cavgs, commander_solve3D,&
                                     & commander_solve3D_cavgs_conditional_restarts, commander_solve3D_addon
 use simple_commanders_solve3D_chunks, only: commander_solve3D_chunks
+use simple_commanders_solve3D_pyramid, only: commander_solve3D_pyramid
 use simple_commanders_volops,   only: commander_noisevol
 use simple_commanders_resolest, only: commander_estimate_lpstages
 implicit none
@@ -17,6 +18,7 @@ type(commander_solve3D)                               :: xsolve3D
 type(commander_solve3D_cavgs)                         :: xsolve3D_cavgs
 type(commander_solve3D_addon)                         :: xsolve3D_addon
 type(commander_solve3D_chunks)                        :: xsolve3D_chunks
+type(commander_solve3D_pyramid)                       :: xsolve3D_pyramid
 type(commander_solve3D_cavgs_conditional_restarts) :: xsolve3D_cavgs_conditional_restarts
 type(commander_estimate_lpstages)                     :: xestimate_lpstages
 type(commander_noisevol)                              :: xnoisevol
@@ -52,6 +54,8 @@ contains
                 call xsolve3D_addon%execute(cline)
             case( 'solve3D_chunks' )
                 call xsolve3D_chunks%execute(cline)
+            case( 'solve3D_pyramid' )
+                call xsolve3D_pyramid%execute(cline)
             case( 'estimate_lpstages' )
                 call xestimate_lpstages%execute(cline)
             case( 'noisevol' )

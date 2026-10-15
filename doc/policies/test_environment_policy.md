@@ -60,8 +60,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 38: 15 fast,
-5 library, 17 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 39: 15 fast,
+5 library, 18 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -119,6 +119,7 @@ convenience and deliberately not a CTest entry.
 | `species_discovery` | highlevel | `detect_atoms` with a species list, with `discover_species=yes` and without an element, on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors (with and without half maps), judged against the generating models through `test_gate` (`metrics.tsv`); the present products must not change |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 | `flex_pca_blobs` | highlevel | `flex_pca` on a two-state phantom in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on a three-state phantom of 3 600 particles in 60 exact views, gated on the planted states and directions |
+| `solve3D_pyramid_blobs` | highlevel | `solve3D_pyramid` end to end on the three-state phantom of 3 600 particles in 60 exact views, its class averages made from the exact classes: the report, the references and the result written, the assignment's purity against the planted states, each reference and each refined map docked onto a truth (the hand free); floors provisional until the first run |
 
 ### 1.3 Programs that are not registered
 

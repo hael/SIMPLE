@@ -77,6 +77,7 @@ Preserve that split when refactoring.
 ## Adjacent Files Worth Reading
 
 - `doc/policies/3D/automasking_policy.md`
+- `doc/policies/3D/solve3D_pyramid_policy.md`: batch multistate 3D by class-average assignment (stream p07's method through `src/main/solve/simple_state_assignment.f90`), ending in one `refine3D refine=cont` iteration with the states fixed
 - `doc/policies/NU/nonuniform_filtering_policy.md`
 - `src/main/volume/simple_halfmap_diagnostics.f90`
 - `src/main/volume/simple_vol_pproc_policy.f90`
