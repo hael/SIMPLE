@@ -270,7 +270,9 @@ is the closed-form optimum of the diagonal model on that operator
 (`shrink_by_ml_prior`, 2026-09-14): the CURRENT same-half base solution's
 Fourier coefficients on the padded lattice scaled voxelwise by
 `(rho+floor)/(rho+floor+P_tau)`, i.e. by the ratio of the regularized and
-base preconditioners. The closed form is shipped as is (`maxits_ml=0`,
+base preconditioners; unmeasured voxels where the prior acts and everything
+beyond the data sphere get factor 0 (the base map holds only support-leaked noise there,
+which the factor 1 used to ship as a layer of power at Nyquist). The closed form is shipped as is (`maxits_ml=0`,
 the default; `ITS=0`, `STOP=closed_form`, `RESID`/`MRES` its residuals
 against the replay system). `maxits_ml>0` runs that many coupled PCG
 iterations of the regularized system FROM the closed form (`rtol=0`, no
@@ -458,7 +460,16 @@ orders of magnitude and is genuinely zero between rotated planes, so an absolute
 floor amplifies the least-constrained modes by six to nine orders of magnitude
 and PCG fills the map with noise. Modes beyond `padf*Rnat` are unconstrained and
 zeroed, making `M` singular but positive semidefinite, which keeps the Krylov
-space out of the null space. The envelope belongs in `M` too: the operator being
+space out of the null space. The same holds for unmeasured voxels inside the
+sphere: a voxel whose `rho` is below `PCG_RHO_SAMPLED_FRAC` (0.1) of its shell's
+mean measured `rho` has no data term in `M`, so `M^-1` there is `1/P_tau` with the
+ML prior and zero without it. The support cut and the native crop spread `b` into
+such voxels, and dividing by the floor alone amplified that about a hundred times.
+Under sparse or uneven view sampling (a tilt series, few class averages, preferred
+orientation) this put a checkerboard spike at the map centre and a layer of power
+at Nyquist, and two iterations stayed far below gridding
+(`doc/refactoring_notes/completed/pcg_sparse_sampling_fix.md`). Dense data have
+almost no voxels below the threshold. The envelope belongs in `M` too: the operator being
 solved is `E^{-1} T E^{-1}`, so `M^{-1}` brackets its Fourier divide with `E`,
 not `E^{-1}`.
 
@@ -633,6 +644,16 @@ same generation blended. The `trailing_chain_identity` sub-suite of
 `unit_reconstruction` (`simple_trail_chain_manifest_tester.f90`) covers the
 manifest round trip, the refusal of other manifest versions, and the raw
 header's mass and identity.
+
+Sparse and uneven view sampling is gated in the `pcg_sparse_sampling` sub-suite of
+`lib_reconstruction` (`simple_pcg_sparse_tester.f90`). An atomic phantom at box 32,
+whose atoms carry strong Nyquist content, is projected exactly (no inverse crime)
+for a single-axis tilt series, a preferred orientation and a dense control. Each
+set runs through the production path (raw accumulation, kernel operator, sphere
+support, two fixed iterations) and through production gridding. On the sparse sets
+PCG must correlate with the truth within 0.05 of gridding and keep the power beyond
+Nyquist under 3%; on the dense control it must stay within 0.02 of gridding. It
+guards the unmeasured-voxel rule of the preconditioner (section 5).
 
 Not covered, and worth remembering before trusting a change: the backend's own
 particle I/O loop, and replicated symmetry through the matrix-free operator

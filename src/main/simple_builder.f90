@@ -78,7 +78,8 @@ contains
         class(cmdline),    intent(inout)          :: cline
         class(parameters), intent(inout)          :: params
         logical, optional, intent(in)             :: ptclrange
-        logical :: read_spproj, ptclrange_here
+        type(string) :: projdir
+        logical      :: read_spproj, ptclrange_here
         call params%new(cline)
         read_spproj = .false.
         if( params%sp_required )then
@@ -89,7 +90,10 @@ contains
         ptclrange_here = merge(ptclrange, .false., present(ptclrange))
         if( read_spproj )then
             call self%spproj%read_non_data_segments(params%projfile)
-            call self%spproj%projinfo%set(1, 'cwd', params%cwd)
+            ! the project file's directory, as update_projinfo stashes it: a registered sigma2 state
+            ! resolves against it also when the project is addressed from another directory
+            projdir = stemname(simple_abspath(params%projfile, check_exists=.false.))
+            call self%spproj%projinfo%set(1, 'cwd', projdir)
             if( ptclrange_here )then
                 call self%spproj%read_segment('ptcl2D', params%projfile, fromto=[params%fromp,params%top])
             else
@@ -162,7 +166,8 @@ contains
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical,      optional, intent(in)    :: wthreads
-        logical :: read_spproj
+        type(string) :: projdir
+        logical      :: read_spproj
         ! create object for orientations
         select case(params%spproj_iseg)
             case(MIC_SEG)
@@ -190,8 +195,10 @@ contains
         endif
         if( read_spproj )then
             call self%spproj%read(params%projfile, wthreads=wthreads)
-            ! update cwd of project (in case the params class changed exec dir)
-            call self%spproj%projinfo%set(1, 'cwd', params%cwd)
+            ! the project file's directory, as update_projinfo stashes it: a registered sigma2 state
+            ! resolves against it also when the project is addressed from another directory
+            projdir = stemname(simple_abspath(params%projfile, check_exists=.false.))
+            call self%spproj%projinfo%set(1, 'cwd', projdir)
             call set_field_ptr
         else
             ! we need the oritab to override the deftab in order not to loose parameters

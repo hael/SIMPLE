@@ -36,6 +36,7 @@ type, extends(image) :: image_bin
     procedure          :: set_largestcc2background
     procedure          :: set_edgecc2background
     procedure          :: find_ccs
+    procedure          :: get_cc_voxels
     procedure          :: masscen_cc
     procedure          :: order_ccs
     procedure          :: size_ccs
@@ -300,6 +301,42 @@ contains
             sz(n_cc) = count(self%bimat == n_cc)
         enddo
     end function size_ccs
+
+    ! Voxels of every label in 1..nlabels from one pass over bimat: label l owns vox(:,first(l):first(l+1)-1),
+    ! in array element order (the order of pack and maxloc). Other labels are ignored.
+    subroutine get_cc_voxels( self, nlabels, first, vox )
+        class(image_bin),     intent(in)  :: self
+        integer,              intent(in)  :: nlabels
+        integer, allocatable, intent(out) :: first(:), vox(:,:)
+        integer, allocatable :: next(:)
+        integer :: i, j, k, l
+        allocate(first(nlabels+1), source=0)
+        do k = 1, self%bldim(3)
+            do j = 1, self%bldim(2)
+                do i = 1, self%bldim(1)
+                    l = self%bimat(i,j,k)
+                    if( l >= 1 .and. l <= nlabels ) first(l+1) = first(l+1) + 1
+                enddo
+            enddo
+        enddo
+        first(1) = 1
+        do l = 1, nlabels
+            first(l+1) = first(l+1) + first(l)
+        enddo
+        allocate(vox(3,first(nlabels+1)-1), source=0)
+        allocate(next(nlabels), source=first(1:nlabels))
+        do k = 1, self%bldim(3)
+            do j = 1, self%bldim(2)
+                do i = 1, self%bldim(1)
+                    l = self%bimat(i,j,k)
+                    if( l >= 1 .and. l <= nlabels )then
+                        vox(:,next(l)) = [i,j,k]
+                        next(l)        = next(l) + 1
+                    endif
+                enddo
+            enddo
+        enddo
+    end subroutine get_cc_voxels
 
     ! Removes a single connected component (CC) from the binary image by label index.
     ! The target label is zeroed in bimat; remaining CCs are then re-labelled

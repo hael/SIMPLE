@@ -897,20 +897,22 @@ contains
 
     subroutine discard_small_ccs( self )
         class(nanoparticle), intent(inout) :: self
-        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
-        integer :: cc
-        call self%img_cc%get_imat(imat_cc)
+        integer, allocatable :: imat_bin(:,:,:), first(:), vox(:,:)
+        integer :: cc, iv
+        call self%img_cc%get_cc_voxels(self%n_cc, first, vox)
         call self%img_bin%get_imat(imat_bin)
         do cc = 1, self%n_cc
-            if( count(imat_cc == cc) < NVOX_THRESH )then ! removes artificial small densities
-                where(imat_cc == cc) imat_bin = 0
+            if( first(cc+1) - first(cc) < NVOX_THRESH )then ! removes artificial small densities
+                do iv = first(cc), first(cc+1) - 1
+                    imat_bin(vox(1,iv),vox(2,iv),vox(3,iv)) = 0
+                enddo
             endif
         enddo
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%find_ccs(self%img_cc)
         call self%img_cc%get_nccs(self%n_cc)
         call self%find_centers()
-        deallocate(imat_bin, imat_cc)
+        deallocate(imat_bin, first, vox)
     end subroutine discard_small_ccs
 
     subroutine split_atoms( self, fname )
@@ -919,9 +921,10 @@ contains
         type(image_bin)       :: img_split_ccs
         real,    allocatable :: x(:)
         real,    pointer     :: rmat_pc(:,:,:)
-        integer, allocatable :: imat(:,:,:), imat_cc(:,:,:), imat_bin(:,:,:), imat_split_ccs(:,:,:)
+        integer, allocatable :: imat_cc(:,:,:), imat_bin(:,:,:), imat_split_ccs(:,:,:), first(:), vox(:,:)
+        logical, allocatable :: claimed(:) ! voxels of the component being split within split_excl of a centre
         integer, parameter   :: RANK_THRESH = 4
-        integer :: icc, cnt, cnt_split
+        integer :: icc, cnt, cnt_split, iv
         integer :: rank, m(1)
         real    :: new_centers(3,3*self%n_cc) ! will pack it afterwards if it has too many elements
         real    :: pc, radius, split_excl
@@ -933,8 +936,9 @@ contains
             split_excl = (0.9 * self%theoretical_radius)**2
         endif
         call self%img%get_rmat_ptr(rmat_pc) ! rmat_pc contains the phase correlation
-        call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
-        allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),           source = imat_cc)
+        call self%img_cc%get_imat(imat_cc)
+        ! the voxels of each component as found here; splitting edits imat_cc only inside the component it splits
+        call self%img_cc%get_cc_voxels(self%n_cc, first, vox)
         allocate(imat_split_ccs(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = 0)
         call img_split_ccs%new_bimg(self%ldim, self%smpd)
         call img_split_ccs%new(self%ldim, self%smpd)
@@ -943,18 +947,21 @@ contains
         do icc = 1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
             pc = rmat_pc(nint(self%atominfo(icc)%center(1)),nint(self%atominfo(icc)%center(2)),nint(self%atominfo(icc)%center(3)))
             ! calculate the rank
-            x = pack(rmat_pc(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=imat == icc)
+            allocate(x(first(icc+1)-first(icc)))
+            do iv = first(icc), first(icc+1) - 1
+                x(iv-first(icc)+1) = rmat_pc(vox(1,iv),vox(2,iv),vox(3,iv))
+            enddo
             call hpsort(x)
             m(:) = minloc(abs(x - pc))
             rank = size(x) - m(1)
             deallocate(x)
             ! calculate radius
-            call self%calc_longest_atm_dist(icc, radius)
+            call self%calc_longest_atm_dist(icc, vox(:,first(icc):first(icc+1)-1), radius)
             ! split
             if( rank > RANK_THRESH .or. radius > 1.5 * self%theoretical_radius )then
-                where(imat == icc)
-                    imat_split_ccs = 1
-                end where
+                do iv = first(icc), first(icc+1) - 1
+                    imat_split_ccs(vox(1,iv),vox(2,iv),vox(3,iv)) = 1
+                enddo
                 cnt_split = cnt_split + 1
                 call split_atom(new_centers,cnt)
             else
@@ -999,87 +1006,86 @@ contains
             real,    intent(inout) :: new_centers(:,:) ! updated coordinates of the centers
             integer, intent(inout) :: cnt              ! atom counter, to update the center coords
             integer :: new_center1(3), new_center2(3), new_center3(3)
-            integer :: i, j, k
-            logical :: found3d_cen
-            logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) ! false in the layer of connection of the atom to be split
-            mask = .false. ! initialization
+            if( allocated(claimed) ) deallocate(claimed)
+            allocate(claimed(first(icc):first(icc+1)-1), source=.false.)
             ! Identify first new center
-            new_center1 = maxloc(rmat_pc(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=imat == icc)
+            new_center1 = brightest()
             cnt = cnt + 1
             new_centers(:,cnt) = real(new_center1)
-            do i = 1, self%ldim(1)
-                do j = 1, self%ldim(2)
-                    do k = 1, self%ldim(3)
-                        if( imat(i,j,k) == icc )then
-                            if(((real(i - new_center1(1)))**2 + (real(j - new_center1(2)))**2 + &
-                            &   (real(k - new_center1(3)))**2) * self%smpd  <=  split_excl) then
-                                mask(i,j,k) = .true.
-                            endif
-                        endif
-                    enddo
-                enddo
-            enddo
+            call claim(new_center1)
             ! Second likely center.
-            new_center2 = maxloc(rmat_pc(:self%ldim(1),:self%ldim(2),:self%ldim(3)), (imat == icc) .and. .not. mask)
+            new_center2 = brightest()
             if( any(new_center2 > 0) )then ! if anything was found
                 ! Validate second center (check if it's 2 merged atoms, or one pointy one)
                 if( sum(real(new_center2 - new_center1)**2.) * self%smpd <= split_excl) then
                     ! the new_center2 is within the diameter of the atom position at new_center1
                     ! therefore, it is not another atom and should be removed
-                    where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+                    call release_unclaimed
                     return
                 else
                     cnt = cnt + 1
                     new_centers(:,cnt) = real(new_center2)
-                    ! In the case of two merged atoms, build the second atom
-                    do i = 1, self%ldim(1)
-                        do j = 1, self%ldim(2)
-                            do k = 1, self%ldim(3)
-                                if( imat(i,j,k) == icc )then
-                                    if(((real(i - new_center2(1)))**2 + (real(j - new_center2(2)))**2 +&
-                                    &   (real(k - new_center2(3)))**2) * self%smpd <= split_excl )then
-                                        mask(i,j,k) = .true.
-                                    endif
-                                endif
-                            enddo
-                        enddo
-                    enddo
+                    call claim(new_center2)
                 endif
             endif
             ! Third likely center.
-            new_center3 = maxloc(rmat_pc(:self%ldim(1),:self%ldim(2),:self%ldim(3)), (imat == icc) .and. .not. mask)
+            new_center3 = brightest()
             if( any(new_center3 > 0) )then ! if anything was found
                 ! Validate third center
                 if(sum(real(new_center3 - new_center1)**2.) * self%smpd <= split_excl .or. &
                 &  sum(real(new_center3 - new_center2)**2.) * self%smpd <= split_excl )then
                     ! the new_center3 is within the diameter of the atom position at new_center1 or new_center2
                     ! therefore, it is not another atom and should be removed
-                    where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+                    call release_unclaimed
                     return
                 else
                     cnt = cnt + 1
                     new_centers(:,cnt) = real(new_center3)
-                    found3d_cen = .false.
-                    ! In the case of two merged atoms, build the second atom
-                    do i = 1, self%ldim(1)
-                        do j = 1, self%ldim(2)
-                            do k = 1, self%ldim(3)
-                                if( imat(i,j,k) == icc )then
-                                    if( ((real(i - new_center3(1)))**2 + (real(j - new_center3(2)))**2 + &
-                                    &    (real(k - new_center3(3)))**2) * self%smpd <= split_excl )then
-                                         found3d_cen = .not.mask(i,j,k)
-                                         mask(i,j,k) = .true.
-                                    endif
-                                endif
-                            enddo
-                        enddo
-                    enddo
+                    call claim(new_center3)
                 endif
             endif
             ! Set the merged cc back to 0
-            where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
-            call self%img_cc%set_imat(imat_cc)
+            call release_unclaimed
         end subroutine split_atom
+
+        ! the first maximum of the phase correlation over the unclaimed voxels of the component, as maxloc
+        ! with a mask returns it; zeros when every voxel is claimed
+        function brightest() result( pos )
+            integer :: pos(3), iv
+            logical :: found
+            real    :: vmax
+            pos   = 0
+            found = .false.
+            vmax  = 0.
+            do iv = lbound(claimed,1), ubound(claimed,1)
+                if( claimed(iv) ) cycle
+                if( .not. found )then
+                    found = .true.
+                    vmax  = rmat_pc(vox(1,iv),vox(2,iv),vox(3,iv))
+                    pos   = vox(:,iv)
+                else if( rmat_pc(vox(1,iv),vox(2,iv),vox(3,iv)) > vmax )then
+                    vmax  = rmat_pc(vox(1,iv),vox(2,iv),vox(3,iv))
+                    pos   = vox(:,iv)
+                endif
+            enddo
+        end function brightest
+
+        subroutine claim( cen )
+            integer, intent(in) :: cen(3)
+            integer :: iv
+            do iv = lbound(claimed,1), ubound(claimed,1)
+                if( ((real(vox(1,iv) - cen(1)))**2 + (real(vox(2,iv) - cen(2)))**2 + &
+                &    (real(vox(3,iv) - cen(3)))**2) * self%smpd <= split_excl ) claimed(iv) = .true.
+            enddo
+        end subroutine claim
+
+        subroutine release_unclaimed
+            integer :: iv
+            do iv = lbound(claimed,1), ubound(claimed,1)
+                if( claimed(iv) ) cycle
+                if( imat_cc(vox(1,iv),vox(2,iv),vox(3,iv)) == icc ) imat_cc(vox(1,iv),vox(2,iv),vox(3,iv)) = 0
+            enddo
+        end subroutine release_unclaimed
 
     end subroutine split_atoms
 
@@ -1118,7 +1124,7 @@ contains
     subroutine discard_atoms( self, l_print )
         class(nanoparticle), intent(inout) :: self
         logical, optional,   intent(in)    :: l_print
-        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:), cscores(:)
+        integer, allocatable :: imat_bin(:,:,:), cscores(:), first(:), vox(:,:)
         real,    allocatable :: centers_A(:,:), cendists(:), cendists_sorted(:)
         logical, allocatable :: atom_del_mask(:)
         integer              :: cscore_thres
@@ -1176,8 +1182,8 @@ contains
         self%prune_cen       = self%NPcen
         self%prune_rad_thres = cendist_thres
         self%prune_cs_thres  = cscore_thres
-        ! get connected components and binary matrices
-        call self%img_cc%get_imat(imat_cc)
+        ! component voxels and binary matrix
+        call self%img_cc%get_cc_voxels(self%n_cc, first, vox)
         call self%img_bin%get_imat(imat_bin)
         ! discard atoms
         n_discard = 0
@@ -1189,7 +1195,7 @@ contains
             if( ll_print ) write(logfhandle, *) '# atoms, discarded based on sz ', cnt_discard
         end do
         call calc_stats(real(cscores), cscore_stats)
-        deallocate(imat_bin, imat_cc)
+        deallocate(imat_bin, first, vox)
         if( ll_print )then
             write(logfhandle,'(A)') '>>> CONTACT SCORE STATS BELOW'
             write(logfhandle,'(A,F8.4)') 'Average: ', cscore_stats%avg
@@ -1210,23 +1216,12 @@ contains
             cnt_discard  = 0
             do cc = 1, self%n_cc
                 if( cscores(cc) < cthresh .and. atom_del_mask(cc) )then
-                    where(imat_cc == cc) imat_bin = 0
+                    call zero_component(cc)
                     n_discard   = n_discard   + 1
                     cnt_discard = cnt_discard + 1
                 endif
             enddo
-            if( cnt_discard > 0 )then
-                ! update atoms and contact scores
-                call self%img_bin%set_imat(imat_bin)
-                call self%img_bin%find_ccs(self%img_cc)
-                call self%img_cc%get_nccs(self%n_cc)
-                call self%find_centers()
-                if( allocated(centers_A) ) deallocate(centers_A)
-                if( allocated(cscores)   ) deallocate(cscores)
-                allocate(cscores(self%n_cc), source=0)
-                centers_A = self%atominfo2centers_A()
-                call self%contact_scores(centers_A,cscores)
-            endif
+            if( cnt_discard > 0 ) call relabel
         end subroutine remove_lowly_contacted
 
         subroutine remove_small_and_lowly_contacted( cthresh )
@@ -1236,7 +1231,7 @@ contains
             ! calculate atomic radii
             allocate(radii(self%n_cc), source=0.)
             do cc = 1, self%n_cc
-                call self%calc_longest_atm_dist(cc, radii(cc), imat=imat_cc)
+                call self%calc_longest_atm_dist(cc, vox(:,first(cc):first(cc+1)-1), radii(cc))
             end do
             radius_thres = self%theoretical_radius/2.
             ! discard
@@ -1244,25 +1239,42 @@ contains
             do cc = 1, self%n_cc
                 if( atom_del_mask(cc) )then
                     if( radii(cc) < radius_thres .and. cscores(cc) < cthresh )then
-                        where(imat_cc == cc) imat_bin = 0
+                        call zero_component(cc)
                         n_discard   = n_discard   + 1
                         cnt_discard = cnt_discard + 1
                     endif
                 endif
             enddo
-            if( cnt_discard > 0 )then
-                ! update atoms and contact scores
-                call self%img_bin%set_imat(imat_bin)
-                call self%img_bin%find_ccs(self%img_cc)
-                call self%img_cc%get_nccs(self%n_cc)
-                call self%find_centers()
-                if( allocated(centers_A) ) deallocate(centers_A)
-                if( allocated(cscores)   ) deallocate(cscores)
-                allocate(cscores(self%n_cc), source=0)
-                centers_A = self%atominfo2centers_A()
-                call self%contact_scores(centers_A,cscores)
-            endif
+            if( cnt_discard > 0 ) call relabel
         end subroutine remove_small_and_lowly_contacted
+
+        ! after discards the components are relabelled: renew everything indexed by atom, keeping the zone
+        subroutine relabel
+            integer :: icc
+            call self%img_bin%set_imat(imat_bin)
+            call self%img_bin%find_ccs(self%img_cc)
+            call self%img_cc%get_nccs(self%n_cc)
+            call self%find_centers()
+            if( allocated(centers_A) ) deallocate(centers_A)
+            if( allocated(cscores)   ) deallocate(cscores)
+            allocate(cscores(self%n_cc), source=0)
+            centers_A = self%atominfo2centers_A()
+            call self%contact_scores(centers_A,cscores)
+            call self%img_cc%get_cc_voxels(self%n_cc, first, vox)
+            deallocate(atom_del_mask)
+            allocate(atom_del_mask(self%n_cc))
+            do icc = 1, self%n_cc
+                atom_del_mask(icc) = euclid(self%atominfo(icc)%center(:), self%NPcen) * self%smpd > cendist_thres
+            end do
+        end subroutine relabel
+
+        subroutine zero_component( label )
+            integer, intent(in) :: label
+            integer :: iv
+            do iv = first(label), first(label+1) - 1
+                imat_bin(vox(1,iv),vox(2,iv),vox(3,iv)) = 0
+            enddo
+        end subroutine zero_component
 
     end subroutine discard_atoms
 
@@ -2272,7 +2284,7 @@ contains
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
         real,    pointer     :: rmat_raw(:,:,:)
-        integer, allocatable :: imat_cc(:,:,:)
+        integer, allocatable :: imat_cc(:,:,:), first(:), vox(:,:)
         logical, allocatable :: cc_mask(:)
         real                 :: tmp_diam, a(3)
         integer              :: i, cc, cn, max_size
@@ -2319,6 +2331,7 @@ contains
         else
             call self%img_cc%get_imat(imat_cc)
         endif
+        call self%img_cc%get_cc_voxels(self%n_cc, first, vox)
         call fit_isotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         call fit_anisotropic%new(self%img_raw%get_ldim(), self%img_raw%get_smpd())
         max_size = 0
@@ -2332,7 +2345,7 @@ contains
             ! distance from the centre of mass of the nanoparticle
             self%atominfo(cc)%cendist = euclid(self%atominfo(cc)%center(:), self%NPcen) * self%smpd
             ! atom diameter
-            call self%calc_longest_atm_dist(cc, self%atominfo(cc)%diam, imat=imat)
+            call self%calc_longest_atm_dist(cc, vox(:,first(cc):first(cc+1)-1), self%atominfo(cc)%diam)
             self%atominfo(cc)%diam = 2.*self%atominfo(cc)%diam ! radius --> diameter in A
             ! whether atom is neighbors with an atom of CN > 12
             if( maxval(self%atominfo(:)%cn_std) > 12 )then
@@ -2531,34 +2544,21 @@ contains
         m = m / real(self%n_cc)
     end function masscen
 
-    subroutine calc_longest_atm_dist( self, label, longest_dist, imat )
+    ! largest distance from the centre of atom label to the voxels pos(3,:) of its connected component
+    subroutine calc_longest_atm_dist( self, label, pos, longest_dist )
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: label
+        integer,             intent(in)    :: pos(:,:)
         real,                intent(out)   :: longest_dist
-        integer, optional,   intent(in)    :: imat(:,:,:)
-        integer, allocatable :: pos(:,:)
-        integer, allocatable :: imat_cc(:,:,:)
         logical, allocatable :: mask_dist(:) ! for min and max dist calculation
         integer :: location(1)               ! location of vxls of the atom farthest from its center
-        if( present(imat) )then
-            imat_cc = imat
-        else
-            call self%img_cc%get_imat(imat_cc)
-        endif
-        where( imat_cc .eq. label )
-            imat_cc = 1
-        elsewhere
-            imat_cc = 0
-        endwhere
-        call get_pixel_pos( imat_cc, pos ) ! pxls positions of the shell
         allocate(mask_dist(size(pos, dim=2)), source = .true.)
         if( size(pos,2) == 1 ) then ! if the connected component has size 1 (just 1 vxl)
             longest_dist  = self%smpd
-            return
         else
             longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location) * self%smpd
         endif
-        deallocate(imat_cc, pos, mask_dist)
+        deallocate(mask_dist)
     end subroutine calc_longest_atm_dist
 
     ! For a given cc in an NP with lattice params a, finds the number

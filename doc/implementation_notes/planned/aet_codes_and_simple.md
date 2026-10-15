@@ -26,10 +26,18 @@ On our side the sources are:
 - `atom_bfactor_model.md`;
 - the code those documents point to.
 
-**What we have not read.** Their later code is on GitHub
-(`AET-pAET/Supplementary-Data-Codes`, `AET-MetallicGlass/Supplementary-Data-Codes`).
-Their current reconstruction algorithm is RESIRE. Where this note describes
-later work, it relies on the published method descriptions, not on code.
+**Read later.** The code of the 2021 metallic-glass study (Yang et al.,
+Nature 592, 60), cloned from `AET-MetallicGlass/Supplementary-Data-Codes`
+into `~/src/Supplementary-Data-Codes`. It contains:
+
+- RESIRE, their current reconstruction algorithm;
+- polynomial atom tracing;
+- k-means classification with local templates;
+- position refinement.
+
+**What we have not read.** The later repository
+`AET-pAET/Supplementary-Data-Codes`. Where this note describes work after
+2021, it relies on the published method descriptions, not on code.
 
 **Terms.**
 
@@ -73,11 +81,11 @@ search.
 
 | Stage | AET (FePt 2017 code, and later papers) | SIMPLE / SINGLE today | Planned on our side |
 | --- | --- | --- | --- |
-| Reconstruction | GENFIRE: Fourier gridding, then 500 iterations alternating between data, positivity and support (section 3) | `refine3D_nano` on the gridding backend, references filtered by ICM; PCG available in SIMPLE (`rec_backend=pcg`), not validated for SINGLE | PCG with an atomic prior inside the solve (`single_pcg_integration.md`) |
+| Reconstruction | GENFIRE (2017): Fourier gridding, then 500 iterations alternating between data, positivity and support; RESIRE (2021 on): fixed-step gradient descent on the projection misfit, with positivity (section 3) | `refine3D_nano` on the gridding backend, references filtered by ICM; PCG available in SIMPLE (`rec_backend=pcg`), not validated for SINGLE | PCG with an atomic prior inside the solve (`single_pcg_integration.md`) |
 | Orientations | grid search of each Euler angle against reprojections, scored by an L1 R-factor | full pose search per image (`refine3D`, `refine=neigh`), correlation objective | unchanged |
-| Atom tracing | greedy: take the brightest local maximum, fit a 3D Gaussian, check a 2 Å minimum distance, subtract the fit, repeat; manual check | `detect_atoms` level 1: correlation with a one-atom template, threshold, connected components, splitting, correlation validation, contact-score pruning | residual recovery of weaker atoms (`discover_species`, opt-in), which is the greedy subtraction idea applied at a second level |
+| Atom tracing | 2017: greedy, take the brightest local maximum, fit a 3D Gaussian, check a 2 Å minimum distance, subtract the fit, repeat; 2021: every local maximum of a 3× upsampled map, each refined by a 4th-order polynomial fit, accepted brightest first at 2 Å minimum distance, nothing subtracted; manual check in both | `detect_atoms` level 1: correlation with a one-atom template, threshold, connected components, splitting, correlation validation, contact-score pruning | residual recovery of weaker atoms (`discover_species`, opt-in), which is the greedy subtraction idea applied at a second level |
 | Species | intensity threshold, then global templates matched by L1 distance, manual edits, a chemistry prior near the missing wedge; later k-means and local templates | aperture intensity at one common width; Gaussian mixture with measurement noise (extreme deconvolution); BIC for the number of classes; separation gate; shared coordination slope; species list by `element=` | promotion after validation on real two-species data |
-| Model refinement | positions refined against the measured projections, with one amplitude and one B per species and an interatomic potential as restraint | none against the images; `_SIM.mrc` (Peng five-Gaussian kernels) becomes the next refinement reference | atomic prior in the PCG solve; per-atom B and occupancy fitted against the particle images (`atom_bfactor_model.md`) |
+| Model refinement | positions refined against the measured projections, with one amplitude and one B per species; an interatomic potential as restraint in 2017, none in 2021 | none against the images; `_SIM.mrc` (Peng five-Gaussian kernels) becomes the next refinement reference | atomic prior in the PCG solve; per-atom B and occupancy fitted against the particle images (`atom_bfactor_model.md`) |
 | Validation | multislice simulation of their own model, run through the same pipeline; R-factor against the projections; R-free in GENFIRE | synthetic element-kernel particles with ground truth; 66 real Pt maps with planted classes; half maps where they exist | image-level cross-validation (`single_pcg_integration.md`) |
 
 ## 3. Reconstruction: GENFIRE and PCG
@@ -193,8 +201,8 @@ that conjugate gradients cannot carry. With positivity and a tight support,
 the iteration fills Fourier regions that no projection sampled, such as
 the missing wedge, the gaps between few projections, and the corners of the
 cube. Without positivity a support still couples measured and unmeasured
-Fourier points, but much more weakly, and two PCG iterations from zero
-use little of that coupling.
+Fourier points. On the FePt tilt series PCG at first filled them harmfully,
+through a preconditioner defect that is now fixed (3.5).
 
 ### 3.4 What the differences mean for SINGLE
 
@@ -210,7 +218,9 @@ use little of that coupling.
   signal-to-noise, though, clipping negative noise biases the map upward,
   most in the solvent and at weak atoms, which are exactly where species
   discovery looks. If we want it, it needs a projected or bound-constrained
-  solver, not plain CG. The atomic prior of `single_pcg_integration.md`
+  solver, not plain CG. On FePt it does not pay for atom detection (3.5):
+  it makes the atoms rounder and the map free of negative values, but it
+  does not lift more atoms above the background, and recall fell. The atomic prior of `single_pcg_integration.md`
   (penalize what is not a sum of atom kernels) is a stronger, linear
   alternative that keeps CG. It also enforces vacuum between atoms, which
   is the part of positivity that matters for atom detection.
@@ -225,14 +235,29 @@ use little of that coupling.
   That is affordable for 68 projections and impossible for thousands of
   images. PCG reads every image once, and its iterations do not depend on
   the number of images.
-- **RESIRE.** Their current algorithm (Pham et al., Sci. Rep. 2023) works
-  in real space. By its published description, which we have not checked
-  against its code, it minimizes the squared difference between measured
-  and computed projections by gradient steps, with optional support and
-  positivity. That is the same least-squares objective as PCG, solved by
-  gradient descent on the real-space projector rather than by conjugate
-  gradients on the Fourier normal equations. Their field has moved toward
-  our formulation, but it keeps positivity and has no noise model.
+- **RESIRE.** Their current algorithm (Pham et al., Sci. Rep. 2023),
+  read from `2_RESIRE_package/src/@RESIRE_Reconstructor/reconstruct.m`.
+  It minimizes the squared difference between the measured and computed
+  projections by gradient descent with a fixed step:
+  - **Computing projections.** The volume is padded four times and Fourier
+    transformed. The central plane of each projection is interpolated with
+    splines, then transformed back to real space.
+  - **The gradient.** It is the real-space back-projection of the computed
+    projections, minus the back-projection of the measured ones (computed
+    once, before the loop).
+  - **The step.** The step is fixed, scaled by the number of projections
+    times the box size. Negative values are set to zero after every step.
+    The default run is 200 iterations.
+  - **What is not there.** The loop has no support constraint (a support
+    can only serve as the starting model) and no noise weights. The forward
+    and back projections use different interpolations, so they are not
+    exact adjoints.
+
+  This is PCG's objective without the weights, solved by fixed-step
+  gradient descent with positivity instead of conjugate gradients. It is
+  also GENFIRE with the misfit measured on the projections rather than on
+  gridded Fourier points. Their field has moved toward our formulation,
+  but it keeps positivity and has no noise model.
 
 ### 3.5 A direct comparison we can run
 
@@ -251,22 +276,91 @@ show three things:
 - what PCG's support does there without positivity;
 - whether our atom tracing and species calls change between the two maps.
 
+**First run, 2026-10-15.** It used the denoised projections with the
+initial single-axis angles (`for_simple/run_fept_recon_only.sh`), and the
+frame and hand came out right.
+
+- **Gridding works.** The half-map FSC reaches 0.5 at 3.4 Å.
+- **PCG did not.** It reached 0.5 at 6.6 Å after one iteration and 9.2 Å
+  after two, with a checkerboard spike at the map centre, 13% of its power
+  beyond the Nyquist sphere and a halo in the missing wedge. One defect
+  caused all three: the right-hand side is cut by the solve support before
+  the Fourier divide, and in voxels no projection measured the
+  preconditioner was only the floor, about a hundredfold gain. The cause,
+  the fix and its test are in
+  `doc/refactoring_notes/completed/pcg_sparse_sampling_fix.md`.
+
+**After the fix, same day.** PCG reaches 0.5 at 3.41 Å after two iterations
+and 3.31 Å after five, and correlates better than gridding with a numpy
+filtered back-projection (0.919 and 0.911 against 0.896). Level-1 atom
+detection, against their final model, finds:
+
+| Map | Recall | Precision |
+| --- | --- | --- |
+| SIMPLE gridding | 0.25 | 0.99 |
+| SIMPLE PCG, 2 iterations | 0.26 | 0.99 |
+| SIMPLE PCG, 5 iterations | 0.35 | 0.99 |
+| Their GENFIRE map | 0.41 | 1.00 |
+
+With species discovery on the half maps, PCG at five iterations finds 54%
+of the atoms at 98% precision (gridding 41%). The species calls are wrong:
+the detected atoms are almost all Pt, since few Fe atoms rise above the
+background in any of the maps, and discovery splits the Pt into two groups.
+
+**Positivity.** Their atoms look rounder, which raised the question whether
+positivity is the reason. A numpy GENFIRE-style iteration on our data and
+nominal angles (measured Fourier points put back each iteration, a sphere
+as support), with and without clipping negative values:
+
+- **It rounds the atoms.** The mean Pt atom is 2.02 times longer along the
+  missing-wedge direction than across without positivity, 1.90 after 200
+  iterations with it. Their map: 1.89.
+- **It does not separate atoms from the background.** The share of Pt
+  atoms brighter than the 99th percentile of the background between atoms
+  stays at 85% (theirs 100%).
+- **It lowers detection.** Level-1 recall is 0.30 without positivity and
+  0.24 with it.
+
+So positivity explains the look of their map, not its better detection.
+
+**Refined angles.** `refine3D refine=cont` refines each projection's three
+rotation components and two shifts against the PCG map of the nominal tilts
+(`for_simple/run_fept_refine_cont.sh`). It converged in two iterations and
+moved the projections by 0.31 degrees on average (largest 1.1 degrees) and
+0.2 pixels, with no rotation of the whole frame. PCG at five iterations from
+the refined poses raises level-1 recall from 0.35 to 0.39, at precision
+0.99 (their map: 0.41), and recall with discovery from 0.54 to 0.62. The
+share of Pt atoms above the background rises from 66% to 71% (theirs 90%,
+smoothed measure). Angle refinement in our own pipeline therefore closes
+most of the detection gap to their map.
+
 ## 4. Atom tracing
 
 | | AET | `detect_atoms` |
 | --- | --- | --- |
 | Candidate atoms | every local maximum above a threshold, brightest first | voxels of the template-correlation map above a threshold, chosen by how well the resulting atoms simulate the map, grouped into connected components |
-| Separating close atoms | the fitted Gaussian of each accepted atom is subtracted before the next maximum is taken; a 2 Å minimum distance | merged components are split, validated against the correlation map |
-| Position | centre of an anisotropic 3D Gaussian fitted in a 5 × 5 × 5 box | centre of mass of the component, after the splitting |
+| Separating close atoms | each local maximum is its own atom; a 2 Å minimum distance (in 2017 the fitted Gaussian of each accepted atom was also subtracted before the next maximum was taken) | merged components are split, validated against the correlation map |
+| Position | 2017: centre of an anisotropic 3D Gaussian fitted in a 5 × 5 × 5 box; 2021: maximum of a 4th-order polynomial fitted on the 3× upsampled map | centre of mass of the component, after the splitting |
 | False atoms | a "non-atom" class in the classification, then manual removal | correlation validation and contact-score pruning (weak, poorly coordinated atoms are removed on purpose) |
 | Weak atoms | found by the same greedy loop as strong ones | level 1 finds the strong class; `discover_species` recovers weaker atoms from the residual at calibrated noise thresholds, with a neighbour gate |
 
-Their greedy loop needs no segmentation and treats every atom alike. Ours
-segments first. The residual recovery of `discover_species` is their idea
-applied only below the strong class, with thresholds set against a measured
-noise level instead of a fixed intensity threshold and a manual check.
-In the papers we looked at, hand edits are part of their pipeline. Ours
-has none, and that is a design constraint we keep.
+Their tracing needs no segmentation and treats every atom alike. Ours
+segments first. The residual recovery of `discover_species` is their 2017
+idea applied only below the strong class, with thresholds set against a
+measured noise level instead of a fixed intensity threshold and a manual
+check. In the papers we looked at, hand edits are part of their pipeline.
+Ours has none, and that is a design constraint we keep.
+
+The FePt map shows what segmenting first costs on a dense two-species
+particle (2026-10-15). With `element=Pt`, level 1 found 57% of the Pt atoms
+and none of the Fe. Every atom it found is real, within 0.14 Å of their
+refined position.
+
+The atoms it missed are not merged into components with found ones. They
+lie below the threshold. The search chose that threshold because lower ones
+merge neighbouring atoms: the correlation between the map and the
+simulated atoms falls from 0.50 to 0.28 as the threshold drops. A tracer
+built on local maxima does not tie the threshold to merging.
 
 ## 5. Species
 

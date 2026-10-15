@@ -2010,15 +2010,19 @@ and tested it before the run.
   `species_discovery` and the four `single_atoms_stats` entries pass; every
   `species_discovery` metric that moved against phase 7's copy is named.
 - **The five runs of 10.9 on the 66 maps**, as phase 7 ran them. Runs 1 and
-  4 do not touch the class fit: their numbers against the stored
-  coordinates must equal phase 7's on every map. Runs 2, 3 and 5: `K`,
+  4 do not touch the class fit. Since 2026-10-15, though, the size rule of
+  `discard_atoms` works after the contact-score pass removes atoms. Before,
+  that pass renumbered the atoms, and the size rule then read the old
+  numbering. Their numbers against the stored coordinates may therefore
+  differ from phase 7's, but only by atoms the size rule now removes. Every
+  difference is named; an atom moved or added stops the run. Runs 2, 3 and 5: `K`,
   admissibility, `D`, the class sizes and ratios, `coord_slope` per map, and
   the per-coordination intensities after the term is taken out. The mixture
   fits also stop earlier than in phases 7 and 8 (3.6), so the comparison
   measures both changes together.
 - **The planting of 10.9** at 0.6, 0.4, 0.25 and the noise control, with the
-  same seeds, so that the same atoms are planted as in phase 8; runs 2, 3
-  and 5; recall, precision and false labels as phase 8 counts them, map by
+  same seeds, so that the same atoms are planted as in phase 8 where the
+  level-1 atoms are unchanged; runs 2, 3 and 5; recall, precision and false labels as phase 8 counts them, map by
   map against phase 8.
 - **Expectations, stated before the run:** one class in runs 2 and 5 and
   `Pt,Ni` inadmissible on at least 95% of the unplanted maps; the class

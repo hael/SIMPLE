@@ -102,7 +102,7 @@ convenience and deliberately not a CTest entry.
 
 | entry | label | what it runs |
 |---|---|---|
-| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation |
+| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 15 degrees and 2 pixels, refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
 | `lib_heterogeneity` | library | flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models |

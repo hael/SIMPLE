@@ -1,12 +1,14 @@
 # Single-state speed: the plan for the week of 2026-10-15
 
-Implementation note, 2026-10-14. **Plan; nothing implemented.**
+Implementation note, 2026-10-14. **Plan; nothing implemented.** Revised
+2026-10-15 for the unattended run `prob_speed` on the Oracle Linux test
+machine, which carries out days 1 and 2 and the same changes in the 2D table
+(section "Execution").
 
 ## Goal and baseline
 
 Make single-state `solve3D`/`refine3D` as fast as the CPU code can be for the
-release; GPU work follows in the next release. `prob_fast=yes` is the default
-from 2026-10-15.
+release; GPU work follows in the next release.
 
 The baseline is the PfCRT run in `~/Processing/PfCRT/bench` (analysis in
 `bench_summary/analysis.md`): 4,567 s, of which refinement 4,452 s, with 10
@@ -31,6 +33,22 @@ about 30-45% of the run.
 assignment of random draws to particles; multi-threaded runs were never
 bit-reproducible (`simple_rnd.f90`: only a one-thread run is).
 
+## Rulings of 2026-10-15
+
+- **`prob_fast` is retired.** Its runs validated in 3D, and the same change
+  will work in 2D. Its particle-frame paths become the only paths, in the
+  `prob` and `prob_neigh` tables and in the 2D table; the key goes from the
+  parameters, the parser and every user interface, and code reached only
+  with `prob_fast=no` is deleted.
+- **The 2D table gets the same changes** in the same run (section "The 2D
+  table").
+- **Gains measured on the test machine are reported.** These changes are
+  compute-bound, so beta-galactosidase timings there are meaningful; PfCRT
+  is measured by the maintainer afterwards.
+- **The distributed simulated test** is a second `solve3D` step with
+  `nparts=2` in `simulated_workflow_1jxy`, added as checks to that suite
+  (no new CTest entry).
+
 ## Testing procedure
 
 The work is tested in three blocks. Each block is checked on the simulated
@@ -38,7 +56,7 @@ high-level tests first, and only then on one PfCRT run:
 
 | block | simulated tests | then |
 | --- | --- | --- |
-| days 1 and 2 | after each item | one PfCRT run for the block |
+| days 1 and 2, the 2D table | after each item, with beta-galactosidase timings (the run `prob_speed`) | one PfCRT run for the block |
 | days 3 and 4 | after each item | one PfCRT run for the block |
 | day 5 | after the item | one PfCRT run, and the dataset with one stack per micrograph |
 
@@ -56,17 +74,14 @@ truth (`ctest -L highlevel`):
 - `cont_refine3D_1jxy`: the only one that runs distributed (`nparts`), but
   with `refine=cont`, not the probabilistic tables.
 
-**A gap: none of them runs the probabilistic tables distributed.**
-`simulated_workflow` and `solve3D_addon` run `solve3D` without `nparts`, so
-they take the shared-memory strategy, where the table and the search run in
-the master process. The job polling (day 1), the redundant segment write and
-the reprojection model (days 1 and 4) and the worker fold (day 5) are only on
-the distributed path. Before day 1, give one simulated `solve3D` a distributed
-run with `nparts=2`. This could be a second `solve3D` step in
-`simulated_workflow_1jxy`, added as checks to that suite rather than as a new
-CTest entry, or until that is decided a run by hand on the project the suite
-leaves behind. Its final map must pass the same truth checks as the
-shared-memory run.
+**The distributed gap.** `simulated_workflow` and `solve3D_addon` run
+`solve3D` without `nparts`, so they take the shared-memory strategy, where
+the table and the search run in the master process. The job polling (day 1),
+the redundant segment write and the reprojection model (days 1 and 4) and the
+worker fold (day 5) are only on the distributed path. `simulated_workflow_1jxy`
+therefore gets a second `solve3D` step with `nparts=2` on the same project
+(ruled 2026-10-15), whose final map must pass the same truth checks as the
+shared-memory step.
 
 **What passing means:**
 
@@ -81,10 +96,8 @@ shared-memory run.
   block is measured at its PfCRT run, read with the summary script, and
   recorded per block in the progress section of this note.
 
-The particle I/O run on the Dell edits the same matcher and prob files
-(`simple_strategy3D_matcher.f90`, `simple_commanders_prob.f90`,
-`simple_matcher_ptcl_io.f90`). Its remaining phases land before the items
-that touch those files, or the items are rebased on them.
+The particle I/O run, which edited the same matcher and prob files, finished
+on 2026-10-15; its changes are merged before the run `prob_speed` starts.
 
 ## Day 1: measurement and the identical fixes on the master
 
@@ -129,14 +142,44 @@ neighbourhood table never reads `prob_fast`.
   after the seed, score with the bank kernel in the coarse and the fine
   passes, start the refinement from the converted shift
   (`shift_ptcl2ref`), and record the seed in `ref_assign_neigh`.
-- Under `prob_fast` (the default), so `prob_fast=no` keeps today's path for
-  comparison.
+  Unconditionally: there is no key.
+- Retire `prob_fast` (ruling of 2026-10-15): its paths in the `prob` table
+  (the single-state particle-frame seed; the multi-state particle-frame grid
+  and its quadratic step) become unconditional; the key leaves
+  `simple_parameters.f90`, the parser, the `refine3D` and `solve3D`-family
+  interfaces and the table part's benchmark lines; code reached only with
+  `prob_fast=no` is deleted, and testers that compared the two paths test the
+  remaining one.
 - Estimated 3-5 times faster score loop: 400-500 s on PfCRT.
 - Validation as for `prob_fast`: the same semantics (a particle-frame shift,
   the angular Nyquist bin included) already accepted for `prob`.
 
 Test: the simulated tests, then the PfCRT run for days 1 and 2. Expected:
 850-1,100 s less than the baseline.
+
+## The 2D table: the same changes
+
+The 2D table (`simple_eul_prob_tab2D.f90`) does per particle what the
+neighbourhood table does: it estimates one shift at the previously assigned
+class, scores every class with that shift through the shifted-reference
+kernel (a shift matrix and one forward FFT per shell for every class), and
+refines the shifts of a few classes around the best one. Both fill paths do
+this, the plain table (`fill_tab_range`, used by `refine=prob` and the
+`solve2D` seed pass) and `fill_tab_prob_snhc_range` (the `prob_snhc` stages
+`solve2D` runs by default).
+
+1. **Benchmark first.** The 2D table part's report has wall times but no
+   thread-seconds split; give it the fill profile the 3D tables write (seed
+   estimation, score loop, refinement, fill wall time, load balance).
+2. **The particle-frame shift** in both fill paths: shift the particle once
+   after the seed and score every class with the bank kernel; record the seed
+   as the 3D table does.
+3. **Dynamic scheduling** of the 2D fill loops (about lines 253, 305, 366 and
+   376 today).
+
+A 2D table scores every class for every particle (often 100-500 classes), so
+the score loop should gain as much as in 3D; how much of `solve2D` that is,
+the benchmark of item 1 tells.
 
 ## Day 3: exact trims in the table, the refinement and the assignment
 
@@ -229,6 +272,167 @@ particle preparation.
   following week, behind the old path until the simulated tests (the
   distributed run among them), the PfCRT run and the per-micrograph dataset
   pass.
+
+## Execution: the run `prob_speed`
+
+Days 1 and 2 and the 2D table are carried out as an unattended run on the
+Oracle Linux test machine (arun run `prob_speed`), in five phases. Nothing is
+committed; the maintainer reviews the complete diff. Every phase records
+itself in the progress section.
+
+Common to every phase:
+
+- **Data.** Beta-galactosidase (5,513 particles, box 256 at 1.275 Å per
+  pixel, `mskdiam=180 pgrp=d2`), copied into a fresh directory under the
+  run's scratch directory for each run; the originals are never written.
+- **Execution settings.** `nparts=4 nthr=6` for distributed runs and
+  `nthr=24` for shared-memory runs, identical in every phase. Timed runs use
+  an out-of-tree Release build with tests built; nothing else heavy runs while
+  a run is timed.
+- **Timing (ruled 2026-10-15).** Gains are reported. Every timed comparison
+  is the same case before and after, at least twice each way, read with
+  `scripts/plot_refine3d_bench.py` (wall time, the critical path per
+  iteration, the table parts' thread-seconds). A change is kept unless it is
+  slower than the build without it beyond the run-to-run spread.
+- **Validation.** Every `solve3D` run uses `nsample=2500` and starts from the
+  one common `solve3D_cavgs` result with `cavg_ini_ext=yes`. Until Phase 2
+  removes the key, every 3D case runs with `prob_fast=yes` on its command
+  line, so that the baselines measure the path that becomes the only one.
+- **Acceptance of a repeated case.**
+  - `solve3D` (cases A and A-shm): the final FSC 0.143 resolution lies
+    within the larger of the Phase 0 spread and 3 % of its Phase 0 value.
+  - `solve2D` (cases E and E-shm): the last iteration's mean score is no
+    lower than 0.97 times the lowest Phase 0 run, and the particle-weighted
+    mean class resolution of the last iteration is no worse than 1.03 times
+    the worst Phase 0 run.
+  - **Simulated tests:** each by its own checks against its truth.
+    `simulated_workflow_6vxx` and `simulated_workflow_1jxy` run on one thread
+    with a fixed seed: after an identical change their maps and orientation
+    documents must be byte-identical to the previous phase's (the
+    distributed step included).
+- **Gates.** The fast gate (run by `./compile_debug.sh`), the CTest unit
+  suites of the touched areas, and `python3 scripts/check_test_registry.py .`
+  whenever tests or their registration change.
+- **Not in this run.** Days 3 to 5; the generated indexes under
+  `doc/code_overview/`; skill files (proposed text goes into the report). The
+  plan stays in `planned/`, since days 3 to 5 follow.
+
+### Phase 0: baseline and the distributed simulated step
+
+1. Build the tree as it is (`./compile_debug.sh`, with the fast gate) and the
+   Release build for timed runs.
+2. Add the second `solve3D` step with `nparts=2` to `simulated_workflow_1jxy`
+   (ruling of 2026-10-15): from the same input project as the shared-memory
+   step, in a directory of its own, with the same settings, its final map
+   checked against the same truth. Note it in
+   `test_environment_policy.md`; raise the CTest timeout of the entry if the
+   suite needs it. This is the only source change of the phase.
+3. Run the baseline cases on the Release build:
+   - **S.** `solve3D_cavgs`, single state; its final project and maps are the
+     common start.
+   - **A.** `solve3D nsample=2500 cavg_ini_ext=yes prob_fast=yes` from S,
+     distributed, twice.
+   - **A-shm.** A's command line in shared memory, twice.
+   - **E.** `solve2D` on the particles, distributed, twice.
+   - **E-shm.** E's command line in shared memory, twice.
+   For every case record the exact command line, the wall time, the final FSC
+   0.5 and 0.143 resolutions (for E the score and class resolution of the
+   acceptance) and the summary script's report, and keep its benchmark
+   reports.
+4. Run `simulated_workflow_1jxy` (with the new step), `simulated_workflow_6vxx`,
+   `solve3D_addon` and `cont_refine3D_1jxy`; record their results and keep
+   the maps and orientation documents of the two `simulated_workflow` suites
+   for the byte comparisons.
+
+Exit criteria: the build and the fast gate pass; the distributed step passes
+its truth checks; every case is recorded with its command line and the
+spreads of A, A-shm, E and E-shm; S is kept for the later phases.
+
+### Phase 1: day 1
+
+The four items of day 1, in this order: the benchmark report of the
+`prob_neigh` pre-step, the job polling, the redundant project write, then the
+dynamic scheduling of the 3D fill loops.
+
+- After the first three (identical changes): the two `simulated_workflow`
+  suites byte-identical to Phase 0.
+- After the fourth: every simulated test passes its checks (the one-thread
+  suites stay byte-identical, since one thread has nothing to reorder).
+- Timed: A, A-shm and E twice each against Phase 0 (the polling also shortens
+  the distributed 2D phases).
+
+Exit criteria: the gates pass; the byte comparisons and the acceptance hold;
+the timings and the critical-path change are recorded per item where the
+spread allows, otherwise for the phase.
+
+### Phase 2: day 2 and the retirement of `prob_fast`
+
+The particle-frame shift in the neighbourhood fill, and the removal of the
+`prob_fast` key with every path reached only with `prob_fast=no` (day 2).
+
+- The simulated tests' outputs change: each passes its truth checks, and the
+  truth metrics are recorded against Phase 1.
+- The unit suites of the tables and the polar kernels (the table and in-plane
+  testers) test the remaining paths.
+- Timed: A and A-shm twice each against Phase 1, now without `prob_fast` on
+  the command line.
+
+Exit criteria: no `prob_fast` left in the sources, the interfaces or the
+living documents; the gates pass; the acceptance holds; the timings and the
+score-loop thread-seconds of the `prob_neigh` stages are recorded against
+Phase 1.
+
+### Phase 3: the 2D table
+
+The three items of section "The 2D table": the benchmark profile first (and
+a second timing baseline of E and E-shm with it if it changes the timers),
+then the particle-frame shift in both fill paths, then the dynamic
+scheduling. Extend the summary script where the 2D reports need it.
+
+- The simulated tests pass their checks (their `solve2D` steps change).
+- Timed: E and E-shm twice each against Phase 2.
+
+Exit criteria: the gates pass; the acceptance of E and E-shm holds; the 2D
+table's thread-seconds and the timings are recorded against Phase 2.
+
+### Phase 4: documents and close
+
+- The living documents: `refine3D_policy.md` (the probabilistic pre-step's
+  benchmark reports, and the particle-frame shift as the only path in every
+  table instead of the `prob_fast` paragraphs), `solve3D_chunks_policy.md`
+  (no `prob_fast` to forward), `solve2D_policy.md` (the 2D table).
+- Final repeats of A, A-shm, E and E-shm once each, and every simulated test.
+- The progress section, then the report beside this plan, with a table of
+  every case: wall time and resolution in Phase 0 and now.
+
+Exit criteria: the gates pass; the report is written.
+
+### File table
+
+| file | why | phases |
+| --- | --- | --- |
+| `doc/implementation_notes/planned/single_state_speed_week.md` | this plan and its progress | each |
+| `scripts/plot_refine3d_bench.py` | the summary script; fixes, and the 2D reports | each |
+| `src/main/commanders/test/simple_commanders_test_highlevel_workflow.f90` | the distributed `solve3D` step of `simulated_workflow_1jxy` | 0 |
+| `production/CMakeLists.txt` | the timeout and comment of `simulated_workflow_1jxy` | 0 |
+| `doc/policies/test_environment_policy.md` | the distributed step | 0 4 |
+| `src/utils/qsys/simple_qsys_ctrl.f90` | the job polling | 1 |
+| `src/main/strategies/parallelization/simple_refine3D_strategy.f90` | the redundant project write | 1 |
+| `src/main/commanders/simple/simple_commanders_prob.f90` | the `prob_neigh` pre-step report; `prob_fast` benchmark lines; the 2D table's profile | 1 2 3 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | dynamic scheduling; `prob_fast` retired | 1 2 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90` | dynamic scheduling; the particle-frame shift | 1 2 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | shared fill and seed routines | 2 3 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90` | the 2D table | 3 |
+| `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90` | consumers of the recorded seed, if they need it | 2 |
+| `src/main/strategies/search/probabilistic/simple_strategy2D_prob.f90` | consumers of the recorded seed, if they need it | 3 |
+| `src/main/pftc/simple_pftc_shsrch_grad.f90` | `prob_fast` options made unconditional | 2 3 |
+| `src/main/pftc/simple_pftc_inplane_tester.f90` | its `prob_fast` comparisons | 2 |
+| `src/main/pftc/simple_polarft_corr.f90`, `src/main/pftc/simple_polarft_memo.f90` | bank kernels where a table needs a variant | 2 3 |
+| `src/main/params/simple_parameters.f90`, `src/main/params/simple_parameters_parse.f90` | the `prob_fast` key removed | 2 |
+| `src/main/ui/simple/simple_ui_refine3D.f90`, `src/main/ui/simple/simple_ui_solve3D.f90` | the `prob_fast` inputs removed | 2 |
+| `doc/policies/3D/refine3D_policy.md` | the pre-step reports; the particle-frame shift as the only path | 1 2 4 |
+| `doc/policies/3D/solve3D_chunks_policy.md` | no `prob_fast` to forward | 2 4 |
+| `doc/policies/2D/solve2D_policy.md` | the 2D table | 3 4 |
 
 ## Not in this week
 

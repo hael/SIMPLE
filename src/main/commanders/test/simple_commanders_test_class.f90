@@ -79,6 +79,7 @@ use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
 use simple_nu_filter_tester,                 only: run_all_nu_filter_tests
 use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
+use simple_pcg_sparse_tester,                only: run_all_pcg_sparse_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_strategy3D_cont_tester,           only: run_all_strategy3D_cont_tests
@@ -550,6 +551,7 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'PCG half-set',         run_all_pcg_halfset_tests)
+        call add_suite(s, n, 'PCG sparse sampling',  run_all_pcg_sparse_tests)
         call add_suite(s, n, 'addon report docking', run_all_solve3D_addon_dock_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
     end subroutine suites_lib_reconstruction

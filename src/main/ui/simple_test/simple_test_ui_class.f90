@@ -190,11 +190,11 @@ contains
         call lib_reconstruction%new(&
         &'lib_reconstruction',&
         &'library tests: half-set PCG reconstruction against gridding, map docking',&
-        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; the solve3D_addon report docking a moved map',&
+        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; PCG from sparse and preferred-orientation view sets against gridding; the solve3D_addon report docking a moved map',&
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set, addon_report_docking, fractional_reconstruction)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, fractional_reconstruction)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 

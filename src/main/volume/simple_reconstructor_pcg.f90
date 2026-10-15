@@ -33,6 +33,7 @@ integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cos
 integer, parameter :: PCG_RAW_ACCUM_VERSION = 2
 integer, parameter :: PCG_RAW_PROV_LEN = 256
 real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< window floor of the x/window warm-start conversion, see window_div
+real,    parameter :: PCG_RHO_SAMPLED_FRAC = 0.1 !< density below this fraction of its shell's measured mean is unmeasured, see finalize_density_accum
 character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW02'
 
 real,             parameter, public :: PCG_LAMBDA = 1.0e-3 !< the Tikhonov coefficient of production reconstructions
@@ -1889,7 +1890,7 @@ contains
         logical,                  intent(in)    :: l_precond, l_kernel
         real(dp), allocatable :: shsum(:), shsum_thr(:,:)
         integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
-        real,     allocatable :: shfloor(:)
+        real,     allocatable :: shfloor(:), shthr(:)
         integer                 :: h, k, cdim(3), m, hh, phys(3), sh, rho_lim
         integer                 :: khat_lim, work_lim, nthr, ithr
         real                    :: denom, rval
@@ -1948,18 +1949,21 @@ contains
                 end do
             end do
             deallocate(shsum_thr, shcnt_thr)
-            allocate(shfloor(0:rho_lim), source=0.0)
+            allocate(shfloor(0:rho_lim), shthr(0:rho_lim), source=0.0)
             do sh = 0, rho_lim
                 if( shcnt(sh) > 0 )then
-                    shfloor(sh) = PCG_RHO_FLOOR_FRAC * real(shsum(sh) / real(shcnt(sh),dp))
+                    shfloor(sh) = PCG_RHO_FLOOR_FRAC   * real(shsum(sh) / real(shcnt(sh),dp))
+                    shthr(sh)   = PCG_RHO_SAMPLED_FRAC * real(shsum(sh) / real(shcnt(sh),dp))
                 endif
             end do
             deallocate(shsum, shcnt)
             self%t_fin_rho = pcg_toc(tp)
         endif
-        ! PASS 2: guarded reciprocal and packed Khat; an empty shell stays unconstrained
+        ! PASS 2: guarded reciprocal and packed Khat; an empty shell stays unconstrained.
+        ! A voxel below shthr is unmeasured: the support cut spreads b into it, and dividing by the
+        ! floor alone would amplify that ~1/PCG_RHO_FLOOR_FRAC times (centre spike, Nyquist layer)
         tp = pcg_tic()
-        !$omp parallel do collapse(2) default(shared) private(h,k,m,hh,phys,sh,denom) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(h,k,m,hh,phys,sh,denom,rval) schedule(static)
         do m = self%lims3(3,1), self%lims3(3,2)
             do k = self%lims3(2,1), self%lims3(2,2)
                 do h = 0, self%lims3(1,2)
@@ -1972,7 +1976,9 @@ contains
                     endif
                     if( l_precond )then
                         if( sh <= rho_lim )then
-                            denom = max(rho_accum(hh,k,m), 0.0) + shfloor(sh)
+                            rval  = max(rho_accum(hh,k,m), 0.0)
+                            denom = 0.0
+                            if( rval >= shthr(sh) ) denom = rval + shfloor(sh)
                             if( self%l_ml_prior )then
                                 denom = denom + self%ml_prior(phys(1),phys(2),phys(3)) / self%padsc**2
                             endif
@@ -1988,7 +1994,7 @@ contains
         self%t_fin_fold = pcg_toc(tp)
         if( l_precond )then
             self%l_precond = .true.
-            deallocate(shfloor)
+            deallocate(shfloor, shthr)
             ! a rebuilt preconditioner carries no ridge term yet
             self%precond_ridge = 0.0
             call self%fold_solvent_ridge_into_precond
@@ -2700,7 +2706,7 @@ contains
         real,                     intent(out)   :: rel_resid_l2, rel_resid_m
         real, allocatable :: diag(:,:,:), u(:,:,:), r(:,:,:), z(:,:,:), bz(:,:,:)
         real(dp) :: bnorm, rnorm, bm, rm
-        integer  :: cdim(3), i, j, k
+        integer  :: cdim(3), i, j, k, logi(3), rho_lim
         if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior has not been built; shrink_by_ml_prior')
         if( .not. self%l_precond  ) THROW_HARD('PCG preconditioner has not been built; shrink_by_ml_prior')
         if( .not. self%l_rhs      ) THROW_HARD('end_accum has not been called; shrink_by_ml_prior')
@@ -2709,15 +2715,21 @@ contains
         if( any(shape(self%precond) /= cdim) .or. any(shape(self%ml_prior) /= cdim) ) &
             &THROW_HARD('PCG preconditioner/prior shape mismatch; shrink_by_ml_prior')
         allocate(diag(cdim(1),cdim(2),cdim(3)), source=1.0)
-        ! precond = 1/(rho+floor+P_raw) here (the prior was attached before
-        ! end_accum), ml_prior = P_raw*padsc**2; beyond the data (precond 0)
-        ! and below the prior's high-pass (ml_prior 0) the factor is 1
-        !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
+        ! precond = 1/(rho+floor+P_raw) here (the prior was attached before end_accum), 1/P_raw at
+        ! unmeasured voxels (factor 0), ml_prior = P_raw*padsc**2; below the prior's high-pass (ml_prior 0)
+        ! the factor is 1. Beyond the data sphere it is 0: the base map holds only support-leaked noise there
+        rho_lim = self%padf * self%Rnat
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,logi) schedule(static)
         do k = 1, cdim(3)
             do j = 1, cdim(2)
                 do i = 1, cdim(1)
-                    diag(i,j,k) = min(1.0, max(0.0, 1.0 - &
-                        &(self%ml_prior(i,j,k) / self%padsc**2) * self%precond(i,j,k)))
+                    logi = self%wimg%comp_addr_logi(i,j,k)
+                    if( nint(sqrt(real(sum(logi**2)))) > rho_lim )then
+                        diag(i,j,k) = 0.0
+                    else
+                        diag(i,j,k) = min(1.0, max(0.0, 1.0 - &
+                            &(self%ml_prior(i,j,k) / self%padsc**2) * self%precond(i,j,k)))
+                    endif
                 end do
             end do
         end do

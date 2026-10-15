@@ -564,6 +564,7 @@ contains
         call test_ccs_degenerate()
         call test_morphology()
         call test_cc_bookkeeping()
+        call test_cc_voxels()
         call test_diameter_cc_3D()
         call test_holes_and_feret()
     end subroutine run_all_image_bin_tests
@@ -797,6 +798,53 @@ contains
 
     ! three blobs of known size and position: labels, sizes, centres, diameters, and the
     ! elimination/relabelling/extraction routines that the pickers and cavg tools use
+    ! get_cc_voxels returns each label's voxels in array element order, the order pack and maxloc see
+    subroutine test_cc_voxels()
+        integer, parameter :: NX = 5, NY = 4, NZ = 3, NLAB = 3
+        type(image_bin) :: bimg
+        integer, allocatable :: first(:), vox(:,:)
+        integer :: imat(NX,NY,NZ), i, j, k, l, iv, nwrong
+        write(*,'(A)') 'test_cc_voxels'
+        call bimg%new_bimg([NX,NY,NZ], 1.0)
+        imat = 0
+        imat(2,1,1) = 1; imat(5,4,3) = 1; imat(1,3,2) = 1   ! label 1 scattered over the box
+        imat(3:4,2:3,2) = 2                                 ! label 2: a 2x2 block
+        imat(1,1,3) = 4                                     ! label 4 is above nlabels; label 3 is absent
+        call bimg%set_imat(imat)
+        call bimg%get_cc_voxels(NLAB, first, vox)
+        call assert_int(NLAB+1, size(first),           'get_cc_voxels: nlabels+1 offsets')
+        call assert_int(1, first(1),                   'get_cc_voxels: the first label starts at 1')
+        call assert_int(7, size(vox,2),                'get_cc_voxels: only labels 1..nlabels are listed')
+        call assert_int(3, first(2) - first(1),        'get_cc_voxels: label 1 has 3 voxels')
+        call assert_int(4, first(3) - first(2),        'get_cc_voxels: label 2 has 4 voxels')
+        call assert_int(0, first(4) - first(3),        'get_cc_voxels: an absent label has none')
+        ! every label's list is the brute-force scan in array element order
+        nwrong = 0
+        do l = 1, NLAB
+            iv = first(l)
+            do k = 1, NZ
+                do j = 1, NY
+                    do i = 1, NX
+                        if( imat(i,j,k) /= l ) cycle
+                        if( iv >= first(l+1) )then
+                            nwrong = nwrong + 1
+                        else if( any(vox(:,iv) /= [i,j,k]) )then
+                            nwrong = nwrong + 1
+                        endif
+                        iv = iv + 1
+                    enddo
+                enddo
+            enddo
+            if( iv /= first(l+1) ) nwrong = nwrong + 1
+        enddo
+        call assert_int(0, nwrong,                     'get_cc_voxels: lists match the scan in array element order')
+        call assert_true(all(vox(:,first(1)) == [2,1,1]), 'get_cc_voxels: label 1 starts at its first voxel in element order')
+        call bimg%get_cc_voxels(0, first, vox)
+        call assert_int(1, size(first),                'get_cc_voxels: no labels, one offset')
+        call assert_int(0, size(vox,2),                'get_cc_voxels: no labels, no voxels')
+        call bimg%kill_bimg
+    end subroutine test_cc_voxels
+
     subroutine test_cc_bookkeeping()
         integer, parameter :: BOX = 48
         real,    parameter :: SMPD = 2.0
