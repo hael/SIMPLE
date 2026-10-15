@@ -85,7 +85,7 @@ use simple_parameters,                                only: parameters
 use simple_sp_project,                                only: sp_project
 use simple_eo_partition,                              only: eo_transaction
 use simple_image,                                     only: image
-use simple_imgarr_utils,                              only: dealloc_imgarr
+use simple_imgarr_utils,                              only: dealloc_imgarr, read_cavgs_into_imgarr
 use simple_qsys_env,                                  only: qsys_env
 use simple_qsys_funs,                                 only: qsys_cleanup
 use simple_qsys_async_job,                            only: qsys_async_job, ASYNC_JOB_RUNNING, ASYNC_JOB_DONE, ASYNC_JOB_FAILED
@@ -284,6 +284,7 @@ contains
     procedure :: start_assign
     procedure :: finish_assign
     procedure :: take_assignment
+    procedure :: write_assignment_cavgs
     procedure :: prepare_refine_seeds
     procedure :: start_refine
     procedure :: finish_refine
@@ -313,6 +314,7 @@ contains
     procedure, nopass :: compact_states
     procedure, nopass :: fit_mskdiam
     procedure, nopass :: usable_job_2D
+    procedure, nopass :: write_state_cavgs
 end type stream_stage_solve3D
 
 contains
@@ -765,7 +767,7 @@ contains
         type(cavg_quality_model)  :: model
         type(cavg_quality_result) :: quality
         type(image), allocatable  :: cavg_imgs(:)
-        type(string)              :: stk, fname
+        type(string)              :: stk
         real                      :: smpd, mskdiam, box_stk
         integer                   :: ncls
         l_ok    = .false.
@@ -785,10 +787,8 @@ contains
             &dir//'/'//REJECTED_CAVGS//MRC_EXT)
         call mrc2jpeg_tiled(dir//'/'//SELECTED_CAVGS//MRC_EXT, dir//'/'//SELECTED_CAVGS//JPG_EXT)
         call mrc2jpeg_tiled(dir//'/'//REJECTED_CAVGS//MRC_EXT, dir//'/'//REJECTED_CAVGS//JPG_EXT)
-        fname = simple_abspath(dir//'/'//SELECTED_CAVGS//JPG_EXT, check_exists=.false.)
-        if( file_exists(fname) ) write(logfhandle,'(A,A)') '>>> QUALITY SELECTED CLASS AVERAGES JPEG ', fname%to_char()
-        fname = simple_abspath(dir//'/'//REJECTED_CAVGS//JPG_EXT, check_exists=.false.)
-        if( file_exists(fname) ) write(logfhandle,'(A,A)') '>>> QUALITY REJECTED CLASS AVERAGES JPEG ', fname%to_char()
+        call log_jpeg('QUALITY SELECTED CLASS AVERAGES', dir//'/'//SELECTED_CAVGS//JPG_EXT)
+        call log_jpeg('QUALITY REJECTED CLASS AVERAGES', dir//'/'//REJECTED_CAVGS//JPG_EXT)
         write(logfhandle,'(A,A,A,I6,A,I6)') '>>> CAVG QUALITY (', preset, ') SELECTED / REJECTED : ', count(cls_states > 0), ' / ',&
             &count(cls_states <= 0)
         call dealloc_imgarr(cavg_imgs)
@@ -1532,6 +1532,8 @@ contains
         else
             write(logfhandle,'(A)') '>>> THE STATES ARE NOT COMPARED (NO DOCKING)'
         endif
+        ! the class averages each state was made from, a stack and a JPEG per state
+        call write_attempt_cavgs()
         open(newunit=funit, file=dir%to_char()//'/'//REFS_RECORD, status='replace', action='write', iostat=ios)
         if( ios /= 0 ) THROW_HARD('cannot write the record of '//dir%to_char())
         write(funit,'(I0,1X,I0,1X,F12.6)') nheld, box_try, smpd_try
@@ -1557,6 +1559,27 @@ contains
         else
             write(logfhandle,'(A)') '>>> THE VOLUMES FAIL THE CHECK'
         endif
+
+    contains
+
+        ! the class averages solve3D_cavgs aligned (its project's cavg entry, one per cls3D entry),
+        ! grouped by their renumbered state into dir: none when they are not on disk
+        subroutine write_attempt_cavgs()
+            type(image), allocatable :: cavgs(:)
+            type(string) :: stk
+            real         :: smpd_stk
+            integer      :: ncls_stk
+            ncls_stk = 0
+            call res%get_cavgs_stk(stk, ncls_stk, smpd_stk, fail=.false.)
+            if( ncls_stk < 1 .or. ncls_stk /= size(cls_states) .or. .not. file_exists(stk) )then
+                write(logfhandle,'(A)') '>>> NO CLASS AVERAGES OF THE ATTEMPT TO GROUP BY STATE'
+                return
+            endif
+            cavgs = read_cavgs_into_imgarr(res)
+            call write_state_cavgs(cavgs, cls_states, nheld, dir, 'SOLVE3D_CAVGS ATTEMPT '//int2str(itry))
+            call dealloc_imgarr(cavgs)
+        end subroutine write_attempt_cavgs
+
     end function register_attempt
 
     ! The correlation of the volumes @p vol1 and @p vol2 (pixel size @p smpd, mask diameter
@@ -1651,6 +1674,14 @@ contains
             if( file_exists(src) ) call simple_copy_file(src, string(REFS_DIR//'/')//refine3D_reprojs_fname(s))
             src = dir//'/'//refine3D_oris_heatmap_fname(s)
             if( file_exists(src) ) call simple_copy_file(src, string(REFS_DIR//'/')//refine3D_oris_heatmap_fname(s))
+            ! the class averages the state was made from
+            src = dir//'/'//cavgs_fbody(s)//MRC_EXT
+            if( file_exists(src) ) call simple_copy_file(src, string(REFS_DIR//'/'//cavgs_fbody(s)//MRC_EXT))
+            src = dir//'/'//cavgs_fbody(s)//JPG_EXT
+            if( file_exists(src) )then
+                call simple_copy_file(src, string(REFS_DIR//'/'//cavgs_fbody(s)//JPG_EXT))
+                call log_jpeg('REFERENCE STATE '//int2str_pad(s, 2)//' CLASS AVERAGES', string(REFS_DIR//'/'//cavgs_fbody(s)//JPG_EXT))
+            endif
         enddo
         call simple_copy_file(dir//'/'//REFS_RECORD, string(REFS_DIR//'/'//REFS_RECORD))
         if( .not. self%restore_refs(string(REFS_DIR)) ) THROW_HARD('the references could not be copied to '//REFS_DIR)
@@ -1806,12 +1837,14 @@ contains
     end subroutine start_assign
 
     ! The matching is done: the rejection, the flags and the mapping onto the rows
-    ! (take_assignment), recorded in the matched project, then the local refinement. Without a
-    ! usable result the states stay as they were.
+    ! (take_assignment), recorded in the matched project, the (sub-)class averages grouped by state
+    ! (write_assignment_cavgs), then the local refinement. Without a usable result the states stay
+    ! as they were.
     subroutine finish_assign( self )
         class(stream_stage_solve3D), intent(inout) :: self
-        type(sp_project) :: res
-        type(string)     :: projfile
+        type(sp_project)     :: res
+        type(string)         :: projfile
+        integer, allocatable :: states_matched(:)
         projfile = self%assign_dir//'/'//ASSIGN_LABEL//METADATA_EXT
         call self%job%kill
         self%phase = PHASE_IDLE
@@ -1820,12 +1853,19 @@ contains
             return
         endif
         call res%read(projfile)
+        ! the states the matching gave, before the rejection
+        if( res%os_cls3D%get_noris() > 0 )then
+            states_matched = res%os_cls3D%get_all_asint('state')
+        else
+            allocate(states_matched(0))
+        endif
         if( .not. self%take_assignment(res) )then
             write(logfhandle,'(A,A,A)') '>>> WARNING: NO USABLE MATCHING IN ', projfile%to_char(), '; THE STATES STAY'
             call res%kill
             return
         endif
         call res%write(projfile)
+        call self%write_assignment_cavgs(res, states_matched)
         call res%kill
         call self%write_stage_project()
         call self%start_refine()
@@ -1976,6 +2016,40 @@ contains
         end subroutine log_fit
 
     end function take_assignment
+
+    ! The matched (sub-)class averages of @p res grouped into the assignment's folder: a stack and a
+    ! JPEG per state (the ambiguous ones included), one of those the fit rejected (a state given by
+    ! the matching, @p states_matched, and none after the rejection, with particles), and one of the
+    ! ambiguous ones (write_state_cavgs). None when the class averages are not on disk.
+    subroutine write_assignment_cavgs( self, res, states_matched )
+        class(stream_stage_solve3D), intent(inout) :: self
+        class(sp_project),           intent(inout) :: res
+        integer,                     intent(in)    :: states_matched(:)
+        type(image), allocatable :: cavgs(:)
+        integer,     allocatable :: states(:)
+        logical,     allocatable :: l_rej(:), l_amb(:)
+        type(string) :: stk
+        real         :: smpd_stk
+        integer      :: ncls, ncls_stk, icls
+        ncls     = res%os_cls3D%get_noris()
+        ncls_stk = 0
+        call res%get_cavgs_stk(stk, ncls_stk, smpd_stk, fail=.false.)
+        if( ncls < 1 .or. ncls_stk /= ncls .or. size(states_matched) /= ncls .or. .not. file_exists(stk) )then
+            write(logfhandle,'(A)') '>>> NO CLASS AVERAGES OF THE ASSIGNMENT TO GROUP BY STATE'
+            return
+        endif
+        states = res%os_cls3D%get_all_asint('state')
+        allocate(l_rej(ncls), l_amb(ncls), source=.false.)
+        do icls = 1,ncls
+            l_rej(icls) = states_matched(icls) > 0 .and. states(icls) == 0
+            if( res%os_cls2D%isthere(icls, 'pop') ) l_rej(icls) = l_rej(icls) .and. res%os_cls2D%get_int(icls, 'pop') > 0
+            if( res%os_cls2D%isthere(icls, 'ambiguous') ) l_amb(icls) = res%os_cls2D%get_int(icls, 'ambiguous') == 1
+        enddo
+        cavgs = read_cavgs_into_imgarr(res)
+        call write_state_cavgs(cavgs, states, self%n_refs(), self%assign_dir, 'ASSIGNMENT '//int2str(self%nassign),&
+            &l_rej=l_rej, l_amb=l_amb)
+        call dealloc_imgarr(cavgs)
+    end subroutine write_assignment_cavgs
 
     ! The seeds of the local refinement on the rows (refine=cont continues from a discrete pose:
     ! state, half-set, projection direction): the half-sets are the project's partition
@@ -2588,6 +2662,72 @@ contains
             l_rej(iworst) = .true.
         enddo
     end subroutine reject_by_fit
+
+    !> The class averages @p cavgs grouped by @p states (1..@p nstates) into @p dir: per state a
+    !! stack and a tiled JPEG (cavgs_fbody), and, when given, one of the classes @p l_rej marks
+    !! (cavgs_rejected) and one of those @p l_amb marks (cavgs_ambiguous); each JPEG logged
+    !! (log_jpeg) under @p label. A group without class averages writes nothing and is logged.
+    subroutine write_state_cavgs( cavgs, states, nstates, dir, label, l_rej, l_amb )
+        class(image),      intent(inout) :: cavgs(:)
+        integer,           intent(in)    :: states(:), nstates
+        class(string),     intent(in)    :: dir
+        character(len=*),  intent(in)    :: label
+        logical, optional, intent(in)    :: l_rej(:), l_amb(:)
+        integer :: s
+        if( size(states) /= size(cavgs) ) THROW_HARD('# states /= # class averages; write_state_cavgs')
+        do s = 1,nstates
+            call write_cavgs_jpeg(states == s, dir//'/'//cavgs_fbody(s), label//' STATE '//int2str_pad(s, 2))
+        enddo
+        if( present(l_rej) ) call write_cavgs_jpeg(l_rej, dir//'/cavgs_rejected',  label//' REJECTED')
+        if( present(l_amb) ) call write_cavgs_jpeg(l_amb, dir//'/cavgs_ambiguous', label//' AMBIGUOUS')
+
+    contains
+
+        subroutine write_cavgs_jpeg( mask, fbody, what )
+            logical,          intent(in) :: mask(:)
+            class(string),    intent(in) :: fbody
+            character(len=*), intent(in) :: what
+            type(string) :: stk, jpg
+            integer      :: icls, k
+            stk = fbody//MRC_EXT
+            jpg = fbody//JPG_EXT
+            if( file_exists(stk) ) call del_file(stk)
+            if( file_exists(jpg) ) call del_file(jpg)
+            if( size(mask) /= size(cavgs) .or. .not. any(mask) )then
+                write(logfhandle,'(A)') '>>> '//what//' CLASS AVERAGES: NONE'
+                return
+            endif
+            k = 0
+            do icls = 1,size(cavgs)
+                if( .not. mask(icls) ) cycle
+                k = k + 1
+                call cavgs(icls)%write(stk, k)
+            enddo
+            call mrc2jpeg_tiled(stk, jpg)
+            write(logfhandle,'(A,I6)') '>>> '//what//' CLASS AVERAGES: ', k
+            call log_jpeg(what//' CLASS AVERAGES', jpg)
+        end subroutine write_cavgs_jpeg
+
+    end subroutine write_state_cavgs
+
+    !> The file body of state @p s's stack of class averages (cavgs_state<NN>).
+    function cavgs_fbody( s ) result( fbody )
+        integer, intent(in) :: s
+        character(len=:), allocatable :: fbody
+        fbody = 'cavgs_state'//int2str_pad(s, 2)
+    end function cavgs_fbody
+
+    !> The JPEG @p jpg logged under @p label with its absolute path, then once more as a line of its
+    !! own ('>>> JPEG <path>'); nothing when it is not on disk.
+    subroutine log_jpeg( label, jpg )
+        character(len=*), intent(in) :: label
+        class(string),    intent(in) :: jpg
+        type(string) :: path
+        if( .not. file_exists(jpg) ) return
+        path = simple_abspath(jpg, check_exists=.false.)
+        write(logfhandle,'(A,A)') '>>> '//label//' JPEG ', path%to_char()
+        write(logfhandle,'(A,A)') '>>> JPEG ', path%to_char()
+    end subroutine log_jpeg
 
     !> The median of @p x (none empty).
     pure real function median_of( x )

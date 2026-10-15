@@ -414,8 +414,12 @@ input and its forwarding are gone.
    states would split the particles by noise), and at least `NSTATES_MIN` (2) states each hold
    `STATE_FRAC_MIN` (5%) of the class averages (provisional constants, until a validation run
    sets them). The run of 13 October 2026 that collapsed ended with the halves 90.6 degrees
-   apart, as random orientations would be. The GUI status is "checking the initial volumes".
-9. **Passed:** the attempt's volumes, JPEGs and record are copied into `state_refs/` and are the
+   apart, as random orientations would be. The class averages each state was made from are
+   written beside its volume, a stack and a tiled JPEG per state (`cavgs_state<NN>`,
+   `write_state_cavgs`), when solve3D_cavgs' class averages are on disk. The GUI status is
+   "checking the initial volumes".
+9. **Passed:** the attempt's volumes, JPEGs (with the per-state class averages) and record are
+   copied into `state_refs/` and are the
    references for the session (`accept_refs`, `restore_refs`): the stage's states
    (`params%nstates`) are theirs, and the GUI gets them (`send_refs`) under their states, without
    FSCs, populations or orientations, since they come from class averages. The stage's project
@@ -503,7 +507,12 @@ Decided 13 October 2026
    median absolute deviations is rejected (`reject_by_fit`: state 0), the worst first, at most
    `FIT_REJECT_MAX` (30%) of them; a kept class with a margin below `MARGIN_AMBIGUOUS` (0.02) is
    flagged (`flag_ambiguous`: `cls2D` key `ambiguous` 1 in the matched project) and assigned as
-   any other. The matched project is written back with both. The log carries the fit's median,
+   any other. The matched project is written back with both, and the matched (sub-)class
+   averages are grouped into the assignment's folder (`write_assignment_cavgs`): a stack and a
+   tiled JPEG per state (`cavgs_state<NN>`, the ambiguous ones included), one of those the fit
+   rejected (`cavgs_rejected`) and one of the ambiguous (`cavgs_ambiguous`). Every JPEG p07
+   writes is logged with its absolute path, then once more on a line of its own,
+   `>>> JPEG <path>`, as the other stages log theirs. The log carries the fit's median,
    deviation, threshold and cap, each rejected class's correlation, population and state, the
    median population of the kept and rejected candidates, and the correlation of the best
    correlation with the log population over the candidates, so a validation run shows whether
@@ -549,7 +558,8 @@ Decided 13 October 2026
    refused),
    `test_local_refinement` (the assigned rows valid refine=cont seeds; a result taken under the
    stage's states with an empty state left out, with the refined poses; a result of other rows
-   refused), `test_fit_rules`, and `unit_pftc_align2D3D` "cavgs state match" (`reduce_state_matches` and
+   refused), `test_state_cavgs` (a stack and a JPEG per state, of the rejected and of the
+   ambiguous; none for a state without class averages), `test_fit_rules`, and `unit_pftc_align2D3D` "cavgs state match" (`reduce_state_matches` and
    `matched_pose` on fixed numbers; projections of two volumes of Gaussian blobs, each matched to
    its own with a positive margin at its own direction, in-plane angle and no shift, and a
    mirrored one at the opposite view).

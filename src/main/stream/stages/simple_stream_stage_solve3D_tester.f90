@@ -24,6 +24,7 @@ use simple_syslib,                                    only: simple_mkdir, dir_ex
 use simple_math_ft,                                   only: get_resarr
 use simple_cmdline,                                   only: cmdline
 use simple_image,                                     only: image
+use simple_imghead,                                   only: find_ldim_nptcls
 use simple_ori,                                       only: ori
 use simple_strategy3D_cont,                           only: cont_seed_is_valid
 use simple_sp_project,                                only: sp_project
@@ -69,6 +70,7 @@ contains
         call test_failed_attempts()
         call test_assignment()
         call test_local_refinement()
+        call test_state_cavgs()
         call test_retention()
         call test_send_status()
         call test_send_volumes()
@@ -931,6 +933,53 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_local_refinement
+
+    !> class averages grouped by state: a stack and a JPEG per state, one of the rejected and one of
+    !! the ambiguous ones (the ambiguous also in their state's); a state without class averages
+    !! writes nothing
+    subroutine test_state_cavgs()
+        class(stream_stage_solve3D), allocatable :: stage
+        type(image),  allocatable :: cavgs(:)
+        real,         allocatable :: rmat(:,:,:)
+        type(string)       :: cwd_saved, root
+        integer, parameter :: STATES(5) = [1, 2, 1, 0, 2]
+        logical, parameter :: L_REJ(5)  = [.false., .false., .false., .true., .false.]
+        logical, parameter :: L_AMB(5)  = [.false., .true., .false., .false., .false.]
+        integer :: nfail0, i, x, y, ldim(3), n
+        allocate(stage)
+        write(*,'(A)') 'test_state_cavgs'
+        nfail0 = tests_failed
+        call enter_fixture('a3_stage_state_cavgs', cwd_saved, root)
+        allocate(cavgs(size(STATES)), rmat(VOL_BOX,VOL_BOX,1))
+        do i = 1,size(STATES)
+            do y = 1,VOL_BOX
+                do x = 1,VOL_BOX
+                    rmat(x,y,1) = real(i) * real(x + 2 * y)
+                enddo
+            enddo
+            call cavgs(i)%new([VOL_BOX, VOL_BOX, 1], VOL_SMPD)
+            call cavgs(i)%set_rmat(rmat, .false.)
+        enddo
+        call stage%write_state_cavgs(cavgs, STATES, 3, string('.'), 'TEST', l_rej=L_REJ, l_amb=L_AMB)
+        call find_ldim_nptcls(string('cavgs_state01.mrc'), ldim, n)
+        call assert_int(2, n, 'state 1''s two class averages')
+        call find_ldim_nptcls(string('cavgs_state02.mrc'), ldim, n)
+        call assert_int(2, n, 'state 2''s two, the ambiguous one included')
+        call assert_false(file_exists(string('cavgs_state03.mrc')), 'a state without class averages writes nothing')
+        call find_ldim_nptcls(string('cavgs_rejected.mrc'), ldim, n)
+        call assert_int(1, n, 'the rejected one')
+        call find_ldim_nptcls(string('cavgs_ambiguous.mrc'), ldim, n)
+        call assert_int(1, n, 'the ambiguous one')
+        call assert_true(file_exists(string('cavgs_state01.jpg')) .and. file_exists(string('cavgs_state02.jpg')),&
+            &'a JPEG per state with class averages')
+        call assert_true(file_exists(string('cavgs_rejected.jpg')) .and. file_exists(string('cavgs_ambiguous.jpg')),&
+            &'and of the rejected and the ambiguous')
+        do i = 1,size(cavgs)
+            call cavgs(i)%kill
+        enddo
+        deallocate(stage)
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_state_cavgs
 
     !> the newest quality folders and those the route started from are kept, and so is the latest
     !! assignment; earlier assignments and folders set aside for unfinished jobs go
