@@ -17,6 +17,7 @@ private
 
 integer,        parameter :: EO_COMPLETE = 0, EO_MISSING = 1, EO_PARTIAL = 2, EO_INCONSISTENT = 3
 integer(int64), parameter :: EO_SEED_DEFAULT = 20261014_int64   !< the transaction's own random stream
+integer(int64), parameter :: MINSTD_A = 48271_int64, MINSTD_M = 2147483647_int64
 integer,        parameter :: MIN_GROUPS_WARN = 20               !< fewer independent groups than this warns
 real,           parameter :: IMBALANCE_WARN  = 0.05             !< halves differing by more of the active warns
 character(len=*), parameter :: KEY_GROUP = 'eo_group', KEY_INDEX = 'eo_byindex'
@@ -461,16 +462,14 @@ contains
         rows_match = .true.
     end function rows_match
 
-    !> splitmix64: the transaction's own generator, never the process-wide random state
+    !> MINSTD (Park and Miller, multiplier 48271): the transaction's own generator, never the
+    !! process-wide random state. Every product fits in 64 bits: integer overflow is undefined in
+    !! Fortran, and an optimising compiler may assume it never happens.
     integer(int64) function next_random( state )
         integer(int64), intent(inout) :: state
-        integer(int64) :: z
-        state = state + int(z'9E3779B97F4A7C15', int64)
-        z = state
-        z = ieor(z, ishft(z, -30)) * int(z'BF58476D1CE4E5B9', int64)
-        z = ieor(z, ishft(z, -27)) * int(z'94D049BB133111EB', int64)
-        z = ieor(z, ishft(z, -31))
-        next_random = ishft(z, -1)   ! non-negative
+        if( state <= 0_int64 .or. state >= MINSTD_M ) state = 1_int64 + modulo(state, MINSTD_M - 1_int64)
+        state       = mod(state * MINSTD_A, MINSTD_M)
+        next_random = state
     end function next_random
 
     !> Fisher-Yates with the transaction's generator

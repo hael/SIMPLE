@@ -2143,9 +2143,13 @@ has no micrograph groups by nature.
 - Particle records cannot say "unlabelled": an unset half label reads as 0,
   the same as even. The provenance therefore lives on the stack rows alone, as
   decided above; the partition status is computed from it.
-- The split uses its own generator (splitmix64, seed 20261014 by default, a
-  seed argument for tests). Groups are shuffled, then stably merge-sorted by
-  active population; labels are written in one pass over the rows.
+- The split uses its own generator (seed 20261014 by default, a seed argument
+  for tests). The run used splitmix64, which relies on integer overflow, and
+  Fortran leaves overflow undefined. A macOS Release build (gfortran 16, -O3)
+  then failed the micrograph-group tests, so on 2026-10-15 the generator became
+  MINSTD (Park and Miller), whose products never overflow. Groups are shuffled,
+  then stably merge-sorted by active population; labels are written in one pass
+  over the rows.
 - Consumers changed as in the inventory: the refine2D, refine3D,
   reconstruction and `calc_pspec` strategies, the 2D and 3D matchers,
   `prob_align2D` and `prob_tab2D`, `solve2D` (first stage and the `cls_init=prev`
