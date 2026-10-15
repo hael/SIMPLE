@@ -618,24 +618,23 @@ contains
         call fname%kill
     end subroutine cleanup_prob_align_outputs
 
-    !> The bench file of a probability-table part (prob_tab_bench_fname); rt_batch is the batch
-    !! builds, particle reading included, which is reported apart
+    !> The bench record of a probability-table part, in its partition's file of the prob_tab, prob_tab_neigh
+    !! or prob_tab2D family; rt_batch is the batch builds, particle reading included, which is reported apart
     subroutine write_prob_tab_bench( params, nptcls, reads, rt_setup, rt_refs, rt_batch, rt_fill, rt_write, rt_tot, fill )
         use simple_matcher_ptcl_io,    only: ptcl_read_counts, write_ptcl_read_bench_context, write_mem_bench_context
-        use simple_refine3D_fnames,    only: prob_tab_bench_fname
+        use simple_bench_io,           only: open_bench_report
         use simple_eul_prob_tab_utils, only: prob_fill_profile
         class(parameters),      intent(in) :: params
         integer,                intent(in) :: nptcls
         type(ptcl_read_counts), intent(in) :: reads
         real(timer_int_kind),   intent(in) :: rt_setup, rt_refs, rt_batch, rt_fill, rt_write, rt_tot
         type(prob_fill_profile), optional, intent(in) :: fill   !< cost record of the 3D table fill
-        type(string)         :: fname
         real(timer_int_kind) :: rt_read
         real(dp) :: ts_sum
         integer :: fnr
         rt_read = reads%rt_read + reads%rt_cache
-        fname   = prob_tab_bench_fname(params%prg%to_char(), params%which_iter, params%part, params%numlen)
-        call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
+        call open_bench_report(fnr, uppercase(params%prg%to_char()), iter=params%which_iter, part=params%part, &
+            &numlen=params%numlen)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'prob_tab program                    : ', params%prg%to_char()
         write(fnr,'(a,i0)') 'prob_tab process partition          : ', params%part
@@ -716,20 +715,17 @@ contains
             endif
         endif
         call fclose(fnr)
-        call fname%kill
     end subroutine write_prob_tab_bench
 
-    !> The bench file of the prob_align driver, all wall time; rt_sched runs from the launch of the parts to the
+    !> The bench record of the prob_align driver, all wall time; rt_sched runs from the launch of the parts to the
     !! last part finished (the in-process table fill in shared memory).
     subroutine write_prob_align_bench( params, nptcls, rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write, rt_tot )
-        use simple_refine3D_fnames, only: prob_align_bench_fname
+        use simple_bench_io, only: open_bench_report
         class(parameters),    intent(in) :: params
         integer,              intent(in) :: nptcls
         real(timer_int_kind), intent(in) :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write, rt_tot
-        type(string) :: fname
         integer :: fnr
-        fname = prob_align_bench_fname(params%which_iter)
-        call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
+        call open_bench_report(fnr, 'PROB_ALIGN', iter=params%which_iter)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,i0)') 'prob_align iteration                : ', params%which_iter
         write(fnr,'(a,i0)') 'prob_align nparts                   : ', params%nparts
@@ -752,7 +748,6 @@ contains
                 &((rt_setup + rt_sample + rt_sched + rt_read + rt_assign + rt_write) / rt_tot) * 100.
         endif
         call fclose(fnr)
-        call fname%kill
     end subroutine write_prob_align_bench
 
     !> The table of a partition without sampled particles: the header, no

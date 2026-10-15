@@ -32,7 +32,7 @@ contains
     procedure(cleanup_interface),       deferred :: cleanup
 end type refine2D_strategy
 
-!> Timings of the sigma2 transaction of an iteration (REFINE2D_STRATEGY_BENCH_ITERnnn.txt)
+!> Timings of the sigma2 transaction of an iteration (the REFINE2D_STRATEGY bench record)
 type :: refine2D_bench_state
     integer(timer_int_kind) :: t_tot        = 0
     integer(timer_int_kind) :: t_sigma_prep = 0
@@ -499,17 +499,16 @@ contains
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
         use simple_matcher_ptcl_io, only: write_mem_bench_context
+        use simple_bench_io,        only: open_bench_report
         type(parameters),           intent(in) :: params
         type(refine2D_bench_state), intent(in) :: bench
         character(len=*),           intent(in) :: execution_mode
-        type(string) :: benchfname
         integer :: fnr
         real(timer_int_kind) :: rt_accounted
         if( .not. L_BENCH_GLOB ) return
         rt_accounted = 0.
         if( bench%rt_tot > TINY ) rt_accounted = 100. * (bench%rt_sigma_prep + bench%rt_sigma) / bench%rt_tot
-        benchfname = string('REFINE2D_STRATEGY_BENCH_ITER')//int2str_pad(params%which_iter,3)//TXT_EXT
-        call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+        call open_bench_report(fnr, 'REFINE2D_STRATEGY', iter=params%which_iter)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'refine2D execution mode             : ', trim(execution_mode)
         write(fnr,'(a,i0)') 'refine2D ncls                       : ', params%ncls
@@ -525,7 +524,6 @@ contains
         write(fnr,'(a,1x,f0.2)') 'refine2D total time                 :', bench%rt_tot
         write(fnr,'(a,1x,f0.2)') 'refine2D % sigma2 transaction       :', rt_accounted
         call fclose(fnr)
-        call benchfname%kill
     end subroutine write_strategy_bench_report
 
     subroutine prepare_canonical_sigma_update( params, build )

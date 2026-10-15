@@ -600,10 +600,10 @@ contains
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
         use simple_matcher_ptcl_io, only: write_mem_bench_context
+        use simple_bench_io,        only: open_bench_report
         type(parameters),             intent(in) :: params
         type(refine3D_bench_state),   intent(in) :: bench
         character(len=*),             intent(in) :: execution_mode
-        type(string) :: benchfname
         integer :: fnr
         real(timer_int_kind) :: rt_accounted
         if( .not. L_BENCH_GLOB ) return
@@ -611,8 +611,7 @@ contains
         if( bench%rt_tot > TINY )then
             rt_accounted = 100. * (bench%rt_init + bench%rt_prob + bench%rt_sched + bench%rt_assemble) / bench%rt_tot
         endif
-        benchfname = refine3D_strategy_bench_fname(params%which_iter)
-        call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+        call open_bench_report(fnr, 'REFINE3D_STRATEGY', iter=params%which_iter)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'refine3D execution mode             : ', trim(execution_mode)
         write(fnr,'(a,a)')  'refine3D refine mode                : ', trim(params%refine)
@@ -637,7 +636,6 @@ contains
         write(fnr,'(a,1x,f0.2)') 'refine3D total time                 :', bench%rt_tot
         write(fnr,'(a,1x,f0.2)') 'refine3D % accounted for            :', rt_accounted
         call fclose(fnr)
-        call benchfname%kill
     end subroutine write_strategy_bench_report
 
     subroutine write_iteration_states( params, build )

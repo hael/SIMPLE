@@ -46,7 +46,6 @@ real(timer_int_kind)       :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_
 real(timer_int_kind)       :: rt_cavg_interp_splat, rt_sigma2_write
 integer(timer_int_kind)    :: t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
 integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot, t_sigma2_write
-type(string)               :: benchfname
 
 type :: refine2D_ctrl
     character(len=:), allocatable :: refine_flag
@@ -470,6 +469,7 @@ contains
 
         subroutine maybe_write_bench(which_iter)
             use, intrinsic :: iso_fortran_env, only: int64, real64
+            use simple_bench_io, only: open_bench_report
             integer, intent(in) :: which_iter
             integer(int64) :: peak_rss
             real(real64)    :: peak_rss_gib
@@ -479,8 +479,7 @@ contains
             peak_rss = get_peak_rss_bytes()
             peak_rss_gib = -1.0_real64
             if( peak_rss >= 0_int64 ) peak_rss_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
-            benchfname = string('REFINE2D_BENCH_ITER')//int2str_pad(which_iter,3)//'.txt'
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            call open_bench_report(fnr, 'REFINE2D', iter=which_iter)
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'match2D refine mode                 : ', trim(ctrl%refine_flag)
             write(fnr,'(a,l1)') 'match2D probabilistic alignment     : ', ctrl%l_prob_align
@@ -513,7 +512,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match2D total time                  :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'match2D % accounted for             :', &
                 ((rt_startup + rt_alloc_ptcl_imgs2D + rt_prep_pftc_refs2D + rt_build_batch_particles2D + &
-                  rt_align + rt_cavg) / rt_tot) * 100.
+                  rt_align + rt_cavg + rt_sigma2_write) / rt_tot) * 100.
 
             call fclose(fnr)
         end subroutine maybe_write_bench

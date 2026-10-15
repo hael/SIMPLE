@@ -705,6 +705,7 @@ contains
     ! that correlation between the raw map and a simulated distribution
     ! obtained with that threshold reaches the maximum value.
     subroutine binarize_and_find_centers( self, l_print )
+        use simple_bench_io, only: open_bench_report
         class(nanoparticle), intent(inout) :: self
         logical, optional,   intent(in)    :: l_print
         type(image_bin)      :: img_bin_t
@@ -763,7 +764,7 @@ contains
         ! endif
         rt_tot = toc(t_tot)
         if( L_BENCH )then
-            call fopen(fnr, FILE=string('BINARIZE_AND_FIND_CENTERS_BENCH.txt'), STATUS='REPLACE', action='WRITE')
+            call open_bench_report(fnr, 'BINARIZE_AND_FIND_CENTERS')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'find_ccs       : ', rt_find_ccs
             write(fnr,'(a,1x,f9.2)') 'find_centers   : ', rt_find_centers

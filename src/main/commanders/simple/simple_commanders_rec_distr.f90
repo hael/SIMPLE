@@ -3,7 +3,7 @@ module simple_commanders_rec_distr
 use simple_commanders_api
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolution_txt_fbody, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fname, refine3D_fsc_fname, &
-    &refine3D_volassemble_bench_fname, refine3D_trail_rec_fbody, refine3D_trail_rec_fname, &
+    &refine3D_trail_rec_fbody, refine3D_trail_rec_fname, &
     &refine3D_trail_rho_fname, refine3D_trail_manifest_fname
 use simple_frozen_accum,    only: frozen_accum
 use simple_oris,            only: population_blend_weights
@@ -1273,12 +1273,11 @@ contains
         end subroutine cleanup_context
 
         subroutine write_benchmark()
-            type(string) :: benchfname
+            use simple_bench_io, only: open_bench_report
             integer :: fnr
             if( .not. L_BENCH_GLOB ) return
-            rt_tot         = toc(t_tot)
-            benchfname = refine3D_volassemble_bench_fname(params%which_iter)
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            rt_tot = toc(t_tot)
+            call open_bench_report(fnr, 'VOLASSEMBLE', iter=params%which_iter)
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a)')    'volassemble assembly mode             : volume'
             write(fnr,'(a,i0)') 'volassemble nspace                    : ', params%nspace
@@ -1308,7 +1307,6 @@ contains
                 &  rt_init_context + rt_trail_frac + rt_gridcorr + rt_upd_proj + rt_cleanup)      &
                 & / rt_tot) * 100.
             call fclose(fnr)
-            call benchfname%kill
         end subroutine write_benchmark
 
     end subroutine exec_volassemble

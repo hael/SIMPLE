@@ -10,7 +10,7 @@ use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_fplane_grid,     only: fplane_grid
 use simple_parameters,      only: parameters
 use simple_reconstructor,   only: reconstructor
-use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, rec3D_bench_fname
+use simple_refine3D_fnames, only: refine3D_partial_rec_fbody
 use simple_state_weight_set, only: state_weight_set
 implicit none
 
@@ -117,18 +117,17 @@ contains
         if( allocated(grouped_w) ) deallocate(grouped_w)
     end subroutine calc_3Drec
 
-    !> Appends one reconstruction pass to the process's REC3D bench file: reading, preparation and
+    !> Appends one reconstruction pass to the partition's REC3D bench file: reading, preparation and
     !! accumulation (gridding or PCG) timed apart, with the pass's read counts
     subroutine write_rec3D_bench( params, backend, nptcls, nimgs, reads, rt_init, rt_prep, rt_accum, rt_tot )
+        use simple_bench_io, only: open_bench_report
         class(parameters),      intent(in) :: params
         character(len=*),       intent(in) :: backend
         integer,                intent(in) :: nptcls, nimgs
         type(ptcl_read_counts), intent(in) :: reads
         real(timer_int_kind),   intent(in) :: rt_init, rt_prep, rt_accum, rt_tot
-        type(string) :: fname
         integer :: fnr
-        fname = rec3D_bench_fname(params%which_iter, params%part, params%numlen)
-        call fopen(fnr, FILE=fname, STATUS='UNKNOWN', POSITION='APPEND', action='WRITE')
+        call open_bench_report(fnr, 'REC3D', iter=params%which_iter, part=params%part, numlen=params%numlen)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'rec3D program                       : ', params%prg%to_char()
         write(fnr,'(a,a)')  'rec3D backend                       : ', backend
@@ -153,9 +152,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'rec3D % accounted for               :', &
                 &((rt_init + reads%rt_read + rt_prep + rt_accum) / rt_tot) * 100.
         endif
-        write(fnr,'(a)') ''
         call fclose(fnr)
-        call fname%kill
     end subroutine write_rec3D_bench
 
     pure integer function state_eo_group( state, eo )

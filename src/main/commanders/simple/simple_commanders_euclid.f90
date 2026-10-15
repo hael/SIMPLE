@@ -113,20 +113,20 @@ contains
             call candidate_path%kill
         end subroutine consolidate_canonical
 
-        !> SIGMA2_COMMIT_BENCH_ITERnnn.txt, named by the which_iter the commit is given (refine2D
-        !! passes the iteration the committed store feeds, refine3D the matcher iteration)
+        !> The SIGMA2_COMMIT bench record, at the which_iter the commit is given (refine2D passes the
+        !! iteration the committed store feeds, refine3D the matcher iteration)
         subroutine write_commit_bench( header, nrows_merged, rt_assemble, rt_publish, rt_tot )
+            use simple_bench_io, only: open_bench_report
             type(sigma2_state_header), intent(in) :: header
             integer,                   intent(in) :: nrows_merged
             real(timer_int_kind),      intent(in) :: rt_assemble, rt_publish, rt_tot
-            type(string) :: benchfname
             real(timer_int_kind) :: rt_accounted
             integer :: fnr
             rt_accounted = 0.
             if( rt_tot > TINY ) rt_accounted = 100. * (rt_assemble + rt_publish) / rt_tot
-            benchfname = string('SIGMA2_COMMIT_BENCH_ITER')//int2str_pad(params%which_iter,3)//TXT_EXT
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            call open_bench_report(fnr, 'SIGMA2_COMMIT', iter=params%which_iter)
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,a)')  'sigma2 commit program               : ', params%prg%to_char()
             write(fnr,'(a,i0)') 'sigma2 commit which_iter            : ', params%which_iter
             write(fnr,'(a,i0)') 'sigma2 commit nparts (range files)  : ', params%nparts
             write(fnr,'(a,i0)') 'sigma2 store particles              : ', header%nptcls
@@ -140,7 +140,6 @@ contains
             write(fnr,'(a,1x,f0.3)') 'sigma2 commit total time            :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'sigma2 commit % accounted for       :', rt_accounted
             call fclose(fnr)
-            call benchfname%kill
         end subroutine write_commit_bench
 
     end subroutine exec_commit_sigma2

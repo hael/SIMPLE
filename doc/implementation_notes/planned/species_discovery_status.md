@@ -137,6 +137,85 @@ planted as above and eight seeds per level:
 On the synthetic particles it changed no label. In SIMPLE it has so far
 passed only the synthetic tests. **It has not run on the real maps.**
 
+## What Miao's FePt data show (2026-10-14)
+
+Peter sent the material of the FePt nanoparticle of Yang et al., Nature
+542, 75 (2017), from Jianwei Miao's group (UCLA). The particle was
+imaged by atomic electron tomography (AET): a tilt series of annular
+dark-field STEM images, reconstructed with their GENFIRE algorithm. The
+folder holds:
+
+- the raw tilt series: 68 projections of 300 × 300 pixels, from −65.6° to
+  +64.0° about one axis;
+- their MATLAB code for atom tracing, species classification and position
+  refinement;
+- the 29,325 traced peaks, each with its Gaussian fit and the 5 × 5 × 5
+  voxels around it;
+- the initial classification (23,804 atoms) and the final model (23,196
+  atoms: 6,569 Fe and 16,627 Pt; 0.3725 Å per voxel);
+- the reconstruction their classification used,
+  `FePt_reconstruction_volume.mat` (256³, downloaded from the group's FePt
+  page on 2026-10-14).
+
+The numbers below are measured on that volume, as their classification
+measures them. The voxels stored around each peak give the same numbers to
+within 0.1.
+
+What they show:
+
+- **The same environment trend as our Pt maps.** The intensity summed over
+  the 3 × 3 × 3 voxels at each atom (a 1.1 Å cube) rises by 5.2% per
+  neighbour, for Fe and for Pt alike. The fitted width stays almost flat;
+  Fe is a little narrower at low coordination. This is a different
+  microscope mode, in vacuum, with a different
+  reconstruction method, so the trend is not specific to SINGLE or to the
+  liquid cell.
+- **The contrast is like ours.** Pt over Fe is 1.7 in those sums, and 2.1
+  in the per-species amplitudes of their refinement. For comparison, Pt over
+  Ni is 1.65 in our element kernels. The two classes overlap: their
+  separation `D` is 2.6 overall and 2.7 among fully coordinated atoms, so
+  our gate of `D >= 3` would reject the split.
+- **The surface composition depends on how the environment is modelled.**
+  In their model, atoms with 8 or fewer neighbours are 65 to 68% Fe; those
+  with 12 are 22% Fe. A plain two-class fit to the intensities gives 86% Fe
+  at the surface. The same fit with our coordination term gives 20%, about
+  the bulk value. Intensity alone does not decide between these. The environment
+  effect itself is real in their data. Fe-labelled atoms with 4 neighbours
+  are at 0.64 of bulk Fe, and Pt mislabelled as Fe would have raised that
+  value, not lowered it.
+- **Their pipeline** works as follows:
+  - Peaks are traced greedily. Each fitted Gaussian is subtracted before
+    the next peak is found, which is our residual recovery applied to every
+    atom.
+  - Species are assigned by iterating global 5 × 5 × 5 templates (L1
+    distance), starting from an intensity threshold. Labels are then edited
+    by hand.
+  - A chemistry prior flags Fe atoms near the missing wedge.
+  - Positions are then refined against the projections, with one amplitude
+    and one B per species and an interatomic potential as a restraint.
+
+  Their pipeline has no environment term and no occupancy term. Between the
+  initial classification and the final model, 2.4% of the labels changed,
+  91% of them from Pt to Fe. The change rate was 5 to 10% among atoms with
+  5 to 11 neighbours, against 1% at 12. Later papers
+  use k-means with local templates (class means within 10 Å). On this
+  volume that leaves the surface at 87% Fe.
+
+How their codes relate to ours, reconstruction included, is in
+`aet_codes_and_simple.md`.
+
+What this changes:
+
+- **A real two-species map exists.** The FePt reconstruction can be the
+  first real two-species run of `detect_atoms`, with their model as a
+  reference. It is not ground truth, and the microscope mode differs.
+- **Species calls at low coordination are model-dependent.** They are to be
+  reported as such. Settling them needs evidence other than map intensity:
+  the projections, or the particle images.
+- **Real Pt/Ni data may be within reach.** Jeong et al., Nat. Commun. 16,
+  8026 (2025), has AET tomograms of PtNi nanocatalysts. Peter Ercius (NCEM)
+  is a co-author, so they are worth asking for.
+
 ## Next steps, in order
 
 1. **Phase 9 on dell: the coordination term on the 66 maps.** This is a
@@ -168,11 +247,15 @@ passed only the synthetic tests. **It has not run on the real maps.**
      - an A/B of `detect_atoms` with and without discovery on a real Pt/Ni
        map, at matched false-positive rate.
 
-     **No real two-species map is at hand**, because the archive is all Pt.
-     Getting one is what blocks promotion. Promotion itself comes after
-     that: recovered atoms into `_ATMS.pdb`, classes into `_SIM.mrc`,
-     `element` optional in the other SINGLE programs, and
-     `autorefine3D_nano` on a two-species trajectory.
+     The archive is all Pt. Real two-species data now come from the AET
+     work above: the FePt reconstruction, and possibly Peter's PtNi
+     tomograms. Run `detect_atoms` with `element=Pt,Fe`
+     on the FePt volume, with and without the coordination term, and compare
+     with their model by coordination number. That needs no dell and can
+     come before phase 9. Promotion itself comes after that: recovered atoms
+     into `_ATMS.pdb`, classes into `_SIM.mrc`, `element` optional in the
+     other SINGLE programs, and `autorefine3D_nano` on a two-species
+     trajectory.
    - **If the expectations don't hold,** make occupancy explicit instead.
      The simple version calls species only on fully coordinated atoms (12
      neighbours), where full occupancy can be assumed. It reports every
@@ -261,7 +344,18 @@ passed only the synthetic tests. **It has not run on the real maps.**
   - the coordination-term checks, `real_fit.py`, `classfit.py` and
     `fixture_check.py`;
   - the mixture-fit cost model, `em_cost*.py`;
-  - the pipeline emulation, `emul_species_cases.py`.
+  - the pipeline emulation, `emul_species_cases.py`;
+  - the FePt checks, in `fept/`, with a reader for MATLAB `.mat` files that
+    needs only numpy.
+- **The FePt data from Peter:** `~/Downloads/TomoFromPeter`, with the
+  reconstruction volume added on 2026-10-14. The subfolder `for_simple/`
+  holds the volume as MRC and their models as PDB, in SIMPLE's coordinate
+  frame. The denoised projections and the refined angles are still missing.
+  They are on the Miao group's FePt page,
+  `physics.ucla.edu/research/imaging/FePt`. The group's later code is on
+  GitHub: `AET-pAET/Supplementary-Data-Codes` (the full pipeline, with a
+  three-element amorphous particle) and `AET-MetallicGlass/Supplementary-
+  Data-Codes` (eight elements classified into three types).
 - **The run specs** are under `~/agent_runs/runs/`:
   - `single_species_proto`: phases 0 to 3;
   - `species_element_model`: phases 4 to 6, with `rulings.md`;

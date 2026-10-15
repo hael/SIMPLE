@@ -789,13 +789,13 @@ contains
     end subroutine make_cavgs_exec_cavgassemble
 
     subroutine exec_cavgassemble( self, cline )
-        use simple_timer, only: timer_int_kind, tic, toc
+        use simple_timer,    only: timer_int_kind, tic, toc
+        use simple_bench_io, only: open_bench_report
         class(commander_cavgassemble), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
         type(starproject)  :: starproj
-        type(string)       :: benchfname
         real, allocatable  :: states(:)
         integer            :: iterstr_start, iterstr_end, iter, io_stat, fnr
         integer(timer_int_kind) :: t_tot, t_phase
@@ -873,8 +873,7 @@ contains
         if( L_BENCH_GLOB )then
             rt_cleanup = toc(t_phase)
             rt_tot     = toc(t_tot)
-            benchfname = string('CAVGASSEMBLE_BENCH_ITER')//int2str_pad(iter,3)//'.txt'
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            call open_bench_report(fnr, 'CAVGASSEMBLE', iter=iter)
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'cavgassemble assembly mode          : class'
             write(fnr,'(a,a)')  'cavgassemble refs                   : ', params%refs%to_char()
@@ -896,7 +895,6 @@ contains
                 &((rt_init + rt_reduce_partials + rt_classdoc + rt_write_cavgs + &
                 &  rt_export_star + rt_project_update + rt_cleanup) / rt_tot) * 100.
             call fclose(fnr)
-            call benchfname%kill
         endif
         call simple_end('**** SIMPLE_CAVGASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)

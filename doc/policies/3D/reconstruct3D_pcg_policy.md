@@ -781,8 +781,8 @@ time, compute cost and memory:
   boundary and the next stage's first base solve was an unintended cold
   start; a copied final gridding map could be masked a second time by a
   standalone postprocess;
-- **cost records.** Every partition writes `REFINE3D_BENCH_ITERnnn_PARTppp.txt`
-  with nparts, worker threads, box,
+- **cost records.** Every partition appends a record per iteration to
+  `BENCH/REFINE3D_BENCH_PARTppp.txt` with nparts, worker threads, box,
   box_crop, backend, `maxits_pcg`, `rtol`, peak and phase RSS, the phase
   timings and their thread-seconds; the master logs one
   `RECONSTRUCTION MASTER PHASE (<backend>): s on n threads = thread-s;

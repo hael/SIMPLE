@@ -1,22 +1,41 @@
 #!/usr/bin/env python3
-"""Create a publication-ready summary from refine3D benchmark reports.
+"""Summarize the benchmark reports of a SIMPLE run: tables, a text report and a figure.
 
 Usage:
-    python3 scripts/plot_refine3d_bench.py BENCHMARK_DIRECTORY [OUTPUT_DIRECTORY]
+    python3 scripts/plot_refine3d_bench.py RUN_OR_BENCH_DIRECTORY [OUTPUT_DIRECTORY]
 
-The input directory is expected to contain the text reports written with
-L_BENCH_GLOB: REFINE3D_STRATEGY_BENCH_ITER*.txt,
-REFINE3D_BENCH_ITERnnn_PARTppp.txt (one per partition; the worker columns
-use partition 1) and VOLASSEMBLE_BENCH_ITER*.txt.  The script uses only the
-Python standard library and writes:
+The input is a run directory holding BENCH/ (one file per benchmark family, and
+per partition for the partition families, one record appended per report), the
+BENCH/ directory itself, or a directory of the per-iteration report files of
+earlier builds (*_BENCH_ITERnnn[_PARTppp].txt and SOLVE3D_BENCH.txt). The
+output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
 
-    refine3d_benchmark_summary.csv  one row per iteration
-    refine3d_benchmark.svg          vector figure suitable for publication
+    bench_records.csv     every value of every record, one row each (long table)
+    bench_iterations.csv  one row per refine3D iteration: the strategy phases,
+                          their critical-path split, and the slowest and mean
+                          partition times
+    bench_report.txt      the run, the time split by stage, the overheads, the
+                          load balance, the outlier iterations and the worker phases
+    bench_profile.svg     the per-iteration critical path (stacked) and the
+                          slowest and mean partition times
 
-The SVG intentionally distinguishes the strategy-level wall-clock phases from
-worker and volassemble totals.  A strategy ``setup/init`` sample is not a
-sigma-estimation measurement: it combines reprojection-model preparation with
-the group-sigma consolidation performed by the strategy.
+Only the Python standard library is used.
+
+The critical path of an iteration splits the strategy's wall time into what
+the slowest partition did and what the master spent around it:
+
+    setup/init                    strategy setup, reprojection model included
+    probability tables            the slowest probability-table part
+    pre-step outside the tables   pre-step minus the slowest part: launch,
+                                  waiting, table reads, ref_assign, writes
+    search                        the slowest search worker
+    scheduling outside the search matcher/scheduler minus the slowest worker:
+                                  launch, the scheduler's polling and the
+                                  sigma2 candidate preparation
+    volume assembly               the volassemble process
+    assembly outside volassemble  assembly/postprocess minus volassemble
+    sigma2 commit                 the commit after the assembly
+    unaccounted                   the strategy total minus all of the above
 """
 
 from __future__ import annotations
@@ -27,118 +46,455 @@ import re
 import statistics
 import sys
 from collections import defaultdict
+from dataclasses import dataclass, field
 from html import escape
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-
-FAMILIES = {
-    "REFINE3D_STRATEGY_BENCH_ITER": "strategy",
-    "REFINE3D_BENCH_ITER": "worker",
-    "VOLASSEMBLE_BENCH_ITER": "assembly",
-}
-
-STRATEGY_COMPONENTS = (
-    ("refine3D strategy setup/init", "setup / init (inclusive)", "#6f7d8c"),
-    ("refine3D probabilistic pre-step", "probability-table preparation", "#2b6cb0"),
-    ("refine3D matcher/scheduler", "matching / scheduling", "#c05621"),
-    ("refine3D assembly/postprocess", "assembly / postprocessing", "#2f855a"),
-)
-
-NUMBER = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?"
-ITER_RE = re.compile(r"ITER(\d+)", re.IGNORECASE)
-PART_RE = re.compile(r"_PART(\d+)", re.IGNORECASE)
+NUMBER_RE = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?$")
 HEADER_RE = re.compile(r"^\s*\*{3}\s*(.*?)\s*\*{3}\s*$")
-VALUE_RE = re.compile(rf"^\s*(.+?)\s*:\s*({NUMBER})\s*$")
+VALUE_RE = re.compile(r"^\s*(.+?)\s*:\s*(.*?)\s*$")
+OLD_NAME_RE = re.compile(r"^(?P<family>[A-Z0-9_]+?)_BENCH(?:_ITER(?P<iter>\d+))?(?:_PART(?P<part>\d+))?\.txt$")
+NEW_NAME_RE = re.compile(r"^(?P<family>[A-Z0-9_]+?)_BENCH(?:_PART(?P<part>\d+))?\.txt$")
 
 
-def parse_file(path: Path) -> Tuple[Dict[str, str], Dict[str, float]]:
-    """Return the context and seconds blocks without treating context as time."""
-    context: Dict[str, str] = {}
-    seconds: Dict[str, float] = {}
-    section = ""
-    for raw in path.read_text().splitlines():
+@dataclass
+class Record:
+    """One benchmark report: its family, iteration, partition and pass, and its sections."""
+    family: str
+    source: str
+    iteration: Optional[int] = None
+    partition: Optional[int] = None
+    npass: int = 1
+    context: Dict[str, str] = field(default_factory=dict)
+    seconds: Dict[str, float] = field(default_factory=dict)
+    percent: Dict[str, float] = field(default_factory=dict)
+    thread_seconds: Dict[str, float] = field(default_factory=dict)
+
+    def empty(self) -> bool:
+        return not (self.context or self.seconds or self.percent or self.thread_seconds)
+
+
+def as_number(text: str) -> Optional[float]:
+    text = text.strip()
+    return float(text) if NUMBER_RE.match(text) else None
+
+
+def section_kind(title: str) -> str:
+    title = " ".join(title.upper().split())
+    if title == "BENCHMARK RECORD":
+        return "record"
+    if title == "BENCHMARK CONTEXT":
+        return "context"
+    if title.endswith("TIMINGS (S)"):
+        return "seconds"
+    if title.startswith("RELATIVE TIMINGS"):
+        return "percent"
+    if title.startswith("THREAD-SECONDS"):
+        return "thread_seconds"
+    return "other"
+
+
+def parse_file(path: Path, family: str, iteration: Optional[int], partition: Optional[int]) -> List[Record]:
+    """Split a report file into records.
+
+    A BENCHMARK RECORD header starts a record (the BENCH/ layout). In the files of
+    earlier builds a file is one record, except that a repeated BENCHMARK CONTEXT
+    header starts the next pass of the same file (the REC3D reports).
+    """
+    records: List[Record] = []
+    current: Optional[Record] = None
+    kind = ""
+    saw_record_header = False
+
+    def start(rec_family: str) -> Record:
+        rec = Record(family=rec_family, source=path.name, iteration=iteration, partition=partition)
+        records.append(rec)
+        return rec
+
+    for raw in path.read_text(errors="replace").splitlines():
         header = HEADER_RE.match(raw)
         if header:
-            title = " ".join(header.group(1).upper().split())
-            section = "context" if title == "BENCHMARK CONTEXT" else "seconds" if title.endswith("TIMINGS (S)") else ""
+            kind = section_kind(header.group(1))
+            if kind == "record":
+                saw_record_header = True
+                current = start(family)
+            elif kind == "context" and not saw_record_header and current is not None and \
+                    (current.context or current.seconds):
+                current = start(family)
+            elif current is None:
+                current = start(family)
             continue
         match = VALUE_RE.match(raw)
-        if not match:
+        if not match or current is None:
             continue
-        key, value = " ".join(match.group(1).split()), match.group(2)
-        if section == "context":
-            context[key] = value
-        elif section == "seconds" and "%" not in key:
-            seconds[key] = float(value)
-    return context, seconds
+        key, text = " ".join(match.group(1).split()), match.group(2)
+        value = as_number(text)
+        if kind == "record":
+            if key == "record family":
+                current.family = text.strip()
+            elif key == "record iteration" and value is not None:
+                current.iteration = int(value)
+            elif key == "record partition" and value is not None:
+                current.partition = int(value)
+        elif kind == "context":
+            current.context[key] = text.strip()
+        elif kind == "seconds" and value is not None:
+            if "%" in key:
+                current.percent[key] = value
+            elif key.endswith("thread-s"):
+                current.thread_seconds[key] = value
+            else:
+                current.seconds[key] = value
+        elif kind == "percent" and value is not None:
+            current.percent[key] = value
+        elif kind == "thread_seconds" and value is not None:
+            current.thread_seconds[key] = value
+    records = [rec for rec in records if not rec.empty()]
+    # passes of one family, iteration and partition, in file order
+    seen: Dict[Tuple[str, Optional[int], Optional[int]], int] = defaultdict(int)
+    for rec in records:
+        seen[(rec.family, rec.iteration, rec.partition)] += 1
+        rec.npass = seen[(rec.family, rec.iteration, rec.partition)]
+    return records
 
 
-def load_reports(indir: Path) -> Dict[int, Dict[str, object]]:
-    rows: Dict[int, Dict[str, object]] = defaultdict(dict)
-    for path in sorted(indir.glob("*_BENCH_ITER*.txt")):
-        family = next((name for prefix, name in FAMILIES.items() if path.name.startswith(prefix)), None)
-        if family is None:
-            continue
-        match = ITER_RE.search(path.name)
+def find_reports(indir: Path) -> Tuple[List[Path], str]:
+    """The report files and their layout: 'BENCH/' or 'per-iteration files'."""
+    bench = indir / "BENCH"
+    if bench.is_dir() and any(bench.glob("*_BENCH*.txt")):
+        return sorted(bench.glob("*_BENCH*.txt")), "BENCH/"
+    files = sorted(indir.glob("*_BENCH*.txt"))
+    if any(OLD_NAME_RE.match(p.name) and "_ITER" in p.name for p in files):
+        return files, "per-iteration files"
+    return files, "BENCH/"
+
+
+def load_records(indir: Path) -> Tuple[List[Record], str, int]:
+    files, layout = find_reports(indir)
+    records: List[Record] = []
+    for path in files:
+        match = OLD_NAME_RE.match(path.name) if layout == "per-iteration files" else NEW_NAME_RE.match(path.name)
         if match is None:
             continue
-        part = PART_RE.search(path.name)
-        if family == "worker" and (part is None or int(part.group(1)) != 1):
-            continue  # worker reports are per partition; partition 1 represents the iteration
-        iteration = int(match.group(1))
-        context, seconds = parse_file(path)
-        row = rows[iteration]
-        row[f"{family}_file"] = path.name
-        for key, value in context.items():
-            row[f"{family}:{key}"] = value
-        for key, value in seconds.items():
-            row[key] = value
-    if not rows:
-        raise ValueError(f"No recognized refine3D benchmark reports in {indir}")
-    return dict(rows)
+        iteration = int(match.group("iter")) if "iter" in match.groupdict() and match.group("iter") else None
+        partition = int(match.group("part")) if match.group("part") else None
+        family = match.group("family")
+        if layout == "per-iteration files" and family == "CAVGASSEMBLE" and iteration is None:
+            family = "CAVGASSEMBLE_SUMS"   # the sum of the parts' contributions, named so since
+        records.extend(parse_file(path, family, iteration, partition))
+    return records, layout, len(files)
 
 
-def as_float(row: Dict[str, object], key: str) -> float:
-    value = row.get(key, 0.0)
-    return float(value) if value not in (None, "") else 0.0
+# ---------------------------------------------------------------- tables
 
-
-def context_value(row: Dict[str, object], family: str, key: str) -> str:
-    return str(row.get(f"{family}:{key}", ""))
-
-
-def write_summary(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
-    columns = [
-        "iteration", "nspace", "kto", "strategy_total_s", "strategy_setup_init_s",
-        "reprojection_model_s", "group_sigma_consolidation_s", "probabilistic_prestep_s",
-        "matcher_scheduler_s", "assembly_postprocess_s", "assembly_nu_evidence_s",
-        "worker_total_s", "volassemble_total_s", "volassemble_nonuniform_filter_s",
-    ]
+def write_records_csv(records: Sequence[Record], outpath: Path) -> None:
     with outpath.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns)
-        writer.writeheader()
-        for iteration in sorted(rows):
-            row = rows[iteration]
-            writer.writerow({
-                "iteration": iteration,
-                "nspace": context_value(row, "strategy", "refine3D nspace"),
-                "kto": context_value(row, "strategy", "refine3D kto"),
-                "strategy_total_s": as_float(row, "refine3D total time"),
-                "strategy_setup_init_s": as_float(row, "refine3D strategy setup/init"),
-                "reprojection_model_s": as_float(row, "refine3D reprojection model"),
-                "group_sigma_consolidation_s": as_float(row, "refine3D group-sigma consolidation"),
-                "probabilistic_prestep_s": as_float(row, "refine3D probabilistic pre-step"),
-                "matcher_scheduler_s": as_float(row, "refine3D matcher/scheduler"),
-                "assembly_postprocess_s": as_float(row, "refine3D assembly/postprocess"),
-                # contained within assembly_postprocess_s (pcg NU replay only;
-                # 0.0 on the gridding backend) -- attribution, not additive
-                "assembly_nu_evidence_s": as_float(row, "refine3D pcg nu-evidence phase"),
-                "worker_total_s": as_float(row, "match3D total time"),
-                "volassemble_total_s": as_float(row, "volassemble total time"),
-                "volassemble_nonuniform_filter_s": as_float(row, "volassemble nonuniform_filter"),
-            })
+        writer = csv.writer(handle)
+        writer.writerow(["family", "iteration", "partition", "pass", "section", "key", "value"])
+        for rec in records:
+            ident = [rec.family, "" if rec.iteration is None else rec.iteration,
+                     "" if rec.partition is None else rec.partition, rec.npass]
+            for section, values in (("context", rec.context), ("seconds", rec.seconds),
+                                    ("percent", rec.percent), ("thread_seconds", rec.thread_seconds)):
+                for key, value in values.items():
+                    writer.writerow(ident + [section, key, value])
 
+
+def by_family(records: Sequence[Record], family: str) -> List[Record]:
+    return [rec for rec in records if rec.family == family]
+
+
+def first_pass_by_iteration(records: Sequence[Record]) -> Dict[int, Record]:
+    out: Dict[int, Record] = {}
+    for rec in records:
+        if rec.iteration is not None and rec.npass == 1 and rec.iteration not in out:
+            out[rec.iteration] = rec
+    return out
+
+
+def partition_stats(records: Sequence[Record], key: str) -> Dict[int, Tuple[float, float, float, int]]:
+    """Per iteration: slowest, mean and fastest value of key over the partitions (the passes of a
+    partition summed), and their number."""
+    sums: Dict[Tuple[int, Optional[int]], float] = defaultdict(float)
+    for rec in records:
+        if rec.iteration is None or key not in rec.seconds:
+            continue
+        sums[(rec.iteration, rec.partition)] += rec.seconds[key]
+    values: Dict[int, List[float]] = defaultdict(list)
+    for (it, _), value in sums.items():
+        values[it].append(value)
+    return {it: (max(v), statistics.fmean(v), min(v), len(v)) for it, v in values.items() if v}
+
+
+@dataclass
+class Iteration:
+    it: int
+    mode: str = ""
+    nspace: str = ""
+    kto: str = ""
+    total: float = 0.0
+    phases: Dict[str, float] = field(default_factory=dict)       # strategy phases as reported
+    path: Dict[str, float] = field(default_factory=dict)         # critical-path split
+    extra: Dict[str, float] = field(default_factory=dict)        # partition statistics and the rest
+
+
+PATH_COMPONENTS = (
+    ("setup", "setup/init", "#6f7d8c"),
+    ("tables", "probability tables", "#2b6cb0"),
+    ("prestep_overhead", "pre-step outside the tables", "#90cdf4"),
+    ("search", "search", "#c05621"),
+    ("sched_overhead", "scheduling outside the search", "#fbd38d"),
+    ("volassemble", "volume assembly", "#2f855a"),
+    ("assembly_overhead", "assembly outside volassemble", "#9ae6b4"),
+    ("sigma2", "sigma2 commit", "#805ad5"),
+    ("unaccounted", "unaccounted", "#e2e8f0"),
+)
+
+
+def build_iterations(records: Sequence[Record]) -> List[Iteration]:
+    strategy = first_pass_by_iteration(by_family(records, "REFINE3D_STRATEGY"))
+    if not strategy:
+        return []
+    volassemble = first_pass_by_iteration(by_family(records, "VOLASSEMBLE"))
+    worker = partition_stats(by_family(records, "REFINE3D"), "match3D total time")
+    sigma2_write = partition_stats(by_family(records, "REFINE3D"), "match3D sigma2 range write")
+    tables: Dict[int, Tuple[float, float, float, int]] = {}
+    fills: Dict[int, Tuple[float, float, float, int]] = {}
+    for family in ("PROB_TAB", "PROB_TAB_NEIGH"):
+        tables.update(partition_stats(by_family(records, family), "prob_tab total time"))
+        fills.update(partition_stats(by_family(records, family), "prob_tab table fill"))
+    rec3D = partition_stats(by_family(records, "REC3D"), "rec3D total time")
+    rows: List[Iteration] = []
+    for it in sorted(strategy):
+        rec = strategy[it]
+        row = Iteration(it=it, mode=rec.context.get("refine3D refine mode", ""),
+                        nspace=rec.context.get("refine3D nspace", ""), kto=rec.context.get("refine3D kto", ""))
+        s = rec.seconds
+        row.total = s.get("refine3D total time", 0.0)
+        row.phases = {
+            "setup": s.get("refine3D strategy setup/init", 0.0),
+            "model": s.get("refine3D reprojection model", 0.0),
+            "prestep": s.get("refine3D probabilistic pre-step", 0.0),
+            "sched": s.get("refine3D matcher/scheduler", 0.0),
+            "assembly": s.get("refine3D assembly/postprocess", 0.0),
+            "sigma2": s.get("refine3D sigma2 commit", 0.0),   # after the assembly, outside the four phases
+        }
+        tab_max = tables.get(it, (0.0, 0.0, 0.0, 0))[0]
+        wrk_max = worker.get(it, (0.0, 0.0, 0.0, 0))[0]
+        vol = volassemble[it].seconds.get("volassemble total time", 0.0) if it in volassemble else 0.0
+        p = row.phases
+        tab_on_path = min(tab_max, p["prestep"])
+        wrk_on_path = min(wrk_max, p["sched"])
+        vol_on_path = min(vol, p["assembly"])
+        row.path = {
+            "setup": p["setup"],
+            "tables": tab_on_path,
+            "prestep_overhead": p["prestep"] - tab_on_path,
+            "search": wrk_on_path,
+            "sched_overhead": p["sched"] - wrk_on_path,
+            "volassemble": vol_on_path,
+            "assembly_overhead": p["assembly"] - vol_on_path,
+            "sigma2": p["sigma2"],
+        }
+        row.path["unaccounted"] = max(0.0, row.total - sum(row.path.values()))
+        for name, stats in (("tables", tables), ("fill", fills), ("worker", worker), ("rec3D", rec3D),
+                            ("sigma2_write", sigma2_write)):
+            if it in stats:
+                row.extra[f"{name}_max"], row.extra[f"{name}_mean"], row.extra[f"{name}_min"], \
+                    row.extra[f"{name}_nparts"] = stats[it]
+        if it in volassemble:
+            row.extra["volassemble_nu_filter"] = volassemble[it].seconds.get("volassemble nonuniform_filter", 0.0)
+        rows.append(row)
+    return rows
+
+
+ITERATION_COLUMNS = (
+    ["iteration", "refine_mode", "nspace", "kto", "strategy_total_s"]
+    + [f"strategy_{k}_s" for k in ("setup", "model", "prestep", "sched", "assembly", "sigma2")]
+    + [f"path_{k}_s" for k, _, _ in PATH_COMPONENTS]
+    + [f"{name}_{stat}_s" for name in ("tables", "fill", "worker", "rec3D", "sigma2_write")
+       for stat in ("max", "mean", "min")]
+    + ["nparts", "volassemble_nu_filter_s"]
+)
+
+
+def write_iterations_csv(rows: Sequence[Iteration], outpath: Path) -> None:
+    with outpath.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(ITERATION_COLUMNS)
+        for row in rows:
+            values = [row.it, row.mode, row.nspace, row.kto, f"{row.total:.3f}"]
+            values += [f"{row.phases[k]:.3f}" for k in ("setup", "model", "prestep", "sched", "assembly", "sigma2")]
+            values += [f"{row.path[k]:.3f}" for k, _, _ in PATH_COMPONENTS]
+            for name in ("tables", "fill", "worker", "rec3D", "sigma2_write"):
+                for stat in ("max", "mean", "min"):
+                    value = row.extra.get(f"{name}_{stat}")
+                    values.append("" if value is None else f"{value:.3f}")
+            nparts = int(row.extra.get("worker_nparts", row.extra.get("tables_nparts", 0)))
+            values += [nparts or "", f"{row.extra.get('volassemble_nu_filter', 0.0):.3f}"]
+            writer.writerow(values)
+
+
+# ---------------------------------------------------------------- report
+
+def stages_of(rows: Sequence[Iteration]) -> List[List[Iteration]]:
+    """Contiguous iterations with the same refine mode and nspace."""
+    blocks: List[List[Iteration]] = []
+    for row in rows:
+        if blocks and (blocks[-1][-1].mode, blocks[-1][-1].nspace) == (row.mode, row.nspace):
+            blocks[-1].append(row)
+        else:
+            blocks.append([row])
+    return blocks
+
+
+def mad(values: Sequence[float]) -> float:
+    med = statistics.median(values)
+    return statistics.median([abs(v - med) for v in values])
+
+
+def pct(part: float, whole: float) -> str:
+    return f"{100.0 * part / whole:5.1f}%" if whole > 0 else "    -"
+
+
+def phase_means(records: Sequence[Record]) -> List[Tuple[str, float, float]]:
+    """Mean and maximum of every timing over the records, largest mean first."""
+    values: Dict[str, List[float]] = defaultdict(list)
+    for rec in records:
+        for key, value in rec.seconds.items():
+            values[key].append(value)
+    out = [(key, statistics.fmean(v), max(v)) for key, v in values.items()]
+    return sorted(out, key=lambda item: -item[1])
+
+
+def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: str, nfiles: int,
+                 indir: Path, outpath: Path) -> None:
+    lines: List[str] = []
+    add = lines.append
+    add("SIMPLE benchmark summary")
+    add("=" * 24)
+    add(f"input   : {indir}")
+    add(f"layout  : {layout}, {nfiles} files, {len(records)} records")
+    counts: Dict[str, int] = defaultdict(int)
+    keys: Dict[Tuple[str, Optional[int], Optional[int]], int] = defaultdict(int)
+    for rec in records:
+        counts[rec.family] += 1
+        if rec.family != "REC3D" and rec.iteration is not None:
+            keys[(rec.family, rec.iteration, rec.partition)] += 1
+    duplicates = sum(1 for n in keys.values() if n > 1)
+    add("families: " + ", ".join(f"{fam} {n}" for fam, n in sorted(counts.items())))
+    if duplicates:
+        add(f"WARNING : {duplicates} family/iteration/partition keys occur more than once, as after a second "
+            "run in the same directory; the first record of each is summarized")
+    add("")
+
+    for rec in by_family(records, "SOLVE3D"):
+        c, s = rec.context, rec.seconds
+        total = s.get("solve3D total time", 0.0)
+        add(f"Run: {c.get('solve3D route', 'solve3D').strip()}, nstates {c.get('solve3D nstates', '?')}, "
+            f"box {c.get('solve3D box', '?')}, stages {c.get('solve3D first stage', '?')}-"
+            f"{c.get('solve3D last stage', '?')}, {c.get('solve3D searched particles', '?')} particles searched, "
+            f"nsample {c.get('solve3D nsample', '?')}")
+        add(f"  total {total:.1f} s")
+        for key, value in s.items():
+            if key == "solve3D total time":
+                continue
+            add(f"  {key.replace('solve3D ', ''):34s} {value:9.1f} s  {pct(value, total)}")
+        add("")
+
+    if not rows:
+        add("No refine3D strategy records: the critical path and the figure need REFINE3D_STRATEGY reports.")
+        add("")
+    else:
+        its = [row.it for row in rows]
+        missing = sorted(set(range(its[0], its[-1] + 1)) - set(its))
+        total = sum(row.total for row in rows)
+        add(f"refine3D: {len(rows)} iterations ({its[0]}-{its[-1]}"
+            + (f"; no strategy record for {', '.join(map(str, missing))}" if missing else "") + ")")
+        add(f"strategy wall time {total:.1f} s; its critical path:")
+        add(f"  {'component':32s} {'seconds':>9s} {'share':>6s}")
+        for key, label, _ in PATH_COMPONENTS:
+            value = sum(row.path[key] for row in rows)
+            add(f"  {label:32s} {value:9.1f} {pct(value, total)}")
+        compute = sum(row.path["tables"] + row.path["search"] + row.path["volassemble"] for row in rows)
+        overhead = sum(row.path["prestep_overhead"] + row.path["sched_overhead"] + row.path["assembly_overhead"]
+                       for row in rows)
+        add(f"  slowest-partition and assembly compute {compute:.1f} s ({pct(compute, total).strip()}); "
+            f"master time around it {overhead:.1f} s ({pct(overhead, total).strip()})")
+        add("")
+        add("By stage (contiguous iterations with one refine mode and nspace), seconds per iteration:")
+        header = (f"  {'iterations':>10s} {'mode':>10s} {'nspace':>6s} {'total':>7s} {'setup':>6s} {'tables':>7s} "
+                  f"{'pre-ovh':>7s} {'search':>7s} {'sch-ovh':>7s} {'volasm':>6s} {'asm-ovh':>7s} {'sigma2':>6s}")
+        add(header)
+        for block in stages_of(rows):
+            n = len(block)
+
+            def mean_of(key: str) -> float:
+                return sum(r.path[key] for r in block) / n
+            add(f"  {block[0].it:>4d}-{block[-1].it:<5d} {block[0].mode:>10s} {block[0].nspace:>6s} "
+                f"{sum(r.total for r in block) / n:7.2f} {mean_of('setup'):6.2f} {mean_of('tables'):7.2f} "
+                f"{mean_of('prestep_overhead'):7.2f} {mean_of('search'):7.2f} {mean_of('sched_overhead'):7.2f} "
+                f"{mean_of('volassemble'):6.2f} {mean_of('assembly_overhead'):7.2f} {mean_of('sigma2'):6.2f}")
+        add("")
+        add("Load balance (slowest partition over the mean, median over iterations):")
+        if not any(row.extra.get("worker_mean", 0.0) > 0 or row.extra.get("tables_mean", 0.0) > 0 for row in rows):
+            add("  no partition reports")
+        for name, label in (("tables", "probability-table parts"), ("worker", "search workers"),
+                            ("rec3D", "reconstruction passes")):
+            ratios = [row.extra[f"{name}_max"] / row.extra[f"{name}_mean"] for row in rows
+                      if row.extra.get(f"{name}_mean", 0.0) > 0]
+            if ratios:
+                add(f"  {label:26s} median {statistics.median(ratios):.2f}, max {max(ratios):.2f} "
+                    f"({len(ratios)} iterations)")
+        add("")
+        add("Outlier iterations (total above the median of the iterations with the same refine mode, nspace and")
+        add("low-pass shell by more than 3 MAD and 10%):")
+        found = False
+        groups: Dict[Tuple[str, str, str], List[Iteration]] = defaultdict(list)
+        for row in rows:
+            groups[(row.mode, row.nspace, row.kto)].append(row)
+        for block in groups.values():
+            if len(block) < 5:
+                continue
+            totals = [r.total for r in block]
+            med, spread = statistics.median(totals), mad(totals)
+            for row in block:
+                if row.total > med + max(3.0 * spread, 0.10 * med):
+                    medians = {k: statistics.median([r.path[k] for r in block]) for k, _, _ in PATH_COMPONENTS}
+                    key = max(medians, key=lambda k: row.path[k] - medians[k])
+                    label = dict((k, l) for k, l, _ in PATH_COMPONENTS)[key]
+                    add(f"  iteration {row.it:3d}: {row.total:6.2f} s against a median of {med:.2f} s; "
+                        f"mostly {label} ({row.path[key]:.2f} s against {medians[key]:.2f} s)")
+                    found = True
+        if not found:
+            add("  none")
+        add("")
+    for family, title in (("REFINE3D", "Search worker phases (mean and maximum over iterations and partitions)"),
+                          ("PROB_TAB", "Probability-table part phases (prob)"),
+                          ("PROB_TAB_NEIGH", "Probability-table part phases (prob_neigh)"),
+                          ("PROB_ALIGN", "Probabilistic pre-step driver phases"),
+                          ("REC3D", "Reconstruction pass phases"),
+                          ("VOLASSEMBLE", "Volume assembly phases"),
+                          ("SIGMA2_COMMIT", "Sigma2 commit phases"),
+                          ("REFINE2D_STRATEGY", "refine2D strategy phases"),
+                          ("REFINE2D", "2D search phases (partition 1)"),
+                          ("SOLVE2D", "solve2D phases"),
+                          ("PROB_TAB2D", "2D probability-table part phases"),
+                          ("CAVGASSEMBLE", "Class-average assembly phases"),
+                          ("CAVGASSEMBLE_SUMS", "Class-average sums of the parts"),
+                          ("CAVGSUMS", "Offline class sums per partition")):
+        recs = by_family(records, family)
+        if not recs:
+            continue
+        add(f"{title}, {len(recs)} records:")
+        for key, mean, maximum in phase_means(recs):
+            add(f"  {key:46s} mean {mean:8.3f} s   max {maximum:8.3f} s")
+        add("")
+    outpath.write_text("\n".join(lines) + "\n")
+
+
+# ---------------------------------------------------------------- figure
 
 def linear(value: float, low: float, high: float, pix_low: float, pix_high: float) -> float:
     if high <= low:
@@ -154,149 +510,132 @@ def nice_limit(values: Iterable[float]) -> float:
     return math.ceil(maximum / step * 5.0) / 5.0 * step
 
 
+def tick_step(limit: float) -> float:
+    raw = limit / 5.0
+    power = 10 ** math.floor(math.log10(raw))
+    for mult in (1, 2, 2.5, 5, 10):
+        if raw <= mult * power:
+            return mult * power
+    return 10 * power
+
+
 def svg_text(x: float, y: float, text: str, size: int = 16, anchor: str = "start", weight: int = 400) -> str:
-    return (f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" font-family="Arial,Helvetica,sans-serif" '
-            f'fill="#17202a" font-size="{size}" font-weight="{weight}">{escape(text)}</text>')
+    return (f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" font-size="{size}" '
+            f'font-weight="{weight}">{escape(text)}</text>')
 
 
 def svg_vertical_text(x: float, y: float, text: str, size: int = 16) -> str:
     return (f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="middle" font-size="{size}" '
-            f'font-family="Arial,Helvetica,sans-serif" fill="#17202a" font-weight="400" '
             f'transform="rotate(-90 {x:.1f} {y:.1f})">{escape(text)}</text>')
 
 
-def draw_legend(items: Iterable[Tuple[str, str]], x: float, y: float) -> List[str]:
+def legend(items: Sequence[Tuple[str, str, str]], x: float, y: float, width: float) -> Tuple[List[str], float]:
+    """Swatches ('box') or line samples ('line') wrapped to width; returns the elements and the next y."""
     out: List[str] = []
-    xpos = x
-    for label, color in items:
-        width = 28 + len(label) * 12.2
-        out.append(f'<rect x="{xpos:.1f}" y="{y - 17:.1f}" width="18" height="18" fill="{color}"/>')
-        out.append(svg_text(xpos + 26, y, label, 20))
-        xpos += width
-    return out
+    xpos, ypos = x, y
+    for label, color, style in items:
+        item_w = (40 if style == "line" else 28) + len(label) * 10.5
+        if xpos + item_w > x + width and xpos > x:
+            xpos, ypos = x, ypos + 30
+        if style == "line":
+            out.append(f'<line x1="{xpos:.1f}" y1="{ypos - 6:.1f}" x2="{xpos + 28:.1f}" y2="{ypos - 6:.1f}" '
+                       f'stroke="{color}" stroke-width="3"/>')
+            out.append(svg_text(xpos + 36, ypos, label, 18))
+        else:
+            out.append(f'<rect x="{xpos:.1f}" y="{ypos - 15:.1f}" width="18" height="18" fill="{color}" '
+                       f'stroke="#a0aec0" stroke-width="0.5"/>')
+            out.append(svg_text(xpos + 26, ypos, label, 18))
+        xpos += item_w
+    return out, ypos + 30
 
 
-def draw_line_legend(items: Iterable[Tuple[str, str]], x: float, y: float) -> List[str]:
-    """Draw a legend whose samples match the line traces used in a panel."""
-    out: List[str] = []
-    xpos = x
-    for label, color in items:
-        width = 38 + len(label) * 12.2
-        out.append(f'<line x1="{xpos:.1f}" y1="{y - 7:.1f}" x2="{xpos + 26:.1f}" y2="{y - 7:.1f}" '
-                   f'stroke="{color}" stroke-width="2.667"/>')
-        out.append(svg_text(xpos + 34, y, label, 20))
-        xpos += width
-    return out
+def axes(out: List[str], plot_l: float, plot_r: float, top: float, bottom: float, limit: float,
+         first: int, last: int, rows: Sequence[Iteration], ylabel: str) -> None:
+    step = tick_step(limit)
+    tick = 0.0
+    while tick <= limit + 1e-9:
+        y = linear(tick, 0, limit, bottom, top)
+        out.append(f'<line class="grid" x1="{plot_l}" y1="{y:.1f}" x2="{plot_r}" y2="{y:.1f}"/>')
+        out.append(svg_text(plot_l - 12, y + 6, f"{tick:g}", 18, "end"))
+        tick += step
+    out.append(f'<line class="axis" x1="{plot_l}" y1="{top}" x2="{plot_l}" y2="{bottom}"/>')
+    out.append(f'<line class="axis" x1="{plot_l}" y1="{bottom}" x2="{plot_r}" y2="{bottom}"/>')
+    out.append(svg_vertical_text(plot_l - 70, (top + bottom) / 2, ylabel, 20))
+    for it in range(first, last + 1):
+        if (it - first) % 10 != 0:
+            continue
+        x = linear(it, first, last, plot_l, plot_r)
+        out.append(f'<line class="axis" x1="{x:.1f}" y1="{bottom}" x2="{x:.1f}" y2="{bottom + 6}"/>')
+        out.append(svg_text(x, bottom + 28, str(it), 18, "middle"))
+    for block in stages_of(rows)[1:]:
+        x = linear(block[0].it - 0.5, first, last, plot_l, plot_r)
+        out.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{bottom}" stroke="#1a202c" '
+                   f'stroke-width="1.5" stroke-dasharray="5 4"/>')
 
 
-def stage_boundaries(rows: Dict[int, Dict[str, object]]) -> List[Tuple[int, str]]:
-    prior = None
-    result = []
-    for iteration in sorted(rows):
-        row = rows[iteration]
-        nspace = context_value(row, "strategy", "refine3D nspace")
-        if nspace and nspace != prior:
-            result.append((iteration, nspace))
-            prior = nspace
-    return result
-
-
-def write_figure(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
-    its = sorted(rows)
-    first, last = its[0], its[-1]
-    width, height = 1800, 1400
-    margin_l, margin_r = 120, 70
-    top_a, bottom_a = 175, 670
-    top_b, bottom_b = 930, 1255
-    plot_l, plot_r = margin_l, width - margin_r
-    stack_max = nice_limit([sum(as_float(rows[i], metric) for metric, _, _ in STRATEGY_COMPONENTS) for i in its])
-    total_max = nice_limit([max(as_float(rows[i], "match3D total time"), as_float(rows[i], "volassemble total time")) for i in its])
-
+def write_figure(rows: Sequence[Iteration], outpath: Path, title: str) -> None:
+    first, last = rows[0].it, rows[-1].it
+    width, height = 1800, 1500
+    plot_l, plot_r = 130, width - 60
+    top_a, bottom_a = 200, 760
+    top_b, bottom_b = 1070, 1380
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         '<title>refine3D benchmark profile</title>',
-        '<desc>Stacked per-iteration strategy wall times and independently timed worker and volassemble wall times.</desc>',
         f'<rect x="0" y="0" width="{width}" height="{height}" fill="#ffffff"/>',
-        '<style>text{font-family:Arial,Helvetica,sans-serif;fill:#17202a}.axis{stroke:#4a5568;stroke-width:2.667}.grid{stroke:#cbd5e0;stroke-width:1}.muted{fill:#4a5568}</style>',
-        svg_text(plot_l, 58, "refine3D benchmark profile", 38, weight=500),
-        svg_text(plot_l, 96, "Wall time by refinement iteration. Strategy components are stacked; worker and volassemble totals are shown separately.", 22),
+        '<style>text{font-family:Arial,Helvetica,sans-serif;fill:#17202a}'
+        '.axis{stroke:#4a5568;stroke-width:2}.grid{stroke:#e2e8f0;stroke-width:1}</style>',
+        svg_text(plot_l, 55, title, 34, weight=600),
+        svg_text(plot_l, 92, "A: the strategy's wall time per iteration, split into the slowest partition's work and "
+                 "the master's time around it. B: the slowest and the mean partition.", 20),
     ]
-
-    # Top panel: stacked strategy components.
-    out += [svg_text(plot_l, top_a - 25, "A  Strategy-level wall time", 26, weight=500)]
-    for tick in range(0, int(stack_max) + 1, max(1, int(math.ceil(stack_max / 5)))):
-        y = linear(tick, 0, stack_max, bottom_a, top_a)
-        out += [f'<line class="grid" x1="{plot_l}" y1="{y:.1f}" x2="{plot_r}" y2="{y:.1f}"/>', svg_text(plot_l - 16, y + 7, f"{tick:g}", 20, "end")]
-    out += [
-        f'<line class="axis" x1="{plot_l}" y1="{top_a}" x2="{plot_l}" y2="{bottom_a}"/>',
-        f'<line class="axis" x1="{plot_l}" y1="{bottom_a}" x2="{plot_r}" y2="{bottom_a}"/>',
-        svg_vertical_text(42, (top_a + bottom_a) / 2, "wall time (s)", 24),
-    ]
-    bar_w = max(2.0, (plot_r - plot_l) / max(1, last - first + 1) * 0.74)
-    for iteration in its:
-        x = linear(iteration, first, last, plot_l, plot_r)
+    # panel A: stacked critical path
+    limit_a = nice_limit(row.total for row in rows)
+    out.append(svg_text(plot_l, top_a - 50, "A  Critical path of each iteration", 24, weight=600))
+    for block in stages_of(rows):
+        x = linear(block[0].it - 0.5, first, last, plot_l, plot_r)
+        label = f"{block[0].mode} {block[0].nspace}"
+        if x + 6 + 9 * len(label) > plot_r:
+            out.append(svg_text(plot_r, top_a - 14, label, 16, "end"))
+        else:
+            out.append(svg_text(x + 6, top_a - 14, label, 16))
+    axes(out, plot_l, plot_r, top_a, bottom_a, limit_a, first, last, rows, "wall time (s)")
+    bar_w = max(2.0, (plot_r - plot_l) / max(1, last - first + 1) * 0.8)
+    for row in rows:
+        x = linear(row.it, first, last, plot_l, plot_r)
         y = bottom_a
-        for metric, _, color in STRATEGY_COMPONENTS:
-            value = as_float(rows[iteration], metric)
-            h = bottom_a - linear(value, 0, stack_max, bottom_a, top_a)
+        for key, _, color in PATH_COMPONENTS:
+            h = bottom_a - linear(row.path[key], 0, limit_a, bottom_a, top_a)
+            if h <= 0:
+                continue
             y -= h
-            out.append(f'<rect x="{x - bar_w/2:.1f}" y="{y:.1f}" width="{bar_w:.1f}" height="{h:.1f}" fill="{color}"/>')
-    for iteration, nspace in stage_boundaries(rows):
-        if iteration == first:
-            continue
-        x = linear(iteration, first, last, plot_l, plot_r)
-        out += [f'<line x1="{x:.1f}" y1="{top_a}" x2="{x:.1f}" y2="{bottom_a}" stroke="#1a202c" stroke-width="2.667" stroke-dasharray="4 4"/>',
-                svg_text(x + 9, top_a + 23, f"nspace {nspace}", 18)]
-    for iteration in range(first, last + 1):
-        if iteration not in rows or (iteration - first) % 10 != 0:
-            continue
-        x = linear(iteration, first, last, plot_l, plot_r)
-        out += [f'<line class="axis" x1="{x:.1f}" y1="{bottom_a}" x2="{x:.1f}" y2="{bottom_a + 6}"/>',
-                svg_text(x, bottom_a + 31, str(iteration), 20, "middle")]
-    out += [
-        svg_text((plot_l + plot_r) / 2, bottom_a + 62, "refinement iteration", 24, "middle"),
-        svg_text(plot_l, bottom_a + 94, "Colour key — stacked contributions to strategy-level wall time:", 20, weight=500),
-    ]
-    out += draw_legend([(label, color) for _, label, color in STRATEGY_COMPONENTS], plot_l, bottom_a + 124)
-
-    # Bottom panel: totals from independently timed executables.
-    out += [
-        svg_text(plot_l, top_b - 70, "B  Independently timed executables", 26, weight=500),
-        svg_text(plot_l, top_b - 43,
-                 "These lines are separate executable wall-clock totals; they are not added to the stacked bars above.", 19),
-    ]
-    for tick in range(0, int(total_max) + 1, max(1, int(math.ceil(total_max / 5)))):
-        y = linear(tick, 0, total_max, bottom_b, top_b)
-        out += [f'<line class="grid" x1="{plot_l}" y1="{y:.1f}" x2="{plot_r}" y2="{y:.1f}"/>', svg_text(plot_l - 16, y + 7, f"{tick:g}", 20, "end")]
-    out += [
-        f'<line class="axis" x1="{plot_l}" y1="{top_b}" x2="{plot_l}" y2="{bottom_b}"/>',
-        f'<line class="axis" x1="{plot_l}" y1="{bottom_b}" x2="{plot_r}" y2="{bottom_b}"/>',
-        svg_vertical_text(42, (top_b + bottom_b) / 2, "wall time per process (s)", 24),
-    ]
-    lines = (("match3D total time", "match3D worker executable", "#805ad5"),
-             ("volassemble total time", "volume-assembly executable", "#d69e2e"))
-    for metric, _, color in lines:
-        points = []
-        for iteration in its:
-            value = as_float(rows[iteration], metric)
-            x = linear(iteration, first, last, plot_l, plot_r)
-            y = linear(value, 0, total_max, bottom_b, top_b)
-            points.append(f"{x:.1f},{y:.1f}")
-        out.append(f'<polyline fill="none" stroke="{color}" stroke-width="2.667" points="{" ".join(points)}"/>')
-    for iteration in range(first, last + 1):
-        if iteration not in rows or (iteration - first) % 10 != 0:
-            continue
-        x = linear(iteration, first, last, plot_l, plot_r)
-        out += [f'<line class="axis" x1="{x:.1f}" y1="{bottom_b}" x2="{x:.1f}" y2="{bottom_b + 8}"/>', svg_text(x, bottom_b + 34, str(iteration), 20, "middle")]
-    out.append(svg_text((plot_l + plot_r) / 2, height - 35, "refinement iteration", 24, "middle"))
-    out += draw_line_legend([(label, color) for _, label, color in lines], plot_l, top_b - 18)
-    n_strategy = len([i for i in its if "refine3D total time" in rows[i]])
-    n_worker = len([i for i in its if "match3D total time" in rows[i]])
-    n_assembly = len([i for i in its if "volassemble total time" in rows[i]])
-    out += [
-        svg_text(plot_r, height - 82, f"strategy n={n_strategy}; worker n={n_worker}; volassemble n={n_assembly}", 18, "end"),
-        '</svg>',
-    ]
+            out.append(f'<rect x="{x - bar_w / 2:.1f}" y="{y:.1f}" width="{bar_w:.1f}" height="{h:.1f}" '
+                       f'fill="{color}"/>')
+    out.append(svg_text((plot_l + plot_r) / 2, bottom_a + 58, "refinement iteration", 20, "middle"))
+    items, next_y = legend([(label, color, "box") for _, label, color in PATH_COMPONENTS],
+                           plot_l, bottom_a + 95, plot_r - plot_l)
+    out += items
+    # panel B: slowest and mean partition
+    series = (("tables_max", "probability tables, slowest part", "#2b6cb0", ""),
+              ("tables_mean", "probability tables, mean part", "#2b6cb0", "6 5"),
+              ("worker_max", "search, slowest worker", "#c05621", ""),
+              ("worker_mean", "search, mean worker", "#c05621", "6 5"))
+    present = [s for s in series if any(s[0] in row.extra for row in rows)]
+    if present:
+        limit_b = nice_limit(row.extra.get(key, 0.0) for row in rows for key, _, _, _ in present)
+        out.append(svg_text(plot_l, top_b - 50, "B  Partition wall time: slowest against mean", 24, weight=600))
+        axes(out, plot_l, plot_r, top_b, bottom_b, limit_b, first, last, rows, "wall time per part (s)")
+        for key, _, color, dash in present:
+            points = [f"{linear(row.it, first, last, plot_l, plot_r):.1f},"
+                      f"{linear(row.extra[key], 0, limit_b, bottom_b, top_b):.1f}" for row in rows if key in row.extra]
+            dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
+            out.append(f'<polyline fill="none" stroke="{color}" stroke-width="2.5"{dash_attr} '
+                       f'points="{" ".join(points)}"/>')
+        out.append(svg_text((plot_l + plot_r) / 2, bottom_b + 58, "refinement iteration", 20, "middle"))
+        items, _ = legend([(label, color, "line") for _, label, color, _ in present], plot_l, top_b - 18,
+                          plot_r - plot_l)
+        out += items
+    out.append('</svg>')
     outpath.write_text("\n".join(out) + "\n")
 
 
@@ -305,19 +644,27 @@ def main(argv: List[str]) -> int:
         print(__doc__.strip(), file=sys.stderr)
         return 2
     indir = Path(argv[1]).expanduser().resolve()
-    outdir = Path(argv[2]).expanduser().resolve() if len(argv) == 3 else indir
     if not indir.is_dir():
         print(f"Benchmark directory does not exist: {indir}", file=sys.stderr)
         return 2
+    records, layout, nfiles = load_records(indir)
+    if not records:
+        print(f"No benchmark reports in {indir}", file=sys.stderr)
+        return 1
+    reports_dir = indir / "BENCH" if (indir / "BENCH").is_dir() else indir
+    outdir = Path(argv[2]).expanduser().resolve() if len(argv) == 3 else reports_dir / "bench_summary"
     outdir.mkdir(parents=True, exist_ok=True)
-    rows = load_reports(indir)
-    summary = outdir / "refine3d_benchmark_summary.csv"
-    figure = outdir / "refine3d_benchmark.svg"
-    write_summary(rows, summary)
-    write_figure(rows, figure)
-    print(f"Parsed {len(rows)} benchmark iterations from {indir}")
-    print(f"Wrote {summary}")
-    print(f"Wrote {figure}")
+    rows = build_iterations(records)
+    write_records_csv(records, outdir / "bench_records.csv")
+    write_iterations_csv(rows, outdir / "bench_iterations.csv")
+    write_report(records, rows, layout, nfiles, indir, outdir / "bench_report.txt")
+    written = ["bench_records.csv", "bench_iterations.csv", "bench_report.txt"]
+    if rows:
+        write_figure(rows, outdir / "bench_profile.svg", f"refine3D benchmark profile: {indir.name}")
+        written.append("bench_profile.svg")
+    print(f"Parsed {len(records)} records from {nfiles} files ({layout}) in {indir}")
+    for name in written:
+        print(f"Wrote {outdir / name}")
     return 0
 
 

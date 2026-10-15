@@ -658,20 +658,21 @@ The refined map of X, its FSC and the refined poses live in the work project.
 
 ### Probabilistic pre-step benchmark files and developer keys
 
-The pre-step has benchmark files of its own, so its time is split into named
-parts instead of being one number in the strategy file:
+The pre-step has benchmark reports of its own, so its time is split into named
+parts instead of being one number in the strategy report (the files are in
+`BENCH/`, section 11.1):
 
-- `PROB_TAB_BENCH_ITERnnn_PARTppp.txt`, one per table part: wall-clock entries
-  measured outside the parallel regions (setup, reference preparation,
-  particle reading and preparation, table fill, table write), and a separate
-  thread-seconds block (seed estimation, score loop, refinement, their sum, the
-  fill region's wall time and the load balance). Thread-seconds are never part
-  of `% accounted for`. The context lists the references, the references
-  refined per particle, the shift searches, their alternations, the coarse-grid
-  evaluations and the objective and gradient evaluations.
-- `PROB_ALIGN_BENCH_ITERnnn.txt`, written by the driver, all wall time:
-  setup, sampling and project write, scheduling (launch to last part finished),
-  table reads, `ref_assign` and the assignment write.
+- `PROB_TAB_BENCH_PARTppp.txt`, one record per table part and iteration:
+  wall-clock entries measured outside the parallel regions (setup, reference
+  preparation, particle reading and preparation, table fill, table write), and
+  a separate thread-seconds block (seed estimation, score loop, refinement,
+  their sum, the fill region's wall time and the load balance). Thread-seconds
+  are never part of `% accounted for`. The context lists the references, the
+  references refined per particle, the shift searches, their alternations, the
+  coarse-grid evaluations and the objective and gradient evaluations.
+- `PROB_ALIGN_BENCH.txt`, one record per iteration, written by the driver, all
+  wall time: setup, sampling and project write, scheduling (launch to last part
+  finished), table reads, `ref_assign` and the assignment write.
 
 `prob_fast` (`yes|no`, default `no`) is a developer key pending promotion. It
 switches on three approximations of the probabilistic table, each in its own
@@ -857,19 +858,55 @@ The combined even/odd iteration is part of base `refine3D`, not a terminal
 
 ## 11. Finalization and Artifacts
 
-On each iteration, strategy benchmark files should stay simple: context plus
-one `TIMINGS (s)` section. Labels should include the coarse operation buckets
+### 11.1 Benchmark reports
+
+Benchmarking (`L_BENCH_GLOB`, on in every build) writes its reports into one
+subdirectory of the run directory, `BENCH/`, never into the run directory
+itself. Each benchmark family has one file there, and a family that every
+partition reports has one file per partition. A report is appended to its
+file as one record, so a run of any length writes a fixed number of files: for
+a distributed solve3D run with 10 partitions and both probability-table modes,
+about 45 instead of one file per iteration and partition (3,104 for a solve3D run of 94 refine3D iterations).
+
+| file | written by | records |
+| --- | --- | --- |
+| `REFINE3D_STRATEGY_BENCH.txt` | the refine3D strategy | one per iteration |
+| `REFINE3D_BENCH_PARTppp.txt` | each 3D search partition | one per iteration |
+| `REC3D_BENCH_PARTppp.txt` | each partition's reconstruction (gridding or PCG) | one per pass |
+| `PROB_TAB_BENCH_PARTppp.txt`, `PROB_TAB_NEIGH_BENCH_PARTppp.txt`, `PROB_TAB2D_BENCH_PARTppp.txt` | each probability-table part | one per iteration |
+| `PROB_ALIGN_BENCH.txt` | the probabilistic pre-step driver | one per iteration |
+| `VOLASSEMBLE_BENCH.txt` | volume assembly | one per iteration |
+| `SIGMA2_COMMIT_BENCH.txt` | the sigma2 commit | one per commit |
+| `SOLVE3D_BENCH.txt` | `solve3D`, `solve3D_addon` | one per run |
+| `REFINE2D_STRATEGY_BENCH.txt`, `REFINE2D_BENCH.txt` | the refine2D strategy; the 2D search (partition 1) | one per iteration |
+| `SOLVE2D_BENCH.txt` | `solve2D` | one per report |
+| `CAVGASSEMBLE_BENCH.txt`, `CAVGASSEMBLE_SUMS_BENCH.txt` | class-average assembly; its sum of the parts' contributions | one per assembly |
+| `CAVGSUMS_BENCH_PARTppp.txt` | each partition's offline class sums | one per call |
+
+A record starts with a `*** BENCHMARK RECORD ***` header that names the family
+and, where they apply, the iteration (`which_iter`) and the partition. The
+writer's own sections follow, as before: `BENCHMARK CONTEXT` and `TIMINGS (s)`,
+plus `THREAD-SECONDS` for the table parts and `RELATIVE TIMINGS (%)` where a
+writer reports them. Each partition appends only to its own file, so
+concurrent workers never write to the same file. The shared helper is
+`open_bench_report` in `src/fileio/simple_bench_io.f90`; a new benchmark
+writer uses it rather than opening a file of its own. SIMPLE never truncates
+these files, and a record does not identify its run: clear `BENCH/` before a
+second run in the same directory.
+
+`scripts/plot_refine3d_bench.py` reads a `BENCH/` directory, or a directory of
+the per-iteration files of earlier builds, and writes the per-iteration
+summary table, a long table of every record, a text report and the figure.
+
+On each iteration, the strategy report should stay simple: context plus one
+`TIMINGS (s)` section. Labels should include the coarse operation buckets
 setup, probabilistic pre-step, matcher/scheduler, assembly/postprocess, and
 total time, together with separately timed reprojection-model materialization
 and the sigma2 transaction (the candidate preparation and the commit). These
 measurements keep a per-iteration sigma update distinguishable from reference
 preparation.
 
-Each refine3D stage also writes one stage-entry benchmark at its first
-iteration. It records the total stage initialization wall time and the nested
-`calc_pspec` wall time. The latter is the per-particle sigma estimation that
-may be reused across compatible stage changes; it must not be inferred from a
-per-iteration setup bucket.
+### 11.2 Run artifacts
 
 Base `objfun=cc` refinement still does not bootstrap or consume sigma2. The
 external-reference wrappers are the explicit exception: their shared service

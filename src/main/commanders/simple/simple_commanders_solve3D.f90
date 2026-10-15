@@ -1386,12 +1386,11 @@ contains
     contains
 
         subroutine write_solve3D_benchmark
-            type(string) :: benchfname
+            use simple_bench_io, only: open_bench_report
             integer :: fnr
             if( .not. L_BENCH_GLOB ) return
-            rt_tot     = toc(t_tot)
-            benchfname = string('SOLVE3D_BENCH.txt')
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            rt_tot = toc(t_tot)
+            call open_bench_report(fnr, 'SOLVE3D')
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')    'solve3D route                       : ', merge('solve3D_addon', 'solve3D      ', l_addon)
             write(fnr,'(a,i0)')   'solve3D nstates                     : ', params%nstates
@@ -1413,7 +1412,6 @@ contains
             write(fnr,'(a,1x,f0.2)') 'solve3D % accounted for             :', &
                 &((rt_setup + rt_start + rt_register + rt_stages + rt_final + rt_epilogue) / rt_tot) * 100.
             call fclose(fnr)
-            call benchfname%kill
         end subroutine write_solve3D_benchmark
 
         subroutine record_emitted_limits( istage_run )

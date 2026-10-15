@@ -3,7 +3,7 @@ module simple_refine3D_fnames
 use simple_defs_fname, only: BIN_EXT, MRC_EXT, TXT_EXT, JPG_EXT,&
     &CAVGS_ITER_FBODY, FSC_FBODY, STARTVOL_FBODY, VOL_FBODY
 use simple_string,       only: string
-use simple_string_utils, only: int2str_pad, uppercase
+use simple_string_utils, only: int2str_pad
 implicit none
 
 private
@@ -35,10 +35,6 @@ public :: refine3D_frozen_manifest_fname
 public :: refine3D_frozen_pcg_fname
 public :: refine3D_reproj_model_fname
 public :: refine3D_cart_refvols_fname
-public :: refine3D_bench_fname
-public :: refine3D_strategy_bench_fname
-public :: refine3D_volassemble_bench_fname
-public :: rec3D_bench_fname, prob_tab_bench_fname, prob_align_bench_fname
 public :: refine3D_oris_heatmap_fname
 public :: refine3D_reprojs_fname
 
@@ -273,43 +269,6 @@ contains
         character(len=*), intent(in) :: half
         fname = string('cart_refvols')//half_suffix(half)//BIN_EXT
     end function refine3D_cart_refvols_fname
-
-    !> per-iteration, per-partition bench record (REFINE3D_BENCH_ITERnnn_PARTppp.txt)
-    type(string) function refine3D_bench_fname( iter, part, numlen ) result(fname)
-        integer, intent(in) :: iter, part, numlen
-        fname = string('REFINE3D_BENCH_ITER')//iter_tag(iter)//'_PART'//part_tag(part, numlen)//TXT_EXT
-    end function refine3D_bench_fname
-
-    type(string) function refine3D_strategy_bench_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string('REFINE3D_STRATEGY_BENCH_ITER')//iter_tag(iter)//TXT_EXT
-    end function refine3D_strategy_bench_fname
-
-    type(string) function refine3D_volassemble_bench_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string('VOLASSEMBLE_BENCH_ITER')//iter_tag(iter)//TXT_EXT
-    end function refine3D_volassemble_bench_fname
-
-    !> per-iteration, per-partition record of the reconstruction passes, one section appended per pass
-    !! (REC3D_BENCH_ITERnnn_PARTppp.txt)
-    type(string) function rec3D_bench_fname( iter, part, numlen ) result(fname)
-        integer, intent(in) :: iter, part, numlen
-        fname = string('REC3D_BENCH_ITER')//iter_tag(iter)//'_PART'//part_tag(part, numlen)//TXT_EXT
-    end function rec3D_bench_fname
-
-    !> per-iteration, per-partition record of a probability-table part; prg is prob_tab, prob_tab_neigh
-    !! or prob_tab2D (PROB_TAB_BENCH_ITERnnn_PARTppp.txt and so on)
-    type(string) function prob_tab_bench_fname( prg, iter, part, numlen ) result(fname)
-        character(len=*), intent(in) :: prg
-        integer,          intent(in) :: iter, part, numlen
-        fname = string(uppercase(trim(prg)))//'_BENCH_ITER'//iter_tag(iter)//'_PART'//part_tag(part, numlen)//TXT_EXT
-    end function prob_tab_bench_fname
-
-    !> per-iteration record of the probabilistic pre-step driver (PROB_ALIGN_BENCH_ITERnnn.txt)
-    type(string) function prob_align_bench_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string('PROB_ALIGN_BENCH_ITER')//iter_tag(iter)//TXT_EXT
-    end function prob_align_bench_fname
 
     type(string) function refine3D_oris_heatmap_fname( state ) result(fname)
         integer, intent(in) :: state

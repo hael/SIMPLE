@@ -711,15 +711,15 @@ contains
         end subroutine gen_final_cavgs
 
         subroutine write_solve2D_benchmark( iter, phase, stage )
+            use simple_bench_io, only: open_bench_report
             integer,          intent(in) :: iter, stage
             character(len=*), intent(in) :: phase
-            type(string) :: benchfname, cluster_refine
+            type(string) :: cluster_refine
             integer :: fnr
             if( .not. L_BENCH_GLOB ) return
             rt_tot = toc(t_tot)
-            benchfname = string('SOLVE2D_BENCH_ITER')//int2str_pad(iter,3)//'.txt'
             cluster_refine = cline_refine2D%get_carg('refine')
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            call open_bench_report(fnr, 'SOLVE2D', iter=iter)
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'solve2D phase                   : ', trim(phase)
             write(fnr,'(a,a)')  'solve2D execution mode          : ', merge('shared-memory', 'distributed  ', l_shmem)
@@ -745,7 +745,6 @@ contains
                 &((rt_setup + rt_calc_pspec + rt_refine2D + rt_final_cavgs) / rt_tot) * 100.
             call fclose(fnr)
             call cluster_refine%kill
-            call benchfname%kill
         end subroutine write_solve2D_benchmark
 
     end subroutine exec_solve2D_workflow

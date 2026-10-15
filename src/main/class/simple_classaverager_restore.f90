@@ -7,6 +7,7 @@ use simple_cavg_sums,        only: cavg_sums, CAVG_SUMS_STATE, CAVG_SUMS_CONTRIB
                                   &cavg_contrib_fname
 use simple_euclid_sigma2,    only: sigma2_half
 use simple_fplane_grid,      only: fplane_grid
+use simple_bench_io,         only: open_bench_report
 implicit none
 #include "simple_local_flags.inc"
 
@@ -395,16 +396,14 @@ contains
             &rt_init, rt_transf, rt_sums, toc(t_tot))
     end subroutine cavger_assemble_sums
 
-    !> The bench file of a part's offline class sums (CAVGSUMS_BENCH_PARTppp.txt)
+    !> The bench record of a part's offline class sums, in its partition's CAVGSUMS file
     subroutine write_assemble_sums_bench( nptcls, reads, rt_init, rt_transf, rt_sums, rt_tot )
         use simple_matcher_ptcl_io, only: ptcl_read_counts, write_ptcl_read_bench_context, write_mem_bench_context
         integer,                intent(in) :: nptcls
         type(ptcl_read_counts), intent(in) :: reads
         real(timer_int_kind),   intent(in) :: rt_init, rt_transf, rt_sums, rt_tot
-        type(string) :: fname
         integer :: fnr
-        fname = string('CAVGSUMS_BENCH_PART')//int2str_pad(p_ptr%part, max(1, p_ptr%numlen))//TXT_EXT
-        call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
+        call open_bench_report(fnr, 'CAVGSUMS', part=p_ptr%part, numlen=p_ptr%numlen)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'cavgsums program                    : ', p_ptr%prg%to_char()
         write(fnr,'(a,i0)') 'cavgsums process partition          : ', p_ptr%part
@@ -425,7 +424,6 @@ contains
                 &((rt_init + rt_transf + reads%rt_read + rt_sums) / rt_tot) * 100.
         endif
         call fclose(fnr)
-        call fname%kill
     end subroutine write_assemble_sums_bench
 
     !>  \brief  merges the even/odd pairs and normalises the sums, merge low resolution
@@ -745,7 +743,6 @@ contains
         integer(timer_int_kind) ::  t_init,  t_io,  t_merge_eos_and_norm,  t_tot
         real(timer_int_kind)    :: rt_init, rt_io, rt_merge_eos_and_norm, rt_tot
         type(cavg_sums)      :: total, part_sums
-        type(string)         :: benchfname
         real,    allocatable :: offsets(:,:)
         integer, allocatable :: part_pops(:,:)
         real    :: offsets_ref(2,ncls)
@@ -797,8 +794,7 @@ contains
         if( L_BENCH_GLOB )then
             rt_merge_eos_and_norm = toc(t_merge_eos_and_norm)
             rt_tot                = toc(t_tot)
-            benchfname = 'CAVGASSEMBLE_BENCH.txt'
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+            call open_bench_report(fnr, 'CAVGASSEMBLE_SUMS')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'initialisation       :', rt_init
             write(fnr,'(a,1x,f0.2)') 'I/O, sum and blend   :', rt_io

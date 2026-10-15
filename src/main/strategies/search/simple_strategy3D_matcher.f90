@@ -12,7 +12,7 @@ use simple_matcher_3Drec,              only: calc_3Drec
 use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
 use simple_matcher_smpl_and_lplims,    only: sample_ptcls4iter3D, master_draws_sample3D
 use simple_qsys_funs,                  only: qsys_declare_part_finished
-use simple_refine3D_fnames,            only: refine3D_bench_fname
+use simple_bench_io,                   only: open_bench_report
 use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes, get_node_mem_in_use_bytes
 use simple_matcher_ptcl_io,            only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
     &write_ptcl_read_bench_context, ptcl_read_session, ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, &
@@ -75,7 +75,6 @@ contains
         ! benchmarking
         integer(int64) :: peak_rss, rss_after_teardown, rss_after_reconstruction
         real(real64)    :: peak_rss_gib, rss_after_teardown_gib, rss_after_reconstruction_gib
-        type(string) :: benchfname
         integer(timer_int_kind) :: t_startup, t_build_batch_ptcls, t_prep_orisrch, t_align, t_rec, t_tot, t_projio
         integer(timer_int_kind) :: t_alloc_ptcl_imgs
         integer(timer_int_kind) :: t_prep_refs, t_memoize_refs, t_sigma2_write
@@ -285,15 +284,13 @@ contains
             endif
             ! every partition writes its own collision-free record so worker time,
             ! load imbalance and memory can be aggregated
-            call write_bench_file(refine3D_bench_fname(which_iter, p_ptr%part, p_ptr%numlen))
+            call write_bench_file
         endif
 
     contains
 
-        subroutine write_bench_file( fname )
-            type(string), intent(in) :: fname
-            benchfname = fname
-            call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
+        subroutine write_bench_file
+            call open_bench_report(fnr, 'REFINE3D', iter=which_iter, part=p_ptr%part, numlen=p_ptr%numlen)
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
             write(fnr,'(a,a)')  'match3D refine mode                 : ', trim(ctrl%refine_mode)
             write(fnr,'(a,l1)') 'match3D write partial outputs       : ', ctrl%do_write_partial_recs
@@ -342,7 +339,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match3D total thread-s             :', rt_tot * real(p_ptr%nthr, kind(rt_tot))
             write(fnr,'(a,1x,f0.2)') 'match3D % accounted for            :', &
                 &((rt_startup + rt_fill + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
-                &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec) / rt_tot) * 100.
+                &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec + rt_sigma2_write) / rt_tot) * 100.
             call fclose(fnr)
         end subroutine write_bench_file
 

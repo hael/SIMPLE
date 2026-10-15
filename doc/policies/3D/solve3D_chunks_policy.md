@@ -217,7 +217,7 @@ E/source.simple                     the 3D-free source (section 5)
 E/base.simple                       base step project
 E/1_solve3D/base.simple             base result
 E/addon_01.simple                   add-on 1 step project, replaced by its published union
-E/2_solve3D_addon/                  add-on 1 run directory: frozen copy, maps, manifest, solve3D_addon_report.txt, SOLVE3D_BENCH.txt
+E/2_solve3D_addon/                  add-on 1 run directory: frozen copy, maps, manifest, solve3D_addon_report.txt, BENCH/
 E/addon_02.simple, E/3_solve3D_addon/, ...
 E/solve3D_chunks_report.txt         the report
 ```
@@ -260,8 +260,9 @@ sections 7 and 8). Late add-ons therefore cost more than early ones, even
 though each searches the same number of particles. This growth is what a
 stream meets as its union grows.
 
-Every `solve3D` and `solve3D_addon` run writes `SOLVE3D_BENCH.txt` in its run
-directory (SIMPLE benchmarking, `L_BENCH_GLOB`): the times of setup, the
+Every `solve3D` and `solve3D_addon` run writes `BENCH/SOLVE3D_BENCH.txt` in its
+run directory (SIMPLE benchmarking, `L_BENCH_GLOB`; refine3D policy, section
+11.1): the times of setup, the
 starting state (for an add-on, the frozen accumulation), the add-on
 registration pass, the refine3D stages, the final reconstruction and the
 epilogue (for an add-on, its report and the cohort-only map). Read across the
@@ -315,6 +316,6 @@ The child runs keep their own refusals.
 | `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90` (`exec_solve3D_chunks`, `publish_solve3D_result`) | validation, `nsample`, the defaults, the stack indices for the cuts, the run sequence, key routing, statistics, the regression log, the report file, publication |
 | `src/main/solve/simple_solve3D_chunks_plan.f90` (`chunk_nsample`, `derive_chunk_run_count`, `partition_selected_balanced`, `prepare_chunks_source`, `select_chunks_step`, `chunks_report`) | the sampling constants, the run count, the whole-stack cuts, the source and step projects, the report format |
 | `src/main/solve/simple_solve3D_chunks_plan_tester.f90` | the unit tests (suite `solve3d_chunks_plan`) |
-| `src/main/commanders/simple/simple_commanders_solve3D.f90` (`write_solve3D_benchmark`) | the child runs; their `SOLVE3D_BENCH.txt` |
+| `src/main/commanders/simple/simple_commanders_solve3D.f90` (`write_solve3D_benchmark`) | the child runs; their `BENCH/SOLVE3D_BENCH.txt` |
 | `src/main/solve/simple_solve3D_manifest.f90` (`replay`, `read_registered`, `register`) | `nsample`, `nstates` and the recorded inputs reaching the add-ons; the manifest registration of the published project |
 | `src/main/solve/simple_solve3D_utils.f90` (`solve3D_symsrch_stage`) | the lowest supported `nstages` |
