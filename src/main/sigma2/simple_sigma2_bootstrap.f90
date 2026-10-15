@@ -139,6 +139,7 @@ contains
         call cline_sigma%delete('trail_seed')
         call cline_sigma%delete('frozen_seed')
         call cline_sigma%delete('frozen_rec')
+        call cline_sigma%delete('frozen_carry')
         call cline_sigma%delete('ufrac_trec')
         call cline_sigma%delete('cohort_sampling')
         call cline_sigma%delete('postprocess')

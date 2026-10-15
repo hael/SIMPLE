@@ -23,6 +23,14 @@ distributed worker accumulation followed by a master solve. The former
 `reconstruct3D_pcg` command has been retired; there is one production workflow
 and one backend selector.
 
+The add-on chains (`solve3D_addon`, `solve3D_chunks`) reconstruct by gridding
+only (ruled 2026-10-13). The
+PCG backend therefore has no frozen-set side: it refuses the internal
+frozen-set handshakes, and `solve3D_addon` refuses a frozen run that used PCG
+([solve3D_addon_policy.md](solve3D_addon_policy.md)). A `solve3D` base run
+keeps both backends. The even and odd halves are the project's partition
+([refine3D_policy.md](refine3D_policy.md), section 5).
+
 The production backend currently supports full-box fixed-pose
 reconstruction from raw or denoised particle sources, multiple populated
 states, CTF-aware `cc` or sigma-weighted `euclid`, point-group replication,
@@ -660,7 +668,7 @@ implemented and tested here rather than repurposed from production gridding.
   cache (against this path's no-module-global rule) and a packed, padded-box
   plane convention that clashes with the full-disk native representation.
 - **Particle I/O** uses production's batched pattern
-  (`prepimgbatch`/`discrete_read_imgbatch`) with `norm_noise` +
+  (`prepimgbatch` and the pass's read session, `ptcl_read_session`) with `norm_noise` +
   `taper_edges_particle` + `fft` per particle before plane extraction — the same
   steps production fuses into `norm_noise_taper_edge_pad_fft`. Batches stream
   into the accumulators and are discarded, so peak memory is constant in

@@ -2,7 +2,7 @@
 module simple_commanders_solve3D
 use simple_commanders_api
 use simple_solve3D_utils
-use simple_final_rec,                              only: calc_final_rec
+use simple_final_rec,                              only: calc_final_rec, calc_final_rec_addon
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
 use simple_procimgstk,                             only: shift_imgfile
 use simple_commanders_project_core,                only: commander_selection
@@ -12,13 +12,22 @@ use simple_commanders_rec,                         only: commander_rec3D
 use simple_cluster_seed,                           only: gen_labelling
 use simple_view_partition_sampling,                only: make_class_samples, report_class_sample_coverage
 use simple_refine3D_fnames,                        only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
-    &refine3D_state_vol_fname, refine3D_state_halfvol_fname, refine3D_frozen_context_fname, refine3D_fsc_fname
-use simple_halfmap_diagnostics,                    only: rename_support_provenance
+    &refine3D_state_vol_fname, refine3D_state_halfvol_fname, refine3D_frozen_context_fname, refine3D_fsc_fname, &
+    &refine3D_carried_context_fname, refine3D_carried_bundle_fname, refine3D_carried_membership_fname
+use simple_halfmap_diagnostics,                    only: rename_support_provenance, copy_support_provenance
 use simple_gui_communicator,                       only: gui_communicator
 use simple_solve3D_manifest,                       only: solve3D_manifest, solve3D_stage_record, MANIFEST_FNAME, &
     &manifest_records_input, manifest_overridable_input
 use simple_project_superset,                       only: project_superset, COHORT_WARN_FRAC
-use simple_frozen_accum,                           only: frozen_accum
+use simple_frozen_accum,                           only: frozen_accum, carried_bundle, write_carried_membership, &
+    &read_carried_membership
+use simple_eo_partition,                           only: ensure_field_halves
+use simple_sigma2_state,                           only: sigma2_state_extend, sigma2_state_union_means, &
+    &sigma2_state_candidate_path
+use simple_sigma2_state_file,                      only: sigma2_state_header, sigma2_state_read_header, &
+    &sigma2_state_init_header, sigma2_state_publish, sigma2_state_artifact_signature, SIGMA2_PROV_RESIDUAL, &
+    &SIGMA2_STATE_FNAME
+use simple_ptcl_layout,                            only: ptcl_layout_digest
 use simple_solve3D_addon_report,                   only: solve3D_addon_report, ADDON_REPORT_FNAME
 implicit none
 
@@ -669,7 +678,7 @@ contains
         type(ui_program), pointer     :: ui_addon => null()
         type(cmdline)                 :: cline_run
         type(string), allocatable     :: keys(:)
-        type(string)                  :: projfile, projfile_frz, sigma_path
+        type(string)                  :: projfile, projfile_frz, sigma_path, base_backend
         character(len=STDLEN)         :: msg
         character(len=:), allocatable :: key
         integer :: i, status
@@ -688,6 +697,11 @@ contains
                     cycle
             end select
             if( ui_addon%accepts(key) ) cycle
+            select case(key)
+                case('rec_backend', 'maxits_pcg', 'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', 'pcg_solvent_check')
+                    msg = key//': solve3D_addon reconstructs by gridding only and takes no backend or PCG control'
+                    THROW_HARD(trim(msg))
+            end select
             if( manifest_records_input(key) )then
                 THROW_HARD(key//' is set by the frozen run (recorded in its manifest); remove it from the command line')
             else
@@ -709,6 +723,13 @@ contains
         if( status /= 0 ) THROW_HARD('projfile_frozen: '//trim(msg))
         call man%validate_frozen(spproj_frz, status, msg)
         if( status /= 0 ) THROW_HARD(trim(msg))
+        ! add-on chains reconstruct by gridding only (doc/policies/3D/solve3D_addon_policy.md)
+        base_backend = man%get_rec_backend()
+        if( base_backend%to_char() /= 'gridding' )then
+            msg = 'the frozen run reconstructed with rec_backend='//base_backend%to_char()//&
+                &'; solve3D_addon continues gridding base runs only'
+            THROW_HARD(trim(msg))
+        endif
         call man%get_artifact('sigma2_state', 0, sigma_path, found)
         if( .not. found ) THROW_HARD('the frozen run recorded no committed residual sigma2 state')
         if( .not. man%matches_artifact('sigma2_state', 0, sigma_path) )then
@@ -748,6 +769,7 @@ contains
         ! the base run's replayed inputs, stage-line shape and solution
         call man%replay(cline_run)
         call cline_run%set('center', 'no')  ! a centring shift would never reach the frozen term
+        call cline_run%set('rec_backend', 'gridding')  ! add-on chains reconstruct by gridding only
         ! the add-on's own inputs and the execution environment, as given; an
         ! overridable replayed key (balance, nclust, mskdiam) yields to the
         ! command line, and the override is logged against the frozen run's value
@@ -880,7 +902,10 @@ contains
         type(sp_project)           :: spproj_frz
         type(solve3D_addon_ctx) :: addon_ctx
         type(string)               :: frozen_copy, frozen_ctx_fname, frozen_sigma_copy
-        logical :: l_addon, l_cohort_chain_seeded
+        type(string)               :: carry_ctx_fname, carry_bundle_fname, carry_members_fname, frozen_bundle_dir
+        type(carried_bundle)       :: bundle_frz          !< the frozen run's carried bundle (carried route)
+        integer, allocatable       :: members_frz(:)      !< its membership: state per frozen-project row, 0 outside
+        logical :: l_addon, l_cohort_chain_seeded, l_carried
         character(len=*), parameter :: ADDON_DIAG_DIR  = 'addon_diag' !< addon_diag=yes: the cohort-only map
         character(len=*), parameter :: FROZEN_COPY_DIR = 'frozen'     !< the frozen project's copy
         integer(timer_int_kind) :: t_tot, t_phase
@@ -1341,14 +1366,15 @@ contains
         if( l_run_final_rec )then
             if( params%nstates > 1 ) call ensure_multistate_particle_assignments
             ! the shared ending: final all-particle reconstruction at original
-            ! sampling, project registration, final products and reprojections
-            ! solve3D_addon: every particle is active again and the
-            ! cohort-only sigma2 registration is gone, so the final
-            ! reconstruction bootstraps the union's own state over every
-            ! particle (bootstrap_rec3D) and ships the union map on it
-            if( l_addon ) call addon_restore_union
-            call calc_final_rec(params, spproj, params%projfile, cline_refine3D, xrec3D, xbootstrap_rec3D, &
-                &l_postprocess=.true., lp_snapshot=lpinfo(nstages_refine3D)%lp)
+            ! sampling, project registration, final products and reprojections;
+            ! solve3D_addon reconstructs incrementally from its own particles and
+            ! the carried sums, and publishes the next carried bundle
+            if( l_addon )then
+                call addon_final
+            else
+                call calc_final_rec(params, spproj, params%projfile, cline_refine3D, xrec3D, xbootstrap_rec3D, &
+                    &l_postprocess=.true., lp_snapshot=lpinfo(nstages_refine3D)%lp)
+            endif
         else
             write(logfhandle,'(A,I0)')'>>> SOLVE3D EARLY STOP AFTER STAGE ', nstages_refine3D
             write(logfhandle,'(A)')'>>> FINAL ALL-PARTICLE RECONSTRUCTION SKIPPED'
@@ -1378,6 +1404,8 @@ contains
         call gui_comm%add_metadata(spproj, oritype='cls3D', stage=0, selection=.true.) ! stage=0 signifies final
         ! cleanup
         call spproj%kill
+        call bundle_frz%kill
+        if( allocated(members_frz) ) deallocate(members_frz)
         call qsys_cleanup(params)
         call gui_comm%kill()
         call simple_end('**** SIMPLE_SOLVE3D NORMAL STOP ****', &
@@ -1438,6 +1466,8 @@ contains
             if( status /= 0 ) THROW_HARD(trim(msg))
             if( .not. file_exists(params%projfile_frozen) ) THROW_HARD('solve3D_addon: projfile_frozen does not exist')
             if( params%nstates /= man_addon%get_nstates() ) THROW_HARD('solve3D_addon: state layout differs from the manifest')
+            ! the carried sums are hard-label gridding sums
+            if( params%l_m_estimator_flex ) THROW_HARD('solve3D_addon carries hard-label sums only; no state weight set')
             call cline%delete('projfile_frozen')
             call cline%delete('addon_diag')
             call cline%delete('addon_manifest')
@@ -1448,6 +1478,9 @@ contains
             frozen_copy        = simple_abspath(string(FROZEN_COPY_DIR//'/')//basename(params%projfile_frozen), &
                 &check_exists=.false.)
             frozen_sigma_copy  = simple_abspath(string(FROZEN_COPY_DIR//'/frozen_sigma2_state.bin'), check_exists=.false.)
+            carry_ctx_fname     = simple_abspath(refine3D_carried_context_fname(),    check_exists=.false.)
+            carry_bundle_fname  = simple_abspath(refine3D_carried_bundle_fname(),     check_exists=.false.)
+            carry_members_fname = simple_abspath(refine3D_carried_membership_fname(), check_exists=.false.)
             addon_ctx%active     = .true.
             addon_ctx%overlap    = params%overlap
             addon_ctx%frozen_rec = frozen_ctx_fname
@@ -1458,14 +1491,22 @@ contains
 
         !> Copy the frozen project, never writing the original: a read resets projfile, the default
         !! segment-write target, to the copy itself, and the copy registers its own copy of the committed
-        !! sigma2 state by absolute path. Then verify that state and mask the working project's frozen rows.
+        !! sigma2 state by absolute path. Then verify that state, find the frozen run's carried bundle (the
+        !! carried route) or none (the first add-on of a chain), mask the working project's frozen rows and
+        !! open the run's own sigma2 state (copy-on-write).
         subroutine addon_prologue
             character(len=STDLEN) :: msg
-            type(string) :: sigma_src
+            type(string) :: sigma_src, bundle_src
             integer :: status
             logical :: found
             call spproj_frz%read(params%projfile_frozen)
-            call superset%new(spproj, spproj_frz, man_addon%get_nstates(), status, msg)
+            call man_addon%get_artifact('carried_bundle', 0, bundle_src, l_carried)
+            if( l_carried ) call adopt_frozen_bundle(bundle_src)
+            if( l_carried )then
+                call superset%new(spproj, spproj_frz, man_addon%get_nstates(), status, msg, carried=members_frz)
+            else
+                call superset%new(spproj, spproj_frz, man_addon%get_nstates(), status, msg)
+            endif
             if( status /= 0 ) THROW_HARD(trim(msg))
             call superset%retire_from_frozen(spproj_frz)
             call man_addon%get_artifact('sigma2_state', 0, sigma_src, found)
@@ -1473,6 +1514,10 @@ contains
             call simple_mkdir(FROZEN_COPY_DIR)
             call simple_copy_file(sigma_src, frozen_sigma_copy)
             call verify_frozen_sigma
+            if( l_carried )then
+                if( sigma2_state_artifact_signature(frozen_sigma_copy) /= bundle_frz%sigma2_generation ) &
+                    &THROW_HARD('the frozen run''s carried bundle belongs to another sigma2 generation')
+            endif
             call spproj_frz%projinfo%set(1, 'projfile', frozen_copy%to_char())
             sigma_src = stemname(frozen_copy)
             call spproj_frz%projinfo%set(1, 'cwd',      sigma_src%to_char())
@@ -1485,8 +1530,117 @@ contains
                 &superset%get_nfrozen(), '/', superset%get_ncohort(), '/', superset%get_nnever_updated(), '/', &
                 &superset%get_nretired()
             write(logfhandle,'(A,A)') '>>> SOLVE3D_ADDON FROZEN COPY: ', frozen_copy%to_char()
+            call open_addon_sigma2_state
             call sigma_src%kill
+            call bundle_src%kill
         end subroutine addon_prologue
+
+        !> The carried route: the frozen run's bundle, validated against its manifest record, the frozen
+        !! project and the ladder by headers and sizes (no payload is read), and its membership
+        subroutine adopt_frozen_bundle( bundle_src )
+            class(string), intent(in) :: bundle_src
+            type(solve3D_stage_record) :: last
+            character(len=STDLEN) :: msg
+            integer :: status
+            if( .not. man_addon%matches_artifact('carried_bundle', 0, bundle_src) ) &
+                &THROW_HARD('the frozen run''s carried bundle is missing or changed: '//bundle_src%to_char())
+            call bundle_frz%read(bundle_src, status, msg)
+            if( status /= 0 ) THROW_HARD(trim(msg))
+            frozen_bundle_dir = stemname(bundle_src)
+            call bundle_frz%validate(frozen_bundle_dir, status, msg)
+            if( status /= 0 ) THROW_HARD(trim(msg))
+            if( trim(bundle_frz%run_id) /= trim(man_addon%get_run_id()) ) &
+                &THROW_HARD('the carried bundle belongs to another run than the frozen run')
+            if( bundle_frz%nrows /= spproj_frz%os_ptcl3D%get_noris() ) &
+                &THROW_HARD('the carried bundle does not have the frozen project''s rows')
+            if( bundle_frz%nstates /= man_addon%get_nstates() ) &
+                &THROW_HARD('the carried bundle has another state layout than the frozen run')
+            if( trim(bundle_frz%weighting) /= 'euclid' .or. any(bundle_frz%wset_id /= 0_8) ) &
+                &THROW_HARD('the carried bundle is not of euclid hard-label sums')
+            last = man_addon%get_stage(man_addon%get_last_stage())
+            if( .not. any(bundle_frz%boxes == man_addon%get_box()) .or. .not. any(bundle_frz%boxes == last%box_crop) ) &
+                &THROW_HARD('the carried bundle lacks the native or the stage box')
+            call read_carried_membership(frozen_bundle_dir//'/'//refine3D_carried_membership_fname(), &
+                &bundle_frz%nrows, members_frz, status)
+            if( status /= 0 ) THROW_HARD('the carried bundle membership cannot be read')
+            write(logfhandle,'(A,A,A,I0,A)') '>>> SOLVE3D_ADDON CARRIED ROUTE: BUNDLE OF RUN ', trim(bundle_frz%run_id), &
+                &' (', sum(bundle_frz%ncarried_state), ' PARTICLES IN ITS SUMS); NO FROZEN PARTICLE IS READ'
+        end subroutine adopt_frozen_bundle
+
+        !> The run's own sigma2 state (copy-on-write): the frozen records of the frozen and retired rows
+        !! copied, every cohort row started from the frozen global curve of its half, published in the
+        !! run directory and registered, so the stage updates the cohort and seeds nothing from image
+        !! power. The halves are the project's partition, made here before any record is seeded.
+        subroutine open_addon_sigma2_state
+            type(sigma2_state_header) :: frozen_header, header
+            type(string) :: committed, candidate
+            logical, allocatable :: l_frz(:), l_coh(:), l_ret(:), copy_rows(:)
+            integer, allocatable :: eo(:)
+            character(len=STDLEN) :: msg
+            integer :: status, i, nrows, nrows_frz
+            call ensure_field_halves(spproj, 'ptcl3D', params%projfile)
+            call spproj%read(params%projfile)
+            call sigma2_state_read_header(frozen_sigma_copy%to_char(), frozen_header, status, msg)
+            if( status /= 0 ) THROW_HARD(trim(msg))
+            nrows     = spproj%os_ptcl3D%get_noris()
+            nrows_frz = int(frozen_header%nptcls)
+            if( nrows_frz /= spproj_frz%os_ptcl3D%get_noris() ) &
+                &THROW_HARD('the frozen sigma2 state does not have the frozen project''s rows')
+            call superset%get_masks(l_frz, l_coh, l_ret)
+            allocate(copy_rows(nrows), eo(nrows))
+            do i = 1, nrows
+                copy_rows(i) = (l_frz(i) .or. l_ret(i)) .and. i <= nrows_frz
+                eo(i)        = spproj%os_ptcl3D%get_eo(i)
+            enddo
+            call sigma2_state_init_header(header, int(frozen_header%kfrom), int(frozen_header%kto), nrows, &
+                &int(frozen_header%box), real(frozen_header%smpd), frozen_header%generation + 1_int64, &
+                &ptcl_layout_digest(spproj, spproj%os_ptcl3D), SIGMA2_PROV_RESIDUAL)
+            committed = simple_abspath(string(SIGMA2_STATE_FNAME), check_exists=.false.)
+            candidate = sigma2_state_candidate_path(committed%to_char(), header%generation)
+            call sigma2_state_extend(frozen_sigma_copy%to_char(), candidate%to_char(), header, copy_rows, l_coh, eo, &
+                &status, msg)
+            if( status == 0 ) call sigma2_state_publish(candidate%to_char(), committed%to_char(), status, msg)
+            if( status /= 0 ) THROW_HARD('solve3D_addon sigma2 state: '//trim(msg))
+            call spproj%set_sigma2_state_path(committed)
+            call spproj%write_segment_inside('projinfo', params%projfile)
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> SOLVE3D_ADDON SIGMA2: ', count(copy_rows), ' FROZEN RECORDS KEPT, ', &
+                &count(l_coh), ' COHORT ROWS FROM THE FROZEN GLOBAL CURVES (NO IMAGE-POWER SEED)'
+            call committed%kill
+            call candidate%kill
+        end subroutine open_addon_sigma2_state
+
+        !> solve3D_addon membership switch (calc_final_rec_addon): the union back, with its global sigma2
+        !! means republished on request, or the frozen and retired rows masked again
+        subroutine switch_addon_membership( l_union, l_means )
+            logical, intent(in) :: l_union, l_means
+            type(string) :: sigma_path
+            logical, allocatable :: active(:)
+            integer, allocatable :: eo(:)
+            character(len=STDLEN) :: msg
+            integer :: status, i
+            logical :: found
+            call spproj%read(params%projfile)
+            if( l_union )then
+                call superset%restore(spproj, spproj_frz)
+                call spproj%write(params%projfile)
+                if( .not. l_means ) return
+                call spproj%get_sigma2_state_path(sigma_path, found)
+                if( .not. found ) THROW_HARD('solve3D_addon lost its sigma2 registration')
+                allocate(active(spproj%os_ptcl3D%get_noris()), eo(spproj%os_ptcl3D%get_noris()))
+                do i = 1, size(active)
+                    active(i) = spproj%os_ptcl3D%get_state(i) > 0
+                    eo(i)     = spproj%os_ptcl3D%get_eo(i)
+                enddo
+                call sigma2_state_union_means(sigma_path%to_char(), active, eo, status, msg)
+                if( status /= 0 ) THROW_HARD('solve3D_addon union sigma2 means: '//trim(msg))
+                write(logfhandle,'(A,I0,A)') '>>> SOLVE3D_ADDON SIGMA2: GLOBAL MEANS OVER THE UNION (', count(active), &
+                    &' PARTICLES) PUBLISHED'
+            else
+                call superset%mask(spproj)
+                call spproj%write_segment_inside('ptcl2D', params%projfile)
+                call spproj%write_segment_inside('ptcl3D', params%projfile)
+            endif
+        end subroutine switch_addon_membership
 
         !> The frozen term is weighted by the base run's committed residual
         !! sigma2 state, never by a re-estimate: its copy must retain the
@@ -1499,13 +1653,17 @@ contains
         !> Cohort poses and labels from random, the frozen sets at every distinct
         !! consuming box of the inherited ladder plus the native box, and the
         !! native frozen-only maps as the stage-3 references (trusted: no CC
-        !! pose-initialisation pass).
+        !! pose-initialisation pass). The first add-on of a chain accumulates the
+        !! frozen particles (read once per box); the carried route adopts the frozen
+        !! run's carried sums instead and starts from the frozen run's final maps,
+        !! which are their restoration at the native box.
         subroutine addon_starting_state
-            type(frozen_accum) :: store
-            type(string) :: src, dest
+            type(frozen_accum) :: store, src
+            type(string) :: src_vol, dest
             character(len=STDLEN) :: msg
             integer, allocatable :: boxes(:)
-            integer :: s, b, status
+            real,    allocatable :: smpds(:)
+            integer :: s, b, status, nstates_counts(params%nstates)
             call reset_ptcl3D_from_ptcl2D_selection
             call spproj%os_ptcl3D%rnd_oris
             if( params%nstates > 1 ) call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
@@ -1514,44 +1672,97 @@ contains
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! the stage-3 controls define the frozen accumulations
             call set_cline_refine3D(params, solve3D_symsrch_stage(), l_cavgs=.false., addon=addon_ctx)
-            call store%new(run_id, trim(params%rec_backend), spproj%os_ptcl3D%get_noris(), &
-                &spproj_frz%os_ptcl3D%get_noris(), [(superset%get_nfrozen_state(s), s=1,params%nstates)])
+            call addon_boxes(boxes, smpds)
+            if( l_carried )then
+                nstates_counts = bundle_frz%ncarried_state
+            else
+                nstates_counts = [(superset%get_nfrozen_state(s), s=1,params%nstates)]
+            endif
+            call store%new(run_id, spproj%os_ptcl3D%get_noris(), spproj_frz%os_ptcl3D%get_noris(), nstates_counts)
             call store%write(frozen_ctx_fname)
-            allocate(boxes(0))
-            do istage = start_stage, nstages_refine3D
-                b = lpinfo(istage)%box_crop
-                if( b == params%box ) cycle
-                if( any(boxes == b) ) cycle
-                boxes = [boxes, b]
-            enddo
-            do s = 1, size(boxes)
-                call calc_frozen_rec(params, frozen_copy, xrec3D, boxes(s), frozen_ctx_fname)
+            if( l_carried )then
+                ! the carried sums of the frozen run become this run's frozen sets: no particle is read
+                call store%set_weighting(OBJFUN_EUCLID, [0_8, 0_8])
+                src = bundle_frz%store(frozen_bundle_dir)
+                do s = 1, params%nstates
+                    do b = 1, size(boxes)
+                        call store%import_gridding_set(src, s, boxes(b), smpds(b))
+                    enddo
+                enddo
+                call src%kill
+                do s = 1, params%nstates
+                    call start_from_frozen_artifact('vol',      s, refine3D_startvol_fname(s))
+                    call start_from_frozen_artifact('vol_even', s, refine3D_startvol_half_fname(s, 'even', unfil=.true.))
+                    call start_from_frozen_artifact('vol_even', s, refine3D_startvol_half_fname(s, 'even'))
+                    call start_from_frozen_artifact('vol_odd',  s, refine3D_startvol_half_fname(s, 'odd', unfil=.true.))
+                    call start_from_frozen_artifact('vol_odd',  s, refine3D_startvol_half_fname(s, 'odd'))
+                    dest = refine3D_startvol_fname(s)
+                    call inject_refine3D_volume(params, s, dest)
+                enddo
+            else
+                do b = 1, size(boxes)
+                    if( boxes(b) == params%box ) cycle
+                    call calc_frozen_rec(params, frozen_copy, xrec3D, boxes(b), frozen_ctx_fname)
+                    call verify_frozen_sigma
+                enddo
+                call calc_frozen_rec(params, frozen_copy, xrec3D, params%box, frozen_ctx_fname)
                 call verify_frozen_sigma
-            enddo
-            call calc_frozen_rec(params, frozen_copy, xrec3D, params%box, frozen_ctx_fname)
-            call verify_frozen_sigma
-            do s = 1, params%nstates
-                src  = refine3D_state_vol_fname(s)
-                dest = refine3D_startvol_fname(s)
-                call simple_rename(src, dest)
-                call rename_support_provenance(src, dest)
-                call inject_refine3D_volume(params, s, dest)
-                src  = refine3D_state_halfvol_fname(s, 'even')
-                dest = refine3D_startvol_half_fname(s, 'even', unfil=.true.)
-                call simple_copy_file(src, dest)
-                dest = refine3D_startvol_half_fname(s, 'even')
-                call simple_rename(src, dest)
-                src  = refine3D_state_halfvol_fname(s, 'odd')
-                dest = refine3D_startvol_half_fname(s, 'odd', unfil=.true.)
-                call simple_copy_file(src, dest)
-                dest = refine3D_startvol_half_fname(s, 'odd')
-                call simple_rename(src, dest)
-                call report_frozen_provenance(s)
-            enddo
+                do s = 1, params%nstates
+                    src_vol = refine3D_state_vol_fname(s)
+                    dest    = refine3D_startvol_fname(s)
+                    call simple_rename(src_vol, dest)
+                    call rename_support_provenance(src_vol, dest)
+                    call inject_refine3D_volume(params, s, dest)
+                    src_vol = refine3D_state_halfvol_fname(s, 'even')
+                    dest    = refine3D_startvol_half_fname(s, 'even', unfil=.true.)
+                    call simple_copy_file(src_vol, dest)
+                    dest    = refine3D_startvol_half_fname(s, 'even')
+                    call simple_rename(src_vol, dest)
+                    src_vol = refine3D_state_halfvol_fname(s, 'odd')
+                    dest    = refine3D_startvol_half_fname(s, 'odd', unfil=.true.)
+                    call simple_copy_file(src_vol, dest)
+                    dest    = refine3D_startvol_half_fname(s, 'odd')
+                    call simple_rename(src_vol, dest)
+                    call report_frozen_provenance(s)
+                enddo
+            endif
             call store%kill
-            call src%kill
+            call src_vol%kill
             call dest%kill
         end subroutine addon_starting_state
+
+        !> the boxes the run's frozen sets and carried sums live at: the distinct stage boxes of the
+        !! ladder the add-on runs, then the native box, each with its sampling
+        subroutine addon_boxes( boxes, smpds )
+            integer, allocatable, intent(out) :: boxes(:)
+            real,    allocatable, intent(out) :: smpds(:)
+            integer :: istage_here
+            allocate(boxes(0), smpds(0))
+            do istage_here = start_stage, nstages_refine3D
+                if( lpinfo(istage_here)%box_crop == params%box ) cycle
+                if( any(boxes == lpinfo(istage_here)%box_crop) ) cycle
+                boxes = [boxes, lpinfo(istage_here)%box_crop]
+                smpds = [smpds, lpinfo(istage_here)%smpd_crop]
+            enddo
+            boxes = [boxes, params%box]
+            smpds = [smpds, params%smpd]
+        end subroutine addon_boxes
+
+        !> a starting reference of the carried route: the frozen run's final map recorded in its manifest
+        subroutine start_from_frozen_artifact( kind, s, dest )
+            character(len=*), intent(in) :: kind
+            integer,          intent(in) :: s
+            class(string),    intent(in) :: dest
+            type(string) :: src
+            logical :: found
+            call man_addon%get_artifact(kind, s, src, found)
+            if( .not. found ) THROW_HARD('the frozen run recorded no '//kind//' map')
+            if( .not. man_addon%matches_artifact(kind, s, src) ) &
+                &THROW_HARD('the frozen run''s '//kind//' map is missing or changed: '//src%to_char())
+            call simple_copy_file(src, dest)
+            call copy_support_provenance(src, dest)
+            call src%kill
+        end subroutine start_from_frozen_artifact
 
         !> The registration pass: one full-cohort iteration of global refine=prob
         !! at a fixed nspace (set_refine3D_register_policy), at the entry
@@ -1624,23 +1835,64 @@ contains
             l_cohort_chain_seeded = .true.
         end subroutine addon_stage_boundary
 
-        !> The union before its final reconstruction: the frozen rows' 3D
-        !! records and every saved ptcl2D state back from the frozen
-        !! project. The cohort-only sigma2 registration is
-        !! dropped and the frozen term leaves the reconstruction command line:
-        !! the final reconstruction reads every particle and finds no
-        !! consumable state, so it bootstraps the union's (image-power seed,
-        !! bootstrap map, one residual pass) exactly as bootstrap_rec3D does
-        !! for any project without consumable sigmas
-        subroutine addon_restore_union
+        !> The incremental final reconstruction and the run's carried bundle: the rows its sums contain
+        !! (the frozen run's carried rows, or the first add-on's frozen rows, plus this run's cohort at its
+        !! final state), the carrier context, the passes (calc_final_rec_addon) and the bundle manifest,
+        !! published last with the run's final sigma2 generation
+        subroutine addon_final
+            type(frozen_accum)   :: carrier
+            type(carried_bundle) :: bundle
+            type(string)         :: sigma_path
+            logical, allocatable :: l_frz(:), l_coh(:), l_ret(:)
+            integer, allocatable :: members(:), boxes(:)
+            real,    allocatable :: smpds(:)
+            integer :: i, s, nrows, nrows_frz
+            logical :: found
             call spproj%read(params%projfile)
-            call superset%restore(spproj, spproj_frz)
-            if( spproj%projinfo%isthere(1, 'sigma2_state') ) call spproj%projinfo%delete_entry('sigma2_state')
-            call spproj%write(params%projfile)
-            call cline_refine3D%delete('frozen_rec')
-            write(logfhandle,'(A,I0,A)') '>>> SOLVE3D_ADDON: RESTORED ', superset%get_nfrozen(), &
-                &' FROZEN PARTICLES; THE FINAL RECONSTRUCTION BOOTSTRAPS THE UNION SIGMA2 STATE'
-        end subroutine addon_restore_union
+            nrows     = spproj%os_ptcl3D%get_noris()
+            nrows_frz = spproj_frz%os_ptcl3D%get_noris()
+            call superset%get_masks(l_frz, l_coh, l_ret)
+            allocate(members(nrows), source=0)
+            if( l_carried )then
+                members(1:nrows_frz) = members_frz
+            else
+                do i = 1, nrows_frz
+                    if( l_frz(i) ) members(i) = spproj_frz%os_ptcl3D%get_state(i)
+                enddo
+            endif
+            do i = 1, nrows
+                if( l_coh(i) .and. spproj%os_ptcl3D%get_state(i) > 0 ) members(i) = spproj%os_ptcl3D%get_state(i)
+            enddo
+            call carrier%new(run_id, nrows, nrows, [(count(members == s), s=1,params%nstates)], carried=.true.)
+            call carrier%write(carry_ctx_fname)
+            call write_carried_membership(carry_members_fname, members)
+            call calc_final_rec_addon(params, params%projfile, cline_refine3D, xrec3D, xrefine3D, &
+                &frozen_ctx_fname, carry_ctx_fname, lpinfo(nstages_refine3D)%box_crop, switch_addon_membership, &
+                &lpinfo(nstages_refine3D)%lp)
+            call spproj%read(params%projfile)
+            call spproj%get_sigma2_state_path(sigma_path, found)
+            if( .not. found ) THROW_HARD('solve3D_addon lost its sigma2 registration')
+            sigma_path = simple_abspath(sigma_path)
+            call addon_boxes(boxes, smpds)
+            bundle%run_id     = run_id
+            bundle%parent_run = man_addon%get_run_id()
+            bundle%route      = trim(merge('carried', 'first  ', l_carried))
+            bundle%nstates    = params%nstates
+            bundle%nrows      = nrows
+            bundle%boxes      = boxes
+            bundle%smpds      = smpds
+            bundle%ncarried_state = [(count(members == s), s=1,params%nstates)]
+            bundle%weighting  = 'euclid'
+            bundle%wset_id    = 0_8
+            bundle%sigma2_generation = sigma2_state_artifact_signature(sigma_path)
+            if( bundle%sigma2_generation < 1_8 ) THROW_HARD('solve3D_addon: the final sigma2 state is not committed')
+            call bundle%write(carry_bundle_fname)
+            write(logfhandle,'(A,I0,A,A)') '>>> SOLVE3D_ADDON CARRIED BUNDLE PUBLISHED (', sum(bundle%ncarried_state), &
+                &' PARTICLES IN ITS SUMS): ', carry_bundle_fname%to_char()
+            call carrier%kill
+            call bundle%kill
+            call sigma_path%kill
+        end subroutine addon_final
 
         !> The cohort-only diagnostic (addon_diag=yes), union-aware res/res05
         !! for every row and the validation against the base solution: FSC
@@ -1795,7 +2047,11 @@ contains
             enddo
             call man%set_ladder(start_stage, nstages_refine3D, stages)
             call man%record_inputs(cline_entry)
-            call man%record_artifacts(spproj_man)
+            if( l_addon )then
+                call man%record_artifacts(spproj_man, carry_bundle_fname)
+            else
+                call man%record_artifacts(spproj_man)
+            endif
             fname = MANIFEST_FNAME
             call man%write(fname, status, msg)
             if( status == 0 )then

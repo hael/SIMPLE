@@ -43,6 +43,7 @@ contains
         call test_replay()
         call test_overridable_inputs()
         call test_frozen_validation()
+        call test_carried_bundle_artifact()
         call del_file(VOL_FNAME)
         call del_file(SIGMA_FNAME)
     end subroutine run_all_solve3D_manifest_tests
@@ -69,19 +70,24 @@ contains
 
     !> a completed eligible solve3D run of nstates over spproj, built the way
     !! exec_solve3D builds it; its artifacts are those spproj registers
-    subroutine make_manifest( man, spproj, nstates, vol1 )
+    subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle )
         type(solve3D_manifest),     intent(inout) :: man
         type(sp_project),           intent(inout) :: spproj
         integer,                    intent(in)    :: nstates
         character(len=*), optional, intent(in)    :: vol1  !< the starting-volume input (a path)
+        logical,          optional, intent(in)    :: rec_backend !< record rec_backend=pcg (default yes)
+        character(len=*), optional, intent(in)    :: bundle      !< an add-on's carried bundle manifest
         type(cmdline) :: cl
+        logical :: l_backend
         call man%new(RUN_ID, 'solve3D', .true., spproj)
         call man%set_solution(nstates, 'c3', 128, 1.3, 180.)
         call man%set_sampling(10000, 8000, 1., .true.)
         call man%set_stage_line(.false., 0., .true., 6.)
         call man%set_ladder(1, 5, ladder())
         call cl%set('pgrp',        'c3')
-        call cl%set('rec_backend', 'pcg')
+        l_backend = .true.
+        if( present(rec_backend) ) l_backend = rec_backend
+        if( l_backend ) call cl%set('rec_backend', 'pcg')
         call cl%set('lpstop',      6.)
         call cl%set('balance',     'cavg')
         call cl%set('nclust',      12)
@@ -92,7 +98,11 @@ contains
         endif
         call cl%set('nthr',        8)    ! not a manifest input key
         call man%record_inputs(cl)
-        call man%record_artifacts(spproj)
+        if( present(bundle) )then
+            call man%record_artifacts(spproj, string(bundle))
+        else
+            call man%record_artifacts(spproj)
+        endif
         call cl%kill
     end subroutine make_manifest
 
@@ -544,7 +554,9 @@ contains
         call make_manifest(man, spproj, 2)
         call cl%set('lp', 12.)   ! a stale limit the replay drops
         call man%replay(cl)
-        call assert_string_eq('pcg', cl%get_carg('rec_backend'), 'a replayed input keeps its value')
+        call assert_false(cl%defined('rec_backend'), 'the backend is not replayed: add-on chains are gridding only')
+        call assert_string_eq('pcg', man%get_rec_backend(), 'the base run''s recorded backend')
+        call assert_int(12, cl%get_iarg('nclust'), 'a replayed input keeps its value')
         call assert_string_eq('c3',  cl%get_carg('pgrp'),        'the point group of the solution')
         call assert_string_eq('c3',  cl%get_carg('pgrp_start'),  'the search starts in the point group of the solution')
         call assert_false(cl%defined('lp'), 'lp is replayed only when it was on the stage line')
@@ -555,6 +567,9 @@ contains
         call assert_int(5,     cl%get_iarg('nstages'), 'the ladder ends at the base run''s last stage')
         call assert_int(10000, cl%get_iarg('nsample'), 'the effective nsample')
         call assert_false(cl%defined('nthr'), 'a key outside the manifest inputs is not replayed')
+        call man%kill
+        call make_manifest(man, spproj, 2, rec_backend=.false.)
+        call assert_string_eq('gridding', man%get_rec_backend(), 'no recorded backend is the gridding default')
         call man%kill
         call spproj%kill
         call cl%kill
@@ -654,5 +669,41 @@ contains
         end subroutine make_foreign
 
     end subroutine test_frozen_validation
+
+    !> an add-on's carried bundle is recorded by the digest of its small manifest, which round trips
+    !! and detects a changed bundle manifest
+    subroutine test_carried_bundle_artifact()
+        character(len=*), parameter :: BUNDLE = 'tmp_manifest_tester_carried_bundle.txt'
+        type(solve3D_manifest) :: man, back
+        type(sp_project)       :: spproj
+        type(string)           :: path
+        character(len=STDLEN)  :: msg
+        integer :: status, funit
+        logical :: found
+        write(*,'(A)') 'test_carried_bundle_artifact'
+        call fopen(funit, file=string(BUNDLE), status='REPLACE', action='WRITE')
+        write(funit,'(A)') 'solve3D_addon_carried_bundle 1'
+        call fclose(funit)
+        call make_project(spproj)
+        call make_manifest(man, spproj, 2, bundle=BUNDLE)
+        call man%write(string(MAN_FNAME), status, msg)
+        call back%read(string(MAN_FNAME), status, msg)
+        call assert_int(0, status, 'a manifest with a carried bundle reads back: '//trim(msg))
+        call back%get_artifact('carried_bundle', 0, path, found)
+        call assert_true(found, 'the carried bundle is recorded')
+        if( found )then
+            call assert_true(back%matches_artifact('carried_bundle', 0, path), 'the recorded bundle matches its digest')
+            call fopen(funit, file=string(BUNDLE), status='OLD', action='WRITE', position='APPEND')
+            write(funit,'(A)') 'run_id another'
+            call fclose(funit)
+            call assert_false(back%matches_artifact('carried_bundle', 0, path), 'a changed bundle manifest is detected')
+        endif
+        call del_file(BUNDLE)
+        call del_file(MAN_FNAME)
+        call man%kill
+        call back%kill
+        call spproj%kill
+        call path%kill
+    end subroutine test_carried_bundle_artifact
 
 end module simple_solve3D_manifest_tester

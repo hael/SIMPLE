@@ -23,7 +23,6 @@ use simple_nu_state_filter,     only: nonuniform_filter_state, nu_aux_member
 use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
-use simple_frozen_accum,        only: frozen_accum
 use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
 use simple_oris,                only: population_blend_weights
 use simple_state_weight_set,    only: state_weight_set
@@ -472,7 +471,6 @@ contains
             real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
             integer :: state = 0, eo = 0, nptcls = 0, niters = 0
             real(dp) :: mass = 0.0_dp  !< applied weight mass of the reduction (nptcls under hard labels)
-            integer :: nfrozen = 0     !< frozen particles added to the reduction (solve3D_addon)
             integer :: band_shell = 0 !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
             integer :: prior_npositive = 0
             character(len=8) :: half = '', solve_kind = ''
@@ -516,14 +514,13 @@ contains
         character(len=16) :: state_support_kind, base_support_kind, shipped_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
-        type(frozen_accum) :: frozen_ctx
-        logical :: l_frozen_rec, l_frozen_seed
-        integer :: nfz_even, nfz_odd
 
         call validate_pcg_common(params)
         solvent_lambda_eff = 0.
-        ! solve3D_addon handshakes (in-process only): the master owns every
-        ! frozen read and write; workers only ever see their own particles
+        ! add-on chains reconstruct by gridding only: the frozen-set handshakes have no PCG side
+        if( cline%defined('frozen_rec') .or. cline%defined('frozen_seed') )then
+            THROW_HARD('frozen sets are gridding only; rec_backend=pcg takes no frozen_rec or frozen_seed')
+        endif
         ! m_estimator=flex: masses come from the state weight set (membership above PCG_WEIGHT_THRESHOLD)
         l_weighted = params%l_m_estimator_flex
         wset_id    = 0_int64
@@ -532,13 +529,6 @@ contains
             if( wset%get_nstates() /= params%nstates ) THROW_HARD('nstates differs from the state weight set; PCG master')
             wset_id = [wset%get_generation(), wset%get_layout_digest()]
         endif
-        l_frozen_rec  = cline%defined('frozen_rec')
-        l_frozen_seed = cline%defined('frozen_seed')
-        if( l_frozen_rec .and. l_frozen_seed ) THROW_HARD('a reconstruction cannot both produce and consume a frozen set')
-        if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), 'pcg', &
-            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.false., wset_id=wset_id)
-        if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), 'pcg', &
-            &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.true., wset_id=wset_id)
         ! master phase: the full local allocation while the workers are idle
         ! (rec3D_master_nthr), restored to nthr before returning
         !$ if( trim(params%qsys_name) == 'local' ) &
@@ -642,12 +632,9 @@ contains
                 l_odd_chain = file_exists(raw_fname)
                 if( l_even_chain .neqv. l_odd_chain ) THROW_HARD('PCG trailing chain pair is incomplete')
                 l_sample_seed = .not. l_even_chain
-                ! add-on mode never seeds from its cohort sample
-                if( l_sample_seed .and. l_frozen_rec ) &
-                    &THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
                 n_active_state  = rnrep(state)
                 n_sampled_state = rnsmp(state)
-                if( .not. l_frozen_rec .and. n_sampled_state > 0 .and. realized_fractions(state) < 0.001 )then
+                if( n_sampled_state > 0 .and. realized_fractions(state) < 0.001 )then
                     if( .not. l_sample_seed )then
                         l_chain_carry = .true.
                         write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
@@ -686,8 +673,6 @@ contains
                 &solvent_even=solvent_even, solvent_odd=solvent_odd)
             ! the chain pair written by the base reductions is published by its manifest, last
             if( all(chain_written) ) call write_chain_manifest(state)
-            nfz_even = even_job%nfrozen
-            nfz_odd  = odd_job%nfrozen
             if( params%l_trail_rec .and. .not. l_chain_carry )then
                 if( l_weighted )then
                     if( abs(real(even_job%mass+odd_job%mass) - n_sampled_state) > 1.0e-3*max(1.,n_sampled_state) ) &
@@ -701,14 +686,12 @@ contains
                     endif
                 endif
             endif
-            ! n_even/n_odd count this run's own particles; an add-on half also
-            ! carries its frozen particles
-            if( n_even + nfz_even == 0 .and. n_odd + nfz_odd == 0 )then
+            if( n_even == 0 .and. n_odd == 0 )then
                 write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
                     &' HAS NO SELECTED PARTICLES; SKIPPING'
                 cycle
             endif
-            if( n_even + nfz_even < 1 .or. n_odd + nfz_odd < 1 ) THROW_HARD('distributed PCG requires both halfsets')
+            if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('distributed PCG requires both halfsets')
             fname_even = refine3D_state_halfvol_fname(state, 'even')
             fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
             fname_vol  = refine3D_state_vol_fname(state)
@@ -876,7 +859,6 @@ contains
         endif
         call raw_fname%kill
         call state_support_msk%kill_bimg
-        call frozen_ctx%kill
         call wset%kill
         deallocate(res0143s, res05s, cfars, state_written, state_carried, state_empty, realized_fractions, update_weights,&
             &align_lps)
@@ -964,8 +946,8 @@ contains
         end subroutine discard_stale_trail_chain_pair
 
         !> The states without particles in this iteration (no particle in the raw accumulator headers
-        !! of any part, either half) while another state has some. None in a single-state run, an
-        !! add-on assembly (every inherited state carries its frozen term) or a state= run.
+        !! of any part, either half) while another state has some. None in a single-state run or a
+        !! state= run.
         subroutine find_empty_states( l_empty )
             logical, allocatable, intent(out) :: l_empty(:)
             integer :: nptcls_state(params%nstates), istate_here, part_here, eo_here, status
@@ -974,7 +956,7 @@ contains
             character(len=256) :: hprov
             type(string) :: fname
             allocate(l_empty(params%nstates), source=.false.)
-            if( params%nstates <= 1 .or. l_frozen_rec .or. params%l_state_defined ) return
+            if( params%nstates <= 1 .or. params%l_state_defined ) return
             nptcls_state = 0
             do istate_here = 1, params%nstates
                 do eo_here = 0, 1
@@ -1263,7 +1245,6 @@ contains
             job%solve_kind = solve_kind
             job%nptcls = 0
             job%mass = 0.0_dp
-            job%nfrozen = 0
             job%niters = 0
             job%ready = .false.
             job%l_ml_solve = present(fsc_prior)
@@ -1302,33 +1283,11 @@ contains
                 enddo
             endif
             job%time_reduce = real(toc(t_phase),dp)
-            if( job%nptcls == 0 .and. .not. l_frozen_rec )then
+            if( job%nptcls == 0 )then
                 call job%pcgop%kill
                 return
             endif
-            if( job%nptcls == 0 )then
-                ! an add-on half without a cohort particle follows the trailing
-                ! recurrence (solve3D_addon_policy.md, section 6)
-                if( .not. job%l_ml_solve )then
-                    fname = refine3D_pcg_trail_accum_fname(state_here, half)
-                    if( params%l_trail_rec )then
-                        if( .not. file_exists(fname) ) &
-                            &THROW_HARD('solve3D_addon trailing assembly requires a seeded cohort chain')
-                        if( realized_fractions(state_here) < 0.001 )then
-                            call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
-                                &chain_provenance, 1.0, n_part)
-                        else
-                            if( 1.0-update_weights(state_here) > 0.01 ) &
-                                &call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
-                                &chain_provenance, chain_weights(state_here), n_part)
-                            call write_chain_half(job%pcgop, fname, state_here, eo_here)
-                        endif
-                    else if( pcg_trail_seed_requested(cline) )then
-                        call write_chain_half(job%pcgop, fname, state_here, eo_here)
-                    endif
-                    call fname%kill
-                endif
-            else if( .not. job%l_ml_solve .and. .not. l_chain_carry )then
+            if( .not. job%l_ml_solve .and. .not. l_chain_carry )then
                 realized_fraction = realized_fractions(state_here)
                 update_weight = update_weights(state_here)
                 l_seed_chain = pcg_trail_seed_requested(cline)
@@ -1363,19 +1322,6 @@ contains
                     call write_chain_half(job%pcgop, fname, state_here, eo_here)
                 endif
                 call fname%kill
-                ! solve3D_addon producer: the frozen particles' raw pair at this box
-                if( l_frozen_seed ) call frozen_ctx%write_pcg_half(state_here, eo_here, params%box_crop, &
-                    &job%pcgop, job%nptcls)
-            endif
-            ! solve3D_addon: the frozen raw pair joins both reductions after the
-            ! chain write, before end_accum (solve3D_addon_policy.md, section 7)
-            if( l_frozen_rec )then
-                call frozen_ctx%add_pcg_half(state_here, eo_here, params%box_crop, params%smpd_crop, &
-                    &job%pcgop, job%nfrozen)
-                if( job%nptcls + job%nfrozen == 0 )then
-                    call job%pcgop%kill
-                    return
-                endif
             endif
 
             t_phase = tic()

@@ -7,6 +7,7 @@ use simple_core_module_api
 use simple_builder,           only: builder
 use simple_parameters,        only: parameters
 use simple_cmdline,           only: cmdline
+use simple_eo_partition,      only: ensure_field_halves
 use simple_rec3D_service,     only: rec3D_service, rec3D_request, rec3D_backend_id, REC3D_BACKEND_GRIDDING, &
     &REC3D_BACKEND_PCG, REC3D_DISPATCH_INPROC, REC3D_DISPATCH_QUEUE, REC3D_WEIGHTS_HARD, REC3D_WEIGHTS_SET
 implicit none
@@ -137,7 +138,7 @@ contains
         call sync_resolved_rec_params(params, cline)
         call build%build_strategy3D_tbox(params)
         ! Even/odd partitioning
-        if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         ! Update eo flags in project
         call build%spproj%write_segment_inside(params%oritype)
         call ensure_canonical_sigma_state(params, build, cline)
@@ -221,9 +222,7 @@ contains
         ! avoid nested directory structure for jobs
         call cline%set('mkdir', 'no')
         ! Even/odd partitioning
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-        endif
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         ! Update eo flags in project
         call build%spproj%write_segment_inside(params%oritype)
         call ensure_canonical_sigma_state(params, build, cline)

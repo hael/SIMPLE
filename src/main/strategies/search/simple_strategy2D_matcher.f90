@@ -4,6 +4,7 @@ use simple_pftc_srch_api
 use simple_classaverager
 use simple_binoris_io,               only: binwrite_oritab
 use simple_progress,                 only: progressfile_update
+use simple_eo_partition,             only: ensure_field_halves
 use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, &
                                            s2D, set_strategy2D_stoch_bound, is_fresh_2D_start
 use simple_builder,                  only: builder
@@ -287,12 +288,9 @@ contains
             allocate(incr_shifts(2,batchsz_max), source=0.0)
         end subroutine prepare_batches
 
+        !> a worker stops without halves; shared memory makes the project's partition
         subroutine ensure_even_odd_partition()
-            if( b_ptr%spproj_field%get_nevenodd() == 0 )then
-                if( l_distr_worker_glob ) THROW_HARD('no eo partitioning available; refine2D_exec')
-                call b_ptr%spproj_field%partition_eo
-                call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
-            endif
+            call ensure_field_halves(b_ptr%spproj, p_ptr%oritype, p_ptr%projfile)
         end subroutine ensure_even_odd_partition
 
         subroutine prepare_class_averages_and_restoration()

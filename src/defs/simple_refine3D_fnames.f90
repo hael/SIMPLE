@@ -32,7 +32,8 @@ public :: refine3D_trail_manifest_fname
 public :: refine3D_frozen_context_fname
 public :: refine3D_frozen_rec_fbody
 public :: refine3D_frozen_manifest_fname
-public :: refine3D_frozen_pcg_fname
+public :: refine3D_carried_rec_fbody, refine3D_carried_context_fname, refine3D_carried_bundle_fname
+public :: refine3D_carried_membership_fname
 public :: refine3D_reproj_model_fname
 public :: refine3D_cart_refvols_fname
 public :: refine3D_oris_heatmap_fname
@@ -249,14 +250,26 @@ contains
         fname = refine3D_frozen_rec_fbody(state, box)//TXT_EXT
     end function refine3D_frozen_manifest_fname
 
-    !> PCG frozen raw (B,D) pair for one (state,half) at one box, in the raw
-    !! accumulator format with its own provenance tag
-    type(string) function refine3D_frozen_pcg_fname( state, box, half ) result(fname)
-        integer,          intent(in) :: state, box
-        character(len=*), intent(in) :: half
-        fname = string('frozen_pcg_state')//state_tag(state)//'_box'//int2str_pad(box, 4)// &
-            &half_suffix(half)//BIN_EXT
-    end function refine3D_frozen_pcg_fname
+    ! The carried bundle an add-on publishes for the next add-on of its chain: the union's raw sums
+    ! (carried frozen sums plus this run's particles) per state at the stage box and the native box,
+    ! named like the frozen sets with their own stem, under a context of their own, with the rows
+    ! they contain (membership) and a bundle manifest written last.
+    type(string) function refine3D_carried_rec_fbody( state, box ) result(fname)
+        integer, intent(in) :: state, box
+        fname = string('carried_state')//state_tag(state)//'_box'//int2str_pad(box, 4)
+    end function refine3D_carried_rec_fbody
+
+    type(string) function refine3D_carried_context_fname() result(fname)
+        fname = string('solve3D_addon_carried_context')//TXT_EXT
+    end function refine3D_carried_context_fname
+
+    type(string) function refine3D_carried_bundle_fname() result(fname)
+        fname = string('solve3D_addon_carried_bundle')//TXT_EXT
+    end function refine3D_carried_bundle_fname
+
+    type(string) function refine3D_carried_membership_fname() result(fname)
+        fname = string('solve3D_addon_carried_membership')//BIN_EXT
+    end function refine3D_carried_membership_fname
 
     type(string) function refine3D_reproj_model_fname( half ) result(fname)
         character(len=*), intent(in) :: half

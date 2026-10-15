@@ -39,6 +39,7 @@ use simple_sp_project_tester,                only: run_all_sp_project_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_state_weight_set_tester,          only: run_all_state_weight_set_tests
 use simple_cavgs_work_project_tester,        only: run_all_cavgs_work_project_tests
+use simple_eo_partition_tester,              only: run_all_eo_partition_tests
 use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
 use simple_mic_import_tester,                only: run_all_mic_import_tests
@@ -374,6 +375,7 @@ contains
         call add_suite(s, n, 'solve3D chunks plan', run_all_solve3D_chunks_plan_tests)
         call add_suite(s, n, 'state weight set',        run_all_state_weight_set_tests)
         call add_suite(s, n, 'cavgs work project',      run_all_cavgs_work_project_tests)
+        call add_suite(s, n, 'eo partition',            run_all_eo_partition_tests)
     end subroutine suites_project
 
     subroutine suites_motion( s, n )

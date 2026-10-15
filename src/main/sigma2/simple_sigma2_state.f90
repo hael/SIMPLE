@@ -5,6 +5,9 @@
 ! store, summing the active, valid rows per half as they pass, and publishes it (sigma2_state_publish).
 ! The merges of stores (sigma2_state_concatenate) stream the same way. sigma2_state_reduce is the full
 ! reduction of a store's records, which the tests hold the streamed global spectra against.
+! solve3D_addon's copy-on-write transaction of the growing union: sigma2_state_extend makes the run's own
+! candidate (the retained frozen records copied, every cohort row started from the global curve of its half),
+! and sigma2_state_union_means republishes a store with both global means taken over the union.
 module simple_sigma2_state
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int32, int64, real32, real64
@@ -16,13 +19,15 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_heade
     &sigma2_state_read_particles, sigma2_state_write_global, sigma2_state_validate_file, &
     &sigma2_state_open_candidate, sigma2_state_write_particles_unit, sigma2_state_close_candidate, &
     &sigma2_state_open_store, sigma2_state_read_particles_unit, sigma2_state_open_local_range, &
-    &sigma2_state_read_local_range_rows, SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
+    &sigma2_state_read_local_range_rows, sigma2_state_read_global, sigma2_state_publish, &
+    &SIGMA2_PROV_RESIDUAL, SIGMA2_STATE_COMMITTED
 implicit none
 private
 
 public :: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_next_generation
 public :: sigma2_state_prepare_update, sigma2_state_assemble_candidate, sigma2_state_concatenate
 public :: sigma2_state_reduce, sigma2_state_validate_identity
+public :: sigma2_state_extend, sigma2_state_union_means
 
 integer, parameter :: BLOCK_ROWS = 4096
 character(len=*), parameter :: SIGMA2_RANGE_FBODY = 'sigma2_state_range_part'
@@ -452,5 +457,139 @@ contains
             endif
         endif
     end subroutine sigma2_state_validate_identity
+
+    !> The add-on's own candidate over the union's rows, header its identity (rows, layout digest,
+    !! generation) with the frozen store's shells: a row with copy_rows is the frozen store's record of
+    !! that row (copy_rows only within the frozen rows), a row with seed_rows starts from the frozen
+    !! store's global curve of its half eo, every other row is zero. The two global means are taken over
+    !! the seeded rows (the cohort, the rows the stage updates), so they start as the frozen means. The
+    !! frozen store is only read; the candidate is synced once and published by the caller.
+    subroutine sigma2_state_extend(frozen_path, candidate_path, header, copy_rows, seed_rows, eo, status, message)
+        character(len=*),          intent(in)    :: frozen_path, candidate_path
+        type(sigma2_state_header), intent(inout) :: header
+        logical,                   intent(in)    :: copy_rows(:), seed_rows(:)
+        integer,                   intent(in)    :: eo(:)
+        integer,                   intent(out)   :: status
+        character(len=*),          intent(out)   :: message
+        type(sigma2_state_header) :: frozen
+        real(real32), allocatable :: block(:,:), fblock(:,:), fglobal(:,:), global(:,:)
+        real(real64), allocatable :: sums(:,:)
+        integer(int64) :: counts(2), ninvalid
+        integer :: nrows, nfrozen, nshell, first_row, last_row, nblock, i, row, flast, src_unit, dst_unit
+        src_unit = -1
+        dst_unit = -1
+        call sigma2_state_validate_file(frozen_path, status, message)
+        if( status /= 0 ) return
+        call sigma2_state_read_header(frozen_path, frozen, status, message)
+        if( status /= 0 ) return
+        if( frozen%state /= SIGMA2_STATE_COMMITTED )then
+            status = 1; message = 'the frozen sigma2 store is not committed'; return
+        endif
+        if( header%kfrom /= frozen%kfrom .or. header%kto /= frozen%kto .or. header%box /= frozen%box )then
+            status = 1; message = 'the extended sigma2 store must keep the frozen store''s shells'; return
+        endif
+        nrows   = int(header%nptcls)
+        nfrozen = int(frozen%nptcls)
+        if( size(copy_rows) /= nrows .or. size(seed_rows) /= nrows .or. size(eo) /= nrows )then
+            status = 1; message = 'sigma2 extension masks have the wrong size'; return
+        endif
+        if( nrows < nfrozen )then
+            status = 1; message = 'the extended sigma2 store has fewer rows than the frozen store'; return
+        endif
+        if( any(copy_rows(nfrozen+1:)) )then
+            status = 1; message = 'a copied sigma2 row lies outside the frozen store'; return
+        endif
+        if( any(copy_rows .and. seed_rows) )then
+            status = 1; message = 'a sigma2 row cannot be both copied and seeded'; return
+        endif
+        call sigma2_state_read_global(frozen_path, fglobal, status, message)
+        if( status /= 0 ) return
+        call sigma2_state_open_store(frozen_path, frozen, src_unit, status, message)
+        if( status /= 0 ) return
+        call sigma2_state_open_candidate(candidate_path, header, dst_unit, status, message)
+        if( status /= 0 )then
+            call close_units
+            return
+        endif
+        nshell = int(header%kto-header%kfrom+1)
+        allocate(sums(nshell,2), source=0.0_real64)
+        allocate(block(nshell,min(nrows,BLOCK_ROWS)), fblock(nshell,min(nrows,BLOCK_ROWS)))
+        counts   = 0_int64
+        ninvalid = 0_int64
+        do first_row = 1, nrows, BLOCK_ROWS
+            last_row = min(nrows, first_row+BLOCK_ROWS-1)
+            nblock   = last_row-first_row+1
+            flast    = min(last_row, nfrozen)
+            if( flast >= first_row )then
+                call sigma2_state_read_particles_unit(src_unit, frozen, first_row, fblock(:,:flast-first_row+1), &
+                    &status, message)
+                if( status /= 0 )then
+                    call close_units
+                    return
+                endif
+            endif
+            do i = 1, nblock
+                row = first_row+i-1
+                if( copy_rows(row) )then
+                    block(:,i) = fblock(:,i)
+                else if( seed_rows(row) )then
+                    if( eo(row) /= 0 .and. eo(row) /= 1 )then
+                        status = 1; message = 'a seeded sigma2 row has no even/odd label'
+                        call close_units
+                        return
+                    endif
+                    block(:,i) = fglobal(:,eo(row)+1)
+                else
+                    block(:,i) = 0.0_real32
+                endif
+            enddo
+            call add_records(block(:,:nblock), first_row, seed_rows, eo, sums, counts, ninvalid, status, message)
+            if( status == 0 ) call sigma2_state_write_particles_unit(dst_unit, header, first_row, &
+                &block(:,:nblock), status, message)
+            if( status /= 0 )then
+                call close_units
+                return
+            endif
+        enddo
+        close(src_unit)
+        src_unit = -1
+        call form_global(sums, counts, ninvalid, global, status, message)
+        if( status /= 0 )then
+            call close_units
+            return
+        endif
+        call sigma2_state_close_candidate(candidate_path, dst_unit, header, global, status, message)
+
+      contains
+
+        subroutine close_units
+            if( src_unit /= -1 ) close(src_unit)
+            if( dst_unit /= -1 ) close(dst_unit)
+        end subroutine close_units
+
+    end subroutine sigma2_state_extend
+
+    !> The committed store republished as its next generation with every record unchanged and both
+    !! global means taken over active (the union's rows) with the halves eo: no particle is read
+    subroutine sigma2_state_union_means(committed_path, active, eo, status, message)
+        character(len=*), intent(in)  :: committed_path
+        logical,          intent(in)  :: active(:)
+        integer,          intent(in)  :: eo(:)
+        integer,          intent(out) :: status
+        character(len=*), intent(out) :: message
+        type(string), allocatable :: no_ranges(:)
+        logical,      allocatable :: scheduled(:)
+        type(string)   :: candidate
+        integer(int64) :: generation
+        call sigma2_state_next_generation(committed_path, generation, status, message)
+        if( status /= 0 ) return
+        candidate = sigma2_state_candidate_path(committed_path, generation)
+        allocate(no_ranges(0))
+        allocate(scheduled(size(active)), source=.false.)
+        call sigma2_state_assemble_candidate(committed_path, candidate%to_char(), no_ranges, scheduled, active, eo, &
+            &status, message)
+        if( status == 0 ) call sigma2_state_publish(candidate%to_char(), committed_path, status, message)
+        call candidate%kill
+    end subroutine sigma2_state_union_means
 
 end module simple_sigma2_state

@@ -72,11 +72,12 @@ max(alignment working set, one state/half reconstruction working set) + particle
 ```
 
 The particle buffer is allocated only within its budget: half the task memory a queue system grants
-(`job_memory_per_task` of the computing environment), and otherwise the node's physical memory divided by twice the number of processes it runs (the parts and their
+(`job_memory_per_task` of the computing environment), otherwise the node's physical memory divided by twice the number of processes it runs (the parts and their
 master, or one process in shared memory). A share above the budget, or an allocation that fails, leaves the
 buffer empty, and the search and the reconstruction read their batches from the stacks as before. The
 budget, the buffer's size and the outcome are in the search's benchmark file. Plan:
-`doc/implementation_notes/planned/particle_io_few_particle_stacks.md`, section 3.1.
+[particle_read_path_policy.md](../particle_read_path_policy.md); the design is in
+`doc/implementation_notes/completed/particle_io_few_particle_stacks.md`, section 3.1.
 
 It must be independent of `nstates` in cubic reconstruction storage.
 

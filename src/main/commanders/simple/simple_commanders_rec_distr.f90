@@ -49,7 +49,7 @@ contains
         &sum_rec, state, numlen_part, &
         &update_frac_trail_rec, realized_update_frac, trail_counts, wset_id, l_floor_rho, l_carry_forward, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
-        &volname, eonames, res05, res0143, cfar, timings, frozen_rec, frozen_seed )
+        &volname, eonames, res05, res0143, cfar, timings, frozen_rec, frozen_seed, frozen_carry )
         use simple_reconstructor,       only: reconstructor, gridding_half_restore
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
             &write_halfmap_diagnostics, write_support_provenance
@@ -71,6 +71,7 @@ contains
         type(restore_timings_t), intent(inout) :: timings
         type(frozen_accum), optional, intent(in) :: frozen_rec  !< add-on consumer: frozen term summed into the union
         type(frozen_accum), optional, intent(in) :: frozen_seed !< add-on producer: publish these accumulators as the frozen set
+        type(frozen_accum), optional, intent(in) :: frozen_carry !< add-on carrier: publish the union's sums (cohort + frozen term)
         type(string) :: fsc_txt_file, trail_fbody
         character(len=:), allocatable :: errmsg
         type(halfmap_diagnostics_result) :: pair_diagnostics
@@ -93,6 +94,8 @@ contains
         ! solve3D_addon: frozen accumulators join after the cohort chain is written and before any
         ! restoration or prior, so FSC, regularization and NU describe the union, the chain the cohort
         call add_frozen_accumulators()
+        ! solve3D_addon carried sums: the union's raw sums, before any restoration, for the next add-on
+        if( present(frozen_carry) ) call frozen_carry%write_gridding_set(state, even_rec, odd_rec)
         call sum_eos_before_density_correction_if_needed()
         ! fractional state weights leave shells sparsely sampled: floor the half densities (never on hard runs)
         if( l_floor_rho )then
@@ -777,13 +780,9 @@ contains
     !! update_project_nu_alignment_lowpass in the gridding volassemble: the
     !! _nu_filt products themselves are written by nonuniform_filter_state
     !! inside the PCG master (both backends run the same competition).
-    !> l_frozen_term: a solve3D_addon reconstruction, in which every
-    !! inherited state holds frozen particles and so has a map even when its
-    !! cohort population is zero
-    subroutine filter_pcg_nonuniform_maps( params, build, l_frozen_term, nu_align_lps )
+    subroutine filter_pcg_nonuniform_maps( params, build, nu_align_lps )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        logical,          intent(in)    :: l_frozen_term
         real, optional,   intent(in)    :: nu_align_lps(:)
         integer, allocatable :: state_pops(:), rep_rows(:), smp_rows(:), rec_rows(:)
         logical, allocatable :: l_included(:)
@@ -809,7 +808,7 @@ contains
                 state_pops(state) = build%spproj_field%get_pop(state, 'state')
             enddo
         endif
-        l_included = (state_pops > 0 .or. l_frozen_term) .and. (nu_align_lps > TINY)
+        l_included = state_pops > 0 .and. nu_align_lps > TINY
         if( any(l_included) )then
             align_lp = minval(nu_align_lps, mask=l_included)
             write(logfhandle,'(A,F8.3,A)') '>>> NU filter project matching low-pass limit: ', align_lp, ' A'
@@ -847,8 +846,8 @@ contains
         integer(kind=8)               :: wset_id(2)
         logical, allocatable          :: l_floor_rho(:)
         logical                       :: l_weighted
-        type(frozen_accum)            :: frozen_ctx
-        logical                       :: l_frozen_rec, l_frozen_seed
+        type(frozen_accum)            :: frozen_ctx, carry_ctx
+        logical                       :: l_frozen_rec, l_frozen_seed, l_frozen_carry
         integer                       :: state, numlen_part
         integer(timer_int_kind)       :: t_tot
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_upd_proj, t_cleanup
@@ -935,10 +934,18 @@ contains
             l_frozen_rec  = cline%defined('frozen_rec')
             l_frozen_seed = cline%defined('frozen_seed')
             if( l_frozen_rec .and. l_frozen_seed ) THROW_HARD('a reconstruction cannot both produce and consume a frozen set')
-            if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), 'gridding', &
+            if( l_frozen_rec ) call frozen_ctx%load(cline%get_carg('frozen_rec'), &
                 &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.false., wset_id=wset_id)
-            if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), 'gridding', &
+            if( l_frozen_seed ) call frozen_ctx%load(cline%get_carg('frozen_seed'), &
                 &params%nstates, build%spproj_field%get_noris(), params%cc_objfun, producer=.true., wset_id=wset_id)
+            ! the carried sums are the union's full raw sums: written beside a consumed frozen term, never trailing
+            l_frozen_carry = cline%defined('frozen_carry')
+            if( l_frozen_carry )then
+                if( .not. l_frozen_rec ) THROW_HARD('carried sums are written only beside a consumed frozen term')
+                if( params%l_trail_rec ) THROW_HARD('carried sums are full raw sums: no trailing reconstruction')
+                call carry_ctx%load(cline%get_carg('frozen_carry'), params%nstates, build%spproj_field%get_noris(), &
+                    &params%cc_objfun, producer=.false., wset_id=wset_id, carried=.true.)
+            endif
             allocate(res0143s(params%nstates), res05s(params%nstates), cfars(params%nstates))
             res0143s = 0.
             res05s   = 0.
@@ -1107,7 +1114,15 @@ contains
         end subroutine determine_trailing_update_fraction
 
         subroutine assemble_state()
-            if( l_frozen_rec )then
+            if( l_frozen_carry )then
+                call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
+                    &sum_rec, state, numlen_part, &
+                    &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
+                    &wset_id, l_floor_rho(state), l_state_carried, &
+                    &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
+                    &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings, &
+                    &frozen_rec=frozen_ctx, frozen_carry=carry_ctx)
+            else if( l_frozen_rec )then
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
                     &update_frac_trail_recs(state), realized_update_fracs(state), trail_counts(:,state), &
@@ -1265,6 +1280,7 @@ contains
             if( allocated(l_floor_rho)            ) deallocate(l_floor_rho)
             call wset%kill
             call frozen_ctx%kill
+            call carry_ctx%kill
             call volname%kill
             call eonames(1)%kill
             call eonames(2)%kill

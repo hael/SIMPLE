@@ -5,6 +5,7 @@ use simple_core_module_api
 use simple_builder,     only: builder
 use simple_parameters,  only: parameters
 use simple_cmdline,     only: cmdline
+use simple_eo_partition, only: ensure_field_halves
 use simple_qsys_env,    only: qsys_env
 use simple_convergence, only: convergence
 use simple_matcher_smpl_and_lplims, only: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, &
@@ -146,10 +147,7 @@ contains
         call cline%set('mkdir', 'no')
         params%which_iter = max(1, params%startit)
         ! the halves are on disk before the references, whose class averages may seed the sigma2 state
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         call init_refine2D_refs(cline, params, build)
         if( .not. cline%defined('part') ) call ensure_canonical_sigma2(params, build, cline)
         startit = 1
@@ -285,10 +283,7 @@ contains
         call cline%set('mkdir', 'no')
         params%which_iter = max(1, params%startit)
         ! the halves are on disk before the references, whose class averages may seed the sigma2 state
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         call init_refine2D_refs(cline, params, build)
         call ensure_canonical_sigma2(params, build, cline)
         if( params%startit == 1 )then

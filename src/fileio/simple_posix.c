@@ -973,7 +973,7 @@ int64_t simple_node_mem_total_bytes(void)
 }
 
 /* ---- Read-only particle stack I/O without Fortran units ------------------------------------
- * Plan: doc/implementation_notes/planned/particle_io_few_particle_stacks.md, section 3.1. Opens,
+ * Policy: doc/policies/particle_read_path_policy.md. Opens,
  * positioned reads and closes on plain descriptors, safe to call from many threads at once; a
  * prefetcher thread serves positioned reads into caller-owned buffers. Failures return -errno. */
 

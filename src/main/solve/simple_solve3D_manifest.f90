@@ -42,9 +42,11 @@ character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(32) = [character(len=KLEN)
 !! add-on's defaults. Entry routes and their controls, the state
 !! layout (derived from the completed solution), the stage range
 !! (from the ladder), centring (forced off) and the compute/convergence keys
-!! the add-on accepts from its own command line are not replayed.
-character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(24) = [character(len=KLEN) :: &
-    &'pgrp', 'mskdiam', 'rec_backend', 'maxits_pcg', 'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', &
+!! the add-on accepts from its own command line are not replayed; neither is
+!! the reconstruction backend, since add-on chains reconstruct by gridding only
+!! and refuse a base run of another backend (get_rec_backend).
+character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(19) = [character(len=KLEN) :: &
+    &'pgrp', 'mskdiam', &
     &'filt_mode', 'automsk', 'envfsc', 'envmsklp', 'objfun', 'hp', &
     &'lp', 'lpstart', 'lpstop', 'force_lp_range', &
     &'prob_athres', 'bfac', 'gauref', 'balance', 'nclust', 'lpstart_ini3D', 'lpstop_ini3D']
@@ -127,6 +129,7 @@ type :: solve3D_manifest
     procedure, private :: find_artifact
     ! getters
     procedure          :: get_fname
+    procedure          :: get_rec_backend
     procedure          :: get_run_id
     procedure          :: get_nstates
     procedure          :: get_box
@@ -250,10 +253,14 @@ contains
     end subroutine record_inputs
 
     !> The run's registered products: content digests for final maps, halves
-    !! and FSCs; the committed sigma2 generation identifies its transaction.
-    subroutine record_artifacts( self, spproj )
+    !! and FSCs; the committed sigma2 generation identifies its transaction. An
+    !! add-on also records its carried bundle by the digest of the bundle's own
+    !! small manifest (its sets' manifests hold their sizes): the sums
+    !! themselves are never read for a digest.
+    subroutine record_artifacts( self, spproj, carried_bundle )
         class(solve3D_manifest), intent(inout) :: self
         class(sp_project),          intent(inout) :: spproj
+        class(string), optional,    intent(in)    :: carried_bundle
         type(string) :: fname, halfvol
         integer(int64) :: sigma_signature
         integer :: state, box_vol
@@ -279,6 +286,13 @@ contains
             sigma_signature = sigma2_state_artifact_signature(fname)
             if( sigma_signature /= 0_int64 ) &
                 &call self%add_artifact('sigma2_state', 0, sigma_signature, fname)
+        endif
+        if( present(carried_bundle) )then
+            if( file_exists(carried_bundle) )then
+                call self%add_artifact('carried_bundle', 0, sigma2_state_digest_file(carried_bundle), carried_bundle)
+            else
+                THROW_WARN('the carried bundle to record does not exist; the manifest records none')
+            endif
         endif
         call fname%kill
         call halfvol%kill
@@ -888,6 +902,16 @@ contains
         class(solve3D_manifest), intent(in) :: self
         nstates = self%nstates
     end function get_nstates
+
+    !> the base run's reconstruction backend: its recorded rec_backend input,
+    !! gridding (the solve3D default) when none was given
+    function get_rec_backend( self ) result( backend )
+        class(solve3D_manifest), intent(in) :: self
+        type(string) :: backend
+        logical      :: found
+        call self%get_input('rec_backend', backend, found)
+        if( .not. found ) backend = 'gridding'
+    end function get_rec_backend
 
     !> native box of the solution
     integer function get_box( self ) result( box )

@@ -24,7 +24,7 @@ use simple_ptcl_layout,       only: ptcl_layout_digest
 use simple_sigma2_state,      only: sigma2_state_assemble_candidate, sigma2_state_concatenate, &
     &sigma2_state_reduce, sigma2_state_validate_identity, &
     &sigma2_state_candidate_path, sigma2_state_prepare_update, &
-    &sigma2_state_range_path, sigma2_state_next_generation
+    &sigma2_state_range_path, sigma2_state_next_generation, sigma2_state_extend, sigma2_state_union_means
 use simple_test_utils
 implicit none
 private
@@ -45,7 +45,125 @@ contains
         call test_concatenation()
         call test_invalid_record_skip()
         call test_estimate_available_on_disk()
+        call test_addon_copy_on_write()
     end subroutine run_all_sigma2_state_tests
+
+    !> solve3D_addon's copy-on-write transaction: the extended store keeps the copied frozen records
+    !! exactly, starts the seeded (cohort) rows from the frozen global curve of their half and zeroes the
+    !! rest, with means over the seeded rows equal to the frozen means; the frozen store is untouched.
+    !! The union means then republish every record unchanged with both means over the union. The frozen
+    !! store spans a row block (5000 rows), the union adds 1000 rows.
+    subroutine test_addon_copy_on_write()
+        integer, parameter :: NFRZ = 5000, NUNI = 6000, BOXT = 16, NSH = BOXT/2
+        character(len=*), parameter :: frozen = 'cow_frozen_sigma2.bin', committed = 'cow_sigma2_state.bin'
+        type(sigma2_state_header) :: header, back
+        real(real32), allocatable :: records(:,:), loaded(:,:), fglobal(:,:), global(:,:)
+        logical, allocatable :: copy_rows(:), seed_rows(:), active(:)
+        integer, allocatable :: eo(:)
+        real(real64) :: expect(NSH,2)
+        integer(int64) :: n2(2)
+        type(string) :: candidate
+        character(len=256) :: message
+        integer :: status, i, h
+        logical :: l_ok
+        write(*,'(A)') 'test_addon_copy_on_write'
+        call del_file(frozen)
+        call del_file(frozen//'.next')
+        call sigma2_state_init_header(header, 1, NSH, NFRZ, BOXT, 1.0, 7_int64, 999_int64, SIGMA2_PROV_RESIDUAL)
+        call sigma2_state_create_candidate(frozen//'.next', header, status, message)
+        call require_ok(status, message)
+        allocate(records(NSH,NFRZ))
+        do i = 1, NFRZ
+            records(:,i) = real(i, real32)
+        enddo
+        call sigma2_state_write_particles(frozen//'.next', 1, records, status, message)
+        call require_ok(status, message)
+        allocate(fglobal(NSH,2))
+        fglobal(:,1) = 10.0_real32
+        fglobal(:,2) = 20.0_real32
+        call sigma2_state_write_global(frozen//'.next', fglobal, status, message)
+        call require_ok(status, message)
+        call sigma2_state_publish(frozen//'.next', frozen, status, message)
+        call require_ok(status, message)
+        ! rows: copied frozen records (not every third), seeded cohort (every third frozen row and the
+        ! appended rows past 5100), zero (5001-5100: neither)
+        allocate(copy_rows(NUNI), seed_rows(NUNI), eo(NUNI))
+        do i = 1, NUNI
+            copy_rows(i) = i <= NFRZ .and. mod(i,3) /= 0
+            seed_rows(i) = (i <= NFRZ .and. mod(i,3) == 0) .or. i > NFRZ + 100
+            eo(i)        = mod(i,2)
+        enddo
+        call sigma2_state_init_header(header, 1, NSH, NUNI, BOXT, 1.0, 8_int64, 12345_int64, SIGMA2_PROV_RESIDUAL)
+        candidate = sigma2_state_candidate_path(committed, 8_int64)
+        call del_file(committed)
+        call sigma2_state_extend(frozen, candidate%to_char(), header, copy_rows, seed_rows, eo, status, message)
+        call require_ok(status, message)
+        call sigma2_state_publish(candidate%to_char(), committed, status, message)
+        call require_ok(status, message)
+        call sigma2_state_read_particles(committed, 1, NUNI, loaded, status, message)
+        call require_ok(status, message)
+        l_ok = .true.
+        do i = 1, NUNI
+            if( copy_rows(i) )then
+                l_ok = l_ok .and. all(loaded(:,i) == records(:,i))
+            else if( seed_rows(i) )then
+                l_ok = l_ok .and. all(loaded(:,i) == fglobal(:,eo(i)+1))
+            else
+                l_ok = l_ok .and. all(loaded(:,i) == 0.0_real32)
+            endif
+        enddo
+        call require(l_ok, 'copied rows exact, seeded rows from their half''s frozen curve, the rest zero')
+        call sigma2_state_read_global(committed, global, status, message)
+        call require_ok(status, message)
+        call require(all(abs(global - fglobal) < 1.e-6), 'the seeded means equal the frozen means')
+        call sigma2_state_read_header(committed, back, status, message)
+        call require(back%nptcls == NUNI .and. back%generation == 8_int64 .and. back%layout_digest == 12345_int64, &
+            &'the extended store has the union''s identity')
+        call sigma2_state_read_particles(frozen, 1, NFRZ, loaded, status, message)
+        call require(status == 0 .and. all(loaded == records), 'the frozen store is untouched')
+        ! union means over copied and seeded rows
+        allocate(active(NUNI))
+        active = copy_rows .or. seed_rows
+        call sigma2_state_union_means(committed, active, eo, status, message)
+        call require_ok(status, message)
+        expect = 0.0_real64
+        n2     = 0_int64
+        do i = 1, NUNI
+            if( .not. active(i) ) cycle
+            h = eo(i) + 1
+            if( copy_rows(i) )then
+                expect(:,h) = expect(:,h) + real(records(:,i), real64)
+            else
+                expect(:,h) = expect(:,h) + real(fglobal(:,h), real64)
+            endif
+            n2(h) = n2(h) + 1_int64
+        enddo
+        expect(:,1) = expect(:,1) / real(n2(1), real64)
+        expect(:,2) = expect(:,2) / real(n2(2), real64)
+        call sigma2_state_read_global(committed, global, status, message)
+        call require(status == 0 .and. all(abs(real(global,real64) - expect) < 1.e-3_real64 * maxval(expect)), &
+            &'the union means are the means of the union''s records per half')
+        call sigma2_state_read_header(committed, back, status, message)
+        call require(back%generation == 9_int64 .and. back%state == SIGMA2_STATE_COMMITTED, &
+            &'the union means are the next committed generation')
+        call sigma2_state_read_particles(committed, 1, NUNI, loaded, status, message)
+        l_ok = status == 0
+        do i = 1, NFRZ
+            if( copy_rows(i) ) l_ok = l_ok .and. all(loaded(:,i) == records(:,i))
+        enddo
+        call require(l_ok, 'republishing the means leaves every record unchanged')
+        ! refusals: a copied row outside the frozen store, a row both copied and seeded
+        copy_rows(NFRZ+1) = .true.
+        call sigma2_state_extend(frozen, candidate%to_char(), header, copy_rows, seed_rows, eo, status, message)
+        call require(status /= 0, 'a copied row outside the frozen store is refused')
+        copy_rows(NFRZ+1) = .false.
+        seed_rows(1) = .true.
+        call sigma2_state_extend(frozen, candidate%to_char(), header, copy_rows, seed_rows, eo, status, message)
+        call require(status /= 0, 'a row both copied and seeded is refused')
+        call del_file(frozen)
+        call del_file(committed)
+        call del_file(candidate)
+    end subroutine test_addon_copy_on_write
 
     !> The streaming commit end to end: two ranges covering every row of a committed generation-1 store
     !! assemble the generation-2 candidate, whose global spectra equal a full reduction of its records;

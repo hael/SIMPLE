@@ -16,8 +16,8 @@ logical, parameter :: DEBUG_HERE  = .false.
 ! (never by a user): they are outside the generated argument vocabulary, so a
 ! worker that parsed them would stop, and they are not provenance. Job
 ! descriptions (worker scripts, jobproc records) never carry them.
-character(len=*), parameter :: INPROCESS_KEYS(4) = [character(len=14) :: &
-    &'trail_seed', 'frozen_seed', 'frozen_rec', 'addon_manifest']
+character(len=*), parameter :: INPROCESS_KEYS(5) = [character(len=14) :: &
+    &'trail_seed', 'frozen_seed', 'frozen_rec', 'frozen_carry', 'addon_manifest']
 
 !> cmdarg key/value pair command-line type
 type cmdarg

@@ -15,6 +15,7 @@ use simple_sp_project,         only: sp_project
 use simple_sigma2_files,       only: load_sigma2
 use simple_flex_pca_rounds,    only: flex_pca_rounds
 use simple_state_weight_set,   only: state_weight_set, STATE_WEIGHTS_KIND_PARTITION
+use simple_eo_partition,       only: ensure_field_halves
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -91,8 +92,8 @@ contains
         if( build%spproj%os_ptcl2D%get_noris() > 0 .and. &
             &build%spproj%os_ptcl2D%get_noris() /= build%spproj%os_ptcl3D%get_noris() ) &
             &THROW_HARD('flex_pca requires matching ptcl2D and ptcl3D rows')
-        ! eo split by index parity when the project's is degenerate. MASTER-ONLY and must be persisted: a
-        ! worker counts over its own range, so it would silently build a different -- equally valid -- split.
+        ! the project's partition labels what has no halves when the split is degenerate. MASTER-ONLY and
+        ! persisted by the partition: a worker counts over its own range and only checks.
         if( rounds%is_worker() )then
             if( count([(build%spproj_field%get_eo(pinds(q))==0,q=1,nptcls)]) < 1 .or. &
                 &count([(build%spproj_field%get_eo(pinds(q))==1,q=1,nptcls)]) < 1 )then
@@ -100,12 +101,8 @@ contains
             endif
         else if( count([(build%spproj_field%get_eo(pinds(q))==0,q=1,nptcls)]) < 20 .or. &
             &count([(build%spproj_field%get_eo(pinds(q))==1,q=1,nptcls)]) < 20 )then
-            write(logfhandle,'(A)') '>>> FLEX_PCA assigning alternating even/odd halfsets (project eo was degenerate)'
-            call build%spproj_field%partition_eo
-            if( rounds%is_master() )then
-                call build%spproj%write_segment_inside(params%oritype, params%projfile)
-                write(logfhandle,'(A)') '>>> FLEX_PCA persisted the repaired eo split for the workers'
-            endif
+            write(logfhandle,'(A)') '>>> FLEX_PCA project eo is degenerate; completing the project partition'
+            call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         endif
         if( count([(build%spproj_field%get_eo(pinds(q))==0,q=1,nptcls)]) < 20 .or. &
             &count([(build%spproj_field%get_eo(pinds(q))==1,q=1,nptcls)]) < 20 ) &

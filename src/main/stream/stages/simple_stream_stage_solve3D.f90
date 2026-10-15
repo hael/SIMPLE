@@ -83,6 +83,7 @@ use simple_sym,                                       only: sym
 use simple_cmdline,                                   only: cmdline
 use simple_parameters,                                only: parameters
 use simple_sp_project,                                only: sp_project
+use simple_eo_partition,                              only: eo_transaction
 use simple_image,                                     only: image
 use simple_imgarr_utils,                              only: dealloc_imgarr
 use simple_qsys_env,                                  only: qsys_env
@@ -1977,16 +1978,18 @@ contains
     end function take_assignment
 
     ! The seeds of the local refinement on the rows (refine=cont continues from a discrete pose:
-    ! state, half-set, projection direction): the half-sets by row parity (partition_eo), the
-    ! same for every assignment since rows are never renumbered, and the projection direction
-    ! closest to each mapped pose in the job's grid (nspace directions, c1). refine3D clears the
-    ! update counts at its first iteration, so its starting reconstruction takes every row with a
-    ! state.
+    ! state, half-set, projection direction): the half-sets are the project's partition
+    ! (eo_transaction: one half per micrograph, recorded on the stage's stack rows and never
+    ! changed, so every assignment has the same halves and a new stack is labelled once), and the
+    ! projection direction closest to each mapped pose in the job's grid (nspace directions, c1).
+    ! refine3D clears the update counts at its first iteration, so its starting reconstruction
+    ! takes every row with a state.
     subroutine prepare_refine_seeds( self )
         class(stream_stage_solve3D), intent(inout) :: self
         type(oris) :: eulspace
         type(sym)  :: c1
-        call self%spproj%os_ptcl3D%partition_eo()
+        logical    :: l_labelled
+        call eo_transaction(self%spproj, l_labelled)
         call c1%new('c1')
         call eulspace%new(self%params%nspace, is_ptcl=.false.)
         call c1%build_refspiral(eulspace)

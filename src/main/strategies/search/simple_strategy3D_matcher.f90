@@ -7,6 +7,7 @@ use simple_matcher_ptcl_batch
 use simple_strategy3D_alloc,           only: clean_strategy3D, prep_strategy3D
 use simple_binoris_io,                 only: binwrite_oritab
 use simple_builder,                    only: builder
+use simple_eo_partition,               only: ensure_field_halves
 use simple_eul_prob_tab,               only: eul_prob_tab
 use simple_matcher_3Drec,              only: calc_3Drec
 use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
@@ -359,12 +360,9 @@ contains
             end select
         end subroutine init_ctrl
 
+        !> a worker stops without halves; shared memory makes the project's partition
         subroutine ensure_even_odd_partition()
-            if( b_ptr%spproj_field%get_nevenodd() == 0 )then
-                if( l_distr_worker_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
-                call b_ptr%spproj_field%partition_eo
-                call b_ptr%spproj%write_segment_inside(p_ptr%oritype)
-            endif
+            call ensure_field_halves(b_ptr%spproj, p_ptr%oritype, p_ptr%projfile)
         end subroutine ensure_even_odd_partition
 
         subroutine sample_particles_for_update( pinds_local, nptcls )

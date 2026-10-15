@@ -1,6 +1,13 @@
 # Particle I/O on per-micrograph stacks: reading, half-sets and add-on passes
 
-Implementation note, 2026-10-12. **Plan; nothing implemented.**
+Implementation note, 2026-10-12. **Completed 2026-10-14** by the unattended
+run of section 10; the progress is in section 11, and the review report is
+[particle_io_few_particle_stacks_report.md](particle_io_few_particle_stacks_report.md).
+The contracts now live in the policies: the read path in
+[particle_read_path_policy.md](../../policies/particle_read_path_policy.md),
+the half-sets in [refine3D_policy.md](../../policies/3D/refine3D_policy.md)
+(section 5), and the add-on passes in
+[solve3D_addon_policy.md](../../policies/3D/solve3D_addon_policy.md).
 
 Note (2026-10-14): `emulate_solve3D_stream` has been removed. Case F and its
 command line in the run table need restating with `solve3D_chunks`.
@@ -77,7 +84,12 @@ Rulings so far (Hans):
   - the first add-on of a chain reads the base particles once and writes the
     first carried sums; `solve3D` does not change (2026-10-13);
   - the offline chains publish their last incremental add-on as it is, with
-    the old weighting of the frozen contributions (2026-10-13).
+    the old weighting of the frozen contributions (2026-10-13);
+  - the add-on passes serve the offline chains only (2026-10-14): the
+    stream's 3D stage no longer runs `solve3D`, `solve3D_addon` or a final
+    `refine3D`, so the stream ingestion policy is out of this run.
+- **No new environment variable** (2026-10-14). The particle buffer's budget
+  is the queue or node rule alone; the variable Phase 3 had added is removed.
 
 ## 0. Summary
 
@@ -99,7 +111,9 @@ Rulings so far (Hans):
   - Reconstruction reads once per state and half.
   - The half label alternates by particle index, so a stack is usually opened
     in both halves.
-- **The stream adds a larger cost.** Every `solve3D_addon` reads all frozen
+- **The add-on chains add a larger cost.** They serve the offline chains
+  `solve3D_chunks` and `emulate_solve3D_stream`; the stream no longer runs
+  add-ons (ruling of 2026-10-14). Every `solve3D_addon` reads all frozen
   particles up to six times: two frozen accumulations, and four passes of
   `bootstrap_rec3D` in the final reconstruction.
 - **The plan, none of which stores anything derived from the particles on
@@ -307,8 +321,8 @@ by earlier runs, several times.
     bootstrap map, the residual sigma2 pass and the shipped map.
 - **The size of a pass.** One pass over 500,000 particles at box 336 reads
   about 226 GB of float32: 20 to 25 minutes on one spinning disk.
-- **Over a session.** An add-on starts each time the new particles reach 10%
-  of the frozen ones. A session growing from 100,000 to 750,000 particles
+- **Over a chain.** An add-on starts each time the new particles reach 10%
+  of the frozen ones. A chain growing from 100,000 to 750,000 particles
   therefore reads its final dataset about fifty times. This is arithmetic,
   not a measurement.
 
@@ -592,14 +606,16 @@ reads through `discrete_read_imgbatch`, so the build gains too.
 
 ### 3.3 Add-on passes (ruled 2026-10-12)
 
-This is the stream's largest particle I/O. It changes the `solve3D_addon`
+This is the largest particle I/O of the offline add-on chains
+(`solve3D_chunks`, `emulate_solve3D_stream`), which the add-on passes serve;
+the stream's 3D stage no longer runs add-ons (ruling of 2026-10-14). It changes the `solve3D_addon`
 contract (`solve3D_addon_policy.md`, sections 3, 5, 7 and 8), and it depends
 on the global-sigma refactoring (`global_sigma2_only.md`). The review found
 four contracts the first rulings did not settle; all four are now ruled
 (section 8).
 
 **Why the frozen sums are recomputed today.** The frozen particles' poses and
-labels never change during a session (stream 3D ingestion policy, item 10).
+labels never change during a chain.
 Their noise weighting does:
 
 - The frozen term is accumulated with the frozen run's committed sigma2
@@ -693,9 +709,8 @@ the run's own particles instead of the union, with no image-power seed:
 
 - **The output** carries the sums and a sigma2 state that merges the frozen
   particles' committed sigmas with the run's new ones.
-- **The full fit.** Only the stream's p07 stage ends with a full `refine3D`
-  over every selected particle (stream 3D ingestion policy). The offline
-  chains do not: `emulate_solve3D_stream` ends at its last adopted add-on,
+- **The full fit.** The stream no longer runs add-ons (ruling of
+  2026-10-14). The offline chains end without a full fit: `emulate_solve3D_stream` ends at its last adopted add-on,
   and `solve3D_chunks` publishes its last add-on directly. They publish the
   incremental result as it is, and the historical weighting of the frozen
   contributions stays in offline results (ruled 2026-10-13: the fastest
@@ -710,7 +725,7 @@ the run's own particles instead of the union, with no image-power seed:
     dual-grid accumulator or the cohort buffer serves both;
   - one more with `addon_diag=yes`, the default of `solve3D_chunks`, for the
     cohort-only reconstruction.
-- **Over a session,** each particle is read a bounded number of times,
+- **Over a chain,** each particle is read a bounded number of times,
   however many add-ons follow.
 - **The carried sums are one bundle, validated cheaply.** They must not go
   through the manifest's generic digest of non-sigma artifacts, which reads
@@ -725,7 +740,7 @@ the run's own particles instead of the union, with no image-power seed:
     full-file digests. The sigma2 identity keeps its structural and
     generation signature.
 
-  Each adopted run owns its complete bundle, because stream cleanup can
+  Each adopted run owns its complete bundle, because a chain's cleanup can
   remove earlier run directories. A failed or rolled-back run leaves the
   previous bundle untouched.
 
@@ -1006,8 +1021,8 @@ None is open. The review's contracts were ruled by Hans on 2026-10-13:
 - **What the offline chains publish.** `solve3D_chunks` and
   `emulate_solve3D_stream` publish their last incremental add-on as it is,
   with the old noise weighting of the frozen contributions: the fastest
-  option. In the stream, p07's full refinement still recomputes everything
-  at the end of a session. Rejected: full final reconstructions in every
+  option. The stream no longer runs add-ons (ruling of 2026-10-14: its 3D
+  stage assigns class averages to fixed reference volumes). Rejected: full final reconstructions in every
   offline add-on, and one terminal full reconstruction per offline chain.
 - **The half-set fallback.** The question on its 1% threshold is gone: the
   fallback is removed (section 3.2).
@@ -1252,7 +1267,7 @@ Exit criteria:
 
 | File | Change | Phases |
 | --- | --- | --- |
-| `src/main/strategies/search/simple_matcher_ptcl_io.f90` | Read timers and counts; the read session; coalesced spans; the POSIX path; the particle buffer. | 0 1 2 3 |
+| `src/main/strategies/search/simple_matcher_ptcl_io.f90` | Read timers and counts; the read session; coalesced spans; the POSIX path; the particle buffer; Phase 5: the environment branch of the buffer budget removed (ruling of 2026-10-14). | 0 1 2 3 5 |
 | `src/main/strategies/search/simple_matcher_ptcl_batch.f90`, `simple_strategy3D_matcher.f90`, `simple_strategy2D_matcher.f90`, `simple_matcher_3Drec.f90` | Benchmark split; sessions per pass; prefetch; the buffer filled before the search and read by the reconstruction; consumers of the partition. | 0 1 2 3 4 |
 | `src/main/strategies/search/simple_ptcl_cache.f90` | Its build reads through the session. | 1 2 |
 | `src/main/commanders/simple/simple_commanders_prob.f90` | The probability-table benchmark file; sessions; consumer of the partition. | 0 1 2 4 |
@@ -1269,12 +1284,13 @@ Exit criteria:
 | `src/fileio/simple_image_slab.f90` | New: the immutable slab of decoded images behind the particle buffer, with its budget check and failed-allocation fallback, kept free of the builder so the stack tester can drive it. | 3 |
 | `src/fileio/simple_stack_read_session.f90` | New: the pass-scoped read session over many stacks (one open per stack per pass, the descriptor carried across batch boundaries, coalesced spans, reusable scratch, exact counts), kept free of the builder so the stack tester can drive it. | 1 2 |
 | `src/main/image/simple_image_io.f90` | Span reads into scratch. | 1 2 |
-| `src/fileio/simple_posix.c`, `src/fileio/simple_syslib.f90` | The node's memory in use for the benchmark files (Phase 0); the POSIX read helpers; the memory budget. | 0 2 3 |
+| `src/fileio/simple_posix.c`, `src/fileio/simple_syslib.f90` | The node's memory in use for the benchmark files (Phase 0); the POSIX read helpers; the memory budget; Phase 7: a comment points at the read-path policy, not at this plan's old path. | 0 2 3 7 |
 | `src/fileio/simple_discrete_stack_io.f90`, `simple_imgfile.f90` | Phase 0: the bytes of one image of the open stack, so the benchmark files count the bytes read. | 0 |
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90` | Read timers in the gridding workers; frozen PCG add removed; carried sums. | 0 5 6 |
 | `src/main/commanders/simple/simple_commanders_solve2D.f90`, `src/main/flex/run/simple_flex_pca_project_gateway.f90` | Consumers of the partition. | 4 |
 | `src/main/ori/simple_oris_setters.f90`, `simple_oris.f90` | The per-index routine kept for its explicit routes. | 4 |
 | `src/main/project/simple_eo_partition.f90` | New: the project-owned partition transaction. | 4 |
+| `src/main/project/simple_eo_partition_tester.f90` | New: the half-set tests of section 6, in the project unit suite. | 4 |
 | `src/main/project/simple_sp_project.f90`, `simple_sp_project_ptcl.f90` | Entry of the partition transaction; micrograph mapping. | 4 |
 | `src/main/commanders/test/simple_commanders_test_highlevel_frac.f90` | Follows the session and the partition. | 1 4 |
 | `src/main/commanders/test/simple_commanders_test_class.f90`, `src/main/ui/simple_test/simple_test_ui_class.f90` | New unit testers in the suite tables; frozen PCG cases out. | 1 2 3 4 5 6 |
@@ -1282,15 +1298,20 @@ Exit criteria:
 | `src/main/commanders/simple/simple_commanders_solve3D.f90`, `simple_commanders_solve3D_chunks.f90` | Refusal of a PCG base; frozen PCG plumbing out; first carried sums; incremental final; publication. | 5 6 |
 | `src/main/solve/simple_solve3D_utils.f90`, `simple_solve3D_manifest.f90`, `simple_solve3D_controller.f90` | Frozen PCG plumbing out; bundle manifest; carried sums. | 5 6 |
 | `src/main/volume/simple_frozen_accum.f90` | PCG payloads deleted; the carried bundle. | 5 6 |
+| `src/main/volume/simple_frozen_accum_tester.f90` | Phase 5: the PCG half cases out, the context fixed to gridding. | 5 6 |
+| `src/main/solve/simple_solve3D_manifest_tester.f90` | Phase 5: the backend is no longer a replayed input; the base backend accessor. Phase 6: the carried bundle artifact. | 5 6 |
 | `src/defs/simple_refine3D_fnames.f90` | Benchmark file names; frozen PCG names out; bundle names. | 0 5 6 |
 | `src/main/params/simple_parameters.f90`, `simple_parameters_parse.f90` | Keys of the frozen PCG path out, if any. | 5 6 |
 | `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` | Incremental final reconstruction; the bootstrap over the cohort. | 6 |
+| `src/main/simple_cmdline.f90` | Phase 6: the in-process handshake that writes the carried sums (never passed to workers). | 6 |
 | `src/main/project/simple_project_superset.f90` | Retirement with carried sums. | 6 |
+| `src/main/project/simple_project_superset_tester.f90` | Phase 6: rows inside carried sums stay out of the cohort. | 6 |
+| `src/main/sigma2/simple_sigma2_state_tester.f90` | Phase 6: the copy-on-write extension and the union means. | 6 |
 | `src/main/sigma2/simple_sigma2_state.f90`, `simple_euclid_sigma2.f90`, `simple_sigma2_bootstrap.f90` | The copy-on-write sigma2 transaction of the growing union. | 6 |
 | `src/fileio/simple_sigma2_state_file.f90`, `simple_sigma2_files.f90` | The candidate extended from the frozen state. | 6 |
 | `src/main/commanders/test/simple_commanders_test_highlevel_addon.f90`, `src/main/ui/simple_test/simple_test_ui_highlevel.f90` | Chain, rollback and bundle cases. | 6 |
-| `doc/policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md` | The buffer across the assignment barrier. | 3 |
-| `doc/policies/3D/solve3D_addon_policy.md`, `solve3D_chunks_policy.md`, `doc/policies/stream/stream_3D_ingestion_policy.md` | Gridding only; retirement; carried sums; incremental final; publication. | 5 6 7 |
+| `doc/policies/3D/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md` | The buffer across the assignment barrier; Phase 5: its environment variable removed (ruling of 2026-10-14); Phase 7: points at the read-path policy. | 3 5 7 |
+| `doc/policies/3D/solve3D_addon_policy.md`, `solve3D_chunks_policy.md` | Gridding only; retirement; carried sums; incremental final; publication; the add-on passes described as serving the offline chains (ruling of 2026-10-14; the stream ingestion policy is out of this run). | 5 6 7 |
 | `doc/policies/3D/refine3D_policy.md`, `reconstruct3D_pcg_policy.md`, `doc/policies/2D/solve2D_policy.md` | Half-set assignment; frozen PCG add removed. | 5 7 |
 | `doc/policies/project_stack_indexing_policy.md`, `doc/policies/particle_read_path_policy.md` | The reader policy; new: the short policy of the read path. | 7 |
 | `doc/implementation_notes/completed/particle_io_few_particle_stacks.md`, `particle_io_few_particle_stacks_report.md` | The plan moved on completion, and the report. | 7 |
@@ -1965,9 +1986,11 @@ added to the file table for this phase).
   says. The local queue ignores that number, so here the node rule applies:
   6.7 GB for each of the four parts of a distributed run, 33.5 GB in shared
   memory.
-- *The user's budget is an environment variable*, as the stream count's is, so
-  no program's interface changes; it also turns the buffer off for the
-  comparisons below.
+- *The user's budget was an environment variable*, as the stream count's is, so
+  no program's interface changed; it turned the buffer off for the comparisons
+  below. Phase 5 removed it (ruling of 2026-10-14: no new environment
+  variables), so `simple_defs_environment.f90` is back to its base content and
+  the budget is the queue or node rule alone.
 - *Acceptance of a case with two Phase 0 values* is read as the band between
   them, widened at each end by the larger of the Phase 0 spread and 3 % of that
   end: for B, 6.94 to 7.10 Å becomes 6.73 to 7.31 Å.
@@ -2038,3 +2061,527 @@ process of the run):
   and the step is kept or dropped by the timing rule:* the table above; kept.
 
 Benchmark files of every timed run: `scratch/keep/bench/phase3/<case>/`.
+
+### Phase 4: project-owned half-sets (2026-10-14)
+
+**Inventory before editing.** Every call of the per-index routine
+`oris%partition_eo` and every test of `get_nevenodd`, and what each becomes.
+"Transaction" means the new project-owned partition of `simple_eo_partition.f90`;
+"per-index" means `partition_eo` kept as the explicit routine of a field that
+has no micrograph groups by nature.
+
+| Place | What it does today | Becomes |
+| --- | --- | --- |
+| `simple_refine3D_strategy.f90`, distributed and shared-memory initialisation (two places) | labels the field by index when it has no odd label | transaction for particle fields; per-index for the class-average field (`cls3D`, `solve3D_cavgs`) |
+| `simple_refine2D_strategy.f90`, the two initialisations | the same | transaction (particle fields only) |
+| `simple_strategy3D_matcher.f90`, `simple_strategy2D_matcher.f90` (`ensure_even_odd_partition`) | a worker stops, shared memory labels by index | workers still stop; shared memory runs the transaction (per-index for `cls3D`) |
+| `simple_commanders_prob.f90`, `prob_align2D` (master) | labels by index | transaction |
+| `simple_commanders_prob.f90`, `prob_tab2D` (a worker in distributed runs) | labels by index and writes the project | consumer: stops when the field has no partition (its master made it) |
+| `simple_calc_pspec_strategy.f90` (`ensure_calc_pspec_eo_partition`) | labels by index | transaction; per-index for `cls3D` |
+| `simple_rec3D_strategy.f90`, shared-memory and distributed initialisation | labels by index | transaction; per-index for `cls3D` |
+| `simple_make_cavgs_strategy.f90`, `setup_evenodd` | labels by index | transaction; per-index for class-average fields |
+| `simple_make_cavgs_strategy.f90`, time series (`ini_tseries`) | labels the fresh time-series classes by index | per-index, explicitly (no micrograph groups in a time series) |
+| `simple_commanders_solve2D.f90`, first stage and `ensure_seed_eo` (`cls_init=prev`) | labels by index | transaction |
+| `simple_flex_pca_project_gateway.f90`, repair of a degenerate split | relabels by index | transaction (existing labels kept; still stops when a half stays nearly empty) |
+| `simple_commanders_test_highlevel_frac.f90` | labels by index | transaction |
+| `simple_oris_tester.f90` | tests the per-index routine | kept: the per-index routine stays |
+
+**Design decisions (taken before editing).**
+
+- *Where the labels' provenance lives: on the stack rows.* A particle record
+  cannot say "unlabelled": its half label is 0 for even and also 0 when never
+  set (the particle record counts a zero as absent). The stack rows are plain
+  key-value records, so an absent key is visible, and they travel with their
+  particles through merges, pruning and stream publication. A stack row that
+  is a micrograph group carries its half (`eo_group`, 0 or 1); a stack row
+  whose particles carry per-index labels carries `eo_byindex`. A stack row
+  without either is unlabelled. Complete: every stack row with particles is
+  marked and its particles agree with it in `ptcl2D` and `ptcl3D`. Missing: no
+  stack row is marked and no particle has a label. Partial: some stack rows
+  are unmarked (appended stacks); only those are labelled. Inconsistent: a
+  marked stack row whose active particles disagree with it, or `ptcl2D` and
+  `ptcl3D` disagreeing: the master stops with the reason rather than repair.
+- *Projects of earlier releases* have labels but no markers: their labels are
+  kept as they are and their stack rows are marked per-index (they were made
+  by index parity); a field labelled and its twin field unlabelled gets the
+  labels copied.
+- *The route.* A field takes the micrograph groups when there are micrograph
+  rows and every stack row with active particles maps to one; otherwise the
+  per-index route, as today, logged. Per-index labels are the parity of the
+  particle's row, the rule `partition_eo` applies, so a partly labelled field
+  continues it.
+- *The split.* Groups in a random order from the transaction's own generator
+  (a fixed seed, never the process-wide random state), then stably by active
+  population, largest first; each goes to the half with fewer active particles,
+  a coin from the same generator breaking ties. Every row of a group, inactive
+  rows included, gets the group's label. The run stops when fewer than two
+  groups have active particles (no two halves can be formed) and warns when
+  fewer than 20 do or the halves differ by more than 5 % of the active
+  particles; the route, the number of groups and the imbalance are logged.
+- *Both particle fields at once.* The transaction writes the same labels to
+  `ptcl2D` and `ptcl3D` (which must have the same rows) and writes the two
+  segments and the stack segment; class-average fields keep the per-index
+  routine.
+
+**What was built.**
+
+- `src/main/project/simple_eo_partition.f90` (new) holds the transaction.
+  `ensure_field_halves(spproj, oritype, projfile)` is the one entry the call
+  sites use:
+  - for `ptcl2D` and `ptcl3D` it reads the micrograph, stack and both particle
+    segments of the project file into a project of its own, labels what has no
+    provenance, writes the three segments when anything changed, and copies the
+    labels and the stack-row provenance into whichever fields the caller has
+    loaded (a 2D run loads only `ptcl2D` and the stacks);
+  - when every loaded stack row is recorded and the field is labelled, it
+    checks the loaded fields in memory and reads nothing (a shared-memory run
+    calls it every iteration); an inconsistent partition stops the run there
+    too;
+  - a distributed worker only checks that its field has halves and stops when
+    it has none;
+  - class-average fields keep `partition_eo`, written to the project.
+- Particle records cannot say "unlabelled": an unset half label reads as 0,
+  the same as even. The provenance therefore lives on the stack rows alone, as
+  decided above; the partition status is computed from it.
+- The split uses its own generator (splitmix64, seed 20261014 by default, a
+  seed argument for tests). Groups are shuffled, then stably merge-sorted by
+  active population; labels are written in one pass over the rows.
+- Consumers changed as in the inventory: the refine2D, refine3D,
+  reconstruction and `calc_pspec` strategies, the 2D and 3D matchers,
+  `prob_align2D` and `prob_tab2D`, `solve2D` (first stage and the `cls_init=prev`
+  seed), the FLEX repair, and the fractional-update gate. `make_cavgs` gained
+  one site the inventory did not list: its distributed master now makes the
+  partition before the workers start, because the workers now refuse instead
+  of labelling. A time series in `make_cavgs` keeps the per-index labels of
+  `ini_tseries` explicitly.
+- `simple_oris_setters.f90`, `simple_oris.f90`, `simple_sp_project.f90` and
+  `simple_sp_project_ptcl.f90`, assigned to this phase, did not need changes:
+  `partition_eo` stays as the per-index routine, and the transaction lives in
+  its own module.
+- `src/main/project/simple_eo_partition_tester.f90` (new), registered as the
+  `eo_partition` sub-suite of `unit_project` (suite table and the UI's
+  sub-suite list).
+
+**Evidence.**
+
+| Case | Wall time | Peak memory | Result | Acceptance |
+| --- | --- | --- | --- | --- |
+| E (`solve2D`) run 1 | 2:48 | 0.41 GB | score 0.389, class resolution 11.25 Å | holds (≥ 0.377, ≤ 12.11 Å) |
+| E run 2 | 3:02 | 0.42 GB | score 0.389, class resolution 11.08 Å | holds |
+| A (`solve3D`) run 1 | 14:27 | 3.20 GB | FSC 0.5 / 0.143: 6.66 / 4.35 Å | holds (within 3 % of 4.35 Å) |
+| A run 2 | 14:38 | 3.23 GB | FSC 0.5 / 0.143: 6.80 / 4.29 Å | holds |
+
+- Logs: `scratch/logs/case_E_p4_1.log`, `case_E_p4_2.log`,
+  `case_A_p4_1.log`, `case_A_p4_2.log`; benchmark files under
+  `scratch/keep/bench/phase4/`. No timing claim (common rules).
+- *The route on beta-galactosidase.* The control project already carries a
+  half split from an earlier release: 2,757 of 5,513 particles odd, and only
+  2,740 agree with index parity, so it is not the per-index pattern. It has no
+  micrograph rows, so the field takes the per-index route, and by the rule that
+  existing labels never change its labels are kept and recorded as per-index.
+  Phase 0 code kept them too, so the halves of A and E are those of Phase 0.
+  Run 1 of each was made before the log line named the route ("labels without
+  provenance ... kept, recorded as per-index"). Run 2 logs
+  `>>> EO PARTITION: PER-INDEX ROUTE (a stack row without a micrograph row);
+  the labels the project holds are kept, recorded as per-index`, once per run:
+  every later stage reads the recorded partition.
+- High-level tests (Release build, `scratch/logs/hl_phase4_*.log`), each
+  judged by its own checks:
+  - `solve3D_addon` passes. Union map against the truth: correlation 0.951,
+    FSC 0.143 at 4.65 Å (floor 6.03 Å); Phase 0 gave 0.942 and 4.93 Å. Its
+    projects have no micrograph rows and no labels, so the log shows the fresh
+    per-index route (one and two stack rows labelled by particle index).
+  - `simulated_workflow_1jxy` passes: correlation 0.874, FSC 0.143 at 4.62 Å
+    (Phase 0: 0.898, 4.54 Å). It has micrograph rows, so it takes the
+    micrograph-group route: 10 groups, 37 / 38 active particles, with the
+    warning for fewer than 20 groups.
+  - `simulated_workflow_6vxx` passes (recorded only): correlation 0.878, FSC
+    0.143 at 4.71 Å (Phase 0: 0.888, 4.71 Å); 10 groups, 41 / 40.
+  - `cont_refine3D_1jxy` passes: symmetric pose error 0.20° (floor 1.60°).
+    Each of its eight sub-runs starts from a copy of a project seeded with
+    labels and no provenance, and keeps those labels.
+- The half-set tests of section 6 (`unit_project suite=eo_partition`, 97
+  checks):
+  - micrograph groups: one label per group in both fields, inactive rows
+    included, and halves within the largest group;
+  - no split for size: a 500-particle group among 25 groups of 10 stays whole;
+  - explicit routes: the per-index route without micrograph rows (labels equal
+    to `partition_eo`), and `cls3D` through `partition_eo` with the particle
+    fields untouched (`make_cavgs` routes a time series to `partition_eo`
+    explicitly);
+  - appended stacks get labels and existing labels stay; labels of an earlier
+    release are kept and copied to the unlabelled field; after
+    `merge_selected_project_files` both fields carry the sources' labels and
+    the next run keeps them; a 2D-style load (`ptcl2D` and stacks only)
+    receives the labels the transaction wrote to the file;
+  - refusals, each in a forked child that must stop: a worker without halves,
+    a master with an inconsistent partition, and a single micrograph group;
+  - the status function reports a particle against its group half, and
+    `ptcl2D` and `ptcl3D` with different rows, as inconsistent;
+  - the split draws nothing from the process-wide random stream (the next
+    `ran3` draws are unchanged); a fixed seed gives the same split and another
+    seed a different one.
+  Prune, re-extraction and stream publication are not separate tests: they
+  carry the stack rows with their particles, which is what the merge test
+  checks.
+
+**Exit criteria.**
+
+- *The builds, the fast gate, the unit suites and the registry check pass:*
+  `./compile_debug.sh` with no compiler warning and the fast gate 15 of 15
+  (`scratch/logs/p4_build_debug_final.log`); the Release build and its gate
+  (`scratch/logs/p4_build_release2.log`); all 13 unit suites pass
+  (`unit_project` 2,596 checks, `unit_core` 1,031, the rest in
+  `scratch/logs/p4_units_summary.txt`);
+  `scripts/check_test_registry.py` passes; no file mode changed.
+- *The half-set tests of section 6 pass:* 97 of 97 (above).
+- *On beta-galactosidase the log shows the per-index route, and cases A and E
+  repeated meet the acceptance:* the route line of run 2 (above). Both runs of
+  A and of E meet the acceptance.
+- *`solve3D_addon`, `simulated_workflow_1jxy`, `simulated_workflow_6vxx` and
+  `cont_refine3D_1jxy` run, each judged as in the common rules:* all four pass
+  their own checks; no floor was changed.
+
+### Phase 5: PCG out of the add-on chains (2026-10-14)
+
+**Two rulings applied first** (`spec/rulings.md`, 2026-10-14; recorded in the
+list of rulings at the top of this plan):
+
+- *No new environment variable.* `SIMPLE_PTCL_BUFFER_MB`, added in Phase 3, is
+  removed: `src/defs/simple_defs_environment.f90` is back to its base content,
+  `ptcl_buffer_budget` in `simple_matcher_ptcl_io.f90` lost its environment
+  branch and the locals only it used, and the memory policy lost the sentence.
+  The budget is half the task memory a queue system grants, otherwise the
+  node's physical memory over twice the processes it runs. The Phase 3 entry
+  notes the removal. The ruling first dropped the environment file's row from
+  the file table; the maintainer's ruling of the same evening restored it, with
+  this phase, since the file changes here (back to its base content).
+- *The add-on passes serve the offline chains only.* The stream's 3D stage no
+  longer runs `solve3D`, `solve3D_addon` or a final `refine3D`. Sections 0,
+  2.6, 3.3 and 8 now say so, and the stream ingestion policy is out of the
+  file table. The two add-on policies keep their stream text until Phase 6
+  describes the passes; this phase changed only what gridding needs.
+
+**What changed.** The add-on chains (`solve3D_addon`, `solve3D_chunks`,
+`emulate_solve3D_stream`) reconstruct by gridding only, as ruled on
+2026-10-13; a base `solve3D` keeps both backends.
+
+- *The refusal.* `solve3D_addon` reads the base run's backend from its run
+  manifest (`solve3D_manifest%get_rec_backend`: the recorded `rec_backend`
+  input, or gridding, `solve3D`'s default, when none was given) right after
+  validating the manifest, before anything is written, and stops on any other
+  backend, naming it. Its own run sets `rec_backend=gridding`, so the manifest
+  of an add-on records gridding and a chained add-on passes the check.
+- *No PCG input.* The add-on's UI entry lost `maxits_pcg`, `maxits_ml` and
+  `pcg_solvent_check`; `emulate_solve3D_stream` builds its inputs without the
+  PCG block (`l_include_pcg=.false.`) and forces gridding, as `solve3D_chunks`
+  already did. The backend and the PCG controls are no longer replayed from
+  the manifest (they stay recorded, which the refusal needs), and on the
+  add-on command line they are refused by name.
+- *The PCG side of the frozen sets is deleted.* In `simple_frozen_accum.f90`
+  the PCG halves (writer, validator, add and their provenance tag) and the
+  backend argument are gone; the run context still records its backend,
+  always gridding, and reading a context of another backend fails. The frozen
+  PCG file name left `simple_refine3D_fnames.f90`. The PCG reconstruction
+  master (`simple_rec3D_pcg_strategy.f90`) lost its frozen consumer and
+  producer and the add-on branches only they reached (the half without a
+  cohort particle, the frozen counts in the half checks, the empty-state
+  exemption); it now refuses the frozen-set handshakes. The NU low-pass
+  handoff of the PCG path (`filter_pcg_nonuniform_maps`) lost its frozen-term
+  argument, which no caller can set any more.
+- *Tests.* The frozen-set tester lost its PCG case and gained the refusal of
+  a PCG context; the manifest tester checks that the backend is not replayed
+  and both answers of `get_rec_backend`. No tolerance changed.
+- *Policies.* `solve3D_addon_policy.md`: no PCG row in the command-line table,
+  forced gridding with its reason, the refusal among the frozen-input checks,
+  the context's backend, the frozen term without its PCG line, the code map.
+  `solve3D_chunks_policy.md`: the backend no longer reaches the add-ons
+  through the manifest.
+
+Files changed in this phase: `src/main/volume/simple_frozen_accum.f90`,
+`simple_frozen_accum_tester.f90`; `src/main/solve/simple_solve3D_manifest.f90`,
+`simple_solve3D_manifest_tester.f90`;
+`src/main/commanders/simple/simple_commanders_solve3D.f90`,
+`simple_commanders_solve3D_chunks.f90`, `simple_commanders_rec_distr.f90`;
+`src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`,
+`simple_rec3D_service.f90`, `simple_refine3D_strategy.f90`;
+`src/main/ui/simple/simple_ui_solve3D.f90`; `src/defs/simple_refine3D_fnames.f90`;
+`src/main/strategies/search/simple_matcher_ptcl_io.f90` and
+`src/defs/simple_defs_environment.f90` (the ruling); the two add-on policies
+and the memory policy; this plan (two tester rows added to the file table).
+
+**Exit criteria.**
+
+- *The builds, the fast gate, the unit suites and the registry check pass:*
+  `./compile_debug.sh` with no compiler warning and the fast gate 15 of 15
+  (`scratch/logs/p5_build_debug_final.log`); the Release build and its gate
+  (`scratch/logs/p5_build_release2.log`; the first attempt,
+  `p5_build_release1.log`, found the test directories of the Release tree
+  deleted by the Phase 4 cleanup, and a reconfigure restored them); all 13 unit
+  suites pass (`scratch/runs/p5unit/units_summary.txt`: `unit_project` 2,599
+  checks, `unit_reconstruction` 223 without the PCG frozen case);
+  `scripts/check_test_registry.py` passes; no file mode changed.
+- *`solve3D_addon` on a copy of a PCG base run stops with the refusal before
+  any work; on a gridding base it runs and passes its own checks:*
+  `scratch/refusal_check.sh` copies P (the `rec_backend=pcg` base run kept in
+  Phase 0) and runs `solve3D_addon` on it with a fresh copy of the control
+  project (`scratch/logs/p5_refusal.log`, Release build). It stops with
+  "the frozen run reconstructed with rec_backend=pcg; solve3D_addon continues
+  gridding base runs only"; no file appeared in its directory, and both
+  projects are byte-identical to their sources. A PCG control on the add-on
+  command line stops by name (`scratch/logs/p5_pcgkey_refusal.log`). The
+  `solve3D_addon` test on its gridding base passes
+  (`scratch/logs/hl_phase5_solve3D_addon.log`): union map against the truth,
+  correlation 0.948 and FSC 0.143 at 4.83 Å (floors 0.90 and 6.13 Å; Phase 4
+  gave 0.951 and 4.65 Å).
+- *Outside history documents, the tree holds no frozen PCG payload:* no
+  source, script or policy names the PCG halves or their file. The generated
+  indexes under `doc/code_overview/` still list the deleted procedures; the
+  maintainer regenerates them (common rules).
+
+### Phase 6: the add-on passes (2026-10-14)
+
+No new ruling. The add-on passes of section 3.3 serve the offline chains
+(`solve3D_chunks`, `emulate_solve3D_stream`), as ruled the same day.
+
+**What was built.**
+
+- *Two routes into an add-on.* The add-on looks for a carried bundle in the
+  frozen run's manifest.
+  - Without one (the frozen run is a `solve3D`), it is the first add-on of a
+    chain. It reads the frozen particles once at the stage box and once at the
+    native box, as before, into this run's frozen sets.
+  - With one, it validates the bundle against the manifest record, the frozen
+    project and the ladder, by headers and sizes, and copies the carried sets
+    under its own run context (`import_gridding_set`). It reads no frozen
+    particle, and starts from the frozen run's final maps, which are the
+    restoration of the carried native sums.
+- *The copy-on-write sigma2 transaction.* After masking, the add-on opens its
+  own sigma2 state in its directory (`sigma2_state_extend` in
+  `simple_sigma2_state.f90`). The frozen and retired rows' committed records are
+  copied unchanged. Every cohort row starts from the frozen global curve of its
+  half; the project's half-set partition is made first. The means are taken
+  over the cohort. Nothing is seeded from image power, and the inherited state
+  is never written. `sigma2_state_union_means` republishes a state with both
+  means over the union, with no record changed.
+- *The incremental final reconstruction* (`calc_final_rec_addon` in
+  `simple_final_rec.f90`), over the masked cohort plus the frozen sets:
+  1. the bootstrap map;
+  2. the residual pass, which commits the cohort's sigmas;
+  3. the union means;
+  4. the carried sums, written at the stage box when it differs from the native
+     box, then at the native box together with the shipped map.
+
+  The union is restored and the maps registered last. A membership callback
+  restores the union or masks it again between passes. The sums are written
+  by a new in-process handshake, `frozen_carry`, in the gridding assembly
+  (`simple_commanders_rec_distr.f90`). Like the other handshakes it is never
+  passed to workers (`simple_cmdline.f90`).
+- *The carried bundle* (`simple_frozen_accum.f90`) has three parts, written in
+  this order:
+  - the carried sets (`carried_stateNN_boxBBBB_*`, with per-set manifests);
+  - the membership (the state of each row inside the sums);
+  - the bundle manifest, written last. It records the run, its parent, the
+    route, the rows, the boxes and their sampling, the weighting, the final
+    sigma2 generation and the counts.
+
+  The solve manifest records the bundle by the digest of that small manifest.
+  The sums themselves are never digested.
+- *Retirement with carried sums* (`simple_project_superset.f90`). A row inside
+  the frozen run's sums that is not frozen and is selected again is retired:
+  searching it would count it twice. A frozen row outside the sums is refused.
+- *Decisions taken.*
+  - **Starting references.** The carried route starts from the frozen run's
+    registered final maps rather than from restoring the carried native sums.
+    They are the same accumulation restored once, and need no extra pass.
+  - **Reselected rows.** A row reselected after its retirement stays retired
+    while it is inside the sums. Searching it would count it twice. A later
+    full `solve3D` is the way to rebase.
+  - **Membership switching.** Between the final passes, membership is switched
+    by masking the working project again. This is the run structure's own
+    mechanism, with no add-on branch in the reconstruction.
+  - **The read-count script.** It now counts images as bytes requested over
+    the bytes of one image. Since Phase 1 a request is a coalesced span, not one
+    image; on Phase 0's files the script still gives Phase 0's numbers.
+- *Tests.*
+  - A two-add-on chain of frozen set, carried sums and adopted sums equals the
+    direct union: sums, densities and the restored map, within the existing
+    tolerances. The bundle is refused for another run, a wrong membership, an
+    unknown route, a truncated component, and a missing manifest
+    (`frozen accumulator`).
+  - The copy-on-write extension and the union means (`sigma2 state`).
+  - The reselected row inside the sums (`project superset`).
+  - The bundle artifact (`solve3D manifest`).
+  - The high-level gate `solve3D_addon` is now a chain of two add-ons. The
+    first reads the frozen particles once and publishes the first bundle; the
+    second adopts it (route `carried`, parent the first add-on). All existing
+    floors are applied, unchanged, to the final union.
+- *Policies.* `solve3D_addon_policy.md`:
+  - the add-ons serve the offline chains, with no stream text left;
+  - retirement with carried sums;
+  - the copy-on-write sigma2 and the two routes of the frozen sets;
+  - the frozen term's weighting;
+  - section 8 rewritten for the incremental final reconstruction, the bundle
+    and chaining;
+  - outputs, the chains section, tests, and the code map.
+
+  `solve3D_chunks_policy.md`: the cost section.
+
+Files changed in this phase:
+- `src/main/volume/simple_frozen_accum.f90` and its tester;
+- `src/main/sigma2/simple_sigma2_state.f90` and its tester, and
+  `simple_sigma2_bootstrap.f90` (the residual pass drops the new handshake);
+- `src/main/simple_final_rec.f90`;
+- `src/main/commanders/simple/simple_commanders_solve3D.f90` and
+  `simple_commanders_rec_distr.f90`;
+- `src/main/simple_cmdline.f90`;
+- `src/main/project/simple_project_superset.f90` and its tester;
+- `src/main/solve/simple_solve3D_manifest.f90` and its tester;
+- `src/defs/simple_refine3D_fnames.f90`;
+- `src/main/commanders/test/simple_commanders_test_highlevel_addon.f90`;
+- the two add-on policies;
+- this plan (file-table rows added for the command-line module and the
+  testers).
+
+**Evidence: case F against Phase 0.** Case F is `emulate_solve3D_stream
+nptcls_base=2000 nptcls_addon=1100 rollback=no addon_diag=yes`, with the
+Phase 0 command line: a base run and three add-ons, run twice. The tables
+quote Phase 0 first, then Phase 6.
+
+| Step | Wall time (s), Phase 0 runs 1, 2 | Wall time (s), Phase 6 runs 1, 2 | s per 1,000 added, Phase 0 | s per 1,000 added, Phase 6 |
+| --- | --- | --- | --- | --- |
+| base `solve3D` (2,000) | 928.3, 913.2 | 1095.3, 882.3 | - | - |
+| add-on 1 (+1,100) | 395.9, 354.4 | 397.0, 330.6 | 359.9, 322.2 | 360.9, 300.5 |
+| add-on 2 (+1,100) | 635.6, 629.3 | 629.7, 450.2 | 577.8, 572.1 | 572.4, 409.2 |
+| add-on 3 (+1,313) | 401.8, 683.1 | 379.7, 610.0 | 306.0, 520.2 | 289.2, 464.6 |
+
+| Step | Union FSC 0.143 (Å), Phase 0 | Union FSC 0.143 (Å), Phase 6 | Frozen particle images read, Phase 0 | Frozen particle images read, Phase 6 |
+| --- | --- | --- | --- | --- |
+| base | 4.03, 4.03 | 4.03, 4.03 | - | - |
+| add-on 1 | 3.89, 3.89 | 3.93, 3.80 | 12,000 | 4,000 |
+| add-on 2 | 3.80, 3.84 | 3.89, 3.75 | 18,600 | 0 |
+| add-on 3 | 3.75, 3.80 | 3.80, 3.75 | 25,200 | 0 |
+
+- *Frozen images read.* Phase 0's counts are the two frozen accumulations,
+  three union passes and the image-power pass. In Phase 6 the first add-on
+  reads its 2,000 frozen particles once at each of its two boxes (162 and 256
+  pixels). The later add-ons read none: their final passes read only their own
+  1,100 or 1,313 particles, four passes since the boxes differ. No add-on runs
+  an image-power pass. The counts are from the benchmark files
+  (`scratch/addon_reads.py`, `scratch/logs/addon_reads_F_p6_1.txt` and
+  `addon_reads_F_p6_2.txt`) and the case logs.
+- *Wall time.* The base run is unchanged code. Its 1,095 s in run 1 against
+  882 s in run 2 shows this machine's spread. No timing claim is made.
+- *Peak memory.* 3.19 and 3.22 GB, against 3.28 and 3.30 GB in Phase 0.
+- *Logs and kept files.* Logs are `scratch/logs/case_F_p6_1.log` and
+  `case_F_p6_2.log`. The benchmark files and emulation reports are kept in
+  `scratch/keep/bench/phase6/`.
+- *Acceptance.* Every step completes. Every union FSC 0.143 lies within 5 % of
+  its Phase 0 value; the largest step is 3.93 Å against 3.89 Å.
+
+**The `solve3D_addon` gate.** The gate is the two-add-on chain; its log is
+`scratch/logs/hl_phase6_solve3D_addon.log`.
+- *Final run.* It passes, every floor unchanged: union truth correlation 0.944
+  (floor 0.90), FSC 0.143 4.83 Å (floor 6.13 Å), cohort pose error 11.7°
+  (floor 15°), excess over the frozen pairs 3.3° (floor 5°). The second add-on
+  read no frozen particle, and its bundle continues the first.
+- *Two earlier runs, both before the review fixes.* The first passed every
+  floor but failed one new check. That check tested sigma2 consumability on the
+  published copy of the first add-on. A published project keeps the bare state
+  name, which resolves only in its run directory; that is unchanged
+  publication behaviour, and the existing final check reads the run-directory
+  project. The check now reads the run-directory project. The second run passed
+  in full.
+
+**Exit criteria.**
+
+- *The builds, the fast gate, the unit suites and the registry check pass:*
+  - `./compile_debug.sh` builds with no compiler warning, and the fast gate
+    passes 15 of 15 (`scratch/logs/p6_build_debug_final.log`).
+  - The Release build passes (`scratch/logs/p6_build_release4.log`).
+  - All fifteen unit suites pass, with `unit_project` at 2,615 checks and
+    `unit_reconstruction` at 240 (`scratch/runs/p6unit/units_summary.txt`).
+  - `scripts/check_test_registry.py` passes, and no file mode changed.
+- *The add-on tests of section 6 pass:* the unit cases above and the chained
+  gate. They cover:
+  - carried sums equal to sums recomputed from the particles, and a shipped
+    map equal to the direct union's over a chain of depth two;
+  - bundle refusals for another run, a truncated or mixed bundle, a wrong
+    membership and an interrupted run;
+  - a reselected retired row;
+  - the gridding route with unequal native and stage boxes, in case F and the
+    gate;
+  - the first add-on reading the base particles once, and no frozen particle
+    read once a bundle exists;
+  - the union's sigma2 means after the membership is restored;
+  - the frozen records unchanged in the merged state.
+
+  `solve3D_addon` refuses `rec_backend=pcg` (Phase 5). Rollback and restart are
+  covered by construction: a run writes only its own directory, and its bundle
+  manifest last. Neither was exercised by a test run.
+- *`solve3D_addon` passes its own checks:* above.
+- *Case F repeated twice: the acceptance holds; add-ons after the first read no
+  frozen particle image (by the counts); each step's wall time and seconds per
+  1,000 added particles are reported against Phase 0:* the tables above.
+
+### Phase 7: documents and close (2026-10-14 to 2026-10-15)
+
+No new ruling.
+
+**Documents.**
+- `doc/policies/particle_read_path_policy.md` (new) is the short policy of the
+  read path: the bit-exact rule, the read session and its limits, the stream
+  count, the fallback pixel modes, failures, the particle buffer and the
+  benchmark lines.
+- The reader policy of `project_stack_indexing_policy.md` names the read
+  session. Before, it named the batch reader deleted in Phase 1.
+- `refine3D_policy.md` (section 5), `solve2D_policy.md` and
+  `reconstruct3D_pcg_policy.md` describe the project-owned partition. The PCG
+  policy also states that add-on chains are gridding only, and its particle I/O
+  line names the read session.
+- `simple_posix.c` and the memory policy point at the read-path policy instead
+  of this plan's former path. Both file-table rows gained this phase.
+- The add-on and chunk policies were brought up to date in Phases 5 and 6.
+- This plan was moved to `doc/implementation_notes/completed/` with `mv`, and
+  the review report written beside it.
+
+**Cases against Phase 0.** Release build, one case at a time on the otherwise
+idle machine; logs `scratch/logs/case_<case>_p7.log`, queue
+`scratch/logs/queue_phase7.log`, benchmark files and the emulation report in
+`scratch/keep/bench/phase7/`. Phase 0 values come first; peak memory is the
+largest resident set of any process of the run.
+
+| Case | Wall time, Phase 0 / Phase 7 | Peak memory, Phase 0 / Phase 7 | Result, Phase 0 / Phase 7 | Acceptance |
+| --- | --- | --- | --- | --- |
+| A (`solve3D`) | 14:05, 14:09 / 14:12 | 3.19, 3.25 / 3.23 GB | FSC 0.143 4.35, 4.35 / 4.41 Å | holds (limit 4.48 Å) |
+| B (`refine3D`, distributed) | 2:38, 2:38 / 2:48 | 3.03 / 3.03 GB | 6.94, 7.10 / 6.80 Å | holds (band 6.73 to 7.31 Å) |
+| C (`refine3D`, shared memory) | 1:46 / 1:46 | 3.63 / 3.92 GB | 7.77 / 7.77 Å | holds |
+| E (`solve2D`) | 3:06, 3:08 / 3:09 | 0.41 / 0.41 GB | score 0.389 / 0.389; class resolution 10.97, 10.94 / 11.05 Å | holds (score at least 0.377, at most 12.11 Å) |
+| F (`emulate_solve3D_stream`) | 39:22, 43:00 / 30:21 | 3.28, 3.30 / 3.22 GB | union FSC 0.143 per step: 4.03 / 3.89 / 3.80, 3.84 / 3.75, 3.80 against 4.03 / 3.93 / 3.89 / 3.84 Å | holds (within 5 % at every step) |
+
+- *Case F's add-ons.* Their wall times were 287 / 342 / 331 s, against Phase
+  0's 396, 354 / 636, 629 / 402, 683 s. That is 261 / 310 / 252 s per 1,000
+  added particles, against 360, 322 / 578, 572 / 306, 520 s.
+- *Frozen particle images read per add-on.* 4,000 / 0 / 0, against Phase 0's
+  12,000 / 18,600 / 25,200 (`scratch/logs/addon_reads_F_p7.txt`).
+- *No timing claim* is made. B's 10 s lies within the spread its own Phase 3
+  runs showed (2:38 to 2:45). C's higher peak memory is the particle buffer
+  (Phase 3).
+
+**High-level tests** (Release build; logs `scratch/logs/hl_phase7_<test>.log`).
+
+| Test | Phase 0 | Phase 7 |
+| --- | --- | --- |
+| `solve3D_addon` | passed: union truth correlation 0.942, FSC 0.143 4.93 Å, one add-on | passed: 0.948, 4.74 Å, a chain of two add-ons |
+| `simulated_workflow_1jxy` | passed: correlation 0.898, 4.54 Å | passed: 0.879, 4.46 Å |
+| `simulated_workflow_6vxx` (recorded only) | passed: 0.888, 4.71 Å | passed: 0.878, 4.71 Å |
+| `cont_refine3D_1jxy` | passed: median rotation errors 0.91 / 0.23 / 0.91° | passed: 0.91 / 0.23 / 0.91° |
+
+**Exit criteria.**
+- *The build, the fast gate and the registry check pass:*
+  - `./compile_debug.sh` builds with no compiler warning, and the fast gate
+    passes 15 of 15 (`scratch/logs/p7_build_debug_final.log`);
+  - `scripts/check_test_registry.py` passes, and no file mode changed.
+- *The acceptance of step 2 holds:* the two tables above.
+- *Steps 1 and 3 are done:* the documents above, the plan moved, and
+  `particle_io_few_particle_stacks_report.md` written beside it.

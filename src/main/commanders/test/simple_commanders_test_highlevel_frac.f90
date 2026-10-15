@@ -8,6 +8,7 @@ contains
 module subroutine exec_test_pcg_frac_update( self, cline )
     use simple_builder,    only: builder
     use simple_parameters, only: parameters
+    use simple_eo_partition, only: ensure_field_halves
     class(commander_test_pcg_frac_update), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
     type(parameters) :: params
@@ -18,8 +19,7 @@ module subroutine exec_test_pcg_frac_update( self, cline )
     call cline%set('mkdir', 'no')
     call build%init_params_and_build_general_tbox(cline, params)
     call build%build_strategy3D_tbox(params)
-    if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
-    call build%spproj%write_segment_inside(params%oritype)
+    call ensure_field_halves(build%spproj, params%oritype, params%projfile)
     call validate_rec3D_pcg_fractional_updates(params, build, cline)
     call build%esig%kill
     call build%kill_strategy3D_tbox

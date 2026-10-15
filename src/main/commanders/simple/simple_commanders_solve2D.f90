@@ -5,6 +5,7 @@ use simple_commanders_cavgs
 use simple_commanders_refine2D
 use simple_solve2D_controller 
 use simple_gui_communicator,       only: gui_communicator
+use simple_eo_partition,           only: ensure_field_halves
 implicit none
 
 public :: commander_solve2D, commander_solve2D_chunks, execute_solve2D_staged
@@ -164,7 +165,7 @@ contains
         if( start_stage == 1 )then
             call spproj_field%delete_2Dclustering
             call spproj_field%clean_entry('updatecnt', 'sampled')
-            if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
+            call ensure_field_halves(spproj, params%oritype, params%projfile)
             call spproj%write_segment_inside(params%oritype, params%projfile)
         else
             if( l_seeded ) call ensure_seed_eo ! before the sigma2 state, which is built on the e/o halves
@@ -339,14 +340,12 @@ contains
         end subroutine inirefs
 
         ! cls_init=prev: the previous even/odd partition is input state and is
-        ! kept; one is generated only when the project has none. Note that
-        ! isthere('eo') is false for eo=0 (zero-valued particle parameters count
-        ! as absent), so only the field-level get_nevenodd test is meaningful.
+        ! kept; the project's partition labels only what has none.
         subroutine ensure_seed_eo
-            if( spproj_field%get_nevenodd() > 0 ) return
-            write(logfhandle,'(A)') '>>> SOLVE2D SEED WARNING: no even/odd partition in the project; generating one'
-            call spproj_field%partition_eo
-            call spproj%write_segment_inside(params%oritype, params%projfile)
+            if( spproj_field%get_nevenodd() == 0 )then
+                write(logfhandle,'(A)') '>>> SOLVE2D SEED WARNING: no even/odd partition in the project; generating one'
+            endif
+            call ensure_field_halves(spproj, params%oritype, params%projfile)
         end subroutine ensure_seed_eo
 
         ! cls_init=prev: seed partition and references from the previous 2D

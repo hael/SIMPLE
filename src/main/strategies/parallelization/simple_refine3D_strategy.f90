@@ -8,6 +8,7 @@ use simple_builder,             only: builder
 use simple_parameters,          only: parameters
 use simple_cmdline,             only: cmdline
 use simple_sp_project,          only: sp_project
+use simple_eo_partition,        only: ensure_field_halves
 use simple_qsys_env,            only: qsys_env
 use simple_convergence,         only: convergence
 use simple_decay_funs,          only: inv_cos_decay, cos_decay
@@ -235,7 +236,7 @@ contains
         ! the PCG master runs the same assembly-owned NU competition as the
         ! gridding volassemble and hands off the matching low-pass
         call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps)
-        call filter_pcg_nonuniform_maps(params, build, cline%defined('frozen_rec'), nu_align_lps)
+        call filter_pcg_nonuniform_maps(params, build, nu_align_lps)
     end subroutine assemble_refine3D_pcg
 
     subroutine remove_pcg_raw_files( params )
@@ -710,10 +711,7 @@ contains
         call self%cline_commit_sigma2%set('prg', 'commit_sigma2')
         if( self%l_sigma )then
             ! Ensure e/o partitioning prior to calc_pspec
-            if( build%spproj_field%get_nevenodd() == 0 )then
-                call build%spproj_field%partition_eo
-                call build%spproj%write_segment_inside(params%oritype)
-            endif
+            call ensure_field_halves(build%spproj, params%oritype, params%projfile)
             call ensure_canonical_sigma2(params, build, cline, startit)
         endif
         ! Keep run-time counters consistent with the new high-level loop
@@ -1078,10 +1076,7 @@ contains
             call self%cline_postprocess%delete(vol%to_char())
         enddo
         ! E/O PARTITIONING (required for consistent e/o reconstructions)
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype)
-        endif
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         ! CONTINUE / STARTUP
         self%have_oris = .true.
         if( params%continue .eq. 'yes' )then

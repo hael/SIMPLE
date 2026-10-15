@@ -226,16 +226,6 @@ contains
         call solve3D_addon%add_input(UI_PARM, 'addon_diag', 'binary', 'Cohort-only diagnostic map', &
         &'Also reconstruct the searched particles alone, without the frozen term, into addon_diag/(yes|no){no}', &
         &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call solve3D_addon%add_input(UI_PARM, 'maxits_pcg', 'num', 'PCG maximum iterations', &
-        &'Maximum kernel PCG iterations (PCG base runs); default is the base run''s value', &
-        &'iterations', .false., 2., group="search", visibility=UI_VIS_ADVANCED)
-        call solve3D_addon%add_input(UI_PARM, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
-        &'Coupled PCG iterations of the ML-regularized system (PCG base runs); default is the base run''s value', &
-        &'iterations', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
-        call solve3D_addon%add_input(UI_PARM, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
-        &'Validation of the automatic solvent-prior strength when the base run used the solvent prior(yes|no){no}', &
-        &'', .false., 'no', group="search", visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! search controls
         call solve3D_addon%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
         call solve3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &

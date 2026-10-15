@@ -528,9 +528,11 @@ Decided 13 October 2026
    The states never change: refine=cont searches none, and a multi-state start seeds no labels
    for it. One iteration bounds the job's cost per publication (`refine=cont` would otherwise
    run until its convergence rule, up to `maxits=100`).
-   - **The seeds** (`prepare_refine_seeds`): the half-sets by row parity (`partition_eo`, the
-     same for every assignment) and the projection direction closest to the mapped pose in the
-     job's grid (`set_projs`), which refine=cont requires of a seed. A given `nspace` must be
+   - **The seeds** (`prepare_refine_seeds`): the half-sets of the project's partition
+     (`eo_transaction`: one half per micrograph, recorded on the stage's stack rows, so the same
+     for every assignment; refine3D stops on halves that disagree with that record) and the
+     projection direction closest to the mapped pose in the job's grid (`set_projs`), which
+     refine=cont requires of a seed. A given `nspace` must be
      even (the reference spiral's); the commander refuses an odd one.
    - **The states:** the job's project holds the states the particles hold, renumbered from 1
      (`compact_states`), since refine3D reconstructs no volume for an empty state;

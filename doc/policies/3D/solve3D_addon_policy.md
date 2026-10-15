@@ -25,9 +25,11 @@ Two uses are supported:
   computed on a harsh selection; the add-on adds what a more permissive
   selection of the same particles contains. The two projects have the same
   rows and differ in their selection.
-- **A growing stream.** Each update appends newly classified particles to the
-  previous update's particles and is frozen on the previous update's output,
-  so it searches only the new particles (section 12).
+- **A growing set in an offline chain.** Each add-on of `solve3D_chunks`
+  appends new particles to the previous step's and is frozen on the previous
+  step's output, so it searches only the new particles (section 12). The stream
+  no longer runs add-ons (13 October 2026): its 3D stage assigns class averages
+  to fixed reference volumes.
 
 It is not a refinement of the frozen particles, not a class-average route
 (the add-on aligns particles only and never runs `solve3D_cavgs`) and not
@@ -48,7 +50,6 @@ checked by the wrapper through `ui_program%accepts`
 | Projects | `projfile_frozen` (`projfile` and `mkdir` as for every project program) |
 | Compute | `nparts`, `nthr` |
 | Sampling and convergence | `nsample` (default: the frozen run's effective value), `overlap` (default 0.95, applies only when the last stage is stage 3) |
-| PCG solve budget and checks | `maxits_pcg`, `maxits_ml`, `pcg_solvent_check` |
 | Overridable settings of the frozen run | `balance`, `nclust`, `mskdiam` (default: the frozen run's value, replayed from its manifest) |
 | Diagnostics | `addon_diag` |
 
@@ -82,6 +83,14 @@ Ordinary `solve3D` and `solve3D_cavgs` refuse `projfile_frozen` and
 `center=no` is forced: a re-centred reference would map a shift onto cohort
 particles that the frozen accumulators never receive.
 
+`rec_backend=gridding` is forced. Add-on chains look for initial solutions and
+speed, not the precision of the kernel preconditioned conjugate-gradient (PCG)
+reconstruction, so they reconstruct by gridding only (ruled 2026-10-13): the
+UI entry offers no PCG controls, the backend is not replayed from the
+manifest, and `rec_backend` or a PCG control (`maxits_pcg`, `maxits_ml`,
+`pcg_solvent`, `pcg_solvent_lambda`, `pcg_solvent_check`) on the command line
+is refused by name.
+
 ## 3. The Frozen Input
 
 The run manifest is the only route into the add-on. `exec_solve3D` writes
@@ -103,7 +112,11 @@ validates against the project that registered it:
   grouped-section identity; manifest validation never scans its particle spectra;
 - the current project's native box and sampling equal the frozen solution's;
 - the frozen run reached stage 3 or later, and its last stage's box does not
-  exceed the native box.
+  exceed the native box;
+- the frozen run reconstructed by gridding: a base run whose manifest records
+  `rec_backend=pcg` is refused, naming its backend, before anything is
+  written (`solve3D_manifest%get_rec_backend`; no recorded backend is the
+  gridding default). A `solve3D` base run keeps both backends.
 
 The manifest reader keeps no backwards compatibility (release 4): a field
 or input key it does not know, such as those of removed features
@@ -130,8 +143,14 @@ particle image in both wherever both hold a row `i`. They may differ in size.
 - A frozen project longer than the current one is accepted when no frozen
   particle lies past the current project's last row.
 - A frozen particle rejected in the current project's `ptcl2D` is retired:
-  its row stays in place, but it contributes to neither the frozen term nor
-  the cohort and remains inactive in the final union. Other frozen particles
+  its row stays in place and remains inactive in the final union. The first
+  add-on of a chain leaves it out of the frozen term it accumulates; once a
+  particle is inside carried sums (section 8) it stays in them, an accepted
+  consequence (ruled 2026-10-13): it is inactive in the project but stays in
+  the frozen volumetric components already generated. A row inside the frozen
+  run's carried sums that is not frozen (retired earlier) and that the current
+  project selects again is retired too: searching it would count it twice.
+  Other frozen particles
   must be active in the frozen project's `ptcl2D`, with the same CTF
   parameters and optics group in both projects.
 
@@ -159,21 +178,39 @@ inherited state are refused.
 - **Masking.** The commander saves the working copy's `ptcl2D` states and sets
   `state=0` in `ptcl2D` and `ptcl3D` for every frozen or retired row, so every
   counting, sampling and labelling routine of the established workflow sees
-  the cohort alone, with no add-on branch. The working copy's inherited sigma2
-  registration is dropped; the run estimates the cohort's own.
-- **Frozen sets.** One frozen accumulation at the last stage's box, plus the
-  native box, each a `reconstruct3D` on the frozen
-  copy with the frozen run's committed sigma2 state (a cropped box uses a
-  prefix of its shells). A set is written as `frozen_stateNN_boxBBBB_*` with
-  its manifest, under a run context (`solve3D_addon_frozen_context.txt`)
-  that records the backend, the state layout, the frozen counts and the row
-  counts of both projects. Sets are never clipped or padded.
+  the cohort alone, with no add-on branch.
+- **Sigma2, copy-on-write.** The inherited registration is dropped, and the
+  run opens a sigma2 state of its own in its directory
+  (`sigma2_state_extend`): the frozen run's committed records of the frozen
+  and retired rows are copied unchanged, every cohort row starts from the
+  frozen global curve of its half (the project's half-set partition is made
+  first), and both global means are taken over the cohort, so they start as
+  the frozen means. Nothing is seeded from image power. The stage updates the
+  cohort's records only; the means it commits are cohort means while the
+  frozen rows are masked. The inherited state belongs to the frozen output and
+  is never written (rollback).
+- **Frozen sets.** One set per state at the last stage's box, plus the native
+  box, under a run context (`solve3D_addon_frozen_context.txt`) that records
+  the backend (always gridding), the state layout, the frozen counts and the
+  row counts of both projects. A set is written as `frozen_stateNN_boxBBBB_*`
+  with its manifest. Sets are never clipped or padded. Their source depends on
+  the frozen run (section 8):
+  - *The first add-on of a chain* (the frozen run is a `solve3D`, or records
+    no carried bundle) reads the frozen particles once per box: a
+    `reconstruct3D` on the frozen copy with the frozen run's committed sigma2
+    state (a cropped box uses a prefix of its shells).
+  - *Later add-ons* adopt the frozen run's carried sums: each carried set is
+    validated against the bundle (headers and sizes) and copied under the run
+    context; no particle is read. The counts are the bundle's, retired
+    particles included.
 - **Entry.** `pgrp_start=pgrp`: no symmetry search. The cohort gets random
   orientations and uniform random labels across every inherited state; its
   `res` and `res05` are cleared. The native-box frozen-only maps are the
-  references, trusted as they are (no CC pose initialisation); their
-  correlation with the frozen run's final maps is logged as a provenance check
-  and warned about below 0.9.
+  references, trusted as they are (no CC pose initialisation). On the first
+  route they are restored from the frozen sets and their correlation with the
+  frozen run's final maps is logged as a provenance check (warned below 0.9);
+  on the carried route they are the frozen run's final maps and halves, which
+  are the restoration of the carried native sums.
 - **Stage policy.** The add-on runs two refine3D steps, nothing before them
   and nothing between:
   1. *Registration pass.* One full-cohort iteration of global `refine=prob` at
@@ -236,44 +273,74 @@ The frozen term is summed into every stage reconstruction, with coefficient
 one, before any restoration or prior:
 
 ```text
-gridding:  S_eo = S_eo(cohort) + S_eo(frozen),  rho_eo = rho_eo(cohort) + rho_eo(frozen)
-pcg:       B = B(cohort) + B(frozen),           D = D(cohort) + D(frozen)   (before end_accum)
+S_eo = S_eo(cohort) + S_eo(frozen),  rho_eo = rho_eo(cohort) + rho_eo(frozen)
 ```
 
-Gridding adds it in `restore_state_from_parts`, after the trailing blend; PCG
-in the master's half job, in both execution modes, after the chain write. It is added before every zero-current early-out, so a state or half
+Gridding adds it in `restore_state_from_parts`, after the trailing blend; the
+frozen sets have no PCG side, and the PCG backend refuses the frozen-set
+handshakes. It is added before every zero-current early-out, so a state or half
 with no cohort contribution is assembled from the frozen term alone. Consumers
 open frozen sets only through the internal `frozen_rec` handshake, which names
 the run context and cannot be set on a command line; every set is validated
 against the context and the consumer's grid before a byte is read, and a set
 of another reconstruction weighting (euclid or cc) is refused.
 
-The frozen term serves the stage references only. Its sigma2 weighting is the
-frozen run's, the cohort's is the add-on's, so the union during the stages is
-a cohort-specific weighting model; the final map is not (section 8).
+The frozen term keeps the weighting it was accumulated with: the frozen run's
+sigma2 state for the first add-on's own accumulation, each earlier run's for
+the carried sums. Contributions are never re-weighted when sigmas change; that
+old weighting is an accepted error (ruled 2026-10-12).
 
 ## 8. Final Reconstruction and Chaining
 
-Before its final reconstruction the add-on restores the frozen rows (the
-frozen project's 3D records through `transfer_3Dparams` plus the state, and
-every saved `ptcl2D` state) and drops the cohort-only sigma2 registration. The
-consumability check does not look at the active set, so a cohort-only state
-would otherwise weight the union with the cohort's noise model.
+The final reconstruction is incremental (`calc_final_rec_addon`): it reads the
+run's own particles (the cohort, with the frozen and retired rows masked) and
+the frozen sets, never the frozen particles, and has no image-power seed.
+Between its passes the union's membership is restored and the sigma2 state is
+republished with both global means over the union (`sigma2_state_union_means`:
+no record changes, the generation advances), then the frozen rows are masked
+again:
 
-`calc_final_rec` then reads every particle, finds no consumable sigma2 state
-and bootstraps the union's exactly as `bootstrap_rec3D` does for any project
-without consumable sigmas: the image-power seed of every particle, the
-gridding ML bootstrap map, one residual pass that commits the canonical state
-at native sampling, and the shipped map on it. The residual pass leaves the
-particle field as it found it ([refine3D_policy.md](refine3D_policy.md),
-section 5.1), so the frozen rows stay exactly the frozen project's.
+1. **Bootstrap map:** the frozen set at the native box plus the cohort at its
+   final poses, on the stage's sigmas (euclid, ML-regularized gridding, the
+   stage's filtering).
+2. **Residual pass:** the cohort against the bootstrap map at native sampling
+   (`refine=sigma`); it commits the cohort's new sigmas, leaving the frozen
+   records as they are. The particle field is left as it was found
+   ([refine3D_policy.md](refine3D_policy.md), section 5.1).
+3. **Carried sums and the shipped map:** the cohort accumulated again on its
+   new sigmas, with the frozen set added, at the stage box first when it
+   differs from the native box, then at the native box, whose map is shipped.
+   Each reconstruction writes the union's raw sums (frozen set plus cohort)
+   through the internal `frozen_carry` handshake, before any restoration, as
+   the run's carried sets (`carried_stateNN_boxBBBB_*`).
 
-The output therefore carries the union's committed residual sigma2 state, and
-its manifest is eligible: it is the frozen input of the next add-on. Add-ons
-chain, each frozen on the previous output and searching only the particles
-appended since; a stream never rebases for the sake of its sigmas. The next
-add-on's frozen accumulations at cropped stage boxes use a prefix of the
-state's shells.
+The union is then restored and its maps registered. The pass count is three
+when the stage box is the native box and four when it differs; `addon_diag=yes`
+adds the cohort-only map.
+
+**The carried bundle.** The carried sets, the rows they contain
+(`solve3D_addon_carried_membership.bin`: the state of each row inside the sums,
+zero outside) and the bundle manifest (`solve3D_addon_carried_bundle.txt`) form
+the run's bundle. The manifest records the run, its parent (the frozen run),
+the route (`first` or `carried`), the state layout and row count, the boxes and
+their sampling, the weighting, the sigma2 generation of the run's final state
+and the particle count per state. It is written last, after every set and the
+membership; the solve manifest records it by the digest of this small manifest
+(the sums are never digested), and the project registers the solve manifest
+only after that. Validation checks headers, sizes, lineage and generation:
+another run's, a truncated, a mixed or an incomplete bundle is refused. Each
+adopted run owns its complete bundle, so a chain survives the removal of
+earlier run directories, and a failed or rolled-back run leaves the previous
+bundle untouched.
+
+**Chaining.** The output carries the union's committed sigma2 state (the frozen
+records unchanged, the cohort's new ones, means over the union), its eligible
+manifest and its bundle: it is the frozen input of the next add-on, which
+adopts the bundle and reads only its own particles. Over a chain, each particle
+is read a bounded number of times however many add-ons follow. The offline
+chains publish their last add-on as it is, with the old weighting of the
+frozen contributions; no terminal full reconstruction is added (ruled
+2026-10-13).
 
 ## 9. Distributed Execution
 
@@ -320,8 +387,8 @@ The local queue checks no exit status: a worker that stops without
 - The run directory holds the union maps and final products as `solve3D`
   writes them, the union sigma2 state, `solve3D_manifest.txt` (the add-on's
   own, eligible), `solve3D_addon_report.txt`, the frozen copy in `frozen/`,
-  the frozen sets and their run context, and with `addon_diag=yes` the
-  cohort-only reconstruction in `addon_diag/`.
+  the frozen sets and their run context, the carried bundle (section 8), and
+  with `addon_diag=yes` the cohort-only reconstruction in `addon_diag/`.
 
 ## 11. Validation Report
 
@@ -348,17 +415,17 @@ rejecting it is the caller's call. The stream's multistate stage rolled such a
 run back until 13 October 2026, when it stopped running `solve3D_addon`
 (`doc/policies/stream/stream_3D_ingestion_policy.md`, section 4, item 11).
 
-## 12. Streaming Integration
+## 12. Chains
 
-For any driver that grows a pool (stream p07 was one until 13 October 2026; it
-now assigns class averages to fixed reference volumes instead,
-`doc/policies/stream/stream_3D_ingestion_policy.md`):
+The stream's multistate stage stopped running add-ons on 13 October 2026; it
+now assigns class averages to fixed reference volumes
+(`doc/policies/stream/stream_3D_ingestion_policy.md`). The add-on passes serve
+the offline chain below. A driver that grows a pool of particles follows these
+rules:
 
 - **Pool per update.** Build each update's current project as the previous
   solution's project (all its rows, in order) with the new classified sets
-  appended as rows: their `ptcl2D` records and 2D class labels kept. p07 did
-  this by merging each pool publication into its rows and taking the
-  publication's class table.
+  appended as rows: their `ptcl2D` records and 2D class labels kept.
   `merge_projects` is not a substitute: it drops the 2D classification, and
   `solve3D` requires it.
 - **Separate files.** The frozen and current projects are different files;
@@ -391,14 +458,22 @@ adopted, and the final union is published over the workflow's project copy. The 
   `addon report docking` in `lib_reconstruction`; `solve3D stream emulation`
   (legacy partitioning, automatic active-balanced chunk planning, source
   preparation, step projects and reports) in `unit_project`.
+- Unit cases of the carried sums: a two-add-on chain of frozen set, carried
+  sums and adopted sums equal to the direct union (sums, densities and the
+  restored map) and the bundle refusals (`frozen accumulator`); the
+  copy-on-write sigma2 extension and the union means (`sigma2 state` in
+  `unit_pftc_align2D3D`); a reselected row inside the sums (`project
+  superset`); the bundle artifact (`solve3D manifest`).
 - Workflow gate `solve3D_addon` (CTest, highlevel): simulated particles of
-  a symmetry-broken 6VXX map in two stacks. The base runs on a 2000-row
-  frozen project (the first set, a seeded 75 % selection), the add-on on a
-  3000-row current project that appends the second set. It checks the frozen
-  inputs unchanged, the frozen rows restored exactly, the union sigma2 state
-  registered, the output valid as a frozen input, the report, cohort coverage,
-  cohort poses against the truth and the union map against the truth and the
-  base map.
+  a symmetry-broken 6VXX map in three stacks. The base runs on a 2000-row
+  frozen project (the first set, a seeded 75 % selection); a first add-on on a
+  2500-row project that appends the second set reads the frozen particles once
+  and publishes the first bundle; a second add-on on the 3000-row project that
+  appends the third set adopts it (route `carried`, parent the first add-on).
+  It checks the frozen inputs unchanged, the frozen rows restored exactly, the
+  union sigma2 state registered, the outputs valid as frozen inputs, both
+  bundles, the report, cohort coverage, cohort poses against the truth and the
+  union map against the truth and the base map.
 
 ## 14. Code Map
 
@@ -409,10 +484,11 @@ adopted, and the final union is published over the workflow's project copy. The 
 | `src/main/commanders/simple/simple_commanders_solve3D.f90` | `commander_solve3D_addon` (key check against the UI entry, manifest and identity validation before any write, the command line for `exec_solve3D`, publication) and the add-on route of `exec_solve3D` (prologue, frozen sets, stage entry, restore, epilogue, manifest) |
 | `src/main/solve/simple_solve3D_manifest.f90` | the run manifest: writing, reading, `validate_frozen`, `replay`, the recorded inputs (`manifest_records_input`) |
 | `src/main/project/simple_project_superset.f90` | identity, membership, masking and restoration |
-| `src/main/volume/simple_frozen_accum.f90` | the frozen sets and their run context |
-| `src/main/commanders/simple/simple_commanders_rec_distr.f90`, `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | the frozen add on the gridding and PCG backends |
+| `src/main/volume/simple_frozen_accum.f90` | the frozen sets and their run context; the carried sets, their bundle manifest and membership |
+| `src/main/commanders/simple/simple_commanders_rec_distr.f90` | the frozen add (gridding only) |
 | `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_utils.f90` | the add-on context (the registration pass, stage-3 early stopping, the `frozen_rec` handshake), `calc_frozen_rec`, the ladder from the manifest |
 | `src/main/solve/simple_solve3D_addon_report.f90`, `src/main/volume/simple_volpair_metrics.f90` | the validation report |
 | `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90`, `src/main/solve/simple_solve3D_chunks_plan.f90` | `solve3D_chunks`: the automatic orchestration with its source preparation, cumulative step projects, statistics and report leaf utilities |
-| `src/main/simple_final_rec.f90`, `src/main/commanders/simple/simple_commanders_refine3D.f90` (`exec_bootstrap_rec3D`) | the final reconstruction that bootstraps the union's sigma2 state |
+| `src/main/simple_final_rec.f90` (`calc_final_rec_addon`) | the incremental final reconstruction and the carried sums |
+| `src/main/sigma2/simple_sigma2_state.f90` (`sigma2_state_extend`, `sigma2_state_union_means`) | the copy-on-write sigma2 transaction |
 | `src/utils/simple_map_reduce.f90` (`split_nobjs_active`), `src/utils/qsys/simple_qsys_env.f90` (`new`, `l_active`), `src/main/project/simple_sp_project_core.f90` (`merge_algndocs`) | partitions that balance the active particles, and the range-checked merge |

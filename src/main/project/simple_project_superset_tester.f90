@@ -21,6 +21,7 @@ contains
         call test_identity_accepts_superset()
         call test_identity_refusals()
         call test_membership()
+        call test_carried_membership()
         call test_mask_and_restore()
     end subroutine run_all_project_superset_tests
 
@@ -275,6 +276,41 @@ contains
         call frozen%kill
         call work%kill
     end subroutine test_membership
+
+    !> A frozen run with carried sums: a row inside the sums that the frozen project no longer selects
+    !! (retired by an earlier add-on) and the current project selects again stays out of the cohort,
+    !! counted as retired; a frozen row outside the sums, or a membership of another size, is refused
+    subroutine test_carried_membership()
+        type(sp_project)       :: cur, frozen
+        type(project_superset) :: superset
+        character(len=STDLEN)  :: msg
+        logical, allocatable   :: l_frz(:), l_coh(:), l_ret(:)
+        integer, allocatable   :: carried(:)
+        integer :: status
+        write(*,'(A)') 'test_carried_membership'
+        call make_current(cur)
+        call make_frozen(cur, frozen, 1)
+        allocate(carried(frozen%os_ptcl3D%get_noris()), source=0)
+        carried(1:10) = 1
+        carried(13)   = 1
+        call superset%new(cur, frozen, 1, status, msg, carried=carried)
+        call assert_int(0, status, 'a frozen run with carried sums is accepted: '//trim(msg))
+        call assert_int(10, superset%get_nfrozen(), 'the frozen rows are the same with carried sums')
+        call assert_int(9,  superset%get_ncohort(), 'a reselected row inside the sums is not searched again')
+        call assert_int(1,  superset%get_nretired(), 'a reselected row inside the sums is counted as retired')
+        call superset%get_masks(l_frz, l_coh, l_ret)
+        call assert_true(l_ret(13) .and. .not. l_coh(13) .and. .not. l_frz(13), &
+            &'the reselected row inside the sums is retired, not cohort')
+        call assert_true(l_coh(11) .and. l_coh(14) .and. l_coh(20), 'rows outside the sums form the cohort')
+        carried(5) = 0
+        call superset%new(cur, frozen, 1, status, msg, carried=carried)
+        call assert_true(status /= 0, 'a frozen row outside the carried sums is refused')
+        call superset%new(cur, frozen, 1, status, msg, carried=carried(1:13))
+        call assert_true(status /= 0, 'a carried membership of another row count is refused')
+        call superset%kill
+        call cur%kill
+        call frozen%kill
+    end subroutine test_carried_membership
 
     !> one inherited state, so that a deselected row leaves the cohort above its floor
     subroutine test_mask_and_restore()

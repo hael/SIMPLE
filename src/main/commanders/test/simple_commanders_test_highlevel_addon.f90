@@ -6,8 +6,11 @@ implicit none
 contains
 
 !> solve3D_addon end to end: solve3D on a seeded selection of a first
-!! set of simulated particles, the add-on on a larger project that appends a
-!! second set, checked against the simulation truth and the base run. The
+!! set of simulated particles, then a chain of two add-ons: the first on a
+!! project that appends a second set (it reads the frozen particles once and
+!! publishes the first carried sums), the second on the full project that
+!! appends a third set (it adopts those sums and reads no frozen particle),
+!! checked against the simulation truth and the base run. The
 !! fixture directory (a few hundred MB) is removed on success and kept for
 !! inspection on failure.
 module subroutine exec_test_solve3D_addon( self, cline )
@@ -166,6 +169,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     use simple_test_gate,               only: test_gate
     use simple_test_truth_metrics,      only: dock_both_hands, compare_to_truth, pair_pose_error, add_gaussian_blob
     use simple_solve3D_addon_report, only: solve3D_addon_report, ADDON_REPORT_FNAME
+    use simple_frozen_accum,            only: carried_bundle
     use simple_image,                   only: image
     use simple_class_frcs,              only: class_frcs
     use, intrinsic :: iso_fortran_env, only: int64
@@ -175,7 +179,9 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     character(len=*), parameter :: TRUTH_VOL   = 'truth_6VXX_blob.mrc'
     character(len=*), parameter :: PTCL_STK    = 'simulated_particles.mrc'
     character(len=*), parameter :: STK_BASE    = 'particles_base.mrc'   !< the base set: particles 1-NBASE
-    character(len=*), parameter :: STK_NEW     = 'particles_new.mrc'    !< the set appended after it
+    character(len=*), parameter :: STK_NEW1    = 'particles_new1.mrc'   !< the set the first add-on appends
+    character(len=*), parameter :: STK_NEW2    = 'particles_new2.mrc'   !< the set the second add-on appends
+    character(len=*), parameter :: MID_DIR     = 'mid'                  !< the first add-on's project and run
     character(len=*), parameter :: TRUTH_ORIS  = 'simulated_oris.txt'
     character(len=*), parameter :: PROJNAME    = 'addon_gate'
     character(len=*), parameter :: STRICT_DIR  = 'strict'
@@ -185,6 +191,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     real,    parameter :: MSKDIAM     = 180.
     integer, parameter :: NPTCLS      = 3000   ! rows of the current project: both sets
     integer, parameter :: NBASE       = 2000   ! rows of the frozen project: the base set
+    integer, parameter :: NMID        = 2500   ! rows of the first add-on's project: the base set and the second
     real,    parameter :: BASE_SELECT = 0.75   ! seeded selection of the base set (about 1500 frozen particles)
     real,    parameter :: SNR         = 0.2
     integer, parameter :: NSAMPLE     = 500    ! sampled in the base run and in the add-on (trailing from stage 5)
@@ -216,16 +223,18 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     type(sp_project)    :: spproj, strict_proj, out_proj, frz_proj
     type(oris)          :: truth
     type(ctfparams)     :: ctfvars
-    type(solve3D_manifest) :: man_base, man_out, man_pub
-    type(sp_project)          :: pub_proj
-    type(string)        :: root, stk_abs, stk_base_abs, stk_new_abs, full_proj, strict_proj_fname
-    type(string)        :: frozen_run_proj, out_run_proj
+    type(solve3D_manifest) :: man_base, man_out, man_pub, man_mid
+    type(sp_project)          :: pub_proj, mid_proj
+    type(carried_bundle)      :: bundle
+    type(string)        :: root, stk_abs, stk_base_abs, stk_new1_abs, stk_new2_abs, full_proj, strict_proj_fname
+    type(string)        :: frozen_run_proj, out_run_proj, mid_proj_fname, mid_run_dir, bundle_path
+    type(string)        :: mid_sigma, mid_vol
     type(image)         :: img
     type(class_frcs)    :: clsfrcs
     real, allocatable   :: frc(:)
     type(string)        :: frozen_sigma, frozen_vol, addon_vol, base_vol, cwd_here, truth_abs
     character(len=STDLEN) :: msg
-    integer(int64)      :: dig_proj0
+    integer(int64)      :: dig_proj0, dig_mid0
     integer, allocatable :: frozen_inds(:), cohort_inds(:)
     logical, allocatable :: l_frozen(:)
     type(test_gate)     :: gate
@@ -264,19 +273,22 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     call xsim%execute(cl)
     call cl%kill
     stk_abs = simple_abspath(string(PTCL_STK))
-    ! the base set and the set appended after it, each its own stack
+    ! the base set and the two sets appended after it, each its own stack
     call img%new([BOX,BOX,1], SMPD)
     do i = 1, NPTCLS
         call img%read(stk_abs, i)
         if( i <= NBASE )then
             call img%write(string(STK_BASE), i)
+        else if( i <= NMID )then
+            call img%write(string(STK_NEW1), i - NBASE)
         else
-            call img%write(string(STK_NEW), i - NBASE)
+            call img%write(string(STK_NEW2), i - NMID)
         endif
     enddo
     call img%kill
     stk_base_abs = simple_abspath(string(STK_BASE))
-    stk_new_abs  = simple_abspath(string(STK_NEW))
+    stk_new1_abs = simple_abspath(string(STK_NEW1))
+    stk_new2_abs = simple_abspath(string(STK_NEW2))
     call truth%new(NPTCLS, is_ptcl=.true.)
     call truth%read(string(TRUTH_ORIS), [1,NPTCLS])
     ! ---- the current project: both sets ----
@@ -292,7 +304,8 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     ctfvars%fraca   = 0.1
     ctfvars%ctfflag = CTFFLAG_YES
     call spproj%add_stk(stk_base_abs, ctfvars)
-    call spproj%add_stk(stk_new_abs,  ctfvars)
+    call spproj%add_stk(stk_new1_abs, ctfvars)
+    call spproj%add_stk(stk_new2_abs, ctfvars)
     call set_fixed_seed(GATE_SEED)
     call spproj%os_cls2D%new(NCLS2D, is_ptcl=.false.)
     call spproj%os_cls2D%set_all2single('state', 1.)
@@ -349,6 +362,15 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     strict_proj_fname = simple_abspath(string(STRICT_DIR//'/'//PROJNAME//'.simple'), check_exists=.false.)
     call strict_proj%write(strict_proj_fname)
     call strict_proj%kill
+    ! the first add-on's project: the base set and the second set, same basename, own directory
+    mid_proj = spproj
+    mid_proj%os_stk    = spproj%os_stk%extract_subset(1, 2)
+    mid_proj%os_ptcl2D = spproj%os_ptcl2D%extract_subset(1, NMID)
+    mid_proj%os_ptcl3D = spproj%os_ptcl3D%extract_subset(1, NMID)
+    call simple_mkdir(MID_DIR)
+    mid_proj_fname = simple_abspath(string(MID_DIR//'/'//PROJNAME//'.simple'), check_exists=.false.)
+    call mid_proj%write(mid_proj_fname)
+    call mid_proj%kill
     call spproj%kill
     ! ---- the base run on the frozen project ----
     call simple_getcwd(cwd_here)
@@ -379,10 +401,53 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     call frz_proj%get_vol('vol', 1, frozen_vol, smpd_vol, box_vol)
     base_vol   = frozen_vol
     dig_proj0  = sigma2_state_digest_file(frozen_run_proj)
-    ! ---- the add-on on the current project ----
+    ! ---- the first add-on: the frozen particles are read once, the first carried sums published ----
+    call simple_chdir(string(MID_DIR), status)
+    call cl%set('prg',             'solve3D_addon')
+    call cl%set('projfile',        mid_proj_fname)
+    call cl%set('projfile_frozen', frozen_run_proj)
+    call cl%set('nthr',            nthr)
+    call cl%set('addon_diag',      'yes')
+    call xaddon%execute(cl)
+    call cl%kill
+    call simple_getcwd(mid_run_dir)
+    call simple_chdir(cwd_here, status)
+    call gate%check('first_frozen_project_unchanged', sigma2_state_digest_file(frozen_run_proj) == dig_proj0)
+    call gate%check('first_frozen_sigma2_identity_unchanged', man_base%matches_artifact('sigma2_state', 0, frozen_sigma))
+    call gate%check('first_frozen_map_unchanged', man_base%matches_artifact('vol', 1, frozen_vol))
+    call gate%check('first_frozen_sigma2_consumed_as_committed', &
+        &man_base%matches_artifact('sigma2_state', 0, mid_run_dir//'/frozen/frozen_sigma2_state.bin'))
+    call man_base%kill
+    ! the first add-on's run project carries the union's sigma2 state; its published copy is the
+    ! frozen input of the second add-on, with its carried bundle
+    call frz_proj%kill
+    call frz_proj%read(mid_run_dir//'/'//PROJNAME//'.simple')
+    call gate%check('first_output_registers_the_union_sigma2_state', &
+        &canonical_sigma2_consumable(frz_proj, frz_proj%os_ptcl3D, BOX, SMPD, msg))
+    call frz_proj%kill
+    call frz_proj%read(mid_proj_fname)
+    call man_mid%read_registered(frz_proj, mid_proj_fname, status, msg)
+    call gate%check('first_addon_manifest_registered', status == 0)
+    call man_mid%validate_frozen(frz_proj, status, msg)
+    call gate%check('first_addon_manifest_valid_frozen_input', status == 0)
+    call man_mid%get_artifact('carried_bundle', 0, bundle_path, found)
+    call gate%check('first_addon_records_its_carried_bundle', found)
+    if( found )then
+        call bundle%read(bundle_path, status, msg)
+        call gate%check('first_bundle_reads_the_frozen_particles_once', status == 0 .and. trim(bundle%route) == 'first')
+        call bundle%validate(stemname(bundle_path), status, msg)
+        call gate%check('first_bundle_complete', status == 0)
+        call gate%check('first_bundle_holds_the_union', sum(bundle%ncarried_state) == &
+            &frz_proj%count_state_gt_zero())
+        call bundle%kill
+    endif
+    call man_mid%get_artifact('sigma2_state', 0, mid_sigma, found)
+    call frz_proj%get_vol('vol', 1, mid_vol, smpd_vol, box_vol)
+    dig_mid0 = sigma2_state_digest_file(mid_proj_fname)
+    ! ---- the second add-on on the full project: the carried sums are adopted, no frozen particle is read ----
     call cl%set('prg',             'solve3D_addon')
     call cl%set('projfile',        full_proj)
-    call cl%set('projfile_frozen', frozen_run_proj)
+    call cl%set('projfile_frozen', mid_proj_fname)
     call cl%set('nthr',            nthr)
     call cl%set('addon_diag',      'yes')
     call xaddon%execute(cl)
@@ -391,25 +456,31 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     out_run_proj = out_run_proj//'/'//PROJNAME//'.simple'
     call simple_chdir(cwd_here, status)
     ! ---- provenance and isolation ----
-    call gate%check('frozen_project_unchanged', sigma2_state_digest_file(frozen_run_proj) == dig_proj0)
-    call gate%check('frozen_sigma2_identity_unchanged', man_base%matches_artifact('sigma2_state', 0, frozen_sigma))
-    call gate%check('frozen_map_unchanged',     man_base%matches_artifact('vol', 1, frozen_vol))
-    ! the frozen term was weighted by the base run's committed residual sigma2
-    ! state (its copy retains the committed header and grouped-section identity
-    ! after every accumulation; particle spectra are not rescanned here)
+    call gate%check('frozen_project_unchanged', sigma2_state_digest_file(mid_proj_fname) == dig_mid0)
+    call gate%check('frozen_sigma2_identity_unchanged', man_mid%matches_artifact('sigma2_state', 0, mid_sigma))
+    call gate%check('frozen_map_unchanged',     man_mid%matches_artifact('vol', 1, mid_vol))
+    ! the frozen sigma2 records are the first add-on's committed state, copied unchanged
     call gate%check('frozen_sigma2_consumed_as_committed', &
-        &man_base%matches_artifact('sigma2_state', 0, string('1_solve3D_addon/frozen/frozen_sigma2_state.bin')))
-    call man_base%kill
+        &man_mid%matches_artifact('sigma2_state', 0, string('1_solve3D_addon/frozen/frozen_sigma2_state.bin')))
     call out_proj%read(out_run_proj)
-    ! the final reconstruction bootstrapped the union's sigma2 state over
-    ! every particle at native sampling, so the output is the frozen input of
-    ! a next add-on
+    ! the output carries the union's sigma2 state (the frozen records with
+    ! the cohort's new ones), so it is the frozen input of a next add-on
     call gate%check('output_registers_the_union_sigma2_state', &
         &canonical_sigma2_consumable(out_proj, out_proj%os_ptcl3D, BOX, SMPD, msg))
     call man_out%read_registered(out_proj, out_run_proj, status, msg)
     call gate%check('addon_manifest_registered', status == 0)
     call man_out%validate_frozen(out_proj, status, msg)
     call gate%check('addon_manifest_valid_frozen_input', status == 0)
+    call man_out%get_artifact('carried_bundle', 0, bundle_path, found)
+    call gate%check('addon_records_its_carried_bundle', found)
+    if( found )then
+        call bundle%read(bundle_path, status, msg)
+        call gate%check('second_addon_read_no_frozen_particle', status == 0 .and. trim(bundle%route) == 'carried')
+        call gate%check('second_bundle_continues_the_first', trim(bundle%parent_run) == trim(man_mid%get_run_id()))
+        call gate%check('second_bundle_holds_the_union', sum(bundle%ncarried_state) == out_proj%count_state_gt_zero())
+        call bundle%kill
+    endif
+    call man_mid%kill
     ! all done: the finished project replaced the original current project
     ! file, registering the add-on's manifest by absolute path
     call pub_proj%read(full_proj)
@@ -429,7 +500,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     call man_out%kill
     call gate%check('addon_diag_map_written', file_exists(string('1_solve3D_addon/addon_diag/')// &
         &refine3D_state_vol_fname(1)))
-    ! ---- the validation report against the base solution ----
+    ! ---- the validation report against the frozen solution (the first add-on) ----
     if( file_exists(string('1_solve3D_addon/'//ADDON_REPORT_FNAME)) )then
         call addon_report%read(string('1_solve3D_addon/'//ADDON_REPORT_FNAME))
         call gate%check('addon_report_no_regression', .not. addon_report%any_regressed())
@@ -441,7 +512,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     else
         call gate%check('addon_report_written', .false.)
     endif
-    ! frozen rows identical to the frozen project; cohort rows (the appended
+    ! frozen rows (the first add-on's union) identical to the frozen project; cohort rows (the third set)
     ! set included) posed
     nf = count(l_frozen)
     nc = NPTCLS - nf
@@ -449,7 +520,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     l_same = .true.
     nposed = 0
     do i = 1, NPTCLS
-        l_frz_row = i <= NBASE
+        l_frz_row = i <= NMID
         if( l_frz_row ) l_frz_row = frz_proj%os_ptcl3D%get_state(i) > 0 .and. frz_proj%os_ptcl3D%get_updatecnt(i) > 0
         if( l_frz_row )then
             frozen_inds = [frozen_inds, i]

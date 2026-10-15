@@ -219,10 +219,13 @@ particle's `stkind` and use `indstk` as the physical image index
 missing or outside `1..nptcls_stk`, is an error. Readers must never use a
 project particle row as the physical stack-file image index.
 
-Several stack rows may share one file (section above). Fortran connects a
-file to one unit at a time, so a reader that opens one unit per stack row must
-group consecutive rows that share a file into one read
-(`read_sorted_stack_runs` in `simple_matcher_ptcl_io.f90`).
+Every particle reader goes through the pass-scoped read session
+(`stack_read_session`, [particle_read_path_policy.md](particle_read_path_policy.md)).
+The session opens each stack file once per pass and reads it on a plain
+descriptor. It groups a pass's requests by stack file in order of first
+appearance, so stack rows that share one file (section above) share one open
+and one set of spans. The images reach the caller in the order of the request,
+duplicates included.
 
 ## Validation Policy
 

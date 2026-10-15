@@ -3,6 +3,8 @@
 ! for frozen rows), appended rows come from new stacks. frozen = frozen ptcl3D state>0 & updatecnt>0;
 ! current-inactive frozen rows are retired. mask zeroes frozen/retired rows; restore keeps retired rows inactive.
 ! The ptcl2D state flags are the selection whether or not a 2D solution exists (balance=none without one).
+! A row inside the carried sums of the frozen run (its bundle membership) that is not frozen stays out of
+! the cohort as retired: its contribution is already in the sums, so searching it again would count it twice.
 ! Contract: doc/policies/3D/solve3D_addon_policy.md sec. 4.
 module simple_project_superset
 use simple_core_module_api
@@ -22,7 +24,7 @@ type :: project_superset
     private
     integer :: nrows = 0, nrows_frozen = 0, nstates = 0 !< row counts of the current and the frozen project
     integer :: nfrozen = 0, ncohort = 0, nnever_updated = 0, nretired = 0
-    logical, allocatable :: l_frozen(:), l_retired(:)
+    logical, allocatable :: l_frozen(:), l_retired(:), l_cohort(:)
     integer, allocatable :: nfrozen_state(:)
     integer, allocatable :: saved_state2D(:)   !< current ptcl2D states before masking
   contains
@@ -36,6 +38,7 @@ type :: project_superset
     procedure :: get_nnever_updated
     procedure :: get_nretired
     procedure :: get_nfrozen_state
+    procedure :: get_masks
     procedure :: is_small_cohort
     procedure :: kill
 end type project_superset
@@ -49,13 +52,16 @@ contains
     !! MIN_COHORT_STATE_POP particles. A cohort below COHORT_WARN_FRAC of the
     !! frozen population is allowed (is_small_cohort, warned by the caller).
     !! On refusal status /= 0 and the object is left empty.
-    subroutine new( self, cur, frozen, nstates, status, msg )
+    !! carried: the frozen run's carried membership (state label per frozen-project row, 0 outside the
+    !! sums), absent for a frozen run without carried sums; every frozen row must lie inside the sums.
+    subroutine new( self, cur, frozen, nstates, status, msg, carried )
         class(project_superset), intent(inout) :: self
         class(sp_project),       intent(inout) :: cur, frozen
         integer,                 intent(in)    :: nstates
         integer,                 intent(out)   :: status
         character(len=*),        intent(out)   :: msg
-        logical, allocatable :: l_cohort(:)
+        integer, optional,       intent(in)    :: carried(:)
+        logical :: l_inside
         integer :: n, i, s, nper_state
         call self%kill
         call validate_identity(cur, frozen, status, msg)
@@ -65,12 +71,32 @@ contains
         self%nrows        = n
         self%nrows_frozen = frozen%os_ptcl3D%get_noris()
         self%nstates      = nstates
-        allocate(self%l_frozen(n), self%l_retired(n), l_cohort(n), source=.false.)
+        if( present(carried) )then
+            if( size(carried) /= self%nrows_frozen )then
+                msg = 'the carried membership does not have the frozen project''s rows'
+                call self%kill
+                return
+            endif
+        endif
+        allocate(self%l_frozen(n), self%l_retired(n), self%l_cohort(n), source=.false.)
         allocate(self%nfrozen_state(nstates), source=0)
         do i = 1, n
             if( i <= self%nrows_frozen ) self%l_frozen(i) = is_frozen_row(frozen, i)
             if( self%l_frozen(i) .and. cur%os_ptcl2D%get_state(i) <= 0 )then
                 self%l_frozen(i)  = .false.
+                self%l_retired(i) = .true.
+                self%nretired     = self%nretired + 1
+            endif
+            l_inside = .false.
+            if( present(carried) .and. i <= self%nrows_frozen ) l_inside = carried(i) > 0
+            if( present(carried) .and. self%l_frozen(i) .and. .not. l_inside )then
+                write(msg,'(A,I0,A)') 'frozen particle ', i, ' is not inside the frozen run''s carried sums'
+                call self%kill
+                return
+            endif
+            if( .not. self%l_frozen(i) .and. .not. self%l_retired(i) .and. l_inside .and. &
+                &cur%os_ptcl2D%get_state(i) > 0 )then
+                ! reselected after its retirement: it is still inside the sums
                 self%l_retired(i) = .true.
                 self%nretired     = self%nretired + 1
             endif
@@ -82,15 +108,15 @@ contains
                     return
                 endif
                 self%nfrozen_state(s) = self%nfrozen_state(s) + 1
-            else
-                l_cohort(i) = cur%os_ptcl2D%get_state(i) > 0
-                if( l_cohort(i) .and. i <= self%nrows_frozen )then
+            else if( .not. self%l_retired(i) )then
+                self%l_cohort(i) = cur%os_ptcl2D%get_state(i) > 0
+                if( self%l_cohort(i) .and. i <= self%nrows_frozen )then
                     if( frozen%os_ptcl3D%get_state(i) > 0 ) self%nnever_updated = self%nnever_updated + 1
                 endif
             endif
         enddo
         self%nfrozen = count(self%l_frozen)
-        self%ncohort = count(l_cohort)
+        self%ncohort = count(self%l_cohort)
         if( self%nfrozen < 1 )then
             msg = 'the frozen project has no frozen particles (state > 0 and updatecnt > 0)'
         else if( any(self%nfrozen_state < 1) )then
@@ -222,6 +248,16 @@ contains
         n = self%nfrozen_state(state)
     end function get_nfrozen_state
 
+    !> the membership per row of the current project: frozen, cohort and retired rows
+    subroutine get_masks( self, l_frozen, l_cohort, l_retired )
+        class(project_superset), intent(in)  :: self
+        logical, allocatable,    intent(out) :: l_frozen(:), l_cohort(:), l_retired(:)
+        if( .not. allocated(self%l_frozen) ) THROW_HARD('the superset relation is not defined; get_masks')
+        l_frozen  = self%l_frozen
+        l_cohort  = self%l_cohort
+        l_retired = self%l_retired
+    end subroutine get_masks
+
     !> a cohort below COHORT_WARN_FRAC of the frozen population
     logical function is_small_cohort( self ) result( l_small )
         class(project_superset), intent(in) :: self
@@ -234,6 +270,7 @@ contains
         self%nfrozen = 0; self%ncohort = 0; self%nnever_updated = 0; self%nretired = 0
         if( allocated(self%l_frozen)      ) deallocate(self%l_frozen)
         if( allocated(self%l_retired)     ) deallocate(self%l_retired)
+        if( allocated(self%l_cohort)      ) deallocate(self%l_cohort)
         if( allocated(self%nfrozen_state) ) deallocate(self%nfrozen_state)
         if( allocated(self%saved_state2D) ) deallocate(self%saved_state2D)
     end subroutine kill

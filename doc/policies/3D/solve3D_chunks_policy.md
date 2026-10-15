@@ -203,8 +203,8 @@ SAME`) and stays visible in the report.
   `mkdir=yes`. An entry key is added when the `solve3D_addon` UI accepts it
   and the base manifest does not record it as an input (`addon_diag`,
   `nparts`, `nthr`, `overlap`). Recorded inputs (`balance`, `nclust`,
-  `mskdiam`, `filt_mode`, `rec_backend`, ...) reach the add-ons through the
-  manifest.
+  `mskdiam`, `filt_mode`, ...) reach the add-ons through the manifest; the
+  backend does not, since every add-on reconstructs by gridding.
 - **`nsample`** is never put on an add-on command line. It is not a recorded
   input, but the manifest's `replay` sets it, together with `nstates`, from
   the base run's sampling record.
@@ -252,13 +252,15 @@ part-way keeps what it measured. It holds:
 
 ## 8. Cost
 
-The cap bounds the searched work of each run, not the union. Every add-on
-reads all union particles several times: the frozen term is accumulated over
-every frozen particle once per box it is needed at, and the final
-reconstruction reads every particle of the union (solve3D_addon policy,
-sections 7 and 8). Late add-ons therefore cost more than early ones, even
-though each searches the same number of particles. This growth is what a
-stream meets as its union grows.
+The cap bounds the searched work of each run, and the add-on passes bound its
+reads: the first add-on reads the base run's particles once per box it needs
+them at (the stage box and the native box) and publishes the first carried
+sums; every later add-on adopts the previous run's carried sums and reads only
+its own particles, in the stage iterations and in the incremental final
+reconstruction (solve3D_addon policy, sections 5 and 8). A late add-on
+therefore reads no more particle images than an early one with the same
+cohort; what still grows with the union is the size of the carried sums it
+copies and the sigma2 state it streams.
 
 Every `solve3D` and `solve3D_addon` run writes `BENCH/SOLVE3D_BENCH.txt` in its
 run directory (SIMPLE benchmarking, `L_BENCH_GLOB`; refine3D policy, section

@@ -327,9 +327,9 @@ contains
     integer(int64) function ptcl_buffer_budget( params, build ) result( budget )
         class(parameters), intent(in) :: params
         class(builder),    intent(in) :: build
-        type(string)      :: qsys
-        integer(int64)    :: total
-        integer           :: nprocs
+        type(string)   :: qsys
+        integer(int64) :: total
+        integer        :: nprocs
         if( build%spproj%compenv%get_noris() > 0 )then
             if( build%spproj%compenv%isthere(1, 'qsys_name') .and. build%spproj%compenv%isthere(1, 'job_memory_per_task') )then
                 qsys = build%spproj%compenv%get_str(1, 'qsys_name')

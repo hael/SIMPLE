@@ -2,6 +2,7 @@
 module simple_commanders_prob
 use simple_commanders_api
 use simple_pftc_srch_api
+use simple_eo_partition, only: ensure_field_halves
 implicit none
 private :: write_empty_prob_tab, write_prob_tab_bench, write_prob_align_bench
 #include "simple_local_flags.inc"
@@ -442,10 +443,7 @@ contains
         endif
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         frac_srch_space  = build%spproj_field%get_avg('frac')
         call set_bp_range2D(params, build, cline, params%which_iter, frac_srch_space)
         ! reproduce particle sampling from exec_prob_align2D
@@ -542,10 +540,7 @@ contains
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call set_b_p_ptrs2D(params, build)
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         if( params%startit == 1 .and. params%which_iter == params%startit )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif

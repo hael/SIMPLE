@@ -165,9 +165,20 @@ For multi-state distributed startup:
 - probabilistic multi-state startup requires each state to exceed the minimum
   population guard
 
-Even/odd partitioning is required for consistent half-map reconstruction. If it
-is absent, initialization partitions the active orientation segment and writes
-that state back to the project.
+Even/odd partitioning is required for consistent half-map reconstruction. The
+partition belongs to the project, not to a field
+(`ensure_field_halves`, `src/main/project/simple_eo_partition.f90`). The
+master makes it once, before any worker runs, and workers stop rather than make
+one. The same labels go to `ptcl2D` and `ptcl3D`, and existing labels never
+change. A stack row that maps to a micrograph is a group: all its particles
+share one half, so overlapping neighbouring picks never sit in opposite halves
+and a reconstruction opens a stack once per state rather than once per half.
+Groups go, largest first, to the half with fewer active particles. Their order
+comes from the partition's own random stream, which leaves the particle sample
+unchanged. A field with stack rows but no micrograph rows takes the per-index
+route (`partition_eo`), as do class-average fields. The stack rows record which
+route labelled them, so a missing, partial or inconsistent partition is told
+apart, and an inconsistent one stops the run.
 
 ### 5.1 Sigma2 bootstrap contract
 

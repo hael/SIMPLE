@@ -4,6 +4,7 @@ use simple_core_module_api
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
 use simple_builder,    only: builder
+use simple_eo_partition, only: ensure_field_halves
 use simple_classaverager, only: cavger_new, cavger_transf_oridat, cavger_read_euclid_sigma2, cavger_assemble_sums, &
                               cavger_restore_cavgs, cavger_gen2Dclassdoc, cavger_write_all, cavger_kill, &
                               cavger_write_contribution
@@ -231,9 +232,15 @@ contains
         if( l_rebuilt ) call spproj%read_segment('projinfo', params%projfile)
     end subroutine ensure_canonical_sigma2
 
-    subroutine setup_evenodd(build)
-        type(builder), intent(inout) :: build
-        if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+    !> the project's halves; a time series has no micrograph groups and keeps the per-index labels
+    subroutine setup_evenodd(build, params)
+        type(builder),    intent(inout) :: build
+        type(parameters), intent(in)    :: params
+        if( params%tseries .eq. 'yes' )then
+            if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+        else
+            call ensure_field_halves(build%spproj, params%oritype, params%projfile)
+        endif
     end subroutine setup_evenodd
 
     subroutine write_oritype_segment_for_compute(build, params, l_shmem)
@@ -315,7 +322,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! ---- SHARED BODY (overlap with worker) ----
         call generate_cluster_centers(self%build, params, cline)
-        call setup_evenodd(self%build)
+        call setup_evenodd(self%build, params)
         call write_oritype_segment_for_compute(self%build, params, l_shmem=.true.)
         ! the rebuild reads the even/odd halves from the project file written above
         call ensure_canonical_sigma2(params, cline, self%build%spproj)
@@ -374,7 +381,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! ---- SHARED BODY (overlap with shmem) ----
         call generate_cluster_centers(self%build, params, cline)
-        call setup_evenodd(self%build)
+        call setup_evenodd(self%build, params)
         call write_oritype_segment_for_compute(self%build, params, l_shmem=.false.)
         call cavger_prepare_and_assemble(params, self%build)
         ! ------------------------------------------
@@ -431,6 +438,8 @@ contains
             params%ncls = ncls_here
         endif
         call print_raw_source_verification(params, build_tmp, 'MASTER')
+        ! the halves are on disk before the workers and the sigma2 rebuild read them
+        if( params%tseries .ne. 'yes' ) call ensure_field_halves(build_tmp%spproj, params%oritype, params%projfile)
         call ensure_canonical_sigma2(params, cline, build_tmp%spproj)
         call cline%set('mkdir', 'no')  ! avoid nested dirs in workers
         call self%qenv%new(params, params%nparts)

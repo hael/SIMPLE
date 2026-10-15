@@ -1,6 +1,6 @@
 !@descr: unit tests of the solve3D_addon frozen accumulator sets (simple_frozen_accum)
-! Frozen set F + cohort equals the direct union (gridding sums/rho, PCG B/D, restored and solved
-! maps); a zero cohort gives F exactly. Plus context round trip and refusals. Box 16, seeded noise.
+! Frozen set F + cohort equals the direct union (gridding sums/rho and restored maps); a zero
+! cohort gives F exactly. Plus context round trip and refusals (gridding only). Box 16, seeded noise.
 module simple_frozen_accum_tester
 use simple_defs,              only: OSMPL_PAD_FAC, STDLEN
 use simple_string,            only: string
@@ -15,10 +15,10 @@ use simple_sym,               only: sym
 use simple_memoize_ft_maps,   only: forget_ft_maps, memoize_ft_maps
 use simple_type_defs,         only: CTFFLAG_NO, OBJFUN_EUCLID, ctfparams, fplane_type
 use simple_reconstructor,     only: reconstructor
-use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL
 use simple_refine3D_fnames,   only: refine3D_frozen_rec_fbody, refine3D_frozen_manifest_fname, &
-    &refine3D_frozen_pcg_fname
-use simple_frozen_accum,      only: frozen_accum
+    &refine3D_carried_rec_fbody, refine3D_carried_bundle_fname, refine3D_carried_membership_fname
+use simple_frozen_accum,      only: frozen_accum, carried_bundle, write_carried_membership, read_carried_membership
+use simple_syslib,            only: simple_mkdir, simple_rmdir
 use simple_test_utils
 implicit none
 private
@@ -27,13 +27,11 @@ public :: run_all_frozen_accum_tests
 integer, parameter :: BOX      = 16
 integer, parameter :: NFROZEN  = 14   ! frozen planes (even/odd alternate)
 integer, parameter :: NCOHORT  = 10   ! cohort planes
-integer, parameter :: PCG_ITS  = 6
 integer, parameter :: SEED     = 20260926
 real,    parameter :: SMPD     = 2.0
-real,    parameter :: LAMBDA   = 1.e-2
 ! Single-precision sums of O(10) terms reassociated between F u C and F + C:
 ! relative differences of a few ulps (~1e-7) of the largest magnitude; the
-! restored/solved maps propagate them through linear operators of O(1) gain.
+! restored maps propagate them through linear operators of O(1) gain.
 real,    parameter :: RAW_RELTOL = 1.e-5
 real,    parameter :: MAP_RELTOL = 1.e-4
 character(len=*), parameter :: CTX_FNAME  = 'tmp_frozen_accum_tester_context.txt'
@@ -47,7 +45,7 @@ contains
         call test_context_round_trip()
         call test_context_refusals()
         call test_gridding_union_equals_sum()
-        call test_pcg_union_equals_sum()
+        call test_carried_chain()
     end subroutine run_all_frozen_accum_tests
 
     ! ---- fixtures -------------------------------------------------------------
@@ -55,10 +53,10 @@ contains
     !> two inherited states of NFROZEN and 1 frozen particles; the working
     !! project has NFROZEN+NCOHORT+3 rows, the frozen project its first
     !! NFROZEN+NCOHORT (three appended rows)
-    subroutine make_context( ctx, rid, backend )
+    subroutine make_context( ctx, rid )
         type(frozen_accum), intent(inout) :: ctx
-        character(len=*),   intent(in)    :: rid, backend
-        call ctx%new(rid, backend, NFROZEN + NCOHORT + 3, NFROZEN + NCOHORT, [NFROZEN, 1])
+        character(len=*),   intent(in)    :: rid
+        call ctx%new(rid, NFROZEN + NCOHORT + 3, NFROZEN + NCOHORT, [NFROZEN, 1])
     end subroutine make_context
 
     !> NFROZEN + NCOHORT well-spread orientations; the first NFROZEN are frozen
@@ -140,25 +138,23 @@ contains
         character(len=STDLEN) :: msg
         integer :: status
         write(*,'(A)') 'test_context_round_trip'
-        call make_context(ctx, RUN_ID, 'gridding')
+        call make_context(ctx, RUN_ID)
         call ctx%write(string(CTX_FNAME))
         call back%read(string(CTX_FNAME), status, msg)
         call assert_int(0, status, 'a written context reads back: '//trim(msg))
-        ! run identifier, backend, layout and counts: the context read back is
+        ! run identifier, backend (gridding), layout and counts: the context read back is
         ! written again record for record
         call back%write(string(CTX_FNAME2))
         call assert_true(same_text(CTX_FNAME, CTX_FNAME2), 'every context record round trips')
         call assert_int(NFROZEN, back%get_nfrozen_state(1), 'context state 1 count round trip')
         call assert_int(1,       back%get_nfrozen_state(2), 'context state 2 count round trip')
-        call back%validate('gridding', 2, NFROZEN+NCOHORT+3, .false., status, msg)
+        call back%validate(2, NFROZEN+NCOHORT+3, .false., status, msg)
         call assert_int(0, status, 'the context accepts a consumer of its working project')
-        call back%validate('gridding', 2, NFROZEN+NCOHORT, .true., status, msg)
+        call back%validate(2, NFROZEN+NCOHORT, .true., status, msg)
         call assert_int(0, status, 'the context accepts a producer of its frozen project')
-        call back%validate('pcg', 2, NFROZEN+NCOHORT+3, .false., status, msg)
-        call assert_true(status /= 0, 'the context refuses another backend')
-        call back%validate('gridding', 1, NFROZEN+NCOHORT+3, .false., status, msg)
+        call back%validate(1, NFROZEN+NCOHORT+3, .false., status, msg)
         call assert_true(status /= 0, 'the context refuses another state layout')
-        call back%validate('gridding', 2, NFROZEN+NCOHORT+4, .false., status, msg)
+        call back%validate(2, NFROZEN+NCOHORT+4, .false., status, msg)
         call assert_true(status /= 0, 'the context refuses another particle index space')
         call del_file(CTX_FNAME)
         call del_file(CTX_FNAME2)
@@ -172,7 +168,7 @@ contains
         character(len=64)     :: good(10)
         integer :: status
         write(*,'(A)') 'test_context_refusals'
-        good = [character(len=64) :: 'solve3D_addon_frozen_context 3', 'run_id r1', 'backend pcg', &
+        good = [character(len=64) :: 'solve3D_addon_frozen_context 3', 'run_id r1', 'backend gridding', &
             &'nstates 2', 'nrows 30', 'nrows_frozen 25', 'nfrozen 7', 'nfrozen_state 1 3', 'nfrozen_state 2 4', 'end']
         call write_text(CTX_FNAME, good)
         call ctx%read(string(CTX_FNAME), status, msg)
@@ -198,6 +194,9 @@ contains
         call write_text(CTX_FNAME, [character(len=64) :: good(1:5), good(7:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'a context without the frozen project''s row count is refused')
+        call write_text(CTX_FNAME, [character(len=64) :: good(1:2), 'backend pcg', good(4:)])
+        call ctx%read(string(CTX_FNAME), status, msg)
+        call assert_true(status /= 0 .and. index(msg, 'gridding') > 0, 'a context of the PCG backend is refused')
         call write_text(CTX_FNAME, [character(len=64) :: good(1:9), 'frozen_rows 1 2 3', 'end'])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'an unknown context field is refused')
@@ -284,7 +283,7 @@ contains
         ! which stores box/2 complex values per row (the h = box/2 column is
         ! not persisted), so the fair comparison passes C and F u C through
         ! the same writer and validated reader (as state 2) and adds F (state 1)
-        call make_context(ctx, RUN_ID, 'gridding')
+        call make_context(ctx, RUN_ID)
         call ctx%write_gridding_set(1, f_even, f_odd)
         call ctx%gridding_set_status(1, BOX, SMPD, status, msg)
         call assert_int(0, status, 'a freshly written gridding set validates: '//trim(msg))
@@ -328,7 +327,7 @@ contains
             &'zero cohort + F is F exactly (coefficient one)')
         call delete_gridding_set(2)
         ! refusals: another run, another grid, a size-mismatched or missing component
-        call make_context(other, 'another_run', 'gridding')
+        call make_context(other, 'another_run')
         call other%gridding_set_status(1, BOX, SMPD, status, msg)
         call assert_true(status /= 0, 'a set of another add-on run is refused')
         call ctx%gridding_set_status(1, BOX, 1.1*SMPD, status, msg)
@@ -339,10 +338,10 @@ contains
         call assert_true(status /= 0, 'no set is found for a state that was not written')
         ! a consumer of another reconstruction weighting, another frozen count
         call ctx%write(string(CTX_FNAME))
-        call weighted%load(string(CTX_FNAME), 'gridding', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false., wset_id=[0_8, 0_8])
+        call weighted%load(string(CTX_FNAME), 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false., wset_id=[0_8, 0_8])
         call weighted%gridding_set_status(1, BOX, SMPD, status, msg)
         call assert_true(status /= 0 .and. index(msg, 'weighting') > 0, 'a set of another weighting is refused')
-        call recount%new(RUN_ID, 'gridding', NFROZEN+NCOHORT+3, NFROZEN+NCOHORT, [NFROZEN-1, 2])
+        call recount%new(RUN_ID, NFROZEN+NCOHORT+3, NFROZEN+NCOHORT, [NFROZEN-1, 2])
         call recount%gridding_set_status(1, BOX, SMPD, status, msg)
         call assert_true(status /= 0, 'a set whose frozen count differs from the context is refused')
         call del_file(CTX_FNAME)
@@ -389,6 +388,214 @@ contains
 
     end subroutine test_gridding_union_equals_sum
 
+    !> A chain of two add-ons on three groups of planes: the first add-on's frozen set (group 1), its
+    !! carried sums (the frozen set plus group 2) in a bundle, adopted by the second add-on without any
+    !! plane, plus group 3, equal the direct union of all three groups (sums, densities and restored
+    !! half) within the reassociation tolerances; the bundle is refused when its run, a component,
+    !! its membership, its route or its manifest is wrong.
+    subroutine test_carried_chain()
+        type(parameters), target :: params
+        type(sp_project)         :: project
+        type(reconstructor)      :: g1_e, g1_o, g2_e, g2_o, g3_e, g3_o, u_e, u_o, scratch_e, scratch_o
+        type(image)              :: map_c, map_u
+        type(frozen_accum)       :: ctx_a, carrier, ctx_c, ctx_u, store
+        type(carried_bundle)     :: bundle, back
+        type(oris)               :: all_oris
+        type(ori)                :: o
+        type(sym)                :: c1sym
+        type(ctfparams)          :: ctfparms
+        type(fplane_type)        :: fplane
+        type(fplane_grid)        :: grid
+        type(image)              :: obs, obs_pad
+        real,    allocatable     :: imgs(:,:,:), rho_c(:,:,:), rho_u(:,:,:), rmat_c(:,:,:), rmat_u(:,:,:)
+        complex, allocatable     :: cmat_c(:,:,:), cmat_u(:,:,:)
+        integer, allocatable     :: members(:), back_members(:)
+        character(len=STDLEN)    :: msg
+        type(string)             :: dir, bundle_fname, members_fname, fname
+        integer :: i, status, n, ngroup
+        write(*,'(A)') 'test_carried_chain'
+        n      = NFROZEN + NCOHORT
+        ngroup = n / 3
+        params%box        = BOX
+        params%box_crop   = BOX
+        params%box_croppd = OSMPL_PAD_FAC * BOX
+        params%smpd_crop  = SMPD
+        params%nstates    = 1
+        params%numlen     = 1
+        params%oritype    = 'cls3D'
+        call g1_e%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call g1_o%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call g2_e%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call g2_o%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call g3_e%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call g3_o%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call u_e%new_accumulator( params, project, expand=.true., wthreads=.false.)
+        call u_o%new_accumulator( params, project, expand=.true., wthreads=.false.)
+        call scratch_e%new_accumulator(params, project, expand=.false., wthreads=.false.)
+        call scratch_o%new_accumulator(params, project, expand=.false., wthreads=.false.)
+        call make_orientations(all_oris)
+        call make_images(imgs)
+        call obs%new([BOX,BOX,1], SMPD, wthreads=.false.)
+        call obs_pad%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD, wthreads=.false.)
+        call grid%new(OSMPL_PAD_FAC*BOX)
+        call o%new(.false.)
+        call c1sym%new('c1')
+        call memoize_ft_maps([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD)
+        ctfparms%smpd    = SMPD
+        ctfparms%ctfflag = CTFFLAG_NO
+        do i = 1, n
+            call all_oris%get_ori(i, o)
+            call obs%set_rmat(imgs(:,:,i:i), .false.)
+            call obs%pad(obs_pad, backgr=0., antialiasing=.false.)
+            call obs_pad%fft()
+            call obs_pad%gen_fplane4rec(SMPD, ctfparms, [0.,0.], fplane, grid)
+            if( mod(i,2) == 0 )then
+                call u_e%insert_plane_oversamp(c1sym, o, fplane)
+                if( i <= ngroup )then
+                    call g1_e%insert_plane_oversamp(c1sym, o, fplane)
+                else if( i <= 2*ngroup )then
+                    call g2_e%insert_plane_oversamp(c1sym, o, fplane)
+                else
+                    call g3_e%insert_plane_oversamp(c1sym, o, fplane)
+                endif
+            else
+                call u_o%insert_plane_oversamp(c1sym, o, fplane)
+                if( i <= ngroup )then
+                    call g1_o%insert_plane_oversamp(c1sym, o, fplane)
+                else if( i <= 2*ngroup )then
+                    call g2_o%insert_plane_oversamp(c1sym, o, fplane)
+                else
+                    call g3_o%insert_plane_oversamp(c1sym, o, fplane)
+                endif
+            endif
+        enddo
+        call g1_e%compress_exp(); call g1_o%compress_exp()
+        call g2_e%compress_exp(); call g2_o%compress_exp()
+        call g3_e%compress_exp(); call g3_o%compress_exp()
+        call u_e%compress_exp();  call u_o%compress_exp()
+        ! the first add-on: its frozen set (group 1), read from the planes once
+        call ctx_a%new('run_a', n, n, [ngroup])
+        call ctx_a%set_weighting(OBJFUN_EUCLID, [0_8, 0_8])
+        call ctx_a%write_gridding_set(1, g1_e, g1_o)
+        ! its carried sums: group 2 plus the frozen set, in the bundle directory, with the membership
+        dir = 'tmp_carried_bundle_run_b'
+        call simple_mkdir(dir)
+        call carrier%new('run_b', n, n, [2*ngroup], carried=.true.)
+        call carrier%set_weighting(OBJFUN_EUCLID, [0_8, 0_8])
+        call carrier%set_dir(dir)
+        call ctx_a%add_gridding_set(1, g2_e, g2_o, scratch_e, scratch_o)
+        call carrier%write_gridding_set(1, g2_e, g2_o)
+        allocate(members(n), source=0)
+        members(1:2*ngroup) = 1
+        members_fname = dir//'/'//refine3D_carried_membership_fname()
+        call write_carried_membership(members_fname, members)
+        call read_carried_membership(members_fname, n, back_members, status)
+        call assert_true(status == 0 .and. all(back_members == members), 'the carried membership round trips')
+        bundle%run_id     = 'run_b'
+        bundle%parent_run = 'run_a'
+        bundle%route      = 'first'
+        bundle%nstates    = 1
+        bundle%nrows      = n
+        bundle%boxes      = [BOX]
+        bundle%smpds      = [SMPD]
+        bundle%ncarried_state = [2*ngroup]
+        bundle%weighting  = 'euclid'
+        bundle%wset_id    = 0_8
+        bundle%sigma2_generation = 3_8
+        bundle_fname = dir//'/'//refine3D_carried_bundle_fname()
+        call bundle%write(bundle_fname)
+        call back%read(bundle_fname, status, msg)
+        call assert_int(0, status, 'a written bundle reads back: '//trim(msg))
+        call assert_true(trim(back%parent_run) == 'run_a' .and. trim(back%route) == 'first' .and. &
+            &back%sigma2_generation == 3_8, 'the bundle records its lineage, route and sigma2 generation')
+        call back%validate(dir, status, msg)
+        call assert_int(0, status, 'a complete bundle validates: '//trim(msg))
+        ! group 3 and the direct union through the same writer and reader as the sets (the raw format
+        ! does not persist the h = box/2 column)
+        call ctx_u%new('run_u', n, n, [n])
+        call ctx_u%set_weighting(OBJFUN_EUCLID, [0_8, 0_8])
+        call ctx_u%write_gridding_set(1, g3_e, g3_o)
+        call g3_e%reset
+        call g3_o%reset
+        call ctx_u%add_gridding_set(1, g3_e, g3_o, scratch_e, scratch_o)
+        ! the second add-on adopts the carried sums without a plane, adds group 3
+        call ctx_c%new('run_c', n, n, [2*ngroup])
+        call ctx_c%set_weighting(OBJFUN_EUCLID, [0_8, 0_8])
+        store = back%store(dir)
+        call ctx_c%import_gridding_set(store, 1, BOX, SMPD)
+        call ctx_c%gridding_set_status(1, BOX, SMPD, status, msg)
+        call assert_int(0, status, 'the adopted set is bound to the adopting run: '//trim(msg))
+        call ctx_c%add_gridding_set(1, g3_e, g3_o, scratch_e, scratch_o)
+        call ctx_u%write_gridding_set(1, u_e, u_o)
+        call u_e%reset
+        call u_o%reset
+        call ctx_u%add_gridding_set(1, u_e, u_o, scratch_e, scratch_o)
+        cmat_c = g3_e%get_cmat()
+        cmat_u = u_e%get_cmat()
+        call g3_e%get_rho_copy(rho_c)
+        call u_e%get_rho_copy(rho_u)
+        call assert_true(max_rel_cdiff(cmat_c, cmat_u) < RAW_RELTOL, 'carried chain even sums equal the direct union')
+        call assert_true(max_rel_rdiff(rho_c, rho_u)   < RAW_RELTOL, 'carried chain even densities equal the direct union')
+        cmat_c = g3_o%get_cmat()
+        cmat_u = u_o%get_cmat()
+        call g3_o%get_rho_copy(rho_c)
+        call u_o%get_rho_copy(rho_u)
+        call assert_true(max_rel_cdiff(cmat_c, cmat_u) < RAW_RELTOL, 'carried chain odd sums equal the direct union')
+        call assert_true(max_rel_rdiff(rho_c, rho_u)   < RAW_RELTOL, 'carried chain odd densities equal the direct union')
+        call map_c%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
+        call map_u%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
+        call g3_e%restore_final(map_c, preserve_numerator=.true.)
+        call u_e%restore_final(map_u, preserve_numerator=.true.)
+        rmat_c = map_c%get_rmat()
+        rmat_u = map_u%get_rmat()
+        call assert_true(max_rel_rdiff(rmat_c, rmat_u) < MAP_RELTOL, &
+            &'the map from the carried chain equals the direct union''s')
+        ! refusals: another run, a wrong membership, an unknown route, a truncated component, no manifest
+        back%run_id = 'run_x'
+        call back%validate(dir, status, msg)
+        call assert_true(status /= 0, 'a bundle of another run context is refused')
+        back%run_id = 'run_b'
+        call write_carried_membership(members_fname, members(1:n-1))
+        call back%validate(dir, status, msg)
+        call assert_true(status /= 0, 'a membership of another row count is refused')
+        members(1) = 0
+        call write_carried_membership(members_fname, members)
+        call back%validate(dir, status, msg)
+        call assert_true(status /= 0, 'a membership that disagrees with the counts is refused')
+        members(1) = 1
+        call write_carried_membership(members_fname, members)
+        call back%validate(dir, status, msg)
+        call assert_int(0, status, 'the restored membership validates again: '//trim(msg))
+        bundle%route = 'other'
+        call bundle%write(bundle_fname)
+        call back%read(bundle_fname, status, msg)
+        call assert_true(status /= 0, 'a bundle of an unknown route is refused')
+        bundle%route = 'first'
+        call bundle%write(bundle_fname)
+        call back%read(bundle_fname, status, msg)
+        fname = dir//'/rho_'//refine3D_carried_rec_fbody(1, BOX)//'_odd.mrc'
+        call truncate_file(fname)
+        call back%validate(dir, status, msg)
+        call assert_true(status /= 0, 'a bundle with a truncated component is refused (incomplete or mixed set)')
+        call del_file(bundle_fname)
+        call back%read(bundle_fname, status, msg)
+        call assert_true(status /= 0, 'a bundle without its manifest (an interrupted run) is refused')
+        ! cleanup
+        call simple_rmdir(dir)
+        call delete_gridding_set(1)
+        call forget_ft_maps()
+        call c1sym%kill(); call o%kill(); call obs%kill(); call obs_pad%kill()
+        call map_c%kill(); call map_u%kill()
+        call g1_e%kill(); call g1_o%kill(); call g2_e%kill(); call g2_o%kill(); call g3_e%kill(); call g3_o%kill()
+        call u_e%kill(); call u_o%kill(); call scratch_e%kill(); call scratch_o%kill()
+        call all_oris%kill(); call project%kill()
+        call ctx_a%kill(); call carrier%kill(); call ctx_c%kill(); call ctx_u%kill(); call store%kill()
+        call bundle%kill(); call back%kill()
+        if( allocated(fplane%cmplx_plane)    ) deallocate(fplane%cmplx_plane)
+        if( allocated(fplane%ctfsq_plane)    ) deallocate(fplane%ctfsq_plane)
+        if( allocated(fplane%transfer_plane) ) deallocate(fplane%transfer_plane)
+    end subroutine test_carried_chain
+
     subroutine truncate_file( fname )
         class(string), intent(in) :: fname
         integer :: funit, io_stat
@@ -409,111 +616,5 @@ contains
         call del_file(refine3D_frozen_manifest_fname(state, BOX))
         call fbody%kill
     end subroutine delete_gridding_set
-
-    ! ---- PCG -------------------------------------------------------------------
-
-    subroutine test_pcg_union_equals_sum()
-        type(reconstructor_pcg) :: sampler, pcg_f, pcg_c, pcg_u, pcg_z
-        type(frozen_accum)      :: ctx, other, weighted
-        type(oris)              :: all_oris, f_oris, c_oris
-        type(ori)               :: o
-        type(image)             :: obs
-        real,    allocatable    :: imgs(:,:,:), x_c(:,:,:), x_u(:,:,:), d_c(:,:,:), d_f(:,:,:)
-        complex, allocatable    :: planes(:,:,:), b_c(:,:,:), b_f(:,:,:)
-        character(len=STDLEN)   :: msg
-        real    :: b_relerr, d_relerr
-        integer :: i, lims2(2,2), status, nadded
-        write(*,'(A)') 'test_pcg_union_equals_sum'
-        call make_orientations(all_oris)
-        call make_images(imgs)
-        call f_oris%new(NFROZEN, .false.)
-        call c_oris%new(NCOHORT, .false.)
-        call o%new(.false.)
-        do i = 1, NFROZEN
-            call all_oris%get_ori(i, o)
-            call f_oris%set_ori(i, o)
-        enddo
-        do i = 1, NCOHORT
-            call all_oris%get_ori(NFROZEN+i, o)
-            call c_oris%set_ori(i, o)
-        enddo
-        call sampler%new(BOX, SMPD, LAMBDA)
-        lims2 = sampler%get_lims2()
-        allocate(planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NFROZEN+NCOHORT))
-        call obs%new([BOX,BOX,1], SMPD, wthreads=.false.)
-        do i = 1, NFROZEN + NCOHORT
-            call obs%set_rmat(imgs(:,:,i:i), .false.)
-            call obs%fft()
-            planes(:,:,i) = sampler%extract_native_plane(obs)
-            call obs%ifft()
-        enddo
-        ! F alone, C alone, F u C in one pass (F first, then C)
-        call accumulate(pcg_f, f_oris, planes(:,:,1:NFROZEN))
-        call accumulate(pcg_c, c_oris, planes(:,:,NFROZEN+1:))
-        call accumulate(pcg_u, all_oris, planes)
-        call make_context(ctx, RUN_ID, 'pcg')
-        call ctx%write_pcg_half(1, 0, BOX, pcg_f, NFROZEN)
-        call ctx%pcg_half_status(1, 0, BOX, SMPD, status, msg)
-        call assert_int(0, status, 'a freshly written PCG half validates: '//trim(msg))
-        call pcg_c%compare_raw_accum(pcg_u, b_relerr, d_relerr)
-        call assert_true(b_relerr > 100.*RAW_RELTOL .and. d_relerr > 100.*RAW_RELTOL, &
-            &'negative control: the cohort B and D alone differ from F u C')
-        call ctx%add_pcg_half(1, 0, BOX, SMPD, pcg_c, nadded)
-        call assert_int(NFROZEN, nadded, 'the frozen PCG half reports its frozen particle count')
-        call pcg_c%compare_raw_accum(pcg_u, b_relerr, d_relerr)
-        call assert_true(b_relerr < RAW_RELTOL, 'PCG raw B: C + F equals F u C')
-        call assert_true(d_relerr < RAW_RELTOL, 'PCG raw D: C + F equals F u C')
-        ! a cohort with no contribution: an open empty reduction plus F is F exactly
-        call pcg_z%new(BOX, SMPD, LAMBDA)
-        call pcg_z%begin_reduction
-        call ctx%add_pcg_half(1, 0, BOX, SMPD, pcg_z, nadded)
-        call pcg_z%get_raw_accum(b_c, d_c)
-        call pcg_f%get_raw_accum(b_f, d_f)
-        call assert_true(all(b_c == b_f) .and. all(d_c == d_f), 'zero cohort + F is F exactly (coefficient one)')
-        ! solved maps at a fixed iteration count from zero
-        call pcg_c%end_accum(.true.)
-        call pcg_c%set_op_mode(PCG_OP_KERNEL)
-        call pcg_u%end_accum(.true.)
-        call pcg_u%set_op_mode(PCG_OP_KERNEL)
-        allocate(x_c(BOX,BOX,BOX), x_u(BOX,BOX,BOX), source=0.)
-        call pcg_c%solve_accum(x_c, maxits=PCG_ITS, rtol=0.)
-        call pcg_u%solve_accum(x_u, maxits=PCG_ITS, rtol=0.)
-        call assert_true(max_rel_rdiff(x_c, x_u) < MAP_RELTOL, 'solved PCG half: C + F equals F u C')
-        ! refusals
-        call make_context(other, 'another_run', 'pcg')
-        call other%pcg_half_status(1, 0, BOX, SMPD, status, msg)
-        call assert_true(status /= 0, 'a PCG half of another add-on run is refused')
-        call ctx%pcg_half_status(1, 1, BOX, SMPD, status, msg)
-        call assert_true(status /= 0, 'a half that was not written is not found')
-        call ctx%pcg_half_status(1, 0, BOX+2, SMPD, status, msg)
-        call assert_true(status /= 0, 'no PCG half is found for another box')
-        call ctx%pcg_half_status(1, 0, BOX, 1.1*SMPD, status, msg)
-        call assert_true(status /= 0, 'a PCG half at another sampling is refused')
-        call ctx%write(string(CTX_FNAME))
-        call weighted%load(string(CTX_FNAME), 'pcg', 2, NFROZEN+NCOHORT+3, OBJFUN_EUCLID, producer=.false., wset_id=[0_8, 0_8])
-        call weighted%pcg_half_status(1, 0, BOX, SMPD, status, msg)
-        call assert_true(status /= 0, 'a PCG half of another weighting is refused')
-        call del_file(CTX_FNAME)
-        call del_file(refine3D_frozen_pcg_fname(1, BOX, 'even'))
-        ! cleanup
-        call sampler%kill(); call pcg_f%kill(); call pcg_c%kill(); call pcg_u%kill(); call pcg_z%kill()
-        call obs%kill()
-        call o%kill()
-        call all_oris%kill(); call f_oris%kill(); call c_oris%kill()
-        call ctx%kill(); call other%kill(); call weighted%kill()
-
-    contains
-
-        subroutine accumulate( op, os, pl )
-            type(reconstructor_pcg), intent(inout) :: op
-            type(oris),              intent(inout) :: os
-            complex,                 intent(in)    :: pl(lims2(1,1):,lims2(2,1):,:)
-            call op%new(BOX, SMPD, LAMBDA)
-            call op%prep_particles(os, use_ctf=.false.)
-            call op%begin_accum
-            call op%accumulate_batch(pl, size(pl,3), 1)
-        end subroutine accumulate
-
-    end subroutine test_pcg_union_equals_sum
 
 end module simple_frozen_accum_tester

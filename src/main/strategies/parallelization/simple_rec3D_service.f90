@@ -277,7 +277,7 @@ contains
         if( params%l_nonuniform )then
             allocate(nu_align_lps(params%nstates), source=0.0)
             call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps)
-            call filter_pcg_nonuniform_maps(params, build, cline%defined('frozen_rec'), nu_align_lps)
+            call filter_pcg_nonuniform_maps(params, build, nu_align_lps)
             deallocate(nu_align_lps)
         else
             call execute_rec3D_pcg_distributed_master(params, build, cline)

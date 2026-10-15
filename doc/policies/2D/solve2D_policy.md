@@ -84,9 +84,12 @@ the project instead of a random start. It is a `solve2D`-only mode
 - The only hard error is the absence of a previous clustering (virgin
   `ptcl2D`, or no active particle with a class label). Missing `cls2D`
   state or labels beyond `cls2D` are repaired with a counted warning; a
-  project with no even/odd partition gets one (`partition_eo`, before the
-  sigma2 state is built). Existing `eo` values are never touched, and no
-  per-particle `eo` check is made: `isthere('eo')` is false for `eo=0`.
+  project with no even/odd partition gets the project's partition
+  (`ensure_field_halves`, before the sigma2 state is built; per micrograph
+  group where the stack rows map to micrographs, by particle index otherwise;
+  [refine3D_policy.md](../3D/refine3D_policy.md), section 5). Existing `eo`
+  values are never touched. The partition's provenance lives on the stack rows,
+  since `isthere('eo')` is false for `eo=0`.
   `delete_2Dclustering` is never called.
 - Seed references are `make_cavgs` from the seed labels at the working
   `box_crop` (`start2Drefs*`), made after the canonical sigma2 state has

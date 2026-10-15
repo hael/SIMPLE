@@ -848,10 +848,10 @@ contains
     end subroutine test_assignment
 
 
-    !> the local refinement: the assigned rows are valid refine=cont seeds (state, half-set by row
-    !! parity, projection direction); its result comes back under the stage's states, those the
-    !! job held renumbered from 1 (an empty state left out), with the refined poses; a result of
-    !! other rows is not taken
+    !> the local refinement: the assigned rows are valid refine=cont seeds (state, half-set of the
+    !! project's partition, one per micrograph and kept by the next assignment, projection
+    !! direction); its result comes back under the stage's states, those the job held renumbered
+    !! from 1 (an empty state left out), with the refined poses; a result of other rows is not taken
     subroutine test_local_refinement()
         class(stream_stage_solve3D), allocatable :: stage
         type(cmdline)    :: cline
@@ -860,6 +860,7 @@ contains
         type(image)      :: vol
         type(string)     :: cwd_saved, root, volfile, fscfile
         real, allocatable :: fsc(:)
+        integer, allocatable :: eo_rows(:)
         integer, parameter :: STATES(5) = [1, 1, 3, 3, 0], JOB_STATES(5) = [1, 1, 2, 2, 0]
         integer          :: nfail0, i, k
         logical          :: l_valid
@@ -886,8 +887,14 @@ contains
         enddo
         call o%kill
         call assert_true(l_valid, 'every assigned row is a valid refine=cont seed')
-        call assert_int(0, stage%spproj%os_ptcl3D%get_eo(1), 'half-sets by row parity: row 1 even')
-        call assert_int(1, stage%spproj%os_ptcl3D%get_eo(2), 'row 2 odd')
+        ! the project's partition: stack A (rows 1-3) and stack B (rows 4-5) are one half each
+        eo_rows = stage%spproj%os_ptcl3D%get_all_asint('eo')
+        call assert_true(all(eo_rows(1:3) == eo_rows(1)), 'half-sets per micrograph: stack A''s rows share one half')
+        call assert_int(eo_rows(4), eo_rows(5), 'stack B''s rows share one half')
+        call assert_int(1, eo_rows(1) + eo_rows(4), 'the two stacks are in opposite halves')
+        call assert_true(all(stage%spproj%os_ptcl2D%get_all_asint('eo') == eo_rows), 'ptcl2D carries the same halves')
+        call stage%prepare_refine_seeds()
+        call assert_true(all(stage%spproj%os_ptcl3D%get_all_asint('eo') == eo_rows), 'the next assignment keeps the halves')
         call assert_int(3, stage%spproj%os_ptcl3D%get_state(3), 'and keeps its state')
         ! the job's project: the rows in the job's states 1 and 2 (the stage's 1 and 3), refined
         res%os_ptcl3D = stage%spproj%os_ptcl3D

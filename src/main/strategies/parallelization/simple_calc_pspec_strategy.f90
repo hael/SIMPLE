@@ -5,6 +5,7 @@ use simple_core_module_api
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
+use simple_eo_partition,   only: ensure_field_halves
 use simple_qsys_funs,      only: qsys_declare_part_finished
 use simple_image,          only: image, unmemoize_powspec_coords
 use simple_sigma2_pspec_sums, only: pspec_part_sums_fname, write_pspec_part_sums
@@ -570,10 +571,7 @@ contains
     subroutine ensure_calc_pspec_eo_partition(params, build)
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
     end subroutine ensure_calc_pspec_eo_partition
 
 end module simple_calc_pspec_strategy
