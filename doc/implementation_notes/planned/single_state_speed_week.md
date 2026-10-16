@@ -202,10 +202,12 @@ the benchmark of item 1 tells.
    592-600): every assignment scans all particles (`any(ptcl_avail)`) and
    advances the head of every reference. Count the available particles and
    advance only the references whose head was the assigned particle, as the
-   neighbourhood version already does.
+   neighbourhood version already does. Carried out with the multi-state
+   `ref_assign` by the run `ms_speed`.
 4. **Neighbourhood table read** (`read_tabs_to_glob`): every part's file is
    opened and read twice, serially. Read it once, counting and filling in one
-   pass.
+   pass. Carried out with the parallel reads of the `prob` table by the run
+   `ms_speed`.
 5. **Score-loop profile at high resolution.** The cost per reference at shell
    78 and box 160 is about twice what the shells and the box explain. The
    likely cause is the reference memo (about 4 GB at 5,000 directions)
@@ -517,14 +519,18 @@ merge (maintainer), plus case M below.
   particles of the percentage of references the search scanned, which it
   stores per particle as `frac` and the log prints as "% SEARCH SPACE
   SCANNED".
+- **`refine3D_states` is capped at 2,500 directions too** (ruled later on
+  2026-10-15). Its `prob_neigh` stage ran at 5,000 directions
+  (`STAGE2_NSPACE`). The ruling caps the directions only; its 500 subspace
+  directions (`STAGE2_NSPACE_SUB`) stay.
 - Still open: a cap on the refined references per particle across states
   (138 of 7,500 in msp1's stage 5).
 
-These rulings change `solve3D`'s multi-state schedule. Its particle route and
-its class-average route share the mode policy, so both switch at stage 5.
-The stage-2 exit concerns the particle route, the only one with `shc` stages.
-`refine3D_states`, which runs `prob_neigh` at 5,000 directions, is not
-covered by them.
+These rulings change `solve3D`'s multi-state schedule and `refine3D_states`.
+`solve3D`'s particle route and its class-average route share the mode policy,
+so both switch at stage 5. The stage-2 exit concerns the particle route, the
+only one with `shc` stages. The run `ms_speed` carries them out
+(`multistate_speed_run.md`, beside this plan).
 
 ### Testing multi-state
 
@@ -534,36 +540,32 @@ The simulated tests are single-state and do not reach these paths.
   table (`simple_eul_prob_tab_tester.f90`). The present routine stays in the
   tester as the reference. The new one must give the same assignments on
   synthetic dense tables of several states with a fixed seed.
-- **Timing on the test machine.** Two beta-galactosidase cases, run like the
-  single-state ones (before and after, twice each way, read with the summary
-  script):
-  - **M.** The two-state `refine3D` test of 14 October at the directions the
-    multi-state `prob` stages now use: `nstates=2 refine=prob`, `vol1` and
-    `vol2` the half maps of the common single-state volume, 1,000
-    directions, `update_frac=0.2 lp=8`, two iterations. It runs distributed
-    (`nparts=4 nthr=6`) and in shared memory (`nthr=24`). It times the dense
-    table, the reads and `ref_assign` of stages 3 and 4.
-  - **MS.** `solve3D nstates=3 nsample=2500` from the particles, distributed,
-    with the default multi-state schedule (`shc` stages included). The
-    common `solve3D_cavgs` start does not apply here: `cavg_ini_ext=yes` with
-    three states needs a three-state particle assignment to start from.
-- **Acceptance of a repeated case.**
-  - M: the last iteration's mean score is no lower than 0.97 times the
-    lowest before-run, and no state empties.
-  - MS, after an identical change: every state's final FSC 0.143 is within
-    the larger of the before-runs' spread and 3%.
-  - The schedule change alters results, and beta-galactosidase has no real
-    states. MS shows only that the schedule runs and every state keeps a map.
-    The check that counts is msp1: the maintainer compares the state
-    populations and per-state maps with the baseline run.
+- **Timing on the test machine**, beta-galactosidase, run like the
+  single-state cases (before and after, twice each way, read with the summary
+  script). The cases are defined in `multistate_speed_run.md`:
+  - a three-state `solve3D` from the common three-state `solve3D_cavgs`
+    start (`solve3D_cavgs nstates=3` gives the three-state particle
+    assignment that `cavg_ini_ext=yes` needs);
+  - a three-state `solve3D` from the particles, which runs the `shc` stages
+    as msp1 did;
+  - a three-state `refine3D` at 1,000 directions, which times the dense
+    table, its reads and `ref_assign`.
+  - The highlevel tests with several states, `flex_pca_blobs` (which runs
+    `refine3D_states_cavgs`) and `solve3D_pyramid_blobs`, check the changed
+    paths against their planted truths.
+- **Acceptance.** The schedule change alters results, and beta-galactosidase
+  has no real states: its cases show that the schedule runs, every state
+  keeps its particles and a map, and the resolutions stay close to the
+  baseline. The check that counts is msp1: the maintainer compares the state
+  populations and per-state maps with the baseline run.
 
 ### Items
 
 | work | where the time is (msp1) | estimated saving | result | block |
 | --- | --- | --- | --- | --- |
-| the multi-state schedule (the rulings) | stage 5: 194 s of tables and 31 s around them per iteration after `prob_speed`; stage 2: 888 s | 1,750-2,400 s | changed | first, with its own msp1 run |
-| `ref_assign` for several states | stages 3 and 4: 2.9-3.0 s per iteration at 3,000 references | about 70 s, growing with the particle count | identical | days 3 and 4 |
-| reading the table parts in parallel | stages 3 and 4: 8.1 s per iteration | 130-180 s | identical | days 3 and 4 |
+| the multi-state schedule (the rulings) | stage 5: 194 s of tables and 31 s around them per iteration after `prob_speed`; stage 2: 888 s | 1,750-2,400 s | changed | run `ms_speed`, then an msp1 run |
+| `ref_assign` for several states | stages 3 and 4: 2.9-3.0 s per iteration at 3,000 references | about 70 s, growing with the particle count | identical | run `ms_speed` |
+| reading the table parts in parallel | stages 3 and 4: 8.1 s per iteration | 130-180 s | identical | run `ms_speed` |
 | a compact record for the dense table | stages 3 and 4: 2.5 GB per iteration written and read, 2.2 GB on the master | 80-120 s, and two thirds of the master's table memory | identical | days 3 and 4 |
 | the states' volume assembly in parallel | 374 s | 100-200 s | identical | days 3 and 4 |
 | one worker process per iteration | about 4 s per `prob` iteration | about 150 s | identical | day 5 |
@@ -594,14 +596,17 @@ of the run `prob_speed` (about 7,000 s), the schedule would take msp1 to
        single-state runs.
    - `set_refine3D_stage_controls`: when `nstates > 1`, `nspace` is at most
      2,500.
+   - `simple_refine3D_states_controller.f90`: `STAGE2_NSPACE` 5,000 becomes
+     2,500 (ruling); `STAGE2_NSPACE_SUB` stays 500.
    - The stage-2 exit: for a multi-state run's stage 2, the convergence rule
      (`simple_convergence.f90`, its multi-state branch) declares convergence
      once the mean scanned exceeds 95%, without the state-overlap term. The
      present rule (overlap and scan together) still ends the stage earlier if
-     it is met. How the controller tells the rule, for example stage 2's
-     `fracsrch` set to 95 with a flag that drops the overlap term, is settled
-     in the diff. The main checkout has uncommitted edits in
-     `simple_convergence.f90`, so the change is made on top of them.
+     it is met. Stage 1 and every other user of the rule stay as they are.
+   - How the controller tells the rule: through an internal key on stage 2's
+     `refine3D` command line, set together with `fracsrch=95`. The key is
+     declared like `cohort_sampling` (parameters and parser, marked
+     internal, no interface entry).
    - The strategy's benchmark report records the mean percentage scanned, so
      the exit shows in the summary.
    - Documents: `solve3D_policy.md`, sections 3 and 6 (stage 5 in
