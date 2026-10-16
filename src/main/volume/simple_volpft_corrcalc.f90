@@ -53,8 +53,9 @@ contains
         class(projector), target, optional, intent(in)    :: vol_target
         integer   :: ispace, k, ldim(3)
         real      :: vec(3), rmat(3,3)
-        type(ori) :: e
-        type(sym) :: ico
+        type(ori)    :: e
+        type(sym)    :: ico
+        type(string) :: msg
         call self%kill
         if( present(vol_target) )then
             if( vol_ref.eqdims.vol_target )then
@@ -77,6 +78,11 @@ contains
         ! set other stuff
         self%kfromto_vpft(1) = vol_ref%get_find(hp)
         self%kfromto_vpft(2) = vol_ref%get_find(lp)
+        if( self%kfromto_vpft(1) < 1 .or. self%kfromto_vpft(1) > self%kfromto_vpft(2) )then
+            msg = 'no Fourier shell between the high-pass limit '//real2str(hp)//' A and the low-pass limit '&
+                &//real2str(lp)//' A above the origin'
+            THROW_HARD(msg%to_char())
+        endif
         allocate( self%vpft_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred  ), &
                   self%locs_ref       (self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,       3), &
                   self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3))

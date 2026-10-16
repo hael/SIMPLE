@@ -3,11 +3,12 @@ module simple_eul_prob_tab2D
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
+use simple_polarft_calc,       only: SHERRSQ
 use simple_decay_funs,         only: extremal_decay2D
-use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, materialize_seed_shift,&
+use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, record_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, sample_likelihood_index, prob_candidate,&
-    &prob_candidate_buffer, prob_candidate_store
+    &prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 implicit none
 
 public :: eul_prob_tab2D
@@ -26,7 +27,7 @@ type :: eul_prob_tab2D
     type(ptcl_ref), allocatable :: assgn_map(:)      !< assignment map (nptcls)
     real,           allocatable :: seed_shifts(:,:)  !< per-particle seeded shift (2,nptcls)
     logical,        allocatable :: seed_has_sh(:)    !< per-particle seeded shift flag
-    integer                     :: seed_nrots = 0    !< rotation grid used for deferred seeded shifts
+    integer                     :: seed_nrots = 0    !< rotation grid of the table (checked when the parts are read)
     integer,        allocatable :: pinds(:)          !< particle indices for processing
     logical,        allocatable :: class_exists(:)   !< class population filter
     integer,        allocatable :: candidate_fill_counts(:)
@@ -39,6 +40,7 @@ type :: eul_prob_tab2D
     integer                     :: nptcls            !< size of pinds array
     integer                     :: nclasses          !< number of classes
     integer                     :: nhood_sz = 1      !< probabilistic neighborhood size used in fill_tab/ref_assign
+    type(prob_fill_profile)     :: fill_profile      !< cost record of the fills since new (bench file)
     contains
     ! CONSTRUCTOR
     procedure :: new => new_global
@@ -47,6 +49,7 @@ type :: eul_prob_tab2D
     ! MAIN PROCEDURES
     procedure :: fill_tab
     procedure :: fill_tab_range
+    procedure :: get_fill_profile
     procedure :: ref_assign => ref_assign_likelihood
     procedure :: begin_write
     procedure :: flush_candidate_buffers
@@ -206,10 +209,14 @@ contains
         integer :: i_from, i_to
         integer :: active_cls(self%nclasses)
         integer :: loc(1), vec_nrots(self%b_ptr%pftc%get_nrots())
-        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3)
+        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), xy0(2)
         real    :: inpl_corrs(self%b_ptr%pftc%get_nrots()), cls_dists(self%nclasses), cls_dists_work(self%nclasses)
         real    :: inpl_corr, inpl_dist, neigh_frac
         logical :: class_active(self%nclasses)
+        real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region, t0
+        integer(int64) :: nscored(nthr_glob), nbank(nthr_glob), nrefined(nthr_glob)
+        complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
+        logical :: l_bank
         if( self%l_sparse_snhc )then
             call self%fill_tab_prob_snhc_range(i_first, i_last)
             return
@@ -219,6 +226,12 @@ contains
         if( i_to < i_from ) return
         call seed_rnd
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
+        ts_seed   = 0.d0
+        ts_score  = 0.d0
+        ts_refine = 0.d0
+        nscored   = 0_int64
+        nbank     = 0_int64
+        nrefined  = 0_int64
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -237,6 +250,7 @@ contains
         neigh_frac = extremal_decay2D(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
         ninpl_smpl = neighfrac2nsmpl(neigh_frac, self%b_ptr%pftc%get_nrots())
         ninpl_smpl = max(1, min(ninpl_smpl, self%b_ptr%pftc%get_nrots()))
+        t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
@@ -247,14 +261,17 @@ contains
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
-            ! fill the table
+            call alloc_seed_bank2D(self, seed_bank)
+            ! fill the table; dynamic: the particles' shift searches differ in cost, and each particle is processed
+            ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,&
-            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,inpl_corr,inpl_dist)&
-            !$omp proc_bind(close) schedule(static)
+            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,vec_nrots,inpl_corr,inpl_dist,t0,l_bank,xy0)&
+            !$omp proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best class
+                t0 = omp_get_wtime()
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)      ! previous ori
                 irot0 = self%b_ptr%pftc%get_roind(360. - o_prev%e3get()) ! in-plane angle index seed
                 icls_prev = nint(self%b_ptr%spproj_field%get(iptcl, 'class'))
@@ -266,30 +283,39 @@ contains
                         cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
                         if( irot == 0 )then
                             cxy(2:3) = 0.
-                            irot = irot0
+                        else
+                            ! one particle-frame shift from here on: the estimate converted at its rotation
+                            cxy(2:3) = shift_ref2ptcl(cxy(2:3), self%b_ptr%pftc%get_rot(irot))
                         endif
                     endif
                 endif
                 self%seed_shifts(:,i) = cxy(2:3)
                 self%seed_has_sh(i)   = .true.
+                call memoize_seed_bank2D(self, iptcl, cxy(2:3), seed_bank(:,:,ithr), l_bank, nbank(ithr))
+                ts_seed(ithr) = ts_seed(ithr) + (omp_get_wtime() - t0)
                 ! (2) search class references using that shared shift
+                t0 = omp_get_wtime()
                 cls_dists = huge(1.0)
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, cxy(2:3), ninpl_smpl,&
+                    call score_seeded_class(self, icls, iptcl, cxy(2:3), seed_bank(:,:,ithr), l_bank, ninpl_smpl,&
                         &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
                     call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, 0., 0., .false.)
                     cls_dists(icls) = inpl_dist
                 end do
+                ts_score(ithr) = ts_score(ithr) + (omp_get_wtime() - t0)
                 ! (3) refine shifts for a neighborhood of classes around the best one
+                t0 = omp_get_wtime()
                 cls_dists_work = cls_dists
                 do iref_n = 1, nhood_sz_loc
                     loc = minloc(cls_dists_work)
                     icls = loc(1)
                     if( cls_dists_work(icls) >= huge(1.0)/2.0 ) exit
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
+                    nrefined(ithr) = nrefined(ithr) + 1_int64
                     irot     = self%candidate_buffers(ithr)%get_inpl(i, icls)
-                    cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                    xy0      = seed_start(self, cxy(2:3), irot)
+                    cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=xy0)
                     if( irot > 0 )then
                         call self%record_sparse_eval(i, ithr, icls,&
                             &eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun), irot,&
@@ -297,27 +323,33 @@ contains
                     endif
                     cls_dists_work(icls) = huge(1.0)
                 end do
+                ts_refine(ithr) = ts_refine(ithr) + (omp_get_wtime() - t0)
             end do
             !$omp end parallel do
         else
             ! shift-free path: evaluate classes/in-planes at zero shift
             !$omp parallel do default(shared) private(i,iptcl,ithr,icls,iref_n,inpl_corrs,vec_nrots,irot,&
-            !$omp& inpl_corr,inpl_dist) proc_bind(close) schedule(static)
+            !$omp& inpl_corr,inpl_dist,t0) proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
+                t0    = omp_get_wtime()
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
                     call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, [0.,0.], ninpl_smpl,&
                         &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
                     call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, 0., 0., .false.)
                 end do
+                ts_score(ithr) = ts_score(ithr) + (omp_get_wtime() - t0)
             end do
             !$omp end parallel do
         endif
+        call record_fill_profile2D(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
+            &nscored, nbank, nrefined, i_to - i_from + 1, nactive, nhood_sz_loc)
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
+        if( allocated(seed_bank) ) deallocate(seed_bank)
         call o_prev%kill
         if( self%table_is_open ) call self%flush_candidate_buffers
     end subroutine fill_tab_range
@@ -336,9 +368,19 @@ contains
         integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, ninpl_smpl, nrots
         integer :: i_from, i_to
         real    :: lims(2,2), lims_init(2,2), neigh_frac, cxy(3)
+        real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        integer(int64) :: nscored(nthr_glob), nbank(nthr_glob), nrefined(nthr_glob)
+        complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
+        logical :: l_bank(nthr_glob)
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
+        ts_seed   = 0.d0
+        ts_score  = 0.d0
+        ts_refine = 0.d0
+        nscored   = 0_int64
+        nbank     = 0_int64
+        nrefined  = 0_int64
         call seed_rnd
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
@@ -354,6 +396,9 @@ contains
         do ithr = 1, nthr_glob
             direct_rts(ithr) = ran_tabu(self%nclasses)
         enddo
+        l_bank   = .false.
+        call alloc_seed_bank2D(self, seed_bank)
+        t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
             lims(:,1)      = -self%p_ptr%trs
             lims(:,2)      =  self%p_ptr%trs
@@ -363,7 +408,9 @@ contains
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
-            !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(static)
+            ! dynamic: the particles' shift searches differ in cost; each is processed whole by one thread with its
+            ! own search object, so only its random draws change
+            !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
@@ -373,7 +420,7 @@ contains
             enddo
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(static)
+            !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
@@ -382,11 +429,13 @@ contains
             enddo
             !$omp end parallel do
         endif
+        call record_fill_profile2D(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
+            &nscored, nbank, nrefined, i_to - i_from + 1, 0, smpl_ncls)
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
         call eval_work%dealloc_eval2D_sparse_ws
-        deallocate(direct_rts)
+        deallocate(direct_rts, seed_bank)
         if( self%table_is_open ) call self%flush_candidate_buffers
 
     contains
@@ -399,6 +448,8 @@ contains
             integer :: icls_prev_loc, irot0_loc, irot_loc, isample_loc, icls_loc, neval_loc
             integer :: neval_bound_loc
             real    :: dist_loc, corr_loc, sh_loc(2)
+            real(dp) :: t0
+            t0 = omp_get_wtime()
             call direct_rts(ithr_loc)%ne_ran_iarr(eval_work%direct_srch_order(:,ithr_loc))
             call self%b_ptr%spproj_field%get_ori(iptcl_loc, o_prev_loc)
             icls_prev_loc = nint(self%b_ptr%spproj_field%get(iptcl_loc, 'class'))
@@ -411,10 +462,19 @@ contains
                 irot_loc  = irot0_loc
                 call grad_shsrch_obj(ithr_loc)%set_indices(icls_prev_loc, iptcl_loc)
                 cxy_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
-                if( irot_loc == 0 ) cxy_loc(2:3) = 0.
+                if( irot_loc == 0 )then
+                    cxy_loc(2:3) = 0.
+                else
+                    ! one particle-frame shift from here on: the estimate converted at its rotation
+                    cxy_loc(2:3) = shift_ref2ptcl(cxy_loc(2:3), self%b_ptr%pftc%get_rot(irot_loc))
+                endif
             endif
             sh_loc = 0.
             if( l_with_shift ) sh_loc = cxy_loc(2:3)
+            call memoize_seed_bank2D(self, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
+                &nbank(ithr_loc))
+            ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
+            t0 = omp_get_wtime()
             neval_bound_loc = nrefs_bound
             eval_work%eval_cls(:,ithr_loc)   = 0
             eval_work%eval_dists(:,ithr_loc) = huge(1.0)
@@ -428,7 +488,11 @@ contains
                 eval_work%eval_cls(neval_loc,ithr_loc)   = icls_loc
                 eval_work%eval_dists(neval_loc,ithr_loc) = dist_loc
             enddo
+            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            nscored(ithr_loc)  = nscored(ithr_loc) + int(neval_loc, int64)
+            t0 = omp_get_wtime()
             call refine_best_classes(i_loc, ithr_loc, iptcl_loc, sh_loc, neval_loc, l_with_shift)
+            ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             call o_prev_loc%kill
         end subroutine process_particle
 
@@ -437,8 +501,8 @@ contains
             real,    intent(in)  :: sh_loc(2)
             real,    intent(out) :: dist_loc, corr_loc
             integer, intent(out) :: irot_loc
-            call self%b_ptr%pftc%gen_likelihood_val(icls_loc, iptcl_loc, sh_loc, ninpl_smpl,&
-                &dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
+            call score_seeded_class(self, icls_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
+                &ninpl_smpl, dist_loc, corr_loc, irot_loc, eval_work%inpl_corrs(:,ithr_loc), eval_work%vec_nrots(:,ithr_loc))
             if( irot_loc < 1 .or. irot_loc > nrots ) irot_loc = 1
         end subroutine score_class
 
@@ -447,7 +511,7 @@ contains
             real,    intent(in) :: sh_loc(2)
             logical, intent(in) :: l_with_shift
             integer :: nrefine_loc, j_loc, eval_slot_loc, icls_loc, irot_loc
-            real    :: cxy_prob_loc(3)
+            real    :: cxy_prob_loc(3), xy0_loc(2)
             if( .not. l_with_shift ) return
             if( neval_loc < 1 ) return
             nrefine_loc = min(smpl_ncls, neval_loc)
@@ -458,9 +522,10 @@ contains
                 icls_loc = eval_work%eval_cls(eval_slot_loc,ithr_loc)
                 if( icls_loc < 1 ) cycle
                 call grad_shsrch_obj(ithr_loc)%set_indices(icls_loc, iptcl_loc)
+                nrefined(ithr_loc) = nrefined(ithr_loc) + 1_int64
                 irot_loc = self%candidate_buffers(ithr_loc)%get_inpl(i_loc, icls_loc)
-                cxy_prob_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, &
-                    &sh_rot=.true., xy_in=sh_loc)
+                xy0_loc  = seed_start(self, sh_loc, irot_loc)
+                cxy_prob_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=xy0_loc)
                 if( irot_loc > 0 )then
                     call self%record_sparse_eval(i_loc, ithr_loc, icls_loc,&
                         &eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun),&
@@ -470,6 +535,106 @@ contains
         end subroutine refine_best_classes
 
     end subroutine fill_tab_prob_snhc_range
+
+    !> the per-thread memo of the particle shifted by its particle-frame seed, which every class of the particle is
+    !! scored against (a seed below SHERRSQ scores against the plain particle memo)
+    subroutine alloc_seed_bank2D( self, seed_bank )
+        class(eul_prob_tab2D),    intent(in)    :: self
+        complex(sp), allocatable, intent(inout) :: seed_bank(:,:,:)
+        integer :: kfromto(2)
+        kfromto = self%b_ptr%pftc%get_kfromto()
+        allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1, nthr_glob))
+    end subroutine alloc_seed_bank2D
+
+    !> shifts the particle once by its seed (l_bank: the bank holds it) and counts the memos built
+    subroutine memoize_seed_bank2D( self, iptcl, shift_xy, bank, l_bank, nbank )
+        class(eul_prob_tab2D), intent(in)    :: self
+        integer,               intent(in)    :: iptcl
+        real,                  intent(in)    :: shift_xy(2)
+        complex(sp),           intent(inout) :: bank(:,:)
+        logical,               intent(out)   :: l_bank
+        integer(int64),        intent(inout) :: nbank
+        l_bank = sum(shift_xy**2) > SHERRSQ
+        if( .not. l_bank ) return
+        call self%b_ptr%pftc%memoize_shifted_ptcl(iptcl, shift_xy, bank)
+        nbank = nbank + 1_int64
+    end subroutine memoize_seed_bank2D
+
+    !> one class scored against the particle shifted by shift_xy (particle frame): from the seed bank when it holds
+    !! the shifted particle, with the angular Nyquist bin, otherwise by the shifted-reference kernel
+    subroutine score_seeded_class( self, icls, iptcl, shift_xy, bank, l_bank, nsample, dist, corr, irot, &
+            &dists_sorted, inds_sorted )
+        class(eul_prob_tab2D), intent(in)    :: self
+        integer,               intent(in)    :: icls, iptcl, nsample
+        real,                  intent(in)    :: shift_xy(2)
+        complex(sp),           intent(in)    :: bank(:,:)
+        logical,               intent(in)    :: l_bank
+        real,                  intent(out)   :: dist, corr
+        integer,               intent(out)   :: irot
+        real,                  intent(inout) :: dists_sorted(:)
+        integer,               intent(inout) :: inds_sorted(:)
+        if( l_bank )then
+            call self%b_ptr%pftc%gen_likelihood_val_bank(icls, iptcl, bank, nsample, dist, corr, irot,&
+                &dists_sorted, inds_sorted)
+        else
+            call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, shift_xy, nsample, dist, corr, irot,&
+                &dists_sorted, inds_sorted)
+        endif
+    end subroutine score_seeded_class
+
+    !> the start of a class's shift refinement: the particle-frame seed as the shift of the class at the rotation it was
+    !! scored at, clamped into the search box
+    function seed_start( self, shift_xy, irot ) result( xy )
+        class(eul_prob_tab2D), intent(in) :: self
+        real,                  intent(in) :: shift_xy(2)
+        integer,               intent(in) :: irot
+        real :: xy(2)
+        xy = shift_xy
+        if( irot > 0 ) xy = shift_ptcl2ref(shift_xy, self%b_ptr%pftc%get_rot(irot))
+        xy = max(-self%p_ptr%trs, min(self%p_ptr%trs, xy))
+    end function seed_start
+
+    !> the cost record of the fills since new, read before kill
+    function get_fill_profile( self ) result( profile )
+        class(eul_prob_tab2D), intent(in) :: self
+        type(prob_fill_profile) :: profile
+        profile = self%fill_profile
+    end function get_fill_profile
+
+    !> adds one fill to the cost record (bench file): the wall time of the parallel region, thread-seconds of the seed,
+    !! the score loop and the refinement, classes scored (nrefs per particle in the plain fill, nscored in the
+    !! prob_snhc fill), the most classes refined per particle and their total, shifted particle memos built and the
+    !! search objects' counters
+    subroutine record_fill_profile2D( self, grad_obj, wall, ts_seed, ts_score, ts_refine, nscored, nbank, nrefined, &
+            &nfilled, nrefs, nrefine )
+        class(eul_prob_tab2D),  intent(inout) :: self
+        type(pftc_shsrch_grad), intent(inout) :: grad_obj(:)
+        real(dp),               intent(in)    :: wall, ts_seed(:), ts_score(:), ts_refine(:)
+        integer(int64),         intent(in)    :: nscored(:), nbank(:), nrefined(:)
+        integer,                intent(in)    :: nfilled, nrefs, nrefine
+        integer(int64) :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
+        integer        :: ithr
+        self%fill_profile%wall_region = self%fill_profile%wall_region + wall
+        self%fill_profile%ts_seed     = self%fill_profile%ts_seed     + sum(ts_seed)
+        self%fill_profile%ts_score    = self%fill_profile%ts_score    + sum(ts_score)
+        self%fill_profile%ts_refine   = self%fill_profile%ts_refine   + sum(ts_refine)
+        self%fill_profile%nthr        = nthr_glob
+        self%fill_profile%nrefs       = nrefs
+        self%fill_profile%nptcls      = self%fill_profile%nptcls      + int(nfilled, int64)
+        self%fill_profile%nscored     = self%fill_profile%nscored     + sum(nscored)
+        self%fill_profile%bank_builds = self%fill_profile%bank_builds + sum(nbank)
+        self%fill_profile%nrefined    = self%fill_profile%nrefined    + sum(nrefined)
+        if( .not. self%p_ptr%l_doshift ) return
+        self%fill_profile%projs_ns = max(self%fill_profile%projs_ns, nrefine)
+        do ithr = 1,size(grad_obj)
+            call grad_obj(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
+            self%fill_profile%objective_evals = self%fill_profile%objective_evals + obj_ithr
+            self%fill_profile%gradient_evals  = self%fill_profile%gradient_evals  + grad_ithr
+            self%fill_profile%alternations    = self%fill_profile%alternations    + alt_ithr
+            self%fill_profile%grid_points     = self%fill_profile%grid_points     + grid_ithr
+            self%fill_profile%minimize_calls  = self%fill_profile%minimize_calls  + min_ithr
+        enddo
+    end subroutine record_fill_profile2D
 
     subroutine record_sparse_eval( self, i, ithr, icls, dist, irot, x, y, has_sh )
         class(eul_prob_tab2D), intent(inout) :: self
@@ -510,8 +675,8 @@ contains
         self%assgn_map(iptcl_loc)%x      = candidate%x
         self%assgn_map(iptcl_loc)%y      = candidate%y
         self%assgn_map(iptcl_loc)%has_sh = candidate%has_sh
-        call materialize_seed_shift(self%assgn_map(iptcl_loc),self%seed_shifts(:,iptcl_loc),&
-            &self%seed_has_sh(iptcl_loc),self%p_ptr%l_doshift,self%seed_nrots)
+        call record_seed_shift(self%assgn_map(iptcl_loc),self%seed_shifts(:,iptcl_loc),&
+            &self%seed_has_sh(iptcl_loc),self%p_ptr%l_doshift)
         self%assgn_map(iptcl_loc)%frac   = frac
         self%assgn_map(iptcl_loc)%npeaks = npeaks
     end subroutine finalize_candidate_assignment
@@ -922,6 +1087,7 @@ contains
         self%table_addr    = 1_int64
         self%table_nnz     = 0_int64
         self%table_nchunks = 0
+        self%fill_profile  = prob_fill_profile()
         self%b_ptr => null()
         self%p_ptr => null()
     end subroutine kill

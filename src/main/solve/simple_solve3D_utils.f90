@@ -201,7 +201,6 @@ contains
         if( .not. cline_symmap%defined('cenlp') )then
         call cline_symmap%set('cenlp',                 solve3D_cenlp_default())
         endif
-        call cline_symmap%set('hp',                        params%hp)
         ! re-reconstruct volume
         call cline_reconstruct3D%set('prg',          'reconstruct3D')
         call cline_reconstruct3D%set('projfile',            projfile)
@@ -595,13 +594,17 @@ contains
         type(string) :: vol_iter, vol_sym, stage, vol_stage, vol_lp_stage
         integer :: state
         real :: lp_snapshot
-        real :: lpsym
+        real :: lpsym, hpsym
         if( l_symran )then
             call se1%symrandomize(spproj%os_ptcl3D)
             call spproj%write_segment_inside('ptcl3D', projfile)
         endif
         if( l_srch4symaxis )then
             lpsym = max(solve3D_lpsymsrch_lb(),lpinfo(solve3D_symsrch_stage())%lp)
+            ! the axis search scores the Fourier shells between hp and lpsym; a stage limit coarser than hp (an early
+            ! map planned from the class FRCs of very few particles) would leave no shell, so the search's high-pass
+            ! is never finer than lpsym and the band holds at least the shell of lpsym
+            hpsym = max(params%hp, lpsym)
             write(logfhandle,'(A,F5.1)') '>>> DID SET MAP SYMMETRIZATION LOW-PASS LIMIT (IN A) TO: ', lpsym
             write(logfhandle,'(A)') '>>>'
             if( params%nstates > 1 )then
@@ -613,6 +616,7 @@ contains
             call cline_symmap%set('smpd', solve3D_stage_smpd_crop(params, istage))
             call cline_symmap%set('box',  solve3D_stage_box_crop(params, istage))
             call cline_symmap%set('lp', lpsym)
+            call cline_symmap%set('hp', hpsym)
             do state = 1,params%nstates
                 vol_iter = refine3D_state_vol_fname(state)
                 if( .not. file_exists(vol_iter) )then

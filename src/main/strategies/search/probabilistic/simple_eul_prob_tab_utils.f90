@@ -3,7 +3,7 @@ module simple_eul_prob_tab_utils
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_defs,      only: TINY, dp
 use simple_error,     only: simple_exception
-use simple_math,      only: hpsort, rotmat2d
+use simple_math,      only: hpsort
 use simple_oris,      only: oris
 use simple_rnd,       only: ran3
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
@@ -11,7 +11,7 @@ implicit none
 
 public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
-public :: materialize_seed_shift, read_seed_shift_table, write_seed_shift_table
+public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dist, sample_likelihood_dist, sample_power_dist, sample_likelihood_index
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 private
@@ -43,9 +43,9 @@ type :: prob_fill_profile
     integer(int64) :: alternations    = 0_int64 !< L-BFGS-B / in-plane alternations
     integer(int64) :: grid_points     = 0_int64 !< coarse-grid points scored
     integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
-    integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built (prob_fast)
+    integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built
     integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
-    integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero without prob_fast
+    integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
 end type prob_fill_profile
 
 ! Thread-owned append buffer used while candidate counts are not known in advance.
@@ -215,30 +215,17 @@ contains
         enddo
     end subroutine build_pind_lookup
 
-    subroutine materialize_seed_shift( assgn, seed_shift, seed_has_sh, l_doshift, seed_nrots )
-        type(ptcl_ref),       intent(inout) :: assgn
-        real,                 intent(in)    :: seed_shift(2)
-        logical,              intent(in)    :: seed_has_sh, l_doshift
-        integer,              intent(in)    :: seed_nrots
-        real    :: rotmat(2,2), rot_xy(2)
-        integer :: irot
-        if( .not. l_doshift ) return
-        if( assgn%has_sh    ) return
-        if( .not. seed_has_sh ) return
-        irot = assgn%inpl
-        if( irot < 1 .or. irot > seed_nrots .or. seed_nrots < 1 )then
-            assgn%x      = 0.
-            assgn%y      = 0.
-            assgn%has_sh = .true.
-            return
-        endif
-        call rotmat2d(real(irot - 1) * 360. / real(seed_nrots), rotmat)
-        rot_xy(1) = seed_shift(1) * rotmat(1,1) + seed_shift(2) * rotmat(2,1)
-        rot_xy(2) = seed_shift(1) * rotmat(1,2) + seed_shift(2) * rotmat(2,2)
-        assgn%x      = rot_xy(1)
-        assgn%y      = rot_xy(2)
+    !> The shift recorded for an assigned candidate that was not refined: the particle-frame seed every candidate of
+    !! the particle was scored with, as it is (every probability table seeds in the particle frame).
+    subroutine record_seed_shift( assgn, seed_shift, seed_has_sh, l_doshift )
+        type(ptcl_ref), intent(inout) :: assgn
+        real,           intent(in)    :: seed_shift(2)
+        logical,        intent(in)    :: seed_has_sh, l_doshift
+        if( .not. l_doshift .or. assgn%has_sh .or. .not. seed_has_sh ) return
+        assgn%x      = seed_shift(1)
+        assgn%y      = seed_shift(2)
         assgn%has_sh = .true.
-    end subroutine materialize_seed_shift
+    end subroutine record_seed_shift
 
     subroutine write_seed_shift_table( funit, addr, seed_nrots, seed_shifts, seed_has_sh )
         integer, intent(in)    :: funit

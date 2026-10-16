@@ -15,7 +15,9 @@ output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
                           their critical-path split, and the slowest and mean
                           partition times
     bench_report.txt      the run, the time split by stage, the overheads, the
-                          load balance, the outlier iterations and the worker phases
+                          load balance, the outlier iterations, the share of the 2D
+                          tables in the refine2D iterations, the probability
+                          tables' thread-seconds and the worker phases
     bench_profile.svg     the per-iteration critical path (stacked) and the
                           slowest and mean partition times
 
@@ -368,6 +370,53 @@ def phase_means(records: Sequence[Record]) -> List[Tuple[str, float, float]]:
     return sorted(out, key=lambda item: -item[1])
 
 
+TABLE_FAMILIES = (("PROB_TAB", "prob"), ("PROB_TAB_NEIGH", "prob_neigh"), ("PROB_TAB2D", "2D"))
+
+
+def write_thread_seconds(records: Sequence[Record], add) -> None:
+    """The table parts' THREAD-SECONDS blocks summed over parts and iterations, per table: the
+    additive entries summed, the ratios (load balance, cost per score) averaged over the records."""
+    for family, label in TABLE_FAMILIES:
+        recs = [rec for rec in by_family(records, family) if rec.thread_seconds]
+        if not recs:
+            continue
+        sums: Dict[str, float] = defaultdict(float)
+        ratios: Dict[str, List[float]] = defaultdict(list)
+        for rec in recs:
+            for key, value in rec.thread_seconds.items():
+                if "load balance" in key or "/(" in key:
+                    ratios[key].append(value)
+                else:
+                    sums[key] += value
+        add(f"Table thread-seconds ({label}), summed over {len(recs)} part records:")
+        for key, value in sums.items():
+            add(f"  {key:46s} {value:10.1f}")
+        for key, values in ratios.items():
+            add(f"  {key:46s} {statistics.fmean(values):10.4g} (mean)")
+        add("")
+
+
+def write_2D_tables(records: Sequence[Record], add) -> None:
+    """The refine2D iterations with a 2D probability table: the slowest table part per iteration (total and
+    fill) summed, against the refine2D strategy's wall time of the same iterations."""
+    strategy = first_pass_by_iteration(by_family(records, "REFINE2D_STRATEGY"))
+    tables = partition_stats(by_family(records, "PROB_TAB2D"), "prob_tab total time")
+    fills = partition_stats(by_family(records, "PROB_TAB2D"), "prob_tab table fill")
+    its = sorted(it for it in tables if it in strategy)
+    if not its:
+        return
+    total = sum(strategy[it].seconds.get("refine2D total time", 0.0) for it in its)
+    slowest = sum(tables[it][0] for it in its)
+    fill = sum(fills[it][0] for it in its if it in fills)
+    ratios = [tables[it][0] / tables[it][1] for it in its if tables[it][1] > 0]
+    add(f"refine2D iterations with a 2D table: {len(its)}; their refine2D wall time {total:.1f} s")
+    add(f"  slowest table part, total                  {slowest:9.1f} s  {pct(slowest, total)}")
+    add(f"  slowest table part, table fill             {fill:9.1f} s  {pct(fill, total)}")
+    if ratios:
+        add(f"  table parts' load balance (slowest over the mean): median {statistics.median(ratios):.2f}")
+    add("")
+
+
 def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: str, nfiles: int,
                  indir: Path, outpath: Path) -> None:
     lines: List[str] = []
@@ -470,10 +519,13 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: s
         if not found:
             add("  none")
         add("")
+    write_2D_tables(records, add)
+    write_thread_seconds(records, add)
     for family, title in (("REFINE3D", "Search worker phases (mean and maximum over iterations and partitions)"),
                           ("PROB_TAB", "Probability-table part phases (prob)"),
                           ("PROB_TAB_NEIGH", "Probability-table part phases (prob_neigh)"),
-                          ("PROB_ALIGN", "Probabilistic pre-step driver phases"),
+                          ("PROB_ALIGN", "Probabilistic pre-step driver phases (prob)"),
+                          ("PROB_ALIGN_NEIGH", "Probabilistic pre-step driver phases (prob_neigh)"),
                           ("REC3D", "Reconstruction pass phases"),
                           ("VOLASSEMBLE", "Volume assembly phases"),
                           ("SIGMA2_COMMIT", "Sigma2 commit phases"),

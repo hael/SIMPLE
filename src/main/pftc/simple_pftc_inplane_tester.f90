@@ -532,7 +532,7 @@ contains
         call kill_fixture(b)
     end subroutine test_strategy2D_route_flags
 
-    ! ---- quadratic shift step from the coarse grid (prob_fast, multi-state) ---
+    ! ---- quadratic shift step from the coarse grid (multi-state table) -------
 
     !> the pure step: exact recovery of a quadratic's stationary point, and each guard that refuses a fit
     subroutine test_grid_fit_step()
@@ -671,7 +671,7 @@ contains
 
     end subroutine test_grid_fit_search
 
-    ! ---- particle-frame shifts (prob_fast) -------------------------------------
+    ! ---- particle-frame shifts (the probabilistic tables) ----------------------
 
     !> the two frame conversions: a quarter turn, the round trip, and a lattice corner that leaves the box
     subroutine test_shift_frames()
@@ -767,7 +767,7 @@ contains
 
     end subroutine test_particle_bank
 
-    !> the particle-frame grid (prob_fast, multi-state) on the phantom: option off is bit-identical, the bank is built once per particle, the result
+    !> the particle-frame grid (multi-state table) on the phantom: option off is bit-identical, the bank is built once per particle, the result
     !! agrees with the reference-frame grid, and the quadratic step works on the lattice
     subroutine test_grid_ptcl_search()
         integer :: icase

@@ -5,13 +5,13 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
-    &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist, &
+    &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
     &write_seed_shift_table, prob_candidate, prob_candidate_buffer, prob_fill_profile
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
 implicit none
 
-public :: eul_prob_tab, record_seed_shift
+public :: eul_prob_tab
 private
 #include "simple_local_flags.inc"
 
@@ -24,7 +24,7 @@ type :: eul_prob_tab
     type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
     real,           allocatable :: seed_shifts(:,:) !< per-particle seeded shift       (2,nptcls)
     logical,        allocatable :: seed_has_sh(:)   !< per-particle seeded shift flag  (nptcls)
-    integer                     :: seed_nrots = 0   !< rotation grid used for deferred seeded shifts
+    integer                     :: seed_nrots = 0   !< rotation grid of the table (checked when the parts are read)
     integer,        allocatable :: pinds(:)        !< particle indices for processing
     integer,        allocatable :: ssinds(:)       !< non-empty state indices
     integer,        allocatable :: state_to_active_rank(:) !< requested state -> compact active-state rank
@@ -217,8 +217,8 @@ contains
         integer :: inpl_refs(self%nrefs,nthr_glob)
         real    :: lims(2,2), lims_init(2,2), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
-        logical :: l_sh_first, l_grid_fit, l_grid_ptcl, l_seed_ptcl
-        complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo (prob_fast, single state)
+        logical :: l_sh_first, l_grid
+        complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo (single state)
         integer(int64) :: seed_builds, bank_ithr
         integer :: kfromto_loc(2)
         integer(int64) :: fit_ithr(0:5)
@@ -232,11 +232,9 @@ contains
         ts_refine = 0.d0
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_sh_first      = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
-        ! prob_fast: the particle-frame grid and its quadratic step in the multi-state table, the particle-frame seed in
-        ! the seeded single-state table
-        l_grid_fit      = trim(self%p_ptr%prob_fast) == 'yes' .and. self%p_ptr%nstates > 1
-        l_grid_ptcl     = l_grid_fit
-        l_seed_ptcl     = trim(self%p_ptr%prob_fast) == 'yes' .and. l_sh_first
+        ! the particle-frame grid and its quadratic step in the multi-state table, the particle-frame seed in the
+        ! seeded single-state table
+        l_grid          = self%p_ptr%nstates > 1
         seed_builds     = 0_int64
         call seed_rnd
         projs_ns = 0
@@ -256,36 +254,27 @@ contains
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
             do ithr = 1,nthr_glob
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
-                    &maxits=self%p_ptr%maxits_sh, coarse_init=.true., grid_fit=l_grid_fit, grid_ptcl=l_grid_ptcl)
+                    &maxits=self%p_ptr%maxits_sh, coarse_init=.true., grid_fit=l_grid, grid_ptcl=l_grid)
             end do
-            if( l_seed_ptcl )then
+            if( l_sh_first )then
                 kfromto_loc = self%b_ptr%pftc%get_kfromto()
                 allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nthr_glob))
             endif
             ! fill the table
             t_region = omp_get_wtime()
-            if( l_grid_ptcl .or. l_grid_fit )then
-                ! With the grid keys a particle's cost depends on how many of its searches the fit
-                ! settles, so static blocks leave threads idle at the tail (load balance 0.90 against
-                ! 0.98 with the keys off). Each thread owns its search object and candidate buffer and
-                ! a particle is processed whole, so the dynamic order changes only which thread meets
-                ! which particle. The keys-off loop below stays static.
-                !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(dynamic)
-                do i = i_first, i_last
-                    iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
-                    call process_particle_with_shift(i, iptcl, ithr)
-                enddo
-                !$omp end parallel do
-            else
-                !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(static)
-                do i = i_first, i_last
-                    iptcl = self%pinds(i)
-                    ithr  = omp_get_thread_num() + 1
-                    call process_particle_with_shift(i, iptcl, ithr)
-                enddo
-                !$omp end parallel do
-            endif
+            ! A particle's cost depends on its shift searches (how many alternations they take, and
+            ! with the grid keys how many of them the fit settles), so static blocks leave threads
+            ! idle at the tail (load balance 0.90 against 0.98 dynamic, measured with the grid
+            ! keys). Each thread owns its search object and candidate buffer and a particle is
+            ! processed whole, so the dynamic order changes only which thread, and so which random
+            ! draws, a particle meets.
+            !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(dynamic)
+            do i = i_first, i_last
+                iptcl = self%pinds(i)
+                ithr  = omp_get_thread_num() + 1
+                call process_particle_with_shift(i, iptcl, ithr)
+            enddo
+            !$omp end parallel do
             self%fill_profile%wall_region = self%fill_profile%wall_region + (omp_get_wtime() - t_region)
         else
             ! fill the table
@@ -341,16 +330,14 @@ contains
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state, prev_proj)
             t0 = omp_get_wtime()
             call estimate_shift_seed(iptcl_loc, ithr_loc, prev_state, prev_proj, o_prev_loc, shift_seed, irot_seed)
-            l_bank_seed = .false.
-            if( l_seed_ptcl )then
-                ! the seed is one particle-frame shift from here on: the estimate converted at its rotation
-                if( irot_seed > 0 ) shift_seed(2:3) = shift_ref2ptcl(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot_seed))
-                l_bank_seed = sum(shift_seed(2:3)**2) > SHERRSQ
-                if( l_bank_seed )then
-                    call self%b_ptr%pftc%memoize_shifted_ptcl(iptcl_loc, shift_seed(2:3), seed_bank(:,:,ithr_loc))
-                    !$omp atomic
-                    seed_builds = seed_builds + 1_int64
-                endif
+            ! the seed is one particle-frame shift from here on: the estimate converted at its rotation (a zero seed
+            ! without the single-state seeding)
+            if( irot_seed > 0 ) shift_seed(2:3) = shift_ref2ptcl(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot_seed))
+            l_bank_seed = sum(shift_seed(2:3)**2) > SHERRSQ
+            if( l_bank_seed )then
+                call self%b_ptr%pftc%memoize_shifted_ptcl(iptcl_loc, shift_seed(2:3), seed_bank(:,:,ithr_loc))
+                !$omp atomic
+                seed_builds = seed_builds + 1_int64
             endif
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
             self%seed_shifts(:,i_loc) = shift_seed(2:3)
@@ -460,13 +447,10 @@ contains
                 call grad_shsrch_obj(ithr_loc)%set_indices(self%ref_full(ri_loc), iptcl_loc)
                 irot_loc = inpl_refs(ri_loc,ithr_loc)
                 if( l_sh_first )then
-                    xy_start = shift_seed(2:3)
-                    if( l_seed_ptcl )then
-                        ! the particle-frame seed as the shift of this reference at the rotation it was scored at, in the box
-                        xy_start = shift_ptcl2ref(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot_loc))
-                        xy_start(1) = max(lims(1,1), min(lims(1,2), xy_start(1)))
-                        xy_start(2) = max(lims(2,1), min(lims(2,2), xy_start(2)))
-                    endif
+                    ! the particle-frame seed as the shift of this reference at the rotation it was scored at, in the box
+                    xy_start = shift_ptcl2ref(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot_loc))
+                    xy_start(1) = max(lims(1,1), min(lims(1,2), xy_start(1)))
+                    xy_start(2) = max(lims(2,1), min(lims(2,2), xy_start(2)))
                     refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, &
                         &sh_rot=.true., xy_in=xy_start)
                 else
@@ -519,24 +503,6 @@ contains
         type(prob_fill_profile) :: profile
         profile = self%fill_profile
     end function get_fill_profile
-
-    !> The shift recorded for an assigned candidate that was not refined. The seed table holds a reference-frame
-    !! seed, rotated by the candidate's in-plane angle (materialize_seed_shift), or with prob_fast (single state) the
-    !! particle-frame seed every candidate was scored with, recorded as it is.
-    subroutine record_seed_shift( assgn, seed_shift, seed_has_sh, l_doshift, seed_nrots, l_seed_ptcl )
-        type(ptcl_ref), intent(inout) :: assgn
-        real,           intent(in)    :: seed_shift(2)
-        logical,        intent(in)    :: seed_has_sh, l_doshift, l_seed_ptcl
-        integer,        intent(in)    :: seed_nrots
-        if( .not. l_seed_ptcl )then
-            call materialize_seed_shift(assgn, seed_shift, seed_has_sh, l_doshift, seed_nrots)
-            return
-        endif
-        if( .not. l_doshift .or. assgn%has_sh .or. .not. seed_has_sh ) return
-        assgn%x      = seed_shift(1)
-        assgn%y      = seed_shift(2)
-        assgn%has_sh = .true.
-    end subroutine record_seed_shift
 
     ! ptcl -> (proj, state) assignment using calibrated likelihood weights
     subroutine ref_assign( self )
@@ -703,8 +669,7 @@ contains
             ptcl_avail(assigned_ptcl)     = .false.
             call self%assign_candidate(assigned_ptcl, self%loc_tab(assigned_iref,assigned_ptcl))
             call record_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift, self%seed_nrots,&
-                &trim(self%p_ptr%prob_fast) == 'yes' .and. self%p_ptr%nstates <= 1)
+                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift)
             self%assgn_map(assigned_ptcl)%frac = 100.
         end subroutine assign_current_ref
 

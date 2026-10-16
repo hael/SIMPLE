@@ -271,6 +271,10 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=1jxy)
   simple_add_test(simulated_workflow_6vxx highlevel 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=6vxx)
+  # 1jxy runs solve3D twice from the same solve2D project: in shared memory and
+  # with nparts=2 (two local simple_private_exec workers), both checked against
+  # the truth, so a simulated suite covers the distributed strategy (owner
+  # decision 2026-10-15).
   simple_add_test(simulated_workflow_1jxy highlevel 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=1jxy)
   # The FCC Pt and wurtzite CdSe fixtures are independent crystal-system

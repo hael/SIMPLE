@@ -178,6 +178,23 @@ Probabilistic table construction has a separate bounded-memory contract:
 - compact storage is materialized as the established `ptcl_ref` assignment only
   after global selection, so assignment-file semantics do not change.
 
+Both table fills (`fill_tab_range` for `refine=prob`: the last stage and the
+seed pass; `fill_tab_prob_snhc_range` for the `prob_snhc` stages) hold the
+shift in the particle frame, as the 3D tables do (`refine3D_policy.md`,
+probabilistic pre-step): the shift estimated at the particle's previous class
+is converted once at the rotation its search ended at, the particle is
+shifted once by it (`memoize_shifted_ptcl`, unless the shift is below
+`SHERRSQ`), every class is scored against that memo with the bank kernel
+(`gen_likelihood_val_bank`, which includes the angular Nyquist bin), a
+refined class starts its shift search from the seed converted at its own
+rotation and clamped into the search box, and an assigned, unrefined
+candidate records the seed as it is (`record_seed_shift`). The particle loops
+run with dynamic OpenMP scheduling (a particle is processed whole by one
+thread, so only its random draws change). Each table part's bench record
+(`PROB_TAB2D_BENCH_PARTppp.txt`) carries the 3D tables' fill profile: the
+thread-seconds of the seed, the score loop and the refinement, the fill
+regions' wall time, the load balance and the shifted particle memos built.
+
 `simple_commanders_mkcavgs.f90` and the classaverager modules own:
 
 - explicit class-average assembly from partial sums

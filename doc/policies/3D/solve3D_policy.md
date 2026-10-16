@@ -365,6 +365,15 @@ At the symmetry-search stage, symmetry-axis search is state-local for
 multi-state runs. Each active state determines its own axis from its current
 map and applies that transform only to orientations assigned to that state.
 
+The axis search scores the Fourier shells between its high-pass and its
+low-pass. The low-pass is the planned limit of the symmetry-search stage, at
+least 12 Å; the high-pass is the run's `hp` (by default half the box), but
+never finer than that low-pass, so the band always holds at least the shell
+of the low-pass. A stage limit as coarse as half the box (planned from the
+class Fourier ring correlations of very few particles) once left the band empty, and the search
+stopped on undefined scores; the polar volume correlator now refuses a band
+without a shell above the origin (2026-10-15).
+
 After symmetry handling, the selected maps are injected back into the staged
 `refine3D` command line and reference-section files are invalidated.
 

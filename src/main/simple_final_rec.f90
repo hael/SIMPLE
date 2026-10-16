@@ -373,7 +373,8 @@ contains
         call child_cline%set('envfsc',   params%envfsc)
         call child_cline%set('envmsklp', params%envmsklp)
         call child_cline%set('binwidth', params%binwidth)
-        if( params%nthr    > 1  ) call child_cline%set('nthr',    params%nthr)
+        ! distributed workers are separate processes, which require nthr on their command line
+        if( params%nthr > 1 .or. params%nparts > 1 ) call child_cline%set('nthr', params%nthr)
         if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
         if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)
         if( params%nstates > 1  ) call child_cline%set('nstates', params%nstates)

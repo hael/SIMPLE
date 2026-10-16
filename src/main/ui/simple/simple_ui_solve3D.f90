@@ -174,28 +174,12 @@ contains
             &'from the staged automasking point(yes|nu|no){no}', &
             &'', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
         &choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']))
-        ! developer key of the probabilistic pre-step: solve3D, solve3D_chunks and (forwarded) its add-on runs
-        call add_prob_fast_input(prg)
         ! computer controls
         call prg%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_COMP, nthr,                                 group="compute", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_COMP, 'nthr_ini3D', 'num', 'Number of threads for ini3D phase, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .false., 0., group="compute", visibility=UI_VIS_STANDARD)
     end subroutine add_solve3D_base_inputs
-
-    !> prob_fast on a solve3D-family program; solve3D_chunks forwards it to its add-on runs, which accept it as
-    !! their own input (it is not recorded in the frozen run's manifest)
-    subroutine add_prob_fast_input( prg )
-        type(ui_program), intent(inout) :: prg
-        call prg%add_input(UI_SRCH, 'prob_fast', 'binary', 'Speed-ups of the probabilistic table', &
-        &'Developer key, pending promotion: in the multi-state probabilistic table, score the coarse shift grid from shifted &
-        &copies of the particle and replace the shift search by a quadratic fit to that grid where the fit is well &
-        &conditioned (L-BFGS-B remains the fallback); in the single-state table, apply the shift seed to the particle once &
-        &instead of to every reference and record it as a particle shift. Approximate away from the seed rotation and &
-        &on the grid(yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="search", visibility=UI_VIS_DEVELOPER)
-    end subroutine add_prob_fast_input
-
 
     !> Grow a completed solve3D solution with the particles a superset
     !! project adds: the frozen particles contribute their signal, unsearched,
@@ -233,7 +217,6 @@ contains
         call solve3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of the searched particles'' assignments for early stopping when the last stage is stage 3{0.95}', &
         &'overlap fraction', .false., .95, group="search", visibility=UI_VIS_ADVANCED)
-        call add_prob_fast_input(solve3D_addon)
         ! overridable settings of the frozen run: how the added particles are sampled and masked
         call solve3D_addon%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
         &'Units every fractional-update sample of the searched particles is balanced over (see solve3D); '//&

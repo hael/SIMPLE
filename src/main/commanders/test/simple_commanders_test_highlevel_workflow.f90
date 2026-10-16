@@ -44,11 +44,13 @@ module subroutine exec_test_simulated_workflow( self, cline )
     integer,          parameter :: NMOVIES        = 10
     integer,          parameter :: EXTRACT_BOX    = 192
     integer,          parameter :: NTHR           = 1
-    integer,          parameter :: TEST_SEED      = 20260923
+    integer,          parameter :: SEED_6VXX      = 20261003
+    integer,          parameter :: SEED_1JXY      = 20260923
     real,             parameter :: MIN_VOL_CORR   = 0.80
     real,             parameter :: MAX_FSC0143    = 40.0
     real,             parameter :: DOCK_HP        = 100.0
     real,             parameter :: DOCK_LP        = 20.0
+    integer,          parameter :: NPARTS_DISTR   = 2
     type(cmdline)                       :: cline_projection, cline_sim_mov, cline_new_project
     type(cmdline)                       :: cline_import_movies, cline_mot_corr, cline_ctf_est
     type(cmdline)                       :: cline_pick, cline_extract, cline_solve2D, cline_solve3D
@@ -77,8 +79,10 @@ module subroutine exec_test_simulated_workflow( self, cline )
     real                                :: pickref_smpd, pickref_width
     real                                :: volume_corr, volume_fsc0143
     real                                :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
-    integer                             :: rnd_defocus
-    logical                             :: volume_ok
+    real                                :: distr_corr, distr_fsc0143
+    real                                :: distr_dock_direct, distr_dock_mirrored, distr_dock_selected
+    integer                             :: rnd_defocus, test_seed
+    logical                             :: volume_ok, distr_ok
 
     ! The test executable initializes only the test UI.  Directly invoked SIMPLE
     ! commanders need the regular UI metadata to implement mkdir=yes correctly.
@@ -105,17 +109,19 @@ module subroutine exec_test_simulated_workflow( self, cline )
             vol_file    = '6VXX.mrc'
             reproj_file = 'reprojs_6VXX.mrcs'
             pgrp        = 'c3'
+            test_seed   = SEED_6VXX
         case('1jxy')
             vol_file    = '1JXY.mrc'
             reproj_file = 'reprojs_1JXY.mrcs'
             pgrp        = 'd2'
+            test_seed   = SEED_1JXY
         case default
             THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
     ! Serial execution fixes draw order, including work before the first commander.
     !$ call omp_set_num_threads(NTHR)
-    call seed_rnd_fixed(TEST_SEED, propagate=.true.)
-    write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', TEST_SEED
+    call seed_rnd_fixed(test_seed, propagate=.true.)
+    write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', test_seed
     test_workdir = 'test_simulated_workflow_'//system_name%to_char()
     call simple_getcwd(cwd_root)
     if( file_exists(test_workdir%to_char()) )then
@@ -347,28 +353,33 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call spproj%kill()
 
     write(logfhandle,'(a)') '>>> Step 10: solve3D'
-    call cline_solve3D%set('prg',                   'solve3D')
-    call cline_solve3D%set('projfile',              project_path)
-    call cline_solve3D%set('mkdir',                        'yes')
-    call cline_solve3D%set('pgrp',                          pgrp)
-    if( system_name == '1jxy' ) call cline_solve3D%set('pgrp_start', pgrp)
-    call cline_solve3D%set('mskdiam',                    MSKDIAM)
-    call cline_solve3D%set('nthr',                          NTHR)
-    call xsolve3D%execute(cline_solve3D)
-    call simple_getcwd(solve3D_dir)
-    call cline_solve3D%kill()
-    final_volume = filepath(solve3D_dir, refine3D_state_vol_fname(1))
-    call validate_reconstructed_volume(truth_volume, final_volume, SMPD, EXTRACT_BOX, 0.01, MSKDIAM, &
-        &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, &
-        &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok)
+    call run_solve3D_step(0, '', volume_ok, volume_corr, volume_fsc0143, &
+        &dock_corr_direct, dock_corr_mirrored, dock_corr_selected)
+    call return_to_stage_root('solve3D')
+
+    ! 1jxy also runs the distributed strategy (job scheduling, the master's prob_align and
+    ! volume assembly between parts) from the same input project, which mkdir=yes left unchanged
+    distr_ok = .true.
+    if( system_name == '1jxy' )then
+        write(logfhandle,'(a,i0,a)') '>>> Step 11: solve3D distributed over ', NPARTS_DISTR, ' parts'
+        call run_solve3D_step(NPARTS_DISTR, 'solve3D_distr', distr_ok, distr_corr, distr_fsc0143, &
+            &distr_dock_direct, distr_dock_mirrored, distr_dock_selected)
+    endif
 
     call simple_chdir(cwd_root, status)
     if( status /= 0 ) THROW_HARD('Could not restore the original working directory')
     if( .not. volume_ok ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: final-volume validation failed')
+    if( .not. distr_ok  ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: distributed final-volume validation failed')
     write(logfhandle,'(a,a,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', &
         &system_name%to_char(), ' docking correlation direct=', dock_corr_direct, ', mirrored=', dock_corr_mirrored, &
         &', selected=', dock_corr_selected, ', whole-volume correlation=', volume_corr, &
         &', FSC=0.143 at ', volume_fsc0143, ' A'
+    if( system_name == '1jxy' )then
+        write(logfhandle,'(a,a,a,i0,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', &
+            &system_name%to_char(), ' nparts=', NPARTS_DISTR, ' docking correlation direct=', distr_dock_direct, &
+            &', mirrored=', distr_dock_mirrored, ', selected=', distr_dock_selected, &
+            &', whole-volume correlation=', distr_corr, ', FSC=0.143 at ', distr_fsc0143, ' A'
+    endif
     call simple_end('**** SIMPLE_TEST_SIMULATED_WORKFLOW NORMAL STOP ****')
 
   contains
@@ -376,6 +387,31 @@ module subroutine exec_test_simulated_workflow( self, cline )
     subroutine update_project_path
         if( file_exists(PROJFILE) ) project_path = simple_abspath(string(PROJFILE))
     end subroutine update_project_path
+
+    !> solve3D on the solve2D project with the suite's settings, shared-memory (nparts=0) or
+    !! distributed, in its own execution directory; the final map is checked against the truth
+    subroutine run_solve3D_step( nparts, dir_exec, ok, corr, fsc0143, dcorr_direct, dcorr_mirrored, dcorr_selected )
+        integer,          intent(in)  :: nparts
+        character(len=*), intent(in)  :: dir_exec
+        logical,          intent(out) :: ok
+        real,             intent(out) :: corr, fsc0143, dcorr_direct, dcorr_mirrored, dcorr_selected
+        call cline_solve3D%set('prg',                   'solve3D')
+        call cline_solve3D%set('projfile',              project_path)
+        call cline_solve3D%set('mkdir',                        'yes')
+        if( len(dir_exec) > 0 ) call cline_solve3D%set('dir_exec', dir_exec)
+        call cline_solve3D%set('pgrp',                          pgrp)
+        if( system_name == '1jxy' ) call cline_solve3D%set('pgrp_start', pgrp)
+        call cline_solve3D%set('mskdiam',                    MSKDIAM)
+        if( nparts > 0 ) call cline_solve3D%set('nparts',     nparts)
+        call cline_solve3D%set('nthr',                          NTHR)
+        call xsolve3D%execute(cline_solve3D)
+        call simple_getcwd(solve3D_dir)
+        call cline_solve3D%kill()
+        final_volume = filepath(solve3D_dir, refine3D_state_vol_fname(1))
+        call validate_reconstructed_volume(truth_volume, final_volume, SMPD, EXTRACT_BOX, 0.01, MSKDIAM, &
+            &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, corr, fsc0143, &
+            &dcorr_direct, dcorr_mirrored, dcorr_selected, ok)
+    end subroutine run_solve3D_step
 
     subroutine return_to_stage_root( stage )
         character(len=*), intent(in) :: stage

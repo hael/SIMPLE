@@ -108,7 +108,7 @@ convenience and deliberately not a CTest entry.
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models |
 | `lib_stream` | library | optics assignment, picking references, pick and extract |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
-| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated movies through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D` |
+| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated movies through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`; 1jxy then runs `solve3D` a second time from the same `solve2D` project with `nparts=2` (two local worker processes, the distributed strategy), in a directory of its own and checked against the same truth, so that the master's job scheduling and assembly between parts are covered (owner decision 2026-10-15). Each suite reseeds the whole workflow with its own root seed, printed in the log: 1jxy 20260923, 6vxx 20261003 (owner decision 2026-10-15: with 80 particles the 6vxx `solve3D` step is sensitive to the draw, and the earlier common seed stopped finding its map after the 2D table moved its shifts to the particle frame) |
 | `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles |
 | `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |

@@ -91,7 +91,6 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     type(qsys_env) :: qenv
     type(chash)    :: job_descr
     integer        :: nthr_master
-    logical        :: have_oris
     logical        :: l_multistates
     logical        :: l_combine_eo
     ! Prototypes / persistent command lines
@@ -1078,7 +1077,6 @@ contains
         ! E/O PARTITIONING (required for consistent e/o reconstructions)
         call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         ! CONTINUE / STARTUP
-        self%have_oris = .true.
         if( params%continue .eq. 'yes' )then
             ! Continuing from previous refinement round
             do state=1,params%nstates
@@ -1141,10 +1139,8 @@ contains
             enddo
             ! a Cartesian pass continues from existing poses (C11)
             if( params%l_cart_refine ) call check_cont_seeds(build%spproj_field)
-            self%have_oris = .not. build%spproj%is_virgin_field(params%oritype)
-            if( .not. self%have_oris )then
+            if( build%spproj%is_virgin_field(params%oritype) )then
                 call build%spproj_field%rnd_oris
-                self%have_oris = .true.
                 call build%spproj%write_segment_inside(params%oritype)
             endif
             if( .not. build%spproj_field%isthere('proj') )then
@@ -1284,10 +1280,8 @@ contains
         if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model(params, cline, nthr=self%nthr_master)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
-        ! ensure spproj is current
-        if( self%have_oris .or. iter > params%startit )then
-            call build%spproj%read(params%projfile)
-        endif
+        ! ensure spproj is current (initialize leaves every run with orientations on file)
+        call build%spproj%read(params%projfile)
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         ! prob refinement
         if( L_BENCH_GLOB )then
@@ -1302,7 +1296,7 @@ contains
                 call cline_prob_align%set('prg', 'prob_align')
             endif
             call cline_prob_align%set('which_iter', iter)
-            call build%spproj%write_segment_inside(params%oritype)
+            ! prob_align reads the project file, which holds the segment read above
             if( l_prob_neigh_mode )then
                 call xprob_align_neigh_distr%execute( cline_prob_align )
             else

@@ -2,6 +2,7 @@
 module simple_qsys_ctrl
 use simple_core_module_api
 use simple_qsys_base,                only: qsys_base
+use simple_qsys_local,               only: qsys_local
 use simple_qsys_slurm,               only: qsys_slurm
 use simple_qsys_lsf,                 only: qsys_lsf
 use simple_qsys_persistent_worker,   only: qsys_persistent_worker
@@ -13,6 +14,7 @@ use simple_qsys_job_record,          only: check_job_lost, cancel_queued_job, JO
 use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task 
 use simple_persistent_worker_server,       only: persistent_worker
 use simple_mem_estimator
+use unix,                            only: c_int, c_usleep
 implicit none
 
 public :: qsys_ctrl
@@ -26,8 +28,12 @@ abstract interface
     end subroutine worker_warmup_callback
 end interface
 
-!> Poll interval (seconds) used by blocking scheduler loops.
+!> Poll interval (seconds) of the blocking scheduler loops on batch queues and the persistent
+!! worker backend, whose done files may sit on a shared file system.
 integer, parameter :: SHORTTIME = 1
+!> Poll interval (microseconds) of the blocking scheduler loops on the local queue: a part's done
+!! file appears on the local file system, so the master notices it within 0.1 s instead of 1-2 s.
+integer, parameter :: LOCAL_POLL_US = 100000
 
 !> Central controller that owns script generation, job-status tracking, and submission
 !! for one range of partitions.  Supports local, SLURM, LSF, PBS, SGE, and the
@@ -939,18 +945,19 @@ contains
 
     ! THE MASTER SCHEDULERS
 
-    !> Block until all partition jobs have completed, polling at SHORTTIME intervals.
+    !> Block until all partition jobs have completed. The done flags are refreshed before they
+    !! are tested, so the loop ends at the first poll after the last part has finished.
     subroutine schedule_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
         integer(timer_int_kind) :: t_phase
         t_phase = tic()
         do
-            if( all(self%jobs_done) ) exit
             call self%update_queue
             if( any(self%jobs_failed) ) call self%stop_on_failed_parts
+            if( all(self%jobs_done) ) exit
             call self%submit_scripts
             call self%service_persistent_worker_warmup()
-            call sleep(SHORTTIME)
+            call poll_pause(self)
         end do
         call report_phase_completion(self, real(toc(t_phase)))
     end subroutine schedule_jobs
@@ -967,13 +974,26 @@ contains
         self%jobs_submitted(:) = .true.
         call self%submit_script(string(ARRAY_SCRIPT))
         do
-            if( all(self%jobs_done) ) exit
             call self%update_queue
             if( any(self%jobs_failed) ) call self%stop_on_failed_parts
-            call sleep(SHORTTIME)
+            if( all(self%jobs_done) ) exit
+            call poll_pause(self)
         end do
         call report_phase_completion(self, real(toc(t_phase)))
     end subroutine schedule_array_jobs
+
+    !> The pause between two polls of a blocking scheduler loop: LOCAL_POLL_US on the local
+    !! queue, SHORTTIME seconds otherwise.
+    subroutine poll_pause( self )
+        class(qsys_ctrl), intent(in) :: self
+        integer(c_int) :: rc
+        select type( pmyqsys => self%myqsys )
+            class is(qsys_local)
+                rc = c_usleep(LOCAL_POLL_US)
+            class default
+                call sleep(SHORTTIME)
+        end select
+    end subroutine poll_pause
 
     !> Before a batch part is submitted: no exit status, job record or failure of an earlier
     !! submission of the same part remains.

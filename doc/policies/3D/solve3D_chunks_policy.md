@@ -41,7 +41,6 @@ below. It has no cadence gate and no rollback.
 | compute keys (`nparts`, `nthr`) and the execution-environment keys | accepted; they go to the base run and every add-on |
 | `nsample` | not accepted; derived (section 3) |
 | `rec_backend`, `maxits_pcg`, `maxits_ml`, `pcg_solvent`, `pcg_solvent_lambda`, `pcg_solvent_check` | not accepted; reconstruction is always `rec_backend=gridding` |
-| `prob_fast` | optional, developer key (default `no`); goes to the base run and every add-on |
 | `nptcls_base` | not accepted; the plan replaces it |
 | `vol1`, `cavg_ini`, `cavg_ini_ext`, `state`, `projfile_frozen` | not accepted |
 

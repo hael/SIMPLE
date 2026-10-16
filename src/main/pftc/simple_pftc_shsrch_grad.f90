@@ -44,13 +44,13 @@ type :: pftc_shsrch_grad
     integer(int64)            :: profile_alternations    = 0_int64 !< L-BFGS-B / discrete in-plane alternations
     integer(int64)            :: profile_grid_points     = 0_int64 !< coarse-grid points scored
     integer(int64)            :: profile_minimize_calls  = 0_int64 !< calls of minimize
-    ! quadratic step from the coarse grid (prob_fast, multi-state)
+    ! quadratic step from the coarse grid (the multi-state probabilistic table)
     logical                   :: grid_fit     = .false. !< quadratic step from the coarse grid before the alternations
     real,         allocatable :: grid_corrs(:,:)        !< objective of every grid point over all rotations (nrots, points)
     integer                   :: grid_ix_star = 0       !< grid point of the lowest cost, x index
     integer                   :: grid_iy_star = 0       !< grid point of the lowest cost, y index
     integer(int64)            :: profile_fit(0:FIT_NREASONS) = 0_int64 !< (0) fits kept, (1:5) fallbacks per FIT_* reason
-    ! particle-frame coarse grid (prob_fast, multi-state)
+    ! particle-frame coarse grid (the multi-state probabilistic table)
     logical                   :: grid_ptcl    = .false. !< the grid is the lattice of particle-frame shifts, scored from a bank
     complex(sp),  allocatable :: grid_bank(:,:,:)       !< shifted particle memos (pftsz+1, nk, lattice points + 1 scratch)
     integer                   :: grid_bank_ptcl = 0     !< particle the bank was built for (0: none)
