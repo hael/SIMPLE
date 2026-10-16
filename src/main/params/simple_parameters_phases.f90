@@ -923,6 +923,27 @@ contains
             case DEFAULT
                 THROW_HARD('pcg_solvent_check must be yes or no')
         end select
+        ! opt-in atomicity prior of the PCG reconstruction (simple_pcg_atomic_prior)
+        select case(trim(self%atm_prior))
+            case('yes')
+                self%l_atm_prior = .true.
+            case('no')
+                self%l_atm_prior = .false.
+            case DEFAULT
+                THROW_HARD('atm_prior must be yes or no')
+        end select
+        if( self%l_atm_prior )then
+            if( trim(self%rec_backend) /= 'pcg' ) THROW_HARD('atm_prior=yes requires rec_backend=pcg')
+            if( .not. cline%defined('pdbfile') )  THROW_HARD('atm_prior=yes requires the atom model pdbfile')
+            if( .not. file_exists(self%pdbfile) ) THROW_HARD('atm_prior=yes: pdbfile does not exist')
+            if( self%l_ml_reg )    THROW_HARD('atm_prior=yes requires ml_reg=no')
+            if( self%l_pcg_solvent ) THROW_HARD('atm_prior=yes and pcg_solvent=yes are exclusive')
+            if( self%l_nonuniform ) THROW_HARD('atm_prior=yes takes no nonuniform filtering')
+        endif
+        if( self%lambda_atm < 0. ) THROW_HARD('lambda_atm must be non-negative (0 = estimated)')
+        if( self%bfac_data < 0. )  THROW_HARD('bfac_data must be non-negative')
+        if( self%maxits_atm < 1 )  THROW_HARD('maxits_atm must be at least 1')
+        self%l_bfac_data_fit = .not. cline%defined('bfac_data')
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
         if( trim(self%discover_species) /= 'yes' .and. trim(self%discover_species) /= 'no' )then

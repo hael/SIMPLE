@@ -14,6 +14,7 @@ use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d, &
     &extract_native_fourier_plane, gather_packed_window
 use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
 use simple_pcg_lattice,       only: pcg_lattice
+use simple_pcg_atomic_prior,  only: pcg_atomic_prior
 use simple_pcg_solver,        only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve, &
     &PCG_STOP_INDEFINITE, PCG_XTOL, PCG_RESID_REPLACE, PCG_RHO_FLOOR_FRAC
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
@@ -112,7 +113,13 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     real, allocatable :: solvent_pen(:,:,:)            !< 1 - w(r) on the solve box
     real              :: solvent_lambda_rel = 0.0
     logical           :: l_solvent_prior = .false.
-    real              :: precond_ridge = 0.0 !< mean solvent ridge folded into the preconditioner (its units), see fold_solvent_ridge_into_precond
+    real              :: precond_ridge = 0.0 !< mean real-space ridges folded into the preconditioner (its units), see fold_ridges_into_precond
+    ! ---- optional atomicity prior: lambda_A (I - P_G), P_G the projector onto atom kernels ----
+    ! the prior object is shared by the two half operators and owned by the caller
+    class(pcg_atomic_prior), pointer :: atm => null()
+    real              :: atm_lambda     = 0.0 !< absolute lambda_A = atm_lambda_rel * realspace_diag
+    real              :: atm_lambda_rel = 0.0
+    logical           :: l_atm_prior    = .false.
     ! ---- per-phase profiling over a solve: particle loop vs FFT + lattice traffic ----
     logical  :: l_profile = .false.
     real(dp) :: t_setvol  = 0.0_dp  !< pad + forward FFT of the iterate
@@ -155,6 +162,11 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure :: set_ml_prior
     procedure :: set_solvent_prior
     procedure :: get_solvent_lambda
+    procedure :: set_atomic_prior
+    procedure :: get_atomic_lambda
+    procedure :: fit_atom_amplitudes
+    procedure :: atomic_model_map
+    procedure :: get_solve_support
     procedure, private :: add_ridge
     procedure, private :: build_env
     procedure, private :: build_hk_luts
@@ -212,7 +224,7 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure, private :: update_lambda_from_density
     procedure, private :: build_ml_prior_from_density
     procedure, private :: apply_fourier_diagonal
-    procedure, private :: fold_solvent_ridge_into_precond
+    procedure, private :: fold_ridges_into_precond
 end type reconstructor_pcg
 
 !> Rank-1 view of a reconstruction operator for the shared PCG engine.
@@ -420,6 +432,7 @@ contains
     subroutine set_deapod( self, l_deapod )
         class(reconstructor_pcg), intent(inout) :: self
         logical,                  intent(in)    :: l_deapod
+        if( self%l_atm_prior .and. .not. l_deapod ) THROW_HARD('the atomicity prior requires the deapodized operator; set_deapod')
         self%l_deapod = l_deapod
     end subroutine set_deapod
 
@@ -461,7 +474,7 @@ contains
     !! portable across datasets. Acts through the coupled iterations only: the
     !! closed-form start is a Fourier diagonal and cannot see a real-space term.
     !! The ridge's mean over the solve domain goes into the preconditioner
-    !! (fold_solvent_ridge_into_precond) so the ridge system keeps CG's conditioning
+    !! (fold_ridges_into_precond) so the ridge system keeps CG's conditioning
     subroutine set_solvent_prior( self, weight, lambda_rel )
         class(reconstructor_pcg), intent(inout) :: self
         class(image),             intent(in)    :: weight
@@ -476,13 +489,85 @@ contains
         self%solvent_pen = 1.0 - min(1.0, max(0.0, weight%get_rmat()))
         self%solvent_lambda_rel = lambda_rel
         self%l_solvent_prior    = lambda_rel > 0.0
-        call self%fold_solvent_ridge_into_precond
+        call self%fold_ridges_into_precond
     end subroutine set_solvent_prior
 
-    !> Jacobi term of the solvent ridge lambda_s (1-w(r)): not Fourier-diagonal, but its mean over the solve domain
-    !! is a constant, entered as c/padsc^2 like the ML prior; without it CG stays far from solved at the production
-    !! budget. Idempotent: the last folded constant is replaced. Called on set_solvent_prior and precond (re)build.
-    subroutine fold_solvent_ridge_into_precond( self )
+    !> Atomicity prior lambda_A (I - P_G) with lambda_A = lambda_rel * realspace_diag (the data precision per voxel).
+    !! The prior object must outlive the solves; lambda_rel = 0 detaches it and leaves the operator untouched.
+    !! Deapodized mode only, no ML prior beside it; call after end_accum
+    subroutine set_atomic_prior( self, prior, lambda_rel )
+        class(reconstructor_pcg),        intent(inout) :: self
+        class(pcg_atomic_prior), target, intent(in)    :: prior
+        real,                            intent(in)    :: lambda_rel
+        if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 ) THROW_HARD('relative atomicity lambda must be finite and non-negative')
+        if( self%realspace_diag <= 0.0 ) THROW_HARD('atomicity prior requires the data scale; call after end_accum; set_atomic_prior')
+        if( .not. self%l_deapod ) THROW_HARD('atomicity prior requires the deapodized operator; set_atomic_prior')
+        if( self%l_ml_prior_requested ) THROW_HARD('atomicity prior and ML prior are exclusive; set_atomic_prior')
+        if( .not. prior%is_built() ) THROW_HARD('atomicity prior has not been built; set_atomic_prior')
+        if( prior%get_box() /= self%box ) THROW_HARD('atomicity prior box differs from the solve box; set_atomic_prior')
+        nullify(self%atm)
+        self%l_atm_prior    = .false.
+        self%atm_lambda_rel = 0.0
+        self%atm_lambda     = 0.0
+        if( lambda_rel > 0.0 )then
+            self%atm            => prior
+            self%atm_lambda_rel = lambda_rel
+            self%atm_lambda     = lambda_rel * self%realspace_diag
+            self%l_atm_prior    = .true.
+        endif
+        call self%fold_ridges_into_precond
+    end subroutine set_atomic_prior
+
+    !> the absolute atomicity coefficient lambda_A (0 when the prior is off)
+    pure real function get_atomic_lambda( self )
+        class(reconstructor_pcg), intent(in) :: self
+        get_atomic_lambda = self%atm_lambda
+    end function get_atomic_lambda
+
+    !> Per-atom amplitudes fitted to this half's data through its normal operator, c = argmin |A G c - b|^2
+    !! (pcg_atomic_prior%amplitudes); the prior term vanishes on span(G), so it may be attached or not
+    subroutine fit_atom_amplitudes( self, prior, c, maxits, rtol, niters, rel_resid )
+        class(reconstructor_pcg), target, intent(inout) :: self
+        class(pcg_atomic_prior),          intent(in)    :: prior
+        real(dp), allocatable,            intent(out)   :: c(:)
+        integer,                          intent(in)    :: maxits
+        real,                             intent(in)    :: rtol
+        integer,                          intent(out)   :: niters
+        real,                             intent(out)   :: rel_resid
+        type(reconstructor_pcg_adapter) :: op
+        real(dp), allocatable :: gb(:)
+        if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; fit_atom_amplitudes')
+        if( prior%get_box() /= self%box ) THROW_HARD('atomicity prior box differs from the solve box; fit_atom_amplitudes')
+        gb = prior%gather(self%b_rhs)
+        op%client => self
+        call prior%amplitudes(op, gb, c, maxits, rtol, niters, rel_resid)
+    end subroutine fit_atom_amplitudes
+
+    !> window * G c, the atom model in the output space of the shipped maps
+    function atomic_model_map( self, prior, c ) result( m )
+        class(reconstructor_pcg), intent(in) :: self
+        class(pcg_atomic_prior),  intent(in) :: prior
+        real(dp),                 intent(in) :: c(:)
+        real, allocatable :: m(:,:,:)
+        m = prior%scatter(c)
+        call self%window_mul(m)
+    end function atomic_model_map
+
+    !> the hard solve support (1 inside, 0 outside; all ones without a support)
+    subroutine get_solve_support( self, supp )
+        class(reconstructor_pcg), intent(in)  :: self
+        real, allocatable,        intent(out) :: supp(:,:,:)
+        if( self%l_mask )then
+            allocate(supp(self%box,self%box,self%box), source=self%mask)
+        else
+            allocate(supp(self%box,self%box,self%box), source=1.0)
+        endif
+    end subroutine get_solve_support
+
+    !> Jacobi term of the real-space ridges, the solvent ridge lambda_s (1-w(r)) and the atomicity prior lambda_A:
+    !! neither is Fourier-diagonal, so the solvent ridge's mean over the solve domain and lambda_A enter the measured
+    !! voxels as c/padsc^2 like the ML prior. Idempotent: the last folded constant is replaced
+    subroutine fold_ridges_into_precond( self )
         class(reconstructor_pcg), intent(inout) :: self
         real(dp) :: psum
         real     :: c, denom
@@ -499,6 +584,7 @@ contains
             endif
             if( n > 0 ) c = self%solvent_lambda_rel * self%data_scale * real(psum / real(n,dp)) / self%padsc**2
         endif
+        if( self%l_atm_prior ) c = c + self%atm_lambda / self%padsc**2
         if( c == self%precond_ridge ) return
         !$omp parallel do collapse(3) default(shared) private(i,j,k,denom) schedule(static)
         do k = 1, size(self%precond,3)
@@ -513,7 +599,7 @@ contains
         end do
         !$omp end parallel do
         self%precond_ridge = c
-    end subroutine fold_solvent_ridge_into_precond
+    end subroutine fold_ridges_into_precond
 
     !> the absolute solvent ridge coefficient (0 when the prior is off)
     pure real function get_solvent_lambda( self )
@@ -522,8 +608,8 @@ contains
         if( self%l_solvent_prior ) get_solvent_lambda = self%solvent_lambda_rel * self%data_scale
     end function get_solvent_lambda
 
-    !> the ridge terms of the normal operator: the band precision lambda I and,
-    !! when set, the position-dependent solvent ridge lambda_s (1-w)
+    !> the ridge terms of the normal operator: the band precision lambda I and, when set, the position-dependent
+    !! solvent ridge lambda_s (1-w) and the atomicity prior lambda_A (I - P_G); both operator modes come here
     subroutine add_ridge( self, p, hp )
         class(reconstructor_pcg), intent(in)    :: self
         real,                     intent(in)    :: p(self%box,self%box,self%box)
@@ -544,6 +630,7 @@ contains
         else
             hp = hp + self%lambda * p
         endif
+        if( self%l_atm_prior ) call self%atm%apply(self%atm_lambda, p, hp)
     end subroutine add_ridge
 
     !> multiplies by E^-1, the inverse KB envelope (deapodization). Real images carry
@@ -638,6 +725,10 @@ contains
         self%solvent_lambda_rel = 0.0
         self%l_solvent_prior    = .false.
         self%precond_ridge      = 0.0
+        nullify(self%atm)
+        self%atm_lambda     = 0.0
+        self%atm_lambda_rel = 0.0
+        self%l_atm_prior    = .false.
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
@@ -1997,7 +2088,7 @@ contains
             deallocate(shfloor, shthr)
             ! a rebuilt preconditioner carries no ridge term yet
             self%precond_ridge = 0.0
-            call self%fold_solvent_ridge_into_precond
+            call self%fold_ridges_into_precond
         endif
     end subroutine finalize_density_accum
 
@@ -2086,14 +2177,16 @@ contains
         real(dp) :: num, den
         real     :: lam_save, ctr, sig, dx, dy, dz, scale
         integer  :: i, j, k
-        logical  :: l_ml_save, l_solv_save
+        logical  :: l_ml_save, l_solv_save, l_atm_save
         if( .not. self%l_kernel ) THROW_HARD('build_kernel has not been called; measure_kernel_scale')
         lam_save    = self%lambda
         l_ml_save   = self%l_ml_prior
         l_solv_save = self%l_solvent_prior
+        l_atm_save  = self%l_atm_prior
         self%lambda = 0.0   ! compare the DATA term only
         self%l_ml_prior = .false.
         self%l_solvent_prior = .false.
+        self%l_atm_prior = .false.
         allocate(probe(self%box,self%box,self%box))
         ctr = real(self%box)/2.0 + 0.5
         sig = 0.15 * real(self%box)
@@ -2114,6 +2207,7 @@ contains
         self%lambda = lam_save
         self%l_ml_prior = l_ml_save
         self%l_solvent_prior = l_solv_save
+        self%l_atm_prior = l_atm_save
     end function measure_kernel_scale
 
     ! PRIVATE HELPERS

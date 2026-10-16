@@ -53,6 +53,7 @@ type :: parameters
     character(len=3)          :: exit_collapse='no'   !< early exit on state collapse(yes|no){no}
     character(len=3)          :: envfsc='no'          !< envelope solvent correction for FSC calculation(yes|no){no}
     character(len=3)          :: pcg_solvent='no'     !< PCG soft solvent prior on the base solve: per-half real-space ridge in solvent identified from a prior-free solve, then the same cold solve again(yes|no){no}
+    character(len=3)          :: atm_prior='no'       !< PCG atomicity prior: penalize the map outside the span of the atom kernels of pdbfile, after a prior-free base solve(yes|no){no}
     character(len=3)          :: pcg_solvent_check='no' !< PCG solvent prior: re-solve the strength grid for real and print it beside the closed-form estimate (validation only)(yes|no){no}
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of solve2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
@@ -364,6 +365,7 @@ type :: parameters
     integer :: ldim(3)=0
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_pcg=2        !< maximum # PCG reconstruction iterations{2}
+    integer :: maxits_atm=30       !< cap of the PCG iterations of the atomicity-prior solve{30}
     integer :: maxits_ml=0         !< coupled PCG iterations of the regularized system from the closed-form start; 0 = closed form only{0}
     integer :: maxits_glob=100     !< maximum # iterations, global
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
@@ -588,6 +590,9 @@ type :: parameters
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: rtol=0.             !< PCG relative residual tolerance; <=0 runs exactly maxits_pcg{0}
+    real    :: lambda_atm=0.       !< atomicity prior strength relative to the data precision per voxel; 0 = the moment estimate{0}
+    real    :: bfac_data=0.        !< atomicity prior: B (A^2) added to the narrowest kernel; fitted on the base map when not given
+    real    :: rtol_atm=0.         !< atomicity-prior solve: stop at this true L2 relative residual; <=0 runs exactly maxits_atm{0}
     real    :: pcg_solvent_lambda=1.0 !< PCG solvent prior ridge coefficient relative to the data scale; estimated by cross-validation when not given (pcg_solvent=yes){auto}
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor
@@ -626,6 +631,8 @@ type :: parameters
     logical :: l_pcg_solvent     = .false.
     logical :: l_pcg_solvent_check = .false.
     logical :: l_pcg_solvent_lambda_auto = .true. !< pcg_solvent_lambda not given: estimated per state and iteration
+    logical :: l_atm_prior       = .false.
+    logical :: l_bfac_data_fit   = .true.  !< bfac_data not given: fitted on the base map
     logical :: l_fillin          = .false.
     logical :: l_greedy_smpl     = .true.
     logical :: l_frac_best       = .false.

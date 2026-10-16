@@ -72,7 +72,7 @@ once from zero; a solve from zero that loses it is fatal.
 **Preconditioner.** The sampling-density diagonal `1/(rho + floor + P_tau)`
 with a shell-relative floor (`RHO_FLOOR_FRAC`). With the solvent prior the
 mean of its real-space ridge over the solve domain is folded in as a
-constant (`fold_solvent_ridge_into_precond`, 2026-09-22): the ridge
+constant (`fold_ridges_into_precond`, 2026-09-22): the ridge
 `lambda_s (1-w(r))` has no Fourier-diagonal representation, but its mean
 is one, and without it CG on the ridge system ran with a preconditioner
 built for the prior-free operator and was left at RESID 0.2-0.3 (bgal,
@@ -168,6 +168,23 @@ solvent-fraction gap, the `KIND=pre` (prior-free) and `KIND=base`
 `pcg_solvent_weight_state01_even.mrc`, `_odd` (one pair per state,
 overwritten every iteration). With `pcg_solvent=no` no prior code runs
 and the strategy is bit-identical to the version without it.
+
+**Opt-in atomicity prior (`atm_prior=yes`, `reconstruct3D` only, default `no`).**
+With an atom model (`pdbfile`, in the map frame) the base pair is solved
+prior-free as above, then each half is solved again from zero with
+`lambda_A (I - P_G)` added to the operator, `P_G` the projector onto Gaussian
+atom kernels clipped to the solve support (`simple_pcg_atomic_prior`): only
+the density the atoms do not explain is penalized. The kernel width is fitted
+on the merged base map (`bfac_data` overrides), `lambda_A = lambda_rel x
+realspace_diag` with `lambda_rel` from the base pair's moments (`lambda_atm`
+overrides), `lambda_A/padsc^2` enters the preconditioner on measured voxels
+only, and the re-solve runs `maxits_atm` iterations (default 30). The
+prior-free pair stays the FSC authority and is written under `_base`; the
+residual `x_b - G c` (amplitudes fitted to the data through the half's
+operator) under `_res`; the sidecar `_atmprior.txt` holds the model, width,
+strength moments and CG statistics. It requires `ml_reg=no` and excludes
+`pcg_solvent` and NU filtering. Design and FePt results:
+`doc/implementation_notes/planned/single_pcg_integration.md`.
 
 ## 4. The FSC and the envelope
 
@@ -311,6 +328,8 @@ accumulation and the master's reduction, not the solve.
 
 ## 9. Tests
 
+`simple_test_exec test=unit_reconstruction suite=atomic_prior` (the
+atomicity prior's projector, its operator term and strength-zero identity),
 `simple_test_exec test=pcg_recon` (operator identities, support contract,
 window band regression), `test=pcg_frac_update` (trailing accumulator
 arithmetic), `test=rec3D_backends` (gridding vs PCG on a project with

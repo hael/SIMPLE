@@ -159,12 +159,13 @@ contains
         fname = swap_suffix(add2fbody(volname, MRC_EXT, '_pcg_support'), TXT_EXT, MRC_EXT)
     end function support_provenance_fname
 
-    subroutine write_support_provenance( volname, l_constrained, solve_kind, support_kind, solvent_prior )
+    subroutine write_support_provenance( volname, l_constrained, solve_kind, support_kind, solvent_prior, atomic_prior )
         type(string),     intent(in) :: volname
         logical,          intent(in) :: l_constrained
         character(len=*), intent(in) :: solve_kind
         character(len=*), optional, intent(in) :: support_kind
         character(len=*), optional, intent(in) :: solvent_prior !< e.g. 'soft lambda_rel=1.00' (pcg_solvent=yes)
+        character(len=*), optional, intent(in) :: atomic_prior  !< e.g. 'lambda_rel=0.50 natoms=23000' (atm_prior=yes)
         type(string) :: fname
         character(len=16) :: support_kind_here
         integer :: funit
@@ -185,6 +186,7 @@ contains
         write(funit,'(A)') 'solve_support='//trim(support_kind_here)
         write(funit,'(A)') 'solve_kind='//trim(solve_kind)
         if( present(solvent_prior) ) write(funit,'(A)') 'solvent_prior='//trim(solvent_prior)
+        if( present(atomic_prior)  ) write(funit,'(A)') 'atomic_prior='//trim(atomic_prior)
         call fclose(funit)
         call fname%kill
     end subroutine write_support_provenance

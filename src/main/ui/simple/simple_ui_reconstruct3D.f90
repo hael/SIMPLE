@@ -88,6 +88,31 @@ contains
         &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
+        call reconstruct3D%add_input(UI_FILT, 'atm_prior', 'binary', 'PCG atomicity prior', &
+        &'Atomicity prior: after the prior-free base solve, each half is solved again with the map outside the span of '//&
+        &'the atom kernels of pdbfile penalized; the base pair stays the FSC authority(yes|no){no}', '', .false., 'no', &
+        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call reconstruct3D%add_input(UI_FILT, 'pdbfile', 'file', 'Atom model', &
+        &'Atom positions of the atomicity prior in PDB format, in the map frame (A = 0-based voxel times smpd)', &
+        &'e.g. atoms.pdb', .false., '', group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
+        call reconstruct3D%add_input(UI_FILT, 'lambda_atm', 'num', 'Atomicity prior strength', &
+        &'Strength relative to the data precision per voxel; 0 = the moment estimate of the base pair', 'coefficient{0}', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
+        call reconstruct3D%add_input(UI_FILT, 'bfac_data', 'num', 'Atomicity prior kernel B', &
+        &'B (A^2) added to the narrowest Gaussian kernel; fitted on the base map when not given', 'B in A^2', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
+        call reconstruct3D%add_input(UI_FILT, 'maxits_atm', 'num', 'Atomicity prior PCG iterations', &
+        &'Cap of the PCG iterations of the atomicity-prior solve', 'iterations{30}', &
+        &.false., 30., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
+        call reconstruct3D%add_input(UI_FILT, 'rtol_atm', 'num', 'Atomicity prior PCG tolerance', &
+        &'Stop the atomicity-prior solve at this true L2 relative residual; <=0 runs exactly maxits_atm', 'tolerance{0}', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
         call reconstruct3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &
         &.false., 0.0, visibility=UI_VIS_ADVANCED, &

@@ -26,6 +26,8 @@ use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_sta
 use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
 use simple_oris,                only: population_blend_weights
 use simple_state_weight_set,    only: state_weight_set
+use simple_pcg_atomic_prior,    only: pcg_atomic_prior, pcg_atomic_prior_stats
+use simple_atoms,               only: atoms
 !$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_max_active_levels, &
 !$     &omp_set_max_active_levels, omp_set_num_threads
 implicit none
@@ -40,6 +42,9 @@ integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost
 ! the sphere for automsk=no, the lag-one density envelope for yes and nu
 ! (never the NU-evidence envelope), an explicit pcg_mskfile over both.
 logical, parameter :: DEBUG = .false.
+! atomicity prior: the per-half amplitude fit through the data operator (pcg_atomic_prior%amplitudes)
+integer, parameter :: ATM_AMP_MAXITS = 30
+real,    parameter :: ATM_AMP_RTOL   = 1.0e-3
 
 contains
 
@@ -479,12 +484,13 @@ contains
             real :: prior_to_khat_l1 = 0.0, prior_to_khat_rms = 0.0
             logical :: l_ml_solve = .false., ready = .false., l_concurrent = .false.
             logical :: l_nonzero = .false. !< nonzero initial guess: eligible for the cold restart
+            logical :: l_atm_solve = .false. !< the atomicity-prior re-solve: maxits_atm/rtol_atm budget
         end type distributed_half_job
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         real,    optional, intent(out)  :: nu_align_lps(:)
-        type(image)  :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd
+        type(image)  :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd, atm_even, atm_odd
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         type(string) :: fname_restxt, eonames(2)
         type(halfmap_diagnostics_result) :: hm_diag
@@ -511,6 +517,13 @@ contains
         logical :: l_shipped_support_constrained, l_solvent_weight
         real    :: res0143_prior_free
         real    :: solvent_lambda_eff !< the solvent ridge in force for the current state
+        ! atm_prior=yes: the prior shared by both half operators, its strength and the products of the current state
+        type(pcg_atomic_prior), target :: atm_prior
+        type(image)  :: atm_res
+        real(dp), allocatable :: atm_c(:,:)       !< (natoms,2) amplitudes fitted per half
+        real    :: atm_lambda_rel, atm_lambda_abs(2), atm_amp_rres(2), atm_resid(2), atm_mres(2)
+        integer :: atm_amp_nits(2), atm_nits(2)
+        logical :: l_atm_resolved
         character(len=16) :: state_support_kind, base_support_kind, shipped_support_kind
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
@@ -669,8 +682,9 @@ contains
             chain_written = .false.
             chain_mass    = 0.0_dp
             chain_contrib = 0
+            l_atm_resolved = .false.
             call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base', &
-                &solvent_even=solvent_even, solvent_odd=solvent_odd)
+                &solvent_even=solvent_even, solvent_odd=solvent_odd, atm_even=atm_even, atm_odd=atm_odd)
             ! the chain pair written by the base reductions is published by its manifest, last
             if( all(chain_written) ) call write_chain_manifest(state)
             if( params%l_trail_rec .and. .not. l_chain_carry )then
@@ -752,6 +766,15 @@ contains
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
+            else if( l_atm_resolved )then
+                ! the prior-free pair keeps its products under _base, the prior'd pair ships
+                call write_atomic_prior_products(state)
+                call atm_even%write(fname_even, del_if_exists=.true.)
+                call atm_odd%write(fname_odd, del_if_exists=.true.)
+                call merged%kill
+                call merged%copy(atm_even)
+                call merged%add(atm_odd)
+                call merged%mul(0.5)
             else
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
@@ -766,6 +789,9 @@ contains
             else if( l_solvent_weight )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind, &
                     &solvent_prior=solvent_prior_provenance(params, solvent_lambda_eff))
+            else if( l_atm_resolved )then
+                call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind, &
+                    &atomic_prior=atomic_prior_provenance())
             else
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind)
             endif
@@ -804,6 +830,11 @@ contains
             call half_odd%kill
             call solvent_even%kill
             call solvent_odd%kill
+            call atm_even%kill
+            call atm_odd%kill
+            call atm_res%kill
+            call atm_prior%kill
+            if( allocated(atm_c) ) deallocate(atm_c)
             if( params%l_ml_reg )then
                 call ml_even%kill
                 call ml_odd%kill
@@ -1140,10 +1171,161 @@ contains
             call support%kill
         end subroutine check_solvent_lambda_by_resolve_distributed
 
+        !> atm_prior=yes, between the prior-free base solve and its re-solve: the model of pdbfile on the solve support,
+        !! its kernel width fitted on the merged base map (or bfac_data), the strength from the base pair's moments (or
+        !! lambda_atm), amplitudes fitted per half through that half's operator, then the prior on both operators
+        subroutine prepare_atomic_prior_on_pair( state_here )
+            integer, intent(in) :: state_here
+            type(atoms)       :: model
+            type(pcg_atomic_prior_stats) :: astats
+            real, allocatable :: pos(:,:), supp(:,:,:), xb(:,:,:), model_map(:,:,:)
+            real    :: bdata, lambda_rel_est, shift_a
+            integer :: i, nsh
+            call model%new(params%pdbfile)
+            if( model%get_n() < 1 ) THROW_HARD('the atom model pdbfile holds no atoms; atm_prior')
+            ! PDB A = 0-based native voxel * smpd; the crop keeps the box centre and the field of view
+            shift_a = real(params%box/2) * params%smpd
+            allocate(pos(3,model%get_n()))
+            do i = 1, model%get_n()
+                pos(:,i) = (model%get_coord(i) - shift_a) / params%smpd_crop + real(params%box_crop/2 + 1)
+            end do
+            call model%kill
+            call even_job%pcgop%get_solve_support(supp)
+            call atm_prior%new(params%box_crop, params%smpd_crop, pos, supp)
+            deallocate(pos, supp)
+            xb  = 0.5 * (even_job%x + odd_job%x)
+            nsh = 0
+            if( params%l_bfac_data_fit )then
+                call atm_prior%fit_width(xb, bdata, nsh)
+            else
+                bdata = params%bfac_data
+            endif
+            if( bdata > 0. ) call atm_prior%build(atm_prior%get_bfac_min() + bdata)
+            lambda_rel_est = atm_prior%estimate_lambda(xb, even_job%x, odd_job%x)
+            atm_lambda_rel = lambda_rel_est
+            if( params%lambda_atm > 0. ) atm_lambda_rel = params%lambda_atm
+            astats = atm_prior%get_stats()
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A)') '>>> PCG ATOMIC PRIOR: STATE ', state_here, ', ', &
+                &astats%natoms, ' of ', astats%natoms_in, ' atoms (', astats%ndup, ' duplicates, ', astats%noutside, &
+                &' off the support)'
+            write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,F6.3,A,I0)') '>>> PCG ATOMIC PRIOR: B_min ', astats%bfac_min, &
+                &' A^2 + B_data ', astats%bfac_data, ' A^2 (fit over ', nsh, ' shells), sigma ', astats%sigma_vox, &
+                &' voxels, footprint radius ', astats%foot_rad
+            write(logfhandle,'(A,4ES11.3,A,F7.4,A,F9.5,A)') '>>> PCG ATOMIC PRIOR: N S E C^2 ', astats%noise, &
+                &astats%signal, astats%explained, astats%c2, ' -> lambda_rel estimate ', astats%lambda_rel_est, &
+                &' (merged-map ratio ', astats%lambda_rel_merged, ')'
+            ! amplitudes per half through its own operator, before the prior is attached (it vanishes on span(G))
+            allocate(atm_c(atm_prior%get_natoms(),2), source=0._dp)
+            call fit_amplitudes_pair
+            model_map = 0.5 * (even_job%pcgop%atomic_model_map(atm_prior, atm_c(:,1)) + &
+                &odd_job%pcgop%atomic_model_map(atm_prior, atm_c(:,2)))
+            call atm_res%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call atm_res%set_rmat(xb - model_map, .false.)
+            deallocate(xb, model_map)
+            write(logfhandle,'(A,2(I0,A,ES10.3,A))') '>>> PCG ATOMIC PRIOR: amplitudes fitted to the data, even ', &
+                &atm_amp_nits(1), ' iterations (residual ', atm_amp_rres(1), '), odd ', atm_amp_nits(2), &
+                &' iterations (residual ', atm_amp_rres(2), ')'
+            call even_job%pcgop%set_atomic_prior(atm_prior, atm_lambda_rel)
+            call odd_job%pcgop%set_atomic_prior(atm_prior, atm_lambda_rel)
+            atm_lambda_abs = [even_job%pcgop%get_atomic_lambda(), odd_job%pcgop%get_atomic_lambda()]
+            write(logfhandle,'(A,F9.5,A,2ES11.3,A,2ES11.3)') '>>> PCG ATOMIC PRIOR: lambda_rel ', atm_lambda_rel, &
+                &' | lambda_A even/odd ', atm_lambda_abs, ' | realspace diagonal even/odd ', &
+                &even_job%pcgop%get_realspace_diagonal(), odd_job%pcgop%get_realspace_diagonal()
+        end subroutine prepare_atomic_prior_on_pair
+
+        !> the per-half amplitude fits, concurrently as the half solves
+        subroutine fit_amplitudes_pair
+            real(dp), allocatable :: c_even(:), c_odd(:)
+            integer :: previous_max_active_levels
+            if( pcg_master_nthreads >= 2 )then
+                previous_max_active_levels = 1
+                !$ previous_max_active_levels = omp_get_max_active_levels()
+                !$ call omp_set_max_active_levels(max(2, previous_max_active_levels))
+                !$omp parallel sections num_threads(2) default(shared)
+                !$omp section
+                !$ call omp_set_num_threads(pcg_half_nthreads)
+                call even_job%pcgop%fit_atom_amplitudes(atm_prior, c_even, ATM_AMP_MAXITS, ATM_AMP_RTOL, &
+                    &atm_amp_nits(1), atm_amp_rres(1))
+                !$omp section
+                !$ call omp_set_num_threads(pcg_half_nthreads)
+                call odd_job%pcgop%fit_atom_amplitudes(atm_prior, c_odd, ATM_AMP_MAXITS, ATM_AMP_RTOL, &
+                    &atm_amp_nits(2), atm_amp_rres(2))
+                !$omp end parallel sections
+                !$ call omp_set_max_active_levels(previous_max_active_levels)
+                !$ call omp_set_num_threads(pcg_master_nthreads)
+            else
+                call even_job%pcgop%fit_atom_amplitudes(atm_prior, c_even, ATM_AMP_MAXITS, ATM_AMP_RTOL, &
+                    &atm_amp_nits(1), atm_amp_rres(1))
+                call odd_job%pcgop%fit_atom_amplitudes(atm_prior, c_odd, ATM_AMP_MAXITS, ATM_AMP_RTOL, &
+                    &atm_amp_nits(2), atm_amp_rres(2))
+            endif
+            atm_c(:,1) = c_even
+            atm_c(:,2) = c_odd
+        end subroutine fit_amplitudes_pair
+
+        !> atm_prior=yes: the prior-free pair and its average under _base, the residual x_b - G c under _res, the
+        !! sidecar _atmprior.txt; half_even/half_odd and merged still hold the base pair here
+        subroutine write_atomic_prior_products( state_here )
+            integer, intent(in) :: state_here
+            type(pcg_atomic_prior_stats) :: astats
+            type(string) :: fname
+            integer :: funit
+            fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'even'), MRC_EXT, '_base')
+            call half_even%write(fname, del_if_exists=.true.)
+            fname = add2fbody(refine3D_state_halfvol_fname(state_here, 'odd'), MRC_EXT, '_base')
+            call half_odd%write(fname, del_if_exists=.true.)
+            fname = add2fbody(refine3D_state_vol_fname(state_here), MRC_EXT, '_base')
+            call merged%write(fname, del_if_exists=.true.)
+            fname = add2fbody(refine3D_state_vol_fname(state_here), MRC_EXT, '_res')
+            call atm_res%write(fname, del_if_exists=.true.)
+            astats = atm_prior%get_stats()
+            fname  = get_fbody(refine3D_state_vol_fname(state_here), 'mrc')//'_atmprior.txt'
+            call fopen(funit, file=fname, status='replace', action='write')
+            write(funit,'(A,A)')      'pdbfile=',            params%pdbfile%to_char()
+            write(funit,'(A,I0)')     'natoms_in=',          astats%natoms_in
+            write(funit,'(A,I0)')     'natoms=',             astats%natoms
+            write(funit,'(A,I0)')     'natoms_duplicate=',   astats%ndup
+            write(funit,'(A,I0)')     'natoms_off_support=', astats%noutside
+            write(funit,'(A,I0)')     'support_voxels=',     astats%nsupport
+            write(funit,'(A,F10.4)')  'bfac_min=',           astats%bfac_min
+            write(funit,'(A,F10.4)')  'bfac_data=',          astats%bfac_data
+            write(funit,'(A,L1)')     'bfac_data_fitted=',   params%l_bfac_data_fit
+            write(funit,'(A,I0)')     'width_fit_shells=',   astats%nshells_fit
+            write(funit,'(A,F10.4)')  'sigma_voxels=',       astats%sigma_vox
+            write(funit,'(A,I0)')     'footprint_radius=',   astats%foot_rad
+            write(funit,'(A,I0)')     'gram_nnz=',           astats%gram_nnz
+            write(funit,'(A,ES14.6)') 'N=',                  astats%noise
+            write(funit,'(A,ES14.6)') 'S=',                  astats%signal
+            write(funit,'(A,ES14.6)') 'E=',                  astats%explained
+            write(funit,'(A,F10.6)')  'C2=',                 astats%c2
+            write(funit,'(A,F12.6)')  'lambda_rel_merged=',  astats%lambda_rel_merged
+            write(funit,'(A,F12.6)')  'lambda_rel_estimate=', astats%lambda_rel_est
+            write(funit,'(A,F12.6)')  'lambda_rel=',         atm_lambda_rel
+            write(funit,'(A,L1)')     'lambda_rel_given=',   params%lambda_atm > 0.
+            write(funit,'(A,2ES14.6)') 'lambda_A_even_odd=', atm_lambda_abs
+            write(funit,'(A,2I6)')    'amplitude_its_even_odd=',   atm_amp_nits
+            write(funit,'(A,2ES14.6)') 'amplitude_resid_even_odd=', atm_amp_rres
+            write(funit,'(A,2I6)')    'solve_its_even_odd=',       atm_nits
+            write(funit,'(A,2ES14.6)') 'solve_resid_l2_even_odd=',  atm_resid
+            write(funit,'(A,2ES14.6)') 'solve_resid_m_even_odd=',   atm_mres
+            write(funit,'(A,I0)')     'maxits_atm=',         params%maxits_atm
+            write(funit,'(A,ES14.6)') 'rtol_atm=',           params%rtol_atm
+            call fclose(funit)
+            call fname%kill
+            write(logfhandle,'(A,I0,A)') '>>> PCG ATOMIC PRIOR: STATE ', state_here, ', prior-free pair written '//&
+                &'under _base (the FSC is theirs), residual x_b - G c under _res, prior''d pair ships'
+        end subroutine write_atomic_prior_products
+
+        function atomic_prior_provenance() result( prov )
+            character(len=:), allocatable :: prov
+            prov = 'lambda_rel='//trim(real2str(atm_lambda_rel))//' natoms='//int2str(atm_prior%get_natoms())//&
+                &' bfac='//trim(real2str(atm_prior%get_bfac()))
+        end function atomic_prior_provenance
+
         !> pcg_solvent=yes: solvent_even/odd receive the ridge re-solve, even/odd
         !! the prior-free base pair (FSC, NU, evidence, _unfil)
         subroutine reduce_solve_state_pair( state_here, even, odd, n_even_here, n_odd_here, solve_kind, &
-                &fsc_prior, warm_even, warm_odd, solvent_even, solvent_odd )
+                &fsc_prior, warm_even, warm_odd, solvent_even, solvent_odd, atm_even, atm_odd )
             integer,          intent(in)    :: state_here
             character(len=*), intent(in)    :: solve_kind
             type(image),      intent(inout) :: even, odd
@@ -1151,6 +1333,7 @@ contains
             real, optional,   intent(in)    :: fsc_prior(:)
             type(image), optional, intent(in) :: warm_even, warm_odd
             type(image), optional, intent(inout) :: solvent_even, solvent_odd
+            type(image), optional, intent(inout) :: atm_even, atm_odd !< atm_prior=yes: the prior'd pair
             logical :: l_resolved
             l_resolved = .false.
 
@@ -1208,6 +1391,50 @@ contains
                 endif
             endif
 
+            if( .not. present(fsc_prior) .and. params%l_atm_prior )then
+                ! atm_prior=yes: the model on the prior-free pair, the prior on both operators, the cold solve
+                ! again into the atm pair; the prior-free pair is the base pair (FSC, products under _base)
+                if( even_job%ready .and. odd_job%ready )then
+                    if( .not.(present(atm_even) .and. present(atm_odd)) ) &
+                        &THROW_HARD('the atomicity-prior re-solve needs its output pair; reduce_solve_state_pair')
+                    call validate_solved_map(even_job%x, 'distributed', state_here, 'even', 'base')
+                    call validate_solved_map(odd_job%x,  'distributed', state_here, 'odd',  'base')
+                    call report_pcg_solve('DISTRIBUTED', state_here, 'even', 'base', even_job%nptcls, &
+                        &even_job%niters, even_job%time_solve, even_job%result)
+                    call report_pcg_solve('DISTRIBUTED', state_here, 'odd', 'base', odd_job%nptcls, &
+                        &odd_job%niters, odd_job%time_solve, odd_job%result)
+                    call write_distributed_diagnostics(state_here, 'even', 'base', even_job%l_concurrent, &
+                        &even_job%nptcls, even_job%result, even_job%rel_res_hist, even_job%time_reduce, &
+                        &even_job%time_finalize, even_job%time_solve, even_job%pcgop%get_data_scale(), &
+                        &even_job%pcgop%get_effective_lambda(), pcgop=even_job%pcgop)
+                    call write_distributed_diagnostics(state_here, 'odd', 'base', odd_job%l_concurrent, &
+                        &odd_job%nptcls, odd_job%result, odd_job%rel_res_hist, odd_job%time_reduce, &
+                        &odd_job%time_finalize, odd_job%time_solve, odd_job%pcgop%get_data_scale(), &
+                        &odd_job%pcgop%get_effective_lambda(), pcgop=odd_job%pcgop)
+                    call even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                    call odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+                    call even%set_rmat(even_job%x, .false.)
+                    call odd%set_rmat( odd_job%x,  .false.)
+                    call prepare_atomic_prior_on_pair(state_here)
+                    even_job%x = 0.0
+                    odd_job%x  = 0.0
+                    even_job%l_nonzero  = .false.
+                    odd_job%l_nonzero   = .false.
+                    even_job%l_atm_solve = .true.
+                    odd_job%l_atm_solve  = .true.
+                    even_job%solve_kind = 'atm'
+                    odd_job%solve_kind  = 'atm'
+                    call solve_distributed_half_pair(even_job, odd_job)
+                    atm_nits  = [even_job%niters, odd_job%niters]
+                    atm_resid = [even_job%result%final_rel_residual, odd_job%result%final_rel_residual]
+                    atm_mres  = [even_job%result%final_rel_residual_m, odd_job%result%final_rel_residual_m]
+                    call finish_distributed_half_job(even_job, atm_even)
+                    call finish_distributed_half_job(odd_job, atm_odd)
+                    l_atm_resolved = .true.
+                    return
+                endif
+            endif
+
             if( present(fsc_prior) )then
                 call finish_distributed_half_job(even_job, even, warm_even)
                 call finish_distributed_half_job(odd_job, odd, warm_odd)
@@ -1247,6 +1474,7 @@ contains
             job%mass = 0.0_dp
             job%niters = 0
             job%ready = .false.
+            job%l_atm_solve = .false.
             job%l_ml_solve = present(fsc_prior)
             if( job%l_ml_solve .neqv. present(warm_start) ) &
                 &THROW_HARD('distributed PCG regularized pair requires both FSC and base map')
@@ -1394,6 +1622,9 @@ contains
                 ! closed form, then maxits_ml coupled iterations from it
                 call job%pcgop%solve_regularized(job%x, params%maxits_ml, job%rel_res_hist, &
                     &job%niters, job%result, job%x_cf)
+            else if( job%l_atm_solve )then
+                call job%pcgop%solve_with_cold_restart(job%x, job%l_nonzero, params%maxits_atm, params%rtol_atm, &
+                    &job%rel_res_hist, job%niters, job%result)
             else
                 call job%pcgop%solve_with_cold_restart(job%x, job%l_nonzero, params%maxits_pcg, params%rtol, &
                     &job%rel_res_hist, job%niters, job%result)
@@ -1467,7 +1698,7 @@ contains
             write(funit,'(A,I0)')     'nparts=',                params%nparts
             write(funit,'(A,I0)')     'nptcls=',                nptcls
             write(funit,'(A,I0)')     'requested_maxits=',      result%requested_maxits
-            write(funit,'(A,ES14.6)') 'requested_rtol=',        params%rtol
+            write(funit,'(A,ES14.6)') 'requested_rtol=',        merge(params%rtol_atm, params%rtol, trim(solve_kind) == 'atm')
             write(funit,'(A,I0)')     'iteration_count=',       result%iteration_count
             write(funit,'(A,A)')      'stop_reason=',           trim(result%stop_reason)
             write(funit,'(A,L1)')     'converged=',             result%converged

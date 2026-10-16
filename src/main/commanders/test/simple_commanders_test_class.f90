@@ -80,6 +80,7 @@ use simple_nu_filter_tester,                 only: run_all_nu_filter_tests
 use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pcg_sparse_tester,                only: run_all_pcg_sparse_tests
+use simple_pcg_atomic_prior_tester,          only: run_all_pcg_atomic_prior_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_strategy3D_cont_tester,           only: run_all_strategy3D_cont_tests
@@ -422,6 +423,7 @@ contains
         call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
         call add_suite(s, n, 'solve3D_cavgs stage rules', run_all_solve3D_reseed_tests)
         call add_suite(s, n, 'state assignment rules',    run_all_state_assignment_tests)
+        call add_suite(s, n, 'atomic prior',              run_all_pcg_atomic_prior_tests)
     end subroutine suites_reconstruction
 
     !> registration on the polar Fourier transform, shared by the 2D and 3D searches
