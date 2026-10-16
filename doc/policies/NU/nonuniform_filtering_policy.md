@@ -151,6 +151,19 @@ For each state, `volassemble` then:
    local-resolution products
 9. records the finest NU bank member as the matching low-pass handoff
 
+The handoff is a REQUEST, not the band. Matching never extends beyond the
+base pair's FSC=0.143 resolution in any program (2026-10-16): `set_bp_range3D`
+clamps `kfromto(2)` to the FSC=0.143 crossing after every route that can set
+it -- an explicit `lp`, the NU handoff (directly or via the
+`nonuniform_lpset` promotion), `lplim_crit`, or the project `lp` field --
+logging `>>> MATCHING LOW-PASS CLAMPED TO FSC=0.143`. The `fsc/1.5` bank cap
+below stays as it is: admitting candidates finer than the FSC is right for
+the FILTER, because local resolution exceeds the global average, but the
+search must not be driven by frequencies the two halves do not share. On
+PfCRT the uncapped handoff pinned matching at 3.98 A against a 4.03 A
+FSC=0.143 and the FSC=0.5 crossing fell from 4.7 to 6.3 A while the 0.143
+crossing "improved" on matched noise.
+
 Low-resolution even/odd insertion is a registration-reference preparation
 trick. It must not feed `volassemble` FSC calculation, automasking, NU
 filtering, ordinary half-map handoff, or on-disk half-map products.

@@ -293,6 +293,7 @@ contains
         use simple_butterworth, only: butterworth_filter
         use simple_vol_pproc_policy,    only: state_mask_is_compatible
         use simple_halfmap_diagnostics, only: read_support_provenance
+        use simple_image_msk,           only: image_msk
         class(string),   intent(in)    :: fname_vol, fname_fsc
         integer,         intent(in)    :: box
         real,            intent(in)    :: smpd
@@ -304,6 +305,7 @@ contains
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
         type(string)     :: fname_even_unfil, fname_odd_unfil
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
+        type(image_msk)  :: bfac_envmsk
         real    :: fsc0143, fsc05, lplim, cap_gain
         integer :: ldim(3), ldim_unfil(3), nptcls_unfil, lp_find
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
@@ -387,8 +389,19 @@ contains
             if( l_unfil_pair )then
                 call vol_unfil%add(vol_unfil_odd)
                 call vol_unfil%mul(0.5)
+                ! Guinier over the particle, not the support: solvent noise is
+                ! flat in resolution, so the slope of a support-wide fit is set
+                ! by where the signal drops under that floor, not by the
+                ! protein's falloff. On PfCRT the support is about half solvent
+                ! and the un-windowed fit gave -25 against -105 windowed, i.e.
+                ! 1.5x instead of 5x sharpening at the cutoff. Masks only this
+                ! temporary spectrum-estimation copy; no output is modified.
+                call bfac_envmsk%automask3D(params, vol_unfil, .false., &
+                    &lp_override=params%envmsklp, l_report=.false.)
+                call bfac_envmsk%apply_3Dmask(vol_unfil)
                 params%bfac = vol_unfil%guinier_bfac(HPLIM_GUINIER, lplim)
-                write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (UNFILTERED PAIR) DETERMINED TO:', params%bfac
+                write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (DENSITY-WINDOWED UNFILTERED PAIR) DETERMINED TO:', &
+                    &params%bfac
             else
                 params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
                 write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (THE MAP ITSELF; a regularized map over-estimates) DETERMINED TO:', &
@@ -401,6 +414,7 @@ contains
             call vol_unfil%kill
             call vol_unfil_odd%kill
         endif
+        call bfac_envmsk%kill_bimg
         ! an ML-regularized map (provenance solve_kind) already carries ~FSC shrinkage per shell from its prior
         prov_solve_kind = ''
         call read_support_provenance(fname_vol, l_prov_constrained, l_prov_found, &

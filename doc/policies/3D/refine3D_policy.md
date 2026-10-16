@@ -962,7 +962,9 @@ automatic sharpening follows the isotropic postprocess protocol
 the FSC=0.143 of the reconstruction's FSC file (the base pair's curve,
 envfsc-corrected where that applies), or of the `_even_unfil/_odd_unfil`
 pair beside the map computed by postprocess when no file is given, one
-Guinier B-factor of the unfiltered pair average between `HPLIM_GUINIER`
+Guinier B-factor of the density-windowed unfiltered pair average
+(windowing restored 2026-10-16; see the PCG policy's final-sharpening
+section for why a support-wide fit under-estimates |B|) between `HPLIM_GUINIER`
 (10 A since 2026-09-26, RELION's `--autob_lowres` default and Rosenthal &
 Henderson's lower limit; 20 A before, which put the steep envelope/micelle
 region into the fit) and that cutoff (never of the shipped regularized

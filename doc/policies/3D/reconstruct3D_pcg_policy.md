@@ -361,9 +361,19 @@ iterations keep the default budget of two iterations from a state-free start
 (the calibrated regime).
 
 Automatic final-map sharpening estimates its Guinier B-factor from the
-unregularized half-pair average (`_even_unfil/_odd_unfil`, no mask of its
-own since 2026-09-21) between `HPLIM_GUINIER` = 10 A (2026-09-26, RELION's
-`autob_lowres` default; was 20 A) and the FSC=0.143 cutoff. The shipped
+unregularized half-pair average (`_even_unfil/_odd_unfil`) between
+`HPLIM_GUINIER` = 10 A (2026-09-26, RELION's `autob_lowres` default; was
+20 A) and the FSC=0.143 cutoff. That average is density-windowed before the
+fit (restored 2026-10-16, having been dropped 2026-09-21): solvent noise is
+flat in resolution, so a fit over the whole support measures where the
+signal sinks under that floor rather than the protein's falloff. On PfCRT,
+whose support is about half solvent, the un-windowed fit gave B = -25
+against -105 windowed -- 1.5x instead of 5x sharpening at the cutoff, and
+visibly softer maps. The window masks only the temporary spectrum-estimation
+copy; no shipped product is masked, and the prohibition on post-hoc PCG
+masking below is untouched. It applies to both backends, since the
+one-support contract (2026-09-09) ships support-masked halves on gridding
+too. The shipped
 regularized map is B-sharpened and Butterworth-filtered at the cutoff with
 no second FSC weighting, since its ML prior already shrank each shell by
 about its FSC (support-provenance `solve_kind=regularized`; refine3D policy,
