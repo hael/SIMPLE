@@ -78,7 +78,8 @@ contains
         ! set other stuff
         self%kfromto_vpft(1) = vol_ref%get_find(hp)
         self%kfromto_vpft(2) = vol_ref%get_find(lp)
-        if( self%kfromto_vpft(1) < 1 .or. self%kfromto_vpft(1) > self%kfromto_vpft(2) )then
+        ! A band may include the origin, but must also contain a nonzero shell.
+        if( self%kfromto_vpft(1) < 0 .or. max(1, self%kfromto_vpft(1)) > self%kfromto_vpft(2) )then
             msg = 'no Fourier shell between the high-pass limit '//real2str(hp)//' A and the low-pass limit '&
                 &//real2str(lp)//' A above the origin'
             THROW_HARD(msg%to_char())
