@@ -436,3 +436,14 @@ FePt with the refined poses of `2_refine_tomo` (30 iterations, model = `detect_a
 The held-out errors come from separate maps of 51 tilts that predict the other 17. Unlike the numpy prototype,
 the prior does not predict held-out tilts better than the prior-free map at its best iteration count; it matches
 it. On this set the estimate is within 1% of the best strength on the grid (section 6).
+
+### For the site visit
+
+The site visit is to show the unsupervised pipeline run on the 2020/2021 SINGLE data sets, with its models
+compared against the curated ones. That demonstration still needs:
+
+- the TEM scattering-factor kernels;
+- the prior inside the `autorefine3D_nano` loop, so that building, regularized reconstruction and refinement
+  alternate;
+- per-atom amplitudes written out and used by species discovery;
+- the image hold-out run inside the program.
