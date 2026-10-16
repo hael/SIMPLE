@@ -60,6 +60,15 @@ contains
         &'Halfwidth of the total rotation a continuous Cartesian pose solve (refine=cont, pose_cont=yes) may '// &
         &'move a particle from its seed: the capture range for wrongly assigned orientations', &
         &'in degrees{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Continuous pose convergence rotation', &
+        &'A refine=cont particle is stable when it moved by at most this rotation since its last pose', &
+        &'in degrees{0.5}', .false., 0.5, group="search", visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'cont_conv_shift', 'num', 'Continuous pose convergence shift', &
+        &'A refine=cont particle is stable when it moved by at most this shift since its last pose', &
+        &'in Angstroms{1.0}', .false., 1.0, group="search", visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'cont_conv_frac', 'num', 'Continuous pose convergence fraction', &
+        &'refine=cont converges when this fraction of every state is stable, over iterations that together '// &
+        &'sampled this fraction of the particles', '(0,1]{0.9}', .false., 0.9, group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, maxits, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, update_frac, group="search", &
@@ -218,6 +227,16 @@ contains
         &'Halfwidth of the total rotation a continuous Cartesian pose solve (pose_cont=yes or only) may '// &
         &'move a particle from its seed: the capture range for wrongly assigned orientations', &
         &'in degrees{10}', .false., 10., group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Continuous pose convergence rotation', &
+        &'A continuous pose (pose_cont=only) is stable when it moved by at most this rotation since its last pose', &
+        &'in degrees{0.5}', .false., 0.5, group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'cont_conv_shift', 'num', 'Continuous pose convergence shift', &
+        &'A continuous pose (pose_cont=only) is stable when it moved by at most this shift since its last pose', &
+        &'in Angstroms{1.0}', .false., 1.0, group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'cont_conv_frac', 'num', 'Continuous pose convergence fraction', &
+        &'Continuous refinement converges when this fraction of every state is stable, over iterations that '// &
+        &'together sampled this fraction of the particles', '(0,1]{0.9}', .false., 0.9, group='search', &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &

@@ -34,6 +34,7 @@ contains
         call reg%add_char('acf', self%acf)
         call reg%add_char('algorithm', self%algorithm)
         call reg%add_char('angastunit', self%angastunit)
+        call reg%add_char('angconv', self%angconv)
         call reg%add_char('append', self%append)
         call reg%add_char('async', self%async)
         call reg%add_char('atom_thres', self%atom_thres)
@@ -253,6 +254,7 @@ contains
     module subroutine bind_input_files(self, reg)
         class(parameters),   target, intent(inout) :: self
         class(param_registry),       intent(inout) :: reg
+        call reg%add_file('angtab', self%angtab,'T')
         call reg%add_file('boxfile', self%boxfile,'T')
         call reg%add_file('boxtab', self%boxtab,'T')
         call reg%add_file('classdoc', self%classdoc,'T')
@@ -488,6 +490,9 @@ contains
         call reg%add_real('bfacerr', self%bfacerr)
         call reg%add_real('bw_ratio', self%bw_ratio)
         call reg%add_real('cenlp', self%cenlp)
+        call reg%add_real('cont_conv_frac', self%cont_conv_frac)
+        call reg%add_real('cont_conv_rot', self%cont_conv_rot)
+        call reg%add_real('cont_conv_shift', self%cont_conv_shift)
         call reg%add_real('cs', self%cs)
         call reg%add_real('ctfresthreshold', self%ctfresthreshold)
         call reg%add_real('defocus', self%defocus)

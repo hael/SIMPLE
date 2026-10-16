@@ -1,17 +1,20 @@
-!@descr: execution of SINGLE 3D nanoparticle refinement commanders
+!@descr: execution of SINGLE 3D nanoparticle refinement and tilt-series commanders
 module single_exec_nano3D
 use simple_string,            only: string
 use simple_cmdline,           only: cmdline
 use single_commanders_nano3D, only: commander_refine3D_nano, commander_autorefine3D_nano, commander_solve3D_nano
+use single_commanders_tomo,   only: commander_import_tilt_series, commander_refine_tomo
 use simple_exec_helpers,      only: restarted_exec
 implicit none
 
 public :: exec_nano3D_commander
 private
 
-type(commander_autorefine3D_nano) :: xautorefine3D_nano
-type(commander_refine3D_nano)     :: xrefine3D_nano
-type(commander_solve3D_nano)      :: xsolve3D_nano
+type(commander_autorefine3D_nano)  :: xautorefine3D_nano
+type(commander_refine3D_nano)      :: xrefine3D_nano
+type(commander_solve3D_nano)       :: xsolve3D_nano
+type(commander_import_tilt_series) :: ximport_tilt_series
+type(commander_refine_tomo)        :: xrefine_tomo
 
 contains
 
@@ -34,6 +37,10 @@ contains
                 endif
             case( 'refine3D_nano' )
                 call xrefine3D_nano%execute(cline)
+            case( 'import_tilt_series' )
+                call ximport_tilt_series%execute(cline)
+            case( 'refine_tomo' )
+                call xrefine_tomo%execute(cline)
             case default    
                 l_did_execute = .false.
         end select

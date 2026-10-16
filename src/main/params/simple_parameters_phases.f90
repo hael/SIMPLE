@@ -989,6 +989,9 @@ contains
                 &THROW_HARD('refine=cont requires oritype=ptcl3D')
             ! its own rotation bound: athres and prob_athres size the polar searches
             if( .not. (self%athres_cont > 0. .and. self%athres_cont <= 180.) ) THROW_HARD('athres_cont must be in (0,180] degrees')
+            if( .not. self%cont_conv_rot   > 0. ) THROW_HARD('cont_conv_rot must be positive')
+            if( .not. self%cont_conv_shift > 0. ) THROW_HARD('cont_conv_shift must be positive')
+            if( .not. (self%cont_conv_frac > 0. .and. self%cont_conv_frac <= 1.) ) THROW_HARD('cont_conv_frac must be in (0,1]')
             ! with pose_cont=yes it is the polish pass the iteration strategy schedules after a
             ! discrete pass (C8, C19); the strategy refuses the pair on its own command line
             self%l_cont_polish = trim(self%pose_cont) == 'yes'

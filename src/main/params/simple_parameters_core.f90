@@ -7,6 +7,7 @@ contains
 
     module subroutine init_dynamic_defaults(self)
         class(parameters), intent(inout) :: self
+        self%angtab=''            !< per-projection angles of a tilt series(.txt)
         self%boxfile=''           !< file with EMAN particle coordinates(.txt)
         self%boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
         self%cavg_new_root=''     !< new root for relocated class-average data

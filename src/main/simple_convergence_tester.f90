@@ -2,7 +2,8 @@
 ! N19: a Cartesian pass reports the mean corr_cart, attempts and improved percentage over its sample;
 ! a polar pass reports corr. N25: a refine=cont pass converges when 90% of every state moved at most
 ! 0.5 deg and 1 A with an accepted or no-improvement outcome, over a streak covering 90% of the active
-! particles; a discrete pass, with or without the polish, keeps its own rule. Expected values are
+! particles (the cont_conv_rot, cont_conv_shift and cont_conv_frac defaults; the parameters replace
+! them); a discrete pass, with or without the polish, keeps its own rule. Expected values are
 ! hand-counted from the fixtures.
 module simple_convergence_tester
 use simple_core_module_api, only: oris, del_file
@@ -10,6 +11,7 @@ use simple_cmdline,         only: cmdline
 use simple_convergence,     only: convergence, cont_particle_stable
 use simple_parameters,      only: parameters
 use simple_defs_fname,      only: STATS_FILE
+use simple_defs_conv,       only: CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A, CONT_CONV_FRAC
 use simple_cartft_pose_opt, only: CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, &
     &CARTFT_NO_IMPROVEMENT, CARTFT_NO_RELIABLE_UPDATE, CARTFT_BOUND_REJECTED, CARTFT_INVALID_NUMERICS, &
     &CARTFT_ITERATION_LIMIT
@@ -38,6 +40,8 @@ contains
         call test_cont_rule_full_sample()
         write(*,'(A)') 'test_cont_rule_streak'
         call test_cont_rule_streak()
+        write(*,'(A)') 'test_cont_rule_tunable'
+        call test_cont_rule_tunable()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
 
@@ -149,14 +153,21 @@ contains
     !> the bounds are inclusive; only an accepted or a finite no-improvement outcome is stable
     subroutine test_cont_particle_stable()
         integer :: rejected(6), i
-        call assert_true(cont_particle_stable(CARTFT_ACCEPTED, 0.5, 1.0), 'the bounds are inclusive')
-        call assert_false(cont_particle_stable(CARTFT_ACCEPTED, 0.51, 0.), 'a rotation above 0.5 deg is stable')
-        call assert_false(cont_particle_stable(CARTFT_ACCEPTED, 0., 1.01), 'a shift above 1 A is stable')
-        call assert_true(cont_particle_stable(CARTFT_NO_IMPROVEMENT, 0., 0.), 'a finite no-improvement is not stable')
+        call assert_true(cont_particle_stable(CARTFT_ACCEPTED, 0.5, 1.0, CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A), &
+            &'the bounds are inclusive')
+        call assert_false(cont_particle_stable(CARTFT_ACCEPTED, 0.51, 0., CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A), &
+            &'a rotation above 0.5 deg is stable')
+        call assert_false(cont_particle_stable(CARTFT_ACCEPTED, 0., 1.01, CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A), &
+            &'a shift above 1 A is stable')
+        call assert_true(cont_particle_stable(CARTFT_NO_IMPROVEMENT, 0., 0., CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A), &
+            &'a finite no-improvement is not stable')
+        call assert_false(cont_particle_stable(CARTFT_ACCEPTED, 0.06, 0., 0.05, 0.1), 'a rotation above a 0.05 deg bound is stable')
+        call assert_false(cont_particle_stable(CARTFT_ACCEPTED, 0., 0.11, 0.05, 0.1), 'a shift above a 0.1 A bound is stable')
         rejected = [CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_NO_RELIABLE_UPDATE, &
             &CARTFT_BOUND_REJECTED, CARTFT_INVALID_NUMERICS, CARTFT_ITERATION_LIMIT]
         do i = 1, size(rejected)
-            call assert_false(cont_particle_stable(rejected(i), 0., 0.), 'a rejected transaction at zero motion is stable')
+            call assert_false(cont_particle_stable(rejected(i), 0., 0., CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A), &
+                &'a rejected transaction at zero motion is stable')
         enddo
     end subroutine test_cont_particle_stable
 
@@ -232,6 +243,40 @@ contains
         call os%kill
     end subroutine test_cont_rule_streak
 
+    !> the parameters cont_conv_rot, cont_conv_shift and cont_conv_frac replace the defaults: a 0.4 deg
+    !! move fails a 0.3 deg bound, a 0.5 A shift fails 0.4 A, eight of ten stable pass a 0.8 fraction,
+    !! and the tight tomography bounds (0.05 deg, 0.1 A) accept only small motion; fresh histories
+    subroutine test_cont_rule_tunable()
+        class(parameters), allocatable :: defaults
+        type(oris) :: os
+        allocate(defaults)
+        call assert_true(defaults%cont_conv_rot == CONT_CONV_ROT_DEG .and. defaults%cont_conv_shift == CONT_CONV_SHIFT_A &
+            &.and. defaults%cont_conv_frac == CONT_CONV_FRAC, 'the parameter defaults are not the simple_defs_conv constants')
+        deallocate(defaults)
+        call make_cont_field(os)
+        call assert_true(fresh_cont_converged(os),                 'the default bounds did not converge')
+        call assert_false(fresh_cont_converged(os, rot_lim=0.3),   'a 0.4 deg move passed a 0.3 deg bound')
+        call assert_false(fresh_cont_converged(os, shift_lim=0.4), 'a 0.5 A shift passed a 0.4 A bound')
+        call assert_true(fresh_cont_converged(os, shift_lim=0.6),  'a 0.5 A shift failed a 0.6 A bound')
+        call os%set(1, 'dist', 0.4)
+        call os%set(2, 'dist', 0.4)
+        call assert_false(fresh_cont_converged(os),                'eight of ten stable passed the default fraction')
+        call assert_true(fresh_cont_converged(os, frac_lim=0.8),   'eight of ten stable failed a 0.8 fraction')
+        call make_cont_field(os, CARTFT_ACCEPTED, 0.04, 0.05)
+        call assert_true(fresh_cont_converged(os, rot_lim=0.05, shift_lim=0.1), 'small motion failed the tight bounds')
+        call make_cont_field(os)
+        call assert_false(fresh_cont_converged(os, rot_lim=0.05, shift_lim=0.1), 'a 0.4 deg move passed the tight bounds')
+        call os%kill
+    end subroutine test_cont_rule_tunable
+
+    !> check_conv3D of a refine=cont pass at smpd 1 with a fresh history and optional bounds
+    logical function fresh_cont_converged( os, rot_lim, shift_lim, frac_lim ) result( converged )
+        type(oris),     intent(inout) :: os
+        real, optional, intent(in)    :: rot_lim, shift_lim, frac_lim
+        type(convergence) :: conv
+        converged = cont_converged(conv, os, 1., 1, .false., rot_lim=rot_lim, shift_lim=shift_lim, frac_lim=frac_lim)
+    end function fresh_cont_converged
+
     !> NCONT particles of state 1, all sampled in generation 1, every transaction ending with status
     !! (default accepted), rotation rot/2 + rot/2 deg (default 0.2 + 0.2) and shift sh px (default 0.5)
     subroutine make_cont_field( os, status, rot, sh )
@@ -284,13 +329,14 @@ contains
     end subroutine sample_half
 
     !> check_conv3D of a refine=cont pass on os, with the history conv carries
-    logical function cont_converged( conv, os, smpd, nstates, l_frac, minits ) result( converged )
+    logical function cont_converged( conv, os, smpd, nstates, l_frac, minits, rot_lim, shift_lim, frac_lim ) result( converged )
         type(convergence), intent(inout) :: conv
         type(oris),        intent(inout) :: os
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: nstates
         logical,           intent(in)    :: l_frac
         integer, optional, intent(in)    :: minits
+        real,    optional, intent(in)    :: rot_lim, shift_lim, frac_lim
         class(parameters), allocatable :: params
         type(cmdline) :: cline
         allocate(params)
@@ -302,7 +348,10 @@ contains
         params%l_update_frac = l_frac
         params%startit       = 1
         params%which_iter    = 1
-        if( present(minits) ) params%minits = minits
+        if( present(minits)    ) params%minits          = minits
+        if( present(rot_lim)   ) params%cont_conv_rot   = rot_lim
+        if( present(shift_lim) ) params%cont_conv_shift = shift_lim
+        if( present(frac_lim)  ) params%cont_conv_frac  = frac_lim
         call cline%set('trs', 5.)
         converged = conv%check_conv3D(params, cline, os, 40.)
         call cline%kill

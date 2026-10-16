@@ -3,7 +3,8 @@
 Implementation note, 2026-10-14. **Plan; nothing implemented.** Revised
 2026-10-15 for the unattended run `prob_speed` on the Oracle Linux test
 machine, which carries out days 1 and 2 and the same changes in the 2D table
-(section "Execution").
+(section "Execution"). Multi-state runs added 2026-10-15 (section
+"Multi-state").
 
 ## Goal and baseline
 
@@ -433,6 +434,213 @@ Exit criteria: the gates pass; the report is written.
 | `doc/policies/3D/refine3D_policy.md` | the pre-step reports; the particle-frame shift as the only path | 1 2 4 |
 | `doc/policies/3D/solve3D_chunks_policy.md` | no `prob_fast` to forward | 2 4 |
 | `doc/policies/2D/solve2D_policy.md` | the 2D table | 3 4 |
+
+## Multi-state
+
+Added 2026-10-15. Multi-state runs matter even more than single-state ones
+for the release (maintainer, 2026-10-15). This section measures them the same
+way and adds their items to the blocks of the week.
+
+### Baseline
+
+The baseline is the three-state `solve3D` run in `~/Processing/msp1/bench`
+(analysis in `bench_summary/analysis.md`; its per-iteration reports converted
+to `BENCH/`, the originals kept): 10,415 s for 141,838 particles, 30,012 of
+them searched per iteration, three independent states, box 288 matched at
+88-160, 5 partitions of 16 threads. The default multi-state schedule: `shc`
+in stages 1 and 2, `prob` in stages 3 to 5 (2,500 directions in stage 5).
+The run used the multi-state table as it was before its particle-frame grid.
+
+| where the time goes | seconds | share of the run |
+| --- | --- | --- |
+| probability tables (slowest part) | 7,075 | 68% |
+| of which stage 5, 2,500 directions x 3 states | 4,632 | 44% |
+| search workers (slowest); 789 s of it in the `shc` stages | 1,369 | 13% |
+| the master around the tables: reading them, `ref_assign` | 789 | 8% |
+| volume assembly | 374 | 4% |
+| final reconstruction | 294 | 3% |
+
+What differs from single state:
+
+- The table is 68% of the run (43% on PfCRT). Every particle is scored
+  against every direction of every state (7,500 references in stage 5) at
+  zero shift, because independent states share no shift frame.
+- In stage 5, two thirds of the fill's thread time is the shift refinement:
+  138 refined references per particle, each with a 5 x 5 grid over every
+  in-plane rotation and then L-BFGS-B.
+- The table is dense, 28 bytes per particle and reference in the files. In
+  stage 5 that is 6.3 GB written by the parts and read serially by the master
+  every iteration, and 5.4 GB held by the master (peak 8.0 GB).
+- `ref_assign` labels the states and then assigns within each state on one
+  thread, rescanning every reference and particle per assigned particle: 8.6
+  s per iteration in stage 5.
+- `shc` stops at the first better reference. As the maps settle it scans
+  most of the 3,000 references: 1 s per part in iteration 1, 26-28 s at the
+  end of stage 2.
+
+### What the run `prob_speed` brings
+
+Retiring `prob_fast` makes the multi-state table always build the coarse grid
+from 25 shifted copies of the particle, made once per particle and shared by
+all its refined references. Where the grid fit holds, a quadratic step
+replaces L-BFGS-B. The fill is scheduled dynamically, and the job polling is
+faster.
+
+On the two-state bgal `refine3D` test of 14 October this cut the refinement
+3.4 times, from 141 to 41 thread-seconds, and the table step from 34 to 15 s.
+Applied to msp1, it is estimated to save about 3,250 s in the tables and
+150-200 s in polling, taking the run from 10,415 s to about 7,000 s. No
+multi-state run has measured it yet. The first measurement is msp1 after the
+merge (maintainer), plus case M below.
+
+### Rulings of 2026-10-15 (multi-state)
+
+- **`prob_neigh` in its `state` mode from 2,500 directions.** A multi-state
+  run switches from `prob` to `prob_neigh` (`state`) at the first stage whose
+  directions go from 1,000 to 2,500. In the default schedule that is stage 5,
+  which so far ran `prob` over every direction of every state.
+- **Directions capped at 2,500** in multi-state runs. Stages 7 and 8 of the
+  eight-stage table, 5,000 directions today, stay at 2,500.
+- **`shc` leaves stage 2 once it scans more than 95%** of the search space on
+  average, whatever the state overlap. The measure is the mean over the
+  particles of the percentage of references the search scanned, which it
+  stores per particle as `frac` and the log prints as "% SEARCH SPACE
+  SCANNED".
+- Still open: a cap on the refined references per particle across states
+  (138 of 7,500 in msp1's stage 5).
+
+These rulings change `solve3D`'s multi-state schedule. Its particle route and
+its class-average route share the mode policy, so both switch at stage 5.
+The stage-2 exit concerns the particle route, the only one with `shc` stages.
+`refine3D_states`, which runs `prob_neigh` at 5,000 directions, is not
+covered by them.
+
+### Testing multi-state
+
+The simulated tests are single-state and do not reach these paths.
+
+- **Identical changes** are checked in the unit suite of the 3D probability
+  table (`simple_eul_prob_tab_tester.f90`). The present routine stays in the
+  tester as the reference. The new one must give the same assignments on
+  synthetic dense tables of several states with a fixed seed.
+- **Timing on the test machine.** Two beta-galactosidase cases, run like the
+  single-state ones (before and after, twice each way, read with the summary
+  script):
+  - **M.** The two-state `refine3D` test of 14 October at the directions the
+    multi-state `prob` stages now use: `nstates=2 refine=prob`, `vol1` and
+    `vol2` the half maps of the common single-state volume, 1,000
+    directions, `update_frac=0.2 lp=8`, two iterations. It runs distributed
+    (`nparts=4 nthr=6`) and in shared memory (`nthr=24`). It times the dense
+    table, the reads and `ref_assign` of stages 3 and 4.
+  - **MS.** `solve3D nstates=3 nsample=2500` from the particles, distributed,
+    with the default multi-state schedule (`shc` stages included). The
+    common `solve3D_cavgs` start does not apply here: `cavg_ini_ext=yes` with
+    three states needs a three-state particle assignment to start from.
+- **Acceptance of a repeated case.**
+  - M: the last iteration's mean score is no lower than 0.97 times the
+    lowest before-run, and no state empties.
+  - MS, after an identical change: every state's final FSC 0.143 is within
+    the larger of the before-runs' spread and 3%.
+  - The schedule change alters results, and beta-galactosidase has no real
+    states. MS shows only that the schedule runs and every state keeps a map.
+    The check that counts is msp1: the maintainer compares the state
+    populations and per-state maps with the baseline run.
+
+### Items
+
+| work | where the time is (msp1) | estimated saving | result | block |
+| --- | --- | --- | --- | --- |
+| the multi-state schedule (the rulings) | stage 5: 194 s of tables and 31 s around them per iteration after `prob_speed`; stage 2: 888 s | 1,750-2,400 s | changed | first, with its own msp1 run |
+| `ref_assign` for several states | stages 3 and 4: 2.9-3.0 s per iteration at 3,000 references | about 70 s, growing with the particle count | identical | days 3 and 4 |
+| reading the table parts in parallel | stages 3 and 4: 8.1 s per iteration | 130-180 s | identical | days 3 and 4 |
+| a compact record for the dense table | stages 3 and 4: 2.5 GB per iteration written and read, 2.2 GB on the master | 80-120 s, and two thirds of the master's table memory | identical | days 3 and 4 |
+| the states' volume assembly in parallel | 374 s | 100-200 s | identical | days 3 and 4 |
+| one worker process per iteration | about 4 s per `prob` iteration | about 150 s | identical | day 5 |
+
+With the schedule, stage 5 leaves the dense table. The dense-table items
+therefore act on stages 3 and 4, and on the single-state `prob` stages. On top
+of the run `prob_speed` (about 7,000 s), the schedule would take msp1 to
+4,600-5,250 s and the identical items to roughly 4,000-4,700 s, against
+10,415 s. These are estimates:
+
+- **Stage 5:** the `prob_neigh` share assumes the neighbourhood table costs
+  a third to a half of `prob` at the same directions. On PfCRT, single state,
+  it cost a third (11.4 against 37.3 s per iteration).
+- **Stage 2:** the exit assumes the scan passes 95% where the `shc` timings
+  level off, around iterations 20-25 of the run. msp1's log has the exact
+  percentages.
+
+1. **The multi-state schedule** (rulings of 2026-10-15; results change).
+   - `simple_solve3D_controller.f90`, `set_refine3D_mode_policy`, the
+     multi-state branch:
+     - `prob_neigh` with `prob_neigh_mode=state` from the first stage whose
+       `nspace` exceeds 1,000, derived from the `NSPACE` table rather than
+       from a second stage constant.
+     - `NSTAGES_INDEPENDENT` keeps the default stop after stage 5 but gets a
+       definition of its own, since `PROB_NEIGH_REFINE_STAGE - 1` no longer
+       describes it.
+     - With `nspace` 2,500, `nspace_sub` comes out at 126, as in
+       single-state runs.
+   - `set_refine3D_stage_controls`: when `nstates > 1`, `nspace` is at most
+     2,500.
+   - The stage-2 exit: for a multi-state run's stage 2, the convergence rule
+     (`simple_convergence.f90`, its multi-state branch) declares convergence
+     once the mean scanned exceeds 95%, without the state-overlap term. The
+     present rule (overlap and scan together) still ends the stage earlier if
+     it is met. How the controller tells the rule, for example stage 2's
+     `fracsrch` set to 95 with a flag that drops the overlap term, is settled
+     in the diff. The main checkout has uncommitted edits in
+     `simple_convergence.f90`, so the change is made on top of them.
+   - The strategy's benchmark report records the mean percentage scanned, so
+     the exit shows in the summary.
+   - Documents: `solve3D_policy.md`, sections 3 and 6 (stage 5 in
+     `prob_neigh`, the cap, the stage-2 exit), and the controller's comments.
+   - Tested with MS and then msp1, as above.
+2. **`ref_assign` for several states** (`simple_eul_prob_tab.f90`,
+   `assign_greedy_state_labels`, `assign_refs_for_state`).
+   - The state labels come from a global greedy frontier. A particle leaves
+     the frontier at its smallest distance over all references, so its label
+     is the state of its best reference. Compute that per particle, in
+     parallel.
+   - The frontier and the per-particle minimum agree except when two
+     references of different states tie exactly for a particle's minimum, for
+     example a flat particle whose distances are all equal. The tester checks
+     both the general case and a tie, and the tie rule is written down (the
+     lowest reference index).
+   - Within a state, loop over that state's references only. Count the
+     available particles instead of `any(ptcl_avail)`. Advance only the heads
+     that pointed at the assigned particle, as the single-state item of day 3
+     does. The random draws and their order are unchanged, so the
+     assignments are identical.
+3. **Reading the table parts** (`exec_prob_align`, `read_tab_to_glob`): read
+   the part files in parallel; each fills only its own particles' columns.
+   Skip the full initialisation of the master table, since every entry is
+   overwritten and the read already stops on an incomplete part.
+4. **A compact record for the dense `prob` table**, in the part files and on
+   the master.
+   - Per particle, one row of (distance, in-plane index) per reference, 8
+     bytes. The reference and particle indices follow from the order.
+   - The refined references go in a short list of (reference, shift) per
+     particle.
+   - An unrefined candidate has no shift of its own: zero in multi-state,
+     the recorded seed in single state, applied as now.
+   - In msp1's stages 3 and 4: 2.5 GB becomes about 0.7 GB per iteration,
+     and the master's table about 0.7 GB instead of 2.2 GB. A multi-state run
+     at 2,500 directions in `prob`, as before the rulings, would have gone
+     from 6.3 to 1.9 GB.
+   - The same change serves the single-state `prob` table. The
+     neighbourhood and 2D tables are sparse and keep their records.
+   - The part files live for one iteration, so the format needs no
+     compatibility.
+5. **The states' volume assembly** (`simple_commanders_rec_distr.f90`, the
+   state loop). Time each state first; then restore the states in parallel
+   where memory allows.
+6. **The worker fold** of day 5 applies unchanged; the table part and the
+   search worker read and prepare the same particles.
+
+Day 3's exact trims to the shift refinement (its items 1 and 2) also reach
+the multi-state refinement wherever the quadratic step falls back to
+L-BFGS-B.
 
 ## Not in this week
 

@@ -8,6 +8,7 @@ implicit none
 
 public :: euler2m, m2euler, dm2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
 public :: make_transfmat, rnd_romat, geodesic_frobdev, rotmat2d
+public :: genfire2euler, euler2genfire
 private
 
 real, parameter :: zvec(3) = [0.,0.,1.]
@@ -134,6 +135,63 @@ contains
             ! beware of the signs:z-rot is really negative
         endif
     end function rotmat
+
+    !> GENFIRE/RESIRE projection angles (phi, theta, psi in degrees; rotMAT = Rz(psi) Ry(theta) Rz(phi),
+    !! active rotations of column vectors) to SIMPLE Euler angles. With image x the first array dimension
+    !! of a projection, image x is rotMAT(:,3) and image y rotMAT(:,1); the volume frames coincide
+    pure function genfire2euler( ang ) result( e )
+        real, intent(in) :: ang(3)
+        real     :: e(3)
+        real(dp) :: m(3,3), r(3,3)
+        m      = genfire_rotmat(ang)
+        r(1,:) = m(:,3)
+        r(2,:) = m(:,1)
+        r(3,:) = cross3(r(1,:), r(2,:))
+        e      = real(dm2euler(r))
+    end function genfire2euler
+
+    !> SIMPLE Euler angles to GENFIRE/RESIRE (phi, theta, psi in degrees), the inverse of genfire2euler;
+    !! phi and psi in (-180,180], theta in [0,180], psi = 0 where theta is 0 or 180
+    pure function euler2genfire( e ) result( ang )
+        real, intent(in) :: e(3)
+        real     :: ang(3)
+        real(dp) :: r(3,3), m(3,3), c, th
+        r      = real(euler2m(e), dp)
+        m(:,3) = r(1,:)
+        m(:,1) = r(2,:)
+        m(:,2) = cross3(m(:,3), m(:,1))
+        c  = max(-1._dp, min(1._dp, m(3,3)))
+        th = acos(c)
+        if( sin(th) > 1.e-6_dp )then
+            ang = real([atan2(m(3,2), -m(3,1)), th, atan2(m(2,3), m(1,3))] * 180._dp / DPI)
+        else if( c > 0._dp )then
+            ang = real([atan2(m(2,1), m(1,1)), 0._dp, 0._dp] * 180._dp / DPI)
+        else
+            ang = real([atan2(m(1,2), -m(1,1)), DPI, 0._dp] * 180._dp / DPI)
+        endif
+    end function euler2genfire
+
+    !> rotMAT of GENFIRE/RESIRE: Rz(psi) Ry(theta) Rz(phi), standard active rotations
+    pure function genfire_rotmat( ang ) result( m )
+        real, intent(in) :: ang(3)
+        real(dp) :: m(3,3), a(3), c(3), s(3), rz1(3,3), ry(3,3), rz2(3,3)
+        a   = real(ang, dp) * DPI / 180._dp
+        c   = cos(a)
+        s   = sin(a)
+        rz1 = 0._dp
+        rz1(1,1) = c(1); rz1(1,2) = -s(1); rz1(2,1) = s(1); rz1(2,2) = c(1); rz1(3,3) = 1._dp
+        ry  = 0._dp
+        ry(1,1)  = c(2); ry(1,3)  =  s(2); ry(2,2)  = 1._dp; ry(3,1) = -s(2); ry(3,3)  = c(2)
+        rz2 = 0._dp
+        rz2(1,1) = c(3); rz2(1,2) = -s(3); rz2(2,1) = s(3); rz2(2,2) = c(3); rz2(3,3) = 1._dp
+        m = matmul(rz2, matmul(ry, rz1))
+    end function genfire_rotmat
+
+    pure function cross3( a, b ) result( c )
+        real(dp), intent(in) :: a(3), b(3)
+        real(dp) :: c(3)
+        c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), a(1)*b(2) - a(2)*b(1)]
+    end function cross3
 
     !>  \brief  for generating a random rotation matrix
     subroutine rnd_romat( rmat )

@@ -566,7 +566,9 @@ consecutive passing iterations have together sampled 90% of the active
 particles (`sampled` at or above the generation the streak began with); a
 failing iteration resets the streak, and `minits` and `maxits` apply as for
 every mode. A rejected transaction keeps the seed, so zero motion alone never
-counts as convergence.
+counts as convergence. The three thresholds are parameters with these values as defaults:
+`cont_conv_rot` (degrees), `cont_conv_shift` (A) and `cont_conv_frac` (the
+stable fraction and the streak coverage).
 
 Polish: `pose_cont=yes` in a discrete mode makes the iteration strategy follow
 every discrete pass with a `refine=cont` pass over the same particle sample

@@ -160,6 +160,7 @@ type :: parameters
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
+    type(string)              :: angtab               !< per-projection angles of a tilt series(.txt)
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
     type(string)              :: cache_dir            !< where to keep the downscaled particle cache
@@ -263,6 +264,7 @@ type :: parameters
     ! other character variables in ascending alphabetical order
     character(len=STDLEN)     :: algorithm=''         !< algorithm to be used
     character(len=STDLEN)     :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
+    character(len=STDLEN)     :: angconv='simple'     !< convention of the angtab angles (simple|tilt|genfire){simple}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|nu|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand|prev){ptcl}; prev: solve2D seeded restart from the previous 2D clustering
@@ -500,6 +502,9 @@ type :: parameters
     real    :: bandwidth_tune=1.0  !< linear multiplier of the Ferguson-optimal bandwidth used when bandwidth_mode=ferguson(1.0=optimum){1.0}
     real    :: dm_alpha=0.0        !< diffusion-map Coifman-Lafon density normalization exponent(0=graph Laplacian|0.5=Fokker-Planck|1=Laplace-Beltrami){0.0}
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
+    real    :: cont_conv_frac=CONT_CONV_FRAC    !< refine=cont convergence: stable fraction per state and streak coverage{0.9}
+    real    :: cont_conv_rot=CONT_CONV_ROT_DEG  !< refine=cont convergence: largest rotation of a stable particle(in degrees){0.5}
+    real    :: cont_conv_shift=CONT_CONV_SHIFT_A !< refine=cont convergence: largest shift of a stable particle(in A){1.0}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: ctfresthreshold=CTFRES_THRESHOLD !< ctf resolution threshold{30A}
     real    :: defocus=2.          !< defocus(in microns){2.}

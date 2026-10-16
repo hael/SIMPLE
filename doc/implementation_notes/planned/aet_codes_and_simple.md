@@ -332,7 +332,12 @@ the refined poses raises level-1 recall from 0.35 to 0.39, at precision
 0.99 (their map: 0.41), and recall with discovery from 0.54 to 0.62. The
 share of Pt atoms above the background rises from 66% to 71% (theirs 90%,
 smoothed measure). Angle refinement in our own pipeline therefore closes
-most of the detection gap to their map.
+most of the detection gap to their map. The SINGLE workflow `refine_tomo` packages
+these steps, with a density mask as the PCG support and, by default, two
+iterations at 2 A: longer refinement stretches the tilt range and rotates the
+frame, which the data barely constrain; `import_tilt_series` reads their angle
+convention and `scripts/aet_mat2simple.py` their MATLAB files
+(`doc/refactoring_notes/planned/refine_tomo.md`).
 
 ## 4. Atom tracing
 

@@ -7,6 +7,8 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('nano3
 type(ui_program), target :: autorefine3D_nano
 type(ui_program), target :: refine3D_nano
 type(ui_program), target :: solve3D_nano
+type(ui_program), target :: import_tilt_series
+type(ui_program), target :: refine_tomo
 
 contains
 
@@ -15,6 +17,8 @@ contains
         call new_solve3D_nano(prgtab)
         call new_autorefine3D_nano(prgtab)
         call new_refine3D_nano(prgtab)
+        call new_import_tilt_series(prgtab)
+        call new_refine_tomo(prgtab)
     end subroutine construct_single_nano3D_programs
 
 subroutine new_solve3D_nano( prgtab )
@@ -190,5 +194,97 @@ subroutine new_solve3D_nano( prgtab )
         ! add to ui_hash
         call add_ui_program('refine3D_nano', refine3D_nano, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_nano
+
+    subroutine new_import_tilt_series( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call import_tilt_series%new(&
+        &'import_tilt_series',&                                                                        ! name
+        &'Add an atomic electron tomography tilt series and its angles to a SIMPLE project',&           ! summary
+        &'is a program for importing a tilt series with per-projection angles in the SIMPLE, single-axis tilt or '//&
+        &'GENFIRE/RESIRE convention, ready for refine_tomo',&                                          ! help
+        &'single_exec',&                                                                               ! executable
+        &.true., visibility=UI_VIS_STANDARD, display_name='Import Tilt Series')                        ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call import_tilt_series%add_input(UI_IMG, 'stk', 'file', 'Tilt series', &
+        &'Stack of projection images, image x along the first array dimension', 'e.g. projs.mrcs', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        ! parameter input/output
+        call import_tilt_series%add_input(UI_FILE, 'angtab', 'file', 'Projection angles', &
+        &'Per-projection angles in the convention of angconv, one projection per line in stack order', &
+        &'e.g. angles.txt', .true., '', visibility=UI_VIS_STANDARD)
+        call import_tilt_series%add_input(UI_PARM, 'angconv', 'multi', 'Angle convention', &
+        &'Convention of angtab: simple, an oritab (e1 e2 e3 x y); tilt, one single-axis tilt angle about image x per line, '//&
+        &'optionally followed by x y; genfire, phi theta psi of GENFIRE/RESIRE per line, optionally followed by x y'//&
+        &'(simple|tilt|genfire){simple}', '', .true., 'simple', &
+        &choices=ui_choices([character(len=7) :: 'simple', 'tilt', 'genfire']), visibility=UI_VIS_STANDARD)
+        call import_tilt_series%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! search controls
+        call import_tilt_series%add_input(UI_SRCH, nspace, &
+        &visibility=UI_VIS_ADVANCED)
+        ! add to ui_hash
+        call add_ui_program('import_tilt_series', import_tilt_series, prgtab, UI_CATEGORY)
+    end subroutine new_import_tilt_series
+
+    subroutine new_refine_tomo( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call refine_tomo%new(&
+        &'refine_tomo',&                                                                                ! name
+        &'Refine the projection poses of an atomic electron tomography tilt series',&                   ! summary
+        &'is a workflow that reconstructs by gridding, masks the density, reconstructs by masked PCG and refines '//&
+        &'every projection''s rotation and shift continuously in a short pass at a fixed low-pass limit',& ! help
+        &'single_exec',&                                                                                ! executable
+        &.true., visibility=UI_VIS_STANDARD, display_name='Refine Tilt Series')                          ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! search controls
+        call refine_tomo%add_input(UI_SRCH, 'trs', 'num', 'Shift bound', &
+        &'Largest total shift a projection may move from its imported shift', 'in pixels{3}', .false., 3., &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_SRCH, 'athres_cont', 'num', 'Rotation bound', &
+        &'Largest total rotation a projection may move from its imported pose', 'in degrees{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_SRCH, 'maxits', 'num', 'Max iterations per stage', &
+        &'Maximum number of refinement iterations in each low-pass stage', 'Max # iterations{2}', .false., 2., &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_SRCH, 'minits', 'num', 'Min iterations per stage', &
+        &'Minimum number of refinement iterations in each low-pass stage', 'Min # iterations{0}', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Convergence rotation', &
+        &'A projection is stable when it moved by at most this rotation since its last pose', 'in degrees{0.5}', &
+        &.false., 0.5, visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_SRCH, 'cont_conv_shift', 'num', 'Convergence shift', &
+        &'A projection is stable when it moved by at most this shift since its last pose', 'in Angstroms{1.0}', &
+        &.false., 1.0, visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_SRCH, 'cont_conv_frac', 'num', 'Convergence fraction', &
+        &'A stage converges when this fraction of the projections is stable', '(0,1]{0.9}', .false., 0.9, &
+        &visibility=UI_VIS_ADVANCED)
+        ! filter controls
+        call refine_tomo%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', &
+        &'Low-pass limit of the first refinement stage', 'low-pass limit in Angstroms{2}', .false., 2., &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', &
+        &'Low-pass limit of the last refinement stage; no stage goes beyond the half-map FSC 0.143 resolution', &
+        &'low-pass limit in Angstroms{2}', .false., 2., visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_FILT, 'nstages', 'num', 'Number of stages', &
+        &'Number of low-pass stages, geometrically spaced from lpstart to lpstop', '# stages{1}', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
+        call refine_tomo%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG iterations', &
+        &'Iterations of every masked PCG reconstruction', '# iterations{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call refine_tomo%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
+        call refine_tomo%add_input(UI_MASK, 'amsklp', 'num', 'Envelope low-pass limit', &
+        &'Low-pass limit of the map the density envelope (the PCG support) is drawn from', &
+        &'low-pass limit in Angstroms{6}', .false., 6., visibility=UI_VIS_ADVANCED)
+        ! computer controls
+        call refine_tomo%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('refine_tomo', refine_tomo, prgtab, UI_CATEGORY)
+    end subroutine new_refine_tomo
 
 end module single_ui_nano3D

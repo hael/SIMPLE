@@ -20,6 +20,7 @@ real, parameter :: MINSHIFT            = 5.0
 real, parameter :: MAXSHIFT            = 6.0
 real, parameter :: AHELIX_WIDTH        = 12.0 ! alpha-helix width in A
 ! refine=cont: a sampled particle is stable when it moved by at most these between consecutive poses
+! (defaults of the cont_conv_rot, cont_conv_shift and cont_conv_frac parameters)
 real, parameter :: CONT_CONV_ROT_DEG   = 0.5  ! rotation (degrees)
 real, parameter :: CONT_CONV_SHIFT_A   = 1.0  ! shift (A)
 real, parameter :: CONT_CONV_FRAC      = 0.9  ! stable fraction per state, and the coverage of the stable streak

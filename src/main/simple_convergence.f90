@@ -624,8 +624,9 @@ contains
     end function check_conv3D
 
 
-    !> refine=cont: the sample (mask) passes when CONT_CONV_FRAC of every populated state is stable;
-    !! converged when consecutive passing iterations sampled CONT_CONV_FRAC of the active particles
+    !> refine=cont: the sample (mask) passes when cont_conv_frac of every populated state is stable
+    !! (cont_conv_rot, cont_conv_shift); converged when consecutive passing iterations sampled
+    !! cont_conv_frac of the active particles. Defaults: CONT_CONV_* of simple_defs_conv
     logical function check_cont_conv( self, params, os, mask, states, sampled ) result( converged )
         use simple_parameters, only: parameters
         class(convergence), intent(inout) :: self
@@ -646,7 +647,8 @@ contains
         allocate(stable(n))
         do i = 1, n
             stable(i) = mask(i) .and. &
-                &cont_particle_stable(nint(status(i)), dist(i) + dist_inpl(i), shincarg(i) * params%smpd)
+                &cont_particle_stable(nint(status(i)), dist(i) + dist_inpl(i), shincarg(i) * params%smpd, &
+                &params%cont_conv_rot, params%cont_conv_shift)
         enddo
         frac_min = 0.
         if( count(mask) > 0 ) frac_min = 1.
@@ -658,7 +660,7 @@ contains
             if( params%nstates > 1 ) write(logfhandle,'(A,I3,A,F8.2)') &
                 &'>>> % STABLE CONTINUOUS POSES, STATE', istate, ':', 100. * frac
         enddo
-        l_pass = frac_min >= CONT_CONV_FRAC
+        l_pass = frac_min >= params%cont_conv_frac
         ! the streak: consecutive passing iterations since the sample generation it began with
         generation = nint(maxval(sampled))
         if( l_pass )then
@@ -680,18 +682,18 @@ contains
         self%cont_coverage_pct = 100. * coverage
         write(logfhandle,'(A,F12.3)') '>>> % STABLE CONTINUOUS POSES (LEAST STATE)   ', self%cont_stable_pct
         write(logfhandle,'(A,F12.3)') '>>> % ACTIVE PARTICLES IN THE STABLE STREAK   ', self%cont_coverage_pct
-        converged = l_pass .and. coverage >= CONT_CONV_FRAC
+        converged = l_pass .and. coverage >= params%cont_conv_frac
         deallocate(status, dist, dist_inpl, shincarg, stable)
     end function check_cont_conv
 
     !> a particle of a refine=cont pass is stable when its transaction ended accepted or with a finite
-    !! no-improvement and it moved by at most CONT_CONV_ROT_DEG and CONT_CONV_SHIFT_A
-    elemental logical function cont_particle_stable( status, rot_deg, shift_a ) result( stable )
+    !! no-improvement and it moved by at most rot_lim (degrees) and shift_lim (A)
+    elemental logical function cont_particle_stable( status, rot_deg, shift_a, rot_lim, shift_lim ) result( stable )
         use simple_cartft_pose_opt, only: CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT
         integer, intent(in) :: status
-        real,    intent(in) :: rot_deg, shift_a
+        real,    intent(in) :: rot_deg, shift_a, rot_lim, shift_lim
         stable = (status == CARTFT_ACCEPTED .or. status == CARTFT_NO_IMPROVEMENT) .and. &
-            &rot_deg <= CONT_CONV_ROT_DEG .and. shift_a <= CONT_CONV_SHIFT_A
+            &rot_deg <= rot_lim .and. shift_a <= shift_lim
     end function cont_particle_stable
 
     subroutine calc_continuous_inplane_stats( self, os, mask, available )

@@ -3,7 +3,7 @@ module simple_ori_tester
 use simple_test_utils ! assertions etc.
 use simple_defs       ! dp, STDLEN, etc.
 use simple_ori,       only: ori
-use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev
+use simple_ori_utils, only: euler2m, m2euler, euler_compose, geodesic_frobdev, genfire2euler, euler2genfire
 use simple_linalg,    only: rad2deg
 use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
@@ -26,6 +26,7 @@ contains
         call test_ctor_and_flags()
         call test_euler_basic_set_get()
         call test_euler_matrix_roundtrip()
+        call test_genfire_conversion()
         call test_normal_and_mat_consistency()
         call test_2Dshift_set_get_and_rounding()
         call test_state_class_proj_eo_sampled_updatecnt()
@@ -112,6 +113,43 @@ contains
             call assert_real(e_in(i), e_out(i), 1.0e-2, 'euler2m/m2euler roundtrip component')
         end do
     end subroutine test_euler_matrix_roundtrip
+
+    !> GENFIRE/RESIRE angles: the single-axis tilt phi maps to SIMPLE (90+phi, 90, 180), the case verified
+    !! on the FePt tilt series (hand and frame check); triplets survive the round trip through SIMPLE's
+    !! rotation matrix, and away from theta = 0 or 180 the angles come back themselves
+    subroutine test_genfire_conversion()
+        real, parameter :: TILTS(4)  = [-65.6, 0., 46.79, 64.]
+        real, parameter :: PHIS(5)   = [-170., -60., 0., 33., 145.]
+        real, parameter :: THETAS(5) = [0., 20., 90., 135., 180.]
+        real, parameter :: PSIS(3)   = [-120., 0., 75.]
+        real    :: e(3), e2(3), a(3), a2(3), dev, dang
+        integer :: i, j, k
+        write(*,'(A)') 'test_genfire_conversion'
+        do i = 1, size(TILTS)
+            e = genfire2euler([TILTS(i), 0., 0.])
+            call assert_real(modulo(90. + TILTS(i), 360.), e(1), DEG_TOL, 'single-axis tilt: e1 = 90 + phi')
+            call assert_real(90.,  e(2), DEG_TOL, 'single-axis tilt: e2 = 90')
+            call assert_real(180., e(3), DEG_TOL, 'single-axis tilt: e3 = 180')
+        enddo
+        dev  = 0.
+        dang = 0.
+        do i = 1, size(PHIS)
+            do j = 1, size(THETAS)
+                do k = 1, size(PSIS)
+                    a  = [PHIS(i), THETAS(j), PSIS(k)]
+                    e  = genfire2euler(a)
+                    a2 = euler2genfire(e)
+                    e2 = genfire2euler(a2)
+                    dev = max(dev, maxval(abs(euler2m(e) - euler2m(e2))))
+                    if( THETAS(j) > 0. .and. THETAS(j) < 180. )then
+                        dang = max(dang, maxval(abs(modulo(a2 - a + 180., 360.) - 180.)))
+                    endif
+                enddo
+            enddo
+        enddo
+        call assert_true(dev  < 1.e-4,   'genfire2euler/euler2genfire round trip changes the rotation')
+        call assert_true(dang < DEG_TOL, 'euler2genfire does not return the angles away from theta 0 or 180')
+    end subroutine test_genfire_conversion
 
     !---------------- normal vs matrix consistency ----------------
 
