@@ -1,7 +1,8 @@
 !@descr: unit tests of the multistate class-average assignment rules shared by stream p07 and solve3D_pyramid (simple_state_assignment)
 ! The rules on fixed numbers (the check of the reference volumes, the renumbering, the sub-class budget,
 ! the mask diameter, the rejection by fit, the ambiguity flag, the first set's cut at whole stacks), the
-! class averages grouped by state on fixture images, and the jobs' command lines. The steps on projects
+! class averages grouped by state on fixture images, a state's own solve3D_cavgs (its classes selected,
+! its poses mapped onto its particles) on fixture projects, and the jobs' command lines. The steps on projects
 ! are tested through stream p07's stage (simple_stream_stage_solve3D_tester), the docking in its
 ! library suite.
 module simple_state_assignment_tester
@@ -10,11 +11,12 @@ use simple_fileio,           only: file_exists
 use simple_imghead,          only: find_ldim_nptcls
 use simple_cmdline,          only: cmdline
 use simple_image,            only: image
+use simple_sp_project,       only: sp_project
 use simple_state_assignment, only: NCLS2D_FIRST, LPSTART_CAVGS3D, LPSTOP_CAVGS3D, LP_ASSIGN, NSPACE_ASSIGN,&
                                   &refs_usable, reject_by_fit, flag_ambiguous, compact_states, expansion_budget,&
                                   &count_active_classes, fit_mskdiam, cut_whole_stacks, write_state_cavgs,&
                                   &set_solve2D_route_cline, set_clsexp_cline, set_cavgs3D_cline, set_assign_cline,&
-                                  &set_refine_cont_cline
+                                  &set_refine_cont_cline, set_state_cavgs3D_cline, select_state_classes, map_state_poses
 use simple_test_utils
 implicit none
 private
@@ -31,6 +33,7 @@ contains
         call test_fit_rules()
         call test_cut_whole_stacks()
         call test_state_cavgs()
+        call test_state_runs()
         call test_job_clines()
     end subroutine run_all_state_assignment_tests
 
@@ -191,6 +194,61 @@ contains
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_state_cavgs
 
+    !> a state's own solve3D_cavgs: the classes it holds selected, the others not; its class poses
+    !! mapped onto its particles only, a row of another state or none keeping its pose; a result of
+    !! other rows not taken
+    subroutine test_state_runs()
+        class(sp_project), allocatable :: spproj, res
+        integer, parameter :: ROW_STATES(4) = [1, 2, 1, 0], ROW_CLASSES(4) = [1, 2, 1, 3]
+        integer :: i, nsel, nposes
+        write(*,'(A)') 'test_state_runs'
+        allocate(spproj, res)
+        ! the assignment's project: three classes in states 1, 2 and none (rejected)
+        call res%os_cls2D%new(3, is_ptcl=.false.)
+        call res%os_cls3D%new(3, is_ptcl=.false.)
+        do i = 1,3
+            call res%os_cls2D%set_state(i, 1)
+        enddo
+        call res%os_cls3D%set_state(1, 1)
+        call res%os_cls3D%set_state(2, 2)
+        call res%os_cls3D%set_state(3, 0)
+        nsel = select_state_classes(res, 1)
+        call assert_int(1, nsel, 'state 1 holds one class')
+        call assert_int(1, res%os_cls2D%get_state(1), 'its class is selected')
+        call assert_int(0, res%os_cls2D%get_state(2), 'another state''s class is not')
+        call assert_int(0, res%os_cls2D%get_state(3), 'nor a rejected one')
+        ! the state's solve3D_cavgs result: its class with a pose, the others deselected
+        call res%os_ptcl2D%new(4, is_ptcl=.true.)
+        call res%os_ptcl3D%new(4, is_ptcl=.true.)
+        do i = 1,4
+            call res%os_ptcl2D%set_class(i, ROW_CLASSES(i))
+            call res%os_ptcl2D%set(i, 'corr', 0.5)
+            call res%os_ptcl2D%set_state(i, 1)
+        enddo
+        call res%os_cls3D%set_euler(1, [10., 45., 0.])
+        call res%os_cls3D%set_euler(2, [20., 90., 0.])
+        call res%os_cls3D%set_state(2, 0)
+        ! the project's rows: rows 1 and 3 in state 1, row 2 in state 2, row 4 deselected
+        call spproj%os_ptcl3D%new(4, is_ptcl=.true.)
+        do i = 1,4
+            call spproj%os_ptcl3D%set_state(i, ROW_STATES(i))
+            call spproj%os_ptcl3D%set_euler(i, [1., 2., 3.])
+        enddo
+        nposes = map_state_poses(spproj, res, 1)
+        call assert_int(2, nposes, 'the state''s two particles take its poses')
+        call assert_real(45., spproj%os_ptcl3D%get(1, 'e2'), 1.e-3, 'a particle takes its class''s pose')
+        call assert_real(10., spproj%os_ptcl3D%get(3, 'e1'), 1.e-3, 'every particle of the state')
+        call assert_real(2.,  spproj%os_ptcl3D%get(2, 'e2'), 1.e-3, 'a particle of another state keeps its pose')
+        call assert_real(2.,  spproj%os_ptcl3D%get(4, 'e2'), 1.e-3, 'a deselected particle too')
+        call assert_int(2, spproj%os_ptcl3D%get_state(2), 'and the states stay')
+        ! a result of other rows
+        call res%os_ptcl2D%new(3, is_ptcl=.true.)
+        call assert_int(-1, map_state_poses(spproj, res, 1), 'a result of other rows is not taken')
+        call spproj%kill
+        call res%kill
+        deallocate(spproj, res)
+    end subroutine test_state_runs
+
     !> the jobs' command lines: each starts afresh in the job's folder and sets the keys of the
     !! method; a mask diameter not positive is left to the job
     subroutine test_job_clines()
@@ -228,6 +286,11 @@ contains
         call assert_true(cline%get_carg('vol2') == 'state_refs/vol_state02.mrc', 'each reference as a volume')
         call assert_real(LP_ASSIGN, cline%get_rarg('lp'), 1.e-4, 'at the matching''s limit')
         call assert_int(NSPACE_ASSIGN, cline%get_iarg('nspace'), 'over its directions')
+        call set_state_cavgs3D_cline(cline, 'state.simple', 120.)
+        call assert_true(cline%get_carg('prg') == 'solve3D_cavgs', 'a state''s own solve3D_cavgs')
+        call assert_int(1, cline%get_iarg('nstates'), 'one state')
+        call assert_false(cline%defined('lpstart') .or. cline%defined('lpstop') .or. cline%defined('force_lp_range'),&
+            &'its limits from the class FRCs, no fixed ramp')
         call set_refine_cont_cline(cline, 'ref.simple', 2, 2500, 90.)
         call assert_true(cline%get_carg('prg') == 'refine3D' .and. cline%get_carg('refine') == 'cont', 'refine3D refine=cont')
         call assert_int(1, cline%get_iarg('maxits'), 'one iteration')

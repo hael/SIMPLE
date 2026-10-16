@@ -15,8 +15,9 @@ Status (2026-10-15): implemented, not yet compiled or run.
 `simple_exec prg=solve3D_pyramid projfile=<project> nstates=<n> nthr=<n>` makes the states'
 reference volumes once, from class averages of the first `nptcls_refs` selected particles. It
 then assigns every selected particle to a state by matching sub-class averages against those
-references. Last, one `refine3D refine=cont` iteration refines the particles' poses with the
-states fixed.
+references. Each state's sub-class averages are then refined alone, by a `solve3D_cavgs` with its
+own resolution limits, and give that state's particles their poses. Last, one
+`refine3D refine=cont` iteration refines the particles' poses with the states fixed.
 
 It has no watching, publications, retries, fallbacks or GUI. Every failed step is a hard exit,
 after the step's log and files are on disk and the report records the failure. Nothing is
@@ -67,8 +68,9 @@ program itself.
 | 8 | `assign/cls_expansion/` | `cls_expansion` of every selected particle's classes (the project's own 2D) into 500 sub-classes | no project, or no usable 2D |
 | 9 | `assign/` | `assign_cavgs_states` against `state_refs/` (15 Å, 1000 directions per state) | no project |
 | 10 | `assign/` | the rejection by fit, the ambiguity flags and the mapping onto the particles (`map_assignment`); the per-state, rejected and ambiguous stacks with JPEGs (`write_matched_cavgs`) | no candidate sub-class, or other particles |
-| 11 | `refine3D/` | the seeds (`set_refine_seeds`: the project's half-sets, the nearest of `nspace` directions), the particles' states renumbered to the populated ones (`write_refine_project`), `refine3D refine=cont maxits=1 objfun=cc pgrp=c1` | no particle with a state, no project, or no volume registered |
-| 12 | (the execution directory) | the result written over the execution directory's project; the report | — |
+| 11 | `assign/state_<NN>/` | per state: `solve3D_cavgs nstates=1` on the state's sub-class averages alone (`select_state_classes`), c1, `prune=no`, the limits it derives from their FRCs (`set_state_cavgs3D_cline`); its volume docked onto the state's reference in both hands, on a common grid (`docked_cc_common_grid`); its class poses mapped onto the state's particles in place of the matching's (`map_state_poses`) | fewer than `NCAVGS_STATE_MIN` (20) sub-class averages in a state, no project or volume, a docked correlation below `STATE_VOL_CC_MIN` (0.80), or no particle given a pose |
+| 12 | `refine3D/` | the seeds (`set_refine_seeds`: the project's half-sets, the nearest of `nspace` directions), the particles' states renumbered to the populated ones (`write_refine_project`), `refine3D refine=cont maxits=1 objfun=cc pgrp=c1` | no particle with a state, no project, or no volume registered |
+| 13 | (the execution directory) | the result written over the execution directory's project; the report | — |
 
 The check passes when the same-state even/odd median angular distance is at most 50°, the state
 agreement is at least 70 %, no two states correlate above 0.97 after docking in both hands, and
@@ -90,17 +92,21 @@ project's own 2D. The result is correct, but the second expansion repeats work.
 - **The execution directory's project** (the input's name, copied in by `mkdir=yes`; this is
   where `simple_exec` records the job). Every particle has its state (0 for the fit's
   rejections) and its refined pose. Each refined state's volume and FSC are registered (`vol`,
-  `fsc`), in the states of the references (the renumbering of step 11 is mapped back).
+  `fsc`), in the states of the references (the renumbering of step 12 is mapped back).
 - **`state_refs/`**: the references, their record, the reprojection and orientation JPEGs, and
   the class averages each was made from.
+- **`assign/state_<NN>/`**: each state's own `solve3D_cavgs` run, with its volume and its
+  reprojections. Each state's particles are in that run's frame and hand, not the reference's.
+  refine3D compares each particle with its own state's volume only, so independent frames are
+  consistent; a state's refined volume can be docked onto another's for a comparison.
 - **`solve3D_pyramid_report.txt`**: a text table, rewritten after each step and on a failure.
   It holds the status, the source and command line, the selected particles and the first set,
   and the route's classes and sub-classes. It holds the check: medians, agreement, each pair's
   docked correlation, the class averages per state and the verdict. It holds the assignment:
   the candidates, the fit's rejections and cap, the ambiguous sub-classes, the median, MAD and
   threshold, and the particles assigned and deselected, with the fit's and the model's
-  rejections side by side. Per state it lists the sub-class averages, the particles and the
-  FSC 0.143 and 0.5 resolutions. Last come the wall times of the steps.
+  rejections side by side. Per state it lists the sub-class averages, the particles, its own
+  volume's docked correlation with its reference, and the FSC 0.143 and 0.5 resolutions. Last come the wall times of the steps.
 
 ## 6. Shared code
 
@@ -117,9 +123,11 @@ The method is not copied from p07. The stateless parts live in `simple_state_ass
 - the steps on projects: `score_cavgs_with_model`, `select_route_classes`,
   `model_rejected_rows`, `check_state_refs`, `docked_pair_cc`, `read_refs_record`,
   `map_assignment`, `write_matched_cavgs`, `set_refine_seeds`, `write_refine_project`,
-  `map_refine_result`, `write_state_cavgs`;
+  `map_refine_result`, `write_state_cavgs`; for `solve3D_pyramid` only, `select_state_classes`,
+  `map_state_poses` and `docked_cc_common_grid`;
 - the jobs' command lines: `set_solve2D_route_cline`, `set_clsexp_cline`, `set_cavgs3D_cline`,
-  `set_assign_cline`, `set_refine_cont_cline`. The callers add the threads and the parts.
+  `set_assign_cline`, `set_refine_cont_cline`, and `set_state_cavgs3D_cline` (`solve3D_pyramid`
+  only). The callers add the threads and the parts.
 
 A change of any of these changes p07 and `solve3D_pyramid` together. Their rules are tested on
 fixed numbers in `unit_reconstruction` "state assignment rules".

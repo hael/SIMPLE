@@ -5,8 +5,9 @@
 ! PURPOSE:
 !   Does offline, in one pass, what stream p07 does session-long (doc/policies/3D/solve3D_pyramid_policy.md):
 !   the states' reference volumes are made once from class averages of the first nptcls_refs selected
-!   particles, every particle is assigned to a state by matching sub-class averages against them, and one
-!   refine3D refine=cont iteration refines the poses with the states fixed. The method's rules, constants and
+!   particles, every particle is assigned to a state by matching sub-class averages against them, each
+!   state's sub-class averages are refined alone by solve3D_cavgs (its own frame and resolution limits),
+!   and one refine3D refine=cont iteration refines the poses with the states fixed. The method's rules, constants and
 !   job command lines are p07's, shared through simple_state_assignment; none of p07's stream machinery
 !   (watching, publications, retries, fallbacks, GUI). Every step runs in-process in a folder of the
 !   execution directory (its commander on a child command line, then back), and every failed step is a hard
@@ -23,12 +24,15 @@
 !   assign/quality_selection/    the pool model on the project's classes, logged only
 !   assign/cls_expansion/        cls_expansion of every selected particle's classes
 !   assign/                      assign_cavgs_states, the rejection, flags and mapping (map_assignment)
+!   assign/state_<NN>/           solve3D_cavgs nstates=1 on state NN's sub-class averages, its volume docked
+!                                onto the state's reference, its poses mapped onto the state's particles
 !   refine3D/                    refine3D refine=cont maxits=1, the states fixed
 !   The result is the execution directory's project, with a report (REPORT_FNAME) beside it.
 !==============================================================================
 module simple_commanders_solve3D_pyramid
 use simple_defs,                only: logfhandle, STDLEN, CWD_GLOB
 use simple_defs_fname,          only: METADATA_EXT, TASK_FINISHED
+use simple_string_utils,        only: int2str_pad
 use simple_error,               only: simple_exception
 use simple_string,              only: string
 use simple_fileio,              only: file_exists, file2rarr, fopen, fclose
@@ -50,6 +54,8 @@ use simple_cavg_quality_model,  only: CAVG_QUALITY_MODEL_POOL_DEFAULT
 use simple_state_assignment,    only: MIN_PTCLS_PER_STATE, NSTATES_MIN, NCLS2D_FIRST, SOLVE2D_DIR, CLSEXP_DIR,&
                                      &CAVGS3D_DIR, ASSIGN_LABEL, REFINE_DIR, REFS_DIR, QUALITY_DIR, refs_check,&
                                      &assign_stats, cut_whole_stacks, usable_job_2D, count_active_classes,&
+                                     &select_state_classes, map_state_poses, docked_cc_common_grid,&
+                                     &set_state_cavgs3D_cline,&
                                      &expansion_budget, fit_mskdiam, select_route_classes, score_cavgs_with_model,&
                                      &model_rejected_rows, check_state_refs, read_refs_record, map_assignment,&
                                      &write_matched_cavgs, set_refine_seeds, write_refine_project, map_refine_result,&
@@ -65,7 +71,10 @@ integer,          parameter :: NPTCLS_REFS     = 100000 ! nptcls_refs' default: 
 character(len=*), parameter :: REFS_SUBSET_DIR = 'refs_subset'
 character(len=*), parameter :: ASSIGN_DIR      = 'assign'
 character(len=*), parameter :: REPORT_FNAME    = 'solve3D_pyramid_report.txt'
-integer,          parameter :: NSTEPS_MAX      = 6      ! the jobs: solve2D, two cls_expansion, solve3D_cavgs, matching, refine3D
+integer,          parameter :: NSTEPS_MAX      = 32     ! the jobs timed: solve2D, two cls_expansion, the solve3D_cavgs runs, matching, refine3D
+! each state's own solve3D_cavgs (provisional, until a validation run sets them)
+integer,          parameter :: NCAVGS_STATE_MIN = 20    ! sub-class averages a state needs for its own run
+real,             parameter :: STATE_VOL_CC_MIN = 0.80  ! its volume docked onto the state's reference, at least
 
 type, extends(commander_base) :: commander_solve3D_pyramid
   contains
@@ -91,6 +100,7 @@ type :: pyramid_report
     logical :: l_assigned  = .false.
     type(assign_stats) :: stats
     integer, allocatable :: state_cavgs(:)       !< sub-class averages assigned per state
+    real,    allocatable :: state_vol_cc(:)      !< each state's own volume docked onto its reference (-1: not run)
     real,    allocatable :: res0143(:), res05(:) !< the refined states' resolution (A; 0: none)
     integer :: nsteps = 0
     character(len=32) :: step_names(NSTEPS_MAX) = ''
@@ -111,13 +121,14 @@ contains
         type(sp_project)          :: spproj, sub, res
         type(cmdline)             :: cline_job
         type(pyramid_report)      :: rep
-        type(string)              :: edir, source_in, stk, dir, projfile, report_fname
+        type(string)              :: edir, source_in, stk, dir, projfile, report_fname, match_projfile, state_vol
         type(string), allocatable :: ref_vols(:)
         integer,      allocatable :: stkind(:), cls_states(:), states_matched(:)
         logical,      allocatable :: selected(:), l_first(:), model_rej(:), desel(:)
         character(len=STDLEN)     :: msg
-        real    :: mskdiam, smpd, box_stk, ref_smpd
+        real    :: mskdiam, smpd, box_stk, ref_smpd, smpd_vol, cc, cc_direct, cc_mirror
         integer :: n, i, s, nstates, nparts, nsplit, nsub, nheld, nreg, ref_box, ncls, nsync, nfirst_rows
+        integer :: box_vol, nsel, nposes
         ! ---- the command line, normalised before the parameters
         if( .not. cline%defined('projfile') ) THROW_HARD('solve3D_pyramid needs projfile')
         if( .not. cline%defined('nstates')  ) THROW_HARD('solve3D_pyramid needs nstates')
@@ -313,7 +324,50 @@ contains
         call res%kill
         rep%l_assigned = .true.
         call write_report(rep, report_fname)
-        ! ---- 11. the local refinement, the states fixed
+        ! ---- 11. each state's sub-class averages refined alone: solve3D_cavgs nstates=1 with the limits
+        ! it derives from their FRCs, its volume docked onto the state's reference (a run that found
+        ! another structure stops here), its poses mapped onto the state's particles in place of the
+        ! matching's. Each state is then in its own run's frame, which refine3D allows: it compares a
+        ! particle with its own state's volume only
+        match_projfile = projfile
+        allocate(rep%state_vol_cc(size(ref_vols)), source=-1.)
+        do s = 1,size(ref_vols)
+            if( rep%state_cavgs(s) < NCAVGS_STATE_MIN )then
+                write(msg,'(A,I0,A,I0,A,I0,A)') 'state ', s, ' holds ', rep%state_cavgs(s),&
+                    &' sub-class averages; its own solve3D_cavgs needs ', NCAVGS_STATE_MIN, ' at least'
+                call fail(trim(msg))
+            endif
+            dir      = string(ASSIGN_DIR//'/state_')//int2str_pad(s, 2)
+            projfile = dir//'/'//CAVGS3D_DIR//METADATA_EXT
+            call simple_mkdir(dir)
+            call res%read(match_projfile)
+            nsel = select_state_classes(res, s)
+            call res%write(projfile)
+            call res%kill
+            write(logfhandle,'(A,I3,A,I6,A)') '>>> STATE ', s, ': SOLVE3D_CAVGS ON ITS ', nsel, ' SUBCLASS AVERAGES'
+            call set_state_cavgs3D_cline(cline_job, CAVGS3D_DIR//METADATA_EXT, mskdiam)
+            call run_job(xcavgs3D, 'solve3D_cavgs (state '//int2str_pad(s, 2)//')', .true.)
+            if( .not. file_exists(projfile) ) call fail('no project from the state''s solve3D_cavgs: '//projfile%to_char())
+            call res%read(projfile)
+            if( .not. res%isthere_in_osout('vol_cavg', 1) ) call fail('the state''s solve3D_cavgs registered no volume: '//projfile%to_char())
+            call res%get_vol('vol_cavg', 1, state_vol, smpd_vol, box_vol)
+            if( .not. file_exists(state_vol) ) call fail('the state''s volume is missing: '//state_vol%to_char())
+            cc = docked_cc_common_grid(ref_vols(s), state_vol, mskdiam, cc_direct, cc_mirror)
+            rep%state_vol_cc(s) = cc
+            write(logfhandle,'(A,I3,A,F7.4,A,F7.4,A)') '>>> STATE ', s, ': ITS VOLUME DOCKED ONTO ITS REFERENCE ', cc_direct,&
+                &' (', cc_mirror, ' MIRRORED)'
+            call write_report(rep, report_fname)
+            if( cc < STATE_VOL_CC_MIN )then
+                write(msg,'(A,I0,A,F6.3,A,F4.2,A)') 'state ', s, '''s own volume docks onto its reference at ', cc,&
+                    &' (at least ', STATE_VOL_CC_MIN, ' needed); see '//dir%to_char()
+                call fail(trim(msg))
+            endif
+            nposes = map_state_poses(spproj, res, s)
+            call res%kill
+            if( nposes < 1 ) call fail('no particle of the state takes a pose from its solve3D_cavgs: '//projfile%to_char())
+            write(logfhandle,'(A,I3,A,I8,A)') '>>> STATE ', s, ': ', nposes, ' PARTICLES TAKE ITS POSES'
+        enddo
+        ! ---- 12. the local refinement, the states fixed
         call set_refine_seeds(spproj, params%nspace)
         dir      = string(REFINE_DIR)
         projfile = dir//'/'//REFINE_DIR//METADATA_EXT
@@ -332,7 +386,7 @@ contains
         nreg = map_refine_result(spproj, res, nstates)
         call res%kill
         if( nreg == 0 ) call fail('the local refinement registered no volume: '//projfile%to_char())
-        ! ---- 12. the result over the execution directory's project, and the report
+        ! ---- 13. the result over the execution directory's project, and the report
         call state_resolutions()
         call spproj%write(params%projfile)
         rep%status = 'DONE'
@@ -432,6 +486,7 @@ contains
     subroutine write_report( rep, fname )
         class(pyramid_report), intent(in) :: rep
         class(string),         intent(in) :: fname
+        real    :: vol_cc
         integer :: funit, ios, s, s2, nptcls
         call fopen(funit, file=fname, status='replace', action='write', iostat=ios)
         if( ios /= 0 )then
@@ -490,18 +545,24 @@ contains
         endif
         if( allocated(rep%state_cavgs) )then
             write(funit,'(A)') ''
-            write(funit,'(A)') 'state  sub-class averages  particles  FSC0.143(A)  FSC0.5(A)'
+            write(funit,'(A)') 'state  sub-class averages  particles  own volume cc  FSC0.143(A)  FSC0.5(A)'
             do s = 1,size(rep%state_cavgs)
                 nptcls = 0
                 if( allocated(rep%stats%counts) )then
                     if( s <= size(rep%stats%counts) ) nptcls = rep%stats%counts(s)
                 endif
+                vol_cc = -1.
+                if( allocated(rep%state_vol_cc) )then
+                    if( s <= size(rep%state_vol_cc) ) vol_cc = rep%state_vol_cc(s)
+                endif
                 if( allocated(rep%res0143) )then
-                    write(funit,'(I5,2X,I18,2X,I9,2X,F11.2,2X,F9.2)') s, rep%state_cavgs(s), nptcls, rep%res0143(s), rep%res05(s)
+                    write(funit,'(I5,2X,I18,2X,I9,2X,F13.4,2X,F11.2,2X,F9.2)') s, rep%state_cavgs(s), nptcls, vol_cc,&
+                        &rep%res0143(s), rep%res05(s)
                 else
-                    write(funit,'(I5,2X,I18,2X,I9,2X,A11,2X,A9)') s, rep%state_cavgs(s), nptcls, '-', '-'
+                    write(funit,'(I5,2X,I18,2X,I9,2X,F13.4,2X,A11,2X,A9)') s, rep%state_cavgs(s), nptcls, vol_cc, '-', '-'
                 endif
             enddo
+            write(funit,'(A)') '(own volume cc: the state''s own solve3D_cavgs volume docked onto its reference; -1 not run)'
         endif
         if( rep%nsteps > 0 )then
             write(funit,'(A)') ''

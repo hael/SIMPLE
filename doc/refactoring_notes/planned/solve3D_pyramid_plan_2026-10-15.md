@@ -22,6 +22,11 @@ Status (15 October 2026): implemented, not yet compiled or run. The contract is
 - The phantom test takes the whole phantom as the first set, not `nptcls_refs=1200`. The
   phantom is one stack ordered by direction, so the first third would be a cap of 20 of the 60
   directions (section 6).
+- Added 16 October 2026: after the assignment, each state's sub-class averages are refined alone
+  by `solve3D_cavgs nstates=1` (its limits from their FRCs), its volume is docked onto the
+  state's reference (at least 0.80, provisional), and its poses replace the matching's for the
+  state's particles before the local refinement. A state with fewer than 20 sub-class averages,
+  or whose own volume docks below the floor, is a hard exit (policy, step 11).
 - `solve3D_pyramid_blobs` is its own CTest entry (highlevel, 7200 s, 8 processors), and
   `SIMPLE_CTEST_BUDGET` was raised from 38 to 39 for it. This was the owner's decision on
   15 October 2026, chosen over folding it into `flex_pca_blobs`, whose wall time it would double.
