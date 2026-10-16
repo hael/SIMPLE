@@ -508,6 +508,7 @@ contains
         self%l_frac_best   = self%frac_best  <= 0.99
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
         self%l_cohort_sampling       = trim(self%cohort_sampling).eq.'yes'
+        self%l_scan_exit             = trim(self%scan_exit).eq.'yes'
     end subroutine derive_sampling_settings
 
     module subroutine derive_parallel_settings(self, cline)
@@ -676,6 +677,11 @@ contains
             case('yes','no')
             case DEFAULT
                 THROW_HARD('cohort_sampling must be yes or no')
+        end select
+        select case(trim(self%scan_exit))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('scan_exit must be yes or no')
         end select
         select case(trim(self%balance))
             case('none','class','cavg')

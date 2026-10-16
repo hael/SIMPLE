@@ -18,6 +18,7 @@ integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early solve
 integer,          parameter :: NSPACE_REGISTER         = 1000 ! nspace of the solve3D_addon registration pass
 integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: NSPACE_SUB_BASE         = 2500
+integer,          parameter :: NSPACE_MULTI_MAX        = 2500 ! multi-state cap on nspace; the stage reaching it starts prob_neigh
 
 ! Stage transition policy
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
@@ -31,8 +32,9 @@ integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch fr
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on staged NU filtering
 integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
-integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8
-integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE - 1
+integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! single-state prob_neigh refinement stages 6-8
+integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
+real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: ENVFSC_STAGE            = NSTAGES     ! when to activate enveloppe masking & FSC phase randomized resolution estimation
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
@@ -61,6 +63,7 @@ type :: refine3D_stage_cfg
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
+    logical :: l_scan_exit = .false. !< the multi-state rule also converges on the scan alone (scan_exit=yes)
 end type refine3D_stage_cfg
 
 contains
@@ -204,8 +207,9 @@ contains
             ! stage 3 keeps its full budget only because of the symmetry search,
             ! which never runs in an add-on: it early-stops on overlap
             if( istage <= SYMSRCH_STAGE )then
-                cfg%overlap  = addon%overlap
-                cfg%fracsrch = 90.
+                cfg%overlap     = addon%overlap
+                cfg%fracsrch    = 90.
+                cfg%l_scan_exit = .false.
             endif
         endif
         call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_refine3D_lp_override, l_register )
@@ -240,6 +244,7 @@ contains
         cfg%frac_best       = 1.0
         cfg%overlap         = 0.99
         cfg%fracsrch        = 99.
+        cfg%l_scan_exit     = .false.
         if( allocated(lpinfo) )then
             if( size(lpinfo) >= SYMSRCH_STAGE ) cfg%trs = max(cfg%trs, lpinfo(SYMSRCH_STAGE)%trslim)
         endif
@@ -321,7 +326,8 @@ contains
                 cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
             endif
         else if( params%nstates > 1 )then
-            ! independent multi-state: particle starts use shc before the prob stages
+            ! independent multi-state: particle starts use shc before the prob stages; prob_neigh
+            ! takes over at the first stage whose directions reach the multi-state cap (stage 5)
             if( istage < PROB_REFINE_STAGE )then
                 if( l_cavgs )then
                     cfg%refine           = 'prob_neigh'
@@ -330,7 +336,7 @@ contains
                     cfg%refine           = 'shc'
                     cfg%prob_neigh_mode  = ''
                 endif
-            else if( istage < PROB_NEIGH_REFINE_STAGE )then
+            else if( istage < multistate_prob_neigh_stage() )then
                 cfg%refine = 'prob'
             else
                 cfg%refine           = 'prob_neigh'
@@ -441,7 +447,9 @@ contains
         stoch_stage = solve3D_stoch_sampl_stage(params)
         cfg%inspace = NSPACE(istage)
         if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%inspace = NSPACE_CAVGS_EARLY
+        if( params%nstates > 1 ) cfg%inspace = min(cfg%inspace, NSPACE_MULTI_MAX)
         cfg%greedy_sampling = 'yes'
+        cfg%l_scan_exit     = .false.
         select case(istage)
             case(1,2)
                 cfg%imaxits       = MAXITS(istage)
@@ -451,6 +459,12 @@ contains
                 cfg%overlap       = 0.99
                 cfg%fracsrch      = 99.
                 cfg%snr_noise_reg = 2.0
+                ! multi-state shc stage 2 also ends once the search scans more than FRACSRCH_SCAN_EXIT %
+                ! on average, whatever the state overlap: the scan, not the overlap, drives its cost
+                if( istage == 2 .and. params%nstates > 1 .and. cfg%refine.eq.'shc' )then
+                    cfg%fracsrch    = FRACSRCH_SCAN_EXIT
+                    cfg%l_scan_exit = .true.
+                endif
             case(3,4,5,6)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
@@ -628,6 +642,11 @@ contains
         call cline_refine3D%set('frac_best',              cfg%frac_best)
         call cline_refine3D%set('overlap',                cfg%overlap)
         call cline_refine3D%set('fracsrch',               cfg%fracsrch)
+        if( cfg%l_scan_exit )then
+            call cline_refine3D%set('scan_exit',          'yes')
+        else
+            call cline_refine3D%delete('scan_exit')
+        endif
         if( l_cavgs )then
             call cline_refine3D%set('snr_noise_reg',      cfg%snr_noise_reg)
             call cline_refine3D%delete('update_frac')
@@ -649,6 +668,15 @@ contains
             call cline_refine3D%delete('gaufreq')
         endif
     end subroutine emit_refine3D_stage_cfg
+
+    !> First stage of the ladder whose directions reach the multi-state cap NSPACE_MULTI_MAX: where
+    !! independent multi-state refinement switches from prob to prob_neigh (stage 5 of the default ladder)
+    integer function multistate_prob_neigh_stage() result( istage )
+        do istage = 1, size(NSPACE)
+            if( NSPACE(istage) >= NSPACE_MULTI_MAX ) return
+        end do
+        THROW_HARD('no stage of the nspace ladder reaches the multi-state cap')
+    end function multistate_prob_neigh_stage
 
     logical function force_full_sampling_mode( params ) result( l_force_full )
         class(parameters), intent(in) :: params

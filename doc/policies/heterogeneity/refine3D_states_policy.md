@@ -109,6 +109,12 @@ The implementation-shaped `multivol_mode` and `prob_neigh_mode` controls are
 not public inputs to this workflow; the commander derives them from
 `pose_policy`.
 
+The `prob_neigh` frequency march searches 2,500 projection directions per
+state (`STAGE2_NSPACE`), the direction cap of multi-state runs (rulings of
+2026-10-15; it ran 5,000 before). The neighbourhood keeps its 500 subspace
+directions (`STAGE2_NSPACE_SUB`). A `local_ang_bound` small enough to ask for
+more subspace directions than that is limited to the 2,500.
+
 ## 4. Sampling and Frequency Planning
 
 The automatic per-iteration target is 10,000 particles per state, capped at

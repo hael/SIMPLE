@@ -220,6 +220,7 @@ contains
         call reg%add_char('stepwise', self%stepwise)
         call reg%add_char('cc_emit_sigma', self%cc_emit_sigma)
         call reg%add_char('cohort_sampling', self%cohort_sampling)
+        call reg%add_char('scan_exit', self%scan_exit)
         call reg%add_char('cont_route', self%cont_route)
         call reg%add_char('sigma_commit_deferred', self%sigma_commit_deferred)
         call reg%add_char('ref_pose_init', self%ref_pose_init)

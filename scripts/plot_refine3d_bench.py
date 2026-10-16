@@ -12,12 +12,14 @@ output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
 
     bench_records.csv     every value of every record, one row each (long table)
     bench_iterations.csv  one row per refine3D iteration: the strategy phases,
-                          their critical-path split, and the slowest and mean
-                          partition times
+                          their critical-path split, the slowest and mean
+                          partition times, and the mean percentage of the
+                          search space scanned
     bench_report.txt      the run, the time split by stage, the overheads, the
                           load balance, the outlier iterations, the share of the 2D
                           tables in the refine2D iterations, the probability
-                          tables' thread-seconds and the worker phases
+                          tables' thread-seconds, the pre-step driver per number
+                          of states and directions, and the worker phases
     bench_profile.svg     the per-iteration critical path (stacked) and the
                           slowest and mean partition times
 
@@ -235,6 +237,7 @@ class Iteration:
     mode: str = ""
     nspace: str = ""
     kto: str = ""
+    scan: Optional[float] = None                                 # mean % of the search space scanned
     total: float = 0.0
     phases: Dict[str, float] = field(default_factory=dict)       # strategy phases as reported
     path: Dict[str, float] = field(default_factory=dict)         # critical-path split
@@ -272,6 +275,7 @@ def build_iterations(records: Sequence[Record]) -> List[Iteration]:
         rec = strategy[it]
         row = Iteration(it=it, mode=rec.context.get("refine3D refine mode", ""),
                         nspace=rec.context.get("refine3D nspace", ""), kto=rec.context.get("refine3D kto", ""))
+        row.scan = as_number(rec.context.get("refine3D % search space scanned", ""))
         s = rec.seconds
         row.total = s.get("refine3D total time", 0.0)
         row.phases = {
@@ -317,7 +321,7 @@ ITERATION_COLUMNS = (
     + [f"path_{k}_s" for k, _, _ in PATH_COMPONENTS]
     + [f"{name}_{stat}_s" for name in ("tables", "fill", "worker", "rec3D", "sigma2_write")
        for stat in ("max", "mean", "min")]
-    + ["nparts", "volassemble_nu_filter_s"]
+    + ["nparts", "volassemble_nu_filter_s", "search_space_scanned_pct"]
 )
 
 
@@ -334,7 +338,8 @@ def write_iterations_csv(rows: Sequence[Iteration], outpath: Path) -> None:
                     value = row.extra.get(f"{name}_{stat}")
                     values.append("" if value is None else f"{value:.3f}")
             nparts = int(row.extra.get("worker_nparts", row.extra.get("tables_nparts", 0)))
-            values += [nparts or "", f"{row.extra.get('volassemble_nu_filter', 0.0):.3f}"]
+            values += [nparts or "", f"{row.extra.get('volassemble_nu_filter', 0.0):.3f}",
+                       "" if row.scan is None else f"{row.scan:.3f}"]
             writer.writerow(values)
 
 
@@ -394,6 +399,31 @@ def write_thread_seconds(records: Sequence[Record], add) -> None:
         for key, values in ratios.items():
             add(f"  {key:46s} {statistics.fmean(values):10.4g} (mean)")
         add("")
+
+
+PRESTEP_KEYS = (("scheduling (parts)", "parts"), ("table reads", "reads"), ("ref_assign", "assign"),
+                ("total time", "total"))
+
+
+def write_prestep_groups(records: Sequence[Record], add) -> None:
+    """The probabilistic pre-step driver (PROB_ALIGN, PROB_ALIGN_NEIGH) per table, number of states and
+    directions: the mean seconds per iteration of the parts' scheduling, the master's table reads, its
+    ref_assign and the total."""
+    groups: Dict[Tuple[str, str, str], List[Record]] = defaultdict(list)
+    for family, label in (("PROB_ALIGN", "prob"), ("PROB_ALIGN_NEIGH", "prob_neigh")):
+        for rec in first_pass_by_iteration(by_family(records, family)).values():
+            groups[(label, rec.context.get("prob_align states", "?"),
+                    rec.context.get("prob_align projection directions", "?"))].append(rec)
+    if not groups:
+        return
+    add("Probabilistic pre-step driver by table, states and directions, mean seconds per iteration:")
+    add(f"  {'table':>10s} {'states':>6s} {'nspace':>6s} {'iters':>5s} "
+        + " ".join(f"{short:>7s}" for _, short in PRESTEP_KEYS))
+    for (label, nstates, nspace), recs in groups.items():
+        means = [statistics.fmean(rec.seconds.get(f"prob_align {key}", 0.0) for rec in recs)
+                 for key, _ in PRESTEP_KEYS]
+        add(f"  {label:>10s} {nstates:>6s} {nspace:>6s} {len(recs):5d} " + " ".join(f"{m:7.3f}" for m in means))
+    add("")
 
 
 def write_2D_tables(records: Sequence[Record], add) -> None:
@@ -472,9 +502,11 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: s
         add(f"  slowest-partition and assembly compute {compute:.1f} s ({pct(compute, total).strip()}); "
             f"master time around it {overhead:.1f} s ({pct(overhead, total).strip()})")
         add("")
-        add("By stage (contiguous iterations with one refine mode and nspace), seconds per iteration:")
+        add("By stage (contiguous iterations with one refine mode and nspace), seconds per iteration; scan% is the")
+        add("mean percentage of the search space scanned at the stage's last iteration:")
         header = (f"  {'iterations':>10s} {'mode':>10s} {'nspace':>6s} {'total':>7s} {'setup':>6s} {'tables':>7s} "
-                  f"{'pre-ovh':>7s} {'search':>7s} {'sch-ovh':>7s} {'volasm':>6s} {'asm-ovh':>7s} {'sigma2':>6s}")
+                  f"{'pre-ovh':>7s} {'search':>7s} {'sch-ovh':>7s} {'volasm':>6s} {'asm-ovh':>7s} {'sigma2':>6s} "
+                  f"{'scan%':>6s}")
         add(header)
         for block in stages_of(rows):
             n = len(block)
@@ -484,7 +516,8 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: s
             add(f"  {block[0].it:>4d}-{block[-1].it:<5d} {block[0].mode:>10s} {block[0].nspace:>6s} "
                 f"{sum(r.total for r in block) / n:7.2f} {mean_of('setup'):6.2f} {mean_of('tables'):7.2f} "
                 f"{mean_of('prestep_overhead'):7.2f} {mean_of('search'):7.2f} {mean_of('sched_overhead'):7.2f} "
-                f"{mean_of('volassemble'):6.2f} {mean_of('assembly_overhead'):7.2f} {mean_of('sigma2'):6.2f}")
+                f"{mean_of('volassemble'):6.2f} {mean_of('assembly_overhead'):7.2f} {mean_of('sigma2'):6.2f} "
+                + ("     -" if block[-1].scan is None else f"{block[-1].scan:6.2f}"))
         add("")
         add("Load balance (slowest partition over the mean, median over iterations):")
         if not any(row.extra.get("worker_mean", 0.0) > 0 or row.extra.get("tables_mean", 0.0) > 0 for row in rows):
@@ -521,6 +554,7 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: s
         add("")
     write_2D_tables(records, add)
     write_thread_seconds(records, add)
+    write_prestep_groups(records, add)
     for family, title in (("REFINE3D", "Search worker phases (mean and maximum over iterations and partitions)"),
                           ("PROB_TAB", "Probability-table part phases (prob)"),
                           ("PROB_TAB_NEIGH", "Probability-table part phases (prob_neigh)"),

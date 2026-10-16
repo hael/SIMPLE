@@ -536,6 +536,8 @@ contains
                 converged = self%mi_state > overlap_lim
             else
                 converged = min_state_mi_joint > OVERLAP_STATE_JOINT .and. self%frac_srch%avg > fracsrch_lim
+                ! scan_exit (solve3D's multi-state shc stage 2): the scan alone also ends the stage
+                if( params%l_scan_exit ) converged = converged .or. self%frac_srch%avg > fracsrch_lim
             endif
             deallocate( state_mi_joint, statepops )
         endif

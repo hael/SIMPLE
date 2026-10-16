@@ -61,8 +61,8 @@ for `solve3D`.
 
 The stage controller in `simple_solve3D_controller.f90` emits a concrete
 `refine3D` command line for each stage. The full particle workflow has eight
-stages. Independent multi-state startup defaults to five stages so it stops
-before the `prob_neigh` and NU-filtering stages.
+stages. Independent multi-state startup defaults to five stages, so it stops
+after its first `prob_neigh` stage and before the NU-filtering stages.
 
 Stage policy includes:
 
@@ -75,7 +75,15 @@ Stage policy includes:
   - single-state particle runs use `prob_neigh` with `prob_neigh_mode=shc`
     in stages 1-2, middle `prob`, and late `prob_neigh`
   - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
-    stages 3-5, and `prob_neigh` in later user-enabled stages
+    stages 3-4, and `prob_neigh` with `prob_neigh_mode=state` from stage 5:
+    the switch is the first stage whose `nspace` reaches the multi-state cap
+    of 2,500 directions (`NSPACE_MULTI_MAX`), read from the stage table, and
+    the class-average route switches at the same stage
+- the multi-state direction cap: with `nstates > 1` no stage exceeds 2,500
+  directions, so stages 7 and 8 (5,000 in single state) run at 2,500
+- the multi-state stage-2 exit: stage 2 of a multi-state particle run (`shc`)
+  also ends once the search scans more than 95% of the search space on
+  average, whatever the state overlap (section 6)
 - `nspace_sub` for `prob_neigh`
 - staged point-group policy between `pgrp_start` and `pgrp`
 - staged translation limits
@@ -335,11 +343,38 @@ the parent particle workflow resumes. The multi-state run is intended for
 severe heterogeneity where early inspection is more valuable than committing
 to a longer refinement immediately. Its particle stages 1 and 2 use direct
 `refine=shc` rather than the probabilistic-neighborhood startup of the
-single-state run; stages 3-5 use `refine=prob`. Direct `solve3D_cavgs`
-initialization retains its own class-average search schedule. Unless the
-user overrides them, the commander sets `nstages=5` and `lpstop=6.0 A`.
-Stage 5 remains in `prob`; it does not enter `prob_neigh`, static NU
-filtering, multi-state trailing reconstruction, or staged automasking. After
+single-state run; stages 3 and 4 use `refine=prob`, and stage 5 (rulings of
+2026-10-15) uses `refine=prob_neigh` with `prob_neigh_mode=state`. The switch
+is the first stage whose directions reach the multi-state cap of 2,500
+(`NSPACE_MULTI_MAX` in the stage controller), derived from the stage table
+of directions rather than from a stage number; the dense `prob` table over
+2,500 directions of every state was the most expensive stage of a
+multi-state run. The class-average route (`solve3D_cavgs` with `nstates > 1`)
+shares this mode policy and switches at the same stage; its early stages
+keep their own class-average search schedule. The cap also limits every
+multi-state stage to 2,500 directions: stages 7 and 8, which run 5,000
+directions in single state, run 2,500 when a user extends a multi-state run
+to them.
+
+Stage 2 of a multi-state particle run ends by the multi-state convergence
+rule (every state's orientation overlap above 0.96 and the mean percentage of
+the search space scanned above `fracsrch`) or, since the rulings of
+2026-10-15, once `shc` scans more than 95% of the search space on average,
+whatever the state overlap. The measure is the mean over the sampled
+particles of the per-particle `frac`, which the log prints as "% SEARCH SPACE
+SCANNED". The controller sets `fracsrch=95` together with the internal key
+`scan_exit=yes` on stage 2's `refine3D` command line (an internal parameter
+with no interface entry); the convergence check then ends the stage on the
+scan alone. Without the key, stage 1, every later stage and every other user
+of the multi-state rule keep the rule as it was. An `shc` search scans more
+of the references the longer the states settle, so a stage that kept running
+until the overlap converged spent most of its time scanning nearly the whole
+space. A `solve3D_addon` pass keeps its own early stopping and does not set
+the key.
+
+Unless the user overrides them, the commander sets `nstages=5` and
+`lpstop=6.0 A`. Stage 5 does not enter static NU filtering, multi-state
+trailing reconstruction, or staged automasking. After
 stage 5, the workflow still runs the final original-sampling reconstruction
 so the run produces inspectable `rec_final_stateNN` volumes. To improve
 particle coverage before that early exit, the multi-state run starts

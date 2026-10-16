@@ -504,25 +504,29 @@ contains
         profile = self%fill_profile
     end function get_fill_profile
 
-    ! ptcl -> (proj, state) assignment using calibrated likelihood weights
+    ! ptcl -> (proj, state) assignment using calibrated likelihood weights.
+    ! Every reference sorts the particles by distance; its head is its closest available particle.
+    ! One state: draw a reference among the heads, assign its head, advance the heads that pointed
+    ! at that particle. Several states: a particle's state is the state of its closest reference over
+    ! all states (ties: the lowest reference index), then the same draw runs within each state over
+    ! that state's references. A particle-indexed list of the references whose head it is
+    ! (head_first, ref_next) finds the heads to advance without rescanning every reference.
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer, allocatable :: stab_inds(:,:), inds_sorted(:), iref_dist_inds(:)
-        integer, allocatable :: greedy_state(:), active_refs(:), active_inds(:), score_mode(:)
+        integer, allocatable :: greedy_state(:), score_mode(:), head_first(:), ref_next(:)
         real,    allocatable :: score_work(:,:), score_min(:), score_spread(:)
-        real,    allocatable :: iref_dist(:), dists_sorted(:)
-        real,    allocatable :: state_projs_athres(:), active_dists(:), active_dists_sorted(:)
+        real,    allocatable :: iref_dist(:), dists_sorted(:), state_projs_athres(:)
         logical, allocatable :: ptcl_avail(:)
-        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, nactive, ithr
+        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, ithr, nleft, ref_offset
         integer :: alloc_stat
         real    :: projs_athres, dist_tmp, corr_tmp
         character(len=256) :: alloc_msg
         allocate(stab_inds(self%nptcls, self%nrefs), score_work(self%nptcls,nthr_glob),&
             &score_min(self%nptcls), score_spread(self%nptcls), score_mode(self%nptcls),&
             &inds_sorted(self%nrefs), iref_dist_inds(self%nrefs), greedy_state(self%nptcls),&
-            &active_refs(self%nrefs), active_inds(self%nrefs), iref_dist(self%nrefs),&
-            &dists_sorted(self%nrefs), state_projs_athres(self%p_ptr%nstates), active_dists(self%nrefs),&
-            &active_dists_sorted(self%nrefs), ptcl_avail(self%nptcls), stat=alloc_stat, errmsg=alloc_msg)
+            &iref_dist(self%nrefs), dists_sorted(self%nrefs), state_projs_athres(self%p_ptr%nstates),&
+            &ptcl_avail(self%nptcls), head_first(self%nptcls), ref_next(self%nrefs), stat=alloc_stat, errmsg=alloc_msg)
         if( alloc_stat /= 0 )then
             write(logfhandle,*) 'eul_prob_tab%ref_assign allocation failed for nptcls/nrefs: ', self%nptcls, self%nrefs
             write(logfhandle,*) trim(alloc_msg)
@@ -550,24 +554,24 @@ contains
         enddo
         greedy_state = 0
         if( self%nstates > 1 )then
-            call assign_greedy_state_labels()
+            call assign_state_labels()
             do si = 1,self%nstates
-                call assign_refs_for_state(self%ssinds(si))
+                call assign_refs_for_state(si)
             enddo
         else
-            call reset_ref_frontier()
-            do while( any(ptcl_avail) )
+            call reset_ref_frontier(1, self%nrefs)
+            ptcl_avail = .true.
+            nleft      = self%nptcls
+            call build_head_lists(1, self%nrefs)
+            do while( nleft > 0 )
                 call sample_likelihood_dist(self%nrefs, frontier_ref_dist, likelihood_nsample(self%nrefs, projs_athres),&
                     &dist_tmp, corr_tmp, assigned_iref, dists_sorted, inds_sorted)
                 call assign_current_ref()
-                do iref = 1,self%nrefs
-                    call advance_ref_head(iref, 0)
-                enddo
+                call advance_heads_at(assigned_ptcl)
             enddo
         endif
-        if( allocated(stab_inds) ) deallocate(stab_inds, inds_sorted, iref_dist_inds, greedy_state, active_refs, active_inds,&
-            &score_work, score_min, score_spread, score_mode, iref_dist, dists_sorted, state_projs_athres, active_dists,&
-            &active_dists_sorted, ptcl_avail)
+        deallocate(stab_inds, inds_sorted, iref_dist_inds, greedy_state, score_work, score_min, score_spread, score_mode,&
+            &iref_dist, dists_sorted, state_projs_athres, ptcl_avail, head_first, ref_next)
 
     contains
 
@@ -641,21 +645,23 @@ contains
             dist = iref_dist(iref_loc)
         end function frontier_ref_dist
 
-        subroutine reset_ref_frontier()
-            do iref = 1,self%nrefs
-                iref_dist(iref) = ref_score(iref, stab_inds(1,iref))
+        !> the references ifirst..ilast with their heads at their closest particle
+        subroutine reset_ref_frontier( ifirst, ilast )
+            integer, intent(in) :: ifirst, ilast
+            integer :: iref_loc
+            do iref_loc = ifirst,ilast
+                iref_dist(iref_loc) = ref_score(iref_loc, stab_inds(1,iref_loc))
             enddo
-            iref_dist_inds = 1
-            ptcl_avail     = .true.
+            iref_dist_inds(ifirst:ilast) = 1
         end subroutine reset_ref_frontier
 
-        subroutine advance_ref_head( iref_current, state_filter )
-            integer, intent(in) :: iref_current, state_filter
+        !> move the head of iref_current to its closest available particle (huge distance when none is left)
+        subroutine advance_ref_head( iref_current )
+            integer, intent(in) :: iref_current
             integer :: iptcl_current
             do while( iref_dist_inds(iref_current) <= self%nptcls )
                 iptcl_current = stab_inds(iref_dist_inds(iref_current), iref_current)
-                if( ptcl_avail(iptcl_current) .and. &
-                    &(state_filter == 0 .or. greedy_state(iptcl_current) == state_filter) )then
+                if( ptcl_avail(iptcl_current) )then
                     iref_dist(iref_current) = ref_score(iref_current, iptcl_current)
                     return
                 endif
@@ -664,71 +670,111 @@ contains
             iref_dist(iref_current) = huge(iref_dist(iref_current))
         end subroutine advance_ref_head
 
+        !> enter reference iref_loc in the list of its head particle
+        subroutine push_head( iref_loc )
+            integer, intent(in) :: iref_loc
+            integer :: iptcl_head
+            if( iref_dist_inds(iref_loc) > self%nptcls ) return
+            iptcl_head             = stab_inds(iref_dist_inds(iref_loc), iref_loc)
+            ref_next(iref_loc)     = head_first(iptcl_head)
+            head_first(iptcl_head) = iref_loc
+        end subroutine push_head
+
+        subroutine build_head_lists( ifirst, ilast )
+            integer, intent(in) :: ifirst, ilast
+            integer :: iref_loc
+            head_first = 0
+            do iref_loc = ifirst,ilast
+                call push_head(iref_loc)
+            enddo
+        end subroutine build_head_lists
+
+        !> advance the heads that pointed at the particle just assigned: no other head changes
+        subroutine advance_heads_at( iptcl_assigned )
+            integer, intent(in) :: iptcl_assigned
+            integer :: iref_loc, iref_next
+            iref_loc = head_first(iptcl_assigned)
+            head_first(iptcl_assigned) = 0
+            do while( iref_loc > 0 )
+                iref_next = ref_next(iref_loc)
+                call advance_ref_head(iref_loc)
+                call push_head(iref_loc)
+                iref_loc = iref_next
+            enddo
+        end subroutine advance_heads_at
+
         subroutine assign_current_ref()
             assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
             ptcl_avail(assigned_ptcl)     = .false.
+            nleft = nleft - 1
             call self%assign_candidate(assigned_ptcl, self%loc_tab(assigned_iref,assigned_ptcl))
             call record_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
                 &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift)
             self%assgn_map(assigned_ptcl)%frac = 100.
         end subroutine assign_current_ref
 
-        subroutine assign_greedy_state_labels()
-            ! Multi-state state labelling is deterministic (argmin distance) for both weighting
-            ! schemes; probabilistic exploration is confined to the within-state projection
-            ! assignment (assign_refs_for_state).
-            call reset_ref_frontier()
-            do while( any(ptcl_avail) )
-                assigned_iref = minloc(iref_dist, dim=1)
-                assigned_ptcl  = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
-                greedy_state(assigned_ptcl) = self%ref_state(assigned_iref)
-                ptcl_avail(assigned_ptcl)  = .false.
-                do iref = 1,self%nrefs
-                    call advance_ref_head(iref, 0)
+        !> Multi-state state labelling is deterministic (argmin distance) for both weighting schemes;
+        !! probabilistic exploration is confined to the within-state projection assignment
+        !! (assign_refs_for_state). A particle's state is the state of its closest reference over
+        !! all states; an exact tie between references goes to the lowest reference index. This is
+        !! the label the global greedy frontier (the closest available reference-particle pair first,
+        !! the lowest reference index among equal distances) gives every particle.
+        subroutine assign_state_labels()
+            integer :: i_loc, iref_loc, iref_best
+            real    :: score, score_best
+            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
+            !$omp private(i_loc,iref_loc,iref_best,score,score_best)
+            do i_loc = 1,self%nptcls
+                iref_best  = 1
+                score_best = ref_score(1, i_loc)
+                do iref_loc = 2,self%nrefs
+                    score = ref_score(iref_loc, i_loc)
+                    if( score < score_best )then
+                        score_best = score
+                        iref_best  = iref_loc
+                    endif
                 enddo
+                greedy_state(i_loc) = self%ref_state(iref_best)
             enddo
-        end subroutine assign_greedy_state_labels
+            !$omp end parallel do
+        end subroutine assign_state_labels
 
-        subroutine gather_active_refs( state_filter )
-            integer, intent(in) :: state_filter
-            nactive = 0
-            do iref = 1,self%nrefs
-                if( self%ref_state(iref) /= state_filter ) cycle
-                if( iref_dist_inds(iref) > self%nptcls ) cycle
-                nactive = nactive + 1
-                active_refs(nactive)  = iref
-                active_dists(nactive) = iref_dist(iref)
-            enddo
-        end subroutine gather_active_refs
-
-        subroutine assign_refs_for_state( state_filter )
-            integer, intent(in) :: state_filter
-            call reset_ref_frontier()
+        !> the projection assignment of the particles labelled with the state of rank si, over that
+        !! state's references, the contiguous block (si-1)*nspace+1..si*nspace; each of them keeps a
+        !! head while a particle of the state is left
+        subroutine assign_refs_for_state( si_loc )
+            integer, intent(in) :: si_loc
+            integer :: state_filter, ifirst, ilast, nblock, iref_loc
+            state_filter = self%ssinds(si_loc)
+            ifirst       = (si_loc - 1) * self%p_ptr%nspace + 1
+            ilast        = si_loc * self%p_ptr%nspace
+            nblock       = ilast - ifirst + 1
+            ref_offset   = ifirst - 1
+            call reset_ref_frontier(ifirst, ilast)
             ptcl_avail = greedy_state == state_filter
-            do iref = 1,self%nrefs
-                if( self%ref_state(iref) == state_filter ) call advance_ref_head(iref, state_filter)
+            nleft      = count(ptcl_avail)
+            do iref_loc = ifirst,ilast
+                call advance_ref_head(iref_loc)
             enddo
-            do while( any(ptcl_avail) )
-                call gather_active_refs(state_filter)
-                if( nactive == 0 ) THROW_HARD('no active refs left in multi-state probability assignment')
-                if( nactive == 1 )then
+            call build_head_lists(ifirst, ilast)
+            do while( nleft > 0 )
+                if( nblock == 1 )then
                     active_idx = 1
                 else
-                    call sample_likelihood_dist(nactive, active_ref_dist, likelihood_nsample(nactive, state_projs_athres(state_filter)),&
-                        &dist_tmp, corr_tmp, active_idx, active_dists_sorted, active_inds)
+                    call sample_likelihood_dist(nblock, block_ref_dist,&
+                        &likelihood_nsample(nblock, state_projs_athres(state_filter)),&
+                        &dist_tmp, corr_tmp, active_idx, dists_sorted, inds_sorted)
                 endif
-                assigned_iref = active_refs(active_idx)
+                assigned_iref = ref_offset + active_idx
                 call assign_current_ref()
-                do iref = 1,self%nrefs
-                    if( self%ref_state(iref) == state_filter ) call advance_ref_head(iref, state_filter)
-                enddo
+                call advance_heads_at(assigned_ptcl)
             enddo
         end subroutine assign_refs_for_state
 
-        real function active_ref_dist( active_loc ) result(dist)
+        real function block_ref_dist( active_loc ) result(dist)
             integer, intent(in) :: active_loc
-            dist = active_dists(active_loc)
-        end function active_ref_dist
+            dist = iref_dist(ref_offset + active_loc)
+        end function block_ref_dist
 
     end subroutine ref_assign
 

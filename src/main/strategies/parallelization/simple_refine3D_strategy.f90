@@ -62,6 +62,8 @@ type :: refine3D_bench_state
     integer                 :: sigma2_nshells = 0
     integer(int64)          :: sigma2_nbytes  = 0_int64
     integer                 :: sigma2_nrows_updated = 0
+    ! mean % of the search space scanned, as the convergence check reports it; negative without a check
+    real                    :: frac_srch = -1.
 end type refine3D_bench_state
 
 ! ======================================================================
@@ -572,6 +574,7 @@ contains
         bench%sigma2_nshells = 0
         bench%sigma2_nbytes  = 0_int64
         bench%sigma2_nrows_updated = 0
+        bench%frac_srch      = -1.
     end subroutine reset_refine3D_bench
 
     !> Context of the sigma2 transaction for the strategy bench file: the committed store's
@@ -623,6 +626,7 @@ contains
         write(fnr,'(a,i0)') 'refine3D sigma2 store shells        : ', bench%sigma2_nshells
         write(fnr,'(a,i0)') 'refine3D sigma2 store bytes         : ', bench%sigma2_nbytes
         write(fnr,'(a,i0)') 'refine3D sigma2 rows updated        : ', bench%sigma2_nrows_updated
+        if( bench%frac_srch >= 0. ) write(fnr,'(a,f0.3)') 'refine3D % search space scanned     : ', bench%frac_srch
         call write_mem_bench_context(fnr, 'refine3D')
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** TIMINGS (s) ***'
@@ -888,6 +892,7 @@ contains
                 ! no convergence report for sigma-only updates
             case default
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
+                if( L_BENCH_GLOB ) self%bench%frac_srch = self%conv%get('frac_srch')
         end select
         if( L_BENCH_GLOB ) self%bench%rt_assemble = toc(self%bench%t_assemble)
         if( self%l_sigma )then
@@ -1464,6 +1469,7 @@ contains
             case DEFAULT
                 if( trim(params%volrec).eq.'yes' ) call refresh_resolution_fields_from_fsc(params, build)
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)
+                if( L_BENCH_GLOB ) self%bench%frac_srch = self%conv%get('frac_srch')
                 converged = converged .and. (iter >= params%startit + 2)
         end select
         ! Force termination at requested number of iterations (maxits is run-length)

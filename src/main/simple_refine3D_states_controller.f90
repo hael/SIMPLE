@@ -22,7 +22,7 @@ public :: refine3D_states_controller, refine3D_states_policy
 
 integer, parameter :: NSAMPLE_PER_STATE_REFINE3D_STATES           = 10000
 integer, parameter :: NSAMPLE_REFINE3D_STATES_CAP                 = 100000
-integer, parameter :: STAGE2_NSPACE                               = 5000
+integer, parameter :: STAGE2_NSPACE                               = 2500 ! prob_neigh stage; the multi-state direction cap
 integer, parameter :: STAGE2_NSPACE_SUB                           = 500
 integer, parameter :: FREQUENCY_BLOCK_NITS                        = 3
 integer, parameter :: STAGE2_MINITS                               = 5

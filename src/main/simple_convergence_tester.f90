@@ -3,8 +3,10 @@
 ! a polar pass reports corr. N25: a refine=cont pass converges when 90% of every state moved at most
 ! 0.5 deg and 1 A with an accepted or no-improvement outcome, over a streak covering 90% of the active
 ! particles (the cont_conv_rot, cont_conv_shift and cont_conv_frac defaults; the parameters replace
-! them); a discrete pass, with or without the polish, keeps its own rule. Expected values are
-! hand-counted from the fixtures.
+! them); a discrete pass, with or without the polish, keeps its own rule. The multi-state rule
+! converges on the state overlap and the scan together; with scan_exit=yes (solve3D's multi-state
+! shc stage 2, fracsrch=95) the scan alone also ends it, and without the key (stage 1, fracsrch=99,
+! and every other user) a low overlap holds it. Expected values are hand-counted from the fixtures.
 module simple_convergence_tester
 use simple_core_module_api, only: oris, del_file
 use simple_cmdline,         only: cmdline
@@ -42,6 +44,8 @@ contains
         call test_cont_rule_streak()
         write(*,'(A)') 'test_cont_rule_tunable'
         call test_cont_rule_tunable()
+        write(*,'(A)') 'test_multistate_scan_exit'
+        call test_multistate_scan_exit()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
 
@@ -149,6 +153,66 @@ contains
         call cline%kill
         call os%kill
     end subroutine test_cartesian_pass_statistics
+
+    !> three states of two particles, all updated: a mean scan of 96% with a joint overlap of 0.5 ends
+    !! solve3D's multi-state stage 2 (scan_exit=yes, fracsrch=95) and not stage 1 (no key, fracsrch=99),
+    !! nor the rule without the key at fracsrch=95; 94% does not end stage 2; with every state's
+    !! overlap above 0.96 the present rule still converges without the key
+    subroutine test_multistate_scan_exit()
+        type(oris) :: os
+        call make_multistate_field(os, frac=96., mi_proj=0.5)
+        call assert_true(multistate_converged(os, 95., .true.),   'stage 2 did not end at a 96% scan with a low overlap')
+        call assert_false(multistate_converged(os, 99., .false.), 'stage 1 ended at a 96% scan with a low overlap')
+        call assert_false(multistate_converged(os, 95., .false.), 'the rule without scan_exit ended on the scan alone')
+        call make_multistate_field(os, frac=94., mi_proj=0.5)
+        call assert_false(multistate_converged(os, 95., .true.),  'stage 2 ended at a 94% scan')
+        call make_multistate_field(os, frac=96., mi_proj=0.98)
+        call assert_true(multistate_converged(os, 95., .false.),  'the overlap-and-scan rule no longer converges')
+        call assert_true(multistate_converged(os, 95., .true.),   'scan_exit blocked the overlap-and-scan rule')
+        call del_file(STATS_FILE)
+        call os%kill
+    end subroutine test_multistate_scan_exit
+
+    !> NPTCLS particles, two per state 1-3, all sampled and updated in generation 1, each scanning
+    !! frac % of the search space with orientation overlap mi_proj
+    subroutine make_multistate_field( os, frac, mi_proj )
+        type(oris), intent(inout) :: os
+        real,       intent(in)    :: frac, mi_proj
+        integer :: i
+        call os%kill
+        call os%new(NPTCLS, is_ptcl=.true.)
+        do i = 1, NPTCLS
+            call os%set_state(i, (i + 1)/2)
+            call os%set(i, 'updatecnt', 1.)
+            call os%set(i, 'sampled',   1.)
+            call os%set(i, 'frac',      frac)
+            call os%set(i, 'mi_proj',   mi_proj)
+            call os%set(i, 'corr',      0.5)
+        end do
+    end subroutine make_multistate_field
+
+    !> check_conv3D of a three-state shc pass on os with the stage's fracsrch, with or without scan_exit
+    logical function multistate_converged( os, fracsrch, l_scan_exit ) result( converged )
+        type(oris), intent(inout) :: os
+        real,       intent(in)    :: fracsrch
+        logical,    intent(in)    :: l_scan_exit
+        class(parameters), allocatable :: params
+        type(convergence) :: conv
+        type(cmdline)     :: cline
+        allocate(params)
+        params%nstates     = 3
+        params%trs         = 5.
+        params%refine      = 'shc'
+        params%l_scan_exit = l_scan_exit
+        params%startit     = 1
+        params%which_iter  = 1
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', fracsrch)
+        converged = conv%check_conv3D(params, cline, os, 40.)
+        call cline%kill
+        deallocate(params)
+    end function multistate_converged
 
     !> the bounds are inclusive; only an accepted or a finite no-improvement outcome is stable
     subroutine test_cont_particle_stable()

@@ -389,6 +389,30 @@ shifts, and sometimes in-plane rotation, after stochastic candidate selection.
 The stored assignment distance is then the refined/profiled objective value.
 This is intended current behavior, not a full soft-assignment EM update.
 
+### Dense-table assignment (`ref_assign`)
+
+The `prob` driver assigns the particles from the dense table
+(`simple_eul_prob_tab.f90`, `ref_assign`). Every reference sorts the
+particles by distance, and its head is its closest particle not yet assigned.
+
+- **One state.** Each step draws a reference from the heads' distances with
+  the likelihood sampler above and assigns that reference's head particle.
+  Only the heads that pointed at that particle move on.
+- **Several states.** A particle's state is the state of its closest
+  reference over all states. An exact tie between references goes to the
+  lowest reference index, which is the label the earlier global greedy
+  frontier gave. Then the same draw runs within each state, over that state's
+  references and particles.
+
+The routine keeps a count of the unassigned particles and, for every
+particle, the list of references whose head it is. After an assignment it
+advances only that particle's list, instead of testing every particle and
+every reference again. The states' labels are computed per particle, in
+parallel. The draws and their order are those of the earlier implementation,
+so the assignment is identical (since 2026-10-16). The unit suite of the
+table keeps the earlier implementation as its reference and compares the
+two.
+
 ### Continuous in-plane policy
 
 `inpl_cont` is internal since release 4 (2026-10-03), not a command-line key.

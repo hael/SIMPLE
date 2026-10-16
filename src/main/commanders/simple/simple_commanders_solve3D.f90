@@ -977,7 +977,7 @@ contains
         l_user_nstages = cline%defined('nstages')
         l_user_lpstop  = cline%defined('lpstop')
         if( nstates_on_cline > 1 .and. .not. l_addon )then
-            ! Stop independent multi-state starts before prob_neigh/NU by default.
+            ! Stop independent multi-state starts after the first prob_neigh stage, before NU, by default.
             if( .not. l_user_nstages ) call cline%set('nstages', solve3D_independent_nstages_default())
             if( .not. l_user_lpstop  ) call cline%set('lpstop',  solve3D_independent_lpstop_default())
         endif
