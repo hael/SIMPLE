@@ -23,8 +23,16 @@ type, bind(c) :: gui_comm_args
     type(c_ptr)              :: metadata_project ! points at gui_project_metadata_inst
 end type gui_comm_args
 
+! The communication state is the process's: one metadata store, its mutexes and at most one worker
+! thread, whatever the number of communicators. A program running another in-process (solve3D's
+! state continuation runs selection) has two active at once: the first new sets the state up, the
+! nested ones report into it, and the last kill tears it down (ncomms_active), so a nested program's
+! end never destroys the mutexes the outer one still uses.
 type(gui_comm_args),        target, save :: gui_comm_args_inst
 type(gui_metadata_project), target, save :: gui_project_metadata_inst
+type(c_pthread_t),                  save :: comm_thread_inst          ! the worker thread, when remote_active
+logical,                            save :: remote_active = .false.   ! the worker thread runs
+integer,                            save :: ncomms_active = 0         ! communicators active in the process
 
 public :: gui_communicator
 private
@@ -32,9 +40,7 @@ private
 
 type gui_communicator
     private
-    type(c_pthread_t) :: comm_thread
-    logical           :: is_active     = .false.
-    logical           :: remote_active = .false.
+    logical :: is_active = .false.
 contains
     procedure :: new
     procedure :: kill => kill_gui_communicator
@@ -53,6 +59,9 @@ contains
         integer                                :: url_len
         if( self%is_active ) return
         self%is_active = .true.
+        ncomms_active  = ncomms_active + 1
+        ! an outer communicator of this process owns the state and the thread: this one reports into them
+        if( ncomms_active > 1 ) return
         ! pack url + procid for the worker thread, read back via c_f_pointer on arg
         niceserver_url                      = params%niceserver%to_char()
         url_len                             = min(len(niceserver_url), STDLEN - 1)
@@ -67,7 +76,7 @@ contains
         call gui_project_metadata_inst%new(GUI_METADATA_PROJECT_TYPE)
         if( params%niceserver .ne. "" .and. params%niceprocid > 0 ) then
             ! spawn metadata listener thread
-            stat = c_pthread_create(thread        = self%comm_thread, &
+            stat = c_pthread_create(thread        = comm_thread_inst, &
                                     attr          = c_null_ptr, &
                                     start_routine = c_funloc(communication_worker), &
                                     arg           = c_loc(gui_comm_args_inst))
@@ -75,7 +84,7 @@ contains
             ! clear the niceprocid and niceserver in the parameters to indicate they have been consumed
             params%niceprocid  = -1
             params%niceserver  = ""
-            self%remote_active = .true.
+            remote_active      = .true.
         end if
     end subroutine new
 
@@ -85,11 +94,15 @@ contains
         type(gui_assembler)                    :: assembler
         type(string)                           :: metadata_backup
         if( .not. self%is_active) return
+        self%is_active = .false.
+        ncomms_active  = ncomms_active - 1
+        ! an outer communicator still uses the state and the thread
+        if( ncomms_active > 0 ) return
         if( c_pthread_mutex_lock(gui_comm_args_inst%terminate_mutex) /= 0    ) THROW_HARD('failed to lock terminate mutex')
         gui_comm_args_inst%l_terminate = .true.
         if( c_pthread_mutex_unlock(gui_comm_args_inst%terminate_mutex) /= 0  ) THROW_HARD('failed to unlock terminate mutex')
-        if( self%remote_active) then
-            if( c_pthread_join(self%comm_thread, ptr) /= 0 ) then
+        if( remote_active ) then
+            if( c_pthread_join(comm_thread_inst, ptr) /= 0 ) then
                 THROW_WARN('failed to join communication worker thread')
                 return ! thread may still be running, unsafe to destroy mutexes or kill shared metadata
             end if
@@ -106,8 +119,7 @@ contains
         if( c_pthread_mutex_destroy(gui_comm_args_inst%terminate_mutex) /= 0 ) THROW_WARN('failed to destroy terminate mutex')
         if( c_pthread_mutex_destroy(gui_comm_args_inst%metadata_mutex) /= 0  ) THROW_WARN('failed to destroy metadata mutex')
         call gui_project_metadata_inst%kill()
-        self%is_active     = .false.
-        self%remote_active = .false.
+        remote_active = .false.
     end subroutine kill_gui_communicator
 
     subroutine add_metadata_1( self, spproj, oritype, stage, selection )

@@ -159,8 +159,8 @@ contains
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
         ! state=X: that state alone, refined on a work project (per-state M-estimation with m_estimator=flex);
-        ! before this run's GUI communicator starts, since the selection program runs its own, whose end
-        ! releases the process-wide communicator state
+        ! before this run's GUI communicator starts, so the selection program's own communicator is the
+        ! outermost while it runs (the communicators share the process's state; the last one ends it)
         if( cline%defined('state') )then
             call prepare_state_work_project()
         else if( params%l_m_estimator_flex )then
