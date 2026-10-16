@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "backend": "local",
+  "fixture": "benchmark-fixture",
+  "executables": {
+    "simple": "/path/to/installed/SIMPLE/bin/simple_exec",
+    "private": "/path/to/installed/SIMPLE/bin/simple_private_exec"
+  },
+  "seed": 20261015,
+  "repetitions": 3,
+  "budget": {
+    "cpus": 2,
+    "wall_seconds": 16800,
+    "cpu_seconds": 33600,
+    "attempt_seconds": 300,
+    "disk_bytes": 21474836480
+  },
+  "cases": [
+    {
+      "id": "motion_correct",
+      "commander": "motion_correct",
+      "mode": "worker",
+      "work_objects": 8,
+      "project": "input.simple",
+      "science": {
+        "algorithm": "patch",
+        "mcpatch": "yes",
+        "downscale": "yes",
+        "smpd_downscale": 1.3
+      },
+      "candidates": [
+        {
+          "nthr": 1
+        },
+        {
+          "nthr": 2
+        }
+      ],
+      "prepare": [
+        [
+          "python3",
+          "{fixture}/prepare.py",
+          "motion_correct",
+          "{workdir}"
+        ]
+      ],
+      "validate": [
+        "python3",
+        "{fixture}/validate.py",
+        "motion_correct",
+        "{workdir}"
+      ]
+    },
+    {
+      "id": "ctf_estimate",
+      "commander": "ctf_estimate",
+      "mode": "worker",
+      "work_objects": 8,
+      "project": "input.simple",
+      "science": {
+        "ctfpatch": "yes",
+        "pspecsz": 512,
+        "fit_phshift": "no",
+        "dfmin": 0.5,
+        "dfmax": 5.0,
+        "hp": 30,
+        "lp": 5
+      },
+      "candidates": [
+        {
+          "nthr": 1
+        },
+        {
+          "nthr": 2
+        }
+      ],
+      "prepare": [
+        [
+          "python3",
+          "{fixture}/prepare.py",
+          "ctf_estimate",
+          "{workdir}"
+        ]
+      ],
+      "validate": [
+        "python3",
+        "{fixture}/validate.py",
+        "ctf_estimate",
+        "{workdir}"
+      ]
+    },
+    {
+      "id": "ctf_correct",
+      "commander": "ctf_correct",
+      "mode": "shared",
+      "work_objects": 8,
+      "project": "input.simple",
+      "science": {
+        "ctf_correct_mode": "phaseflip"
+      },
+      "candidates": [
+        {
+          "nthr": 1
+        },
+        {
+          "nthr": 2
+        }
+      ],
+      "prepare": [
+        [
+          "python3",
+          "{fixture}/prepare.py",
+          "ctf_correct",
+          "{workdir}"
+        ]
+      ],
+      "validate": [
+        "python3",
+        "{fixture}/validate.py",
+        "ctf_correct",
+        "{workdir}"
+      ]
+    },
+    {
+      "id": "solve2D",
+      "commander": "solve2D",
+      "mode": "shared",
+      "work_objects": 2000,
+      "project": "input.simple",
+      "science": {
+        "ncls": 8,
+        "mskdiam": 133.12,
+        "nstages": 6,
+        "nits_per_stage": 5,
+        "extr_lim": 20,
+        "eo_stage": "no",
+        "autoscale": "no",
+        "refine": "prob_snhc",
+        "nsample": 2000,
+        "ctf": "no",
+        "cache": "no"
+      },
+      "candidates": [
+        {
+          "nthr": 1
+        },
+        {
+          "nthr": 2
+        }
+      ],
+      "prepare": [
+        [
+          "python3",
+          "{fixture}/prepare.py",
+          "solve2D",
+          "{workdir}"
+        ]
+      ],
+      "validate": [
+        "python3",
+        "{fixture}/validate.py",
+        "solve2D",
+        "{workdir}"
+      ]
+    },
+    {
+      "id": "pick",
+      "commander": "pick",
+      "mode": "shared",
+      "work_objects": 8,
+      "project": "input.simple",
+      "science": {
+        "picker": "new",
+        "moldiam": 100,
+        "pcontrast": "black",
+        "lp": 20,
+        "pick_roi": "no"
+      },
+      "candidates": [
+        {
+          "nthr": 1
+        },
+        {
+          "nthr": 2
+        }
+      ],
+      "prepare": [
+        [
+          "python3",
+          "{fixture}/prepare.py",
+          "pick",
+          "{workdir}"
+        ]
+      ],
+      "validate": [
+        "python3",
+        "{fixture}/validate.py",
+        "pick",
+        "{workdir}"
+      ]
+    },
+    {
+      "id": "solve3D",
+      "commander": "solve3D",
+      "mode": "shared",
+      "work_objects": 2000,
+      "project": "input.simple",
+      "science": {
+        "pgrp": "c1",
+        "nstates": 1,
+        "nstages": 1,
+        "nsample": 2000,
+        "mskdiam": 133.12,
+        "vol1": "{fixture}/volume.mrc"
+      },
+      "candidates": [
+        {
+          "nthr": 1
+        },
+        {
+          "nthr": 2
+        }
+      ],
+      "prepare": [
+        [
+          "python3",
+          "{fixture}/prepare.py",
+          "solve3D",
+          "{workdir}"
+        ]
+      ],
+      "validate": [
+        "python3",
+        "{fixture}/validate.py",
+        "solve3D",
+        "{workdir}"
+      ]
+    }
+  ]
+}

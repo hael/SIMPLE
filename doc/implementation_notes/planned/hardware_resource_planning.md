@@ -1169,3 +1169,927 @@ line values but leave the final decision with the user or system administrator.
     first release, and which may initially provide render-only coverage?
 24. Which scheduler capabilities are mandatory for stream operation, including
     persistent workers, dependencies, requeue behavior, and array throttling?
+
+## 15. Campaign implementation: first slice, 2026-10-15
+
+The current checkout now implements a Python campaign entry point in
+`scripts/hardware_resource_planner.py`, shared execution in
+`scripts/benchmark/campaign.py`, and commander capability/argv adapters in
+`scripts/benchmark/adapters.py`. The earlier conversational prototype and its
+binary profile writer were absent from this checkout. This implementation
+starts with reproducible measurement records; it does not yet export a binary
+resource profile or change SIMPLE runtime defaults.
+
+### Administrator interface
+
+```bash
+python3 scripts/hardware_resource_planner.py discover
+python3 scripts/hardware_resource_planner.py campaign campaign.json --output output/calibration
+# Explicit opt-in: launches preparation, SIMPLE, and scientific validators.
+python3 scripts/hardware_resource_planner.py campaign campaign.json --output output/calibration --execute
+```
+
+The default campaign command only reads/hashes inputs and prints the proposed
+measured-command argv and repetition schedule. It creates no output directory
+and launches no process. Discovery reports host logical CPUs, process affinity,
+and Linux host RAM; cgroup, scheduler, NUMA, GPU and non-Linux RAM qualification
+remain outstanding. An administrator must supply the usable CPU/time/disk
+budget explicitly; physical host totals are not allocation grants.
+
+`scripts/hardware_campaign.example.json` is a template for all three adapters.
+It requires real executable paths and an administrator-provided
+`benchmark-fixture` directory beside the manifest. It is deliberately not
+bundled with fake scientific validation. Relative fixture/executable paths are
+resolved against the manifest directory. Start with one stratum and a small
+input bundle before using the full template's 24 attempts (six candidates,
+each with one warmup and three measured repetitions).
+
+### Adapter contract
+
+| Commander | Supported modes | Candidate keys |
+| --- | --- | --- |
+| `motion_correct` | worker; master rendering | `nthr`; master additionally `nparts`, `ncunits`, `job_memory_per_task` |
+| `ctf_estimate` | worker; master rendering | Same as motion |
+| `ctf_correct` | shared-memory | `nthr` only |
+
+Scientific settings are explicit per case and remain identical across its
+candidates. Patched and global motion, patched/global estimation, phaseflip,
+heuristic Wiener and FSC-based Wiener are separate cases. The adapter rejects
+resource/execution keys inside `science`, unsupported candidate keys,
+oversubscribed CPUs, duplicate candidates, and invalid partition counts.
+Worker commands set `part`, `fromp`, `top`, and `nparts=1`; master commands omit
+worker selectors so the owning SIMPLE strategy takes the distributed path.
+Every argv places `prg=` first, as required by SIMPLE's parser. The first real
+campaign exposed this requirement; the adapter regression checks now assert it.
+
+Master execution is intentionally unavailable in this first slice:
+`simple_qsys_local` launches workers using `setsid`, so terminating the Python
+runner's process group cannot guarantee cancellation of distributed workers.
+The real queue job cancellation/accounting contract must be integrated before
+enabling master campaigns. Rendering their argv is supported now.
+
+### Fixture preparation and validation protocol
+
+Each case declares a relative project filename, preparation argv arrays, a
+validation argv array, scientific parameters, active work count, and candidate
+resource dictionaries. The template invokes two fixture-supplied Python hooks:
+
+- `prepare.py <commander> <workdir>` creates the declared project and all
+  inputs it can modify/delete beneath the private run directory. Use SIMPLE's
+  existing project/import commands; do not parse or patch project binaries.
+- `validate.py <commander> <workdir>` checks scientific outputs against
+  independently specified truth or a reviewed reference. On stdout it emits
+  one JSON object with `passed` (boolean), nonempty `validator_version`, and
+  a nonempty `metrics` object. Diagnostics belong on stderr. Wrong outputs
+  must report false or exit nonzero.
+
+Hooks are trusted administrator code, not sandboxed plugins. Their executable
+paths are resolved and hashed, their argv are recorded, and helper scripts
+should live in the checksummed fixture. Scripts referenced elsewhere are the
+administrator's responsibility. `{workdir}` and `{fixture}` are literal argv
+substitutions; no shell expansion is used. The latter always names the private
+fixture copy, not the source bundle.
+
+Every repetition copies the entire fixture, with no symlinks or hardlinks,
+and verifies the copied bytes against the planning fingerprint. Hooks must
+recreate embedded project paths into that private workspace: copying a
+project binary does not rewrite its internal absolute paths. This matters
+because estimation can delete its `forctf` input and correction updates
+stack/project metadata. Input generation, import and validation are timed as
+separate stages, outside the command's measured end-to-end wall time.
+
+The engine enforces the validator protocol, not the scientific truth of an
+arbitrary validator. Built-in known-motion, known-CTF and analytic correction
+fixtures/validators remain to be implemented and qualified. The existing
+motion memory harness remains unchanged; its identical-frame isotropic fixture
+is useful for memory/startup measurements but cannot qualify patched motion.
+
+### Lifecycle, budgets and evidence
+
+Warm up each candidate once, then run at least three fresh-process repetitions
+in reproducible shuffled blocks. Seed propagation and thread settings are
+recorded. Linux children inherit an affinity restricted to the selected logical
+CPUs within the process allocation. This is not yet physical-core/NUMA binding;
+on other POSIX systems the CPU budget is a planning constraint only.
+
+Each attempt has one deadline covering fixture copying, preparation, measured
+execution and validation. The runner checks deadlines between stages and polls
+processes every 100 ms, killing their process group on timeout/interruption
+or a disk-limit breach. Filesystem copy/hash calls cannot be preempted by this
+polling loop, and disk limits can be temporarily exceeded between polls. SIGINT
+and SIGTERM trigger cleanup; SIGKILL cannot be handled. Hooks must not detach
+children into independent sessions.
+
+Worst-case reserved wall time is attempts times attempt timeout; reserved CPU
+time multiplies that bound by the CPU budget. Expansion rejects campaigns
+outside either budget. These conservative reservations include preparation,
+warmups and failed/interrupted attempts, and persist across resume. Disk checks
+count retained artifacts and fixture copies. This slice does not impose a hard
+RAM cap; choose bounded fixtures and use site/container enforcement as needed.
+It does not interpret a missing memory measurement as zero.
+
+`campaign.json` saves the exact plan, fixture hashes, executable and runner/adapter source hashes,
+relevant environment, platform, and CPU binding. Stable experiment IDs derive
+from this identity and the candidate/repetition. A process lock prevents two
+runners writing the same campaign. `observations.jsonl` appends started/finished
+events with stages, argv, exit reasons, wall times, validation and telemetry;
+each retry uses a new directory. Resume skips only passed attempts and rejects
+changed inputs, executables or environment. A malformed/truncated journal fails
+closed rather than discarding evidence. Provision extra reservation budget for
+retries; failure does not replenish the budget.
+
+Native `memory_usage_*.csv` files in the run directory yield per-process
+high-water RSS records. Completeness is explicitly unverified, node aggregate
+and swap are null, and every observation remains `qualification=unqualified`,
+even when its hook passes. No production recommendation is exported from these
+records yet. CPU/I/O accounting, complete process-tree memory, true allocation
+discovery, built-in fixtures, noise-aware ranking, scheduler adapters, and
+versioned profile export/Fortran consumption are the next implementation steps.
+
+### Lightweight validation
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=scripts python3 -m unittest benchmark.test_campaign -v
+```
+
+These Python checks run tiny Python stand-ins, never SIMPLE or a compiler.
+They cover default-off execution, explicit execution/resume, changed-input
+rejection, scientific failure propagation, CPU/time budgets, adapter routing,
+symlink rejection, retry accounting, timeout and descendant cleanup, and the
+render-only master boundary. Actual SIMPLE benchmarks and Linux/macOS/site
+qualification remain administrator-run validation.
+
+### First authorized execution, 2026-10-15
+
+An incremental Release build succeeded. The fast gate passed all 15 suites
+in 8.43 s after rerunning outside the socket-restricted sandbox (the first
+attempt failed the IPC socket test). The new runner then completed four
+warmups and twelve measured motion runs, with three repetitions per setting:
+
+| `nthr` | Median command wall time (s) | Maximum process RSS (MiB) |
+| --- | --- | --- |
+| 1 | 3.9564 | 410.16 |
+| 2 | 2.3358 | 410.65 |
+| 4 | 1.4355 | 419.80 |
+| 8 | 1.0046 | 417.62 |
+
+The fixture was 2048x2048, eight identical frames, 1.3 A/pixel, isotropic
+alignment with patches disabled. Runs used eight distinct physical cores in
+one socket, fixed seed and explicit OpenMP binding. Every run passed the
+declared zero-motion checks: sampled integrated-image correlation >=0.99 and
+maximum recovered shift <=0.1 pixels. Observed values were 0.9999999458 and
+0.007524 pixels. These checks qualify this smoke fixture only.
+
+The separate existing memory harness also completed twelve successful runs.
+Its internal elapsed times are retained separately from the new runner's
+command wall times. Eight threads were fastest among the measured settings,
+but this does not establish a production optimum or worker concurrency.
+CTF estimation/correction, patched-motion truth fixtures and partition sweeps
+remain unmeasured in this session. Evidence and machine-readable summaries are
+retained locally under `output/resource_benchmark_20261015/`.
+
+## 16. Linux desktop motion profile and launcher
+
+`scripts/benchmark_motion_desktop.py` extends the existing memory fixture helpers
+with a bounded concurrent-worker probe. It generates 4096- and 8192-square
+float32 movies at 1.3 A/pixel, eight frames each, with known global x shifts
+`[0,0,0,0,0,1,2,3]` pixels. It runs `algorithm=patch mcpatch=yes`, records native
+RSS, and checks integrated images against the generated truth. Image correlation
+must be at least 0.98; profile export additionally requires recovery of global
+shifts within 0.1 pixels. These are synthetic global-motion cases, not a
+qualification of recovery from local deformation or real detector noise.
+
+```bash
+python3 scripts/benchmark_motion_desktop.py \
+  --output output/motion_desktop_4k8k \
+  --sizes 4096 8192 --candidates 4x1 8x1 2x8 4x8 8x4 \
+  --repeats 3 --discard-images --execute
+```
+
+Without `--execute`, this command prints its plan. Candidate notation is
+threads per worker times concurrent workers. One warmup and three repetitions
+are run per candidate, with shuffled order for each repetition. All workers
+read the same prepared movie but have separate output directories; inputs are
+cache-warm and this is not a measurement of streaming independent movies from
+storage. Throughput is completed movies divided by whole-wave wall time.
+These worker waves do not measure the SIMPLE master's dispatch/merge overhead.
+
+The probe uses one logical CPU per physical core and leaves at least 20% of
+cores outside the benchmark pool on this desktop (32 used, eight reserved).
+Workers share that pool with `OMP_PROC_BIND=FALSE`, avoiding pinning every
+independent worker to the same first few cores. Each wave has a timeout and
+process-group cleanup. Failed image checks stop the sweep. `--discard-images`
+removes validated bulky outputs except the first warmup worker per candidate;
+original movies/truth, STAR shifts, models, logs, per-wave results and telemetry
+remain. Memory is observed, not hard-limited by the Python probe.
+
+When three repetitions complete, export selects the highest median throughput
+for batch use, preferring fewer CPU threads and then less aggregate worker
+memory among candidates within 5% of the best. Low-latency use selects the
+fastest measured single-worker setting. Memory requests are 1.5 times observed
+maximum worker RSS, rounded upward to 256 MiB. Export verifies that installed
+SIMPLE executables match the benchmark build's ELF code/read-only/initialized
+data sections, allowing CMake's build/install RPATH changes; the resulting
+profile records full installed executable hashes for later checking.
+
+The primary exported configuration is `desktop_profile.json`, a UTF-8 JSON
+file written next to `summary.json`. No executable launcher is generated.
+The repository's optional launcher reads this same file:
+
+```bash
+python3 scripts/run_motion_desktop.py \
+  --profile output/motion_desktop_4k8k/desktop_profile.json \
+  --project /path/to/project.simple --movies 100 \
+  --size 4096 --frames 8 --smpd 1.3
+# Add --execute to run the printed command.
+# Add --objective latency to select the measured single-worker option.
+```
+
+The JSON contract identifies `profile_type=simple_resource_profile`,
+`schema_version=1`, and `commander=motion_correct`. `hardware`, `cpu_ids`, and
+`binary_sha256` identify the measured machine, CPU pool and installed binaries.
+`workload` gives frame count, pixel size in Angstrom/pixel and scientific mode;
+`sizes` keys are square image side lengths in pixels. Each size contains `batch`
+and `latency` settings: `nthr`, `ncunits`, `job_memory_per_task_mib`, and measured
+throughput/time. Memory is MiB, time is seconds, throughput is movies/second.
+`resource_policy` provides machine-readable reserve and partition rules;
+`qualification` and `evidence` preserve measurement scope and provenance.
+CTF profiles will identify their own commander after calibration; this motion
+profile supplies no CTF defaults.
+
+Native SIMPLE consumption is **not implemented yet**. The intended reader must
+be opt-in (`auto_apply=false`), reject unsupported versions or mismatched
+commander/workload/build/hardware, and preserve explicit job parameters.
+It must check current CPU/memory allocation before applying recommendations,
+derive `nparts` from the active movie count and clamped worker count, and never
+rewrite an existing restart partition layout. The recorded partition policy
+is explicitly unmeasured. Missing or incompatible profiles leave existing
+SIMPLE defaults intact. JSON replaces the earlier proposed binary handoff;
+no Python interpreter will be required by the future native reader.
+
+Dimensions, frame count, sampling and active movie count are declarations by
+the operator; the launcher does not parse project binaries to infer them.
+Frame counts or sampling outside the measured cases are rejected. It checks
+CPU model/kernel identity and executable hashes, clamps concurrency against
+current affinity and host available RAM, reserves at least 4 GiB of RAM, and
+sets `nparts=min(active_movies,2*ncunits)`. This two-wave partition count is an
+unmeasured heuristic. Cgroup/scheduler allocation semantics remain outside this
+desktop-only launcher. The fixed benchmark seed is retained in its printed
+environment, together with the measured scientific settings.
+
+Profiles remain provisional until representative real movies and the master's
+complete launch/merge path are qualified. Increasing frames, adding gain/dose
+work, changing sampling/format, or moving to cold or remote storage requires
+another measurement. A small movie count may favor the latency profile even
+when the batch-throughput profile is faster on a sustained queue.
+
+### Measured result on this desktop, 2026-10-15
+
+Forty waves completed and all 176 worker outputs passed image validation.
+Recovered global shifts were within 0.014 pixels of the generated truth.
+The Intel Xeon Gold 6242R desktop has 40 physical cores/80 logical CPUs;
+the probe used physical CPUs 0-15 and 20-35, with eight cores reserved.
+
+| Movie size | Best tested batch `nthr` / `ncunits` | Median batch movies/s | Worker request (MiB) | Best measured single-worker time at `nthr=8` |
+| --- | --- | --- | --- | --- |
+| 4096x4096 | 4 / 8 | 0.7900 | 2560 | 5.0685 s |
+| 8192x8192 | 4 / 8 | 0.2102 | 9216 | 18.9387 s |
+
+The compared candidates were 4x1, 8x1, 2x8, 4x8 and 8x4. This establishes
+the best of those configurations under the eight-worker/32-core desktop
+budget, not a global optimum. More workers and alternative partition counts
+were not swept. All timings exclude preparation and validation and include
+worker process startup and output writes; inputs are synthetic/cache-warm.
+
+The reusable configuration is
+`output/motion_desktop_4k8k/desktop_profile.json`, with all candidate measurements
+in `summary.json`. A previously exported standalone launcher is retained only
+as historical smoke-test evidence.
+A real one-movie 4K smoke run through the exported launcher's local master
+and worker completed successfully in 7.085 s, and its integrated-image
+correlation was 0.99989524. This verifies launcher execution and project merge,
+not the performance of the proposed two-wave partition policy. Fifteen Python
+checks passed at that milestone. JSON-only export and consumer checks are
+validated separately after the output-contract update.
+
+## 17. Desktop CTF estimation calibration
+
+`scripts/benchmark_ctf_desktop.py` runs isolated `ctf_estimate` workers using
+4K/8K synthetic micrographs. `scripts/benchmark/generate_ctf_micrograph.py`
+filters seeded Gaussian noise with an independently evaluated conventional CTF:
+300 kV, 2.7 mm Cs, 0.1 amplitude contrast, 1.3 Angstrom/pixel, isotropic 2-micron
+underfocus and zero phase shift. NumPy is required only by the fixture generator;
+`--fixture-python` selects its interpreter. The benchmark runner uses standard
+Python. The generator records its NumPy version, seed and physical truth.
+
+```bash
+python3 scripts/benchmark_ctf_desktop.py \
+  --output output/ctf_desktop_4k8k \
+  --fixture-python /usr/bin/python3.6 \
+  --sizes 4096 8192 --candidates 4x1 8x1 2x8 4x8 8x4 \
+  --repeats 3 --discard-images --execute
+```
+
+The interpreter path above is specific to this desktop's existing NumPy install.
+Omitting `--execute` prints the plan without creating fixtures or running SIMPLE.
+Each candidate has a warmup and three measured repetitions. The CPU pool and
+process timeout/cleanup follow the motion benchmark. Scientific settings are
+fixed: `ctfpatch=yes pspecsz=512 fit_phshift=no dfmin=0.5 dfmax=5 hp=30 lp=5`.
+Each output must contain a CTF document with finite defocus, resolution and
+correlation; both defocus axes must recover the external truth within 0.1 micron.
+This validates global defocus, not a spatially varying patch-defocus surface.
+
+Outputs include `plan.json`, input MRC/truth, per-worker commands/logs/CTF
+models/telemetry, `results.jsonl`, `summary.json`, and `desktop_profile.json`.
+The JSON uses the resource-profile contract with `commander=ctf_estimate`,
+`auto_apply=false`, explicit workload coverage, installed executable hashes,
+and `median_micrographs_per_second`. Selection and memory margins follow the
+motion profile. Export requires complete successful observations, three measured
+repetitions and a single-worker candidate. No launcher is generated.
+
+Recommendations remain provisional: identical cached synthetic input per worker,
+no real detector noise or ice variation, no astigmatic/phase-shift sweep, no
+master dispatch/merge performance measurement. `nparts` remains an unmeasured
+two-wave policy. The existing motion-only launcher rejects this CTF profile;
+native SIMPLE consumption is still a future integration. `ctf_correct` is not
+run by this benchmark.
+
+### Measured CTF result on this desktop, 2026-10-15
+
+All 40 waves completed successfully (five candidates, two sizes, one warmup
+plus three measured repetitions). All 176 outputs passed the global defocus
+truth gate; maximum error was 0.001025 micron. The same 32-physical-core pool
+as motion correction was used, leaving eight physical cores outside the pool.
+
+| Micrograph | Best tested batch `nthr` / `ncunits` | Median micrographs/s | Worker request (MiB) | Single-worker seconds at `nthr=8` |
+| --- | --- | --- | --- | --- |
+| 4096x4096 | 4 / 8 | 1.4912 | 1024 | 2.9455 |
+| 8192x8192 | 4 / 8 | 0.5248 | 2560 | 8.1588 |
+
+The profile at `output/ctf_desktop_4k8k/desktop_profile.json` was verified against
+all observations and the current installed executable hashes. Twenty Python
+checks passed; default-off planning created no output directory. No rebuild or
+commit was performed. The pilot initially completed SIMPLE successfully but
+exposed a validator filename mismatch (`*_ctf.txt`); that was corrected before
+the full sweep. The original pilot evidence remains in `output/ctf_desktop_pilot`.
+
+## 18. Particle-to-class-average desktop calibration
+
+The user selected 2,000 synthetic particles, 128-pixel boxes and eight classes.
+The current command for de novo class averages is `solve2D` (formerly
+`abinitio2D`); its internal `refine2D` stages were formerly called `cluster2D`.
+The benchmark uses these current names and introduces no legacy CLI aliases.
+
+`scripts/benchmark_solve2d_desktop.py` adds opt-in shared-memory calibration.
+The generic campaign adapter also supports `solve2D` in shared mode, with
+explicit scientific settings and no particle-correction output-stack argument.
+A distributed solve2D mode is deliberately not enabled before process cleanup
+and master/worker accounting are qualified.
+
+The independent NumPy fixture generator writes eight asymmetric analytic
+ring-and-lobe shapes with distinct radii at random in-plane angles, with additive
+Gaussian noise, a fixed seed,
+no shifts and no CTF. Labels and noiseless templates are retained as external
+truth. Each run imports the same immutable particle stack into a fresh project;
+no candidate inherits another candidate's assignments, classes or cache.
+
+The schedule is fixed across candidates: six stages, `extr_lim=20`,
+`nits_per_stage=5`, `eo_stage=no`, `autoscale=no`, `refine=prob_snhc`,
+`nsample=2000`, `cache=no`. These are the normal iteration limits, but the synthetic fixture is not a
+production convergence qualification. `--extr-lim` and `--nits-per-stage` can
+explicitly request a shorter diagnostic schedule. Execution includes final class-average
+assembly; fixture preparation and output validation are outside the timer.
+The runner applies a per-run timeout, a 20-GiB campaign disk ceiling and the
+same 32-core affinity pool used by motion and CTF probes.
+
+Validation requires the expected MRC class-stack geometry, finite nonzero
+image data and valid class assignments for all input particles. Adjusted Rand
+index and purity compare assignments with the external labels, independent of
+class numbering. Profile export requires adjusted Rand index >=0.8 and all eight classes occupied
+in every run, in addition to the structural checks. Failure retains measurements
+and class averages for inspection but produces no resource recommendation.
+Real-data quality remains unqualified; `auto_apply=false` remains mandatory.
+The resulting class averages, projects, assignment listings, logs and telemetry
+are retained for review.
+
+```bash
+python3 scripts/benchmark_solve2d_desktop.py \
+  --output output/solve2d_desktop_2000_128_8 \
+  --particles 2000 --box 128 --threads 4 8 16 --repeats 3 \
+  --fixture-python /usr/bin/python3.6 --execute
+```
+
+Without `--execute` the command prints a plan only. The NumPy interpreter path
+is specific to this desktop. After one warmup and three repetitions per thread
+count, export writes `summary.json` and `desktop_profile.json`. Settings include
+`nthr`, `nparts=1`, `ncunits=1` and a memory request with the existing 50% margin.
+Here `nparts=1` explicitly means shared-memory execution, not a partition-count
+optimum. Selection prefers fewer threads among cases within 5% of the best
+median wall time. Results cover the exact particle count, box, class count and
+schedule; extrapolation to larger boxes, more classes, sampled updates, CTF or
+distributed execution requires another calibration. Native SIMPLE JSON loading
+remains a separate future integration.
+
+### Pilot findings, 2026-10-15
+
+Three diagnostic pilots ran, each with one warmup and one measured repetition:
+
+| Fixture / schedule | Threads | Measured seconds | Peak RSS (MiB) | Adjusted Rand index | Purity |
+| --- | --- | --- | --- | --- | --- |
+| Similar Gaussian-lobe shapes / shortened | 8 | 48.31 | 552.8 | 0.223 | 0.250 |
+| Distinct ring-and-lobe shapes / shortened | 8 | 42.79 | 550.4 | 0.380 | 0.454 |
+| Distinct ring-and-lobe shapes / normal limits | 16 | 59.04 | 1022.5 | 0.394 | 0.471 |
+
+All runs assigned all 2,000 particles and produced finite class-average stacks,
+but none recovered all eight intended classes to the quality threshold. The
+normal-limit warmup occupied only four classes (ARI 0.357). These are diagnostic
+results, not comparable performance candidates: fixtures, schedules and thread
+counts changed between pilots. No full thread sweep or recommended resource
+profile was exported. Further fixture/solver investigation or a validated real
+particle project is needed before performance calibration is meaningful.
+
+The current helper emits the distinct ring-and-lobe fixture. Earlier generator
+hashes and original truth files remain with their respective pilots:
+`output/solve2d_desktop_pilot`, `output/solve2d_desktop_ring_pilot`, and
+`output/solve2d_desktop_full_pilot`. Each contains `summary.json`, class averages,
+projects, assignments and validation metrics. Twenty-six Python checks pass,
+including default-off behavior, routing, class-label permutation invariance,
+quality-failure export blocking, and qualified-profile selection. No rebuild or
+commit was performed; no benchmark processes remain running.
+
+## 19. Consolidated calibration entry point
+
+Contract: `hardware_resource_planner.py calibrate` owns default-off execution
+and aggregates the supported motion, CTF-estimation and solve2D profiles into
+one JSON collection. Workflow adapters own fixtures, scientific argv, truth
+validation and profile qualification. One runner owns process groups, timeouts,
+disk limits, affinity, repetitions, warmups, telemetry and evidence persistence.
+The three previous desktop CLI names remain thin compatibility entry points;
+they retain their per-workflow output-directory semantics. Existing scientific
+settings and qualification thresholds must not change during this refactor.
+
+Validation will cover dry-run side effects, compatibility arguments, shared
+process cleanup/failure handling, adapter command construction, and aggregated
+qualified/unqualified results using fake executables. No SIMPLE build or new
+scientific calibration is required for this structural change. Picking,
+solve3D, scheduler/cgroup qualification and resume remain outside this slice.
+
+### Implemented interface and validation
+
+```bash
+python3 scripts/hardware_resource_planner.py calibrate \
+  --workflows motion_correct ctf_estimate solve2D \
+  --fixture-python /path/to/python-with-numpy \
+  --workdir /scratch/simple-calibration \
+  --output simple_resource_profile.json
+# Review the plan, then add --execute to run it.
+```
+
+`--simple-exec` and `--private-exec` override installation paths. `--sizes`,
+`--candidates` (threads x workers), `--threads` (solve2D), `--repeats`,
+`--timeout`, `--disk-gib`, `--cpus`, and the solve2D workload/schedule options
+control the campaign. Default image candidates are 4x1, 8x1, 2x8, 4x8, 8x4;
+solve2D uses 4/8/16 threads. Automatically chosen candidates are filtered to
+fit the reserved physical-core pool; explicitly oversized candidates fail.
+The legacy motion wrapper keeps its original candidate defaults and discovers
+executables from the installed environment.
+Explicit subcommands and compatibility runners remain dry-run unless `--execute`
+is supplied. The bare administrator entry point runs standard calibration (section 21). NumPy is only
+required when executing workflows whose fixture generators need it.
+
+`benchmark/calibration.py` owns the common lifecycle. The registry in
+`benchmark/calibration_adapters.py` connects the motion, CTF and solve2D
+scientific modules; `benchmark/resources.py` owns the physical-core pool and
+`benchmark/profiles.py` owns identity and motion profile export. The optional
+motion launcher imports profile helpers from this package. None of these
+modules imports the former desktop runner scripts. Those scripts now contain
+only compatibility CLI delegation.
+
+The combined file has `profile_type=simple_resource_profile_collection`,
+`schema_version=1`, `auto_apply=false`, hardware identity, and a `workflows`
+object keyed by commander. Each entry contains `status`, `reason`, `evidence`
+and `profile`:
+
+- `provisional`: a qualified synthetic profile is embedded.
+- `unqualified`: measurements exist but the repetition/quality/export gates
+  were not met; `profile` is null.
+- `failed`: fixture generation, execution, validation or export failed;
+  `profile` is null and the reason is retained.
+
+The file is atomically replaced after each completed workflow, retaining
+previous results if a later workflow fails. Execution failures produce exit
+status 2 after the remaining workflows are attempted. Unqualified measurements
+are reported in JSON without being promoted to recommendations. Per-workflow
+`plan.json`, `results.jsonl`, `summary.json` and eligible `desktop_profile.json`
+files remain under the evidence directory. Existing per-workflow schema-1
+profiles remain compatible with the optional motion launcher; that launcher
+does not consume the collection itself. Native SIMPLE loading is not added.
+
+New output/work directories are required; existing results are never resumed
+or overwritten. Process-group cleanup and timeouts cover worker waves and
+external preparation/validation commands. The disk ceiling is polled across
+the entire combined evidence directory (not a filesystem quota). This remains
+a local Linux calibration runner: scheduler/cgroup memory accounting and
+multi-node scheduling are not implemented. Scientific settings and thresholds
+are retained from the desktop adapters, including the solve2D ARI/occupancy
+export gate. No previous measurement is relabelled as a new calibration.
+
+Verified on 2026-10-15: all 36 Python checks pass, including fake-worker end-to-end
+collection export, mixed workflow failures, unqualified output, timeout reaping,
+disk-limit failure, adapter argv, fresh solve2D projects, and the three legacy
+CLIs. A unified dry run planned all three workflows without creating its output
+file or evidence directory. `git diff --check` passed. No SIMPLE compilation,
+scientific benchmark rerun, or commit was performed for this refactor.
+
+## 20. Picking, extraction and solve3D adapters (original implementation)
+
+The default consolidated calibration now includes all six requested workflows:
+`motion_correct`, `ctf_estimate`, `pick`, `extract`, `solve2D`, and `solve3D`.
+`pick` is the actual SIMPLE commander name for particle picking. These additions
+use the existing common runner; no separate desktop scripts were introduced.
+The generic campaign adapter and example manifest also recognize the three
+new commanders in shared mode.
+
+```bash
+python3 scripts/hardware_resource_planner.py calibrate \
+  --fixture-python /usr/bin/python3.6 \
+  --workflows motion_correct ctf_estimate pick extract solve2D solve3D \
+  --workdir output/calibration_all \
+  --output output/simple_resource_profile.json
+# Add --execute after reviewing the plan.
+```
+
+New adapter scope and validation:
+
+- `pick`: one synthetic micrograph per run, at each requested `--sizes` value,
+  with a sparse grid of dark Gaussian particles, known centers, 1.3 A/pixel,
+  noise sigma 0.03 and spacing twice `--box`. Uses `picker=new` in Gaussian
+  diameter mode, `pick_roi=no`, `pcontrast=black`, fixed `lp=20`, `ndev=2`.
+  Output `.box` coordinates are converted from origins to centers and matched
+  one-to-one to truth within 0.15 box widths. Precision and recall must both
+  reach 0.8; duplicate picks count as false positives. No template-based or
+  segmentation-picker optimum is implied.
+- `extract`: uses the same synthetic micrograph design and externally generated
+  EMAN box coordinates, independently of picking success. Each candidate gets
+  a fresh project. Mode is integrated-micrograph extraction, `pcontrast=black`,
+  `ctf=no`, `backgr_subtr=no`, `wfloat16=no`, `outside=no`. Validation checks
+  particle count, stack geometry and finite pixels, then compares every image
+  against its independently cropped, contrast-inverted input. Affine planes
+  are projected out before correlation to accommodate extraction's background
+  ramp subtraction and normalization. Every crop must correlate >=0.99.
+- `solve3D`: generates a known asymmetric Gaussian volume, simulates particles
+  at SNR 0.1 with no CTF or translational error. Supplied-volume initialization
+  uses `balance=none` on fresh particles, without an unnecessary 2D preparation run. Every candidate starts with a
+  fresh project. This first case measures one stage with `vol1` set to the
+  known volume, one state, C1 symmetry, `force_lp_range=yes`, `lpstart=15`,
+  `lpstop=6`, `filt_mode=none`, and `automsk=no`. It is explicitly a known-start
+  screening case, not full de novo reconstruction or a production schedule.
+  Validation requires an iteration in the log, a reconstructed state volume,
+  finite particle orientations, all requested particles in state 1, and all
+  particle update counters positive. The reconstructed volume must correlate
+  >=0.8 with smooth external truth in the same frame, resampled to the output
+  grid if needed. No rotation/handedness search is hidden in the validator.
+
+All three initially sweep `--threads` in shared memory, not concurrent jobs or
+partitions. Export records `nparts=1`, `ncunits=1`, measured wall time and the
+existing conservative memory margin. `--sizes` controls picking/extraction
+micrograph sizes; `--box` controls their particle box and the solve3D volume/
+particle box; `--particles` controls solve3D simulated particle count. The
+existing `--candidates` worker-concurrency sweep still applies to motion/CTF.
+Combined JSON entries retain the common provisional/unqualified/failed status.
+Three measured repetitions and successful quality gates in every run are
+required before any new resource recommendation is emitted.
+
+The implementation lives in `benchmark/calibration_spatial.py`; NumPy-only
+fixture generation and spatial validators run through `fixture_spatial.py`
+using `--fixture-python`. Preparation and validation commands use the common
+runner's process groups, timeout and disk budget. Scientific kernels and
+Fortran sources are unchanged.
+
+Verified 2026-10-15: 41 Python checks passed, covering registration, command
+routing, isolated projects, coordinate conversion, duplicate-pick penalties,
+nonfinite rejection, complete-observation export and quality gating. Small
+NumPy checks accepted exact extraction crops and the known volume, and
+rejected zero crops and an inverted volume. A six-workflow default dry run
+created no output artifacts; `git diff --check` passed. No SIMPLE build or
+native execution of the new adapters was performed in this change, so their
+native end-to-end calibration remains outstanding. Existing motion/CTF results
+must not be interpreted as measurements of these new workflows.
+
+### Installed environment discovery
+
+Calibration uses the administrator's loaded SIMPLE environment: executable lookup
+uses `PATH`, with `$SIMPLE_PATH/bin` as a fallback. No build directory or prefix
+is required, including for the compatibility desktop runners. Optional explicit
+executable/prefix overrides remain for development. The inherited `SIMPLE_PATH`
+is preserved unless an explicit prefix is supplied. Motion profiles pin the actual
+benchmarked executable paths and hashes without assuming a `bin/` layout.
+Missing required executables fail before fixture generation; previews remain
+available without an installation. Shell aliases/functions are not executables:
+load the installation environment so the commands are available on `PATH`.
+
+## 21. Standard calibration and Slurm execution
+
+An installed environment now needs only (from the scripts directory):
+
+```bash
+./hardware_resource_planner.py
+# Or submit from the cluster login node with its SIMPLE environment loaded:
+python3 scripts/hardware_resource_planner.py calibrate --slurm csbdevel --execute
+```
+
+Both default to motion correction, CTF estimation, picking, extraction, solve2D
+and solve3D; evidence goes to `calibration-results/` and the combined JSON to
+`simple_resource_profile.json` in the current directory. Existing destinations
+are refused. The bare executable starts standard calibration immediately, as explicitly requested
+by the administrator interface contract. Use the explicit `calibrate` subcommand
+without `--execute` to preview without submitting or running anything.
+All workflow, workload and destination options remain optional overrides. Standard
+calibration discards repeated motion/CTF image outputs after validation to stay
+within its disk budget, retaining representative warmup images and all metrics;
+`--no-discard-images` retains all images.
+
+Slurm submission requests one node, one task, 16 CPUs, 65536 MiB and one hour by
+default. Override these with `--slurm-cpus`, `--slurm-memory` (MiB),
+`--slurm-time` and optionally `--slurm-account`. The script and evidence paths
+must be visible on the compute node. Python 3.9+ runs the planner (the entry point automatically selects an installed
+`python3.9`–`python3.14` if the default Python is older); fixture Python
+must have NumPy (`--fixture-python` can select a separate interpreter).
+The loaded installation environment is exported to the batch job. `srun` binds
+the task to allocated cores before discovery; candidates respect task affinity
+and `SLURM_CPUS_PER_TASK`, without the desktop 20% core reserve. Slurm enforces
+the requested memory and wall-time limits. JSON records allocation identity and
+limits in both the collection and each exported profile. This measures within
+one node, not distributed scaling, queue wait time or scheduler partition sizing.
+
+Submission prints the job ID and writes `<output>.submission.json` with the
+exact submission command/script; stdout/stderr go to `<output>.slurm-<jobid>.log`.
+Calibration must be submitted from the cluster, not a desktop with unrelated
+paths. Inside an existing single-node allocation, use normal `calibrate` under
+`srun` with explicit `--cpus-per-task`; nested submission is refused.
+
+The executable starts with a compact options outline, including the Slurm
+submission/resource flags. Completed calibration prints a table of workflow,
+size/box, batch/latency/shared mode, `nthr`, workers, `nparts`, requested MiB per
+worker and qualification status. Failed/unqualified workflows have no recommended
+values. Partition heuristics are explicitly marked unmeasured. The final message
+links the created JSON to its intended future use by SIMPLE and explicitly states
+that automatic consumption has not been implemented. Submission reports the job
+ID, log destination (where the table will appear) and eventual JSON location.
+
+### CSB validation, 2026-10-15
+
+- Job 53893089 submitted to `csbdevel`, 8 CPUs/32768 MiB on `cn132` (Xeon Gold
+  6342), synthetic 4K workload, three measured repetitions, shortened 2D schedule.
+  Motion and CTF profiles qualified provisionally. Matching 4-thread/1-worker
+  medians were 7.5756 s/movie and 4.8619 s/micrograph. Desktop Xeon Gold 6242R
+  references were 7.3090 s and 5.1261 s. Installed binaries differ: these are
+  environment comparisons, not isolated CPU-performance claims.
+- Original picking/extraction calls exposed mandatory `nparts` CLI validation.
+  Fixed both adapters with `nparts=1,part=1` while retaining explicit worker
+  ranges (no nested scheduler submission). Retry job 53893144 on `cn123` completed
+  exit 0 in 58 seconds: extraction qualified, picking correctly withheld its
+  profile because the external-truth quality gate failed.
+- Bare executable/Slurm preview verified on CSB with its default Python 3.6
+  automatically selecting Python 3.12. Fifty local Python checks pass. No build
+  was performed. The original job finished exit 2: solve2D failed its accuracy qualification
+  and solve3D exposed an invalid final-stage index. The supplied-volume workflow
+  begins at stage 4, so its single-stage adapter now uses `nstages=4` (a final
+  index, not a stage count); a focused smoke retry follows.
+- Local evidence snapshots and desktop comparison are in
+  `output/csb_calibration_20261015/`; retry evidence retains its separate node
+  identity and must not be presented as measurements from `cn132`.
+
+- Focused job 53893236 exercised the startup outline and final table in a real
+  Slurm log; solve3D reported a sigma2 empty-half error after the old 2D prep.
+  Removed that preparation in favor of the documented fresh-particle,
+  supplied-volume `balance=none` route. Job 53893274 tests that route with
+  200 particles, 128-pixel boxes, four CPUs and one repeat (smoke only, not a
+  qualified resource profile).
+
+- Job 53893274 also failed in the installed SIMPLE sigma2 bootstrap: all 200
+  particles were in the even half and none in the odd half, including without
+  the 2D preparation. Thus the earlier preparation was not established as the
+  cause. The fresh-particle supplied-volume adapter is retained, but solve3D
+  calibration remains unqualified/failed until this initialization issue is
+  resolved; no fabricated recommendation is exported. No Fortran changes or
+  builds were made. The completed CSB test jobs are no longer running.
+
+## 22. Reduced-cost standard calibration
+
+The observed desktop sweep spent about 24 minutes on motion and seven minutes
+on CTF alone. The no-argument standard now retains all six workflows but uses
+4K inputs only, 500 particles with 128-pixel boxes, image candidates 4x1/8x1/4x2
+and shared-workflow thread candidates 4/8, filtered to available cores. It uses
+`extr_lim=4`, `nits_per_stage=1` and a 180-second per-process timeout. Warmup plus
+three measured repetitions and all scientific quality gates are retained.
+Motion and CTF each require 12 waves instead of 40. This is a smaller synthetic
+reference workload, not a qualified prediction for 8K or large particle jobs.
+
+`calibrate --full --execute` restores 4K/8K, 2000 particles, the five image
+candidates, 4/8/16 shared threads, 20/5 solve2D scheduling and 600-second timeout.
+Explicit workload options override either preset. Slurm forwards the preset and
+chooses CPU candidates inside its allocation; compatibility desktop wrappers
+retain their previous defaults. Evidence plans and exported JSON identify the
+preset. The startup outline describes both choices. Existing running campaigns
+and evidence are not modified or restarted by this change.
+
+Validation: 51 Python checks pass, including standard/full selection, explicit
+overrides, single-core fallback and Slurm forwarding. No new native benchmark
+or build was run; reduced-preset total wall time remains unmeasured.
+
+### Deterministic calibration inputs (initial implementation)
+
+Calibration fixes `SIMPLE_SEED=20261015`, generates native simulation inputs
+with one thread, and reuses each fixture across all candidates and repetitions.
+The solve3D adapter uses the existing `simulate_particles` commander; its volume,
+particle stack, truth orientations and explicit balanced half-set import are
+included in the fixture identity. The other adapters retain their fixed analytic
+or seeded Python fixtures until their native simulation/truth contracts are
+integrated. `simulate_movie` exists but is not yet wired into calibration.
+
+Plans and exported profiles now include a `reproducibility` object containing
+the seed, generation thread count, reuse policy and SHA-256 hashes of declared
+scientific inputs. Hashes are checked again after each candidate sweep; changed
+inputs prevent profile export. Generator source and executable hashes remain
+in the existing evidence. This describes reproducibility within the recorded
+generator/build environment, not bitwise agreement across compilers or NumPy
+versions. SIMPLE's RNG explicitly warns that concurrent OpenMP seed calls are
+order-dependent; multi-threaded solver results therefore retain tolerance-based
+scientific gates. Timings remain measurements with warmup and repetitions.
+
+Validation: 53 Python checks pass, including input-mutation rejection, JSON
+provenance, fixed seed environment, and the single-threaded native simulator
+command with balanced import halves. No native build or simulation was executed
+for this change. Scientific qualification of solve2D/solve3D is still outstanding.
+
+## 23. Molecular calibration from the simulated workflow
+
+The default calibration now follows the recipe in
+`simple_commanders_test_highlevel_workflow.f90`. `--fixture-source analytic`
+retains the earlier independent fixtures; compatibility desktop entry points
+still default to those fixtures. `--molecule 6vxx` selects bundled spike
+coordinates; `--molecule 1jyx` selects bundled beta-galactosidase (the test suite
+spells its selector `1jxy`). No network download or test executable is needed.
+
+Calibration is entirely external Python. No SIMPLE source changes, new native
+commands, native simulation calls or rebuild are required. The earlier native
+calibration changes, including the external-reference initialization patch and
+its test registration, have been removed. `workflow_fixture.py` generates volume,
+projections, movies and truth using NumPy. `data/*.xyz.gz` contains coordinate-only
+copies of the existing example models; `data/molecules.json` records their atom
+counts, checksums and source checksum. These assets ship with the Python tool;
+runtime does not read the SIMPLE source tree or download molecular structures.
+The density model uses equal-weight atom counts with 2 A Gaussian smoothing,
+not SIMPLE's native atomic scattering factors. Generator metadata identifies
+that distinction and the NumPy version.
+
+The Python adapter generates a molecular volume, 100 spiral projections and
+seeded shuffled projection subsets, then eight-frame movies at SNR 0.2. Seed
+20260923 and one preparation thread are fixed; successive movies use seed+index.
+CTF is isotropic at 2 um with 300 kV, Cs=2.7 mm and amplitude contrast 0.1.
+The stationary specimen background is CTF filtered; independent frame noise
+sets SNR 0.2. Known integer frame shifts and inverse-shifted noisy averages are
+written as external truth, along with exact particle boxes. This is a reproducible
+recipe, not a byte-identical replay of the native test simulator. The standard box remains 128; sampling
+is `max(1.3,240/box)` A/pixel so the molecular support is not cropped to fit it.
+Movies have distinct basenames and at most 10% particle footprint coverage;
+the requested particle count is distributed over as many movies as needed.
+Actual picking/extraction counts can differ and are recorded in validations
+and qualified profiles, separately from the requested count.
+
+Preparation runs the preceding commanders serially, only as far as required
+by the selected workflows. It saves each starting project and keeps its data
+at absolute paths in `_simulation/<image-size>`. Each timed candidate receives
+a fresh project copy; measured outputs never become the next workflow's inputs.
+Shared preparation is reused across workflows. All prerequisites, validation
+and hashing are outside timing. `--fixture-timeout` bounds each preparation or
+validation command separately (900 seconds by default); `--timeout` still
+bounds each measured command. Total preparation time has not been measured.
+This pipeline can take longer than the independent analytic fixtures.
+
+This first molecular version sweeps `--threads` with one local job and one
+partition where supported. It measures complete master commands for image
+stages; `--candidates` worker-concurrency sweeps remain specific to analytic
+fixtures. Local masters use the installed `SIMPLE_PATH/bin/simple_private_exec`,
+whose identity must match discovery. Memory requests conservatively sum process
+peak RSS, including child workers. A Linux subreaper supervisor cleans up local
+workers even if queue scripts detach into their own sessions. Slurm submits the
+same preparation and measurement path inside the granted single-node allocation.
+
+Validation compares motion images with the simulator's optimal average, CTF
+with actual defocus, picking with truth boxes, and extraction with crops of the
+immutable input micrographs. solve3D starts de novo from the serial solve2D
+project; it uses production `dock_volpair` in both hands, then independent NumPy
+whole-volume correlation and soft-masked shell FSC against molecular truth
+(correlation >=0.8, FSC=0.143 resolution <=40 A). The NumPy FSC discretization is
+not claimed numerically identical to the suite's production FSC implementation.
+Native output contracts and thresholds still need end-to-end validation.
+
+solve2D checks finite class averages and complete, valid assignments. Continuous
+molecular projection directions have no exact eight-class ground truth: the
+old synthetic-label ARI gate does not apply. Its timing evidence is retained,
+but its recommendation remains unqualified until an independent molecular
+classification accuracy criterion is established. This limitation is explicit
+in the validation and final JSON; no structural-only success is exported as
+an accuracy-qualified recommendation.
+
+Validation so far: 59 Python checks pass, including candidate project isolation,
+single execution of serial prerequisites, deterministic subset bytes, rejection
+of noise reconstructions, acceptance of identical truth maps, Slurm option
+forwarding, and timeout cleanup of a detached worker. Both external coordinate
+models, projection stacks, movies and truth outputs reproduce byte-for-byte
+in the fixture checks; inverse-shifted frames reproduce the saved optimal image.
+`git diff --check` passes and `git diff -- src production` is empty. No native
+build, test executable or molecular calibration was run. Required next validation
+is an installed SIMPLE smoke run followed by scientific validation and the
+three-repetition candidate sweep. Existing measured JSON files were not changed.
+When no workflow qualifies, the console labels the JSON a diagnostic report and
+omits recommendation legends.
+
+### solve3D timeout follow-up (2026-10-16)
+
+The desktop and CSB comparison reached solve3D stage 3 before the shared
+180-second candidate limit terminated it. Preserve the full de novo workflow
+and scientific gates; give solve3D its own 1800-second candidate default.
+`--solve3d-timeout` overrides that value. An explicit general `--timeout`
+still applies to every workflow unless the solve3D override is supplied.
+Preview and evidence plans record the effective limit, and Slurm forwards the
+option through the existing generic CLI forwarding. Other workflow defaults
+remain unchanged. This changes only the external Python calibration.
+
+Validation: 60 Python checks ran successfully (one environment-dependent
+check skipped), including preset/override precedence; `git diff --check`
+passed. A focused 8-thread desktop retry uses the existing serial solve2D
+input under `output/calibration_compare_20261015_external`, with one warm-up
+and one measured candidate. Evidence: `output/solve3d_retry_20261016`.
+Both full native solve3D runs completed with normal stops on the installed
+desktop build cd2229e1: warm-up 1019.417 s (16.99 min), measured repeat
+1003.308 s (16.72 min), 8 threads and 927 assigned particles. Peak recorded
+memory was 1853.5/1843.3 MiB. The accuracy gate remains unqualified:
+truth correlation 0.41465/0.40810 is below 0.8 (FSC143 reported 40 A).
+Completion is verified; neither an accurate reconstruction nor optimal thread
+count is claimed. The picked-input fixture needs further scientific work.
+No rebuild or SIMPLE source change was performed. CSB was not rerun for this
+follow-up; Slurm forwarding of the override passed a mocked submission check.
+A full multi-candidate sweep takes substantially longer than the previous
+timeout-limited campaign; request sufficient Slurm wall time explicitly.
+
+### Extraction removed as a calibration target (2026-10-16)
+
+The current default and selectable workflows are `motion_correct`,
+`ctf_estimate`, `pick`, `solve2D`, and `solve3D`. Extraction is no longer a
+standalone benchmark, recommendation-table entry, or supported campaign case.
+The CLI outline, analytic adapter registry, molecular adapter registry and
+campaign example reflect this removal. Earlier six-workflow results above
+are historical evidence and are not rewritten.
+
+The molecular preparation chain still runs extraction internally to create
+particle stacks for solve2D and solve3D. It is preparation, not a timed
+calibration candidate, and does not produce a separate resource recommendation.
+
+### Package organization (2026-10-16)
+
+The public executable remains `scripts/hardware_resource_planner.py`; its
+Python-version bootstrap delegates to `resource_planner.cli`. Implementation
+now lives under `scripts/resource_planner/`, with `workflows/`, `fixtures/`
+(including molecular data), `tests/`, and `examples/`. Hardware discovery is
+in `hardware.py`; process limits and cleanup are in `execution.py` and
+`supervise.py`. The shared workflow mechanics live in `workflows/common.py`.
+Source fingerprints include relative paths throughout the nested package.
+The package README is the usage guide; this file remains the design record.
+
+The three desktop compatibility wrappers and old profile-applying launcher
+are retired from the source layout and preserved locally under ignored
+`output/resource_calibration/retired_tools/`. Their launcher-specific checks
+are archived there too; profile-export checks remain in the active suite.
+Analytic fixtures remain accessible through the main CLI. Existing
+`scripts/memory/` code is unchanged.
+
+New runs default to `output/resource_calibration/standard/profile.json` and
+`output/resource_calibration/standard/measurements/`, relative to the launch
+directory. Existing directories are still refused; use explicit paths for
+additional named runs. Logs remain alongside each attempt's measurements.
+The new output subtree is Git-ignored. Historical campaign evidence is not
+moved or rewritten because projects can contain absolute input paths.
+
+Validation: all 55 remaining Python checks passed with
+`SIMPLE_FIXTURE_PYTHON=/usr/bin/python3.6`, including deterministic fixture
+replay, adapter preparation and process cleanup. Discovery and Slurm preview
+also passed; no job was submitted. The five removed tests applied only to the
+retired motion launcher. `git diff --check` passed. No native build or SIMPLE
+runtime tests were performed for this reorganization.
+
+### Direct particle preparation; no extraction (2026-10-16)
+
+Supersedes the earlier internal-extraction design. No extraction commander,
+adapter or validator remains in the implementation. Image calibration uses
+the motion-to-CTF-to-picking preparation chain. Particle calibration has its
+own cached fixture: Python molecular projections are sampled with the fixed
+seed into a stack of the requested particle count and imported directly with
+`ctf=no` and balanced even/odd assignments. solve2D starts from this project;
+solve3D starts from a serial solve2D snapshot. Image preparation failures do
+not affect particle preparation. Validation counts assignments against the
+direct stack, rather than picking or extraction output. Fixture version is 3;
+old extracted-particle timings do not qualify this new clean-projection case.
+The dataset remains synthetic and its scientific quality gates are unchanged.

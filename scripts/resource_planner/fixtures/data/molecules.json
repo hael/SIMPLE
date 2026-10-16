@@ -1,0 +1,16 @@
+{
+  "source": "SIMPLE embedded molecular coordinate sets (simple_molecule_data.f90)",
+  "source_sha256": "312952f28826f5e3603a491df465f915a45b4e5a390bdd03c91c589897f39adf",
+  "models": {
+    "1jyx": {
+      "atoms": 36516,
+      "file": "1jyx.xyz.gz",
+      "sha256": "8d72a00e0e32a5a99861f5dea10aa5089dd4de03adb93bbf2ed21d88739fb883"
+    },
+    "6vxx": {
+      "atoms": 23694,
+      "file": "6vxx.xyz.gz",
+      "sha256": "7e773679a12fd12775db77a8e01bf9c27d6ae1dad17a39a2b82a3fa601fdf00f"
+    }
+  }
+}
