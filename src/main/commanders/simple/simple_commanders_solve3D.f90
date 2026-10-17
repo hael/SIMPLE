@@ -143,6 +143,10 @@ contains
         call prep_class_command_lines(params, cline, work_projfile)
         ! set symmetry class variables
         call set_symmetry_class_vars(params)
+        ! a run that stops before the axis search would hand on orientations in pgrp_start
+        if( l_srch4symaxis .and. nstages_ini3D < solve3D_symsrch_stage(.true.) )then
+            THROW_HARD('solve3D_cavgs needs nstages >= '//int2str(solve3D_symsrch_stage(.true.))//' when pgrp_start differs from pgrp; got '//int2str(nstages_ini3D))
+        endif
         ! read project
         call spproj%read(params%projfile)
         ! set low-pass limits and downscaling info from FRCs
@@ -256,7 +260,7 @@ contains
             ! Probabilistic search
             call exec_refine3D(params, istage, xrefine3D)
             ! Symmetrization
-            if( istage == solve3D_symsrch_stage() )then
+            if( istage == solve3D_symsrch_stage(l_srch4symaxis) )then
                 call symmetrize(params, istage, work_proj, work_projfile, xrec3D)
             endif
             ! States the stage left (nearly) empty take members of the largest for the next stage
@@ -738,9 +742,9 @@ contains
         if( spproj_cur%get_box() /= man%get_box() .or. abs(spproj_cur%get_smpd() - man%get_smpd()) > 1.e-4*man%get_smpd() )then
             THROW_HARD('the current project''s native box or sampling differs from the frozen solution''s')
         endif
-        ! the add-on runs one stage, the last the base run ran
-        if( man%get_last_stage() < solve3D_symsrch_stage() )then
-            THROW_HARD('the base run stopped at stage '//int2str(man%get_last_stage())//'; solve3D_addon needs a base run that reached stage '//int2str(solve3D_symsrch_stage())//' or later')
+        ! the add-on runs one stage, the last the base run ran, and searches no axis
+        if( man%get_last_stage() < solve3D_symsrch_stage(.false.) )then
+            THROW_HARD('the base run stopped at stage '//int2str(man%get_last_stage())//'; solve3D_addon needs a base run that reached stage '//int2str(solve3D_symsrch_stage(.false.))//' or later')
         endif
         ! its consuming box gets a frozen set from reconstruct3D, which never
         ! upsamples: a stage box exceeding the native box (small boxes, where
@@ -1047,6 +1051,7 @@ contains
         ! provide initialization of 3D alignment using class averages?
         start_stage = 1
         l_ini3D     = .false.
+        l_cavg_ini  = .false.
         ! solve3D_addon runs one stage, the last the base run ran (recorded in
         ! its manifest), after a registration pass; trusted frozen references,
         ! no symmetry search (pgrp_start = pgrp) and no CC pose initialisation
@@ -1067,19 +1072,20 @@ contains
                 &'>>> SOLVE3D STATE CONTINUATION STARTING FROM STAGE ', start_stage, ' WITH NONUNIFORM FILTERING'
         endif
         if( trim(params%cavg_ini).eq.'yes' )then
-            if( last_stage < solve3D_nstages_ini3D() - 1 ) THROW_HARD('nstages must be >= first executable solve3D stage')
+            if( last_stage < solve3D_nstages_ini3D() ) THROW_HARD('nstages must be >= first executable solve3D stage')
             ! execution
             call ini3D_from_cavgs(cline)
             ! re-read the project file to update info in spproj
             call spproj%read(params%projfile)
-            start_stage = solve3D_nstages_ini3D() - 1 ! compute reduced to two overlapping stages
+            start_stage = solve3D_nstages_ini3D() ! the particles re-run the class averages' last stage
             l_ini3D     = .true.
+            l_cavg_ini  = .true.
             ! symmetry dealt with by ini3D
         endif
         ! initialization on class averages done outside this workflow (externally)?
         l_cavg_ini_ext = trim(params%cavg_ini_ext).eq.'yes'
         if( l_cavg_ini_ext )then
-            if( last_stage < solve3D_symsrch_stage() + 1 ) THROW_HARD('nstages must be >= first executable solve3D stage')
+            if( last_stage < solve3D_symsrch_stage(.false.) + 1 ) THROW_HARD('nstages must be >= first executable solve3D stage')
             ! check that ptcl3D field is not virgin
             if( spproj%is_virgin_field('ptcl3D') )then
                 THROW_HARD('Prior 3D alignment required for solve3D when cavg_ini_ext is set to yes')
@@ -1088,7 +1094,7 @@ contains
             ! symmetry axis search is skipped: input orientations are assumed already symmetrized
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
-            start_stage = solve3D_symsrch_stage() + 1 ! start after the symmetry search stage
+            start_stage = solve3D_symsrch_stage(.false.) + 1 ! start after the stages of a run without an axis search
             l_ini3D     = .true.
         endif
         ! initialization of input volumes originating from outside the workflow
@@ -1107,7 +1113,7 @@ contains
             ! input volumes are assumed aligned to the target symmetry axis
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
-            start_stage = solve3D_symsrch_stage() + 1
+            start_stage = solve3D_symsrch_stage(.false.) + 1
             ! CC pose initialization below owns the external-reference route.
             ! setting up random classes for class-balanced particle sampling
             if( trim(params%balance) /= 'none' )then
@@ -1123,12 +1129,14 @@ contains
         if( nstages_refine3D < start_stage )then
             THROW_HARD('nstages must be >= first executable solve3D stage')
         endif
+        ! set symmetry class variables
+        call set_symmetry_class_vars(params)
         l_run_final_rec = nstages_refine3D == solve3D_nstages() .or. params%nstates > 1
         ! a single-state schedule stopped explicitly at the symmetry-search stage
         ! or later is a solution in its own right (its last stage fills in the
         ! particles no earlier stage updated): it gets the final reconstruction
         ! and its run manifest, so it can be the frozen input of solve3D_addon
-        if( cline%defined('nstages') .and. nstages_refine3D >= solve3D_symsrch_stage() ) l_run_final_rec = .true.
+        if( cline%defined('nstages') .and. nstages_refine3D >= solve3D_symsrch_stage(l_srch4symaxis) ) l_run_final_rec = .true.
         ! automasking is per state (state-specific masks), single or multi-state alike
         l_automsk     = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
         ! l_automsk_off (the EXPLICIT automsk=no veto of the pcg-backend
@@ -1136,8 +1144,6 @@ contains
         ! injected, BEFORE automsk=no lands on the cline as a default
         ! prepare class command lines
         call prep_class_command_lines(params, cline, params%projfile)
-        ! set symmetry class variables
-        call set_symmetry_class_vars(params)
         ! fall over if there are no particles
         if( spproj%os_ptcl3D%get_noris() < 1 ) THROW_HARD('Particles could not be found in the project')
         ! take care of class-biased particle sampling; without a 2D solution
@@ -1352,7 +1358,7 @@ contains
             call flush(logfhandle)
             call print_states(params, istage)
             ! Symmetrization
-            if( istage == solve3D_symsrch_stage() )then
+            if( istage == solve3D_symsrch_stage(l_srch4symaxis) )then
                 call symmetrize(params, istage, spproj, params%projfile, xrec3D)
             endif
             ! update GUI
@@ -1671,7 +1677,7 @@ contains
             if( status /= 0 ) THROW_HARD(trim(msg))
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! the stage-3 controls define the frozen accumulations
-            call set_cline_refine3D(params, solve3D_symsrch_stage(), l_cavgs=.false., addon=addon_ctx)
+            call set_cline_refine3D(params, solve3D_symsrch_stage(.false.), l_cavgs=.false., addon=addon_ctx)
             call addon_boxes(boxes, smpds)
             if( l_carried )then
                 nstates_counts = bundle_frz%ncarried_state

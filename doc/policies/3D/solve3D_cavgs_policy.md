@@ -89,7 +89,10 @@ only one is an error.
 ## 5. Staged Refinement
 
 The number of ini3D stages is capped by `solve3D_nstages_ini3D_max()`. A user
-`nstages` value can shorten the route up to that cap.
+`nstages` value can shorten the route up to that cap. Run from `solve3D`
+(`cavg_ini=yes`), the route has `solve3D_nstages_ini3D()` stages, as many as
+the symmetry-search stage (4), so it ends with the axis search; the particle
+stages enter at that stage (`solve3D_policy.md` section 5).
 
 `nstates` alone selects the mode, as in particle `solve3D`: `nstates=1` is
 the single-state run and `nstates > 1` refines independent states from the
@@ -122,7 +125,10 @@ mode and disables trailing reconstruction effectively, even when the shared
 stage controller emits `trail_rec=yes`.
 
 At the symmetry-search stage, the workflow runs the shared symmetry handling
-used by the solve3D workflows.
+used by the solve3D workflows. The axis is searched after stage 4
+(`solve3D_policy.md` section 7), so a run with `pgrp_start != pgrp` and
+`nstages` below 4 is refused (2026-10-17): it would end with orientations in
+`pgrp_start`, which `cavg_ini_ext` takes to be symmetrized.
 
 ### 5.1 State reseeding (`reseed_states`, default `no`)
 
@@ -174,10 +180,12 @@ the blurriest state, and in stage 7 the states collapsed into one.
 (`cavgs_prob_athres`, set on each stage's `refine3D` command line by the stage
 controller):
 
-- the run's `prob_athres` through the symmetry-search stage (3), which keeps
-  the early exploration that `prob_athres=90` was chosen for;
+- the run's `prob_athres` through the symmetry-search stage (3; 4 when the
+  run searches an axis, `solve3D_policy.md` section 7), which keeps the early
+  exploration that `prob_athres=90` was chosen for;
 - then halved each stage, never below 10 degrees (`PROB_ATHRES_TAPER_MIN`) nor
-  above the run's value: 45, 22.5, 11.25 and 10 for stages 4 to 7 from 90.
+  above the run's value: 45, 22.5, 11.25 and 10 for stages 4 to 7 from 90
+  without an axis search, 45, 22.5 and 11.25 for stages 5 to 7 with one.
 
 The threshold of each stage is logged. Without the option every stage keeps
 the run's `prob_athres`. Particle `solve3D` is not affected. Validate the

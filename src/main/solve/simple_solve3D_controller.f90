@@ -8,7 +8,6 @@ character(len=*), parameter :: REC_FBODY               = 'rec_final_state'
 
 ! Stage schedule and search-space sizes
 integer,          parameter :: NSTAGES                 = 8
-integer,          parameter :: NSTAGES_INI3D           = 4    ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
 integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
@@ -24,7 +23,8 @@ integer,          parameter :: NSPACE_MULTI_MAX        = 2500 ! multi-state cap 
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
 integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
 integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
-integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
+integer,          parameter :: SYMSRCH_STAGE           = 4           ! search symmetry axis after this stage (3 until 2026-10-17)
+integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
 real,             parameter :: PROB_ATHRES_TAPER_MIN   = 10.         ! solve3D_cavgs' narrowed angular window ends here (prob_athres_taper)
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
@@ -128,9 +128,10 @@ contains
         nstages_out = NSTAGES_INDEPENDENT
     end function solve3D_independent_nstages_default
 
+    !> cavg_ini: the class-average stages, through the axis search; the particles enter at the last
     module function solve3D_nstages_ini3D() result(nstages_out)
         integer :: nstages_out
-        nstages_out = NSTAGES_INI3D
+        nstages_out = SYMSRCH_STAGE
     end function solve3D_nstages_ini3D
 
     module function solve3D_nstages_ini3D_max() result(nstages_out)
@@ -143,19 +144,25 @@ contains
         nstages_out = CAVGS_EARLY_NSTAGES
     end function solve3D_cavgs_early_nstages
 
-    module function solve3D_symsrch_stage() result(istage)
+    !> Last stage in pgrp_start at full iteration budget: the axis search follows it when
+    !! @p l_symsrch (SYMSRCH_STAGE); a run without a search ends the block at NOSYMSRCH_STAGE
+    module pure function solve3D_symsrch_stage( l_symsrch ) result( istage )
+        logical, intent(in) :: l_symsrch
         integer :: istage
-        istage = SYMSRCH_STAGE
+        istage = NOSYMSRCH_STAGE
+        if( l_symsrch ) istage = SYMSRCH_STAGE
     end function solve3D_symsrch_stage
 
     !> solve3D_cavgs' angular sampling threshold at stage @p istage with prob_athres_taper=yes: the
     !! run's prob_athres (@p athres_run) through the symmetry-search stage, then halved each stage,
-    !! never below PROB_ATHRES_TAPER_MIN (nor above the run's value). With 90: 45, 22.5, 11.25 and
-    !! 10 for stages 4 to 7.
+    !! never below PROB_ATHRES_TAPER_MIN (nor above the run's value). With 90 and no axis search:
+    !! 45, 22.5, 11.25 and 10 for stages 4 to 7; one stage later with a search.
     module procedure cavgs_prob_athres
-        athres = athres_run
-        if( istage <= SYMSRCH_STAGE ) return
-        athres = max(min(athres_run, PROB_ATHRES_TAPER_MIN), athres_run * 0.5**(istage - SYMSRCH_STAGE))
+        integer :: istage_sym
+        athres     = athres_run
+        istage_sym = solve3D_symsrch_stage(l_srch4symaxis)
+        if( istage <= istage_sym ) return
+        athres = max(min(athres_run, PROB_ATHRES_TAPER_MIN), athres_run * 0.5**(istage - istage_sym))
     end procedure cavgs_prob_athres
 
     module function solve3D_ml_reg_start_stage() result(istage)
@@ -206,7 +213,7 @@ contains
         if( l_addon )then
             ! stage 3 keeps its full budget only because of the symmetry search,
             ! which never runs in an add-on: it early-stops on overlap
-            if( istage <= SYMSRCH_STAGE )then
+            if( istage <= solve3D_symsrch_stage(l_srch4symaxis) )then
                 cfg%overlap     = addon%overlap
                 cfg%fracsrch    = 90.
                 cfg%l_scan_exit = .false.
@@ -246,7 +253,7 @@ contains
         cfg%fracsrch        = 99.
         cfg%l_scan_exit     = .false.
         if( allocated(lpinfo) )then
-            if( size(lpinfo) >= SYMSRCH_STAGE ) cfg%trs = max(cfg%trs, lpinfo(SYMSRCH_STAGE)%trslim)
+            if( size(lpinfo) >= PROB_REFINE_STAGE ) cfg%trs = max(cfg%trs, lpinfo(PROB_REFINE_STAGE)%trslim)
         endif
     end subroutine set_refine3D_register_policy
 
@@ -475,7 +482,7 @@ contains
                 else if( istage >= stoch_stage )then
                     cfg%frac_best = 0.5
                 endif
-                if( istage > SYMSRCH_STAGE )then
+                if( istage > full_budget_last_stage(l_cavgs) )then
                     cfg%overlap  = 0.9 ! early stopping
                     cfg%fracsrch = 90. ! early stopping
                 else
@@ -668,6 +675,14 @@ contains
             call cline_refine3D%delete('gaufreq')
         endif
     end subroutine emit_refine3D_stage_cfg
+
+    !> Last stage run to its full budget: the symmetry-search stage and, on the particles of a
+    !! cavg_ini run, their entry stage (the class averages' last)
+    integer function full_budget_last_stage( l_cavgs ) result( istage )
+        logical, intent(in) :: l_cavgs
+        istage = solve3D_symsrch_stage(l_srch4symaxis)
+        if( l_cavg_ini .and. .not. l_cavgs ) istage = max(istage, solve3D_nstages_ini3D())
+    end function full_budget_last_stage
 
     !> First stage of the ladder whose directions reach the multi-state cap NSPACE_MULTI_MAX: where
     !! independent multi-state refinement switches from prob to prob_neigh (stage 5 of the default ladder)

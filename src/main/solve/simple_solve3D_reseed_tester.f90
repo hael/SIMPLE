@@ -2,7 +2,7 @@
 ! In-memory labels and scores of the even (1..ncavgs) and odd (ncavgs+1..2*ncavgs) halves of the
 ! class averages, and the per-stage angular thresholds; no project, volume or job.
 module simple_solve3D_reseed_tester
-use simple_solve3D_utils, only: reseed_state_labels, cavgs_prob_athres
+use simple_solve3D_utils, only: reseed_state_labels, cavgs_prob_athres, solve3D_symsrch_stage, l_srch4symaxis
 use simple_test_utils
 implicit none
 private
@@ -20,10 +20,12 @@ contains
         call test_too_few_to_reseed()
     end subroutine run_all_solve3D_reseed_tests
 
-    !> prob_athres_taper: the run's window through the symmetry-search stage (3), then halved each
-    !! stage down to 10 degrees, never above the run's value
+    !> prob_athres_taper: the run's window through the symmetry-search stage (3, or 4 with an axis
+    !! search), then halved each stage down to 10 degrees, never above the run's value
     subroutine test_prob_athres_taper()
         write(*,'(A)') 'test_prob_athres_taper'
+        call assert_int(3, solve3D_symsrch_stage(.false.), 'no axis search: stage 3')
+        call assert_int(4, solve3D_symsrch_stage(.true.),  'axis search after stage 4')
         call assert_real(90.,   cavgs_prob_athres(90., 1), 1.e-4, 'stage 1: the run''s window')
         call assert_real(90.,   cavgs_prob_athres(90., 3), 1.e-4, 'through the symmetry stage')
         call assert_real(45.,   cavgs_prob_athres(90., 4), 1.e-4, 'halved at stage 4')
@@ -31,6 +33,10 @@ contains
         call assert_real(11.25, cavgs_prob_athres(90., 6), 1.e-4, 'and at stage 6')
         call assert_real(10.,   cavgs_prob_athres(90., 7), 1.e-4, 'never below 10 degrees')
         call assert_real(6.,    cavgs_prob_athres(6., 5),  1.e-4, 'nor above a run''s window below 10')
+        l_srch4symaxis = .true.
+        call assert_real(90.,   cavgs_prob_athres(90., 4), 1.e-4, 'axis search: the run''s window at stage 4')
+        call assert_real(45.,   cavgs_prob_athres(90., 5), 1.e-4, 'axis search: halved at stage 5')
+        l_srch4symaxis = .false.
     end subroutine test_prob_athres_taper
 
     !> populated states, and a single state, are left as they are

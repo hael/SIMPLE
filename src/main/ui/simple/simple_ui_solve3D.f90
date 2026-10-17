@@ -92,7 +92,7 @@ contains
             &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
             &visibility=UI_VIS_ADVANCED)
             call prg%add_input(UI_PARM, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
-                &'Use existing ptcl3D orientations and state assignments from a prior solve3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
+                &'Use existing ptcl3D orientations and state assignments from a prior solve3D_cavgs run that searched the symmetry axis; starts at stage 4 in pgrp(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
             &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         endif
         ! <no additional inputs>

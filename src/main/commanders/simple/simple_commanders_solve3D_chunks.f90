@@ -43,12 +43,13 @@ contains
         type(ui_program), pointer     :: ui_addon => null(), ui_workflow => null()
         type(string),     allocatable :: keys(:)
         type(string)                  :: edir, source_in, source_fname, frozen, result_proj, step_proj, cmd_text, report_fname
+        type(string)                  :: pgrp, pgrp_start
         integer,          allocatable :: part(:), part_sizes(:), stkind(:)
         logical,          allocatable :: selected(:)
         character(len=:), allocatable :: key
         character(len=STDLEN)         :: msg
         integer(8) :: t0, t1, rate
-        integer    :: i, k, s, status, nchunks, nselected, nfrozen_sel, nstates, nsample, ninside
+        integer    :: i, k, s, status, nchunks, nselected, nfrozen_sel, nstates, nsample, ninside, min_stage
         ! ---- validate the public command line before setting the internal sampling target or writing anything
         call get_prg_ptr(string('solve3D_chunks'), ui_workflow)
         if( .not. associated(ui_workflow) ) THROW_HARD('the solve3D_chunks user interface is not registered')
@@ -71,8 +72,13 @@ contains
         ! a base run that stops before the symmetry-search stage registers no manifest (one state)
         ! or cannot be continued by solve3D_addon: refuse it before the base run, not after
         if( cline%defined('nstages') )then
-            if( cline%get_iarg('nstages') < solve3D_symsrch_stage() )then
-                write(msg,'(A,I0,A,I0)') 'solve3D_chunks needs nstages >= ', solve3D_symsrch_stage(), '; got ', &
+            pgrp       = 'c1'
+            pgrp_start = 'c1'
+            if( cline%defined('pgrp') )       pgrp       = cline%get_carg('pgrp')
+            if( cline%defined('pgrp_start') ) pgrp_start = cline%get_carg('pgrp_start')
+            min_stage = solve3D_symsrch_stage(lowercase(pgrp%to_char()) /= lowercase(pgrp_start%to_char()))
+            if( cline%get_iarg('nstages') < min_stage )then
+                write(msg,'(A,I0,A,I0)') 'solve3D_chunks needs nstages >= ', min_stage, '; got ', &
                     &cline%get_iarg('nstages')
                 THROW_HARD(trim(msg))
             endif

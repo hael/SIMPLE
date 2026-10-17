@@ -280,7 +280,8 @@ Before anything is written:
 - a key that is not an input of `solve3D_chunks`;
 - `mkdir` other than `yes`;
 - `nstates < 1`;
-- `nstages` below 3, the symmetry-search stage. Such a base run would write
+- `nstages` below the symmetry-search stage (3; 4 when `pgrp_start`
+  differs from `pgrp`). Such a base run would write
   no manifest (one state), or `solve3D_addon` would refuse to continue it
   (several states). In practice `nstages` is at least 5; the refusal only
   makes a mistake fail at once instead of after the base run.

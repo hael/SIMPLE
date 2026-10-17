@@ -316,11 +316,18 @@ Class-average initialization and external class-average initialization both
 skip the random-volume start. With `cavg_ini=yes`, the nested
 `solve3D_cavgs` run owns any `pgrp_start` to `pgrp` symmetry-axis search.
 When control returns to the particle workflow, `pgrp_start` is set to `pgrp` so
-the axis search is not repeated. `cavg_ini_ext=yes` is the explicit exception to
-the fresh-start rule: it requires prior `ptcl3D` alignment, preserves the
-external orientation/state information needed by that route, assumes the input
-orientations are already symmetrized, and starts after the symmetry-search
-stage. If `nstates > 1`, every requested prior `ptcl3D` state must exist and be
+the axis search is not repeated. The nested run has as many stages as the
+symmetry-search stage (`solve3D_nstages_ini3D`, four), so it ends with the axis
+search on the class averages whenever `pgrp_start != pgrp` (section 7). The
+particles then enter at that last class-average stage, stage 4, which runs
+its full budget (`overlap` 0.99, `fracsrch` 99) on the particles, whatever the
+point group (2026-10-17; they entered at stage 3 before). `cavg_ini_ext=yes` is the explicit
+exception to the fresh-start rule: it requires prior `ptcl3D` alignment,
+preserves the external orientation/state information needed by that route,
+assumes the input orientations are already symmetrized, and starts at stage 4,
+after the stages a run without an axis search keeps in `pgrp_start`. A prior
+`solve3D_cavgs` run with `pgrp_start != pgrp` and fewer than 4 stages, which
+would stop before its axis search, is refused by `solve3D_cavgs`. If `nstates > 1`, every requested prior `ptcl3D` state must exist and be
 populated.
 
 ## 6. Multi-State Policy
@@ -396,6 +403,21 @@ raises symmetry, the start group must be a subgroup of the target group. If it
 lowers symmetry, the target must be a subgroup of the start group and symmetry
 randomization may be applied.
 
+The axis is searched after stage 4 (`SYMSRCH_STAGE`; after stage 3 until
+2026-10-17, when the stage-3 map was too poor and the search failed too often).
+The stages through it reconstruct in `pgrp_start` and run their full iteration
+budget (`overlap` 0.99, `fracsrch` 99); the symmetry-search stage defers its
+canonical sigma2 commit to after the symmetric reconstruction. A run that
+searches no axis (`pgrp_start = pgrp`: every c1 run and the input-volume,
+`cavg_ini`, `cavg_ini_ext` and add-on routes) ends that block at stage 3
+(`NOSYMSRCH_STAGE`) as before, so its stage 4 early-stops (`overlap` 0.9,
+`fracsrch` 90) and its entry stage is unchanged, except that the particle
+stages of a `cavg_ini` run enter at stage 4 and run it to its full budget
+(section 5). `solve3D_symsrch_stage`
+returns the block's last stage for either case; the final-reconstruction rule
+(section 9), the `solve3D_chunks` refusal and the `prob_athres_taper` window of
+`solve3D_cavgs` follow it.
+
 At the symmetry-search stage, symmetry-axis search is state-local for
 multi-state runs. Each active state determines its own axis from its current
 map and applies that transform only to orientations assigned to that state.
@@ -468,10 +490,11 @@ automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
 
 `solve3D` runs a fresh original-sampling reconstruction from selected
 particles for full schedules, for every multi-state schedule, and for a
-single-state schedule stopped explicitly (`nstages`) at stage 3 or later; the
+single-state schedule stopped explicitly (`nstages`) at the symmetry-search
+stage or later (stage 3; stage 4 when the run searches an axis, section 7); the
 run manifest follows it, so such a run can be the frozen input of
 `solve3D_addon`, which then runs that stage. Single-state schedules stopped
-before stage 3 skip this final all-particle reconstruction.
+before it skip this final all-particle reconstruction.
 Before a multi-state final reconstruction, a greedy missing-update pass
 (`refine=greedy`) assigns every active particle that no stage updated.
 

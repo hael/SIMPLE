@@ -19,6 +19,7 @@ implicit none
 type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis    = .false., l_symran = .false.
 logical          :: l_ini3D           = .false.
+logical          :: l_cavg_ini        = .false. !< particle stages of a cavg_ini run: the entry stage runs its full budget
 logical          :: l_automsk         = .false.
 logical          :: l_automsk_off     = .false.
 logical          :: l_nonuniform      = .false.
@@ -116,7 +117,8 @@ interface
         integer :: nstages_out
     end function solve3D_cavgs_early_nstages
 
-    module function solve3D_symsrch_stage() result(istage)
+    module pure function solve3D_symsrch_stage( l_symsrch ) result( istage )
+        logical, intent(in) :: l_symsrch
         integer :: istage
     end function solve3D_symsrch_stage
 
@@ -600,7 +602,7 @@ contains
             call spproj%write_segment_inside('ptcl3D', projfile)
         endif
         if( l_srch4symaxis )then
-            lpsym = max(solve3D_lpsymsrch_lb(),lpinfo(solve3D_symsrch_stage())%lp)
+            lpsym = max(solve3D_lpsymsrch_lb(),lpinfo(solve3D_symsrch_stage(l_srch4symaxis))%lp)
             ! the axis search scores the Fourier shells between hp and lpsym; a stage limit coarser than hp (an early
             ! map planned from the class FRCs of very few particles) would leave no shell, so the search's high-pass
             ! is never finer than lpsym and the band holds at least the shell of lpsym
@@ -812,7 +814,7 @@ contains
         endif
         ! Reconstruction
         pgrp = trim(params%pgrp)
-        if( istage <= solve3D_symsrch_stage() ) pgrp = trim(params%pgrp_start)
+        if( istage <= solve3D_symsrch_stage(l_srch4symaxis) ) pgrp = trim(params%pgrp_start)
         cline_rec = cline_reconstruct3D
         call apply_refine3D_reconstruction_controls(cline_rec)
         call cline_rec%set('prg',       'reconstruct3D')

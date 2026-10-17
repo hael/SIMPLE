@@ -96,8 +96,9 @@ is refused by name.
 The run manifest is the only route into the add-on. `exec_solve3D` writes
 `solve3D_manifest.txt` at the end of every completed run (after the final
 reconstruction) and registers it in `projinfo`;
-a run stopped before stage 3 writes
-none and is not a frozen input. A run stopped explicitly at stage 3 or later
+a run stopped before stage 3 (stage 4 for a single-state run that searches a
+symmetry axis) writes none and is not a frozen input. A run stopped explicitly
+at that stage or later
 (`nstages`, e.g. a single-state `nstages=5` base) does the final reconstruction
 and writes one; the add-on then runs that stage. The frozen project
 must be an eligible `solve3D` or `solve3D_addon` output whose manifest
