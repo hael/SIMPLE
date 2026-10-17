@@ -1,0 +1,39 @@
+subject line: RELEASE NOTE SIMPLE 2.1
+
+Dear Structural Biologists:
+
+We announce the release of a new version of our program package SIMPLE (v2.1) for single-particle cryo-EM ab initio 3D reconstruction.
+ 
+Please note that the webpage has moved to www.simplecryoem.com.
+
+New features include:
+
+* PRIME2D: A Stochastic Hill Climbing Approach for Simultaneous 2D Alignment and Clustering of cryo-EM images (DOI: http://dx.doi.org/10.1016/j.str.2016.04.006) which
+  (1) generates improved 2D class averages from large single-particle cryo-EM datasets
+  (2) can be used in conjunction with PRIME3D to obtain a reliable 3D starting model in a rapid and unbiased fashion
+  (3) overcomes inherent limitations in widely used clustering approaches
+  (4) is many times faster than other widely used approaches
+
+* PRIME3D: ~150-fold speedup as compared to the previously released version. This was accomplished using new theory for fast rotational matching of polar Fourier transforms based on Hadamard products calculated using a re-organised and highly parallelizable data structure. The paper is not yet published, but we decided to nevertheless release the code since we anticipate that the massive speedup of PRIME3D will have major impacts for our users. For example, less than 10,0000 particles downscaled to around 100x100 pixels can feasibly be processed on a modern laptop equipped with an Intel i5 or i7 processor. We executed an ab initio 3D reconstruction run using PRIME3D on half a million images downscaled to 64x64 pixels in less than 5 hours on a cluster with 224 CPU cores (Intel(R) Xeon(R) CPU E5-2670 0 @ 2.60GHz).
+
+* MRC file format support. The file handling classes are shared with the Frealix program for helical reconstruction.
+
+* Improved manuals and easier to use command line-based front-end.
+
+* Extended automatic unit test suite (executed via the optional "make check").
+
+Our next release (SIMPLE 3.0) is planned for January 2017 and will include:
+* GPU accelerated motion correction
+* GPU accelerated PRIME2D/3D
+* GPU accelerated multiparticle 3D reconstruction
+
+We thank our beta testers for their constructive feedback. If you need help installing SIMPLE, optimising its execution for your computer architecture or experience any problems or bugs please use the contact form on the webpage (www.simplecryoem.com) to file a help ticket. We will endeavour to respond within two days.
+
+Happy image processing!
+
+The SIMPLE team:
+
+Sarah N Le
+Cyril F Reboul
+Frederic Bonnet
+Dominika & Hans Elmlund
