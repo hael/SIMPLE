@@ -288,6 +288,7 @@ contains
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
+        real    :: res05_now
         logical :: converged, cont_stats_available, pose_stats_available
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
@@ -544,6 +545,19 @@ contains
         ! a Cartesian pass reports frac = 100 and an overlap any small motion meets: its own rule
         if( params%l_cart_refine ) &
             &converged = self%check_cont_conv(params, os, sampled > sampled_lb .and. states > 0.5, states, sampled)
+        ! lpexit: the halves agree past the band in use, so the crossing lies outside what
+        ! was matched and is clean. The stage's remaining iterations cannot reach it; the
+        ! next stage's crop can. Ends the stage only, never re-opens the band.
+        if( params%l_lpexit .and. .not.converged .and. allocated(res05_state_avg) )then
+            if( any(res05_state_avg > TINY) )then
+                res05_now = minval(res05_state_avg, mask=res05_state_avg > TINY)
+                if( res05_now < params%lp )then
+                    write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
+                        &res05_now, ' A IS BEYOND THE MATCHING BAND (', params%lp, ' A)'
+                    converged = .true.
+                endif
+            endif
+        endif
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &

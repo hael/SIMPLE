@@ -217,14 +217,58 @@ alongside the effective planned matching limit. In the non-NU stages the
 ceiling is the stage's matching limit, so matching never exceeds the
 printed stage limit.
 
-Stage-boundary FSC=0.5 promotion (2026-09-06, particle route only): past
-stage 2, the planned `lpinfo(istage)%lp` is replaced by the project's FSC=0.5
+Stage-boundary FSC=0.5 advance (2026-09-06; one ladder rung since
+2026-10-18, particle route only): past stage 2, when the project's FSC=0.5
 resolution of the best resolved populated state (the per-particle `res05`
-field written by the reconstruction) when that is finer, bounded by the
-ladder cap (`LPSTOP_BOUNDS(1)`, 4.5 A, or the coarser explicit `lpstop`; the
-class-average route keeps its final limit). The resolution fields are
-cleared when the particles are reset from `ptcl2D`, so only resolutions
-measured in the run itself promote. The promoted value
+field written by the reconstruction) is finer than the planned
+`lpinfo(istage)%lp`, the stage runs at the *next* rung
+`lpinfo(istage+1)%lp` instead, bounded by the ladder cap
+(`LPSTOP_BOUNDS(1)`, 4.5 A, or the coarser explicit `lpstop`; the
+class-average route keeps its final limit). `res05` gates the advance; the
+ladder sets its size.
+
+**Stage shift (2026-10-18).** Where the stage can be skipped, it is skipped
+rather than run at an advanced limit. When `res05` is finer than
+`lpinfo(istage)%lp` the stage's own crop cannot represent the resolution the
+halves already agree on -- `set_bp_range3D` clips the band to the crop
+Nyquist, so the stage would print an advanced limit while matching at the
+crop limit and spend its whole iteration budget there. `solve3D_stage_behind_fsc05`
+gates a `cycle` in the frequency-marching loop, logging `>>> SOLVE3D SHIFTING
+PAST STAGE`. Excluded, because they carry one-time work: the first stage
+(`start_stage`, the add-on registration pass), the last stage (automasking,
+envelope FSC, trailing reconstruction) and, **only when an axis is actually
+searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` is shiftable: with
+`pgrp == pgrp_start` the `symmetrize` call is a complete no-op, since
+`l_symran` is set only when `pgrp_start` has more symmetry than `pgrp` and
+therefore implies `l_srch4symaxis`. Skipped
+stages leave `emitted_lp` at its `-1` sentinel, which the stage report and
+the add-on manifest already treat as "not run". The one-rung advance above
+therefore applies only to the three stages that cannot be shifted past.
+
+**Mid-stage resolution exit (2026-10-18).** The same test is also applied
+during the stage, as a convergence criterion rather than a skip: the internal
+`lpexit` key, emitted on the refine3D command line for exactly the shiftable
+stages, makes `check_conv3D` end the stage once the best populated state's
+FSC=0.5 resolution is finer than `params%lp`, the band actually in use after
+the crop-Nyquist clamp. Logged as `>>> STAGE RESOLUTION EXIT`. This is
+consistent with the never-per-iteration rule above rather than an exception
+to it: the test asks only whether the crossing lies *beyond* the band, which
+is the region the alignments never matched and so cannot have overfitted, and
+it ends the stage without re-opening the band. It is self-braking -- once the
+next stage opens the band past the crossing the test fails again until the map
+genuinely improves. It only ever adds convergence, so `minits` and the
+Cartesian rule still hold.
+
+Before 2026-10-18 the band was set to `res05` itself,
+which made it a function of a single crossing: on PfCRT, whose FSC runs
+nearly parallel to 0.5 over 7.0-4.7 A, a 0.03 FSC difference moves that
+crossing 1.5 A, so the mid-stage band varied over 4.6-7.1 A between
+restarts for reasons unrelated to the map. One rung bounds what a noisy
+crossing can cost. The advance does not accumulate: each stage starts from
+its own planned rung, so the lead is at most one rung at any boundary. The
+resolution fields are cleared when the particles are reset from `ptcl2D`, so
+only resolutions measured in the run itself advance the band. The advanced
+value
 is the printed stage limit and, in non-NU stages, the `lpstop` ceiling. The
 decision is taken once per stage boundary and never per iteration:
 `solve3D` runs without gold-standard halves, so an FSC crossing is
@@ -232,7 +276,7 @@ trustworthy only where it lies beyond the band that produced the alignments.
 The crossing at the end of the previous stage lies beyond that stage's band
 and is clean; a per-iteration rule would ratchet on noise fitted inside the
 newly opened band. An explicit command-line `lp` (with `ml_reg=yes`) disables
-the promotion for that stage. Multi-state follows the standard single-band
+the advance for that stage. Multi-state follows the standard single-band
 rule: the best resolved populated state sets the band for all states.
 (Streptavidin log set 2026-09-06: the plan sat at 8.6/7.6 A in stages 4/5
 while the half maps agreed to 4.3 A at FSC=0.5.)

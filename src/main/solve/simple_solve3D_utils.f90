@@ -122,6 +122,12 @@ interface
         integer :: istage
     end function solve3D_symsrch_stage
 
+    module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical :: l_behind
+    end function solve3D_stage_behind_fsc05
+
     module pure function cavgs_prob_athres( athres_run, istage ) result( athres )
         real,    intent(in) :: athres_run
         integer, intent(in) :: istage

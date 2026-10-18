@@ -1322,6 +1322,19 @@ contains
                 call addon_register_pass(istage)
                 if( L_BENCH_GLOB ) rt_register = toc(t_phase)
             endif
+            ! Shift stage when the halves already agree past this stage's planned
+            ! limit: its crop cannot represent that resolution, so the iterations
+            ! buy nothing. Never the first or last stage, nor the axis-search stage.
+            ! Without an axis search symmetrize is a no-op (l_symran implies
+            ! l_srch4symaxis), so that stage is shiftable.
+            if( istage > start_stage .and. istage < nstages_refine3D .and. &
+                &.not.( l_srch4symaxis .and. istage == solve3D_symsrch_stage(.true.) ) )then
+                if( solve3D_stage_behind_fsc05(params, istage) )then
+                    write(logfhandle,'(A,I3,A,F5.1,A)')'>>> SOLVE3D SHIFTING PAST STAGE ', istage, &
+                        &': PLANNED LP ', lpinfo(istage)%lp, ' A ALREADY REACHED AT FSC=0.5'
+                    cycle
+                endif
+            endif
             ! Preparation of command line for refinement
             if( l_addon )then
                 call set_cline_refine3D(params, istage, l_cavgs=.false., addon=addon_ctx)

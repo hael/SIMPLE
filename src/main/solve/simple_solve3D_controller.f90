@@ -543,8 +543,9 @@ contains
         lp_cap = LPSTOP_BOUNDS(1)
         if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
         if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
-        ! Stage-boundary FSC=0.5 promotion past FSC05_PROMOTE_MIN_STAGE, never finer than lp_cap: once per
-        ! boundary, since without gold-standard halves only an FSC beyond the previous band is clean.
+        ! Stage-boundary FSC=0.5 advance past FSC05_PROMOTE_MIN_STAGE, one ladder rung, never finer than
+        ! lp_cap: once per boundary, since without gold-standard halves only an FSC beyond the previous
+        ! band is clean. FSC=0.143 must not set a matching band here (no gold-standard stage in solve3D).
         ! Add-on promotes from the union FSC (solve3D_policy.md sec. 4; solve3D_addon_policy.md sec. 5).
         l_fsc05_promoted = .false.
         if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register ) &
@@ -654,6 +655,15 @@ contains
         else
             call cline_refine3D%delete('scan_exit')
         endif
+        ! mid-stage resolution exit, allowed exactly where the stage shift is: never the
+        ! first two stages, the last stage or the axis-search stage
+        if( .not. l_cavgs .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
+            &istage < active_refine3D_nstages() .and. &
+            &.not.( l_srch4symaxis .and. istage == SYMSRCH_STAGE ) )then
+            call cline_refine3D%set('lpexit',             'yes')
+        else
+            call cline_refine3D%delete('lpexit')
+        endif
         if( l_cavgs )then
             call cline_refine3D%set('snr_noise_reg',      cfg%snr_noise_reg)
             call cline_refine3D%delete('update_frac')
@@ -712,9 +722,11 @@ contains
         if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
     end function stage_matching_lp
 
-    !> Replace the planned stage matching limit by the project's FSC=0.5
-    !! resolution when that is finer, bounded by the ladder cap. Applies past
-    !! stage FSC05_PROMOTE_MIN_STAGE on the particle route only.
+    !> Advance the planned stage matching limit by one ladder rung when the
+    !! project's FSC=0.5 resolution is finer than it, bounded by the ladder cap.
+    !! Applies past stage FSC05_PROMOTE_MIN_STAGE on the particle route only.
+    !! res05 gates the advance; the ladder sets its size, so a noisy crossing
+    !! costs one rung early rather than setting the band outright.
     subroutine promote_stage_lp_from_fsc05( params, istage, lp_cap, lp, l_promoted )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: istage
@@ -724,16 +736,37 @@ contains
         real :: res05, lp_new
         l_promoted = .false.
         if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
+        if( .not. allocated(lpinfo) )          return
+        if( istage >= size(lpinfo) )           return ! no next rung
         ! silent: the stage banner reports the limit actually used and its
-        ! provenance (no res05 field = nothing to promote from)
+        ! provenance (no res05 field = nothing to advance from)
         res05 = project_best_fsc05_resolution(params)
         if( res05 < TINY ) return
-        lp_new = max(min(lp, res05), lp_cap)
+        if( res05 >= lp )  return ! not ahead of schedule
+        lp_new = max(lpinfo(istage+1)%lp, lp_cap)
         if( lp_new < lp - 1.e-3 )then
             lp         = lp_new
             l_promoted = .true.
         endif
     end subroutine promote_stage_lp_from_fsc05
+
+    !> Is the stage's planned matching limit already behind the measured FSC=0.5
+    !! resolution? Such a stage would iterate at a crop that cannot represent
+    !! what the halves already agree on. Particle route, past
+    !! FSC05_PROMOTE_MIN_STAGE; .false. without a res05 field.
+    module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical :: l_behind
+        real :: res05
+        l_behind = .false.
+        if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
+        if( .not. allocated(lpinfo) )           return
+        if( istage > size(lpinfo) )             return
+        res05 = project_best_fsc05_resolution(params)
+        if( res05 < TINY ) return
+        l_behind = res05 < lpinfo(istage)%lp
+    end function solve3D_stage_behind_fsc05
 
     !> FSC=0.5 resolution of the best resolved populated state, read from the
     !! per-particle res05 field the reconstruction writes; 0 when absent
