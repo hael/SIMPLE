@@ -16,13 +16,13 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_nu_filter_vars
 implicit none
 
-public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, &
+public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
           set_nu_solvent_envelope, clear_nu_solvent_envelope, &
           set_nu_evidence_null_shell, clear_nu_evidence_null_shell, &
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, analyze_filtmap_neighbor_continuity,&
-          get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
+          get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp, get_nu_filter_timings,&
           write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
           nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
@@ -134,8 +134,6 @@ character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE = 'base_unfil'
 character(len=*), parameter   :: NU_EVIDENCE_SOURCE_PREV = 'previous_shipped'
 ! bumped whenever the unary or its calibration changes; v2 is the squared-error unary at one noise level
 character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v2'
-character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
-character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 ! Opt-in diagnostics for NU-filter development. Keep normal runs concise; this
 ! flag restores the detailed candidate, smoothing, and continuity logs.
 logical :: NU_DEV_OUTPUT = .false.
@@ -236,6 +234,10 @@ interface
         integer, intent(in) :: ilabel
     end function nu_label_is_aux_replacement
 
+    module subroutine get_nu_filter_timings( filtering, objective, optimise, compose )
+        real(timer_int_kind), intent(out) :: filtering, objective, optimise, compose
+    end subroutine get_nu_filter_timings
+
     module subroutine init_nu_filter( vol_even, vol_odd, fsc_res )
         class(image), intent(in) :: vol_even, vol_odd
         real,    optional, intent(in) :: fsc_res
@@ -244,20 +246,6 @@ interface
     module subroutine set_nu_filter_report( l_report )
         logical, intent(in) :: l_report
     end subroutine set_nu_filter_report
-
-    module function filtered_vol_fname( cache_prefix, cutoff_find ) result( fname )
-        class(string), intent(in) :: cache_prefix
-        integer,       intent(in) :: cutoff_find
-        type(string) :: fname
-    end function filtered_vol_fname
-
-    module logical function filtered_vols_cached( cache_prefix )
-        class(string), intent(in) :: cache_prefix
-    end function filtered_vols_cached
-
-    module subroutine delete_cached_filtered_vols( cache_prefix )
-        class(string), intent(in) :: cache_prefix
-    end subroutine delete_cached_filtered_vols
 
     module subroutine release_nu_filter_unary_storage
     end subroutine release_nu_filter_unary_storage
@@ -339,9 +327,17 @@ interface
         real, intent(inout) :: packed(:)
     end subroutine pack_nu_full_to_mask
 
-    module subroutine cache_filtered_vols( vol_even, vol_odd )
-        class(image), intent(in) :: vol_even, vol_odd
-    end subroutine cache_filtered_vols
+    module subroutine prepare_nu_candidate_fts( vol_even, vol_odd, ft_even, ft_odd, filt_even, filt_odd )
+        class(image), intent(in)    :: vol_even, vol_odd
+        type(image),  intent(inout) :: ft_even, ft_odd, filt_even, filt_odd
+    end subroutine prepare_nu_candidate_fts
+
+    module subroutine filter_nu_candidate( i, ft_even, ft_odd, filt_even, filt_odd )
+        integer,     intent(in)    :: i
+        type(image), intent(in)    :: ft_even, ft_odd
+        type(image), intent(inout) :: filt_even, filt_odd
+    end subroutine filter_nu_candidate
+
 
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
@@ -470,18 +466,12 @@ interface
 
 
     ! In submodule: simple_nu_filter_apply.f90
-    !> Filtered even/odd references from the current label field: composed from the cached candidates of
-    !! the competition pair or, given vol_apply_even/odd (pcg_solvent=yes), from that pair filtered per label.
-    !! The auxiliary label is filled from the auxiliary pair in both cases.
-    module subroutine nu_filter_vols( vol_even, vol_odd, vol_apply_even, vol_apply_odd )
-        class(image),           intent(out) :: vol_even, vol_odd
-        class(image), optional, intent(in)  :: vol_apply_even, vol_apply_odd
+    !> Filtered even/odd references from the current label field: the source pair (the competition pair, or
+    !! with pcg_solvent=yes the solvent-prior pair) filtered per label; the auxiliary label from the auxiliary pair.
+    module subroutine nu_filter_vols( vol_even, vol_odd, vol_src_even, vol_src_odd )
+        class(image), intent(out) :: vol_even, vol_odd
+        class(image), intent(in)  :: vol_src_even, vol_src_odd
     end subroutine nu_filter_vols
-
-    module subroutine nu_filter_vol( vol_in, vol_out )
-        class(image), intent(in)  :: vol_in
-        class(image), intent(out) :: vol_out
-    end subroutine nu_filter_vol
 
     ! In submodule: simple_nu_filter_stats.f90
     module subroutine pack_filtmap_lowpass_limits( lowpass_vals, mask )

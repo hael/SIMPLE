@@ -13,14 +13,14 @@ contains
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         character(len=*), optional, intent(in) :: evidence_source
         real,        optional, intent(in) :: fsc_res
-        type(image) :: vol_even_filt, vol_odd_filt, vol_support
-        type(string) :: even_cache_fname, odd_cache_fname
+        type(image) :: vol_even_filt, vol_odd_filt, vol_support, vol_even_ft, vol_odd_ft
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
         real :: noise_scale, finest_lp
         integer :: i, n_candidates, aux_replacement_idx, aux_find
         real    :: x
         real,    allocatable :: bwfilters_tmp(:,:)
         integer, allocatable :: cutoff_finds_tmp(:)
+        integer(timer_int_kind) :: t0
         call init_nu_filter(vol_even, vol_odd, fsc_res)
         if( nu_l_report .and. nu_bank_cap_find > 0 )then
             write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') '>>> NU BANK CAP: FSC=0.143 ', fsc_res, &
@@ -61,7 +61,7 @@ contains
             end do
             if( aux_replacement_idx > 0 )then
                 ! ML pair appended as the last label only at or beyond the finest retained rung (in practice FSC <= 4 A);
-                ! it shares that rung's Potts coordinate, so the unary alone decides; its filtered pair is never cached.
+                ! it shares that rung's Potts coordinate, so the unary alone decides.
                 aux_find = max(1, min(box/2, calc_fourier_index(aux_resolutions(aux_replacement_idx), box, smpd)))
                 if( aux_find >= cutoff_finds(size(cutoff_finds)) )then
                     call stash_aux_volumes(aux_even(aux_replacement_idx:aux_replacement_idx), &
@@ -98,14 +98,10 @@ contains
             &THROW_HARD('NU replay evidence cannot include an auxiliary replacement pair')
         if( nu_evidence_requested ) &
             &call calculate_nu_source_fingerprint(vol_even, vol_odd, nu_evidence_source_fingerprint)
-        ! Filter caches are local scratch products. Rebuild the current bank
-        ! after setup so a prior interrupted run cannot satisfy existence-only
-        ! cache checks with stale volumes.
-        call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
-        call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
-        call vol_even_filt%new(ldim, smpd)
-        call vol_odd_filt%new(ldim, smpd)
-        call cache_filtered_vols(vol_even, vol_odd)
+        ! every candidate pair is filtered from these transforms and scored at once
+        if( L_BENCH_GLOB ) t0 = tic()
+        call prepare_nu_candidate_fts(vol_even, vol_odd, vol_even_ft, vol_odd_ft, vol_even_filt, vol_odd_filt)
+        if( L_BENCH_GLOB ) nu_rt_filtering = nu_rt_filtering + toc(t0)
         ! one candidate-independent level; cached for build_nu_evidence_state's null candidate
         noise_scale = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
         nu_noise_scale_cached = noise_scale
@@ -130,16 +126,16 @@ contains
         allocate(nu_ev_base(n_nu_mask), source=0.)
         allocate(nu_ev_best(n_nu_mask), source=huge(x))
         do i = 1, size(cutoff_finds)
+            if( L_BENCH_GLOB ) t0 = tic()
             dmat_cand = huge(x)
             if( nu_label_is_aux_replacement(i) )then
                 call vol_even%nu_objective(aux_even_bank(1), vol_odd, aux_odd_bank(1), dmat_cand, nu_lmask, noise_scale)
             else
-                even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
-                odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
-                if( .not.file_exists(even_cache_fname) ) THROW_HARD('Missing filtered volume cache: '//even_cache_fname%to_char())
-                if( .not.file_exists(odd_cache_fname)  ) THROW_HARD('Missing filtered volume cache: '//odd_cache_fname%to_char())
-                call vol_even_filt%read(even_cache_fname)
-                call vol_odd_filt%read(odd_cache_fname)
+                call filter_nu_candidate(i, vol_even_ft, vol_odd_ft, vol_even_filt, vol_odd_filt)
+                if( L_BENCH_GLOB )then
+                    nu_rt_filtering = nu_rt_filtering + toc(t0)
+                    t0 = tic()
+                endif
                 call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, nu_lmask, noise_scale)
             endif
             ! Snapshot the raw cost before candidate-scale smoothing; the envelope
@@ -148,9 +144,12 @@ contains
             call pack_nu_raw_candidate(dmat_cand, i)
             call smooth_nu_objective(dmat_cand, dmat_tmp, nu_label_lowpass_limit(i))
             call pack_nu_dmat_candidate(dmat_cand, i)
+            if( L_BENCH_GLOB ) nu_rt_objective = nu_rt_objective + toc(t0)
         end do
         call vol_even_filt%kill
         call vol_odd_filt%kill
+        call vol_even_ft%kill
+        call vol_odd_ft%kill
         deallocate(dmat_tmp, dmat_cand)
         call release_nu_smooth_norm()
     end subroutine setup_nu_dmats
@@ -200,6 +199,8 @@ contains
         integer, allocatable :: sel(:)
         real,    allocatable :: lvl(:,:), full(:,:,:), tmp(:,:,:)
         real    :: lp_level
+        integer(timer_int_kind) :: t0
+        if( L_BENCH_GLOB ) t0 = tic()
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -265,6 +266,7 @@ contains
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
         call clamp_nu_filtmap_labels(n_base)
+        if( L_BENCH_GLOB ) nu_rt_optimise = nu_rt_optimise + toc(t0)
         ! the unary bank stays allocated for build_nu_evidence_state; nu_filter_vols releases it
     end subroutine optimize_nu_cutoff_finds
 

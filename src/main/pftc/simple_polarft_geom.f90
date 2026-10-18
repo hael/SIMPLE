@@ -14,14 +14,15 @@ contains
         shmat = cmplx(self%heap_vars(ithr)%shmat_8)
     end subroutine gen_shmat
 
-    !>  Generate polar shift matrix by means of de Moivre's formula
+    !>  Generate polar shift matrix by means of de Moivre's formula, for alignment: only the searched shells
+    !>  [kfromto(1);kfromto(2)] are set, the only ones its consumers read
     module subroutine gen_shmat4aln(self, ithr, shift, shmat)
         class(polarft_calc),  intent(inout) :: self
         integer,              intent(in)    :: ithr
         real(sp),             intent(in)    :: shift(2)
         complex(sp), pointer, intent(inout) :: shmat(:,:)
         call self%gen_shmat4aln_8(ithr, real(shift,dp), self%heap_vars(ithr)%shmat_8)
-        shmat = cmplx(self%heap_vars(ithr)%shmat_8)
+        shmat(:,self%kfromto(1):self%kfromto(2)) = cmplx(self%heap_vars(ithr)%shmat_8(:,self%kfromto(1):self%kfromto(2)))
     end subroutine gen_shmat4aln
 
     !>  Generate polar shift matrix by means of de Moivre's formula, double precision
@@ -91,20 +92,6 @@ contains
         call self%gen_shmat(ithr, shvec, shmat)
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
     end subroutine shift_ptcl
-
-    module subroutine shift_ref( self, iref, shvec)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref
-        real(sp),            intent(in)    :: shvec(2)
-        complex(dp), pointer :: shmat(:,:)
-        integer :: ithr, ieo
-        ithr = omp_get_thread_num() + 1
-        shmat => self%heap_vars(ithr)%shmat_8
-        call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
-        do ieo = REF_EVEN, REF_ODD
-            self%pfts_refs(:,:,iref,ieo) = cmplx(dcmplx(self%pfts_refs(:,:,iref,ieo)) * shmat)
-        enddo
-    end subroutine shift_ref
 
     ! mirror pft about h (mirror about y of cartesian image)
     module pure subroutine mirror_ref_pft_1( self, pft, pftm )

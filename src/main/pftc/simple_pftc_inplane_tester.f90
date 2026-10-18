@@ -18,6 +18,7 @@ use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_test_utils
 use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite, ieee_value, ieee_quiet_nan
 use, intrinsic :: iso_fortran_env,  only: int64
+!$ use omp_lib
 implicit none
 private
 public :: run_all_pftc_inplane_tests
@@ -69,6 +70,10 @@ contains
         call test_grid_fit_search()
         call test_particle_bank()
         call test_grid_ptcl_search()
+        call test_shmat_searched_shells()
+        call test_search_threads()
+        call test_loaded_reference()
+        call test_likelihood_threads()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
 
@@ -97,13 +102,15 @@ contains
         call vol%kill()
     end subroutine write_phantom
 
-    !> reference at e3 = 0 and one particle at (truth_angle, shift) from the phantom
-    subroutine build_fixture( b, p, objfun, lp, truth_angle, shift, hard_edge )
+    !> reference at e3 = 0 and one particle at (truth_angle, shift) from the phantom; with nrefs, references 2..nrefs
+    !! are the phantom's projections along the other directions of the spiral
+    subroutine build_fixture( b, p, objfun, lp, truth_angle, shift, hard_edge, nrefs, nthr )
         type(builder),    target, intent(inout) :: b
         type(parameters), target, intent(inout) :: p
         integer,                  intent(in)    :: objfun
         real,                     intent(in)    :: lp, truth_angle, shift(2)
         logical,                  intent(in)    :: hard_edge
+        integer,        optional, intent(in)    :: nrefs, nthr
         type(cmdline) :: cline
         type(ori)     :: o_ref, o_particle
         call cline%set('vol1',    PHANTOM_FILE)
@@ -115,6 +122,8 @@ contains
         ! the smallest even projection-direction count (build_refspiral needs an even
         ! nspace); vol_pad2ref_pfts fills nspace references, the fixture uses the first
         call cline%set('nspace',  2)
+        if( present(nrefs) ) call cline%set('nspace', nrefs)
+        if( present(nthr)  ) call cline%set('nthr',   nthr)
         call cline%set('ctf',     'no')
         select case(objfun)
             case(OBJ_EUCLID)
@@ -843,5 +852,200 @@ contains
         end subroutine grid_ptcl_case
 
     end subroutine test_grid_ptcl_search
+
+    ! ---- exact checks of the identical speed changes ---------------------------
+
+    !> the alignment shift matrix holds only the searched shells: the scores are the same, bit for bit, whatever the
+    !! shells above kfromto(2) hold (shift_ptcl fills them with another shift; the searched shells are then reset)
+    subroutine test_shmat_searched_shells()
+        type(builder),    target :: b
+        type(parameters), target :: p
+        complex(sp), allocatable :: pft(:,:), pft_full(:,:)
+        real(sp),    allocatable :: v1(:), v2(:)
+        integer :: iobj, ish, nrots, kfromto(2), ndiff
+        write(*,'(A)') 'test_shmat_searched_shells'
+        do iobj = OBJ_EUCLID, OBJ_CC
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
+            nrots   = b%pftc%get_nrots()
+            kfromto = b%pftc%get_kfromto()
+            allocate(v1(nrots), v2(nrots), pft(b%pftc%get_pftsz(),kfromto(1):kfromto(2)))
+            pft_full = b%pftc%allocate_ptcl_pft()
+            call b%pftc%get_ptcl_pft(1, pft)
+            pft_full(:,kfromto(1):kfromto(2)) = pft
+            ndiff = 0
+            do ish = 1,size(PROBE_SHIFTS,2)
+                call reset_particle
+                call b%pftc%gen_objfun_vals(1, 1, real(PROBE_SHIFTS(:,ish),sp), v1)
+                call b%pftc%shift_ptcl(1, [3.1, -2.7] * real(ish))
+                call reset_particle
+                call b%pftc%gen_objfun_vals(1, 1, real(PROBE_SHIFTS(:,ish),sp), v2)
+                ndiff = ndiff + count(v1 /= v2)
+            enddo
+            call assert_int(0, ndiff, 'the scores do not depend on the shells above the searched band (exact)')
+            deallocate(v1, v2, pft, pft_full)
+            call kill_fixture(b)
+        enddo
+
+    contains
+
+        !> the searched shells back, nothing above them, and the particle memoised afresh
+        subroutine reset_particle
+            call b%pftc%set_ptcl_pft(1, pft_full)
+            call b%pftc%memoize_ptcls
+        end subroutine reset_particle
+
+    end subroutine test_shmat_searched_shells
+
+    !> the evaluations of the shift search with the reference loaded once equal those that copy it every time, exactly,
+    !! also when other evaluations (which overwrite the copying route's buffer) come in between
+    subroutine test_loaded_reference()
+        integer, parameter :: NREFS_LR = 6
+        type(builder),    target :: b
+        type(parameters), target :: p
+        real(sp), allocatable :: vals(:)
+        real(dp) :: f_load, f_copy, g_load(2), g_copy(2), c_load, c_copy
+        integer  :: iobj, iref, ish, irot, nrots, ndiff
+        write(*,'(A)') 'test_loaded_reference'
+        do iobj = OBJ_EUCLID, OBJ_CC
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_LR)
+            nrots = b%pftc%get_nrots()
+            allocate(vals(nrots))
+            ndiff = 0
+            do iref = 1,NREFS_LR
+                call b%pftc%load_ref_aln_8(iref, 1)
+                do ish = 1,size(PROBE_SHIFTS,2)
+                    do irot = 1,nrots,7
+                        ! evaluations of another reference in between
+                        call b%pftc%gen_objfun_vals(mod(iref,NREFS_LR)+1, 1, real(PROBE_SHIFTS(:,ish),sp), vals)
+                        c_copy = b%pftc%gen_corr_for_rot_8(mod(iref,NREFS_LR)+1, 1, PROBE_SHIFTS(:,ish), irot)
+                        c_load = b%pftc%gen_corr_for_rot_8_aln(1, PROBE_SHIFTS(:,ish), irot)
+                        c_copy = b%pftc%gen_corr_for_rot_8(iref, 1, PROBE_SHIFTS(:,ish), irot)
+                        call b%pftc%gen_corr_grad_for_rot_8_aln(1, PROBE_SHIFTS(:,ish), irot, f_load, g_load)
+                        call b%pftc%gen_corr_grad_for_rot_8(iref, 1, PROBE_SHIFTS(:,ish), irot, f_copy, g_copy)
+                        if( c_load /= c_copy .or. f_load /= f_copy .or. any(g_load /= g_copy) ) ndiff = ndiff + 1
+                    enddo
+                enddo
+            enddo
+            call assert_int(0, ndiff, 'the loaded reference evaluates exactly as the copied one')
+            deallocate(vals)
+            call kill_fixture(b)
+        enddo
+    end subroutine test_loaded_reference
+
+    !> the likelihood scores of the table fill (shifted reference and particle bank) over 24 references, euclid and cc,
+    !! at one thread and at four: the same distance, score and rotation, bit for bit (one sample: the draw is the best)
+    subroutine test_likelihood_threads()
+        integer, parameter :: NREFS_LT = 24
+        type(builder),    target :: b
+        type(parameters), target :: p
+        complex(sp), allocatable :: bank(:,:)
+        real(sp),    allocatable :: res1(:,:), res4(:,:)
+        integer :: iobj, nthr_prev, kfromto(2)
+        write(*,'(A)') 'test_likelihood_threads'
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        allocate(res1(6,NREFS_LT), res4(6,NREFS_LT))
+        do iobj = OBJ_EUCLID, OBJ_CC
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_LT, nthr=4)
+            kfromto = b%pftc%get_kfromto()
+            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1))
+            call b%pftc%memoize_shifted_ptcl(1, [0.7, -0.4], bank)
+            !$ call omp_set_num_threads(1)
+            call score_refs(res1)
+            !$ call omp_set_num_threads(4)
+            call score_refs(res4)
+            !$ call omp_set_num_threads(nthr_prev)
+            call assert_int(0, count(transfer(res1,0,size(res1)) /= transfer(res4,0,size(res4))), &
+                &'the likelihood scores at four threads equal those at one, bit for bit')
+            deallocate(bank)
+            call kill_fixture(b)
+        enddo
+        nthr_glob = nthr_prev
+
+    contains
+
+        subroutine score_refs( res )
+            real(sp), intent(out) :: res(:,:)
+            real(sp) :: pvec(b%pftc%get_nrots()), dist, corr
+            integer  :: inds(b%pftc%get_nrots()), iref, irot
+            !$omp parallel do default(shared) private(iref,pvec,inds,dist,corr,irot) schedule(dynamic)
+            do iref = 1,NREFS_LT
+                call b%pftc%gen_likelihood_val(iref, 1, [1.1, -0.6], 1, dist, corr, irot, pvec, inds)
+                res(1:3,iref) = [dist, corr, real(irot)]
+                call b%pftc%gen_likelihood_val_bank(iref, 1, bank, 1, dist, corr, irot, pvec, inds)
+                res(4:6,iref) = [dist, corr, real(irot)]
+            enddo
+            !$omp end parallel do
+        end subroutine score_refs
+
+    end subroutine test_likelihood_threads
+
+    !> the alternating shift search (as the probabilistic tables run it) over 24 references and three start shifts,
+    !! euclid and cc, at one thread and at four: every result bit for bit the same
+    subroutine test_search_threads()
+        integer,  parameter :: NREFS_TH = 24, NSTARTS = 3
+        real,     parameter :: STARTS(2,NSTARTS) = reshape([0.,0., 1.5,-1., -2.,0.5], [2,NSTARTS])
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(pftc_shsrch_grad), allocatable :: srch(:)
+        real,    allocatable :: cxy1(:,:,:), cxy4(:,:,:)
+        integer, allocatable :: irot1(:,:), irot4(:,:)
+        real    :: limits(2,2), lims_init(2,2)
+        integer :: iobj, nthr_prev, ithr
+        write(*,'(A)') 'test_search_threads'
+        limits(:,1)    = -TRS
+        limits(:,2)    =  TRS
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        allocate(srch(4), cxy1(3,NSTARTS,NREFS_TH), cxy4(3,NSTARTS,NREFS_TH), irot1(NSTARTS,NREFS_TH), irot4(NSTARTS,NREFS_TH))
+        do iobj = OBJ_EUCLID, OBJ_CC
+            ! the pftc's per-thread work arrays are made for four threads
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_TH, nthr=4)
+            do ithr = 1,4
+                call srch(ithr)%new_alternating(b, limits, lims_init=lims_init, maxits=p%maxits_sh, coarse_init=.true.)
+            enddo
+            !$ call omp_set_num_threads(1)
+            call run_searches(cxy1, irot1)
+            !$ call omp_set_num_threads(4)
+            call run_searches(cxy4, irot4)
+            !$ call omp_set_num_threads(nthr_prev)
+            call assert_int(0, count(irot1 /= irot4) + count(transfer(cxy1,0,size(cxy1)) /= transfer(cxy4,0,size(cxy4))), &
+                &'the shift searches at four threads equal those at one, bit for bit')
+            call assert_true(count(irot1 > 0) > NREFS_TH, 'the searches find solutions')
+            do ithr = 1,4
+                call srch(ithr)%kill
+            enddo
+            call kill_fixture(b)
+        enddo
+        nthr_glob = nthr_prev
+
+    contains
+
+        subroutine run_searches( cxy, irot )
+            real,    intent(out) :: cxy(:,:,:)
+            integer, intent(out) :: irot(:,:)
+            integer :: iref, istart, ith
+            cxy = 0.
+            !$omp parallel do default(shared) private(iref,istart,ith) schedule(dynamic)
+            do iref = 1,NREFS_TH
+                ith = 1
+                !$ ith = omp_get_thread_num() + 1
+                call srch(ith)%set_indices(iref, 1)
+                do istart = 1,NSTARTS
+                    irot(istart,iref) = 1
+                    if( istart == 1 )then
+                        cxy(:,istart,iref) = srch(ith)%minimize(irot(istart,iref), sh_rot=.true.)
+                    else
+                        cxy(:,istart,iref) = srch(ith)%minimize(irot(istart,iref), sh_rot=.true., xy_in=STARTS(:,istart))
+                    endif
+                    if( irot(istart,iref) == 0 ) cxy(:,istart,iref) = 0.
+                enddo
+            enddo
+            !$omp end parallel do
+        end subroutine run_searches
+
+    end subroutine test_search_threads
 
 end module simple_pftc_inplane_tester

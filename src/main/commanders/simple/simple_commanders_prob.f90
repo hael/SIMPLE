@@ -4,7 +4,7 @@ use simple_commanders_api
 use simple_pftc_srch_api
 use simple_eo_partition, only: ensure_field_halves
 implicit none
-private :: write_empty_prob_tab, write_prob_tab_bench, write_prob_align_bench
+private :: write_empty_prob_tab, write_prob_tab_bench, write_prob_align_bench, run_prob_align, run_prob_align_neigh
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_prob_tab
@@ -19,12 +19,14 @@ end type commander_prob_tab_neigh
 
 type, extends(commander_base) :: commander_prob_align
   contains
-    procedure :: execute      => exec_prob_align
+    procedure :: execute              => exec_prob_align
+    procedure :: execute_from_project => exec_prob_align_from_project
 end type commander_prob_align
 
 type, extends(commander_base) :: commander_prob_align_neigh
     contains
-        procedure :: execute      => exec_prob_align_neigh
+        procedure :: execute              => exec_prob_align_neigh
+        procedure :: execute_from_project => exec_prob_align_neigh_from_project
 end type commander_prob_align_neigh
 
 type, extends(commander_base) :: commander_prob_tab2D
@@ -81,7 +83,7 @@ contains
         if( nptcls < 1 )then
             ! a partition without sampled particles (state-0 rows only, e.g. the
             ! frozen rows of solve3D_addon) contributes an empty table
-            call write_empty_prob_tab(params, build, pinds, fname)
+            call write_empty_prob_tab(params, build, pinds, fname, eulprob_obj_part)
             call build%kill_general_tbox
             call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_tab'))
             call simple_end('**** SIMPLE_PROB_TAB NORMAL STOP ****', print_simple=.false.)
@@ -178,7 +180,7 @@ contains
         fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(params%part,params%numlen)//'.dat'
         if( nptcls < 1 )then
             ! a partition without sampled particles contributes an empty table
-            call write_empty_prob_tab(params, build, pinds, fname)
+            call write_empty_prob_tab(params, build, pinds, fname, eulprob_obj_part_neigh)
         else
             ! All neighborhood modes can fill the table in matcher-sized batches; this
             ! caps particle-image/PFT memo memory without changing assignment ownership.
@@ -256,11 +258,25 @@ contains
 
 
     subroutine exec_prob_align( self, cline )
+        class(commander_prob_align), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        call run_prob_align(cline)
+    end subroutine exec_prob_align
+
+    !> prob_align with the caller's project of projfile in memory, read and unchanged since: copied, not read again
+    subroutine exec_prob_align_from_project( self, cline, spproj )
+        class(commander_prob_align), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        class(sp_project),           intent(in)    :: spproj
+        call run_prob_align(cline, spproj)
+    end subroutine exec_prob_align_from_project
+
+    subroutine run_prob_align( cline, spproj_src )
         use simple_eul_prob_tab,            only: eul_prob_tab
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
-        class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
+        class(sp_project), optional, intent(in)    :: spproj_src
         integer,     allocatable :: pinds(:)
         type(string)             :: fname
         type(builder)            :: build
@@ -270,13 +286,13 @@ contains
         type(cmdline)            :: cline_prob_tab
         type(qsys_env)           :: qenv
         type(chash)              :: job_descr
-        integer :: nptcls, ipart
+        integer :: nptcls
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write
         if( L_BENCH_GLOB ) t_tot = tic()
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false., spproj_src=spproj_src)
         if( L_BENCH_GLOB )then
             rt_setup = toc(t_tot)
             t        = tic()
@@ -321,11 +337,7 @@ contains
         ! Build the global table only after worker tables are complete.  Keeping it
         ! live while workers build dense partition tables roughly doubles peak RSS.
         call eulprob_obj_glob%new(params,build,pinds)
-        ! reading corrs from all parts
-        do ipart = 1, params%nparts
-            fname = string(DIST_FBODY)//int2str_pad(ipart,params%numlen)//'.dat'
-            call eulprob_obj_glob%read_tab_to_glob(fname)
-        enddo
+        call eulprob_obj_glob%read_tabs_to_glob(string(DIST_FBODY), params%nparts, params%numlen)
         if( L_BENCH_GLOB )then
             rt_read = toc(t)
             t       = tic()
@@ -350,14 +362,28 @@ contains
         call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_align'))
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_align
+    end subroutine run_prob_align
 
     subroutine exec_prob_align_neigh( self, cline )
+        class(commander_prob_align_neigh), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        call run_prob_align_neigh(cline)
+    end subroutine exec_prob_align_neigh
+
+    !> prob_align_neigh with the caller's project of projfile in memory, read and unchanged since: copied
+    subroutine exec_prob_align_neigh_from_project( self, cline, spproj )
+        class(commander_prob_align_neigh), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        class(sp_project),                 intent(in)    :: spproj
+        call run_prob_align_neigh(cline, spproj)
+    end subroutine exec_prob_align_neigh_from_project
+
+    subroutine run_prob_align_neigh( cline, spproj_src )
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
         use simple_builder,                 only: builder
-        class(commander_prob_align_neigh), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
+        class(sp_project), optional, intent(in)    :: spproj_src
         integer,           allocatable :: pinds(:)
         type(string)                   :: fname
         type(builder)                  :: build
@@ -373,7 +399,7 @@ contains
         if( L_BENCH_GLOB ) t_tot = tic()
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true., spproj_src=spproj_src)
         if( L_BENCH_GLOB )then
             rt_setup = toc(t_tot)
             t        = tic()
@@ -436,7 +462,7 @@ contains
         call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_align_neigh'))
         call qsys_cleanup(params)
         call simple_end('**** SIMPLE_PROB_ALIGN_NEIGH NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_prob_align_neigh
+    end subroutine run_prob_align_neigh
 
     subroutine exec_prob_tab2D( self, cline )
         use simple_matcher_smpl_and_lplims, only: set_bp_range2D
@@ -777,14 +803,14 @@ contains
 
     !> The table of a partition without sampled particles: the header, no
     !! candidates, so prob_align reads one table per partition. Written by the
-    !! plain table type, whose file format the neighbourhood tables share.
-    subroutine write_empty_prob_tab( params, build, pinds, fname )
+    !! table type of the caller (dense or neighbourhood), which owns the format.
+    subroutine write_empty_prob_tab( params, build, pinds, fname, tab )
         use simple_eul_prob_tab, only: eul_prob_tab
-        class(parameters), intent(in) :: params
-        class(builder),    intent(in) :: build
-        integer,           intent(in) :: pinds(:)
-        class(string),     intent(in) :: fname
-        type(eul_prob_tab) :: tab
+        class(parameters),   intent(in)    :: params
+        class(builder),      intent(in)    :: build
+        integer,             intent(in)    :: pinds(:)
+        class(string),       intent(in)    :: fname
+        class(eul_prob_tab), intent(inout) :: tab
         call tab%new_worker(params, build, pinds)
         call tab%begin_write(fname)
         call tab%write_tab(fname)

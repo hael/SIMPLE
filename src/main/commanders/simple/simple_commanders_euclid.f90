@@ -6,6 +6,7 @@ use simple_sigma2_state, only: sigma2_state_candidate_path, sigma2_state_assembl
     &sigma2_state_range_path, sigma2_state_next_generation
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, sigma2_state_publish
 implicit none
+private :: run_commit_sigma2
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_calc_pspec
@@ -15,7 +16,8 @@ end type commander_calc_pspec
 
 type, extends(commander_base) :: commander_commit_sigma2
   contains
-    procedure :: execute      => exec_commit_sigma2
+    procedure :: execute              => exec_commit_sigma2
+    procedure :: execute_from_project => exec_commit_sigma2_from_project
 end type commander_commit_sigma2
 
 contains
@@ -43,12 +45,26 @@ contains
 
     subroutine exec_commit_sigma2( self, cline )
         class(commander_commit_sigma2), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
+        call run_commit_sigma2(cline)
+    end subroutine exec_commit_sigma2
+
+    !> the commit with the caller's project of projfile in memory, as the file holds it: copied, not read again
+    subroutine exec_commit_sigma2_from_project( self, cline, spproj )
+        class(commander_commit_sigma2), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        class(sp_project),              intent(in)    :: spproj
+        call run_commit_sigma2(cline, spproj)
+    end subroutine exec_commit_sigma2_from_project
+
+    subroutine run_commit_sigma2( cline, spproj_src )
+        class(cmdline),              intent(inout) :: cline
+        class(sp_project), optional, intent(in)    :: spproj_src
         type(parameters)      :: params
         type(builder)         :: build
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,spproj_src=spproj_src)
         call consolidate_canonical
         ! cleanup
         call build%kill_general_tbox
@@ -142,6 +158,6 @@ contains
             call fclose(fnr)
         end subroutine write_commit_bench
 
-    end subroutine exec_commit_sigma2
+    end subroutine run_commit_sigma2
 
 end module simple_commanders_euclid

@@ -13,8 +13,9 @@ output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
     bench_records.csv     every value of every record, one row each (long table)
     bench_iterations.csv  one row per refine3D iteration: the strategy phases,
                           their critical-path split, the slowest and mean
-                          partition times, and the mean percentage of the
-                          search space scanned
+                          partition times, the mean percentage of the
+                          search space scanned, and the nonuniform filter's
+                          split in volume assembly
     bench_report.txt      the run, the time split by stage, the overheads, the
                           load balance, the outlier iterations, the share of the 2D
                           tables in the refine2D iterations, the probability
@@ -311,9 +312,15 @@ def build_iterations(records: Sequence[Record]) -> List[Iteration]:
                     row.extra[f"{name}_nparts"] = stats[it]
         if it in volassemble:
             row.extra["volassemble_nu_filter"] = volassemble[it].seconds.get("volassemble nonuniform_filter", 0.0)
+            for key, label in NU_SPLIT:
+                row.extra[f"volassemble_nu_{key}"] = volassemble[it].seconds.get(f"volassemble nu filter {label}", 0.0)
         rows.append(row)
     return rows
 
+
+# the nonuniform filter's split in the volassemble report (column suffix, report label)
+NU_SPLIT = (("candidate_filter", "candidate filter"), ("objective", "objective"), ("optimisation", "optimisation"),
+            ("composition", "composition"))
 
 ITERATION_COLUMNS = (
     ["iteration", "refine_mode", "nspace", "kto", "strategy_total_s"]
@@ -322,6 +329,7 @@ ITERATION_COLUMNS = (
     + [f"{name}_{stat}_s" for name in ("tables", "fill", "worker", "rec3D", "sigma2_write")
        for stat in ("max", "mean", "min")]
     + ["nparts", "volassemble_nu_filter_s", "search_space_scanned_pct"]
+    + [f"volassemble_nu_{key}_s" for key, _ in NU_SPLIT]
 )
 
 
@@ -340,6 +348,7 @@ def write_iterations_csv(rows: Sequence[Iteration], outpath: Path) -> None:
             nparts = int(row.extra.get("worker_nparts", row.extra.get("tables_nparts", 0)))
             values += [nparts or "", f"{row.extra.get('volassemble_nu_filter', 0.0):.3f}",
                        "" if row.scan is None else f"{row.scan:.3f}"]
+            values += [f"{row.extra.get(f'volassemble_nu_{key}', 0.0):.3f}" for key, _ in NU_SPLIT]
             writer.writerow(values)
 
 

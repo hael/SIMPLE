@@ -127,13 +127,14 @@ contains
         call self%build_spproj(params, cline)
     end subroutine init_params_and_build_spproj
 
-    subroutine init_params_and_build_general_tbox( self, cline, params, do3d )
-        class(builder),    target, intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        class(parameters),         intent(inout) :: params
-        logical,         optional, intent(in)    :: do3d
+    subroutine init_params_and_build_general_tbox( self, cline, params, do3d, spproj_src )
+        class(builder),    target,   intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        class(parameters),           intent(inout) :: params
+        logical,           optional, intent(in)    :: do3d
+        class(sp_project), optional, intent(in)    :: spproj_src !< the project of projfile in memory (see build_spproj)
         call params%new(cline)
-        call self%build_spproj(params, cline)
+        call self%build_spproj(params, cline, spproj_src=spproj_src)
         call self%build_general_tbox(params, cline, do3d=do3d)
     end subroutine init_params_and_build_general_tbox
 
@@ -160,12 +161,15 @@ contains
 
     ! LOW-LEVEL BUILDERS
 
-    subroutine build_spproj( self, params, cline, wthreads )
+    !> spproj_src: the caller's project as read from params%projfile and unchanged since; it is copied instead of
+    !! read again (a copy is several times faster than the read of a large project)
+    subroutine build_spproj( self, params, cline, wthreads, spproj_src )
         use simple_ui, only: get_prg_ptr
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
-        class(cmdline),         intent(inout) :: cline
-        logical,      optional, intent(in)    :: wthreads
+        class(builder),    target,   intent(inout) :: self
+        class(parameters),           intent(inout) :: params
+        class(cmdline),              intent(inout) :: cline
+        logical,           optional, intent(in)    :: wthreads
+        class(sp_project), optional, intent(in)    :: spproj_src
         type(string) :: projdir
         logical      :: read_spproj
         ! create object for orientations
@@ -194,7 +198,11 @@ contains
             if( cline%defined('projfile') ) read_spproj = .true.
         endif
         if( read_spproj )then
-            call self%spproj%read(params%projfile, wthreads=wthreads)
+            if( present(spproj_src) )then
+                call self%spproj%copy(spproj_src)
+            else
+                call self%spproj%read(params%projfile, wthreads=wthreads)
+            endif
             ! the project file's directory, as update_projinfo stashes it: a registered sigma2 state
             ! resolves against it also when the project is addressed from another directory
             projdir = stemname(simple_abspath(params%projfile, check_exists=.false.))

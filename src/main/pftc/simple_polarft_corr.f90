@@ -1,7 +1,7 @@
 !@descr: polarft class submodule for objective function evaluations
 submodule (simple_polarft_calc) simple_polarft_corr
 use simple_defs, only: DTWOPI
-use simple_eul_prob_tab_utils, only: sample_bounded_dist, sample_likelihood_dist, sample_power_dist
+use simple_eul_prob_tab_utils, only: sample_bounded_dist, sample_likelihood_dists, sample_power_dist
 #include "simple_local_flags.inc"
 implicit none
 
@@ -416,20 +416,45 @@ contains
         integer,                     intent(out)   :: irot
         real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
         integer,                     intent(inout) :: sorted_inds(self%nrots)
-        real(sp) :: scores(self%nrots)
-        call self%gen_corrs(iref, iptcl, shift, scores)
-        call sample_likelihood_dist(self%nrots, cc_dist_at_rot, nsample, dist, corr, irot,&
-            &pvec_sorted, sorted_inds)
-        corr = max(0., min(1., scores(irot)))
-
-    contains
-
-        real function cc_dist_at_rot(p_loc) result(dist_loc)
-            integer, intent(in) :: p_loc
-            dist_loc = 1. - max(0., min(1., scores(p_loc)))
-        end function cc_dist_at_rot
-
+        integer :: ithr
+        ithr = omp_get_thread_num() + 1
+        call self%gen_corrs(iref, iptcl, shift, self%heap_vars(ithr)%rot_scores)
+        call sample_cc_scores(self, ithr, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
     end subroutine gen_prob_likelihood_cc_val
+
+    !> the likelihood draw over the cc scores of the calling thread's buffer: distance 1 - cc, cc clamped to [0,1]
+    subroutine sample_cc_scores( self, ithr, nsample, dist, corr, irot, pvec_sorted, sorted_inds )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: ithr, nsample
+        real(sp),            intent(out)   :: dist, corr
+        integer,             intent(out)   :: irot
+        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
+        integer,             intent(inout) :: sorted_inds(self%nrots)
+        integer :: p
+        do p = 1,self%nrots
+            self%heap_vars(ithr)%rot_dists(p) = 1. - max(0., min(1., self%heap_vars(ithr)%rot_scores(p)))
+        enddo
+        call sample_likelihood_dists(self%nrots, self%heap_vars(ithr)%rot_dists, nsample, dist, corr, irot,&
+            &pvec_sorted, sorted_inds, self%heap_vars(ithr)%rot_cdf)
+        corr = max(0., min(1., self%heap_vars(ithr)%rot_scores(irot)))
+    end subroutine sample_cc_scores
+
+    !> the likelihood draw over the Euclidean distances of the calling thread's crvec1 (gen_euclid_crvec)
+    subroutine sample_euclid_crvec( self, ithr, norm, nsample, dist, corr, irot, pvec_sorted, sorted_inds )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: ithr, nsample
+        real(dp),            intent(in)    :: norm
+        real(sp),            intent(out)   :: dist, corr
+        integer,             intent(out)   :: irot
+        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
+        integer,             intent(inout) :: sorted_inds(self%nrots)
+        integer :: p
+        do p = 1,self%nrots
+            self%heap_vars(ithr)%rot_dists(p) = euclid_dist_from_crvec(self, ithr, p, norm)
+        enddo
+        call sample_likelihood_dists(self%nrots, self%heap_vars(ithr)%rot_dists, nsample, dist, corr, irot,&
+            &pvec_sorted, sorted_inds, self%heap_vars(ithr)%rot_cdf)
+    end subroutine sample_euclid_crvec
 
     module subroutine gen_prob_likelihood_euclid_val( self, iref, iptcl, shift, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds )
@@ -443,16 +468,7 @@ contains
         real(dp) :: norm
         integer  :: ithr
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        call sample_likelihood_dist(self%nrots, euclid_dist_at_rot, nsample, dist, corr, irot,&
-            &pvec_sorted, sorted_inds)
-
-    contains
-
-        real function euclid_dist_at_rot(p_loc) result(dist_loc)
-            integer, intent(in) :: p_loc
-            dist_loc = euclid_dist_from_crvec(self, ithr, p_loc, norm)
-        end function euclid_dist_at_rot
-
+        call sample_euclid_crvec(self, ithr, norm, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
     end subroutine gen_prob_likelihood_euclid_val
 
     module subroutine gen_prob_power_euclid_val( self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
@@ -573,33 +589,17 @@ contains
         integer,             intent(out)   :: irot
         real(sp),            intent(inout) :: pvec_sorted(self%nrots)
         integer,             intent(inout) :: sorted_inds(self%nrots)
-        real(sp) :: scores(self%nrots)
         real(dp) :: norm
         integer  :: ithr
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
-                call gen_corrs_bank(self, iref, iptcl, bank, scores)
-                call sample_likelihood_dist(self%nrots, cc_dist_at_rot, nsample, dist, corr, irot,&
-                    &pvec_sorted, sorted_inds)
-                corr = max(0., min(1., scores(irot)))
+                ithr = omp_get_thread_num() + 1
+                call gen_corrs_bank(self, iref, iptcl, bank, self%heap_vars(ithr)%rot_scores)
+                call sample_cc_scores(self, ithr, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
             case(OBJFUN_EUCLID)
                 call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr)
-                call sample_likelihood_dist(self%nrots, euclid_dist_at_rot, nsample, dist, corr, irot,&
-                    &pvec_sorted, sorted_inds)
+                call sample_euclid_crvec(self, ithr, norm, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
         end select
-
-    contains
-
-        real function cc_dist_at_rot(p_loc) result(dist_loc)
-            integer, intent(in) :: p_loc
-            dist_loc = 1. - max(0., min(1., scores(p_loc)))
-        end function cc_dist_at_rot
-
-        real function euclid_dist_at_rot(p_loc) result(dist_loc)
-            integer, intent(in) :: p_loc
-            dist_loc = euclid_dist_from_crvec(self, ithr, p_loc, norm)
-        end function euclid_dist_at_rot
-
     end subroutine gen_likelihood_val_bank
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
@@ -1381,27 +1381,48 @@ contains
         dval = dval - frequency * aimag(z)
     end subroutine eval_series_at_rotind
 
-    module subroutine gen_corr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
-        real(dp),                    intent(out)   :: grad(2)
-        complex(dp), pointer :: pft_ref_8(:,:)
-        real(dp) :: f
-        integer  :: ithr, i, ieo
-        i    = self%pinds(iptcl)
+    !> copies reference iref, of the parity of particle iptcl, to the calling thread's buffer of the shift search:
+    !! the reference is fixed during one minimisation and the copy to double precision is exact
+    module subroutine load_ref_aln_8( self, iref, iptcl )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        integer :: ithr, ieo
         ithr = omp_get_thread_num() + 1
-        pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
-        ieo       = merge(REF_EVEN, REF_ODD, self%iseven(i))
-        pft_ref_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+        ieo  = merge(REF_EVEN, REF_ODD, self%iseven(self%pinds(iptcl)))
+        self%heap_vars(ithr)%pft_ref_aln_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+    end subroutine load_ref_aln_8
+
+    !> gen_corr_for_rot_8 with the reference load_ref_aln_8 holds
+    module real(dp) function gen_corr_for_rot_8_aln( self, iptcl, shvec, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        complex(dp), pointer :: pft_ref_8(:,:)
+        pft_ref_8 => self%heap_vars(omp_get_thread_num() + 1)%pft_ref_aln_8
+        gen_corr_for_rot_8_aln = 0.d0
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
-                call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, i, shvec, irot, f, grad)
+                gen_corr_for_rot_8_aln = self%gen_corr_cc_for_rot_8_2(pft_ref_8, self%pinds(iptcl), shvec, irot)
             case(OBJFUN_EUCLID)
-                call self%gen_corr_grad_for_rot_8(iref, iptcl, shvec, irot, f, grad)
+                gen_corr_for_rot_8_aln = self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot)
         end select
-    end subroutine gen_corr_grad_only_for_rot_8
+    end function gen_corr_for_rot_8_aln
+
+    !> gen_corr_grad_for_rot_8 with the reference load_ref_aln_8 holds
+    module subroutine gen_corr_grad_for_rot_8_aln( self, iptcl, shvec, irot, f, grad )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: f, grad(2)
+        complex(dp), pointer :: pft_ref_8(:,:)
+        pft_ref_8 => self%heap_vars(omp_get_thread_num() + 1)%pft_ref_aln_8
+        select case(self%p_ptr%cc_objfun)
+            case(OBJFUN_CC)
+                call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, self%pinds(iptcl), shvec, irot, f, grad)
+            case(OBJFUN_EUCLID)
+                call self%gen_euclid_grad_for_rot_8(pft_ref_8, iptcl, shvec, irot, f, grad)
+        end select
+    end subroutine gen_corr_grad_for_rot_8_aln
 
     !> Evaluation of sigma2 noise particle contribution
     !> Optional scale diagnostics at the SAME orientation (see

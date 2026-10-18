@@ -13,7 +13,7 @@ use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_
     &NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
     &get_nu_filter_bank_finest_lp, &
     &write_nu_local_resolution_map, write_nu_evidence_envmask, &
-    &set_nu_evidence_null_shell, set_nu_solvent_envelope
+    &set_nu_evidence_null_shell, set_nu_solvent_envelope, get_nu_filter_timings
 implicit none
 
 public :: nonuniform_filter_state, nu_state_filter_timings, nu_aux_member
@@ -21,8 +21,13 @@ private
 #include "simple_local_flags.inc"
 
 type nu_state_filter_timings
-    real(timer_int_kind) :: envmask = 0.
-    real(timer_int_kind) :: filter  = 0.
+    real(timer_int_kind) :: envmask   = 0.
+    real(timer_int_kind) :: filter    = 0.
+    ! the filter's own split (simple_nu_filter, get_nu_filter_timings)
+    real(timer_int_kind) :: filtering = 0.
+    real(timer_int_kind) :: objective = 0.
+    real(timer_int_kind) :: optimise  = 0.
+    real(timer_int_kind) :: compose   = 0.
 end type nu_state_filter_timings
 
 contains
@@ -134,8 +139,6 @@ contains
         call vol_aux_even%kill
         call vol_aux_odd%kill
         call optimize_nu_cutoff_finds()
-        call vol_base_even%kill
-        call vol_base_odd%kill
         l_apply = present(vol_apply_even) .and. present(vol_apply_odd)
         if( present(vol_apply_even) .neqv. present(vol_apply_odd) ) &
             &THROW_HARD('an apply pair needs both halves; nonuniform_filter_state')
@@ -144,8 +147,11 @@ contains
             if( params%part == 1 ) write(logfhandle,'(A,I0,A)') '>>> NU REFERENCES: STATE ', state, &
                 &', LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR'
         else
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_base_even, vol_base_odd)
         endif
+        ! the base pair is filtered again by the composition: released only now
+        call vol_base_even%kill
+        call vol_base_odd%kill
         if( trim(params%automsk).ne.'no' )then
             ! The _nu_filt matching references carry the active envelope. In
             ! nu mode this is the current evidence mask, with density fallback.
@@ -163,10 +169,20 @@ contains
         call record_nu_alignment_lowpass_limit()
         call vol_even_nu%kill
         call vol_odd_nu%kill
+        if( L_BENCH_GLOB .and. present(timings) ) call add_filter_split()
         call cleanup_nu_filter()
         if( L_BENCH_GLOB .and. present(timings) ) timings%filter = timings%filter + toc(t_filter)
 
     contains
+
+        subroutine add_filter_split()
+            real(timer_int_kind) :: filtering, objective, optimise, compose
+            call get_nu_filter_timings(filtering, objective, optimise, compose)
+            timings%filtering = timings%filtering + filtering
+            timings%objective = timings%objective + objective
+            timings%optimise  = timings%optimise  + optimise
+            timings%compose   = timings%compose   + compose
+        end subroutine add_filter_split
 
         subroutine write_nonuniform_outputs()
             type(string) :: eonames_nu(2), volname_nu, locres_name

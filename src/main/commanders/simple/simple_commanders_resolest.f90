@@ -259,7 +259,7 @@ contains
                 call wait_for_closure(envmsk_out)
             endif
         endif
-        call nu_filter_vols(even_nu, odd_nu)
+        call nu_filter_vols(even_nu, odd_nu, even, odd)
         call print_nu_filtmap_lowpass_stats()
         if( NU_DEV_OUTPUT ) call analyze_filtmap_neighbor_continuity()
         call odd_nu%write(odd_out, del_if_exists=.true.)

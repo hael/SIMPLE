@@ -296,21 +296,33 @@ The current filter performs these steps:
 
 1. build a retained low-pass bank from the base even/odd pair
 2. optionally append an auxiliary pair as the last (finest) bank member
-3. cache low-pass-filtered bank volumes as local scratch files
-4. compute mask-packed unary objective costs for retained candidates
+3. filter each retained candidate pair from the Fourier transforms of the
+   edge-tapered input halves and compute its mask-packed unary objective
+   cost at once (no candidate volume is kept or written)
+4. compute the auxiliary pair's cost from the pair itself
 5. smooth each candidate objective over a mask-normalized local support
 6. select the label per in-mask voxel coarse to fine: a finer candidate
    replaces the incumbent only if it wins at its own smoothing scale with
    both smoothed alike (2026-09-08; see section 9)
 7. apply ordered-label Potts smoothing to the candidate map, which never
    promotes a voxel beyond the label it entered with
-8. synthesize filtered even/odd outputs from the selected labels
+8. synthesize filtered even/odd outputs from the selected labels: each half
+   of the source pair is filtered again per label, with the same taper,
+   transform and Butterworth filter as in step 3, so the composed voxels are
+   the candidates' exactly
 9. write the merged `_nu_filt` output as the even/odd average
 10. write the same-grid `_nu_locres` map
 
+There are no scratch files: the candidate pairs of earlier builds were
+written to disk in step 3 and read back in steps 4 and 8. Filtering again in
+the composition costs two inverse transforms per candidate, which was
+measured not slower than the reads (`nu_filt3D` on a box-300 pair, 9.9 s
+against 10.5 s, 2026-10-17); the caller keeps the source pair alive until the
+composition (`nonuniform_filter_state` releases the base pair after it).
+
 With `pcg_solvent=yes` (PCG) the label field is estimated on the
 prior-free base pair and APPLIED to the solvent-prior'd pair when the
-`_nu_filt` references are composed (`nu_filter_vols` apply pair,
+`_nu_filt` references are composed (`nu_filter_vols` source pair,
 2026-09-21): per-label Butterworth of the prior'd halves scattered by the
 field, the auxiliary label from the ML pair as always. The competition,
 its noise level (a solvent-dominated MAD the prior would collapse), the

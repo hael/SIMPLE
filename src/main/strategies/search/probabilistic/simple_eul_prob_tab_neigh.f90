@@ -6,7 +6,8 @@ use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch, &
-    &read_seed_shift_table, record_seed_shift, sample_likelihood_dist, prob_candidate, prob_candidate_store
+    &read_seed_shift_table, write_seed_shift_table, record_seed_shift, sample_likelihood_dist, prob_candidate, &
+    &prob_candidate_buffer, prob_candidate_store
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -24,13 +25,20 @@ integer, parameter :: MIN_STOCH_FINE_REFS = 5
 
 type, extends(eul_prob_tab) :: eul_prob_tab_neigh
     type(prob_candidate_store) :: candidate_store
-    integer, allocatable       :: candidate_fill_counts(:)
-    logical                    :: l_direct_stoch_neigh = .false.
+    type(prob_candidate_buffer), allocatable :: candidate_buffers(:) !< per thread, flushed to the part file
+    integer,        allocatable :: candidate_fill_counts(:)
+    integer,        allocatable :: cand_counts(:)                    !< candidates written per particle (part file)
+    integer(int64)              :: table_nnz     = 0_int64
+    integer                     :: table_nchunks = 0
+    logical                     :: l_direct_stoch_neigh = .false.
 contains
+    procedure :: new_worker     => new_neigh_worker
     procedure :: new_neigh
     procedure :: new_neigh_global
-    procedure :: fill_tab      => fill_tab_neigh
     procedure :: fill_tab_range => fill_tab_neigh_range
+    procedure :: begin_write
+    procedure :: write_tab
+    procedure :: flush_candidate_buffers
     procedure :: ref_assign    => ref_assign_neigh
     procedure :: kill          => kill_neigh
     procedure :: read_tabs_to_glob
@@ -70,12 +78,23 @@ end type coarse_search_ws
 
 contains
 
+    !> a part's table with its per-thread candidate buffers (an empty part needs no more)
+    subroutine new_neigh_worker( self, params, build, pinds )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(parameters), target, intent(in)    :: params
+        class(builder),    target, intent(in)    :: build
+        integer,                   intent(in)    :: pinds(:)
+        call self%kill
+        call self%eul_prob_tab%new_worker(params,build,pinds)
+        allocate(self%candidate_buffers(nthr_glob))
+    end subroutine new_neigh_worker
+
     subroutine new_neigh( self, params, build, pinds )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
-        call self%eul_prob_tab%new_worker(params,build,pinds)
+        call self%new_worker(params,build,pinds)
         call validate_neigh_mode(self)
     end subroutine new_neigh
 
@@ -107,12 +126,6 @@ contains
                 THROW_HARD('simple_eul_prob_tab_neigh::new_neigh; unsupported prob_neigh_mode')
         end select
     end subroutine validate_neigh_mode
-
-    ! Fills the full particle range by delegating to fill_tab_neigh_range(1, nptcls).
-    subroutine fill_tab_neigh( self )
-        class(eul_prob_tab_neigh), intent(inout) :: self
-        call self%fill_tab_range(1, self%nptcls)
-    end subroutine fill_tab_neigh
 
     ! Dispatches to the stochastic (shc/snhc) or subspace (geom/state) path
     subroutine fill_tab_neigh_range( self, i_first, i_last )
@@ -1132,6 +1145,79 @@ contains
 
     ! Table & Assignment I/O
 
+    ! The sparse part file: header (nrefs, nptcls, candidates, chunks), particle indices, candidate counts per
+    ! particle (they size the master's store without a scan of the stream), seed table, then the candidate chunks
+    subroutine begin_write( self, binfname )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(string),             intent(in)    :: binfname
+        integer        :: io_stat
+        integer(int64) :: file_header(4), addr
+        if( self%table_is_open ) THROW_HARD('probability candidate stream is already open')
+        if( .not. allocated(self%candidate_buffers) ) THROW_HARD('candidate stream requested without worker buffers')
+        file_header = [int(self%nrefs,int64),int(self%nptcls,int64),0_int64,0_int64]
+        call fopen(self%table_unit,binfname,access='STREAM',action='WRITE',status='REPLACE',iostat=io_stat)
+        call fileiochk('simple_eul_prob_tab_neigh; begin_write; file: '//binfname%to_char(),io_stat)
+        self%table_is_open = .true.
+        allocate(self%cand_counts(self%nptcls), source=0)
+        write(self%table_unit,pos=1) file_header
+        addr = sizeof(file_header) + 1
+        write(self%table_unit,pos=addr) self%pinds
+        addr = addr + sizeof(self%pinds)
+        write(self%table_unit,pos=addr) self%cand_counts
+        addr = addr + sizeof(self%cand_counts)
+        call write_seed_shift_table(self%table_unit,addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
+        self%table_addr    = addr
+        self%table_nnz     = 0
+        self%table_nchunks = 0
+    end subroutine begin_write
+
+    subroutine flush_candidate_buffers( self )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer :: ithr, nused, j, i_loc
+        if( .not. self%table_is_open ) return
+        do ithr = 1,size(self%candidate_buffers)
+            nused = self%candidate_buffers(ithr)%nused
+            if( nused < 1 ) cycle
+            do j = 1,nused
+                i_loc = self%candidate_buffers(ithr)%particle_indices(j)
+                self%cand_counts(i_loc) = self%cand_counts(i_loc) + 1
+            enddo
+            write(self%table_unit,pos=self%table_addr) nused
+            self%table_addr = self%table_addr + sizeof(nused)
+            write(self%table_unit,pos=self%table_addr) self%candidate_buffers(ithr)%particle_indices(1:nused)
+            self%table_addr = self%table_addr + sizeof(self%candidate_buffers(ithr)%particle_indices(1:nused))
+            write(self%table_unit,pos=self%table_addr) self%candidate_buffers(ithr)%candidates(1:nused)
+            self%table_addr = self%table_addr + sizeof(self%candidate_buffers(ithr)%candidates(1:nused))
+            self%table_nnz     = self%table_nnz + int(nused,int64)
+            self%table_nchunks = self%table_nchunks + 1
+            call self%candidate_buffers(ithr)%kill
+        enddo
+    end subroutine flush_candidate_buffers
+
+    ! Completes the sparse part file: the header, the candidate counts and the seed table
+    subroutine write_tab( self, binfname )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        class(string),             intent(in)    :: binfname
+        integer(int64) :: file_header(4), addr
+        if( .not. self%table_is_open ) call self%begin_write(binfname)
+        call self%flush_candidate_buffers
+        ! a partition without particles writes a table without candidates
+        if( self%table_nnz < 1 .and. self%nptcls > 0 ) THROW_HARD('eul_prob_tab_neigh%write_tab; empty candidate stream')
+        file_header = [int(self%nrefs,int64),int(self%nptcls,int64),self%table_nnz,int(self%table_nchunks,int64)]
+        write(self%table_unit,pos=1) file_header
+        addr = sizeof(file_header) + 1
+        write(self%table_unit,pos=addr) self%pinds
+        addr = addr + sizeof(self%pinds)
+        write(self%table_unit,pos=addr) self%cand_counts
+        addr = addr + sizeof(self%cand_counts)
+        call write_seed_shift_table(self%table_unit,addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
+        call fclose(self%table_unit)
+        deallocate(self%cand_counts)
+        self%table_unit    = -1
+        self%table_is_open = .false.
+        self%table_addr    = 1
+    end subroutine write_tab
+
     ! Reads one partition candidate stream into the compact global store.
     subroutine read_sparse_tab_to_glob( self, binfname )
         class(eul_prob_tab_neigh), intent(inout) :: self
@@ -1162,7 +1248,7 @@ contains
         allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
         read(funit, pos=addr) pinds_loc
-        addr = addr + sizeof(pinds_loc)
+        addr = addr + 2 * sizeof(pinds_loc)   ! the particle indices and the candidate counts
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
         if( nptcls_loc > 0 )then
             if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
@@ -1220,65 +1306,39 @@ contains
         deallocate(pinds_loc, seed_shifts_loc, seed_has_sh_loc, particle_indices, candidates_loc, pind2glob)
     end subroutine read_sparse_tab_to_glob
 
-    ! Aggregates nparts tables into the global table
+    ! Aggregates nparts tables into the global table: the candidate counts every part writes after its
+    ! particle indices size the store, then the parts' candidates are placed in file order
     subroutine read_tabs_to_glob( self, fbody, nparts, numlen )
         class(eul_prob_tab_neigh), intent(inout) :: self
         class(string),             intent(in)    :: fbody
         integer,                   intent(in)    :: nparts, numlen
         type(string) :: fname
-        integer, parameter :: IO_CHUNK = 65536
-        integer, allocatable :: counts_glob(:), particle_indices(:), pinds_loc(:), pind2glob(:)
-        real,    allocatable :: seed_shifts_loc(:,:)
-        logical, allocatable :: seed_has_sh_loc(:)
-        type(prob_candidate) :: candidate_dummy
-        integer :: ipart, funit, io_stat, nptcls_loc, nchunks, ichunk, chunk_n
-        integer :: i, j, first, last, nread
-        integer(int64) :: header(4), nnz, nnz_read, addr, chunk_indices_addr, chunk_candidates_addr
-        integer :: pind, i_glob, max_pind, seed_nrots_loc
+        integer, allocatable :: counts_glob(:), counts_loc(:), pinds_loc(:), pind2glob(:)
+        integer :: ipart, funit, io_stat, nptcls_loc, i, pind, i_glob, max_pind
+        integer(int64) :: header(4), addr
         allocate(counts_glob(self%nptcls), source=0)
         do ipart = 1,nparts
-                fname = fbody//int2str_pad(ipart,numlen)//'.dat'
-                call fopen(funit,fname,access='STREAM',action='READ',status='OLD',iostat=io_stat)
-                call fileiochk('simple_eul_prob_tab_neigh; read_tabs_to_glob header; file: '//fname%to_char(), io_stat)
-                read(funit,pos=1) header
-                if( header(1) /= self%nrefs ) THROW_HARD('nrefs mismatch in read_tabs_to_glob')
-                nptcls_loc = int(header(2))
-                nnz = header(3)
-                nchunks = int(header(4))
-                allocate(pinds_loc(nptcls_loc))
-                allocate(seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
-                addr = sizeof(header) + 1
-                read(funit,pos=addr) pinds_loc
-                addr = addr + sizeof(pinds_loc)
-                call read_seed_shift_table(funit,addr,seed_nrots_loc,seed_shifts_loc,seed_has_sh_loc)
-                allocate(particle_indices(IO_CHUNK))
-                call build_pind_lookup(self%pinds,pinds_loc,pind2glob,max_pind)
-                nnz_read = 0
-                do ichunk = 1,nchunks
-                    read(funit,pos=addr) chunk_n
-                    addr = addr + sizeof(chunk_n)
-                    if( chunk_n < 1 ) THROW_HARD('invalid empty candidate chunk')
-                    chunk_indices_addr    = addr
-                    chunk_candidates_addr = chunk_indices_addr + chunk_n * sizeof(chunk_n)
-                    do first = 1,chunk_n,IO_CHUNK
-                        last  = min(chunk_n, first + IO_CHUNK - 1)
-                        nread = last - first + 1
-                        read(funit,pos=chunk_indices_addr + (first-1)*sizeof(chunk_n)) particle_indices(1:nread)
-                        do j = 1,nread
-                            i = particle_indices(j)
-                            if( i < 1 .or. i > nptcls_loc ) THROW_HARD('invalid particle index in sparse candidate stream')
-                            pind = pinds_loc(i)
-                            if( pind < 1 .or. pind > max_pind ) cycle
-                            i_glob = pind2glob(pind)
-                            if( i_glob > 0 ) counts_glob(i_glob) = counts_glob(i_glob) + 1
-                        enddo
-                    enddo
-                    addr = chunk_candidates_addr + chunk_n * sizeof(candidate_dummy)
-                    nnz_read = nnz_read + int(chunk_n,int64)
-                enddo
-                if( nnz_read /= nnz ) THROW_HARD('candidate stream count mismatch')
-                call fclose(funit)
-                deallocate(pinds_loc,particle_indices,seed_shifts_loc,seed_has_sh_loc,pind2glob)
+            fname = fbody//int2str_pad(ipart,numlen)//'.dat'
+            call fopen(funit,fname,access='STREAM',action='READ',status='OLD',iostat=io_stat)
+            call fileiochk('simple_eul_prob_tab_neigh; read_tabs_to_glob header; file: '//fname%to_char(), io_stat)
+            read(funit,pos=1) header
+            if( header(1) /= self%nrefs ) THROW_HARD('nrefs mismatch in read_tabs_to_glob')
+            nptcls_loc = int(header(2))
+            allocate(pinds_loc(nptcls_loc), counts_loc(nptcls_loc))
+            addr = sizeof(header) + 1
+            read(funit,pos=addr) pinds_loc
+            addr = addr + sizeof(pinds_loc)
+            read(funit,pos=addr) counts_loc
+            call fclose(funit)
+            if( sum(int(counts_loc,int64)) /= header(3) ) THROW_HARD('candidate counts disagree with the stream size')
+            call build_pind_lookup(self%pinds,pinds_loc,pind2glob,max_pind)
+            do i = 1,nptcls_loc
+                pind = pinds_loc(i)
+                if( pind < 1 .or. pind > max_pind ) cycle
+                i_glob = pind2glob(pind)
+                if( i_glob > 0 ) counts_glob(i_glob) = counts_glob(i_glob) + counts_loc(i)
+            enddo
+            deallocate(pinds_loc,counts_loc,pind2glob)
         enddo
         where( counts_glob < 1 ) counts_glob = 1
         call self%candidate_store%new_ragged(self%pinds,counts_glob)
@@ -1484,6 +1544,16 @@ contains
 
     subroutine kill_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
+        integer :: ithr
+        if( allocated(self%candidate_buffers) )then
+            do ithr = 1,size(self%candidate_buffers)
+                call self%candidate_buffers(ithr)%kill
+            enddo
+            deallocate(self%candidate_buffers)
+        endif
+        if( allocated(self%cand_counts) ) deallocate(self%cand_counts)
+        self%table_nnz     = 0
+        self%table_nchunks = 0
         call self%candidate_store%kill
         if( allocated(self%candidate_fill_counts) ) deallocate(self%candidate_fill_counts)
         self%l_direct_stoch_neigh = .false.

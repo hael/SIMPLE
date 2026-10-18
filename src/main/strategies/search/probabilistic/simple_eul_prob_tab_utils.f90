@@ -12,8 +12,9 @@ implicit none
 public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
-public :: sample_bounded_dist, sample_likelihood_dist, sample_power_dist, sample_likelihood_index
+public :: sample_bounded_dist, sample_likelihood_dist, sample_likelihood_dists, sample_power_dist, sample_likelihood_index
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
+public :: prob_dense_entry, prob_refined_entry, PROB_TAB_DENSE_FORMAT
 private
 #include "simple_local_flags.inc"
 
@@ -25,6 +26,25 @@ type :: prob_candidate
     real    :: y      = 0.
     logical :: has_sh = .false.
 end type prob_candidate
+
+! The format word of a dense part file, in the header slot where a sparse part file holds its candidate count
+integer(int64), parameter :: PROB_TAB_DENSE_FORMAT = -2_int64
+
+! One entry of the dense table, a particle and a reference: the distance and the in-plane index. No default values:
+! the fill and the read write every entry.
+type :: prob_dense_entry
+    real    :: dist
+    integer :: inpl
+end type prob_dense_entry
+
+! A refined entry of the dense table: the particle (part-local in a part file, the master's index on the master),
+! the compact reference and the shift of its search
+type :: prob_refined_entry
+    integer :: i
+    integer :: ri
+    real    :: x
+    real    :: y
+end type prob_refined_entry
 
 ! Cost record of a partition's table fill for the bench file: wall time outside the parallel region,
 ! thread-seconds summed over threads.
@@ -487,8 +507,8 @@ contains
         integer,   intent(out)   :: which
         real,      intent(inout) :: pvec_sorted(:)
         integer,   intent(inout) :: sorted_inds(:)
-        real    :: cdf(max(1,nsample)), rnd, dist_tmp, csum, min_dist
-        integer :: num_ub, i, rank, pick
+        real    :: cdf(max(1,nsample)), dist_tmp
+        integer :: num_ub, i
         num_ub = min(n,max(1,nsample))
         do i = 1,num_ub
             pvec_sorted(i) = dist_fun(i)
@@ -506,6 +526,49 @@ contains
             endif
         enddo
         call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
+        call draw_likelihood(num_ub, pvec_sorted, sorted_inds, cdf, dist, corr, which)
+    end subroutine sample_likelihood_dist
+
+    !> sample_likelihood_dist over distances already evaluated, dists(1:n), with the caller's work buffer cdf
+    !! (size >= nsample): the same draw without an internal procedure or an allocation per call
+    subroutine sample_likelihood_dists( n, dists, nsample, dist, corr, which, pvec_sorted, sorted_inds, cdf )
+        integer, intent(in)    :: n, nsample
+        real,    intent(in)    :: dists(:)
+        real,    intent(out)   :: dist, corr
+        integer, intent(out)   :: which
+        real,    intent(inout) :: pvec_sorted(:)
+        integer, intent(inout) :: sorted_inds(:)
+        real,    intent(inout) :: cdf(:)
+        integer :: num_ub, i
+        num_ub = min(n,max(1,nsample))
+        do i = 1,num_ub
+            pvec_sorted(i) = dists(i)
+            sorted_inds(i) = i
+        enddo
+        do i = num_ub / 2, 1, -1
+            call maxheap_sift_down(pvec_sorted, sorted_inds, i, num_ub)
+        enddo
+        do i = num_ub + 1,n
+            if( dists(i) < pvec_sorted(1) )then
+                pvec_sorted(1) = dists(i)
+                sorted_inds(1) = i
+                call maxheap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
+            endif
+        enddo
+        call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
+        call draw_likelihood(num_ub, pvec_sorted, sorted_inds, cdf, dist, corr, which)
+    end subroutine sample_likelihood_dists
+
+    !> the draw of the likelihood samplers from the num_ub best distances, sorted ascending
+    subroutine draw_likelihood( num_ub, pvec_sorted, sorted_inds, cdf, dist, corr, which )
+        integer, intent(in)    :: num_ub
+        real,    intent(in)    :: pvec_sorted(:)
+        integer, intent(in)    :: sorted_inds(:)
+        real,    intent(inout) :: cdf(:)
+        real,    intent(out)   :: dist, corr
+        integer, intent(out)   :: which
+        real    :: rnd, csum, min_dist
+        integer :: i, rank, pick
         min_dist = pvec_sorted(1)
         do i = 1,num_ub
             cdf(i) = exp(-(pvec_sorted(num_ub-i+1) - min_dist))
@@ -536,7 +599,7 @@ contains
         which = sorted_inds(pick)
         dist  = pvec_sorted(pick)
         corr  = exp(-dist)
-    end subroutine sample_likelihood_dist
+    end subroutine draw_likelihood
 
     ! Array-based counterpart of sample_likelihood_dist for the global assignment stage.
     ! Given the already-evaluated distances of n candidates, draw one index with the same

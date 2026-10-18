@@ -56,6 +56,12 @@ type :: pftc_shsrch_grad
     integer                   :: grid_bank_ptcl = 0     !< particle the bank was built for (0: none)
     real(dp)                  :: grid_u_star(2) = 0.d0  !< lattice shift of the grid minimum
     integer(int64)            :: profile_bank_builds = 0_int64 !< shifted particle memos built
+    ! the last all-rotation objective of minimize and its shift: L-BFGS-B's callback scores every accepted point and
+    ! minimize scores the point it ends on, the same vector when the shifts are bitwise equal
+    real,         allocatable :: vals_cache(:)
+    real                      :: vals_cache_xy(2) = 0.
+    logical                   :: vals_cache_on    = .false. !< only within minimize: the pftc may change between calls
+    logical                   :: vals_cache_valid = .false.
 contains
     procedure          :: new_alternating      => grad_shsrch_new_alternating
     procedure          :: new_fixed       => grad_shsrch_new_fixed
@@ -68,14 +74,15 @@ contains
     procedure          :: does_opt_angle
     procedure          :: uses_joint_inplane
     procedure          :: set_limits
-    procedure          :: coarse_search
-    procedure          :: coarse_search_opt_angle
+    procedure, private :: coarse_search
+    procedure, private :: coarse_search_opt_angle
     procedure          :: reset_profile     => grad_shsrch_reset_profile
     procedure          :: get_profile       => grad_shsrch_get_profile
     procedure          :: get_fit_profile   => grad_shsrch_get_fit_profile
     procedure          :: get_bank_builds   => grad_shsrch_get_bank_builds
     procedure, private :: try_grid_fit
     procedure, private :: build_grid_bank
+    procedure, private :: objfun_vals
 end type pftc_shsrch_grad
 
 contains
@@ -145,6 +152,7 @@ contains
                 &coarse_num_steps*coarse_num_steps+1))
         endif
         self%grid_bank_ptcl = 0
+        allocate(self%vals_cache(self%nrots))
         ! set costfun pointers
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
@@ -240,7 +248,7 @@ contains
                         self%joint_initial_cost_valid = .true.
                     endif
                 else
-                    cost = - self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+                    cost = - self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%particle, vec, self%cur_inpl_idx)
                 endif
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
@@ -252,7 +260,7 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: grad(D)
-        real(dp)                :: corrs_grad(2), joint_grad(3), joint_loss
+        real(dp)                :: corrs, corrs_grad(2), joint_grad(3), joint_loss
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
@@ -261,8 +269,7 @@ contains
                     call joint_grad_at_angle(self, vec(1:3), joint_loss, joint_grad)
                     grad = joint_grad
                 else
-                    call self%b_ptr%pftc%gen_corr_grad_only_for_rot_8(self%reference, &
-                        &self%particle, vec, self%cur_inpl_idx, corrs_grad)
+                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     grad = - corrs_grad
                 endif
             class default
@@ -291,8 +298,7 @@ contains
                         self%joint_initial_cost_valid = .true.
                     endif
                 else
-                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8(self%reference, self%particle, &
-                        &vec, self%cur_inpl_idx, corrs, corrs_grad)
+                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     f    = - corrs
                     grad = - corrs_grad
                 endif
@@ -317,11 +323,30 @@ contains
         real,                    intent(out)   :: corr
         real :: objective(self%nrots)
 
-        self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
-        call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, xy, objective)
+        call self%objfun_vals(xy, objective)
         irot = maxloc(objective, dim=1)
         corr = objective(irot)
     end subroutine select_best_discrete_angle
+
+    !> the objective over all rotations at shift xy; within minimize the last vector is reused at a bitwise equal shift
+    subroutine objfun_vals( self, xy, vals )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real,                    intent(in)    :: xy(2)
+        real,                    intent(out)   :: vals(self%nrots)
+        if( self%vals_cache_valid )then
+            if( all(transfer(xy, 0, 2) == transfer(self%vals_cache_xy, 0, 2)) )then
+                vals = self%vals_cache
+                return
+            endif
+        endif
+        self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
+        call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, xy, vals)
+        if( self%vals_cache_on )then
+            self%vals_cache       = vals
+            self%vals_cache_xy    = xy
+            self%vals_cache_valid = .true.
+        endif
+    end subroutine objfun_vals
 
     real function grad_shsrch_get_angle( self ) result(angle)
         class(pftc_shsrch_grad), intent(in) :: self
@@ -371,8 +396,12 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         self%profile_minimize_calls = self%profile_minimize_calls + 1_int64
+        ! the objective's double-precision reference, copied once per minimisation
+        call self%b_ptr%pftc%load_ref_aln_8(self%reference, self%particle)
         if( self%opt_angle )then
-            call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+            self%vals_cache_on    = .true.
+            self%vals_cache_valid = .false.
+            call self%objfun_vals(self%ospec%x, corrs)
             self%cur_inpl_idx = maxloc(corrs, dim=1)
             self%cur_inpl_rotind = real(self%cur_inpl_idx)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
@@ -394,7 +423,7 @@ contains
                     self%profile_alternations = self%profile_alternations + 1_int64
                     call self%opt_obj%minimize(self%ospec, self, lowest_cost)
                     loc = self%cur_inpl_idx
-                    call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                    call self%objfun_vals(self%ospec%x, corrs)
                     self%cur_inpl_idx = maxloc(corrs, dim=1)
                     self%cur_inpl_rotind = real(self%cur_inpl_idx)
                     if( self%cur_inpl_idx == loc ) exit
@@ -424,8 +453,7 @@ contains
             self%cur_inpl_idx   = irot
             self%cur_inpl_rotind = real(irot)
             self%profile_objective_evals = self%profile_objective_evals + 1_int64
-            lowest_cost_overall = -self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, &
-                &self%particle, self%ospec%x_8, self%cur_inpl_idx)
+            lowest_cost_overall = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%particle, self%ospec%x_8, self%cur_inpl_idx)
             if( self%coarse_init )then
                 call self%coarse_search(coarse_cost, init_xy)
                 if( coarse_cost < lowest_cost_overall )then
@@ -453,6 +481,8 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         end if
+        self%vals_cache_on    = .false.
+        self%vals_cache_valid = .false.
         if( present(xy_in) ) self%coarse_init = coarse_init_orig
     end function grad_shsrch_minimize
 
@@ -615,7 +645,7 @@ contains
                 y    = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_grid_points     = self%profile_grid_points + 1_int64
-                cost = -self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
+                cost = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]
@@ -903,6 +933,9 @@ contains
         nullify(self%b_ptr)
         if( allocated(self%grid_corrs) ) deallocate(self%grid_corrs)
         if( allocated(self%grid_bank)  ) deallocate(self%grid_bank)
+        if( allocated(self%vals_cache) ) deallocate(self%vals_cache)
+        self%vals_cache_on    = .false.
+        self%vals_cache_valid = .false.
         self%grid_fit       = .false.
         self%grid_ptcl      = .false.
         self%grid_bank_ptcl = 0

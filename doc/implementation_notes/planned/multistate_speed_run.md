@@ -230,7 +230,8 @@ recorded against Phase 1.
 
 ### Phase 3: table reads
 
-Item 3 of "The work".
+Item 3 of "The work". Carried out instead by the run `speed_mac` on
+2026-10-17, with identical results (`identical_speed_run.md`, Phase 1).
 
 - Tests: the byte comparisons and the rest of the single-state acceptance.
 - Timed against Phase 2: A and M, twice each way. Record the table-read

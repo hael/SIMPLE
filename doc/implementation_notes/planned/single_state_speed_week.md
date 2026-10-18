@@ -650,7 +650,8 @@ of the run `prob_speed` (about 7,000 s), the schedule would take msp1 to
      compatibility.
 5. **The states' volume assembly** (`simple_commanders_rec_distr.f90`, the
    state loop). Time each state first; then restore the states in parallel
-   where memory allows.
+   where memory allows. *Not an identical change* (2026-10-17, see the status
+   at the end): only the per-state timers were added.
 6. **The worker fold** of day 5 applies unchanged; the table part and the
    search worker read and prepare the same particles.
 
@@ -1337,3 +1338,45 @@ against its floor of 5) and `cont_refine3D_1jxy` passes.
 
 **Exit criteria.** The gates pass; the report is written
 (`single_state_speed_week_report.md`).
+
+### Status after the run `speed_mac`, 2026-10-17
+
+The run carried out the identical parts of days 3 and 4 and of the section
+"Multi-state" on the maintainer's Mac (`identical_speed_run.md` and its
+report). Every item below was byte-identical to the base on the one-thread
+identity cases.
+
+- Day 3, item 1 (the shift refinement): done. One double-precision copy of
+  the reference per minimisation; the gradient-only path and `shift_ref`,
+  both unused, deleted. In addition, the all-rotation objective that
+  L-BFGS-B's last accepted point repeats is reused.
+- Day 3, item 2 (the shift-matrix range): done.
+- Day 3, item 3 (`ref_assign`): done earlier by the run `ms_speed`.
+- Day 3, item 4 (the neighbourhood read): done; the part writes its
+  per-particle counts and the first pass reads only those.
+- Day 3, items 5 and 6 (the score-loop profile, single-precision weights):
+  not in the run. The score loop's per-call allocations and internal
+  distance functions (heap trampolines on this compiler) were replaced by
+  per-thread buffers.
+- Day 4, item 1 (the nonuniform filter): done. Timers, the objective right
+  after each candidate, and the composition filtering again from the input
+  pair (timed not slower); no scratch files.
+- Day 4, item 2 (the reprojection model): done for the distributed master;
+  the builder is kept for the run and later iterations read only the
+  segments the model uses.
+- Day 4, item 3 (the project reads): `prob_align` gets a copy of the
+  master's project (a copy of a 751,729-particle project takes 0.28 s, a read
+  1.3 s); volume assembly's trailing reread and the one-record read of the
+  matching low-pass are gone. Volume assembly and `commit_sigma2` still read
+  the file: a copy of the master's project is not what they read.
+- Multi-state, items 3 and 4 (the parallel reads, the compact record): done.
+- Multi-state, item 5 (the states' assembly in parallel): not identical.
+  Several sums of a state's assembly depend on the thread count (the radial
+  FSC, the noise term of the ML regularisation, the smoothing weight of the
+  filter's label update, the phase randomisation's per-thread random
+  streams, FFTW plans made for the thread count), the filter is module state
+  with cache names that carried no state index, and the policy on
+  multi-state peak memory forbids holding several states' volumes in
+  assembly. Per-state timers and the in-memory source halves were added
+  instead.
+

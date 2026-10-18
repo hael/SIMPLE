@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability table: the seed shift of an assigned candidate and the dense assignment ref_assign
+!@descr: unit tests for the 3D probability table: the seed shift of an assigned candidate, the dense part files and ref_assign
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! ref_assign is compared with the assignment it replaced, kept here as the reference (reference_assign): on synthetic
@@ -10,10 +10,12 @@ use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist
+use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
+    &prob_candidate, prob_dense_entry, prob_refined_entry
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
+!$ use omp_lib
 implicit none
 private
 public :: run_all_eul_prob_tab_tests
@@ -31,6 +33,12 @@ contains
     subroutine run_all_eul_prob_tab_tests()
         write(*,'(A)') '**** running all 3D probability table tests ****'
         call test_record_seed_shift()
+        write(*,'(A)') 'test_dense_part_round_trip'
+        call test_dense_part_round_trip()
+        write(*,'(A)') 'test_dense_read_threads'
+        call test_dense_read_threads()
+        write(*,'(A)') 'test_likelihood_samplers'
+        call test_likelihood_samplers()
         write(*,'(A)') 'test_ref_assign_against_reference'
         call test_ref_assign_against_reference()
     end subroutine run_all_eul_prob_tab_tests
@@ -132,11 +140,211 @@ contains
         deallocate(params, build)
     end subroutine compare_with_reference
 
+    !> Two dense part files written by worker tables in batches, read by a master whose particle order is the reverse:
+    !! every row, refined shift and seed comes back exactly, an unrefined entry without shift
+    subroutine test_dense_part_round_trip()
+        integer, parameter :: NSPACE_RT = 50, NSTATES_RT = 2, NPTCLS_RT = 40, NPARTS_RT = 2
+        class(parameters), allocatable, target :: params
+        class(builder),    allocatable, target :: build
+        type(eul_prob_tab) :: master
+        type(prob_dense_entry), allocatable :: rows(:,:)
+        real,                   allocatable :: shifts(:,:,:), seeds(:,:)
+        logical,                allocatable :: refined(:,:)
+        integer,                allocatable :: pinds(:)
+        type(prob_candidate) :: cand
+        integer :: nrefs, i, ri, i_glob, nwrong
+        nrefs = NSPACE_RT * NSTATES_RT
+        call make_round_trip_parts(params, build, NSPACE_RT, NSTATES_RT, NPTCLS_RT, NPARTS_RT, rows, shifts, refined, seeds)
+        pinds = [(i, i=NPTCLS_RT,1,-1)]
+        call master%new(params, build, pinds)
+        call master%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_RT, 1)
+        nwrong = 0
+        do i = 1,NPTCLS_RT
+            i_glob = NPTCLS_RT - i + 1
+            if( any(master%seed_shifts(:,i_glob) /= seeds(:,i)) .or. .not. master%seed_has_sh(i_glob) ) nwrong = nwrong + 1
+            do ri = 1,nrefs
+                cand = master%dense_candidate(ri, i_glob)
+                if( cand%iref /= ri .or. cand%dist /= rows(ri,i)%dist .or. cand%inpl /= rows(ri,i)%inpl )then
+                    nwrong = nwrong + 1
+                else if( refined(ri,i) )then
+                    if( .not. cand%has_sh .or. cand%x /= shifts(1,ri,i) .or. cand%y /= shifts(2,ri,i) ) nwrong = nwrong + 1
+                else if( cand%has_sh .or. cand%x /= 0. .or. cand%y /= 0. )then
+                    nwrong = nwrong + 1
+                endif
+            enddo
+        enddo
+        call assert_int(0, nwrong, 'the dense part files read back exactly')
+        call master%kill
+        call kill_round_trip_parts(params, build, NPARTS_RT)
+    end subroutine test_dense_part_round_trip
+
+    !> The likelihood sampler over an array of distances draws exactly as the one over a distance function, from the same
+    !! seed: 200 random sets of 1 to 300 distances with ties, a flat set, sentinel distances and every sample size
+    subroutine test_likelihood_samplers()
+        real,    allocatable :: dists(:), pvec(:), pvec2(:), cdf(:)
+        integer, allocatable :: inds(:), inds2(:)
+        real    :: dist1, corr1, dist2, corr2
+        integer :: iset, n, nsample, which1, which2, i, nwrong
+        call seed_rnd_fixed(SEED_TAB)
+        nwrong = 0
+        do iset = 1,200
+            n = 1 + int(299. * ran3())
+            allocate(dists(n), pvec(n), pvec2(n), cdf(n), inds(n), inds2(n))
+            do i = 1,n
+                dists(i) = 10. * ran3()
+            enddo
+            if( n > 4 ) dists(n/2:n/2+2) = dists(1)
+            if( mod(iset,10) == 0 ) dists = 3.
+            if( mod(iset,13) == 0 ) dists(1:(n+1)/2) = huge(1.)
+            nsample = 1 + mod(iset-1, n)
+            call seed_rnd_fixed(SEED_DRAW + iset)
+            call sample_likelihood_dist(n, dist_at, nsample, dist1, corr1, which1, pvec, inds)
+            call seed_rnd_fixed(SEED_DRAW + iset)
+            call sample_likelihood_dists(n, dists, nsample, dist2, corr2, which2, pvec2, inds2, cdf)
+            if( which1 /= which2 .or. dist1 /= dist2 .or. corr1 /= corr2 ) nwrong = nwrong + 1
+            deallocate(dists, pvec, pvec2, cdf, inds, inds2)
+        enddo
+        call assert_int(0, nwrong, 'the array likelihood sampler draws exactly as the function sampler')
+
+    contains
+
+        real function dist_at( i )
+            integer, intent(in) :: i
+            dist_at = dists(i)
+        end function dist_at
+
+    end subroutine test_likelihood_samplers
+
+    !> The parallel read of the dense part files at one and at four threads, over 1, 3 and 7 parts: the same rows,
+    !! refined lists and seeds, bit for bit
+    subroutine test_dense_read_threads()
+        integer, parameter :: NSPACE_TH = 40, NSTATES_TH = 3, NPTCLS_TH = 70
+        integer, parameter :: NPARTS_TH(3) = [1, 3, 7]
+        class(parameters), allocatable, target :: params
+        class(builder),    allocatable, target :: build
+        type(eul_prob_tab) :: master1, master4
+        type(prob_dense_entry), allocatable :: rows(:,:)
+        real,                   allocatable :: shifts(:,:,:), seeds(:,:)
+        logical,                allocatable :: refined(:,:)
+        integer,                allocatable :: pinds(:)
+        integer :: i, k, nthr_prev, nwrong
+        character(len=32) :: label
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        do k = 1,size(NPARTS_TH)
+            write(label,'(I0,A)') NPARTS_TH(k), ' parts'
+            call make_round_trip_parts(params, build, NSPACE_TH, NSTATES_TH, NPTCLS_TH, NPARTS_TH(k), rows, shifts,&
+                &refined, seeds)
+            ! the master's particles in a scrambled order
+            pinds = [(mod(17*i, NPTCLS_TH) + 1, i=0,NPTCLS_TH-1)]
+            !$ call omp_set_num_threads(1)
+            call master1%new(params, build, pinds)
+            call master1%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
+            !$ call omp_set_num_threads(4)
+            call master4%new(params, build, pinds)
+            call master4%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
+            !$ call omp_set_num_threads(nthr_prev)
+            nwrong = count(master1%rows(:,:)%dist /= master4%rows(:,:)%dist) +&
+                &count(master1%rows(:,:)%inpl /= master4%rows(:,:)%inpl) +&
+                &count(master1%refined_offsets /= master4%refined_offsets) +&
+                &count(master1%seed_shifts /= master4%seed_shifts) + count(master1%seed_has_sh .neqv. master4%seed_has_sh)
+            if( size(master1%refined) /= size(master4%refined) )then
+                nwrong = nwrong + 1
+            else
+                nwrong = nwrong + count(master1%refined(:)%i /= master4%refined(:)%i) +&
+                    &count(master1%refined(:)%ri /= master4%refined(:)%ri) +&
+                    &count(master1%refined(:)%x /= master4%refined(:)%x) + count(master1%refined(:)%y /= master4%refined(:)%y)
+            endif
+            call assert_int(0, nwrong, 'the read at four threads equals the read at one ('//trim(label)//')')
+            call assert_int(36, master4%seed_nrots, 'the rotation grid of the parts is taken ('//trim(label)//')')
+            call master1%kill
+            call master4%kill
+            call kill_round_trip_parts(params, build, NPARTS_TH(k))
+        enddo
+    end subroutine test_dense_read_threads
+
+    !> NPARTS_RT dense part files prob_tab_tester_part<n>.dat of consecutive particles, written by worker tables in
+    !! two batches each: random rows, a refined shift on about one entry in ten, a seed per particle
+    subroutine make_round_trip_parts( params, build, nspace, nstates, nptcls, nparts, rows, shifts, refined, seeds )
+        class(parameters), allocatable, target, intent(inout) :: params
+        class(builder),    allocatable, target, intent(inout) :: build
+        integer,                                intent(in)    :: nspace, nstates, nptcls, nparts
+        type(prob_dense_entry), allocatable,    intent(out)   :: rows(:,:)
+        real,                   allocatable,    intent(out)   :: shifts(:,:,:), seeds(:,:)
+        logical,                allocatable,    intent(out)   :: refined(:,:)
+        type(eul_prob_tab) :: worker
+        type(prob_refined_entry), allocatable :: batch_refined(:)
+        integer, allocatable :: parts(:,:)
+        integer :: nrefs, i, ri, ipart, i_loc, nloc, ibatch, first, last, n
+        nrefs = nspace * nstates
+        allocate(params, build)
+        params%nspace      = nspace
+        params%nstates     = nstates
+        params%prob_athres = 10.
+        params%l_doshift   = .true.
+        call seed_rnd_fixed(SEED_TAB)
+        allocate(build%spproj_field)
+        call build%spproj_field%new(nptcls, is_ptcl=.true.)
+        do i = 1,nptcls
+            call build%spproj_field%set_state(i, mod(i-1, nstates) + 1)
+        enddo
+        allocate(rows(nrefs,nptcls), shifts(2,nrefs,nptcls), refined(nrefs,nptcls), seeds(2,nptcls))
+        do i = 1,nptcls
+            seeds(:,i) = [ran3() - 0.5, ran3() - 0.5]
+            do ri = 1,nrefs
+                rows(ri,i)     = prob_dense_entry(5. * ran3(), 1 + int(36. * ran3()))
+                refined(ri,i) = ran3() < 0.1
+                shifts(:,ri,i) = [ran3() - 0.5, ran3() - 0.5]
+            enddo
+        enddo
+        parts = split_nobjs_even(nptcls, nparts)
+        do ipart = 1,nparts
+            nloc = parts(ipart,2) - parts(ipart,1) + 1
+            call worker%new_worker(params, build, [(i, i=parts(ipart,1),parts(ipart,2))])
+            worker%seed_nrots = 36
+            worker%seed_shifts = seeds(:,parts(ipart,1):parts(ipart,2))
+            worker%seed_has_sh = .true.
+            call worker%begin_write(string('prob_tab_tester_part')//int2str(ipart)//'.dat')
+            do ibatch = 1,2
+                first = merge(1, nloc/2 + 1, ibatch == 1)
+                last  = merge(nloc/2, nloc, ibatch == 1)
+                allocate(batch_refined(count(refined(:,parts(ipart,1)+first-1:parts(ipart,1)+last-1))))
+                n = 0
+                do i_loc = first,last
+                    i = parts(ipart,1) + i_loc - 1
+                    do ri = 1,nrefs
+                        if( .not. refined(ri,i) ) cycle
+                        n = n + 1
+                        batch_refined(n) = prob_refined_entry(i_loc, ri, shifts(1,ri,i), shifts(2,ri,i))
+                    enddo
+                enddo
+                call worker%write_rows(first, rows(:,parts(ipart,1)+first-1:parts(ipart,1)+last-1), batch_refined)
+                deallocate(batch_refined)
+            enddo
+            call worker%write_tab(string('prob_tab_tester_part')//int2str(ipart)//'.dat')
+            call worker%kill
+        enddo
+    end subroutine make_round_trip_parts
+
+    subroutine kill_round_trip_parts( params, build, nparts )
+        class(parameters), allocatable, target, intent(inout) :: params
+        class(builder),    allocatable, target, intent(inout) :: build
+        integer,                                intent(in)    :: nparts
+        integer :: ipart
+        do ipart = 1,nparts
+            call del_file(string('prob_tab_tester_part')//int2str(ipart)//'.dat')
+        enddo
+        call build%spproj_field%kill
+        deallocate(build%spproj_field)
+        deallocate(params, build)
+    end subroutine kill_round_trip_parts
+
     subroutine set_dist( tab, iref, i, dist )
         type(eul_prob_tab), intent(inout) :: tab
         integer,            intent(in)    :: iref, i
         real,               intent(in)    :: dist
-        tab%loc_tab(iref,i)%dist = dist
+        tab%rows(iref,i)%dist = dist
+        tab%rows(iref,i)%inpl = 0
     end subroutine set_dist
 
     !> The assignment ref_assign replaced (as of 2026-10-15), on a dense table dists(nrefs,nptcls) whose

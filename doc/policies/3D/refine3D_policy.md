@@ -139,6 +139,26 @@ Distributed `refine3D` keeps prototype command lines for worker, probability,
 sigma, assembly, and postprocess steps. These command lines are execution
 templates, not independent workflow policies.
 
+The distributed master also keeps the builder of the reprojection model for
+the run (`materialize_reprojection_model_kept`, released in `distr_cleanup`):
+crop, directions and masks are fixed for one `refine3D` run. The first
+iteration builds it from the full project as any builder; later iterations
+read only the segments the model uses (the non-data segments, `out`,
+`optics` and the particle field, then `update_projinfo`, so that the field
+is written to the run's own project), make the strategy toolbox and the
+three volumes the model's clean-up released again, and release the project
+after writing the field. The master then reads the full project, and
+`prob_align` gets a copy of that read (`execute_from_project`) instead of
+reading the file once more.
+
+Volume assembly (gridding, not `refine=sigma`) also takes a copy of the
+master's project (`execute_hand_on`): the master read it at the start of
+the iteration, and `merge_algndocs` wrote the field from it, so it equals
+the file. Assembly hands its project on as it ends; the low-pass refresh
+(`refresh_matching_lp_from_project`) and `commit_sigma2`
+(`execute_from_project`) read that instead of the file. Every write of the
+project stays as it was.
+
 Fresh-start checks that decide whether to consume project-carried matching
 metadata must use the stage interval: `which_iter <= startit` with
 `continue != yes` is fresh, even when `startit` is greater than one.
@@ -412,6 +432,37 @@ parallel. The draws and their order are those of the earlier implementation,
 so the assignment is identical (since 2026-10-16). The unit suite of the
 table keeps the earlier implementation as its reference and compares the
 two.
+
+### Probability-table part files
+
+Every table part writes one file that the driver reads after the parts have
+finished.
+
+- **The dense table (`prob`).** The header holds the number of references
+  and particles, a format word (`PROB_TAB_DENSE_FORMAT`) and the number of
+  refined entries; then the particle indices, the seed table, one row per
+  particle of (distance, in-plane index) for every reference
+  (`prob_dense_entry`, 8 bytes; the reference and particle follow from the
+  position), and a list of the refined entries (particle, reference,
+  shift; `prob_refined_entry`). An unrefined entry has no shift of its own.
+  The worker writes a batch's rows at the particles' positions and checks at
+  the end that every row was written. The driver reads the parts in
+  parallel into its rows and the refined lists by particle; every particle
+  of the driver must be in exactly one part, and the parts must agree on the
+  rotation grid. `dense_candidate` rebuilds the entry `assign_candidate`
+  reads. The driver's table is not initialised before the read.
+- **The neighbourhood table (`prob_neigh`) and the 2D table** keep their
+  candidate streams (particle index and full candidate per entry). The
+  neighbourhood part writes the number of candidates of each particle after
+  the particle indices; the driver sizes its store from these counts and
+  then places the candidates in file order (the order decides ties).
+- An empty part writes the header of its own table type.
+
+The shift search of the tables keeps a double-precision copy of the
+reference for one minimisation (`load_ref_aln_8`), and reuses the
+all-rotation objective it computed at a shift when the same shift (bit for
+bit) comes back, as L-BFGS-B's last accepted point does. The likelihood
+scores work in per-thread buffers.
 
 ### Continuous in-plane policy
 
@@ -820,6 +871,13 @@ FSCs and FSC-derived diagnostics are calculated from dense Cartesian
 half-volumes, not from sparse, intermediate, or low-resolution-blended
 registration-reference representations.
 
+The nonuniform filter's source halves are the restored halves kept in memory
+as they are written (the box only, as a read of the file gives them). The
+trailing counts use the particle field in memory. Assembly back-fills
+missing projection labels before it; the labels do not enter the counts and
+are kept in the field it writes (since 2026-10-18; before, the counts reread
+the field and so dropped the labels on trailing runs).
+
 ### 9.1 PCG reconstruction backend
 
 `rec_backend=gridding|pcg` selects the reconstruction backend; `gridding` is
@@ -937,6 +995,13 @@ second run in the same directory.
 `scripts/plot_refine3d_bench.py` reads a `BENCH/` directory, or a directory of
 the per-iteration files of earlier builds, and writes the per-iteration
 summary table, a long table of every record, a text report and the figure.
+
+`VOLASSEMBLE_BENCH.txt` has, after its `% accounted for` line, a section
+`SPLIT TIMINGS (s)`: the nonuniform filter split into candidate filtering,
+objective, label optimisation and composition, and per state the restore and
+the filter. These are parts of the timings above and are not added to the
+accounted total. The summary script adds the filter split as columns of
+`bench_iterations.csv`.
 
 On each iteration, the strategy report should stay simple: context plus one
 `TIMINGS (s)` section. Labels should include the coarse operation buckets

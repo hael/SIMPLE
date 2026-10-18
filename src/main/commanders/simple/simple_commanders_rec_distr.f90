@@ -17,7 +17,8 @@ public :: commander_volassemble, filter_pcg_nonuniform_maps
 
 type, extends(commander_base) :: commander_volassemble
   contains
-    procedure :: execute => exec_volassemble
+    procedure :: execute         => exec_volassemble
+    procedure :: execute_hand_on => exec_volassemble_hand_on
 end type commander_volassemble
 
 type :: restore_timings_t
@@ -41,8 +42,8 @@ integer, parameter :: TC_N       = 6
 contains
 
     !> Reduce one state's Cartesian partial reconstructions and restore dense even, odd and merged
-    !> volumes. On return build%vol/vol2 hold the restored halves (for automask); under NU, vol_nu_base_*
-    !> and (ml_reg + static aux) vol_nu_aux_* hold the NU inputs before even/odd low-resolution insertion.
+    !> volumes. Under NU, vol_nu_base_* and (ml_reg + static aux) vol_nu_aux_* hold the NU inputs before
+    !> even/odd low-resolution insertion.
     !> l_carry_forward returns true when a trailing state has no sample, no chain and a previous volume in
     !> the directory: nothing is restored or written, and the caller carries that volume forward.
     subroutine restore_state_from_parts( params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
@@ -76,7 +77,7 @@ contains
         character(len=:), allocatable :: errmsg
         type(halfmap_diagnostics_result) :: pair_diagnostics
         real    :: weight_prev, trail_chain_mrep, trail_mrep_new
-        integer :: ldim(3), trail_chain_gen, trail_ncontrib
+        integer :: trail_chain_gen, trail_ncontrib
         logical :: l_trail_chain
         integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos
         integer(timer_int_kind) :: t_trail_blend
@@ -104,12 +105,7 @@ contains
         endif
         call restore_eos_and_write_fsc()
         call sum_eos_after_density_correction_if_needed()
-        call capture_nonuniform_source_halves()
         call restore_merged_volume()
-        ! build%vol/vol2 hold the restored halves for automasking; low-resolution e/o
-        ! blending belongs to reprojection-model preparation, never to these on-disk halfmaps.
-        call build%vol%read(eonames(1))
-        call build%vol2%read(eonames(2))
         ! Record the shipped soft-sphere support (msk_crop) and whether the ML prior shrank the map,
         ! so postprocess neither masks nor FSC-weights it again.
         if( params%l_ml_reg )then
@@ -418,8 +414,19 @@ contains
             if( L_BENCH_GLOB ) t_restore_eos = tic()
             ! The (blended or seeded) sums are the statistics of the map written
             ! to disk, so the FSC is always estimated from the restored halves.
-            call restore_gridding_pair(params, even_rec, odd_rec, state, &
-                &eonames(1), eonames(2), pair_diagnostics)
+            if( params%l_nonuniform )then
+                ! the NU inputs are the halves as written (read back exactly), kept in memory
+                if( use_static_nu_aux_replacement() )then
+                    call restore_gridding_pair(params, even_rec, odd_rec, state, eonames(1), eonames(2), &
+                        &pair_diagnostics, vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd)
+                else
+                    call restore_gridding_pair(params, even_rec, odd_rec, state, eonames(1), eonames(2), &
+                        &pair_diagnostics, vol_nu_base_even, vol_nu_base_odd)
+                endif
+            else
+                call restore_gridding_pair(params, even_rec, odd_rec, state, &
+                    &eonames(1), eonames(2), pair_diagnostics)
+            endif
             res05      = pair_diagnostics%res_fsc05
             res0143    = pair_diagnostics%res_fsc0143
             cfar       = pair_diagnostics%cfar
@@ -456,27 +463,6 @@ contains
             if( .not. params%l_ml_reg ) return
             call sum_pair_into_sum_rec()
         end subroutine sum_eos_after_density_correction_if_needed
-
-        subroutine capture_nonuniform_source_halves()
-            if( .not. params%l_nonuniform ) return
-            ldim = [params%box_crop, params%box_crop, params%box_crop]
-            call vol_nu_base_even%new(ldim, params%smpd_crop)
-            call vol_nu_base_odd%new( ldim, params%smpd_crop)
-            if( params%l_ml_reg )then
-                call vol_nu_base_even%read(add2fbody(eonames(1), MRC_EXT, '_unfil'))
-                call vol_nu_base_odd%read( add2fbody(eonames(2), MRC_EXT, '_unfil'))
-                if( use_static_nu_aux_replacement() )then
-                    call vol_nu_aux_even%new(ldim, params%smpd_crop)
-                    call vol_nu_aux_odd%new( ldim, params%smpd_crop)
-                    call vol_nu_aux_even%read(eonames(1))
-                    call vol_nu_aux_odd%read( eonames(2))
-                endif
-            else
-                call vol_nu_base_even%read(eonames(1))
-                call vol_nu_base_odd%read( eonames(2))
-            endif
-            ! the half-maps on disk are deapodized by the one-half gridding backend; nothing to apply here
-        end subroutine capture_nonuniform_source_halves
 
         subroutine restore_merged_volume()
             if( L_BENCH_GLOB ) t_restore_merged = tic()
@@ -643,12 +629,14 @@ contains
         !! base/replay mechanics but no composite lifetime, partial reduction, or
         !! trailing-chain policy.
         subroutine restore_gridding_pair( params, even_rec, odd_rec, state, fname_even, fname_odd, &
-            &diagnostics )
+            &diagnostics, base_even, base_odd, aux_even, aux_odd )
             class(parameters),                intent(in)    :: params
             class(reconstructor),             intent(inout) :: even_rec, odd_rec
             integer,                          intent(in)    :: state
             class(string),                    intent(in)    :: fname_even, fname_odd
             type(halfmap_diagnostics_result), intent(out)   :: diagnostics
+            type(image), optional,            intent(inout) :: base_even, base_odd !< the unregularized halves as written
+            type(image), optional,            intent(inout) :: aux_even, aux_odd   !< the regularized halves as written (ml_reg)
             type(gridding_half_restore) :: even_restore, odd_restore
             real,     allocatable :: res(:)
             real                  :: smpd, fny
@@ -668,10 +656,12 @@ contains
                 call even_restore%finalize_from_base(even_rec)
                 call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                if( present(base_even) ) call keep_half(even_restore%final, base_even)
                 call odd_rec%restore_base(odd_restore%base, preserve_numerator=.true.)
                 call odd_restore%finalize_from_base(odd_rec)
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                if( present(base_odd) ) call keep_half(odd_restore%final, base_odd)
                 call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
                     &state, diagnostics)
                 call even_restore%final%kill
@@ -685,12 +675,14 @@ contains
                 call even_rec%restore_final(even_restore%final, preserve_numerator=.true.)
                 call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call even_restore%final%write(fname_even, del_if_exists=.true.)
+                if( present(aux_even) ) call keep_half(even_restore%final, aux_even)
                 call even_restore%final%kill
                 call odd_restore%base%kill
                 call odd_restore%prepare_final(odd_rec)
                 call odd_rec%restore_final(odd_restore%final, preserve_numerator=.true.)
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(fname_odd, del_if_exists=.true.)
+                if( present(aux_odd) ) call keep_half(odd_restore%final, aux_odd)
                 call odd_restore%final%kill
             else
                 call even_rec%restore_base(even_restore%base)
@@ -704,10 +696,12 @@ contains
                 ! wrote the map and never a stale pair from an earlier
                 ! regularized assembly at another box
                 call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                if( present(base_even) ) call keep_half(even_restore%final, base_even)
                 call odd_restore%finalize_from_base(odd_rec)
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(fname_odd, del_if_exists=.true.)
                 call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                if( present(base_odd) ) call keep_half(odd_restore%final, base_odd)
                 call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
                     &state, diagnostics)
                 call even_restore%final%kill
@@ -722,6 +716,17 @@ contains
             call even_restore%kill
             call odd_restore%kill
         end subroutine restore_gridding_pair
+
+        !> a restored half as a read of the file just written gives it: the box only, zero FFT padding
+        subroutine keep_half( half, kept )
+            type(image), target, intent(in)    :: half
+            type(image),         intent(inout) :: kept
+            real(kind=c_float), pointer :: rmat_half(:,:,:), rmat_kept(:,:,:)
+            call kept%new([params%box_crop, params%box_crop, params%box_crop], params%smpd_crop)
+            call half%get_rmat_ptr(rmat_half)
+            call kept%get_rmat_ptr(rmat_kept)
+            rmat_kept = rmat_half
+        end subroutine keep_half
 
         !> Gridding adapter for the backend-neutral half-map evaluator: builds
         !! the merged average, selects lagged NU or density fallback in nu mode,
@@ -822,12 +827,29 @@ contains
     end subroutine filter_pcg_nonuniform_maps
 
     subroutine exec_volassemble( self, cline )
+        class(commander_volassemble), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        call run_volassemble(cline)
+    end subroutine exec_volassemble
+
+    !> volume assembly from the caller's project of projfile in memory (read and unchanged since: copied, not read
+    !! again); its project, as it ends with every write done, is handed back in spproj_out
+    subroutine exec_volassemble_hand_on( self, cline, spproj_src, spproj_out )
+        class(commander_volassemble), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        class(sp_project),            intent(in)    :: spproj_src
+        class(sp_project),            intent(inout) :: spproj_out
+        call run_volassemble(cline, spproj_src, spproj_out)
+    end subroutine exec_volassemble_hand_on
+
+    subroutine run_volassemble( cline, spproj_src, spproj_out )
         use simple_reconstructor,   only: reconstructor
         use simple_nu_filter,       only: set_nu_filter_report, NU_DEV_OUTPUT
         use simple_nu_state_filter, only: nonuniform_filter_state, nu_state_filter_timings, &
             &nu_aux_member
-        class(commander_volassemble), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
+        class(cmdline),              intent(inout) :: cline
+        class(sp_project), optional, intent(in)    :: spproj_src
+        class(sp_project), optional, intent(inout) :: spproj_out
         type(parameters), target      :: params
         type(builder)                 :: build
         type(reconstructor)           :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
@@ -856,6 +878,8 @@ contains
         real(timer_int_kind)          :: rt_trail_blend_accums
         real(timer_int_kind)          :: rt_nu_envmask, rt_nonuniform_filter, rt_tot
         real(timer_int_kind)          :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
+        real(timer_int_kind), allocatable :: rt_state_restore(:), rt_state_nu(:)
+        integer(timer_int_kind)       :: t_state
         call initialize_bench_timers()
         if( L_BENCH_GLOB ) t_init_context = tic()
         call initialize_context()
@@ -876,6 +900,7 @@ contains
         if( L_BENCH_GLOB ) t_upd_proj = tic()
         call update_project_resolution_metadata()
         if( L_BENCH_GLOB ) rt_upd_proj = toc(t_upd_proj)
+        if( present(spproj_out) ) call spproj_out%copy(build%spproj)
         if( L_BENCH_GLOB ) t_cleanup = tic()
         call cleanup_context()
         if( L_BENCH_GLOB ) rt_cleanup = toc(t_cleanup)
@@ -901,12 +926,10 @@ contains
         end subroutine initialize_bench_timers
 
         subroutine initialize_context()
-            call build%init_params_and_build_general_tbox(cline, params)
+            call build%init_params_and_build_general_tbox(cline, params, spproj_src=spproj_src)
             ! the retired build_rec_eo_tbox back-filled missing per-particle
             ! projection-direction labels before assembly; preserve that contract
-            if( .not. build%spproj_field%isthere('proj') )then
-                call build%spproj_field%set_projs(build%eulspace)
-            endif
+            if( .not. build%spproj_field%isthere('proj') ) call build%spproj_field%set_projs(build%eulspace)
             call set_nu_filter_report(params%part == 1)
             call even_rec%new_accumulator(params, build%spproj, expand=.false.)
             call odd_rec%new_accumulator(params, build%spproj, expand=.false.)
@@ -959,6 +982,7 @@ contains
             allocate(trail_counts(TC_N,params%nstates), source=0.)
             allocate(state_pops(params%nstates))
             state_pops = 0
+            allocate(rt_state_restore(params%nstates), rt_state_nu(params%nstates), source=0._timer_int_kind)
         end subroutine initialize_context
 
         subroutine refresh_state_populations()
@@ -1054,7 +1078,6 @@ contains
             trail_counts           = 0.
             if( cline%defined('trail_seed') .and. .not. params%l_trail_rec )then
                 ! a full-reconstruction seed represents the rows sample4rec selects
-                call build%spproj%read_segment(params%oritype, params%projfile)
                 if( l_weighted )then
                     call build%spproj%os_ptcl3D%get_update_rows(rep_rows, smp_rows, rec_rows)
                     do istate = 1, params%nstates
@@ -1069,7 +1092,8 @@ contains
                 endif
             endif
             if( .not. params%l_trail_rec ) return
-            call build%spproj%read_segment(params%oritype, params%projfile)
+            ! the counts use the field in memory: it is the file plus any back-filled projection labels,
+            ! which do not enter the counts and are kept for the field written later
             ! N(s) and n(s) of the population rule; f = n/N
             if( l_weighted )then
                 call build%spproj%os_ptcl3D%get_update_rows(rep_rows, smp_rows, rec_rows)
@@ -1114,6 +1138,7 @@ contains
         end subroutine determine_trailing_update_fraction
 
         subroutine assemble_state()
+            if( L_BENCH_GLOB ) t_state = tic()
             if( l_frozen_carry )then
                 call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
                     &sum_rec, state, numlen_part, &
@@ -1146,6 +1171,7 @@ contains
                     &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                     &volname, eonames, res05s(state), res0143s(state), cfars(state), restore_timings)
             endif
+            if( L_BENCH_GLOB ) rt_state_restore(state) = toc(t_state)
             if( l_state_carried )then
                 ! no sample and no chain: nothing was restored, as for a dropped state
                 l_state_dropped(state) = .true.
@@ -1156,7 +1182,9 @@ contains
             params%vols(state)      = volname
             params%vols_even(state) = eonames(1)
             params%vols_odd(state)  = eonames(2)
+            if( L_BENCH_GLOB ) t_state = tic()
             call postprocess_state()
+            if( L_BENCH_GLOB ) rt_state_nu(state) = toc(t_state)
             call volname%kill
         end subroutine assemble_state
 
@@ -1290,7 +1318,7 @@ contains
 
         subroutine write_benchmark()
             use simple_bench_io, only: open_bench_report
-            integer :: fnr
+            integer :: fnr, istate
             if( .not. L_BENCH_GLOB ) return
             rt_tot = toc(t_tot)
             call open_bench_report(fnr, 'VOLASSEMBLE', iter=params%which_iter)
@@ -1322,9 +1350,22 @@ contains
                 &  rt_nonuniform_filter +                                                         &
                 &  rt_init_context + rt_trail_frac + rt_gridcorr + rt_upd_proj + rt_cleanup)      &
                 & / rt_tot) * 100.
+            ! parts of the timings above, not added to the accounted-for total
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** SPLIT TIMINGS (S) ***'
+            write(fnr,'(a,1x,f0.2)') 'volassemble nu filter candidate filter :', nu_timings%filtering
+            write(fnr,'(a,1x,f0.2)') 'volassemble nu filter objective        :', nu_timings%objective
+            write(fnr,'(a,1x,f0.2)') 'volassemble nu filter optimisation     :', nu_timings%optimise
+            write(fnr,'(a,1x,f0.2)') 'volassemble nu filter composition      :', nu_timings%compose
+            do istate = 1,params%nstates
+                write(fnr,'(a,i2.2,a,1x,f0.2)') 'volassemble state ', istate, ' restore           :', &
+                    &rt_state_restore(istate)
+                write(fnr,'(a,i2.2,a,1x,f0.2)') 'volassemble state ', istate, ' nonuniform filter :', &
+                    &rt_state_nu(istate)
+            enddo
             call fclose(fnr)
         end subroutine write_benchmark
 
-    end subroutine exec_volassemble
+    end subroutine run_volassemble
 
 end module simple_commanders_rec_distr

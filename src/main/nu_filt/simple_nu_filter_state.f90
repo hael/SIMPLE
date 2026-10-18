@@ -28,6 +28,15 @@ contains
             &allocated(aux_even_bank) .and. allocated(aux_odd_bank)
     end function nu_label_is_aux_replacement
 
+    !> the wall seconds of the current sequence (zero without L_BENCH_GLOB)
+    module subroutine get_nu_filter_timings( filtering, objective, optimise, compose )
+        real(timer_int_kind), intent(out) :: filtering, objective, optimise, compose
+        filtering = nu_rt_filtering
+        objective = nu_rt_objective
+        optimise  = nu_rt_optimise
+        compose   = nu_rt_compose
+    end subroutine get_nu_filter_timings
+
     module subroutine init_nu_filter( vol_even, vol_odd, fsc_res )
         class(image), intent(in) :: vol_even, vol_odd
         real,    optional, intent(in) :: fsc_res
@@ -40,6 +49,10 @@ contains
         if( abs(vol_odd%get_smpd() - smpd) > TINY ) THROW_HARD('Input volume smpd differs; init_nu_filter')
         if( smpd <= TINY ) THROW_HARD('Input volume smpd must be positive; init_nu_filter')
         nu_smooth_norm_radius = -1
+        nu_rt_filtering = 0.
+        nu_rt_objective = 0.
+        nu_rt_optimise  = 0.
+        nu_rt_compose   = 0.
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         allocate(cutoff_finds_tmp(size(lowpass_limits)))
         do i = 1, size(lowpass_limits)
@@ -71,37 +84,6 @@ contains
         logical, intent(in) :: l_report
         nu_l_report = l_report
     end subroutine set_nu_filter_report
-
-    module function filtered_vol_fname( cache_prefix, cutoff_find ) result( fname )
-        class(string), intent(in) :: cache_prefix
-        integer,       intent(in) :: cutoff_find
-        type(string) :: fname
-        fname = cache_prefix%to_char()//'_k_'//int2str(cutoff_find)//'.mrc'
-    end function filtered_vol_fname
-
-    module logical function filtered_vols_cached( cache_prefix )
-        class(string), intent(in) :: cache_prefix
-        integer :: i
-        filtered_vols_cached = .false.
-        if( .not.allocated(cutoff_finds) ) return
-        do i = 1, size(cutoff_finds)
-            if( nu_label_is_aux_replacement(i) ) cycle
-            if( .not.file_exists(filtered_vol_fname(cache_prefix, cutoff_finds(i))) ) return
-        end do
-        filtered_vols_cached = .true.
-    end function filtered_vols_cached
-
-    module subroutine delete_cached_filtered_vols( cache_prefix )
-        class(string), intent(in) :: cache_prefix
-        integer :: i
-        if( allocated(cutoff_finds) ) then
-            do i = 1, size(cutoff_finds)
-                if( file_exists(filtered_vol_fname(cache_prefix, cutoff_finds(i))) ) then
-                    call del_file(filtered_vol_fname(cache_prefix, cutoff_finds(i)))
-                end if
-            end do
-        end if
-    end subroutine delete_cached_filtered_vols
 
     module subroutine pack_nu_raw_candidate( dmat_full, icand )
         real,    intent(in) :: dmat_full(:,:,:)
@@ -188,8 +170,6 @@ contains
     end subroutine accumulate_nu_evidence_raw
 
     module subroutine cleanup_nu_filter
-        call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
-        call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
         call release_nu_filter_unary_storage
         if( allocated(nu_ev_base)         ) deallocate(nu_ev_base)
         if( allocated(nu_ev_best)         ) deallocate(nu_ev_best)
@@ -552,49 +532,39 @@ contains
         !$omp end parallel do
     end subroutine pack_nu_dmat_candidate
 
-    module subroutine cache_filtered_vols( vol_even, vol_odd )
-        class(image), intent(in) :: vol_even, vol_odd
-        type(image) :: vol_even_filt, vol_odd_filt
-        type(image) :: vol_even_copy_cmat, vol_odd_copy_cmat
-        type(string) :: even_cache_fname, odd_cache_fname
-        integer :: i, winsz
+    !> the Fourier transforms of the edge-tapered input halves, and the work pair the candidates are filtered into
+    module subroutine prepare_nu_candidate_fts( vol_even, vol_odd, ft_even, ft_odd, filt_even, filt_odd )
+        class(image), intent(in)    :: vol_even, vol_odd
+        type(image),  intent(inout) :: ft_even, ft_odd, filt_even, filt_odd
+        integer :: winsz
         real    :: edge_mean
-        logical :: even_cached, odd_cached
         winsz = nint(COSMSKHALFWIDTH)
-        even_cached = filtered_vols_cached(string(NU_FILTER_CACHE_EVEN))
-        odd_cached  = filtered_vols_cached(string(NU_FILTER_CACHE_ODD))
-        if( even_cached .and. odd_cached ) return
-        call vol_even_copy_cmat%copy(vol_even)
-        call vol_odd_copy_cmat%copy(vol_odd)
-        call vol_even_copy_cmat%set_wthreads(.true.)
-        call vol_odd_copy_cmat%set_wthreads(.true.)
-        call vol_even_copy_cmat%taper_edges_vol(winsz, edge_mean)
-        call vol_odd_copy_cmat%taper_edges_vol(winsz, edge_mean)
-        call vol_even_copy_cmat%fft
-        call vol_odd_copy_cmat%fft
-        call vol_even_filt%new(ldim, smpd)
-        call vol_odd_filt%new(ldim, smpd)
-        call vol_even_filt%set_ft(.true.)
-        call vol_odd_filt%set_ft(.true.)
-        call vol_even_filt%set_wthreads(.true.)
-        call vol_odd_filt%set_wthreads(.true.)
-        do i = 1, size(cutoff_finds)
-            if( nu_label_is_aux_replacement(i) ) cycle
-            even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
-            odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
-            if( file_exists(even_cache_fname) .and. file_exists(odd_cache_fname) ) cycle
-            call vol_even_filt%copy_fast(vol_even_copy_cmat)
-            call vol_odd_filt%copy_fast(vol_odd_copy_cmat)
-            call vol_even_filt%apply_filter(vol_odd_filt, bwfilters(:,i)) ! double filter application
-            call vol_even_filt%ifft
-            call vol_odd_filt%ifft
-            call vol_even_filt%write(even_cache_fname, del_if_exists=.true.)
-            call vol_odd_filt%write(odd_cache_fname,  del_if_exists=.true.)
-        end do
-        call vol_even_copy_cmat%kill
-        call vol_odd_copy_cmat%kill
-        call vol_even_filt%kill
-        call vol_odd_filt%kill
-    end subroutine cache_filtered_vols
+        call ft_even%copy(vol_even)
+        call ft_odd%copy(vol_odd)
+        call ft_even%set_wthreads(.true.)
+        call ft_odd%set_wthreads(.true.)
+        call ft_even%taper_edges_vol(winsz, edge_mean)
+        call ft_odd%taper_edges_vol(winsz, edge_mean)
+        call ft_even%fft
+        call ft_odd%fft
+        call filt_even%new(ldim, smpd)
+        call filt_odd%new(ldim, smpd)
+        call filt_even%set_ft(.true.)
+        call filt_odd%set_ft(.true.)
+        call filt_even%set_wthreads(.true.)
+        call filt_odd%set_wthreads(.true.)
+    end subroutine prepare_nu_candidate_fts
+
+    !> candidate i's pair: the Butterworth low-pass of both transforms, back in real space
+    module subroutine filter_nu_candidate( i, ft_even, ft_odd, filt_even, filt_odd )
+        integer,     intent(in)    :: i
+        type(image), intent(in)    :: ft_even, ft_odd
+        type(image), intent(inout) :: filt_even, filt_odd
+        call filt_even%copy_fast(ft_even)
+        call filt_odd%copy_fast(ft_odd)
+        call filt_even%apply_filter(filt_odd, bwfilters(:,i)) ! double filter application
+        call filt_even%ifft
+        call filt_odd%ifft
+    end subroutine filter_nu_candidate
 
 end submodule simple_nu_filter_state

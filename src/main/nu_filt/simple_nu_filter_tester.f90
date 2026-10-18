@@ -7,7 +7,7 @@
 module simple_nu_filter_tester
 use simple_core_module_api
 use simple_image,     only: image
-use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, pack_filtmap_lowpass_limits, &
+use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, pack_filtmap_lowpass_limits, &
                            &cleanup_nu_filter, set_nu_filter_report, build_nu_evidence_state, nu_evidence_state, &
                            &nu_evidence_summary, get_nu_evidence_summary, unpack_nu_evidence_state, &
                            &nu_evidence_state_is_valid, calc_nu_evidence_margin, nu_evidence_envelope, &
@@ -46,6 +46,7 @@ contains
         call test_noise_scale()
         call test_ranking_scale_free()
         call test_coarser_region()
+        call test_composition_per_label()
         call test_evidence_envelope()
     end subroutine run_all_nu_filter_tests
 
@@ -373,6 +374,65 @@ contains
         call assert_true(frac_fine   >= 0.9, 'at least 90% of the fine half is at or finer than 6 A')
         call assert_true(frac_coarse >= 0.9, 'at least 90% of the coarse half is at or coarser than 10 A')
     end subroutine test_coarser_region
+
+    !> the composed pair of the split phantom, filtered again from the input halves: every voxel is its label's
+    !! candidate (the edge-tapered half Butterworth-filtered at the label's cutoff; label 1 outside the support), exactly
+    subroutine test_composition_per_label()
+        use simple_nu_filter_vars, only: filtmap, cutoff_finds, nu_lmask
+        use simple_butterworth,    only: butterworth_filter
+        type(image) :: even, odd, even_nu, odd_nu
+        real, allocatable :: bwfilter(:)
+        integer :: icut, ndiff
+        write(logfhandle,'(A)') '-- test_composition_per_label'
+        call make_pair(.true., even, odd)
+        call set_nu_filter_report(.false.)
+        call setup_nu_dmats(even, odd, MSKDIAM, [real ::])
+        call optimize_nu_cutoff_finds()
+        call nu_filter_vols(even_nu, odd_nu, even, odd)
+        allocate(bwfilter(BOX), source=0.)
+        ndiff = 0
+        do icut = 1, size(cutoff_finds)
+            call butterworth_filter(cutoff_finds(icut), bwfilter)
+            ndiff = ndiff + count_label_diffs(even, even_nu, icut) + count_label_diffs(odd, odd_nu, icut)
+        enddo
+        call assert_int(0, ndiff, 'every composed voxel is its label''s candidate, bit for bit')
+        call assert_true(count(nu_lmask .and. filtmap > 1) > 1000, 'the composition holds labels beyond the coarsest')
+        call cleanup_nu_filter()
+        call set_nu_filter_report(.true.)
+        call even%kill
+        call odd%kill
+        call even_nu%kill
+        call odd_nu%kill
+
+    contains
+
+        !> voxels of label icut where the composed half differs from the half filtered at that label
+        integer function count_label_diffs( half, composed, icut_loc ) result( n )
+            type(image), intent(in)    :: half
+            type(image), intent(inout) :: composed
+            integer,     intent(in)    :: icut_loc
+            type(image) :: cand
+            real(kind=c_float), pointer :: rmat_cand(:,:,:), rmat_comp(:,:,:)
+            logical, allocatable :: l_label(:,:,:)
+            real :: edge_mean
+            call cand%copy(half)
+            call cand%set_wthreads(.true.)
+            call cand%taper_edges_vol(nint(COSMSKHALFWIDTH), edge_mean)
+            call cand%fft
+            call cand%apply_filter(bwfilter)
+            call cand%ifft
+            call cand%get_rmat_ptr(rmat_cand)
+            call composed%get_rmat_ptr(rmat_comp)
+            if( icut_loc == 1 )then
+                l_label = (.not. nu_lmask) .or. filtmap == 1
+            else
+                l_label = nu_lmask .and. filtmap == icut_loc
+            endif
+            n = count(l_label .and. rmat_cand /= rmat_comp)
+            call cand%kill
+        end function count_label_diffs
+
+    end subroutine test_composition_per_label
 
     !> the neutral fixture through the evidence path: the compact state favours signal inside the molecule
     !! and the null in the solvent, the margin separates them, the envelope recovers the molecule; a pair
