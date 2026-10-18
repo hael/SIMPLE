@@ -1,6 +1,6 @@
 !@descr: projection-aware covariance heterogeneity commander
 module simple_commanders_flex_pca
-use simple_commanders_api, only: autoscale, builder, cmdline, commander_base, file_exists, logfhandle, &
+use simple_commanders_api, only: autoscale, builder, cmdline, commander_base, file_exists, image, logfhandle, &
     &parameters, simple_end, simple_exception, sp_project, simple_abspath, string
 implicit none
 
@@ -134,24 +134,33 @@ contains
         call val%kill
     end function flex_pca_auto_states
 
-    ! Pick up the project consensus map (out segment, imgkind=vol, state 1) when vol1 is not on the
-    ! command line. Called on the master before params%new so the workers inherit the resolved path.
-    ! The mean is read at the native particle sampling, so a consensus map registered at a stage
-    ! crop is rejected here and must be passed explicitly instead.
+    ! Pick up the project consensus map (out segment, state 1) when vol1 is not on the command line:
+    ! the particle map (imgkind=vol), else the class-average map (imgkind=vol_cavg). Called on the
+    ! master before params%new so the workers inherit the resolved path. The mean is read at the native
+    ! particle sampling, so a particle map registered at a stage crop is rejected here and must be
+    ! passed explicitly; a class-average map at a crop is Fourier-padded to the native box (same field
+    ! of view required) and written to the current directory.
     subroutine pickup_project_consensus_volume( cline )
         class(cmdline), intent(inout) :: cline
+        character(len=*), parameter :: NATIVE_MEAN_FNAME = 'flex_pca_consensus_native.mrc'
         type(sp_project) :: spproj
+        type(image)      :: img
         type(string)     :: projfile, vol1
+        character(len=8) :: imgkind
         real             :: smpd, vol_smpd
         integer          :: box, vol_box
         if( cline%defined('vol1') ) return
         projfile = cline%get_carg('projfile')
         call spproj%read_segment('out', projfile)
-        if( .not. spproj%isthere_in_osout('vol', 1) )then
+        if( spproj%isthere_in_osout('vol', 1) )then
+            imgkind = 'vol'
+        else if( spproj%isthere_in_osout('vol_cavg', 1) )then
+            imgkind = 'vol_cavg'
+        else
             call spproj%kill
             THROW_HARD('flex_pca requires a consensus mean map: pass vol1 or register one in the project out segment')
         endif
-        call spproj%get_vol('vol', 1, vol1, vol_smpd, vol_box)
+        call spproj%get_vol(trim(imgkind), 1, vol1, vol_smpd, vol_box)
         call spproj%kill
         if( .not. file_exists(vol1) ) THROW_HARD('flex_pca project consensus map does not exist: '//vol1%to_char())
         call spproj%read_segment('stk', projfile)
@@ -159,11 +168,22 @@ contains
         smpd = spproj%get_smpd()
         call spproj%kill
         if( vol_box /= box .or. vol_smpd <= 0. .or. abs(vol_smpd - smpd) > 1.e-6 )then
-            THROW_HARD('flex_pca project consensus map must match the native particle sampling; pass vol1 explicitly')
+            if( trim(imgkind) == 'vol' )then
+                THROW_HARD('flex_pca project consensus map must match the native particle sampling; pass vol1 explicitly')
+            endif
+            ! class-average map at a stage crop: same field of view, resampled to the native lattice
+            if( vol_smpd <= 0. .or. abs(real(vol_box)*vol_smpd - real(box)*smpd) > 0.01 * real(box)*smpd )then
+                THROW_HARD('flex_pca project class-average map does not cover the particle field of view; pass vol1 explicitly')
+            endif
+            call img%read_and_crop(vol1, smpd, box, smpd)
+            call vol1%kill
+            vol1 = NATIVE_MEAN_FNAME
+            call img%write(vol1)
+            call img%kill
         endif
         vol1 = simple_abspath(vol1)
         call cline%set('vol1', vol1)
-        write(logfhandle,'(A)') '>>> FLEX_PCA consensus map from project: '//vol1%to_char()
+        write(logfhandle,'(A)') '>>> FLEX_PCA consensus map ('//trim(imgkind)//') from project: '//vol1%to_char()
         call projfile%kill
         call vol1%kill
     end subroutine pickup_project_consensus_volume
