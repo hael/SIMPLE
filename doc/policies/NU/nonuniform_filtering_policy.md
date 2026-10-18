@@ -151,18 +151,30 @@ For each state, `volassemble` then:
    local-resolution products
 9. records the finest NU bank member as the matching low-pass handoff
 
-The handoff is a REQUEST, not the band. Matching never extends beyond the
-base pair's FSC=0.143 resolution in any program (2026-10-16): `set_bp_range3D`
-clamps `kfromto(2)` to the FSC=0.143 crossing after every route that can set
-it -- an explicit `lp`, the NU handoff (directly or via the
-`nonuniform_lpset` promotion), `lplim_crit`, or the project `lp` field --
-logging `>>> MATCHING LOW-PASS CLAMPED TO FSC=0.143`. The `fsc/1.5` bank cap
-below stays as it is: admitting candidates finer than the FSC is right for
-the FILTER, because local resolution exceeds the global average, but the
-search must not be driven by frequencies the two halves do not share. On
-PfCRT the uncapped handoff pinned matching at 3.98 A against a 4.03 A
-FSC=0.143 and the FSC=0.5 crossing fell from 4.7 to 6.3 A while the 0.143
-crossing "improved" on matched noise.
+A per-iteration FSC=0.143 clamp on the matching band was tried in
+`set_bp_range3D` and **reverted** (2026-10-16, `65bee3073`; reverted the same
+day after it degraded PfCRT). Do not reintroduce it there. Two reasons:
+
+- In solve3D the band is the controller's stage ladder, not an FSC estimate.
+  `l_lpset` is `cline%defined('lp')` and `simple_solve3D_controller` sets `lp`
+  on every refine3D command line, so `set_bp_range3D` always takes the
+  `l_lpset` branch and the FSC is read only to populate `build%fsc`. Clamping
+  there clamps the ladder, whose purpose is to run ahead of achieved
+  resolution so the map can climb into the band. `l_incrreslim` is switched
+  off whenever `lp` is set, for exactly this reason. The clamp fired on 14-29%
+  of iterations across ten PfCRT restarts.
+- `get_find_at_crit` returns the FIRST shell scanning outward below the
+  criterion. PfCRT's FSC is non-monotonic (a dip near 5.97 A recovering by
+  5.17 A), so a single noisy shell collapses the band.
+
+The band is already bounded at the controller, by the stage ladder's `lp_cap`
+and `lpstop_eff`. A FSC=0.143 ceiling belongs there if it is wanted at all:
+with headroom, on the converged rather than the current crossing, and robust
+to a single dipping shell.
+
+The `fsc/1.5` bank cap below stays as it is. Admitting candidates finer than
+the global FSC is right for the FILTER, because local resolution exceeds the
+global average.
 
 Low-resolution even/odd insertion is a registration-reference preparation
 trick. It must not feed `volassemble` FSC calculation, automasking, NU

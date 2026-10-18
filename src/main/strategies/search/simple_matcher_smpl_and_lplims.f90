@@ -22,7 +22,7 @@ contains
         real, allocatable :: resarr(:), fsc_arr(:)
         real              :: fsc0143, fsc05, nu_align_lp
         real              :: mapres(params%nstates)
-        integer           :: s, loc, lp_ind, arr_sz, fsc_sz, nyqcrop_ind, fsc0143_ind
+        integer           :: s, loc, lp_ind, arr_sz, fsc_sz, nyqcrop_ind
         type(string)      :: fsc_fname
         logical           :: fsc_bin_exists(params%nstates), all_fsc_bin_exist, l_nu_align_lp
         l_nu_align_lp  = .false.
@@ -118,17 +118,6 @@ contains
             ! re-set the low-pass limit
             params%lp = calc_lowpass_lim(params%kfromto(2), params%box, params%smpd)
         endif
-        ! matching never extends beyond FSC=0.143: whatever set the band above
-        ! (explicit lp, the NU handoff, lplim_crit, the project field), the data
-        ! only supports frequencies up to the 0.143 crossing. Beyond it the
-        ! search is driven by noise the two halves do not share.
-        fsc0143_ind = fsc0143_find(params, build)
-        if( fsc0143_ind > 0 .and. params%kfromto(2) > fsc0143_ind )then
-            write(logfhandle,'(A,F8.3,A,F8.3,A)') '>>> MATCHING LOW-PASS CLAMPED TO FSC=0.143: ', &
-                &calc_lowpass_lim(params%kfromto(2), params%box, params%smpd), ' A -> ', &
-                &calc_lowpass_lim(fsc0143_ind,       params%box, params%smpd), ' A'
-            params%kfromto(2) = fsc0143_ind
-        endif
         ! making sure the resolution limit does not exceed limits of box_crop
         nyqcrop_ind       = calc_fourier_index(2.*params%smpd_crop, params%box_crop, params%smpd_crop)
         params%kfromto(2) = min(params%kfromto(2), nyqcrop_ind)
@@ -145,22 +134,6 @@ contains
         ! update low-pass limit in project
         call build%spproj_field%set_all2single('lp',params%lp)
     end subroutine set_bp_range3D
-
-    !> Fourier index of the FSC=0.143 crossing, the hard ceiling on the matching
-    !! band. 0 when no populated state carries an FSC. Multi-state takes the
-    !! best-resolved state, matching how the band itself is chosen above.
-    integer function fsc0143_find( params, build ) result( find )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer :: s, find_s
-        find = 0
-        do s = 1, params%nstates
-            if( build%spproj_field%get_pop(s, 'state') < 1 ) cycle
-            if( .not. any(build%fsc(s,:) > 0.143) ) cycle
-            find_s = get_find_at_crit(build%fsc(s,:), 0.143)
-            find   = max(find, find_s)
-        end do
-    end function fsc0143_find
 
     logical function try_nu_project_working_lp( params, build, align_lp ) result( l_use )
         class(parameters), intent(in)    :: params
