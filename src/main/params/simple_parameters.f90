@@ -138,7 +138,6 @@ type :: parameters
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
     character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
-    character(len=3)          :: lpexit='no'          !< internal: end the stage once the FSC=0.5 resolution is beyond the matching band(yes|no){no}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
@@ -558,6 +557,7 @@ type :: parameters
     real    :: lpstop_pickrefs=0.  !< solve3D_cavgs low-pass stop of the stream's picking references (in A; 0: the initial analysis' default)
     real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
     real    :: lpstop_coarse=0.    !< stop low-pass limit(in A){0}
+    real    :: lpexit=0.           !< internal: end the stage once FSC=0.5 resolves finer than this (in A; 0: off)
     real    :: lpstop_fine=0.      !< stop low-pass limit(in A){0}
     real    :: lpthres=STREAM_RES_THRESHOLD
     real    :: local_ang_bound=-1. !< refine3D_states local projection-angle override in degrees; negative is automatic
@@ -662,7 +662,6 @@ type :: parameters
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first
     logical :: l_cohort_sampling = .false.
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
-    logical :: l_lpexit          = .false. !< lpexit=yes: the stage ends once FSC=0.5 resolves beyond the band in use
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

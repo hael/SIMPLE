@@ -245,19 +245,58 @@ stages leave `emitted_lp` at its `-1` sentinel, which the stage report and
 the add-on manifest already treat as "not run". The one-rung advance above
 therefore applies only to the three stages that cannot be shifted past.
 
-**Mid-stage resolution exit (2026-10-18).** The same test is also applied
-during the stage, as a convergence criterion rather than a skip: the internal
-`lpexit` key, emitted on the refine3D command line for exactly the shiftable
-stages, makes `check_conv3D` end the stage once the best populated state's
-FSC=0.5 resolution is finer than `params%lp`, the band actually in use after
-the crop-Nyquist clamp. Logged as `>>> STAGE RESOLUTION EXIT`. This is
-consistent with the never-per-iteration rule above rather than an exception
-to it: the test asks only whether the crossing lies *beyond* the band, which
-is the region the alignments never matched and so cannot have overfitted, and
-it ends the stage without re-opening the band. It is self-braking -- once the
-next stage opens the band past the crossing the test fails again until the map
-genuinely improves. It only ever adds convergence, so `minits` and the
-Cartesian rule still hold.
+**Stage iteration budget (`MAXITS`): measured slack, not yet reallocated.**
+The budget stands at `[20,20,17,15,12,12,12,25]`. A reallocation of stage 3's
+budget to stage 6 was made on 2026-10-18 and reverted the same day, unrun,
+because moving `NU_FILTER_STAGE` to 5 removes the premise it rested on: stage
+6 was starved as the *first* NU stage, and it no longer is. Revisit with
+per-stage trajectories measured after the NU-at-5 run. The evidence stands on
+its own and is recorded here.
+
+From the ten-restart PfCRT reference `latest6`, which exhausts the budget of
+every stage 1-7 in every restart, so no stage before the last converges and
+all are cut off rather than finished:
+
+- Stage 3's orientation overlap peaks at iteration 4 (0.50-0.52) and then
+  declines monotonically for the remaining 13 (to 0.43-0.45) with resolution
+  flat at 11.089 A and cFAR trendless. Churn, not refinement: the band is
+  too coarse to discriminate, so assignments wander.
+- Stage 6, where NU filtering starts, carries the run from 9.70 to 4.50 A in
+  12 iterations and was still gaining resolution at its final iteration in 4
+  of the 10 restarts (gains of 0.32-0.58 A at cutoff).
+
+A stage-3-to-6 move would have been roughly time-neutral: -9 iterations at
+9.01 s and +8 at 13.26 s, measured per-iteration partition times. Note that
+flat FSC=0.143 alone does not mean
+a stage is wasteful, because the resolution estimate is quantised to Fourier
+shells: stages 4, 5 and the 19-iteration tail of stage 8 all hold resolution
+flat while cFAR climbs (0.48-0.57, 0.56-0.68 and 0.59-0.68), so their budgets
+stand. `MAXITS_CAVGS_EARLY` still overrides stages 1-3 on the class-average
+route, so the stage-3 change applies to the particle route only.
+
+**Mid-stage resolution exit (2026-10-18).** The stage-shift test is also
+evaluated during the stage, as a convergence criterion: the internal `lpexit`
+key carries `lpinfo(istage+1)%lp`, the next rung's planned limit, and
+`check_conv3D` ends the stage once the best populated state's `res05`
+resolves past it. Logged as `>>> STAGE RESOLUTION EXIT`. Emitted for the same
+stages the shift is allowed for, and it only ever adds convergence, so
+`minits` and the Cartesian rule still hold.
+
+A first version tested against `params%lp`, the band in use, and was
+reverted the same day: PfCRT `latest8` converged in 2 of 6 restarts. **Do not
+test the band in force.** A band-limited map's FSC=0.5 crossing sits at its
+band, because the map resolves to what it was matched at, so the test fires
+at the first opportunity in nearly every stage -- the run logged exits at
+12.937 A against a band of 12.938 A, and 11.089 against 11.089. Stages 3 and
+4 got 3 of their 17 and 15 iterations in every restart, and the final
+FSC=0.143 ranged over 4.03-7.96 A against a 4.05 A ten-restart baseline.
+
+The next rung's limit carries information because it has not been applied
+yet. On PfCRT's own ladder (20.0, 19.4, 18.3, 12.9, 11.1, 9.7, 9.1, 6.0 A)
+against its measured `res05` trajectory (14.8, 12.9, 12.4, 11.5, 9.7 A at
+stages 3-7) the test declines at every stage, which is correct: that map does
+not run ahead of its schedule. It is expected to fire on datasets whose maps
+do, which is where the saving is.
 
 Before 2026-10-18 the band was set to `res05` itself,
 which made it a function of a single crossing: on PfCRT, whose FSC runs
@@ -522,9 +561,24 @@ uses current evidence for assembled references plus the lagged evidence
 artifact for early consumers, with density fallback. There is no separate
 reference-mask control, so early stages remain spherical.
 
-The default multi-state (`nstates > 1`) stage limit stops at stage 5, before
-this NU-filtering policy is activated. Users who override `nstages` past that
-point re-enter the staged NU policy described here.
+NU filtering starts at `NU_FILTER_STAGE` = 5 (6 until 2026-10-18), one stage
+earlier than the `prob` -> `prob_neigh` switch at `PROB_NEIGH_REFINE_STAGE`.
+The two were the same stage before, so a reference becoming NU-filtered and a
+global search becoming a neighbourhood search arrived together and could not
+be attributed separately. Stage 5 also had capacity to spare on the PfCRT
+reference: resolution flat at 9.703 A from its third of twelve iterations,
+with only cFAR still moving (0.56-0.68). `l_state_continue_mode` already
+enabled NU from stage 5 through `TRAILREC_STAGE_SINGLE`, so this is an
+exercised path rather than new ground.
+
+The default multi-state (`nstates > 1`) stage limit is stage 5
+(`NSTAGES_INDEPENDENT`), so **that final stage is now an NU stage**; before
+2026-10-18 default multi-state ran no NU-filtered stage at all. Applied to
+multi-state deliberately, for the quality the filtered reference is expected
+to give. The envfsc and automasking boundaries are unaffected: both are
+`NSTAGES` (8) and remain outside the default multi-state schedule, as does
+`TRAILREC_STAGE_MULTI`. Users who override `nstages` past stage 5 re-enter the
+rest of the staged NU policy described here.
 
 Detailed NU behavior belongs to
 [nonuniform filtering policy](../NU/nonuniform_filtering_policy.md); detailed

@@ -26,11 +26,24 @@ controller:
 - the result is set on the refine3D command line **unconditionally**
   (`:636`).
 
-Because `l_lpset` is `cline%defined('lp')`
-(`simple_parameters_phases.f90:597`) and no route strips `lp` for a solve3D
-stage, `set_bp_range3D` always takes its `l_lpset` branch during solve3D. Its
-FSC-derived routes -- the NU handoff, `lplim_crit`, the project `lp` field --
-are unreachable there. They remain live for standalone refine3D.
+`l_lpset` is `cline%defined('lp')` (`simple_parameters_phases.f90:597`), and
+no route in the controller strips `lp` for a solve3D stage, so every solve3D
+stage reaches `set_bp_range3D` with `lp` defined.
+
+**Not established:** whether that makes the `else` branch's FSC-derived routes
+-- the NU handoff, `lplim_crit`, the project `lp` field -- unreachable in
+solve3D. An earlier revision of this note asserted it. The `latest6` logs
+contradict it: eight `>>> NU filter promoted matching low-pass to command
+line` lines, a write reached only from inside that branch, against a single
+occurrence of the `>>> NU filter matching low-pass limit` line that encloses
+it. One process cannot produce that ratio, so distributed log aggregation is
+involved and the control flow was not traced further. Needs checking against
+a build.
+
+Nothing below depends on the stronger claim. The clamp of section 2 was wrong
+on the gold-standard grounds and on `get_find_at_crit`'s first-crossing
+behaviour independently, and the ladder-clamping argument needs only that
+`lp` is set, which is verified.
 
 **The contract: the band leads achieved resolution.** The ladder deliberately
 runs ahead of the current map's FSC so the map has somewhere to climb into.
@@ -175,20 +188,34 @@ set only when `pgrp_start` outranks `pgrp` and so implies `l_srch4symaxis`:
 with no axis search, `symmetrize` does nothing at all. The rung advance is
 retained for the excluded stages.
 
-**Mid-stage exit, same gate set.** The boundary test only fires between
-stages, so a stage that becomes correct to leave halfway through still runs to
-convergence. The internal `lpexit` key (emitted for the shiftable stages only)
-adds the same test to `check_conv3D`, against `params%lp` -- the band in use
-after the crop-Nyquist clamp, not the printed one. It reuses
-`res05_state_avg`, which that function already computes, and only ever adds
-convergence, so `minits` and the Cartesian rule are untouched.
+**Mid-stage exit, referenced to the next rung.** The internal `lpexit` key
+carries `lpinfo(istage+1)%lp` and `check_conv3D` ends the stage once `res05`
+resolves past it. Same eligibility as the shift; only ever adds convergence.
 
-This is within the policy's never-per-iteration rule, not an exception to it.
-That rule exists because an FSC measured *inside* an opened band is
-contaminated by noise the alignment just fitted; the test here asks only
-whether the crossing lies *beyond* the band, which was never matched. It also
-self-brakes: once the next stage opens the band past the crossing, the test
-fails again until the map improves.
+A first version tested `params%lp`, the band in use, and was reverted the
+same day after PfCRT `latest8` converged in 2 of 6 restarts. The error was
+the reference quantity, not noise: a band-limited map's FSC=0.5 crossing sits
+at its band, so `res05 < params%lp` is true at the first opportunity in
+nearly every stage. The log shows it firing on 12.937 vs 12.938 A and 11.089
+vs 11.089 A; stages 3 and 4 got 3 of 17 and 3 of 15 iterations in all six
+restarts, and the final FSC=0.143 spread over 4.03-7.96 A against a 4.05 A
+baseline. Asking "has the map got ahead of the band?" is vacuous when the
+band is what limits the map.
+
+**What the benchmark says about the premise.** `BENCH` for `latest8` restart 1
+gives measured per-iteration partition times of 3.02, 3.36, 9.01, 10.61,
+12.37, 13.26 and 18.10 s for stages 1-6 and 8, at `box_crop` 88 to 160.
+`box_crop` never reaches the full 300, so per-iteration cost varies only ~6x
+across the ladder, and with the front-loaded budget stages 3-5 are ~33% of
+partition time at full budget and stage 7 another ~14%. Mid-stage iterations
+are worth real time. But the 46% cut `latest8` showed was not slack: it came
+from the reverted test truncating stages the map needed. The legitimate
+boundary test fired 0-1 times per restart.
+
+So the PfCRT success criterion is that the gate **declines**: few or no
+shifts, 9/10 converged, ~4.05 A. A large saving on PfCRT would be the warning
+sign. The scheme is known to find slack on export_gate and streptavidin,
+whose maps converge faster than the ladder plans.
 
 Compatibility was free: `emitted_lp` is initialised to `-1.` and the stage
 report already does `if( emitted_lp(i) < 0. ) cycle`, while the add-on

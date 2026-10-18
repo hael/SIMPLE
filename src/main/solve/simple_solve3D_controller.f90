@@ -30,7 +30,7 @@ integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refi
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
-integer,          parameter :: NU_FILTER_STAGE         = 6           ! switch on staged NU filtering
+integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! single-state prob_neigh refinement stages 6-8
 integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
@@ -655,12 +655,15 @@ contains
         else
             call cline_refine3D%delete('scan_exit')
         endif
-        ! mid-stage resolution exit, allowed exactly where the stage shift is: never the
-        ! first two stages, the last stage or the axis-search stage
+        ! Mid-stage resolution exit: the stage ends once FSC=0.5 resolves past what the
+        ! NEXT rung aims for, which is the stage-shift test evaluated every iteration.
+        ! Never against the band in use: a band-limited map's crossing sits at its band,
+        ! so that test fires on nothing (reverted 2026-10-18). Same eligibility as the
+        ! shift: never the first two stages, the last stage or the axis-search stage.
         if( .not. l_cavgs .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
-            &istage < active_refine3D_nstages() .and. &
+            &istage < active_refine3D_nstages() .and. allocated(lpinfo) .and. &
             &.not.( l_srch4symaxis .and. istage == SYMSRCH_STAGE ) )then
-            call cline_refine3D%set('lpexit',             'yes')
+            call cline_refine3D%set('lpexit',             lpinfo(istage+1)%lp)
         else
             call cline_refine3D%delete('lpexit')
         endif

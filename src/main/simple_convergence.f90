@@ -545,15 +545,15 @@ contains
         ! a Cartesian pass reports frac = 100 and an overlap any small motion meets: its own rule
         if( params%l_cart_refine ) &
             &converged = self%check_cont_conv(params, os, sampled > sampled_lb .and. states > 0.5, states, sampled)
-        ! lpexit: the halves agree past the band in use, so the crossing lies outside what
-        ! was matched and is clean. The stage's remaining iterations cannot reach it; the
-        ! next stage's crop can. Ends the stage only, never re-opens the band.
-        if( params%l_lpexit .and. .not.converged .and. allocated(res05_state_avg) )then
+        ! lpexit holds the next stage's planned limit: once the halves resolve past it the
+        ! remaining iterations at this crop buy nothing the next stage will not do better.
+        ! Only ever adds convergence.
+        if( params%lpexit > TINY .and. .not.converged .and. allocated(res05_state_avg) )then
             if( any(res05_state_avg > TINY) )then
                 res05_now = minval(res05_state_avg, mask=res05_state_avg > TINY)
-                if( res05_now < params%lp )then
+                if( res05_now < params%lpexit )then
                     write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
-                        &res05_now, ' A IS BEYOND THE MATCHING BAND (', params%lp, ' A)'
+                        &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', params%lpexit, ' A)'
                     converged = .true.
                 endif
             endif

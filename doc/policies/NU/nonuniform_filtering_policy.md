@@ -155,14 +155,24 @@ A per-iteration FSC=0.143 clamp on the matching band was tried in
 `set_bp_range3D` and **reverted** (2026-10-16, `65bee3073`; reverted the same
 day after it degraded PfCRT). Do not reintroduce it there. Two reasons:
 
-- In solve3D the band is the controller's stage ladder, not an FSC estimate.
-  `l_lpset` is `cline%defined('lp')` and `simple_solve3D_controller` sets `lp`
-  on every refine3D command line, so `set_bp_range3D` always takes the
-  `l_lpset` branch and the FSC is read only to populate `build%fsc`. Clamping
-  there clamps the ladder, whose purpose is to run ahead of achieved
-  resolution so the map can climb into the band. `l_incrreslim` is switched
-  off whenever `lp` is set, for exactly this reason. The clamp fired on 14-29%
-  of iterations across ten PfCRT restarts.
+- In solve3D the band is the controller's stage ladder, not an FSC estimate:
+  `simple_solve3D_controller` sets `lp` on every refine3D command line
+  (`:636`), and `l_lpset` is `cline%defined('lp')`
+  (`simple_parameters_phases.f90:597`). Clamping in `set_bp_range3D` therefore
+  clamps the ladder, whose purpose is to run ahead of achieved resolution so
+  the map can climb into the band. `l_incrreslim` is switched off whenever
+  `lp` is set, for exactly this reason. The clamp fired on 14-29% of
+  iterations across ten PfCRT restarts.
+
+  Not established: whether an `lp` on the command line makes the routes in the
+  `else` branch -- the NU handoff, `lplim_crit`, the project `lp` field --
+  unreachable in solve3D. An earlier revision of this paragraph asserted that;
+  the `latest6` logs contradict it, carrying eight
+  `>>> NU filter promoted matching low-pass to command line` lines, which
+  execute only inside that branch (the enclosing
+  `>>> NU filter matching low-pass limit` line appears once, so distributed
+  log aggregation is involved and the control flow was not traced further).
+  Confirm against a build before relying on either reading.
 - `get_find_at_crit` returns the FIRST shell scanning outward below the
   criterion. PfCRT's FSC is non-monotonic (a dip near 5.97 A recovering by
   5.17 A), so a single noisy shell collapses the band.
@@ -638,9 +648,11 @@ bank is the static ladder of section 8. solve3D has no gold-standard stage
 is always promoted to `nonuniform_lpset`. The controller forces
 `envfsc=no` before `ENVFSC_STAGE` and forwards the requested value at that stage;
 scheduled stage `lp` remains on the refine3D command line.
-The default multi-state (`nstates > 1`) `solve3D` policy stops at stage 5, before this
-NU-filtering and envfsc stage boundary, unless the user explicitly requests
-later stages. The separate final original-sampling reconstruction still
+The default multi-state (`nstates > 1`) `solve3D` policy stops at stage 5,
+which since 2026-10-18 is the first NU stage (`NU_FILTER_STAGE` = 5, was 6),
+so its final stage is NU-filtered and its band can take the
+`nonuniform_lpset` handoff. The envfsc boundary is unchanged at `NSTAGES`
+and still lies beyond the default multi-state schedule. The separate final original-sampling reconstruction still
 inherits the parent `envfsc` request.
 
 The solve3D cavgs route disables NU filtering and automasking.
