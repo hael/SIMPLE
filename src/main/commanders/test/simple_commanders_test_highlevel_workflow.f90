@@ -37,14 +37,16 @@ module subroutine exec_test_simulated_workflow( self, cline )
     real,             parameter :: CS             = 2.7
     real,             parameter :: KV             = 300.0
     real,             parameter :: FRACA          = 0.1
-    integer,          parameter :: NPROJS         = 100
-    integer,          parameter :: NPER_MOVIE     = 10
+    integer,          parameter :: NREPROJS       = 100
+    integer,          parameter :: NPROJS_6VXX    = 160
+    integer,          parameter :: NPROJS_1JXY    = NREPROJS
     integer,          parameter :: MOVIE_DIM      = 1536
     integer,          parameter :: NFRAMES        = 16
-    integer,          parameter :: NMOVIES        = 10
+    integer,          parameter :: NMOVIES_6VXX   = 16
+    integer,          parameter :: NMOVIES_1JXY   = 10
     integer,          parameter :: EXTRACT_BOX    = 192
     integer,          parameter :: NTHR           = 1
-    integer,          parameter :: SEED_6VXX      = 20261003
+    integer,          parameter :: SEED_6VXX      = 20260923
     integer,          parameter :: SEED_1JXY      = 20260923
     real,             parameter :: MIN_VOL_CORR   = 0.80
     real,             parameter :: MAX_FSC0143    = 40.0
@@ -72,9 +74,10 @@ module subroutine exec_test_simulated_workflow( self, cline )
     type(string)                        :: system_name, workflow_picker, pgrp, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
     type(string)                        :: truth_volume, solve3D_dir, final_volume
-    type(string)                        :: movie_files(NMOVIES)
+    type(string), allocatable           :: movie_files(:)
     character(len=XLONGSTRLEN)          :: workflow_root_path
-    integer                             :: i, j, proj_inds(NPER_MOVIE), projection_order(NPROJS), ldim(3), nprojs_stk
+    integer                             :: i, j, ldim(3), nprojs_stk, nmovies, nprojs, nper_movie
+    integer, allocatable                :: proj_inds(:), projection_order(:)
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
     real                                :: pickref_smpd, pickref_width
     real                                :: volume_corr, volume_fsc0143
@@ -110,14 +113,20 @@ module subroutine exec_test_simulated_workflow( self, cline )
             reproj_file = 'reprojs_6VXX.mrcs'
             pgrp        = 'c3'
             test_seed   = SEED_6VXX
+            nmovies     = NMOVIES_6VXX
+            nprojs      = NPROJS_6VXX
         case('1jxy')
             vol_file    = '1JXY.mrc'
             reproj_file = 'reprojs_1JXY.mrcs'
             pgrp        = 'd2'
             test_seed   = SEED_1JXY
+            nmovies     = NMOVIES_1JXY
+            nprojs      = NPROJS_1JXY
         case default
             THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
+    nper_movie = nprojs / nmovies
+    allocate(movie_files(nmovies), proj_inds(nper_movie), projection_order(nprojs))
     ! Serial execution fixes draw order, including work before the first commander.
     !$ call omp_set_num_threads(NTHR)
     call seed_rnd_fixed(test_seed, propagate=.true.)
@@ -161,30 +170,31 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call cline_projection%set('smpd',                             SMPD)
     call cline_projection%set('pgrp',                             pgrp)
     call cline_projection%set('mskdiam',                       MSKDIAM)
-    call cline_projection%set('nspace',                         NPROJS)
+    call cline_projection%set('nspace',                       NREPROJS)
     call cline_projection%set('nthr',                             NTHR)
     call xreproject%execute(cline_projection)
     call cline_projection%kill()
     call return_to_stage_root('reproject')
     reproj_path = simple_abspath(string(REPROJ_DIR//'/'//reproj_file%to_char()))
     call find_ldim_nptcls(reproj_path, ldim, nprojs_stk)
-    if( nprojs_stk /= NPROJS ) THROW_HARD('Unexpected number of generated reprojections')
+    if( nprojs_stk /= NREPROJS ) THROW_HARD('Unexpected number of generated reprojections')
     reproj_box = ldim(1)
     ldim(3) = 1
     call projection%new(ldim, SMPD)
 
-    write(logfhandle,'(a,i0,a,i0,a,i0,a)') '>>> Step 3: generate ', NMOVIES, &
-        &' simulated movies with ', NFRAMES, ' frames and ', NPER_MOVIE, ' shuffled spiral projections each'
-    if( NPROJS /= NMOVIES * NPER_MOVIE ) THROW_HARD('Projection count must divide equally among simulated movies')
-    do i = 1, NPROJS
+    write(logfhandle,'(a,i0,a,i0,a,i0,a)') '>>> Step 3: generate ', nmovies, &
+        &' simulated movies with ', NFRAMES, ' frames and ', nper_movie, ' shuffled projections each'
+    if( nprojs /= nmovies * nper_movie ) THROW_HARD('Projection count must divide equally among simulated movies')
+    do i = 1, NREPROJS
         projection_order(i) = i
     enddo
     call seed_rnd
-    call shuffle(projection_order)
-    do i = 1,NMOVIES
-        proj_inds = projection_order((i - 1) * NPER_MOVIE + 1:i * NPER_MOVIE)
+    call shuffle(projection_order(:NREPROJS))
+    if( nprojs > NREPROJS ) projection_order(NREPROJS + 1:nprojs) = projection_order(1:nprojs - NREPROJS)
+    do i = 1,nmovies
+        proj_inds = projection_order((i - 1) * nper_movie + 1:i * nper_movie)
         if( file_exists(SUBSET_FILE) ) call del_file(SUBSET_FILE)
-        do j = 1,NPER_MOVIE
+        do j = 1,nper_movie
             call projection%read(reproj_path, proj_inds(j))
             call projection%write(string(SUBSET_FILE), j)
         enddo
