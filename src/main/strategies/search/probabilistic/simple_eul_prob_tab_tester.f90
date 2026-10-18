@@ -50,9 +50,17 @@ contains
     !! particle 3 between state 1 and state 3, particle 4 has only invalid distances, and particles 5 and
     !! 6 have identical distances (ties between particles in every reference's order).
     subroutine test_ref_assign_against_reference()
+        integer :: nthr_prev, nthr_global_prev
+        nthr_prev = 1
+        !$ nthr_prev = omp_get_max_threads()
+        nthr_global_prev = nthr_glob
+        nthr_glob = 1
+        !$ call omp_set_num_threads(14)
         call compare_with_reference(nspace=200, nstates=1)
         call compare_with_reference(nspace=200, nstates=3)
         call compare_with_reference(nspace=1,  nstates=2)
+        !$ call omp_set_num_threads(nthr_prev)
+        nthr_glob = nthr_global_prev
     end subroutine test_ref_assign_against_reference
 
     subroutine compare_with_reference( nspace, nstates )
@@ -215,11 +223,11 @@ contains
 
     end subroutine test_likelihood_samplers
 
-    !> The parallel read of the dense part files at one and at four threads, over 1, 3 and 7 parts: the same rows,
+    !> The parallel read of dense part files at one, four and fourteen threads, with changing reference counts: the same rows,
     !! refined lists and seeds, bit for bit
     subroutine test_dense_read_threads()
         integer, parameter :: NSPACE_TH = 40, NSTATES_TH = 3, NPTCLS_TH = 70
-        integer, parameter :: NPARTS_TH(3) = [1, 3, 7]
+        integer, parameter :: NPARTS_TH(4) = [1, 3, 7, 14]
         class(parameters), allocatable, target :: params
         class(builder),    allocatable, target :: build
         type(eul_prob_tab) :: master1, master4
@@ -227,23 +235,35 @@ contains
         real,                   allocatable :: shifts(:,:,:), seeds(:,:)
         logical,                allocatable :: refined(:,:)
         integer,                allocatable :: pinds(:)
-        integer :: i, k, nthr_prev, nwrong
+        integer :: i, k, nthr_prev, nwrong, nthr_read, iread, nreads
         character(len=32) :: label
         nthr_prev = 1
         !$ nthr_prev = omp_get_max_threads()
         do k = 1,size(NPARTS_TH)
             write(label,'(I0,A)') NPARTS_TH(k), ' parts'
-            call make_round_trip_parts(params, build, NSPACE_TH, NSTATES_TH, NPTCLS_TH, NPARTS_TH(k), rows, shifts,&
+            call make_round_trip_parts(params, build, k*NSPACE_TH, NSTATES_TH, NPTCLS_TH, NPARTS_TH(k), rows, shifts,&
                 &refined, seeds)
             ! the master's particles in a scrambled order
             pinds = [(mod(17*i, NPTCLS_TH) + 1, i=0,NPTCLS_TH-1)]
             !$ call omp_set_num_threads(1)
             call master1%new(params, build, pinds)
             call master1%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
-            !$ call omp_set_num_threads(4)
+            nthr_read = merge(14, 4, NPARTS_TH(k) == 14)
+            !$ call omp_set_num_threads(nthr_read)
             call master4%new(params, build, pinds)
-            call master4%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
+            nreads = merge(24, 1, NPARTS_TH(k) == 14)
+            do iread = 1,nreads
+                call master4%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
+                nwrong = count(master4%rows(:,:)%dist /= rows(:,pinds)%dist) +&
+                    &count(master4%rows(:,:)%inpl /= rows(:,pinds)%inpl) +&
+                    &count(master4%seed_shifts /= seeds(:,pinds)) + count(.not. master4%seed_has_sh)
+                call assert_int(0, nwrong, 'repeated parallel reads match generated rows and seeds ('//trim(label)//')')
+            enddo
             !$ call omp_set_num_threads(nthr_prev)
+            nwrong = count(master4%rows(:,:)%dist /= rows(:,pinds)%dist) +&
+                &count(master4%rows(:,:)%inpl /= rows(:,pinds)%inpl) +&
+                &count(master4%seed_shifts /= seeds(:,pinds)) + count(.not. master4%seed_has_sh)
+            call assert_int(0, nwrong, 'the parallel read matches generated rows and seeds ('//trim(label)//')')
             nwrong = count(master1%rows(:,:)%dist /= master4%rows(:,:)%dist) +&
                 &count(master1%rows(:,:)%inpl /= master4%rows(:,:)%inpl) +&
                 &count(master1%refined_offsets /= master4%refined_offsets) +&
@@ -255,7 +275,7 @@ contains
                     &count(master1%refined(:)%ri /= master4%refined(:)%ri) +&
                     &count(master1%refined(:)%x /= master4%refined(:)%x) + count(master1%refined(:)%y /= master4%refined(:)%y)
             endif
-            call assert_int(0, nwrong, 'the read at four threads equals the read at one ('//trim(label)//')')
+            call assert_int(0, nwrong, 'the parallel read equals the read at one thread ('//trim(label)//')')
             call assert_int(36, master4%seed_nrots, 'the rotation grid of the parts is taken ('//trim(label)//')')
             call master1%kill
             call master4%kill

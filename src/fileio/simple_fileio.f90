@@ -87,25 +87,30 @@ contains
             &blank, pad, form, decimal, round, delim, convert, iomsg, position, errmsg
         integer               :: iostat_this,  recl_this
         character(len=STDLEN) :: iomsg_this
+        character(len=XLONGSTRLEN) :: filename_static
+        character(len=XLONGSTRLEN+STDLEN) :: message_this
         character(len=30)     :: async_this, access_this, action_this, status_this,&
             &blank_this, pad_this, decimal_this, delim_this, form_this, round_this,&
             &position_this, errmsg_this
         ! check to see if file is empty
         if( file%is_blank() )then
             write(logfhandle,*) 'simple_system::fopen filename blank'
-            if(present(iomsg))  write(logfhandle,*) trim(adjustl(iomsg))
-            if(present(errmsg)) write(logfhandle,*) "Message: ", trim(adjustl(errmsg))
+            if(present(iomsg))  write(logfhandle,*) iomsg
+            if(present(errmsg)) write(logfhandle,*) "Message: ", errmsg
             return
         endif
+        if( file%strlen() > len(filename_static) ) THROW_HARD('filename too long; fopen')
+        call file%to_static(filename_static)
         errmsg_this="In simple_fileio::fopen "
         if (present(errmsg)) errmsg_this=errmsg
         if (.not. (present(iostat) .or. present(form) .or. present(recl) .or.&
             & present(async) .or. present(pad) .or. present(action) .or. present(status)&
             & .or. present(position) .or. present(access) .or. present(decimal) .or. &
             present(round) .or. present(delim) .or. present(blank) ) )then
-            open(NEWUNIT=funit, FILE=file%to_char(),IOSTAT=iostat_this)
-            call fileiochk(trim(adjustl(errmsg_this))//" fopen basic open "//file%to_char(), iostat_this,.false.)
-            if(is_io(funit)) THROW_HARD( "newunit returned "//int2str(funit))
+            open(NEWUNIT=funit, FILE=filename_static,IOSTAT=iostat_this)
+            write(message_this,'(3A)') errmsg_this, ' fopen basic open ', filename_static
+            call fileiochk(message_this, iostat_this,.false.)
+            if(is_io(funit)) THROW_HARD('newunit returned a reserved I/O unit')
             return ! if ok
         end if
         ! Optional args
@@ -129,7 +134,7 @@ contains
         if ( (strings_are_equal(status_this, 'NEW',.false.))  .and. &
             (strings_are_equal(action_this, 'READ',.false.))  .and. &
             (.not. file_exists(file) ) )then
-            write(logfhandle,*) "::fopen incompatible status=NEW and action=READ ", file%to_char()," does not exist"
+            write(logfhandle,*) "::fopen incompatible status=NEW and action=READ ", filename_static," does not exist"
             return ! false
         end if
         if(present(position)) then
@@ -137,7 +142,7 @@ contains
                 (strings_are_equal(position, 'APPEND',.false.))  .and. &
                 (.not. file_exists(file) ) )then
                 write(logfhandle,*) "::fopen incompatible status=OLD and position=APPEND  when ",&
-                    file%to_char()," does not exist"
+                    filename_static," does not exist"
                 write( status_this,'(A)')  upperCase('NEW')
             end if
         end if
@@ -159,19 +164,19 @@ contains
                 if (present(action))then
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,RECL=recl_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,RECL=recl_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,RECL=recl_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,RECL=recl_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
                     end if
                 else ! no action
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,RECL=recl_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,RECL=recl_this,&
                             &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,&
                             &STATUS=status_this,ACCESS=access_this,RECL=recl_this)
                     end if
                 end if
@@ -179,25 +184,25 @@ contains
                 if (present(action))then
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,&
                             &ACTION=action_this,STATUS=status_this,ACCESS=access_this)
                     end if
                 else ! no action
                     if (present(position))then
                         !! Appending to file
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,&
                             &STATUS=status_this,ACCESS=access_this,POSITION=position_this)
                     else
-                        open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
+                        open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,&
                             &STATUS=status_this,ACCESS=access_this)
                     end if
                 end if
             end if
             if(present(iostat))iostat=iostat_this
-            if(funit/=0 .and. is_io(funit)) THROW_HARD("newunit returned "//int2str(funit))
+            if(funit/=0 .and. is_io(funit)) THROW_HARD('newunit returned a reserved I/O unit')
             return
         end if
         recl_this=-1
@@ -237,32 +242,33 @@ contains
         if(present(iomsg)) iomsg_this=iomsg
         ! execute open under specific conditions
         if (strings_are_equal(form_this, 'FORMATTED',.false.)) then
-            open( NEWUNIT=funit,FILE=file%to_char(),IOSTAT=iostat_this,&
+            open( NEWUNIT=funit,FILE=filename_static,IOSTAT=iostat_this,&
                 &ACTION=action_this,STATUS=status_this,ACCESS=access_this,&
                 &BLANK=blank_this,FORM='FORMATTED', ROUND=round_this,&
                 &IOMSG=iomsg_this)
         else
             if (strings_are_equal(access_this, 'DIRECT',.false.))then
-                open( NEWUNIT=funit, FILE=file%to_char(), IOSTAT=iostat_this, &
+                open( NEWUNIT=funit, FILE=filename_static, IOSTAT=iostat_this, &
                     &ACTION=action_this, STATUS=status_this,&
                     &ACCESS=access_this, FORM=form_this, RECL=recl_this,&
                     &IOMSG=iomsg_this)
             else
                 if (recl_this == -1)then
-                    open( NEWUNIT=funit, FILE=file%to_char(), IOSTAT=iostat_this, &
+                    open( NEWUNIT=funit, FILE=filename_static, IOSTAT=iostat_this, &
                         &ACTION=action_this, STATUS=status_this,&
                         &ACCESS=access_this, FORM=form_this,&
                         &IOMSG=iomsg_this)
                 else
-                    open( NEWUNIT=funit, FILE=file%to_char(), IOSTAT=iostat_this, &
+                    open( NEWUNIT=funit, FILE=filename_static, IOSTAT=iostat_this, &
                         &ACTION=action_this, STATUS=status_this,&
                         &ACCESS=access_this, RECL=recl_this, FORM=form_this,&
                         &IOMSG=iomsg_this)
                 end if
             end if
         end if
-        call fileiochk(trim(adjustl(errmsg_this))//" fopen opening "//file%to_char(), iostat_this, .false.)
-        if(is_io(funit)) THROW_HARD("newunit returned "//int2str(funit))
+        write(message_this,'(3A)') errmsg_this, ' fopen opening ', filename_static
+        call fileiochk(message_this, iostat_this, .false.)
+        if(is_io(funit)) THROW_HARD('newunit returned a reserved I/O unit')
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
     end subroutine fopen
