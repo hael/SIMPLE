@@ -224,6 +224,14 @@ contains
         call self%qdescr%set('job_nparts', int2str(params%nparts))                         ! overrides env file
         if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
         qsnam = self%qdescr%get('qsys_name')
+        if( qsnam%strlen_trim() == 0 )then
+            qsnam = string(trim(params%qsys_name))
+            if( qsnam%strlen_trim() == 0 )then
+                qsnam = simple_getenv('SIMPLE_QSYS', iostat)
+                if( iostat /= 0 ) THROW_HARD('SIMPLE_QSYS is not defined in your environment; qsys_env::new')
+            endif
+            call self%qdescr%set('qsys_name', qsnam)
+        endif
         qsnam_requested = qsnam
         call validate_requested_qsys(qsnam)
         ! The '_worker' suffix on a qsys name (e.g. 'local_worker', 'slurm_worker')

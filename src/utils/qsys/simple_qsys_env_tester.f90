@@ -21,6 +21,7 @@ contains
     subroutine run_all_qsys_env_tests()
         write(*,'(A)') '**** running all qsys environment tests ****'
         call test_installation_path_policy()
+        call test_missing_project_scheduler()
         call test_active_balanced_split()
         call test_active_balanced_qsys_parts()
         call test_warmup_owner_lifetime()
@@ -124,6 +125,53 @@ contains
         call cline%kill
         call del_file(projfile)
     end subroutine test_installation_path_policy
+
+    subroutine test_missing_project_scheduler()
+        class(parameters), allocatable :: params
+        class(sp_project), allocatable :: project
+        type(qsys_env) :: qenv
+        type(string) :: projfile, local_simple_path, env_qsys
+        integer :: iostat
+        write(*,'(A)') 'test_missing_project_scheduler'
+        local_simple_path = simple_getenv('SIMPLE_PATH', iostat)
+        call assert_int(0, iostat, 'SIMPLE_PATH is set in the test environment')
+        if( iostat /= 0 ) return
+        allocate(params, project)
+        projfile = 'test_qsys_env_missing_scheduler.simple'
+        call del_file(projfile)
+        call project%projinfo%new(1, is_ptcl=.false.)
+        call project%projinfo%set(1, 'projname', 'test_qsys_env_missing_scheduler')
+        call project%compenv%new(1, is_ptcl=.false.)
+        call project%compenv%set(1, 'qsys_name', '')
+        call project%compenv%set(1, 'user_account', 'retained_account')
+        call project%write(projfile)
+        params%prg             = 'qsys_env_missing_scheduler'
+        params%projfile        = projfile
+        params%qsys_name       = 'local'
+        params%nparts          = 1
+        params%ncunits         = 1
+        params%nptcls          = 0
+        params%nthr            = 1
+        params%worker_priority = 'normal'
+        params%worker_server   = ''
+        call qenv%new(params, 1)
+        call assert_string_eq('local', qenv%qdescr%get('qsys_name'), 'a blank project scheduler uses parameters')
+        call assert_string_eq('retained_account', qenv%qdescr%get('user_account'), 'project queue metadata is retained')
+        call qenv%kill
+        params%qsys_name = 'unsupported_parameter_backend'
+        call qenv%new(params, 1, qsys_name=string('local'))
+        call assert_string_eq('local', qenv%qdescr%get('qsys_name'), 'the explicit scheduler overrides parameters')
+        call qenv%kill
+        env_qsys = simple_getenv('SIMPLE_QSYS', iostat, silent=.true.)
+        if( iostat == 0 .and. env_qsys == 'local' )then
+            params%qsys_name = ''
+            call qenv%new(params, 1)
+            call assert_string_eq('local', qenv%qdescr%get('qsys_name'), 'a blank scheduler falls back to SIMPLE_QSYS')
+            call qenv%kill
+        endif
+        call project%kill
+        call del_file(projfile)
+    end subroutine test_missing_project_scheduler
 
     ! split_nobjs_active on the layouts the distributed 3D workflows meet
     subroutine test_active_balanced_split()
