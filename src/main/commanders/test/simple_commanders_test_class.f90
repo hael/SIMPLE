@@ -282,7 +282,7 @@ type :: unit_suite
     procedure(no_arg_test), pointer, nopass :: run => null()
 end type unit_suite
 
-integer, parameter :: MAX_SUITES = 128   ! must hold every sub-suite of `units`; add_suite stops on overflow
+integer, parameter :: MAX_SUITES = 160   ! must hold every sub-suite of `units`; add_suite stops on overflow
 
 contains
 
@@ -568,8 +568,12 @@ contains
         type(unit_suite),      intent(inout) :: s(:)
         integer,               intent(inout) :: n
         character(len=*),      intent(in)    :: name
+        type(string) :: errstr
         procedure(no_arg_test)               :: proc
-        if( n >= size(s) ) THROW_HARD('too many unit sub-suites; raise MAX_SUITES')
+        if( n >= size(s) )then
+            errstr = 'too many unit sub-suites; raise MAX_SUITES: '//int2str(n)
+            THROW_HARD(errstr%to_char())
+        endif
         n = n + 1
         s(n)%name = name
         s(n)%run  => proc
