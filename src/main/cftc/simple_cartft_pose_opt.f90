@@ -6,11 +6,12 @@
 ! R exp([omega]x); shifts are increments from the stored shift, committed in native-box pixels.
 module simple_cartft_pose_opt
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api, only: dp, PI, ori, dm2euler, simple_exception
 use simple_cartft_calc,     only: cartft_calc
 implicit none
 private
-public :: cartft_pose_opt, right_increment_rotation
+public :: cartft_pose_opt, cartft_pose_work, right_increment_rotation
 ! typed per-particle outcomes of a solve or a stage
 public :: CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT
 public :: CARTFT_NO_RELIABLE_UPDATE, CARTFT_BOUND_REJECTED, CARTFT_INVALID_NUMERICS, CARTFT_ITERATION_LIMIT
@@ -46,9 +47,12 @@ real(dp), parameter :: DEFAULT_SHIFT_STEP_NATIVE  = 1._dp  !< native pixels per 
 type :: cartft_stage
     integer  :: status         = CARTFT_NOT_ATTEMPTED
     integer  :: niter          = 0
-    integer  :: nattempted     = 0     !< trial poses evaluated
+    integer  :: nattempted     = 0     !< trial poses proposed, bound-rejected ones included
+    integer  :: ntrials        = 0     !< trial poses evaluated
     integer  :: naccepted      = 0     !< trial poses accepted
     integer  :: nbound_hits    = 0     !< proposals capped or rejected by a bound
+    real(dp) :: ratio_sum      = 0._dp !< actual over predicted reduction, summed over accepted steps
+    real(dp) :: ratio_sumsq    = 0._dp !< and its squares
     real(dp) :: max_rotation_step = 0._dp
     real(dp) :: max_shift_step    = 0._dp
     real(dp) :: objective_before  = -1._dp !< set by a transaction
@@ -72,6 +76,7 @@ type :: cartft_pose_opt
     integer  :: status = CARTFT_NOT_ATTEMPTED
     real(dp) :: objective_before = -1._dp, objective_after = -1._dp
     real(dp) :: cumulative_rotation = 0._dp, cumulative_shift = 0._dp
+    integer  :: npasses = 0                !< calculator evaluations since the last solve began
     type(cartft_stage) :: stages(2)
     logical  :: exists = .false.
 contains
@@ -91,6 +96,20 @@ contains
     ! private helpers
     procedure, private :: reset_record
 end type cartft_pose_opt
+
+!> Work of Cartesian solves summed for a bench record: solves by status, LM counts, calculator
+!! passes and pixel-evaluations (passes times the pixels of the particle's shells in the full disk).
+type :: cartft_pose_work
+    private
+    integer(int64) :: nstatus(CARTFT_INVALID_PREPARATION:CARTFT_ITERATION_LIMIT) = 0_int64
+    integer(int64) :: nsolved = 0_int64, npasses = 0_int64, npix_evals = 0_int64
+    integer(int64) :: niter = 0_int64, ntrials = 0_int64, naccepted = 0_int64, nbound_hits = 0_int64
+    real(dp)       :: ratio_sum = 0._dp, ratio_sumsq = 0._dp
+contains
+    procedure :: add_solve
+    procedure :: add
+    procedure :: write_bench
+end type cartft_pose_work
 
 contains
 
@@ -206,6 +225,7 @@ contains
         endif
         ! the seed objective is the single acceptance baseline of the transaction
         call calc%objective_gradient(state, iseven, iptcl, rotmat, shift, self%objective_before, gradient)
+        self%npasses = self%npasses + 1
         if( .not. ieee_is_finite(self%objective_before) )then
             self%status = CARTFT_INVALID_NUMERICS
             return
@@ -218,6 +238,7 @@ contains
             call self%refine_shift(calc, state, iseven, iptcl, staged_rotmat, staged_shift)
             call calc%objective_gradient(state, iseven, iptcl, staged_rotmat, staged_shift, &
                 &shift_objective_after, gradient)
+            self%npasses = self%npasses + 1
             associate( st => self%stages(CARTFT_STAGE_SHIFT) )
                 st%objective_before = self%objective_before
                 st%objective_after  = shift_objective_after
@@ -245,6 +266,7 @@ contains
         endif
         call calc%objective_gradient(state, iseven, iptcl, staged_rotmat, staged_shift, &
             &joint_objective_after, gradient)
+        self%npasses = self%npasses + 1
         associate( st => self%stages(CARTFT_STAGE_JOINT) )
             st%objective_before = shift_objective_after
             st%objective_after  = joint_objective_after
@@ -299,6 +321,7 @@ contains
                 return
             endif
             call calc%shift_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian)
+            self%npasses = self%npasses + 1
             naccepted = 0
             consecutive_rejections = 0
             bounded_trial = .false.
@@ -372,6 +395,8 @@ contains
                 st%nattempted = st%nattempted + 1
                 call calc%shift_normal_terms(state, iseven, iptcl, rotmat, trial_shift, &
                     &trial_objective, trial_gradient, trial_hessian)
+                st%ntrials   = st%ntrials + 1
+                self%npasses = self%npasses + 1
                 if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                     &any(.not. ieee_is_finite(trial_hessian)) )then
                     consecutive_rejections = consecutive_rejections + 1
@@ -384,6 +409,8 @@ contains
                 ratio  = actual/predicted
                 if( actual > 0._dp .and. ratio >= 0.25_dp )then
                     relative_reduction = actual/max(abs(objective), NUMERIC_FLOOR)
+                    st%ratio_sum   = st%ratio_sum   + ratio
+                    st%ratio_sumsq = st%ratio_sumsq + ratio*ratio
                     shift     = trial_shift
                     objective = trial_objective
                     gradient  = trial_gradient
@@ -455,6 +482,7 @@ contains
             consecutive_rejections = 0
             ! evaluate the seed once: objective, five-vector gradient and 5x5 Gauss-Newton matrix
             call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian)
+            self%npasses  = self%npasses + 1
             bounded_trial = .false.
             if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
                 &any(.not. ieee_is_finite(hessian)) )then
@@ -534,6 +562,8 @@ contains
                 ! the dominant cost of an LM iteration
                 call calc%pose_normal_terms(state, iseven, iptcl, trial_rotmat, trial_shift, &
                     &trial_objective, trial_gradient, trial_hessian)
+                st%ntrials   = st%ntrials + 1
+                self%npasses = self%npasses + 1
                 if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                     &any(.not. ieee_is_finite(trial_hessian)) )then
                     consecutive_rejections = consecutive_rejections + 1
@@ -548,6 +578,8 @@ contains
                 accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
                 if( accept_trial )then
                     relative_reduction = actual/max(abs(objective), NUMERIC_FLOOR)
+                    st%ratio_sum   = st%ratio_sum   + ratio
+                    st%ratio_sumsq = st%ratio_sumsq + ratio*ratio
                     rotmat    = trial_rotmat
                     shift     = trial_shift
                     objective = trial_objective
@@ -631,8 +663,107 @@ contains
         self%objective_after     = -1._dp
         self%cumulative_rotation = 0._dp
         self%cumulative_shift    = 0._dp
+        self%npasses             = 0
         self%stages              = cartft_stage()
     end subroutine reset_record
+
+    ! WORK RECORD
+
+    !> Add the last solve of opt: npix pixels per evaluation, nextra evaluations made outside the
+    !! solve at its committed pose (the sigma2 residual).
+    subroutine add_solve( self, opt, npix, nextra )
+        class(cartft_pose_work), intent(inout) :: self
+        class(cartft_pose_opt),  intent(in)    :: opt
+        integer,                 intent(in)    :: npix, nextra
+        integer :: istage, npasses
+        if( opt%status < lbound(self%nstatus,1) .or. opt%status > ubound(self%nstatus,1) ) &
+            &THROW_HARD('cartft_pose_work received an unknown solve status')
+        self%nstatus(opt%status) = self%nstatus(opt%status) + 1_int64
+        if( opt%npasses > 0 ) self%nsolved = self%nsolved + 1_int64
+        npasses         = opt%npasses + nextra
+        self%npasses    = self%npasses    + int(npasses, int64)
+        self%npix_evals = self%npix_evals + int(npasses, int64)*int(npix, int64)
+        do istage = CARTFT_STAGE_SHIFT, CARTFT_STAGE_JOINT
+            associate( st => opt%stages(istage) )
+                self%niter       = self%niter       + int(st%niter, int64)
+                self%ntrials     = self%ntrials     + int(st%ntrials, int64)
+                self%naccepted   = self%naccepted   + int(st%naccepted, int64)
+                self%nbound_hits = self%nbound_hits + int(st%nbound_hits, int64)
+                self%ratio_sum   = self%ratio_sum   + st%ratio_sum
+                self%ratio_sumsq = self%ratio_sumsq + st%ratio_sumsq
+            end associate
+        end do
+    end subroutine add_solve
+
+    !> Add another record, as the threads' records are merged.
+    subroutine add( self, other )
+        class(cartft_pose_work), intent(inout) :: self
+        class(cartft_pose_work), intent(in)    :: other
+        self%nstatus     = self%nstatus     + other%nstatus
+        self%nsolved     = self%nsolved     + other%nsolved
+        self%npasses     = self%npasses     + other%npasses
+        self%npix_evals  = self%npix_evals  + other%npix_evals
+        self%niter       = self%niter       + other%niter
+        self%ntrials     = self%ntrials     + other%ntrials
+        self%naccepted   = self%naccepted   + other%naccepted
+        self%nbound_hits = self%nbound_hits + other%nbound_hits
+        self%ratio_sum   = self%ratio_sum   + other%ratio_sum
+        self%ratio_sumsq = self%ratio_sumsq + other%ratio_sumsq
+    end subroutine add
+
+    !> The record as a bench section, keys prefixed by label. ts_search is the search's thread-seconds,
+    !! so the time per pixel-evaluation covers the whole particle search, sigma2 residual included.
+    subroutine write_bench( self, fnr, label, ts_search )
+        class(cartft_pose_work), intent(in) :: self
+        integer,                 intent(in) :: fnr
+        character(len=*),        intent(in) :: label
+        real(dp),                intent(in) :: ts_search
+        character(len=40) :: key
+        real(dp) :: mean
+        write(fnr,'(a)') '*** CONTINUOUS POSE WORK ***'
+        call put_count('solves',              sum(self%nstatus))
+        call put_count('accepted',            self%nstatus(CARTFT_ACCEPTED))
+        call put_count('no improvement',      self%nstatus(CARTFT_NO_IMPROVEMENT))
+        call put_count('no reliable update',  self%nstatus(CARTFT_NO_RELIABLE_UPDATE))
+        call put_count('bound rejected',      self%nstatus(CARTFT_BOUND_REJECTED))
+        call put_count('invalid numerics',    self%nstatus(CARTFT_INVALID_NUMERICS))
+        call put_count('iteration limit',     self%nstatus(CARTFT_ITERATION_LIMIT))
+        call put_count('invalid preparation', self%nstatus(CARTFT_INVALID_PREPARATION))
+        call put_count('not attempted',       self%nstatus(CARTFT_NOT_ATTEMPTED))
+        call put_count('LM iterations',       self%niter)
+        call put_count('trial evaluations',   self%ntrials)
+        call put_count('accepted steps',      self%naccepted)
+        call put_count('bound hits',          self%nbound_hits)
+        call put_count('calculator passes',   self%npasses)
+        call put_count('pixel-evaluations',   self%npix_evals)
+        if( self%nsolved > 0_int64 )then
+            call put_real('passes per solve',        real(self%npasses, dp)/real(self%nsolved, dp))
+            call put_real('LM iterations per solve', real(self%niter, dp)/real(self%nsolved, dp))
+        endif
+        if( self%naccepted > 0_int64 )then
+            mean = self%ratio_sum/real(self%naccepted, dp)
+            call put_real('actual/predicted mean', mean)
+            call put_real('actual/predicted sdev', sqrt(max(0._dp, self%ratio_sumsq/real(self%naccepted, dp) - mean*mean)))
+        endif
+        if( self%npix_evals > 0_int64 ) call put_real('ns per pixel-evaluation', 1.e9_dp*ts_search/real(self%npix_evals, dp))
+
+    contains
+
+        subroutine put_count( name, n )
+            character(len=*), intent(in) :: name
+            integer(int64),   intent(in) :: n
+            key = label//' cont '//name
+            write(fnr,'(a,a,1x,i0)') key, ':', n
+        end subroutine put_count
+
+        subroutine put_real( name, val )
+            character(len=*), intent(in) :: name
+            real(dp),         intent(in) :: val
+            key = label//' cont '//name
+            write(fnr,'(a,a,1x,f0.4)') key, ':', val
+        end subroutine put_real
+
+    end subroutine write_bench
 
     ! FREE PROCEDURE
 

@@ -6,6 +6,7 @@
 ! The objectives and the reference file are specified in refine3D_policy.md (Cartesian section).
 module simple_cartft_calc
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, ieee_value
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api,   only: dp, sp, PI, KBWINSZ, KBALPHA, OSMPL_PAD_FAC, CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP, &
     &OBJFUN_CC, OBJFUN_EUCLID, ctfparams, ctfvars, kbinterpol, cyci_1d, simple_exception, string, fopen, fclose, &
     &fileiochk, file_exists, logfhandle
@@ -37,6 +38,7 @@ type :: cartft_ptcl
     complex, allocatable :: observed(:,:), transfer(:,:)
     real(dp) :: power   = 0._dp                 !< sum |X|^2 (whitened under OBJFUN_EUCLID)
     integer  :: kfromto(2) = 0
+    integer  :: npix    = 0                     !< pixels of its shells in the full disk
     integer  :: half    = 0                     !< column of its half in sigma2 (OBJFUN_EUCLID only)
     integer  :: objfun  = 0                     !< OBJFUN_CC or OBJFUN_EUCLID once prepared
     logical  :: valid   = .false.
@@ -70,6 +72,7 @@ contains
     procedure          :: set_ref
     procedure          :: ref_exists
     procedure          :: has_refs
+    procedure          :: get_ref_bytes
     ! reference-volume file (6.6)
     procedure          :: set_refvol
     procedure          :: write
@@ -82,6 +85,7 @@ contains
     generic            :: set_ptcl => set_ptcl_cc, set_ptcl_euclid
     procedure          :: ptcl_is_valid
     procedure          :: get_ptcl_kfromto
+    procedure          :: get_ptcl_npix
     procedure          :: get_ptcl_objfun
     procedure          :: get_ptcl_taper
     procedure          :: get_box
@@ -352,6 +356,21 @@ contains
         end do
     end function has_refs
 
+    !> Bytes held by the reference transforms of every state and half.
+    pure integer(int64) function get_ref_bytes( self )
+        class(cartft_calc), intent(in) :: self
+        integer :: ihalf, state
+        get_ref_bytes = 0_int64
+        if( .not. self%exists ) return
+        do state = 1, self%nstates
+            do ihalf = 1, 2
+                if( .not. allocated(self%refs(ihalf,state)%cmat) ) cycle
+                get_ref_bytes = get_ref_bytes + size(self%refs(ihalf,state)%cmat, kind=int64) * &
+                    &int(storage_size(self%refs(ihalf,state)%cmat)/8, int64)
+            end do
+        end do
+    end function get_ref_bytes
+
     ! PARTICLES
 
     !> Prepare particle slot iptcl for OBJFUN_CC from its full-disk observation X (prepared as
@@ -442,6 +461,16 @@ contains
         if( iptcl < 1 .or. iptcl > self%nptcls ) return
         kfromto = self%ptcls(iptcl)%kfromto
     end function get_ptcl_kfromto
+
+    !> Pixels of slot iptcl's shells in the full disk, the work unit of one evaluation (0 when unprepared).
+    pure integer function get_ptcl_npix( self, iptcl )
+        class(cartft_calc), intent(in) :: self
+        integer,            intent(in) :: iptcl
+        get_ptcl_npix = 0
+        if( .not. self%exists ) return
+        if( iptcl < 1 .or. iptcl > self%nptcls ) return
+        get_ptcl_npix = self%ptcls(iptcl)%npix
+    end function get_ptcl_npix
 
     !> Objective the particle slot iptcl was prepared for (0 when never prepared).
     pure integer function get_ptcl_objfun( self, iptcl )
@@ -862,6 +891,7 @@ contains
             p%power   = 0._dp
             p%kfromto = [lower_shell, upper_shell]
             p%half    = 0
+            p%npix    = 0
             if( upper_shell < lower_shell ) return
             if( present(half) )then
                 if( .not. all(self%sigma2_ok(lower_shell:upper_shell,half)) ) return
@@ -892,6 +922,7 @@ contains
                     p%transfer(h,k) = cval*weight
                     p%observed(h,k) = observed(h,k)*weight
                     p%power = p%power + real(conjg(p%observed(h,k))*p%observed(h,k), dp)
+                    p%npix  = p%npix + 1
                 end do
             end do
             ! both objectives normalize by the particle power: an observation without power

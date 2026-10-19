@@ -424,6 +424,7 @@ contains
         call reg%add_int('nspace_sub', self%nspace_sub)
         call reg%add_int('nspace_pickrefs', self%nspace_pickrefs)
         call reg%add_int('nstages', self%nstages)
+        call reg%add_int('nu_stage', self%nu_stage)
         call reg%add_int('nstages_pickrefs', self%nstages_pickrefs)
         call reg%add_int('nstates', self%nstates)
         call reg%add_int('nstates_pickrefs', self%nstates_pickrefs)

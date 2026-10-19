@@ -15,7 +15,8 @@ use simple_parameters,       only: parameters
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_spec
 use simple_type_defs,        only: OBJFUN_CC, OBJFUN_EUCLID
-use simple_cartft_pose_opt,  only: cartft_pose_opt, CARTFT_ACCEPTED, CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION
+use simple_cartft_pose_opt,  only: cartft_pose_opt, cartft_pose_work, CARTFT_ACCEPTED, CARTFT_NOT_ATTEMPTED, &
+    &CARTFT_INVALID_PREPARATION
 implicit none
 
 public :: strategy3D_cont, cont_seed_is_valid, check_cont_seeds
@@ -32,12 +33,15 @@ type, extends(strategy3D) :: strategy3D_cont
     type(ori)             :: result_ori             !< the seed, or the accepted pose
     integer               :: status = CARTFT_NOT_ATTEMPTED
     real                  :: score  = 0.            !< corr_cart: at the result, at the seed when rejected
+    integer               :: npix   = 0             !< pixels per evaluation of the particle's slot
+    integer               :: nextra = 0             !< evaluations after the solve (the sigma2 residual)
     logical               :: searched = .false.
     logical               :: exists   = .false.
 contains
     procedure :: new         => new_cont
     procedure :: srch        => srch_cont
     procedure :: oris_assign => oris_assign_cont
+    procedure :: add_work    => add_work_cont
     procedure :: kill        => kill_cont
     procedure, private :: bind
 end type strategy3D_cont
@@ -141,6 +145,7 @@ contains
         self%result_ori = self%seed_ori
         call self%opt%refine(self%b_ptr%cftc, islot, self%result_ori)
         self%status = self%opt%get_status()
+        self%npix   = self%b_ptr%cftc%get_ptcl_npix(islot)
         call self%opt%get_objectives(objective_before, objective_after)
         ! the score at the committed pose: the result, or the seed after a rejection
         self%score = 0.
@@ -153,6 +158,7 @@ contains
             shift  = real((self%result_ori%get_2Dshift() - self%seed_ori%get_2Dshift()) * &
                 &real(self%p_ptr%box_crop)/real(self%p_ptr%box), dp)
             call self%b_ptr%esig%calc_sigma2(self%b_ptr%cftc, islot, self%spec%iptcl, state, iseven, rotmat, shift)
+            self%nextra = 1
         endif
         self%searched = .true.
         call self%oris_assign
@@ -189,6 +195,13 @@ contains
         call symmetry_equivalent_ori%kill
     end subroutine oris_assign_cont
 
+    !> Add the particle's solve, a rejected state-zero particle included, to the bench work record.
+    subroutine add_work_cont( self, work )
+        class(strategy3D_cont),  intent(in)    :: self
+        class(cartft_pose_work), intent(inout) :: work
+        call work%add_solve(self%opt, self%npix, self%nextra)
+    end subroutine add_work_cont
+
     subroutine kill_cont( self )
         class(strategy3D_cont), intent(inout) :: self
         call self%opt%kill
@@ -197,6 +210,8 @@ contains
         nullify(self%p_ptr, self%b_ptr, self%spec%eulprob_obj_part)
         self%status   = CARTFT_NOT_ATTEMPTED
         self%score    = 0.
+        self%npix     = 0
+        self%nextra   = 0
         self%searched = .false.
         self%exists   = .false.
     end subroutine kill_cont

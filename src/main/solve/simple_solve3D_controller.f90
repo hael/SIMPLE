@@ -406,13 +406,22 @@ contains
         cfg%filt_mode  = 'none'
         if( l_cavgs ) return
         if( l_nonuniform .and. &
-            &(istage >= NU_FILTER_STAGE .or. (l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
+            &(istage >= nu_start_stage(params) .or. &
+            &(l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
             cfg%filt_mode = trim(params%filt_mode)
             ! no gold-standard stage in solve3D: NU filtering keeps the scheduled lp
             ! (gold-standard refinement belongs to refine3D_auto)
             if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
         endif
     end subroutine set_refine3D_filtering_policy
+
+    !> the stage NU filtering starts at: nu_stage when set, else NU_FILTER_STAGE
+    !! (not nu_filter_stage: Fortran is case-insensitive, so that name is the parameter)
+    integer function nu_start_stage( params ) result( istage )
+        class(parameters), intent(in) :: params
+        istage = NU_FILTER_STAGE
+        if( params%nu_stage > 0 ) istage = params%nu_stage
+    end function nu_start_stage
 
     subroutine set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg

@@ -615,8 +615,9 @@ Ownership:
   particle: the joint five-parameter stage; `cont_route=shift_then_joint` is an
   internal test seam, C16).
 - `simple_strategy3D_cont`: `strategy3D_cont`, the matcher's only
-  continuous-pose symbol; it extends `strategy3D` beside the polar parent
-  `strategy3D_pftc`.
+  continuous-pose search object; it extends `strategy3D` beside the polar
+  parent `strategy3D_pftc`. The matcher also sums `cartft_pose_work`, the work
+  record of the solves, per thread for its bench report (section 11.1).
 - The iteration strategy materializes the prepared real-space reference
   volumes once per iteration (`cart_refvols_{even,odd}.bin`, section 6 of this
   policy applies unchanged up to the polar projection); every matcher reads
@@ -1001,10 +1002,18 @@ about 45 instead of one file per iteration and partition (3,104 for a solve3D ru
 A record starts with a `*** BENCHMARK RECORD ***` header that names the family
 and, where they apply, the iteration (`which_iter`) and the partition. The
 writer's own sections follow, as before: `BENCHMARK CONTEXT` and `TIMINGS (s)`,
-plus `THREAD-SECONDS` for the table parts, the 2D search and the class sums
+plus `THREAD-SECONDS` for the table parts, the 2D and 3D searches and the class sums
 (busy time summed over the team, the region's wall time, the team size and
 the load balance), and `RELATIVE TIMINGS (%)` where a
-writer reports them. Each partition appends only to its own file, so
+writer reports them. A Cartesian pass (`refine=cont`, the polish) adds
+`CONTINUOUS POSE WORK` to its `REFINE3D` record: the solves by `CARTFT_*`
+status, LM iterations, trial evaluations, accepted steps, bound hits,
+calculator passes (the sigma2 residual included), pixel-evaluations (passes
+times the pixels of the particle's shells in the full disk), the mean and
+spread of actual over predicted reduction at accepted steps, and the search
+thread-seconds per pixel-evaluation. Its context gives the bytes of the
+Cartesian references, and their read and transform count as reference
+preparation. Each partition appends only to its own file, so
 concurrent workers never write to the same file. The shared helper is
 `open_bench_report` in `src/fileio/simple_bench_io.f90`; a new benchmark
 writer uses it rather than opening a file of its own. SIMPLE never truncates

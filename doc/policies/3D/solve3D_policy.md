@@ -288,7 +288,19 @@ route, so the stage-3 change applies to the particle route only.
 evaluated during the stage, as a convergence criterion: the internal `lpexit`
 key carries `lpinfo(istage+1)%lp`, the next rung's planned limit, and
 `check_conv3D` ends the stage once the best populated state's `res05`
-resolves past it. Logged as `>>> STAGE RESOLUTION EXIT`. Emitted for the same
+resolves past it **and has stopped gaining**: `res05` must be no better than
+the previous iteration's, carried across iterations in `STATS_FILE` as
+`RESOLUTION_FSC05`, and the comparison is within the stage, so the exit never
+fires at a stage's first iteration. Logged as `>>> STAGE RESOLUTION EXIT`.
+
+The gain guard was added after PfCRT `latest9` (9/10 converged, best
+3.981 A, run at `8c8d8b42`): the threshold alone ended the NU stage mid-climb
+in **all ten** restarts, with last-iteration gains of 0.2-0.8 A, and where it
+cut predicted the outcome. The six restarts that left stage 5 at 7.573 A
+finished at 4.03-4.14, the two that left at 7.762 A at 3.981 and 4.032, and
+the two that left coarsest at 8.171 A gave the two worst maps, 4.140 and the
+run's only failure at 5.353. A stage still gaining resolution is productive
+whatever the next rung's limit says. Emitted for the same
 stages the shift is allowed for, and it only ever adds convergence, so
 `minits` and the Cartesian rule still hold.
 
@@ -570,8 +582,10 @@ uses current evidence for assembled references plus the lagged evidence
 artifact for early consumers, with density fallback. There is no separate
 reference-mask control, so early stages remain spherical.
 
-NU filtering starts at `NU_FILTER_STAGE` = 5 (6 until 2026-10-18), one stage
-earlier than the `prob` -> `prob_neigh` switch at `PROB_NEIGH_REFINE_STAGE`.
+NU filtering starts at `NU_FILTER_STAGE` = 5 (6 until 2026-10-18),
+overridable from the command line by `nu_stage` for testing (0 = the built-in
+value; 3 is the earliest accepted, being the first stage with an FSC), one
+stage earlier than the `prob` -> `prob_neigh` switch at `PROB_NEIGH_REFINE_STAGE`.
 The two were the same stage before, so a reference becoming NU-filtered and a
 global search becoming a neighbourhood search arrived together and could not
 be attributed separately. Stage 5 also had capacity to spare on the PfCRT

@@ -20,6 +20,7 @@ type convergence
     type(stats_struct) :: lp_est           !< low-pass limit, estimated
     type(stats_struct) :: res              !< resolution @ FSC=0.143
     type(stats_struct) :: res05            !< resolution @ FSC=0.5
+    real    :: res05_prev             = 0. !< previous iteration's best FSC=0.5 resolution, from STATS_FILE
     integer :: iteration              = 0  !< current interation
     real    :: mi_class               = 0. !< class parameter distribution overlap
     real    :: mi_proj                = 0. !< projection parameter distribution overlap
@@ -58,6 +59,7 @@ contains
             call ostats%read(string(STATS_FILE))
             self%iteration     = nint(ostats%get(1,'ITERATION'))
             self%score%avg     = ostats%get(1,'SCORE')
+            if( ostats%isthere('RESOLUTION_FSC05') ) self%res05_prev = ostats%get(1,'RESOLUTION_FSC05')
             self%frac_srch%avg = ostats%get(1,'SEARCH_SPACE_SCANNED')
             self%mi_proj       = ostats%get(1,'ORIENTATION_OVERLAP')
             self%mi_state      = nint(ostats%get(1,'STATE_OVERLAP'))
@@ -426,6 +428,9 @@ contains
             end do
         endif
         deallocate(state_mask)
+        ! best resolved populated state, the quantity the lpexit rule and STATS_FILE carry
+        res05_now = 0.
+        if( any(res05_state_avg > TINY) ) res05_now = minval(res05_state_avg, mask=res05_state_avg > TINY)
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
@@ -547,15 +552,17 @@ contains
             &converged = self%check_cont_conv(params, os, sampled > sampled_lb .and. states > 0.5, states, sampled)
         ! lpexit holds the next stage's planned limit: once the halves resolve past it the
         ! remaining iterations at this crop buy nothing the next stage will not do better.
+        ! A stage still gaining resolution is productive whatever the threshold says, so the
+        ! exit also requires the gain to have stopped: on PfCRT latest9 every restart left
+        ! the NU stage mid-climb and the two that left coarsest gave the two worst maps.
+        ! The comparison is within the stage, so never at its first iteration.
         ! Only ever adds convergence.
-        if( params%lpexit > TINY .and. .not.converged .and. allocated(res05_state_avg) )then
-            if( any(res05_state_avg > TINY) )then
-                res05_now = minval(res05_state_avg, mask=res05_state_avg > TINY)
-                if( res05_now < params%lpexit )then
-                    write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
-                        &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', params%lpexit, ' A)'
-                    converged = .true.
-                endif
+        if( params%lpexit > TINY .and. .not.converged .and. res05_now > TINY )then
+            if( res05_now < params%lpexit .and. params%which_iter > params%startit .and. &
+                &self%res05_prev > TINY .and. res05_now >= self%res05_prev - TINY )then
+                write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
+                    &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', params%lpexit, ' A) AND NO LONGER GAINING'
+                converged = .true.
             endif
         endif
         if( converged .and. params%minits > 0 )then
@@ -584,6 +591,7 @@ contains
         call ostats%set(1,'SHIFT_INCR_ARG',              self%shincarg%avg)
         call ostats%set(1,'PERCEN_SEARCH_SPACE_SCANNED', self%frac_srch%avg)
         call ostats%set(1,'LP_MATCHING',                 params%lp)       ! the band matched this iteration
+        if( res05_now > TINY ) call ostats%set(1,'RESOLUTION_FSC05', res05_now) ! read back as res05_prev
         call ostats%set(1,'LP_NU_HANDOFF',               self%lp%avg)     ! the handoff for the next
         call ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
         call ostats%set(1,'RESOLUTION',                  self%res%avg)

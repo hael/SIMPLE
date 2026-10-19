@@ -24,6 +24,7 @@ use simple_strategy3D_greedy,          only: strategy3D_greedy
 use simple_strategy3D_greedy_inpl,     only: strategy3D_greedy_inpl
 use simple_strategy3D_prob,            only: strategy3D_prob
 use simple_strategy3D_cont,            only: strategy3D_cont
+use simple_cartft_pose_opt,            only: cartft_pose_work
 use simple_strategy3D_shc,             only: strategy3D_shc
 use simple_strategy3D_srch,            only: strategy3D_spec
 use simple_strategy3D,                 only: strategy3D
@@ -87,12 +88,21 @@ contains
         type(ptcl_read_session) :: reads
         integer(int64)          :: buffer_budget, buffer_bytes
         integer                 :: buffer_status
-        integer(timer_int_kind) :: t_fill
-        real(timer_int_kind)    :: rt_fill
+        integer(timer_int_kind) :: t_fill, t_cart_refs
+        real(timer_int_kind)    :: rt_fill, rt_cart_refs
+        ! busy time of the search per thread, and the Cartesian solves' work per thread
+        type(cartft_pose_work), allocatable :: cont_work(:)
+        type(cartft_pose_work)  :: cont_work_sum
+        real(dp),   allocatable :: ts_thr(:)
+        real(dp)                :: ts_search, wall_search, t_region, t_ptcl
+        integer(int64)          :: cart_ref_bytes
+        integer                 :: nthr_team
         p_ptr => params
         b_ptr => build
         rss_after_teardown      = -1_int64
         rss_after_reconstruction = -1_int64
+        rt_cart_refs   = 0.
+        cart_ref_bytes = 0_int64
         call init_ctrl()
         converged = .false.
         if( ctrl%do_bench )then
@@ -104,7 +114,12 @@ contains
         ! the band limit of the pass travels with its references (6.6): a Cartesian pass reads
         ! its reference volumes here, before an empty partition's sigma2 output needs it
         if( p_ptr%l_cart_refine )then
+            if( ctrl%do_bench ) t_cart_refs = tic()
             call read_cart_refvols(p_ptr, b_ptr)
+            if( ctrl%do_bench )then
+                rt_cart_refs   = toc(t_cart_refs)
+                cart_ref_bytes = b_ptr%cftc%get_ref_bytes()
+            endif
         else
             call adopt_reprojection_model_range(p_ptr, b_ptr)
         endif
@@ -140,7 +155,8 @@ contains
         endif
         call prepare_particles_batches( nptcls2update )
         if( ctrl%do_bench )then
-            rt_startup = toc(t_startup)
+            ! the Cartesian reference read is reported as reference preparation
+            rt_startup = toc(t_startup) - rt_cart_refs
             rt_build_batch_ptcls = 0.0
             rt_alloc_ptcl_imgs   = 0.0
             rt_prep_refs = 0.0
@@ -175,7 +191,11 @@ contains
             rt_align            = 0.0
         endif
         ! per-thread counters of the team the search runs on
-        allocate(cnt_greedy(omp_get_max_threads()), cnt_all(omp_get_max_threads()), source=0)
+        nthr_team = omp_get_max_threads()
+        allocate(cnt_greedy(nthr_team), cnt_all(nthr_team), source=0)
+        allocate(cont_work(nthr_team), ts_thr(nthr_team))
+        ts_thr      = 0._dp
+        wall_search = 0._dp
         if( trim(p_ptr%inpl_cont) == 'yes' )then
             call b_ptr%spproj_field%set_all2single('cont_inpl_attempted', 0.)
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
@@ -208,11 +228,13 @@ contains
             incr_shifts(:,1:batchsz) = 0.0
             call build_batch_particles_local()
             if( ctrl%do_bench ) t_align = tic()
+            t_region = omp_get_wtime()
             ! a particle's cost varies, so the schedule is dynamic: a particle is searched whole by one thread, so the
             ! order changes only which thread, and so which random draws, it meets
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr) firstprivate(orientation) &
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,t_ptcl) firstprivate(orientation) &
             !$omp schedule(dynamic) proc_bind(close)
             do iptcl_batch = 1, batchsz
+                t_ptcl        = omp_get_wtime()
                 iptcl_map     = batch_start + iptcl_batch - 1
                 iptcl         = pinds(iptcl_map)
                 ithr          = omp_get_thread_num() + 1
@@ -226,9 +248,15 @@ contains
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
                 endif
+                ts_thr(ithr) = ts_thr(ithr) + (omp_get_wtime() - t_ptcl)
             enddo
             !$omp end parallel do
+            wall_search = wall_search + (omp_get_wtime() - t_region)
             if( ctrl%do_bench ) rt_align = rt_align + toc(t_align)
+        enddo
+        ts_search = sum(ts_thr)
+        do ithr = 1, nthr_team
+            call cont_work_sum%add(cont_work(ithr))
         enddo
         call reads%kill
         call seal_record_buffer
@@ -250,7 +278,7 @@ contains
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
-        deallocate(cnt_greedy, cnt_all, incr_shifts)
+        deallocate(cnt_greedy, cnt_all, incr_shifts, cont_work, ts_thr)
         call eulprob_obj_part%kill
         call clean_strategy3D
         call b_ptr%kill_strategy3D_tbox
@@ -332,6 +360,8 @@ contains
             call write_ptcl_read_bench_context(fnr, 'match3D buffer fill', reads_fill)
             call write_ptcl_read_bench_context(fnr, 'match3D search', reads_srch)
             call write_ptcl_read_bench_context(fnr, 'match3D reconstruction', reads_rec)
+            if( p_ptr%l_cart_refine ) &
+                &write(fnr,'(a,i0)') 'match3D Cartesian reference bytes   : ', cart_ref_bytes
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.2)') 'match3D startup/setup              :', rt_startup
@@ -339,7 +369,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match3D particle reading           :', reads_srch%rt_read
             write(fnr,'(a,1x,f0.2)') 'match3D particle preparation       :', &
                 &rt_build_batch_ptcls + rt_alloc_ptcl_imgs - reads_srch%rt_read
-            write(fnr,'(a,1x,f0.2)') 'match3D reference preparation      :', rt_prep_refs + rt_memoize_refs
+            write(fnr,'(a,1x,f0.2)') 'match3D reference preparation      :', rt_prep_refs + rt_memoize_refs + rt_cart_refs
             write(fnr,'(a,1x,f0.2)') 'match3D orientation search         :', rt_prep_orisrch + rt_align
             write(fnr,'(a,1x,f0.2)') 'match3D project metadata I/O       :', rt_projio
             write(fnr,'(a,1x,f0.2)') 'match3D partial reconstruction     :', rt_rec
@@ -349,8 +379,20 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match3D total time                 :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'match3D total thread-s             :', rt_tot * real(p_ptr%nthr, kind(rt_tot))
             write(fnr,'(a,1x,f0.2)') 'match3D % accounted for            :', &
-                &((rt_startup + rt_fill + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + &
+                &((rt_startup + rt_fill + rt_build_batch_ptcls + rt_alloc_ptcl_imgs + rt_prep_refs + rt_cart_refs + &
                 &  rt_memoize_refs + rt_prep_orisrch + rt_align + rt_projio + rt_rec + rt_sigma2_write) / rt_tot) * 100.
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** THREAD-SECONDS (summed over threads; not wall time) ***'
+            write(fnr,'(a,1x,f0.2)') 'match3D search                     :', ts_search
+            write(fnr,'(a,1x,f0.2)') 'match3D search region wall time    :', wall_search
+            write(fnr,'(a,1x,i0)')   'match3D search threads             :', nthr_team
+            if( wall_search > 0._dp )then
+                write(fnr,'(a,1x,f0.3)') 'match3D search load balance        :', ts_search / (wall_search * real(nthr_team,dp))
+            endif
+            if( p_ptr%l_cart_refine )then
+                write(fnr,'(a)') ''
+                call cont_work_sum%write_bench(fnr, 'match3D', ts_search)
+            endif
             call fclose(fnr)
         end subroutine write_bench_file
 
@@ -489,7 +531,12 @@ contains
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
                 ! cont_inpl_attempted/_improved are written by the search object that ran the
                 ! continuous in-plane route (strategy3D_srch)
-                if( .not. p_ptr%l_cart_refine )then
+                if( p_ptr%l_cart_refine )then
+                    select type( cont_srch => strategy3Dsrch(iptcl_batch)%ptr )
+                        type is( strategy3D_cont )
+                            call cont_srch%add_work(cont_work(ithr))
+                    end select
+                else
                     incr_shifts(:,iptcl_batch) = b_ptr%spproj_field%get_2Dshift(iptcl) - shift_before
                 endif
                 call strategy3Dsrch(iptcl_batch)%ptr%kill

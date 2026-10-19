@@ -447,6 +447,7 @@ type :: parameters
     integer :: nspace_sub=500      !< # projection directions in subspace
     integer :: nspace_pickrefs=0   !< # reprojections of the stream's picking references (0: the initial analysis' default)
     integer :: nstages=8           !< # low-pass limit stages
+    integer :: nu_stage=0          !< solve3D stage NU filtering switches on at(0: the built-in default){0}
     integer :: nstages_pickrefs=0  !< # solve3D_cavgs stages of the stream's picking references (0: the initial analysis' default)
     integer :: nstates=1           !< # states to reconstruct
     integer :: nstates_pickrefs=0  !< # solve3D_cavgs states of the stream's picking references (0: the initial analysis' default)
