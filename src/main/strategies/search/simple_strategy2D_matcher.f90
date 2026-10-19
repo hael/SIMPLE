@@ -62,6 +62,7 @@ type :: refine2D_ctrl
     logical :: l_restore_cavgs
     logical :: l_require_full_assignment
     logical :: l_cached
+    logical :: l_crop_sums
     logical :: do_bench
   contains
     procedure :: display
@@ -125,11 +126,14 @@ contains
             rt_build_batch_particles2D = 0.0
             t_alloc_ptcl_imgs2D        = tic()
         endif
-        ! ptcl_imgs holds the raw images handed to class-average restoration; from the
-        ! cache they arrive already Fourier-cropped, so both buffers shrink to box_crop
+        ! ptcl_imgs holds the images handed to class-average restoration; cropped (from the cache, or made in
+        ! memory) they are at box_crop, and from the cache the read buffer shrinks to box_crop too
         if( ctrl%l_cached )then
             call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
                 &imgbatch_box=p_ptr%box_crop, imgbatch_smpd=p_ptr%smpd_crop)
+            call alloc_imgarr(batchsz_max, [p_ptr%box_crop, p_ptr%box_crop, 1], p_ptr%smpd_crop, ptcl_imgs)
+        else if( ctrl%l_crop_sums )then
+            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
             call alloc_imgarr(batchsz_max, [p_ptr%box_crop, p_ptr%box_crop, 1], p_ptr%smpd_crop, ptcl_imgs)
         else
             call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
@@ -274,6 +278,12 @@ contains
             ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
             if( ctrl%l_cached .and. p_ptr%part == 1 ) &
                 write(logfhandle,'(A)') '>>> REFINE2D: reading particles from the downscaled cache'
+            ! The class averages live at box_crop, so their sums take the Fourier-cropped particles the cache would
+            ! serve, made in memory from the full-size read; the stream's 2D pool keeps the full-size path
+            ctrl%l_crop_sums = .false.
+            if( .not. ctrl%l_cached .and. .not. ctrl%l_stream )then
+                if( p_ptr%box_crop < p_ptr%box .and. trim(p_ptr%oritype) == 'ptcl2D' ) ctrl%l_crop_sums = .true.
+            endif
         end subroutine init_ctrl
 
         subroutine sample_particles_for_update()
@@ -330,7 +340,7 @@ contains
                 THROW_HARD('need refs to be part of command line for refine2D execution')
             endif
             call cavger_read_all
-            call cavger_init_online(batchsz_max, cropped_ptcls=ctrl%l_cached)
+            call cavger_init_online(batchsz_max, cropped_ptcls=ctrl%l_cached .or. ctrl%l_crop_sums)
         end subroutine prepare_class_averages_and_restoration
 
         subroutine prepare_alignment_references(batchsz_max)
@@ -346,7 +356,7 @@ contains
         subroutine build_batch_particles_local()
             if( ctrl%do_bench ) t_build_batch_particles2D = tic()
             call build_batch_particles2D(p_ptr, b_ptr, batchsz, pinds(batch_start:batch_end), reads, &
-                ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
+                ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad, crop_sums=ctrl%l_crop_sums)
             if( ctrl%do_bench ) rt_build_batch_particles2D = rt_build_batch_particles2D + toc(t_build_batch_particles2D)
         end subroutine build_batch_particles_local
 
@@ -524,6 +534,7 @@ contains
             write(fnr,'(a,f0.3)') 'match2D peak RSS (GiB)              : ', peak_rss_gib
             write(fnr,'(a,i0)') 'match2D node memory in use (bytes)  : ', get_node_mem_in_use_bytes()
             write(fnr,'(a,l1)') 'match2D particles from the 2D cache : ', ctrl%l_cached
+            write(fnr,'(a,l1)') 'match2D class sums from cropped particles : ', ctrl%l_cached .or. ctrl%l_crop_sums
             call write_sigma2_bench_context(fnr, 'match2D', nptcls2update)
             call write_ptcl_read_bench_context(fnr, 'match2D search', reads_srch)
             write(fnr,'(a)') ''
@@ -571,6 +582,8 @@ contains
         write(logfhandle,'(a,l1)') 'l_prob_align         : ', self%l_prob_align
         write(logfhandle,'(a,l1)') 'l_restore_cavgs      : ', self%l_restore_cavgs
         write(logfhandle,'(a,l1)') 'l_require_full_assignment : ', self%l_require_full_assignment
+        write(logfhandle,'(a,l1)') 'l_cached             : ', self%l_cached
+        write(logfhandle,'(a,l1)') 'l_crop_sums          : ', self%l_crop_sums
         write(logfhandle,'(a,l1)') 'do_bench             : ', self%do_bench
     end subroutine display
 

@@ -2267,7 +2267,7 @@ last nightly and the report were not finished.
 
 **What no longer holds.** The profiles and floors of Phases 1 to 5 were measured on 25d256886 with
 this run's changes. Master changed results in `solve3D` and `refine3D` since: the clamp revert, the
-FSC=0.5 shift stage, the nonuniform filter from stage 5 with its mid-stage exit (8c8d8b427), the axis
+FSC=0.5 stage omission, the nonuniform filter from stage 5 with its mid-stage exit (8c8d8b427), the axis
 search at stage 4, and the speed week (04e520e78), which is meant to be identical apart from keeping
 back-filled projection labels in volume assembly. So every entry that runs either needs its profile
 again. An entry whose outputs stay byte-identical at one thread between the old and the merged

@@ -26,8 +26,11 @@ partial cache would never hit; the cache always covers all active particles.
 
 An entry is the noise-normalized (against the full-box `lmsk`),
 Fourier-cropped particle, stored as a real-space `box_crop` image. Fourier
-crop -> inverse FFT -> forward FFT is an exact round trip, so reading an entry
-back reproduces the same coefficients `prepimg4align` would have computed.
+crop -> inverse FFT -> forward FFT is a round trip that is exact in
+mathematics, not in single-precision arithmetic, so reading an entry back
+reproduces the coefficients `prepimg4align` would have computed to rounding,
+not bit for bit. The real-space round trip also drops the part of the cropped
+Nyquist lines that no real image can hold.
 The shift is not cacheable (re-read from the project every iteration) and the
 CTF is deliberately left out so the cache does not depend on CTF parameters.
 
@@ -40,13 +43,20 @@ directory).
 
 ## 3. Consumers
 
-- 2D alignment (`prob_tab2D`, `refine2D_exec` search): exact substitution.
+- 2D alignment (`prob_tab2D`, `refine2D_exec` search): substitution equal to
+  rounding (Section 2).
 - 2D class-average restoration (`cavger_update_sums` with
   `cropped_ptcls=.true.`): deliberate numerics change — edge taper and
   gridding source grid live at `box_crop`, no second noise normalization,
-  shift and CTF pixel size scaled to the cropped grid.
+  shift and CTF pixel size scaled to the cropped grid. Without the cache the
+  2D matcher makes the same entry in memory from the full-size read of each
+  batch and restores from it the same way (`solve2D_policy.md`), whenever
+  `box_crop < box` outside the stream's 2D pool; the cache then only saves the
+  reads and the per-iteration preparation.
 Not consumers, by design: every 3D workflow (alignment, probabilistic
-preparation, and reconstruction all read the full-size originals; the
+preparation, and reconstruction all read the full-size originals; a cropped
+`refine3D` reconstruction takes the observations its own search made from
+them, in memory, see `particle_read_path_policy.md`; the
 `refine3D` execution strategies throw on `cache=yes`), the one-off
 starting-volume `reconstruct3D`, `volassemble` (no particle reads), streaming
 2D variants (long-lived processes over changing particle sets would thrash
@@ -132,8 +142,8 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   rather than being served silently; this does not occur in the current
   workflows.
 - The cached class-average restoration path is accepted on statistical
-  parity with uncached execution, not bit equality; the alignment paths are
-  bit-exact.
+  parity with uncached execution, not bit equality; the alignment paths agree
+  with uncached execution to rounding (Section 2).
 
 ## 9. Shared Machinery
 

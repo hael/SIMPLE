@@ -2,7 +2,8 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
-use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, add_ptcl_cache_read_time
+use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, add_ptcl_cache_read_time, &
+    &records_open, record_slot, put_record
 !$ use omp_lib, only: omp_get_max_threads
 use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached, prepimg4align_cart
 use simple_cartft_calc,     only: cartft_calc
@@ -256,53 +257,84 @@ contains
         deallocate(raw_work, out_work)
     end subroutine prep_cart_batch
 
+    !> The polar particles of a 3-D batch. While the pass's buffer is open for records, each particle's record is
+    !! put as well: prepimg4align leaves the noise-normalized full-box transform in src_imgs, and its unshifted
+    !! Fourier crop, back in real space, is the reconstruction's cropped observation (prep_rec_observation), bit
+    !! for bit, without a second normalization and full-box transform.
     subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, &
         &tmp_imgs_pad )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: src_imgs(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
+        type(image), allocatable :: rec_work(:)
+        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot
+        logical :: l_record
+        l_record = records_open()
+        if( l_record )then
+            ! one record image per thread of the team the loop runs on
+            nthr_team = 1
+            !$ nthr_team = omp_get_max_threads()
+            call alloc_imgarr(nthr_team, [params%box_crop, params%box_crop, 1], params%smpd_crop, rec_work)
+        endif
         call tmp_imgs(1)%memoize_mask_coords
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         pdim_interp = build%pftc%get_pdim_interp()
         call tmp_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,slot) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+            if( l_record )then
+                slot = record_slot(iptcl)
+                if( slot > 0 )then
+                    call src_imgs(iptcl_batch)%clip(rec_work(ithr))
+                    call rec_work(ithr)%ifft
+                    call put_record(slot, rec_work(ithr))
+                endif
+            endif
             ! the half first: memoizing the particle's self-term reads its half's spectrum
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
             call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
         end do
         !$omp end parallel do
+        if( l_record ) call dealloc_imgarr(rec_work)
         call forget_ft_maps
         call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl3D')
         call build%pftc%memoize_ptcls
     end subroutine polarize_batch_particles3D
 
-    !>  ptcl_imgs receives the raw full-size images, which only callers that restore
-    !!  class averages from them need; omit it to skip both the buffer and the copy.
-    subroutine build_batch_particles2D( params, build, nptcls_here, pinds, reads, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
-        class(parameters),      intent(in)    :: params
-        class(builder),         intent(inout) :: build
-        integer,                intent(in)    :: nptcls_here
-        integer,                intent(in)    :: pinds(nptcls_here)
+    !>  ptcl_imgs receives the images class-average restoration sums, which only callers that restore class
+    !!  averages need; omit it to skip both the buffer and the copy. They are the full-size originals, or the
+    !!  Fourier-cropped particles when cached or when crop_sums asks for them (sized box_crop by the caller).
+    subroutine build_batch_particles2D( params, build, nptcls_here, pinds, reads, ptcl_imgs, ptcl_match_imgs, &
+        &ptcl_match_imgs_pad, crop_sums )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
+        class(parameters),        intent(in)    :: params
+        class(builder),           intent(inout) :: build
+        integer,                  intent(in)    :: nptcls_here
+        integer,                  intent(in)    :: pinds(nptcls_here)
         class(ptcl_read_session), intent(inout) :: reads   !< the read session of the pass
-        class(image), optional, intent(inout) :: ptcl_imgs(nptcls_here)
-        class(image),           intent(inout) :: ptcl_match_imgs(params%nthr)
-        class(image),           intent(inout) :: ptcl_match_imgs_pad(params%nthr)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
-        logical :: l_keep_raw, l_cached
+        class(image),   optional, intent(inout) :: ptcl_imgs(nptcls_here)
+        class(image),             intent(inout) :: ptcl_match_imgs(params%nthr)
+        class(image),             intent(inout) :: ptcl_match_imgs_pad(params%nthr)
+        logical,        optional, intent(in)    :: crop_sums !< cropped particles for the sums, made in memory
+        type(image), allocatable :: crop_work(:)
+        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team
+        logical :: l_keep_raw, l_cached, l_crop_mem
         integer(timer_int_kind) :: t_cache
         l_keep_raw = present(ptcl_imgs)
         ! When cached, ptcl_imgs receives the Fourier-cropped particle rather than the
         ! full-size original, so callers that pass it must have sized it at box_crop and
         ! told cavger_init_online to expect cropped particles.
         l_cached   = ptcl_cache_in_use(params, build)
+        ! The same cropped particle without the disk cache: made here from the full-size read
+        l_crop_mem = .false.
+        if( present(crop_sums) .and. l_keep_raw .and. .not. l_cached ) l_crop_mem = crop_sums
         if( l_cached )then
             if( L_BENCH_GLOB ) t_cache = tic()
             call ptcl_cache_read_batch(params, build, nptcls_here, pinds, [1,nptcls_here])
@@ -315,15 +347,30 @@ contains
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
         call ptcl_match_imgs(1)%memoize_mask_coords
         call memoize_ft_maps(ptcl_match_imgs(1)%get_ldim(), ptcl_match_imgs(1)%get_smpd())
+        if( l_crop_mem )then
+            ! one work image per thread of the team the loop runs on
+            nthr_team = 1
+            !$ nthr_team = omp_get_max_threads()
+            call alloc_imgarr(nthr_team, [params%box_crop, params%box_crop, 1], params%smpd_crop, crop_work)
+        endif
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            if( l_keep_raw ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
             if( l_cached )then
+                if( l_keep_raw ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
                 call prepimg4align_cached(params, build, iptcl, build%imgbatch(iptcl_batch), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+            else if( l_crop_mem )then
+                ! the cache's entry (ptcl_cache_ensure): noise-normalized, Fourier-cropped, unshifted, real space;
+                ! kept for the sums, and a copy prepared for alignment as a cached particle is
+                call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, ptcl_imgs(iptcl_batch), [0.,0.])
+                call ptcl_imgs(iptcl_batch)%ifft
+                call crop_work(ithr)%copy_fast(ptcl_imgs(iptcl_batch))
+                call prepimg4align_cached(params, build, iptcl, crop_work(ithr), &
+                    &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             else
+                if( l_keep_raw ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
                 call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             endif
@@ -332,6 +379,7 @@ contains
             call build%pftc%polarize_ptcl_pft(ptcl_match_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
         end do
         !$omp end parallel do
+        if( l_crop_mem ) call dealloc_imgarr(crop_work)
         call build%pftc%create_polar_absctfmats(build%spproj, 'ptcl2D')
         call build%pftc%memoize_ptcls
         call forget_ft_maps

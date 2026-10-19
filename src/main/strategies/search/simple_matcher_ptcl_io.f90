@@ -15,11 +15,14 @@ public :: prep_rec_observation
 public :: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, add_ptcl_cache_read_time
 public :: write_ptcl_read_bench_context, write_mem_bench_context
 public :: ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, pass_buffer_status_name, pass_buffer_bytes
-public :: BUFFER_FILLED, BUFFER_OFF, BUFFER_OVER_BUDGET, BUFFER_NO_MEMORY
+public :: open_record_buffer, records_open, record_slot, put_record, seal_record_buffer, take_records
+public :: get_rec_observation
+public :: BUFFER_FILLED, BUFFER_OFF, BUFFER_OVER_BUDGET, BUFFER_NO_MEMORY, BUFFER_RECORDS
 private
 
-! outcomes of filling the particle buffer
+! outcomes of filling the particle buffer, or of opening it for records
 integer, parameter :: BUFFER_FILLED = 0, BUFFER_OFF = 1, BUFFER_OVER_BUDGET = 2, BUFFER_NO_MEMORY = 3
+integer, parameter :: BUFFER_RECORDS = 4
 
 interface read_imgbatch
     module procedure read_imgbatch_1
@@ -50,11 +53,16 @@ type(ptcl_read_counts) :: read_totals
 ! The particle buffer of one search pass: its share's images, read once into an immutable slab and copied from
 ! it by the batches of the same process (section 3.1 of particle_io_few_particle_stacks.md). 3D: the search and
 ! the reconstruction; 2D in shared memory: the probability table fills it, the matcher's batches use it.
+! A cropped 3D pass holds records instead: each particle's reconstruction observation (prep_rec_observation,
+! untapered), put by the search's batches from the transform the alignment computes, sealed before the
+! reconstruction, which takes its observations from them.
 type(image_slab)     :: pass_slab
 integer, allocatable :: pass_slot(:)    !< slab slot of particle p at pass_slot(p - pass_lo + 1), 0 when absent
+logical, allocatable :: pass_put(:)     !< records: slot k has been put
 integer              :: pass_lo  = 0
 integer              :: pass_box = 0
-logical              :: l_pass_ready = .false.
+logical              :: l_pass_ready   = .false.
+logical              :: l_pass_records = .false.
 
 !> The particle images of one pass (a search, a reconstruction, a probability table), read through a
 !! stack read session. One per pass: new before its first batch, kill after its last. After each batch
@@ -388,10 +396,111 @@ contains
     subroutine release_pass_buffer
         call pass_slab%kill
         if( allocated(pass_slot) ) deallocate(pass_slot)
-        pass_lo      = 0
-        pass_box     = 0
-        l_pass_ready = .false.
+        if( allocated(pass_put)  ) deallocate(pass_put)
+        pass_lo        = 0
+        pass_box       = 0
+        l_pass_ready   = .false.
+        l_pass_records = .false.
     end subroutine release_pass_buffer
+
+    !> Opens the buffer for the records of the pass's share pinds(1:n) at box_crop: empty slots, one per particle,
+    !! that the search's batches put (record_slot, put_record) before seal_record_buffer. Returns BUFFER_RECORDS,
+    !! or BUFFER_OFF (no budget or no particle), BUFFER_OVER_BUDGET or BUFFER_NO_MEMORY with nothing open and the
+    !! reconstruction reading its batches from the stacks.
+    integer function open_record_buffer( params, n, pinds, budget ) result( status )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: n, pinds(n)
+        integer(int64),    intent(in) :: budget
+        integer :: slab_status, k
+        call release_pass_buffer
+        status = BUFFER_OFF
+        if( n < 1 .or. budget <= 0_int64 ) return
+        if( params%box_crop >= params%box ) THROW_HARD('records are cropped observations; open_record_buffer')
+        call pass_slab%new(params%box_crop, n, budget, slab_status)
+        select case(slab_status)
+            case(SLAB_OVER_BUDGET)
+                status = BUFFER_OVER_BUDGET
+                return
+            case(SLAB_NO_MEMORY)
+                status = BUFFER_NO_MEMORY
+                return
+        end select
+        status  = BUFFER_RECORDS
+        pass_lo = minval(pinds)
+        allocate(pass_slot(maxval(pinds) - pass_lo + 1), source=0)
+        allocate(pass_put(n), source=.false.)
+        do k = 1, n
+            pass_slot(pinds(k) - pass_lo + 1) = k
+        end do
+        pass_box       = params%box_crop
+        l_pass_records = .true.
+    end function open_record_buffer
+
+    !> Is the buffer open for records, before its seal
+    logical function records_open()
+        records_open = l_pass_records .and. .not. l_pass_ready
+    end function records_open
+
+    !> The record slot of particle iptcl while the buffer is open for records, otherwise 0
+    integer function record_slot( iptcl ) result( k )
+        integer, intent(in) :: iptcl
+        integer :: j
+        k = 0
+        if( .not. records_open() ) return
+        j = iptcl - pass_lo + 1
+        if( j < 1 .or. j > size(pass_slot) ) return
+        k = pass_slot(j)
+    end function record_slot
+
+    !> Slot k receives its particle's record, a real-space image at box_crop. Writes slot k only, so the batch's
+    !! threads put their particles concurrently.
+    subroutine put_record( k, img )
+        integer,      intent(in)    :: k
+        class(image), intent(inout) :: img
+        call pass_slab%put(k, img)
+        pass_put(k) = .true.
+    end subroutine put_record
+
+    !> After the search: no record changes after this; a particle whose record was not put is read from the stacks
+    subroutine seal_record_buffer
+        integer :: j
+        if( .not. records_open() ) return
+        call pass_slab%seal
+        do j = 1, size(pass_slot)
+            if( pass_slot(j) > 0 )then
+                if( .not. pass_put(pass_slot(j)) ) pass_slot(j) = 0
+            endif
+        end do
+        l_pass_ready = .true.
+    end subroutine seal_record_buffer
+
+    !> Do the sealed records hold every one of these particles; when they do, the particles count as images
+    !! from the buffer (get_rec_observation then gives their observations)
+    logical function take_records( pinds )
+        integer, intent(in) :: pinds(:)
+        integer :: i, j
+        take_records = .false.
+        if( .not. (l_pass_records .and. l_pass_ready) ) return
+        do i = 1, size(pinds)
+            j = pinds(i) - pass_lo + 1
+            if( j < 1 .or. j > size(pass_slot) ) return
+            if( pass_slot(j) < 1 ) return
+        end do
+        take_records = .true.
+        read_totals%nbuffered = read_totals%nbuffered + int(size(pinds),int64)
+    end function take_records
+
+    !> obs (box_crop) receives the reconstruction observation of particle iptcl from its record: what
+    !! prep_rec_observation makes of the particle, bit for bit, tapered at the cropped box if l_taper. Only for
+    !! particles take_records accepted; thread-safe, so a reconstruction's threads take their particles concurrently.
+    subroutine get_rec_observation( iptcl, obs, l_taper )
+        integer,      intent(in)    :: iptcl
+        class(image), intent(inout) :: obs
+        logical,      intent(in)    :: l_taper
+        real :: edge_mean
+        call pass_slab%get(pass_slot(iptcl - pass_lo + 1), obs)
+        if( l_taper ) call obs%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
+    end subroutine get_rec_observation
 
     integer(int64) function pass_buffer_bytes()
         pass_buffer_bytes = pass_slab%bytes()
@@ -402,19 +511,21 @@ contains
         character(len=:), allocatable :: name
         select case(status)
             case(BUFFER_FILLED);      name = 'filled'
+            case(BUFFER_RECORDS);     name = 'cropped records'
             case(BUFFER_OFF);         name = 'off, batch reads'
             case(BUFFER_OVER_BUDGET); name = 'over budget, batch reads'
             case default;             name = 'allocation failed, batch reads'
         end select
     end function pass_buffer_status_name
 
-    !> Does the particle buffer hold every one of these particles at this box
+    !> Does the particle buffer hold every one of these particles at this box, as read
     logical function buffer_covers( params, pinds )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: pinds(:)
         integer :: i, j
         buffer_covers = .false.
         if( .not. l_pass_ready ) return
+        if( l_pass_records ) return
         if( params%box /= pass_box ) return
         do i = 1, size(pinds)
             j = pinds(i) - pass_lo + 1
@@ -434,6 +545,7 @@ contains
     !> The reconstruction observation of both backends. Cropped: noise-normalized at the native box against lmsk,
     !! Fourier-cropped to obs, back in real space, then tapered at the cropped box if l_taper; uncropped: tapered,
     !! then normalized, as in the fused gridding routine. Cropping and tapering do not commute, so all backends use it.
+    !! A cropped 3D pass keeps the untapered cropped observation as the particle's record (get_rec_observation).
     subroutine prep_rec_observation( ptcl_img, lmsk, obs, l_taper )
         class(image), intent(inout) :: ptcl_img
         logical,      intent(in)    :: lmsk(:,:,:)

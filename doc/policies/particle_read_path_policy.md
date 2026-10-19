@@ -56,6 +56,22 @@ The reconstruction of the same pass, which runs after the assignment barrier,
 copies its images from that buffer instead of reading them again. The buffer
 lives for one pass in one process
 (`separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md`).
+
+When the pass reconstructs at a cropped box (`box_crop < box`, a polar
+search), the buffer holds records instead of decoded images. The search
+reads its batches from the stacks. Each particle's alignment preparation
+normalizes and transforms the full box. The unshifted Fourier crop of that
+transform, back in real space, is the observation the reconstruction would
+make from the same image (`prep_rec_observation`, before its taper). The
+batch keeps it at `box_crop` in the particle's slot. The reconstruction (both
+backends) takes its observations from these records. It does not read the
+stacks or transform the full box again. The outputs are bit for bit those of
+the raw buffer, and the buffer is `(box/box_crop)^2` smaller. One exception:
+the PCG backend's own observation image transforms with several threads when
+`box_crop` is 200 or more, and a record is transformed on one thread, so there
+the two may differ by rounding. A particle without a record is read from the
+stacks.
+
 In shared-memory 2D, the probability table (`prob_tab2D`, run in the master
 process) fills the buffer with the iteration's sampled particles, the
 matcher of the same iteration copies its batches from it, and the matcher

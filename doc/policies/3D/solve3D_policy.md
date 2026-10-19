@@ -237,23 +237,23 @@ field written by the reconstruction) is finer than the planned
 class-average route keeps its final limit). `res05` gates the advance; the
 ladder sets its size.
 
-**Stage shift (2026-10-18).** Where the stage can be skipped, it is skipped
+**Stage omission (2026-10-18).** Where the stage can be omitted, it is omitted
 rather than run at an advanced limit. When `res05` is finer than
 `lpinfo(istage)%lp` the stage's own crop cannot represent the resolution the
 halves already agree on -- `set_bp_range3D` clips the band to the crop
 Nyquist, so the stage would print an advanced limit while matching at the
 crop limit and spend its whole iteration budget there. `solve3D_stage_behind_fsc05`
-gates a `cycle` in the frequency-marching loop, logging `>>> SOLVE3D SHIFTING
-PAST STAGE`. Excluded, because they carry one-time work: the first stage
+gates a `cycle` in the frequency-marching loop, logging `>>> SOLVE3D OMITTING
+STAGE`. Excluded, because they carry one-time work: the first stage
 (`start_stage`, the add-on registration pass), the last stage (automasking,
 envelope FSC, trailing reconstruction) and, **only when an axis is actually
-searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` is shiftable: with
+searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` can be omitted: with
 `pgrp == pgrp_start` the `symmetrize` call is a complete no-op, since
 `l_symran` is set only when `pgrp_start` has more symmetry than `pgrp` and
-therefore implies `l_srch4symaxis`. Skipped
+therefore implies `l_srch4symaxis`. Omitted
 stages leave `emitted_lp` at its `-1` sentinel, which the stage report and
 the add-on manifest already treat as "not run". The one-rung advance above
-therefore applies only to the three stages that cannot be shifted past.
+therefore applies only to the three stages that cannot be omitted.
 
 **Stage iteration budget (`MAXITS`): measured slack, not yet reallocated.**
 The budget stands at `[20,20,17,15,12,12,12,25]`. A reallocation of stage 3's

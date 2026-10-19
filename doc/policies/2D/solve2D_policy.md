@@ -160,8 +160,9 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 
 The 2D matcher must preserve a single particle-stack read per batch in the
 online alignment/restoration path. Batch construction should keep the
-already-read raw particle images for class-average restoration, and restoration
-should consume those in-memory images after assignment in the same batch.
+already-read particle images (or the Fourier-cropped images made from them,
+below) for class-average restoration, and restoration should consume those
+in-memory images after assignment in the same batch.
 
 Do not split online class-average restoration into a second full particle pass
 that re-reads image stacks to lower peak memory. Offline or terminal
@@ -226,6 +227,19 @@ the offline `make_cavgs` sums) are bucketed by class and half; the buckets run
 under a dynamic schedule, the largest first, and each adds its particles in
 batch order. The sums are therefore the same at any thread count. The work
 images are sized by the thread team.
+
+The matcher's class averages live at `box_crop`, so whenever `box_crop < box`
+(and outside the stream's 2D pool) its online sums take the Fourier-cropped
+particle the particle cache would serve (`particle_cache_policy.md`, section
+3), made in memory from the full-size read of the batch: noise-normalized at
+the full box, cropped, then tapered, padded and transformed at `box_crop`.
+That replaces a transform of the padded full box of which only the
+`box_crop` region was used. The alignment then prepares the particle exactly
+as with `cache=yes`. Both differ from the uncached full-box preparation by
+rounding: the cropped particle goes back to real space and is transformed
+again, which is not bitwise exact. The class sums change as the cached
+restoration does (statistical parity, not bit equality). The final class
+averages of `solve2D` are restored at the full box by `make_cavgs`.
 
 Benchmark reports (`refine3D_policy.md`, section 11.1, lists the files):
 `REFINE2D_BENCH_PARTppp.txt` for every partition, with the thread-seconds and

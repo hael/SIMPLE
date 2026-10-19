@@ -5,7 +5,7 @@ use simple_timer
 use simple_builder,         only: builder
 use simple_matcher_ptcl_io, only: ptcl_read_session, prepimgbatch, prep_rec_observation, killimgbatch, &
     &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, write_ptcl_read_bench_context, &
-    &write_mem_bench_context
+    &write_mem_bench_context, take_records, get_rec_observation
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_fplane_grid,     only: fplane_grid
 use simple_parameters,      only: parameters
@@ -41,6 +41,7 @@ contains
         integer, allocatable :: grouped_pinds(:), state_eo_offsets(:)
         real,    allocatable :: grouped_w(:)
         integer :: batchlims(2), ibatch, batchsz, state, eo, group
+        logical :: l_records
         type(ptcl_read_counts)  :: reads0
         type(ptcl_read_session) :: reads
         integer(timer_int_kind) :: t, t0
@@ -83,11 +84,14 @@ contains
                 do ibatch = state_eo_offsets(group),state_eo_offsets(group+1)-1,MAXIMGBATCHSZ
                     batchlims = [ibatch, min(state_eo_offsets(group+1)-1, ibatch+MAXIMGBATCHSZ-1)]
                     batchsz   = batchlims(2) - batchlims(1) + 1
-                    call reads%read(params, build, size(grouped_pinds), grouped_pinds, batchlims)
+                    ! the search's records of a cropped pass are the batch's observations, else the batch is read
+                    l_records = .false.
+                    if( allocated(crop_imgs) ) l_records = take_records(grouped_pinds(batchlims(1):batchlims(2)))
+                    if( .not. l_records ) call reads%read(params, build, size(grouped_pinds), grouped_pinds, batchlims)
                     if( L_BENCH_GLOB ) t = tic()
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
                         &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), &
-                        &crop_imgs=crop_imgs)
+                        &crop_imgs=crop_imgs, records=l_records)
                     if( L_BENCH_GLOB )then
                         rt_prep = rt_prep + toc(t)
                         t       = tic()
@@ -432,8 +436,9 @@ contains
     !! For model comparisons (FLEX's projected model): kfromto, the band (default the sigma2 range of build%esig;
     !! the planes' Nyquist is then capped at it); observation_model, planes holding the whitened observation and
     !! the forward transfer; whiten, whitening by the sigma2 spectra (default with the Euclidean objective).
+    !! records: the cropped observations come from the pass's records (take_records accepted pinds), ptcl_imgs unread.
     subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes, crop_imgs, kfromto, &
-            &observation_model, whiten )
+            &observation_model, whiten, records )
         use simple_image, only: image
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -443,12 +448,15 @@ contains
         type(fplane_type), intent(inout) :: fplanes(nptcls)
         type(image), allocatable, optional, intent(inout) :: crop_imgs(:)
         integer,                  optional, intent(in)    :: kfromto(2)
-        logical,                  optional, intent(in)    :: observation_model, whiten
+        logical,                  optional, intent(in)    :: observation_model, whiten, records
         type(fplane_grid) :: grid
         integer :: i, ithr, kfromto_here(2), box_pd
-        logical :: l_crop, l_band, l_obs, l_whiten
+        logical :: l_crop, l_band, l_obs, l_whiten, l_records
         l_crop = present(crop_imgs)
         if( l_crop ) l_crop = allocated(crop_imgs)
+        l_records = .false.
+        if( present(records) ) l_records = records
+        if( l_records .and. .not. l_crop ) THROW_HARD('records are cropped observations; prep_imgs4rec')
         l_band = present(kfromto)
         l_obs  = .false.
         if( present(observation_model) ) l_obs = observation_model
@@ -483,7 +491,11 @@ contains
             if( l_crop )then
                 ! backend-neutral crop step (PCG prepares through the same call); the
                 ! fused routine below tapers at the cropped box, pads and transforms
-                call prep_rec_observation(ptcl_imgs(i), build%lmsk, crop_imgs(ithr), .false.)
+                if( l_records )then
+                    call get_rec_observation(pinds(i), crop_imgs(ithr), .false.)
+                else
+                    call prep_rec_observation(ptcl_imgs(i), build%lmsk, crop_imgs(ithr), .false.)
+                endif
                 call crop_imgs(ithr)%norm_noise_taper_edge_pad_fft(build%lmsk_crop, &
                     &build%img_pad_heap(ithr), renorm=.false.)
             else

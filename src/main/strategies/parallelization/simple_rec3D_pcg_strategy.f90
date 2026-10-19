@@ -9,7 +9,7 @@ use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG
     &pcg_raw_accum_compatible, measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, &
     &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map, read_pcg_raw_accum_header
 use simple_matcher_ptcl_io,     only: prepimgbatch, ptcl_read_session, killimgbatch, prep_rec_observation, &
-    &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since
+    &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, take_records, get_rec_observation
 use simple_matcher_3Drec,       only: write_rec3D_bench
 use simple_sigma2_files,        only: load_sigma2
 use simple_euclid_sigma2,       only: sigma2_half
@@ -380,6 +380,7 @@ contains
             integer :: lims2(2,2), R, batchlims(2), batchsz, ih
             integer :: i, ii, iptcl, ibatch
             real    :: shift(2), crop_factor
+            logical :: l_records
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             fname = refine3D_pcg_raw_accum_fname(state_here, params%part, params%numlen, &
@@ -436,11 +437,17 @@ contains
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
-                call rsess%read(params, build, size(pinds), pinds, batchlims)
+                ! the search's records of a cropped pass are the batch's observations, else the batch is read
+                l_records = take_records(pinds(batchlims(1):batchlims(2)))
+                if( .not. l_records ) call rsess%read(params, build, size(pinds), pinds, batchlims)
                 if( L_BENCH_GLOB ) t_prep = tic()
                 do ii = 1, batchsz
                     ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
-                    call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
+                    if( l_records )then
+                        call get_rec_observation(pinds(batchlims(1)+ii-1), obs, .true.)
+                    else
+                        call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
+                    endif
                     call obs%fft
                     y_batch(:,:,ii) = pcgop%extract_native_plane(obs)
                 enddo

@@ -169,7 +169,7 @@ what it replaces: the band is no longer set to an arbitrary measured value.
   the `res05 >= lp` return keeps the sharpen-only direction, monotone,
   floored at `lp_cap`.
 
-**Stage shift, same day, and the real value of the approach.** Borrowing the
+**Stage omission, same day, and the real value of the approach.** Borrowing the
 next rung's `lp` while staying at the stage's own crop is close to inert:
 `set_bp_range3D` ends with
 `kfromto(2) = min(kfromto(2), nyqcrop_ind)`, so the advanced limit is clipped
@@ -177,20 +177,20 @@ back to the crop Nyquist of `lpinfo(istage)%box_crop`. The stage banner then
 prints a limit the search never used, and the stage still spends its full
 budget at a sampling that cannot represent the resolution already achieved.
 
-So where a stage can be skipped, skip it: `solve3D_stage_behind_fsc05` gates a
+So where a stage can be omitted, omit it: `solve3D_stage_behind_fsc05` gates a
 `cycle` in the frequency-marching loop. That drops the whole stage config --
 `box_crop`, `smpd_crop`, `trslim`, `nspace`, `maxits` -- which is where the
 wall-clock goes. Unlike the rung advance this compounds naturally: a map three
-rungs ahead skips three stages. Excluded are the stages carrying
+rungs ahead omits three stages. Excluded are the stages carrying
 one-time work: `start_stage`, the last stage, and `SYMSRCH_STAGE` when an axis
-is actually searched. `NOSYMSRCH_STAGE` is shiftable, because `l_symran` is
+is actually searched. `NOSYMSRCH_STAGE` can be omitted, because `l_symran` is
 set only when `pgrp_start` outranks `pgrp` and so implies `l_srch4symaxis`:
 with no axis search, `symmetrize` does nothing at all. The rung advance is
 retained for the excluded stages.
 
 **Mid-stage exit, referenced to the next rung.** The internal `lpexit` key
 carries `lpinfo(istage+1)%lp` and `check_conv3D` ends the stage once `res05`
-resolves past it. Same eligibility as the shift; only ever adds convergence.
+resolves past it. Same eligibility as the omission; only ever adds convergence.
 
 A first version tested `params%lp`, the band in use, and was reverted the
 same day after PfCRT `latest8` converged in 2 of 6 restarts. The error was

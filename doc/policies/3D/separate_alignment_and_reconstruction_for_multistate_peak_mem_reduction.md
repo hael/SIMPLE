@@ -63,7 +63,7 @@ membership threshold of 0.01 (`PCG_WEIGHT_THRESHOLD`).
 | Barrier | Final orientation/state/half metadata, selected particle indices, CTF/project metadata, symmetry, Euclidean sigma data | PFTC/reprojections, matching images, search strategies, particle PFTs, correlation caches, alignment batches |
 | Worker reconstruction | One half-map reconstructor, bounded reconstruction image/Fourier buffers, one `(state, half)` index range (with its weights under a weight set) | EO composite, another state/half reconstructor, alignment objects |
 | Assembly | EO composite and state-local postprocessing objects | Worker alignment state and arrays of state volumes |
-| All three worker phases (alignment, barrier, reconstruction) | The particle buffer: the decoded raw images of the pass's share, one immutable slab filled before the search and read by copy into the bounded batches of the search and the reconstruction, released after the reconstruction | Anything derived from those images (prepared, filtered or transformed particles) |
+| All three worker phases (alignment, barrier, reconstruction) | The particle buffer: the decoded raw images of the pass's share, one immutable slab filled before the search and read by copy into the bounded batches of the search and the reconstruction, released after the reconstruction. A cropped reconstruction instead keeps one record per particle, the untapered cropped observation the search's batches make from their own transforms, sealed after the search and read by copy into the reconstruction's batches | Anything else derived from those images (prepared, filtered or transformed particles) |
 
 The worker memory target is therefore:
 

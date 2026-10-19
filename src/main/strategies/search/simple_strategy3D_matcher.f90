@@ -17,7 +17,7 @@ use simple_bench_io,                   only: open_bench_report
 use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes, get_node_mem_in_use_bytes
 use simple_matcher_ptcl_io,            only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
     &write_ptcl_read_bench_context, ptcl_read_session, ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, &
-    &pass_buffer_status_name, pass_buffer_bytes
+    &pass_buffer_status_name, pass_buffer_bytes, open_record_buffer, seal_record_buffer
 use simple_strategy3D_eval,            only: strategy3D_eval
 use simple_strategy3D_greedy_sub,      only: strategy3D_greedy_sub
 use simple_strategy3D_greedy,          only: strategy3D_greedy
@@ -43,6 +43,7 @@ type :: refine3D_ctrl
     logical :: do_emit_sigma
     logical :: do_write_oris
     logical :: do_bench
+    logical :: do_buffer_records
   contains
     procedure :: print_flags
 end type refine3D_ctrl
@@ -182,13 +183,18 @@ contains
         allocate(incr_shifts(2,batchsz_max), source=0.0)
         call reads%new(p_ptr)
         call reads%expect(pinds(1:nptcls2update))
-        ! the share read once into the particle buffer, for the batches and the reconstruction below
+        ! the share read once into the particle buffer, for the batches and the reconstruction below; a cropped
+        ! reconstruction keeps the records the batches make instead, and the batches read the stacks
         if( ctrl%do_bench )then
             t_fill     = tic()
             reads_fill = ptcl_read_counts_now()
         endif
         buffer_budget = ptcl_buffer_budget(p_ptr, b_ptr)
-        buffer_status = fill_pass_buffer(p_ptr, b_ptr, reads, nptcls2update, pinds, buffer_budget)
+        if( ctrl%do_buffer_records )then
+            buffer_status = open_record_buffer(p_ptr, nptcls2update, pinds, buffer_budget)
+        else
+            buffer_status = fill_pass_buffer(p_ptr, b_ptr, reads, nptcls2update, pinds, buffer_budget)
+        endif
         buffer_bytes  = pass_buffer_bytes()
         if( ctrl%do_bench )then
             rt_fill    = toc(t_fill)
@@ -225,6 +231,7 @@ contains
             if( ctrl%do_bench ) rt_align = rt_align + toc(t_align)
         enddo
         call reads%kill
+        call seal_record_buffer
         if( ctrl%do_bench ) reads_srch = ptcl_read_counts_since(reads0)
         frac_greedy = 0.0
         if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
@@ -361,6 +368,9 @@ contains
                 case default
                     ctrl%do_write_partial_recs = l_write_partial_recs
             end select
+            ! the polar batches make the cropped reconstruction's observations from their own transforms
+            ctrl%do_buffer_records = ctrl%do_write_partial_recs .and. p_ptr%box_crop < p_ptr%box .and. &
+                &.not. p_ptr%l_cart_refine
         end subroutine init_ctrl
 
         !> a worker stops without halves; shared memory makes the project's partition
@@ -520,6 +530,7 @@ contains
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
+        write(logfhandle,*) 'do_buffer_records     : ', ctrl%do_buffer_records
     end subroutine print_flags
 
     !> This part's partial reconstructions of the updated particles: by hard state labels, or with
