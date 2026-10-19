@@ -47,8 +47,9 @@ end type ptcl_read_counts
 
 type(ptcl_read_counts) :: read_totals
 
-! The particle buffer of one 3D search pass: its share's images, read once into an immutable slab and copied
-! from it by the search batches and the reconstruction of the same process (section 3.1 of the plan).
+! The particle buffer of one search pass: its share's images, read once into an immutable slab and copied from
+! it by the batches of the same process (section 3.1 of particle_io_few_particle_stacks.md). 3D: the search and
+! the reconstruction; 2D in shared memory: the probability table fills it, the matcher's batches use it.
 type(image_slab)     :: pass_slab
 integer, allocatable :: pass_slot(:)    !< slab slot of particle p at pass_slot(p - pass_lo + 1), 0 when absent
 integer              :: pass_lo  = 0
@@ -252,7 +253,7 @@ contains
         integer,                  intent(in)    :: n, pinds(n), batchlims(2)
         type(stack_read_counts)   :: c0, c1
         integer(timer_int_kind)   :: t_read
-        integer :: nbatch, nexp, i
+        integer :: nbatch, nexp
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
             write(logfhandle,*) 'n        : ', n
@@ -261,9 +262,7 @@ contains
         if( L_BENCH_GLOB ) t_read = tic()
         nbatch = batchlims(2) - batchlims(1) + 1
         if( buffer_covers(params, pinds(batchlims(1):batchlims(2))) )then
-            do i = batchlims(1), batchlims(2)
-                call pass_slab%get(pass_slot(pinds(i) - pass_lo + 1), build%imgbatch(i - batchlims(1) + 1))
-            end do
+            call pass_slab%get_many(pass_slot(pinds(batchlims(1):batchlims(2)) - pass_lo + 1), build%imgbatch(1:nbatch))
             read_totals%nbuffered = read_totals%nbuffered + int(nbatch,int64)
             if( L_BENCH_GLOB ) read_totals%rt_read = read_totals%rt_read + toc(t_read)
             return

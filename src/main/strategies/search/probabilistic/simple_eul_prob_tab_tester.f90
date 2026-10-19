@@ -11,11 +11,11 @@ use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
-    &prob_candidate, prob_dense_entry, prob_refined_entry
+    &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
-!$ use omp_lib
+!$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
 private
 public :: run_all_eul_prob_tab_tests
@@ -39,6 +39,8 @@ contains
         call test_dense_read_threads()
         write(*,'(A)') 'test_likelihood_samplers'
         call test_likelihood_samplers()
+        write(*,'(A)') 'test_bounded_and_power_samplers'
+        call test_bounded_and_power_samplers()
         write(*,'(A)') 'test_ref_assign_against_reference'
         call test_ref_assign_against_reference()
     end subroutine run_all_eul_prob_tab_tests
@@ -223,8 +225,182 @@ contains
 
     end subroutine test_likelihood_samplers
 
-    !> The parallel read of dense part files at one, four and fourteen threads, with changing reference counts: the same rows,
-    !! refined lists and seeds, bit for bit
+    !> The bounded and power samplers over an array of distances draw exactly as the ones over a distance function
+    !! they replaced (kept here as reference_bounded and reference_power), from the same seed: 200 random sets of 1 to
+    !! 300 distances with ties, a flat set, sentinel distances, every sample size and several angular bounds and powers
+    subroutine test_bounded_and_power_samplers()
+        real,    allocatable :: dists(:), pvec(:), pvec2(:), cdf(:)
+        integer, allocatable :: inds(:), inds2(:)
+        real    :: dist1, corr1, dist2, corr2, athres, power
+        integer :: iset, n, nsample, which1, which2, i, nwrong_b, nwrong_p
+        call seed_rnd_fixed(SEED_TAB)
+        nwrong_b = 0
+        nwrong_p = 0
+        do iset = 1,200
+            n = 1 + int(299. * ran3())
+            allocate(dists(n), pvec(n), pvec2(n), cdf(n), inds(n), inds2(n))
+            do i = 1,n
+                dists(i) = 10. * ran3()
+            enddo
+            if( n > 4 ) dists(n/2:n/2+2) = dists(1)
+            if( mod(iset,10) == 0 ) dists = 3.
+            if( mod(iset,13) == 0 ) dists(1:(n+1)/2) = huge(1.)
+            if( mod(iset,17) == 0 ) dists = 0.
+            nsample = 1 + mod(iset-1, n)
+            athres  = 1. + 179. * ran3()
+            power   = 0.5 + 3. * ran3()
+            call seed_rnd_fixed(SEED_DRAW + iset)
+            call reference_bounded(n, athres, 10., dist1, which1, pvec, inds)
+            call seed_rnd_fixed(SEED_DRAW + iset)
+            call sample_bounded_dists(n, dists, athres, 10., dist2, which2, pvec2, inds2)
+            if( which1 /= which2 .or. dist1 /= dist2 ) nwrong_b = nwrong_b + 1
+            call seed_rnd_fixed(SEED_DRAW + iset)
+            call reference_power(n, power, nsample, dist1, corr1, which1, pvec, inds)
+            call seed_rnd_fixed(SEED_DRAW + iset)
+            call sample_power_dists(n, dists, power, nsample, dist2, corr2, which2, pvec2, inds2, cdf)
+            if( which1 /= which2 .or. dist1 /= dist2 .or. corr1 /= corr2 ) nwrong_p = nwrong_p + 1
+            deallocate(dists, pvec, pvec2, cdf, inds, inds2)
+        enddo
+        call assert_int(0, nwrong_b, 'the array bounded sampler draws exactly as the function sampler')
+        call assert_int(0, nwrong_p, 'the array power sampler draws exactly as the function sampler')
+
+    contains
+
+        real function dist_at( i )
+            integer, intent(in) :: i
+            dist_at = dists(i)
+        end function dist_at
+
+        !> the bounded sampler over a distance function, as it was
+        subroutine reference_bounded( n_loc, athres_ub_in, prob_athres, dist, which, pvec_sorted, sorted_inds )
+            integer, intent(in)    :: n_loc
+            real,    intent(in)    :: athres_ub_in, prob_athres
+            real,    intent(out)   :: dist
+            integer, intent(out)   :: which
+            real,    intent(inout) :: pvec_sorted(:)
+            integer, intent(inout) :: sorted_inds(:)
+            integer :: num_lb, num_ub, pick
+            real    :: athres_ub, athres_lb, sum_pvec, rnd
+            athres_ub = min(prob_athres, athres_ub_in)
+            athres_lb = min(athres_ub / 10., 1.)
+            num_ub    = min(n_loc,max(1,int(athres_ub * real(n_loc) / 180.)))
+            num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
+            call reference_select(n_loc, num_ub, pvec_sorted, sorted_inds)
+            rnd      = ran3()
+            sum_pvec = sum(pvec_sorted(1:num_ub))
+            if( sum_pvec < TINY )then
+                pick  = min(num_ub, 1 + floor(real(num_ub) * rnd))
+                which = sorted_inds(pick)
+            else
+                pvec_sorted(1:num_ub) = pvec_sorted(1:num_ub) / sum_pvec
+                if( rnd > sum(pvec_sorted(1:num_lb)) )then
+                    which = sorted_inds(1)
+                else
+                    which = sorted_inds(num_ub)
+                endif
+            endif
+            dist = dist_at(which)
+        end subroutine reference_bounded
+
+        !> the power sampler over a distance function, as it was
+        subroutine reference_power( n_loc, pw, nsmpl, dist, corr, which, pvec_sorted, sorted_inds )
+            integer, intent(in)    :: n_loc, nsmpl
+            real,    intent(in)    :: pw
+            real,    intent(out)   :: dist, corr
+            integer, intent(out)   :: which
+            real,    intent(inout) :: pvec_sorted(:)
+            integer, intent(inout) :: sorted_inds(:)
+            real    :: cdf_loc(max(1,nsmpl)), rnd, csum
+            integer :: num_ub, j, rank, pick
+            num_ub = min(n_loc,max(1,nsmpl))
+            call reference_select(n_loc, num_ub, pvec_sorted, sorted_inds)
+            do j = 1,num_ub
+                cdf_loc(j) = exp(-pvec_sorted(num_ub-j+1))
+            enddo
+            if( all(cdf_loc(1:num_ub) < TINY) )then
+                pick  = 1
+                which = sorted_inds(pick)
+                dist  = pvec_sorted(pick)
+                corr  = cdf_loc(num_ub)
+                return
+            endif
+            where( cdf_loc(1:num_ub) < TINY ) cdf_loc(1:num_ub) = 0.
+            do j = 2,num_ub
+                cdf_loc(j) = cdf_loc(j) + cdf_loc(j-1)
+            enddo
+            csum = cdf_loc(num_ub)
+            cdf_loc(1:num_ub) = cdf_loc(1:num_ub) / csum
+            rnd = ran3()
+            rnd = min(1.,max(0.,1.-rnd**pw))
+            rank = 0
+            do j = 1,num_ub
+                if( cdf_loc(j) > rnd )then
+                    rank = j
+                    exit
+                endif
+            enddo
+            if( rank == 0 ) rank = num_ub
+            pick  = num_ub - rank + 1
+            which = sorted_inds(pick)
+            dist  = pvec_sorted(pick)
+            corr  = exp(-dist)
+        end subroutine reference_power
+
+        !> the num_ub lowest distances of the function, as the samplers selected them (bounded max-heap, sort)
+        subroutine reference_select( n_loc, num_ub, pvec_sorted, sorted_inds )
+            integer, intent(in)    :: n_loc, num_ub
+            real,    intent(inout) :: pvec_sorted(:)
+            integer, intent(inout) :: sorted_inds(:)
+            real    :: dist_tmp
+            integer :: j
+            do j = 1,num_ub
+                pvec_sorted(j) = dist_at(j)
+                sorted_inds(j) = j
+            enddo
+            do j = num_ub / 2, 1, -1
+                call heap_sift_down(pvec_sorted, sorted_inds, j, num_ub)
+            enddo
+            do j = num_ub + 1,n_loc
+                dist_tmp = dist_at(j)
+                if( dist_tmp < pvec_sorted(1) )then
+                    pvec_sorted(1) = dist_tmp
+                    sorted_inds(1) = j
+                    call heap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
+                endif
+            enddo
+            call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
+        end subroutine reference_select
+
+        subroutine heap_sift_down( pv, si, root_in, heap_size )
+            real,    intent(inout) :: pv(:)
+            integer, intent(inout) :: si(:)
+            integer, intent(in)    :: root_in, heap_size
+            integer :: root, child, swap_i, tmp_ind
+            real    :: tmp_val
+            root = root_in
+            do
+                child = 2 * root
+                if( child > heap_size ) exit
+                swap_i = root
+                if( pv(swap_i) < pv(child) ) swap_i = child
+                if( child + 1 <= heap_size )then
+                    if( pv(swap_i) < pv(child + 1) ) swap_i = child + 1
+                endif
+                if( swap_i == root ) exit
+                tmp_val    = pv(root)
+                pv(root)   = pv(swap_i)
+                pv(swap_i) = tmp_val
+                tmp_ind    = si(root)
+                si(root)   = si(swap_i)
+                si(swap_i) = tmp_ind
+                root = swap_i
+            enddo
+        end subroutine heap_sift_down
+
+    end subroutine test_bounded_and_power_samplers
+
+    !> The parallel read of dense part files at one thread, at four and, for fourteen parts, 24 times at every processor:
+    !! the same rows, refined lists and seeds, bit for bit, with changing reference counts
     subroutine test_dense_read_threads()
         integer, parameter :: NSPACE_TH = 40, NSTATES_TH = 3, NPTCLS_TH = 70
         integer, parameter :: NPARTS_TH(4) = [1, 3, 7, 14]
@@ -248,40 +424,45 @@ contains
             !$ call omp_set_num_threads(1)
             call master1%new(params, build, pinds)
             call master1%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
-            nthr_read = merge(14, 4, NPARTS_TH(k) == 14)
+            nthr_read = 4
+            nreads    = 1
+            if( NPARTS_TH(k) == 14 )then
+                !$ nthr_read = omp_get_num_procs()
+                nreads = 24
+            endif
             !$ call omp_set_num_threads(nthr_read)
             call master4%new(params, build, pinds)
-            nreads = merge(24, 1, NPARTS_TH(k) == 14)
+            nwrong = 0
             do iread = 1,nreads
                 call master4%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
-                nwrong = count(master4%rows(:,:)%dist /= rows(:,pinds)%dist) +&
+                nwrong = nwrong + count(master4%rows(:,:)%dist /= rows(:,pinds)%dist) +&
                     &count(master4%rows(:,:)%inpl /= rows(:,pinds)%inpl) +&
-                    &count(master4%seed_shifts /= seeds(:,pinds)) + count(.not. master4%seed_has_sh)
-                call assert_int(0, nwrong, 'repeated parallel reads match generated rows and seeds ('//trim(label)//')')
+                    &count(master4%seed_shifts /= seeds(:,pinds)) + count(.not. master4%seed_has_sh) +&
+                    &count_differences(master1, master4)
             enddo
             !$ call omp_set_num_threads(nthr_prev)
-            nwrong = count(master4%rows(:,:)%dist /= rows(:,pinds)%dist) +&
-                &count(master4%rows(:,:)%inpl /= rows(:,pinds)%inpl) +&
-                &count(master4%seed_shifts /= seeds(:,pinds)) + count(.not. master4%seed_has_sh)
-            call assert_int(0, nwrong, 'the parallel read matches generated rows and seeds ('//trim(label)//')')
-            nwrong = count(master1%rows(:,:)%dist /= master4%rows(:,:)%dist) +&
-                &count(master1%rows(:,:)%inpl /= master4%rows(:,:)%inpl) +&
-                &count(master1%refined_offsets /= master4%refined_offsets) +&
-                &count(master1%seed_shifts /= master4%seed_shifts) + count(master1%seed_has_sh .neqv. master4%seed_has_sh)
-            if( size(master1%refined) /= size(master4%refined) )then
-                nwrong = nwrong + 1
-            else
-                nwrong = nwrong + count(master1%refined(:)%i /= master4%refined(:)%i) +&
-                    &count(master1%refined(:)%ri /= master4%refined(:)%ri) +&
-                    &count(master1%refined(:)%x /= master4%refined(:)%x) + count(master1%refined(:)%y /= master4%refined(:)%y)
-            endif
-            call assert_int(0, nwrong, 'the parallel read equals the read at one thread ('//trim(label)//')')
+            call assert_int(0, nwrong, 'the parallel reads equal the generated rows and the read at one thread ('//&
+                &trim(label)//')')
             call assert_int(36, master4%seed_nrots, 'the rotation grid of the parts is taken ('//trim(label)//')')
             call master1%kill
             call master4%kill
             call kill_round_trip_parts(params, build, NPARTS_TH(k))
         enddo
     end subroutine test_dense_read_threads
+
+    !> the fields of two masters' read that differ: rows, refined lists, offsets and seeds
+    integer function count_differences( a, b ) result( nwrong )
+        type(eul_prob_tab), intent(in) :: a, b
+        nwrong = count(a%rows(:,:)%dist /= b%rows(:,:)%dist) + count(a%rows(:,:)%inpl /= b%rows(:,:)%inpl) +&
+            &count(a%refined_offsets /= b%refined_offsets) + count(a%seed_shifts /= b%seed_shifts) +&
+            &count(a%seed_has_sh .neqv. b%seed_has_sh)
+        if( size(a%refined) /= size(b%refined) )then
+            nwrong = nwrong + 1
+        else
+            nwrong = nwrong + count(a%refined(:)%i /= b%refined(:)%i) + count(a%refined(:)%ri /= b%refined(:)%ri) +&
+                &count(a%refined(:)%x /= b%refined(:)%x) + count(a%refined(:)%y /= b%refined(:)%y)
+        endif
+    end function count_differences
 
     !> NPARTS_RT dense part files prob_tab_tester_part<n>.dat of consecutive particles, written by worker tables in
     !! two batches each: random rows, a refined shift on about one entry in ten, a seed per particle

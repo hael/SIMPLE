@@ -4,6 +4,7 @@ use simple_core_module_api
 use simple_test_utils    ! for assert_* utilities and counters
 use simple_oris,        only: population_blend_weights, class_sample_quotas, class_sample_sweep
 use simple_oris_utils,  only: oridist_from_oris
+!$ use omp_lib,          only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
 private
 public :: run_all_oris_tests
@@ -36,7 +37,53 @@ contains
         call test_rnd_oris_bounds()
         call test_assignment()
         call test_oridist_from_oris()
+        call test_get_pops_halves()
     end subroutine run_all_oris_tests
+
+    !> class populations counted in one pass (all, and per half) equal get_pop's counts class by class, at one thread
+    !! and 20 times at every processor; state-0 records and labels above the class count are left out as get_pop does
+    subroutine test_get_pops_halves()
+        integer, parameter :: NREC = 500, NCLS = 13
+        type(oris) :: os
+        integer, allocatable :: pops(:), pe(:), po(:), pops1(:), pe1(:), po1(:)
+        integer :: i, icls, nwrong, irep, nthr_prev, nthr_full
+        write(*,'(A)') 'test_get_pops_halves'
+        call os%new(NREC, is_ptcl=.true.)
+        do i = 1, NREC
+            call os%set(i, 'class', real(mod(7*i, NCLS+2)))   ! 0 and NCLS+1 included
+            call os%set(i, 'eo',    real(mod(i, 3) - 1))      ! -1, 0 and 1
+            call os%set_state(i, merge(0, 1, mod(i, 11) == 0))
+        end do
+        call os%get_pops(pops1, 'class', maxn=NCLS)
+        call os%get_pops(pe1,   'class', maxn=NCLS, eo=0)
+        call os%get_pops(po1,   'class', maxn=NCLS, eo=1)
+        nwrong = 0
+        do icls = 1, NCLS
+            if( pops1(icls) /= os%get_pop(icls, 'class') )      nwrong = nwrong + 1
+            if( pe1(icls)   /= os%get_pop(icls, 'class', eo=0) ) nwrong = nwrong + 1
+            if( po1(icls)   /= os%get_pop(icls, 'class', eo=1) ) nwrong = nwrong + 1
+        end do
+        call assert_int(0, nwrong, 'one-pass class populations equal get_pop per class, all and per half')
+        nthr_prev = 1
+        nthr_full = 1
+        !$ nthr_prev = omp_get_max_threads()
+        !$ nthr_full = omp_get_num_procs()
+        !$ call omp_set_num_threads(1)
+        call os%get_pops(pops1, 'class', maxn=NCLS)
+        call os%get_pops(pe1,   'class', maxn=NCLS, eo=0)
+        call os%get_pops(po1,   'class', maxn=NCLS, eo=1)
+        !$ call omp_set_num_threads(nthr_full)
+        nwrong = 0
+        do irep = 1, 20
+            call os%get_pops(pops, 'class', maxn=NCLS)
+            call os%get_pops(pe,   'class', maxn=NCLS, eo=0)
+            call os%get_pops(po,   'class', maxn=NCLS, eo=1)
+            nwrong = nwrong + count(pops /= pops1) + count(pe /= pe1) + count(po /= po1)
+        end do
+        !$ call omp_set_num_threads(nthr_prev)
+        call assert_int(0, nwrong, 'one-pass class populations at every processor equal those at one thread')
+        call os%kill
+    end subroutine test_get_pops_halves
 
     !---------------------------------------------------------------
     ! 1. Constructors and basic properties

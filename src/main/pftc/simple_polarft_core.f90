@@ -101,12 +101,10 @@ contains
             allocate(self%heap_vars(ithr)%argvec(self%pftsz),&
                     &self%heap_vars(ithr)%shvec(self%pftsz),&
                     &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%interpklim),&
-                    &self%heap_vars(ithr)%kcorrs(self%nrots),&
                     &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_aln_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%interpklim),&
-                    &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%rot_scores(self%nrots), self%heap_vars(ithr)%rot_dists(self%nrots),&
                     &self%heap_vars(ithr)%rot_cdf(self%nrots),&
                     &self%heap_vars(ithr)%joint_coeffs(self%pftsz+1,3))
@@ -135,10 +133,10 @@ contains
         if( self%existence )then
             do ithr=1,self%p_ptr%nthr
                 deallocate(self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
-                    &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
+                    &self%heap_vars(ithr)%shmat,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_ref_aln_8,&
-                    &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,&
+                    &self%heap_vars(ithr)%shmat_8,&
                     &self%heap_vars(ithr)%rot_scores,self%heap_vars(ithr)%rot_dists,self%heap_vars(ithr)%rot_cdf,&
                     &self%heap_vars(ithr)%joint_coeffs)
             end do

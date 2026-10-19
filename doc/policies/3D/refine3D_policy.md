@@ -377,6 +377,11 @@ update" unless the ownership, artifacts, and update model actually change.
 `prob_neigh` dispatches to the neighborhood probability command. The matcher
 then consumes the generated assignment artifact.
 
+The matcher's search loop (3D and 2D) runs under a dynamic OpenMP schedule: a
+particle is searched whole by one thread, so at more than one thread only
+which random draws a particle meets changes; one thread gives the same
+results as a static schedule.
+
 `prob_neigh_mode` controls how `prob_neigh` chooses candidate neighborhoods
 before evaluating candidates:
 
@@ -439,8 +444,9 @@ Every table part writes one file that the driver reads after the parts have
 finished.
 
 - **The dense table (`prob`).** The header holds the number of references
-  and particles, a format word (`PROB_TAB_DENSE_FORMAT`) and the number of
-  refined entries; then the particle indices, the seed table, one row per
+  and particles, a format word (`PROB_TAB_DENSE_FORMAT`, -3, private to the
+  dense table) and the number of refined entries; then the number and list
+  of the active states, the particle indices, the seed table, one row per
   particle of (distance, in-plane index) for every reference
   (`prob_dense_entry`, 8 bytes; the reference and particle follow from the
   position), and a list of the refined entries (particle, reference,
@@ -449,20 +455,31 @@ finished.
   the end that every row was written. The driver reads the parts in
   parallel into its rows and the refined lists by particle; every particle
   of the driver must be in exactly one part, and the parts must agree on the
-  rotation grid. `dense_candidate` rebuilds the entry `assign_candidate`
-  reads. The driver's table is not initialised before the read.
+  rotation grid and on the active states (a row's reference index counts the
+  active references). Before reading past the header the file size must be
+  the size the header implies, and every read checks its status. Inside the
+  parallel read nothing stops: each part returns a status, and the first
+  failing part stops the run after the loop, with its file name and the
+  reason. `dense_candidate` rebuilds the entry `assign_candidate` reads. The
+  driver's table is not initialised before the read; its refined-entry
+  offsets are default integers behind a size guard.
 - **The neighbourhood table (`prob_neigh`) and the 2D table** keep their
   candidate streams (particle index and full candidate per entry). The
   neighbourhood part writes the number of candidates of each particle after
   the particle indices; the driver sizes its store from these counts and
   then places the candidates in file order (the order decides ties).
-- An empty part writes the header of its own table type.
+- An empty part writes the header of its own table type. The neighbourhood
+  table refuses `write_rows`, the dense table's row writer.
 
 The shift search of the tables keeps a double-precision copy of the
-reference for one minimisation (`load_ref_aln_8`), and reuses the
+reference for one minimisation (`load_ref_aln_8`, which records the
+reference index and half per thread; the `_aln` evaluators take the index and
+stop on a mismatch), and reuses the
 all-rotation objective it computed at a shift when the same shift (bit for
 bit) comes back, as L-BFGS-B's last accepted point does. The likelihood
-scores work in per-thread buffers.
+scores, and the power and bounded samplers of the 2D and greedy searches,
+work in per-thread buffers over arrays of distances (no internal procedures,
+so no heap trampolines).
 
 ### Continuous in-plane policy
 
@@ -972,11 +989,11 @@ about 45 instead of one file per iteration and partition (3,104 for a solve3D ru
 | `REFINE3D_BENCH_PARTppp.txt` | each 3D search partition | one per iteration |
 | `REC3D_BENCH_PARTppp.txt` | each partition's reconstruction (gridding or PCG) | one per pass |
 | `PROB_TAB_BENCH_PARTppp.txt`, `PROB_TAB_NEIGH_BENCH_PARTppp.txt`, `PROB_TAB2D_BENCH_PARTppp.txt` | each probability-table part | one per iteration |
-| `PROB_ALIGN_BENCH.txt`, `PROB_ALIGN_NEIGH_BENCH.txt` | the probabilistic pre-step driver of `prob`, of `prob_neigh` | one per iteration |
+| `PROB_ALIGN_BENCH.txt`, `PROB_ALIGN_NEIGH_BENCH.txt`, `PROB_ALIGN2D_BENCH.txt` | the probabilistic pre-step driver of `prob`, of `prob_neigh`, of the 2D tables | one per iteration |
 | `VOLASSEMBLE_BENCH.txt` | volume assembly | one per iteration |
 | `SIGMA2_COMMIT_BENCH.txt` | the sigma2 commit | one per commit |
 | `SOLVE3D_BENCH.txt` | `solve3D`, `solve3D_addon` | one per run |
-| `REFINE2D_STRATEGY_BENCH.txt`, `REFINE2D_BENCH.txt` | the refine2D strategy; the 2D search (partition 1) | one per iteration |
+| `REFINE2D_STRATEGY_BENCH.txt`, `REFINE2D_BENCH_PARTppp.txt` | the refine2D strategy; each 2D search partition | one per iteration |
 | `SOLVE2D_BENCH.txt` | `solve2D` | one per report |
 | `CAVGASSEMBLE_BENCH.txt`, `CAVGASSEMBLE_SUMS_BENCH.txt` | class-average assembly; its sum of the parts' contributions | one per assembly |
 | `CAVGSUMS_BENCH_PARTppp.txt` | each partition's offline class sums | one per call |
@@ -984,7 +1001,9 @@ about 45 instead of one file per iteration and partition (3,104 for a solve3D ru
 A record starts with a `*** BENCHMARK RECORD ***` header that names the family
 and, where they apply, the iteration (`which_iter`) and the partition. The
 writer's own sections follow, as before: `BENCHMARK CONTEXT` and `TIMINGS (s)`,
-plus `THREAD-SECONDS` for the table parts and `RELATIVE TIMINGS (%)` where a
+plus `THREAD-SECONDS` for the table parts, the 2D search and the class sums
+(busy time summed over the team, the region's wall time, the team size and
+the load balance), and `RELATIVE TIMINGS (%)` where a
 writer reports them. Each partition appends only to its own file, so
 concurrent workers never write to the same file. The shared helper is
 `open_bench_report` in `src/fileio/simple_bench_io.f90`; a new benchmark
@@ -994,7 +1013,9 @@ second run in the same directory.
 
 `scripts/plot_refine3d_bench.py` reads a `BENCH/` directory, or a directory of
 the per-iteration files of earlier builds, and writes the per-iteration
-summary table, a long table of every record, a text report and the figure.
+summary table, a long table of every record, a text report and the figure;
+for refine2D iterations also their critical path (`bench_iterations2D.csv`,
+`bench_profile2D.svg`).
 
 `VOLASSEMBLE_BENCH.txt` has, after its `% accounted for` line, a section
 `SPLIT TIMINGS (s)`: the nonuniform filter split into candidate filtering,

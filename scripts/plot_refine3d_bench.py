@@ -23,6 +23,9 @@ output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
                           of states and directions, and the worker phases
     bench_profile.svg     the per-iteration critical path (stacked) and the
                           slowest and mean partition times
+    bench_iterations2D.csv, bench_profile2D.svg
+                          the same for the refine2D iterations (solve2D's
+                          stages), from the REFINE2D_STRATEGY reports
 
 Only the Python standard library is used.
 
@@ -41,6 +44,15 @@ the slowest partition did and what the master spent around it:
     assembly outside volassemble  assembly/postprocess minus volassemble
     sigma2 commit                 the commit after the assembly
     unaccounted                   the strategy total minus all of the above
+
+The 2D critical path splits a refine2D iteration (to the end of its
+finalisation) the same way: setup, the slowest 2D table part, the pre-step
+outside it, the slowest search partition, the scheduling outside it (in shared
+memory the matcher runs in the master, its class sums and restoration
+included), class-average assembly (cavgassemble) and the master's time around
+it, the merge of the partitions' documents, the master's project writes and
+rereads, the sigma2 preparation and commit, convergence with the star file and
+the JPEG, and the unaccounted rest.
 """
 
 from __future__ import annotations
@@ -318,6 +330,136 @@ def build_iterations(records: Sequence[Record]) -> List[Iteration]:
     return rows
 
 
+PATH_COMPONENTS_2D = (
+    ("setup", "setup", "#6f7d8c"),
+    ("tables", "2D tables", "#2b6cb0"),
+    ("prestep_overhead", "pre-step outside the tables", "#90cdf4"),
+    ("search", "search", "#c05621"),
+    ("sched_overhead", "scheduling outside the search", "#fbd38d"),
+    ("cavgassemble", "class-average assembly", "#2f855a"),
+    ("assembly_overhead", "assembly outside cavgassemble", "#9ae6b4"),
+    ("merge", "merge of the documents", "#d69e2e"),
+    ("proj_io", "project writes and rereads", "#e53e3e"),
+    ("sigma2", "sigma2 preparation and commit", "#805ad5"),
+    ("finish", "convergence, star file, JPEG", "#b794f4"),
+    ("unaccounted", "unaccounted", "#e2e8f0"),
+)
+
+
+def build_iterations_2D(records: Sequence[Record]) -> List[Iteration]:
+    """One row per refine2D iteration with a REFINE2D_STRATEGY record: its phases and their critical path."""
+    strategy = first_pass_by_iteration(by_family(records, "REFINE2D_STRATEGY"))
+    if not strategy:
+        return []
+    search_recs = by_family(records, "REFINE2D")
+    worker = partition_stats(search_recs, "match2D total time")
+    tables = partition_stats(by_family(records, "PROB_TAB2D"), "prob_tab total time")
+    fills = partition_stats(by_family(records, "PROB_TAB2D"), "prob_tab table fill")
+    cavgasm = first_pass_by_iteration(by_family(records, "CAVGASSEMBLE"))
+    first_search: Dict[int, Record] = {}
+    for rec in search_recs:
+        if rec.iteration is not None and rec.iteration not in first_search:
+            first_search[rec.iteration] = rec
+    rows: List[Iteration] = []
+    for it in sorted(strategy):
+        s = strategy[it].seconds
+        ctx = first_search[it].context if it in first_search else {}
+        row = Iteration(it=it, mode=ctx.get("match2D refine mode", ""), kto=ctx.get("match2D kto", ""))
+        row.total = s.get("refine2D total time", 0.0)
+        p = {key: s.get(f"refine2D {label}", 0.0) for key, label in (
+            ("setup", "iteration setup"), ("prestep", "probabilistic pre-step"), ("sched", "matcher/scheduler"),
+            ("merge", "merge alignment documents"), ("assembly", "class-average assembly"),
+            ("proj_io", "project writes and rereads"), ("conv", "convergence"), ("star", "cls2D star file"),
+            ("jpeg", "class-average JPEG"))}
+        p["sigma2"] = s.get("refine2D sigma2 candidate prep", 0.0) + s.get("refine2D sigma2 commit", 0.0)
+        row.phases = p
+        tab_on_path = min(tables.get(it, (0.0, 0.0, 0.0, 0))[0], p["prestep"])
+        wrk_on_path = min(worker.get(it, (0.0, 0.0, 0.0, 0))[0], p["sched"])
+        cav = cavgasm[it].seconds.get("cavgassemble total time", 0.0) if it in cavgasm else 0.0
+        cav_on_path = min(cav, p["assembly"])
+        row.path = {
+            "setup": p["setup"],
+            "tables": tab_on_path,
+            "prestep_overhead": p["prestep"] - tab_on_path,
+            "search": wrk_on_path,
+            "sched_overhead": p["sched"] - wrk_on_path,
+            "cavgassemble": cav_on_path,
+            "assembly_overhead": p["assembly"] - cav_on_path,
+            "merge": p["merge"],
+            "proj_io": p["proj_io"],
+            "sigma2": p["sigma2"],
+            "finish": p["conv"] + p["star"] + p["jpeg"],
+        }
+        row.path["unaccounted"] = max(0.0, row.total - sum(row.path.values()))
+        for name, stats in (("tables", tables), ("fill", fills), ("worker", worker)):
+            if it in stats:
+                row.extra[f"{name}_max"], row.extra[f"{name}_mean"], row.extra[f"{name}_min"], \
+                    row.extra[f"{name}_nparts"] = stats[it]
+        rows.append(row)
+    return rows
+
+
+ITERATION_COLUMNS_2D = (
+    ["iteration", "refine_mode", "kto", "strategy_total_s"]
+    + [f"path_{k}_s" for k, _, _ in PATH_COMPONENTS_2D]
+    + [f"{name}_{stat}_s" for name in ("tables", "fill", "worker") for stat in ("max", "mean", "min")]
+    + ["nparts"]
+)
+
+
+def write_iterations_csv_2D(rows: Sequence[Iteration], outpath: Path) -> None:
+    with outpath.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(ITERATION_COLUMNS_2D)
+        for row in rows:
+            values = [row.it, row.mode, row.kto, f"{row.total:.3f}"]
+            values += [f"{row.path[k]:.3f}" for k, _, _ in PATH_COMPONENTS_2D]
+            for name in ("tables", "fill", "worker"):
+                for stat in ("max", "mean", "min"):
+                    value = row.extra.get(f"{name}_{stat}")
+                    values.append("" if value is None else f"{value:.3f}")
+            nparts = int(row.extra.get("worker_nparts", row.extra.get("tables_nparts", 0)))
+            values.append(nparts or "")
+            writer.writerow(values)
+
+
+def write_2D_path(rows: Sequence[Iteration], add) -> None:
+    """The refine2D iterations' critical path, per stage (contiguous iterations of one refine mode) and the
+    partitions' load balance."""
+    if not rows:
+        return
+    total = sum(row.total for row in rows)
+    add(f"refine2D: {len(rows)} iterations ({rows[0].it}-{rows[-1].it}); strategy wall time {total:.1f} s; "
+        "its critical path:")
+    add(f"  {'component':32s} {'seconds':>9s} {'share':>6s}")
+    for key, label, _ in PATH_COMPONENTS_2D:
+        value = sum(row.path[key] for row in rows)
+        add(f"  {label:32s} {value:9.1f} {pct(value, total)}")
+    add("")
+    add("By stage (contiguous iterations with one refine mode), seconds per iteration:")
+    short = (("setup", "setup"), ("tables", "tables"), ("prestep_overhead", "pre-ovh"), ("search", "search"),
+             ("sched_overhead", "sch-ovh"), ("cavgassemble", "cavgasm"), ("assembly_overhead", "asm-ovh"),
+             ("merge", "merge"), ("proj_io", "proj-io"), ("sigma2", "sigma2"), ("finish", "finish"))
+    add(f"  {'iterations':>10s} {'mode':>10s} {'total':>7s} " + " ".join(f"{label:>7s}" for _, label in short))
+    for block in stages_of(rows):
+        n = len(block)
+        add(f"  {block[0].it:>4d}-{block[-1].it:<5d} {block[0].mode:>10s} {sum(r.total for r in block) / n:7.2f} "
+            + " ".join(f"{sum(r.path[k] for r in block) / n:7.2f}" for k, _ in short))
+    add("")
+    add("refine2D load balance (slowest partition over the mean, median over iterations):")
+    found = False
+    for name, label in (("tables", "2D table parts"), ("worker", "search partitions")):
+        ratios = [row.extra[f"{name}_max"] / row.extra[f"{name}_mean"] for row in rows
+                  if row.extra.get(f"{name}_mean", 0.0) > 0 and row.extra.get(f"{name}_nparts", 0) > 1]
+        if ratios:
+            found = True
+            add(f"  {label:26s} median {statistics.median(ratios):.2f}, max {max(ratios):.2f} "
+                f"({len(ratios)} iterations)")
+    if not found:
+        add("  one partition")
+    add("")
+
+
 # the nonuniform filter's split in the volassemble report (column suffix, report label)
 NU_SPLIT = (("candidate_filter", "candidate filter"), ("objective", "objective"), ("optimisation", "optimisation"),
             ("composition", "composition"))
@@ -385,12 +527,14 @@ def phase_means(records: Sequence[Record]) -> List[Tuple[str, float, float]]:
 
 
 TABLE_FAMILIES = (("PROB_TAB", "prob"), ("PROB_TAB_NEIGH", "prob_neigh"), ("PROB_TAB2D", "2D"))
+THREAD_FAMILIES = TABLE_FAMILIES + (("REFINE2D", "2D search and class sums"), ("CAVGSUMS", "offline class sums"))
 
 
 def write_thread_seconds(records: Sequence[Record], add) -> None:
-    """The table parts' THREAD-SECONDS blocks summed over parts and iterations, per table: the
-    additive entries summed, the ratios (load balance, cost per score) averaged over the records."""
-    for family, label in TABLE_FAMILIES:
+    """The THREAD-SECONDS blocks of the table parts, the 2D search and the class sums, summed over parts and
+    iterations per family: the additive entries summed, the ratios (load balance, cost per score) and the
+    team sizes averaged over the records."""
+    for family, label in THREAD_FAMILIES:
         recs = [rec for rec in by_family(records, family) if rec.thread_seconds]
         if not recs:
             continue
@@ -398,11 +542,11 @@ def write_thread_seconds(records: Sequence[Record], add) -> None:
         ratios: Dict[str, List[float]] = defaultdict(list)
         for rec in recs:
             for key, value in rec.thread_seconds.items():
-                if "load balance" in key or "/(" in key:
+                if "load balance" in key or "/(" in key or key.endswith("threads"):
                     ratios[key].append(value)
                 else:
                     sums[key] += value
-        add(f"Table thread-seconds ({label}), summed over {len(recs)} part records:")
+        add(f"Thread-seconds ({label}), summed over {len(recs)} records:")
         for key, value in sums.items():
             add(f"  {key:46s} {value:10.1f}")
         for key, values in ratios.items():
@@ -456,8 +600,8 @@ def write_2D_tables(records: Sequence[Record], add) -> None:
     add("")
 
 
-def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: str, nfiles: int,
-                 indir: Path, outpath: Path) -> None:
+def write_report(records: Sequence[Record], rows: Sequence[Iteration], rows2D: Sequence[Iteration], layout: str,
+                 nfiles: int, indir: Path, outpath: Path) -> None:
     lines: List[str] = []
     add = lines.append
     add("SIMPLE benchmark summary")
@@ -561,6 +705,7 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: s
         if not found:
             add("  none")
         add("")
+    write_2D_path(rows2D, add)
     write_2D_tables(records, add)
     write_thread_seconds(records, add)
     write_prestep_groups(records, add)
@@ -573,7 +718,8 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], layout: s
                           ("VOLASSEMBLE", "Volume assembly phases"),
                           ("SIGMA2_COMMIT", "Sigma2 commit phases"),
                           ("REFINE2D_STRATEGY", "refine2D strategy phases"),
-                          ("REFINE2D", "2D search phases (partition 1)"),
+                          ("REFINE2D", "2D search phases (every partition)"),
+                          ("PROB_ALIGN2D", "2D probabilistic pre-step driver phases"),
                           ("SOLVE2D", "solve2D phases"),
                           ("PROB_TAB2D", "2D probability-table part phases"),
                           ("CAVGASSEMBLE", "Class-average assembly phases"),
@@ -668,7 +814,8 @@ def axes(out: List[str], plot_l: float, plot_r: float, top: float, bottom: float
                    f'stroke-width="1.5" stroke-dasharray="5 4"/>')
 
 
-def write_figure(rows: Sequence[Iteration], outpath: Path, title: str) -> None:
+def write_figure(rows: Sequence[Iteration], outpath: Path, title: str,
+                 components: Sequence[Tuple[str, str, str]] = PATH_COMPONENTS, workflow: str = "refine3D") -> None:
     first, last = rows[0].it, rows[-1].it
     width, height = 1800, 1500
     plot_l, plot_r = 130, width - 60
@@ -676,7 +823,7 @@ def write_figure(rows: Sequence[Iteration], outpath: Path, title: str) -> None:
     top_b, bottom_b = 1070, 1380
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
-        '<title>refine3D benchmark profile</title>',
+        f'<title>{workflow} benchmark profile</title>',
         f'<rect x="0" y="0" width="{width}" height="{height}" fill="#ffffff"/>',
         '<style>text{font-family:Arial,Helvetica,sans-serif;fill:#17202a}'
         '.axis{stroke:#4a5568;stroke-width:2}.grid{stroke:#e2e8f0;stroke-width:1}</style>',
@@ -699,7 +846,7 @@ def write_figure(rows: Sequence[Iteration], outpath: Path, title: str) -> None:
     for row in rows:
         x = linear(row.it, first, last, plot_l, plot_r)
         y = bottom_a
-        for key, _, color in PATH_COMPONENTS:
+        for key, _, color in components:
             h = bottom_a - linear(row.path[key], 0, limit_a, bottom_a, top_a)
             if h <= 0:
                 continue
@@ -707,7 +854,7 @@ def write_figure(rows: Sequence[Iteration], outpath: Path, title: str) -> None:
             out.append(f'<rect x="{x - bar_w / 2:.1f}" y="{y:.1f}" width="{bar_w:.1f}" height="{h:.1f}" '
                        f'fill="{color}"/>')
     out.append(svg_text((plot_l + plot_r) / 2, bottom_a + 58, "refinement iteration", 20, "middle"))
-    items, next_y = legend([(label, color, "box") for _, label, color in PATH_COMPONENTS],
+    items, next_y = legend([(label, color, "box") for _, label, color in components],
                            plot_l, bottom_a + 95, plot_r - plot_l)
     out += items
     # panel B: slowest and mean partition
@@ -750,13 +897,19 @@ def main(argv: List[str]) -> int:
     outdir = Path(argv[2]).expanduser().resolve() if len(argv) == 3 else reports_dir / "bench_summary"
     outdir.mkdir(parents=True, exist_ok=True)
     rows = build_iterations(records)
+    rows2D = build_iterations_2D(records)
     write_records_csv(records, outdir / "bench_records.csv")
     write_iterations_csv(rows, outdir / "bench_iterations.csv")
-    write_report(records, rows, layout, nfiles, indir, outdir / "bench_report.txt")
+    write_report(records, rows, rows2D, layout, nfiles, indir, outdir / "bench_report.txt")
     written = ["bench_records.csv", "bench_iterations.csv", "bench_report.txt"]
     if rows:
         write_figure(rows, outdir / "bench_profile.svg", f"refine3D benchmark profile: {indir.name}")
         written.append("bench_profile.svg")
+    if rows2D:
+        write_iterations_csv_2D(rows2D, outdir / "bench_iterations2D.csv")
+        write_figure(rows2D, outdir / "bench_profile2D.svg", f"refine2D benchmark profile: {indir.name}",
+                     PATH_COMPONENTS_2D, "refine2D")
+        written += ["bench_iterations2D.csv", "bench_profile2D.svg"]
     print(f"Parsed {len(records)} records from {nfiles} files ({layout}) in {indir}")
     for name in written:
         print(f"Wrote {outdir / name}")

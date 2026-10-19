@@ -33,14 +33,24 @@ contains
     procedure(cleanup_interface),       deferred :: cleanup
 end type refine2D_strategy
 
-!> Timings of the sigma2 transaction of an iteration (the REFINE2D_STRATEGY bench record)
+!> Timings of an iteration, from its start to the end of finalize_iteration (the REFINE2D_STRATEGY bench record)
 type :: refine2D_bench_state
     integer(timer_int_kind) :: t_tot        = 0
     integer(timer_int_kind) :: t_sigma_prep = 0
     integer(timer_int_kind) :: t_sigma      = 0
+    integer(timer_int_kind) :: t            = 0   !< start of the phase being timed
     real(timer_int_kind)    :: rt_tot        = 0.
     real(timer_int_kind)    :: rt_sigma_prep = 0.
     real(timer_int_kind)    :: rt_sigma      = 0.
+    real(timer_int_kind)    :: rt_setup      = 0.  !< job description, stale artifacts, the carried-sums check
+    real(timer_int_kind)    :: rt_prestep    = 0.  !< prob_align2D
+    real(timer_int_kind)    :: rt_search     = 0.  !< shared memory: the matcher; distributed: scheduling and search
+    real(timer_int_kind)    :: rt_merge      = 0.  !< merging the partitions' alignment documents
+    real(timer_int_kind)    :: rt_cavg       = 0.  !< distributed class-average assembly
+    real(timer_int_kind)    :: rt_proj_io    = 0.  !< the master's project segment writes and rereads
+    real(timer_int_kind)    :: rt_conv       = 0.  !< convergence
+    real(timer_int_kind)    :: rt_star       = 0.  !< the cls2D star file
+    real(timer_int_kind)    :: rt_jpeg       = 0.  !< the class-average JPEG
     ! the canonical sigma2 store this iteration updated, and the rows its update replaced
     integer                 :: sigma2_nptcls  = 0
     integer                 :: sigma2_nshells = 0
@@ -164,14 +174,12 @@ contains
         use simple_strategy2D_matcher, only: refine2D_exec
         use simple_starproject,        only: starproject
         use simple_commanders_euclid,  only: commander_commit_sigma2
-        use simple_commanders_prob,    only: commander_prob_align2D
         class(refine2D_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
         type(commander_commit_sigma2) :: xcommit_sigma2
-        type(commander_prob_align2D)      :: xprob_align2D
         type(starproject) :: starproj
         type(cmdline)     :: cline_prob_align
         real              :: update_frac_req
@@ -192,15 +200,14 @@ contains
             params%update_frac   = 1.0
             params%l_update_frac = .false.
         endif
+        if( L_BENCH_GLOB ) self%bench%rt_setup = toc(self%bench%t_tot)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
-            call build%spproj%write_segment_inside(params%oritype)
-            call xprob_align2D%execute(cline_prob_align)
-            call build%spproj%read_segment(params%oritype, params%projfile)
+            call run_prob_align2D(params, build, cline_prob_align, self%bench)
         endif
         ! main clustering/alignment step
         if( params%cc_objfun==OBJFUN_EUCLID )then
@@ -208,7 +215,9 @@ contains
             call prepare_canonical_sigma_update(params, build)
             if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
+        if( L_BENCH_GLOB ) self%bench%t = tic()
         call refine2D_exec(params, build, cline, params%which_iter, converged)
+        if( L_BENCH_GLOB ) self%bench%rt_search = toc(self%bench%t)
         if( l_full_update )then
             params%update_frac   = update_frac_req
             params%l_update_frac = l_update_frac_req
@@ -225,18 +234,24 @@ contains
             call cline%set('which_iter', params%which_iter)
         endif
         ! Write starfile
+        if( L_BENCH_GLOB ) self%bench%t = tic()
         call starproj%export_cls2D(build%spproj, params%which_iter)
+        if( L_BENCH_GLOB ) self%bench%rt_star = toc(self%bench%t)
         ! cleanup
         call starproj%kill
         call cline_prob_align%kill
-        if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine inmem_execute_iteration
 
     subroutine inmem_finalize_iteration( self, params, build)
         class(refine2D_inmem_strategy), intent(inout)   :: self
         type(parameters),                intent(in)     :: params
         type(builder),                   intent(inout)  :: build
-        call gen_jpeg(params%which_iter) 
+        if( L_BENCH_GLOB ) self%bench%t = tic()
+        call gen_jpeg(params%which_iter)
+        if( L_BENCH_GLOB )then
+            self%bench%rt_jpeg = toc(self%bench%t)
+            self%bench%rt_tot  = toc(self%bench%t_tot)
+        endif
         call write_strategy_bench_report(params, self%bench, 'shared-memory')
     end subroutine inmem_finalize_iteration
 
@@ -301,14 +316,12 @@ contains
     subroutine distr_execute_iteration( self, params, build, cline, converged )
         use simple_stream_utils,         only: terminate_stream
         use simple_commanders_euclid,    only: commander_commit_sigma2
-        use simple_commanders_prob,      only: commander_prob_align2D
         class(refine2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
         type(commander_commit_sigma2) :: xcommit_sigma2
-        type(commander_prob_align2D)      :: xprob_align2D
         type(cmdline)                     :: cline_calc_sigma, cline_prob_align
         type(string)                      :: update_frac_req
         real                              :: frac_srch_space
@@ -338,15 +351,14 @@ contains
             if( l_update_frac_key ) update_frac_req = self%job_descr%get('update_frac')
             call self%job_descr%set('update_frac', '1.0')
         endif
+        if( L_BENCH_GLOB ) self%bench%rt_setup = toc(self%bench%t_tot)
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
-            call build%spproj%write_segment_inside(params%oritype)
-            call xprob_align2D%execute(cline_prob_align)
-            call build%spproj%read_segment(params%oritype, params%projfile)
+            call run_prob_align2D(params, build, cline_prob_align, self%bench)
         endif
         ! The master creates one generation-scoped candidate after every
         ! project-state update and before workers read the committed state.
@@ -359,10 +371,12 @@ contains
             if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
         ! Schedule distributed jobs
+        if( L_BENCH_GLOB ) self%bench%t = tic()
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, &
                                                      algnfbody=string(ALGN_FBODY), &
                                                      array=L_USE_SLURM_ARR, &
                                                      extra_params=params)
+        if( L_BENCH_GLOB ) self%bench%rt_search = toc(self%bench%t)
         call terminate_stream(params, 'SIMPLE_DISTR_REFINE2D HARD STOP 1')
         if( l_full_update )then
             if( l_update_frac_key )then
@@ -372,11 +386,19 @@ contains
             endif
         endif
         ! Merge alignment docs
+        if( L_BENCH_GLOB ) self%bench%t = tic()
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY)
+        if( L_BENCH_GLOB ) self%bench%rt_merge = toc(self%bench%t)
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
+            if( L_BENCH_GLOB ) self%bench%t = tic()
             call run_distributed_cavg_assembly(params, cline, self%nthr_master)
+            if( L_BENCH_GLOB )then
+                self%bench%rt_cavg = toc(self%bench%t)
+                self%bench%t       = tic()
+            endif
             call build%spproj%read_segment(params%oritype, params%projfile)
+            if( L_BENCH_GLOB ) self%bench%rt_proj_io = self%bench%rt_proj_io + toc(self%bench%t)
         endif
         ! Sigma2 consolidation
         if( params%cc_objfun==OBJFUN_EUCLID )then
@@ -392,6 +414,7 @@ contains
             endif
         endif
         ! Check convergence
+        if( L_BENCH_GLOB ) self%bench%t = tic()
         converged = self%conv%check_conv2D(params, cline, build%spproj_field, &
                                            build%spproj_field%get_n('class'), params%msk)
         if( trim(params%stream2d).eq.'no' ) call progressfile_update(self%conv%get('progress'))
@@ -413,15 +436,24 @@ contains
             endif
             converged = converged .and. l_full_assignment
         endif
-        if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
+        if( L_BENCH_GLOB ) self%bench%rt_conv = toc(self%bench%t)
     end subroutine distr_execute_iteration
 
     subroutine distr_finalize_iteration( self, params, build )
         class(refine2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(in)    :: params
         type(builder),                   intent(inout) :: build
+        if( L_BENCH_GLOB ) self%bench%t = tic()
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        if( L_BENCH_GLOB )then
+            self%bench%rt_proj_io = self%bench%rt_proj_io + toc(self%bench%t)
+            self%bench%t          = tic()
+        endif
         call gen_jpeg(params%which_iter)
+        if( L_BENCH_GLOB )then
+            self%bench%rt_jpeg = toc(self%bench%t)
+            self%bench%rt_tot  = toc(self%bench%t_tot)
+        endif
         call write_strategy_bench_report(params, self%bench, 'distributed')
     end subroutine distr_finalize_iteration
 
@@ -502,7 +534,9 @@ contains
         real(timer_int_kind) :: rt_accounted
         if( .not. L_BENCH_GLOB ) return
         rt_accounted = 0.
-        if( bench%rt_tot > TINY ) rt_accounted = 100. * (bench%rt_sigma_prep + bench%rt_sigma) / bench%rt_tot
+        if( bench%rt_tot > TINY ) rt_accounted = 100. * (bench%rt_setup + bench%rt_prestep + bench%rt_sigma_prep +&
+            &bench%rt_search + bench%rt_merge + bench%rt_cavg + bench%rt_proj_io + bench%rt_sigma + bench%rt_conv +&
+            &bench%rt_star + bench%rt_jpeg) / bench%rt_tot
         call open_bench_report(fnr, 'REFINE2D_STRATEGY', iter=params%which_iter)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
         write(fnr,'(a,a)')  'refine2D execution mode             : ', trim(execution_mode)
@@ -514,12 +548,44 @@ contains
         call write_mem_bench_context(fnr, 'refine2D')
         write(fnr,'(a)') ''
         write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f0.3)') 'refine2D iteration setup            :', bench%rt_setup
+        write(fnr,'(a,1x,f0.3)') 'refine2D probabilistic pre-step     :', bench%rt_prestep
         write(fnr,'(a,1x,f0.3)') 'refine2D sigma2 candidate prep      :', bench%rt_sigma_prep
+        write(fnr,'(a,1x,f0.3)') 'refine2D matcher/scheduler          :', bench%rt_search
+        write(fnr,'(a,1x,f0.3)') 'refine2D merge alignment documents  :', bench%rt_merge
+        write(fnr,'(a,1x,f0.3)') 'refine2D class-average assembly     :', bench%rt_cavg
+        write(fnr,'(a,1x,f0.3)') 'refine2D project writes and rereads :', bench%rt_proj_io
         write(fnr,'(a,1x,f0.3)') 'refine2D sigma2 commit              :', bench%rt_sigma
+        write(fnr,'(a,1x,f0.3)') 'refine2D convergence                :', bench%rt_conv
+        write(fnr,'(a,1x,f0.3)') 'refine2D cls2D star file            :', bench%rt_star
+        write(fnr,'(a,1x,f0.3)') 'refine2D class-average JPEG         :', bench%rt_jpeg
         write(fnr,'(a,1x,f0.2)') 'refine2D total time                 :', bench%rt_tot
-        write(fnr,'(a,1x,f0.2)') 'refine2D % sigma2 transaction       :', rt_accounted
+        write(fnr,'(a,1x,f0.2)') 'refine2D % accounted for            :', rt_accounted
         call fclose(fnr)
     end subroutine write_strategy_bench_report
+
+    !> prob_align2D with the project segment written before and reread after it (both master project I/O)
+    subroutine run_prob_align2D( params, build, cline_prob_align, bench )
+        use simple_commanders_prob, only: commander_prob_align2D
+        type(parameters),           intent(in)    :: params
+        type(builder),              intent(inout) :: build
+        type(cmdline),              intent(inout) :: cline_prob_align
+        type(refine2D_bench_state), intent(inout) :: bench
+        type(commander_prob_align2D) :: xprob_align2D
+        if( L_BENCH_GLOB ) bench%t = tic()
+        call build%spproj%write_segment_inside(params%oritype)
+        if( L_BENCH_GLOB )then
+            bench%rt_proj_io = bench%rt_proj_io + toc(bench%t)
+            bench%t          = tic()
+        endif
+        call xprob_align2D%execute(cline_prob_align)
+        if( L_BENCH_GLOB )then
+            bench%rt_prestep = toc(bench%t)
+            bench%t          = tic()
+        endif
+        call build%spproj%read_segment(params%oritype, params%projfile)
+        if( L_BENCH_GLOB ) bench%rt_proj_io = bench%rt_proj_io + toc(bench%t)
+    end subroutine run_prob_align2D
 
     subroutine prepare_canonical_sigma_update( params, build )
         type(parameters), intent(in)    :: params

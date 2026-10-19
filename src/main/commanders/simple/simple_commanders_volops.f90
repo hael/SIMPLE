@@ -379,6 +379,8 @@ contains
         if( has_fsc )then
             lplim     = fsc0143
             do_envfsc = params%l_envfsc
+            ! no shell reaches FSC=0.143 (a state without signal): cut at the first shell
+            if( lplim < TINY ) lplim = res(1)
         else
             lplim = params%lp
         endif

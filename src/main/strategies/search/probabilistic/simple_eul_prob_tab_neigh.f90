@@ -7,7 +7,7 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, sample_likelihood_dist, prob_candidate, &
-    &prob_candidate_buffer, prob_candidate_store
+    &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -37,6 +37,7 @@ contains
     procedure :: new_neigh_global
     procedure :: fill_tab_range => fill_tab_neigh_range
     procedure :: begin_write
+    procedure :: write_rows    => write_rows_neigh
     procedure :: write_tab
     procedure :: flush_candidate_buffers
     procedure :: ref_assign    => ref_assign_neigh
@@ -1170,6 +1171,15 @@ contains
         self%table_nnz     = 0
         self%table_nchunks = 0
     end subroutine begin_write
+
+    !> dense rows have no place in the sparse part file
+    subroutine write_rows_neigh( self, i_first, rows, refined )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        integer,                   intent(in)    :: i_first
+        type(prob_dense_entry),    intent(in)    :: rows(:,:)
+        type(prob_refined_entry),  intent(in)    :: refined(:)
+        THROW_HARD('dense rows cannot be written to a neighbourhood part file; write_rows_neigh')
+    end subroutine write_rows_neigh
 
     subroutine flush_candidate_buffers( self )
         class(eul_prob_tab_neigh), intent(inout) :: self

@@ -20,6 +20,7 @@ use simple_syslib,       only: io_set_faults, open_fd_count, set_open_files_limi
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
 use simple_image_slab,   only: image_slab, SLAB_OK, SLAB_OVER_BUDGET, SLAB_NO_MEMORY
+!$ use omp_lib,          only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 use simple_cmdline,      only: cmdline
 use simple_imghead,      only: MrcImgHead, MRC_MODE_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141, find_ldim_nptcls
 implicit none
@@ -101,6 +102,7 @@ contains
         call test_slab_roundtrip_reuse_and_immutable()
         call test_slab_budget_and_failed_allocation()
         call test_slab_float32_nan_payload()
+        call test_slab_get_many_threads()
         call cleanup()
     end subroutine run_all_stack_io_tests
 
@@ -793,6 +795,70 @@ contains
         call slab%kill
         call delete_stacks(stks)
     end subroutine test_slab_roundtrip_reuse_and_immutable
+
+    !> the parallel copy of many slots (the batches served from the particle buffer): at one thread and 20 times at
+    !! every processor, every image bit for bit its slot, padding zeroed, real space, whatever the images held
+    subroutine test_slab_get_many_threads()
+        integer, parameter :: NSLOTS = 97, NGET = 61, SBOX = 40
+        type(image_slab) :: slab
+        type(image)      :: put_img, ref(NGET), got(NGET)
+        real(kind=c_float), pointer :: a(:,:,:) => null(), b(:,:,:) => null()
+        integer :: slots(NGET), i, k, irep, status, nwrong, nthr_prev, nthr_full
+        write(*,'(A)') 'test_slab_get_many_threads'
+        nthr_prev = 1
+        nthr_full = 1
+        !$ nthr_prev = omp_get_max_threads()
+        !$ nthr_full = omp_get_num_procs()
+        call slab%new(SBOX, NSLOTS, int(NSLOTS,int64)*SBOX*SBOX*4, status)
+        call assert_int(SLAB_OK, status, 'the slab of the parallel copy is allocated')
+        call put_img%new([SBOX,SBOX,1], SMPD, wthreads=.false.)
+        do i = 1, NSLOTS
+            call put_img%get_rmat_ptr(a)
+            a(1:SBOX,1:SBOX,1) = reshape([(real(mod(i*7919 + 31*k, 1000)) / 7., k=1,SBOX*SBOX)], [SBOX,SBOX])
+            call slab%put(i, put_img)
+        end do
+        call slab%seal
+        ! slots out of order and repeated
+        slots = [(mod(37*i, NSLOTS) + 1, i=1,NGET)]
+        slots(NGET) = slots(1)
+        do i = 1, NGET
+            call ref(i)%new([SBOX,SBOX,1], SMPD, wthreads=.false.)
+            call got(i)%new([SBOX,SBOX,1], SMPD, wthreads=.false.)
+            call fill_with_junk(ref(i))
+        end do
+        !$ call omp_set_num_threads(1)
+        call slab%get_many(slots, ref)
+        !$ call omp_set_num_threads(nthr_full)
+        nwrong = 0
+        do irep = 1, 20
+            do i = 1, NGET
+                call fill_with_junk(got(i))
+            end do
+            call slab%get_many(slots, got)
+            do i = 1, NGET
+                call ref(i)%get_rmat_ptr_padded(a)
+                call got(i)%get_rmat_ptr_padded(b)
+                if( any(transfer(a, 0_int32, size(a)) /= transfer(b, 0_int32, size(b))) ) nwrong = nwrong + 1
+                if( got(i)%is_ft() ) nwrong = nwrong + 1
+            end do
+        end do
+        !$ call omp_set_num_threads(nthr_prev)
+        call assert_int(0, nwrong, 'the parallel slab copies equal the copies at one thread, bit for bit')
+        nwrong = 0
+        do i = 1, NGET
+            call slab%get(slots(i), put_img)
+            call put_img%get_rmat_ptr_padded(a)
+            call ref(i)%get_rmat_ptr_padded(b)
+            if( any(transfer(a, 0_int32, size(a)) /= transfer(b, 0_int32, size(b))) ) nwrong = nwrong + 1
+        end do
+        call assert_int(0, nwrong, 'a copy of many slots equals the copy of each slot')
+        do i = 1, NGET
+            call ref(i)%kill
+            call got(i)%kill
+        end do
+        call put_img%kill
+        call slab%kill
+    end subroutine test_slab_get_many_threads
 
     !> float32 pixels, a signalling NaN with a payload among them, pass the read and the slab bit for bit
     subroutine test_slab_float32_nan_payload()

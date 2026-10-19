@@ -475,7 +475,7 @@ contains
         use simple_eul_prob_tab2D,          only: eul_prob_tab2D
         use simple_eul_prob_tab_utils,      only: prob_fill_profile
         use simple_matcher_ptcl_io,         only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
-            &ptcl_read_session
+            &ptcl_read_session, ptcl_buffer_budget, fill_pass_buffer
         class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -487,8 +487,9 @@ contains
         type(ptcl_read_counts)   :: reads0
         type(ptcl_read_session)  :: reads
         real    :: frac_srch_space
-        integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz
+        integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz, buffer_status
         integer, allocatable :: batches(:,:)
+        logical :: l_cached
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_setup, rt_refs, rt_batch, rt_fill, rt_write
         if( L_BENCH_GLOB )then
@@ -502,9 +503,22 @@ contains
         call set_bp_range2D(params, build, cline, params%which_iter, frac_srch_space)
         ! reproduce particle sampling from exec_prob_align2D
         if( build%spproj_field%has_been_sampled() )then
-            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds)
+            call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls, pinds, &
+                &allow_empty=params%l_distr_worker)
         else
             THROW_HARD('exec_prob_tab2D requires particle sampling from exec_prob_align2D')
+        endif
+        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
+        if( nptcls < 1 )then
+            ! a partition without sampled particles contributes an empty table
+            call eulprob_obj_part%new_worker(params, build, pinds)
+            call eulprob_obj_part%begin_write(fname)
+            call eulprob_obj_part%write_tab(fname)
+            call eulprob_obj_part%kill
+            call build%kill_general_tbox
+            call qsys_declare_part_finished(params, string('simple_commanders_prob :: exec_prob_tab2D'))
+            call simple_end('**** SIMPLE_PROB_TAB2D NORMAL STOP ****', print_simple=.false.)
+            return
         endif
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls) / real(batchsz_max))
@@ -519,7 +533,8 @@ contains
         ! restores class averages, so the raw full-size images are not needed and the
         ! batch can be served from the downscaled cache
         call ptcl_cache_assert_ready(params, build)
-        if( ptcl_cache_in_use(params, build) )then
+        l_cached = ptcl_cache_in_use(params, build)
+        if( l_cached )then
             call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
                 &imgbatch_box=params%box_crop, imgbatch_smpd=params%smpd_crop)
         else
@@ -532,7 +547,6 @@ contains
         call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter)
         ! Fill the partition table in matcher-sized batches to cap polar FT memo memory.
         call eulprob_obj_part%new_worker(params,build,pinds)
-        fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'
         call eulprob_obj_part%begin_write(fname)
         if( L_BENCH_GLOB )then
             rt_refs  = toc(t)
@@ -541,6 +555,11 @@ contains
         endif
         call reads%new(params)
         call reads%expect(pinds(1:nptcls))
+        ! in shared memory the matcher of the same iteration and process searches the same particles: the table
+        ! reads them once into the particle buffer, and the matcher's batches are copied from it (it releases it)
+        if( .not. params%l_distr_worker .and. .not. l_cached )then
+            buffer_status = fill_pass_buffer(params, build, reads, nptcls, pinds, ptcl_buffer_budget(params, build))
+        endif
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
             batch_end   = batches(ibatch,2)
@@ -591,11 +610,18 @@ contains
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
         integer :: nptcls
+        integer(timer_int_kind) :: t_tot, t
+        real(timer_int_kind)    :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write
+        if( L_BENCH_GLOB ) t_tot = tic()
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call set_b_p_ptrs2D(params, build)
         call ensure_field_halves(build%spproj, params%oritype, params%projfile)
+        if( L_BENCH_GLOB )then
+            rt_setup = toc(t_tot)
+            t        = tic()
+        endif
         if( params%startit == 1 .and. params%which_iter == params%startit )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
@@ -614,6 +640,10 @@ contains
         ! Must precede the cline copy below so a fallback to cache=no reaches the
         ! prob_tab2D worker command lines.
         call ptcl_cache_ensure(params, build, cline)
+        if( L_BENCH_GLOB )then
+            rt_sample = toc(t)
+            t         = tic()
+        endif
         ! generate partition-wise dist tables
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab2D')
@@ -626,13 +656,25 @@ contains
         endif
         write(logfhandle,'(A)') '>>> PROB_ALIGN2D: prob_tab2D workers completed; merging partition tables'
         call flush(logfhandle)
+        if( L_BENCH_GLOB )then
+            rt_sched = toc(t)
+            t        = tic()
+        endif
         ! Allocate the global table only after worker scoring has released its batch-local storage.
         call eulprob_obj_glob%new(params, build, pinds)
         call eulprob_obj_glob%read_tabs_to_glob(string(DIST_FBODY),params%nparts,params%numlen)
+        if( L_BENCH_GLOB )then
+            rt_read = toc(t)
+            t       = tic()
+        endif
         ! global probabilistic class assignment
         write(logfhandle,'(A)') '>>> PROB_ALIGN2D: running global probabilistic assignment'
         call flush(logfhandle)
         call eulprob_obj_glob%ref_assign
+        if( L_BENCH_GLOB )then
+            rt_assign = toc(t)
+            t         = tic()
+        endif
         ! write assignment to file
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         write(logfhandle,'(A,A)') '>>> PROB_ALIGN2D: writing assignment ', fname%to_char()
@@ -640,11 +682,14 @@ contains
         call eulprob_obj_glob%write_assignment(fname)
         write(logfhandle,'(A)') '>>> PROB_ALIGN2D: assignment written'
         call flush(logfhandle)
+        if( L_BENCH_GLOB ) rt_write = toc(t)
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
+        if( L_BENCH_GLOB ) call write_prob_align_bench(params, 'PROB_ALIGN2D', nptcls, rt_setup, rt_sample, rt_sched, &
+            &rt_read, rt_assign, rt_write, toc(t_tot))
         call build%kill_general_tbox
         call qsys_declare_part_finished(params, string('simple_commanders_prob :: exec_prob_align2D'))
         call qsys_cleanup(params)
@@ -765,9 +810,9 @@ contains
         call fclose(fnr)
     end subroutine write_prob_tab_bench
 
-    !> The bench record of the prob_align driver, all wall time, in family PROB_ALIGN (prob) or PROB_ALIGN_NEIGH
-    !! (prob_neigh); rt_sched runs from the launch of the parts to the last part finished (the in-process table fill
-    !! in shared memory).
+    !> The bench record of the prob_align driver, all wall time, in family PROB_ALIGN (prob), PROB_ALIGN_NEIGH
+    !! (prob_neigh) or PROB_ALIGN2D; rt_sched runs from the launch of the parts to the last part finished (the
+    !! in-process table fill in shared memory).
     subroutine write_prob_align_bench( params, family, nptcls, rt_setup, rt_sample, rt_sched, rt_read, rt_assign, &
             &rt_write, rt_tot )
         use simple_bench_io, only: open_bench_report
@@ -781,8 +826,12 @@ contains
         write(fnr,'(a,i0)') 'prob_align iteration                : ', params%which_iter
         write(fnr,'(a,i0)') 'prob_align nparts                   : ', params%nparts
         write(fnr,'(a,i0)') 'prob_align worker threads           : ', params%nthr
-        write(fnr,'(a,i0)') 'prob_align states                   : ', params%nstates
-        write(fnr,'(a,i0)') 'prob_align projection directions    : ', params%nspace
+        if( family == 'PROB_ALIGN2D' )then
+            write(fnr,'(a,i0)') 'prob_align classes                  : ', params%ncls
+        else
+            write(fnr,'(a,i0)') 'prob_align states                   : ', params%nstates
+            write(fnr,'(a,i0)') 'prob_align projection directions    : ', params%nspace
+        endif
         write(fnr,'(a,i0)') 'prob_align box_crop                 : ', params%box_crop
         write(fnr,'(a,i0)') 'prob_align sampled particles        : ', nptcls
         write(fnr,'(a)') ''

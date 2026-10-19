@@ -1091,8 +1091,6 @@ contains
         logical :: fall_over, vol_defined, l_prob_neigh_mode
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
-        ! a reprojection builder of an earlier run has another crop, directions or masks
-        call release_refbuild(self)
         ! Local options / flags
         self%l_multistates = cline%defined('nstates')
         ! init project
@@ -1326,8 +1324,7 @@ contains
         type(commander_prob_align_neigh)  :: xprob_align_neigh_distr
         type(commander_volassemble) :: xvolassemble
         type(cmdline) :: cline_prob_align, cline_volassemble
-        type(sp_project) :: vol_proj !< volume assembly's project as it ends, handed on
-        logical          :: l_vol_proj
+        type(sp_project), allocatable :: vol_proj !< volume assembly's project as it ends, handed on
         type(string)  :: str
         integer(timer_int_kind) :: t_recphase
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
@@ -1345,7 +1342,6 @@ contains
         endif
         601 format(A,1X,F12.3)
         iter     = params%which_iter
-        l_vol_proj = .false.
         call self%conv%print_iteration(iter)
         ! annealing
         if( params%l_noise_reg )then
@@ -1461,8 +1457,8 @@ contains
                             ! the master's project is the file: read at the start of the iteration, its field as
                             ! merge_algndocs wrote it. Assembly takes a copy and hands its own on (for the matching
                             ! low-pass refresh and the sigma2 commit, which read what it has written)
+                            allocate(vol_proj)
                             call xvolassemble%execute_hand_on(cline_volassemble, build%spproj, vol_proj)
-                            l_vol_proj = .true.
                         endif
                     endif
                     call report_rec_master_phase(params, t_recphase, rec3D_master_nthr(params, self%nthr_master))
@@ -1534,7 +1530,7 @@ contains
             end select
         endif
         if( trim(params%volrec).eq.'yes' )then
-            if( l_vol_proj )then
+            if( allocated(vol_proj) )then
                 call refresh_matching_lp_from_project(params, build, cline, vol_proj)
             else
                 call refresh_matching_lp_from_project(params, build, cline)
@@ -1589,7 +1585,7 @@ contains
                 if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
                 ! the commit reads the particles' states and halves and the sigma2 path, which no write since
                 ! volume assembly has changed (the master writes only the out segment)
-                if( l_vol_proj )then
+                if( allocated(vol_proj) )then
                     call xcommit_sigma2%execute_from_project(self%cline_commit_sigma2, vol_proj)
                 else
                     call xcommit_sigma2%execute(self%cline_commit_sigma2)
@@ -1597,6 +1593,11 @@ contains
                 if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
             endif
             if( L_BENCH_GLOB ) call record_sigma2_bench_context(build, self%bench)
+        endif
+        ! the sigma2 commit was the handed-on project's last use
+        if( allocated(vol_proj) )then
+            call vol_proj%kill
+            deallocate(vol_proj)
         endif
         ! iteration-dependent updates
         if( params%l_doshift .and. .not.self%job_descr%isthere('trs') )then
@@ -1616,7 +1617,6 @@ contains
         if( allocated(fsc) ) deallocate(fsc)
         if( allocated(state_pops) ) deallocate(state_pops)
         if( allocated(l_no_new_map) ) deallocate(l_no_new_map)
-        call vol_proj%kill
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
 

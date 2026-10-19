@@ -1,7 +1,7 @@
 !@descr: polarft class submodule for objective function evaluations
 submodule (simple_polarft_calc) simple_polarft_corr
 use simple_defs, only: DTWOPI
-use simple_eul_prob_tab_utils, only: sample_bounded_dist, sample_likelihood_dists, sample_power_dist
+use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_likelihood_dists, sample_power_dists
 #include "simple_local_flags.inc"
 implicit none
 
@@ -393,18 +393,13 @@ contains
         real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
         integer,                     intent(inout) :: sorted_inds(self%nrots)
         real(dp)    :: norm
-        integer     :: ithr
+        integer     :: ithr, p
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        call sample_bounded_dist(self%nrots, euclid_dist_at_rot, athres_ub, prob_athres, dist, irot,&
+        do p = 1,self%nrots
+            self%heap_vars(ithr)%rot_dists(p) = euclid_dist_from_crvec(self, ithr, p, norm)
+        enddo
+        call sample_bounded_dists(self%nrots, self%heap_vars(ithr)%rot_dists, athres_ub, prob_athres, dist, irot,&
             &pvec_sorted, sorted_inds)
-
-    contains
-
-        real function euclid_dist_at_rot(p_loc) result(dist_loc)
-            integer,  intent(in) :: p_loc
-            dist_loc = euclid_dist_from_crvec(self, ithr, p_loc, norm)
-        end function euclid_dist_at_rot
-
     end subroutine gen_prob_euclid_val
 
     module subroutine gen_prob_likelihood_cc_val( self, iref, iptcl, shift, nsample, dist, corr, irot,&
@@ -482,18 +477,13 @@ contains
         real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
         integer,                     intent(inout) :: sorted_inds(self%nrots)
         real(dp) :: norm
-        integer  :: ithr
+        integer  :: ithr, p
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        call sample_power_dist(self%nrots, euclid_dist_at_rot, power, nsample, dist, corr, irot,&
-            &pvec_sorted, sorted_inds)
-
-    contains
-
-        real function euclid_dist_at_rot(p_loc) result(dist_loc)
-            integer, intent(in) :: p_loc
-            dist_loc = euclid_dist_from_crvec(self, ithr, p_loc, norm)
-        end function euclid_dist_at_rot
-
+        do p = 1,self%nrots
+            self%heap_vars(ithr)%rot_dists(p) = euclid_dist_from_crvec(self, ithr, p, norm)
+        enddo
+        call sample_power_dists(self%nrots, self%heap_vars(ithr)%rot_dists, power, nsample, dist, corr, irot,&
+            &pvec_sorted, sorted_inds, self%heap_vars(ithr)%rot_cdf)
     end subroutine gen_prob_power_euclid_val
 
     ! Kernels of a particle bank entry (memoize_shifted_ptcl): the shifted particle against the unshifted
@@ -877,27 +867,6 @@ contains
         ! EUCL = EXP( -DIST^2 / |PTCL|^2 )
         gen_euclid_for_rot_8_2 = exp(-gen_euclid_for_rot_8_2 / self%wsqsums_ptcls(i))
     end function gen_euclid_for_rot_8_2
-
-    module subroutine gen_corr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2)
-        integer,                     intent(in)    :: irot
-        real(dp),                    intent(out)   :: f, grad(2)
-        complex(dp), pointer :: pft_ref_8(:,:)
-        integer :: ithr, i, ieo
-        i         = self%pinds(iptcl)
-        ithr      = omp_get_thread_num() + 1
-        pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
-        ieo       = merge(REF_EVEN, REF_ODD, self%iseven(i))
-        pft_ref_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-        select case(self%p_ptr%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, i, shvec, irot, f, grad)
-            case(OBJFUN_EUCLID)
-                call self%gen_euclid_grad_for_rot_8(pft_ref_8, iptcl, shvec, irot, f, grad)
-        end select
-    end subroutine gen_corr_grad_for_rot_8
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad )
         class(polarft_calc), target, intent(inout) :: self
@@ -1390,15 +1359,30 @@ contains
         ithr = omp_get_thread_num() + 1
         ieo  = merge(REF_EVEN, REF_ODD, self%iseven(self%pinds(iptcl)))
         self%heap_vars(ithr)%pft_ref_aln_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+        self%heap_vars(ithr)%aln_iref      = iref
+        self%heap_vars(ithr)%aln_ieo       = ieo
     end subroutine load_ref_aln_8
 
+    !> stops unless the calling thread's buffer holds reference iref of the parity of particle iptcl
+    subroutine check_ref_aln_8( self, ithr, iref, iptcl )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: ithr, iref, iptcl
+        if( self%heap_vars(ithr)%aln_iref /= iref .or. &
+            &self%heap_vars(ithr)%aln_ieo /= merge(REF_EVEN, REF_ODD, self%iseven(self%pinds(iptcl))) )then
+            THROW_HARD('the shift search evaluates a reference load_ref_aln_8 did not load')
+        endif
+    end subroutine check_ref_aln_8
+
     !> gen_corr_for_rot_8 with the reference load_ref_aln_8 holds
-    module real(dp) function gen_corr_for_rot_8_aln( self, iptcl, shvec, irot )
+    module real(dp) function gen_corr_for_rot_8_aln( self, iref, iptcl, shvec, irot )
         class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl, irot
+        integer,                     intent(in)    :: iref, iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
         complex(dp), pointer :: pft_ref_8(:,:)
-        pft_ref_8 => self%heap_vars(omp_get_thread_num() + 1)%pft_ref_aln_8
+        integer :: ithr
+        ithr = omp_get_thread_num() + 1
+        call check_ref_aln_8(self, ithr, iref, iptcl)
+        pft_ref_8 => self%heap_vars(ithr)%pft_ref_aln_8
         gen_corr_for_rot_8_aln = 0.d0
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
@@ -1408,14 +1392,17 @@ contains
         end select
     end function gen_corr_for_rot_8_aln
 
-    !> gen_corr_grad_for_rot_8 with the reference load_ref_aln_8 holds
-    module subroutine gen_corr_grad_for_rot_8_aln( self, iptcl, shvec, irot, f, grad )
+    !> the objective and its shift gradient at one rotation, with the reference load_ref_aln_8 holds
+    module subroutine gen_corr_grad_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl, irot
+        integer,                     intent(in)    :: iref, iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
         real(dp),                    intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_ref_8(:,:)
-        pft_ref_8 => self%heap_vars(omp_get_thread_num() + 1)%pft_ref_aln_8
+        integer :: ithr
+        ithr = omp_get_thread_num() + 1
+        call check_ref_aln_8(self, ithr, iref, iptcl)
+        pft_ref_8 => self%heap_vars(ithr)%pft_ref_aln_8
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
                 call self%gen_corr_cc_grad_for_rot_8(pft_ref_8, self%pinds(iptcl), shvec, irot, f, grad)

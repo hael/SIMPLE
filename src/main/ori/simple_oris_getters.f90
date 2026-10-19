@@ -468,19 +468,27 @@ contains
         endif
     end function get_pop_2
 
-    module subroutine get_pops( self, pops, label, maxn )
+    !> pops(v): the active records with label value v (1..max(get_n(label), maxn)); with eo, those of that half only
+    module subroutine get_pops( self, pops, label, maxn, eo )
         class(oris),          intent(in)    :: self
         integer, allocatable, intent(out)   :: pops(:)
         character(len=*),     intent(in)    :: label
-        integer, optional,    intent(in)    :: maxn
-        integer :: i, val, n
+        integer, optional,    intent(in)    :: maxn, eo
+        integer :: i, val, n, eo_sel
+        logical :: l_eo
         n = self%get_n(label)
         if( present(maxn) ) n = max(n, maxn)
+        l_eo   = present(eo)
+        eo_sel = 0
+        if( l_eo ) eo_sel = eo
         if(allocated(pops)) deallocate(pops)
         allocate(pops(n),source=0)
         !$omp parallel do private(i,val) default(shared) proc_bind(close) reduction(+:pops)
         do i = 1,self%n
             if( self%o(i)%isstatezero() ) cycle
+            if( l_eo )then
+                if( self%o(i)%get_eo() /= eo_sel ) cycle
+            endif
             val = self%o(i)%get_int(label)
             if( val > 0 ) pops(val) = pops(val) + 1
         end do

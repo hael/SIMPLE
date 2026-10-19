@@ -17,7 +17,7 @@ implicit none
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc
 public :: cavger_read_euclid_sigma2, cavger_kill
 ! Interpolation & restoration
-public :: cavger_init_online, cavger_update_sums, cavger_dealloc_online
+public :: cavger_init_online, cavger_update_sums, cavger_dealloc_online, cavger_write_sums_load
 public :: cavger_assemble_sums, cavger_restore_cavgs
 ! I/O & handling of distributed sums and of the carried (fractional-update) sums
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
@@ -291,13 +291,20 @@ interface
     module subroutine cavger_dealloc_online()
     end subroutine cavger_dealloc_online
 
-    module subroutine cavger_update_sums( nptcls, ptcl_imgs )
-        integer,      intent(in)    :: nptcls
-        class(image), intent(inout) :: ptcl_imgs(nptcls)
+    module subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region )
+        integer,            intent(in)    :: nptcls
+        class(image),       intent(inout) :: ptcl_imgs(nptcls)
+        real(dp), optional, intent(inout) :: ts_sum, wall_region
     end subroutine cavger_update_sums
 
     module subroutine cavger_assemble_sums()
     end subroutine cavger_assemble_sums
+
+    module subroutine cavger_write_sums_load( fnr, prefix, ts_sums, wall_sums )
+        integer,          intent(in) :: fnr
+        character(len=*), intent(in) :: prefix
+        real(dp),         intent(in) :: ts_sums, wall_sums
+    end subroutine cavger_write_sums_load
 
     module subroutine cavger_restore_cavgs( frcs_fname )
         use simple_gridding, only: prep2D_inv_instrfun4mul

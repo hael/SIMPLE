@@ -18,7 +18,7 @@ use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_test_utils
 use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite, ieee_value, ieee_quiet_nan
 use, intrinsic :: iso_fortran_env,  only: int64
-!$ use omp_lib
+!$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_thread_num, omp_set_num_threads
 implicit none
 private
 public :: run_all_pftc_inplane_tests
@@ -853,7 +853,7 @@ contains
 
     end subroutine test_grid_ptcl_search
 
-    ! ---- exact checks of the identical speed changes ---------------------------
+    ! ---- exact checks: shift matrix range, loaded reference, likelihood scores ----
 
     !> the alignment shift matrix holds only the searched shells: the scores are the same, bit for bit, whatever the
     !! shells above kfromto(2) hold (shift_ptcl fills them with another shift; the searched shells are then reset)
@@ -896,8 +896,8 @@ contains
 
     end subroutine test_shmat_searched_shells
 
-    !> the evaluations of the shift search with the reference loaded once equal those that copy it every time, exactly,
-    !! also when other evaluations (which overwrite the copying route's buffer) come in between
+    !> the evaluations of the shift search with the reference loaded once equal those that copy it every time and those
+    !! after a fresh load, exactly, also when other evaluations and loads come in between
     subroutine test_loaded_reference()
         integer, parameter :: NREFS_LR = 6
         type(builder),    target :: b
@@ -918,10 +918,15 @@ contains
                         ! evaluations of another reference in between
                         call b%pftc%gen_objfun_vals(mod(iref,NREFS_LR)+1, 1, real(PROBE_SHIFTS(:,ish),sp), vals)
                         c_copy = b%pftc%gen_corr_for_rot_8(mod(iref,NREFS_LR)+1, 1, PROBE_SHIFTS(:,ish), irot)
-                        c_load = b%pftc%gen_corr_for_rot_8_aln(1, PROBE_SHIFTS(:,ish), irot)
+                        c_load = b%pftc%gen_corr_for_rot_8_aln(iref, 1, PROBE_SHIFTS(:,ish), irot)
                         c_copy = b%pftc%gen_corr_for_rot_8(iref, 1, PROBE_SHIFTS(:,ish), irot)
-                        call b%pftc%gen_corr_grad_for_rot_8_aln(1, PROBE_SHIFTS(:,ish), irot, f_load, g_load)
-                        call b%pftc%gen_corr_grad_for_rot_8(iref, 1, PROBE_SHIFTS(:,ish), irot, f_copy, g_copy)
+                        call b%pftc%gen_corr_grad_for_rot_8_aln(iref, 1, PROBE_SHIFTS(:,ish), irot, f_load, g_load)
+                        ! another reference loaded and evaluated, then this one loaded afresh
+                        call b%pftc%load_ref_aln_8(mod(iref,NREFS_LR)+1, 1)
+                        call b%pftc%gen_corr_grad_for_rot_8_aln(mod(iref,NREFS_LR)+1, 1, PROBE_SHIFTS(:,ish), irot,&
+                            &f_copy, g_copy)
+                        call b%pftc%load_ref_aln_8(iref, 1)
+                        call b%pftc%gen_corr_grad_for_rot_8_aln(iref, 1, PROBE_SHIFTS(:,ish), irot, f_copy, g_copy)
                         if( c_load /= c_copy .or. f_load /= f_copy .or. any(g_load /= g_copy) ) ndiff = ndiff + 1
                     enddo
                 enddo
@@ -932,31 +937,37 @@ contains
         enddo
     end subroutine test_loaded_reference
 
-    !> the likelihood scores of the table fill (shifted reference and particle bank) over 24 references, euclid and cc,
-    !! at one thread and at four: the same distance, score and rotation, bit for bit (one sample: the draw is the best)
+    !> the likelihood scores of the table fill (shifted reference and particle bank) and, with euclid, the power and
+    !! bounded samplers of the 2D and greedy searches, over 24 references, at one thread and 20 times at every
+    !! processor: the same distance, score and rotation, bit for bit (one sample: the draw is the best)
     subroutine test_likelihood_threads()
-        integer, parameter :: NREFS_LT = 24
+        integer, parameter :: NREFS_LT = 24, NRES = 11
         type(builder),    target :: b
         type(parameters), target :: p
         complex(sp), allocatable :: bank(:,:)
-        real(sp),    allocatable :: res1(:,:), res4(:,:)
-        integer :: iobj, nthr_prev, kfromto(2)
+        real(sp),    allocatable :: res1(:,:), resn(:,:)
+        integer :: iobj, nthr_prev, nthr_full, kfromto(2), irep, ndiff
         write(*,'(A)') 'test_likelihood_threads'
         nthr_prev = 1
+        nthr_full = 1
         !$ nthr_prev = omp_get_max_threads()
-        allocate(res1(6,NREFS_LT), res4(6,NREFS_LT))
+        !$ nthr_full = omp_get_num_procs()
+        allocate(res1(NRES,NREFS_LT), resn(NRES,NREFS_LT))
         do iobj = OBJ_EUCLID, OBJ_CC
-            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_LT, nthr=4)
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_LT, nthr=nthr_full)
             kfromto = b%pftc%get_kfromto()
             allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1))
             call b%pftc%memoize_shifted_ptcl(1, [0.7, -0.4], bank)
             !$ call omp_set_num_threads(1)
             call score_refs(res1)
-            !$ call omp_set_num_threads(4)
-            call score_refs(res4)
+            !$ call omp_set_num_threads(nthr_full)
+            ndiff = 0
+            do irep = 1,20
+                call score_refs(resn)
+                ndiff = ndiff + count(transfer(res1,0,size(res1)) /= transfer(resn,0,size(resn)))
+            enddo
             !$ call omp_set_num_threads(nthr_prev)
-            call assert_int(0, count(transfer(res1,0,size(res1)) /= transfer(res4,0,size(res4))), &
-                &'the likelihood scores at four threads equal those at one, bit for bit')
+            call assert_int(0, ndiff, 'the likelihood and sampler scores at every processor equal those at one, bit for bit')
             deallocate(bank)
             call kill_fixture(b)
         enddo
@@ -968,12 +979,19 @@ contains
             real(sp), intent(out) :: res(:,:)
             real(sp) :: pvec(b%pftc%get_nrots()), dist, corr
             integer  :: inds(b%pftc%get_nrots()), iref, irot
+            res = 0.
             !$omp parallel do default(shared) private(iref,pvec,inds,dist,corr,irot) schedule(dynamic)
             do iref = 1,NREFS_LT
                 call b%pftc%gen_likelihood_val(iref, 1, [1.1, -0.6], 1, dist, corr, irot, pvec, inds)
                 res(1:3,iref) = [dist, corr, real(irot)]
                 call b%pftc%gen_likelihood_val_bank(iref, 1, bank, 1, dist, corr, irot, pvec, inds)
                 res(4:6,iref) = [dist, corr, real(irot)]
+                if( iobj == OBJ_EUCLID )then
+                    call b%pftc%gen_prob_power_objfun_val(iref, 1, [1.1, -0.6], 2., 1, dist, corr, irot, pvec, inds)
+                    res(7:9,iref) = [dist, corr, real(irot)]
+                    call b%pftc%gen_prob_objfun_val(iref, 1, [1.1, -0.6], 0.1, 0.1, dist, irot, pvec, inds)
+                    res(10:11,iref) = [dist, real(irot)]
+                endif
             enddo
             !$omp end parallel do
         end subroutine score_refs
@@ -981,7 +999,7 @@ contains
     end subroutine test_likelihood_threads
 
     !> the alternating shift search (as the probabilistic tables run it) over 24 references and three start shifts,
-    !! euclid and cc, at one thread and at four: every result bit for bit the same
+    !! euclid and cc, at one thread and 20 times at every processor: every result bit for bit the same
     subroutine test_search_threads()
         integer,  parameter :: NREFS_TH = 24, NSTARTS = 3
         real,     parameter :: STARTS(2,NSTARTS) = reshape([0.,0., 1.5,-1., -2.,0.5], [2,NSTARTS])
@@ -991,30 +1009,36 @@ contains
         real,    allocatable :: cxy1(:,:,:), cxy4(:,:,:)
         integer, allocatable :: irot1(:,:), irot4(:,:)
         real    :: limits(2,2), lims_init(2,2)
-        integer :: iobj, nthr_prev, ithr
+        integer :: iobj, nthr_prev, ithr, nthr_full, irep, ndiff
         write(*,'(A)') 'test_search_threads'
         limits(:,1)    = -TRS
         limits(:,2)    =  TRS
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         nthr_prev = 1
+        nthr_full = 1
         !$ nthr_prev = omp_get_max_threads()
-        allocate(srch(4), cxy1(3,NSTARTS,NREFS_TH), cxy4(3,NSTARTS,NREFS_TH), irot1(NSTARTS,NREFS_TH), irot4(NSTARTS,NREFS_TH))
+        !$ nthr_full = omp_get_num_procs()
+        allocate(srch(nthr_full), cxy1(3,NSTARTS,NREFS_TH), cxy4(3,NSTARTS,NREFS_TH), irot1(NSTARTS,NREFS_TH),&
+            &irot4(NSTARTS,NREFS_TH))
         do iobj = OBJ_EUCLID, OBJ_CC
-            ! the pftc's per-thread work arrays are made for four threads
-            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_TH, nthr=4)
-            do ithr = 1,4
+            ! the pftc's per-thread work arrays are made for the full team
+            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_TH, nthr=nthr_full)
+            do ithr = 1,nthr_full
                 call srch(ithr)%new_alternating(b, limits, lims_init=lims_init, maxits=p%maxits_sh, coarse_init=.true.)
             enddo
             !$ call omp_set_num_threads(1)
             call run_searches(cxy1, irot1)
-            !$ call omp_set_num_threads(4)
-            call run_searches(cxy4, irot4)
+            !$ call omp_set_num_threads(nthr_full)
+            ndiff = 0
+            do irep = 1,20
+                call run_searches(cxy4, irot4)
+                ndiff = ndiff + count(irot1 /= irot4) + count(transfer(cxy1,0,size(cxy1)) /= transfer(cxy4,0,size(cxy4)))
+            enddo
             !$ call omp_set_num_threads(nthr_prev)
-            call assert_int(0, count(irot1 /= irot4) + count(transfer(cxy1,0,size(cxy1)) /= transfer(cxy4,0,size(cxy4))), &
-                &'the shift searches at four threads equal those at one, bit for bit')
+            call assert_int(0, ndiff, 'the shift searches at every processor equal those at one thread, bit for bit')
             call assert_true(count(irot1 > 0) > NREFS_TH, 'the searches find solutions')
-            do ithr = 1,4
+            do ithr = 1,nthr_full
                 call srch(ithr)%kill
             enddo
             call kill_fixture(b)

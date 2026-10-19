@@ -9,9 +9,11 @@ use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab2D,     only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: prob_candidate, write_seed_shift_table
+use simple_eul_prob_tab_utils, only: prob_candidate, write_seed_shift_table, sample_likelihood_index
 use simple_type_defs,          only: ptcl_ref
+use simple_rnd,                only: seed_rnd_fixed
 use simple_test_utils
+!$ use omp_lib,                only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
 private
 public :: run_all_eul_prob_tab2D_tests
@@ -33,6 +35,7 @@ contains
         call test_dense_stream()
         call test_sparse_stream()
         call test_sparse_single_neighborhood()
+        call test_dense_assign_against_reference()
         call table%kill
     end subroutine run_all_eul_prob_tab2D_tests
 
@@ -108,6 +111,142 @@ contains
         call del_file('prob2d_sparse_single_part1.dat')
         call del_file('prob2d_sparse_single_assignment.dat')
     end subroutine test_sparse_single_neighborhood
+
+    !> The dense assignment against the one it replaced (reference_assign2D, which rescans the frontier every step):
+    !! synthetic tables of 150 particles and 20 classes with ties (a flat particle, identical particles, a class
+    !! tie at the minimum, invalid distances), several draw seeds, the same class for every particle; and the
+    !! assignment at one thread and 20 times at every processor, the same classes and distances
+    subroutine test_dense_assign_against_reference()
+        integer, parameter :: NP = 150, NC = 20, NSEEDS = 4
+        type(eul_prob_tab2D) :: tab
+        real,    allocatable :: dists(:,:)
+        integer, allocatable :: icls_ref(:), pinds_t(:), icls1(:)
+        real,    allocatable :: dist1(:)
+        integer :: i, icls, iseed, nwrong, irep, nthr_prev, nthr_full, ncls_prev, npeaks_prev
+        character(len=len(params%refine)) :: refine_prev
+        write(*,'(A)') 'test_dense_assign_against_reference'
+        ncls_prev   = params%ncls
+        npeaks_prev = params%npeaks_inpl
+        refine_prev = params%refine
+        params%ncls        = NC
+        params%npeaks_inpl = NC
+        params%refine      = 'prob'
+        nthr_prev = 1
+        nthr_full = 1
+        !$ nthr_prev = omp_get_max_threads()
+        !$ nthr_full = omp_get_num_procs()
+        pinds_t = [(i, i=1,NP)]
+        allocate(dists(NC,NP))
+        call seed_rnd_fixed(20261019)
+        do i = 1, NP
+            do icls = 1, NC
+                dists(icls,i) = 4. * ran3()
+            enddo
+        enddo
+        dists(:,1)  = 1.5                  ! flat
+        dists(:,8)  = dists(:,7)           ! identical particles
+        dists(3,9)  = 0.01                 ! a class tie at the minimum
+        dists(11,9) = 0.01
+        dists(5,12) = huge(1.)             ! invalid distances
+        dists(:,13) = huge(1.)
+        nwrong = 0
+        do iseed = 1, NSEEDS
+            call tab%new(params, build, pinds_t)
+            call set_table(tab)
+            call seed_rnd_fixed(1000 + iseed)
+            call tab%ref_assign
+            call seed_rnd_fixed(1000 + iseed)
+            call reference_assign2D(dists, tab%nhood_sz, icls_ref)
+            nwrong = nwrong + count(tab%assgn_map(:)%icls /= icls_ref)
+            call tab%kill
+        enddo
+        call assert_int(0, nwrong, 'the dense 2D assignment equals the rescanning assignment it replaced')
+        call seed_rnd_fixed(1001)
+        call reference_assign2D(dists, NC, icls1)
+        call seed_rnd_fixed(1002)
+        call reference_assign2D(dists, NC, icls_ref)
+        call assert_true(any(icls1 /= icls_ref), 'the draws change the dense 2D assignment')
+        ! one thread against every processor
+        call tab%new(params, build, pinds_t)
+        call set_table(tab)
+        !$ call omp_set_num_threads(1)
+        call seed_rnd_fixed(2000)
+        call tab%ref_assign
+        icls1 = tab%assgn_map(:)%icls
+        dist1 = tab%assgn_map(:)%dist
+        !$ call omp_set_num_threads(nthr_full)
+        nwrong = 0
+        do irep = 1, 20
+            call set_table(tab)
+            call seed_rnd_fixed(2000)
+            call tab%ref_assign
+            nwrong = nwrong + count(tab%assgn_map(:)%icls /= icls1) + count(tab%assgn_map(:)%dist /= dist1)
+        enddo
+        !$ call omp_set_num_threads(nthr_prev)
+        call assert_int(0, nwrong, 'the dense 2D assignment at every processor equals the one at one thread')
+        call tab%kill
+        params%ncls        = ncls_prev
+        params%npeaks_inpl = npeaks_prev
+        params%refine      = refine_prev
+
+    contains
+
+        subroutine set_table( t )
+            type(eul_prob_tab2D), intent(inout) :: t
+            integer :: ip, ic
+            do ip = 1, NP
+                do ic = 1, NC
+                    t%loc_tab(ic,ip)%iref = ic
+                    t%loc_tab(ic,ip)%inpl = ic
+                    t%loc_tab(ic,ip)%dist = dists(ic,ip)
+                enddo
+            enddo
+        end subroutine set_table
+
+    end subroutine test_dense_assign_against_reference
+
+    !> The dense 2D assignment as it was (every class active): each class sorts the particles; each step scans every
+    !! class's head to its first available particle and draws among the heads. icls_out(i) is particle i's class.
+    subroutine reference_assign2D( dists, nhood, icls_out )
+        real,                 intent(in)  :: dists(:,:)
+        integer,              intent(in)  :: nhood
+        integer, allocatable, intent(out) :: icls_out(:)
+        integer, allocatable :: stab(:,:), heads(:), eligible(:), order(:)
+        real,    allocatable :: work(:), cdists(:), sorted(:)
+        logical, allocatable :: avail(:)
+        integer :: nc, np, ic, ip, neligible, chosen, iptcl
+        nc = size(dists,1)
+        np = size(dists,2)
+        allocate(stab(np,nc), heads(nc), eligible(nc), order(nc), work(np), cdists(nc), sorted(nc), avail(np))
+        allocate(icls_out(np), source=0)
+        do ic = 1, nc
+            stab(:,ic) = [(ip, ip=1,np)]
+            work = dists(ic,:)
+            call hpsort(work, stab(:,ic))
+        enddo
+        heads = 1
+        avail = .true.
+        do while( any(avail) )
+            neligible = 0
+            do ic = 1, nc
+                do while( heads(ic) <= np )
+                    if( avail(stab(heads(ic),ic)) ) exit
+                    heads(ic) = heads(ic) + 1
+                enddo
+                if( heads(ic) <= np )then
+                    neligible = neligible + 1
+                    eligible(neligible) = ic
+                    cdists(neligible)   = dists(ic,stab(heads(ic),ic))
+                endif
+            enddo
+            if( neligible == 0 ) exit
+            call sample_likelihood_index(neligible, cdists, min(nhood, neligible), huge(1.0), sorted, order, chosen)
+            ic    = eligible(chosen)
+            iptcl = stab(heads(ic),ic)
+            avail(iptcl)    = .false.
+            icls_out(iptcl) = ic
+        enddo
+    end subroutine reference_assign2D
 
     subroutine set_candidate( candidate, icls, dist )
         type(prob_candidate), intent(out) :: candidate

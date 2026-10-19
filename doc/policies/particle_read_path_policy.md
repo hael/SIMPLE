@@ -56,8 +56,13 @@ The reconstruction of the same pass, which runs after the assignment barrier,
 copies its images from that buffer instead of reading them again. The buffer
 lives for one pass in one process
 (`separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md`).
+In shared-memory 2D, the probability table (`prob_tab2D`, run in the master
+process) fills the buffer with the iteration's sampled particles, the
+matcher of the same iteration copies its batches from it, and the matcher
+releases it. Batches are copied out of the buffer in parallel.
 Its budget is half the task memory a queue system grants; otherwise it is the
-node's physical memory divided by twice the number of processes the node runs.
+node's physical memory (`MemTotal` on Linux, `hw.memsize` on macOS) divided by
+twice the number of processes the node runs.
 A share above the budget, or an allocation that fails, leaves the buffer empty,
 and the batches are read from the stacks as before. The outputs are the same
 either way.

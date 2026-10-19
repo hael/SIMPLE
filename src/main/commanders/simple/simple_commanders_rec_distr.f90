@@ -900,7 +900,6 @@ contains
         if( L_BENCH_GLOB ) t_upd_proj = tic()
         call update_project_resolution_metadata()
         if( L_BENCH_GLOB ) rt_upd_proj = toc(t_upd_proj)
-        if( present(spproj_out) ) call spproj_out%copy(build%spproj)
         if( L_BENCH_GLOB ) t_cleanup = tic()
         call cleanup_context()
         if( L_BENCH_GLOB ) rt_cleanup = toc(t_cleanup)
@@ -1286,7 +1285,6 @@ contains
         end subroutine log_nu_alignment_lowpass_summary
 
         subroutine cleanup_context()
-            call build%kill_general_tbox
             call even_rec%kill
             call odd_rec%kill
             call read_even_rec%kill
@@ -1296,6 +1294,9 @@ contains
             call vol_nu_base_odd%kill
             call vol_nu_aux_even%kill
             call vol_nu_aux_odd%kill
+            ! the project handed on is copied once the reconstructors and volumes are freed
+            if( present(spproj_out) ) call spproj_out%copy(build%spproj)
+            call build%kill_general_tbox
             if( allocated(state_pops)             ) deallocate(state_pops)
             if( allocated(l_state_dropped)        ) deallocate(l_state_dropped)
             if( allocated(res0143s)               ) deallocate(res0143s)

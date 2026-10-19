@@ -84,8 +84,11 @@ Lifecycle, in order:
    `optimize_nu_cutoff_finds`, and the accepted shell walk when `nu_refine=yes`
    (`extend_nu_filter_highres_shells`). One evidence identity, exactly the
    `postprocess_nu` lifecycle.
-2. Merge `(even + odd) / 2` and NU-filter it while the bank is live:
-   `nu_filter_vol(merged, merged_nu)`. This is the atom-response work map.
+2. While the bank is live, NU-filter the pair (`nu_filter_vols(even_nu,
+   odd_nu, even, odd)`: each half filtered per label) and merge
+   `merged_nu = (even_nu + odd_nu) / 2`, which equals filtering the merged
+   map, since the filter is linear and the same for both halves. This is
+   the atom-response work map.
 3. `build_nu_evidence_state(even, odd, state)`, `cleanup_nu_filter`,
    `assert_nu_evidence_replay_ready(state)`, `print_nu_evidence_summary`.
 4. `unpack_nu_evidence_state(state, selected_cutoff=, band_support=)`; the

@@ -950,10 +950,16 @@ int64_t simple_node_mem_in_use_bytes(void)
 #endif
 }
 
-/* Physical memory of the node, MemTotal, in bytes; -1 where /proc/meminfo does not exist */
+/* Physical memory of the node in bytes: MemTotal on Linux, hw.memsize on macOS; -1 elsewhere */
 int64_t simple_node_mem_total_bytes(void)
 {
-#if defined(__linux__)
+#if defined(__APPLE__)
+    int mib[2] = {CTL_HW, HW_MEMSIZE};
+    int64_t physical_memory = 0;
+    size_t length = sizeof(physical_memory);
+    if (sysctl(mib, 2, &physical_memory, &length, NULL, 0) != 0 || physical_memory <= 0) return -1;
+    return physical_memory;
+#elif defined(__linux__)
     FILE *stream;
     char line[256];
     long long kib, total_kib = -1;

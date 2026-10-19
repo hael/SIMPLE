@@ -26,6 +26,7 @@ contains
         type(image), allocatable :: match_imgs(:)
         real         :: xyz(3)
         integer      :: icls, pop, pop_even, pop_odd, centype, ithr, pdim_srch(3)
+        integer, allocatable :: pops(:), pops_even(:), pops_odd(:)
         logical      :: do_center, has_been_searched, input_center, l_fresh_start, l_use_merged_ref
         l_fresh_start     = is_fresh_2D_start(params, which_iter)
         has_been_searched = (.not. l_fresh_start) .and. (.not.build%spproj%is_virgin_field(params%oritype))
@@ -44,6 +45,12 @@ contains
         call cavgs_merged(1)%memoize_mask_coords
         ! mode of cavg centering
         centype = get_centype(params%center_type)
+        ! the classes' populations, all and per half, counted once
+        if( has_been_searched )then
+            call build%spproj_field%get_pops(pops,      'class', maxn=params%ncls)
+            call build%spproj_field%get_pops(pops_even, 'class', maxn=params%ncls, eo=0)
+            call build%spproj_field%get_pops(pops_odd,  'class', maxn=params%ncls, eo=1)
+        endif
         ! PREPARATION OF REFERENCES IN pftc
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,ithr,pop,pop_even,pop_odd,do_center,xyz)&
@@ -53,9 +60,9 @@ contains
             pop_even = 0
             pop_odd  = 0
             if( has_been_searched )then
-                pop      = build%spproj_field%get_pop(icls, 'class'      )
-                pop_even = build%spproj_field%get_pop(icls, 'class', eo=0)
-                pop_odd  = build%spproj_field%get_pop(icls, 'class', eo=1)
+                pop      = pops(icls)
+                pop_even = pops_even(icls)
+                pop_odd  = pops_odd(icls)
             endif
             ithr = omp_get_thread_num() + 1
             if( pop > 0 )then

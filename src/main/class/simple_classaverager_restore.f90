@@ -183,10 +183,11 @@ contains
         ! Fourier grids share a spacing and index hp means the same spatial frequency
         ! in both; stack_accumulate_fplane only ever reads |hp| <= 2*nyq of the class
         ! average, which is exactly the extent of the cropped padded grid.
+        ! one per thread of the team cavger_update_sums runs on
         if( l_cropped_ptcls )then
-            call alloc_imgarr(nthr_glob, ldim_croppd, smpd_crop, tmp_pad_imgs)
+            call alloc_imgarr(omp_get_max_threads(), ldim_croppd, smpd_crop, tmp_pad_imgs)
         else
-            call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
+            call alloc_imgarr(omp_get_max_threads(), ldim_pd, smpd, tmp_pad_imgs)
         endif
         ! particle records
         allocate(precs(maxbatchsz))
@@ -206,15 +207,25 @@ contains
         endif
     end subroutine cavger_dealloc_online
 
-    subroutine cavger_update_sums( nptcls, ptcl_imgs )
-        integer,      intent(in)    :: nptcls
-        class(image), intent(inout) :: ptcl_imgs(nptcls)
-        type(fplane_type) :: fplanes(nthr_glob)
+    !> the batch's particles added to their classes' sums. Each (class, half) is a task, the largest first, under a
+    !! dynamic schedule; a task sums its particles in batch order, so the sums do not depend on the thread count.
+    !! ts_sum and wall_region accumulate the thread-seconds and the wall time of the region (bench load balance).
+    subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region )
+        integer,            intent(in)    :: nptcls
+        class(image),       intent(inout) :: ptcl_imgs(nptcls)
+        real(dp), optional, intent(inout) :: ts_sum, wall_region
+        type(fplane_type), allocatable :: fplanes(:)
         type(fplane_grid) :: grid
-        type(ctfparams) :: ctfparms_here
-        integer, allocatable :: cls_first(:), cls_order(:)
-        integer :: iptcl, ithr, icls, i, j, ih, box_pd
-        real    :: crop_factor, shift_here(2)
+        type(ctfparams)   :: ctfparms_here
+        integer,  allocatable :: bfirst(:), border(:), tasks(:)
+        real(dp), allocatable :: ts_thr(:)
+        real(dp) :: t_region, t_task
+        integer  :: iptcl, ithr, icls, i, j, ih, box_pd, nthr_team, nbuckets, ib, ihalf, itask, ntasks
+        real     :: crop_factor, shift_here(2)
+        ! work arrays for the team the region runs on
+        nthr_team = omp_get_max_threads()
+        if( size(tmp_pad_imgs) < nthr_team ) THROW_HARD('class-sum work images fewer than threads; cavger_update_sums')
+        allocate(fplanes(nthr_team))
         ! Memoization for the padded image tmp_pad_imgs was allocated with. The
         ! (ldim,smpd) pair fixes the physical extent, and boxpd*smpd == box_croppd*
         ! smpd_crop, so a given index h denotes the same spatial frequency either way.
@@ -232,41 +243,46 @@ contains
         else
             call grid%new(box_pd)
         endif
-        ! the batch bucketed by class once (a stable counting sort): class icls holds the batch indices
-        ! cls_order(cls_first(icls):cls_first(icls+1)-1), in batch order, so each class's sums
-        ! accumulate in the same order as a scan over the whole batch
-        allocate(cls_first(ncls+1), source=0)
-        allocate(cls_order(nptcls))
+        ! the batch bucketed by (class, half) once, a stable counting sort: bucket ib = 2*(icls-1) + ihalf holds
+        ! the batch indices border(bfirst(ib):bfirst(ib+1)-1) in batch order, so each sum accumulates in the
+        ! order of a scan over the whole batch; a particle of another half label is in no sum
+        nbuckets = 2 * ncls
+        allocate(bfirst(nbuckets+1), source=0)
+        allocate(border(nptcls), source=0)
         do i = 1, nptcls
-            if( precs(i)%pind == 0 ) cycle
-            icls = precs(i)%class
-            if( icls < 1 .or. icls > ncls ) cycle
-            cls_first(icls+1) = cls_first(icls+1) + 1
+            ib = bucket_of(i)
+            if( ib > 0 ) bfirst(ib+1) = bfirst(ib+1) + 1
         enddo
-        cls_first(1) = 1
-        do icls = 1, ncls
-            cls_first(icls+1) = cls_first(icls+1) + cls_first(icls)
+        bfirst(1) = 1
+        do ib = 1, nbuckets
+            bfirst(ib+1) = bfirst(ib+1) + bfirst(ib)
         enddo
-        ! cls_first(icls+1) - 1 is the last slot of class icls; fill from the front with a running cursor
-        cls_order = 0
+        ! bfirst(ib+1) - 1 is the last slot of bucket ib; fill from the front with a running cursor
         do i = 1, nptcls
-            if( precs(i)%pind == 0 ) cycle
-            icls = precs(i)%class
-            if( icls < 1 .or. icls > ncls ) cycle
-            cls_order(cls_first(icls)) = i
-            cls_first(icls) = cls_first(icls) + 1
+            ib = bucket_of(i)
+            if( ib < 1 ) cycle
+            border(bfirst(ib)) = i
+            bfirst(ib) = bfirst(ib) + 1
         enddo
-        ! the cursors now point at the next class's first slot: shift them back by one class
-        do icls = ncls, 1, -1
-            cls_first(icls+1) = cls_first(icls)
+        ! the cursors now point at the next bucket's first slot: shift them back by one bucket
+        do ib = nbuckets, 1, -1
+            bfirst(ib+1) = bfirst(ib)
         enddo
-        cls_first(1) = 1
-        !$omp parallel do default(shared) private(icls,j,i,iptcl,ithr,ih,ctfparms_here,shift_here)&
-        !$omp schedule(static,1) proc_bind(close)
-        do icls = 1, ncls
-            do j = cls_first(icls), cls_first(icls+1) - 1
-                i     = cls_order(j)
-                ithr  = omp_get_thread_num() + 1
+        bfirst(1) = 1
+        call order_tasks
+        ! busy time per thread of the team the region runs on
+        allocate(ts_thr(nthr_team), source=0.d0)
+        t_region = omp_get_wtime()
+        !$omp parallel do default(shared) private(itask,ib,icls,ihalf,j,i,iptcl,ithr,ih,ctfparms_here,shift_here,t_task)&
+        !$omp schedule(dynamic,1) proc_bind(close)
+        do itask = 1, ntasks
+            t_task = omp_get_wtime()
+            ithr   = omp_get_thread_num() + 1
+            ib     = tasks(itask)
+            icls   = (ib - 1) / 2 + 1
+            ihalf  = ib - 2 * (icls - 1)
+            do j = bfirst(ib), bfirst(ib+1) - 1
+                i     = border(j)
                 iptcl = precs(i)%pind
                 ! particle: normalize, pad & forward FT
                 ! The mask has to match the box the particle actually has. Cached
@@ -301,19 +317,58 @@ contains
                         &fplanes(ithr), grid)
                 endif
                 ! rotation, interpolation and accumulation
-                select case(precs(i)%eo)
-                case(0,-1)
-                    eo_pops(1,icls) = eo_pops(1,icls) + 1
+                eo_pops(ihalf,icls) = eo_pops(ihalf,icls) + 1
+                if( ihalf == 1 )then
                     call cavgs%even%accumulate_fplane(precs(i)%e3, fplanes(ithr), icls)
-                case(1)
-                    eo_pops(2,icls) = eo_pops(2,icls) + 1
+                else
                     call cavgs%odd%accumulate_fplane(precs(i)%e3, fplanes(ithr), icls)
-                end select
+                endif
             enddo
+            ts_thr(ithr) = ts_thr(ithr) + (omp_get_wtime() - t_task)
         enddo
         !$omp end parallel do
+        if( present(wall_region) ) wall_region = wall_region + (omp_get_wtime() - t_region)
+        if( present(ts_sum) )      ts_sum      = ts_sum + sum(ts_thr)
         call grid%kill
-        deallocate(cls_first, cls_order)
+        deallocate(fplanes, bfirst, border, tasks, ts_thr)
+
+    contains
+
+        !> the (class, half) bucket of batch particle i, 0 when it is in no sum (even: half label 0 or -1)
+        integer function bucket_of( i ) result( ib )
+            integer, intent(in) :: i
+            integer :: icls_loc
+            ib = 0
+            if( precs(i)%pind == 0 ) return
+            icls_loc = precs(i)%class
+            if( icls_loc < 1 .or. icls_loc > ncls ) return
+            select case(precs(i)%eo)
+                case(0,-1)
+                    ib = 2 * (icls_loc - 1) + 1
+                case(1)
+                    ib = 2 * (icls_loc - 1) + 2
+            end select
+        end function bucket_of
+
+        !> the non-empty buckets, the most populated first (a stable insertion sort: equal ones by bucket index)
+        subroutine order_tasks
+            integer :: k, kk, ib_loc, pop
+            allocate(tasks(nbuckets))
+            ntasks = 0
+            do ib_loc = 1, nbuckets
+                pop = bfirst(ib_loc+1) - bfirst(ib_loc)
+                if( pop < 1 ) cycle
+                ntasks = ntasks + 1
+                k = ntasks
+                do kk = ntasks - 1, 1, -1
+                    if( bfirst(tasks(kk)+1) - bfirst(tasks(kk)) >= pop ) exit
+                    tasks(kk+1) = tasks(kk)
+                    k = kk
+                enddo
+                tasks(k) = ib_loc
+            enddo
+        end subroutine order_tasks
+
     end subroutine cavger_update_sums
 
     !>  \brief  is for generating class averages offline
@@ -329,6 +384,9 @@ contains
         integer :: first_stkind, fromp, istk, nptcls_in_stk, last_stkind, ibatch, nbatches, nptcls_tot
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_init, rt_transf, rt_sums
+        real(dp)                :: ts_sums, wall_sums
+        ts_sums   = 0.d0
+        wall_sums = 0.d0
         if( L_BENCH_GLOB )then
             t_tot     = tic()
             reads0    = ptcl_read_counts_now()
@@ -382,7 +440,7 @@ contains
                 call reads%read(p_ptr, b_ptr, nptcls_eff, pinds(1:nptcls_eff), [1,nptcls_eff])
                 ! Interpolate images and update class sums
                 if( L_BENCH_GLOB ) t = tic()
-                call cavger_update_sums(nptcls_eff, b_ptr%imgbatch(1:nptcls_eff))
+                call cavger_update_sums(nptcls_eff, b_ptr%imgbatch(1:nptcls_eff), ts_sums, wall_sums)
                 if( L_BENCH_GLOB ) rt_sums = rt_sums + toc(t)
             enddo   ! batch loop
         enddo       ! stack loop
@@ -393,15 +451,16 @@ contains
         call cavger_dealloc_online
         call killimgbatch(b_ptr)
         if( L_BENCH_GLOB ) call write_assemble_sums_bench(nptcls_tot, ptcl_read_counts_since(reads0), &
-            &rt_init, rt_transf, rt_sums, toc(t_tot))
+            &rt_init, rt_transf, rt_sums, toc(t_tot), ts_sums, wall_sums)
     end subroutine cavger_assemble_sums
 
     !> The bench record of a part's offline class sums, in its partition's CAVGSUMS file
-    subroutine write_assemble_sums_bench( nptcls, reads, rt_init, rt_transf, rt_sums, rt_tot )
+    subroutine write_assemble_sums_bench( nptcls, reads, rt_init, rt_transf, rt_sums, rt_tot, ts_sums, wall_sums )
         use simple_matcher_ptcl_io, only: ptcl_read_counts, write_ptcl_read_bench_context, write_mem_bench_context
         integer,                intent(in) :: nptcls
         type(ptcl_read_counts), intent(in) :: reads
         real(timer_int_kind),   intent(in) :: rt_init, rt_transf, rt_sums, rt_tot
+        real(dp),               intent(in) :: ts_sums, wall_sums
         integer :: fnr
         call open_bench_report(fnr, 'CAVGSUMS', part=p_ptr%part, numlen=p_ptr%numlen)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
@@ -423,8 +482,32 @@ contains
             write(fnr,'(a,1x,f0.2)') 'cavgsums % accounted for            :', &
                 &((rt_init + rt_transf + reads%rt_read + rt_sums) / rt_tot) * 100.
         endif
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** THREAD-SECONDS (summed over threads; not wall time) ***'
+        call cavger_write_sums_load(fnr, 'cavgsums', ts_sums, wall_sums)
         call fclose(fnr)
     end subroutine write_assemble_sums_bench
+
+    !> the class sums' lines of a THREAD-SECONDS section: busy time summed over the team, the region's wall time,
+    !! and their ratio to the team's wall time (1 when every thread is busy throughout)
+    module subroutine cavger_write_sums_load( fnr, prefix, ts_sums, wall_sums )
+        integer,          intent(in) :: fnr
+        character(len=*), intent(in) :: prefix
+        real(dp),         intent(in) :: ts_sums, wall_sums
+        character(len=36) :: label
+        integer :: nthr_team
+        nthr_team = omp_get_max_threads()
+        label = prefix//' class sums'
+        write(fnr,'(a,a,1x,f0.2)') label, ':', ts_sums
+        label = prefix//' class sums region wall time'
+        write(fnr,'(a,a,1x,f0.2)') label, ':', wall_sums
+        label = prefix//' class sums threads'
+        write(fnr,'(a,a,1x,i0)') label, ':', nthr_team
+        if( wall_sums > 0.d0 )then
+            label = prefix//' class sums load balance'
+            write(fnr,'(a,a,1x,f0.3)') label, ':', ts_sums / (wall_sums * real(nthr_team,dp))
+        endif
+    end subroutine cavger_write_sums_load
 
     !>  \brief  merges the even/odd pairs and normalises the sums, merge low resolution
     !    frequencies, calculates & writes FRCs and optionally applies regularization

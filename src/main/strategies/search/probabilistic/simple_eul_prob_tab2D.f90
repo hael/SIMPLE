@@ -941,22 +941,23 @@ contains
 
     end subroutine ref_assign_sparse_likelihood
 
-    ! ptcl -> class assignment preserving class coverage across the particle set
+    !> ptcl -> class assignment preserving class coverage across the particle set: every active class sorts the
+    !! particles by distance, and each step draws among the classes' closest available particles (the frontier)
     subroutine ref_assign_likelihood( self )
         class(eul_prob_tab2D), intent(inout) :: self
-        integer, allocatable :: stab_inds(:,:), icls_dist_inds(:), active_cls(:), eligible_cls(:), inds_sorted(:)
+        integer, allocatable :: stab_inds(:,:), icls_dist_inds(:), active_cls(:), active_pos(:), inds_sorted(:)
+        integer, allocatable :: head_first(:), head_next(:)
         real,    allocatable :: score_work(:,:), cls_dists(:), corr_proxy(:)
         logical, allocatable :: ptcl_avail(:), class_active(:)
-        integer :: i, icls, assigned_icls, assigned_ptcl, ithr
-        integer :: nactive, iact, chosen_active, neligible, nhood_sz_loc, nassigned
-        real    :: best_dist
+        integer :: i, icls, assigned_icls, assigned_ptcl, ithr, nthr_work
+        integer :: nactive, iact, chosen_active, nhood_sz_loc, nleft
         if( self%l_sparse_snhc )then
             call self%ref_assign_sparse_likelihood
             return
         endif
         write(logfhandle,'(A,I0,A,I0)') '>>> PROB_TAB2D_ASSIGN: preparing ', self%nptcls, ' particles x ', self%nclasses
         call flush(logfhandle)
-        allocate(class_active(self%nclasses), active_cls(self%nclasses), eligible_cls(self%nclasses),&
+        allocate(class_active(self%nclasses), active_cls(self%nclasses), active_pos(self%nclasses),&
             &inds_sorted(self%nclasses), icls_dist_inds(self%nclasses), cls_dists(self%nclasses), corr_proxy(self%nclasses))
         class_active = self%class_exists
         nactive      = count(class_active)
@@ -965,15 +966,19 @@ contains
             nactive      = self%nclasses
             THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
         endif
-        nactive = 0
+        nactive    = 0
+        active_pos = 0
         do icls = 1, self%nclasses
             if( class_active(icls) )then
                 nactive = nactive + 1
                 active_cls(nactive) = icls
+                active_pos(icls)    = nactive
             endif
         end do
         nhood_sz_loc = min(self%nhood_sz, nactive)
-        allocate(score_work(self%nptcls,nthr_glob),stab_inds(self%nptcls,self%nclasses),&
+        ! work columns for the team the sort runs on
+        nthr_work = omp_get_max_threads()
+        allocate(score_work(self%nptcls,nthr_work),stab_inds(self%nptcls,self%nclasses),&
             &ptcl_avail(self%nptcls))
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: using likelihood weights exp(-dist)'
         call flush(logfhandle)
@@ -994,70 +999,65 @@ contains
         !$omp end parallel do
         icls_dist_inds = 1
         ptcl_avail     = .true.
-        nassigned      = 0
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: assigning particles'
         call flush(logfhandle)
-        do while( any(ptcl_avail) )
-            ! collect the current best distance for each class, skipping exhausted ones
-            neligible = 0
+        ! the frontier: a class's head is its closest available particle, at position iact of cls_dists. Every
+        ! active class is in it while particles are left (its column lists them all); a head moves only when its
+        ! particle is assigned, found through the head lists by particle, so nothing is rescanned
+        allocate(head_first(self%nptcls), source=0)
+        allocate(head_next(self%nclasses), source=0)
+        nleft = self%nptcls
+        if( nleft > 0 )then
             do iact = 1, nactive
                 icls = active_cls(iact)
-                do while( icls_dist_inds(icls) <= self%nptcls )
-                    assigned_ptcl = stab_inds(icls_dist_inds(icls), icls)
-                    if( ptcl_avail(assigned_ptcl) )then
-                        if( (.not. self%l_sparse_snhc) .or. self%loc_tab(icls,assigned_ptcl)%inpl > 0 ) exit
-                    endif
-                    icls_dist_inds(icls) = icls_dist_inds(icls) + 1
-                end do
-                if( icls_dist_inds(icls) <= self%nptcls )then
-                    neligible = neligible + 1
-                    eligible_cls(neligible) = icls
-                    assigned_ptcl           = stab_inds(icls_dist_inds(icls), icls)
-                    cls_dists(neligible)    = self%loc_tab(icls,assigned_ptcl)%dist
-                endif
-            end do
-            if( neligible == 0 ) exit
-            ! Top-K softmax over the eligible class frontier; shared implementation.
-            call sample_likelihood_index(neligible, cls_dists, min(nhood_sz_loc, neligible), huge(1.0),&
-                &corr_proxy, inds_sorted, chosen_active)
-            assigned_icls = eligible_cls(chosen_active)
-            assigned_ptcl = stab_inds(icls_dist_inds(assigned_icls), assigned_icls)
-            ptcl_avail(assigned_ptcl)     = .false.
-            call self%finalize_assignment(assigned_ptcl,assigned_icls,100.,0)
-            nassigned = nassigned + 1
-        end do
-        if( any(ptcl_avail) )then
-            do i = 1, self%nptcls
-                if( .not. ptcl_avail(i) ) cycle
-                assigned_icls = 0
-                best_dist     = huge(1.0)
-                do iact = 1, nactive
-                    icls = active_cls(iact)
-                    if( self%loc_tab(icls,i)%inpl <= 0 ) cycle
-                    if( self%loc_tab(icls,i)%dist < best_dist )then
-                        best_dist     = self%loc_tab(icls,i)%dist
-                        assigned_icls = icls
-                    endif
-                end do
-                if( assigned_icls == 0 )then
-                    do iact = 1, nactive
-                        icls = active_cls(iact)
-                        if( self%loc_tab(icls,i)%dist < best_dist )then
-                            best_dist     = self%loc_tab(icls,i)%dist
-                            assigned_icls = icls
-                        endif
-                    end do
-                endif
-                if( assigned_icls == 0 ) THROW_HARD('Failed particle assignment in eul_prob_tab2D%ref_assign_likelihood')
-                call self%finalize_assignment(i,assigned_icls,100.,0)
-                ptcl_avail(i)     = .false.
-                nassigned = nassigned + 1
+                cls_dists(iact) = self%loc_tab(icls,stab_inds(1,icls))%dist
+                call push_head(icls)
             end do
         endif
+        do while( nleft > 0 )
+            ! Top-K softmax over the class frontier; shared implementation.
+            call sample_likelihood_index(nactive, cls_dists, min(nhood_sz_loc, nactive), huge(1.0),&
+                &corr_proxy, inds_sorted, chosen_active)
+            assigned_icls = active_cls(chosen_active)
+            assigned_ptcl = stab_inds(icls_dist_inds(assigned_icls), assigned_icls)
+            ptcl_avail(assigned_ptcl) = .false.
+            call self%finalize_assignment(assigned_ptcl,assigned_icls,100.,0)
+            nleft = nleft - 1
+            if( nleft > 0 ) call advance_heads_at(assigned_ptcl)
+        end do
         write(logfhandle,'(A)') '>>> PROB_TAB2D_ASSIGN: done'
         call flush(logfhandle)
-        deallocate(stab_inds, icls_dist_inds, active_cls, eligible_cls, inds_sorted, score_work, cls_dists, corr_proxy,&
-            &ptcl_avail, class_active)
+        deallocate(stab_inds, icls_dist_inds, active_cls, active_pos, inds_sorted, score_work, cls_dists, corr_proxy,&
+            &ptcl_avail, class_active, head_first, head_next)
+
+    contains
+
+        !> class icls joins the head list of the particle its head points at
+        subroutine push_head( icls_loc )
+            integer, intent(in) :: icls_loc
+            integer :: iptcl_head
+            iptcl_head            = stab_inds(icls_dist_inds(icls_loc), icls_loc)
+            head_next(icls_loc)   = head_first(iptcl_head)
+            head_first(iptcl_head) = icls_loc
+        end subroutine push_head
+
+        !> the classes whose head was the assigned particle move on to their next available particle
+        subroutine advance_heads_at( iptcl_assigned )
+            integer, intent(in) :: iptcl_assigned
+            integer :: icls_loc, icls_next
+            icls_loc = head_first(iptcl_assigned)
+            head_first(iptcl_assigned) = 0
+            do while( icls_loc > 0 )
+                icls_next = head_next(icls_loc)
+                do while( .not. ptcl_avail(stab_inds(icls_dist_inds(icls_loc), icls_loc)) )
+                    icls_dist_inds(icls_loc) = icls_dist_inds(icls_loc) + 1
+                end do
+                cls_dists(active_pos(icls_loc)) = self%loc_tab(icls_loc,stab_inds(icls_dist_inds(icls_loc), icls_loc))%dist
+                call push_head(icls_loc)
+                icls_loc = icls_next
+            end do
+        end subroutine advance_heads_at
+
     end subroutine ref_assign_likelihood
 
     ! DESTRUCTOR
@@ -1140,7 +1140,8 @@ contains
         integer(int64) :: file_header(4), addr
         if( .not. self%table_is_open ) call self%begin_write(binfname)
         call self%flush_candidate_buffers
-        if( self%table_nnz < 1 ) THROW_HARD('eul_prob_tab2D%write_tab; empty candidate stream')
+        ! a distributed part without sampled particles writes an empty table
+        if( self%table_nnz < 1 .and. self%nptcls > 0 ) THROW_HARD('eul_prob_tab2D%write_tab; empty candidate stream')
         if( .not. self%l_sparse_snhc )then
             if( self%table_nnz /= int(self%nclasses,int64)*int(self%nptcls,int64) )&
                 &THROW_HARD('eul_prob_tab2D%write_tab; dense candidate stream is incomplete')
@@ -1188,8 +1189,11 @@ contains
         read(funit,pos=addr) pinds_loc
         addr = addr + sizeof(pinds_loc)
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
-        if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab2D%read_tab_to_glob')
+        ! a part without particles never set its rotation grid
+        if( nptcls_loc > 0 )then
+            if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
+            if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab2D%read_tab_to_glob')
+        endif
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
         do i_loc = 1, nptcls_loc
             pind = pinds_loc(i_loc)
@@ -1258,14 +1262,19 @@ contains
         nnz          = file_header(3)
         nchunks      = int(file_header(4))
         if( nclasses_loc .ne. self%nclasses ) THROW_HARD('nclasses mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
-        if( nnz < 1 ) THROW_HARD('empty sparse table in eul_prob_tab2D%read_sparse_tab_to_glob')
+        if( nnz < 1 .and. nptcls_loc > 0 ) THROW_HARD('empty sparse table in eul_prob_tab2D%read_sparse_tab_to_glob')
         allocate(pinds_loc(nptcls_loc),seed_shifts_loc(2,nptcls_loc),seed_has_sh_loc(nptcls_loc))
         addr = sizeof(file_header) + 1
         read(funit, pos=addr) pinds_loc
         addr = addr + sizeof(pinds_loc)
         call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
-        if( self%seed_nrots /= seed_nrots_loc ) THROW_HARD('seed_nrots mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
+        ! a part without particles never set its rotation grid
+        if( nptcls_loc > 0 )then
+            if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_loc
+            if( self%seed_nrots /= seed_nrots_loc )then
+                THROW_HARD('seed_nrots mismatch in eul_prob_tab2D%read_sparse_tab_to_glob')
+            endif
+        endif
         if( .not. allocated(self%candidate_store%candidates) .or. .not. allocated(self%candidate_fill_counts) )&
             &THROW_HARD('sparse 2D candidate store must be sized before reading partition tables')
         call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)

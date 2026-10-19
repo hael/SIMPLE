@@ -6,8 +6,7 @@ use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
-    &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &PROB_TAB_DENSE_FORMAT
+    &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
 implicit none
@@ -15,6 +14,14 @@ implicit none
 public :: eul_prob_tab
 private
 #include "simple_local_flags.inc"
+
+! the format word of a dense part file, in the header slot where a sparse part file holds its candidate count
+integer(int64), parameter :: PROB_TAB_DENSE_FORMAT = -3_int64
+
+! outcomes of reading one dense part file, raised after the parallel read
+integer, parameter :: PART_READ_OK = 0, PART_READ_OPEN = 1, PART_READ_IO = 2, PART_READ_NREFS = 3
+integer, parameter :: PART_READ_FORMAT = 4, PART_READ_COUNTS = 5, PART_READ_PTCL = 6, PART_READ_REFINED = 7
+integer, parameter :: PART_READ_SIZE = 8, PART_READ_STATES = 9
 
 ! the refined entries of one part file, master indices
 type :: refined_list
@@ -259,12 +266,9 @@ contains
             endif
             ! fill the table
             t_region = omp_get_wtime()
-            ! A particle's cost depends on its shift searches (how many alternations they take, and
-            ! with the grid keys how many of them the fit settles), so static blocks leave threads
-            ! idle at the tail (load balance 0.90 against 0.98 dynamic, measured with the grid
-            ! keys). Each thread owns its search object and candidate buffer and a particle is
-            ! processed whole, so the dynamic order changes only which thread, and so which random
-            ! draws, a particle meets.
+            ! A particle's cost depends on its shift searches, so the schedule is dynamic. Each thread owns
+            ! its search object and a particle is processed whole, writing only its own row: the order
+            ! changes only which thread, and so which random draws, a particle meets.
             !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(dynamic)
             do i = i_first, i_last
                 iptcl = self%pinds(i)
@@ -835,8 +839,8 @@ contains
 
     ! FILE IO
 
-    !> Opens the dense part file: header (nrefs, nptcls, format word, refined entries), particle indices, seed table,
-    !! one row of (distance, in-plane index) per particle and reference, then the refined entries
+    !> Opens the dense part file: header (nrefs, nptcls, format word, refined entries), active states (count, list), particle indices,
+    !! seed table, one row of (distance, in-plane index) per particle and reference, then the refined entries
     subroutine begin_write( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
         class(string),       intent(in)    :: binfname
@@ -852,13 +856,15 @@ contains
         self%table_addr = self%rows_addr + int(self%nptcls,int64) * int(self%nrefs,int64) * int(storage_size(entry)/8,int64)
     end subroutine begin_write
 
-    !> header, particle indices and seed table of the dense part file; the rows follow at rows_addr
+    !> header, active states, particle indices and seed table of the dense part file; the rows follow at rows_addr
     subroutine write_dense_head( self )
         class(eul_prob_tab), intent(inout) :: self
         integer(int64) :: file_header(4), addr
         file_header = [int(self%nrefs,int64), int(self%nptcls,int64), PROB_TAB_DENSE_FORMAT, self%table_nrefined]
         write(self%table_unit,pos=1) file_header
         addr = sizeof(file_header) + 1
+        write(self%table_unit,pos=addr) self%nstates, self%ssinds
+        addr = addr + sizeof(self%nstates) + sizeof(self%ssinds)
         write(self%table_unit,pos=addr) self%pinds
         addr = addr + sizeof(self%pinds)
         call write_seed_shift_table(self%table_unit,addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
@@ -908,14 +914,16 @@ contains
         integer,             intent(in)    :: nparts, numlen
         type(refined_list), allocatable :: part_refined(:)
         type(string), allocatable :: part_fnames(:)
-        integer, allocatable :: next(:), nparts_of(:), seed_nrots_part(:)
+        integer, allocatable :: next(:), nparts_of(:), seed_nrots_part(:), part_status(:)
+        character(len=:), allocatable :: err_msg
+        integer(int64) :: nrefined_tot
         integer :: ipart, i, j
         if( .not. allocated(self%rows) ) THROW_HARD('dense master rows are not allocated; read_tabs_to_glob')
         if( size(self%rows,1) /= self%nrefs .or. size(self%rows,2) /= self%nptcls )then
             THROW_HARD('dense master row dimensions disagree; read_tabs_to_glob')
         endif
         allocate(part_refined(nparts), seed_nrots_part(nparts))
-        allocate(nparts_of(self%nptcls), source=0)
+        allocate(nparts_of(self%nptcls), part_status(nparts), source=0)
         allocate(part_fnames(nparts))
         do ipart = 1,nparts
             part_fnames(ipart) = fbody//int2str_pad(ipart,numlen)//'.dat'
@@ -927,9 +935,15 @@ contains
         !$omp parallel do default(shared) private(ipart) proc_bind(close) schedule(dynamic)
         do ipart = 1,nparts
             call self%read_dense_part(part_fnames(ipart), part_refined(ipart)%e,&
-                &seed_nrots_part(ipart), nparts_of)
+                &seed_nrots_part(ipart), nparts_of, part_status(ipart))
         enddo
         !$omp end parallel do
+        do ipart = 1,nparts
+            if( part_status(ipart) == PART_READ_OK ) cycle
+            err_msg = 'dense probability table part file '//part_fnames(ipart)%to_char()//': '//&
+                &trim(part_read_error(part_status(ipart)))
+            THROW_HARD(err_msg)
+        enddo
         if( any(nparts_of /= 1) ) THROW_HARD('a particle of the dense table is in no part file or in several')
         ! a part without particles never set its rotation grid (0)
         do ipart = 1,nparts
@@ -937,7 +951,12 @@ contains
             if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_part(ipart)
             if( self%seed_nrots /= seed_nrots_part(ipart) ) THROW_HARD('seed_nrots mismatch between dense part files')
         enddo
-        ! the refined entries indexed by particle, in part order
+        ! the refined entries indexed by particle, in part order; their offsets are default integers
+        nrefined_tot = 0_int64
+        do ipart = 1,nparts
+            nrefined_tot = nrefined_tot + int(size(part_refined(ipart)%e),int64)
+        enddo
+        if( nrefined_tot >= int(huge(1),int64) ) THROW_HARD('refined entries exceed default-integer bounds; read_tabs_to_glob')
         allocate(next(self%nptcls), source=0)
         do ipart = 1,nparts
             do j = 1,size(part_refined(ipart)%e)
@@ -959,89 +978,175 @@ contains
                 next(i) = next(i) + 1
             enddo
         enddo
-        deallocate(part_refined, part_fnames, next, nparts_of, seed_nrots_part)
+        deallocate(part_refined, part_fnames, next, nparts_of, seed_nrots_part, part_status)
+
+    contains
+
+        function part_read_error( status ) result( reason )
+            integer, intent(in) :: status
+            character(len=64)   :: reason
+            select case(status)
+                case(PART_READ_OPEN);    reason = 'cannot be opened'
+                case(PART_READ_IO);      reason = 'read error'
+                case(PART_READ_SIZE);    reason = 'file size differs from the size its header implies'
+                case(PART_READ_STATES);  reason = 'active states differ from the master'
+                case(PART_READ_NREFS);   reason = 'reference count differs from the master'
+                case(PART_READ_FORMAT);  reason = 'not a dense part file'
+                case(PART_READ_COUNTS);  reason = 'invalid particle or refined-entry count'
+                case(PART_READ_PTCL);    reason = 'a particle is invalid or in several parts'
+                case(PART_READ_REFINED); reason = 'invalid refined entry'
+                case DEFAULT;            reason = 'unknown error'
+            end select
+        end function part_read_error
+
     end subroutine read_tabs_to_glob
 
-    !> one dense part file: rows and seed table to the master's particles, out the refined entries (master indices)
-    !! and the part's rotation grid (0 without particles); nparts_of counts the parts holding each master particle
-    subroutine read_dense_part( self, binfname, refined, seed_nrots_loc, nparts_of )
+    !> one dense part file: rows and seed table to the master's particles, out the refined entries (master indices),
+    !! the part's rotation grid (0 without particles) and a PART_READ_* status; nparts_of counts the parts holding each
+    !! master particle. Runs inside the parallel read: no stop, no string temporaries.
+    subroutine read_dense_part( self, binfname, refined, seed_nrots_loc, nparts_of, status )
         class(eul_prob_tab),                   intent(inout) :: self
         class(string),                         intent(in)    :: binfname
         type(prob_refined_entry), allocatable, intent(out)   :: refined(:)
         integer,                               intent(out)   :: seed_nrots_loc
         integer,                               intent(inout) :: nparts_of(:)
+        integer,                               intent(out)   :: status
         type(prob_refined_entry), allocatable :: refined_loc(:)
-        type(prob_dense_entry) :: entry
-        character(len=XLONGSTRLEN) :: filename_static
-        character(len=XLONGSTRLEN+64) :: io_message
+        type(prob_refined_entry) :: refined_entry
+        type(prob_dense_entry)   :: entry
         real,    allocatable :: seed_shifts_loc(:,:)
         logical, allocatable :: seed_has_sh_loc(:)
-        integer, allocatable :: pind2glob(:), pinds_loc(:), glob_of(:)
-        integer(int64) :: file_header(4), addr, rows_addr, row_bytes
-        integer :: funit, io_stat, nptcls_loc, nrefined_loc, i_loc, i_glob, pind, max_pind, j, n, previous_parts
-        call binfname%to_static(filename_static)
-        write(io_message,'(2A)') 'simple_eul_prob_tab; read_dense_part; file: ', filename_static
+        integer, allocatable :: pind2glob(:), pinds_loc(:), glob_of(:), ssinds_loc(:)
+        integer(int64) :: file_header(4), addr, rows_addr, row_bytes, file_bytes, ptcl_bytes
+        logical :: flag
+        integer :: funit, io_stat, nptcls_loc, nrefined_loc, nstates_loc, i_loc, i_glob, pind, max_pind, j, n
+        integer :: previous_parts
+        seed_nrots_loc = 0
+        allocate(refined(0))
         call fopen(funit,binfname,access='STREAM',form='UNFORMATTED',action='READ',status='OLD',iostat=io_stat)
-        call fileiochk(io_message, io_stat)
-        read(funit,pos=1,iostat=io_stat) file_header
-        call fileiochk(io_message, io_stat)
-        if( io_stat /= 0 ) THROW_HARD('invalid dense probability table header')
-        if( int(file_header(1)) /= self%nrefs ) THROW_HARD('nrefs mismatch in eul_prob_tab%read_dense_part')
-        if( file_header(3) /= PROB_TAB_DENSE_FORMAT ) THROW_HARD('not a dense part file; eul_prob_tab%read_dense_part')
-        if( file_header(2) < 0_int64 .or. file_header(2) > int(huge(nptcls_loc),int64) )then
-            THROW_HARD('invalid particle count in dense part file')
+        if( io_stat /= 0 )then
+            status = PART_READ_OPEN
+            return
         endif
-        if( file_header(4) < 0_int64 .or. file_header(4) > int(huge(nrefined_loc),int64) )then
-            THROW_HARD('invalid refined-entry count in dense part file')
-        endif
-        nptcls_loc   = int(file_header(2))
-        nrefined_loc = int(file_header(4))
-        allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
-        addr = sizeof(file_header) + 1
-        read(funit,pos=addr,iostat=io_stat) pinds_loc
-        call fileiochk(io_message, io_stat)
-        addr = addr + sizeof(pinds_loc)
-        call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
-        if( nptcls_loc < 1 ) seed_nrots_loc = 0
-        rows_addr = addr
-        row_bytes = int(self%nrefs,int64) * int(storage_size(entry)/8,int64)
-        call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
-        allocate(glob_of(nptcls_loc), source=0)
-        do i_loc = 1,nptcls_loc
-            pind = pinds_loc(i_loc)
-            if( pind < 1 .or. pind > max_pind ) cycle
-            i_glob = pind2glob(pind)
-            if( i_glob < 1 ) cycle
-            if( i_glob > self%nptcls ) THROW_HARD('invalid master particle index in dense part file')
-            glob_of(i_loc) = i_glob
-            !$omp atomic capture
-            previous_parts = nparts_of(i_glob)
-            nparts_of(i_glob) = nparts_of(i_glob) + 1
-            !$omp end atomic
-            if( previous_parts /= 0 ) THROW_HARD('a particle of the dense table is in several part rows')
-            self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
-            self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
-            read(funit,pos=rows_addr+int(i_loc-1,int64)*row_bytes,iostat=io_stat) self%rows(:,i_glob)
-            call fileiochk(io_message, io_stat)
-        enddo
-        allocate(refined_loc(nrefined_loc))
-        if( nrefined_loc > 0 )then
-            read(funit,pos=rows_addr+int(nptcls_loc,int64)*row_bytes,iostat=io_stat) refined_loc
-            call fileiochk(io_message, io_stat)
-        endif
+        status = read_part()
         call fclose(funit)
-        n = 0
-        do j = 1,nrefined_loc
-            i_loc = refined_loc(j)%i
-            if( i_loc < 1 .or. i_loc > nptcls_loc ) THROW_HARD('invalid particle of a refined entry')
-            if( refined_loc(j)%ri < 1 .or. refined_loc(j)%ri > self%nrefs ) THROW_HARD('invalid reference of a refined entry')
-            if( glob_of(i_loc) < 1 ) cycle
-            n = n + 1
-            refined_loc(n)   = refined_loc(j)
-            refined_loc(n)%i = glob_of(i_loc)
-        enddo
-        refined = refined_loc(1:n)
-        deallocate(refined_loc, pinds_loc, seed_shifts_loc, seed_has_sh_loc, pind2glob, glob_of)
+
+    contains
+
+        integer function read_part() result( status_loc )
+            read(funit,pos=1,iostat=io_stat) file_header
+            if( io_stat /= 0 )then
+                status_loc = PART_READ_IO
+                return
+            endif
+            if( int(file_header(1)) /= self%nrefs )then
+                status_loc = PART_READ_NREFS
+                return
+            endif
+            if( file_header(3) /= PROB_TAB_DENSE_FORMAT )then
+                status_loc = PART_READ_FORMAT
+                return
+            endif
+            if( file_header(2) < 0_int64 .or. file_header(2) > int(huge(nptcls_loc),int64) .or.&
+                &file_header(4) < 0_int64 .or. file_header(4) > int(huge(nrefined_loc),int64) )then
+                status_loc = PART_READ_COUNTS
+                return
+            endif
+            nptcls_loc   = int(file_header(2))
+            nrefined_loc = int(file_header(4))
+            ! a row's reference index counts the active references: the part's states must be the master's
+            addr = sizeof(file_header) + 1
+            read(funit,pos=addr,iostat=io_stat) nstates_loc
+            if( io_stat /= 0 )then
+                status_loc = PART_READ_IO
+                return
+            endif
+            if( nstates_loc /= self%nstates )then
+                status_loc = PART_READ_STATES
+                return
+            endif
+            ! every read below lies inside the size the header implies
+            row_bytes  = int(self%nrefs,int64) * int(storage_size(entry)/8,int64)
+            ptcl_bytes = int(storage_size(pind)/8 + 2*storage_size(1.)/8 + storage_size(flag)/8,int64) + row_bytes
+            inquire(unit=funit, size=file_bytes)
+            if( file_bytes /= sizeof(file_header) + int((self%nstates + 2)*storage_size(seed_nrots_loc)/8,int64) +&
+                &int(nptcls_loc,int64) * ptcl_bytes + int(nrefined_loc,int64) * int(storage_size(refined_entry)/8,int64) )then
+                status_loc = PART_READ_SIZE
+                return
+            endif
+            allocate(ssinds_loc(nstates_loc))
+            read(funit,pos=addr+sizeof(nstates_loc),iostat=io_stat) ssinds_loc
+            if( io_stat /= 0 )then
+                status_loc = PART_READ_IO
+                return
+            endif
+            if( any(ssinds_loc /= self%ssinds) )then
+                status_loc = PART_READ_STATES
+                return
+            endif
+            addr = addr + sizeof(nstates_loc) + sizeof(ssinds_loc)
+            allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
+            read(funit,pos=addr,iostat=io_stat) pinds_loc
+            if( io_stat /= 0 )then
+                status_loc = PART_READ_IO
+                return
+            endif
+            addr = addr + sizeof(pinds_loc)
+            call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
+            if( nptcls_loc < 1 ) seed_nrots_loc = 0
+            rows_addr = addr
+            call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
+            allocate(glob_of(nptcls_loc), source=0)
+            do i_loc = 1,nptcls_loc
+                pind = pinds_loc(i_loc)
+                if( pind < 1 .or. pind > max_pind ) cycle
+                i_glob = pind2glob(pind)
+                if( i_glob < 1 ) cycle
+                if( i_glob > self%nptcls )then
+                    status_loc = PART_READ_PTCL
+                    return
+                endif
+                glob_of(i_loc) = i_glob
+                !$omp atomic capture
+                previous_parts = nparts_of(i_glob)
+                nparts_of(i_glob) = nparts_of(i_glob) + 1
+                !$omp end atomic
+                if( previous_parts /= 0 )then
+                    status_loc = PART_READ_PTCL
+                    return
+                endif
+                self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
+                self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
+                read(funit,pos=rows_addr+int(i_loc-1,int64)*row_bytes,iostat=io_stat) self%rows(:,i_glob)
+                if( io_stat /= 0 )then
+                    status_loc = PART_READ_IO
+                    return
+                endif
+            enddo
+            allocate(refined_loc(nrefined_loc))
+            if( nrefined_loc > 0 )then
+                read(funit,pos=rows_addr+int(nptcls_loc,int64)*row_bytes,iostat=io_stat) refined_loc
+                if( io_stat /= 0 )then
+                    status_loc = PART_READ_IO
+                    return
+                endif
+            endif
+            n = 0
+            do j = 1,nrefined_loc
+                i_loc = refined_loc(j)%i
+                if( i_loc < 1 .or. i_loc > nptcls_loc .or. refined_loc(j)%ri < 1 .or. refined_loc(j)%ri > self%nrefs )then
+                    status_loc = PART_READ_REFINED
+                    return
+                endif
+                if( glob_of(i_loc) < 1 ) cycle
+                n = n + 1
+                refined_loc(n)   = refined_loc(j)
+                refined_loc(n)%i = glob_of(i_loc)
+            enddo
+            refined    = refined_loc(1:n)
+            status_loc = PART_READ_OK
+        end function read_part
+
     end subroutine read_dense_part
 
     ! write a global assignment map to binary file

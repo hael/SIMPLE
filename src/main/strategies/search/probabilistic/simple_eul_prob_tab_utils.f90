@@ -12,9 +12,9 @@ implicit none
 public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
-public :: sample_bounded_dist, sample_likelihood_dist, sample_likelihood_dists, sample_power_dist, sample_likelihood_index
+public :: sample_bounded_dists, sample_likelihood_dist, sample_likelihood_dists, sample_power_dists, sample_likelihood_index
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
-public :: prob_dense_entry, prob_refined_entry, PROB_TAB_DENSE_FORMAT
+public :: prob_dense_entry, prob_refined_entry
 private
 #include "simple_local_flags.inc"
 
@@ -26,9 +26,6 @@ type :: prob_candidate
     real    :: y      = 0.
     logical :: has_sh = .false.
 end type prob_candidate
-
-! The format word of a dense part file, in the header slot where a sparse part file holds its candidate count
-integer(int64), parameter :: PROB_TAB_DENSE_FORMAT = -2_int64
 
 ! One entry of the dense table, a particle and a reference: the distance and the in-plane index. No default values:
 ! the fill and the read write every entry.
@@ -389,36 +386,23 @@ contains
 
     end function angle_sampling_2
 
-    subroutine sample_bounded_dist( n, dist_fun, athres_ub_in, prob_athres, dist, which, pvec_sorted, sorted_inds )
-        integer,   intent(in)    :: n
-        procedure(dist_eval_fun)  :: dist_fun
-        real,      intent(in)    :: athres_ub_in, prob_athres
-        real,      intent(out)   :: dist
-        integer,   intent(out)   :: which
-        real,      intent(inout) :: pvec_sorted(:)
-        integer,   intent(inout) :: sorted_inds(:)
-        integer :: num_lb, num_ub, i, pick
-        real    :: athres_ub, athres_lb, sum_pvec, rnd, dist_tmp
+    !> the bounded draw over distances already evaluated, dists(1:n): among the num_ub best (athres_ub of 180 degrees)
+    !! the best or, with the probability of the num_lb best's share, the worst of them
+    subroutine sample_bounded_dists( n, dists, athres_ub_in, prob_athres, dist, which, pvec_sorted, sorted_inds )
+        integer, intent(in)    :: n
+        real,    intent(in)    :: dists(:)
+        real,    intent(in)    :: athres_ub_in, prob_athres
+        real,    intent(out)   :: dist
+        integer, intent(out)   :: which
+        real,    intent(inout) :: pvec_sorted(:)
+        integer, intent(inout) :: sorted_inds(:)
+        integer :: num_lb, num_ub, pick
+        real    :: athres_ub, athres_lb, sum_pvec, rnd
         athres_ub = min(prob_athres, athres_ub_in)
         athres_lb = min(athres_ub / 10., 1.)
         num_ub    = min(n,max(1,int(athres_ub * real(n) / 180.)))
         num_lb    = 1 + floor(athres_lb / athres_ub * num_ub)
-        do i = 1,num_ub
-            pvec_sorted(i) = dist_fun(i)
-            sorted_inds(i) = i
-        enddo
-        do i = num_ub / 2, 1, -1
-            call maxheap_sift_down(pvec_sorted, sorted_inds, i, num_ub)
-        enddo
-        do i = num_ub + 1,n
-            dist_tmp = dist_fun(i)
-            if( dist_tmp < pvec_sorted(1) )then
-                pvec_sorted(1) = dist_tmp
-                sorted_inds(1) = i
-                call maxheap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
-            endif
-        enddo
-        call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
+        call select_lowest_dists(n, dists, num_ub, pvec_sorted, sorted_inds)
         rnd      = ran3()
         sum_pvec = sum(pvec_sorted(1:num_ub))
         if( sum_pvec < TINY )then
@@ -432,36 +416,24 @@ contains
                 which = sorted_inds(num_ub)
             endif
         endif
-        dist = dist_fun(which)
-    end subroutine sample_bounded_dist
+        dist = dists(which)
+    end subroutine sample_bounded_dists
 
-    subroutine sample_power_dist( n, dist_fun, power, nsample, dist, corr, which, pvec_sorted, sorted_inds )
-        integer,   intent(in)    :: n, nsample
-        procedure(dist_eval_fun)  :: dist_fun
-        real,      intent(in)    :: power
-        real,      intent(out)   :: dist, corr
-        integer,   intent(out)   :: which
-        real,      intent(inout) :: pvec_sorted(:)
-        integer,   intent(inout) :: sorted_inds(:)
-        real    :: cdf(max(1,nsample)), rnd, dist_tmp, csum
+    !> the power draw over distances already evaluated, dists(1:n), with the caller's work buffer cdf (size >= nsample):
+    !! a rank among the nsample best, the uniform draw raised to power biasing it toward the best
+    subroutine sample_power_dists( n, dists, power, nsample, dist, corr, which, pvec_sorted, sorted_inds, cdf )
+        integer, intent(in)    :: n, nsample
+        real,    intent(in)    :: dists(:)
+        real,    intent(in)    :: power
+        real,    intent(out)   :: dist, corr
+        integer, intent(out)   :: which
+        real,    intent(inout) :: pvec_sorted(:)
+        integer, intent(inout) :: sorted_inds(:)
+        real,    intent(inout) :: cdf(:)
+        real    :: rnd, csum
         integer :: num_ub, i, rank, pick
         num_ub = min(n,max(1,nsample))
-        do i = 1,num_ub
-            pvec_sorted(i) = dist_fun(i)
-            sorted_inds(i) = i
-        enddo
-        do i = num_ub / 2, 1, -1
-            call maxheap_sift_down(pvec_sorted, sorted_inds, i, num_ub)
-        enddo
-        do i = num_ub + 1,n
-            dist_tmp = dist_fun(i)
-            if( dist_tmp < pvec_sorted(1) )then
-                pvec_sorted(1) = dist_tmp
-                sorted_inds(1) = i
-                call maxheap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
-            endif
-        enddo
-        call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
+        call select_lowest_dists(n, dists, num_ub, pvec_sorted, sorted_inds)
         do i = 1,num_ub
             cdf(i) = exp(-pvec_sorted(num_ub-i+1))
         enddo
@@ -492,7 +464,32 @@ contains
         which = sorted_inds(pick)
         dist  = pvec_sorted(pick)
         corr  = exp(-dist)
-    end subroutine sample_power_dist
+    end subroutine sample_power_dists
+
+    !> the num_ub lowest of dists(1:n), sorted ascending into pvec_sorted with their indices: a bounded max-heap,
+    !! then a sort
+    subroutine select_lowest_dists( n, dists, num_ub, pvec_sorted, sorted_inds )
+        integer, intent(in)    :: n, num_ub
+        real,    intent(in)    :: dists(:)
+        real,    intent(inout) :: pvec_sorted(:)
+        integer, intent(inout) :: sorted_inds(:)
+        integer :: i
+        do i = 1,num_ub
+            pvec_sorted(i) = dists(i)
+            sorted_inds(i) = i
+        enddo
+        do i = num_ub / 2, 1, -1
+            call maxheap_sift_down(pvec_sorted, sorted_inds, i, num_ub)
+        enddo
+        do i = num_ub + 1,n
+            if( dists(i) < pvec_sorted(1) )then
+                pvec_sorted(1) = dists(i)
+                sorted_inds(1) = i
+                call maxheap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
+            endif
+        enddo
+        call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
+    end subroutine select_lowest_dists
 
     ! Truncated, numerically-stabilized softmax over a lazily-evaluated distance function.
     ! The distances are noise-variance-normalized negative-log-likelihoods (whitened per
@@ -539,23 +536,9 @@ contains
         real,    intent(inout) :: pvec_sorted(:)
         integer, intent(inout) :: sorted_inds(:)
         real,    intent(inout) :: cdf(:)
-        integer :: num_ub, i
+        integer :: num_ub
         num_ub = min(n,max(1,nsample))
-        do i = 1,num_ub
-            pvec_sorted(i) = dists(i)
-            sorted_inds(i) = i
-        enddo
-        do i = num_ub / 2, 1, -1
-            call maxheap_sift_down(pvec_sorted, sorted_inds, i, num_ub)
-        enddo
-        do i = num_ub + 1,n
-            if( dists(i) < pvec_sorted(1) )then
-                pvec_sorted(1) = dists(i)
-                sorted_inds(1) = i
-                call maxheap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
-            endif
-        enddo
-        call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
+        call select_lowest_dists(n, dists, num_ub, pvec_sorted, sorted_inds)
         call draw_likelihood(num_ub, pvec_sorted, sorted_inds, cdf, dist, corr, which)
     end subroutine sample_likelihood_dists
 

@@ -173,7 +173,8 @@ contains
             rt_build_batch_ptcls= 0.0
             rt_align            = 0.0
         endif
-        allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
+        ! per-thread counters of the team the search runs on
+        allocate(cnt_greedy(omp_get_max_threads()), cnt_all(omp_get_max_threads()), source=0)
         if( trim(p_ptr%inpl_cont) == 'yes' )then
             call b_ptr%spproj_field%set_all2single('cont_inpl_attempted', 0.)
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
@@ -201,8 +202,10 @@ contains
             incr_shifts(:,1:batchsz) = 0.0
             call build_batch_particles_local()
             if( ctrl%do_bench ) t_align = tic()
+            ! a particle's cost varies, so the schedule is dynamic: a particle is searched whole by one thread, so the
+            ! order changes only which thread, and so which random draws, it meets
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr) firstprivate(orientation) &
-            !$omp schedule(static) proc_bind(close)
+            !$omp schedule(dynamic) proc_bind(close)
             do iptcl_batch = 1, batchsz
                 iptcl_map     = batch_start + iptcl_batch - 1
                 iptcl         = pinds(iptcl_map)

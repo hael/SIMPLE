@@ -248,7 +248,7 @@ contains
                         self%joint_initial_cost_valid = .true.
                     endif
                 else
-                    cost = - self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%particle, vec, self%cur_inpl_idx)
+                    cost = - self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx)
                 endif
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
@@ -269,7 +269,7 @@ contains
                     call joint_grad_at_angle(self, vec(1:3), joint_loss, joint_grad)
                     grad = joint_grad
                 else
-                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     grad = - corrs_grad
                 endif
             class default
@@ -298,7 +298,7 @@ contains
                         self%joint_initial_cost_valid = .true.
                     endif
                 else
-                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     f    = - corrs
                     grad = - corrs_grad
                 endif
@@ -453,7 +453,7 @@ contains
             self%cur_inpl_idx   = irot
             self%cur_inpl_rotind = real(irot)
             self%profile_objective_evals = self%profile_objective_evals + 1_int64
-            lowest_cost_overall = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%particle, self%ospec%x_8, self%cur_inpl_idx)
+            lowest_cost_overall = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             if( self%coarse_init )then
                 call self%coarse_search(coarse_cost, init_xy)
                 if( coarse_cost < lowest_cost_overall )then
@@ -645,7 +645,7 @@ contains
                 y    = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_grid_points     = self%profile_grid_points + 1_int64
-                cost = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%particle, [x,y], self%cur_inpl_idx)
+                cost = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%reference, self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]

@@ -26,6 +26,8 @@ contains
     procedure :: put
     procedure :: seal
     procedure :: get
+    procedure :: get_many
+    procedure, private :: copy_slot
     procedure :: bytes
     procedure :: exists
     procedure :: kill
@@ -82,17 +84,45 @@ contains
         class(image_slab), intent(in)    :: self
         integer,           intent(in)    :: k
         class(image),      intent(inout) :: img
-        real(c_float), pointer :: rmat(:,:,:)
         integer :: ldim(3)
         if( .not. self%l_sealed ) THROW_HARD('the slab is not sealed; get')
         if( k < 1 .or. k > self%n ) THROW_HARD('slot out of range; get')
         ldim = img%get_ldim()
         if( any(ldim /= [self%box,self%box,1]) ) THROW_HARD('image does not match the slab box; get')
+        call self%copy_slot(k, img)
+    end subroutine get
+
+    !> imgs(i) receives slot slots(i), as get does, the images copied in parallel; checked before the copies
+    subroutine get_many( self, slots, imgs )
+        class(image_slab), intent(in)    :: self
+        integer,           intent(in)    :: slots(:)
+        class(image),      intent(inout) :: imgs(:)
+        integer :: i, ldim(3)
+        if( .not. self%l_sealed ) THROW_HARD('the slab is not sealed; get_many')
+        if( size(imgs) < size(slots) ) THROW_HARD('fewer images than slots; get_many')
+        if( any(slots < 1) .or. any(slots > self%n) ) THROW_HARD('slot out of range; get_many')
+        do i = 1, size(slots)
+            ldim = imgs(i)%get_ldim()
+            if( any(ldim /= [self%box,self%box,1]) ) THROW_HARD('image does not match the slab box; get_many')
+        end do
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1, size(slots)
+            call self%copy_slot(slots(i), imgs(i))
+        end do
+        !$omp end parallel do
+    end subroutine get_many
+
+    !> img receives slot k, unchecked: its pixels, padding zeroed, flagged real space
+    subroutine copy_slot( self, k, img )
+        class(image_slab), intent(in)    :: self
+        integer,           intent(in)    :: k
+        class(image),      intent(inout) :: img
+        real(c_float), pointer :: rmat(:,:,:)
         call img%get_rmat_ptr_padded(rmat)
         rmat(1:self%box,1:self%box,1) = self%pix(:,:,k)
         rmat(self%box+1:,:,1) = 0.
         call img%set_ft(.false.)
-    end subroutine get
+    end subroutine copy_slot
 
     integer(int64) function bytes( self )
         class(image_slab), intent(in) :: self

@@ -582,11 +582,11 @@ interface
         integer :: pop
     end function get_pop_2
 
-    module subroutine get_pops( self, pops, label, maxn )
+    module subroutine get_pops( self, pops, label, maxn, eo )
         class(oris),          intent(in)    :: self
         integer, allocatable, intent(out)   :: pops(:)
         character(len=*),     intent(in)    :: label
-        integer, optional,    intent(in)    :: maxn
+        integer, optional,    intent(in)    :: maxn, eo
     end subroutine get_pops
 
     module subroutine get_pinds( self, ind, label, indices, l_shuffle, l_require_updated )

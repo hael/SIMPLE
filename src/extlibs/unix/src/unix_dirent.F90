@@ -60,7 +60,7 @@ module unix_dirent
         function c_opendir(filename) bind(c, name='opendir')
             import :: c_char, c_ptr
             implicit none
-            character(kind=c_char), intent(in) :: filename
+            character(kind=c_char), intent(in) :: filename(*)
             type(c_ptr)                        :: c_opendir
         end function c_opendir
 

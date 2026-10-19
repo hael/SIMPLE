@@ -39,13 +39,13 @@ end type fftw_crvec
 type heap_vars
     real(dp),    pointer :: argvec(:)           => null()
     complex(sp), pointer :: shmat(:,:)          => null()
-    real(dp),    pointer :: kcorrs(:)           => null()
     complex(dp), pointer :: pft_ref_8(:,:)      => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:)  => null()
     complex(dp), pointer :: pft_ref_aln_8(:,:)  => null()  ! the reference of one shift search (load_ref_aln_8)
+    integer              :: aln_iref = 0                    ! its index and half, checked by the _aln evaluators
+    integer              :: aln_ieo  = 0
     complex(dp), pointer :: shvec(:)            => null()
     complex(dp), pointer :: shmat_8(:,:)        => null()
-    real(dp),    pointer :: pft_r1_8(:,:)       => null()
     ! the likelihood score of one reference: scores and distances over the rotations, the sampler's cdf
     real(sp),    pointer :: rot_scores(:)       => null()
     real(sp),    pointer :: rot_dists(:)        => null()
@@ -202,7 +202,6 @@ type :: polarft_calc
     generic            :: gen_corr_for_rot_8 => gen_corr_for_rot_8_1, gen_corr_for_rot_8_2
     procedure, private :: gen_corr_cc_for_rot_8_1, gen_corr_cc_for_rot_8_2
     procedure, private :: gen_euclid_for_rot_8_1, gen_euclid_for_rot_8_2
-    procedure          :: gen_corr_grad_for_rot_8
     procedure          :: load_ref_aln_8
     procedure          :: gen_corr_for_rot_8_aln
     procedure          :: gen_corr_grad_for_rot_8_aln
@@ -792,13 +791,6 @@ interface
         real(dp),                    intent(in)    :: shvec(2)
     end function gen_euclid_for_rot_8_2
 
-    module subroutine gen_corr_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, irot
-        real(dp),                    intent(in)    :: shvec(2)
-        real(dp),                    intent(out)   :: f, grad(2)
-    end subroutine gen_corr_grad_for_rot_8
-
     module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot
@@ -841,15 +833,15 @@ interface
         integer,             intent(in)    :: iref, iptcl
     end subroutine load_ref_aln_8
 
-    module real(dp) function gen_corr_for_rot_8_aln( self, iptcl, shvec, irot )
+    module real(dp) function gen_corr_for_rot_8_aln( self, iref, iptcl, shvec, irot )
         class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl, irot
+        integer,                     intent(in)    :: iref, iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
     end function gen_corr_for_rot_8_aln
 
-    module subroutine gen_corr_grad_for_rot_8_aln( self, iptcl, shvec, irot, f, grad )
+    module subroutine gen_corr_grad_for_rot_8_aln( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iptcl, irot
+        integer,                     intent(in)    :: iref, iptcl, irot
         real(dp),                    intent(in)    :: shvec(2)
         real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_corr_grad_for_rot_8_aln

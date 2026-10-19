@@ -195,12 +195,47 @@ thread, so only its random draws change). Each table part's bench record
 thread-seconds of the seed, the score loop and the refinement, the fill
 regions' wall time, the load balance and the shifted particle memos built.
 
+Dense assignment (`ref_assign_likelihood`): every active class sorts the
+particles by distance; each step draws among the classes' closest available
+particles (the frontier). The frontier is kept, not rescanned: after an
+assignment only the classes whose head was the assigned particle move on.
+
+A distributed part with none of the sampled particles is valid: its table
+part writes an empty table (header, no candidates; the readers skip its
+rotation grid), and its matcher pass runs without batches, writing its
+orientations, its sigma2 range and an empty class-sum contribution carrying
+the references' centering offsets.
+
+The search loop of the matcher runs under a dynamic OpenMP schedule (a
+particle is searched whole by one thread, so only its random draws change).
+In shared memory the probability table fills the particle buffer
+(`doc/policies/particle_read_path_policy.md`) and the matcher of the same
+iteration copies its batches from it, so a table iteration reads each
+particle once; the buffer holds raw images, so the preparation still runs
+twice.
+
 `simple_commanders_mkcavgs.f90` and the classaverager modules own:
 
 - explicit class-average assembly from partial sums
 - merged/even/odd class-average output
 - class-document generation
 - class FRC output and project output metadata
+
+The class sums of a batch (`cavger_update_sums`, the matcher's online sums and
+the offline `make_cavgs` sums) are bucketed by class and half; the buckets run
+under a dynamic schedule, the largest first, and each adds its particles in
+batch order. The sums are therefore the same at any thread count. The work
+images are sized by the thread team.
+
+Benchmark reports (`refine3D_policy.md`, section 11.1, lists the files):
+`REFINE2D_BENCH_PARTppp.txt` for every partition, with the thread-seconds and
+load balance of the search loop and of the class sums; `REFINE2D_STRATEGY`
+for the whole iteration, setup to the class-average JPEG (pre-step,
+matcher or scheduler, merge, class-average assembly, the master's project
+writes and rereads, sigma2, convergence, star file); `PROB_ALIGN2D` for the
+pre-step driver; `CAVGSUMS` with the class sums' load balance.
+`scripts/plot_refine3d_bench.py` turns them into the 2D critical path per
+iteration.
 
 ## 4. Sampling and Fractional-Update Policy
 
