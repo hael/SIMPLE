@@ -20,6 +20,7 @@ type(ui_program), target :: print_project_info
 type(ui_program), target :: prune_project
 type(ui_program), target :: replace_project_field
 type(ui_program), target :: selection
+type(ui_program), target :: select_micrographs
 type(ui_program), target :: update_project
 type(ui_program), target :: fix_projfile
 type(ui_program), target :: zero_project_shifts
@@ -46,6 +47,7 @@ contains
         call new_prune_project(prgtab)
         call new_replace_project_field(prgtab)
         call new_selection(prgtab)
+        call new_select_micrographs(prgtab)
         call new_update_project(prgtab)
         call new_fix_projfile(prgtab)
         call new_zero_project_shifts(prgtab)
@@ -645,6 +647,41 @@ subroutine new_export_relion( prgtab )
         ! add to ui_hash
         call add_ui_program('replace_project_field', replace_project_field, prgtab, UI_CATEGORY)
     end subroutine new_replace_project_field
+
+    subroutine new_select_micrographs(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call select_micrographs%new('select_micrographs', &
+            'Select a micrograph subset from an existing project', &
+            'Select exactly nmics micrographs into a separate project, retaining eligible particles in state. '// &
+            'quality_coverage balances existing positive particle scores across symmetry-aware viewing bins and particle halves. '// &
+            'particles exactly maximizes active particle count. Search limits are reported; image stacks and input stay unchanged.', &
+            'simple_exec',.true.,visibility=UI_VIS_ADVANCED,display_name='Select Micrograph Subset')
+        call select_micrographs%add_input(UI_FILE,projfile,visibility=UI_VIS_STANDARD)
+        call select_micrographs%add_input(UI_PARM,'nmics','num','Micrographs to retain', &
+            'Exact number of eligible micrographs to select','positive integer',.true.,0., &
+            visibility=UI_VIS_STANDARD,preserve_default=.true.)
+        call select_micrographs%add_input(UI_PARM,'subset_mode','multi','Selection objective', &
+            'quality_coverage uses angular support; particles maximizes eligible particle count','',.false.,'quality_coverage', &
+            choices=ui_choices([character(len=16) :: 'quality_coverage','particles']),visibility=UI_VIS_STANDARD)
+        call select_micrographs%add_input(UI_PARM,'subset_score','multi','Particle score', &
+            'Existing positive finite score used as support; none gives unit support. Scores are not calibrated probabilities.', &
+            '',.false.,'corr',choices=ui_choices([character(len=9) :: 'corr','corr_cart','none']),visibility=UI_VIS_ADVANCED)
+        call select_micrographs%add_input(UI_PARM,'state','num','Target structural state', &
+            'Keep eligible particles of this state only','positive integer',.false.,1.,visibility=UI_VIS_STANDARD)
+        call select_micrographs%add_input(UI_SRCH,'nspace','num','Viewing direction bins', &
+            'Even number of symmetry-aware spiral directions used for coverage','positive even integer',.false.,64., &
+            visibility=UI_VIS_ADVANCED,preserve_default=.true.)
+        call select_micrographs%add_input(UI_SRCH,'pgrp','str','Point-group symmetry', &
+            'Point-group symmetry used for viewing-direction coverage','e.g. c1',.false.,'c1', &
+            visibility=UI_VIS_ADVANCED,preserve_default=.true.)
+        call select_micrographs%add_input(UI_PARM,'subset_max_nodes','num','Search node budget', &
+            'Global search budget; reaching it returns a reported unproven incumbent','positive integer',.false.,100000., &
+            visibility=UI_VIS_ADVANCED)
+        call select_micrographs%add_input(UI_FILE,'outfile','file','Subset project', &
+            'New .simple project; defaults to the input name with _mic_subset appended', &
+            'e.g. selected.simple',.false.,'',visibility=UI_VIS_ADVANCED,preserve_default=.true.)
+        call add_ui_program('select_micrographs',select_micrographs,prgtab,UI_CATEGORY)
+    end subroutine new_select_micrographs
 
     subroutine new_selection( prgtab )
         class(ui_hash), intent(inout) :: prgtab 

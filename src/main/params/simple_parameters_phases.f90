@@ -668,6 +668,24 @@ contains
         character(len=2), allocatable :: symbols(:)
         character(len=5)              :: selector
         integer                       :: binwidth_min
+        if( self%prg == 'select_micrographs' )then
+            if( self%nmics < 1 .or. self%state < 1 .or. self%nspace < 1 .or. self%subset_max_nodes < 1 )then
+                THROW_HARD('select_micrographs requires positive nmics, state, nspace and subset_max_nodes')
+            endif
+            select case(trim(self%subset_mode))
+                case('quality_coverage','particles')
+                case default
+                    THROW_HARD('subset_mode must be quality_coverage or particles')
+            end select
+            select case(trim(self%subset_score))
+                case('corr','corr_cart','none')
+                case default
+                    THROW_HARD('subset_score must be corr, corr_cart or none')
+            end select
+            if( trim(self%subset_mode) == 'quality_coverage' .and. mod(self%nspace,2) /= 0 )then
+                THROW_HARD('quality_coverage requires an even nspace')
+            endif
+        endif
         select case(trim(self%memreport))
             case('yes','no')
             case DEFAULT

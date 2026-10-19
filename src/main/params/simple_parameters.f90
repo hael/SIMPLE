@@ -304,6 +304,8 @@ type :: parameters
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
+    character(len=STDLEN)     :: subset_mode='quality_coverage' !< select_micrographs objective(quality_coverage|particles)
+    character(len=STDLEN)     :: subset_score='corr'   !< select_micrographs particle support(corr|corr_cart|none)
     character(len=STDLEN)     :: pose_policy='global' !< state-refinement pose policy(local|global){global}
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc){state}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
@@ -403,6 +405,7 @@ type :: parameters
     integer :: ninipick=0          !< # of micrographs to run inipick preprocessing on in preprocess
     integer :: nits_per_stage=5    !< # of iterations per stage
     integer :: nmics=0             !< # micrographs
+    integer :: subset_max_nodes=100000 !< select_micrographs branch-and-bound node budget
     integer :: nmoldiams=1         !< # moldiams
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed execution

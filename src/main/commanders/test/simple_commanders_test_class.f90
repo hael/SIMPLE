@@ -44,6 +44,7 @@ use simple_class_compatibility_tester,       only: run_all_class_compatibility_t
 use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
 use simple_mic_import_tester,                only: run_all_mic_import_tests
 use simple_mic_selection_tester,             only: run_all_mic_selection_tests
+use simple_mic_subset_tester,                only: run_all_mic_subset_tests
 use simple_optics_groups_tester,             only: run_all_optics_groups_tests
 use simple_optics_maps_tester,               only: run_all_optics_maps_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
@@ -374,6 +375,7 @@ contains
         call add_suite(s, n, 'particle sieve',          run_all_ptcl_sieve_tests)
         call add_suite(s, n, 'micrograph import',       run_all_mic_import_tests)
         call add_suite(s, n, 'micrograph selection',    run_all_mic_selection_tests)
+        call add_suite(s, n, 'micrograph subset',       run_all_mic_subset_tests)
         call add_suite(s, n, 'optics groups',           run_all_optics_groups_tests)
         call add_suite(s, n, 'optics maps',             run_all_optics_maps_tests)
         call add_suite(s, n, 'solve3D manifest',        run_all_solve3D_manifest_tests)

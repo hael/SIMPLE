@@ -112,6 +112,51 @@ simple_exec prg=solve3D pgrp=c1 mskdiam=180 nthr=40
 ```
 
 
+## Select a micrograph subset from an oriented project
+
+Select exactly 100 micrographs using existing 3D particle scores and angular
+coverage:
+
+```shell
+simple_exec prg=select_micrographs projfile=my_project.simple nmics=100 pgrp=c1
+```
+
+The command uses active particles in structural `state=1` by default. Change
+`state=` to select another state. The default `subset_score=corr` uses the
+last polar alignment score; `subset_score=corr_cart` selects the Cartesian
+score instead. These scores are separate ranking proxies, not calibrated
+probabilities. `subset_score=none` gives each eligible particle unit support.
+Coverage selection requires updated particles with finite orientations and
+complete existing project half-set provenance. It never creates a new split.
+
+The default output is `my_project_mic_subset.simple` beside the input. Use
+`outfile=another_subset.simple` for a different destination. The input and
+image stacks are not modified. Output keeps original row indices and retained
+particle poses, structural labels and halves; excluded rows are deselected.
+Inherited output products, state weights and registered sigma state are
+cleared, so reconstruct the selected particles before assessing map quality.
+
+The output project has accompanying `.micrographs.csv` and `.coverage.csv`
+reports containing selected micrographs, eligible particle counts, direction
+coordinates and support before/after selection. `nspace=64` controls the
+symmetry-aware direction grid and must be even. Set the correct molecular
+symmetry with `pgrp=`.
+
+The optimizer balances quality-weighted particle yield and directional support
+using a logarithmic objective. It starts with a deterministic greedy subset,
+then searches globally. `subset_max_nodes=100000` limits search work. The log
+and micrograph report explicitly say whether the optimum of this objective
+was proved; otherwise the subset is the best solution found within that
+budget. This score does not guarantee an improved reconstructed volume.
+This operation uses `mkdir=no`; choose an output path instead of an execution
+directory. Existing output projects or reports are never overwritten.
+
+To maximize accepted particle count without using orientations or scores:
+
+```shell
+simple_exec prg=select_micrographs projfile=my_project.simple nmics=100 subset_mode=particles
+```
+
 ## NICE (New Interface for CryoEM)
 Launch the Graphical User Interface (GUI) with:
 ```shell
