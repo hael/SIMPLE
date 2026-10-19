@@ -45,8 +45,9 @@ runs `scripts/check_test_registry.py`, `scripts/check_descr.py` and
 `scripts/check_flex_dag.py` (section 4.5), then
 `ctest -L fast` with half the cores rounded up, then
 `scripts/ctest_budget.py`, which
-fails the build when an entry fails or the gate takes more than 60 s of real
-time (`scripts/run_fast_gate.sh`, `scripts/ctest_budget.py`). A failed gate installs nothing. The per-entry timings are kept in
+fails the build when an entry fails and only warns when the gate takes more
+than 60 s of real time (`scripts/run_fast_gate.sh`, `scripts/ctest_budget.py`).
+A budget warning allows installation to continue. A failed gate installs nothing. The per-entry timings are kept in
 `build/test_runs/ctest_fast.log.timing.txt`; the gate takes about 5 s on the
 reference Mac in Debug. Tests are on by default in every compile script;
 `--exclude-tests` (`BUILD_TESTS=OFF`) builds the library and executables only

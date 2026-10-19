@@ -10,11 +10,12 @@
 # the output to BUILD_DIR/test_runs/ctest_fast.log and hands it to
 # scripts/ctest_budget.py. What is printed is ctest's own report;
 # the budget checker is silent when the gate passes within budget and speaks
-# only when an entry failed or the run went over 30 s (Phase 2 of
+# only when an entry failed or the run went over budget (Phase 2 of
 # doc/refactoring_notes/completed/uniform_test_environment_refactoring.md, 2026-09-22).
 # The per-entry timing table is always written beside the log
 # (ctest_fast.log.timing.txt), so a suite that grows is visible from build to
-# build. Exit status is the budget checker's.
+# build. Budget overruns only warn; failed entries still fail the gate.
+# Exit status is the budget checker's.
 #
 # Before ctest, the source-boundary/descriptor, registry and FLEX dependency-DAG
 # checks run; a mismatch, multi-unit source, upward dependency or cycle fails
