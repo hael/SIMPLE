@@ -267,6 +267,10 @@ having read 900 lines of policy before touching `set_bp_range3D`.
 
 ## 4. The test (proposal)
 
+**Not pursued** (maintainer, 2026-10-18): the stage shift is judged on real
+datasets. The stage rules it relies on are listed for fast unit tests in
+`testing_and_benchmarking_plan.md` section 3.
+
 The broader suite proposal's Progress section reads "Nothing yet", and no
 tester asserts anything about the band: every `kfromto(2)` in a `*_tester`
 module is a fixture allocation. So a change to the band contract has exactly

@@ -787,11 +787,15 @@ pass.
   - the wall time of `test=nightly` and of `ctest -L highlevel -j 24`,
     beside Phase 5's numbers, saying which of master's changes lie between
     them;
-  - the speed week's timing. A, A-shm, MS, M and E as the runs `prob_speed`
-    and `ms_speed` last ran them, on builds of 25d256886 and 04e520e78,
-    twice each way, interleaved. The results go into
-    `identical_speed_run_report.md`.
-- Phase 6's documents, finished with the new floors and cards.
+  - the speed week's timing on builds of 25d256886 and 04e520e78, twice each
+    way, interleaved: A, A-shm and E as `prob_speed` defined them (A is
+    `solve3D` from S in shared memory), MS and M as `ms_speed` did (ruling of
+    2026-10-18). The results go into `identical_speed_run_report.md`.
+- Phase 6's documents, finished with the new floors and cards, and the stale
+  text listed in `testing_and_benchmarking_plan.md` section 3 (the test
+  policy's unit-suite tables, the seed-offset wording, the four-thread fast
+  tier that nothing runs, `test=nightly` as the tier of simulated tests too
+  expensive for the build; the `production/CMakeLists.txt` comments).
 - The report beside this note.
 
 Exit criteria: the gates pass; the report is written.
