@@ -46,6 +46,8 @@ contains
         call test_cont_rule_tunable()
         write(*,'(A)') 'test_multistate_scan_exit'
         call test_multistate_scan_exit()
+        write(*,'(A)') 'test_lpexit_gain_guard'
+        call test_lpexit_gain_guard()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
 
@@ -213,6 +215,64 @@ contains
         call cline%kill
         deallocate(params)
     end function multistate_converged
+
+    !> lpexit=8 A over consecutive iterations of a stage from iteration 1: 9 A holds it, 7.5 A still
+    !! gaining holds it, a repeated 7.5 A ends it and so does a loss to 7.6 A; the first iteration of
+    !! a stage from 5 does not compare with the last of the previous stage, an earlier stage's stats
+    !! are not this stage's and without lpexit a stalled 7.5 A holds; with three states the best
+    !! (7.5 A, not the particle average of 8.83 A) is compared with the previous best
+    subroutine test_lpexit_gain_guard()
+        call del_file(STATS_FILE)
+        call assert_false(lpexit_converged([9.0], 1, 1, 8.), 'the stage ended short of lpexit')
+        call assert_false(lpexit_converged([7.5], 2, 1, 8.), 'the stage ended while still gaining')
+        call assert_true(lpexit_converged([7.5],  3, 1, 8.), 'a stalled resolution past lpexit did not end the stage')
+        call assert_true(lpexit_converged([7.6],  4, 1, 8.), 'a lost resolution past lpexit did not end the stage')
+        call assert_false(lpexit_converged([7.6], 5, 5, 8.), 'the first iteration compared with the previous stage')
+        call assert_false(lpexit_converged([7.6], 9, 8, 8.), 'an earlier stage''s stats were compared')
+        call assert_false(lpexit_converged([7.6], 10, 8, 0.), 'the exit fired without lpexit')
+        call del_file(STATS_FILE)
+        call assert_false(lpexit_converged([7.5, 9.0, 10.], 1, 1, 8.), 'the first three-state iteration ended the stage')
+        call assert_true(lpexit_converged([7.5, 9.0, 10.],  2, 1, 8.), 'the best state was not compared with the previous best')
+        call del_file(STATS_FILE)
+    end subroutine test_lpexit_gain_guard
+
+    !> check_conv3D of a shc pass at iteration which_iter of a stage from startit, NPTCLS particles
+    !! split evenly over size(res05) states at FSC=0.5 resolutions res05; a 50% scan with overlap 0.5
+    !! holds the regular rule, so only the lpexit rule can converge
+    logical function lpexit_converged( res05, which_iter, startit, lpexit ) result( converged )
+        real,    intent(in) :: res05(:), lpexit
+        integer, intent(in) :: which_iter, startit
+        class(parameters), allocatable :: params
+        type(convergence) :: conv
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        integer :: i, istate
+        call os%new(NPTCLS, is_ptcl=.true.)
+        do i = 1, NPTCLS
+            istate = (i - 1)*size(res05)/NPTCLS + 1
+            call os%set_state(i, istate)
+            call os%set(i, 'updatecnt', 1.)
+            call os%set(i, 'sampled',   1.)
+            call os%set(i, 'frac',      50.)
+            call os%set(i, 'mi_proj',   0.5)
+            call os%set(i, 'corr',      0.5)
+            call os%set(i, 'res05',     res05(istate))
+        end do
+        allocate(params)
+        params%nstates    = size(res05)
+        params%trs        = 5.
+        params%refine     = 'shc'
+        params%lpexit     = lpexit
+        params%startit    = startit
+        params%which_iter = which_iter
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        converged = conv%check_conv3D(params, cline, os, 40.)
+        call cline%kill
+        call os%kill
+        deallocate(params)
+    end function lpexit_converged
 
     !> the bounds are inclusive; only an accepted or a finite no-improvement outcome is stable
     subroutine test_cont_particle_stable()

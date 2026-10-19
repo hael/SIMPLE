@@ -20,7 +20,6 @@ type convergence
     type(stats_struct) :: lp_est           !< low-pass limit, estimated
     type(stats_struct) :: res              !< resolution @ FSC=0.143
     type(stats_struct) :: res05            !< resolution @ FSC=0.5
-    real    :: res05_prev             = 0. !< previous iteration's best FSC=0.5 resolution, from STATS_FILE
     integer :: iteration              = 0  !< current interation
     real    :: mi_class               = 0. !< class parameter distribution overlap
     real    :: mi_proj                = 0. !< projection parameter distribution overlap
@@ -35,7 +34,6 @@ type convergence
     real    :: cont_coverage_pct      = 0. !< refine=cont: active particles sampled during the streak (%)
     real    :: progress               = 0. !< progress estimation
   contains
-    procedure :: read
     procedure :: check_conv2D
     procedure, nopass :: print_verdict
     procedure :: check_conv3D
@@ -49,37 +47,6 @@ type convergence
 end type convergence
 
 contains
-
-    subroutine read( self, l_err )
-        class(convergence), intent(inout) :: self
-        logical,            intent(out)   :: l_err
-        type(oris) :: ostats
-        l_err = .false.
-        call ostats%new(1, is_ptcl=.false.)
-        if( file_exists(STATS_FILE) )then
-            call ostats%read(string(STATS_FILE))
-            self%iteration     = nint(ostats%get(1,'ITERATION'))
-            self%score%avg     = ostats%get(1,'SCORE')
-            if( ostats%isthere('RESOLUTION_FSC05') ) self%res05_prev = ostats%get(1,'RESOLUTION_FSC05')
-            self%frac_srch%avg = ostats%get(1,'SEARCH_SPACE_SCANNED')
-            self%mi_proj       = ostats%get(1,'ORIENTATION_OVERLAP')
-            self%mi_state      = nint(ostats%get(1,'STATE_OVERLAP'))
-            self%dist%avg      = ostats%get(1,'DIST_BTW_BEST_ORIS')
-            self%dist_inpl%avg = ostats%get(1,'IN-PLANE_DIST')
-            self%shincarg%avg  = ostats%get(1,'SHIFT_INCR_ARG')
-            if( ostats%isthere('CONT_INPL_IMPROVED_PCT') )then
-                self%cont_inpl_improved_pct = ostats%get(1,'CONT_INPL_IMPROVED_PCT')
-                self%cont_inpl_attempts      = nint(ostats%get(1,'CONT_INPL_ATTEMPTS'))
-            endif
-            if( ostats%isthere('POSE_CONT_IMPROVED_PCT') )then
-                self%pose_cont_improved_pct = ostats%get(1,'POSE_CONT_IMPROVED_PCT')
-                self%pose_cont_attempts = nint(ostats%get(1,'POSE_CONT_ATTEMPTS'))
-            endif
-        else
-            l_err = .true.
-        endif
-        call ostats%kill
-    end subroutine read
 
     subroutine print_iteration( self, which_iter )
         class(convergence), intent(inout) :: self
@@ -293,7 +260,7 @@ contains
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
-        real    :: res05_now
+        real    :: res05_now, res05_prev
         logical :: converged, cont_stats_available, pose_stats_available
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
@@ -561,11 +528,13 @@ contains
         ! The comparison is within the stage, so never at its first iteration.
         ! Only ever adds convergence.
         if( params%lpexit > TINY .and. .not.converged .and. res05_now > TINY )then
-            if( res05_now < params%lpexit .and. params%which_iter > params%startit .and. &
-                &self%res05_prev > TINY .and. res05_now >= self%res05_prev - TINY )then
-                write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
-                    &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', params%lpexit, ' A) AND NO LONGER GAINING'
-                converged = .true.
+            if( res05_now < params%lpexit .and. params%which_iter > params%startit )then
+                res05_prev = prev_stage_res05(params)
+                if( res05_prev > TINY .and. res05_now >= res05_prev - TINY )then
+                    write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
+                        &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', params%lpexit, ' A) AND NO LONGER GAINING'
+                    converged = .true.
+                endif
             endif
         endif
         if( converged .and. params%minits > 0 )then
@@ -594,7 +563,6 @@ contains
         call ostats%set(1,'SHIFT_INCR_ARG',              self%shincarg%avg)
         call ostats%set(1,'PERCEN_SEARCH_SPACE_SCANNED', self%frac_srch%avg)
         call ostats%set(1,'LP_MATCHING',                 params%lp)       ! the band matched this iteration
-        if( res05_now > TINY ) call ostats%set(1,'RESOLUTION_FSC05', res05_now) ! read back as res05_prev
         call ostats%set(1,'LP_NU_HANDOFF',               self%lp%avg)     ! the handoff for the next
         call ostats%set(1,'LP_ESTIMATED',                self%lp_est%avg)
         call ostats%set(1,'RESOLUTION',                  self%res%avg)
@@ -602,7 +570,7 @@ contains
         do istate = 1, params%nstates
             write(res_key,'(A,I2.2)') 'RESOLUTION_STATE', istate
             call ostats%set(1, trim(res_key),            res_state_avg(istate))
-            write(res_key,'(A,I2.2)') 'RESOLUTION_FSC05_STATE', istate
+            write(res_key,'(A,I2.2)') 'RESOLUTION_FSC05_STATE', istate ! read back by prev_stage_res05
             call ostats%set(1, trim(res_key),            res05_state_avg(istate))
         end do
         if( params%l_update_frac .and. params%nstates > 1 )then
@@ -649,6 +617,33 @@ contains
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D
+
+    !> the lpexit rule's res05_prev: best populated state's FSC=0.5 resolution in STATS_FILE, read
+    !! before check_conv3D overwrites it; 0. unless the file is from an earlier iteration of this stage
+    real function prev_stage_res05( params ) result( res05_prev )
+        use simple_parameters, only: parameters
+        class(parameters), intent(in) :: params
+        type(oris)            :: ostats
+        character(len=KEYLEN) :: res_key
+        real    :: res05
+        integer :: istate, iter_prev
+        res05_prev = 0.
+        if( .not. file_exists(STATS_FILE) ) return
+        call ostats%new(1, is_ptcl=.false.)
+        call ostats%read(string(STATS_FILE))
+        iter_prev = 0
+        if( ostats%isthere('ITERATION') ) iter_prev = nint(ostats%get(1,'ITERATION'))
+        if( iter_prev >= params%startit .and. iter_prev < params%which_iter )then
+            do istate = 1, params%nstates
+                write(res_key,'(A,I2.2)') 'RESOLUTION_FSC05_STATE', istate
+                if( .not. ostats%isthere(trim(res_key)) ) cycle
+                res05 = ostats%get(1, trim(res_key))
+                if( res05 <= TINY ) cycle
+                if( res05_prev <= TINY .or. res05 < res05_prev ) res05_prev = res05
+            end do
+        endif
+        call ostats%kill
+    end function prev_stage_res05
 
 
     !> refine=cont: the sample (mask) passes when cont_conv_frac of every populated state is stable

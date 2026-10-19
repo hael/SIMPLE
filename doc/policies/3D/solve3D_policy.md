@@ -289,9 +289,14 @@ evaluated during the stage, as a convergence criterion: the internal `lpexit`
 key carries `lpinfo(istage+1)%lp`, the next rung's planned limit, and
 `check_conv3D` ends the stage once the best populated state's `res05`
 resolves past it **and has stopped gaining**: `res05` must be no better than
-the previous iteration's, carried across iterations in `STATS_FILE` as
-`RESOLUTION_FSC05`, and the comparison is within the stage, so the exit never
-fires at a stage's first iteration. Logged as `>>> STAGE RESOLUTION EXIT`.
+the previous iteration's, read back from `STATS_FILE` before the iteration
+overwrites it (the best of its `RESOLUTION_FSC05_STATEnn`, the same quantity),
+and the comparison is within the stage, so the exit never fires at a stage's
+first iteration nor against stats whose `ITERATION` precedes the stage.
+Logged as `>>> STAGE RESOLUTION EXIT`. Until 2026-10-19 the previous value
+was never read back, so the guard could not fire: PfCRT stage 5 ran all 12
+`MAXITS` iterations (about 108 s each) where the `latest9` restarts had left
+after 3-8.
 
 The gain guard was added after PfCRT `latest9` (9/10 converged, best
 3.981 A, run at `8c8d8b42`): the threshold alone ended the NU stage mid-climb
