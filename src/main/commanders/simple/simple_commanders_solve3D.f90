@@ -242,14 +242,14 @@ contains
         call configure_cavgs_distributed_clines
         call work_proj%write()
         ! Frequency marching
-        call set_cline_refine3D(params, 1, l_cavgs=.true.)
+        call set_cline_refine3D(params, 1, 1, l_cavgs=.true.)
         call rndstart(cline_refine3D)
         l_reseeded = .false.
         do istage = 1, nstages_ini3D
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', lpinfo(istage)%lp, ' A'
             ! Preparation of command line for probabilistic search
-            call set_cline_refine3D(params, istage, l_cavgs=.true.)
+            call set_cline_refine3D(params, istage, 1, l_cavgs=.true.)
             ! the volumes of the states reseeded after the previous stage, from their new members
             if( l_reseeded ) call calc_rec(params, work_projfile, xrec3D, istage)
             l_reseeded = .false.
@@ -1113,7 +1113,7 @@ contains
             ! input volumes are assumed aligned to the target symmetry axis
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
-            start_stage = solve3D_symsrch_stage(.false.) + 1
+            start_stage = solve3D_vol_supplied_stage()
             ! CC pose initialization below owns the external-reference route.
             ! setting up random classes for class-balanced particle sampling
             if( trim(params%balance) /= 'none' )then
@@ -1206,7 +1206,11 @@ contains
                 lprange       = solve3D_lpstop_bounds()
                 params%lpstop = min(params%lpstop, lprange(1))
             endif
-            call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop)
+            if( solve3D_uses_delayed_input_lp(l_vol_ini_ext, params%nstates) )then
+                call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop, first_stage=start_stage)
+            else
+                call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop)
+            endif
         else
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
                 call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
@@ -1251,7 +1255,7 @@ contains
             if( l_vol_ini_ext )then
                 ! user provided input volumes
                 call normalize_input_volumes(params, cline_refine3D)
-                call set_cline_refine3D(params, start_stage, l_cavgs=.false.)
+                call set_cline_refine3D(params, start_stage, start_stage, l_cavgs=.false.)
                 pose_init_iter = max(1, cline_refine3D%get_iarg('startit') - 1)
                 allocate(external_refs(params%nstates), external_checkpoint(params%nstates))
                 external_refs = params%vols(1:params%nstates)
@@ -1298,7 +1302,7 @@ contains
             ! This reconstruction feeds start_stage but runs before the stage
             ! loop. Emit the same controller policy here so a requested PCG
             ! backend never executes with the unprocessed outer command line.
-            call set_cline_refine3D(params, start_stage, l_cavgs=.false.)
+            call set_cline_refine3D(params, start_stage, start_stage, l_cavgs=.false.)
             call calc_rec(params, params%projfile, xrec3D, start_stage)
         endif
         if( L_BENCH_GLOB ) rt_start = toc(t_phase)
@@ -1337,9 +1341,9 @@ contains
             endif
             ! Preparation of command line for refinement
             if( l_addon )then
-                call set_cline_refine3D(params, istage, l_cavgs=.false., addon=addon_ctx)
+                call set_cline_refine3D(params, istage, start_stage, l_cavgs=.false., addon=addon_ctx)
             else
-                call set_cline_refine3D(params, istage, l_cavgs=.false.)
+                call set_cline_refine3D(params, istage, start_stage, l_cavgs=.false.)
             endif
             call record_emitted_limits(istage)
             if( l_addon ) call addon_stage_boundary(istage)
@@ -1690,7 +1694,7 @@ contains
             if( status /= 0 ) THROW_HARD(trim(msg))
             call spproj%write_segment_inside(params%oritype, params%projfile)
             ! the stage-3 controls define the frozen accumulations
-            call set_cline_refine3D(params, solve3D_symsrch_stage(.false.), l_cavgs=.false., addon=addon_ctx)
+            call set_cline_refine3D(params, solve3D_symsrch_stage(.false.), start_stage, l_cavgs=.false., addon=addon_ctx)
             call addon_boxes(boxes, smpds)
             if( l_carried )then
                 nstates_counts = bundle_frz%ncarried_state
@@ -1791,7 +1795,7 @@ contains
         subroutine addon_register_pass( istage_here )
             integer, intent(in) :: istage_here
             addon_ctx%l_register = .true.
-            call set_cline_refine3D(params, istage_here, l_cavgs=.false., addon=addon_ctx)
+            call set_cline_refine3D(params, istage_here, start_stage, l_cavgs=.false., addon=addon_ctx)
             addon_ctx%l_register = .false.
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I0,A,I0,A,F7.3,A)') '>>> SOLVE3D_ADDON REGISTRATION PASS BEFORE STAGE ', istage_here, &

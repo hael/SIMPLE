@@ -482,23 +482,35 @@ contains
 
     end subroutine lpstages_fast
 
-    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose )
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical, optional, intent(in)  :: verbose
+        integer, optional, intent(in)  :: first_stage
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
-        integer :: i, box_trial
+        integer :: i, box_trial, ifirst
         real    :: rbox_stepsz, smpd_target
         logical :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_setlims')
+        ifirst = 1
+        if( present(first_stage) )then
+            if( first_stage < 1 .or. first_stage > nstages ) THROW_HARD('first_stage must be within the lpstages_setlims schedule')
+            ifirst = first_stage
+        endif
         lpinfo(:)%l_lpset = .true.
         do i = 1,nstages
-            if( nstages == 1 )then
+            if( present(first_stage) )then
+                if( i <= ifirst )then
+                    lpinfo(i)%lp = lpstart
+                else
+                    lpinfo(i)%lp = lpstart - real(i-ifirst)*(lpstart-lpstop)/real(nstages-ifirst)
+                endif
+            else if( nstages == 1 )then
                 lpinfo(i)%lp = lpstop
             else
                 lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
@@ -508,10 +520,10 @@ contains
             lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
             lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
         enddo
-        if( nstages > 1 )then
-            rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
-            do i = 2, nstages - 1 ! linear box_crop scheme
-                box_trial             = nint(real(lpinfo(1)%box_crop) + real(i-1)*rbox_stepsz)
+        if( nstages > ifirst )then
+            rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(ifirst)%box_crop)/real(nstages - ifirst)
+            do i = ifirst + 1, nstages - 1 ! linear box_crop scheme
+                box_trial             = nint(real(lpinfo(ifirst)%box_crop) + real(i-ifirst)*rbox_stepsz)
                 lpinfo(i)%box_crop    = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
                 lpinfo(i)%scale       = real(lpinfo(i)%box_crop) / real(box)
                 lpinfo(i)%smpd_crop   = smpd / lpinfo(i)%scale
@@ -520,8 +532,8 @@ contains
             end do
         endif
         if( l_verbose )then
-            do i = 1, nstages
-                print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
+            do i = ifirst, nstages
+                write(logfhandle,*) 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
                     &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
             end do
         endif

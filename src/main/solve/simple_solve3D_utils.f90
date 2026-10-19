@@ -122,6 +122,16 @@ interface
         integer :: istage
     end function solve3D_symsrch_stage
 
+    module pure function solve3D_vol_supplied_stage() result(istage)
+        integer :: istage
+    end function solve3D_vol_supplied_stage
+
+    module pure function solve3D_uses_delayed_input_lp( l_vol_supplied, nstates ) result( l_delayed )
+        logical, intent(in) :: l_vol_supplied
+        integer, intent(in) :: nstates
+        logical :: l_delayed
+    end function solve3D_uses_delayed_input_lp
+
     module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
@@ -146,9 +156,9 @@ interface
         integer :: niters
     end function solve3D_remaining_niters
 
-    module subroutine set_cline_refine3D( params, istage, l_cavgs, addon )
+    module subroutine set_cline_refine3D( params, istage, first_stage, l_cavgs, addon )
         class(parameters),                    intent(in) :: params
-        integer,                              intent(in) :: istage
+        integer,                              intent(in) :: istage, first_stage
         logical,                              intent(in) :: l_cavgs
         type(solve3D_addon_ctx), optional, intent(in) :: addon
     end subroutine set_cline_refine3D
@@ -510,16 +520,21 @@ contains
 
     end subroutine set_lplims_from_frcs
 
-    subroutine set_lplims_from_input( params, spproj, lpstart, lpstop )
+    subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, first_stage )
         class(parameters), intent(inout) :: params
         class(sp_project), intent(in)    :: spproj
         real,              intent(in)    :: lpstart, lpstop
+        integer, optional, intent(in)    :: first_stage
         integer :: nstages
         l_cavgs_mode = .false.
         nstages = active_lp_schedule_nstages()
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(nstages))
-        call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
+        if( present(first_stage) )then
+            call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, first_stage=first_stage)
+        else
+            call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
+        endif
     end subroutine set_lplims_from_input
 
     !> solve3D_addon planning branch: the base run's planned ladder from its

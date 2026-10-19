@@ -25,6 +25,7 @@ integer,          parameter :: ML_REG_START_STAGE      = 3           ! first sta
 integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
 integer,          parameter :: SYMSRCH_STAGE           = 4           ! search symmetry axis after this stage (3 until 2026-10-17)
 integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
+integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
@@ -152,6 +153,18 @@ contains
         if( l_symsrch ) istage = SYMSRCH_STAGE
     end function solve3D_symsrch_stage
 
+    module pure function solve3D_vol_supplied_stage() result(istage)
+        integer :: istage
+        istage = VOL_SUPPLIED_STAGE
+    end function solve3D_vol_supplied_stage
+
+    module pure function solve3D_uses_delayed_input_lp( l_vol_supplied, nstates ) result( l_delayed )
+        logical, intent(in) :: l_vol_supplied
+        integer, intent(in) :: nstates
+        logical :: l_delayed
+        l_delayed = l_vol_supplied .and. nstates == 1
+    end function solve3D_uses_delayed_input_lp
+
     module function solve3D_ml_reg_start_stage() result(istage)
         integer :: istage
         istage = ML_REG_START_STAGE
@@ -206,7 +219,7 @@ contains
                 cfg%l_scan_exit = .false.
             endif
         endif
-        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_refine3D_lp_override, l_register )
+        call emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_refine3D_lp_override, l_register )
         if( l_addon )then
             if( .not. addon%frozen_rec%is_allocated() ) THROW_HARD('active add-on context without a frozen run context')
             call cline_refine3D%set('frozen_rec', addon%frozen_rec)
@@ -508,10 +521,10 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_register )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, first_stage, l_cavgs, l_cmdline_lp_override, l_register )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
-        integer,                  intent(in) :: istage
+        integer,                  intent(in) :: istage, first_stage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
@@ -641,8 +654,8 @@ contains
         ! NEXT rung aims for, which is the stage-shift test evaluated every iteration.
         ! Never against the band in use: a band-limited map's crossing sits at its band,
         ! so that test fires on nothing (reverted 2026-10-18). Same eligibility as the
-        ! shift: never the first two stages, the last stage or the axis-search stage.
-        if( .not. l_cavgs .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
+        ! shift: never the entry stage, the first two stages, the last stage or the axis-search stage.
+        if( .not. l_cavgs .and. istage > first_stage .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
             &istage < active_refine3D_nstages() .and. allocated(lpinfo) .and. &
             &.not.( l_srch4symaxis .and. istage == SYMSRCH_STAGE ) )then
             call cline_refine3D%set('lpexit',             lpinfo(istage+1)%lp)

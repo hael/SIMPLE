@@ -209,8 +209,18 @@ are derived from class FRCs by default, with `lpstart`/`lpstop` overrides and a
 
 Stage 1 of `solve3D` never runs with a low-pass limit finer than 20 A.
 `lpstages` and `lpstages_fast` apply this floor before generating the remaining
-low-pass and crop ladder, preserving gradual frequency marching. Explicit
-external-volume schedules use `lpstages_setlims` and are unchanged.
+low-pass and crop ladder, preserving gradual frequency marching.
+
+The single-state external-volume route (`vol1`, `nstates=1`) starts at
+`VOL_SUPPLIED_STAGE`, the stage after the no-axis-search block
+(`NOSYMSRCH_STAGE + 1`, stage 4 in the standard schedule). That first
+executable stage is anchored at exactly `lpstart`; the unused preceding stages
+carry the same low-pass and crop metadata but are omitted from schedule
+diagnostics. The remaining stages march linearly from `lpstart` to `lpstop`.
+Those delayed rungs are the planned limits used by FSC=0.5 promotion, stage
+shift and mid-stage exit; the entry stage remains ineligible for shift or exit.
+Multi-state external-volume schedules and other callers of
+`lpstages_setlims` retain the ordinary full-ladder interpolation.
 
 The controller passes an `lpstop` ceiling to each staged `refine3D` child
 alongside the effective planned matching limit. In the non-NU stages the

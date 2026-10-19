@@ -217,19 +217,31 @@ contains
 
     !---------------- lpstages_setlims ----------------
 
-    ! a linear ramp from lpstart to lpstop with no floor, crop boxes interpolated through the magic boxes
+    ! a linear ramp from lpstart to lpstop with no floor; an optional delayed start holds its prefix at lpstart
     subroutine test_lpstages_setlims()
-        type(lp_crop_inf) :: info(5)
-        integer, parameter :: BOXCROP(5) = [88, 108, 128, 150, 168]
-        real,    parameter :: LPS(5)     = [15., 12.5, 10., 7.5, 5.]
-        integer :: i
+        type(lp_crop_inf) :: info(8)
+        integer, parameter :: BOXCROP(5)         = [88, 108, 128, 150, 168]
+        integer, parameter :: BOXCROP_DELAYED(8) = [88, 88, 88, 88, 108, 128, 150, 168]
+        real,    parameter :: LPS(5)             = [15., 12.5, 10., 7.5, 5.]
+        real,    parameter :: LPS_DELAYED(8)     = [15., 15., 15., 15., 12.5, 10., 7.5, 5.]
+        integer :: i, nlines
         write(*,'(A)') 'test_lpstages_setlims'
-        call lpstages_setlims(BOX, 5, SMPD, 15., 5., info, verbose=.false.)
+        call lpstages_setlims(BOX, 5, SMPD, 15., 5., info(1:5), verbose=.false.)
         do i = 1,5
             call assert_real(LPS(i), info(i)%lp, TOL, 'setlims, stage '//int2str(i)//': linear ramp, no floor')
             call assert_int(BOXCROP(i), info(i)%box_crop, 'setlims, stage '//int2str(i)//': crop box')
             call assert_crop_consistent(info(i), 'setlims, stage '//int2str(i))
         end do
+        call lpstages_setlims(BOX, 8, SMPD, 15., 5., info, verbose=.false., first_stage=4)
+        do i = 1,8
+            call assert_real(LPS_DELAYED(i), info(i)%lp, TOL, 'setlims delayed, stage '//int2str(i)//': low-pass limit')
+            call assert_int(BOXCROP_DELAYED(i), info(i)%box_crop, 'setlims delayed, stage '//int2str(i)//': crop box')
+            call assert_crop_consistent(info(i), 'setlims delayed, stage '//int2str(i))
+        end do
+        call count_setlims_diagnostics(nlines)
+        call assert_int(8, nlines, 'setlims diagnostics: ordinary schedule prints every stage')
+        call count_setlims_diagnostics(nlines, first_stage=4)
+        call assert_int(5, nlines, 'setlims diagnostics: delayed schedule starts at stage 4')
         call lpstages_setlims(BOX, 1, SMPD, 15., 5., info(1:1), verbose=.false.)
         call assert_real(5.,   info(1)%lp, TOL, 'setlims, one stage: lpstop')
         call assert_int(168, info(1)%box_crop, 'setlims, one stage: cropped for lpstop')
@@ -239,6 +251,41 @@ contains
         call assert_real(1.,  info(1)%scale,     1.e-6, 'coarse data: scale 1')
         call assert_real(3.0, info(1)%smpd_crop, 1.e-6, 'coarse data: sampling kept')
         call assert_false(info(1)%l_autoscale, 'coarse data: no autoscaling')
+
+        contains
+
+            subroutine count_setlims_diagnostics( nlines, first_stage )
+                integer, intent(out) :: nlines
+                integer, optional, intent(in) :: first_stage
+                integer :: saved_log, scratch_log, io_stat
+                character(len=256) :: line
+                type(lp_crop_inf) :: diagnostic_info(8)
+                saved_log = logfhandle
+                open(newunit=scratch_log, status='scratch', action='readwrite', iostat=io_stat)
+                call assert_int(0, io_stat, 'setlims diagnostics: open scratch log')
+                if( io_stat /= 0 )then
+                    nlines = -1
+                    return
+                endif
+                logfhandle = scratch_log
+                if( present(first_stage) )then
+                    call lpstages_setlims(BOX, 8, SMPD, 15., 5., diagnostic_info, first_stage=first_stage)
+                else
+                    call lpstages_setlims(BOX, 8, SMPD, 15., 5., diagnostic_info)
+                endif
+                flush(scratch_log)
+                rewind(scratch_log)
+                nlines = 0
+                do
+                    read(scratch_log,'(A)',iostat=io_stat) line
+                    if( io_stat /= 0 ) exit
+                    nlines = nlines + 1
+                enddo
+                logfhandle = saved_log
+                close(scratch_log, iostat=io_stat)
+                call assert_int(0, io_stat, 'setlims diagnostics: close scratch log')
+            end subroutine count_setlims_diagnostics
+
     end subroutine test_lpstages_setlims
 
     !---------------- FSC weightings ----------------
