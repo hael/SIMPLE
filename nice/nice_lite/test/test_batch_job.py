@@ -19,6 +19,14 @@ from ..views import job_builder_views
 
 
 class BatchJobLifecycleTests(TestCase):
+    PARENT_JOB_CREATORS = (
+        ("createMicrographDeselection", ([2], 3)),
+        ("createClassDeselection", ([2],)),
+        ("createStateSelection", ([1, 3],)),
+        ("linkParticleSet", ()),
+        ("linkParticleSetFinal", ("deselected.txt",)),
+    )
+
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
@@ -37,6 +45,74 @@ class BatchJobLifecycleTests(TestCase):
             user="tester",
         )
         self.workspace = Workspace(self.workspace_model.id)
+
+    def test_selection_creators_persist_parent_before_dispatch(self):
+        parent = JobModel.objects.create(
+            dset=self.workspace_model, cdat=timezone.now(), prog="solve2D", status="finished"
+        )
+        project_file = os.path.join(self.workspace_dir, "workspace.simple")
+
+        def dispatch(args, job_dir, workspace_dir, program, job_id, **options):
+            self.assertEqual(JobModel.objects.get(id=job_id).parent, parent.id)
+            return True
+
+        with (
+            patch.object(SIMPLEBatch, "loadUIJSON", return_value=True),
+            patch.object(SIMPLEBatch, "start", side_effect=dispatch),
+        ):
+            for creator, extra_args in self.PARENT_JOB_CREATORS:
+                with self.subTest(creator=creator):
+                    job = BatchJob()
+                    self.assertTrue(getattr(job, creator)(
+                        self.project, self.workspace, project_file, *extra_args,
+                        parent_job_id=parent.id,
+                    ))
+                    self.assertEqual(JobModel.objects.get(id=job.id).parent, parent.id)
+
+    def test_invalid_selection_parents_do_not_create_jobs_or_files(self):
+        other_workspace = WorkspaceModel.objects.create(proj=self.project, dirc="other")
+        other_parent = JobModel.objects.create(dset=other_workspace, cdat=timezone.now())
+        invalid_ids = (None, True, -1, other_parent.id, other_parent.id + 1000)
+        project_file = os.path.join(self.workspace_dir, "workspace.simple")
+        before_files = sorted(os.listdir(self.workspace_dir))
+        before_jobs = JobModel.objects.count()
+
+        with patch.object(batchjob_module, "SIMPLEBatch") as launcher:
+            for creator, extra_args in self.PARENT_JOB_CREATORS:
+                parent_ids = invalid_ids + ((0,) if creator.startswith("create") else ())
+                for parent_id in parent_ids:
+                    with self.subTest(creator=creator, parent=parent_id):
+                        self.assertFalse(getattr(BatchJob(), creator)(
+                            self.project, self.workspace, project_file, *extra_args,
+                            parent_job_id=parent_id,
+                        ))
+
+        launcher.assert_not_called()
+        self.assertEqual(JobModel.objects.count(), before_jobs)
+        self.assertEqual(sorted(os.listdir(self.workspace_dir)), before_files)
+        self.workspace_model.refresh_from_db()
+        self.assertEqual(self.workspace_model.jcnt, 0)
+
+    def test_cross_workspace_particle_set_links_remain_roots(self):
+        os.mkdir(os.path.join(self.project.dirc, "target"))
+        target = WorkspaceModel.objects.create(proj=self.project, dirc="target")
+        project_file = os.path.join(self.workspace_dir, "workspace.simple")
+        with (
+            patch.object(SIMPLEBatch, "loadUIJSON", return_value=True),
+            patch.object(SIMPLEBatch, "start", return_value=True),
+        ):
+            for creator, extra_args in self.PARENT_JOB_CREATORS:
+                if not creator.startswith("link"):
+                    continue
+                with self.subTest(creator=creator):
+                    job = BatchJob()
+                    self.assertTrue(getattr(job, creator)(
+                        self.project, Workspace(target.id), project_file, *extra_args,
+                        parent_job_id=0,
+                    ))
+                    child = JobModel.objects.get(id=job.id)
+                    self.assertEqual(child.parent, 0)
+                    self.assertEqual(child.dset_id, target.id)
 
     def test_new_persists_batch_identity_and_launches_selected_commander(self):
         launcher = batchjob_module.SIMPLEBatch

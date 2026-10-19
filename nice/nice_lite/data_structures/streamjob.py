@@ -589,7 +589,9 @@ class StreamJob(Job):
         project = Project(id=self.jobmodel.dset.proj.id)
         workspace = Workspace(self.jobmodel.dset.id)
         selectionjob = BatchJob()
-        return selectionjob.createStateSelection(project, workspace, parent_proj, selected_states)
+        return selectionjob.createStateSelection(
+            project, workspace, parent_proj, selected_states, parent_job_id=self.jobmodel.id
+        )
 
     def selection_classification_2D(self, final_deselection):
         """Create and launch a cls2D-deselection ('selection') batch job from the final 2D-classification selection.
@@ -608,6 +610,8 @@ class StreamJob(Job):
             self.absdir, "classification_2D", "classification_2D.simple"
         )
         selectionjob = BatchJob()
-        return selectionjob.createClassDeselection(project, workspace, parent_proj, final_deselection)
+        return selectionjob.createClassDeselection(
+            project, workspace, parent_proj, final_deselection, parent_job_id=self.jobmodel.id
+        )
 
 

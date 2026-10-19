@@ -621,6 +621,7 @@ def view_batch_class_2D_selection(request, jobid):
         workspace,
         batch_job.get_result_project_path(),
         deselected_ids,
+        parent_job_id=jobmodel.id,
     ):
         logger.warning(
             "batch classification 2D selection job creation failed for job %s",
@@ -664,6 +665,7 @@ def view_batch_class_3D_selection(request, jobid):
         workspace,
         batch_job.get_result_project_path(),
         selected_states,
+        parent_job_id=jobmodel.id,
     ):
         logger.warning(
             "batch classification 3D selection job creation failed for job %s",
@@ -727,6 +729,7 @@ def view_batch_micrograph_selection(request, jobid):
         result_project,
         deselected_micrograph_ids,
         total_micrographs,
+        parent_job_id=jobmodel.id,
     ):
         logger.warning(
             "batch micrograph selection job creation failed for job %s",

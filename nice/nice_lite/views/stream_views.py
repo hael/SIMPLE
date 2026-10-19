@@ -1407,6 +1407,8 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
         print_error(f"link_particle_set: target workspace {link_workspace.id} not in project {project.id}")
         return redirect("nice_lite:view_stream", jobid=jobid)
 
+    parent_job_id = jobmodel.id if link_workspace.id == workspace.id else 0
+
     if type != "final":
         # Snapshot links a generated snapshot directory (2D or 3D, in its stage's folder) to a
         # new Batch particle-set job.
@@ -1419,12 +1421,14 @@ def view_stream_link_particle_set(request, jobid, setid, filename, type):
             pathlib.Path(filename).stem,
             filename,
         )
-        batchjob.linkParticleSet(project, link_workspace, set_proj)
+        batchjob.linkParticleSet(project, link_workspace, set_proj, parent_job_id=parent_job_id)
     elif type == "final":
         # Final links the selected/deselected final files from classification_2D outputs.
         set_proj = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, "classification_2D", "stream_solve2D.simple")
         set_desel = os.path.join(project.dirc, workspace.dirc, streamjob.dirc, filename)
-        batchjob.linkParticleSetFinal(project, link_workspace, set_proj, set_desel)
+        batchjob.linkParticleSetFinal(
+            project, link_workspace, set_proj, set_desel, parent_job_id=parent_job_id
+        )
     batchjob.set_description("from " + workspace.name + "->" + str(streamjob.id) + " stream->particle set " + str(setid))
     response = redirect("nice_lite:index")
     response.set_cookie(key="selected_project_id", value=project.id)

@@ -896,6 +896,24 @@ class BatchJob(Job):
             metadata["rerun_of"] = rerun_of
         return metadata
 
+    def _set_parent(self, workspacemodel, parent_job_id, *, allow_root=False):
+        """Validate a same-workspace parent before creating selection/link artifacts."""
+        if (
+            not isinstance(parent_job_id, int)
+            or isinstance(parent_job_id, bool)
+            or parent_job_id < (0 if allow_root else 1)
+        ):
+            logger.error("_set_parent: invalid parent job")
+            return False
+        if parent_job_id > 0 and not JobModel.objects.filter(
+            id=parent_job_id,
+            dset=workspacemodel,
+        ).exists():
+            logger.error("_set_parent: parent job is unavailable in this workspace")
+            return False
+        self.parent = parent_job_id
+        return True
+
     def new(
         self,
         workspace,
@@ -1021,12 +1039,14 @@ class BatchJob(Job):
         jobmodel.save()
         return False
 
-    def linkParticleSet(self, project, workspace, set_proj):
+    def linkParticleSet(self, project, workspace, set_proj, *, parent_job_id):
         self.args = {}
 
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
             logger.error("linkParticleSet: workspace not found")
+            return False
+        if not self._set_parent(workspacemodel, parent_job_id, allow_root=True):
             return False
 
         self.disp = workspacemodel.jcnt + 1
@@ -1049,6 +1069,7 @@ class BatchJob(Job):
             dirc=self.dirc,
             pckg="simple_stream",
             prog="link_particle_set",
+            parent=self.parent,
             status="finished",
             master_status="finished",
             master_stats=self._metadata(),
@@ -1064,13 +1085,14 @@ class BatchJob(Job):
         self.absdir = self.get_absdir()
         return True
 
-    def linkParticleSetFinal(self, project, workspace, set_proj, set_desel):
+    def linkParticleSetFinal(self, project, workspace, set_proj, set_desel, *, parent_job_id):
         self.args = {}
-        self.parent = 0
 
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
             logger.error("linkParticleSetFinal: workspace not found")
+            return False
+        if not self._set_parent(workspacemodel, parent_job_id, allow_root=True):
             return False
 
         self.disp = workspacemodel.jcnt + 1
@@ -1119,13 +1141,17 @@ class BatchJob(Job):
             parent_proj=set_proj,
         )
 
-    def createMicrographDeselection(self, project, workspace, parent_proj, deselected_indices, total_micrographs):
+    def createMicrographDeselection(
+        self, project, workspace, parent_proj, deselected_indices, total_micrographs, *, parent_job_id
+    ):
         """Create and launch a mic-deselection ('selection') batch job."""
         self.args = {}
 
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
             logger.error("createMicrographDeselection: workspace not found")
+            return False
+        if not self._set_parent(workspacemodel, parent_job_id):
             return False
 
         self.disp = workspacemodel.jcnt + 1
@@ -1163,6 +1189,7 @@ class BatchJob(Job):
             dirc=self.dirc,
             pckg=self.pckg,
             prog=self.prog,
+            parent=self.parent,
             status="queued",
             master_status="queued",
             master_stats=self._metadata(),
@@ -1187,13 +1214,15 @@ class BatchJob(Job):
             parent_proj=parent_proj,
         )
 
-    def createClassDeselection(self, project, workspace, parent_proj, deselected_ids):
+    def createClassDeselection(self, project, workspace, parent_proj, deselected_ids, *, parent_job_id):
         """Create and launch a cls2D-deselection ('selection') batch job."""
         self.args = {}
 
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
             logger.error("createClassDeselection: workspace not found")
+            return False
+        if not self._set_parent(workspacemodel, parent_job_id):
             return False
 
         self.disp = workspacemodel.jcnt + 1
@@ -1227,6 +1256,7 @@ class BatchJob(Job):
             dirc=self.dirc,
             pckg=self.pckg,
             prog=self.prog,
+            parent=self.parent,
             status="queued",
             master_status="queued",
             master_stats=self._metadata(),
@@ -1251,7 +1281,7 @@ class BatchJob(Job):
             parent_proj=parent_proj,
         )
 
-    def createStateSelection(self, project, workspace, parent_proj, selected_states):
+    def createStateSelection(self, project, workspace, parent_proj, selected_states, *, parent_job_id):
         """Create and launch a cls3D state-selection ('selection') batch job.
 
         Unlike class/mic deselection, the 'selection' program takes the kept
@@ -1263,6 +1293,8 @@ class BatchJob(Job):
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
             logger.error("createStateSelection: workspace not found")
+            return False
+        if not self._set_parent(workspacemodel, parent_job_id):
             return False
 
         self.disp = workspacemodel.jcnt + 1
@@ -1294,6 +1326,7 @@ class BatchJob(Job):
             dirc=self.dirc,
             pckg=self.pckg,
             prog=self.prog,
+            parent=self.parent,
             status="queued",
             master_status="queued",
             master_stats=self._metadata(),
