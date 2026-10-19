@@ -883,13 +883,14 @@ subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
         real,        intent(in)  :: lp
         real,        intent(out) :: med_rot_out, med_sh_out, basin_out
         real, allocatable :: rot(:), sh(:)
-        real    :: m1(3,3), m2(3,3)
-        integer :: j
+        real(dp) :: m1(3,3), m2(3,3)
+        integer  :: j
         allocate(rot(nptcls), sh(nptcls))
         do j = 1, nptcls
-            m1     = os%get_mat(j)
-            m2     = truth%get_mat(j)
-            rot(j) = acos(max(-1., min(1., (sum(m1*m2) - 1.)/2.)))
+            m1 = real(os%get_mat(j), dp)
+            m2 = real(truth%get_mat(j), dp)
+            ! the chord form: acos of a single-precision trace resolves only about 0.002 degrees near zero
+            rot(j) = real(2._dp*asin(min(1._dp, sqrt(sum((m1 - m2)**2))/(2._dp*sqrt(2._dp)))))
             sh(j)  = smpd*norm2(os%get_2Dshift(j) - truth%get_2Dshift(j))
         enddo
         basin_out   = real(count(rot <= lp/(MSKDIAM/2.)))/real(nptcls)

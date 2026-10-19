@@ -584,7 +584,11 @@ reference-mask control, so early stages remain spherical.
 
 NU filtering starts at `NU_FILTER_STAGE` = 5 (6 until 2026-10-18),
 overridable from the command line by `nu_stage` for testing (0 = the built-in
-value; 3 is the earliest accepted, being the first stage with an FSC), one
+value; 5 is the earliest accepted). NU filtering needs an alignment good
+enough for its local-resolution estimate: below that the estimate is
+meaningless, the filtered reference reinforces the bad alignment rather than
+correcting it, and the run goes into a hole. `nu_stage` 3 and 4 were tried on
+PfCRT and streptavidin and did not work. Stage 5 is one
 stage earlier than the `prob` -> `prob_neigh` switch at `PROB_NEIGH_REFINE_STAGE`.
 The two were the same stage before, so a reference becoming NU-filtered and a
 global search becoming a neighbourhood search arrived together and could not

@@ -697,8 +697,11 @@ contains
                 THROW_HARD('cohort_sampling must be yes or no')
         end select
         if( self%nu_stage < 0 ) THROW_HARD('nu_stage must be non-negative (0 = default)')
-        if( self%nu_stage > 0 .and. self%nu_stage < 3 ) &
-            &THROW_HARD('nu_stage must be at least 3: stage 3 is the first stage with an FSC')
+        ! 5 is the earliest NU filtering works: the alignment must be good enough for
+        ! the local-resolution estimate, or the filter reinforces it into a hole.
+        ! nu_stage 3 and 4 were tried on PfCRT and streptavidin (2026-10-19)
+        if( self%nu_stage > 0 .and. self%nu_stage < 5 ) &
+            &THROW_HARD('nu_stage must be at least 5: earlier stages do not support NU filtering')
         select case(trim(self%scan_exit))
             case('yes','no')
             case DEFAULT

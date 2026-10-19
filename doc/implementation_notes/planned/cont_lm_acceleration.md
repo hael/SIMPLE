@@ -340,26 +340,95 @@ Keep all the profile directories together with build B.
 
 #### Baseline record
 
-To be filled in by the maintainer.
+Taken 2026-10-19 by the agent with `~/src/SIMPLE_cont_bench/run_baseline.sh`.
+Builds A and B are detached worktrees there, each with its own `build/`, and
+every run directory is under `runs/`. The beta-gal checkpoint is a read-only
+copy of `~/Processing/bgal/bench/5_solve3D`: `bench.simple`, whose stack path
+is absolute, and `recvol_state01{,_even,_odd}.mrc`. Each beta-gal run starts
+from a fresh copy of it.
 
 | Item | Value |
 | --- | --- |
 | Build A commit | `86bf97213` |
-| Build B commit (stage 2) | |
-| Machine, threads | |
+| Build B commit (stage 2) | `b2d8f34e5` |
+| Machine, threads | FWM-S116118, Apple M2 Ultra (16 performance + 8 efficiency cores, 192 GB); timed runs `nthr=16`, alone on the machine |
 | SNR | 0.05; polish also at 0.02 |
-| `unit_cart_align3D` (B) | |
-| CR1 identity, A against B | |
-| Counter cost (beta-gal, A B B A) | |
-| Before-profile directories | |
+| `unit_cart_align3D` (B) | PASS, 761 of 761 assertions; fast gate 15/15 for A and for B |
+| CR1 identity, A against B | Identical: the 60 check values of `metrics.tsv` are byte-identical, and both gates pass (`runs/cr1_A`, `runs/cr1_B`, about 40 minutes each at one thread) |
+| Counter cost (beta-gal, A B B A) | Orientation search A 19.34, 19.41 s; B 19.33, 19.46 s (a third B run 19.12 s). The difference is inside the spread: no measurable cost. |
+| Before-profile directories | `runs/profile_cr1_B/profile`: 20 of 20 seeds pass (table below). `runs/bench_polish_seed{1..5}`: to be retaken, because the pose-error metric was quantized (below). |
 
-| Case | Search thread-s | Wall (s) | Passes / solve | LM its / solve | Solves at the cap | Rejected fraction | Actual/predicted mode bin | ns / pixel-eval | Median rot (deg) | Median shift (A) | Mean corr_cart |
+Simulated cases: 10 000 particles, box 256 at 0.73 A, reference reconstructed at
+the truth poses. The polish band is shell 62 (lp 3 A) and the capture band
+shell 23 (lp 8 A). Beta-gal: 4 199 active particles of 5 513, box 256 at
+1.275 A, band shell 88 (3.7 A), D2, euclid.
+
+| Case | Search thread-s | Search wall (s) | Passes / solve | LM its / solve | Solves at the cap | Rejected fraction | Actual/predicted mode bin (share) | ns / pixel-eval | Median rot (deg) | Median shift (A) | Mean corr_cart |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| polish_euclid | | | | | | | | | | | |
-| polish_cc | | | | | | | | | | | |
-| capture_euclid | | | | | | | | | | | |
-| capture_cc | | | | | | | | | | | |
-| beta-gal (3 runs) | | | | | | | | | - | - | |
+| polish_euclid, snr 0.05 | 381.6 | 24.1 | 14.88 | 10.88 | 0 | 0.41 | 1.25-1.75 (0.32) | 209 | 0.084 | 0.029 | 0.67 (`exp(-L)`) |
+| polish_cc, snr 0.05 | 378.7 | 24.0 | 14.43 | 11.43 | 0 | 0.38 | 1.25-1.75 (0.38) | 214 | 0.088 | 0.030 | 0.78 |
+| capture_euclid, snr 0.05 | 66.7 | 4.2 | 17.69 | 19.70 | 33 | 0.16 | 0.75-1.25 (0.47) | 218 | 0.250 | 0.095 | 0.83 (`exp(-L)`) |
+| capture_cc, snr 0.05 | 61.1 | 3.9 | 15.71 | 19.91 | 15 | 0.16 | 0.75-1.25 (0.64) | 225 | 0.320 | 0.133 | 0.89 |
+| polish_euclid, snr 0.02 | 375.6 | 23.8 | 14.78 | 10.78 | 0 | 0.42 | 1.25-1.75 (0.31) | 207 | 0.128 | 0.045 | 0.56 (`exp(-L)`) |
+| polish_cc, snr 0.02 | 429.1 | 27.1 | 16.40 | 13.40 | 0 | 0.36 | 1.25-1.75 (0.51) | 213 | 0.131 | 0.046 | 0.65 |
+| beta-gal, B (median of 3) | 305.2 | 19.3 | 13.75 | 9.75 | 0 | 0.48 | 0.25-0.75 (0.64) | 215 | - | - | - |
+
+Seeds were 2 degrees and 1 A off for polish, and 15 degrees and 2.6 A off for
+capture. Every solve ended "accepted". Memory: the Cartesian references take
+1.08 GB (two halves at 0.54 GB); peak RSS is 6.9-7.8 GiB for the simulated
+cases and 5.1 GiB for beta-gal. The full histograms are in each case's
+`BENCH/bench_summary/bench_report.txt`.
+
+**Before-profile of the gate** (`test=profile target=cont_refine3D_1jxy nseeds=20`,
+8 threads each, build B). Each value is the median over 20 seeds, with its
+spread, the worst seed and the floor. No seed failed.
+
+| Metric | Median | Spread | Worst | Floor |
+| --- | --- | --- | --- | --- |
+| a (euclid) median rotation error (deg) | 0.943 | 0.035 | 1.003 | 1.5 |
+| a (euclid) median shift error (px) | 0.071 | 0.002 | 0.075 | 0.2 |
+| b (cc) median rotation error (deg) | 0.229 | 0.003 | 0.237 | 1.5 |
+| b (cc) median shift error (px) | 0.059 | 0.001 | 0.061 | 0.2 |
+| c (distributed) difference to a (deg) | 0 | 0 | 0 | 0.01 |
+| e (auto, `pose_cont=only`) median rotation error (deg) | 0.980 | 0.306 | 1.709 | 7.5 |
+| f (polish) symmetry-aware error (deg) | 0.423 | 0.019 | 0.474 | 0.93 |
+| g (auto with polish) symmetry-aware error (deg) | 0.176 | 0.022 | 0.564 | 1.55 |
+| h (continuation) symmetry-aware error (deg) | 0.174 | 0.030 | 0.258 | 1.55 |
+
+**The pose-error metric of the benchmark was too coarse.** It took the `acos`
+of a single-precision trace, the gate's formula. Near zero that resolves only
+about 0.002 degrees, so at the polish errors (about 0.085 degrees) the median
+moved in steps of a few percent: five seed offsets gave 0.0839 degrees to four
+digits. The benchmark now uses the chord form in double precision,
+`2 asin(||R1 - R2||_F / (2 sqrt 2))`, which resolves the seeds (0.0858 against
+0.0873 for euclid). The simulated truth metrics in the case table above, and the
+benchmark seed runs, are therefore retaken with build B rebuilt at the commit
+of this fix. The solver is unchanged, so the timings and work counts stand; the
+beta-gal runs and the CR1 identity check do not use this metric.
+
+What the baseline says:
+
+- **The fixed passes are 21-28% of all passes.** They are 3 or 4 of 13.75-17.7
+  per solve (section 3.2, stage 3a).
+- **36-48% of trial evaluations are rejected** in the polish cases and on
+  beta-gal. That is the terminal phase of the stopping rule (section 3.3), the
+  largest single waste, and stage 4's main lever.
+- **Real data answers the open euclid question.** On beta-gal, 64% of euclid's
+  accepted steps have actual/predicted below 0.75: its Gauss-Newton matrix is
+  too small, the over-step that section 3.1 predicts for a filtered,
+  attenuated reference. The simulation, whose reference is an unfiltered
+  reconstruction, does not show it, so stage 4 is judged on beta-gal as well.
+- **cc's steps are about 1.3-1.5 times too short at realistic SNR** (mode bin
+  1.25-1.75). The scaling of section 3.1 is a modest gain.
+- **The capture regime iterates longer** (about 20 LM iterations, some of them
+  without an evaluation because the bound guard rejected the proposal), and a
+  few solves reach the cap. Its time is small next to the polish band's, since
+  shell 23 has a seventh of the pixels of shell 62.
+- **About 207-225 ns per pixel-evaluation on every case,** the figure stage 6
+  must lower.
+- **Work counts are identical across repeated beta-gal runs** (13.75 passes
+  per solve in all three), so a change in them between builds is a real
+  change, not noise.
 
 #### First observations (smoke runs, 2026-10-19)
 
@@ -940,6 +1009,8 @@ them would understate the iteration count.
 | Fast-path oracle | Replaced routine kept and compared | Only the gradient is checked, against finite differences; the 5x5 matrix and `shift_normal_terms` have no independent check |
 | Threads | 1 against `omp_get_num_procs()` threads, 20 repeats, bit for bit (speed2D rule) | A fixed 3-thread team, run once |
 | Negative control | Required for every gate | None in `cont_refine3D_1jxy` |
+| Reference scale | The objective's assumptions met | The gate's euclid stages (a, c) run against the pdb2mrc truth map, whose amplitude scale does not match the noise-normalized particles. Their median rotation error is 0.94 degrees, against 0.23 degrees for cc (stage b) on the same data (before-profile, stage 2). The benchmark reconstructs its reference for this reason. |
+| Small-angle metric | Resolves the tested differences | The gate's `acos` of a single-precision trace resolves about 0.002 degrees near zero; enough for its floors near 1 degree, not for comparing stages |
 | Large tester objects | `class(T), allocatable` | Plain `type(parameters)`/`type(builder)` locals (`simple_strategy3D_cont_tester.f90:75-76`) |
 | Comments | Current | `production/CMakeLists.txt:243-245` says 5,000 particles and kept TSVs; the code uses 1,000 and removes its files (stage 7) |
 
@@ -965,4 +1036,5 @@ The oracle checks stage 6 needs:
 Still open, to be decided from measurements:
 
 - the stopping tolerances (the stage 4 profile);
-- whether the euclid matrix is rescaled (the stage 2 telemetry).
+- how the euclid matrix is corrected. The stage 2 baseline shows that it over-steps on beta-gal
+  (64% of accepted steps below 0.75), so stage 4 covers euclid too; the form of the correction is open.

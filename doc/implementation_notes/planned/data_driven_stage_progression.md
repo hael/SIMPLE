@@ -48,6 +48,32 @@ The schedule was therefore already being driven by measured resolution, with
 the rungs acting as an upper bound that the mechanisms routinely overrode.
 That is the awkward middle: a bound with a schedule's authority.
 
+**The pre-NU stages have a job, and it is not resolution.** `nu_stage` 3 and
+4 were tried on PfCRT and streptavidin and did not work; 5 is the earliest
+the NU machinery can be inserted, and `nu_stage` now rejects anything lower.
+The reason is that NU filtering needs an alignment good enough for its
+local-resolution estimate: below that the estimate is meaningless, the
+filtered reference reinforces the bad alignment instead of correcting it, and
+the run goes into a hole.
+
+That changes how the figures above should be read. Stages 1-4 are not 72
+wasted iterations with a missing filter; they exist to earn an alignment the
+filter can use, and they are the prerequisite for everything stage 5 onward
+does. The surplus, if any, is *within* that job rather than a case against
+it, and the question is whether those stages need that many iterations to
+finish it -- measured on alignment quality, not on resolution. The evidence
+that something is loose there is alignment-shaped: on the `latest6`
+reference, stage 3's orientation overlap peaks at its fourth iteration
+(0.50-0.52) and then declines monotonically for the remaining thirteen
+(to 0.43-0.45) in every restart, and stage 1's overlap plateaus by its fourth
+of twenty.
+
+So a progression rule needs **two signals, not one**: alignment quality
+(overlap) governs the pre-NU stages, measured resolution governs the stages
+from 5 on. Keying the early stages to resolution would be the same category
+error as the reverted `params%lp` exit -- steering on a quantity that is not
+what the stage is there to improve.
+
 ## The proposal
 
 Make the roles explicit. The ladder supplies:

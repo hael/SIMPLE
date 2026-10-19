@@ -159,7 +159,7 @@ contains
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
         call prg%add_input(UI_FILT, 'nu_stage', 'num', 'Stage NU filtering starts at', &
             &'solve3D stage that switches on NU filtering (0: the built-in default); &
-            &stage 3 is the earliest, the first stage with an FSC', &
+            &5 is the earliest that works, tested on PfCRT and streptavidin', &
             &'NU start stage', .false., 0., group="filter", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
