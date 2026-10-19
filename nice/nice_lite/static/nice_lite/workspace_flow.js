@@ -177,6 +177,23 @@
   };
   cy.on("render", scheduleCardPosition);
   layout.on("layoutstop", () => {
+    // Order rows from top to bottom, moving each job together with its branch.
+    const rows = new Map();
+    cy.nodes().sort((first, second) => first.position("y") - second.position("y")).forEach((node) => {
+      const y = node.position("y");
+      if (!rows.has(y)) rows.set(y, []);
+      rows.get(y).push(node);
+    });
+    cy.batch(() => {
+      rows.forEach((nodes) => {
+        const xPositions = nodes.map((node) => node.position("x")).sort((a, b) => a - b);
+        nodes.sort((first, second) => first.data("order") - second.data("order"));
+        nodes.forEach((node, index) => {
+          const offset = xPositions[index] - node.position("x");
+          if (offset) node.union(node.successors().nodes()).shift({ x: offset, y: 0 });
+        });
+      });
+    });
     if (!restoreViewport()) cy.fit(cy.elements(), 56);
     positionCards();
     cy.on("pan zoom", scheduleViewportSave);
