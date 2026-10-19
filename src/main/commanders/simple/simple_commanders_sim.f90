@@ -7,6 +7,8 @@ use simple_simulator, only: simimg
 implicit none
 #include "simple_local_flags.inc"
 
+private :: state_fractions, draw_states, oritab_holds_states
+
 type, extends(commander_base) :: commander_simulate_noise
   contains
     procedure :: execute      => exec_simulate_noise
@@ -69,10 +71,11 @@ contains
         type(ori)        :: orientation, o_thres, o_mirr
         type(oris)       :: packed_oris
         type(ctf)        :: tfun
-        type(projector)  :: vol_pad
+        type(projector), allocatable :: vol_pads(:)
+        integer,         allocatable :: states(:)
         real             :: bfac, bfacerr, euls(3), euls_mirr(3)
-        integer          :: i, cnt, ntot
-        logical          :: apply_ctf
+        integer          :: i, cnt, ntot, nstates, istate, ldim_vol(3), nsec
+        logical          :: apply_ctf, l_oritab_states
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
         if( .not. cline%defined('dferr')    ) call cline%set('dferr',    1.5)
@@ -81,6 +84,12 @@ contains
         call cline%set('nspace', cline%get_iarg('nptcls'))
         call cline%set('eo', '  no')
         call build%init_params_and_build_general_tbox(cline,params)
+        ! the simulator multiplies by the CTF or leaves it out: no other mode is applied
+        select case(trim(params%ctf))
+            case('yes', 'no')
+            case DEFAULT
+                THROW_HARD('simulate_particles applies ctf=yes or ctf=no only')
+        end select
         apply_ctf     = trim(params%ctf) .eq. 'yes'
         if( .not. cline%defined('outstk') ) params%outstk = string('simulated_particles')//params%ext
         if( cline%defined('part') )then
@@ -100,14 +109,51 @@ contains
         if( .not. build%spproj_field%isthere('dfx') )then
             if( apply_ctf ) call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
         endif
-        call build%spproj_field%set_all2single('state', 1.0)
-        ! prepare for image generation
-        call build%vol%read(params%vols(1))
-        call build%vol%mask3D_soft(params%msk, backgr=0.)
-        call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
-        call build%vol%pad(vol_pad)
-        call vol_pad%fft
-        call vol_pad%expand_cmat()
+        ! the state of every particle: from oritab, or drawn with the population fractions
+        nstates = max(1, params%nstates)
+        do istate = 2, nstates
+            if( .not. cline%defined('vol'//int2str(istate)) ) THROW_HARD('nstates=K needs vol1 to volK')
+        enddo
+        l_oritab_states = .false.
+        if( nstates > 1 .and. cline%defined('oritab') )then
+            if( fname2format(params%oritab) == 'O' )then
+                l_oritab_states = build%spproj_field%isthere('state')
+            else
+                l_oritab_states = oritab_holds_states(params%oritab)
+            endif
+        endif
+        ! the states come from one source: the populations are not applied to states the oritab holds
+        if( l_oritab_states .and. cline%defined('state_pops') )&
+            &THROW_HARD('state_pops with an oritab that holds states: the states would come from the oritab')
+        if( nstates == 1 )then
+            call build%spproj_field%set_all2single('state', 1.0)
+        else if( l_oritab_states )then
+            states = nint(build%spproj_field%get_all('state'))
+            if( any(states < 1 .or. states > nstates) ) THROW_HARD('oritab holds a state outside 1 to nstates')
+        else
+            states = draw_states(build%spproj_field%get_noris(), state_fractions(params%state_pops, nstates))
+            do i = 1, size(states)
+                call build%spproj_field%set_state(i, states(i))
+            enddo
+        endif
+        ! every state of the mixture holds a particle
+        if( nstates > 1 )then
+            do istate = 1, nstates
+                if( count(states == istate) == 0 ) THROW_HARD('state '//int2str(istate)//' of the mixture holds no particle')
+            enddo
+        endif
+        ! prepare for image generation: one padded volume per state, held together
+        allocate(vol_pads(nstates))
+        do istate = 1, nstates
+            call find_ldim_nptcls(params%vols(istate), ldim_vol, nsec)
+            if( any(ldim_vol /= [params%box, params%box, params%box]) ) THROW_HARD('the volumes of the states differ in box')
+            call build%vol%read(params%vols(istate))
+            call build%vol%mask3D_soft(params%msk, backgr=0.)
+            call vol_pads(istate)%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
+            call build%vol%pad(vol_pads(istate))
+            call vol_pads(istate)%fft
+            call vol_pads(istate)%expand_cmat()
+        enddo
         write(logfhandle,'(A)') '>>> GENERATING IMAGES'
         cnt  = 0
         ntot = params%top-params%fromp+1
@@ -131,7 +177,7 @@ contains
             call progress(cnt,ntot)
             ! project vol
             call build%img_pad%zero_and_flag_ft
-            call vol_pad%fproject(orientation, build%img_pad)
+            call vol_pads(orientation%get_state())%fproject(orientation, build%img_pad)
             ! shift
             call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
             call build%img%zero_and_unflag_ft
@@ -171,7 +217,11 @@ contains
         else
             call build%spproj_field%write(params%outfile, [1,params%nptcls])
         endif
-        call vol_pad%kill_expanded
+        do istate = 1, nstates
+            call vol_pads(istate)%kill_expanded
+            call vol_pads(istate)%kill
+        enddo
+        deallocate(vol_pads)
         call killimgbatch(build)
         call orientation%kill
         ! end gracefully
@@ -838,5 +888,87 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_NANOPARTICLE NORMAL STOP ****')
     end subroutine exec_simulate_nanoparticle
+
+    !> whether the orientation document fname gives particles a state (a state= key on a line)
+    logical function oritab_holds_states( fname )
+        class(string), intent(in) :: fname
+        character(len=4096) :: line
+        integer :: funit, ios
+        oritab_holds_states = .false.
+        open(newunit=funit, file=fname%to_char(), status='old', action='read', iostat=ios)
+        if( ios /= 0 ) return
+        do
+            read(funit,'(a)',iostat=ios) line
+            if( ios /= 0 ) exit
+            if( index(' '//line, ' state=') > 0 .or. index(line, achar(9)//'state=') > 0 )then
+                oritab_holds_states = .true.
+                exit
+            endif
+        enddo
+        close(funit)
+    end function oritab_holds_states
+
+    !> The population fractions of nstates states: the comma-separated list pops, or equal when it is
+    !! blank; they are non-negative and sum to 1 (within 1e-3)
+    function state_fractions( pops, nstates ) result( fracs )
+        use simple_string_utils, only: parsestr
+        character(len=*), intent(in) :: pops
+        integer,          intent(in) :: nstates
+        real, allocatable     :: fracs(:)
+        character(len=STDLEN) :: list
+        character(len=32)     :: items(MAXS)
+        integer :: n, i, ios
+        allocate(fracs(nstates), source=1. / real(nstates))
+        if( len_trim(pops) == 0 ) return
+        list = pops
+        call parsestr(list, ',', items, n)
+        if( n /= nstates ) THROW_HARD('state_pops must hold one fraction per state')
+        do i = 1, n
+            read(items(i),*,iostat=ios) fracs(i)
+            if( ios /= 0 ) THROW_HARD('state_pops is not a list of numbers: '//trim(pops))
+        enddo
+        if( any(fracs < 0.) ) THROW_HARD('state_pops holds a negative fraction')
+        if( abs(sum(fracs) - 1.) > 1.e-3 ) THROW_HARD('the fractions of state_pops must sum to 1')
+    end function state_fractions
+
+    !> The states of n particles in exact counts: each fraction times n, rounded, the remainder given
+    !! to (or taken from) the states in order of decreasing fraction; the order of the labels is
+    !! shuffled with the seeded generator
+    function draw_states( n, fracs ) result( states )
+        use simple_rnd, only: shuffle
+        integer, intent(in) :: n
+        real,    intent(in) :: fracs(:)
+        integer, allocatable :: states(:)
+        integer :: counts(size(fracs)), order(size(fracs)), k, i, j, nleft
+        logical :: taken(size(fracs))
+        counts = nint(fracs * real(n))
+        ! the states by decreasing fraction, ties in index order
+        taken = .false.
+        do i = 1, size(fracs)
+            j = maxloc(fracs, dim=1, mask=.not. taken)
+            order(i) = j
+            taken(j) = .true.
+        enddo
+        nleft = n - sum(counts)
+        i = 0
+        do while( nleft /= 0 )
+            k = order(mod(i, size(fracs)) + 1)
+            if( nleft > 0 )then
+                counts(k) = counts(k) + 1
+                nleft     = nleft - 1
+            else if( counts(k) > 0 )then
+                counts(k) = counts(k) - 1
+                nleft     = nleft + 1
+            endif
+            i = i + 1
+        enddo
+        allocate(states(n))
+        j = 0
+        do k = 1, size(fracs)
+            states(j+1:j+counts(k)) = k
+            j = j + counts(k)
+        enddo
+        call shuffle(states)
+    end function draw_states
 
 end module simple_commanders_sim

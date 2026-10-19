@@ -10,6 +10,9 @@ type(ui_program), target :: simulate_particles
 type(ui_program), target :: solve3D_addon
 type(ui_program), target :: solve3D_addon_snapshots
 type(ui_program), target :: cont_refine3D_1jxy
+type(ui_program), target :: multistate_assignment
+type(ui_program), target :: multistate_workflows
+type(ui_program), target :: state_fixture
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
 type(ui_program), target :: rec3D_backends
@@ -21,6 +24,9 @@ type(ui_program), target :: flex_pca_blobs
 type(ui_program), target :: solve3D_pyramid_blobs
 type(ui_program), target :: write_state_weights_labels
 type(ui_program), target :: write_state_weights_mixed
+type(ui_program), target :: nightly
+type(ui_program), target :: profile
+type(ui_program), target :: identity
 
 contains
 
@@ -31,6 +37,9 @@ contains
         call new_solve3D_addon(tsttab)
         call new_solve3D_addon_snapshots(tsttab)
         call new_cont_refine3D_1jxy(tsttab)
+        call new_multistate_assignment(tsttab)
+        call new_multistate_workflows(tsttab)
+        call new_state_fixture(tsttab)
         call new_simulated_workflow(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
@@ -42,6 +51,9 @@ contains
         call new_flex_pca_blobs(tsttab)
         call new_solve3D_pyramid_blobs(tsttab)
         call new_write_state_weights(tsttab)
+        call new_nightly(tsttab)
+        call new_profile(tsttab)
+        call new_identity(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -52,6 +64,9 @@ contains
         write(logfhandle,'(A)') solve3D_addon%name%to_char()
         write(logfhandle,'(A)') solve3D_addon_snapshots%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
+        write(logfhandle,'(A)') multistate_assignment%name%to_char()
+        write(logfhandle,'(A)') multistate_workflows%name%to_char()
+        write(logfhandle,'(A)') state_fixture%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
@@ -64,6 +79,9 @@ contains
         write(logfhandle,'(A)') solve3D_pyramid_blobs%name%to_char()
         write(logfhandle,'(A)') write_state_weights_labels%name%to_char()
         write(logfhandle,'(A)') write_state_weights_mixed%name%to_char()
+        write(logfhandle,'(A)') nightly%name%to_char()
+        write(logfhandle,'(A)') profile%name%to_char()
+        write(logfhandle,'(A)') identity%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -106,7 +124,9 @@ contains
         &'simulate_particles',&                     ! name
         &'quantitatively validate particle simulation from embedded 6VXX',&
         &'checks volume and stack metadata, every image variance, orientation diversity, shifts, '//&
-        &'and CTF parameter bounds against deterministic inputs',&
+        &'and CTF parameter bounds against deterministic inputs; a mixture of three states with given '//&
+        &'populations (exact counts, each image from its own state''s volume); and the multi-state test '//&
+        &'fixture in its families and modes, its cache and the point groups of its truths',&
         &'simple_test_exec',&                       ! executable
         &.false., display_name='Particle Simulation Validation')                                   ! requires sp_project
         ! add to ui_hash
@@ -156,6 +176,66 @@ contains
         ! add to ui_hash
         call add_ui_program('cont_refine3D_1jxy', cont_refine3D_1jxy, tsttab, UI_CATEGORY)
     end subroutine new_cont_refine3D_1jxy
+
+    subroutine new_multistate_assignment( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call multistate_assignment%new(&
+        &'multistate_assignment',&                  ! name
+        &'validate multi-state refine3D against the known states of a simulated blob phantom',&
+        &'refine3D nstates=3 with refine=prob and with refine=prob_neigh on 1 500 simulated particles of three '//&
+        &'blob phantoms (populations 50, 30 and 20 %), from the truths low-passed to 20 A and random initial '//&
+        &'states, the state labels, maps and poses checked against the simulation truth, with shuffled-label and '//&
+        &'duplicated-maps controls in every refinement and an identical-states control on request',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Multi-State Assignment Validation')                            ! requires sp_project
+        call multistate_assignment%add_input(UI_PARM, 'suite', 'str', 'Sub-suite', &
+            &'Run one case: prob, prob_neigh or identical (the identical-states control); list prints them. '//&
+            &'Default runs prob and prob_neigh', '', .false., '')
+        call multistate_assignment%add_input(UI_COMP, nthr, required_override=.false.)
+        ! add to ui_hash
+        call add_ui_program('multistate_assignment', multistate_assignment, tsttab, UI_CATEGORY)
+    end subroutine new_multistate_assignment
+
+    subroutine new_multistate_workflows( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call multistate_workflows%new(&
+        &'multistate_workflows',&                   ! name
+        &'validate multi-state solve3D and refine3D_states against known beta-galactosidase states',&
+        &'On 3 000 simulated particles of the tetramer, the tetramer less a chain and a dimer of '//&
+        &'beta-galactosidase (populations 50, 30 and 20 %): solve3D_cavgs then solve3D cavg_ini_ext=yes on the '//&
+        &'class averages of an oracle 2D classification, solve3D from the particles, and refine3D_states '//&
+        &'from a single-state solution; the state labels, the maps (docked in both hands) and the poses '//&
+        &'checked against the simulation truth, with shuffled-label and duplicated-maps controls; the solve3D '//&
+        &'route from the particles is held to floors, the other two are robustness profiles',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Multi-State Workflow Validation')                              ! requires sp_project
+        call multistate_workflows%add_input(UI_PARM, 'suite', 'str', 'Sub-suite', &
+            &'Run one workflow: cavgs, shc or states; <workflow>_identical runs it on identical states (a control), '//&
+            &'hard_<workflow> on the conformational states (a robustness profile); list prints them. '//&
+            &'Default (the CTest entry) runs shc, the route held to floors', '', .false., '')
+        call multistate_workflows%add_input(UI_COMP, nthr, required_override=.false.)
+        ! add to ui_hash
+        call add_ui_program('multistate_workflows', multistate_workflows, tsttab, UI_CATEGORY)
+    end subroutine new_multistate_workflows
+
+    subroutine new_state_fixture( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call state_fixture%new(&
+        &'state_fixture',&                          ! name
+        &'validate the multi-state test fixture: its modes, its cache and the point groups of its truths',&
+        &'The blob family in its search, known-pose and exact-view modes, each built twice (the second from the '//&
+        &'cache), with exact state counts and the project each mode promises; the compositional and '//&
+        &'conformational beta-galactosidase states, each truth holding its declared point group and not the next '//&
+        &'larger one',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Multi-State Fixture Validation')                               ! requires sp_project
+        call state_fixture%add_input(UI_COMP, nthr, required_override=.false.)
+        ! add to ui_hash
+        call add_ui_program('state_fixture', state_fixture, tsttab, UI_CATEGORY)
+    end subroutine new_state_fixture
 
     subroutine new_simulated_workflow( tsttab )
         class(ui_hash), intent(inout) :: tsttab
@@ -217,16 +297,18 @@ contains
         call pcg_frac_update%new(&
         &'pcg_frac_update',&
         &'Project-backed PCG fractional-update validation',&
-        &'Uses reconstruct3D inputs and internally partitions every populated state/half into two '//&
+        &'Uses reconstruct3D inputs (projfile=, or without it a project of known inputs the multi-state '//&
+        &'test fixture builds: 600 blob particles at their true poses, objfun=cc) and internally partitions '//&
+        &'every populated state/half into two '//&
         &'deterministic complementary subsets. Validates raw (B,D) additivity, u/f continuation '//&
         &'weighting, full-mass ensemble preservation, and continuation artifact replay.',&
         &'simple_test_exec',&
-        &.true., display_name='PCG Fractional Update Validation')
+        &.false., display_name='PCG Fractional Update Validation')
         call pcg_frac_update%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0)
         call pcg_frac_update%add_input(UI_SRCH, trs)
-        call pcg_frac_update%add_input(UI_SRCH, pgrp)
+        call pcg_frac_update%add_input(UI_SRCH, pgrp, required_override=.false.)
         call pcg_frac_update%add_input(UI_SRCH, objfun)
         call pcg_frac_update%add_input(UI_FILT, ml_reg)
         call pcg_frac_update%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map', &
@@ -236,7 +318,7 @@ contains
         &'Iterations used for the continuation replay comparison', 'iterations{2}', .false., 2.)
         call pcg_frac_update%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Tolerance used for the continuation replay comparison', 'tolerance{0}', .false., 0.0)
-        call pcg_frac_update%add_input(UI_MASK, mskdiam)
+        call pcg_frac_update%add_input(UI_MASK, mskdiam, required_override=.false.)
         call pcg_frac_update%add_input(UI_COMP, nparts, required_override=.false.)
         call pcg_frac_update%add_input(UI_COMP, nthr)
         call add_ui_program('pcg_frac_update', pcg_frac_update, tsttab, UI_CATEGORY)
@@ -342,7 +424,8 @@ contains
         &'runs one deterministic two-state phantom through shared memory and two real local workers, '//&
         &'then checks each result against truth and records cross-mode agreement; then refines each '//&
         &'truth-matched state with refine3D_auto state=X, with the frozen FLEX weights and with the hard labels; '//&
-        &'then runs cls_expansion and refine3D_states_cavgs on a three-state phantom and checks the class-average '//&
+        &'then runs cls_expansion and refine3D_states_cavgs on three beta-galactosidase states in exact views '//&
+        &'and checks the class-average '//&
         &'states against truth',&
         &'simple_test_exec',&
         &.false., display_name='FLEX PCA Workflow Validation')
@@ -386,5 +469,74 @@ contains
         call write_state_weights_mixed%add_input(UI_SRCH, nstates)
         call add_ui_program('write_state_weights_mixed', write_state_weights_mixed, tsttab, UI_CATEGORY)
     end subroutine new_write_state_weights
+
+    subroutine new_nightly( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call nightly%new(&
+        &'nightly',&
+        &'the whole high-level suite, packed by CPU reservation',&
+        &'runs every correctness entry of the test registry once, each in its own directory under dir= as a child '//&
+        &'process in its own session with its deadline, packed so that the peak CPU reservations of the running '//&
+        &'entries stay within ncunits= cores; writes nightly_report.tsv (one row per entry and gate metric, with '//&
+        &'outcome, wall time and peak CPU use) and fails if an entry or a gate failed',&
+        &'simple_test_exec',&
+        &.false., display_name='Nightly Test Suite')
+        call nightly%add_input(UI_PARM, 'ncunits', 'num', 'Core budget', &
+            &'Cores the running entries may reserve together{the processors of the machine}', '# cores', .false., 0.)
+        call nightly%add_input(UI_PARM, 'dir', 'dir', 'Output directory', &
+            &'Directory of the run{nightly_<date>_<time>}', 'directory', .false., '')
+        call add_ui_program('nightly', nightly, tsttab, UI_CATEGORY)
+    end subroutine new_nightly
+
+    subroutine new_profile( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call profile%new(&
+        &'profile',&
+        &'robustness profile of high-level test entries over seeds and thread counts',&
+        &'runs a registry entry (or all) at seed offsets 0 to nseeds-1 and each thread count of nthr=, as children '//&
+        &'of the test dispatcher packed within ncunits= cores, and writes per entry and thread count the '//&
+        &'distribution of every gate metric (runs, median, robust spread, worst, failure rate against its floor); '//&
+        &'with dir1= and dir2= it compares two profile directories instead',&
+        &'simple_test_exec',&
+        &.false., display_name='Test Robustness Profile')
+        call profile%add_input(UI_PARM, 'target', 'str', 'Registry entry', &
+            &'The registry entries to profile, comma-separated, or all', 'entry', .false., '')
+        call profile%add_input(UI_PARM, 'suite', 'str', 'Sub-suite', &
+            &'Replaces the suite= of the entry', 'sub-suite', .false., '')
+        call profile%add_input(UI_PARM, 'nseeds', 'num', 'Seed offsets', &
+            &'Number of seed offsets, 0 to nseeds-1 (0 draws what CTest draws)', '# seeds', .false., 20.)
+        call profile%add_input(UI_PARM, 'nthr', 'str', 'Thread counts', &
+            &'Comma-separated OMP_NUM_THREADS settings{the entry''s CTest setting}', 'e.g. 1,8', .false., '')
+        call profile%add_input(UI_PARM, 'ncunits', 'num', 'Core budget', &
+            &'Cores the running executions may reserve together{the processors of the machine}', '# cores', .false., 0.)
+        call profile%add_input(UI_PARM, 'dir', 'dir', 'Output directory', &
+            &'Directory of the profile{profile_<date>_<time>}', 'directory', .false., '')
+        call profile%add_input(UI_PARM, 'dir1', 'dir', 'First profile', &
+            &'A profile directory to compare with dir2=', 'directory', .false., '')
+        call profile%add_input(UI_PARM, 'dir2', 'dir', 'Second profile', &
+            &'A profile directory to compare with dir1=', 'directory', .false., '')
+        call add_ui_program('profile', profile, tsttab, UI_CATEGORY)
+    end subroutine new_profile
+
+    subroutine new_identity( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call identity%new(&
+        &'identity',&
+        &'byte identity of two run directories of a high-level entry',&
+        &'compares the outputs the test registry declares for the entry in two run directories byte for byte, '//&
+        &'ignoring the declared run-specific fields (the run identifier, path digests and checksum of '//&
+        &'solve3D_manifest.txt and the paths of its artifacts, the layout digest of sigma2_state.bin; project '//&
+        &'files by the records of their particle and class segments); writes identity_report.txt and fails on '//&
+        &'any difference',&
+        &'simple_test_exec',&
+        &.false., display_name='Test Run Identity')
+        call identity%add_input(UI_PARM, 'target', 'str', 'Registry entry', &
+            &'The registry entry whose declared outputs are compared', 'entry', .true., '')
+        call identity%add_input(UI_PARM, 'dir1', 'dir', 'First run directory', &
+            &'The run directory of the first execution', 'directory', .true., '')
+        call identity%add_input(UI_PARM, 'dir2', 'dir', 'Second run directory', &
+            &'The run directory of the second execution', 'directory', .true., '')
+        call add_ui_program('identity', identity, tsttab, UI_CATEGORY)
+    end subroutine new_identity
 
 end module simple_test_ui_highlevel

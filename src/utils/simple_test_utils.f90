@@ -1,6 +1,6 @@
 !@descr: reusable assertion, suite tracking, and reporting utilities for tests
 module simple_test_utils
-use, intrinsic :: iso_fortran_env, only: output_unit
+use, intrinsic :: iso_fortran_env, only: output_unit, int64
 use simple_string,       only: string
 use simple_string_utils, only: int2str
 use simple_defs,         only: dp, STDLEN, longer, logfhandle
@@ -13,10 +13,14 @@ private
 public :: assert_true, assert_int, assert_real, assert_char, assert_string_eq, assert_double, assert_false
 public :: begin_test_suite, end_test_suite, reset_test_report, report_summary
 public :: tests_run, tests_failed
-public :: set_fixed_seed, fix_test_seed
+public :: set_fixed_seed, fix_test_seed, set_test_seed_offset, offset_seed
 public :: enter_fixture, leave_fixture
 
 integer, parameter :: TEST_SEED = 20260923 ! the SIMPLE_SEED of every simple_test_exec run
+! A seed offset moves every base by a large odd stride: the bases of the tests lie a few apart
+! (dates), so an offset added to one would land on another's, and adjacent draws would correlate
+integer(int64), parameter :: SEED_STRIDE = 2654435761_int64
+integer            :: seed_offset = 0       ! seed_offset= of simple_test_exec, added to every fixed seed
 
 type :: test_suite_result
     character(len=STDLEN) :: name = ''
@@ -41,17 +45,29 @@ type(test_failure),      allocatable :: failures(:)
 
 contains
 
-    ! Delegate local and propagated seeding to the library RNG.
+    ! A test's base seed moved by the seed offset (offset 0 leaves it as it is), in 64 bits.
+    pure integer(int64) function offset_seed( base_seed )
+        integer, intent(in) :: base_seed
+        offset_seed = int(base_seed, int64) + SEED_STRIDE * int(seed_offset, int64)
+    end function offset_seed
+
+    ! Delegate local and propagated seeding to the library RNG, moved by the seed offset.
     subroutine set_fixed_seed( base_seed, propagate )
         integer,           intent(in) :: base_seed
         logical, optional, intent(in) :: propagate
-        call seed_rnd_fixed(base_seed, propagate)
+        call seed_rnd_fixed(offset_seed(base_seed), propagate)
     end subroutine set_fixed_seed
 
     ! SIMPLE_SEED of the test process, whatever the environment holds: a run by hand draws what a CTest run draws
     subroutine fix_test_seed
-        call seed_rnd_fixed(TEST_SEED, propagate=.true.)
+        call seed_rnd_fixed(offset_seed(TEST_SEED), propagate=.true.)
     end subroutine fix_test_seed
+
+    ! The offset every later fixed seed of the process gets; 0 gives the CTest draws.
+    subroutine set_test_seed_offset( offset )
+        integer, intent(in) :: offset
+        seed_offset = offset
+    end subroutine set_test_seed_offset
 
     subroutine reset_test_report( filename )
         character(len=*), optional, intent(in) :: filename

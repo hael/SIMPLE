@@ -196,8 +196,11 @@ if(BUILD_TESTS)
     "SIMPLE_EMAIL=test@localhost"
     "GFORTRAN_UNBUFFERED_ALL=y"
   )
+  # RUN_SERIAL: the entry runs alone; PROCESSORS <n>: it reserves n of the -j slots, so
+  # ctest -L highlevel -j 24 packs the entries by their peak CPU reservations (the test registry's
+  # ncpu, which scripts/check_test_registry.py holds them to)
   function(simple_add_test name label timeout nthr)
-    cmake_parse_arguments(ARG "RUN_SERIAL" "" "COMMAND" ${ARGN})
+    cmake_parse_arguments(ARG "RUN_SERIAL" "PROCESSORS" "COMMAND" ${ARGN})
     file(MAKE_DIRECTORY "${SIMPLE_TEST_RUNS_DIR}/${name}")
     add_test(NAME ${name}
       COMMAND ${ARG_COMMAND}
@@ -211,6 +214,9 @@ if(BUILD_TESTS)
     )
     if(ARG_RUN_SERIAL)
       set_tests_properties(${name} PROPERTIES RUN_SERIAL TRUE)
+    endif()
+    if(ARG_PROCESSORS)
+      set_tests_properties(${name} PROPERTIES PROCESSORS ${ARG_PROCESSORS})
     endif()
   endfunction()
 
@@ -255,6 +261,18 @@ if(BUILD_TESTS)
   # for the combined suite.
   simple_add_test(lib_stream library 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_stream)
+  # pcg_recon: the gated stages of the PCG reconstruction operator on a phantom (operator identities,
+  # kernels, streamed and raw accumulation, envelope, symmetry, mass, crop, ML prior, observation
+  # parity, support): a library suite of seconds, relabelled from highlevel by the test-suite truth
+  # plan (2026-10-18), not a workflow.
+  simple_add_test(pcg_recon library 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)
+  # pcg_frac_update: the PCG fractional-update gates (additivity of the reconstruction sums, the
+  # continuation weighting, full-mass preservation, replay) on a project of known inputs the
+  # multi-state fixture builds; it needed a user's project before the test-suite truth plan
+  # (2026-10-18) made it hermetic.
+  simple_add_test(pcg_frac_update library 3600 8 RUN_SERIAL
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_frac_update nthr=8)
 
   # ---- high-level gates (explicit CTest runs only) --------------------------
   # These workflows use generated data and quantitative output gates. The
@@ -265,66 +283,84 @@ if(BUILD_TESTS)
   # These entries are deliberately excluded from scripts/run_fast_gate.sh,
   # which selects only the `fast` label during compilation/installation. Run
   # them explicitly with: ctest -L highlevel --output-on-failure
-  simple_add_test(mini_stream_6vxx highlevel 7200 8 RUN_SERIAL
+  # Each is a row of the test registry (src/main/commanders/test/
+  # simple_test_registry.f90), which simple_test_exec test=nightly and
+  # test=profile run; scripts/check_test_registry.py keeps the name, command
+  # line, timeout and thread count of the two equal.
+  simple_add_test(mini_stream_6vxx highlevel 7200 8 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=6vxx)
-  simple_add_test(mini_stream_1jxy highlevel 7200 8 RUN_SERIAL
+  simple_add_test(mini_stream_1jxy highlevel 7200 8 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=mini_stream suite=1jxy)
-  simple_add_test(simulated_workflow_6vxx highlevel 7200 1 RUN_SERIAL
+  simple_add_test(simulated_workflow_6vxx highlevel 7200 1 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=6vxx)
   # 1jxy runs solve3D twice from the same solve2D project: in shared memory and
   # with nparts=2 (two local simple_private_exec workers), both checked against
   # the truth, so a simulated suite covers the distributed strategy (owner
   # decision 2026-10-15).
-  simple_add_test(simulated_workflow_1jxy highlevel 7200 1 RUN_SERIAL
+  simple_add_test(simulated_workflow_1jxy highlevel 7200 1 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=1jxy)
   # The FCC Pt and wurtzite CdSe fixtures are independent crystal-system
   # workflows and therefore receive isolated working directories and verdicts.
-  simple_add_test(single_workflow_fcc highlevel 7200 1 RUN_SERIAL
+  simple_add_test(single_workflow_fcc highlevel 7200 1 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow suite=fcc smpd=0.358)
-  simple_add_test(single_workflow_wurtzite highlevel 7200 1 RUN_SERIAL
+  simple_add_test(single_workflow_wurtzite highlevel 7200 1 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow suite=wurtzite smpd=0.358)
-  simple_add_test(pcg_recon highlevel 3600 8 RUN_SERIAL
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pcg_recon)
   # reproject + simulate_particles on the embedded 6VXX volume; the only
   # explicit high-level run of either commander (simulated_workflow uses simulate_movie).
   # Review verdict 2026-09-23 (plan, section 9.7, highlevel).
-  simple_add_test(simulate_particles highlevel 3600 8 RUN_SERIAL
+  simple_add_test(simulate_particles highlevel 3600 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulate_particles nthr=8)
   # solve3D_addon end to end on its own simulated particles of a
   # symmetry-broken 6VXX map: solve3D on a seeded subset (the frozen
   # solution), then the add-on on all of them, checked against the simulation
   # truth and the base run. Its own entry by owner decision (2026-09-26): an
   # independent workflow, not an extension of simulate_particles.
-  simple_add_test(solve3D_addon highlevel 7200 8 RUN_SERIAL
+  simple_add_test(solve3D_addon highlevel 7200 8 PROCESSORS 11
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=solve3D_addon nthr=8)
   # continuous Cartesian pose refinement end to end (refine3D refine=cont under both
   # objectives and distributed, refine3D_auto pose_cont=only from perturbed poses and as the
   # continuation of a polar refine3D_auto) on simulated 1JYX particles, gated on the simulation
   # truth. Its own entry by owner decision (contract C18 of the pose_cont refactoring,
   # 2026-09-30): a refinement mode independent of the polar workflows the other entries run.
-  simple_add_test(cont_refine3D_1jxy highlevel 7200 8 RUN_SERIAL
+  simple_add_test(cont_refine3D_1jxy highlevel 7200 8 PROCESSORS 10
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=cont_refine3D_1jxy nthr=8)
-  simple_add_test(single_atoms_stats highlevel 3600 8 RUN_SERIAL
+  # multi-state refine3D (refine=prob and refine=prob_neigh, three states) on simulated blob
+  # phantoms, gated on the known state of every particle. Its own entry (test-suite truth plan,
+  # multi-state phase, 2026-10-17): no other entry checks the state assignment against the truth.
+  simple_add_test(multistate_assignment highlevel 3600 8 PROCESSORS 11
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_assignment nthr=8)
+  # the multi-state workflows on simulated beta-galactosidase states, gated on the known state of
+  # every particle: solve3D nstates=3 from the particles (the class-average route and
+  # refine3D_states are robustness profiles, run by suite). Its own entry (test-suite truth plan,
+  # multi-state workflow phase, 2026-10-17): a workflow of twenty minutes, apart from the refine3D
+  # assignment test.
+  simple_add_test(multistate_workflows highlevel 3600 8 PROCESSORS 11
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_workflows nthr=8)
+  # the multi-state fixture (its modes, its cache, the point groups of its truths). Its own entry by
+  # the ruling of 2026-10-17: these checks are not simulate_particles', whose claim and cost they changed.
+  simple_add_test(state_fixture highlevel 1800 8 PROCESSORS 8
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=state_fixture nthr=8)
+  simple_add_test(single_atoms_stats highlevel 3600 8 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=Pt)
   # the same test on the CdSe wurtzite, zincblende and rocksalt lattices of the compound selectors, whose
   # lattice lookups took the cut symbol Cd (fcc) before the repair of the species-discovery plan (section 9):
   # interior coordination and fitted lattice constant asserted
-  simple_add_test(single_atoms_stats_cdsew highlevel 3600 8 RUN_SERIAL
+  simple_add_test(single_atoms_stats_cdsew highlevel 3600 8 PROCESSORS 4
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=CdSeW)
-  simple_add_test(single_atoms_stats_cdsez highlevel 3600 8 RUN_SERIAL
+  simple_add_test(single_atoms_stats_cdsez highlevel 3600 8 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=CdSeZ)
-  simple_add_test(single_atoms_stats_cdser highlevel 3600 8 RUN_SERIAL
+  simple_add_test(single_atoms_stats_cdser highlevel 3600 8 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=CdSeR)
   # species discovery of detect_atoms (species list and discover_species=yes) on Pt, Pt/Ni and Pt/Al
   # particles rendered with the element kernels, judged against the generating models; its own entry by
   # the plan doc/implementation_notes/planned/species_discovery.md (sections 10.4 and 10.6)
-  simple_add_test(species_discovery highlevel 3600 8 RUN_SERIAL
+  simple_add_test(species_discovery highlevel 3600 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=species_discovery nthr=8)
   # stream preprocessing: five simulated movies through the stream's
   # preprocessing stage, which submits its jobs to the local queue; the other
   # stream stage tests moved to lib_stream, unit_project and forked_process,
   # abinitio2D_stream was retired (plan, section 9.7, stream).
-  simple_add_test(stream_preproc highlevel 3600 8 RUN_SERIAL
+  simple_add_test(stream_preproc highlevel 3600 8 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=stream_preproc)
   # FLEX PCA end to end on one deterministic two-state phantom: shared memory
   # versus two real local workers. Two workers times four threads fill the
@@ -337,7 +373,7 @@ if(BUILD_TESTS)
   # refinement on its own three-state phantom of 3 600 particles in 60 exact
   # views: cls_expansion, then refine3D_states_cavgs, gated on the planted
   # states and directions; also checks in this suite rather than a new process.
-  simple_add_test(flex_pca_blobs highlevel 7200 8 RUN_SERIAL
+  simple_add_test(flex_pca_blobs highlevel 7200 8 PROCESSORS 9
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_pca_blobs nthr=4)
 
   # solve3D_pyramid end to end on the three-state phantom of 3 600 particles in
@@ -349,7 +385,7 @@ if(BUILD_TESTS)
   # flex_pca_blobs: a separate program run end to end on its own phantom, which
   # would double that entry's wall time (owner decision, 2026-10-15, recorded in
   # doc/refactoring_notes/planned/solve3D_pyramid_plan_2026-10-15.md).
-  simple_add_test(solve3D_pyramid_blobs highlevel 7200 8 RUN_SERIAL
+  simple_add_test(solve3D_pyramid_blobs highlevel 7200 8 PROCESSORS 9
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=solve3D_pyramid_blobs nthr=8)
 
   # ---- platform cases -------------------------------------------------------
@@ -382,7 +418,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 39)   # 15 fast + 1 platform + 18 highlevel + 5 library
+  set(SIMPLE_CTEST_BUDGET 43)   # 15 fast + 1 platform + 20 highlevel + 7 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

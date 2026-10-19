@@ -402,9 +402,8 @@ input and its forwarding are gone.
    averages (`pgrp=c1`, `prune=no`, the mask diameter; one run, no collapse restarts). Its
    low-pass limits are a fixed ramp from `LPSTART_CAVGS3D` (20 Å) to `LPSTOP_CAVGS3D` (12 Å) over
    its stages (`lpstart`, `lpstop`, `force_lp_range=yes`), not one derived from the class FRCs.
-   Its angular sampling window is narrowed after the symmetry search (`prob_athres_taper=yes`: 90
-   degrees through stage 3, then halved each stage down to 10; `solve3D_cavgs_policy.md`,
-   section 5.2), so the poses settle. Its result is not mapped onto the particles: they get
+   Its angular sampling window is `solve3D_cavgs`' default, 10 degrees, as in particle `solve3D`
+   (`solve3D_cavgs_policy.md`, section 2). Its result is not mapped onto the particles: they get
    their states from the assignments (section 10).
 8. **The check** (`finish_cavgs3D`, `register_attempt`, `refs_usable`). `solve3D_cavgs` records
    the even/odd angular distance and state agreement of the class averages on its `vol_cavg`

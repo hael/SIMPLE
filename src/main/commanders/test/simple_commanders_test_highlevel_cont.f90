@@ -20,7 +20,7 @@ module subroutine exec_test_cont_refine3D_1jxy( self, cline )
     if( status /= 0 ) THROW_HARD('TEST_CONT_REFINE3D_1JXY FAILED: could not enter fixture directory')
     call params%new(cline)
     all_ok = .true.
-    call run_cont_refine3D_gate(params%nthr, all_ok)
+    call run_cont_refine3D_gate(params%nthr, filepath(cwd_saved, 'metrics.tsv'), all_ok)
     call simple_chdir(cwd_saved, status)
     if( status /= 0 ) THROW_HARD('TEST_CONT_REFINE3D_1JXY FAILED: could not restore original directory')
     if( all_ok )then
@@ -64,9 +64,11 @@ end subroutine exec_test_cont_refine3D_1jxy
 !     improves on the seeds (the precondition of the stage), and the continuation accepts its
 !     poses and leaves the pose error no worse. 1JYX is D2-symmetric and the gate runs in c1, so
 !     the global searches of the polar workflow assign any of the four symmetry-related poses
-!     (Phase 8 finding); stage h measures the error up to them (sym_pose_error)
+!     (Phase 8 finding); stages f, g and h measure the error up to them: the smallest over the
+!     operators of D2, declared from the model's chain arrangement (betagal_frame), never learnt
+!     from the poses, in the truth map's frame, which the refinements share
 !  Every metric goes to metrics.tsv.
-subroutine run_cont_refine3D_gate( nthr, all_ok )
+subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use simple_atoms,              only: atoms
     use simple_molecule_data,      only: molecule_data, betagal_1jyx
@@ -77,9 +79,11 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     use simple_refine3D_fnames,    only: refine3D_reproj_model_fname, refine3D_trail_manifest_fname
     use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
     use simple_test_gate,          only: test_gate, NO_FLOOR
-    use simple_test_truth_metrics, only: pair_pose_error
-    integer, intent(in)    :: nthr
-    logical, intent(inout) :: all_ok
+    use simple_test_truth_metrics, only: pair_pose_error, group_errors, axis_operator
+    use simple_test_state_fixture, only: betagal_frame
+    integer,       intent(in)    :: nthr
+    class(string), intent(in)    :: metrics_file
+    logical,       intent(inout) :: all_ok
     character(len=*), parameter :: GATE_DIR   = 'cont_refine3D_gate'
     character(len=*), parameter :: ATOM_VOL   = '1JYX_atoms.mrc'
     character(len=*), parameter :: TRUTH_VOL  = '1JYX.mrc'
@@ -122,8 +126,6 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     ! Stages f and g (Phase 9; declared before their first run): the polish leaves the error
     ! (symmetry-aware, over the particles the passes updated) no worse than the same run without
     ! it, within the 0.1 deg of stage h
-    integer, parameter :: NSYM_1JYX = 4             !< order of the D2 point group of 1JYX
-    real,    parameter :: SYM_CLUSTER_RAD = 3.      !< deg, the radius of a symmetry-mate cluster
     type(commander_simulate_particles) :: xsim
     type(commander_new_project)        :: xnew_project
     type(commander_refine3D)           :: xrefine3D
@@ -139,9 +141,8 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     type(string)        :: root, gate_root, stk_abs, truth_abs, proj_dir
     integer, allocatable :: inds(:)
     real    :: med_rot, med_sh, basin, seed_rot, seed_sh, pair_seed, pair_before, pair_after, frac5
-    real    :: sym_seed, sym_before, sym_after, centers(3,3,NSYM_1JYX), sym_nopolish, sym_polish
+    real    :: sym_seed, sym_before, sym_after, sym_nopolish, sym_polish, d2ops(3,3,4), o(3), f(3,3)
     real    :: corr_mean
-    integer :: sym_convention, conv_tmp
     logical :: updated(NPTCLS), l_sample_ok, l_finite
     type(sp_project) :: out_f
     real    :: diffs(NPTCLS)
@@ -154,11 +155,17 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call simple_chdir(GATE_DIR, status)
     if( status /= 0 ) THROW_HARD('Could not enter '//GATE_DIR)
     call simple_getcwd(gate_root)
-    call gate%new(string('metrics.tsv'))
+    call gate%new(metrics_file)
     ! ---- the truth: 1JYX centred; the reference is its soft-masked copy (E25) ----
     mol = betagal_1jyx()
     call molecule%pdb2mrc(volfile=string(ATOM_VOL), smpd=SMPD, mol=mol, center_pdb=.true., vol_dim=[BOX,BOX,BOX])
     call molecule%kill
+    ! the declared D2 of 1JYX: the identity and the 180 degree turns about the axes of its frame
+    call betagal_frame(mol, o, f)
+    d2ops(:,:,1) = axis_operator([0.,0.,1.], 0.)
+    do i = 1, 3
+        d2ops(:,:,i+1) = axis_operator(f(i,:), 180.)
+    enddo
     call vol%new([BOX,BOX,BOX], SMPD)
     call vol%read(string(ATOM_VOL))
     call vol%mask3D_soft(MSKRAD, backgr=0.)
@@ -227,7 +234,7 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call pose_errors(seeded%os_ptcl3D, seed_rot, seed_sh, basin)
     pair_seed = pair_pose_error(seeded%os_ptcl3D, truth, inds, inds, NPAIRS, GATE_SEED, frac5)
     call gate%report('seed_pair_pose_error_deg',       pair_seed)
-    call sym_pose_error(seeded%os_ptcl3D, .true., sym_convention, centers, sym_seed)
+    sym_seed = sym_err(seeded%os_ptcl3D)
     call gate%report('seed_sym_pose_error_deg',        sym_seed)
     call gate%report('seed_median_rotation_error_deg', seed_rot)
     call gate%report('seed_median_shift_error_px',     seed_sh)
@@ -236,7 +243,7 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call run_refine3D_cont('a_euclid', 'euclid', 0, out_a)
     call gate_e25('a', out_a)
     ! a pure Cartesian pass runs no separate polar in-plane refinement (inpl_cont=no)
-    call gate%check('a_no_polar_inplane_route', .not. any(out_a%os_ptcl3D%get_all('cont_inpl_attempted') > 0.5))
+    call gate%check('a_no_polar_inplane_route', all(out_a%os_ptcl3D%get_all('cont_inpl_attempted') <= 0.5))
     call run_refine3D_cont('b_cc', 'cc', 0, run_proj)
     call gate_e25('b', run_proj)
     call run_refine3D_cont('c_distr', 'euclid', 2, out_c)
@@ -245,9 +252,10 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
         diffs(i) = rad2deg(geodesic_angle(out_a%os_ptcl3D, out_c%os_ptcl3D, i))
     enddo
     call gate%metric('c_median_rotation_difference_to_a_deg', median_nocopy(diffs), MAX_MED_DIFF, &
-        &median_nocopy(diffs) <= MAX_MED_DIFF)
-    call gate%metric('c_fraction_differing_by_more_than_0.1deg', real(count(diffs > DIFF_LIM))/real(NPTCLS), &
-        &MAX_FRAC_DIFF, real(count(diffs > DIFF_LIM))/real(NPTCLS) <= MAX_FRAC_DIFF)
+        &median_nocopy(diffs) <= MAX_MED_DIFF, upper=.true.)
+    ! a non-finite difference counts as differing
+    call gate%metric('c_fraction_differing_by_more_than_0.1deg', real(count(.not. (diffs <= DIFF_LIM)))/real(NPTCLS), &
+        &MAX_FRAC_DIFF, real(count(.not. (diffs <= DIFF_LIM)))/real(NPTCLS) <= MAX_FRAC_DIFF, upper=.true.)
     ! ---- e: refine3D_auto pose_cont=only from the perturbed project ----
     call enter_stage('e_auto')
     call cl%set('prg',       'refine3D_auto')
@@ -272,23 +280,25 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call stats%kill
     call check_no_polar('e', run_proj)
     call pose_errors(run_proj%os_ptcl3D, med_rot, med_sh, basin)
-    call gate%metric('e_median_rotation_error_deg', med_rot, MAX_MED_ROT_E, med_rot <= MAX_MED_ROT_E .and. med_rot < seed_rot)
-    call gate%metric('e_median_shift_error_px',     med_sh,  MAX_MED_SH_E,  med_sh  <= MAX_MED_SH_E  .and. med_sh  < seed_sh)
+    call gate%metric('e_median_rotation_error_deg', med_rot, MAX_MED_ROT_E, med_rot <= MAX_MED_ROT_E .and. med_rot < seed_rot, &
+        &upper=.true.)
+    call gate%metric('e_median_shift_error_px',     med_sh,  MAX_MED_SH_E,  med_sh  <= MAX_MED_SH_E  .and. med_sh  < seed_sh, &
+        &upper=.true.)
     call gate%report('e_fraction_in_basin_8A', basin)
     call simple_chdir(gate_root, status)
     ! ---- f: a discrete refine3D with and without the polish ----
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_1JXY STAGE f: pose_cont=no'
     call run_refine3D_discrete('f_nopolish', 'no', out_f)
     updated = out_f%os_ptcl3D%get_all('updatecnt') > 0.5
-    call sym_pose_error(out_f%os_ptcl3D, .true., conv_tmp, centers, sym_nopolish, updated)
+    sym_nopolish = sym_err(out_f%os_ptcl3D, updated)
     call gate%report('f_nopolish_sym_pose_error_deg', sym_nopolish)
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_1JXY STAGE f: pose_cont=yes'
     call run_refine3D_discrete('f_polish', 'yes', out_f)
     updated = out_f%os_ptcl3D%get_all('updatecnt') > 0.5
     call gate%report('f_updated_particles', real(count(updated)))
-    call sym_pose_error(out_f%os_ptcl3D, .true., conv_tmp, centers, sym_polish, updated)
+    sym_polish = sym_err(out_f%os_ptcl3D, updated)
     call gate%metric('f_polish_sym_pose_error_deg', sym_polish, sym_nopolish + MAX_PAIR_GAIN_LOSS, &
-        &sym_polish <= sym_nopolish + MAX_PAIR_GAIN_LOSS)
+        &sym_polish <= sym_nopolish + MAX_PAIR_GAIN_LOSS, upper=.true.)
     ! the polish refines the sample of its discrete pass and nothing else
     l_sample_ok = count(updated) > 0 .and. count(updated) < NPTCLS
     do i = 1, NPTCLS
@@ -330,8 +340,8 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
     pair_before = pair_pose_error(run_proj%os_ptcl3D, truth, inds, inds, NPAIRS, GATE_SEED, frac5)
     call gate%report('h_polar_pair_pose_error_deg', pair_before)
-    call sym_pose_error(run_proj%os_ptcl3D, .true., sym_convention, centers, sym_before)
-    call gate%metric('h_polar_sym_pose_error_deg', sym_before, sym_seed, sym_before < sym_seed)
+    sym_before = sym_err(run_proj%os_ptcl3D)
+    call gate%metric('h_polar_sym_pose_error_deg', sym_before, sym_seed, sym_before < sym_seed, upper=.true.)
     call pose_errors(run_proj%os_ptcl3D, med_rot, med_sh, basin)
     call gate%report('h_polar_median_rotation_error_deg', med_rot)
     call cl%set('prg',       'refine3D_auto')
@@ -347,10 +357,9 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
     pair_after = pair_pose_error(run_proj%os_ptcl3D, truth, inds, inds, NPAIRS, GATE_SEED, frac5)
     call gate%report('h_continued_pair_pose_error_deg', pair_after)
-    ! against the symmetry mates and frame of the polar result
-    call sym_pose_error(run_proj%os_ptcl3D, .false., sym_convention, centers, sym_after)
+    sym_after = sym_err(run_proj%os_ptcl3D)
     call gate%metric('h_continued_sym_pose_error_deg', sym_after, sym_before + MAX_PAIR_GAIN_LOSS, &
-        &sym_after <= sym_before + MAX_PAIR_GAIN_LOSS)
+        &sym_after <= sym_before + MAX_PAIR_GAIN_LOSS, upper=.true.)
     call pose_errors(run_proj%os_ptcl3D, med_rot, med_sh, basin)
     call gate%report('h_continued_median_rotation_error_deg', med_rot)
     call gate%report('h_continued_median_shift_error_px',     med_sh)
@@ -377,9 +386,9 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     call gate%report('g_last_polish_improved_pct', stats%get(1, 'POSE_CONT_IMPROVED_PCT'))
     call stats%kill
     call gate%check('g_every_particle_polished', all(run_proj%os_ptcl3D%get_all('corr_cart') > 0.))
-    call sym_pose_error(run_proj%os_ptcl3D, .true., conv_tmp, centers, sym_polish)
+    sym_polish = sym_err(run_proj%os_ptcl3D)
     call gate%metric('g_sym_pose_error_deg', sym_polish, sym_before + MAX_PAIR_GAIN_LOSS, &
-        &sym_polish <= sym_before + MAX_PAIR_GAIN_LOSS)
+        &sym_polish <= sym_before + MAX_PAIR_GAIN_LOSS, upper=.true.)
     call simple_chdir(gate_root, status)
     all_ok = all_ok .and. gate%passed()
     call gate%kill
@@ -436,77 +445,23 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
         med_sh_out  = median_nocopy(sh)
     end subroutine pose_errors
 
-    !> The median rotation error (deg) against the truth up to the symmetry mates of 1JYX and a
-    !! global frame: the frame difference of particle i, D = R_truth^T R or R R_truth^T (both
-    !! conventions are tried and the tighter is kept), takes one of NSYM_1JYX values for a correct
-    !! assignment; the values are found as the centres of the densest clusters of radius
-    !! SYM_CLUSTER_RAD, and the error of particle i is its distance to the nearest centre. With
-    !! l_new the centres and the convention are found and returned, otherwise those given are used.
-    subroutine sym_pose_error( os, l_new, convention, cent, err, sel )
-        class(oris),       intent(in)    :: os
-        logical,           intent(in)    :: l_new
-        integer,           intent(inout) :: convention
-        real,              intent(inout) :: cent(3,3,NSYM_1JYX)
-        real,              intent(out)   :: err
-        logical, optional, intent(in)    :: sel(NPTCLS)   !< the particles measured (all by default)
-        real    :: d(3,3,NPTCLS,2), c(3,3,NSYM_1JYX,2), med(2), e(NPTCLS), rt(3,3), re(3,3)
-        logical :: claimed(NPTCLS), lsel(NPTCLS)
-        integer :: j, k, jj, iconv, best, nbest, nn
+    !> The median rotation error (deg) against the truth up to the declared D2 of 1JYX, over the
+    !! particles sel (all by default)
+    real function sym_err( os, sel )
+        class(oris),       intent(in) :: os
+        logical, optional, intent(in) :: sel(NPTCLS)
+        real    :: re(3,3,NPTCLS), rt(3,3,NPTCLS), errs(NPTCLS)
+        logical :: lsel(NPTCLS)
+        integer :: j
         lsel = .true.
         if( present(sel) ) lsel = sel
         do j = 1, NPTCLS
-            rt = truth%get_mat(j)
-            re = os%get_mat(j)
-            d(:,:,j,1) = matmul(transpose(rt), re)
-            d(:,:,j,2) = matmul(re, transpose(rt))
+            re(:,:,j) = os%get_mat(j)
+            rt(:,:,j) = truth%get_mat(j)
         enddo
-        do iconv = 1, 2
-            if( l_new )then
-                claimed = .not. lsel
-                do k = 1, NSYM_1JYX
-                    best  = 0
-                    nbest = -1
-                    do j = 1, NPTCLS
-                        if( claimed(j) ) cycle
-                        nn = 0
-                        do jj = 1, NPTCLS
-                            if( .not. claimed(jj) .and. mat_angle(d(:,:,j,iconv), d(:,:,jj,iconv)) <= SYM_CLUSTER_RAD ) nn = nn + 1
-                        enddo
-                        if( nn > nbest )then
-                            nbest = nn
-                            best  = j
-                        endif
-                    enddo
-                    if( best == 0 ) best = 1
-                    c(:,:,k,iconv) = d(:,:,best,iconv)
-                    do jj = 1, NPTCLS
-                        if( mat_angle(d(:,:,best,iconv), d(:,:,jj,iconv)) <= SYM_CLUSTER_RAD ) claimed(jj) = .true.
-                    enddo
-                enddo
-            else
-                c(:,:,:,iconv) = cent
-                if( iconv /= convention ) cycle
-            endif
-            do j = 1, NPTCLS
-                e(j) = huge(1.)
-                do k = 1, NSYM_1JYX
-                    e(j) = min(e(j), mat_angle(d(:,:,j,iconv), c(:,:,k,iconv)))
-                enddo
-            enddo
-            med(iconv) = median(pack(e, lsel))
-        enddo
-        if( l_new )then
-            convention = merge(1, 2, med(1) <= med(2))
-            cent       = c(:,:,:,convention)
-        endif
-        err = med(convention)
-    end subroutine sym_pose_error
-
-    !> the rotation angle (deg) between two rotation matrices
-    real function mat_angle( a, b )
-        real, intent(in) :: a(3,3), b(3,3)
-        mat_angle = rad2deg(acos(max(-1., min(1., (sum(a*b) - 1.)/2.))))
-    end function mat_angle
+        errs    = group_errors(re, rt, d2ops)
+        sym_err = median(pack(errs, lsel))
+    end function sym_err
 
     !> a run directory under the gate holding a copy of the seeded project; entered
     subroutine enter_stage( dir )
@@ -520,9 +475,11 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
     !> one refine3D refine=cont pass against the truth reference on the shift-then-joint route of
     !! the E25 floors (production runs the joint stage alone); nparts > 0 distributes it
     subroutine run_refine3D_cont( dir, objfun, nparts, out )
+        use simple_syslib, only: simple_list_files
         character(len=*), intent(in)    :: dir, objfun
         integer,          intent(in)    :: nparts
         type(sp_project), intent(inout) :: out
+        type(string), allocatable :: bench_parts(:)
         call enter_stage(dir)
         call cl%set('prg',      'refine3D')
         call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
@@ -545,6 +502,11 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
         endif
         call xrefine3D%execute(cl)
         call cl%kill
+        ! the path: a distributed run recorded its last part, so it ran as nparts worker jobs
+        if( nparts > 0 )then
+            call simple_list_files('BENCH/*PART'//int2str(nparts)//'*', bench_parts)
+            call gate%check(dir(1:1)//'_ran_'//int2str(nparts)//'_parts', size(bench_parts) > 0)
+        endif
         call out%read(simple_abspath(string(PROJNAME//'.simple')))
         call check_no_polar(dir(1:1), out)
         call simple_chdir(gate_root, status)
@@ -592,8 +554,8 @@ subroutine run_cont_refine3D_gate( nthr, all_ok )
         character(len=*), intent(in)    :: tag
         type(sp_project), intent(inout) :: out
         call pose_errors(out%os_ptcl3D, med_rot, med_sh, basin)
-        call gate%metric(tag//'_median_rotation_error_deg', med_rot, MAX_MED_ROT, med_rot <= MAX_MED_ROT)
-        call gate%metric(tag//'_median_shift_error_px',     med_sh,  MAX_MED_SH,  med_sh  <= MAX_MED_SH)
+        call gate%metric(tag//'_median_rotation_error_deg', med_rot, MAX_MED_ROT, med_rot <= MAX_MED_ROT, upper=.true.)
+        call gate%metric(tag//'_median_shift_error_px',     med_sh,  MAX_MED_SH,  med_sh  <= MAX_MED_SH, upper=.true.)
         call gate%metric(tag//'_fraction_in_basin_8A',      basin,   MIN_BASIN,   basin   >= MIN_BASIN)
         call gate%report(tag//'_mean_corr_cart', out%os_ptcl3D%get_avg('corr_cart'))
     end subroutine gate_e25

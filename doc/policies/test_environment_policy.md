@@ -32,9 +32,9 @@ labels.
 | label | entries | when | what |
 |---|---|---|---|
 | `fast` | 15 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
-| `library` | 5 library suites `lib_<area>` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `highlevel` | 17 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
-| `platform` | `forked_process`, plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
+| `library` | 5 library suites `lib_<area>` and the PCG entries `pcg_recon` and `pcg_frac_update` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
+| `highlevel` | 20 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
+| `platform` | `forked_process` (with the test dispatcher's own tests), plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
 run overnight; high-level tests run only when explicitly selected with CTest.
@@ -60,8 +60,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 39: 15 fast,
-5 library, 18 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 43: 15 fast,
+7 library, 20 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -82,7 +82,7 @@ tester module (section 4.1).
 | `unit_core` | ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line |
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
-| `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search |
+| `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
 | `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, solve3D stream emulation, state weight set, cavgs work project |
 | `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
@@ -102,32 +102,40 @@ convenience and deliberately not a CTest entry.
 
 | entry | label | what it runs |
 |---|---|---|
-| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation |
+| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 15 degrees and 2 pixels, refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
 | `lib_heterogeneity` | library | flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models |
 | `lib_stream` | library | optics assignment, picking references, pick and extract |
+| `pcg_recon` | library | gated stages of the PCG reconstruction operator on generated data, each stage's decision a row of its table; in process, so a library entry (it was a high-level one until 2026-10-18) |
+| `pcg_frac_update` | library | the PCG fractional-update gates (additivity of the reconstruction sums, the continuation weighting, full-mass preservation, replay) on a project of 600 blob particles at their true poses that the multi-state fixture builds |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
-| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated movies through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`; 1jxy then runs `solve3D` a second time from the same `solve2D` project with `nparts=2` (two local worker processes, the distributed strategy), in a directory of its own and checked against the same truth, so that the master's job scheduling and assembly between parts are covered (owner decision 2026-10-15). Each suite reseeds the whole workflow with its own root seed, printed in the log: 1jxy 20260923, 6vxx 20261003 (owner decision 2026-10-15: with 80 particles the 6vxx `solve3D` step is sensitive to the draw, and the earlier common seed stopped finding its map after the 2D table moved its shifts to the particle frame) |
-| `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles |
-| `pcg_recon` | highlevel | gated stages of the PCG reconstruction operator |
-| `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume |
+| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | 200 simulated particles in 20 movies through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`; 1jxy then runs `solve3D` a second time from the same `solve2D` project with `nparts=2` (two local worker processes, the distributed strategy), in a directory of its own and checked against the same truth, so that the master's job scheduling and assembly between parts are covered (owner decision 2026-10-15); the test asserts that the distributed run wrote its second part's record. A control scores the result against the other molecule's truth. The map's correlation with its truth (and the 6vxx FSC) is reported as a robustness profile: in the profile of 2026-10-18 `solve3D` missed the map, at the correlation of the other molecule, in 7 of 20 runs for 6vxx and 1 of 20 for 1jxy, so no floor is admissible; the 1jxy FSC ceiling of 40 Å stays. Each suite reseeds the whole workflow with its own root seed, printed in the log: 1jxy 20260923, 6vxx 20261003 (owner decision 2026-10-15: with 80 particles the 6vxx `solve3D` step is sensitive to the draw, and the earlier common seed stopped finding its map after the 2D table moved its shifts to the particle frame) |
+| `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles; the poses are judged by their median rotation error against the truth after one docking of the `autorefine3D_nano` map, up to the rotations of the lattice's group (O for FCC, D6 for wurtzite), since these near-symmetric particles are posed only up to them |
+| `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume; `simulate_particles` with three blob volumes and given populations (exact state counts, every image closest to the projection of its own state's volume at its true pose); 50 images without CTF, each correlating better with the reprojection at its own recorded pose than with one at another image's pose |
+| `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_auto pose_cont=only`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations |
+| `multistate_assignment` | highlevel | `refine3D nstates=3` with `refine=prob` and with `refine=prob_neigh` on 1 500 simulated particles of the three blob phantoms of the state fixture (populations 50, 30 and 20 %, SNR 2), from the truths low-passed to 20 A and random initial states, scored by correlation (`objfun=cc`, as production's state assignment), gated on the known state of every particle (adjusted Rand index, accuracy, each state's recall, the populations, no estimated state empty: a merge of two states fails), the maps (their mapping agreeing with the label mapping, their fit, their discrimination inside the difference mask) and the poses of the correctly assigned particles; the shuffled-label and duplicated-maps controls in both refinements; `suite=identical` runs the identical-states control by hand (labels only: identical truths leave nothing to discriminate) |
+| `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1): `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs`, each image's state and each state's map judged against the truth (owner ruling 2026-10-17), `solve3D` from the particles, and `refine3D_states` from a single-state solution (the true poses and the consensus map); the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses checked against the simulation truth, with the shuffled-label and duplicated-maps controls. The entry runs all three; every route must resolve each true state (recall above one half) and leave no estimated state empty (owner ruling 2026-10-17: state 0 means exclusion, so a state parked there is a defect), the label metrics of the shc and class-average routes are reported, `refine3D_states` is held to floors on its labels, populations and map discrimination, and all three routes to ceilings on their rotation and shift errors; `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on) and `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`, the control of the ruling of 2026-10-18) are run by hand; and `suite=<workflow>_identical` (identical states) and `suite=hard_<workflow>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
 | `single_atoms_stats_cdsew`, `single_atoms_stats_cdsez`, `single_atoms_stats_cdser` | highlevel | the same test on simulated wurtzite, zincblende and rocksalt CdSe nanoparticles (`element=CdSeW`, `CdSeZ`, `CdSeR`), whose lattice lookups use the compound selector; also asserts the coordination number of the interior atoms (4, 4, 6) and the fitted lattice constant within 2% of the table |
 | `species_discovery` | highlevel | `detect_atoms` with a species list, with `discover_species=yes` and without an element, on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors (with and without half maps), judged against the generating models through `test_gate` (`metrics.tsv`); the present products must not change |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
-| `flex_pca_blobs` | highlevel | `flex_pca` on a two-state phantom in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on a three-state phantom of 3 600 particles in 60 exact views, gated on the planted states and directions |
-| `solve3D_pyramid_blobs` | highlevel | `solve3D_pyramid` end to end on the three-state phantom of 3 600 particles in 60 exact views, its class averages made from the exact classes: the report, the references and the result written, the assignment's purity against the planted states, each reference and each refined map docked onto a truth (the hand free); floors provisional until the first run |
+| `flex_pca_blobs` | highlevel | `flex_pca` on a two-state blob dataset of the multi-state fixture (2 000 particles at their true poses, SNR 1) in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on the fixture's three compositional beta-galactosidase states (3 600 particles in 60 exact views; ruling of 2026-10-18: not blob states that differ in a lobe of 6 % of the mass): the route's contract gated (projects, hand-back, maps), its state accuracy against the planted states (one-to-one mapping, with the shuffled-label null) and the poses of the sub-averages reported as a robustness profile, since its profile admits no floor (accuracy at the chance level) |
+| `solve3D_pyramid_blobs` | highlevel | `solve3D_pyramid` end to end on the fixture's three-state blob dataset of 3 600 particles in 60 exact views, its class averages made from the exact classes: the report, the references and the result written, the assignment against the planted states (one-to-one mapping: accuracy, adjusted Rand index, recall), each reference and each refined map matched and docked onto a truth (the hand free) and the docked maps' discrimination, with a shuffled-label control |
 
 ### 1.3 Programs that are not registered
 
 A few programs are reachable through `simple_test_exec` but are not CTest
-entries because they need data a user supplies: `pcg_frac_update` and
-`rec3D_backends`. No new program joins this list
-without a reason: a diagnostic that runs on a user's data is a developer
-program (section 3.4), not a test.
+entries: `rec3D_backends` (gridding against PCG on a user's project; a
+measurement without thresholds, a developer tool in the sense of section 3.4),
+and the input generators `solve3D_addon_snapshots`, `write_state_weights_labels`
+and `write_state_weights_mixed` (tools for manual runs). `pcg_frac_update`,
+which needed a user's project, builds its own from the multi-state test fixture
+when run without `projfile=` and is the library entry of that name. No new
+program joins this list without a reason: a diagnostic that runs on a user's
+data is a developer program (section 3.4), not a test.
 
 For any suite-based entry, print its accepted sub-suite identifiers without
 running tests using `simple_test_exec test=<entry> suite=list`; for example,
@@ -144,6 +152,8 @@ SIMPLE_UNIT_ORDER=reverse simple_test_exec test=units   # the sub-suites in reve
 cd build && ctest -L fast --output-on-failure           # the gate by hand
 cd build && ctest -L library                            # a nightly tier by hand
 cd build && ctest -L highlevel --output-on-failure      # long tests, explicit only
+simple_test_exec test=simulated_workflow suite=6vxx seed_offset=3   # the same test on other draws
+simple_test_exec test=nightly                           # the whole high-level suite (section 1.5)
 ```
 
 The `suite=` selector is the sub-suite name in lower case, with blanks and
@@ -156,11 +166,146 @@ run by hand draws what a CTest run draws: `simple_test_exec` sets
 the environment holds. The seed is not a user setting; a program that needs
 one takes it through `parameters`.
 
+`seed_offset=<n>` adds n to every fixed seed of the test: to the process seed
+of `fix_test_seed` and to every `set_fixed_seed` of a tester or high-level test
+(and so to the `SIMPLE_SEED` its commanders and workers inherit). 0, the
+default, draws what CTest draws. It is a key of the front door only: it is read
+there and removed from the command line, so no commander or `parameters` sees
+it. A test must draw from fixed seeds only through these two routines, or its
+draws do not move with the offset. Production code that seeds itself with a
+fixed number (the class-expansion strategy and kernel of `flex_pca`) does not
+move with it.
+
 `SIMPLE_UNIT_ORDER=reverse` is a diagnostic for the fused, in-process suites:
 it reverses the sub-suite table so a result that differs from the normal run
 exposes state leaked by one sub-suite into another. It does not reverse CTest
 entries and is not part of the normal build gate; use it after changing shared
 state, lifecycle or test-runner code.
+
+### 1.5 The suite runner: the registry, `test=nightly`, `test=profile`, `test=identity`
+
+The high-level entries are listed once, in the test registry
+(`src/main/commanders/test/simple_test_registry.f90`): per entry its command
+line, its `OMP_NUM_THREADS`, the worker processes and threads it starts, its
+peak CPU reservation (the cores in use at its busiest moment, master and
+workers together), its deadline (the CTest `TIMEOUT`), its kind (a correctness
+gate or a robustness profile only), its peak resident memory and the disk its
+run directory grows to (each from a measurement, with a margin), whether its
+master's threads follow a profile's thread count, and, for the one-thread
+entries, the outputs an identity check compares. `scripts/check_test_registry.py`
+holds the `highlevel` registrations of `production/CMakeLists.txt` to the
+registry: the same names, command lines, timeouts and thread counts, and a
+CTest `PROCESSORS` equal to the CPU reservation, so that `ctest -L highlevel -j
+24` packs the entries as `test=nightly` does. A new high-level entry gets its
+registry row and its CTest registration together.
+
+Three test programs run and compare the suite; none of them is a CTest entry.
+They run every test execution as a child process of the test dispatcher
+(`simple_test_dispatch`), which:
+
+- forks the child (`simple_forked_process`), which leads its own session,
+  enters its own run directory, writes its output to `run.log` there, sets its
+  `OMP_NUM_THREADS` and seed offset and runs the test program in the process;
+- gives every child the environment CTest gives an entry: `SIMPLE_PATH` the
+  build the running `simple_test_exec` belongs to, its `bin/` and `scripts/`
+  first on `PATH`, `SIMPLE_QSYS=local`, so that the child and the workers it
+  starts run the same build;
+- starts the largest reservation queued (the first in queue order among
+  equals) when its cores, memory and disk fit in what is free: the cores of
+  the budget (`ncunits=`, by default the processors of the machine) less those
+  of the running executions, 90 % of the memory available when the run starts
+  less the running executions' memory, the disk free on the run's file system
+  when it starts less the disk of every execution started (outputs stay).
+  Smaller executions wait for every larger one to start, so they cannot starve
+  it; one that does not fit even alone runs alone;
+- removes a `metrics.tsv` left in a reused run directory before the child
+  starts, so a table is always the execution's own;
+- records a failed child with its exit status and goes on; sends a child past
+  its deadline SIGTERM and, after a grace period (60 s), SIGKILL, and records
+  it as timed out; kills every process left of a child when it ends, the
+  child's process group before the child is reaped (so that its pid and group
+  cannot belong to another process yet). The processes of a child are its
+  session and every process that inherited its marker `SIMPLE_TEST_EXECUTION`
+  from the environment, since the local queue starts workers in sessions of
+  their own. A child ends at once on SIGTERM (`_exit`, async-signal-safe); its
+  gate rows and log lines are flushed as they are written, so its table holds
+  every row written before the signal;
+- samples the CPU use and resident memory of each child's processes every
+  second and reports the peak;
+- when interrupted (SIGINT, SIGTERM, SIGHUP), stops every running child,
+  records it as interrupted (an outcome without a verdict, outside the failure
+  rates), starts no other and reports the rest as not run. A disposition the
+  dispatcher inherited as ignored (`nohup`, a background job) stays ignored. A
+  child dies with a dispatcher killed outright (SIGKILL); the workers of such
+  a child may then outlive it.
+- **Linux only**: the markers of processes outside a session, the CPU and
+  memory samples and the count of processes left read `/proc`, and the exit
+  of a child is detected without reaping it by `waitid` with `WNOWAIT`.
+  Elsewhere the dispatcher says so when it starts, signals the session alone
+  and kills after reaping; the dispatcher's own tests skip the probes that
+  need `/proc`.
+- **Known limits.** Largest-first packing starts the long one-thread
+  workflows (`simulated_workflow_*`, reservations of 2 and 3) after every
+  larger reservation, so on 24 cores they set the nightly's wall time (about
+  an hour on 2026-10-18 against 45 minutes of CTest packing); ordering by
+  expected core-seconds would start them early. The disk budget counts every
+  started execution's disk, since outputs stay; a profile that deletes
+  outputs as executions end therefore runs one execution at a time once the
+  budget is spent.
+
+```text
+simple_test_exec test=nightly [ncunits=24] [dir=<run>]
+simple_test_exec test=profile target=<entry[,entry...]|all> nseeds=20 [nthr=1,8] [suite=<sub-suite>] [ncunits=24] [dir=<profile>]
+simple_test_exec test=profile dir1=<profile> dir2=<profile>
+simple_test_exec test=identity target=<entry> dir1=<run directory> dir2=<run directory>
+```
+
+- **`test=nightly`** runs every correctness entry of the registry once, each
+  in `<run>/<entry>`, and writes `nightly_report.tsv`: one row per entry and
+  gate metric with the outcome (passed, failed, timed out), the exit status,
+  the wall time, the peak CPU use beside the reservation, the peak memory, and
+  the metric's value, floor, verdict and sense. It fails when an entry or a
+  gate failed. It runs at the entries' CTest thread counts and seed offset 0,
+  so an entry run by it draws what CTest draws.
+- **`test=profile`** runs one entry, a comma-separated list of them or all at seed offsets 0 to nseeds-1 and
+  each thread count of `nthr=` (by default the entry's own), each execution in
+  `<profile>/<entry>_t<threads>_s<offset>`, and writes `executions.tsv` (as the
+  nightly report) and per entry and thread count `profile_<entry>_t<n>.tsv`:
+  for every gate metric the runs that wrote it, the median, the robust spread
+  `s` (1.4826 times the median absolute deviation, or the range over 4 when
+  that is zero), the range, the worst run in the sense of its floor, and the
+  failure rate: an execution fails a metric when one of its rows of it fails,
+  when it wrote none, or when the execution itself failed or timed out (even
+  after writing passing rows); interrupted and unstarted executions are left
+  out. `nseeds=` is 20 when not given. `suite=` names one entry's sub-suite, so
+  it needs a single `target=`. A thread count other than the entry's own scales
+  the `nthr=` the entry passes to its commanders and, below the entry's own,
+  its deadline (inversely); the reservation follows the master's share (the
+  reservation less its workers' threads) and each worker's threads in
+  proportion, while an entry whose threads are its own (the one-thread
+  workflows, the mini stream, the stream preprocessing) keeps its reservation;
+  memory and disk do not scale. Seed offsets move every base seed of the test
+  by offset times a large odd stride (2654435761, in 64-bit integers), so the
+  offsets of one test cannot land on another test's base. A profile informs;
+  it does not fail on a metric. With `dir1=` and
+  `dir2=` it compares two profiles instead: for each table both hold,
+  `comparison_profile_<entry>_t<n>.tsv` gives both medians, the shift of the
+  median in units of the larger spread (positive is better) and both failure
+  rates.
+- **`test=identity`** compares two run directories of one entry byte for byte
+  over the outputs its registry row declares, and writes `identity_report.txt`
+  (SAME, DIFF or MISSING per file). It ignores only the declared run-specific
+  fields, which hold the run's paths, run identifier or time:
+  - in `solve3D_manifest.txt`, the lines `run_id`, `layout_digest` and
+    `stack_digest` (digests of the absolute stack paths), `checksum` (of the
+    whole manifest), and the path that ends each `artifact` line;
+  - in `sigma2_state.bin`, the layout digest (header word 14, bytes 121-128);
+  - project files (`*.simple`) are compared record by record over every
+    segment, and text files (`*.txt`) line by line, each with its run
+    directory's own path removed, since both hold absolute paths.
+  A declared pattern that selects no file in either directory fails. The
+  `BENCH` timing files are not declared outputs. Identity is decided only by
+  one-thread runs.
 
 ## 2. What a test is
 
@@ -223,6 +368,37 @@ expected value at 0.99 and the defect at 0.4).
   developer program if the team needs it again.
 - **A demonstration** (sampling pictures, gnuplot windows, printed tables to
   eyeball): delete it or keep it in a local worktree.
+
+### 2.3 Four kinds of test, kept apart
+
+A run of SIMPLE with more than one thread is not reproducible, and a workflow
+on simulated data is a draw: its metric scatters from seed to seed. A test
+that mixes "is it right" with "how reliably" cannot say which of the two
+failed. So there are four kinds of test, and each answers one question:
+
+| kind | question | how it is run | how it passes |
+|---|---|---|---|
+| **identity** | did a refactoring change any result? | one thread, fixed seed, the same case on two builds (`test=identity`) | the declared outputs byte-identical, run-specific fields excluded by a declared list |
+| **correctness** | does the code recover the truth it was given? | one run on simulated data with a large, known signal (CTest, `test=nightly`) | truth metrics against floors that sit far from both the observed distribution and the negative control |
+| **robustness** | how reliably, and how well, across draws? | the same case over many seeds and thread settings (`test=profile`) | a distribution (median, spread, worst, failure rate) recorded and compared over time; never a single-run gate |
+| **performance** | how fast? | benchmark reports | timings, never in a pass/fail test |
+
+Consequences:
+
+- **A correctness gate is insensitive to the draw.** Its case is built so that
+  the right algorithm passes on every seed and thread count by a wide margin,
+  and its floors come from a robustness profile by the floor rule (section
+  6.2). If no floor is admissible, the case is not a correctness gate: its
+  metric is reported as a robustness profile, or its signal is raised until it
+  can be a gate.
+- **Identity is the only test of a refactoring that claims identical
+  results.** It never uses multi-threaded runs.
+- **Robustness profiles inform decisions; they do not stop work.** A change
+  meant to change results is judged by comparing profiles before and after,
+  on cases with known truth.
+- **Multi-state correctness is judged only against known labels on simulated
+  data.** Real data without labels shows stability, never correctness
+  (section 6.6).
 
 ## 3. Where a test goes
 
@@ -406,9 +582,11 @@ left in a production module.
 A test that runs a pipeline is a commander: its type and `exec_test_<name>`
 routine in `src/main/commanders/test/simple_commanders_test_<area>.f90`, a
 case in the router `src/main/exec/simple_test_exec_<area>.f90`, a program in
-`src/main/ui/simple_test/simple_test_ui_<area>.f90`, and a registration in
+`src/main/ui/simple_test/simple_test_ui_<area>.f90`, a registration in
 `production/CMakeLists.txt` with `simple_add_test` (label, timeout, threads,
-`RUN_SERIAL`). Section 6 says what it has to check. It still fails through
+and `RUN_SERIAL` for a library or platform entry, `PROCESSORS <reservation>`
+for a high-level one) and, for a high-level entry, its row in the test
+registry (section 1.5) and its card (section 6.5). Section 6 says what it has to check. It still fails through
 assertions or `THROW_HARD` with a message that names the metric, its value
 and the floor.
 
@@ -482,8 +660,9 @@ The assertion and reporting layer. A tester uses the assertions and
 | `assert_real(expected, actual, tol, msg)` | a real within an absolute tolerance (`tol = 0.` for an exact value) |
 | `assert_double(expected, actual, msg[, ulp_tol])` | a double within a number of ulps (10 by default) |
 | `assert_char(expected, actual, msg)`, `assert_string_eq(char, string, msg)` | text, trimmed |
-| `set_fixed_seed(base[, propagate])` | seed the intrinsic generator with a fixed state; `propagate=.true.` also sets `SIMPLE_SEED`, from which the commanders run in process reseed |
-| `fix_test_seed` | `SIMPLE_SEED` of the test process set to 20260923; called once by `simple_test_exec`, not by testers |
+| `set_fixed_seed(base[, propagate])` | seed the intrinsic generator with a fixed state, base plus the seed offset; `propagate=.true.` also sets `SIMPLE_SEED`, from which the commanders run in process reseed |
+| `fix_test_seed` | `SIMPLE_SEED` of the test process set to 20260923 plus the seed offset; called by `simple_test_exec` and the test dispatcher, not by testers |
+| `set_test_seed_offset(n)`, `get_test_seed_offset()` | the seed offset of the process (`seed_offset=` of `simple_test_exec`); for the front door and the dispatcher, and for a test that prints its effective seed |
 | `begin_test_suite`, `end_test_suite`, `reset_test_report`, `report_summary`, `tests_run`, `tests_failed` | the runner's bookkeeping; not for testers |
 
 A failed assertion records its message, with expected and actual values, and
@@ -497,11 +676,16 @@ with the tests); a new gate uses these instead of its own copies.
 
 | routine | use |
 |---|---|
-| `test_gate` (`simple_test_gate`): `new(fname)`, `check(name, ok)`, `metric(name, val, floor, ok)`, `report(name, val)`, `passed()`, `kill` | a gate's checks and metrics, logged as PASS/FAIL and tabulated in a TSV file (name, value, floor, pass) |
-| `validate_reconstructed_volume` (`simple_test_truth_metrics`) | a workflow's final map against its simulation truth: box and sampling, docking in both hands, correlation and masked-FSC floors |
+| `test_gate` (`simple_test_gate`): `new(fname)`, `check(name, ok)`, `metric(name, val, floor, ok[, upper])`, `report(name, val)`, `passed()`, `kill` | a gate's checks and metrics, logged as PASS/FAIL and tabulated in a TSV file (name, value, floor, pass, sense); `upper=.true.` marks the floor as a ceiling |
+| `validate_reconstructed_volume` (`simple_test_truth_metrics`) | a workflow's final map against its simulation truth: box and sampling, docking in both hands, correlation and masked-FSC floors, each decision also a row of the gate it is given |
 | `dock_both_hands`, `compare_to_truth` | the two steps of it, for a gate with its own floors (the masked FSC is the production `compare_volpair` of `simple_volpair_metrics`, which also gives a band-limited correlation) |
 | `pair_pose_error` | poses against the simulation truth without docking (median error of relative rotation angles over seeded pairs) |
 | `add_gaussian_blob` | a blob that breaks the symmetry of a model map, so that c1 poses are unique |
+| `state_fixture` (`simple_test_state_fixture`) | a multi-state dataset with known states, poses, shifts and CTF: blob phantoms (box 64) or beta-galactosidase states (box 96 at 2.2 A; compositional: tetramer D2, tetramer less one chain C1, dimer C2; conformational: one chain rigidly rotated), one `simulate_particles` mixture with given populations, and a project per mode (search: no poses, no states; known: the true poses; views: exact repeated views, class = view); the truth is `truth.txt` beside it. Cached per build in `<SIMPLE_PATH>/test_runs/fixture_cache/<family>_<hash>`, where the hash (64-bit FNV-1a) is of a key text holding the commit of the build, the fixture version, every parameter of the dataset and its seed with the seed offset; the directory holds the key as `key.txt` and is built in a temporary directory renamed into place when complete |
+| `point_group_check`, `betagal_frame` | a truth's self-correlation under its declared point group and under the extra operator of the next larger one; the D2 frame of 1JYX from its chains |
+| `match_states`, `adjusted_rand_index`, `mapped_accuracy`, `accuracy_null`, `collapsed_accuracy`, `population_errors` | state labels against the truth: the one-to-one mapping that maximises agreement (at most eight states), the adjusted Rand index, the accuracy under the mapping, its null distribution from shuffled truth labels (counts kept) and the collapsed predictor |
+| `match_maps`, `discrimination` | the map mapping from docked correlations (it must agree with the label mapping), and whether the maps discriminate the states inside the mask where the truths differ (margins and difference correlations; copies of one map fail) |
+| `carry_pose`, `group_errors`, `group_operators` | a pose and shift carried into the truth's frame by a docking and hand (`dock_both_hands` returns them), and the rotation error under the operators of the truth's declared point group only (poses r and r g are equivalent) |
 
 ## 6. The nightly suite
 
@@ -519,6 +703,11 @@ with the tests); a new gate uses these instead of its own copies.
 
 What does not belong: anything that needs user data or a download, timing
 benchmarks, and anything that cannot fail.
+
+On the test machine the whole high-level tier runs as one command,
+`simple_test_exec test=nightly` (section 1.5), which packs the entries on the
+machine's cores and writes one report; `ctest -L highlevel -j <cores>` runs the
+same entries packed by their `PROCESSORS`.
 
 ### 6.2 How a workflow gate is designed
 
@@ -538,15 +727,43 @@ benchmarks, and anything that cannot fail.
   the masked FSC at 0.143 against a declared floor. Orientations are compared
   after composing each one with the docking rotation (and the mirror), modulo
   the point group.
-- **Floors are declared in the test**, next to where their value comes from:
-  the first measured runs with a stated margin, or a physical argument. A
-  floor is loosened only with a written justification in the commit. There
-  are no blessed baselines and no platform keys.
+- **Floors come from a profile, by the floor rule**, never from a first run.
+  `test=profile` runs the gate at seed offsets 0 to 19 at its CTest thread
+  count (and at one thread where it is deterministic) and gives every
+  metric's distribution. Let `s` be the robust spread: 1.4826 times the median
+  absolute deviation, or the observed range over 4 if that is zero. For a
+  metric where higher is better, a floor is admissible when it lies
+  - at most at the worst of the 20 runs minus `s`;
+  - at most at the median minus `3s`;
+  - at least at the negative control's value plus `3s`.
+
+  A ceiling is the mirror image. Every floor is written next to its check
+  with its origin: the profile, its date, its median, spread and worst run,
+  and the control. A floor moves only by this rule, with the new profile
+  written beside it; it is never loosened to make a run pass. If no value is
+  admissible, the metric is reported as a robustness profile (sense `report`)
+  and the card says why. A contract the code must always keep (a value inside
+  the interval it was asked for, a file written, a count) is a check, not a
+  floor. There are no blessed baselines and no platform keys.
+- **Every gate has a negative control** that shows it can fail for the right
+  reason: the same metric against a broken truth (shuffled labels, another
+  molecule, another micrograph's defocus, copies of one map, shuffled poses)
+  must fail the floor. The control's value is a row of the table.
 - **Every workflow writes its metrics** to `metrics.tsv` in its run
-  directory, one `name value floor pass` line per metric, for the nightly
-  summary.
+  directory (the working directory it was started in, never a fixture
+  directory it deletes), one `name value floor pass sense` line per check and
+  metric, for the nightly report and the profiles. The sense says how the
+  floor bounds the value: `min` (the value must reach the floor), `max` (the
+  floor is a ceiling), `check` (1 or 0 against 1) or `report` (no bound).
+  Values are written in exponent form, so a tolerance of 1e-6 keeps its
+  digits. Every value a test decides on is a row, written before the decision,
+  so a failing run still reports it. A name written more than once in a run (a
+  value reported and then held to a floor, a check repeated) is one metric of
+  that run, which passes only if every row of it passes.
 - **It fails on a missed floor**, with a message naming the metric, its value
-  and the floor, and it is reproducible: `SIMPLE_SEED` fixes every draw.
+  and the floor. Its draws are fixed (`SIMPLE_SEED` and the seed offset), so a
+  one-thread run is reproducible; a run on several threads is still a draw
+  from a distribution, which is why its floors come from a profile.
 
 ### 6.3 The nightly GitHub Actions runs
 
@@ -654,6 +871,40 @@ These real-data runs do not replace the hermetic fast, library, platform, or
 high-level suites. CTest supplies reproducible generated-data gates within the
 SIMPLE repository; the benchmark-dataset workflow supplies short real-data
 evidence in its separately versioned data and reporting repository.
+
+### 6.5 The test cards
+
+CARDS_PLACEHOLDER
+
+### 6.6 Real data: the dataset layer (planned)
+
+Real datasets (beta-galactosidase, PfCRT, msp1, the ribosome, the benchmark
+datasets of `SIMPLE_data_testing`) carry no truth, so they are robustness and
+performance evidence, never correctness:
+
+- does the workflow still complete;
+- does the resolution hold its dataset's limit;
+- how long does it take;
+- how much do the results scatter across seeds.
+
+Multi-state real data shows stability only (populations and per-state
+resolutions across seeds); its labels are unknown, so it never judges a state
+assignment. The layer that automates these runs on the test machine is
+designed in `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md`
+and built after it:
+
+- **a manifest per machine**, kept outside the repository because the paths
+  are the machine's: per dataset its path, the exact command line, the
+  resolution limit it must hold and its reference wall time;
+- **a SIMPLE test program** that reads the manifest and runs each dataset's
+  command line through the same dispatcher as `test=nightly` and `test=profile`,
+  writing the same `metrics.tsv` rows (resolution against its limit as a
+  ceiling, wall time as a report), so that its profiles over seeds come from
+  `test=profile` like any other;
+- **first entries**: the beta-galactosidase and PfCRT cases of the speed runs.
+
+Until it exists, real-data runs stay by hand or in the `SIMPLE_data_testing`
+workflow (section 6.4).
 
 ## 7. Why tests are no longer standalone programs
 
@@ -765,7 +1016,7 @@ written as `sub-suite` (entry).
 | `lplims`, `lpstages`, `lpstages_test` | `low-pass stages` (`unit_numerics`) |
 | `master` | `stream heartbeat` (`forked_process`) |
 | `maxnloc`, `maxnloc_test` | `search, sort, locate` (`unit_numerics`) |
-| `mini_stream` | `simple_test_exec test=mini_stream`, by hand (needs a user's movies) |
+| `mini_stream` | the high-level entries `mini_stream_6vxx` and `mini_stream_1jxy` (simulated micrographs) |
 | `mrc2jpeg`, `mrc_validate` | `mrc2jpeg`, `mrc validate` (`unit_image`) |
 | `multinomal_test`, `rnd_shuffle` | `random draws` (`unit_numerics`) |
 | `nano_mask` | `nano mask` (`unit_image`) |
@@ -780,8 +1031,9 @@ written as `sub-suite` (entry).
 | `oris`, `oris_test` | `orientation collection` (`unit_ori`) |
 | `otsu`, `otsu_test`, `peak_thres_fdr` | `segmentation` (`unit_image`) |
 | `pca_all`, `pca_imgvar` | `PCA` (`unit_numerics`) |
-| `pcg_frac_update`, `rec3D_backends` | by hand, `simple_test_exec test=pcg_frac_update`, `test=rec3D_backends` |
-| `pcg_recon` | the workflow entry `pcg_recon` |
+| `pcg_frac_update` | the library entry `pcg_frac_update` |
+| `rec3D_backends` | by hand, `simple_test_exec test=rec3D_backends` |
+| `pcg_recon` | the library entry `pcg_recon` |
 | `pdb2mrc` | `pdb2mrc` (`lib_single`) |
 | `phase_rand_fsc` | deleted; `simple_exec prg=fsc` |
 | `phasecorr`, `ptcl_center`, `rotate_ref`, `uniform_euler`, `uniform_rot`, `eval_polarftcc` | deleted; the image basics `ptcl_center` touched are in `image` (`unit_image`), `rotate_ref_8` is in `polar correlation` (`unit_pftc_align2D3D`) |

@@ -115,7 +115,6 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
-    character(len=3)          :: prob_athres_taper='no' !< solve3D_cavgs: halve prob_athres each stage after the symmetry search, down to 10 degrees(yes|no){no}
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
@@ -322,6 +321,7 @@ type :: parameters
     character(len=STDLEN)     :: split_mode='even'
     character(len=STDLEN)     :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=STDLEN)     :: states=''             !< comma-separated list of states
+    character(len=STDLEN)     :: state_pops=''         !< simulate_particles: comma-separated population fractions of the states{equal}
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: suite=''             !< one sub-suite of a unit-test area to run alone (simple_test_exec test=unit_<area> suite=<name>)
     character(len=STDLEN)     :: tag=''               !< just a tag

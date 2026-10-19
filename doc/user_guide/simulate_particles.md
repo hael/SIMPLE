@@ -37,6 +37,27 @@ This generates 200 images at random orientations, with shifts bounded by
 2 pixels per image axis. The defocus components and astigmatism vary per
 particle; the chosen values are saved with each orientation record.
 
+### A mixture of states
+
+```shell
+mkdir particles_states
+cd particles_states
+
+simple_exec prg=simulate_particles \
+  vol1=/absolute/path/state1.mrc vol2=/absolute/path/state2.mrc vol3=/absolute/path/state3.mrc \
+  nstates=3 state_pops=0.5,0.3,0.2 \
+  smpd=1.3 mskdiam=180 pgrp=c1 nptcls=1000 snr=0.5 sherr=2 \
+  ctf=yes kv=300 cs=2.7 fraca=0.1 defocus=2 dferr=0.2 astigerr=0.05 \
+  outstk=particles.mrcs outfile=particle_truth.txt mkdir=no nthr=1
+```
+
+This generates 1000 images of three conformations or compositions of one
+molecule: 500 of `state1.mrc`, 300 of `state2.mrc` and 200 of `state3.mrc`.
+Each image is projected from the volume of its particle's state, and the
+state is written with the particle's orientation, shift and CTF parameters,
+so the output orientation document is the truth of the mixture. The volumes
+must share box, sampling and frame.
+
 ### Noisy particles without CTF
 
 ```shell
@@ -61,7 +82,9 @@ commander defaults differ from the generic parameter or help-text values.
 
 | Option | Meaning | Effective default or requirement |
 | --- | --- | --- |
-| `vol1` | Input density volume | Required |
+| `vol1` | Input density volume; with `nstates=K`, `vol1` to `volK`, one per state | Required |
+| `nstates` | Number of states, each with its own volume | 1 |
+| `state_pops` | Comma-separated population fractions of the states, summing to 1 | Equal populations |
 | `smpd` | Sampling in Å/pixel | Supply the actual input sampling; standalone parameter initialization is 1.3 |
 | `nptcls` | Number of output particle images | Required |
 | `snr` | Signal-to-noise setting | Required; use a positive value |
@@ -71,7 +94,7 @@ commander defaults differ from the generic parameter or help-text values.
 | `sherr` | Uniform shift half-width in pixels for random orientations | 0 |
 | `trs` | Uniform shift half-width in pixels with `even=yes` | 0 |
 | `pgrp` | Point-group setting | `c1` |
-| `ctf` | Apply CTF filtering | `yes`; use `no` to bypass it |
+| `ctf` | Apply CTF filtering | `yes`; use `no` to bypass it (no other value is accepted) |
 | `kv` | Acceleration voltage in kV | 300 |
 | `cs` | Spherical aberration in mm | 2.7 |
 | `fraca` | Amplitude contrast fraction | 0.1 |
@@ -104,7 +127,25 @@ overrides those records when both are supplied. Otherwise, with `ctf=yes`,
 the generator draws positive `dfx` values within `defocus ± dferr`, then
 positive `dfy` values within `dfx ± astigerr`, with random astigmatism angles.
 
-The command always soft-masks the input volume before projection. If
+### States
+
+With `nstates=K` greater than 1, every particle has a state from 1 to K and is
+projected from that state's volume. If `oritab` gives the particles a state
+(a `state=` field; a project file always does), those states are used, a
+state outside 1 to K is an error, and so is `state_pops` beside them (the
+populations would not be applied). Otherwise (no `oritab`, or one without
+states) the states are drawn with the fractions of `state_pops`: one fraction
+per state, none negative, summing to 1 within 0.001, or else an error. They are
+drawn in exact counts: each fraction times `nptcls`, rounded, with what rounding leaves
+over given to (or taken from) the states in order of decreasing fraction. The
+order of the states over the particles is then shuffled with the seeded random
+generator, after the orientations and CTF parameters are drawn. The K padded
+volumes are held in memory together, so the memory use grows with K. A state
+that ends with no particle (a population too small for `nptcls`) is an error. With
+`nstates` absent or 1, every particle has state 1 and the output is the same as
+with one volume.
+
+The command always soft-masks each input volume before projection. If
 `mskdiam` is omitted, the default diameter is `(box - 6) * smpd` Å before
 conversion to the supported pixel radius. Invalid or oversized mask diameters
 fall back to the box-derived mask with a warning.
@@ -114,7 +155,7 @@ fall back to the box-derived mask with a warning.
 | File | Contents |
 | --- | --- |
 | `outstk` (default `simulated_particles.mrc` for MRC input) | One boxed projection image per particle |
-| `outfile` (default `simulated_oris.txt`) | SIMPLE records containing generated or supplied orientations, shifts, and CTF parameters when applicable |
+| `outfile` (default `simulated_oris.txt`) | SIMPLE records containing generated or supplied orientations, shifts, states, and CTF parameters when applicable |
 
 The output image box follows the input volume box. When `outstk` is omitted,
 the default filename extension follows the input volume format. An explicit

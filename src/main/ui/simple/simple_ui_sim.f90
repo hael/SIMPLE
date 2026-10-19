@@ -177,7 +177,9 @@ subroutine new_cif2mrc( prgtab )
         &'simulate_particles',&                                           ! name
         &'Simulate single-particle images',&                              ! summary
         &'is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but&
-        & it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be&
+        & it is nevertheless useful for testing purposes. With nstates=K it projects each particle from the volume of&
+        & its state (vol1 to volK): the states come from the state field of oritab, or are drawn with the population&
+        & fractions of state_pops (equal by default), in exact counts, and are written to the output orientations. It does not do any multi-slice simulation and it cannot be&
         & used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input&
         & is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is&
         & projected using Fourier interpolation, 20% of the total noise is added to the images (pink noise), they are&
@@ -189,7 +191,7 @@ subroutine new_cif2mrc( prgtab )
         &display_name='Simulate Particles')                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call simulate_particles%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .true., '', &
+        call simulate_particles%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to project; with nstates=K, vol1 to volK, one per state', 'input volume e.g. vol.mrc', .true., '', &
         &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call simulate_particles%add_input(UI_PARM, smpd, &
@@ -225,6 +227,10 @@ subroutine new_cif2mrc( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call simulate_particles%add_input(UI_PARM, ctf, &
         &visibility=UI_VIS_STANDARD)
+        call simulate_particles%add_input(UI_PARM, nstates, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, 'state_pops', 'str', 'State populations', 'Comma-separated population fractions of the states, summing to 1, every state at least one particle; refused beside an oritab that holds states{equal}', 'e.g. 0.5,0.3,0.2', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
         call simulate_particles%add_input(UI_PARM, 'nframes', 'num', '# of particle frames', '# of lower SNR particle frames', '{1}', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>

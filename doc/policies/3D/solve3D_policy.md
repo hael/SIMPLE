@@ -498,8 +498,7 @@ searches no axis (`pgrp_start = pgrp`: every c1 run and the input-volume,
 stages of a `cavg_ini` run enter at stage 4 and run it to its full budget
 (section 5). `solve3D_symsrch_stage`
 returns the block's last stage for either case; the final-reconstruction rule
-(section 9), the `solve3D_chunks` refusal and the `prob_athres_taper` window of
-`solve3D_cavgs` follow it.
+(section 9) and the `solve3D_chunks` refusal follow it.
 
 At the symmetry-search stage, symmetry-axis search is state-local for
 multi-state runs. Each active state determines its own axis from its current

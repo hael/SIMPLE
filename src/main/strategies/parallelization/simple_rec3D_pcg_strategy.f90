@@ -705,7 +705,17 @@ contains
                     &' HAS NO SELECTED PARTICLES; SKIPPING'
                 cycle
             endif
-            if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('distributed PCG requires both halfsets')
+            if( n_even < 1 .or. n_odd < 1 )then
+                ! a state left with members in one halfset only (the halves of class averages are
+                ! assigned independently): its previous maps are carried forward, as for an empty
+                ! state; gridding assembles a zero half instead and continues as well
+                if( params%l_trail_rec .or. .not. previous_state_maps_exist(state) )&
+                    &THROW_HARD('distributed PCG requires both halfsets')
+                write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
+                    &' HAS PARTICLES IN ONE HALFSET ONLY; CARRYING PREVIOUS VOLUME FORWARD'
+                state_carried(state) = .true.
+                cycle
+            endif
             fname_even = refine3D_state_halfvol_fname(state, 'even')
             fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
             fname_vol  = refine3D_state_vol_fname(state)

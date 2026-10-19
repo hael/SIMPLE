@@ -1,9 +1,10 @@
 !@descr: unit tests for simple_forked_process (lifecycle, signals, timestamps, I/O)
 ! Children run the default execute_test, which exits 0 on SIGTERM: terminate() must end in
-! STOPPED, kill() (SIGKILL) in FAILED. test_logfile_redirection hashes execute_test's sentinel
-! line. test_fork_with_running_monitor forks under a running memory monitor. Skipped on Windows.
+! STOPPED, kill() (SIGKILL) in FAILED; a child with new_session leads its own process group.
+! test_logfile_redirection hashes execute_test's sentinel line. test_fork_with_running_monitor
+! forks under a running memory monitor. Skipped on Windows.
 module simple_forked_process_tester
-  use unix,                  only: c_pid_t, c_usleep, c_kill, c_int, SIGINT
+  use unix,                  only: c_pid_t, c_usleep, c_kill, c_int, SIGINT, SIGKILL
   use simple_forked_process, only: forked_process,         &
                                    FORK_STATUS_RUNNING,    &
                                    FORK_STATUS_STOPPED,    &
@@ -30,6 +31,7 @@ contains
     write(*,'(A)') '**** running all forked process tests ****'
     call test_start()
     call test_kill()
+    call test_new_session()
     call test_terminate()
     call test_sigint_ignored()
     call test_timestamps()
@@ -62,6 +64,25 @@ contains
     call proc%await_final_status()
     call assert_int(proc%status(), FORK_STATUS_FAILED, 'process is failed after SIGKILL')
   end subroutine test_kill
+
+  ! A child started with new_session leads its own process group, which signal_group() kills
+  ! whole; the exit code of a completed child is 0, of a killed one minus the signal.
+  subroutine test_new_session()
+    type(forked_process) :: proc, plain
+    integer              :: rc
+    write(*,'(A)') 'test_new_session'
+    call plain%start(name=string('TEST_EXIT_CODE'))
+    call plain%await_final_status()
+    call assert_int(0, plain%get_exit_code(), 'a child that completes has exit code 0')
+    call proc%start(name=string('TEST_NEW_SESSION'), new_session=.true.)
+    rc = c_usleep(FORK_POLL_TIME * 3)
+    call assert_int(0, c_kill(-proc%get_pid(), 0_c_int), 'the child leads a process group of its own')
+    call proc%signal_group(SIGKILL)
+    call proc%await_final_status()
+    call assert_int(FORK_STATUS_FAILED, proc%status(), 'a killed group leader has failed')
+    call assert_int(-SIGKILL, proc%get_exit_code(), 'its exit code is minus the signal')
+    call assert_true(c_kill(-proc%get_pid(), 0_c_int) /= 0, 'and its group is gone')
+  end subroutine test_new_session
 
   ! Fork a process, send SIGTERM (graceful), and verify it reaches STOPPED.
   subroutine test_terminate()

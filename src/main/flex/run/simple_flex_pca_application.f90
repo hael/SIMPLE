@@ -327,8 +327,15 @@ contains
                 call build_covariance_state_weights(sess%latent, sess%nkern, sess%state_axis, sess%min_neff, sess%states, &
                     &macro_in=sess%deconv_labels, equal_occ=trim(params%state_placement) == 'equal_occ')
             endif
-            ! Drop states below min_neff before reconstruction (they gave artefact maps).
-            call prune_underpopulated_states(sess%min_neff, sess%states)
+            ! Drop states below min_neff before reconstruction (they gave artefact maps). The population
+            ! floor has its own occupancy rule (min_state_frac): there a state is pruned only below the
+            ! smaller of the two floors, so the absolute min_neff cannot drop a state that met the floor
+            if( sess%l_pop_floor )then
+                call prune_underpopulated_states(min(sess%min_neff, &
+                    &max(1, nint(params%min_state_frac * real(sess%sel%nptcls)))), sess%states)
+            else
+                call prune_underpopulated_states(sess%min_neff, sess%states)
+            endif
             ! MUST precede cv_select_bandwidths, whose trial half maps take ml_reg from this command line.
             params%l_ml_reg = .false.
             params%ml_reg   = 'no'

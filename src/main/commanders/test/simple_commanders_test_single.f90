@@ -30,6 +30,7 @@ subroutine exec_test_single_atoms_stats( self, cline )
     use simple_atoms,            only: atoms
     use simple_imghead,          only: find_ldim_nptcls, find_img_smpd
     use simple_test_utils,       only: set_fixed_seed
+    use simple_test_gate,        only: test_gate
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_single_atoms_stats), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
@@ -56,6 +57,7 @@ subroutine exec_test_single_atoms_stats( self, cline )
     type(commander_detect_atoms)          :: xdetat
     type(commander_atoms_stats)           :: xatstats
     type(atoms)                           :: simulated_atoms, detected_atoms
+    type(test_gate)                       :: gate
     type(string)                          :: cwd_saved, fixture_root
     integer                               :: status, nsimulated, ndetected
     real                                  :: recall, precision, rms_error, density_corr
@@ -63,6 +65,7 @@ subroutine exec_test_single_atoms_stats( self, cline )
     write(logfhandle,'(a)') '>>> TEST_SINGLE_ATOMS_STATS:'
     call set_fixed_seed(20260925)
     call simple_getcwd(cwd_saved)
+    call gate%new(filepath(cwd_saved, 'metrics.tsv'))
     fixture_root = filepath(cwd_saved, 'test_single_atoms_stats_'//int2str(get_process_id()))
     if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
     call simple_mkdir(fixture_root)
@@ -126,6 +129,8 @@ subroutine exec_test_single_atoms_stats( self, cline )
     if( ndetected > 0 ) call check_binary_lattice
     call simulated_atoms%kill
     call detected_atoms%kill
+    call gate%check('every_check_of_the_suite_passed', all_ok)
+    call gate%kill
     call simple_chdir(cwd_saved, status)
     if( status /= 0 ) THROW_HARD('TEST_SINGLE_ATOMS_STATS FAILED: could not restore original directory')
     if( all_ok )then
@@ -158,7 +163,7 @@ subroutine exec_test_single_atoms_stats( self, cline )
         write(logfhandle,'(a,a,a,3(i0,1x),a,i0,a,f7.3)') '    ', trim(description), &
             &' volume: dimensions ', ldim, ', sections ', nsections, ', smpd ', smpd
         if( any(ldim /= [BOX, BOX, BOX]) ) call fail(trim(description)//' volume dimensions are incorrect')
-        if( abs(smpd - params%smpd) > 0.001 ) call fail(trim(description)//' volume sampling is incorrect')
+        if( .not. (abs(smpd - params%smpd) <= 0.001) ) call fail(trim(description)//' volume sampling is incorrect')
         if( all(ldim > 0) )then
             call vol%new(ldim, smpd, wthreads=.false.)
             call vol%read(string(filename))
@@ -184,7 +189,7 @@ subroutine exec_test_single_atoms_stats( self, cline )
             call fail('simulated and detected-atom density dimensions differ')
             return
         endif
-        if( abs(simulated_smpd - detected_smpd) > 0.001 )then
+        if( .not. (abs(simulated_smpd - detected_smpd) <= 0.001) )then
             call fail('simulated and detected-atom density sampling differs')
             return
         endif
@@ -196,6 +201,7 @@ subroutine exec_test_single_atoms_stats( self, cline )
         call simulated_density%kill
         call detected_density%kill
         write(logfhandle,'(a,f7.4)') '    simulated/detected density correlation: ', density_corr
+        call gate%metric('density_corr', density_corr, MIN_DENSITY_CORR, .not. density_corr < MIN_DENSITY_CORR)
         if( .not. ieee_is_finite(density_corr) )then
             call fail('simulated/detected density correlation is not finite')
         elseif( density_corr < MIN_DENSITY_CORR )then
@@ -237,10 +243,41 @@ subroutine exec_test_single_atoms_stats( self, cline )
         endif
         write(logfhandle,'(a,f7.4,a,f7.4,a,f7.4,a)') '    coordinate match: recall=', recall, &
             &', precision=', precision, ', RMS error=', rms_error, ' A'
-        if( recall < MIN_RECALL ) call fail('atom-detection recall is below 0.90')
-        if( precision < MIN_PRECISION ) call fail('atom-detection precision is below 0.90')
-        if( rms_error > MAX_RMS_ERROR ) call fail('atom RMS position error exceeds 0.75 A')
+        call gate%metric('recall', recall, MIN_RECALL, .not. recall < MIN_RECALL)
+        call gate%metric('precision', precision, MIN_PRECISION, .not. precision < MIN_PRECISION)
+        call gate%metric('rms_position_error_A', rms_error, MAX_RMS_ERROR, .not. rms_error > MAX_RMS_ERROR, upper=.true.)
+        if( .not. (recall >= MIN_RECALL) ) call fail('atom-detection recall is below 0.90')
+        if( .not. (precision >= MIN_PRECISION) ) call fail('atom-detection precision is below 0.90')
+        if( .not. (rms_error <= MAX_RMS_ERROR) ) call fail('atom RMS position error exceeds 0.75 A')
+        call shifted_control
     end subroutine compare_atom_coordinates
+
+    !> the negative control: the detected atoms moved by half the shortest bond of the model must fail
+    !! the recall floor (a detector that misplaces every atom)
+    subroutine shifted_control
+        integer :: i, j, nmatched
+        real    :: bond, distance, min_distance, half(3), shifted_recall
+        bond = huge(1.0)
+        do i = 1, min(nsimulated, 200)
+            do j = 1, nsimulated
+                if( j == i ) cycle
+                bond = min(bond, norm2(simulated_atoms%get_coord(i) - simulated_atoms%get_coord(j)))
+            enddo
+        enddo
+        half = [0.5 * bond, 0., 0.]
+        nmatched = 0
+        do i = 1, nsimulated
+            min_distance = huge(1.0)
+            do j = 1, ndetected
+                distance = norm2(simulated_atoms%get_coord(i) - (detected_atoms%get_coord(j) + half))
+                min_distance = min(min_distance, distance)
+            enddo
+            if( min_distance <= POSITION_TOL ) nmatched = nmatched + 1
+        enddo
+        shifted_recall = real(nmatched) / real(nsimulated)
+        call gate%report('control_recall_of_atoms_shifted_by_half_a_bond', shifted_recall)
+        call gate%check('control_shifted_atoms_fail_the_recall_floor', .not. (shifted_recall >= MIN_RECALL))
+    end subroutine shifted_control
 
     subroutine check_statistics_files( expected_atoms )
         integer, intent(in) :: expected_atoms
@@ -387,7 +424,9 @@ subroutine exec_test_single_atoms_stats( self, cline )
         enddo
         call fit_lattice(el_ucase, centers, a_fit)
         write(logfhandle,'(a,a,a,3f9.4,a,3f9.4)') '    ', trim(crystal_system), ' lattice fitted ', a_fit, ', table ', a_tab
-        if( abs(a_fit(1) - a_tab(1)) > MAX_A_ERR * a_tab(1) ) call fail('fitted lattice constant is more than 2% from the table')
+        call gate%metric('lattice_constant_relative_error', abs(a_fit(1) - a_tab(1)) / a_tab(1), MAX_A_ERR, &
+            &.not. abs(a_fit(1) - a_tab(1)) > MAX_A_ERR * a_tab(1), upper=.true.)
+        if( .not. (abs(a_fit(1) - a_tab(1)) <= MAX_A_ERR * a_tab(1)) ) call fail('fitted lattice constant is more than 2% from the table')
         ! interior coordination from atoms_stats.csv, columns found by name
         if( .not. file_exists(ATOM_STATS) ) return
         call fopen(funit, file=string(ATOM_STATS), status='old', action='read', iostat=ios)
@@ -422,6 +461,7 @@ subroutine exec_test_single_atoms_stats( self, cline )
         nwrong = count(cendist <= rinner .and. nint(cn) /= cn_expected)
         write(logfhandle,'(a,i0,a,i0,a,i0,a,f6.2,a)') '    interior atoms: ', count(cendist <= rinner), ', with CN /= ', cn_expected,&
             &': ', nwrong, ' (CN range ', minval(cn, mask=cendist <= rinner), ')'
+        call gate%metric('interior_atoms_with_wrong_cn', real(nwrong), 0., nwrong == 0, upper=.true.)
         if( nwrong > 0 ) call fail('an interior atom of the binary crystal has the wrong coordination number')
     end subroutine check_binary_lattice
 
@@ -471,7 +511,14 @@ subroutine exec_test_species_discovery( self, cline )
     real,    parameter :: MIN_PT_RECALL    = 0.98   ! Pt over its eligible atoms: runs with discovery and the pure case
     real,    parameter :: MIN_ALL_RECALL   = 0.95   ! all eligible atoms of all species, runs with discovery
     integer, parameter :: MAX_FALSE        = 1      ! false atoms per run
-    real,    parameter :: MIN_LIGHT_RECALL = 0.90   ! the second element over its eligible atoms, runs with the list
+    ! the second element over its eligible atoms, runs with the list: by the floor rule from the profile
+    ! of 2026-10-18 (scratch/keep/profiles/phase5/after_e, 20 seed offsets): Ni median 0.977, robust
+    ! spread 0.012, worst 0.908, admissible up to 0.895 (it was 0.90)
+    real,    parameter :: MIN_LIGHT_RECALL = 0.89
+    ! aluminium's by the floor rule, from the profile of 2026-10-16 (20 seed offsets,
+    ! scratch/keep/profiles/phase1/species_discovery): median 0.985, robust spread 0.022, worst 0.908,
+    ! admissible up to 0.886 (the control, element=Pt alone, recovers none); 0.90 sat inside the spread
+    real,    parameter :: MIN_AL_RECALL    = 0.88
     real,    parameter :: MAX_PLAIN_LIGHT  = 0.90   ! light case: element=Pt finds fewer than this of the eligible Al
     real,    parameter :: MIN_HALF_AGREE   = 0.95   ! label agreement between the half maps
     real,    parameter :: MIN_ELIG_SNR     = 6.5    ! eligibility: filtered peak of the atom's own kernel over filtered noise
@@ -1102,7 +1149,7 @@ subroutine exec_test_species_discovery( self, cline )
         integer, allocatable :: match(:), hits(:), order(:), cls(:), sel(:)
         type(atoms) :: found_atms
         character(len=2) :: el2
-        real    :: tol, dpt, ratio, ratio_gen, rise_fit, rise_gen, rin, rout
+        real    :: tol, dpt, ratio, ratio_gen, rise_fit, rise_gen, rin, rout, min_light
         integer, parameter :: MAXLEV = 8
         integer :: nrow, j, nfalse, nwrong, k_found, nrec, nsh, nin, nout, kc, j1, j2, ic, nfound(0:2,0:MAXLEV)
         logical :: l_list, l_disc
@@ -1139,7 +1186,7 @@ subroutine exec_test_species_discovery( self, cline )
         allocate(hits(nlat),  source=0)
         do j = 1,nrow
             match(j) = minloc(sum((gxyz - spread(xyz(:,j), 2, nlat))**2, dim=1), dim=1)
-            if( norm2(gxyz(:,match(j)) - xyz(:,j)) > tol )then
+            if( .not. (norm2(gxyz(:,match(j)) - xyz(:,j)) <= tol) )then
                 match(j) = 0
             else
                 hits(match(j)) = hits(match(j)) + 1
@@ -1158,7 +1205,7 @@ subroutine exec_test_species_discovery( self, cline )
             endif
         enddo
         call gate%report(tag//': found atoms', real(nrow))
-        call gate%metric(tag//': false atoms', real(nfalse), real(MAX_FALSE), nfalse <= MAX_FALSE)
+        call gate%metric(tag//': false atoms', real(nfalse), real(MAX_FALSE), nfalse <= MAX_FALSE, upper=.true.)
         if( l_disc .or. trim(el2) == '' )then
             call gate%metric(tag//': PT recall over eligible', recall_of(elig .and. gel == ELEMS(1), hits), MIN_PT_RECALL,&
                 &recall_of(elig .and. gel == ELEMS(1), hits) >= MIN_PT_RECALL)
@@ -1237,8 +1284,10 @@ subroutine exec_test_species_discovery( self, cline )
             if( l_list )then
                 call gate%check(tag//': every found atom carries its element', nwrong == 0)
                 call gate%check(tag//': two-class fit admissible', report_string(txt, 'admissible_K2') == 'yes')
+                min_light = MIN_LIGHT_RECALL
+                if( trim(el2) == 'AL' ) min_light = MIN_AL_RECALL
                 call gate%metric(tag//': '//el2//' recall over eligible', recall_of(elig .and. gel == el2, hits),&
-                    &MIN_LIGHT_RECALL, recall_of(elig .and. gel == el2, hits) >= MIN_LIGHT_RECALL)
+                    &min_light, recall_of(elig .and. gel == el2, hits) >= min_light)
                 ratio     = report_value(txt, 'class_ratio_2')
                 ratio_gen = int_el(elem_index(el2)) / int_el(1)
                 call gate%report(tag//': single-atom intensity ratio', ratio_gen)
@@ -1269,6 +1318,10 @@ subroutine exec_test_species_discovery( self, cline )
         ! generated rise over the generating atoms of the same shells. Not floored: on maps filtered as reconstructions
         ! are, the neighbours' negative halos narrow interior atoms, so the fitted rise carries a coordination artefact
         ! (section 7 of the plan)
+        ! a pure particle under a two-element list: the forced second class is inadmissible (checked
+        ! above), so its class 1 is no platinum class (it held 4 of 285 atoms in a failing draw); the
+        ! widths are of the classes of a particle with two species
+        if( trim(el2) == '' .and. l_list ) return
         rad_csv = trim(RUN_NAME(ir))//'/map_species_radial.csv'
         call read_table(rad_csv, radial)
         sel = pack([(j, j=1,size(radial,2))], nint(radial(1,:)) == 1)
@@ -1324,7 +1377,7 @@ subroutine exec_test_species_discovery( self, cline )
         call found_atms%kill
         rec = recall_of(elig .and. gel == SECOND(ic), hits)
         call gate%metric('light/pt: AL recall over eligible below the ceiling (the fixture tests the recovery)', rec,&
-            &MAX_PLAIN_LIGHT, rec < MAX_PLAIN_LIGHT)
+            &MAX_PLAIN_LIGHT, rec < MAX_PLAIN_LIGHT, upper=.true.)
     end subroutine light_plain_recall
 
 end subroutine exec_test_species_discovery
@@ -1340,8 +1393,9 @@ subroutine exec_test_single_workflow( self, cline )
     use simple_commanders_project_ptcl, only: commander_import_particles
     use simple_commanders_project_core, only: commander_new_project
     use single_commanders_nano3D,       only: commander_autorefine3D_nano, commander_refine3D_nano
-    use simple_test_truth_metrics,      only: pair_pose_error
-    use simple_rnd,                     only: seed_rnd_fixed
+    use simple_test_truth_metrics,      only: dock_both_hands, carry_pose, group_errors, group_operators
+    use simple_test_utils,              only: set_fixed_seed, offset_seed
+    use simple_test_gate,               only: test_gate
     !$ use omp_lib,                     only: omp_set_num_threads
     class(commander_test_single_workflow), intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
@@ -1361,13 +1415,14 @@ subroutine exec_test_single_workflow( self, cline )
     type(sp_project)                      :: run_proj
     type(oris)                            :: truth_oris
     type(string)                          :: cont_projfile
-    integer, allocatable                  :: pinds(:)
-    real                                  :: pair_polar, pair_cont, frac5, pair_nopolish, pair_polish
+    real                                  :: pair_polar, pair_cont, pair_nopolish, pair_polish
+    real                                  :: dock_cc_direct, dock_cc_mirror, dock_eul(3), dock_shift(3)
+    logical                               :: dock_mirrored
     type(string)                          :: aref_projfile, nano_projfile
-    integer                               :: i, npairs_ptcls
     type(string)                          :: suite_name, projname, projfile, project_dir, startvol
     type(string)                          :: simulated_vol, reprojections, trajectory, denoised_trajectory
-    type(string)                          :: autorefine_dir, final_volume
+    type(string)                          :: autorefine_dir, final_volume, run_dir
+    type(test_gate)                       :: gate
     character(len=*), parameter           :: REPROJECTIONS_STK = 'reprojections.mrc'
     character(len=*), parameter           :: TRAJECTORY_STK    = 'simulated_trajectory.mrc'
     character(len=*), parameter           :: DENOISED_STK      = 'denoised_trajectory.mrc'
@@ -1382,13 +1437,19 @@ subroutine exec_test_single_workflow( self, cline )
     character(len=*), parameter           :: NOPOLISH_DIR      = '9_refine3D_nano_nopolish'
     character(len=*), parameter           :: POLISH_DIR        = '10_refine3D_nano_polish'
     ! N29, Phase 9 (declared before the first run): refine3D_nano pose_cont=yes and pose_cont=no
-    ! continue from the same autorefine3D_nano project; with the polish the pair pose error is no
-    ! worse than without, within the same 0.5 deg
+    ! continue from the same autorefine3D_nano project; with the polish the median rotation error is
+    ! no worse than without, within the same 0.5 deg
     ! N29 (pose_cont refactoring, Phase 8; ruling R5): refine3D_nano refine=cont continues from the
-    ! autorefine3D_nano project; its poses against the trajectory truth (frame- and
-    ! hand-independent pair metric, 20 000 pairs) are no worse than the polar result's, within
-    ! 0.5 deg (declared before the first run)
-    integer,          parameter           :: NCONT_ITERS = 2, NPAIRS = 20000, PAIR_SEED = 20261001
+    ! autorefine3D_nano project; its poses against the trajectory truth are no worse than the polar
+    ! result's, within 0.5 deg (declared before the first run). The error is the median over the
+    ! particles of the rotation error in the truth's frame up to the lattice's group (test-suite truth
+    ! plan, Phase 5: the earlier frame-free pair metric was not symmetry-aware and read the
+    ! near-symmetric clusters' correct poses as random, 42.7-45.6 deg in every run)
+    ! The relative ceiling (a stage may lose at most MAX_PAIR_LOSS deg of median rotation error to the
+    ! one before) is admissible on the profiles of 2026-10-18 (20 seed offsets, one thread): fcc
+    ! refine=cont minus autorefine3D_nano median -0.13 deg, worst +0.19, the polish minus no polish
+    ! median -0.15, worst +0.12; wurtzite worst -0.11 and -0.13; random poses lose tens of degrees
+    integer,          parameter           :: NCONT_ITERS = 2
     real,             parameter           :: MAX_PAIR_LOSS = 0.5
     integer,          parameter           :: NREPROJS = 300, MASKDIAM = 40, NREFINE_ITERS = 3, NTHR = 1
     integer,          parameter           :: NSPACE = 5000, NITERS_BETWEEN = 4
@@ -1400,6 +1461,9 @@ subroutine exec_test_single_workflow( self, cline )
     real,             parameter           :: MAX_FSC0143       = 5.0
     real,             parameter           :: DOCK_HP           = 100.0
     real,             parameter           :: DOCK_LP           = 5.0
+    ! the docking that frames the poses: to 2 A, where the lattice fringes fix the orientation (to
+    ! 5 A the fcc median rotation error read 20 deg against 5 deg, the wurtzite one 2.9 against 1.6)
+    real,             parameter           :: POSE_DOCK_LP      = 2.0
     real                               :: volume_corr, volume_fsc0143
     real                               :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     logical                            :: volume_ok
@@ -1422,11 +1486,13 @@ subroutine exec_test_single_workflow( self, cline )
             THROW_HARD('no sub-suite '//suite_name%to_char()//' in single_workflow; use suite=list')
     end select
     !$ call omp_set_num_threads(NTHR)
-    call seed_rnd_fixed(TEST_SEED, propagate=.true.)
-    write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', TEST_SEED
+    call set_fixed_seed(TEST_SEED, propagate=.true.)
+    write(logfhandle,'(a,i0)') '>>> Deterministic workflow seed: ', offset_seed(TEST_SEED)
     if( .not. cline%defined('smpd') ) call cline%set('smpd', 0.358)
     call cline%set('nthr', NTHR)
     projname = 'test_single_workflow_'//suite_name%to_char()
+    call simple_getcwd(run_dir)
+    call gate%new(filepath(run_dir, 'metrics.tsv'))
     call params%new(cline)
     projfile = projname%to_char()//'.simple'
     call cline_nproj%set('prg',                       'new_project')
@@ -1523,8 +1589,12 @@ subroutine exec_test_single_workflow( self, cline )
     final_volume = filepath(filepath(autorefine_dir, 'final_results'), &
         &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//MRC_EXT)
     call validate_reconstructed_volume(simulated_vol, final_volume, params%smpd, BOX, 0.001, real(MOLDIAM), &
-        &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, volume_corr, volume_fsc0143, &
+        &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, gate, 'autorefine3D_nano', volume_corr, volume_fsc0143, &
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok, corr_lp=DOCK_LP)
+    ! the frame of the poses: the autorefine3D_nano map docked onto the simulated one (both hands);
+    ! refine=cont and the polish refine against that map, so one docking carries every stage's poses
+    call dock_both_hands(simulated_vol, final_volume, real(MOLDIAM), DOCK_HP, POSE_DOCK_LP, 'pose_dock', &
+        &string('pose_dock_docked.mrc'), dock_cc_direct, dock_cc_mirror, dock_eul, dock_shift, dock_mirrored)
     call return_to_project_dir
     if( .not. volume_ok ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: final-volume validation failed')
     ! N29: refine3D_nano refine=cont on the autorefine3D_nano project (projfile, the last stage's
@@ -1533,11 +1603,9 @@ subroutine exec_test_single_workflow( self, cline )
     call truth_oris%read(filepath(filepath(project_dir, REPROJECTION_DIR), TRAJECTORY_ORITAB), [1,NREPROJS])
     cont_projfile = projfile
     call run_proj%read(cont_projfile)
-    npairs_ptcls = min(NREPROJS, run_proj%os_ptcl3D%get_noris())
-    if( npairs_ptcls < 2 ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the autorefine3D_nano project holds no particles')
-    allocate(pinds(npairs_ptcls))
-    pinds = [(i, i=1,npairs_ptcls)]
-    pair_polar = pair_pose_error(run_proj%os_ptcl3D, truth_oris, pinds, pinds, NPAIRS, PAIR_SEED, frac5)
+    if( run_proj%os_ptcl3D%get_noris() /= NREPROJS )&
+        &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the autorefine3D_nano project does not hold every particle')
+    pair_polar = group_pose_error()
     call enter_workflow_stage(CONT_DIR, cont_projfile)
     call cline_cont%set('prg',      'refine3D_nano')
     call cline_cont%set('mkdir',    'no')
@@ -1552,19 +1620,26 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_cont%set('nthr',     params%nthr)
     call xref3Dnano%execute(cline_cont)
     call run_proj%read(cont_projfile)
-    pair_cont = pair_pose_error(run_proj%os_ptcl3D, truth_oris, pinds, pinds, NPAIRS, PAIR_SEED, frac5)
+    pair_cont = group_pose_error()
     call return_to_project_dir
-    write(logfhandle,'(a,f8.3,a,f8.3,a)') 'single_workflow pair pose error against the truth: autorefine3D_nano ', &
+    write(logfhandle,'(a,f8.3,a,f8.3,a)') 'single_workflow median rotation error against the truth: autorefine3D_nano ', &
         &pair_polar, ' deg, then refine3D_nano refine=cont ', pair_cont, ' deg'
-    if( pair_cont > pair_polar + MAX_PAIR_LOSS ) &
+    call gate%report('autorefine3D_nano_rotation_error_deg', pair_polar)
+    call gate%metric('refine_cont_rotation_error_deg', pair_cont, pair_polar + MAX_PAIR_LOSS, &
+        &pair_cont <= pair_polar + MAX_PAIR_LOSS, upper=.true.)
+    if( .not. (pair_cont <= pair_polar + MAX_PAIR_LOSS) ) &
         &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: refine=cont worsened the poses of autorefine3D_nano')
     ! N29, Phase 9: refine3D_nano with and without the polish from the autorefine3D_nano project
     aref_projfile = projfile
     call run_nano_refine(NOPOLISH_DIR, 'no',  pair_nopolish)
     call run_nano_refine(POLISH_DIR,   'yes', pair_polish)
-    write(logfhandle,'(a,f8.3,a,f8.3,a)') 'single_workflow pair pose error against the truth: refine3D_nano pose_cont=no ', &
-        &pair_nopolish, ' deg, pose_cont=yes ', pair_polish, ' deg'
-    if( pair_polish > pair_nopolish + MAX_PAIR_LOSS ) &
+    write(logfhandle,'(a,f8.3,a,f8.3,a)') 'single_workflow median rotation error against the truth: refine3D_nano '//&
+        &'pose_cont=no ', pair_nopolish, ' deg, pose_cont=yes ', pair_polish, ' deg'
+    call gate%report('nopolish_rotation_error_deg', pair_nopolish)
+    call gate%metric('polish_rotation_error_deg', pair_polish, pair_nopolish + MAX_PAIR_LOSS, &
+        &pair_polish <= pair_nopolish + MAX_PAIR_LOSS, upper=.true.)
+    call gate%kill
+    if( .not. (pair_polish <= pair_nopolish + MAX_PAIR_LOSS) ) &
         &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the polish worsened the poses of refine3D_nano')
     call run_proj%kill
     call truth_oris%kill
@@ -1576,8 +1651,32 @@ subroutine exec_test_single_workflow( self, cline )
     call simple_end('**** SIMPLE_TEST_SINGLE_WORKFLOW NORMAL STOP ****')
 
 contains
+    !> The median rotation error of run_proj's particles against the truth: each pose carried into
+    !! the truth's frame by the docking of the autorefine3D_nano map, the error the smallest over the
+    !! near-symmetries of the lattice, which refinement cannot tell apart: the rotations of its group
+    !! (O for the face-centred cubic cluster, D6 for the wurtzite one; the clusters' exact symmetry is
+    !! only C3 and C1) and, as both lattices are nearly centrosymmetric, the in-plane rotation by 180
+    !! degrees. A pose off by one of them scores zero and a random one tens of degrees
+    real function group_pose_error() result( err )
+        real, allocatable :: rc(:,:,:), rt(:,:,:), ops(:,:,:)
+        real :: shc(2)
+        integer :: ip
+        allocate(rc(3,3,NREPROJS), rt(3,3,NREPROJS))
+        do ip = 1, NREPROJS
+            call carry_pose(run_proj%os_ptcl3D%get_mat(ip), run_proj%os_ptcl3D%get_2Dshift(ip), dock_mirrored, BOX, &
+                &euler2m(dock_eul), dock_shift, rc(:,:,ip), shc)
+            rt(:,:,ip) = truth_oris%get_mat(ip)
+        enddo
+        if( suite_name == 'fcc' )then
+            ops = group_operators('o')
+        else
+            ops = group_operators('d6')
+        endif
+        err = median(group_errors(rc, rt, ops, projection_inversion=.true.))
+    end function group_pose_error
+
     !> NCONT_ITERS refine3D_nano iterations (refine=neigh, objfun=cc) from the autorefine3D_nano
-    !! project with pose_cont, in their own stage directory; the pair pose error of the result
+    !! project with pose_cont, in their own stage directory; the median rotation error of the result
     subroutine run_nano_refine( dir, pose_cont, pair_err )
         character(len=*), intent(in)  :: dir, pose_cont
         real,             intent(out) :: pair_err
@@ -1599,7 +1698,7 @@ contains
         call xref3Dnano%execute(cline_nano)
         call cline_nano%kill
         call run_proj%read(nano_projfile)
-        pair_err = pair_pose_error(run_proj%os_ptcl3D, truth_oris, pinds, pinds, NPAIRS, PAIR_SEED, frac5)
+        pair_err = group_pose_error()
         call return_to_project_dir
     end subroutine run_nano_refine
 

@@ -112,7 +112,7 @@ contains
         call cline%set('objfun', 'euclid') ! noise normalized Euclidean distances from the start
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                      'yes')
         if( .not. cline%defined('overlap')          ) call cline%set('overlap',                     0.95)
-        if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                  90.) ! reduces # failed runs on trpv1 from 4->2/10
+        if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                  10.) ! as solve3D
         if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',   solve3D_cenlp_default())
         if( .not. cline%defined('imgkind')          ) call cline%set('imgkind',                   'cavg')
         if( .not. cline%defined('filt_mode')        ) call cline%set('filt_mode',                 'none')

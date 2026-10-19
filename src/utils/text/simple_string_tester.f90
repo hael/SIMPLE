@@ -141,6 +141,16 @@ contains
         s      = string('abcdef')
         s_hash = s%to_fnv1a_hash64()
         call assert_char('D80BDA3FBE244A0A', s_hash%to_char(), 'to_fnv1a_hash64() returns incorrect hash')
+        ! published FNV-1a 64 vectors: the empty string is the offset basis; 'a' and 'foobar'
+        s      = string('')
+        s_hash = s%to_fnv1a_hash64()
+        call assert_char('CBF29CE484222325', s_hash%to_char(), 'the FNV-1a hash of the empty string')
+        s      = string('a')
+        s_hash = s%to_fnv1a_hash64()
+        call assert_char('AF63DC4C8601EC8C', s_hash%to_char(), 'the FNV-1a hash of a')
+        s      = string('foobar')
+        s_hash = s%to_fnv1a_hash64()
+        call assert_char('85944171F73967E8', s_hash%to_char(), 'the FNV-1a hash of foobar')
     end subroutine test_to_fnv1a_hash64
 
     !---------------- numeric conversions ----------------

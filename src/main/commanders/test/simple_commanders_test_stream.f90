@@ -27,6 +27,7 @@ subroutine exec_test_stream_preproc( self, cline )
         &starfile_table__delete, EMDL_MICROGRAPH_SHIFT_X, EMDL_MICROGRAPH_SHIFT_Y
     use simple_commanders_stream_p01_preprocess,    only: commander_stream_p01_preprocess
     use simple_ui,                        only: make_ui
+    use simple_test_gate,                 only: test_gate
     use, intrinsic :: iso_c_binding,      only: C_long, C_double
     use, intrinsic :: ieee_arithmetic,    only: ieee_is_finite
     class(commander_test_stream_preproc), intent(inout) :: self
@@ -42,7 +43,11 @@ subroutine exec_test_stream_preproc( self, cline )
     real,             parameter :: CS               = 2.7
     real,             parameter :: KV               = 300.0
     real,             parameter :: FRACA            = 0.1
-    real,             parameter :: DEFOCUS_TOL      = 0.10
+    ! The defocus ceiling by the floor rule, from the profile of 2026-10-16 (20 seed offsets,
+    ! scratch/keep/profiles/phase1/stream_preproc): medians 0.007-0.016 um, robust spread up to
+    ! 0.0065, worst 0.164 (a rare outlying fit), admissible from 0.17; the control, the neighbouring
+    ! movie's truth 0.25 um away, lies above 0.23. The former 0.10 failed 15 % of the runs.
+    real,             parameter :: DEFOCUS_TOL      = 0.20
     real,             parameter :: MOTION_TOL       = 0.50
     real,             parameter :: CORR_FLOOR       = 0.50
     real,             parameter :: CORR_MARGIN      = 0.05
@@ -56,19 +61,21 @@ subroutine exec_test_stream_preproc( self, cline )
     type(image)                  :: particle, feature, integrated, optimal, wrong_optimal
     type(oris)                   :: simulation_truth
     type(sp_project)             :: spproj
+    type(test_gate)              :: gate
     type(string)                 :: cwd_root, fixture_root, movies_dir, truth_dir, particle_stack_path
     type(string)                 :: project_path, movie_name, optimal_name, params_name, value
     type(string)                 :: movie_paths(STREAM_NMOVS_SET), optimal_paths(STREAM_NMOVS_SET)
     type(string)                 :: params_paths(STREAM_NMOVS_SET)
     character(len=XLONGSTRLEN)   :: fixture_root_path
     integer                      :: i, imovie, wrong_movie, status, ldim(3), nimages
-    real                         :: dfx, dfy, ctfres, truth_dfx, truth_dfy, defocus_error
+    real                         :: dfx, dfy, ctfres, truth_dfx, truth_dfy, defocus_error, wrong_error
     real                         :: motion_error, image_corr, wrong_corr
 
     ! simple_test_exec initializes only test-program metadata.  The movie
     ! simulator uses the production UI while constructing its parameters.
     call make_ui
     call simple_getcwd(cwd_root)
+    call gate%new(filepath(cwd_root, 'metrics.tsv'))
     fixture_root = 'test_preproc_'//int2str(get_process_id())
     if( dir_exists(fixture_root) ) THROW_HARD('TEST_PREPROC FAILED: fixture directory already exists')
     call simple_mkdir(fixture_root)
@@ -189,7 +196,7 @@ subroutine exec_test_stream_preproc( self, cline )
         if( .not. ieee_is_finite(dfx) .or. .not. ieee_is_finite(dfy) .or. &
             &.not. ieee_is_finite(ctfres) .or. dfx <= 0. .or. dfy <= 0. .or. ctfres <= 0. )&
             &THROW_HARD('TEST_PREPROC FAILED: CTF parameters are not physically valid')
-        if( abs(spproj%os_mic%get(i, 'smpd') - SMPD) > 0.01 )&
+        if( .not. (abs(spproj%os_mic%get(i, 'smpd') - SMPD) <= 0.01) )&
             &THROW_HARD('TEST_PREPROC FAILED: micrograph sampling distance changed unexpectedly')
 
         ! The simulator writes the actual defocus values after its deliberate
@@ -203,16 +210,29 @@ subroutine exec_test_stream_preproc( self, cline )
         ! can exchange dfx/dfy and rotate the astigmatism angle by 90 degrees.
         defocus_error = min(max(abs(dfx - truth_dfx), abs(dfy - truth_dfy)), &
             &max(abs(dfx - truth_dfy), abs(dfy - truth_dfx)))
+        ! min and max may drop a non-finite truth
+        if( .not. (ieee_is_finite(truth_dfx) .and. ieee_is_finite(truth_dfy)) ) defocus_error = huge(1.)
         write(logfhandle,'(a,i0,a,f7.3,a,f7.3)') '>>> TEST_PREPROC movie ', imovie, &
             &': defocus max error ', defocus_error, ' um; limit ', DEFOCUS_TOL
-        if( defocus_error > DEFOCUS_TOL )&
-            &THROW_HARD('TEST_PREPROC FAILED: recovered defocus differs from simulation truth by more than 0.10 um')
+        call gate%metric('defocus_error_um_movie'//int2str(imovie), defocus_error, DEFOCUS_TOL, &
+            &defocus_error <= DEFOCUS_TOL, upper=.true.)
+        if( .not. (defocus_error <= DEFOCUS_TOL) )&
+            &THROW_HARD('TEST_PREPROC FAILED: recovered defocus differs from simulation truth by more than 0.20 um')
+        ! the negative control: the fit against the truth of the other movie whose truth lies farthest
+        ! from this one's fails the ceiling (the neighbour's, 0.25 um away nominally, came within it in
+        ! 17 of 100 movie runs of the profile of 2026-10-18: the simulator perturbs each defocus)
+        wrong_error = farthest_truth_error(imovie, truth_dfx, truth_dfy, dfx, dfy)
+        call gate%report('control_defocus_error_um_movie'//int2str(imovie)//'_against_the_farthest_truth', wrong_error)
+        call gate%check('control_defocus_movie'//int2str(imovie)//'_against_the_farthest_truth_fails', &
+            &.not. (wrong_error <= DEFOCUS_TOL))
 
         call spproj%os_mic%getter(i, 'mc_starfile', value)
         motion_error = max_motion_error(value, simulation_truth)
         write(logfhandle,'(a,i0,a,f7.3,a,f7.3)') '>>> TEST_PREPROC movie ', imovie, &
             &': motion max error ', motion_error, ' pixels; limit ', MOTION_TOL
-        if( motion_error > MOTION_TOL )&
+        call gate%metric('motion_error_px_movie'//int2str(imovie), motion_error, MOTION_TOL, &
+            &motion_error <= MOTION_TOL, upper=.true.)
+        if( .not. (motion_error <= MOTION_TOL) )&
             &THROW_HARD('TEST_PREPROC FAILED: recovered frame motion differs from simulation truth by more than 0.50 pixels')
         call simulation_truth%kill
 
@@ -228,16 +248,23 @@ subroutine exec_test_stream_preproc( self, cline )
         wrong_corr = integrated%real_corr(wrong_optimal)
         write(logfhandle,'(a,i0,a,f7.3,a,f7.3,a,f7.3)') '>>> TEST_PREPROC movie ', imovie, &
             &': correlation with truth ', image_corr, '; control ', wrong_corr, '; floor ', CORR_FLOOR
-        if( image_corr < CORR_FLOOR )&
+        call gate%metric('integrated_truth_corr_movie'//int2str(imovie), image_corr, CORR_FLOOR, &
+            &image_corr >= CORR_FLOOR)
+        call gate%metric('integrated_truth_corr_margin_over_wrong_movie'//int2str(imovie), image_corr - wrong_corr, &
+            &CORR_MARGIN, image_corr >= wrong_corr + CORR_MARGIN)
+        if( .not. (image_corr >= CORR_FLOOR) )&
             &THROW_HARD('TEST_PREPROC FAILED: integrated micrograph correlation with truth is below 0.50')
-        if( image_corr < wrong_corr + CORR_MARGIN )&
+        if( .not. (image_corr >= wrong_corr + CORR_MARGIN) )&
             &THROW_HARD('TEST_PREPROC FAILED: integrated micrograph does not identify its own simulation truth')
         call integrated%kill
         call optimal%kill
         call wrong_optimal%kill
     enddo
+    ! the path: the stage ran its work as worker jobs of the local queue
+    call check_worker_jobs
     call spproj%kill
     call cline_preproc%kill
+    call gate%kill
     call simple_chdir(cwd_root, status)
     if( status /= 0 ) THROW_HARD('TEST_PREPROC FAILED: could not restore the original directory')
     write(logfhandle,'(a,i0,a,a)') 'PASS: stream_preproc validated ', STREAM_NMOVS_SET, &
@@ -245,6 +272,61 @@ subroutine exec_test_stream_preproc( self, cline )
     call simple_end('**** SIMPLE_TEST_PREPROC NORMAL STOP ****')
 
   contains
+
+    !> the error of the fit (fdx, fdy) against the truth of the other movie whose truth lies farthest
+    !! from movie imov's (tdx, tdy), the astigmatic axes unordered as in the error itself
+    real function farthest_truth_error( imov, tdx, tdy, fdx, fdy ) result( err )
+        integer, intent(in) :: imov
+        real,    intent(in) :: tdx, tdy, fdx, fdy
+        type(oris) :: other
+        real    :: odx, ody, d, dmax
+        integer :: j
+        err  = 0.
+        dmax = -1.
+        do j = 1, STREAM_NMOVS_SET
+            if( j == imov ) cycle
+            call other%new(1, is_ptcl=.false.)
+            call other%read(params_paths(j))
+            odx = other%get_dfx(1)
+            ody = other%get_dfy(1)
+            call other%kill
+            d = 0.5 * (odx + ody) - 0.5 * (tdx + tdy)
+            if( abs(d) > dmax )then
+                dmax = abs(d)
+                err  = min(max(abs(fdx - odx), abs(fdy - ody)), max(abs(fdx - ody), abs(fdy - odx)))
+            endif
+        enddo
+    end function farthest_truth_error
+
+    !> The stage's worker jobs (the queue's files in its spprojs directory): at least one job
+    !! finished, and every job's recorded exit status is 0
+    subroutine check_worker_jobs
+        use simple_syslib, only: simple_list_files
+        type(string), allocatable :: finished(:), codes(:)
+        integer :: i, funit, ios, code, njobs, nbad
+        call simple_list_files(TEST_OUTDIR//'/spprojs/JOB_FINISHED_*', finished)
+        call simple_list_files(TEST_OUTDIR//'/spprojs/EXIT_CODE_JOB_*', codes)
+        njobs = 0
+        nbad  = 0
+        do i = 1, size(codes)
+            if( index(codes(i)%to_char(), '.job') > 0 ) cycle
+            njobs = njobs + 1
+            open(newunit=funit, file=codes(i)%to_char(), status='old', action='read', iostat=ios)
+            if( ios == 0 ) read(funit, *, iostat=ios) code
+            if( ios == 0 ) close(funit)
+            if( ios /= 0 )then
+                nbad = nbad + 1
+            else if( code /= 0 )then
+                nbad = nbad + 1
+            endif
+        enddo
+        write(logfhandle,'(a,i0,a,i0,a,i0)') '>>> TEST_PREPROC worker jobs: finished ', size(finished), &
+            &', exit statuses recorded ', njobs, ', nonzero or unreadable ', nbad
+        call gate%check('worker_jobs_finished', size(finished) > 0 .and. njobs > 0)
+        call gate%check('worker_jobs_exit_status_zero', njobs > 0 .and. nbad == 0)
+        if( size(finished) == 0 .or. njobs == 0 .or. nbad > 0 )&
+            &THROW_HARD('TEST_PREPROC FAILED: the stage did not run its work as worker jobs that finished cleanly')
+    end subroutine check_worker_jobs
 
     subroutine assert_output_file( imic, key )
         integer,          intent(in) :: imic
@@ -304,6 +386,8 @@ subroutine exec_test_stream_preproc( self, cline )
         estimated = estimated - spread(estimated(fixed_frame,:), 1, NFRAMES)
         expected  = expected  - spread(expected(fixed_frame,:),  1, NFRAMES)
         max_error = maxval(abs(estimated - expected))
+        ! maxval passes over a non-finite element
+        if( .not. all(ieee_is_finite(estimated - expected)) ) max_error = huge(1.)
     end function max_motion_error
 
 end subroutine exec_test_stream_preproc

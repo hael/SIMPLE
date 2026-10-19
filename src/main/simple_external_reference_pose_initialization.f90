@@ -13,9 +13,14 @@ private
 contains
 
     !> l_all_rows: every active row is aligned and must be updated, without the cohort cap, and the
-    !! sampling counters are cleared again afterwards, so a following coverage check counts only later updates
+    !! sampling counters are cleared again afterwards, so a following coverage check counts only later updates.
+    !! l_poseless: the rows carry no orientation and no shift (class averages built without a pose), so
+    !! the pass searches no shift: a single-state search fits the shift first against the reference of
+    !! the row's previous pose, which for a pose-less row is an arbitrary projection, and that shift then
+    !! biases every orientation it scores (noise-free reprojections of the exact reference: 45 % within
+    !! 5 deg with the shift search, 97 % without); the stages that follow refine the shifts
     subroutine initialize_poses_against_external_references( params, parent_cline, xrefine3D, xrec3D, &
-        &nactive, reference_vols, checkpoint_vols, pose_init_iter, lp_init, l_all_rows )
+        &nactive, reference_vols, checkpoint_vols, pose_init_iter, lp_init, l_all_rows, l_poseless )
         class(parameters),     intent(in)    :: params
         class(cmdline),        intent(inout) :: parent_cline
         class(commander_base), intent(inout) :: xrefine3D, xrec3D
@@ -25,6 +30,7 @@ contains
         integer,               intent(in)    :: pose_init_iter
         real,        optional, intent(in)    :: lp_init
         logical,     optional, intent(in)    :: l_all_rows
+        logical,     optional, intent(in)    :: l_poseless
         integer, parameter :: NSAMPLE_POSE_INIT_CAP = 100000
         integer, parameter :: NSPACE_POSE_INIT       = 2500
         real,    parameter :: LP_POSE_INIT           = 15.0
@@ -72,6 +78,9 @@ contains
         call cline_pose_init%set('lp',              lp)
         call cline_pose_init%set('lpstop',          lp)
         call cline_pose_init%set('trs',             lpinfo_pose_init(1)%trslim)
+        if( present(l_poseless) )then
+            if( l_poseless ) call cline_pose_init%set('trs', 0.)
+        endif
         call cline_pose_init%set('sigma_commit_deferred', 'no')
         do state = 1,size(reference_vols)
             if( .not. file_exists(reference_vols(state)) )then

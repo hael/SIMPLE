@@ -101,6 +101,9 @@ use simple_persistent_worker_message_tester, only: run_all_persistent_worker_mes
 use simple_persistent_worker_server_tester,  only: run_all_persistent_worker_server_tests
 use simple_stream_pipe_tester,               only: run_all_stream_pipe_tests
 use simple_forked_process_tester,            only: run_all_forked_process_tests
+use simple_test_dispatch_tester,             only: run_all_test_dispatch_tests
+use simple_test_tools_tester,                only: run_all_test_tools_tests
+use simple_test_truth_metrics_tester,        only: run_all_truth_metrics_tests, run_all_truth_docking_tests
 use simple_imghead_tester,                   only: run_all_imghead_tests
 use simple_image_tester,                     only: run_all_image_tests
 use simple_jpg_tester,                       only: run_all_mrc2jpeg_tests
@@ -355,6 +358,7 @@ contains
         call add_suite(s, n, 'low-pass stages',         run_all_lpstages_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
         call add_suite(s, n, 'shift search',            run_all_ftexp_shsrch_tests)
+        call add_suite(s, n, 'truth metrics',           run_all_truth_metrics_tests)
     end subroutine suites_numerics
 
     subroutine suites_project( s, n )
@@ -524,6 +528,7 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'qsys control',     run_all_qsys_ctrl_tests)
         call add_suite(s, n, 'qsys environment', run_all_qsys_env_tests)
+        call add_suite(s, n, 'test tools',       run_all_test_tools_tests)
     end subroutine suites_parallel
 
     !> heterogeneity analysis (flex_pca): latent model, state weights, deconvolution,
@@ -555,6 +560,7 @@ contains
         call add_suite(s, n, 'PCG half-set',         run_all_pcg_halfset_tests)
         call add_suite(s, n, 'PCG sparse sampling',  run_all_pcg_sparse_tests)
         call add_suite(s, n, 'addon report docking', run_all_solve3D_addon_dock_tests)
+        call add_suite(s, n, 'truth map docking', run_all_truth_docking_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
     end subroutine suites_lib_reconstruction
 
@@ -808,11 +814,12 @@ contains
     subroutine exec_test_forked_process( self, cline )
         class(commander_test_forked_process), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(unit_suite) :: s(2)
+        type(unit_suite) :: s(3)
         integer :: n
         n = 0
         call add_suite(s, n, 'forked process',   run_all_forked_process_tests)
         call add_suite(s, n, 'stream heartbeat', run_stream_heartbeat_tests)
+        call add_suite(s, n, 'test dispatcher',  run_all_test_dispatch_tests)
         call run_unit_suites('forked_process', cline, s(1:n))
     end subroutine exec_test_forked_process
 

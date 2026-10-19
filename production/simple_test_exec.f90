@@ -3,7 +3,7 @@ program simple_test_exec
 use simple_test_exec_api
 use simple_parameters,     only: parameters
 use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
-use simple_test_utils,     only: fix_test_seed
+use simple_test_utils,     only: fix_test_seed, set_test_seed_offset
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)             :: xarg, prg
@@ -43,8 +43,15 @@ call cline%parse
 ! that name into the standard program field before any commander constructs
 ! parameters.
 call cline%set('prg', trim(prg))
+! seed_offset=<n> moves every fixed seed of the test: a key of this front door, which no commander
+! sees; a queue resubmission (script_exec) keeps it on the command line it writes
+if( cline%defined('seed_offset') )then
+    call set_test_seed_offset(cline%get_iarg('seed_offset'))
+    call fix_test_seed
+endif
 ! generate script for queue submission?
 call script_exec(cline, string(trim(prg)), string('simple_test_exec'))
+if( cline%defined('seed_offset') ) call cline%delete('seed_offset')
 call mem_monitor_init(cline, 'simple_test_exec:'//trim(prg))
 l_silent      = .false.
 l_did_execute = .false. ! will be set to true if one program was executed

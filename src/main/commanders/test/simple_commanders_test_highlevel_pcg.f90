@@ -14,6 +14,7 @@ module subroutine exec_test_pcg_recon( self, cline )
     use simple_sym,               only: sym
     use simple_image,             only: image
     use simple_matcher_ptcl_io,   only: prep_rec_observation
+    use simple_test_gate,         only: test_gate
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
     integer,          parameter :: BOX = 32, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
@@ -106,8 +107,12 @@ module subroutine exec_test_pcg_recon( self, cline )
     real    :: ml_prior_positive_min, ml_prior_positive_max, ml_prior_to_khat_l1, ml_prior_to_khat_rms
     real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
     real(dp):: crop_b_num, crop_b_den, crop_d_num, crop_d_den, ml_prior_energy
-    logical :: all_ok
+    type(test_gate)         :: gate
+    type(string)            :: cwd_saved
+    logical :: all_ok, l_stage_ok
     all_ok = .true.
+    call simple_getcwd(cwd_saved)
+    call gate%new(filepath(cwd_saved, 'metrics.tsv'))
 
     ! ---- deterministic RNG seed: every probe below must be reproducible or a
     !      tolerance failure cannot be told from a different random draw ----
@@ -162,7 +167,8 @@ module subroutine exec_test_pcg_recon( self, cline )
     adjoint_err = real(abs(lhs-rhs) / max(1.0_dp, abs(lhs), abs(rhs)))
     write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <Gx,q>=', real(lhs), ' <x,G^Tq>=', real(rhs), &
         &' rel_err=', adjoint_err
-    if( adjoint_err > ADJOINT_RELTOL )then
+    call gate%metric('adjoint_rel_error', adjoint_err, ADJOINT_RELTOL, .not. adjoint_err > ADJOINT_RELTOL, upper=.true.)
+    if( .not. (adjoint_err <= ADJOINT_RELTOL) )then
         write(logfhandle,'(a)') '    FAIL: adjoint dot-product identity violated'
         all_ok = .false.
     else
@@ -192,7 +198,9 @@ module subroutine exec_test_pcg_recon( self, cline )
         adjoint_err = real(abs(lhs-rhs) / max(1.0_dp, abs(lhs), abs(rhs)))
         write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <T*Gx,q>=', real(lhs), &
             &' <x,G^T(conjg(T)*q)>=', real(rhs), ' rel_err=', adjoint_err
-        if( adjoint_err > ADJOINT_RELTOL )then
+        call gate%metric('weighted_adjoint_rel_error', adjoint_err, ADJOINT_RELTOL, .not. adjoint_err > ADJOINT_RELTOL, &
+            &upper=.true.)
+        if( .not. (adjoint_err <= ADJOINT_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: weighted adjoint identity violated (build_transfer)'
             all_ok = .false.
         else
@@ -233,14 +241,17 @@ module subroutine exec_test_pcg_recon( self, cline )
         adjoint_err = real(abs(dp_p_hq-dp_hp_q) / max(1.0_dp, abs(dp_p_hq), abs(dp_hp_q)))
         write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,Hq)=', real(dp_p_hq), &
             &' dot(Hp,q)=', real(dp_hp_q), ' rel_err=', adjoint_err
-        if( adjoint_err > NORMAL_OP_RELTOL )then
+        call gate%metric('normal_operator_asymmetry', adjoint_err, NORMAL_OP_RELTOL, .not. adjoint_err > NORMAL_OP_RELTOL, &
+            &upper=.true.)
+        if( .not. (adjoint_err <= NORMAL_OP_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: normal operator is not symmetric'
             all_ok = .false.
         else
             write(logfhandle,'(a)') '    PASS: normal operator is symmetric'
         endif
         write(logfhandle,'(a,es14.6)') '    dot(p,Hp)=', real(dp_p_hp)
-        if( dp_p_hp <= 0.0_dp )then
+        call gate%check('normal_operator_positive_definite', dp_p_hp > 0.0_dp)
+        if( .not. (dp_p_hp > 0.0_dp) )then
             write(logfhandle,'(a)') '    FAIL: normal operator is not positive-definite'
             all_ok = .false.
         else
@@ -260,7 +271,9 @@ module subroutine exec_test_pcg_recon( self, cline )
         adjoint_err = real(abs(dp_p_hq-dp_hp_q) / max(1.0_dp, abs(dp_p_hq), abs(dp_hp_q)))
         write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,PHPq)=', real(dp_p_hq), &
             &' dot(PHPp,q)=', real(dp_hp_q), ' rel_err=', adjoint_err
-        if( adjoint_err > NORMAL_OP_RELTOL )then
+        call gate%metric('masked_normal_operator_asymmetry', adjoint_err, NORMAL_OP_RELTOL, &
+            &.not. adjoint_err > NORMAL_OP_RELTOL, upper=.true.)
+        if( .not. (adjoint_err <= NORMAL_OP_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: masked normal operator is not symmetric'
             all_ok = .false.
         else
@@ -269,7 +282,8 @@ module subroutine exec_test_pcg_recon( self, cline )
         ! strict positivity holds because H carries the lambda ridge:
         ! p.(PHP)p = (Pp).H(Pp) >= lambda*|Pp|^2 > 0 for a random probe
         write(logfhandle,'(a,es14.6)') '    dot(p,PHPp)=', real(dp_p_hp)
-        if( dp_p_hp <= 0.0_dp )then
+        call gate%check('masked_normal_operator_positive_definite', dp_p_hp > 0.0_dp)
+        if( .not. (dp_p_hp > 0.0_dp) )then
             write(logfhandle,'(a)') '    FAIL: masked normal operator is not positive-definite'
             all_ok = .false.
         else
@@ -298,15 +312,19 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcgop%solve(y_planes, recon, maxits=40, rtol=1.0e-3, &
             &rel_res_hist=rel_res_hist, niters=niters)
         write(logfhandle,'(a,i0,a)') '    PCG ran ', niters, ' iterations'
+        l_stage_ok = .true.
         do i = 2, niters
-            if( rel_res_hist(i) > rel_res_hist(i-1) + MONOTONIC_SLACK )then
+            if( .not. (rel_res_hist(i) <= rel_res_hist(i-1) + MONOTONIC_SLACK) )then
                 write(logfhandle,'(a,i0)') '    FAIL: relative residual increased at iteration ', i
-                all_ok = .false.
+                all_ok     = .false.
+                l_stage_ok = .false.
             endif
         end do
+        call gate%check('pcg_residual_monotonic', l_stage_ok)
         corr = corr_of(recon, phantom)
         write(logfhandle,'(a,f8.5)') '    recon-vs-phantom correlation = ', corr
-        if( corr < RECON_CORR_THRES )then
+        call gate%metric('recon_phantom_corr', corr, RECON_CORR_THRES, corr >= RECON_CORR_THRES)
+        if( .not. (corr >= RECON_CORR_THRES) )then
             write(logfhandle,'(a)') '    FAIL: recovered volume does not correlate with the known phantom'
             all_ok = .false.
         else
@@ -335,7 +353,8 @@ module subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a,es14.6)') '    relative error, all voxels = ', err_all
         write(logfhandle,'(a,es14.6)') '    relative error, interior   = ', err_int
         write(logfhandle,'(a,es14.6)') '    relative maximum error     = ', err_max
-        if( err_int > EPS_INTERIOR )then
+        call gate%metric('kernel_interior_rel_error', err_int, EPS_INTERIOR, .not. err_int > EPS_INTERIOR, upper=.true.)
+        if( .not. (err_int <= EPS_INTERIOR) )then
             write(logfhandle,'(a)') '    FAIL: kernelized operator disagrees with the matrix-free reference'
             all_ok = .false.
         else
@@ -346,7 +365,9 @@ module subroutine exec_test_pcg_recon( self, cline )
         ! assert on it directly.
         kscale = pcgop%measure_kernel_scale()
         write(logfhandle,'(a,f10.6)') '    measured kernel scale (1.0 = analytic padsc**2 exact) = ', kscale
-        if( abs(kscale - 1.0) > KSCALE_TOL )then
+        call gate%metric('kernel_scale_deviation', abs(kscale - 1.0), KSCALE_TOL, .not. abs(kscale - 1.0) > KSCALE_TOL, &
+            &upper=.true.)
+        if( .not. (abs(kscale - 1.0) <= KSCALE_TOL) )then
             write(logfhandle,'(a)') '    FAIL: kernel scale has drifted from the analytic constant'
             all_ok = .false.
         else
@@ -393,7 +414,8 @@ module subroutine exec_test_pcg_recon( self, cline )
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         write(logfhandle,'(a,es14.6)') '    relative change after shift-only edit = ', kdiff
-        if( kdiff > 1.0e-5 )then
+        call gate%metric('kernel_change_shifts_only', kdiff, 1.0e-5, .not. kdiff > 1.0e-5, upper=.true.)
+        if( .not. (kdiff <= 1.0e-5) )then
             write(logfhandle,'(a)') '    FAIL: kernel changed when only shifts changed'
             all_ok = .false.
         else
@@ -413,7 +435,8 @@ module subroutine exec_test_pcg_recon( self, cline )
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         write(logfhandle,'(a,es14.6)') '    relative change after CTF edit        = ', kdiff
-        if( kdiff < 1.0e-4 )then
+        call gate%metric('kernel_change_ctf', kdiff, 1.0e-4, kdiff >= 1.0e-4)
+        if( .not. (kdiff >= 1.0e-4) )then
             write(logfhandle,'(a)') '    FAIL: kernel did not change when the CTF changed'
             all_ok = .false.
         else
@@ -422,6 +445,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcgop%set_op_mode(PCG_OP_MATRIXFREE)
         call pcgop%build_precond
         hm = pcgop%apply_normal_matrixfree(p_probe)
+        call gate%check('operator_finite_after_build_precond', .not. any(hm /= hm))
         if( any(hm /= hm) )then
             write(logfhandle,'(a)') '    FAIL: operator produced non-finite values after build_precond'
             all_ok = .false.
@@ -465,6 +489,8 @@ module subroutine exec_test_pcg_recon( self, cline )
             &niters=niters, outcome=solver_outcome)
         call pcgop%get_rhs(b_mono)
         write(logfhandle,'(a,i0,a)') '    monolithic: ', niters, ' iterations'
+        call gate%check('fixed_iteration_solver_outcome', .not. (trim(solver_outcome%stop_reason) /= 'fixed_iterations' &
+            &.or. solver_outcome%iteration_count /= STREAM_ITS .or. solver_outcome%converged))
         if( trim(solver_outcome%stop_reason) /= 'fixed_iterations' .or. &
             &solver_outcome%iteration_count /= STREAM_ITS .or. solver_outcome%converged )then
             write(logfhandle,'(a)') '    FAIL: fixed-iteration solver outcome is inconsistent'
@@ -501,10 +527,14 @@ module subroutine exec_test_pcg_recon( self, cline )
             stream_err = sqrt(sum((recon_str-recon)**2)) / max(1.0, sqrt(sum(recon*recon)))
             write(logfhandle,'(a,i3,a,es14.6,a,es14.6)') '    batch size ', nb, &
                 &': rel_err(b) = ', rhs_err, '   rel_err(x) = ', stream_err
-            if( rhs_err > STREAM_ACCUM_RELTOL )then
+            call gate%metric('fused_rhs_rel_error_batch'//int2str(nb), rhs_err, STREAM_ACCUM_RELTOL, .not. rhs_err > STREAM_ACCUM_RELTOL, &
+                &upper=.true.)
+            call gate%metric('fused_solve_rel_error_batch'//int2str(nb), stream_err, STREAM_SOLVE_RELTOL, &
+                &.not. stream_err > STREAM_SOLVE_RELTOL, upper=.true.)
+            if( .not. (rhs_err <= STREAM_ACCUM_RELTOL) )then
                 write(logfhandle,'(a)') '    FAIL: fused RHS does not reproduce monolithic accumulation'
                 all_ok = .false.
-            else if( stream_err > STREAM_SOLVE_RELTOL )then
+            else if( .not. (stream_err <= STREAM_SOLVE_RELTOL) )then
                 write(logfhandle,'(a)') '    FAIL: fused accumulation changes the fixed-step solve beyond tolerance'
                 all_ok = .false.
             else
@@ -534,7 +564,9 @@ module subroutine exec_test_pcg_recon( self, cline )
             kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
             write(logfhandle,'(a,i3,a,es14.6)') '    kernel batch size ', nb, &
                 &': streamed vs monolithic rel_err = ', kdiff
-            if( kdiff > STREAM_ACCUM_RELTOL )then
+            call gate%metric('streamed_kernel_rel_diff_batch'//int2str(nb), kdiff, STREAM_ACCUM_RELTOL, .not. kdiff > STREAM_ACCUM_RELTOL, &
+                &upper=.true.)
+            if( .not. (kdiff <= STREAM_ACCUM_RELTOL) )then
                 write(logfhandle,'(a)') '    FAIL: kernel built from a streamed accumulator differs'
                 all_ok = .false.
             else
@@ -570,7 +602,12 @@ module subroutine exec_test_pcg_recon( self, cline )
         kdiff   = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         write(logfhandle,'(a,i0,a,es14.6,a,es14.6)') '    raw reduction particles ', nraw_total, &
             &': rel_err(b) = ', rhs_err, '   rel_err(kernel) = ', kdiff
-        if( nraw_total /= NPROJS .or. rhs_err > STREAM_ACCUM_RELTOL .or. kdiff > STREAM_ACCUM_RELTOL )then
+        call gate%metric('raw_reduction_rhs_rel_error', rhs_err, STREAM_ACCUM_RELTOL, &
+            &.not. rhs_err > STREAM_ACCUM_RELTOL, upper=.true.)
+        call gate%metric('raw_reduction_kernel_rel_diff', kdiff, STREAM_ACCUM_RELTOL, &
+            &.not. kdiff > STREAM_ACCUM_RELTOL, upper=.true.)
+        call gate%check('raw_reduction_holds_every_projection', nraw_total == NPROJS)
+        if( nraw_total /= NPROJS .or. .not. (rhs_err <= STREAM_ACCUM_RELTOL .and. kdiff <= STREAM_ACCUM_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: raw fixed-order reduction differs from monolithic accumulation'
             all_ok = .false.
         else
@@ -597,16 +634,22 @@ module subroutine exec_test_pcg_recon( self, cline )
         env_ctr   = env(c,c,c)
         env_edge  = env(1,c,c)
         recip_err = maxval(abs(env*invenv - 1.0))
+        ! maxval passes over a NaN element
+        if( any(env /= env) .or. any(invenv /= invenv) ) recip_err = huge(1.0)
         write(logfhandle,'(a,f10.6)')  '    envelope at centre       = ', env_ctr
         write(logfhandle,'(a,f10.6)')  '    envelope at edge (1,c,c) = ', env_edge
         write(logfhandle,'(a,es14.6)') '    max|env*invenv - 1|      = ', recip_err
-        if( abs(env_ctr - 1.0) > 1.0e-5 )then
+        call gate%metric('envelope_centre_deviation', abs(env_ctr - 1.0), 1.0e-5, .not. abs(env_ctr - 1.0) > 1.0e-5, &
+            &upper=.true.)
+        call gate%check('envelope_decays_from_centre', env_edge < env_ctr)
+        call gate%metric('envelope_reciprocal_error', recip_err, 1.0e-4, .not. recip_err > 1.0e-4, upper=.true.)
+        if( .not. (abs(env_ctr - 1.0) <= 1.0e-5) )then
             write(logfhandle,'(a)') '    FAIL: envelope is not unity at the box centre'
             all_ok = .false.
-        else if( env_edge >= env_ctr )then
+        else if( .not. (env_edge < env_ctr) )then
             write(logfhandle,'(a)') '    FAIL: envelope does not decay away from the centre'
             all_ok = .false.
-        else if( recip_err > 1.0e-4 )then
+        else if( .not. (recip_err <= 1.0e-4) )then
             write(logfhandle,'(a)') '    FAIL: invenv is not the reciprocal of env'
             all_ok = .false.
         else
@@ -635,7 +678,8 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcgop%solve(y_planes, recon_off, maxits=40, rtol=1.0e-3, niters=niters)
         corr_off = corr_of(recon_off, phantom)
         write(logfhandle,'(a,i0,a,f9.5)') '    deapod OFF: ', niters, ' iters, corr = ', corr_off
-        if( corr_on <= corr_off )then
+        call gate%metric('deapodization_corr_gain', corr_on - corr_off, 0., corr_on > corr_off)
+        if( .not. (corr_on > corr_off) )then
             write(logfhandle,'(a)') '    FAIL: deapodization did not improve recovery of the true volume'
             all_ok = .false.
         else
@@ -699,10 +743,13 @@ module subroutine exec_test_pcg_recon( self, cline )
         kdiff      = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         stream_err = sqrt(sum((b_str -b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
         write(logfhandle,'(a,es14.6,a,es14.6)') '    rel_err(Khat) = ', kdiff, '   rel_err(b) = ', stream_err
-        if( kdiff > 5.0e-3 .or. stream_err > 5.0e-3 )then
+        call gate%metric('symmetry_kernel_rel_diff', kdiff, 5.0e-3, .not. kdiff > 5.0e-3, upper=.true.)
+        call gate%metric('symmetry_rhs_rel_diff', stream_err, 5.0e-3, .not. stream_err > 5.0e-3, upper=.true.)
+        call gate%check('symmetry_kernel_not_trivially_zero', sqrt(sum(khat_a*khat_a)) > TINY)
+        if( .not. (kdiff <= 5.0e-3 .and. stream_err <= 5.0e-3) )then
             write(logfhandle,'(a)') '    FAIL: symmetry replication does not match the expanded-set build'
             all_ok = .false.
-        else if( sqrt(sum(khat_a*khat_a)) <= TINY )then
+        else if( .not. (sqrt(sum(khat_a*khat_a)) > TINY) )then
             write(logfhandle,'(a)') '    FAIL: replicated kernel is trivially zero'
             all_ok = .false.
         else
@@ -790,10 +837,14 @@ module subroutine exec_test_pcg_recon( self, cline )
             &' duplicated = ', lambda_eff_dup
         write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    rel_err(scale x2) = ', mass_scale_err, &
             &' rel_err(lambda x2) = ', mass_lambda_err, ' rel_err(solution) = ', mass_solution_err
-        if( mass_scale_err > MASS_SCALE_RELTOL .or. mass_lambda_err > MASS_SCALE_RELTOL )then
+        call gate%metric('mass_scale_rel_error', max(mass_scale_err, mass_lambda_err), MASS_SCALE_RELTOL, &
+            &mass_scale_err <= MASS_SCALE_RELTOL .and. mass_lambda_err <= MASS_SCALE_RELTOL, upper=.true.)
+        call gate%metric('mass_solution_rel_error', mass_solution_err, MASS_SOLVE_RELTOL, &
+            &.not. mass_solution_err > MASS_SOLVE_RELTOL, upper=.true.)
+        if( .not. (mass_scale_err <= MASS_SCALE_RELTOL .and. mass_lambda_err <= MASS_SCALE_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: effective lambda does not scale with duplicated data'
             all_ok = .false.
-        else if( mass_solution_err > MASS_SOLVE_RELTOL )then
+        else if( .not. (mass_solution_err <= MASS_SOLVE_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: relative lambda changes the solution under data duplication'
             all_ok = .false.
         else
@@ -888,7 +939,9 @@ module subroutine exec_test_pcg_recon( self, cline )
         crop_d_err = real(sqrt(crop_d_num / max(1.0_dp,crop_d_den)))
         write(logfhandle,'(a,es14.6,a,es14.6)') '    common-band rel_err(B) = ', crop_b_err, &
             &' rel_err(D) = ', crop_d_err
-        if( crop_b_err > CROP_RAW_RELTOL .or. crop_d_err > CROP_RAW_RELTOL )then
+        call gate%metric('crop_raw_rel_error', max(crop_b_err, crop_d_err), CROP_RAW_RELTOL, &
+            &crop_b_err <= CROP_RAW_RELTOL .and. crop_d_err <= CROP_RAW_RELTOL, upper=.true.)
+        if( .not. (crop_b_err <= CROP_RAW_RELTOL .and. crop_d_err <= CROP_RAW_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: cropped raw accumulators disagree with the full-box common band'
             all_ok = .false.
         else
@@ -908,7 +961,9 @@ module subroutine exec_test_pcg_recon( self, cline )
             &hm_crop(lo:hi,lo:hi,lo:hi))**2)) / &
             &max(1.0,sqrt(sum(hm_crop(lo:hi,lo:hi,lo:hi)**2)))
         write(logfhandle,'(a,es14.6)') '    cropped kernel interior rel_err = ', crop_kernel_err
-        if( crop_kernel_err > EPS_INTERIOR )then
+        call gate%metric('crop_kernel_rel_error', crop_kernel_err, EPS_INTERIOR, .not. crop_kernel_err > EPS_INTERIOR, &
+            &upper=.true.)
+        if( .not. (crop_kernel_err <= EPS_INTERIOR) )then
             write(logfhandle,'(a)') '    FAIL: cropped kernel disagrees with the matrix-free reference'
             all_ok = .false.
         else
@@ -942,7 +997,10 @@ module subroutine exec_test_pcg_recon( self, cline )
         ml_prior_max = maxval(ml_prior_diag)
         write(logfhandle,'(a,es14.6,a,es14.6)') '    prior diagonal min = ', ml_prior_min, &
             &' max = ', ml_prior_max
-        if( ml_prior_min < 0.0 .or. ml_prior_max <= 0.0 )then
+        ! minval and maxval pass over a NaN element
+        l_stage_ok = ml_prior_min >= 0.0 .and. ml_prior_max > 0.0 .and. .not. any(ml_prior_diag /= ml_prior_diag)
+        call gate%check('ml_prior_nonzero_positive_semidefinite', l_stage_ok)
+        if( .not. l_stage_ok )then
             write(logfhandle,'(a)') '    FAIL: ML prior is not a nonzero positive-semidefinite diagonal'
             all_ok = .false.
         else
@@ -951,10 +1009,12 @@ module subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a,i0,4(a,es14.6))') '    positive bins = ', ml_prior_npositive, &
             &' min+ = ', ml_prior_positive_min, ' max+ = ', ml_prior_positive_max, &
             &' prior/Khat L1 = ', ml_prior_to_khat_l1, ' RMS = ', ml_prior_to_khat_rms
-        if( ml_prior_npositive /= count(ml_prior_diag > 0.0) .or. &
-            &abs(ml_prior_positive_min-minval(ml_prior_diag, mask=ml_prior_diag > 0.0)) > 0.0 .or. &
-            &abs(ml_prior_positive_max-ml_prior_max) > 0.0 .or. &
-            &ml_prior_to_khat_l1 <= 0.0 .or. ml_prior_to_khat_rms <= 0.0 )then
+        l_stage_ok = ml_prior_npositive == count(ml_prior_diag > 0.0) .and. &
+            &abs(ml_prior_positive_min-minval(ml_prior_diag, mask=ml_prior_diag > 0.0)) <= 0.0 .and. &
+            &abs(ml_prior_positive_max-ml_prior_max) <= 0.0 .and. &
+            &ml_prior_to_khat_l1 > 0.0 .and. ml_prior_to_khat_rms > 0.0
+        call gate%check('ml_prior_summary_consistent', l_stage_ok)
+        if( .not. l_stage_ok )then
             write(logfhandle,'(a)') '    FAIL: ML prior summary diagnostics are inconsistent'
             all_ok = .false.
         else
@@ -971,10 +1031,12 @@ module subroutine exec_test_pcg_recon( self, cline )
         ml_prior_energy = sum(real(p_crop,dp) * real(hk_ml-hk_crop,dp))
         write(logfhandle,'(a,es14.6,a,es14.6)') '    ML kernel interior rel_err = ', ml_kernel_err, &
             &' dot(p,P_tau*p) = ', real(ml_prior_energy)
-        if( ml_kernel_err > EPS_INTERIOR )then
+        call gate%metric('ml_kernel_rel_error', ml_kernel_err, EPS_INTERIOR, .not. ml_kernel_err > EPS_INTERIOR, upper=.true.)
+        call gate%check('ml_prior_adds_positive_energy', ml_prior_energy > 0.0_dp)
+        if( .not. (ml_kernel_err <= EPS_INTERIOR) )then
             write(logfhandle,'(a)') '    FAIL: ML kernel disagrees with the matrix-free reference'
             all_ok = .false.
-        else if( ml_prior_energy <= 0.0_dp )then
+        else if( .not. (ml_prior_energy > 0.0_dp) )then
             write(logfhandle,'(a)') '    FAIL: ML prior does not add positive quadratic energy'
             all_ok = .false.
         else
@@ -1029,7 +1091,9 @@ module subroutine exec_test_pcg_recon( self, cline )
         obs_err   = sqrt(sum((obsg - obs_scale*obsp)**2) / max(sum(obsg**2), TINY))
         write(logfhandle,'(a,f10.6,a,es12.4)') '    gridding/PCG observation scale = ', obs_scale, &
             &'  scaled relative error = ', obs_err
-        if( obs_err > OBS_PARITY_RELTOL )then
+        call gate%metric('observation_parity_rel_error', obs_err, OBS_PARITY_RELTOL, .not. obs_err > OBS_PARITY_RELTOL, &
+            &upper=.true.)
+        if( .not. (obs_err <= OBS_PARITY_RELTOL) )then
             write(logfhandle,'(a)') '    FAIL: gridding and PCG prepare different cropped observations'
             all_ok = .false.
         else
@@ -1076,7 +1140,10 @@ module subroutine exec_test_pcg_recon( self, cline )
         window = wimg%get_rmat()
         call wimg%kill
         support_leak = maxval(abs(x_c), mask=window <= TINY)
+        ! maxval passes over a NaN element
+        if( any(x_c /= x_c) ) support_leak = huge(1.0)
         write(logfhandle,'(a,es14.6)') '    maximum outside-support magnitude = ', support_leak
+        call gate%metric('support_leak', support_leak, TINY, support_leak <= TINY, upper=.true.)
         if( support_leak <= TINY )then
             write(logfhandle,'(a)') '    PASS: the constrained output is zero outside its support'
         else
@@ -1092,7 +1159,9 @@ module subroutine exec_test_pcg_recon( self, cline )
             rms_last = rms_c
             write(logfhandle,'(a,i3,a,es14.6)') '    warm start ', irep, ': band rms = ', rms_c
         end do
-        if( rms_last < SUPPORT_STABILITY_FRAC * rms_first )then
+        call gate%metric('window_band_rms_ratio', rms_last / max(rms_first, TINY), SUPPORT_STABILITY_FRAC, &
+            &rms_last >= SUPPORT_STABILITY_FRAC * rms_first)
+        if( .not. (rms_last >= SUPPORT_STABILITY_FRAC * rms_first) )then
             write(logfhandle,'(a)') '    FAIL: the window band shrinks under repeated warm starts'
             all_ok = .false.
         else
@@ -1115,6 +1184,8 @@ module subroutine exec_test_pcg_recon( self, cline )
     call e_exp%kill
     call c1sym%kill
     call c2sym%kill
+    call gate%check('every_stage_passed', all_ok)
+    call gate%kill
     if( all_ok )then
         call simple_end('**** SIMPLE_TEST_PCG_RECON NORMAL STOP ****')
     else

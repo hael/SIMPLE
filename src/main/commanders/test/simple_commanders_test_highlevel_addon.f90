@@ -12,7 +12,7 @@ contains
 !! appends a third set (it adopts those sums and reads no frozen particle),
 !! checked against the simulation truth and the base run. The
 !! fixture directory (a few hundred MB) is removed on success and kept for
-!! inspection on failure.
+!! inspection on failure; metrics.tsv stays in the run directory.
 module subroutine exec_test_solve3D_addon( self, cline )
     class(commander_test_solve3D_addon), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
@@ -28,7 +28,7 @@ module subroutine exec_test_solve3D_addon( self, cline )
     if( status /= 0 ) THROW_HARD('TEST_SOLVE3D_ADDON FAILED: could not enter fixture directory')
     call params%new(cline)
     all_ok = .true.
-    call run_solve3D_addon_gate(params%nthr, all_ok)
+    call run_solve3D_addon_gate(params%nthr, filepath(cwd_saved, 'metrics.tsv'), all_ok)
     call simple_chdir(cwd_saved, status)
     if( status /= 0 ) THROW_HARD('TEST_SOLVE3D_ADDON FAILED: could not restore original directory')
     if( all_ok )then
@@ -157,7 +157,7 @@ end subroutine exec_generate_solve3D_addon_snapshots
 !> solve3D_addon gate on symmetry-broken 6VXX particles: solve3D on a seeded selection of the
 !  first NBASE rows, then the add-on on all NPTCLS rows (same project basename). Gates frozen-input
 !  integrity, manifests, cohort coverage and poses, union map vs truth and base; metrics.tsv.
-subroutine run_solve3D_addon_gate( nthr, all_ok )
+subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     use simple_atoms,                   only: atoms
     use simple_molecule_data,           only: molecule_data, sars_cov2_spkgp_6vxx
     use simple_ui,                      only: make_ui
@@ -173,8 +173,9 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     use simple_image,                   only: image
     use simple_class_frcs,              only: class_frcs
     use, intrinsic :: iso_fortran_env, only: int64
-    integer, intent(in)    :: nthr
-    logical, intent(inout) :: all_ok
+    integer,       intent(in)    :: nthr
+    class(string), intent(in)    :: metrics_file
+    logical,       intent(inout) :: all_ok
     character(len=*), parameter :: GATE_DIR    = 'solve3D_addon_gate'
     character(len=*), parameter :: TRUTH_VOL   = 'truth_6VXX_blob.mrc'
     character(len=*), parameter :: PTCL_STK    = 'simulated_particles.mrc'
@@ -204,9 +205,16 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     real,    parameter :: DOCK_LP     = 20.
     ! blob: amplitude relative to the map maximum, width and position in A
     real,    parameter :: BLOB_AMP    = 1.5, BLOB_SIGMA = 11., BLOB_POS(3) = [45., 25., 30.]
-    ! floors: worst observed run plus a margin (~30% pose median, 5 deg excess, 0.05/0.03 corr, 1 A FSC)
-    real,    parameter :: MAX_COHORT_POSE_ERR  = 15.  !< cohort-frozen pair median; random poses give ~40
-    real,    parameter :: MAX_POSE_ERR_EXCESS  = 5.   !< cohort-frozen above frozen-frozen
+    ! floors: the map rows as before (worst observed run plus a margin, 0.05/0.03 corr, 1 A FSC). The
+    ! poses are held relative to the base alone (test-suite truth plan, Phase 5): the frozen particles'
+    ! own pair pose error spreads 4.6-16.6 deg with the draw while the base map correlates at 0.93-0.95,
+    ! so an absolute cohort floor (15 deg, at the median) tested the base, not the add-on. The ceiling
+    ! of the cohort's excess over the frozen particles is the floor rule's. The Phase 1 profile (the
+    ! excess derived from its absolute rows: median 3.2 deg, robust spread 1.1, worst 5.02) gave 6.5;
+    ! the test's own after-profile of 2026-10-18 (scratch/keep/profiles/phase5/after, 20 seed offsets
+    ! at 8 threads) spreads wider: median 3.38 deg, robust spread 2.14, worst 5.89, admissible from
+    ! 9.8; the control (the cohort's truth shuffled) gives median 23.9 deg, s 3.2, so at most 14.3
+    real,    parameter :: MAX_POSE_ERR_EXCESS  = 10.0 !< cohort-frozen above frozen-frozen
     real,    parameter :: MIN_COVERAGE        = 0.9   !< cohort particles with updatecnt > 0
     real,    parameter :: MIN_UNION_CORR      = 0.9   !< docked union map vs truth
     real,    parameter :: MAX_CORR_LOSS       = 0.03  !< union map correlation below the base map's
@@ -239,7 +247,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     logical, allocatable :: l_frozen(:)
     type(test_gate)     :: gate
     integer :: i, status, nf, nc, nposed, box_vol
-    real    :: r, smpd_vol, corr_addon, corr_base, fsc_addon, fsc_base, err_cf, err_ff, coverage
+    real    :: r, smpd_vol, corr_addon, corr_base, fsc_addon, fsc_base, err_cf, err_ff, coverage, err_ctrl
     real    :: frac_ff, frac_cf
     logical :: found, l_same, l_pub, l_frz_row
     call make_ui
@@ -252,7 +260,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     call simple_mkdir(GATE_DIR)
     call simple_chdir(GATE_DIR, status)
     if( status /= 0 ) THROW_HARD('Could not enter '//GATE_DIR)
-    call gate%new(string('metrics.tsv'))
+    call gate%new(metrics_file)
     ! ---- the truth: 6VXX with an off-axis blob ----
     mol = sars_cov2_spkgp_6vxx()
     call molecule%pdb2mrc(smpd=SMPD, volfile=string(TRUTH_VOL), mol=mol, center_pdb=.true., vol_dim=[BOX,BOX,BOX])
@@ -544,9 +552,13 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     call gate%report('frozen_frozen_pairs_within_5deg', frac_ff)
     call gate%report('cohort_frozen_pairs_within_5deg', frac_cf)
     call gate%report('frozen_frozen_pair_pose_error_deg', err_ff)
-    call gate%metric('cohort_frozen_pair_pose_error_deg', err_cf, MAX_COHORT_POSE_ERR, err_cf <= MAX_COHORT_POSE_ERR)
+    call gate%report('cohort_frozen_pair_pose_error_deg', err_cf)
     call gate%metric('cohort_pose_error_excess_deg', err_cf - err_ff, MAX_POSE_ERR_EXCESS, &
-        &err_cf - err_ff <= MAX_POSE_ERR_EXCESS)
+        &err_cf - err_ff <= MAX_POSE_ERR_EXCESS, upper=.true.)
+    ! the negative control: the cohort's truth shuffled among the cohort must fail the excess ceiling
+    call shuffled_cohort_control(err_ctrl)
+    call gate%report('control_shuffled_cohort_excess_deg', err_ctrl - err_ff)
+    call gate%check('control_shuffled_cohort_fails_the_excess_ceiling', .not. (err_ctrl - err_ff <= MAX_POSE_ERR_EXCESS))
     ! ---- maps against the truth ----
     call out_proj%get_vol('vol', 1, addon_vol, smpd_vol, box_vol)
     call dock_and_compare(addon_vol, 'union', corr_addon, fsc_addon)
@@ -556,7 +568,7 @@ subroutine run_solve3D_addon_gate( nthr, all_ok )
     call gate%metric('union_minus_base_corr', corr_addon - corr_base, -MAX_CORR_LOSS, &
         &corr_addon - corr_base >= -MAX_CORR_LOSS)
     call gate%metric('union_truth_fsc0143_A', fsc_addon, fsc_base + MAX_FSC_LOSS, &
-        &fsc_addon > 0. .and. fsc_addon <= fsc_base + MAX_FSC_LOSS)
+        &fsc_addon > 0. .and. fsc_addon <= fsc_base + MAX_FSC_LOSS, upper=.true.)
     call gate%report('base_truth_fsc0143_A', fsc_base)
     all_ok = all_ok .and. gate%passed()
     call gate%kill
@@ -581,6 +593,26 @@ contains
             &string('gate_'//tag//'_docked.mrc'), cc_direct, cc_mirror)
         call compare_to_truth(truth_abs, string('gate_'//tag//'_docked.mrc'), MSKDIAM, corr, fsc05, fsc0143)
     end subroutine dock_and_compare
+
+    !> the cohort-frozen pair pose error against a truth whose cohort rows are permuted among the
+    !! cohort (the frozen rows kept): the error of an add-on that posed its particles at random
+    subroutine shuffled_cohort_control( err )
+        use simple_rnd, only: shuffle
+        real, intent(out) :: err
+        type(oris) :: truth_ctrl
+        integer, allocatable :: perm(:)
+        real    :: frac
+        integer :: k
+        truth_ctrl = truth
+        perm       = cohort_inds
+        call set_fixed_seed(GATE_SEED + 2)
+        call shuffle(perm)
+        do k = 1, size(cohort_inds)
+            call truth_ctrl%set_euler(cohort_inds(k), truth%get_euler(perm(k)))
+        enddo
+        err = pair_pose_error(out_proj%os_ptcl3D, truth_ctrl, cohort_inds, frozen_inds, NPAIRS, GATE_SEED + 1, frac)
+        call truth_ctrl%kill
+    end subroutine shuffled_cohort_control
 
 end subroutine run_solve3D_addon_gate
 

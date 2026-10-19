@@ -11,6 +11,11 @@ public :: shuffle, partial_shuffle, has_global_seed
 private
 #include "simple_local_flags.inc"
 
+interface seed_rnd_fixed
+    module procedure seed_rnd_fixed_i4
+    module procedure seed_rnd_fixed_i8
+end interface
+
 interface ran3arr
     module procedure ran3arr_1
     module procedure ran3arr_2
@@ -117,20 +122,29 @@ contains
     !> Seed the intrinsic generator and restart the library reseed counter.
     !! propagate exports the root seed for subsequent library reseeds and child processes.
     !! Without propagation, only the calling thread's intrinsic state is seeded.
-    subroutine seed_rnd_fixed( base, propagate )
+    subroutine seed_rnd_fixed_i4( base, propagate )
         use iso_fortran_env, only: int64
         integer, intent(in) :: base
+        logical, optional, intent(in) :: propagate
+        call seed_rnd_fixed_i8(int(base, int64), propagate)
+    end subroutine seed_rnd_fixed_i4
+
+    !> as seed_rnd_fixed_i4, for a 64-bit base (SIMPLE_SEED and the generator take one)
+    subroutine seed_rnd_fixed_i8( base, propagate )
+        use iso_fortran_env, only: int64
+        integer(int64),    intent(in) :: base
         logical, optional, intent(in) :: propagate
         if( present(propagate) )then
             if( propagate ) call put_simple_seed(base)
         endif
-        call put_fixed_seed(int(base, int64))
+        call put_fixed_seed(base)
         nseed_rnd_calls = 0
-    end subroutine seed_rnd_fixed
+    end subroutine seed_rnd_fixed_i8
 
     subroutine put_simple_seed( seed )
         use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
-        integer, intent(in) :: seed
+        use iso_fortran_env, only: int64
+        integer(int64), intent(in) :: seed
         character(len=32)   :: seed_string
         integer(c_int)      :: status
         interface

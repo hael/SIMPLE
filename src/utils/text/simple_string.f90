@@ -232,20 +232,29 @@ contains
         if( present(io_stat) ) io_stat = ios
     end function to_dble
 
+    !> The 64-bit FNV-1a hash of the trimmed string, as 16 hexadecimal digits. The product by the
+    !! prime 2**40 + 435 is taken modulo 2**64 in 32-bit halves, so no signed integer overflows.
     function to_fnv1a_hash64(self) result( hash )
         class(string),    intent(in) :: self
         integer(kind=8),  parameter  :: FNV_OFFSET = int(z'CBF29CE484222325', 8)
-        integer(kind=8),  parameter  :: FNV_PRIME  = int(z'00000100000001B3', 8)
+        integer(kind=8),  parameter  :: PRIME_LO   = int(z'000001B3', 8) ! the prime's low 32 bits
+        integer(kind=8),  parameter  :: PRIME_HI   = int(z'00000100', 8) ! and its high 32 bits
+        integer(kind=8),  parameter  :: MASK32     = int(z'00000000FFFFFFFF', 8)
         type(string)                 :: hash
         character(len=16)            :: hash_hex
-        integer(kind=8)              :: hash_val
+        integer(kind=8)              :: hash_val, lo, hi, prod_lo, prod_hi
         integer                      :: i
         hash_val = FNV_OFFSET
         do i = 1, self%strlen_trim()
             ! 1. XOR current hash with the current byte
             hash_val = ieor(hash_val, int(iachar(self%buffer(i:i)), int64))
-            ! 2. Multiply by the FNV prime
-            hash_val = hash_val * FNV_PRIME
+            ! 2. Multiply by the FNV prime, modulo 2**64: lo*PRIME_LO < 2**41 and the cross terms
+            !    < 2**41, so every partial product and sum fits in 63 bits
+            lo       = iand(hash_val, MASK32)
+            hi       = iand(ishft(hash_val, -32), MASK32)
+            prod_lo  = lo * PRIME_LO
+            prod_hi  = iand(ishft(prod_lo, -32) + lo * PRIME_HI + hi * PRIME_LO, MASK32)
+            hash_val = ior(ishft(prod_hi, 32), iand(prod_lo, MASK32))
         end do
         ! Format result as a 16-character zero-padded hex string
         write(hash_hex, '(Z16.16)') hash_val

@@ -5,15 +5,32 @@ implicit none
 
 contains
 
+!> On the reconstruct3D project projfile= names, or, without one, on a project of known inputs the
+!! multi-state test fixture builds in the working directory (600 particles of one blob phantom at
+!! their true poses, objfun=cc): a hermetic test (test-suite truth plan, Phase 5)
 module subroutine exec_test_pcg_frac_update( self, cline )
     use simple_builder,    only: builder
     use simple_parameters, only: parameters
     use simple_eo_partition, only: ensure_field_halves
+    use simple_test_state_fixture, only: state_fixture, FIX_KNOWN
     class(commander_test_pcg_frac_update), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    type(parameters) :: params
-    type(builder)    :: build
-
+    type(parameters)    :: params
+    type(builder)       :: build
+    type(state_fixture) :: fix
+    if( .not. cline%defined('projfile') )then
+        fix%family  = 'blob'
+        fix%mode    = FIX_KNOWN
+        fix%nstates = 1
+        fix%nptcls  = 600
+        fix%snr     = 2.
+        if( cline%defined('nthr') ) fix%nthr = cline%get_iarg('nthr')
+        call fix%build
+        call cline%set('projfile', fix%project_fname())
+        if( .not. cline%defined('objfun')  ) call cline%set('objfun',  'cc')
+        if( .not. cline%defined('mskdiam') ) call cline%set('mskdiam', fix%mskdiam())
+        if( .not. cline%defined('pgrp')    ) call cline%set('pgrp',    'c1')
+    endif
     if( .not. cline%defined('trs') ) call cline%set('trs', 5.)
     call cline%set('oritype', 'ptcl3D')
     call cline%set('mkdir', 'no')
@@ -185,7 +202,7 @@ contains
         provenance = 'pcg-frac-update-v1'
         u  = 0.5
         if( params%l_ufrac_trec_defined ) u = params%ufrac_trec
-        if( u <= 0.0 .or. u > 1.0 ) THROW_HARD('pcg_frac_update requires 0 < ufrac_trec <= 1')
+        if( .not. (u > 0.0 .and. u <= 1.0) ) THROW_HARD('pcg_frac_update requires 0 < ufrac_trec <= 1')
         f_full   = frac_fname(state_here, half_here, 'full')
         f_sub1   = frac_fname(state_here, half_here, 'subset1')
         f_sub2   = frac_fname(state_here, half_here, 'subset2')
@@ -252,7 +269,7 @@ contains
         call finalize_and_solve(op_replay, x_replay, hist, niters)
         deallocate(hist)
         solve_err = volume_rel_error(x_direct, x_replay)
-        if( solve_err > REPLAY_TOL ) THROW_HARD('PCG continuation replay changed the reconstructed solution')
+        if( .not. (solve_err <= REPLAY_TOL) ) THROW_HARD('PCG continuation replay changed the reconstructed solution')
         call op_blend%kill
         call op_replay%kill
         deallocate(x_replay)
@@ -417,7 +434,7 @@ contains
         write(funit,'(A,A)') 'gate=', trim(label)
         write(funit,'(A,ES14.6)') 'B_relerr=', b_err
         write(funit,'(A,ES14.6)') 'D_relerr=', d_err
-        if( b_err > tolerance .or. d_err > tolerance )then
+        if( .not. (b_err <= tolerance .and. d_err <= tolerance) )then
             write(logfhandle,'(A,A,A,ES12.4,A,ES12.4)') '>>> PCG FRAC FAIL | ', trim(label), &
                 &' | B=', b_err, ' | D=', d_err
             THROW_HARD('PCG fractional-update raw accumulator validation failed')

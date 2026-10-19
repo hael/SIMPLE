@@ -33,7 +33,8 @@ When unset, it supplies:
 - `mkdir=yes`
 - `objfun=euclid`
 - `overlap=0.95`
-- `prob_athres=90` (narrowed in the late stages with `prob_athres_taper=yes`, section 5.2)
+- `prob_athres=10`, as particle `solve3D` (ruling of 18 October 2026; it was 90, with an optional
+  per-stage taper that is deleted)
 - `cenlp` from the solve3D controller default
 - `imgkind=cavg`
 - `noise_norm=no`
@@ -116,9 +117,11 @@ Each stage is configured through the shared solve3D stage controller with
 - `snr_noise_reg` is set from the stage controls
 - early Gaussian reference filtering remains available through stage policy
 
-For multi-state runs, class-average stages 1 and 2 retain
-`refine=prob_neigh` with `prob_neigh_mode=shc`. They do not adopt the direct
-`refine=shc` startup used by particle-based multi-state `solve3D`.
+For multi-state runs, class-average stages 1 and 2 run direct `refine=shc`,
+as particle-based multi-state `solve3D` does (ruling of 18 October 2026;
+before, they ran `refine=prob_neigh` with `prob_neigh_mode=shc`). Single-state
+runs keep `refine=prob_neigh` with `prob_neigh_mode=shc` in those stages, as
+particle `solve3D` does.
 
 Because `l_cavgs=.true.` removes `update_frac`, `refine3D` derives full-update
 mode and disables trailing reconstruction effectively, even when the shared
@@ -164,36 +167,8 @@ The worst-fitting classes are also the noisiest, so a reseeded state can
 start from weak signal. A small but genuine state that falls under 2% after a
 stage is reseeded too. Validate the option before making it a default.
 
-### 5.2 Narrowing the angular window (`prob_athres_taper`, default `no`)
-
-The probabilistic search draws each orientation from the candidates within
-an angular window of the best one: `min(prob_athres, the previous iteration's
-mean angular jump)` (`calc_athres`). With `prob_athres=90`, the cap almost
-never applies, so the window follows the last jumps, and the jumps follow the
-window. A run of 560 class averages (13 October 2026) kept an orientation
-overlap of about 0.02 and a mean jump of about 50 degrees through stage 7,
-ending with the even and odd halves of each class 90.6 degrees apart, as
-random orientations would be. Its unsettled poses drew the class averages to
-the blurriest state, and in stage 7 the states collapsed into one.
-
-`prob_athres_taper=yes` (added 13 October 2026) narrows the window per stage
-(`cavgs_prob_athres`, set on each stage's `refine3D` command line by the stage
-controller):
-
-- the run's `prob_athres` through the symmetry-search stage (3; 4 when the
-  run searches an axis, `solve3D_policy.md` section 7), which keeps the early
-  exploration that `prob_athres=90` was chosen for;
-- then halved each stage, never below 10 degrees (`PROB_ATHRES_TAPER_MIN`) nor
-  above the run's value: 45, 22.5, 11.25 and 10 for stages 4 to 7 from 90
-  without an axis search, 45, 22.5 and 11.25 for stages 5 to 7 with one.
-
-The threshold of each stage is logged. Without the option every stage keeps
-the run's `prob_athres`. Particle `solve3D` is not affected. Validate the
-option before making it a default.
-
-Tests: `test_prob_athres_taper` and the reseeding tests in
-`simple_solve3D_reseed_tester` (`unit_reconstruction`, "solve3D_cavgs stage
-rules").
+Tests: the reseeding tests in `simple_solve3D_reseed_tester`
+(`unit_reconstruction`, "solve3D_cavgs stage rules").
 
 ## 6. Mapping Back
 

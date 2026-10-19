@@ -116,7 +116,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Numerics')
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, diffusion_map_graphs, optimisers, low_pass_stages, shift_search, truth_metrics)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
@@ -194,7 +194,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, fractional_reconstruction)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, fractional_reconstruction)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 
@@ -295,11 +295,11 @@ contains
         call unit_parallel%new(&
         &'unit_parallel',&
         &'unit tests: distributed execution',&
-        &'is the fast-gate unit suite for distributed execution: the job controller on the local backend (scripts only, nothing submitted) and the installation-path policy of the queue-system environment',&
+        &'is the fast-gate unit suite for distributed execution: the job controller on the local backend (scripts only, nothing submitted), the installation-path policy of the queue-system environment, and the test tooling (profile statistics, packing by CPU reservation, identity rules, the test registry)',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Distributed Execution')
         call unit_parallel%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (qsys_control, qsys_environment)', '', .false., '')
+            &'One sub-suite of this area to run alone (qsys_control, qsys_environment, test_tools)', '', .false., '')
         call add_ui_program('unit_parallel', unit_parallel, tsttab, UI_CATEGORY)
     end subroutine new_unit_parallel
 
@@ -350,11 +350,11 @@ contains
         call forked_process%new(&
         &'forked_process',&
         &'unit tests of forked child processes',&
-        &'exercises real child processes with clock-based polling (the forked-process lifecycle and the stream heartbeat); not part of the build gate, run under the platform label',&
+        &'exercises real child processes with clock-based polling (the forked-process lifecycle, the stream heartbeat and the test dispatcher with failing, hanging and worker-hanging children); not part of the build gate, run under the platform label',&
         &'simple_test_exec',&
         &.false., display_name='Forked Process Test')
         call forked_process%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (forked_process, stream_heartbeat)', '', .false., '')
+            &'One sub-suite of this suite to run alone (forked_process, stream_heartbeat, test_dispatcher)', '', .false., '')
         call add_ui_program('forked_process', forked_process, tsttab, UI_CATEGORY)
     end subroutine new_forked_process
 

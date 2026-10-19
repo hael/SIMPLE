@@ -354,7 +354,8 @@ contains
         nkeep = count(keep)
         if( nkeep >= states%nstates ) return
         if( nkeep < 2 )then
-            ! nothing clears the floor: keep the two best-supported seats rather than delivering none
+            ! nothing clears the floor: keep the best-supported seat, and the runner-up only when it
+            ! holds mass (a state map of nothing cannot be reconstructed)
             allocate(key(states%nstates), ord(states%nstates))
             key = states%neff
             do s = 1, states%nstates
@@ -362,9 +363,9 @@ contains
             end do
             call hpsort(key, ord)
             keep = .false.
-            keep(ord(states%nstates))   = .true.
-            keep(ord(states%nstates-1)) = .true.
-            nkeep = 2
+            keep(ord(states%nstates)) = .true.
+            if( states%neff(ord(states%nstates-1)) > 0. ) keep(ord(states%nstates-1)) = .true.
+            nkeep = count(keep)
             deallocate(key, ord)
         endif
         ! PARTITION when every weighted row sums to one across the states (the weight set's rule)

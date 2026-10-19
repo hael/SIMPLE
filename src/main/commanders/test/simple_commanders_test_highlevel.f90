@@ -81,7 +81,73 @@ type, extends(commander_base) :: commander_test_write_state_weights_mixed
     procedure :: execute      => exec_test_write_state_weights_mixed
 end type commander_test_write_state_weights_mixed
 
+!> the whole suite: every correctness entry of the registry once, packed by CPU reservation
+type, extends(commander_base) :: commander_test_nightly
+  contains
+    procedure :: execute      => exec_test_nightly
+end type commander_test_nightly
+
+!> a robustness profile: entries over seed offsets and thread counts
+type, extends(commander_base) :: commander_test_profile
+  contains
+    procedure :: execute      => exec_test_profile
+end type commander_test_profile
+
+!> multi-state refine3D against the known states of a blob phantom
+type, extends(commander_base) :: commander_test_multistate_assignment
+  contains
+    procedure :: execute      => exec_test_multistate_assignment
+end type commander_test_multistate_assignment
+
+!> the multi-state fixture: its modes, its cache and the declared point groups of its truths
+type, extends(commander_base) :: commander_test_state_fixture
+  contains
+    procedure :: execute      => exec_test_state_fixture
+end type commander_test_state_fixture
+
+!> solve3D and refine3D_states with several states against the known states of beta-galactosidase
+type, extends(commander_base) :: commander_test_multistate_workflows
+  contains
+    procedure :: execute      => exec_test_multistate_workflows
+end type commander_test_multistate_workflows
+
+!> byte identity of two run directories of one entry
+type, extends(commander_base) :: commander_test_identity
+  contains
+    procedure :: execute      => exec_test_identity
+end type commander_test_identity
+
 interface
+
+    module subroutine exec_test_nightly( self, cline )
+        class(commander_test_nightly), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_nightly
+
+    module subroutine exec_test_profile( self, cline )
+        class(commander_test_profile), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_profile
+
+    module subroutine exec_test_multistate_assignment( self, cline )
+        class(commander_test_multistate_assignment), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_multistate_assignment
+
+    module subroutine exec_test_state_fixture( self, cline )
+        class(commander_test_state_fixture), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_state_fixture
+
+    module subroutine exec_test_multistate_workflows( self, cline )
+        class(commander_test_multistate_workflows), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_multistate_workflows
+
+    module subroutine exec_test_identity( self, cline )
+        class(commander_test_identity), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_identity
 
     module subroutine exec_test_mini_stream_quantitative( self, cline )
         class(commander_test_mini_stream), intent(inout) :: self

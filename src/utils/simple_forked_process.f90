@@ -4,14 +4,16 @@
 ! A failed child is not restarted here: the owner calls start() again.
 ! terminate() sends SIGTERM, kill() SIGKILL. The parent's buffered output is flushed before
 ! the fork, so a child does not write it again; the child ignores SIGINT, so a terminal's
-! Ctrl-C reaches the parent, which stops its children in order.
+! Ctrl-C reaches the parent, which stops its children in order. A child started with
+! new_session leads its own session and process group, which signal_group() reaches whole,
+! the processes the child started included.
 module simple_forked_process
   use, intrinsic :: iso_c_binding,   only: c_intptr_t
   use, intrinsic :: iso_fortran_env, only: output_unit, error_unit
   use unix,                  only: c_pid_t, c_int, c_long, c_null_char, &
-                                  c_fork, c_kill, c_exit, c_time,     &
+                                  c_fork, c_kill, c_exit, c_time, c_setsid, &
                                   c_waitpid, c_usleep, c_perror,      &
-                                  SIGTERM, SIGKILL, SIGINT, EXIT_SUCCESS, &
+                                  SIGTERM, SIGKILL, SIGINT, SIGHUP, EXIT_SUCCESS, &
                                   WNOHANG, c_signal, c_funptr, c_null_funptr
   use simple_defs,           only: logfhandle
   use simple_error,          only: simple_exception
@@ -29,7 +31,7 @@ module simple_forked_process
   integer, public,  parameter :: FORK_STATUS_SKIPPED    =  3
   integer, public,  parameter :: FORK_POLL_TIME         = 100000 ! poll interval (µs)
 
-  public  :: forked_process
+  public  :: forked_process, sig_ign, is_sig_ign
   private
 #include "simple_local_flags.inc"
 
@@ -47,15 +49,20 @@ module simple_forked_process
     logical               :: failed     = .false.
     logical               :: stopped    = .false.
     logical               :: skipped    = .false.
+    logical               :: new_session = .false. ! the child leads its own session
+    integer(kind=c_int)   :: wstatus    = 0  ! wait status of the reaped child
   contains
     procedure :: execute => execute_test
     procedure :: start
     procedure :: terminate
     procedure :: kill => kill_forked_process
+    procedure :: signal_group
+    procedure :: get_exit_code
     procedure :: destroy
     procedure :: set_cline
     procedure :: skip
     procedure :: status
+    procedure :: has_exited
     procedure :: await_final_status
     procedure :: get_pid
     procedure :: get_queuetime
@@ -67,16 +74,19 @@ module simple_forked_process
 contains
 
   ! Fork a child process and begin execution. Optionally accept a new cline,
-  ! name and logfile. In the child, redirect logfhandle if a logfile is given,
-  ! call self%execute(), then exit. In the parent, record timestamps.
-  subroutine start( self, name, logfile, cline )
+  ! name and logfile. In the child, lead a new session if new_session, redirect
+  ! logfhandle if a logfile is given, call self%execute(), then exit. In the
+  ! parent, record timestamps.
+  subroutine start( self, name, logfile, cline, new_session )
     class(forked_process),           intent(inout) :: self
     type(string),          optional, intent(in)    :: name, logfile
     type(cmdline),         optional, intent(in)    :: cline
+    logical,               optional, intent(in)    :: new_session
     integer(kind=c_int)                            :: ios
     type(c_funptr)                                 :: prev_handler
     if( present(logfile) ) self%logfile = logfile
     if( present(name)    ) self%name    = name
+    if( present(new_session) ) self%new_session = new_session
     ! cmdline's defined assignment needs an allocated left-hand side
     if( .not. allocated(self%cline) ) allocate(self%cline)
     if( present(cline)   ) self%cline   = cline
@@ -99,12 +109,17 @@ contains
       call c_perror('fork()' // c_null_char)
       THROW_HARD('Failed to fork process')
     else if( self%pid == 0 ) then
-      ! Child process: optionally redirect log output, execute, then exit.
+      ! Child process: optionally lead a session and redirect log output, execute, then exit.
+      if( self%new_session )then
+        if( c_setsid() < 0 ) call c_perror('setsid()' // c_null_char)
+      end if
       ! Default SIGTERM first: a handler inherited from the parent acts on the parent's
       ! state and threads, which the child does not have; execute() installs its own.
       ! SIGINT is ignored, and stays ignored in what the child execs: a terminal's Ctrl-C
-      ! goes to the whole process group, and the parent stops its children in order.
+      ! goes to the whole process group, and the parent stops its children in order. SIGHUP
+      ! takes its default too, so the parent's handler does not act in the child.
       prev_handler = c_signal(SIGTERM, c_null_funptr)
+      prev_handler = c_signal(SIGHUP,  c_null_funptr)
       prev_handler = c_signal(SIGINT,  sig_ign())
       if( .not. self%logfile%is_blank() ) then
         if( file_exists(self%logfile%to_char()) ) then
@@ -150,6 +165,31 @@ contains
     rc = c_kill(self%pid, SIGKILL)
     if( rc /= 0 ) THROW_HARD('Failed to send SIGKILL to forked child')
   end subroutine kill_forked_process
+
+  ! Send sig to the child's process group (its session, with new_session), or to the child
+  ! alone while it has not yet made the group; never to a reaped child, whose pid may be
+  ! another process's by now. A group that is gone is not an error.
+  subroutine signal_group( self, sig )
+    class(forked_process), intent(in) :: self
+    integer(kind=c_int),   intent(in) :: sig
+    integer(kind=c_int)               :: rc
+    if( self%pid <= 0 ) return
+    rc = -1
+    if( self%new_session ) rc = c_kill(-self%pid, sig)
+    if( rc /= 0 .and. self%running ) rc = c_kill(self%pid, sig)
+  end subroutine signal_group
+
+  ! The exit status of the reaped child, or minus the signal that ended it.
+  integer function get_exit_code( self )
+    class(forked_process), intent(in) :: self
+    integer :: termsig
+    termsig = iand(int(self%wstatus), 127)
+    if( termsig == 0 )then
+      get_exit_code = iand(ishft(int(self%wstatus), -8), 255)
+    else
+      get_exit_code = -termsig
+    endif
+  end function get_exit_code
 
   ! Mark the process as skipped, which will cause status() to return
   ! FORK_STATUS_SKIPPED.
@@ -227,6 +267,7 @@ contains
       rc = c_waitpid(self%pid, stat_loc, options)
       if( rc == self%pid ) then
         self%running = .false.
+        self%wstatus = stat_loc
         if( stat_loc == 0 ) then
           self%stopped = .true.
           self%failed  = .false.
@@ -244,6 +285,35 @@ contains
     end if
     if( self%failed ) status_code = FORK_STATUS_FAILED
   end function status
+
+  ! Whether the running child has ended, without reaping it (waitid with WNOWAIT, Linux): until
+  ! status() reaps it, its pid and process group stay its own, so they can still be signalled
+  ! without reaching a process that reused the pid. Elsewhere .false.: the owner reaps first.
+  logical function has_exited( self )
+    class(forked_process), intent(in) :: self
+#if defined(__linux__)
+    interface
+      function c_waitid( idtype, id, info, options ) bind(c, name='waitid') result( rc )
+        import :: c_int, c_pid_t
+        integer(c_int),   value         :: idtype
+        integer(c_pid_t), value         :: id
+        integer(c_int),   intent(inout) :: info(32) ! siginfo_t, 128 bytes
+        integer(c_int),   value         :: options
+        integer(c_int)                  :: rc
+      end function c_waitid
+    end interface
+    integer(c_int), parameter :: P_PID = 1, WEXITED = 4, WNOWAIT = int(z'01000000', c_int)
+    integer(c_int) :: info(32)
+#endif
+    has_exited = .false.
+    if( .not. self%running .or. self%pid <= 0 ) return
+#if defined(__linux__)
+    ! si_signo stays 0 when no child is waitable yet
+    info = 0_c_int
+    if( c_waitid(P_PID, self%pid, info, ior(WEXITED, ior(WNOWAIT, WNOHANG))) /= 0 ) return
+    has_exited = info(1) /= 0_c_int
+#endif
+  end function has_exited
 
   ! Return the child's PID.
   function get_pid( self ) result( pid )
@@ -285,5 +355,11 @@ contains
     type(c_funptr) :: handler
     handler = transfer(1_c_intptr_t, handler)
   end function sig_ign
+
+  ! Whether a disposition signal() returned is SIG_IGN.
+  logical function is_sig_ign( handler )
+    type(c_funptr), intent(in) :: handler
+    is_sig_ign = transfer(handler, 0_c_intptr_t) == 1_c_intptr_t
+  end function is_sig_ign
 
 end module simple_forked_process

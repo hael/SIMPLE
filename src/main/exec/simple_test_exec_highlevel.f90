@@ -5,10 +5,13 @@ use simple_commanders_test_highlevel, only: commander_test_mini_stream, commande
                                             commander_test_simulated_workflow, commander_test_pcg_recon, &
                                             commander_test_pcg_frac_update, commander_test_rec3D_backends, &
                                             commander_test_solve3D_addon, commander_test_cont_refine3D_1jxy, &
+                                            commander_test_multistate_assignment, commander_test_multistate_workflows, &
+                                            commander_test_state_fixture, &
                                             commander_generate_solve3D_addon_snapshots, &
                                             commander_test_flex_pca_blobs, commander_test_solve3D_pyramid_blobs, &
                                             commander_test_write_state_weights_labels, &
-                                            commander_test_write_state_weights_mixed
+                                            commander_test_write_state_weights_mixed, &
+                                            commander_test_nightly, commander_test_profile, commander_test_identity
 implicit none
 
 public :: exec_test_highlevel_commander
@@ -20,6 +23,9 @@ type(commander_test_simulate_particles)          :: xsimulate_particles
 type(commander_test_solve3D_addon)               :: xsolve3D_addon
 type(commander_generate_solve3D_addon_snapshots) :: xaddon_snapshots
 type(commander_test_cont_refine3D_1jxy)          :: xcont_refine3D_1jxy
+type(commander_test_multistate_assignment)       :: xmultistate_assignment
+type(commander_test_multistate_workflows)        :: xmultistate_workflows
+type(commander_test_state_fixture)               :: xstate_fixture
 type(commander_test_pcg_recon)                   :: xpcg_recon
 type(commander_test_pcg_frac_update)             :: xpcg_frac_update
 type(commander_test_rec3D_backends)              :: xrec3D_backends
@@ -27,6 +33,9 @@ type(commander_test_flex_pca_blobs)              :: xflex_pca_blobs
 type(commander_test_solve3D_pyramid_blobs)       :: xsolve3D_pyramid_blobs
 type(commander_test_write_state_weights_labels)  :: xwrite_state_weights_labels
 type(commander_test_write_state_weights_mixed)   :: xwrite_state_weights_mixed
+type(commander_test_nightly)                     :: xnightly
+type(commander_test_profile)                     :: xprofile
+type(commander_test_identity)                    :: xidentity
 
 contains
 
@@ -49,6 +58,12 @@ contains
                 call xaddon_snapshots%execute(cline)
             case( 'cont_refine3D_1jxy' )
                 call xcont_refine3D_1jxy%execute(cline)
+            case( 'multistate_assignment' )
+                call xmultistate_assignment%execute(cline)
+            case( 'multistate_workflows' )
+                call xmultistate_workflows%execute(cline)
+            case( 'state_fixture' )
+                call xstate_fixture%execute(cline)
             case( 'simulated_workflow' )
                 call xsimulated_workflow%execute(cline)
             case( 'pcg_recon' )
@@ -65,6 +80,12 @@ contains
                 call xwrite_state_weights_labels%execute(cline)
             case( 'write_state_weights_mixed' )
                 call xwrite_state_weights_mixed%execute(cline)
+            case( 'nightly' )
+                call xnightly%execute(cline)
+            case( 'profile' )
+                call xprofile%execute(cline)
+            case( 'identity' )
+                call xidentity%execute(cline)
             case default
                 l_did_execute = .false.
         end select

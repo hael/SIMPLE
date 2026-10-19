@@ -72,7 +72,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
     type(string)          :: cwd_orig
     integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
-    logical :: l_truth, l_gate_ls, l_mkdir
+    logical :: l_truth, l_gate_ls, l_mkdir, l_rr_nonfinite
     if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
     if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required; exec_test_rec3D_backends')
     l_mkdir = .true.
@@ -349,11 +349,14 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     write(logfhandle,'(A,F0.4)') '>>> REC3D BACKENDS: PCG CENTRE-BIN RATIO (diagnostic, not gated): ', &
         &summary%centre_bin
     rmin = huge(rmin); rmax = -huge(rmax); nrb_used = 0
+    l_rr_nonfinite = .false.
     do irb = 2, nrb_msk
         if( real(irb)*rbin_width > 0.85*mskrad ) exit
         if( radprof(irb,1) < 1.e-3*radprof(1,1) .or. radprof(irb,2) < 1.e-3*radprof(1,2) ) cycle
         rr = safe_ratio(safe_ratio(radprof(irb,2), radprof(irb,1)), rnorm)
         if( rr <= 0. ) cycle
+        ! a non-finite ratio is a failure the min and max below would drop
+        if( rr /= rr ) l_rr_nonfinite = .true.
         nrb_used = nrb_used + 1
         rmin = min(rmin, rr); rmax = max(rmax, rr)
     enddo
@@ -401,7 +404,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     nfail = 0
     if( kgate < 10 ) call gate_fail('gated band (agreement band capped at lp) ends at k='//int2str(kgate)//' (need >= 10)')
     if( n < 5 )      call gate_fail('only '//int2str(n)//' valid shells in the gated band (need >= 5)')
-    if( med < 0.67 .or. med > 1.5 ) &
+    if( .not. (med >= 0.67 .and. med <= 1.5) ) &
         &call gate_fail('median gated-band amplitude ratio pcg/gridding '//real2str_trim(med)//' outside [0.67,1.5]')
     nfsc = max(0, kgate - 1)
     if( nfsc > 0 )then
@@ -409,10 +412,11 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         call hpsort(fscs(1:nfsc))
         med_fsc = fscs(max(1,(nfsc+1)/2))
         summary%band_fsc = med_fsc
-        if( med_fsc < 0.9 ) call gate_fail('median gated-band FSC(gridding,pcg) '//real2str_trim(med_fsc)//' below 0.9')
+        if( .not. (med_fsc >= 0.9) ) call gate_fail('median gated-band FSC(gridding,pcg) '//real2str_trim(med_fsc)//' below 0.9')
     endif
     if( nrb_used < 3 ) call gate_fail('only '//int2str(nrb_used)//' usable radial bins inside 0.85 x mask radius (need >= 3)')
-    if( nrb_used >= 3 .and. (rmin < 0.5 .or. rmax > 2.0) ) &
+    if( l_rr_nonfinite ) call gate_fail('a normalised radial ratio inside 0.85 x mask radius is not finite')
+    if( nrb_used >= 3 .and. .not. (rmin >= 0.5 .and. rmax <= 2.0) ) &
         &call gate_fail('normalised radial ratio range ['//real2str_trim(rmin)//','//real2str_trim(rmax)//'] outside [0.5,2.0]')
     if( l_truth )then
         ! gridding LS profile vs truth must be flat inside the mask (a fading deapodization fails); ml_reg=yes
@@ -424,7 +428,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         do irb = 2, nrb_msk
             if( real(irb)*rbin_width > 0.85*mskrad ) exit
             tg = safe_ratio(tprof(irb,1), tprof(2,1))
-            if( tg < 0.92 .or. tg > 1.08 )then
+            if( .not. (tg >= 0.92 .and. tg <= 1.08) )then
                 if( l_gate_ls )then
                     call gate_fail('gridding/truth LS profile '//real2str_trim(tg)//' at radial bin '//int2str(irb)//' outside [0.92,1.08]')
                 else
@@ -439,7 +443,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
             call hpsort(fscs(1:nfsc))
             med_fsc = fscs(max(1,(nfsc+1)/2))
             summary%truth_fsc_g = med_fsc
-            if( med_fsc < 0.8 ) call gate_fail('median FSC(truth,gridding) over the gated band '//real2str_trim(med_fsc)//' below 0.8')
+            if( .not. (med_fsc >= 0.8) ) call gate_fail('median FSC(truth,gridding) over the gated band '//real2str_trim(med_fsc)//' below 0.8')
             fscs(1:nfsc) = tcorr(2:kgate,2)
             call hpsort(fscs(1:nfsc))
             summary%truth_fsc_p = fscs(max(1,(nfsc+1)/2))

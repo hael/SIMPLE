@@ -1155,14 +1155,15 @@ contains
             endif
         end subroutine check_flex_fits
 
-        !> every row against the consensus map; the checkpoint map, from the class averages, is flex's mean
+        !> every row against the consensus map; the checkpoint map, from the class averages, is flex's mean.
+        !! The rows are pose-less (the work project gives the class-average halves no orientation or shift)
         subroutine seed_poses()
             integer :: nactive_rows
             call work_proj%read_segment('ptcl3D', params%projfile)
             nactive_rows = work_proj%os_ptcl3D%count_state_gt_zero()
             call work_proj%kill
             call initialize_poses_against_external_references(params, work_cline, xrefine3D, xrec3D, &
-                &nactive_rows, ref_vols, checkpoint_vols, 1, lp_init=params%lpstart, l_all_rows=.true.)
+                &nactive_rows, ref_vols, checkpoint_vols, 1, lp_init=params%lpstart, l_all_rows=.true., l_poseless=.true.)
             if( l_cls3D_labels ) return
             ! flex's delivered maps reuse the checkpoint's file name
             call simple_copy_file(checkpoint_vols(1), string(MEAN_VOL_FNAME))

@@ -276,8 +276,7 @@ contains
         call assert_true(cline%get_carg('pgrp') == 'c1' .and. cline%get_carg('prune') == 'no', 'c1, no pruning')
         call assert_real(LPSTART_CAVGS3D, cline%get_rarg('lpstart'), 1.e-4, 'the fixed ramp''s start')
         call assert_real(LPSTOP_CAVGS3D,  cline%get_rarg('lpstop'),  1.e-4, 'and stop')
-        call assert_true(cline%get_carg('force_lp_range') == 'yes' .and. cline%get_carg('prob_athres_taper') == 'yes',&
-            &'forced, with the angular taper')
+        call assert_true(cline%get_carg('force_lp_range') == 'yes', 'forced')
         vols(1) = 'state_refs/vol_state01.mrc'
         vols(2) = 'state_refs/vol_state02.mrc'
         call set_assign_cline(cline, 'match.simple', vols, 90.)

@@ -1176,8 +1176,7 @@ contains
 
     !> solve3D_cavgs on the project's class averages and their halves: @p nstates volumes, c1, no
     !! pruning, the fixed low-pass ramp LPSTART_CAVGS3D to LPSTOP_CAVGS3D (force_lp_range, not one
-    !! derived from the class FRCs), and the angular window narrowed after the symmetry search
-    !! (prob_athres_taper), so the poses settle.
+    !! derived from the class FRCs).
     subroutine set_cavgs3D_cline( cline, projfile, nstates, mskdiam )
         class(cmdline),   intent(inout) :: cline
         character(len=*), intent(in)    :: projfile
@@ -1193,7 +1192,6 @@ contains
         call cline%set('lpstart',           LPSTART_CAVGS3D)
         call cline%set('lpstop',            LPSTOP_CAVGS3D)
         call cline%set('force_lp_range',    'yes')
-        call cline%set('prob_athres_taper', 'yes')
         if( mskdiam > 0. ) call cline%set('mskdiam', mskdiam)
     end subroutine set_cavgs3D_cline
 

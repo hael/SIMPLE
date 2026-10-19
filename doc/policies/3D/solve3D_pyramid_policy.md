@@ -62,7 +62,7 @@ program itself.
 | 2 | `refs_subset/solve2D/` | `solve2D`, `NCLS2D_FIRST` (150) classes, `cache=yes` | no project, or no usable 2D (`usable_job_2D`) |
 | 3 | `refs_subset/quality_selection/` | with `use_model=yes`, the pool model's selection of those classes, mapped to their particles; the selected and rejected stacks with JPEGs (`select_route_classes`) | never |
 | 4 | `refs_subset/cls_expansion/` | `cls_expansion` of the kept classes into `expansion_budget` (500) sub-classes in all | no project, or no usable 2D |
-| 5 | `refs_subset/solve3D_cavgs/` | `solve3D_cavgs`, `nstates`, c1, `prune=no`, 20 → 12 Å forced, `prob_athres_taper=yes` | no project |
+| 5 | `refs_subset/solve3D_cavgs/` | `solve3D_cavgs`, `nstates`, c1, `prune=no`, 20 → 12 Å forced | no project |
 | 6 | `state_refs/` | the check (`check_state_refs`): the states that hold class averages renumbered from 1, their volumes, JPEGs, the class averages per state and the record `state_refs.txt` | no state, a state without a volume, or the check fails |
 | 7 | `assign/quality_selection/` | the pool model's verdict on the project's classes, logged beside the fit, not applied | never |
 | 8 | `assign/cls_expansion/` | `cls_expansion` of every selected particle's classes (the project's own 2D) into 500 sub-classes | no project, or no usable 2D |

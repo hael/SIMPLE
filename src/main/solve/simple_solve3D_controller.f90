@@ -25,7 +25,6 @@ integer,          parameter :: ML_REG_START_STAGE      = 3           ! first sta
 integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
 integer,          parameter :: SYMSRCH_STAGE           = 4           ! search symmetry axis after this stage (3 until 2026-10-17)
 integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
-real,             parameter :: PROB_ATHRES_TAPER_MIN   = 10.         ! solve3D_cavgs' narrowed angular window ends here (prob_athres_taper)
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
@@ -153,18 +152,6 @@ contains
         if( l_symsrch ) istage = SYMSRCH_STAGE
     end function solve3D_symsrch_stage
 
-    !> solve3D_cavgs' angular sampling threshold at stage @p istage with prob_athres_taper=yes: the
-    !! run's prob_athres (@p athres_run) through the symmetry-search stage, then halved each stage,
-    !! never below PROB_ATHRES_TAPER_MIN (nor above the run's value). With 90 and no axis search:
-    !! 45, 22.5, 11.25 and 10 for stages 4 to 7; one stage later with a search.
-    module procedure cavgs_prob_athres
-        integer :: istage_sym
-        athres     = athres_run
-        istage_sym = solve3D_symsrch_stage(l_srch4symaxis)
-        if( istage <= istage_sym ) return
-        athres = max(min(athres_run, PROB_ATHRES_TAPER_MIN), athres_run * 0.5**(istage - istage_sym))
-    end procedure cavgs_prob_athres
-
     module function solve3D_ml_reg_start_stage() result(istage)
         integer :: istage
         istage = ML_REG_START_STAGE
@@ -265,7 +252,7 @@ contains
         call init_refine3D_iteration( cfg )
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
-        call set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_mode_policy( cfg, params, istage )
         call set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_balance_policy( cfg, params )
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
@@ -321,11 +308,10 @@ contains
         endif
     end subroutine set_refine3D_symmetry_policy
 
-    subroutine set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
+    subroutine set_refine3D_mode_policy( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
-        logical,                  intent(in)    :: l_cavgs
         cfg%prob_neigh_mode = ''
         if( l_refine3D_mode_override )then
             cfg%refine = refine3D_mode_override
@@ -333,16 +319,12 @@ contains
                 cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
             endif
         else if( params%nstates > 1 )then
-            ! independent multi-state: particle starts use shc before the prob stages; prob_neigh
-            ! takes over at the first stage whose directions reach the multi-state cap (stage 5)
+            ! independent multi-state, from particles and from class averages alike: shc before the
+            ! prob stages; prob_neigh takes over at the first stage whose directions reach the
+            ! multi-state cap (stage 5)
             if( istage < PROB_REFINE_STAGE )then
-                if( l_cavgs )then
-                    cfg%refine           = 'prob_neigh'
-                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
-                else
-                    cfg%refine           = 'shc'
-                    cfg%prob_neigh_mode  = ''
-                endif
+                cfg%refine           = 'shc'
+                cfg%prob_neigh_mode  = ''
             else if( istage < multistate_prob_neigh_stage() )then
                 cfg%refine = 'prob'
             else
@@ -670,13 +652,6 @@ contains
         if( l_cavgs )then
             call cline_refine3D%set('snr_noise_reg',      cfg%snr_noise_reg)
             call cline_refine3D%delete('update_frac')
-            ! the angular sampling window narrowed stage by stage after the symmetry search
-            ! (prob_athres_taper); otherwise the run's prob_athres throughout
-            if( params%prob_athres_taper .eq. 'yes' )then
-                call cline_refine3D%set('prob_athres',    cavgs_prob_athres(params%prob_athres, istage))
-                write(logfhandle,'(A,F6.1)') '>>> ANGULAR SAMPLING THRESHOLD (prob_athres_taper, DEG): ',&
-                    &cavgs_prob_athres(params%prob_athres, istage)
-            endif
         else
             call cline_refine3D%delete('snr_noise_reg')
         endif

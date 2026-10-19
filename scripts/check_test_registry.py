@@ -15,7 +15,11 @@ before the gate, so a build with tests fails on a mismatch:
   * every program that runs sub-suites (the tables of simple_commanders_test_class) lists
     them, in table order, in the help of its suite= input in the test UI, spelled as the
     runner matches them (suite_id: lower case, blanks and hyphens as underscores, commas
-    and slashes dropped); `units`, which runs every table, has no list.
+    and slashes dropped); `units`, which runs every table, has no list;
+  * the high-level CTest entries are the rows of the test registry
+    (src/main/commanders/test/simple_test_registry.f90), which test=nightly and
+    test=profile run: the same names, command lines, TIMEOUT (the deadline) and
+    OMP_NUM_THREADS.
 
 Programs that are neither suites nor registered (manual tools, the focused routes of
 lib_single) are allowed. Nothing is compiled or run.
@@ -116,15 +120,46 @@ def ui_suite_lists(ui_dir):
     return lists
 
 
+def registry_rows(registry_text):
+    """name -> (command line tokens, deadline, threads, CPU reservation) of the rows of the test registry"""
+    text = strip_fortran_comments(registry_text).replace('&\n', ' ').replace('&', ' ')
+    rows = {}
+    for m in re.finditer(r"test_entry\(\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*(\d+)\s*,"
+                         r"\s*\d+\s*,\s*\d+\s*,\s*(\d+)\s*,\s*(\d+)\s*,", text):
+        name, prg, args, nthr, ncpu, deadline = m.groups()
+        rows.setdefault(name, []).append((sorted(['test=' + prg] + args.split()), int(deadline), int(nthr),
+                                          int(ncpu)))
+    return rows
+
+
+def highlevel_registrations(cmake_text):
+    """name -> (command line tokens, timeout, threads, processors) of the CTest entries labelled highlevel
+    (processors 0 when the entry declares none), and the names of those labelled highlevel in a form it
+    cannot read"""
+    lines = [l.split('#', 1)[0] for l in cmake_text.split('\n')]
+    text = '\n'.join(lines)
+    regs = {}
+    for m in re.finditer(r'simple_add_test\(\s*(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(?:RUN_SERIAL\s+|PROCESSORS\s+(\d+)\s+)?'
+                         r'COMMAND\s+\$<TARGET_FILE:\$\{SIMPLE_TEST_EXE\}>([^)]*)\)', text):
+        name, label, timeout, nthr, procs, args = m.groups()
+        if label != 'highlevel':
+            continue
+        regs.setdefault(name, []).append((sorted(args.split()), int(timeout), int(nthr), int(procs or 0)))
+    # an entry the pattern above cannot read must not drop out of the check
+    unreadable = sorted(set(re.findall(r'simple_add_test\(\s*(\S+)\s+highlevel\b', text)) - set(regs))
+    return regs, unreadable
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     verbose = '--verbose' in sys.argv[1:]
     root = os.path.abspath(args[0] if args else os.path.join(os.path.dirname(__file__), '..'))
     cmake = os.path.join(root, 'production', 'CMakeLists.txt')
     test_class = os.path.join(root, 'src', 'main', 'commanders', 'test', 'simple_commanders_test_class.f90')
+    registry = os.path.join(root, 'src', 'main', 'commanders', 'test', 'simple_test_registry.f90')
     ui_dir = os.path.join(root, 'src', 'main', 'ui', 'simple_test')
     exec_dir = os.path.join(root, 'src', 'main', 'exec')
-    for p in (cmake, ui_dir, exec_dir, test_class):
+    for p in (cmake, ui_dir, exec_dir, test_class, registry):
         if not os.path.exists(p):
             print('check_test_registry: missing %s' % p)
             return 2
@@ -162,6 +197,22 @@ def main():
         elif ui_lists[name] != tables[name]:
             problems.append("test program '%s': the suite= list of the test UI (%s) is not the suite table (%s)"
                             % (name, ', '.join(ui_lists[name]), ', '.join(tables[name])))
+    rows = registry_rows(read(registry))
+    regs, unreadable = highlevel_registrations(read(cmake))
+    for name in unreadable:
+        problems.append("the highlevel CTest entry '%s' is not in the form simple_add_test(<name> highlevel "
+                        "<timeout> <threads> PROCESSORS <n> COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> <args>)" % name)
+    for name in sorted(set(rows) | set(regs)):
+        if name not in regs:
+            problems.append("registry entry '%s' is not a highlevel CTest entry" % name)
+        elif name not in rows:
+            problems.append("highlevel CTest entry '%s' is not in the test registry" % name)
+        elif len(rows[name]) > 1 or len(regs[name]) > 1:
+            problems.append("'%s' is registered more than once" % name)
+        elif rows[name][0] != regs[name][0]:
+            problems.append("'%s': the registry (command line, deadline, threads, CPU reservation) %s is not the "
+                            "CTest entry (command line, timeout, threads, PROCESSORS) %s"
+                            % (name, rows[name][0], regs[name][0]))
     if problems:
         print('check_test_registry: %d problem(s):' % len(problems))
         for p in problems:
@@ -169,7 +220,8 @@ def main():
         return 1
     if verbose:
         print('check_test_registry: %d registered selectors, %d test programs, %d router cases, '
-              '%d suite tables: consistent' % (len(registered), len(progs), len(cases), len(tables)))
+              '%d suite tables, %d registry entries: consistent'
+              % (len(registered), len(progs), len(cases), len(tables), len(rows)))
     return 0
 
 

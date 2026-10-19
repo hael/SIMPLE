@@ -759,6 +759,16 @@ contains
             THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
         endif
         call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
+        ! STATE LABEL INIT, as the distributed master: a fresh multi-state start (the first
+        ! iteration) on a project whose particles are all in one state draws uniform labels (none in
+        ! a pass that searches no state). A later stage of a workflow, whose states may have emptied,
+        ! continues from its labels as before
+        if( params%nstates > 1 .and. startit == 1 .and. labels_may_change(params) .and. &
+            &build%spproj_field%get_n('state') <= 1 )then
+            call seed_multistate_startup_labels(build, params, cline)
+            call assert_multistate_populations(build, params)
+            l_proj_dirty = .true.
+        endif
         ! Initial orientation parameters; a Cartesian pass continues from existing poses (C11)
         if( params%l_cart_refine ) call check_cont_seeds(build%spproj_field)
         if( build%spproj%is_virgin_field(params%oritype) )then

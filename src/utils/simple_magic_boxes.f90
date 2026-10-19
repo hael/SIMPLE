@@ -123,6 +123,14 @@ contains
                 box_new = minbox
             endif
         endif
+        if( box_new >= box_in )then
+            ! a floor (64, minbox) or the magic-box rounding at or above the input box: no crop,
+            ! never an upsampling
+            box_new  = box_in
+            scale    = 1.0
+            smpd_new = smpd_in
+            return
+        endif
         scale    = real(box_new)/real(box_in)
         smpd_new = smpd_in/scale
     end subroutine autoscale

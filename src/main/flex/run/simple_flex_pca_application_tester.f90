@@ -27,7 +27,7 @@ private
 
 public :: run_all_flex_pca_application_tests
 public :: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project, read_state_weight_table
-public :: configure_flex_pca_phantom
+public :: configure_flex_pca_phantom, write_phantom_truths
 
 integer, parameter         :: BOX                             = 64
 integer, parameter         :: DEFAULT_NPTCLS                  = 2000
@@ -228,10 +228,14 @@ contains
         enddo
         call vol%set_rmat(mean / real(nst), .false.)
         call vol%write(truth_mean)
-        call vol%set_rmat(a - b, .false.)
-        call vol%write(truth_diff)
+        ! the difference of A and B, when there is a B (a single state has none)
+        if( nst >= 2 )then
+            call vol%set_rmat(a - b, .false.)
+            call vol%write(truth_diff)
+            deallocate(b)
+        endif
         call vol%kill
-        deallocate(base, a, b, mean)
+        deallocate(base, a, mean)
     end subroutine write_phantom_truths
 
     !> nposes uniform spiral poses; with nviews > 0, nviews spiral directions, each repeated as one pose
