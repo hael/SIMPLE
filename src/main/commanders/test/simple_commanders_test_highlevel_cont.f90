@@ -1,7 +1,15 @@
-!@descr: continuous 3D pose refinement gate of simple_commanders_test_highlevel
+!@descr: continuous 3D pose refinement gate and benchmark of simple_commanders_test_highlevel
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_cont
 implicit none
 #include "simple_local_flags.inc"
+
+! the benchmark workload (doc/implementation_notes/planned/cont_lm_acceleration.md, section 6.3):
+! E25's 1JYX extent on a 256 native grid, at a typical particle SNR (realistic data is 0.02 or better)
+character(len=*), parameter :: CONT_BENCH_DIR    = 'cont_refine3D_bench'
+integer,          parameter :: CONT_BENCH_BOX    = 256
+real,             parameter :: CONT_BENCH_EXTENT = 187.2  !< Angstroms, E25's box 144 at 1.3 A
+integer,          parameter :: CONT_BENCH_NPTCLS = 10000
+real,             parameter :: CONT_BENCH_SNR    = 0.05
 
 contains
 
@@ -594,5 +602,301 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     end subroutine check_no_polar
 
 end subroutine run_cont_refine3D_gate
+
+!> simple_test_exec test=cont_refine3D_bench [suite=polish|capture|list] [objfun=euclid|cc] [nptcls=<n>]
+!! [snr=<x>] [nparts=<n>] [nthr=<n>]: a measurement, no assertion. Every run directory, its BENCH/
+!! and metrics.tsv stay in ./cont_refine3D_bench, which must not exist yet.
+module subroutine exec_test_cont_refine3D_bench( self, cline )
+    use simple_ui, only: make_ui
+    class(commander_test_cont_refine3D_bench), intent(inout) :: self
+    class(cmdline),                            intent(inout) :: cline
+    class(parameters), allocatable :: params
+    type(string) :: cwd_saved, root, suite, objfun
+    integer      :: nthr, nparts, nptcls, status
+    real         :: snr
+    suite  = ''
+    objfun = ''
+    nparts = 0
+    nptcls = CONT_BENCH_NPTCLS
+    snr    = CONT_BENCH_SNR
+    if( cline%defined('suite')  ) suite  = cline%get_carg('suite')
+    if( cline%defined('objfun') ) objfun = cline%get_carg('objfun')
+    if( cline%defined('nparts') ) nparts = cline%get_iarg('nparts')
+    if( cline%defined('nptcls') ) nptcls = cline%get_iarg('nptcls')
+    if( cline%defined('snr')    ) snr    = cline%get_rarg('snr')
+    select case(suite%to_char())
+        case('list')
+            write(logfhandle,'(a)') 'Available suites for cont_refine3D_bench: polish, capture'
+            return
+        case('', 'polish', 'capture')
+        case default
+            THROW_HARD('no sub-suite '//suite%to_char()//' in cont_refine3D_bench; use suite=list')
+    end select
+    select case(objfun%to_char())
+        case('', 'euclid', 'cc')
+        case default
+            THROW_HARD('cont_refine3D_bench runs objfun=euclid or objfun=cc')
+    end select
+    if( nparts < 0 .or. nptcls < 1 .or. .not. snr > 0. ) THROW_HARD('cont_refine3D_bench needs nparts >= 0, nptcls >= 1, snr > 0')
+    ! these configure the child programs, not this commander
+    call cline%delete('suite')
+    call cline%delete('objfun')
+    call cline%delete('nparts')
+    call cline%delete('nptcls')
+    call cline%delete('snr')
+    call make_ui
+    call simple_getcwd(cwd_saved)
+    allocate(params)
+    call params%new(cline)
+    nthr = params%nthr
+    deallocate(params)
+    root = filepath(cwd_saved, CONT_BENCH_DIR)
+    ! a benchmark never replaces an earlier one
+    if( dir_exists(root) ) THROW_HARD('move the previous '//CONT_BENCH_DIR//' away before a new benchmark')
+    call simple_mkdir(root)
+    call simple_chdir(root, status)
+    if( status /= 0 ) THROW_HARD('could not enter '//CONT_BENCH_DIR)
+    call run_cont_refine3D_bench(suite%to_char(), objfun%to_char(), nthr, nparts, nptcls, snr)
+    call simple_chdir(cwd_saved, status)
+    if( status /= 0 ) THROW_HARD('could not return to '//cwd_saved%to_char())
+    CWD_GLOB = cwd_saved%to_char()
+    write(logfhandle,'(a)') '>>> CONT_REFINE3D_BENCH: run directories, BENCH/ and metrics.tsv in '//root%to_char()
+    call simple_end('**** SIMPLE_TEST_CONT_REFINE3D_BENCH NORMAL STOP ****')
+end subroutine exec_test_cont_refine3D_bench
+
+!> The benchmark's cases: per regime, the truth perturbed by the regime's error, then one refine3D
+!! refine=cont pass per objective on the native grid and the production joint route, against the
+!! reconstruction at the truth poses: the reference a converged refinement leaves, on the particles'
+!! scale, which euclid's Gauss-Newton matrix assumes. polish is the error a discrete search leaves, in a
+!! finishing band; capture is E25. Pose errors against the truth go to metrics.tsv as reports.
+subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
+    use simple_atoms,               only: atoms
+    use simple_molecule_data,       only: molecule_data, betagal_1jyx
+    use simple_commanders_rec,      only: commander_rec3D
+    use simple_commanders_refine3D, only: commander_refine3D
+    use simple_refine3D_fnames,     only: refine3D_state_vol_fname
+    use simple_cartft_pose_opt,     only: right_increment_rotation
+    use simple_test_gate,           only: test_gate
+    character(len=*), intent(in) :: suite, objfun
+    integer,          intent(in) :: nthr, nparts, nptcls
+    real,             intent(in) :: snr
+    character(len=*), parameter :: ATOM_VOL   = '1JYX_atoms.mrc'
+    character(len=*), parameter :: PTCL_STK   = 'simulated_particles.mrc'
+    character(len=*), parameter :: TRUTH_ORIS = 'simulated_oris.txt'
+    character(len=*), parameter :: PROJNAME   = 'cont_bench'
+    character(len=*), parameter :: REF_DIR    = 'reference'
+    real,    parameter :: MSKDIAM  = 120.           !< Angstroms, as E25
+    real,    parameter :: TRS_A    = 6.5            !< Angstroms, E25's 5 pixels
+    real,    parameter :: POLISH_ROT  = 2.,  POLISH_SH_A  = 1.,  POLISH_LP  = 3.
+    real,    parameter :: CAPTURE_ROT = 15., CAPTURE_SH_A = 2.6, CAPTURE_LP = 8., CAPTURE_ATHRES = 15.
+    integer, parameter :: PERTURBATION_SEED = 20260915
+    type(commander_simulate_particles) :: xsim
+    type(commander_new_project)        :: xnew_project
+    type(commander_rec3D)              :: xrec
+    type(commander_refine3D)           :: xrefine3D
+    type(cmdline)       :: cl
+    type(atoms)         :: molecule
+    type(molecule_data) :: mol
+    type(sp_project)    :: seeded, out
+    type(oris)          :: truth
+    type(ctfparams)     :: ctfvars
+    type(test_gate)     :: gate
+    type(string)        :: bench_root, stk_abs, ref_abs
+    real    :: smpd, med_rot, med_sh, basin
+    integer :: i, status
+    smpd = CONT_BENCH_EXTENT/real(CONT_BENCH_BOX)
+    write(logfhandle,'(a)') '>>> CONT_REFINE3D_BENCH: refine=cont benchmark'
+    call simple_getcwd(bench_root)
+    call gate%new(filepath(bench_root, 'metrics.tsv'))
+    call gate%report('setting_box',    real(CONT_BENCH_BOX))
+    call gate%report('setting_smpd',   smpd)
+    call gate%report('setting_nptcls', real(nptcls))
+    call gate%report('setting_snr',    snr)
+    call gate%report('setting_nthr',   real(nthr))
+    call gate%report('setting_nparts', real(nparts))
+    ! ---- the truth: 1JYX centred ----
+    mol = betagal_1jyx()
+    call molecule%pdb2mrc(volfile=string(ATOM_VOL), smpd=smpd, mol=mol, center_pdb=.true., &
+        &vol_dim=[CONT_BENCH_BOX,CONT_BENCH_BOX,CONT_BENCH_BOX])
+    call molecule%kill
+    ! ---- particles: the CTF spread of E25, no simulated shift ----
+    call cl%set('prg',      'simulate_particles')
+    call cl%set('vol1',     ATOM_VOL)
+    call cl%set('smpd',     smpd)
+    call cl%set('mskdiam',  MSKDIAM)
+    call cl%set('nthr',     nthr)
+    call cl%set('nptcls',   nptcls)
+    call cl%set('pgrp',     'c1')
+    call cl%set('snr',      snr)
+    call cl%set('ctf',      'yes')
+    call cl%set('kv',       300.)
+    call cl%set('cs',       2.7)
+    call cl%set('fraca',    0.1)
+    call cl%set('defocus',  1.5)
+    call cl%set('dferr',    0.5)
+    call cl%set('astigerr', 0.1)
+    call cl%set('bfac',     0.)
+    call cl%set('sherr',    0.)
+    call xsim%execute(cl)
+    call cl%kill
+    stk_abs = simple_abspath(string(PTCL_STK))
+    call truth%new(nptcls, is_ptcl=.true.)
+    call truth%read(string(TRUTH_ORIS), [1,nptcls])
+    ! ---- the project: truth CTF and poses, the fields of a discrete workflow ----
+    call cl%set('projname',  PROJNAME)
+    call cl%set('qsys_name', 'local')
+    call xnew_project%execute(cl)             ! creates and enters PROJNAME/
+    call cl%kill
+    call seeded%read(simple_abspath(string(PROJNAME//'.simple')))
+    ctfvars%smpd    = smpd
+    ctfvars%kv      = 300.
+    ctfvars%cs      = 2.7
+    ctfvars%fraca   = 0.1
+    ctfvars%ctfflag = CTFFLAG_YES
+    call seeded%add_stk(stk_abs, ctfvars)
+    call seeded%os_cls2D%new(1, is_ptcl=.false.)
+    call seeded%os_cls2D%set_all2single('state', 1.)
+    do i = 1, nptcls
+        call seeded%os_ptcl3D%set(i, 'dfx',    truth%get(i, 'dfx'))
+        call seeded%os_ptcl3D%set(i, 'dfy',    truth%get(i, 'dfy'))
+        call seeded%os_ptcl3D%set(i, 'angast', truth%get(i, 'angast'))
+        call seeded%os_ptcl3D%set_state(i, 1)
+        call seeded%os_ptcl3D%set(i, 'eo',   real(mod(i,2)))
+        call seeded%os_ptcl3D%set(i, 'proj', 1.)
+        call seeded%os_ptcl3D%set_euler(i, truth%get_euler(i))
+        call seeded%os_ptcl3D%set_shift(i, truth%get_2Dshift(i))
+        call seeded%os_ptcl2D%set(i, 'class', 1.)
+        call seeded%os_ptcl2D%set(i, 'corr',  0.5)
+        call seeded%os_ptcl2D%set(i, 'dfx',    truth%get(i, 'dfx'))
+        call seeded%os_ptcl2D%set(i, 'dfy',    truth%get(i, 'dfy'))
+        call seeded%os_ptcl2D%set(i, 'angast', truth%get(i, 'angast'))
+        call seeded%os_ptcl2D%set_state(i, 1)
+    enddo
+    call simple_chdir(bench_root, status)
+    if( status /= 0 ) THROW_HARD('could not return to the benchmark directory')
+    ! ---- the reference: the reconstruction at the truth poses, with its own halves ----
+    call simple_mkdir(REF_DIR)
+    call simple_chdir(string(REF_DIR), status)
+    if( status /= 0 ) THROW_HARD('could not enter '//REF_DIR)
+    call seeded%write(simple_abspath(string(PROJNAME//'.simple'), check_exists=.false.))
+    call cl%set('prg',      'reconstruct3D')
+    call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
+    call cl%set('mkdir',    'no')
+    call cl%set('oritype',  'ptcl3D')
+    call cl%set('nstates',  1)
+    call cl%set('pgrp',     'c1')
+    call cl%set('mskdiam',  MSKDIAM)
+    call cl%set('nthr',     nthr)
+    call xrec%execute(cl)
+    call cl%kill
+    ref_abs = simple_abspath(refine3D_state_vol_fname(1))
+    call simple_chdir(bench_root, status)
+    if( status /= 0 ) THROW_HARD('could not return to the benchmark directory')
+    ! ---- the cases: poses per regime ----
+    if( suite /= 'capture' ) call run_regime('polish',  POLISH_ROT,  POLISH_SH_A,  POLISH_LP,  0.)
+    if( suite /= 'polish'  ) call run_regime('capture', CAPTURE_ROT, CAPTURE_SH_A, CAPTURE_LP, CAPTURE_ATHRES)
+    call gate%kill
+    call seeded%kill
+    call out%kill
+    call truth%kill
+
+  contains
+
+    !> the seeds of one regime, the truth perturbed by exactly rot_err (deg) and sh_err_a (A), and its
+    !! cases; athres_cont 0 keeps the production default
+    subroutine run_regime( regime, rot_err, sh_err_a, lp, athres_cont )
+        character(len=*), intent(in) :: regime
+        real,             intent(in) :: rot_err, sh_err_a, lp, athres_cont
+        call set_fixed_seed(PERTURBATION_SEED)
+        do i = 1, nptcls
+            call perturb(i, rot_err, sh_err_a/smpd)
+        enddo
+        call pose_errors(seeded%os_ptcl3D, lp, med_rot, med_sh, basin)
+        call gate%report(regime//'_seed_median_rotation_error_deg', med_rot)
+        call gate%report(regime//'_seed_median_shift_error_A',      med_sh)
+        if( objfun /= 'cc'     ) call run_case(regime//'_euclid', 'euclid', lp, athres_cont)
+        if( objfun /= 'euclid' ) call run_case(regime//'_cc',     'cc',     lp, athres_cont)
+    end subroutine run_regime
+
+    !> one refine3D refine=cont pass in bench_root/tag; nparts > 0 distributes it
+    subroutine run_case( tag, case_objfun, lp, athres_cont )
+        character(len=*), intent(in) :: tag, case_objfun
+        real,             intent(in) :: lp, athres_cont
+        write(logfhandle,'(a)') '>>> CONT_REFINE3D_BENCH CASE '//tag
+        call simple_mkdir(tag)
+        call simple_chdir(string(tag), status)
+        if( status /= 0 ) THROW_HARD('could not enter '//tag)
+        call seeded%write(simple_abspath(string(PROJNAME//'.simple'), check_exists=.false.))
+        call cl%set('prg',      'refine3D')
+        call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
+        call cl%set('mkdir',    'no')
+        call cl%set('vol1',     ref_abs)
+        call cl%set('refine',   'cont')
+        call cl%set('objfun',   case_objfun)
+        call cl%set('pgrp',     'c1')
+        call cl%set('mskdiam',  MSKDIAM)
+        call cl%set('lp',       lp)
+        call cl%set('trs',      TRS_A/smpd)
+        if( athres_cont > 0. ) call cl%set('athres_cont', athres_cont)
+        call cl%set('maxits',   1)
+        if( nparts > 0 )then
+            call cl%set('nparts', nparts)
+            call cl%set('nthr',   max(1, nthr/nparts))
+        else
+            call cl%set('nthr',   nthr)
+        endif
+        call xrefine3D%execute(cl)
+        call cl%kill
+        call out%read(simple_abspath(string(PROJNAME//'.simple')))
+        call pose_errors(out%os_ptcl3D, lp, med_rot, med_sh, basin)
+        call gate%report(tag//'_median_rotation_error_deg', med_rot)
+        call gate%report(tag//'_median_shift_error_A',      med_sh)
+        call gate%report(tag//'_fraction_in_basin',         basin)
+        call gate%report(tag//'_mean_corr_cart',            out%os_ptcl3D%get_avg('corr_cart'))
+        call gate%report(tag//'_improved_fraction',         out%os_ptcl3D%get_avg('pose_cont_improved'))
+        call simple_chdir(bench_root, status)
+        if( status /= 0 ) THROW_HARD('could not return to the benchmark directory')
+    end subroutine run_case
+
+    !> the truth pose of particle iptcl perturbed by exactly rot_err (deg) about a random axis and
+    !! sh_err (pixels) in a random direction, as E25 perturbs its seeds
+    subroutine perturb( iptcl, rot_err, sh_err )
+        integer, intent(in) :: iptcl
+        real,    intent(in) :: rot_err, sh_err
+        real(dp) :: rotmat(3,3), axis(3), z, azimuth, radial
+        real     :: uniform(3)
+        call random_number(uniform)
+        z       = 2._dp*real(uniform(1),dp) - 1._dp
+        azimuth = 2._dp*DPI*real(uniform(2),dp)
+        radial  = sqrt(max(0._dp, 1._dp - z*z))
+        axis    = [radial*cos(azimuth), radial*sin(azimuth), z]
+        rotmat  = right_increment_rotation(real(truth%get_mat(iptcl),dp), real(deg2rad(rot_err),dp)*axis)
+        call seeded%os_ptcl3D%set_euler(iptcl, real(dm2euler(rotmat)))
+        azimuth = 2._dp*DPI*real(uniform(3),dp)
+        call seeded%os_ptcl3D%set_shift(iptcl, truth%get_2Dshift(iptcl) + sh_err*real([cos(azimuth), sin(azimuth)]))
+    end subroutine perturb
+
+    !> median rotation (deg) and shift (A) errors against the truth, and the fraction of particles
+    !! inside the basin width at lp
+    subroutine pose_errors( os, lp, med_rot_out, med_sh_out, basin_out )
+        class(oris), intent(in)  :: os
+        real,        intent(in)  :: lp
+        real,        intent(out) :: med_rot_out, med_sh_out, basin_out
+        real, allocatable :: rot(:), sh(:)
+        real    :: m1(3,3), m2(3,3)
+        integer :: j
+        allocate(rot(nptcls), sh(nptcls))
+        do j = 1, nptcls
+            m1     = os%get_mat(j)
+            m2     = truth%get_mat(j)
+            rot(j) = acos(max(-1., min(1., (sum(m1*m2) - 1.)/2.)))
+            sh(j)  = smpd*norm2(os%get_2Dshift(j) - truth%get_2Dshift(j))
+        enddo
+        basin_out   = real(count(rot <= lp/(MSKDIAM/2.)))/real(nptcls)
+        med_rot_out = rad2deg(median_nocopy(rot))
+        med_sh_out  = median_nocopy(sh)
+    end subroutine pose_errors
+
+end subroutine run_cont_refine3D_bench
 
 end submodule simple_commanders_test_highlevel_cont

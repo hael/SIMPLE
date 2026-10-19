@@ -10,7 +10,25 @@
       "Bash(git diff:*)",
       "Bash(git log:*)",
       "Bash(git show:*)",
-      "Bash(cmake --build build --target :*)"
+      "Bash(cmake --build build --target :*)",
+      "Bash(cmake:*)",
+      "Bash(make:*)",
+      "Bash(ctest:*)",
+      "Bash(./compile_clean.sh:*)",
+      "Bash(./compile_debug.sh:*)",
+      "Bash(./run_tests.sh:*)",
+      "Bash(scripts/run_fast_gate.sh:*)",
+      "Bash(./scripts/run_fast_gate.sh:*)",
+      "Bash(build/bin/simple_test_exec:*)",
+      "Bash(build/bin/simple_exec:*)",
+      "Bash(build/bin/single_exec:*)",
+      "Bash(python3 scripts/check_test_registry.py:*)",
+      "Bash(python3 scripts/check_descr.py:*)",
+      "Bash(python3 scripts/plot_refine3d_bench.py:*)"
+    ],
+    "deny": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

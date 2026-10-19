@@ -1018,8 +1018,9 @@ writer reports them. A Cartesian pass (`refine=cont`, the polish) adds
 `CONTINUOUS POSE WORK` to its `REFINE3D` record: the solves by `CARTFT_*`
 status, LM iterations, trial evaluations, accepted steps, bound hits,
 calculator passes (the sigma2 residual included), pixel-evaluations (passes
-times the pixels of the particle's shells in the full disk), the mean and
-spread of actual over predicted reduction at accepted steps, and the search
+times the pixels of the particle's shells in the full disk), the solves that
+reached the iteration cap, a histogram of actual over predicted reduction at
+accepted steps, and the search
 thread-seconds per pixel-evaluation. Its context gives the bytes of the
 Cartesian references, and their read and transform count as reference
 preparation. Each partition appends only to its own file, so

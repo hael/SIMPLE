@@ -18,9 +18,11 @@ output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
                           split in volume assembly
     bench_report.txt      the run, the time split by stage, the overheads, the
                           load balance, the outlier iterations, the share of the 2D
-                          tables in the refine2D iterations, the probability
-                          tables' thread-seconds, the pre-step driver per number
-                          of states and directions, and the worker phases
+                          tables in the refine2D iterations, the thread-seconds
+                          of the probability tables and the searches, the work
+                          of the continuous pose solves (refine=cont, the
+                          polish), the pre-step driver per number of states and
+                          directions, and the worker phases
     bench_profile.svg     the per-iteration critical path (stacked) and the
                           slowest and mean partition times
     bench_iterations2D.csv, bench_profile2D.svg
@@ -87,9 +89,10 @@ class Record:
     seconds: Dict[str, float] = field(default_factory=dict)
     percent: Dict[str, float] = field(default_factory=dict)
     thread_seconds: Dict[str, float] = field(default_factory=dict)
+    cont_work: Dict[str, float] = field(default_factory=dict)
 
     def empty(self) -> bool:
-        return not (self.context or self.seconds or self.percent or self.thread_seconds)
+        return not (self.context or self.seconds or self.percent or self.thread_seconds or self.cont_work)
 
 
 def as_number(text: str) -> Optional[float]:
@@ -109,6 +112,8 @@ def section_kind(title: str) -> str:
         return "percent"
     if title.startswith("THREAD-SECONDS"):
         return "thread_seconds"
+    if title == "CONTINUOUS POSE WORK":
+        return "cont_work"
     return "other"
 
 
@@ -167,6 +172,8 @@ def parse_file(path: Path, family: str, iteration: Optional[int], partition: Opt
             current.percent[key] = value
         elif kind == "thread_seconds" and value is not None:
             current.thread_seconds[key] = value
+        elif kind == "cont_work" and value is not None:
+            current.cont_work[key] = value
     records = [rec for rec in records if not rec.empty()]
     # passes of one family, iteration and partition, in file order
     seen: Dict[Tuple[str, Optional[int], Optional[int]], int] = defaultdict(int)
@@ -213,7 +220,8 @@ def write_records_csv(records: Sequence[Record], outpath: Path) -> None:
             ident = [rec.family, "" if rec.iteration is None else rec.iteration,
                      "" if rec.partition is None else rec.partition, rec.npass]
             for section, values in (("context", rec.context), ("seconds", rec.seconds),
-                                    ("percent", rec.percent), ("thread_seconds", rec.thread_seconds)):
+                                    ("percent", rec.percent), ("thread_seconds", rec.thread_seconds),
+                                    ("cont_work", rec.cont_work)):
                 for key, value in values.items():
                     writer.writerow(ident + [section, key, value])
 
@@ -527,7 +535,8 @@ def phase_means(records: Sequence[Record]) -> List[Tuple[str, float, float]]:
 
 
 TABLE_FAMILIES = (("PROB_TAB", "prob"), ("PROB_TAB_NEIGH", "prob_neigh"), ("PROB_TAB2D", "2D"))
-THREAD_FAMILIES = TABLE_FAMILIES + (("REFINE2D", "2D search and class sums"), ("CAVGSUMS", "offline class sums"))
+THREAD_FAMILIES = TABLE_FAMILIES + (("REFINE2D", "2D search and class sums"), ("REFINE3D", "3D search"),
+                                    ("CAVGSUMS", "offline class sums"))
 
 
 def write_thread_seconds(records: Sequence[Record], add) -> None:
@@ -552,6 +561,46 @@ def write_thread_seconds(records: Sequence[Record], add) -> None:
         for key, values in ratios.items():
             add(f"  {key:46s} {statistics.fmean(values):10.4g} (mean)")
         add("")
+
+
+CONT_PREFIX = "match3D cont "
+CONT_COUNTS = ("solves", "accepted", "no improvement", "no reliable update", "bound rejected", "invalid numerics",
+               "iteration limit", "invalid preparation", "not attempted", "solves at the iteration cap",
+               "LM iterations", "trial evaluations", "accepted steps", "bound hits", "calculator passes",
+               "pixel-evaluations")
+CONT_RATIO_BINS = ("0.25-0.75", "0.75-1.25", "1.25-1.75", "1.75-2.5", ">= 2.5")
+
+
+def write_cont_work(records: Sequence[Record], add) -> None:
+    """The CONTINUOUS POSE WORK sections of the 3D search records (refine=cont and the polish), summed over
+    parts and iterations; the per-solve figures and the histogram of actual over predicted reduction at the
+    accepted steps are recomputed from the sums, the time per pixel-evaluation from the search's
+    thread-seconds."""
+    recs = [rec for rec in by_family(records, "REFINE3D") if rec.cont_work]
+    if not recs:
+        return
+    sums = {name: sum(rec.cont_work.get(CONT_PREFIX + name, 0.0) for rec in recs) for name in CONT_COUNTS}
+    bins = {name: sum(rec.cont_work.get(CONT_PREFIX + "actual/predicted " + name, 0.0) for rec in recs)
+            for name in CONT_RATIO_BINS}
+    search_ts = sum(rec.thread_seconds.get("match3D search", 0.0) for rec in recs)
+    # a solve that evaluated its seed; the two statuses without one make no pass
+    solved = sums["solves"] - sums["not attempted"] - sums["invalid preparation"]
+    add(f"Continuous pose work (refine=cont and the polish), summed over {len(recs)} records:")
+    for name in CONT_COUNTS:
+        add(f"  {name:46s} {sums[name]:14.0f}")
+    if solved > 0:
+        add(f"  {'passes per solve':46s} {sums['calculator passes'] / solved:14.3f}")
+        add(f"  {'LM iterations per solve':46s} {sums['LM iterations'] / solved:14.3f}")
+    if sums["trial evaluations"] > 0:
+        add(f"  {'rejected fraction of trial evaluations':46s} "
+            f"{1.0 - sums['accepted steps'] / sums['trial evaluations']:14.3f}")
+    nbinned = sum(bins.values())
+    if nbinned > 0:
+        for name in CONT_RATIO_BINS:
+            add(f"  {'accepted steps with actual/predicted ' + name:46s} {bins[name] / nbinned:14.3f}")
+    if sums["pixel-evaluations"] > 0 and search_ts > 0:
+        add(f"  {'search ns per pixel-evaluation':46s} {1e9 * search_ts / sums['pixel-evaluations']:14.2f}")
+    add("")
 
 
 PRESTEP_KEYS = (("scheduling (parts)", "parts"), ("table reads", "reads"), ("ref_assign", "assign"),
@@ -708,6 +757,7 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], rows2D: S
     write_2D_path(rows2D, add)
     write_2D_tables(records, add)
     write_thread_seconds(records, add)
+    write_cont_work(records, add)
     write_prestep_groups(records, add)
     for family, title in (("REFINE3D", "Search worker phases (mean and maximum over iterations and partitions)"),
                           ("PROB_TAB", "Probability-table part phases (prob)"),

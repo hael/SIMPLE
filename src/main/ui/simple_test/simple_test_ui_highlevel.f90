@@ -10,6 +10,7 @@ type(ui_program), target :: simulate_particles
 type(ui_program), target :: solve3D_addon
 type(ui_program), target :: solve3D_addon_snapshots
 type(ui_program), target :: cont_refine3D_1jxy
+type(ui_program), target :: cont_refine3D_bench
 type(ui_program), target :: multistate_assignment
 type(ui_program), target :: multistate_workflows
 type(ui_program), target :: state_fixture
@@ -36,6 +37,7 @@ contains
         call new_solve3D_addon(tsttab)
         call new_solve3D_addon_snapshots(tsttab)
         call new_cont_refine3D_1jxy(tsttab)
+        call new_cont_refine3D_bench(tsttab)
         call new_multistate_assignment(tsttab)
         call new_multistate_workflows(tsttab)
         call new_state_fixture(tsttab)
@@ -62,6 +64,7 @@ contains
         write(logfhandle,'(A)') solve3D_addon%name%to_char()
         write(logfhandle,'(A)') solve3D_addon_snapshots%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
+        write(logfhandle,'(A)') cont_refine3D_bench%name%to_char()
         write(logfhandle,'(A)') multistate_assignment%name%to_char()
         write(logfhandle,'(A)') multistate_workflows%name%to_char()
         write(logfhandle,'(A)') state_fixture%name%to_char()
@@ -173,6 +176,35 @@ contains
         ! add to ui_hash
         call add_ui_program('cont_refine3D_1jxy', cont_refine3D_1jxy, tsttab, UI_CATEGORY)
     end subroutine new_cont_refine3D_1jxy
+
+    subroutine new_cont_refine3D_bench( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call cont_refine3D_bench%new(&
+        &'cont_refine3D_bench',&                    ! name
+        &'benchmark continuous Cartesian pose refinement on simulated 1JYX particles',&
+        &'One refine3D refine=cont pass per regime and objective on simulated 1JYX particles at box 256, '//&
+        &'against the reconstruction at the truth poses: '//&
+        &'polish (poses 2 degrees and 1 A from the truth, lp 3 A) and capture (15 degrees and 2.6 A, lp 8 A). '//&
+        &'A measurement with no thresholds and no CTest entry: run directories, BENCH/ and the pose errors '//&
+        &'(metrics.tsv) stay in ./cont_refine3D_bench '//&
+        &'(doc/implementation_notes/planned/cont_lm_acceleration.md, section 6.3)',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Continuous Refinement Benchmark')                                ! requires sp_project
+        call cont_refine3D_bench%add_input(UI_PARM, 'suite', 'str', 'Regime', &
+            &'Run one regime: polish or capture; list prints them. Default runs both', '', .false., '')
+        call cont_refine3D_bench%add_input(UI_PARM, 'objfun', 'str', 'Objective', &
+            &'Run one objective: euclid or cc. Default runs both', '', .false., '')
+        call cont_refine3D_bench%add_input(UI_PARM, 'nptcls', 'num', 'Particles', &
+            &'Number of simulated particles', '# particles{10000}', .false., 10000.)
+        call cont_refine3D_bench%add_input(UI_PARM, 'snr', 'num', 'SNR', &
+            &'Signal-to-noise ratio of the simulated particles; cryo-EM particles are 0.02 or better', &
+            &'signal-to-noise ratio{0.05}', .false., 0.05)
+        call cont_refine3D_bench%add_input(UI_COMP, nparts, required_override=.false.)
+        call cont_refine3D_bench%add_input(UI_COMP, nthr, required_override=.false.)
+        ! add to ui_hash
+        call add_ui_program('cont_refine3D_bench', cont_refine3D_bench, tsttab, UI_CATEGORY)
+    end subroutine new_cont_refine3D_bench
 
     subroutine new_multistate_assignment( tsttab )
         class(ui_hash), intent(inout) :: tsttab

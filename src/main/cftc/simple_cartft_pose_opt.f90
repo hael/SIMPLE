@@ -42,6 +42,11 @@ integer,  parameter :: LM_MAX_CONSECUTIVE_REJECTIONS = 8
 integer,  parameter :: DEFAULT_MAXITS             = 40
 real(dp), parameter :: DEFAULT_ROTATION_SCALE     = 0.1_dp
 real(dp), parameter :: DEFAULT_SHIFT_STEP_NATIVE  = 1._dp  !< native pixels per proposal
+! bench histogram of actual over predicted reduction at accepted steps (>= 0.25 by the acceptance rule)
+integer,  parameter :: NRATIO_BINS = 5
+real(dp), parameter :: RATIO_EDGES(NRATIO_BINS-1) = [0.75_dp, 1.25_dp, 1.75_dp, 2.5_dp]
+character(len=*), parameter :: RATIO_LABELS(NRATIO_BINS) = [character(len=9) :: '0.25-0.75', '0.75-1.25', &
+    &'1.25-1.75', '1.75-2.5', '>= 2.5']
 
 !> Record of one LM stage.
 type :: cartft_stage
@@ -51,8 +56,7 @@ type :: cartft_stage
     integer  :: ntrials        = 0     !< trial poses evaluated
     integer  :: naccepted      = 0     !< trial poses accepted
     integer  :: nbound_hits    = 0     !< proposals capped or rejected by a bound
-    real(dp) :: ratio_sum      = 0._dp !< actual over predicted reduction, summed over accepted steps
-    real(dp) :: ratio_sumsq    = 0._dp !< and its squares
+    integer  :: nratio(NRATIO_BINS) = 0 !< accepted steps per bin of actual over predicted reduction
     real(dp) :: max_rotation_step = 0._dp
     real(dp) :: max_shift_step    = 0._dp
     real(dp) :: objective_before  = -1._dp !< set by a transaction
@@ -104,7 +108,8 @@ type :: cartft_pose_work
     integer(int64) :: nstatus(CARTFT_INVALID_PREPARATION:CARTFT_ITERATION_LIMIT) = 0_int64
     integer(int64) :: nsolved = 0_int64, npasses = 0_int64, npix_evals = 0_int64
     integer(int64) :: niter = 0_int64, ntrials = 0_int64, naccepted = 0_int64, nbound_hits = 0_int64
-    real(dp)       :: ratio_sum = 0._dp, ratio_sumsq = 0._dp
+    integer(int64) :: ncapped = 0_int64                  !< solves whose joint stage used every iteration
+    integer(int64) :: nratio(NRATIO_BINS) = 0_int64
 contains
     procedure :: add_solve
     procedure :: add
@@ -409,8 +414,7 @@ contains
                 ratio  = actual/predicted
                 if( actual > 0._dp .and. ratio >= 0.25_dp )then
                     relative_reduction = actual/max(abs(objective), NUMERIC_FLOOR)
-                    st%ratio_sum   = st%ratio_sum   + ratio
-                    st%ratio_sumsq = st%ratio_sumsq + ratio*ratio
+                    st%nratio(ratio_bin(ratio)) = st%nratio(ratio_bin(ratio)) + 1
                     shift     = trial_shift
                     objective = trial_objective
                     gradient  = trial_gradient
@@ -578,8 +582,7 @@ contains
                 accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
                 if( accept_trial )then
                     relative_reduction = actual/max(abs(objective), NUMERIC_FLOOR)
-                    st%ratio_sum   = st%ratio_sum   + ratio
-                    st%ratio_sumsq = st%ratio_sumsq + ratio*ratio
+                    st%nratio(ratio_bin(ratio)) = st%nratio(ratio_bin(ratio)) + 1
                     rotmat    = trial_rotmat
                     shift     = trial_shift
                     objective = trial_objective
@@ -689,10 +692,10 @@ contains
                 self%ntrials     = self%ntrials     + int(st%ntrials, int64)
                 self%naccepted   = self%naccepted   + int(st%naccepted, int64)
                 self%nbound_hits = self%nbound_hits + int(st%nbound_hits, int64)
-                self%ratio_sum   = self%ratio_sum   + st%ratio_sum
-                self%ratio_sumsq = self%ratio_sumsq + st%ratio_sumsq
+                self%nratio      = self%nratio      + int(st%nratio, int64)
             end associate
         end do
+        if( opt%stages(CARTFT_STAGE_JOINT)%niter >= opt%maxits ) self%ncapped = self%ncapped + 1_int64
     end subroutine add_solve
 
     !> Add another record, as the threads' records are merged.
@@ -707,8 +710,8 @@ contains
         self%ntrials     = self%ntrials     + other%ntrials
         self%naccepted   = self%naccepted   + other%naccepted
         self%nbound_hits = self%nbound_hits + other%nbound_hits
-        self%ratio_sum   = self%ratio_sum   + other%ratio_sum
-        self%ratio_sumsq = self%ratio_sumsq + other%ratio_sumsq
+        self%ncapped     = self%ncapped     + other%ncapped
+        self%nratio      = self%nratio      + other%nratio
     end subroutine add
 
     !> The record as a bench section, keys prefixed by label. ts_search is the search's thread-seconds,
@@ -719,7 +722,7 @@ contains
         character(len=*),        intent(in) :: label
         real(dp),                intent(in) :: ts_search
         character(len=40) :: key
-        real(dp) :: mean
+        integer :: ibin
         write(fnr,'(a)') '*** CONTINUOUS POSE WORK ***'
         call put_count('solves',              sum(self%nstatus))
         call put_count('accepted',            self%nstatus(CARTFT_ACCEPTED))
@@ -740,11 +743,10 @@ contains
             call put_real('passes per solve',        real(self%npasses, dp)/real(self%nsolved, dp))
             call put_real('LM iterations per solve', real(self%niter, dp)/real(self%nsolved, dp))
         endif
-        if( self%naccepted > 0_int64 )then
-            mean = self%ratio_sum/real(self%naccepted, dp)
-            call put_real('actual/predicted mean', mean)
-            call put_real('actual/predicted sdev', sqrt(max(0._dp, self%ratio_sumsq/real(self%naccepted, dp) - mean*mean)))
-        endif
+        call put_count('solves at the iteration cap', self%ncapped)
+        do ibin = 1, NRATIO_BINS
+            call put_count('actual/predicted '//trim(RATIO_LABELS(ibin)), self%nratio(ibin))
+        end do
         if( self%npix_evals > 0_int64 ) call put_real('ns per pixel-evaluation', 1.e9_dp*ts_search/real(self%npix_evals, dp))
 
     contains
@@ -797,6 +799,12 @@ contains
     end function right_increment_rotation
 
     ! PRIVATE
+
+    !> The bench histogram bin of an accepted step's actual over predicted reduction.
+    pure integer function ratio_bin( ratio )
+        real(dp), intent(in) :: ratio
+        ratio_bin = 1 + count(ratio >= RATIO_EDGES)
+    end function ratio_bin
 
     pure logical function positive_finite( val )
         real(dp), intent(in) :: val

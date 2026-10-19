@@ -80,12 +80,14 @@ living docs and leave the old ones in dated history docs.
 - Use `rg` / `rg --files` first when searching.
 - Use direct, local Fortran APIs and structured project/parameter/orientation
   helpers instead of ad hoc parsing or parallel configuration paths.
-- Do not compile, link, run CMake builds, or execute test binaries unless the user
-  explicitly requests it. The user performs compilation to avoid spending agent
-  credits on builds.
-- Validate edits with editor or language-server syntax diagnostics and other
-  lightweight checks that do not compile code. Tell the user that compilation and
-  runtime tests were left for them.
+- Compile and run tests as part of the development cycle. Build incrementally in
+  the existing `build/` (`make -C build -j<n>`, then `scripts/run_fast_gate.sh build`
+  and `make -C build install`); `./compile_clean.sh` and `./compile_debug.sh` rebuild
+  from scratch. Run the touched area's `build/bin/simple_test_exec test=unit_<area>`
+  and the high-level entries a change affects; start long runs in the background.
+  Report what was built and run, and the results.
+- Never commit or push. The maintainer decides what is committed and pushed:
+  leave changes in the working tree and say which are ready.
 
 ## Fortran conventions
 
