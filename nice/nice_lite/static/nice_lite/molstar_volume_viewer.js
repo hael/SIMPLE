@@ -313,8 +313,17 @@ async function initializeMolstarVolumeViewer(root) {
     await loadSelectedVolume();
 }
 
+// Hidden stage panels should not compete with navigation for volume downloads.
+const volumeViewerObserver = new IntersectionObserver((entries, observer) => {
+    for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        observer.unobserve(entry.target);
+        initializeMolstarVolumeViewer(entry.target).catch((error) => {
+            console.error("Unable to initialize the Batch Mol* viewer.", error);
+        });
+    }
+});
+
 for (const root of document.querySelectorAll("[data-volume-viewer]")) {
-    initializeMolstarVolumeViewer(root).catch((error) => {
-        console.error("Unable to initialize the Batch Mol* viewer.", error);
-    });
+    volumeViewerObserver.observe(root);
 }
