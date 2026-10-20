@@ -1,0 +1,22 @@
+{% comment %}
+  Display only: placeholder and selected image. crop_sprite crops the manual
+  picker's micrograph/power-spectrum sprite; otherwise show the complete image.
+  Picking controls, overlays, and saving belong to the manual picker.
+{% endcomment %}
+<div id="mic_picker" class="relative flex flex-1 min-h-0 items-center justify-center overflow-hidden p-3">
+    <p id="mic_picker_placeholder" class="text-[10px] text-streamlabel">select a micrograph to view it here</p>
+    <div id="mic_picker_imgwrap" class="hidden relative {% if crop_sprite %}aspect-square max-h-full max-w-full h-full{% else %}w-full h-full{% endif %} overflow-hidden">
+        <img id="mic_picker_img" class="{% if crop_sprite %}h-auto{% else %}h-full w-full{% endif %}" style="{% if crop_sprite %}width:200%;max-width:200%;margin-left:-100%;{% else %}object-fit:contain;{% endif %}" alt="" loading="lazy">
+    </div>
+</div>
+<script>
+    const showMicrographImage = (imgSrc) => {
+        const imgwrap = document.getElementById("mic_picker_imgwrap");
+        const img = document.getElementById("mic_picker_img");
+        const placeholder = document.getElementById("mic_picker_placeholder");
+        if (!imgwrap || !img || !placeholder) return;
+        img.src = imgSrc;
+        imgwrap.classList.remove("hidden");
+        placeholder.classList.add("hidden");
+    };
+</script>

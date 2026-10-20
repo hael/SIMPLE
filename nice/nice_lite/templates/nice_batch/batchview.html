@@ -149,9 +149,18 @@
             <!-- movies panel -->
              <div data-panel="movies" class="hidden w-full flex flex-row p-[10px] flex-1 overflow-hidden">
                 <div class="flex flex-col h-full gap-2.5 w-full">
-                    <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+                    <div class="flex flex-col h-full min-h-0 bg-streambar rounded-xl text-streamtext border border-streamline overflow-hidden">
                         {% if "movies" in jobstats and jobstats.movies|length > 0 %}
-                            {% include 'includes/_mov_viewer.html' with panel_title='movies' selectable=False %}
+                            {% if prog == 'import_movies' %}
+                                <div class="flex items-center justify-between px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                                    <p class="text-[10px] font-medium text-streamtext uppercase tracking-widest">First Movie or Micrograph</p>
+                                </div>
+                                {% include 'includes/_single_micrograph_view.html' %}
+                                {% url 'nice_lite:image' jobstats.movies.0.path as movie_image_url %}
+                                <script>showMicrographImage("{{ movie_image_url|escapejs }}");</script>
+                            {% else %}
+                                {% include 'includes/_mov_viewer.html' with panel_title='movies' selectable=False %}
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
