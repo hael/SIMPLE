@@ -460,7 +460,7 @@ def view_workspace_jobs(request):
     force_render = request.GET.get("force") == "1"
     if force_render or old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
-        if template == "jobs_cards.html":
+        if template in ("jobs_cards.html", "jobs_flow.html"):
             for jobmodel in jobs:
                 if _is_batch_job(jobmodel):
                     jobmodel.batch_card_parameters = _batch_card_parameters(jobmodel)

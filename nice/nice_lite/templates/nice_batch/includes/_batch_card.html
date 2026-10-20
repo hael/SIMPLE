@@ -2,7 +2,6 @@
   _batch_card.html — one Batch card, included by jobs_cards.html for each job.
   Expects `job` in context (passed automatically by the parent template loop).
 {% endcomment %}
-{% load humanize ui_fields %}
 <div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-pointer"
     {% if job.batch_project_drag_path %}data-batch-project-path="{{ job.batch_project_drag_path }}" ondragstart="dragBatchProject(event)"{% endif %}
     onclick="this.querySelector('form.viewform').submit();">
@@ -16,34 +15,7 @@
         <!-- Parameter and count tiles -->
         {% with tile_text_class="text-nice4dark" %}
         <div class="grid grid-cols-2 gap-2">
-            {% for label, value, unit in job.batch_card_parameters %}
-                {% include 'includes/_count_tile.html' with count=value|format_float count_unit=unit label=label %}
-            {% endfor %}
-            {% if job.status != "failed" and job.status != "stopped" %}
-                {% if job.master_stats and job.master_stats.project_metadata %}
-                    {% if job.master_stats.project_metadata.nmics %}
-                        {% if job.master_stats.project_metadata.nmics_selected %} 
-                            {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nmics_selected label="micrographs selected" sublabel=job.master_stats.project_metadata.nmics sublabel_sep="/" %}
-                        {% else %}
-                            {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nmics label="micrographs" %}
-                        {% endif %}
-                    {% endif %}
-                    {% if job.master_stats.project_metadata.ncls2D %}
-                        {% if job.master_stats.project_metadata.ncls2D_selected %} 
-                            {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.ncls2D_selected label="2D classes selected" sublabel=job.master_stats.project_metadata.ncls2D sublabel_sep="/" %}
-                        {% else %}
-                            {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.ncls2D label="2D classes" %}
-                        {% endif %}
-                    {% endif %}
-                    {% if job.master_stats.project_metadata.nptcls %}
-                        {% if job.master_stats.project_metadata.nptcls_selected %} 
-                            {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nptcls_selected label="particles selected" sublabel=job.master_stats.project_metadata.nptcls sublabel_sep="/" %}
-                        {% else %}
-                            {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nptcls label="particles" %}
-                        {% endif %}
-                    {% endif %}
-                {% endif %}
-            {% endif %}
+            {% include 'includes/_job_card_tiles.html' with card_type='batch' compact=False %}
         </div>
         {% endwith %}
 

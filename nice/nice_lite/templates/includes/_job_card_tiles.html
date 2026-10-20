@@ -1,0 +1,57 @@
+{% comment %}
+  Shared job-card tile definitions for Cards and Flow views.
+  Expects job and card_type ("batch" or "stream"). Set compact=True for a
+  comma-separated wrapping line; otherwise the caller supplies the tile grid.
+{% endcomment %}
+{% load ui_fields %}
+{% if compact %}<div class="flex flex-col flex-1 justify-center px-3 text-center text-[10px] text-nice4dark"><div>{% endif %}
+{% filter strip_trailing_comma %}
+{% if card_type == "batch" %}
+    {% for label, value, unit in job.batch_card_parameters %}
+        {% include 'includes/_count_tile.html' with count=value|format_float count_unit=unit label=label %}
+    {% endfor %}
+    {% if job.status != "failed" and job.status != "stopped" %}
+        {% if job.master_stats and job.master_stats.project_metadata %}
+            {% if job.master_stats.project_metadata.nmics %}
+                {% if job.master_stats.project_metadata.nmics_selected %}
+                    {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nmics_selected label="micrographs selected" sublabel=job.master_stats.project_metadata.nmics sublabel_sep="/" %}
+                {% else %}
+                    {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nmics label="micrographs" %}
+                {% endif %}
+            {% endif %}
+            {% if job.master_stats.project_metadata.ncls2D %}
+                {% if job.master_stats.project_metadata.ncls2D_selected %}
+                    {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.ncls2D_selected label="2D classes selected" sublabel=job.master_stats.project_metadata.ncls2D sublabel_sep="/" %}
+                {% else %}
+                    {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.ncls2D label="2D classes" %}
+                {% endif %}
+            {% endif %}
+            {% if job.master_stats.project_metadata.nptcls %}
+                {% if job.master_stats.project_metadata.nptcls_selected %}
+                    {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nptcls_selected label="particles selected" sublabel=job.master_stats.project_metadata.nptcls sublabel_sep="/" %}
+                {% else %}
+                    {% include 'includes/_count_tile.html' with count=job.master_stats.project_metadata.nptcls label="particles" %}
+                {% endif %}
+            {% endif %}
+        {% endif %}
+    {% endif %}
+{% elif job.status != "failed" and job.status != "stopped" %}
+    {% with ms=job.preprocessing_stats cs=job.classification_2D_stats %}
+        {% if ms.movies_imported > 0 %}
+            {% if ms.movies_processed == ms.movies_imported %}
+                {% include 'includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" %}
+            {% else %}
+                {% include 'includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" variant="action" %}
+            {% endif %}
+        {% endif %}
+        {% if cs.particles_imported > 0 %}
+            {% if cs.particles_accepted == cs.particles_imported %}
+                {% include 'includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" %}
+            {% else %}
+                {% include 'includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" variant="action" %}
+            {% endif %}
+        {% endif %}
+    {% endwith %}
+{% endif %}
+{% endfilter %}
+{% if compact %}</div></div>{% endif %}

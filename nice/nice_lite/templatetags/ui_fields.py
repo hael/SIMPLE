@@ -3,6 +3,12 @@ from django import template
 register = template.Library()
 
 
+@register.filter(is_safe=True)
+def strip_trailing_comma(value):
+    """Remove only the final comma from rendered summary entries."""
+    return str(value).rstrip().removesuffix(',')
+
+
 @register.filter
 def bracket_default(value):
     """

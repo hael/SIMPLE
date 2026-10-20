@@ -116,7 +116,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         fake_workspace = SimpleNamespace(id=1, get_absdir=lambda: "/workspace")
         fake_queryset = _FakeQueryset(
             [{"id": 1, "status": "finished", "parent": 0}],
-            jobs=[WorkspaceFlowGraphTests._job(1)],
+            jobs=[WorkspaceFlowGraphTests._job(1, pckg="simple", master_stats={}, args={})],
         )
         flow_graph = {"nodes": [], "edges": [], "summary": {"jobs": 0}}
 

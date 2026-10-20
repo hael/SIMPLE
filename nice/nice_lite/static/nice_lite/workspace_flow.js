@@ -81,13 +81,18 @@
   // layer again before the browser paints their initial top-left positions.
   cardsLayer?.classList.remove("hidden");
   const cards = new Map();
+  let cardHeight = 0;
   cardsLayer?.querySelectorAll("[data-flow-node-id]").forEach((card) => {
     cards.set(card.dataset.flowNodeId, card);
-    const node = cy.$id(card.dataset.flowNodeId);
+    cardHeight = Math.max(cardHeight, card.offsetHeight);
+  });
+  cards.forEach((card, nodeId) => {
+    card.style.height = `${cardHeight}px`;
+    const node = cy.$id(nodeId);
     if (node.nonempty()) {
       node.style({
         width: card.offsetWidth,
-        height: card.offsetHeight,
+        height: cardHeight,
       });
     }
   });

@@ -4,7 +4,6 @@
   Uses {% with %} to cache the two stats dicts as `ms` and `cs`,
   avoiding repeated dict key lookups per template render.
 {% endcomment %}
-{% load humanize %}
 {% with ms=job.preprocessing_stats cs=job.classification_2D_stats ss=job.particle_sieving_stats %}
 <div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-pointer"
     onclick="this.querySelector('form.viewform').submit();">
@@ -35,20 +34,7 @@
 
             <!-- Count tiles -->
             <div class="grid grid-cols-2 gap-2">
-                {% if ms.movies_imported > 0 %}
-                    {% if ms.movies_processed == ms.movies_imported %} 
-                        {% include 'includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" %}
-                    {% else %}
-                        {% include 'includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" variant="action" %}
-                    {% endif %}
-                {% endif %}
-                {% if cs.particles_imported > 0 %}
-                    {% if cs.particles_accepted == cs.particles_imported %}
-                        {% include 'includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" %}
-                    {% else %}
-                        {% include 'includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" variant="action" %}
-                    {% endif %}
-                {% endif %}
+                {% include 'includes/_job_card_tiles.html' with card_type='stream' compact=False %}
             </div>
 
             <!-- Thumbnail: 2D class grid or latest micrograph -->

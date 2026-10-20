@@ -11,9 +11,12 @@
                      precedence over sublabel, since sublabel is compared numerically
     variant    — "neutral" | "rejected" | "action" | omit for default (streamring accent)
     tile_text_class — (optional) text colour override for the default green tiles
+    compact    — (optional) render a plain label and value for Flow summaries
 {% endcomment %}
 {% load humanize %}
-{% if variant == "neutral" %}
+{% if compact %}
+<span>{{ label }}: {{ count|intcomma }}{% if count_unit %} {{ count_unit }}{% endif %}{% if sublabel_text %} {% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel_text }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}{% elif sublabel >= 0 %} {% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}{% endif %}</span>,
+{% elif variant == "neutral" %}
 <div class="flex-1 bg-streambg border-0 border-streamline rounded-lg pl-2 pr-0 py-1 min-w-max">
     <div class="flex items-center gap-1.5 mb-1.5">
         <!-- <div class="w-1.5 h-1.5 rounded-full bg-streamlabel flex-shrink-0"></div> -->
