@@ -42,7 +42,6 @@ class BatchJob(Job):
     LOG_FILES = (
         ("stdout.log", "standard output"),
         ("stderr.log", "standard error"),
-        ("nice_status.log", "NICE status callbacks"),
     )
     ARTIFACT_EXTENSIONS = frozenset((
         ".simple", ".mrc", ".star", ".jpg", ".jpeg", ".png", ".pdf", ".txt",
@@ -262,14 +261,11 @@ class BatchJob(Job):
                 candidates.append(project_path)
         return candidates[0] if len(candidates) == 1 else None
 
-    def get_log_tails(self, max_bytes=131072):
-        """Return bounded tails for the fixed batch log filenames."""
+    def get_logs(self):
+        """Read the full standard output and error logs without modifying them."""
         job_dir = self.get_safe_job_dir()
         if job_dir is None:
             return []
-        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
-            max_bytes = 131072
-        max_bytes = min(max_bytes, 1048576)
 
         logs = []
         for filename, label in self.LOG_FILES:
@@ -279,19 +275,15 @@ class BatchJob(Job):
                 "label": label,
                 "exists": path is not None,
                 "size": 0,
-                "truncated": False,
                 "text": "",
             }
             if path is not None:
                 try:
                     size = os.path.getsize(path)
                     with open(path, "rb") as log_file:
-                        start = max(0, size - max_bytes)
-                        log_file.seek(start)
-                        log_text = log_file.read(max_bytes).decode("utf-8", errors="replace")
+                        log_text = log_file.read().decode("utf-8", errors="replace")
                     entry.update({
                         "size": size,
-                        "truncated": start > 0,
                         "text": log_text,
                     })
                 except OSError:

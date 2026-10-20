@@ -263,11 +263,12 @@ class BatchJobLifecycleTests(TestCase):
             pass
         self.assertEqual(job.get_result_project_path(), workspace_project)
 
-    def test_batch_detail_returns_bounded_logs_and_artifact_previews(self):
+    def test_batch_detail_returns_full_logs_and_artifact_previews(self):
         job_dir = os.path.join(self.workspace_dir, "1_motion_correct")
         os.mkdir(job_dir)
+        logtext = "0123456789 αβγ\n" * 80000 + "last line"
         with open(os.path.join(job_dir, "stdout.log"), "w", encoding="utf-8") as stdout_file:
-            stdout_file.write("0123456789")
+            stdout_file.write(logtext)
         with open(os.path.join(job_dir, "movie_thumb.jpg"), "wb") as image_file:
             image_file.write(b"image")
         with open(os.path.join(job_dir, "movie_intg.mrc"), "wb") as mrc_file:
@@ -284,7 +285,7 @@ class BatchJobLifecycleTests(TestCase):
         )
 
         job = BatchJob(id=jobmodel.id)
-        logs = job.get_log_tails(max_bytes=5)
+        logs = job.get_logs()
         with (
             patch.object(
                 BatchJob,
@@ -299,8 +300,9 @@ class BatchJobLifecycleTests(TestCase):
         ):
             artifacts = job.get_artifact_summary()
 
-        self.assertEqual(logs[0]["text"], "56789")
-        self.assertTrue(logs[0]["truncated"])
+        self.assertEqual(logs[0]["text"], logtext)
+        with open(os.path.join(job_dir, "stdout.log"), "rb") as stdout_file:
+            self.assertEqual(stdout_file.read(), logtext.encode("utf-8"))
         self.assertFalse(logs[1]["exists"])
         self.assertEqual(
             {entry["extension"]: entry["count"] for entry in artifacts["counts"]},
@@ -616,7 +618,7 @@ class BatchJobLifecycleTests(TestCase):
 
         self.assertIsNone(job.get_safe_job_dir())
         self.assertIsNone(job.get_result_project_path())
-        self.assertEqual(job.get_log_tails(), [])
+        self.assertEqual(job.get_logs(), [])
         self.assertEqual(job.get_artifact_summary(), {"counts": [], "images": []})
 
     def test_new_marks_persisted_job_failed_when_dispatch_fails(self):

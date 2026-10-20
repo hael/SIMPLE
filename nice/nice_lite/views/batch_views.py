@@ -412,7 +412,7 @@ def _log_parts(logtext):
     """Split log text into text/image parts on ">>> JPEG" markers."""
     parts = []
     logpart_str = ""
-    for line in logtext.splitlines():
+    for line in logtext.splitlines(keepends=True):
         if ">>> JPEG " in line:
             split_line = line.split()
             if len(split_line) >= 3:
@@ -421,9 +421,9 @@ def _log_parts(logtext):
                 logpart_str = ""
             else:
                 # Keep malformed marker lines in text output instead of crashing.
-                logpart_str += line + "\n"
+                logpart_str += line
         else:
-            logpart_str += line + "\n"
+            logpart_str += line
     if logpart_str != "":
         parts.append({"text": logpart_str})
     return parts
@@ -435,7 +435,7 @@ def _batch_overview_context(
     volume_viewer_requested=False,
 ):
     """Shared overview/logs/arguments context for the batch and manual-picker detail views."""
-    log_by_name = {entry["name"]: entry for entry in batchjob.get_log_tails()}
+    log_by_name = {entry["name"]: entry for entry in batchjob.get_logs()}
     stdout_entry = log_by_name.get("stdout.log", {})
     stderr_entry = log_by_name.get("stderr.log", {})
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}

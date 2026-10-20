@@ -25,8 +25,8 @@
     created — job creation timestamp, shown in the job-details footer
     folder  — absolute path to the job directory, shown in the job-details footer
     jobstats — dict of batch project metadata (e.g. micrographs, cls2D)
-    log     — list of {text} parts for the logs panel (stdout.log tail)
-    error   — optional error text for the logs panel (stderr.log tail)
+    log     — list of {text} parts for the logs panel (full stdout.log)
+    error   — optional error text for the logs panel (full stderr.log)
     arguments — list of {key, label, value, origin, submitted} for the arguments panel
     submitted_argument_count — count of user-submitted arguments
     volume_outputs — browser-safe metadata for owned 3D result volumes
@@ -226,6 +226,7 @@
                 tab.classList.toggle("text-streamring", active);
                 tab.classList.toggle("text-streamlabel", !active);
             });
+            if (target === "overview") scrollLogsToBottom();
         };
 
         // default to the last available output tab on load

@@ -100,7 +100,7 @@ class BatchViewTests(SimpleTestCase):
         )
         batch_job = Mock()
         batch_job.get_absdir.return_value = "/project/workspace/2_import_movies"
-        batch_job.get_log_tails.return_value = []
+        batch_job.get_logs.return_value = []
         launcher = Mock()
         launcher.get_ui.return_value = {
             "import_movies": {
@@ -332,7 +332,7 @@ class BatchViewTests(SimpleTestCase):
             ),
         )
         batch_job = Mock()
-        batch_job.get_log_tails.return_value = []
+        batch_job.get_logs.return_value = []
         batch_job.get_absdir.return_value = "/workspace/9_solve3D"
         batch_job.get_stage_volume_outputs.return_value = [{
             "path": "/workspace/9_solve3D/recvol_state01.mrc",

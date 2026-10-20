@@ -26,7 +26,7 @@
             <div class="logtext flex-1 min-h-0 overflow-auto p-3">
                 {% for logpart in log %}
                     {% if "text" in logpart %}
-                        <pre class="text-[10px] text-streamsubtle" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ logpart.text }}</pre>
+                        <pre class="text-[10px] text-streamsubtle" style="white-space:pre-wrap;overflow-wrap:anywhere"><span>{{ logpart.text }}</span></pre>
                     {% elif "image" in logpart %}
                         <img src="{% url 'nice_lite:image' logpart.image %}" loading="lazy"/>
                     {% endif %}
@@ -37,7 +37,7 @@
             <div id="job_log_panel_error" data-log-panel data-log-key="error"
                  class="hidden h-full flex flex-col overflow-hidden rounded-b-lg border border-streamdivider border-t-0 bg-streambg">
                 <div class="flex-1 min-h-0 overflow-auto p-3">
-                    <pre class="text-[10px] text-streamerror" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ error }}</pre>
+                    <pre class="text-[10px] text-streamerror" style="white-space:pre-wrap;overflow-wrap:anywhere"><span>{{ error }}</span></pre>
                 </div>
             </div>
         {% endif %}
@@ -45,9 +45,27 @@
 </div>
 
 <script>
+    function scrollLogsToBottom() {
+        document.querySelectorAll('[data-log-panel] > div').forEach(function (log) {
+            if (log.clientHeight) log.scrollTop = log.scrollHeight;
+        });
+    }
+
     (function () {
         var tabs = document.querySelectorAll('[data-log-tab]');
         var panels = document.querySelectorAll('[data-log-panel]');
+        panels.forEach(function (panel) {
+            var log = panel.firstElementChild;
+            var atBottom = true;
+            log.addEventListener('scroll', function () {
+                atBottom = log.scrollHeight - log.clientHeight - log.scrollTop <= 2;
+            }, {passive: true});
+            // Keep the bottom visible as log images load, until the reader scrolls up.
+            log.addEventListener('load', function () {
+                if (atBottom && log.clientHeight) log.scrollTop = log.scrollHeight;
+            }, true);
+        });
+        scrollLogsToBottom();
 
         tabs.forEach(function (tab) {
             if (tab.dataset.tabBound === '1') return;
@@ -65,6 +83,7 @@
                 panels.forEach(function (panel) {
                     panel.classList.toggle('hidden', panel.dataset.logKey !== key);
                 });
+                scrollLogsToBottom();
             });
         });
     })();
