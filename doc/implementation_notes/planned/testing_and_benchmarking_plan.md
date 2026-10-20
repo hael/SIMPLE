@@ -400,8 +400,8 @@ Each is a separate project that changes results. Each is judged by a paired
 - **`refine3D_states_cavgs` placing pose-less sub-averages.** Carry the members'
   poses into the class expansion, copy them to both halves, and refine them
   locally. Sub-average state accuracy is at chance today (0.42 against a
-  shuffled 0.37). After it, `solve3D_pyramid_blobs` moves to the compositional
-  beta-galactosidase states: it fails 20 of 20 on a 6% lobe.
+  shuffled 0.37). (`solve3D_pyramid_blobs`, which waited on it, was removed on
+  2026-10-20.)
 - **The objective in multi-state class-average stages.** `solve3D_cavgs` forces
   `euclid`. `cc` resolved 2 of 3 runs against 1 of 3, with poses four times
   worse.
@@ -455,8 +455,7 @@ FePt with two species, the nonuniform evidence-mask diagnostic.
      cases) go alongside.
 5. **Alongside, by hand or in day runs:** the test gaps of section 6.
 6. **Then the method projects of section 7,** each its own run (ruling 7): the
-   annealed state draw first, then the placement of pose-less sub-averages
-   (which unblocks the pyramid test).
+   annealed state draw first, then the placement of pose-less sub-averages.
 
 ## Sources
 

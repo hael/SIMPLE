@@ -408,7 +408,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 43)   # 15 fast + 1 platform + 20 highlevel + 7 library
+  set(SIMPLE_CTEST_BUDGET 42)   # 15 fast + 1 platform + 19 highlevel + 7 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

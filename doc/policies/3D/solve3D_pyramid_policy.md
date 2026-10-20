@@ -140,13 +140,5 @@ fixed numbers in `unit_reconstruction` "state assignment rules".
 - `unit_stream` "solve 3D": the shared steps through p07's stage (the attempts, the
   assignment, the local refinement's seeds and result); `lib_stream` "solve 3D reference
   docking": the docking of the check.
-- High level, nightly: `solve3D_pyramid_blobs` (`simple_commanders_test_highlevel_pyramid`).
-  It uses the three-state phantom of 3,600 particles in 60 exact views that
-  `refine3D_states_cavgs` uses, with its class averages made from the exact classes
-  (`make_cavgs`), and runs end to end with `nstates=3`. It checks the report, the references
-  and the result. It checks the assignment's purity against the planted states, each reference
-  docked onto its closest truth, and each refined map docked onto its particles' majority truth
-  (the hand free). Its floors are provisional, to be set from the first run.
-  - The phantom is one stack ordered by direction, so a first set of a third would hold a cap
-    of 20 directions. The test therefore takes the whole phantom as the first set (the
-    default `nptcls_refs`).
+- No high-level test runs `solve3D_pyramid` end to end: `solve3D_pyramid_blobs` was removed on
+  2026-10-20 (the maintainer's decision), after it failed on every run of its profile.

@@ -61,8 +61,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 43: 15 fast,
-7 library, 20 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 42: 15 fast,
+7 library, 19 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -124,7 +124,6 @@ convenience and deliberately not a CTest entry.
 | `species_discovery` | highlevel | `detect_atoms` with a species list, with `discover_species=yes` and without an element, on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors (with and without half maps), judged against the generating models through `test_gate` (`metrics.tsv`); the present products must not change |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 | `flex_pca_blobs` | highlevel | `flex_pca` on a two-state blob dataset of the multi-state fixture (2 000 particles at their true poses, SNR 1) in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on the fixture's three compositional beta-galactosidase states (3 600 particles in 60 exact views; ruling of 2026-10-18: not blob states that differ in a lobe of 6 % of the mass): the route's contract gated (projects, hand-back, maps), its state accuracy against the planted states (one-to-one mapping, with the shuffled-label null), the number of planted states its maps match and the poses of the sub-averages reported as a robustness profile, since its profile admits no floor (accuracy at the chance level) |
-| `solve3D_pyramid_blobs` | highlevel | `solve3D_pyramid` end to end on the fixture's three-state blob dataset of 3 600 particles in 60 exact views, its class averages made from the exact classes: the report, the references and the result written, the assignment against the planted states (one-to-one mapping: accuracy, adjusted Rand index, recall), each reference and each refined map matched and docked onto a truth (the hand free) and the docked maps' discrimination, with a shuffled-label control |
 
 ### 1.3 Programs that are not registered
 
@@ -1096,15 +1095,6 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   chance level (four runs deliver one state, one run's maps match a single planted state), a
   finding left to the maintainer.
 - Cost: 404 s at 8 threads (reserving 9 cores), up to 8.7 GiB.
-
-**`solve3D_pyramid_blobs`**
-- Claim: `solve3D_pyramid` assigns three planted blob states and refines their maps end to end.
-- Checks: the report written; the assignment against the planted states (one-to-one mapping:
-  accuracy, adjusted Rand index, recall); each reference and refined map matched and docked to a
-  truth; the docked maps' discrimination. Control: shuffled labels.
-- Profile (2026-10-19): fails 20 of 20, 19 on production's own stops after its state step merges
-  the states (the states differ in a lobe of 6 % of the mass). A finding left to the maintainer.
-- Cost: 291 s at 8 threads (reserving 9 cores) (to its failure).
 
 ### 6.6 Real data: the dataset layer (planned)
 

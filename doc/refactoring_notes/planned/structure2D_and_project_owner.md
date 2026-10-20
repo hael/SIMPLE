@@ -236,9 +236,8 @@ and the master must restore its own count after the call.
 
 15. **The truth suite on the final build.** `simple_test_exec test=nightly`
     on the base build and on the final build. Every entry that passes on the
-    base passes on the final build; entries that already fail on the base (for
-    example `solve3D_pyramid_blobs`, 19 of 20 in the last profile) are recorded
-    as such. The workflow entries judge what identity cannot (the changed
+    base passes on the final build; entries that already fail on the base are
+    recorded as such. The workflow entries judge what identity cannot (the changed
     random draws of Phases 3 to 5).
 16. **Documents.** `refine3D_policy.md` (the master's project, the bodies as
     strategy routines), `solve2D_policy.md`, the multi-state memory policy if
