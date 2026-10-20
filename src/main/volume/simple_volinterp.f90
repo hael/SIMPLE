@@ -53,7 +53,7 @@ contains
         call vol_pad%expand_cmat()
         write(logfhandle,'(A)') '>>> GENERATING PROJECTIONS'
         !$omp parallel do schedule(static) default(shared)&
-        !$omp private(i,ithr,o2) proc_bind(close)
+        !$omp private(i,ithr) firstprivate(o2) proc_bind(close)
         do i=1,n
             if( .not.use_proj(i) ) cycle
             ! get thread index

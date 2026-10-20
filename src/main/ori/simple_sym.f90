@@ -486,7 +486,7 @@ contains
         allocate(nrm_asym(3,self%n,nasym), x_asym(2,self%n,nasym), nrm_ref(3,nref), x_ref(2,nref))
         ! nasym x nsym symmetry copies: in parallel, as sym_dists ran in the pair loop it replaces (60 copies per
         ! orientation in I)
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(j,isym,o,osym,mat)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(j,isym,mat) firstprivate(o,osym)
         do j = 1,nasym
             call os_asym%get_ori(j, o)
             nrm_asym(:,1,j) = o%get_normal()
@@ -502,7 +502,7 @@ contains
             call osym%kill
         enddo
         !$omp end parallel do
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,o,mat)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(i,mat) firstprivate(o)
         do i = 1,nref
             call os_ref%get_ori(i, o)
             nrm_ref(:,i) = o%get_normal()

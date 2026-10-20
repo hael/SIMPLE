@@ -1313,7 +1313,7 @@ contains
 
     !------ Private Non-type-bound helpers ------
 
-    module function segment2info( iseg, n_records ) result( info )
+    function segment2info( iseg, n_records ) result( info )
         integer(kind(ENUM_ORISEG)), intent(in) :: iseg
         integer(kind=8),            intent(in) :: n_records
         character(len=:), allocatable :: info, nrecs_str
@@ -1348,7 +1348,7 @@ contains
         end select
     end function segment2info
 
-    module function segment2oritype( iseg ) result( oritype )
+    function segment2oritype( iseg ) result( oritype )
         integer(kind(ENUM_ORISEG)), intent(in) :: iseg
         character(len=:), allocatable :: oritype
         select case(iseg)

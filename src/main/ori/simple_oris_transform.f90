@@ -192,8 +192,8 @@ contains
         call oxy%set_euler([ 0., 0.,0.])
         call oxz%set_euler([90.,90.,0.])
         call oyz%set_euler([ 0.,90.,0.])
-        !$omp parallel do default(shared) private(i,j,pop,offset,o,sh3d,w,sumw) &
-        !$omp schedule(static) proc_bind(close) reduction(+:npop,avg)
+        !$omp parallel do default(shared) private(i,j,pop,offset,sh3d,w,sumw) &
+        !$omp firstprivate(o) schedule(static) proc_bind(close) reduction(+:npop,avg)
         do i = 1,N
             pop    = 0
             offset = 0.d0
