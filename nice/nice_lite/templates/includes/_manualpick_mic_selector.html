@@ -138,6 +138,12 @@
         }
     };
 
+    document.getElementById("mic_tile_grid").addEventListener("click", (event) => {
+        if (event.target.closest(".mic")) return;
+        const mic = event.target.closest(".mictile")?.querySelector(".mic");
+        if (mic) toggleMic(mic);
+    });
+
     let micBoxOverlayRadius = 1;
     let micBoxOverlaysVisible = true;
     let micBoxShape = "circle";
