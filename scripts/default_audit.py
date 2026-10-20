@@ -56,6 +56,10 @@ CLINE_HELPER_CALL = re.compile(r"^\s*call\s+([a-z_][a-z0-9_]*)\s*\(.*\bcline\b",
 # missing-key assignments are part of the caller's display-default evidence.
 TRACED_DEFAULT_HELPERS = {"set_automask2d_defaults"}
 
+# Commander execute methods that only forward the command line to one workflow
+# procedure: the workflow's missing-key assignments are the program's evidence.
+DELEGATED_WORKFLOWS = {"exec_solve2d_workflow"}
+
 # These helpers inspect or report the command line but do not assign defaults.
 READ_ONLY_CLINE_HELPERS = {"warn_for_forced_bootstrap_overrides"}
 
@@ -533,6 +537,9 @@ def commander_rules(root: Path, procedure: Procedure, constants: dict[str, str],
                 })
                 continue
             helper_candidates = helper_procedures.get(helper_name, [])
+            if helper_name in DELEGATED_WORKFLOWS and len(helper_candidates) == 1:
+                rules.extend(commander_rules(root, helper_candidates[0], constants, helper_procedures))
+                continue
             if helper_name in TRACED_DEFAULT_HELPERS and len(helper_candidates) == 1:
                 for helper_statement in helper_candidates[0].statements:
                     helper_rule = parse_set_rule(root, helper_candidates[0].path, helper_statement,
@@ -844,6 +851,8 @@ def main() -> int:
     bindings = extract_parameter_bindings(root)
     procedures = extract_procedures(exec_paths + commander_paths + stream_paths)
     helper_procedures = extract_procedures(helper_paths)
+    for name in DELEGATED_WORKFLOWS:
+        helper_procedures.setdefault(name, procedures.get(name, []))
     commander_methods = extract_commander_methods(commander_paths + stream_paths)
     if args.output_fortran:
         overrides = collect_program_overrides(root, procedures, commander_methods, constants, bindings, baselines, helper_procedures)

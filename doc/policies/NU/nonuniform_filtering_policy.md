@@ -446,6 +446,10 @@ then follows the radius table (PfCRT record 2026-09-08d in
 sequential, coarse to fine: at each level the incumbent and the candidate
 are both smoothed at the candidate's radius from the raw unaries kept in
 `raw_dmats_mask`, and the candidate wins only with a strictly lower cost.
+The candidate at its own radius is the setup's `dmats_mask` column, and the
+smoothing norm of that radius is the setup's, kept mask-packed
+(`norms_mask`): each level smooths only the labels below it (28 smoothings
+for eight labels, not 42), with the same values bit for bit.
 Identical unaries tie exactly and the coarser label keeps. `dmats_mask`
 (own-radius smoothing) remains the input of the Potts prior, the beta
 estimate and the evidence envelope, and the Potts sweeps
@@ -484,6 +488,17 @@ The ordered-label prior:
 
 Degenerate implementation exits, such as a single label or numerical-zero
 beta, may skip smoothing. Users do not select a no-smoothing mode.
+
+Each colour pass walks the support voxels of its colour from a list packed
+once (same-colour voxels are not neighbours, so the result does not depend
+on the order). The tent smoothing (`simple_tent_smooth.f90`) writes an
+all-zero row, plane or slab as zeros and filters the Y and Z columns a plane
+at a time, each column keeping the operation sequence of the one-column
+filter; its unit check compares it bit for bit with the column-by-column
+filter. The smoothing beta comes from a real-valued OpenMP reduction, so the
+label field is reproducible at a fixed thread count, not across thread
+counts. The `VOLASSEMBLE` report splits the label optimisation into the
+level smoothings and the Potts sweeps.
 
 ## 10. High-Resolution Extension (removed)
 

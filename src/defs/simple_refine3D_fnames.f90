@@ -1,7 +1,7 @@
 !@descr: filename helpers for refine3D output artifacts
 module simple_refine3D_fnames
 use simple_defs_fname, only: BIN_EXT, MRC_EXT, TXT_EXT, JPG_EXT,&
-    &CAVGS_ITER_FBODY, FSC_FBODY, STARTVOL_FBODY, VOL_FBODY
+    &FSC_FBODY, STARTVOL_FBODY, VOL_FBODY
 use simple_string,       only: string
 use simple_string_utils, only: int2str_pad
 implicit none
@@ -18,7 +18,6 @@ public :: refine3D_fsc_fbody
 public :: refine3D_fsc_fname
 public :: refine3D_fsc_plot_fbody
 public :: refine3D_resolution_txt_fbody
-public :: refine3D_iter_refs_fname
 public :: refine3D_iter_vol_fname
 public :: refine3D_partial_rec_fbody
 public :: refine3D_partial_rec_fname
@@ -139,12 +138,6 @@ contains
         fname = string('RESOLUTION_STATE')//state_tag(state)
         if( present(iter) ) fname = fname//'_ITER'//iter_tag(iter)
     end function refine3D_resolution_txt_fbody
-
-    type(string) function refine3D_iter_refs_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string(CAVGS_ITER_FBODY)//iter_tag(iter)
-        fname = fname//MRC_EXT
-    end function refine3D_iter_refs_fname
 
     type(string) function refine3D_iter_vol_fname( state, iter, suffix ) result(fname)
         integer,          intent(in) :: state, iter

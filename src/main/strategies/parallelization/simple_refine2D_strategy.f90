@@ -15,8 +15,8 @@ use simple_ptcl_cache,  only: ptcl_cache_ensure
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_commit_iter
-use simple_sigma2_state, only: sigma2_state_prepare_update
-use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header
+use simple_strategy_sigma2, only: prepare_canonical_sigma_update, read_sigma2_bench_counts
+use simple_refine2D_fnames, only: refine2D_cavgs_fname, refine2D_cavgs_half_fname
 implicit none
 
 public :: refine2D_strategy, refine2D_inmem_strategy, refine2D_distr_strategy, create_refine2D_strategy
@@ -229,7 +229,8 @@ contains
             call xcommit_sigma2%execute(cline)
             if( L_BENCH_GLOB )then
                 self%bench%rt_sigma = toc(self%bench%t_sigma)
-                call record_sigma2_bench_context(build, self%bench)
+                call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
+                &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
             endif
             call cline%set('which_iter', params%which_iter)
         endif
@@ -272,7 +273,7 @@ contains
             if( file_exists(FRCS_FILE) )then
                 call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             endif
-            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+            finalcavgs = refine2D_cavgs_fname(params%which_iter, MRC_EXT)
             call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
             call finalcavgs%kill
             call build%spproj%write_segment_inside('out', params%projfile)
@@ -410,7 +411,8 @@ contains
             call xcommit_sigma2%execute(cline_calc_sigma)
             if( L_BENCH_GLOB )then
                 self%bench%rt_sigma = toc(self%bench%t_sigma)
-                call record_sigma2_bench_context(build, self%bench)
+                call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
+                &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
             endif
         endif
         ! Check convergence
@@ -436,6 +438,7 @@ contains
             endif
             converged = converged .and. l_full_assignment
         endif
+        call self%conv%print_verdict(converged)
         if( L_BENCH_GLOB ) self%bench%rt_conv = toc(self%bench%t)
     end subroutine distr_execute_iteration
 
@@ -476,7 +479,7 @@ contains
             if( file_exists(FRCS_FILE) )then
                 call build%spproj%add_frcs2os_out(string(FRCS_FILE), 'frc2D')
             endif
-            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//MRC_EXT
+            finalcavgs = refine2D_cavgs_fname(params%which_iter, MRC_EXT)
             call build%spproj%add_cavgs2os_out(finalcavgs, build%spproj%get_smpd(), imgkind='cavg')
             call finalcavgs%kill
             call build%spproj%write_segment_inside('out', params%projfile)
@@ -502,27 +505,6 @@ contains
 
     !> Context of the sigma2 transaction: the committed store's dimensions and the active rows
     !! carrying the current sampling marker (updated this iteration)
-    subroutine record_sigma2_bench_context( build, bench )
-        type(builder),              intent(inout) :: build
-        type(refine2D_bench_state), intent(inout) :: bench
-        type(sigma2_state_header) :: header
-        type(string)          :: state_path
-        integer, allocatable  :: rep_rows(:), smp_rows(:), rec_rows(:)
-        integer               :: status
-        logical               :: found
-        character(len=STDLEN) :: message
-        call build%spproj%get_sigma2_state_path(state_path, found)
-        if( .not. found ) return
-        call sigma2_state_read_header(state_path%to_char(), header, status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
-        bench%sigma2_nptcls  = header%nptcls
-        bench%sigma2_nshells = header%kto - header%kfrom + 1
-        bench%sigma2_nbytes  = header%file_bytes
-        call build%spproj_field%get_update_rows(rep_rows, smp_rows, rec_rows)
-        bench%sigma2_nrows_updated = size(smp_rows)
-        deallocate(rep_rows, smp_rows, rec_rows)
-        call state_path%kill
-    end subroutine record_sigma2_bench_context
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
         use simple_matcher_ptcl_io, only: write_mem_bench_context
@@ -586,21 +568,6 @@ contains
         call build%spproj%read_segment(params%oritype, params%projfile)
         if( L_BENCH_GLOB ) bench%rt_proj_io = bench%rt_proj_io + toc(bench%t)
     end subroutine run_prob_align2D
-
-    subroutine prepare_canonical_sigma_update( params, build )
-        type(parameters), intent(in)    :: params
-        type(builder),    intent(inout) :: build
-        type(string) :: state_path
-        integer :: status
-        logical :: found
-        character(len=STDLEN) :: message
-        call build%spproj%get_sigma2_state_path(state_path, found)
-        if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-        ! the committed store validated, nothing left by another transaction of the next generation
-        call sigma2_state_prepare_update(state_path%to_char(), params%nparts, params%numlen, status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
-        call state_path%kill
-    end subroutine prepare_canonical_sigma_update
 
     !> Initialize references for refine2D (used by inmem and distr modes).
     subroutine init_refine2D_refs( cline, params, build )
@@ -687,11 +654,9 @@ contains
         integer,          intent(in)    :: nthr_master
         type(commander_cavgassemble) :: xcavgassemble
         type(cmdline)                :: cline_cavgassemble
-        type(string)                 :: str_iter
-        str_iter   = int2str_pad(params%which_iter, 3)
-        params%refs      = CAVGS_ITER_FBODY // str_iter%to_char()            // MRC_EXT
-        params%refs_even = CAVGS_ITER_FBODY // str_iter%to_char() // '_even' // MRC_EXT
-        params%refs_odd  = CAVGS_ITER_FBODY // str_iter%to_char() // '_odd'  // MRC_EXT
+        params%refs      = refine2D_cavgs_fname(params%which_iter, MRC_EXT)
+        params%refs_even = refine2D_cavgs_half_fname(params%which_iter, 'even', MRC_EXT)
+        params%refs_odd  = refine2D_cavgs_half_fname(params%which_iter, 'odd', MRC_EXT)
         call cline%set('refs', params%refs)
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg',  'cavgassemble')
@@ -701,7 +666,6 @@ contains
         call terminate_stream(params, 'SIMPLE_DISTR_REFINE2D HARD STOP 2')
         call xcavgassemble%execute(cline_cavgassemble)
         call cline_cavgassemble%kill
-        call str_iter%kill
     end subroutine run_distributed_cavg_assembly
 
     subroutine init_tseries_refs( cline, params, build, cline_make_cavgs, l_scale_inirefs )
@@ -795,18 +759,14 @@ contains
 
     subroutine gen_jpeg( which_iter ) 
         integer, intent(in) :: which_iter
-        type(string) :: str_iter, fbody, mrc, jpg
+        type(string) :: mrc, jpg
         ! Generate JPEG
-        str_iter = int2str_pad(which_iter, 3)
-        fbody = string(CWD_GLOB)//'/'//CAVGS_ITER_FBODY//str_iter%to_char()
-        mrc   = fbody//MRC_EXT
-        jpg   = fbody//JPG_EXT
+        mrc = string(CWD_GLOB)//'/'//refine2D_cavgs_fname(which_iter, MRC_EXT)
+        jpg = string(CWD_GLOB)//'/'//refine2D_cavgs_fname(which_iter, JPG_EXT)
         if( file_exists(mrc) )then
             call mrc2jpeg_tiled(mrc, jpg)
             write(logfhandle,'(A,A)') '>>> JPEG ', jpg%to_char()
         endif
-        call str_iter%kill
-        call fbody%kill
         call mrc%kill
         call jpg%kill
     end subroutine gen_jpeg

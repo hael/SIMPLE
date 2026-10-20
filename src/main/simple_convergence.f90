@@ -37,6 +37,7 @@ type convergence
   contains
     procedure :: read
     procedure :: check_conv2D
+    procedure, nopass :: print_verdict
     procedure :: check_conv3D
     procedure :: print_iteration
     procedure :: append_stats
@@ -140,7 +141,7 @@ contains
         write(logfhandle,601) '>>> CLASS OVERLAP:                            ', self%mi_class
         write(logfhandle,602) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled, s_ratio%to_char()
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
-        write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
+        write(logfhandle,601) '>>> % PARTICLES USED FOR UPDATING THE MODEL   ', percen_avg
         if( cont_stats_available )then
             cont_ratio = '('//int2str(self%cont_inpl_attempts)//' attempts)'
             write(logfhandle,602) '>>> % CONTINUOUS IN-PLANE RUNS IMPROVED       ', &
@@ -150,14 +151,16 @@ contains
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG)   AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
-        write(logfhandle,604) '>>> MATCHING  LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        ! one low-pass for every particle: the particles' lp field, since the distributed master never sets params%lp
+        write(logfhandle,601) '>>> MATCHING  LOW-PASS LIMIT (THIS ITERATION) ', self%lp%avg
+        if( self%lp_est%maxv > TINY )then
         write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
+        endif
         write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
-        write(logfhandle,609) '>>> | PROB NEIGH MODE               | '//trim(params%prob_neigh_mode)
         if( trim(params%gauref).eq.'yes' )then
         write(logfhandle,609) '>>> | GAU REGULARIZATION            | on'
         else
@@ -232,19 +235,8 @@ contains
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
                     self%progress = progress_estimate_2D(real(params%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 endif
-                if( converged )then
-                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-                else
-                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-                endif
             else
-                if( self%dist_inpl%avg < 0.5 )then
-                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-                    converged = .true.
-                else
-                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-                    converged = .false.
-                endif
+                converged = self%dist_inpl%avg < 0.5
             endif
         endif
         ! stats
@@ -271,6 +263,17 @@ contains
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv2D
+
+    !> the 2D iteration's convergence verdict: check_conv2D tests the criteria, the caller applies minits, maxits and
+    !! the full-assignment coverage and prints the final decision
+    subroutine print_verdict( converged )
+        logical, intent(in) :: converged
+        if( converged )then
+            write(logfhandle,'(A)') '>>> CONVERGED: yes'
+        else
+            write(logfhandle,'(A)') '>>> CONVERGED: no'
+        endif
+    end subroutine print_verdict
 
     function check_conv3D( self, params, cline, os, msk ) result( converged )
         use simple_parameters, only: parameters

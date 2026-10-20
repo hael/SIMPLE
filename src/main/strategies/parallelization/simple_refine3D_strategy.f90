@@ -13,8 +13,7 @@ use simple_qsys_env,            only: qsys_env
 use simple_convergence,         only: convergence
 use simple_decay_funs,          only: inv_cos_decay, cos_decay
 use simple_cluster_seed,        only: gen_labelling
-use simple_sigma2_state,        only: sigma2_state_prepare_update
-use simple_sigma2_state_file,   only: sigma2_state_header, sigma2_state_read_header
+use simple_strategy_sigma2,     only: prepare_canonical_sigma_update, read_sigma2_bench_counts
 use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
@@ -638,27 +637,6 @@ contains
 
     !> Context of the sigma2 transaction for the strategy bench file: the committed store's
     !! dimensions and the active rows carrying the current sampling marker (updated this iteration)
-    subroutine record_sigma2_bench_context( build, bench )
-        type(builder),              intent(inout) :: build
-        type(refine3D_bench_state), intent(inout) :: bench
-        type(sigma2_state_header) :: header
-        type(string)          :: state_path
-        integer, allocatable  :: rep_rows(:), smp_rows(:), rec_rows(:)
-        integer               :: status
-        logical               :: found
-        character(len=STDLEN) :: message
-        call build%spproj%get_sigma2_state_path(state_path, found)
-        if( .not. found ) return
-        call sigma2_state_read_header(state_path%to_char(), header, status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
-        bench%sigma2_nptcls  = header%nptcls
-        bench%sigma2_nshells = header%kto - header%kfrom + 1
-        bench%sigma2_nbytes  = header%file_bytes
-        call build%spproj_field%get_update_rows(rep_rows, smp_rows, rec_rows)
-        bench%sigma2_nrows_updated = size(smp_rows)
-        deallocate(rep_rows, smp_rows, rec_rows)
-        call state_path%kill
-    end subroutine record_sigma2_bench_context
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
         use simple_matcher_ptcl_io, only: write_mem_bench_context
@@ -973,7 +951,8 @@ contains
                 call xcommit_sigma2%execute(self%cline_commit_sigma2)
                 if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
             endif
-            if( L_BENCH_GLOB ) call record_sigma2_bench_context(build, self%bench)
+            if( L_BENCH_GLOB ) call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
+                &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
         endif
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine inmem_execute_iteration
@@ -1291,20 +1270,6 @@ contains
         endif
     end subroutine ensure_canonical_sigma2
 
-    subroutine prepare_canonical_sigma_update(params, build)
-        type(parameters), intent(in)    :: params
-        type(builder),    intent(inout) :: build
-        type(string) :: state_path
-        integer :: status
-        logical :: found
-        character(len=STDLEN) :: message
-        call build%spproj%get_sigma2_state_path(state_path, found)
-        if( .not. found ) THROW_HARD('particle project has no canonical sigma2 state path')
-        ! the committed store validated, nothing left by another transaction of the next generation
-        call sigma2_state_prepare_update(state_path%to_char(), params%nparts, params%numlen, status, message)
-        if( status /= 0 ) THROW_HARD(trim(message))
-        call state_path%kill
-    end subroutine prepare_canonical_sigma_update
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_commanders_rec_distr, only: commander_volassemble
@@ -1592,7 +1557,8 @@ contains
                 endif
                 if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
             endif
-            if( L_BENCH_GLOB ) call record_sigma2_bench_context(build, self%bench)
+            if( L_BENCH_GLOB ) call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
+                &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
         endif
         ! the sigma2 commit was the handed-on project's last use
         if( allocated(vol_proj) )then

@@ -1,6 +1,6 @@
 # Speed and architecture: before the release, and the next release
 
-Proposal note, 2026-10-18. **Nothing here is implemented.** The maintainer
+Proposal note, 2026-10-18. **Partly implemented: see "Status" below.** The maintainer
 accepted the proposals on 2026-10-18, except two 2D defaults that stay as
 they are (section 1.2 c). It collects the changes proposed after the run
 `speed_mac`, split into what should be done before release 4 and what moves
@@ -20,6 +20,50 @@ Each proposal says what it is, why, whether results stay byte-identical
 ("identical"), and its size. Gains are estimates unless a measurement is
 named. Items that change results need a ruling and a check with the truth
 suite of the run `test_truth`.
+
+## Status, 2026-10-19
+
+Done, all byte-identical at one thread unless said otherwise:
+
+- **Section 1.1**: all eight items (run `speed2d_mac`, Phase 1;
+  `doc/implementation_notes/completed/speed2D_run_report.md`).
+- **Section 1.2 a, measuring**: done in `speed2d_mac` (Phase 2); the
+  `PROB_ALIGN2D` report now also splits the master's reads and assignment
+  (run `speed2d3d_mac`).
+- **Section 1.2 b**: class sums balanced, one particle read per table
+  iteration, dynamic search loops, the dense assignment without rescans,
+  populations counted once, the last two heap trampolines (`speed2d_mac`);
+  the compact dense 2D record, parallel part reads with a coverage check,
+  per-particle counts in the sparse part files, and the sparse assignment's
+  class lists sorted in parallel (`speed2d3d_mac`). Open: fewer project
+  reads and writes on the master (with section 1.4).
+- **Section 1.2 d, look and feel**: all items (`speed2d3d_mac`, Phase 2):
+  3D-style log lines and one convergence verdict per iteration, the solve2D
+  interface texts, class-average names through helpers, the shared sigma2
+  helpers, the policy sections.
+- **Section 1.2 f**: the empty 2D partition (`speed2d_mac`). Open:
+  partition balancing by active particles (changes results).
+- **Section 1.3**: the NU label optimisation and the master's dense 3D
+  table stored by reference (`speed2d3d_mac`). The shift matrix fused into
+  the alignment kernels was tried and is not identical (below). Open: one
+  project owner on the master, single-precision weights.
+- **Also done** (`speed2d3d_mac`, Phase 4, changes uncached results by
+  rounding, accepted): the 2D table prepares its particles from the same
+  in-memory cropped image as the 2D matcher, and in shared memory the
+  particle buffer keeps those cropped particles, so `cache=no` equals
+  `cache=yes` byte for byte.
+
+Two corrections to section 1.3, found by reading the code at `af13bc828`:
+
+- The master's dense 3D table was already particle-major (each particle's
+  references contiguous); the useful change was the opposite layout, each
+  reference's distances contiguous, which is what was done.
+- The correlation's shift-independent term cannot be computed once per
+  minimisation without changing results: it is built from the shifted
+  reference, and the shift matrix's modulus drifts by rounding along its
+  recurrence. Only fusing the shift matrix into the kernels could be
+  identical, and on this compiler it is not (the fused multiply-adds
+  differ between the two contexts), so it was restored.
 
 ## Part 1. Before the release
 
@@ -148,9 +192,9 @@ anyway; the stream pool also runs `refine2D`, so stream is affected):
 | item | what | gain | identical | size |
 | --- | --- | --- | --- | --- |
 | one project owner on the master (3D and 2D) | the master materialises its reprojection model on its own builder; the bodies of volume assembly, class-average assembly, `prob_align`, `prob_align2D` and the sigma commit become strategy or domain routines on `(params, build)`; the master reads only what workers write and writes the project once per iteration | about 3-6 s per iteration at 750,000 particles in 3D, similar in 2D; one to two fewer full projects at the peak; settles section 1.4 | yes | 500-900 lines in 3D, mostly moved; 2D smaller |
-| faster label optimisation in the NU filter | reuse the setup's smoothing at each level, skip all-zero lines and block the strided passes of the tent smoothing, packed voxel lists per colour in the Potts sweeps | the label optimisation was 8.7 of 14.9 s of the filter on the three-state identity case; likely 2-3 times on it | yes | about 150 lines |
-| transposed master table, contiguous reads | the master's dense 3D table stored particle-major so the assignment streams; consecutive particles read in one statement; refined entries placed directly | the assignment and reads on large multi-state tables | yes | about 150 lines |
-| shift-independent work once per search | the correlation's shift-independent term once per minimisation; the shift matrix built inside the kernel loops | part of the refinement's memory traffic | yes for the correlation objective, rounding-level for the Euclidean one | small to medium |
+| faster label optimisation in the NU filter | done (2026-10-19): reuse the setup's smoothing at each level, skip all-zero lines and block the strided passes of the tent smoothing, packed voxel lists per colour in the Potts sweeps | the label optimisation was 8.7 of 14.9 s of the filter on the three-state identity case; likely 2-3 times on it | yes | about 150 lines |
+| transposed master table, contiguous reads | done (2026-10-19): the master's dense 3D table stored by reference (it was particle-major already) so the assignment streams; consecutive particles read in one statement; refined entries placed directly | the assignment and reads on large multi-state tables | yes | about 150 lines |
+| shift-independent work once per search | the correlation's shift-independent term once per minimisation; the shift matrix built inside the kernel loops. Tried 2026-10-19: neither is identical (see Status) | part of the refinement's memory traffic | no, rounding level | small to medium |
 | single-precision weights in the score kernels | single-precision data times a single-precision weight | twice the vector width of the score loop | no (rounding level) | small; only if the truth suite is ready in time |
 
 **Stretch, only if the items above land early: the worker fold.** One

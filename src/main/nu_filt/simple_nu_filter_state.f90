@@ -29,12 +29,14 @@ contains
     end function nu_label_is_aux_replacement
 
     !> the wall seconds of the current sequence (zero without L_BENCH_GLOB)
-    module subroutine get_nu_filter_timings( filtering, objective, optimise, compose )
-        real(timer_int_kind), intent(out) :: filtering, objective, optimise, compose
-        filtering = nu_rt_filtering
-        objective = nu_rt_objective
-        optimise  = nu_rt_optimise
-        compose   = nu_rt_compose
+    module subroutine get_nu_filter_timings( filtering, objective, optimise, compose, opt_levels, opt_potts )
+        real(timer_int_kind), intent(out) :: filtering, objective, optimise, compose, opt_levels, opt_potts
+        filtering  = nu_rt_filtering
+        objective  = nu_rt_objective
+        optimise   = nu_rt_optimise
+        compose    = nu_rt_compose
+        opt_levels = nu_rt_opt_levels
+        opt_potts  = nu_rt_opt_potts
     end subroutine get_nu_filter_timings
 
     module subroutine init_nu_filter( vol_even, vol_odd, fsc_res )
@@ -53,6 +55,8 @@ contains
         nu_rt_objective = 0.
         nu_rt_optimise  = 0.
         nu_rt_compose   = 0.
+        nu_rt_opt_levels = 0.
+        nu_rt_opt_potts  = 0.
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         allocate(cutoff_finds_tmp(size(lowpass_limits)))
         do i = 1, size(lowpass_limits)
@@ -140,6 +144,7 @@ contains
     module subroutine release_nu_filter_unary_storage
         if( allocated(dmats_mask)         ) deallocate(dmats_mask)
         if( allocated(raw_dmats_mask)     ) deallocate(raw_dmats_mask)
+        if( allocated(norms_mask)         ) deallocate(norms_mask)
         call release_nu_smooth_norm
     end subroutine release_nu_filter_unary_storage
 
@@ -147,6 +152,25 @@ contains
         if( allocated(nu_smooth_norm)     ) deallocate(nu_smooth_norm)
         nu_smooth_norm_radius = -1
     end subroutine release_nu_smooth_norm
+
+    !> the smoothing norm at lp_angstrom's radius from its mask-packed copy: smooth_nu_objective reads it only on the
+    !! support, so the voxels outside are left as they are
+    module subroutine load_nu_smooth_norm( lp_angstrom, packed )
+        real, intent(in) :: lp_angstrom
+        real, intent(in) :: packed(:)
+        integer :: i, j, k, imask
+        if( size(packed) /= n_nu_mask ) THROW_HARD('packed size mismatch; load_nu_smooth_norm')
+        if( .not.allocated(nu_smooth_norm) ) allocate(nu_smooth_norm(ldim(1),ldim(2),ldim(3)), source=0.)
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            nu_smooth_norm(i,j,k) = packed(imask)
+        end do
+        !$omp end parallel do
+        nu_smooth_norm_radius = nu_objective_smooth_radius_pixels(lp_angstrom)
+    end subroutine load_nu_smooth_norm
 
     module subroutine accumulate_nu_evidence_raw( dmat_full, icand )
         real,    intent(in) :: dmat_full(:,:,:)

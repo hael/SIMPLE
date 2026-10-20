@@ -3,7 +3,7 @@ module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, add_ptcl_cache_read_time, &
-    &records_open, record_slot, put_record
+    &records_open, record_slot, put_record, take_records, get_records
 !$ use omp_lib, only: omp_get_max_threads
 use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached, prepimg4align_cart
 use simple_cartft_calc,     only: cartft_calc
@@ -14,7 +14,7 @@ implicit none
 
 public :: prep_sigmas_objfun, alloc_ptcl_imgs
 public :: write_sigma2_bench_context, write_sigma2_bench_timings
-public :: build_batch_particles3D, build_batch_particles2D, prep_cart_batch
+public :: build_batch_particles3D, build_batch_particles2D, prep_cart_batch, crop_particles2D
 public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
@@ -308,9 +308,22 @@ contains
         call build%pftc%memoize_ptcls
     end subroutine polarize_batch_particles3D
 
+    !> Do the 2D table and the 2D matcher make the cache's Fourier-cropped particle in memory from the full-size read
+    !! and prepare alignment from it as a cached particle: uncached, outside the stream's 2D pool, cropped, ptcl2D
+    logical function crop_particles2D( params, l_cached )
+        class(parameters), intent(in) :: params
+        logical,           intent(in) :: l_cached
+        crop_particles2D = .false.
+        if( l_cached ) return
+        if( trim(params%stream2d) == 'yes' ) return
+        crop_particles2D = params%box_crop < params%box .and. trim(params%oritype) == 'ptcl2D'
+    end function crop_particles2D
+
     !>  ptcl_imgs receives the images class-average restoration sums, which only callers that restore class
     !!  averages need; omit it to skip both the buffer and the copy. They are the full-size originals, or the
     !!  Fourier-cropped particles when cached or when crop_sums asks for them (sized box_crop by the caller).
+    !!  With crop_sums the cropped particle is put as the pass's record while the buffer is open for records (the
+    !!  2D table in shared memory), and a batch whose records are all sealed is copied from them, not read.
     subroutine build_batch_particles2D( params, build, nptcls_here, pinds, reads, ptcl_imgs, ptcl_match_imgs, &
         &ptcl_match_imgs_pad, crop_sums )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
@@ -322,10 +335,10 @@ contains
         class(image),   optional, intent(inout) :: ptcl_imgs(nptcls_here)
         class(image),             intent(inout) :: ptcl_match_imgs(params%nthr)
         class(image),             intent(inout) :: ptcl_match_imgs_pad(params%nthr)
-        logical,        optional, intent(in)    :: crop_sums !< cropped particles for the sums, made in memory
+        logical,        optional, intent(in)    :: crop_sums !< cropped particles, made in memory (crop_particles2D)
         type(image), allocatable :: crop_work(:)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team
-        logical :: l_keep_raw, l_cached, l_crop_mem
+        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot
+        logical :: l_keep_raw, l_cached, l_crop_mem, l_from_records, l_put_records
         integer(timer_int_kind) :: t_cache
         l_keep_raw = present(ptcl_imgs)
         ! When cached, ptcl_imgs receives the Fourier-cropped particle rather than the
@@ -334,11 +347,18 @@ contains
         l_cached   = ptcl_cache_in_use(params, build)
         ! The same cropped particle without the disk cache: made here from the full-size read
         l_crop_mem = .false.
-        if( present(crop_sums) .and. l_keep_raw .and. .not. l_cached ) l_crop_mem = crop_sums
+        if( present(crop_sums) .and. .not. l_cached ) l_crop_mem = crop_sums
+        ! the records the 2D table of this pass made: the batch's cropped particles, without the read
+        l_from_records = .false.
+        if( l_crop_mem .and. l_keep_raw ) l_from_records = take_records(pinds)
+        l_put_records  = .false.
+        if( l_crop_mem ) l_put_records = records_open()
         if( l_cached )then
             if( L_BENCH_GLOB ) t_cache = tic()
             call ptcl_cache_read_batch(params, build, nptcls_here, pinds, [1,nptcls_here])
             if( L_BENCH_GLOB ) call add_ptcl_cache_read_time(toc(t_cache))
+        else if( l_from_records )then
+            call get_records(pinds, ptcl_imgs)
         else
             call reads%read(params, build, nptcls_here, pinds, [1,nptcls_here])
         endif
@@ -353,7 +373,7 @@ contains
             !$ nthr_team = omp_get_max_threads()
             call alloc_imgarr(nthr_team, [params%box_crop, params%box_crop, 1], params%smpd_crop, crop_work)
         endif
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,slot) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
@@ -361,12 +381,27 @@ contains
                 if( l_keep_raw ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
                 call prepimg4align_cached(params, build, iptcl, build%imgbatch(iptcl_batch), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+            else if( l_from_records )then
+                ! the record is the cached particle; a copy is prepared for alignment, which transforms its input
+                call crop_work(ithr)%copy_fast(ptcl_imgs(iptcl_batch))
+                call prepimg4align_cached(params, build, iptcl, crop_work(ithr), &
+                    &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             else if( l_crop_mem )then
                 ! the cache's entry (ptcl_cache_ensure): noise-normalized, Fourier-cropped, unshifted, real space;
-                ! kept for the sums, and a copy prepared for alignment as a cached particle is
-                call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, ptcl_imgs(iptcl_batch), [0.,0.])
-                call ptcl_imgs(iptcl_batch)%ifft
-                call crop_work(ithr)%copy_fast(ptcl_imgs(iptcl_batch))
+                ! kept for the sums (or put as the pass's record) before a copy is prepared for alignment as a cached
+                ! particle is
+                if( l_keep_raw )then
+                    call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, ptcl_imgs(iptcl_batch), [0.,0.])
+                    call ptcl_imgs(iptcl_batch)%ifft
+                    call crop_work(ithr)%copy_fast(ptcl_imgs(iptcl_batch))
+                else
+                    call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, crop_work(ithr), [0.,0.])
+                    call crop_work(ithr)%ifft
+                endif
+                if( l_put_records )then
+                    slot = record_slot(iptcl)
+                    if( slot > 0 ) call put_record(slot, crop_work(ithr))
+                endif
                 call prepimg4align_cached(params, build, iptcl, crop_work(ithr), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             else

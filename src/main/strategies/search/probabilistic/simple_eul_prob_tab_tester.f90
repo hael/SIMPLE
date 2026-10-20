@@ -435,8 +435,8 @@ contains
             nwrong = 0
             do iread = 1,nreads
                 call master4%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_TH(k), 1)
-                nwrong = nwrong + count(master4%rows(:,:)%dist /= rows(:,pinds)%dist) +&
-                    &count(master4%rows(:,:)%inpl /= rows(:,pinds)%inpl) +&
+                nwrong = nwrong + count(master4%dists /= transpose(rows(:,pinds)%dist)) +&
+                    &count(master4%inpls /= transpose(rows(:,pinds)%inpl)) +&
                     &count(master4%seed_shifts /= seeds(:,pinds)) + count(.not. master4%seed_has_sh) +&
                     &count_differences(master1, master4)
             enddo
@@ -453,7 +453,7 @@ contains
     !> the fields of two masters' read that differ: rows, refined lists, offsets and seeds
     integer function count_differences( a, b ) result( nwrong )
         type(eul_prob_tab), intent(in) :: a, b
-        nwrong = count(a%rows(:,:)%dist /= b%rows(:,:)%dist) + count(a%rows(:,:)%inpl /= b%rows(:,:)%inpl) +&
+        nwrong = count(a%dists /= b%dists) + count(a%inpls /= b%inpls) +&
             &count(a%refined_offsets /= b%refined_offsets) + count(a%seed_shifts /= b%seed_shifts) +&
             &count(a%seed_has_sh .neqv. b%seed_has_sh)
         if( size(a%refined) /= size(b%refined) )then
@@ -544,8 +544,8 @@ contains
         type(eul_prob_tab), intent(inout) :: tab
         integer,            intent(in)    :: iref, i
         real,               intent(in)    :: dist
-        tab%rows(iref,i)%dist = dist
-        tab%rows(iref,i)%inpl = 0
+        tab%dists(i,iref) = dist
+        tab%inpls(i,iref) = 0
     end subroutine set_dist
 
     !> The assignment ref_assign replaced (as of 2026-10-15), on a dense table dists(nrefs,nptcls) whose

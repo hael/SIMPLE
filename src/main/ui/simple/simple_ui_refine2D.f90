@@ -5,7 +5,6 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('refine2d', 'Refine 2D Workflows', 30)
 type(ui_program), target :: solve2D
-type(ui_program), target :: refine2D
 type(ui_program), target :: solve2D_chunks
 type(ui_program), target :: make_cavgs
 type(ui_program), target :: bootstrap_cavgs
@@ -70,7 +69,7 @@ contains
         ! search controls
         call program%add_input(UI_SRCH, ncls, group="search", visibility=UI_VIS_STANDARD)
         call program%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their &
-        &center of gravity and map shifts back to the particles(yes|no){no}','', .false., 'no', group="model", &
+        &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
@@ -78,12 +77,21 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
-        &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="search", &
+        &'Refinement mode of the stages from the third on (the first two always use snhc_smpl): prob_snhc scores &
+        &a sparse probabilistic table and assigns the last stage from a dense one; prob uses the dense table in every &
+        &stage; snhc_smpl is prob_snhc with the last stage sparse too(prob_snhc|prob|snhc_smpl){prob_snhc}','', &
+        &.false., 'prob_snhc', group="search", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_ADVANCED)
+        call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
+        &to sample each iteration; every active particle when there are fewer{200000}', '# particles to sample{200000}', &
+        &.false., 200000., group="search", visibility=UI_VIS_STANDARD, preserve_default=.true.)
+        call program%add_input(UI_SRCH, 'nstages', 'num', 'Number of stages', 'Number of solve2D stages, at most 6 &
+        &(5 with eo_stage=no): the low-pass limits from lpstart to lpstop are spread over the stages before the last, &
+        &and the last is the gold-standard even/odd stage{6}', '# stages{6}', .false., 6., group="search", &
+        &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         call program%add_input(UI_SRCH, 'stats', 'binary', 'Write class-average statistics', &
         &'Write class-average statistics during solve2D(yes|no){no}', '', .false., 'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -104,14 +112,17 @@ contains
         call program%add_input(UI_FILT, ml_reg, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., group="filter", &
+        &prior to determination of the center of gravity of the class averages and centering; by default the mask &
+        &diameter / 6, kept within 20-30 A and at least twice the cropped pixel size', 'centering low-pass limit in &
+        &Angstroms', .false., 30., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first solve2D stage',&
+        call program%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit of the first solve2D &
+            &stage; by default the mask diameter / 12, kept within 15-20 A and at least twice the cropped pixel size',&
             &'low-pass limit in Angstroms', .false., 30., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., group="filter", &
+        call program%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Low-pass limit the stages march to, &
+            &reached before the gold-standard stage; by default the mask diameter / 22, kept within 6-8 A and at least &
+            &twice the cropped pixel size', 'low-pass limit in Angstroms', .false., 6., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_FILT, lp, group="filter", &
         &visibility=UI_VIS_ADVANCED)

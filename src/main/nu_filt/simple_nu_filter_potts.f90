@@ -9,9 +9,10 @@ contains
         integer(kind=NU_LABEL_KIND), intent(inout) :: candmap(:,:,:)
         integer, intent(in)    :: n_candidates
         integer :: iter, color, i, j, k, imask, icand, cur_icand, best_icand, n_full(3,NU_LABEL_SMOOTH_NNEIGH), nsz
-        integer :: nchanged, n_base
+        integer :: nchanged, n_base, ivox
         real    :: beta, e, best_e, site_energy
         integer(kind=NU_LABEL_KIND), allocatable :: cap(:,:,:)
+        integer, allocatable :: color_vox(:), color_offsets(:)
         if( n_candidates < 2 ) return
         if( .not. allocated(candidate_coords) ) THROW_HARD('candidate_coords not allocated; refine_nu_candidate_map_ordered_labels')
         if( size(candidate_coords) /= n_candidates ) &
@@ -40,17 +41,18 @@ contains
             site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
             write(logfhandle,'(A,F12.5)') '>>> NU ordered-label smoothing initial mean site energy: ', site_energy
         endif
+        call pack_color_voxels
         do iter = 1, NU_LABEL_SMOOTH_MAXITS
             nchanged = 0
             do color = 0, NU_LABEL_SMOOTH_NCOLORS - 1
                 !$omp parallel do schedule(static) default(shared) &
-                !$omp private(i,j,k,imask,icand,cur_icand,best_icand,n_full,nsz,e,best_e) &
+                !$omp private(ivox,i,j,k,imask,icand,cur_icand,best_icand,n_full,nsz,e,best_e) &
                 !$omp reduction(+:nchanged) proc_bind(close)
-                do imask = 1, n_nu_mask
+                do ivox = color_offsets(color), color_offsets(color+1) - 1
+                    imask = color_vox(ivox)
                     i = nu_mask_vox(1,imask)
                     j = nu_mask_vox(2,imask)
                     k = nu_mask_vox(3,imask)
-                    if( nu_label_smooth_color(i,j,k) /= color ) cycle
                     call neigh_8_3D(ldim, [i,j,k], n_full, nsz)
                     cur_icand  = int(candmap(i,j,k))
                     best_icand = cur_icand
@@ -80,7 +82,33 @@ contains
             endif
             if( nchanged == 0 ) exit
         end do
-        deallocate(cap)
+        deallocate(cap, color_vox, color_offsets)
+
+    contains
+
+        !> the support voxels of each colour, in mask order: colour c's are color_vox(color_offsets(c):color_offsets(c+1)-1)
+        subroutine pack_color_voxels
+            integer, allocatable :: next(:)
+            integer :: c
+            allocate(color_offsets(0:NU_LABEL_SMOOTH_NCOLORS), source=0)
+            allocate(color_vox(n_nu_mask), next(0:NU_LABEL_SMOOTH_NCOLORS-1))
+            do imask = 1, n_nu_mask
+                c = nu_label_smooth_color(nu_mask_vox(1,imask), nu_mask_vox(2,imask), nu_mask_vox(3,imask))
+                color_offsets(c+1) = color_offsets(c+1) + 1
+            end do
+            color_offsets(0) = 1
+            do c = 0, NU_LABEL_SMOOTH_NCOLORS - 1
+                color_offsets(c+1) = color_offsets(c+1) + color_offsets(c)
+            end do
+            next = color_offsets(0:NU_LABEL_SMOOTH_NCOLORS-1)
+            do imask = 1, n_nu_mask
+                c = nu_label_smooth_color(nu_mask_vox(1,imask), nu_mask_vox(2,imask), nu_mask_vox(3,imask))
+                color_vox(next(c)) = imask
+                next(c) = next(c) + 1
+            end do
+            deallocate(next)
+        end subroutine pack_color_voxels
+
     end subroutine refine_nu_candidate_map_ordered_labels
 
     module real function estimate_nu_label_smooth_beta( n_candidates )

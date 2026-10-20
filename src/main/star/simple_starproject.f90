@@ -5,6 +5,7 @@ use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_starproject_utils
 use simple_refine3D_fnames, only: refine3D_iter_vol_fname, refine3D_resolution_txt_fbody
+use simple_refine2D_fnames, only: refine2D_cavgs_fname
 use CPlot2D_wrapper_module
 use simple_rnd
 use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
@@ -722,7 +723,7 @@ contains
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
         if(present(iter)) then 
-            stkname = basename(string(CWD_GLOB))//"/"//CAVGS_ITER_FBODY//int2str_pad(iter,3)//MRC_EXT
+            stkname = basename(string(CWD_GLOB))//"/"//refine2D_cavgs_fname(iter, MRC_EXT)
             do i=1, spproj%os_cls2D%get_noris()
                 call spproj%os_cls2D%set(i, "stk", stkname)
             end do

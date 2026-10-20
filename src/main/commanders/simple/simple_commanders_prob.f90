@@ -469,13 +469,14 @@ contains
         use simple_strategy2D_matcher,      only: set_b_p_ptrs2D, &
             &ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
         use simple_matcher_pftc_prep,       only: prep_pftc4align2D
-        use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+        use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
+            &crop_particles2D
         use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
         use simple_classaverager,           only: cavger_new, cavger_read_all, cavger_kill
         use simple_eul_prob_tab2D,          only: eul_prob_tab2D
         use simple_eul_prob_tab_utils,      only: prob_fill_profile
         use simple_matcher_ptcl_io,         only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
-            &ptcl_read_session, ptcl_buffer_budget, fill_pass_buffer
+            &ptcl_read_session, ptcl_buffer_budget, fill_pass_buffer, open_record_buffer, seal_record_buffer
         class(commander_prob_tab2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -489,7 +490,7 @@ contains
         real    :: frac_srch_space
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz, buffer_status
         integer, allocatable :: batches(:,:)
-        logical :: l_cached
+        logical :: l_cached, l_crop
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_setup, rt_refs, rt_batch, rt_fill, rt_write
         if( L_BENCH_GLOB )then
@@ -534,6 +535,8 @@ contains
         ! batch can be served from the downscaled cache
         call ptcl_cache_assert_ready(params, build)
         l_cached = ptcl_cache_in_use(params, build)
+        ! cropped as the matcher's particles are: from the in-memory cache entry, as a cached particle
+        l_crop   = crop_particles2D(params, l_cached)
         if( l_cached )then
             call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
                 &imgbatch_box=params%box_crop, imgbatch_smpd=params%smpd_crop)
@@ -556,9 +559,15 @@ contains
         call reads%new(params)
         call reads%expect(pinds(1:nptcls))
         ! in shared memory the matcher of the same iteration and process searches the same particles: the table
-        ! reads them once into the particle buffer, and the matcher's batches are copied from it (it releases it)
+        ! reads them once, and the matcher's batches are copied from the particle buffer (it releases it); cropped,
+        ! the buffer keeps each particle's record, the cropped particle, which the matcher then neither reads nor
+        ! prepares at the full box
         if( .not. params%l_distr_worker .and. .not. l_cached )then
-            buffer_status = fill_pass_buffer(params, build, reads, nptcls, pinds, ptcl_buffer_budget(params, build))
+            if( l_crop )then
+                buffer_status = open_record_buffer(params, nptcls, pinds, ptcl_buffer_budget(params, build))
+            else
+                buffer_status = fill_pass_buffer(params, build, reads, nptcls, pinds, ptcl_buffer_budget(params, build))
+            endif
         endif
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
@@ -566,7 +575,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             if( L_BENCH_GLOB ) t = tic()
             call build_batch_particles2D(params, build, batchsz, pinds(batch_start:batch_end), reads, &
-                &ptcl_match_imgs=ptcl_match_imgs, ptcl_match_imgs_pad=ptcl_match_imgs_pad)
+                &ptcl_match_imgs=ptcl_match_imgs, ptcl_match_imgs_pad=ptcl_match_imgs_pad, crop_sums=l_crop)
             if( L_BENCH_GLOB )then
                 rt_batch = rt_batch + toc(t)
                 t        = tic()
@@ -574,6 +583,7 @@ contains
             call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
             if( L_BENCH_GLOB ) rt_fill = rt_fill + toc(t)
         end do
+        call seal_record_buffer
         call reads%kill
         ! write the 2D probability table
         if( L_BENCH_GLOB ) t = tic()
@@ -593,7 +603,7 @@ contains
     end subroutine exec_prob_tab2D
 
     subroutine exec_prob_align2D( self, cline )
-        use simple_eul_prob_tab2D,          only: eul_prob_tab2D
+        use simple_eul_prob_tab2D,          only: eul_prob_tab2D, prob_assign_profile2D
         use simple_strategy2D_matcher,      only: set_b_p_ptrs2D
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4update2D
         use simple_ptcl_cache,              only: ptcl_cache_ensure
@@ -609,6 +619,7 @@ contains
         type(cmdline)              :: cline_prob_tab
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
+        type(prob_assign_profile2D) :: assign_profile
         integer :: nptcls
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write
@@ -629,8 +640,6 @@ contains
         ! In probabilistic mode the sampled subset is reused within the current iteration
         ! by prob_tab2D/refine2D_exec, but it is redrawn on later iterations.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
-        write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PROB_ALIGN2D: sampled ', nptcls, ' particles over ', params%nparts, ' part(s)'
-        call flush(logfhandle)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
         ! Build the downscaled particle cache before the workers start, so they all
@@ -654,8 +663,6 @@ contains
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif
-        write(logfhandle,'(A)') '>>> PROB_ALIGN2D: prob_tab2D workers completed; merging partition tables'
-        call flush(logfhandle)
         if( L_BENCH_GLOB )then
             rt_sched = toc(t)
             t        = tic()
@@ -668,8 +675,6 @@ contains
             t       = tic()
         endif
         ! global probabilistic class assignment
-        write(logfhandle,'(A)') '>>> PROB_ALIGN2D: running global probabilistic assignment'
-        call flush(logfhandle)
         call eulprob_obj_glob%ref_assign
         if( L_BENCH_GLOB )then
             rt_assign = toc(t)
@@ -677,19 +682,19 @@ contains
         endif
         ! write assignment to file
         fname = string(ASSIGNMENT_FBODY)//'.dat'
-        write(logfhandle,'(A,A)') '>>> PROB_ALIGN2D: writing assignment ', fname%to_char()
-        call flush(logfhandle)
         call eulprob_obj_glob%write_assignment(fname)
-        write(logfhandle,'(A)') '>>> PROB_ALIGN2D: assignment written'
+        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_ALIGN2D: ', nptcls, ' particles over ', params%nparts,&
+            &' part(s) assigned'
         call flush(logfhandle)
         if( L_BENCH_GLOB ) rt_write = toc(t)
+        assign_profile = eulprob_obj_glob%get_assign_profile()
         ! cleanup
         call eulprob_obj_glob%kill
         call cline_prob_tab%kill
         call qenv%kill
         call job_descr%kill
         if( L_BENCH_GLOB ) call write_prob_align_bench(params, 'PROB_ALIGN2D', nptcls, rt_setup, rt_sample, rt_sched, &
-            &rt_read, rt_assign, rt_write, toc(t_tot))
+            &rt_read, rt_assign, rt_write, toc(t_tot), assign2D=assign_profile)
         call build%kill_general_tbox
         call qsys_declare_part_finished(params, string('simple_commanders_prob :: exec_prob_align2D'))
         call qsys_cleanup(params)
@@ -812,14 +817,16 @@ contains
 
     !> The bench record of the prob_align driver, all wall time, in family PROB_ALIGN (prob), PROB_ALIGN_NEIGH
     !! (prob_neigh) or PROB_ALIGN2D; rt_sched runs from the launch of the parts to the last part finished (the
-    !! in-process table fill in shared memory).
+    !! in-process table fill in shared memory); assign2D splits the 2D reads and assignment.
     subroutine write_prob_align_bench( params, family, nptcls, rt_setup, rt_sample, rt_sched, rt_read, rt_assign, &
-            &rt_write, rt_tot )
-        use simple_bench_io, only: open_bench_report
-        class(parameters),    intent(in) :: params
-        character(len=*),     intent(in) :: family
-        integer,              intent(in) :: nptcls
-        real(timer_int_kind), intent(in) :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write, rt_tot
+            &rt_write, rt_tot, assign2D )
+        use simple_bench_io,       only: open_bench_report
+        use simple_eul_prob_tab2D, only: prob_assign_profile2D
+        class(parameters),                     intent(in) :: params
+        character(len=*),                      intent(in) :: family
+        integer,                               intent(in) :: nptcls
+        real(timer_int_kind),                  intent(in) :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write, rt_tot
+        type(prob_assign_profile2D), optional, intent(in) :: assign2D
         integer :: fnr
         call open_bench_report(fnr, family, iter=params%which_iter)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
@@ -846,6 +853,18 @@ contains
         if( rt_tot > 0. )then
             write(fnr,'(a,1x,f0.2)') 'prob_align % accounted for          :', &
                 &((rt_setup + rt_sample + rt_sched + rt_read + rt_assign + rt_write) / rt_tot) * 100.
+        endif
+        if( present(assign2D) )then
+            ! parts of the table reads and of ref_assign, not added to '% accounted for'
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** READ AND ASSIGNMENT DETAIL TIMINGS (s) ***'
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D read, candidate counts  :', assign2D%read_count
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D read, candidates        :', assign2D%read_fill
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, counts     :', assign2D%lists_count
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, fill       :', assign2D%lists_fill
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, sort       :', assign2D%lists_sort
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D frontier loop           :', assign2D%frontier
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D leftover particles      :', assign2D%leftover
         endif
         call fclose(fnr)
     end subroutine write_prob_align_bench

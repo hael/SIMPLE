@@ -27,6 +27,8 @@ type nu_state_filter_timings
     real(timer_int_kind) :: filtering = 0.
     real(timer_int_kind) :: objective = 0.
     real(timer_int_kind) :: optimise  = 0.
+    real(timer_int_kind) :: opt_levels = 0.  !< of optimise: the level smoothings and comparisons
+    real(timer_int_kind) :: opt_potts  = 0.  !< of optimise: the ordered-label Potts sweeps
     real(timer_int_kind) :: compose   = 0.
 end type nu_state_filter_timings
 
@@ -176,11 +178,13 @@ contains
     contains
 
         subroutine add_filter_split()
-            real(timer_int_kind) :: filtering, objective, optimise, compose
-            call get_nu_filter_timings(filtering, objective, optimise, compose)
-            timings%filtering = timings%filtering + filtering
-            timings%objective = timings%objective + objective
-            timings%optimise  = timings%optimise  + optimise
+            real(timer_int_kind) :: filtering, objective, optimise, compose, opt_levels, opt_potts
+            call get_nu_filter_timings(filtering, objective, optimise, compose, opt_levels, opt_potts)
+            timings%filtering  = timings%filtering  + filtering
+            timings%objective  = timings%objective  + objective
+            timings%optimise   = timings%optimise   + optimise
+            timings%opt_levels = timings%opt_levels + opt_levels
+            timings%opt_potts  = timings%opt_potts  + opt_potts
             timings%compose   = timings%compose   + compose
         end subroutine add_filter_split
 

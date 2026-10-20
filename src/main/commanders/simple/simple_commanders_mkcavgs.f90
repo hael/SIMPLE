@@ -3,6 +3,7 @@ module simple_commanders_mkcavgs
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_classaverager
+use simple_refine2D_fnames, only: refine2D_cavgs_fname, refine2D_cavgs_half_fname, refine2D_cavgs_iter
 implicit none
 #include "simple_local_flags.inc"
 
@@ -797,7 +798,7 @@ contains
         type(builder)      :: build
         type(starproject)  :: starproj
         real, allocatable  :: states(:)
-        integer            :: iterstr_start, iterstr_end, iter, io_stat, fnr
+        integer            :: iter, io_stat, fnr
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_init, rt_reduce_partials, rt_classdoc, rt_write_cavgs
         real(timer_int_kind)    :: rt_export_star, rt_project_update, rt_cleanup, rt_tot
@@ -816,9 +817,9 @@ contains
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( L_BENCH_GLOB ) rt_init = toc(t_phase)
         if( cline%defined('which_iter') )then
-            params%refs      = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//params%ext%to_char()
-            params%refs_even = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//'_even'//params%ext%to_char()
-            params%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(params%which_iter,3)//'_odd'//params%ext%to_char()
+            params%refs      = refine2D_cavgs_fname(params%which_iter, params%ext%to_char())
+            params%refs_even = refine2D_cavgs_half_fname(params%which_iter, 'even', params%ext%to_char())
+            params%refs_odd  = refine2D_cavgs_half_fname(params%which_iter, 'odd', params%ext%to_char())
         else if( .not. cline%defined('refs') )then
             params%refs      = 'start2Drefs'//params%ext%to_char()
             params%refs_even = 'start2Drefs_even'//params%ext%to_char()
@@ -843,9 +844,7 @@ contains
             if( L_BENCH_GLOB ) rt_export_star = toc(t_phase)
             iter = params%which_iter
         else if( cline%defined('refs') .and. params%refs%substr_ind(CAVGS_ITER_FBODY) > 0 ) then
-            iterstr_start = params%refs%substr_ind(CAVGS_ITER_FBODY) + 10
-            iterstr_end   = params%refs%substr_ind(params%ext) - 1
-            iter = str2int(params%refs%to_char([iterstr_start,iterstr_end]), io_stat)
+            iter = refine2D_cavgs_iter(params%refs, params%ext, io_stat)
             if( L_BENCH_GLOB ) t_phase = tic()
             call starproj%export_cls2D(build%spproj, iter)
             if( L_BENCH_GLOB ) rt_export_star = toc(t_phase)

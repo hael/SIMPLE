@@ -6,6 +6,7 @@ use simple_commanders_refine2D
 use simple_solve2D_controller 
 use simple_gui_communicator,       only: gui_communicator
 use simple_eo_partition,           only: ensure_field_halves
+use simple_refine2D_fnames,        only: refine2D_cavgs_fname, refine2D_cavgs_ranked_fname
 implicit none
 
 public :: commander_solve2D, commander_solve2D_chunks, execute_solve2D_staged
@@ -156,8 +157,8 @@ contains
         if( L_BENCH_GLOB ) rt_setup = toc(t_phase)
         ! summary
         do istage = 1,nstages
-            write(logfhandle,'(A,I2,A,L1,F6.1,2I8,F7.3,2L2)')'>>> STAGE ', istage,' LPSET LP MAXCLSPOP NPTCLS UFRAC ST FR: ',&
-            &stage_parms(istage)%l_lpset,stage_parms(istage)%lp, stage_parms(istage)%max_cls_pop,&
+            write(logfhandle,'(A,I2,A,L1,F6.1,I8,F7.3,2L2)')'>>> STAGE ', istage,' LPSET LP NPTCLS UFRAC ST FR: ',&
+            &stage_parms(istage)%l_lpset,stage_parms(istage)%lp,&
             &stage_parms(istage)%nptcls, stage_parms(istage)%update_frac,&
             &stage_parms(istage)%l_sticky_sampling, stage_parms(istage)%l_frac_restore
         end do
@@ -180,14 +181,18 @@ contains
         do istage = start_stage,stop_stage
             write(logfhandle,'(A)')'>>>'
             if( stage_parms(istage)%l_lpset )then
-                write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', stage_parms(istage)%lp
+                write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', stage_parms(istage)%lp, ' A'
             else
                 write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH GOLD STANDARD E/O'
             endif
             ! parameters update
             call set_cline_refine2D_stage(cline_refine2D, cline, params, stage_parms, maxits, istage)
             ! classify
+            write(logfhandle,'(A,I0)')'>>> SOLVE2D ENTERING REFINE2D STAGE ', istage
+            call flush(logfhandle)
             call execute_refine2D
+            write(logfhandle,'(A,I0)')'>>> SOLVE2D RETURNED FROM REFINE2D STAGE ', istage
+            call flush(logfhandle)
             ! update GUI
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('out',   params%projfile)
@@ -640,7 +645,7 @@ contains
             if( .not. any(stage_parms(:)%l_update_frac) ) return
             last_iter      = cline_refine2D%get_iarg('endit')
             terminal_start = last_iter + 1
-            terminal_refs  = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char()
+            terminal_refs  = refine2D_cavgs_fname(last_iter, params%ext%to_char())
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I8)')'>>> TERMINAL GREEDY ALL-PARTICLE PASS FROM ITERATION ', last_iter
             call cline_refine2D%set('refs',           terminal_refs)
@@ -675,7 +680,7 @@ contains
             type(cmdline)                    :: cline_make_cavgs, cline_rank_cavgs
             type(string)                     :: finalcavgs, finalcavgs_ranked
             integer :: iter
-            finalcavgs = CAVGS_ITER_FBODY//int2str_pad(iter,3)//params%ext%to_char()
+            finalcavgs = refine2D_cavgs_fname(iter, params%ext%to_char())
             ! classes generation
             cline_make_cavgs = cline ! ncls is transferred here
             call cline_make_cavgs%delete('autoscale')
@@ -698,7 +703,7 @@ contains
             call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg', mskdiam=params%mskdiam)
             call spproj%write_segment_inside('out', params%projfile)
             ! rank based on gold-standard resolution estimates
-            finalcavgs_ranked = CAVGS_ITER_FBODY//int2str_pad(iter,3)//'_ranked'//params%ext%to_char()
+            finalcavgs_ranked = refine2D_cavgs_ranked_fname(iter, params%ext%to_char())
             call cline_rank_cavgs%set('projfile', params%projfile)
             call cline_rank_cavgs%set('stk',      finalcavgs)
             call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)

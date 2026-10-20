@@ -119,6 +119,8 @@ contains
         allocate(dmats_mask(n_nu_mask,n_candidates), source=huge(x))
         if( allocated(raw_dmats_mask) ) deallocate(raw_dmats_mask)
         allocate(raw_dmats_mask(n_nu_mask,n_candidates), source=huge(x))
+        if( allocated(norms_mask) ) deallocate(norms_mask)
+        allocate(norms_mask(n_nu_mask,n_candidates), source=0.)
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
         allocate(dmat_cand(ldim(1),ldim(2),ldim(3)), source=huge(x))
         if( allocated(nu_ev_base) ) deallocate(nu_ev_base)
@@ -144,6 +146,7 @@ contains
             call pack_nu_raw_candidate(dmat_cand, i)
             call smooth_nu_objective(dmat_cand, dmat_tmp, nu_label_lowpass_limit(i))
             call pack_nu_dmat_candidate(dmat_cand, i)
+            call pack_nu_full_to_mask(nu_smooth_norm, norms_mask(:,i))
             if( L_BENCH_GLOB ) nu_rt_objective = nu_rt_objective + toc(t0)
         end do
         call vol_even_filt%kill
@@ -199,7 +202,7 @@ contains
         integer, allocatable :: sel(:)
         real,    allocatable :: lvl(:,:), full(:,:,:), tmp(:,:,:)
         real    :: lp_level
-        integer(timer_int_kind) :: t0
+        integer(timer_int_kind) :: t0, t1
         if( L_BENCH_GLOB ) t0 = tic()
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -215,21 +218,26 @@ contains
         ! fine.
         n_candidates = size(dmats_mask, 2)
         if( .not.allocated(raw_dmats_mask) ) THROW_HARD('raw_dmats_mask not allocated; run setup_nu_dmats before optimize_nu_cutoff_finds')
+        if( .not.allocated(norms_mask) ) THROW_HARD('norms_mask not allocated; run setup_nu_dmats before optimize_nu_cutoff_finds')
         if( allocated(filtmap) ) deallocate(filtmap)
         allocate(filtmap(nx,ny,nz), source=1_NU_LABEL_KIND)
         ! Coarse-to-fine like-for-like selection: label l replaces the incumbent only if strictly cheaper, both
-        ! re-smoothed at l's radius from raw_dmats_mask (n(n+1)/2-1 extra passes); dmats_mask feeds the Potts prior.
+        ! smoothed at l's radius from raw_dmats_mask; l itself at its own radius is the setup's dmats_mask column,
+        ! which also feeds the Potts prior, and the setup's norm at that radius is loaded, not smoothed again.
         allocate(sel(n_nu_mask), source=1)
         allocate(lvl(n_nu_mask,n_candidates), source=0.)
         allocate(full(nx,ny,nz), source=0.)
         allocate(tmp(nx,ny,nz),  source=0.)
+        if( L_BENCH_GLOB ) t1 = tic()
         do ilevel = 2, n_candidates
             lp_level = nu_label_lowpass_limit(ilevel)
-            do icand = 1, ilevel
+            call load_nu_smooth_norm(lp_level, norms_mask(:,ilevel))
+            do icand = 1, ilevel - 1
                 call unpack_nu_raw_candidate(icand, full)
                 call smooth_nu_objective(full, tmp, lp_level)
                 call pack_nu_full_to_mask(full, lvl(:,icand))
             end do
+            lvl(:,ilevel) = dmats_mask(:,ilevel)
             !$omp parallel do schedule(static) default(shared) private(imask) proc_bind(close)
             do imask = 1, n_nu_mask
                 if( lvl(imask,ilevel) < lvl(imask,sel(imask)) ) sel(imask) = ilevel
@@ -238,6 +246,7 @@ contains
         end do
         deallocate(lvl, full, tmp)
         call release_nu_smooth_norm()
+        if( L_BENCH_GLOB ) nu_rt_opt_levels = nu_rt_opt_levels + toc(t1)
         !$omp parallel do schedule(static) default(shared) private(i,j,k,imask) proc_bind(close)
         do imask = 1, n_nu_mask
             i = nu_mask_vox(1,imask)
@@ -261,7 +270,9 @@ contains
         if( NU_DEV_OUTPUT .and. nu_l_report ) call log_nu_aux_replacement_margin_stats()
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'before ordered-label smoothing')
+        if( L_BENCH_GLOB ) t1 = tic()
         call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
+        if( L_BENCH_GLOB ) nu_rt_opt_potts = nu_rt_opt_potts + toc(t1)
         if( nu_l_solvent_clamp ) call apply_nu_solvent_clamp()
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')

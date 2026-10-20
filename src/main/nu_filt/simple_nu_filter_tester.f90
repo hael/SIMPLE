@@ -14,6 +14,9 @@ use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_
                            &nu_envmask_params, nu_envmask_stats, NU_EVIDENCE_NBANDS, NU_EVIDENCE_SOURCE_BASE, &
                            &NU_EVIDENCE_MIN_NULL_FRAC, NU_EVIDENCE_MAX_NULL_FRAC
 use simple_test_utils
+use simple_tent_smooth, only: tent_smooth_3d
+use simple_rnd,         only: seed_rnd_fixed
+!$ use omp_lib,          only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
 
 public :: run_all_nu_filter_tests
@@ -48,7 +51,168 @@ contains
         call test_coarser_region()
         call test_composition_per_label()
         call test_evidence_envelope()
+        call test_tent_smooth_exact()
+        call test_label_field_threads()
     end subroutine run_all_nu_filter_tests
+
+    !> the label optimisation at every processor, 20 times on one setup: the same label field each time (the smoothing
+    !! beta is a real reduction, so the field is reproducible at a fixed thread count; the level smoothings and the
+    !! Potts sweeps run in parallel)
+    subroutine test_label_field_threads()
+        integer, parameter :: NREP = 20
+        type(image) :: even, odd
+        real, allocatable :: lp_first(:), lp_rep(:)
+        integer :: irep, ndiff, nthr_prev, nthr_full
+        write(logfhandle,'(A)') '-- test_label_field_threads'
+        nthr_prev = 1
+        nthr_full = 1
+        !$ nthr_prev = omp_get_max_threads()
+        !$ nthr_full = omp_get_num_procs()
+        call make_pair(.true., even, odd)
+        call set_nu_filter_report(.false.)
+        !$ call omp_set_num_threads(nthr_full)
+        ndiff = 0
+        call setup_nu_dmats(even, odd, MSKDIAM, [real ::])
+        do irep = 1, NREP
+            call optimize_nu_cutoff_finds()
+            if( irep == 1 )then
+                call pack_filtmap_lowpass_limits(lp_first)
+            else
+                call pack_filtmap_lowpass_limits(lp_rep)
+                if( size(lp_rep) /= size(lp_first) )then
+                    ndiff = ndiff + 1
+                else
+                    ndiff = ndiff + count(lp_rep /= lp_first)
+                endif
+            endif
+        end do
+        call cleanup_nu_filter()
+        !$ call omp_set_num_threads(nthr_prev)
+        call set_nu_filter_report(.true.)
+        call even%kill
+        call odd%kill
+        call assert_int(0, ndiff, 'the label field is the same in every run at every processor')
+    end subroutine test_label_field_threads
+
+    !> The tent smoothing (zero rows and planes written without filtering, Y and Z columns filtered a plane at a time)
+    !! equals the column-by-column filtering it replaced, reference_tent_smooth, bit for bit: odd box sizes, radii 1-7,
+    !! zero rows, planes and slabs (of either sign) beside random values; at one thread and 20 times at every processor
+    subroutine test_tent_smooth_exact()
+        integer, parameter :: NX = 23, NY = 17, NZ = 19
+        real, allocatable :: vol(:,:,:), ref(:,:,:), new(:,:,:), tmp(:,:,:)
+        integer :: radius, irep, nthr_prev, nthr_full, ndiff, i, j, k
+        write(logfhandle,'(A)') 'test_tent_smooth_exact'
+        nthr_prev = 1
+        nthr_full = 1
+        !$ nthr_prev = omp_get_max_threads()
+        !$ nthr_full = omp_get_num_procs()
+        allocate(vol(NX,NY,NZ), ref(NX,NY,NZ), new(NX,NY,NZ), tmp(NX,NY,NZ))
+        call seed_rnd_fixed(SEED)
+        do k = 1,NZ
+            do j = 1,NY
+                do i = 1,NX
+                    vol(i,j,k) = ran3() - 0.3
+                end do
+            end do
+        end do
+        vol(:,3,:)   = 0.              ! an XZ slab
+        vol(:,:,5)   = 0.              ! an XY plane
+        vol(:,7,9)   = -0.             ! a row of negative zeros
+        vol(:,1:2,1) = 0.              ! rows at the edge
+        vol(4,:,:)   = 0.              ! a YZ plane (zeros inside rows)
+        ndiff = 0
+        do radius = 1,7
+            ref = vol
+            call reference_tent_smooth(ref, tmp, NX, NY, NZ, radius)
+            !$ call omp_set_num_threads(1)
+            new = vol
+            call tent_smooth_3d(new, tmp, NX, NY, NZ, radius)
+            ndiff = ndiff + count(transfer(new, 1, size(new)) /= transfer(ref, 1, size(ref)))
+            !$ call omp_set_num_threads(nthr_full)
+            do irep = 1,20
+                new = vol
+                call tent_smooth_3d(new, tmp, NX, NY, NZ, radius)
+                ndiff = ndiff + count(transfer(new, 1, size(new)) /= transfer(ref, 1, size(ref)))
+            end do
+            !$ call omp_set_num_threads(nthr_prev)
+        end do
+        call assert_int(0, ndiff, 'the tent smoothing equals the column-by-column filtering, bit for bit')
+        deallocate(vol, ref, new, tmp)
+    end subroutine test_tent_smooth_exact
+
+    !> the tent smoothing as it was before its zero skips and plane-wise Y/Z passes: one column at a time, serially
+    subroutine reference_tent_smooth( vol, tmp, nx, ny, nz, radius )
+        integer, intent(in)    :: nx, ny, nz, radius
+        real,    intent(inout) :: vol(nx,ny,nz), tmp(nx,ny,nz)
+        integer :: lext1, rext1, lext2, rext2
+        lext1 = radius / 2
+        rext1 = radius - lext1
+        lext2 = rext1
+        rext2 = lext1
+        call pass(vol, tmp, 1, lext1, rext1)
+        call pass(tmp, vol, 1, lext2, rext2)
+        call pass(vol, tmp, 2, lext1, rext1)
+        call pass(tmp, vol, 2, lext2, rext2)
+        call pass(vol, tmp, 3, lext1, rext1)
+        call pass(tmp, vol, 3, lext2, rext2)
+
+    contains
+
+        subroutine pass( src, dst, dim, lext, rext )
+            real,    intent(in)  :: src(nx,ny,nz)
+            real,    intent(out) :: dst(nx,ny,nz)
+            integer, intent(in)  :: dim, lext, rext
+            real    :: bx_in(nx), bx_out(nx), by_in(ny), by_out(ny), bz_in(nz), bz_out(nz)
+            integer :: a, b
+            select case(dim)
+                case(1)
+                    do b = 1,nz
+                        do a = 1,ny
+                            bx_in = src(:,a,b)
+                            call filter_1d(bx_in, bx_out, nx, lext, rext)
+                            dst(:,a,b) = bx_out
+                        end do
+                    end do
+                case(2)
+                    do b = 1,nz
+                        do a = 1,nx
+                            by_in = src(a,:,b)
+                            call filter_1d(by_in, by_out, ny, lext, rext)
+                            dst(a,:,b) = by_out
+                        end do
+                    end do
+                case(3)
+                    do b = 1,ny
+                        do a = 1,nx
+                            bz_in = src(a,b,:)
+                            call filter_1d(bz_in, bz_out, nz, lext, rext)
+                            dst(a,b,:) = bz_out
+                        end do
+                    end do
+            end select
+        end subroutine pass
+
+        subroutine filter_1d( src, dst, n, lext, rext )
+            integer, intent(in)  :: n, lext, rext
+            real,    intent(in)  :: src(n)
+            real,    intent(out) :: dst(n)
+            integer :: i, j, box_width
+            real    :: running_sum
+            box_width   = lext + rext + 1
+            running_sum = 0.0
+            do j = -lext, rext
+                running_sum = running_sum + src(max(1, min(n, 1 + j)))
+            end do
+            dst(1) = running_sum / real(box_width)
+            do i = 2, n
+                running_sum = running_sum &
+                            + src(max(1, min(n, i + rext))) &
+                            - src(max(1, min(n, i - 1 - lext)))
+                dst(i) = running_sum / real(box_width)
+            end do
+        end subroutine filter_1d
+
+    end subroutine reference_tent_smooth
 
     ! ---- fixtures -------------------------------------------------------------
 

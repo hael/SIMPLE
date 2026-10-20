@@ -1357,6 +1357,8 @@ contains
             write(fnr,'(a,1x,f0.2)') 'volassemble nu filter candidate filter :', nu_timings%filtering
             write(fnr,'(a,1x,f0.2)') 'volassemble nu filter objective        :', nu_timings%objective
             write(fnr,'(a,1x,f0.2)') 'volassemble nu filter optimisation     :', nu_timings%optimise
+            write(fnr,'(a,1x,f0.2)') 'volassemble nu filter opt. levels      :', nu_timings%opt_levels
+            write(fnr,'(a,1x,f0.2)') 'volassemble nu filter opt. Potts       :', nu_timings%opt_potts
             write(fnr,'(a,1x,f0.2)') 'volassemble nu filter composition      :', nu_timings%compose
             do istate = 1,params%nstates
                 write(fnr,'(a,i2.2,a,1x,f0.2)') 'volassemble state ', istate, ' restore           :', &

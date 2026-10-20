@@ -16,7 +16,7 @@ public :: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, add_pt
 public :: write_ptcl_read_bench_context, write_mem_bench_context
 public :: ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, pass_buffer_status_name, pass_buffer_bytes
 public :: open_record_buffer, records_open, record_slot, put_record, seal_record_buffer, take_records
-public :: get_rec_observation
+public :: get_rec_observation, get_records
 public :: BUFFER_FILLED, BUFFER_OFF, BUFFER_OVER_BUDGET, BUFFER_NO_MEMORY, BUFFER_RECORDS
 private
 
@@ -501,6 +501,13 @@ contains
         call pass_slab%get(pass_slot(iptcl - pass_lo + 1), obs)
         if( l_taper ) call obs%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
     end subroutine get_rec_observation
+
+    !> imgs (box_crop) receive the records of particles take_records accepted, copied in parallel
+    subroutine get_records( pinds, imgs )
+        integer,      intent(in)    :: pinds(:)
+        class(image), intent(inout) :: imgs(:)
+        call pass_slab%get_many(pass_slot(pinds - pass_lo + 1), imgs)
+    end subroutine get_records
 
     integer(int64) function pass_buffer_bytes()
         pass_buffer_bytes = pass_slab%bytes()

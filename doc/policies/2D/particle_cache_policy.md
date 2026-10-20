@@ -49,10 +49,12 @@ directory).
   `cropped_ptcls=.true.`): deliberate numerics change — edge taper and
   gridding source grid live at `box_crop`, no second noise normalization,
   shift and CTF pixel size scaled to the cropped grid. Without the cache the
-  2D matcher makes the same entry in memory from the full-size read of each
-  batch and restores from it the same way (`solve2D_policy.md`), whenever
-  `box_crop < box` outside the stream's 2D pool; the cache then only saves the
-  reads and the per-iteration preparation.
+  2D matcher and the 2D probability table make the same entry in memory from
+  the full-size read of each batch, align from it and restore from it the same
+  way (`solve2D_policy.md`, `crop_particles2D`), whenever `box_crop < box`
+  outside the stream's 2D pool, so an uncached run is byte-identical to a
+  cached one; the cache then only saves the reads and the per-iteration
+  preparation.
 Not consumers, by design: every 3D workflow (alignment, probabilistic
 preparation, and reconstruction all read the full-size originals; a cropped
 `refine3D` reconstruction takes the observations its own search made from

@@ -34,7 +34,7 @@ selector has been removed for `solve2D` and `refine2D`.
 5. optionally run probabilistic pre-alignment in later stages
 6. update particle class, in-plane, shift, sampled, and update-count state
 7. restore class averages through shared-memory or distributed class-average pathways
-8. run a final fill-in assignment pass for active particles that were never updated
+8. when updates are sampled, keep the last stages iterating (`fillin=yes`) until every active particle has a class
 9. when sampled updates were active, run a terminal dense greedy all-particle pass
 10. generate final class averages, FRC metadata, and ranked outputs
 
@@ -59,6 +59,70 @@ class-overlap convergence reporting can recover. The separate terminal
 all-particle coverage pass after sampled staged updates also uses dense
 `refine=greedy`. `solve2D_chunks` must preserve this policy when constructing
 child `solve2D` command lines.
+
+### Defaults
+
+`solve2D` sets `oritype=ptcl2D`. When unset, it supplies:
+
+- `autoscale=yes`, `mkdir=yes`
+- `center=yes`, `center_type=seg`
+- `cls_init=rand`
+- `gauref=yes`, `ml_reg=yes`
+- `refine=prob_snhc`
+- `extr_lim=20`, `nits_per_stage=5`, `eo_stage=yes`
+- `rank_cavgs=yes`, `stats=no`
+
+The controller derives the rest:
+
+- the crop: `box_crop` from a target pixel size of 2.67 A (never below a box
+  of 88) when `autoscale=yes`; the class averages of the stages live at it
+- `lpstart` = mask diameter / 12, kept within 15-20 A; `lpstop` = mask
+  diameter / 22, kept within 6-8 A; `cenlp` = mask diameter / 6, kept within
+  20-30 A; each at least twice the cropped pixel size. A command-line `lp`
+  fixes every stage after the first at `lp`
+- `nsample=200000` (`NSAMPLE_DEFAULT_2D`): the sample of each iteration, every
+  active particle when there are fewer
+- `nstages=6` (5 with `eo_stage=no`); a smaller `nstages` re-spaces the
+  low-pass ladder from `lpstart` to `lpstop` over the stages before the last,
+  which stays the gold-standard stage
+
+The interface shows these values (`scripts/default_audit.py` follows
+`exec_solve2D` into `exec_solve2D_workflow`). The shown numeric defaults of
+`lpstart`, `lpstop` and `cenlp` are the parameter baselines, since the
+interface has no way to show a value derived from the mask diameter; their
+help texts give the rule.
+
+### Stage controller
+
+`simple_solve2D_controller.f90` emits one `refine2D` command line per stage.
+Six stages, in two phases (stages 1-4 and 5-6):
+
+| stage | search (`refine=prob_snhc`) | low-pass | references |
+| --- | --- | --- | --- |
+| 1 | `snhc_smpl` | `lpstart` | random, Gaussian-filtered (`gauref`), no centering, no shift search |
+| 2 | `snhc_smpl` | ladder | the previous iteration's class averages, `ml_reg`, centering and shift search |
+| 3-4 | sparse `prob_snhc` table | ladder | as stage 2 |
+| 5 | sparse `prob_snhc` table | `lpstop` | as stage 2 |
+| 6 | dense `prob` table | gold standard (even/odd) | as stage 2 |
+
+- The ladder halves the distance to `lpstop` at each stage.
+- `refine=prob` uses the dense table from stage 3 on; `refine=snhc_smpl` keeps
+  the sparse table in the last stage too. Stages 1 and 2 are always
+  `snhc_smpl`.
+- Phase 1 stages end at fixed iterations (`minits = maxits`), spread over
+  `extr_lim`; phase 2 stages run `nits_per_stage` iterations, more when the
+  sample needs them to cover every particle.
+- When updates are sampled, stages 5 and 6 (and the last stage) take
+  `fillin=yes`: they keep iterating until every active particle has a class.
+  Stage 1 samples but does not carry previous class sums forward.
+- After the stages, a sampled run ends with one dense `refine=greedy` pass
+  over every particle (the terminal pass) before the final class averages.
+
+The log marks each stage (`>>> STAGE n WITH LP x A`, or `WITH GOLD STANDARD
+E/O`) and its call (`>>> SOLVE2D ENTERING REFINE2D STAGE n`, `>>> SOLVE2D
+RETURNED FROM REFINE2D STAGE n`). Each iteration prints one `>>> CONVERGED:
+yes|no`, the decision after `minits`, `maxits` and the full-assignment
+coverage, as 3D does.
 
 ### Seeded restart (`cls_init=prev`)
 
@@ -122,7 +186,6 @@ the project instead of a random start. It is a `solve2D`-only mode
   (validation/repair of the previous clustering, seed references, seed
   pass and its diagnostics); the seed partition itself is an `oris`
   operation (`reseed_classes`, `simple_oris_reshape.f90`)
-- final fill-in dispatch
 - terminal dense greedy all-particle dispatch after sampled staged updates
 - final class-average generation/ranking
 
@@ -136,6 +199,7 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - search-mode policy by stage
 - sampled-update policy, including `NSAMPLE_DEFAULT_2D` and `nsample` override handling
 - the rule that stage 1 may sample particles but does not fractionally restore previous class averages
+- the full-assignment coverage request (`fillin=yes`) on the staged calls
 - the seed-pass iteration index and command line of a `cls_init=prev` run
   (`solve2D_seed_pass_iter`, `set_cline_refine2D_seed_pass`)
 
@@ -174,7 +238,7 @@ Probabilistic table construction has a separate bounded-memory contract:
 - `prob_tab2D` workers retain only thread-local compact candidates for the
   current particle batch and stream them to one partition file;
 - `prob_align2D` constructs the global object only after workers complete;
-- dense `refine=prob` uses a compact rectangular candidate table, while sparse
+- dense `refine=prob` uses a compact rectangular table, while sparse
   `refine=prob_snhc` uses a particle-oriented ragged candidate store;
 - compact storage is materialized as the established `ptcl_ref` assignment only
   after global selection, so assignment-file semantics do not change.
@@ -196,10 +260,45 @@ thread, so only its random draws change). Each table part's bench record
 thread-seconds of the seed, the score loop and the refinement, the fill
 regions' wall time, the load balance and the shifted particle memos built.
 
+The 2D part files (`dist_partN.dat`; one iteration's artifacts) have two
+layouts, told apart by a format word in the header:
+
+- the candidate stream (`refine=prob_snhc`, format -4): header (classes,
+  particles, format word, candidates, chunks), particle indices, the
+  candidate count of every particle, the seed table, then the chunks the
+  worker threads flushed (particle indices and 24-byte candidates);
+- the dense rows (`refine=prob`, format -5): header (classes, particles,
+  format word, refined entries), particle indices, the seed table, one row
+  of (distance, in-plane index) per particle and class (8 bytes per entry),
+  then the refined entries (particle, class, shift) of the candidates whose
+  shift was refined. A worker turns each thread's buffered candidates into
+  rows when it flushes them: a particle is processed whole by one thread,
+  so its candidates are consecutive in one buffer.
+
+`prob_align2D` reads the parts in parallel (one task per part file, file
+names built before the loop, a status per part raised after it): first every
+part's head, which sizes the sparse store from the counts, then every part's
+candidates or rows, once. Each part's size must be the size its header
+implies, and every particle of the master must be in exactly one part
+(counted with an atomic capture). The dense master keeps `rows(nclasses,
+nptcls)` of 8 bytes and the refined entries in compressed-row form; the
+assignment rebuilds a full candidate from them (`dense_candidate`). The
+`PROB_ALIGN2D` report splits the reads (heads, candidates) and the
+assignment (class lists: counts, fill, sort; the frontier loop; the leftover
+particles).
+
 Dense assignment (`ref_assign_likelihood`): every active class sorts the
 particles by distance; each step draws among the classes' closest available
 particles (the frontier). The frontier is kept, not rescanned: after an
 assignment only the classes whose head was the assigned particle move on.
+
+Sparse assignment (`ref_assign_sparse_likelihood`): each class's candidates
+are gathered with their particles and distances during the fill pass and
+sorted in parallel over the classes (the same unstable `hpsort` on the same
+input, so ties fall as before); the head walk reads those arrays in order,
+and each particle's peak count is computed once. The frontier loop keeps its
+order, its one random draw per step and the swap-remove that decides ties
+within a particle.
 
 A distributed part with none of the sampled particles is valid: its table
 part writes an empty table (header, no candidates; the readers skip its
@@ -212,8 +311,10 @@ particle is searched whole by one thread, so only its random draws change).
 In shared memory the probability table fills the particle buffer
 (`doc/policies/particle_read_path_policy.md`) and the matcher of the same
 iteration copies its batches from it, so a table iteration reads each
-particle once; the buffer holds raw images, so the preparation still runs
-twice.
+particle once. When the particles are cropped (below), the buffer holds
+their records, the cropped particles, so the matcher neither reads nor
+prepares them at the full box; otherwise it holds raw images and the
+preparation runs twice.
 
 `simple_commanders_mkcavgs.f90` and the classaverager modules own:
 
@@ -229,17 +330,20 @@ batch order. The sums are therefore the same at any thread count. The work
 images are sized by the thread team.
 
 The matcher's class averages live at `box_crop`, so whenever `box_crop < box`
-(and outside the stream's 2D pool) its online sums take the Fourier-cropped
+(and outside the stream's 2D pool; `crop_particles2D` decides it for the
+matcher and the table alike) its online sums take the Fourier-cropped
 particle the particle cache would serve (`particle_cache_policy.md`, section
 3), made in memory from the full-size read of the batch: noise-normalized at
 the full box, cropped, then tapered, padded and transformed at `box_crop`.
 That replaces a transform of the padded full box of which only the
 `box_crop` region was used. The alignment then prepares the particle exactly
-as with `cache=yes`. Both differ from the uncached full-box preparation by
-rounding: the cropped particle goes back to real space and is transformed
-again, which is not bitwise exact. The class sums change as the cached
-restoration does (statistical parity, not bit equality). The final class
-averages of `solve2D` are restored at the full box by `make_cavgs`.
+as with `cache=yes`, and so does the probability table (`prob_tab2D`), so an
+uncached run is byte-identical to a cached one. Both differ from the old
+uncached full-box preparation by rounding: the cropped particle goes back to
+real space and is transformed again, which is not bitwise exact. The class
+sums change as the cached restoration does (statistical parity, not bit
+equality). The final class averages of `solve2D` are restored at the full
+box by `make_cavgs`.
 
 Benchmark reports (`refine3D_policy.md`, section 11.1, lists the files):
 `REFINE2D_BENCH_PARTppp.txt` for every partition, with the thread-seconds and
@@ -364,7 +468,11 @@ Stable 2D workflow artifacts include:
   assembly owner, with `M(c)` per class; no part number
 - `cavgs_iterNNN.mrc`, `cavgs_iterNNN_even.mrc`, `cavgs_iterNNN_odd.mrc`
 - `FRCS_FILE`
-- `sigma2` iteration files
+- `sigma2_state.bin`: the project's one canonical sigma2 store. Before the
+  parts of an iteration write, the master validates the committed store and
+  clears what another transaction of the next generation left
+  (`prepare_canonical_sigma_update`); the parts write their ranges as a
+  candidate, and `commit_sigma2` publishes it as the next generation
 - `ptcl2D`, `cls2D`, `cls3D`, and `out` project segments
 
 Partition-local probabilistic assignment/dist files and the class-sum contributions are per-iteration artifacts: the master removes them before the next distributed iteration writes new ones, and the assembly owner deletes the contributions after the blend. Workers never read carried state. The carried set `cavg_state.bin` is the only durable source of class-average carry-over: the owner (the `cavgassemble` step in distributed runs, the matcher's restoration finalisation in shared memory) reads it, applies the class-centering shifts the workers report once, blends, and publishes the new set through a temporary name and a rename. When an iteration would blend but the carried set is missing, unreadable, or disagrees with the run on class count, `box_crop` or `smpd_crop`, the master runs that iteration as a full update (every particle, no carry-over). Legacy `cavgs_*_partN.mrc` / `ctfsqsums_*_partN.mrc` files are never read; a run continued from such a directory starts with one full update. Changing `nparts` or the execution mode across `continue=yes` needs nothing else.
@@ -410,8 +518,9 @@ For any `solve2D` or `refine2D` change, check:
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
 - Do not describe `fillin=yes` as missing-only assignment while it still uses
   the normal sampled-update path.
-- Do not use final fill-in as a substitute for the terminal dense all-particle
-  refresh when sampled solve2D updates were active.
+- Do not use the staged full-assignment coverage (`fillin=yes`) as a substitute
+  for the terminal dense all-particle refresh when sampled solve2D updates
+  were active.
 - Do not reuse stale assignment files as valid current-iteration inputs.
 - Do not re-read particle stacks in the online matcher/restoration path when the
   raw batch images are already available.

@@ -75,7 +75,15 @@ stacks.
 In shared-memory 2D, the probability table (`prob_tab2D`, run in the master
 process) fills the buffer with the iteration's sampled particles, the
 matcher of the same iteration copies its batches from it, and the matcher
-releases it. Batches are copied out of the buffer in parallel.
+releases it. Batches are copied out of the buffer in parallel. When the 2D
+particles are cropped (`box_crop < box`, uncached, outside the stream's 2D
+pool), the table opens the buffer for records instead: each particle's
+in-memory cache entry (noise-normalized at the full box, Fourier-cropped,
+unshifted, real space at `box_crop`), put before the table's alignment
+preparation transforms its copy. The matcher copies a batch's records, which
+are its cropped particles for the class sums and, as cached particles, for
+alignment, and neither reads the stacks nor prepares the full box. The
+buffer is then `(box/box_crop)^2` smaller.
 Its budget is half the task memory a queue system grants; otherwise it is the
 node's physical memory (`MemTotal` on Linux, `hw.memsize` on macOS) divided by
 twice the number of processes the node runs.

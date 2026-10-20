@@ -1,7 +1,8 @@
 !@descr: utility routines for solve2D refine2D staging and limits
 module simple_solve2D_controller
 use simple_core_module_api
-use simple_parameters, only: parameters
+use simple_parameters,      only: parameters
+use simple_refine2D_fnames, only: refine2D_cavgs_fname
 implicit none
 
 public :: stage_params, determine_solve2D_stages, mskdiam2lplimits_refine2D, set_cline_refine2D_stage
@@ -31,7 +32,7 @@ character(len=3), parameter :: EO_STAGE           = 'yes'
 type stage_params
     real    :: lp=0., smpd_crop=0., trslim=0.
     real    :: update_frac=1.
-    integer :: box_crop = 0, max_cls_pop=0, nptcls=0
+    integer :: box_crop = 0, nptcls=0
     logical :: l_lpset=.false., l_update_frac=.false.
     logical :: l_sticky_sampling=.false., l_frac_restore=.false.
 end type stage_params
@@ -87,7 +88,6 @@ contains
             nsample_target_2D = NSAMPLE_DEFAULT_2D
         endif
         if( nsample_target_2D < 1 ) THROW_HARD('nsample must be >= 1 for solve2D sampled update')
-        stage_parms(:)%max_cls_pop = 0
         stage_parms(:)%nptcls      = min(nptcls_eff, nsample_target_2D)
         if( nptcls_eff > 0 )then
             stage_parms(:)%update_frac   = min(1.0, real(stage_parms(1)%nptcls) / real(nptcls_eff))
@@ -247,7 +247,7 @@ contains
                 cfg%trs       = stage_parms(istage)%trslim
                 cfg%center    = trim(params%center)
                 cfg%extr_iter = params%extr_lim+1
-                cfg%refs      = CAVGS_ITER_FBODY//int2str_pad(cfg%iter-1,3)//params%ext%to_char()
+                cfg%refs      = refine2D_cavgs_fname(cfg%iter-1, params%ext%to_char())
                 cfg%ml_reg    = params%ml_reg
                 cfg%gauref    = 'no'
                 cfg%minits    = cfg%iter + 1
@@ -301,7 +301,7 @@ contains
         integer,                   intent(in)    :: istage
         cfg%trs      = stage_parms(istage)%trslim
         cfg%center   = trim(params%center)
-        cfg%refs     = CAVGS_ITER_FBODY//int2str_pad(cfg%iter-1,3)//params%ext%to_char()
+        cfg%refs     = refine2D_cavgs_fname(cfg%iter-1, params%ext%to_char())
         cfg%ml_reg   = params%ml_reg
         cfg%gauref   = 'no'
     end subroutine set_refine2D_stage_regular_refs

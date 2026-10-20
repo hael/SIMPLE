@@ -17,7 +17,7 @@ use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
                                            all_active_ptcls_2D_assigned, refine2D_blends_carryover
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
-    &write_sigma2_bench_context, write_sigma2_bench_timings
+    &write_sigma2_bench_context, write_sigma2_bench_timings, crop_particles2D
 use simple_ptcl_cache,               only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_imgarr_utils,             only: alloc_imgarr
 use simple_strategy2D_greedy,        only: strategy2D_greedy
@@ -31,6 +31,7 @@ use simple_strategy2D_prob,          only: strategy2D_prob
 use simple_strategy2D_srch,          only: strategy2D_spec
 use simple_strategy2D_tseries,       only: strategy2D_tseries
 use simple_eul_prob_tab2D,           only: eul_prob_tab2D
+use simple_refine2D_fnames,          only: refine2D_cavgs_fname, refine2D_cavgs_half_fname
 implicit none
 
 public :: refine2D_exec
@@ -280,10 +281,7 @@ contains
                 write(logfhandle,'(A)') '>>> REFINE2D: reading particles from the downscaled cache'
             ! The class averages live at box_crop, so their sums take the Fourier-cropped particles the cache would
             ! serve, made in memory from the full-size read; the stream's 2D pool keeps the full-size path
-            ctrl%l_crop_sums = .false.
-            if( .not. ctrl%l_cached .and. .not. ctrl%l_stream )then
-                if( p_ptr%box_crop < p_ptr%box .and. trim(p_ptr%oritype) == 'ptcl2D' ) ctrl%l_crop_sums = .true.
-            endif
+            ctrl%l_crop_sums = crop_particles2D(p_ptr, ctrl%l_cached)
         end subroutine init_ctrl
 
         subroutine sample_particles_for_update()
@@ -471,9 +469,9 @@ contains
             else
                 if( ctrl%l_restore_cavgs )then
                     if( cline%defined('which_iter') )then
-                        p_ptr%refs      = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//MRC_EXT
-                        p_ptr%refs_even = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//'_even'//MRC_EXT
-                        p_ptr%refs_odd  = CAVGS_ITER_FBODY//int2str_pad(p_ptr%which_iter,3)//'_odd'//MRC_EXT
+                        p_ptr%refs      = refine2D_cavgs_fname(p_ptr%which_iter, MRC_EXT)
+                        p_ptr%refs_even = refine2D_cavgs_half_fname(p_ptr%which_iter, 'even', MRC_EXT)
+                        p_ptr%refs_odd  = refine2D_cavgs_half_fname(p_ptr%which_iter, 'odd', MRC_EXT)
                     else
                         THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
                     endif
@@ -502,6 +500,7 @@ contains
                     endif
                     converged = converged .and. l_full_assignment
                 endif
+                call conv%print_verdict(converged)
                 if(.not. ctrl%l_stream) call progressfile_update(conv%get('progress'))
             endif
         end subroutine finalize_restoration_and_convergence

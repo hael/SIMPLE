@@ -22,6 +22,10 @@ integer(int64), parameter :: PROB_TAB_DENSE_FORMAT = -3_int64
 integer, parameter :: PART_READ_OK = 0, PART_READ_OPEN = 1, PART_READ_IO = 2, PART_READ_NREFS = 3
 integer, parameter :: PART_READ_FORMAT = 4, PART_READ_COUNTS = 5, PART_READ_PTCL = 6, PART_READ_REFINED = 7
 integer, parameter :: PART_READ_SIZE = 8, PART_READ_STATES = 9
+! particles per block of the master's loops over references (a block's columns stay in cache)
+integer, parameter :: PTCL_BLOCK = 256
+! bytes of dense rows a part read takes in one statement
+integer(int64), parameter :: ROWS_READ_BYTES = 8_int64 * 1024_int64 * 1024_int64
 
 ! the refined entries of one part file, master indices
 type :: refined_list
@@ -31,7 +35,8 @@ end type refined_list
 type :: eul_prob_tab
     class(builder),    pointer  :: b_ptr => null()
     class(parameters), pointer  :: p_ptr => null()
-    type(prob_dense_entry),   allocatable :: rows(:,:)          !< dense table (active refs,nptcls), master
+    real,                     allocatable :: dists(:,:)         !< dense table distances (nptcls,active refs), master
+    integer,                  allocatable :: inpls(:,:)         !< dense table in-plane indices (nptcls,active refs), master
     type(prob_refined_entry), allocatable :: refined(:)         !< refined entries in particle order, master
     integer,                  allocatable :: refined_offsets(:) !< first refined entry of each particle (nptcls+1)
     type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
@@ -95,7 +100,7 @@ contains
         integer,                   intent(in)    :: pinds(:)
         call self%new_common(params,build,pinds)
         ! every row is written by the read; no refined entries until then
-        allocate(self%assgn_map(self%nptcls), self%rows(self%nrefs,self%nptcls))
+        allocate(self%assgn_map(self%nptcls), self%dists(self%nptcls,self%nrefs), self%inpls(self%nptcls,self%nrefs))
         allocate(self%refined(0))
         allocate(self%refined_offsets(self%nptcls+1), source=1)
         call self%initialize_storage
@@ -498,8 +503,8 @@ contains
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer, allocatable :: stab_inds(:,:), inds_sorted(:), iref_dist_inds(:)
-        integer, allocatable :: greedy_state(:), score_mode(:), head_first(:), ref_next(:)
-        real,    allocatable :: score_work(:,:), score_min(:), score_spread(:)
+        integer, allocatable :: greedy_state(:), head_first(:), ref_next(:)
+        real,    allocatable :: score_work(:,:)
         real,    allocatable :: iref_dist(:), dists_sorted(:), state_projs_athres(:)
         logical, allocatable :: ptcl_avail(:)
         integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, ithr, nleft, ref_offset
@@ -509,7 +514,6 @@ contains
         nthr_work = 1
         !$ nthr_work = omp_get_max_threads()
         allocate(stab_inds(self%nptcls, self%nrefs), score_work(self%nptcls,nthr_work),&
-            &score_min(self%nptcls), score_spread(self%nptcls), score_mode(self%nptcls),&
             &inds_sorted(self%nrefs), iref_dist_inds(self%nrefs), greedy_state(self%nptcls),&
             &iref_dist(self%nrefs), dists_sorted(self%nrefs), state_projs_athres(self%p_ptr%nstates),&
             &ptcl_avail(self%nptcls), head_first(self%nptcls), ref_next(self%nrefs), stat=alloc_stat, errmsg=alloc_msg)
@@ -518,7 +522,7 @@ contains
             write(logfhandle,*) trim(alloc_msg)
             THROW_HARD('failed allocating probability assignment work arrays')
         endif
-        call prepare_ref_score_vectors
+        call count_invalid_and_flat
         ! Sort each reference using one scratch score column per worker thread.
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i,ithr)
         do iref = 1, self%nrefs
@@ -556,60 +560,57 @@ contains
                 call advance_heads_at(assigned_ptcl)
             enddo
         endif
-        deallocate(stab_inds, inds_sorted, iref_dist_inds, greedy_state, score_work, score_min, score_spread, score_mode,&
+        deallocate(stab_inds, inds_sorted, iref_dist_inds, greedy_state, score_work,&
             &iref_dist, dists_sorted, state_projs_athres, ptcl_avail, head_first, ref_next)
 
     contains
 
-        subroutine prepare_ref_score_vectors()
-            real    :: min_dist, max_dist, dist_val, spread, invalid_dist
-            integer :: i_loc, iref_loc, nvalid, nflat, nbad
+        !> the particles without a valid distance and those whose valid distances are all equal: warnings, and a stop
+        !! when every particle is one of them. References outside, so that each reference's column streams.
+        subroutine count_invalid_and_flat()
+            real,    allocatable :: min_dist(:), max_dist(:)
+            integer, allocatable :: nvalid(:)
+            real    :: dist_val, invalid_dist
+            integer :: ib, i_loc, iref_loc, nflat, nbad
             invalid_dist = 0.1 * huge(invalid_dist)
-            nflat = 0
-            nbad  = 0
-            score_min    = 0.
-            score_spread = 0.
-            score_mode   = 0
-            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-            !$omp private(i_loc,iref_loc,min_dist,max_dist,dist_val,spread,nvalid) reduction(+:nflat,nbad)
-            do i_loc = 1, self%nptcls
-                min_dist = huge(min_dist)
-                max_dist = -huge(max_dist)
-                nvalid   = 0
+            allocate(min_dist(self%nptcls), source=huge(invalid_dist))
+            allocate(max_dist(self%nptcls), source=-huge(invalid_dist))
+            allocate(nvalid(self%nptcls), source=0)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ib,i_loc,iref_loc,dist_val)
+            do ib = 1,self%nptcls,PTCL_BLOCK
                 do iref_loc = 1,self%nrefs
-                    dist_val = self%rows(iref_loc,i_loc)%dist
-                    if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist )then
-                        min_dist = min(min_dist, dist_val)
-                        max_dist = max(max_dist, dist_val)
-                        nvalid   = nvalid + 1
-                    endif
+                    do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
+                        dist_val = self%dists(i_loc,iref_loc)
+                        if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist )then
+                            min_dist(i_loc) = min(min_dist(i_loc), dist_val)
+                            max_dist(i_loc) = max(max_dist(i_loc), dist_val)
+                            nvalid(i_loc)   = nvalid(i_loc) + 1
+                        endif
+                    enddo
                 enddo
-                if( nvalid == 0 )then
-                    nbad = nbad + 1
-                    cycle
-                endif
-                spread = max_dist - min_dist
-                score_min(i_loc)    = min_dist
-                score_spread(i_loc) = spread
-                if( spread <= 0. )then
-                    score_mode(i_loc) = 1
-                    nflat = nflat + 1
-                else
-                    score_mode(i_loc) = 2
-                endif
             enddo
             !$omp end parallel do
+            nbad  = 0
+            nflat = 0
+            do i_loc = 1,self%nptcls
+                if( nvalid(i_loc) == 0 )then
+                    nbad = nbad + 1
+                else if( max_dist(i_loc) - min_dist(i_loc) <= 0. )then
+                    nflat = nflat + 1
+                endif
+            enddo
             if( nbad == self%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
             if( nflat == self%nptcls ) THROW_HARD('all probability-table reference distances are flat')
             if( nbad > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', nbad
             if( nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', nflat
-        end subroutine prepare_ref_score_vectors
+            deallocate(min_dist, max_dist, nvalid)
+        end subroutine count_invalid_and_flat
 
         real function ref_score( iref_loc, iptcl_loc ) result(score)
             integer, intent(in) :: iref_loc, iptcl_loc
             real :: dist_val, invalid_dist
             invalid_dist = 0.1 * huge(invalid_dist)
-            dist_val = self%rows(iref_loc,iptcl_loc)%dist
+            dist_val = self%dists(iptcl_loc,iref_loc)
             score = 1.
             if( .not.(ieee_is_finite(dist_val) .and. dist_val < invalid_dist) )then
                 score = invalid_dist
@@ -706,23 +707,33 @@ contains
         !! the label the global greedy frontier (the closest available reference-particle pair first,
         !! the lowest reference index among equal distances) gives every particle.
         subroutine assign_state_labels()
-            integer :: i_loc, iref_loc, iref_best
-            real    :: score, score_best
-            !$omp parallel do default(shared) proc_bind(close) schedule(static)&
-            !$omp private(i_loc,iref_loc,iref_best,score,score_best)
-            do i_loc = 1,self%nptcls
-                iref_best  = 1
-                score_best = ref_score(1, i_loc)
-                do iref_loc = 2,self%nrefs
-                    score = ref_score(iref_loc, i_loc)
-                    if( score < score_best )then
-                        score_best = score
-                        iref_best  = iref_loc
-                    endif
+            real,    allocatable :: score_best(:)
+            integer, allocatable :: iref_best(:)
+            integer :: ib, i_loc, iref_loc
+            real    :: score
+            allocate(score_best(self%nptcls), iref_best(self%nptcls))
+            ! references outside, ascending, with the strict < per particle
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ib,i_loc,iref_loc,score)
+            do ib = 1,self%nptcls,PTCL_BLOCK
+                do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
+                    iref_best(i_loc)  = 1
+                    score_best(i_loc) = ref_score(1, i_loc)
                 enddo
-                greedy_state(i_loc) = self%ref_state(iref_best)
+                do iref_loc = 2,self%nrefs
+                    do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
+                        score = ref_score(iref_loc, i_loc)
+                        if( score < score_best(i_loc) )then
+                            score_best(i_loc) = score
+                            iref_best(i_loc)  = iref_loc
+                        endif
+                    enddo
+                enddo
+                do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
+                    greedy_state(i_loc) = self%ref_state(iref_best(i_loc))
+                enddo
             enddo
             !$omp end parallel do
+            deallocate(score_best, iref_best)
         end subroutine assign_state_labels
 
         !> the projection assignment of the particles labelled with the state of rank si, over that
@@ -825,8 +836,8 @@ contains
         type(prob_candidate) :: candidate
         integer :: j
         candidate%iref = self%ref_full(ri)
-        candidate%inpl = self%rows(ri,i)%inpl
-        candidate%dist = self%rows(ri,i)%dist
+        candidate%inpl = self%inpls(i,ri)
+        candidate%dist = self%dists(i,ri)
         do j = self%refined_offsets(i), self%refined_offsets(i+1) - 1
             if( self%refined(j)%ri == ri )then
                 candidate%x      = self%refined(j)%x
@@ -918,12 +929,12 @@ contains
         character(len=:), allocatable :: err_msg
         integer(int64) :: nrefined_tot
         integer :: ipart, i, j
-        if( .not. allocated(self%rows) ) THROW_HARD('dense master rows are not allocated; read_tabs_to_glob')
-        if( size(self%rows,1) /= self%nrefs .or. size(self%rows,2) /= self%nptcls )then
+        if( .not. allocated(self%dists) ) THROW_HARD('dense master table is not allocated; read_tabs_to_glob')
+        if( size(self%dists,1) /= self%nptcls .or. size(self%dists,2) /= self%nrefs )then
             THROW_HARD('dense master row dimensions disagree; read_tabs_to_glob')
         endif
         allocate(part_refined(nparts), seed_nrots_part(nparts))
-        allocate(nparts_of(self%nptcls), part_status(nparts), source=0)
+        allocate(nparts_of(self%nptcls), next(self%nptcls), part_status(nparts), source=0)
         allocate(part_fnames(nparts))
         do ipart = 1,nparts
             part_fnames(ipart) = fbody//int2str_pad(ipart,numlen)//'.dat'
@@ -935,7 +946,7 @@ contains
         !$omp parallel do default(shared) private(ipart) proc_bind(close) schedule(dynamic)
         do ipart = 1,nparts
             call self%read_dense_part(part_fnames(ipart), part_refined(ipart)%e,&
-                &seed_nrots_part(ipart), nparts_of, part_status(ipart))
+                &seed_nrots_part(ipart), nparts_of, next, part_status(ipart))
         enddo
         !$omp end parallel do
         do ipart = 1,nparts
@@ -951,19 +962,13 @@ contains
             if( self%seed_nrots == 0 ) self%seed_nrots = seed_nrots_part(ipart)
             if( self%seed_nrots /= seed_nrots_part(ipart) ) THROW_HARD('seed_nrots mismatch between dense part files')
         enddo
-        ! the refined entries indexed by particle, in part order; their offsets are default integers
+        ! the refined entries indexed by particle (next holds the read's counts per particle): offsets by a prefix sum,
+        ! then every part places its entries, in file order; a particle's entries all come from its one part
         nrefined_tot = 0_int64
         do ipart = 1,nparts
             nrefined_tot = nrefined_tot + int(size(part_refined(ipart)%e),int64)
         enddo
         if( nrefined_tot >= int(huge(1),int64) ) THROW_HARD('refined entries exceed default-integer bounds; read_tabs_to_glob')
-        allocate(next(self%nptcls), source=0)
-        do ipart = 1,nparts
-            do j = 1,size(part_refined(ipart)%e)
-                i = part_refined(ipart)%e(j)%i
-                next(i) = next(i) + 1
-            enddo
-        enddo
         self%refined_offsets(1) = 1
         do i = 1,self%nptcls
             self%refined_offsets(i+1) = self%refined_offsets(i) + next(i)
@@ -971,6 +976,7 @@ contains
         next = self%refined_offsets(1:self%nptcls)
         deallocate(self%refined)
         allocate(self%refined(self%refined_offsets(self%nptcls+1)-1))
+        !$omp parallel do default(shared) private(ipart,j,i) proc_bind(close) schedule(dynamic)
         do ipart = 1,nparts
             do j = 1,size(part_refined(ipart)%e)
                 i = part_refined(ipart)%e(j)%i
@@ -978,6 +984,7 @@ contains
                 next(i) = next(i) + 1
             enddo
         enddo
+        !$omp end parallel do
         deallocate(part_refined, part_fnames, next, nparts_of, seed_nrots_part, part_status)
 
     contains
@@ -1003,15 +1010,16 @@ contains
 
     !> one dense part file: rows and seed table to the master's particles, out the refined entries (master indices),
     !! the part's rotation grid (0 without particles) and a PART_READ_* status; nparts_of counts the parts holding each
-    !! master particle. Runs inside the parallel read: no stop, no string temporaries.
-    subroutine read_dense_part( self, binfname, refined, seed_nrots_loc, nparts_of, status )
+    !! master particle, nrefined_of its refined entries. Runs inside the parallel read: no stop, no string temporaries.
+    subroutine read_dense_part( self, binfname, refined, seed_nrots_loc, nparts_of, nrefined_of, status )
         class(eul_prob_tab),                   intent(inout) :: self
         class(string),                         intent(in)    :: binfname
         type(prob_refined_entry), allocatable, intent(out)   :: refined(:)
         integer,                               intent(out)   :: seed_nrots_loc
-        integer,                               intent(inout) :: nparts_of(:)
+        integer,                               intent(inout) :: nparts_of(:), nrefined_of(:)
         integer,                               intent(out)   :: status
         type(prob_refined_entry), allocatable :: refined_loc(:)
+        type(prob_dense_entry),   allocatable :: rows_loc(:,:)
         type(prob_refined_entry) :: refined_entry
         type(prob_dense_entry)   :: entry
         real,    allocatable :: seed_shifts_loc(:,:)
@@ -1020,7 +1028,7 @@ contains
         integer(int64) :: file_header(4), addr, rows_addr, row_bytes, file_bytes, ptcl_bytes
         logical :: flag
         integer :: funit, io_stat, nptcls_loc, nrefined_loc, nstates_loc, i_loc, i_glob, pind, max_pind, j, n
-        integer :: previous_parts
+        integer :: previous_parts, nchunk, first
         seed_nrots_loc = 0
         allocate(refined(0))
         call fopen(funit,binfname,access='STREAM',form='UNFORMATTED',action='READ',status='OLD',iostat=io_stat)
@@ -1117,11 +1125,23 @@ contains
                 endif
                 self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
                 self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
-                read(funit,pos=rows_addr+int(i_loc-1,int64)*row_bytes,iostat=io_stat) self%rows(:,i_glob)
+            enddo
+            ! consecutive particles' rows in one statement, scattered to the master's columns
+            nchunk = int(max(1_int64, min(int(max(1,nptcls_loc),int64), ROWS_READ_BYTES / row_bytes)))
+            allocate(rows_loc(self%nrefs,nchunk))
+            do first = 1,nptcls_loc,nchunk
+                n = min(nchunk, nptcls_loc - first + 1)
+                read(funit,pos=rows_addr+int(first-1,int64)*row_bytes,iostat=io_stat) rows_loc(:,1:n)
                 if( io_stat /= 0 )then
                     status_loc = PART_READ_IO
                     return
                 endif
+                do j = 1,n
+                    i_glob = glob_of(first+j-1)
+                    if( i_glob < 1 ) cycle
+                    self%dists(i_glob,:) = rows_loc(:,j)%dist
+                    self%inpls(i_glob,:) = rows_loc(:,j)%inpl
+                enddo
             enddo
             allocate(refined_loc(nrefined_loc))
             if( nrefined_loc > 0 )then
@@ -1142,6 +1162,8 @@ contains
                 n = n + 1
                 refined_loc(n)   = refined_loc(j)
                 refined_loc(n)%i = glob_of(i_loc)
+                !$omp atomic update
+                nrefined_of(glob_of(i_loc)) = nrefined_of(glob_of(i_loc)) + 1
             enddo
             refined    = refined_loc(1:n)
             status_loc = PART_READ_OK
@@ -1207,7 +1229,8 @@ contains
         self%rows_addr      = 1
         self%table_nrefined = 0
         self%table_nfilled  = 0
-        if( allocated(self%rows)            ) deallocate(self%rows)
+        if( allocated(self%dists)           ) deallocate(self%dists)
+        if( allocated(self%inpls)           ) deallocate(self%inpls)
         if( allocated(self%refined)         ) deallocate(self%refined)
         if( allocated(self%refined_offsets) ) deallocate(self%refined_offsets)
         if( allocated(self%assgn_map)    ) deallocate(self%assgn_map)

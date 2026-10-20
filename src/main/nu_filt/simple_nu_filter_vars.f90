@@ -11,6 +11,9 @@ real,             allocatable :: dmats_mask(:,:)
 ! Raw (unsmoothed) mask-packed unaries of every candidate, for the like-for-like selection in
 ! optimize_nu_cutoff_finds, which dmats_mask's per-candidate radii cannot give. Released with dmats_mask.
 real,             allocatable :: raw_dmats_mask(:,:)
+! The smoothing norm at each candidate's radius, mask-packed by setup_nu_dmats: optimize_nu_cutoff_finds smooths at the
+! same radii and loads these instead of smoothing the mask again. Released with dmats_mask.
+real,             allocatable :: norms_mask(:,:)
 real,             allocatable :: bwfilters(:,:)
 real,             allocatable :: candidate_coords(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
@@ -67,7 +70,9 @@ logical :: nu_evidence_requested = .false.
 character(len=32) :: nu_evidence_source = ''
 real(kind=8) :: nu_evidence_source_fingerprint(6) = 0.d0
 ! Wall seconds of the current sequence (from setup_nu_dmats) under L_BENCH_GLOB, for the volume-assembly report:
-! candidate filtering, the objective, the label optimisation, the composition
+! candidate filtering, the objective, the label optimisation (of it: the level smoothings and comparisons, the
+! ordered-label Potts sweeps), the composition
 real(timer_int_kind) :: nu_rt_filtering = 0., nu_rt_objective = 0., nu_rt_optimise = 0., nu_rt_compose = 0.
+real(timer_int_kind) :: nu_rt_opt_levels = 0., nu_rt_opt_potts = 0.
 
 end module simple_nu_filter_vars

@@ -48,7 +48,8 @@ contains
     end subroutine tent_smooth_3d
 
     ! Apply a 1-D box filter to every row along the X axis of a 3-D array.
-    ! X rows are contiguous in memory, so no temporary buffer is needed.
+    ! X rows are contiguous in memory, so no temporary buffer is needed. A row of zeros (the outside of a mask) stays
+    ! zero, so it is written without filtering.
     subroutine box_filter_x(src, dst, nx, ny, nz, lext, rext)
         integer, intent(in)  :: nx, ny, nz, lext, rext
         real,    intent(in)  :: src(nx,ny,nz)
@@ -57,50 +58,100 @@ contains
         !$omp parallel do collapse(2) schedule(static) default(shared) private(m,l)
         do l = 1, nz
             do m = 1, ny
-                call box_filter_1d(src(:,m,l), dst(:,m,l), nx, lext, rext)
+                if( is_zero(src(:,m,l), nx) )then
+                    dst(:,m,l) = 0.
+                else
+                    call box_filter_1d(src(:,m,l), dst(:,m,l), nx, lext, rext)
+                endif
             end do
         end do
         !$omp end parallel do
     end subroutine box_filter_x
 
     ! Apply a 1-D box filter to every column along the Y axis of a 3-D array.
-    ! Y columns are non-contiguous, so each column is copied into a contiguous
-    ! buffer before filtering to avoid strided memory access inside box_filter_1d.
+    ! The columns of one XY plane are filtered together, a running sum per column, so the loop reads whole X rows;
+    ! each column keeps the operation sequence of box_filter_1d. A plane of zeros stays zero.
     subroutine box_filter_y(src, dst, nx, ny, nz, lext, rext)
         integer, intent(in)  :: nx, ny, nz, lext, rext
         real,    intent(in)  :: src(nx,ny,nz)
         real,    intent(out) :: dst(nx,ny,nz)
-        integer :: n, l
-        real    :: buf_in(ny), buf_out(ny)
-        !$omp parallel do collapse(2) schedule(static) default(shared) private(n,l,buf_in,buf_out)
+        integer :: i, j, l, box_width
+        real    :: running_sum(nx)
+        box_width = lext + rext + 1
+        !$omp parallel do schedule(static) default(shared) private(i,j,l,running_sum)
         do l = 1, nz
-            do n = 1, nx
-                buf_in       = src(n, :, l)
-                call box_filter_1d(buf_in, buf_out, ny, lext, rext)
-                dst(n, :, l) = buf_out
+            if( is_zero(src(:,:,l), nx*ny) )then
+                dst(:,:,l) = 0.
+                cycle
+            endif
+            running_sum = 0.0
+            do j = -lext, rext
+                running_sum = running_sum + src(:,clamp_index(1 + j, 1, ny),l)
+            end do
+            dst(:,1,l) = running_sum / real(box_width)
+            do i = 2, ny
+                running_sum = running_sum &
+                            + src(:,clamp_index(i + rext,     1, ny),l) &
+                            - src(:,clamp_index(i - 1 - lext, 1, ny),l)
+                dst(:,i,l) = running_sum / real(box_width)
             end do
         end do
         !$omp end parallel do
     end subroutine box_filter_y
 
     ! Apply a 1-D box filter to every pillar along the Z axis of a 3-D array.
-    ! Z pillars are non-contiguous, so a contiguous buffer is used (see box_filter_y).
+    ! The pillars of one XZ slab are filtered together, as in box_filter_y. A slab of zeros stays zero.
     subroutine box_filter_z(src, dst, nx, ny, nz, lext, rext)
         integer, intent(in)  :: nx, ny, nz, lext, rext
         real,    intent(in)  :: src(nx,ny,nz)
         real,    intent(out) :: dst(nx,ny,nz)
-        integer :: n, m
-        real    :: buf_in(nz), buf_out(nz)
-        !$omp parallel do collapse(2) schedule(static) default(shared) private(n,m,buf_in,buf_out)
+        integer :: i, j, m, box_width
+        real    :: running_sum(nx)
+        box_width = lext + rext + 1
+        !$omp parallel do schedule(static) default(shared) private(i,j,m,running_sum)
         do m = 1, ny
-            do n = 1, nx
-                buf_in       = src(n, m, :)
-                call box_filter_1d(buf_in, buf_out, nz, lext, rext)
-                dst(n, m, :) = buf_out
+            if( is_zero_slab(src, nx, ny, nz, m) )then
+                dst(:,m,:) = 0.
+                cycle
+            endif
+            running_sum = 0.0
+            do j = -lext, rext
+                running_sum = running_sum + src(:,m,clamp_index(1 + j, 1, nz))
+            end do
+            dst(:,m,1) = running_sum / real(box_width)
+            do i = 2, nz
+                running_sum = running_sum &
+                            + src(:,m,clamp_index(i + rext,     1, nz)) &
+                            - src(:,m,clamp_index(i - 1 - lext, 1, nz))
+                dst(:,m,i) = running_sum / real(box_width)
             end do
         end do
         !$omp end parallel do
     end subroutine box_filter_z
+
+    ! all n values are zero (either sign)
+    pure logical function is_zero(v, n)
+        integer, intent(in) :: n
+        real,    intent(in) :: v(n)
+        integer :: i
+        is_zero = .false.
+        do i = 1, n
+            if( v(i) /= 0. ) return
+        end do
+        is_zero = .true.
+    end function is_zero
+
+    ! the XZ slab y = m of a volume is zero
+    pure logical function is_zero_slab(v, nx, ny, nz, m)
+        integer, intent(in) :: nx, ny, nz, m
+        real,    intent(in) :: v(nx,ny,nz)
+        integer :: k
+        is_zero_slab = .false.
+        do k = 1, nz
+            if( .not. is_zero(v(:,m,k), nx) ) return
+        end do
+        is_zero_slab = .true.
+    end function is_zero_slab
 
     ! Apply a 1-D box (sliding-window mean) filter to a 1-D array.
     !

@@ -3,6 +3,7 @@ module single_commanders_nano2D
 use simple_commanders_api
 use simple_commanders_refine2D, only: commander_refine2D
 use simple_commanders_mkcavgs,   only: commander_make_cavgs_distr
+use simple_refine2D_fnames,     only: refine2D_cavgs_fname
 implicit none
 #include "simple_local_flags.inc"
 
@@ -78,7 +79,7 @@ contains
         call cline_refine2D_nano%set('projfile', params%projfile)
         call xrefine2D_nano%execute(cline_refine2D_nano)        
         last_iter_stage2 = cline_refine2D_nano%get_iarg('endit')
-        finalcavgs       = CAVGS_ITER_FBODY//int2str_pad(last_iter_stage2,3)//params%ext%to_char()
+        finalcavgs       = refine2D_cavgs_fname(last_iter_stage2, params%ext%to_char())
         ! adding cavgs & FRCs to project
         params%projfile = orig_projfile
         call spproj%read( params%projfile )

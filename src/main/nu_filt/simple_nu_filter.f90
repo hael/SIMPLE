@@ -234,8 +234,8 @@ interface
         integer, intent(in) :: ilabel
     end function nu_label_is_aux_replacement
 
-    module subroutine get_nu_filter_timings( filtering, objective, optimise, compose )
-        real(timer_int_kind), intent(out) :: filtering, objective, optimise, compose
+    module subroutine get_nu_filter_timings( filtering, objective, optimise, compose, opt_levels, opt_potts )
+        real(timer_int_kind), intent(out) :: filtering, objective, optimise, compose, opt_levels, opt_potts
     end subroutine get_nu_filter_timings
 
     module subroutine init_nu_filter( vol_even, vol_odd, fsc_res )
@@ -252,6 +252,11 @@ interface
 
     module subroutine release_nu_smooth_norm
     end subroutine release_nu_smooth_norm
+
+    module subroutine load_nu_smooth_norm( lp_angstrom, packed )
+        real, intent(in) :: lp_angstrom
+        real, intent(in) :: packed(:)
+    end subroutine load_nu_smooth_norm
 
     module subroutine cleanup_nu_filter
     end subroutine cleanup_nu_filter

@@ -432,8 +432,12 @@ particles by distance, and its head is its closest particle not yet assigned.
 The routine keeps a count of the unassigned particles and, for every
 particle, the list of references whose head it is. After an assignment it
 advances only that particle's list, instead of testing every particle and
-every reference again. The states' labels are computed per particle, in
-parallel. The draws and their order are those of the earlier implementation,
+every reference again. The driver holds the table by reference
+(`dists(nptcls,nrefs)`, `inpls(nptcls,nrefs)`), so each reference's
+distances are contiguous for its sort. The states' labels and the check for
+invalid or flat particles run with the references outside, over blocks of
+256 particles in parallel, each particle keeping its best so far (strict `<`,
+references in ascending order). The draws and their order are those of the earlier implementation,
 so the assignment is identical (since 2026-10-16). The unit suite of the
 table keeps the earlier implementation as its reference and compares the
 two.
@@ -453,7 +457,11 @@ finished.
   shift; `prob_refined_entry`). An unrefined entry has no shift of its own.
   The worker writes a batch's rows at the particles' positions and checks at
   the end that every row was written. The driver reads the parts in
-  parallel into its rows and the refined lists by particle; every particle
+  parallel: consecutive rows of a part in one statement (up to 8 MiB),
+  scattered to the driver's columns, and each particle's refined entries
+  counted during the read; the refined lists are then laid out by a prefix
+  sum and every part places its entries in parallel (a particle's entries
+  come from its one part, in file order). Every particle
   of the driver must be in exactly one part, and the parts must agree on the
   rotation grid and on the active states (a row's reference index counts the
   active references). Before reading past the header the file size must be
@@ -463,11 +471,12 @@ finished.
   reason. `dense_candidate` rebuilds the entry `assign_candidate` reads. The
   driver's table is not initialised before the read; its refined-entry
   offsets are default integers behind a size guard.
-- **The neighbourhood table (`prob_neigh`) and the 2D table** keep their
-  candidate streams (particle index and full candidate per entry). The
-  neighbourhood part writes the number of candidates of each particle after
-  the particle indices; the driver sizes its store from these counts and
-  then places the candidates in file order (the order decides ties).
+- **The neighbourhood table (`prob_neigh`)** keeps its candidate stream
+  (particle index and full candidate per entry). The neighbourhood part
+  writes the number of candidates of each particle after the particle
+  indices; the driver sizes its store from these counts and then places the
+  candidates in file order (the order decides ties). The 2D table's parts
+  are described in `solve2D_policy.md`.
 - An empty part writes the header of its own table type. The neighbourhood
   table refuses `write_rows`, the dense table's row writer.
 
