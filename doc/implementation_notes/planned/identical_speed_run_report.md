@@ -1,6 +1,6 @@
 # Identical speed changes: report of the run `speed_mac`
 
-Report, 2026-10-17; Phase 6 added 2026-10-18. The run carried out the plan in `identical_speed_run.md`
+Report, 2026-10-17; Phase 6 added 2026-10-18; the identity and the timing on the x86 test machine added 2026-10-19 by the run `test_truth_sync` (sections "Identity on x86" and "Timing on x86"). The run carried out the plan in `identical_speed_run.md`
 on the maintainer's Mac, unattended, as one uncommitted diff. "Identical"
 means: the outputs of the identity cases are byte for byte those of the
 build before the run.
@@ -239,6 +239,131 @@ test them apart.
   whose particle field has no `proj` labels, on a trailing run:
   `trail_rec=yes`, or a `trail_seed` run); that the only differences are
   the kept `proj` labels in the written field and what follows from them.
+
+## Identity on x86 (run `test_truth_sync`, 2026-10-19)
+
+**Verdict: the speed week is byte-identical at one thread on the x86 test
+machine as well**, on every case the Mac compared before Phase 6 that the
+continuation's plan names (SW1 with both its steps, MSI, CCI and PCI), and
+item 22 changes no result that any run can reach today.
+
+- **Builds.** The base is 25d256886 (the run `test_truth`'s Release build,
+  copied); the speed week is master's 04e520e78, built from an export of
+  that commit. Both are Release builds with tests, gfortran 15.2 (Oracle
+  Linux 8.10, Intel Core Ultra 9 285). 04e520e78 also holds its parent
+  13795c1d9, which moved the symmetry-axis search of `solve3D` from stage 3
+  to stage 4; it changes only runs that search the axis, and SW1 does not
+  (beta-galactosidase starts in its own group, `pgrp_start=pgrp=d2`), so the
+  comparison isolates the speed week.
+- **The cases**, as the plan defines them, at one thread in the CTest
+  environment, each in one fixed directory for every build: SW1
+  (`simulated_workflow suite=1jxy`, also the fixture of the three others,
+  made once on the base build), MSI (82 particles; 27, 27 and 28 per state
+  at the end), CCI and PCI (both with `update_frac=0.5 trail_rec=yes`). Each
+  case ran twice on the base build and once on 04e520e78.
+- **Results.** Base against base and base against 04e520e78 are identical
+  over every compared file: SW1 729 (maps, stacks, projects through their
+  segment dumps, picked coordinates, FSC, sigma2 and table files), MSI 226,
+  CCI 50, PCI 53. Wall times at one thread: SW1 13-14 min, MSI 5.3 min, CCI
+  0.5 min, PCI 2.4 min.
+- **Exclusions**, declared with their reasons in the comparison script
+  (as on the Mac): project files (compared through `print_project_field`
+  dumps of seven segments), `BENCH/`, run logs, queue job records, the
+  particle previews named by process id, the time and process-id fields of
+  `metadata.json`, the run identifier and checksum of
+  `solve3D_manifest.txt`, the timing lines and timing tables of the PCG
+  diagnostics. One more was needed on this machine: the FSC plots, PDF
+  files written through ghostscript, embed their creation time and a random
+  document identifier, so they are compared without those lines.
+- **The table part files** changed layout on purpose, as on the Mac, so
+  they were compared through lossless decoders written for both layouts
+  (standalone Fortran in the run's scratch, not in the repository): the
+  dense part files (`dist_part*.dat`: every particle's distance and in-plane
+  index for every reference, its refined shifts and the seed table, as bit
+  patterns) and the neighbourhood part files (`dist_part_neigh_*.dat`:
+  04e520e78 adds each particle's candidate count, which the decoder checks
+  against the stream). Each decoder also checks that its layout accounts
+  for every byte of the file; decoding a new neighbourhood file as an old
+  one fails that check. Decoded, every part file is identical.
+- **Item 22 (the back-filled projection labels kept).** Volume assembly
+  back-fills `proj` labels only when the particle field has none, and the
+  reread it removed ran only on trailing runs. A reading of every caller
+  (the distributed and shared-memory `refine3D`, `reconstruct3D`, the
+  stage reconstructions of `solve3D`, the add-on, `refine3D_states`, the
+  flex service) finds no route on which both hold: every route that trails
+  has run a refinement first, and refinement sets `proj` on every particle.
+  The one candidate, a distributed `reconstruct3D` with `trail_rec=yes` on
+  a project without labels, stops on both builds in the trailing counts
+  ("requires previous sampling") right after the back-fill, since trailing
+  needs earlier sampling, which only a refinement provides. No case
+  reaches the changed path, so no result differs; on a path that did, only
+  the `proj` labels written with the particle field would change, and
+  nothing in assembly reads them (later readers: the `refine=cont` seed
+  check, heat maps, iteration statistics, JSON export, `projstats`,
+  `proj2class`).
+- **Not run on x86:** SW6, NU3D, AD1 and CR1, which the continuation's
+  plan does not name; the timings (its Phase 9).
+
+Evidence (run directory `~/agent_runs/test_truth_sync`):
+`state/journal_phase_7.md`; `scratch/logs/identity/` (the comparison of
+every case pair, every run log, the case and comparison scripts and the
+decoders as run).
+
+## Timing on x86 (run `test_truth_sync`, 2026-10-19)
+
+The timing cases of the section "Timing cases for the test machine", on the
+24-core test machine (Intel Core Ultra 9 285, otherwise idle), 25d256886
+(base) against 04e520e78 (the speed week, which also holds the axis-search
+move 13795c1d9; none of these cases searches an axis), both Release builds
+with gfortran 15.2. Each case twice each way, interleaved: in the first round
+the base ran first, in the second the speed week. The inputs are copies of
+the projects the runs `prob_speed` and `ms_speed` kept, their paths moved
+with `update_project`; A, A-shm, E and E-shm as `prob_speed` defined them, MS
+and M as `ms_speed` did.
+
+| case | what | base (s) | speed week (s) | change |
+| --- | --- | --- | --- | --- |
+| A | `solve3D` from S (class-average start), `nparts=4 nthr=6` | 480.0, 490.4 | 474.4, 459.9 | −3.7 % |
+| A-shm | the same in shared memory, `nthr=24` | 390.6, 379.9 | 390.6, 375.9 | −0.5 % |
+| E | `solve2D`, 50 classes, `nparts=4 nthr=6` | 80.4, 80.3 | 77.1, 77.1 | −4.0 % |
+| E-shm | the same in shared memory, `nthr=24` | 86.2, 87.8 | 86.5, 86.1 | −0.8 % |
+| MS | three-state `solve3D` from S3, `nparts=4 nthr=6` | 891.2, 893.0 | 785.9, 788.7 | −11.7 % |
+| M | the dense three-state `refine3D`, two iterations, `nparts=4 nthr=6` | 62.0, 62.7 | 52.6, 53.2 | −15.2 % |
+
+The runs repeat within 4 % (A, A-shm) and within 2 % (the others). The master's peak
+memory is unchanged (A 3.1 GB, A-shm 5.5-5.7 GB, MS 5.1-5.2 GB, E-shm
+3.0 GB) except M, 0.90 against 0.98-1.01 GB.
+
+The benchmark records, summed over iterations and parts (means of the two
+runs, base against speed week; `scratch/timing/summarize.sh`):
+
+- **The table fills** are faster: the dense table A 414 against 345 s, MS
+  1 062 against 915 s, M 137 against 121 s; the neighbourhood table A 110
+  against 93 s, MS 802 against 722 s; the 2D table E 32.4 against 26.9 s, E-shm
+  7.8 against 6.4 s.
+- **The pre-step's table reads** fall from 5.2 to 1.0 s (A), 10.8 to 2.5 s
+  (MS), 1.35 to 0.1 s (M).
+- **The nonuniform filter in volume assembly is slower on x86**: A 52.7
+  against 73.4 s, A-shm 41.1 against 63.8 s (volume assembly as a whole 110
+  against 133 s and 89 against 111 s). Its new timers split the speed week's
+  run of A into the candidate filter (24 s), the composition (26 s), the
+  objective (5 s) and the optimisation (17 s). The composition filtering the
+  candidates again instead of writing and reading them (the item decided by
+  the timing of `nu_filt3D` on PfCRT on the Mac, 9.9 against 10.5 s) is the
+  likely cause: on this machine it costs about 20 s per run of A. In A the
+  faster tables hide it; in A-shm they only balance it. A finding for the
+  maintainer: time the standalone `nu_filt3D` on x86 with both forms before
+  the choice stands.
+- **The reprojection model** is unchanged (A 51 against 50 s).
+
+The wall-time gains are where the speed week aimed them: the multi-state
+tables (MS, M) and the distributed table reads; single-state `solve3D` gains
+little at this size, and the filter gives back what the tables save in shared
+memory.
+
+Evidence: `scratch/logs/p9_speed_timing.log`, `p9_eshm_timing.log`,
+`p9_speed_summary.txt`; per run the log, `time.txt` and the `BENCH`
+records in `scratch/timing/results/`; the scripts in `scratch/timing/`.
 
 ## Files
 

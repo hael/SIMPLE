@@ -50,13 +50,19 @@ module subroutine exec_test_simulated_workflow( self, cline )
     integer,          parameter :: NTHR           = 1
     integer,          parameter :: SEED_6VXX      = 20260923
     integer,          parameter :: SEED_1JXY      = 20260923
-    ! The map's bounds by the floor rule come from a profile of 200 particles in 20 movies per suite
-    ! (2026-10-18, 20 seed offsets at one thread): solve3D missed the map in 7 of 20 runs for 6vxx and
-    ! 1 of 20 for 1jxy (2 of 20 distributed), at the correlation of the other molecule (the wrong-truth
-    ! control: median 0.53, s 0.04). No correlation floor lay under those runs and above the control,
-    ! so the correlations are reported, and so is the 6vxx FSC (its missed maps reach 50 A); the 1jxy
-    ! FSC ceiling of 40 A was admissible and stays. The sizes above (160 particles for 6vxx from 100
-    ! reprojections, 100 for 1jxy) replaced the 200 the same day and are not yet profiled.
+    ! The map's bounds by the floor rule, from the profile of the merged code at the sizes above
+    ! (2026-10-19, scratch/keep/profiles/phase8/main, 20 seed offsets at one thread): solve3D missed
+    ! the map in 2 of 20 runs for 6vxx (correlation 0.54 and 0.49, FSC 62 and 42 A) and for 1jxy in 1
+    ! of 20 in shared memory (0.64, 50 A; one more run reached only 0.71 and 19 A) and 1 of 20 in the
+    ! distributed step (another seed, 50 A), at the correlation of the other
+    ! molecule (the wrong-truth control: median 0.53-0.55, s 0.02-0.03). The found maps correlate at
+    ! median 0.88 (s 0.02-0.03) with FSC 4.5-4.8 A. No correlation floor lies under the missed runs
+    ! and 3s above the control, and no FSC ceiling over the missed runs means anything, so the
+    ! correlations and the FSC values are reported (the 1jxy FSC ceiling of 40 A, admissible on the
+    ! 200-particle profile of 2026-10-18, failed once). The control check below holds the wrong
+    ! molecule under MIN_VOL_CORR, the level no missed run reached and every found map passed. The
+    ! maintainer's Mac measured a 6vxx correlation of 0.780 at the earlier sizes (2026-10-17, one
+    ! thread); these sizes have not been profiled there yet.
     real,             parameter :: MIN_VOL_CORR   = 0.80
     real,             parameter :: MAX_FSC0143    = 40.0
     real,             parameter :: DOCK_HP        = 100.0
@@ -444,7 +450,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
         final_volume = filepath(solve3D_dir, refine3D_state_vol_fname(1))
         call validate_reconstructed_volume(truth_volume, final_volume, SMPD, EXTRACT_BOX, 0.01, MSKDIAM, &
             &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, gate, tag, corr, fsc0143, &
-            &dcorr_direct, dcorr_mirrored, dcorr_selected, ok, corr_gated=.false., fsc_gated=system_name%to_char() /= '6vxx')
+            &dcorr_direct, dcorr_mirrored, dcorr_selected, ok, corr_gated=.false., fsc_gated=.false.)
         call wrong_truth_control(tag)
         ! the distributed step ran its parts: the record of the second part's work exists
         if( nparts > 1 )then

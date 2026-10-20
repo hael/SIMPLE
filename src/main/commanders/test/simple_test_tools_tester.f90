@@ -6,7 +6,8 @@ use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 use simple_string,             only: string
 use simple_syslib,             only: simple_mkdir, simple_rmdir, del_file
 use simple_test_utils,         only: assert_true, assert_false, assert_int, assert_real
-use simple_test_profile_stats, only: gate_row, metric_dist, read_gate_table, robust_spread, summarize_metric, profile_table
+use simple_test_profile_stats, only: gate_row, metric_dist, read_gate_table, robust_spread, summarize_metric, profile_table, &
+                                    &meets_success_floor
 use simple_test_dispatch,      only: next_to_start
 use simple_test_identity,      only: compare_run_dirs, same_bytes, same_manifest, manifest_line_kept, SIGMA2_DIGEST_BYTES
 use simple_test_registry,      only: test_entry, get_test_registry, find_test_entry
@@ -57,6 +58,15 @@ contains
         d = summarize_metric('corr', 'min', [0.5, nan], [0.4, 0.4], [.true., .false.], 2)
         call assert_real(0.5, d%med, 1.e-6, 'a non-finite value stays out of the statistics')
         call assert_real(0.5, d%failure_rate, 1.e-6, 'and counts as a failure')
+        ! a success metric over five executions, one of which wrote nothing: 1, 0, 1, 1 succeed three times
+        d = summarize_metric('resolved', 'success', [1., 0., 1., 1.], [0.6, 0.6, 0.6, 0.6], [.true., .true., .true., .true.], 5)
+        call assert_int(3, d%successes, 'a success metric counts the runs with the value 1')
+        call assert_real(0.4, d%failure_rate, 1.e-6, 'the executions without a success, the missing one included')
+        call assert_true(meets_success_floor(d), 'three of five meet a floor of 0.6 of the runs')
+        d = summarize_metric('resolved', 'success', [1., 0., 1., 0.], [0.6, 0.6, 0.6, 0.6], [.true., .true., .true., .true.], 5)
+        call assert_false(meets_success_floor(d), 'two of five miss a floor of 0.6 of the runs')
+        d = summarize_metric('corr', 'min', [0.1], [0.4], [.false.], 1)
+        call assert_true(meets_success_floor(d), 'a metric of another sense has no success floor')
     end subroutine test_summarize_metric
 
     !> gate tables as test_gate writes them, aggregated over executions
@@ -97,6 +107,12 @@ contains
         call assert_real(1.0, dists(2)%failure_rate, 1.e-6, 'err fails in both (a failing row; a failed execution)')
         call assert_real(0.5, dists(1)%failure_rate, 1.e-6, &
             &'corr passes only where the execution passed: a failed execution fails its passing rows')
+        ! a success: three executions write 1, the second of which failed afterwards, so it counts twice
+        call write_table(F2, [character(len=80) :: 'ok  '//achar(9)//' 1.000000E+00'//achar(9)//' 5.000000E-01'//achar(9)//'yes'//achar(9)//'success'])
+        call profile_table([character(len=32) :: F2, F2, F2], [.true., .false., .true.], dists)
+        call assert_true(trim(dists(1)%sense) == 'success', 'a success row keeps its sense')
+        call assert_int(2, dists(1)%successes, 'a success counts only in an execution that passed')
+        call assert_real(0.5, dists(1)%floor, 1.e-6, 'the floor of a success is its own')
         call del_file(F1)
         call del_file(F2)
     end subroutine test_gate_tables

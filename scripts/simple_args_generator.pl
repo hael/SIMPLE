@@ -138,7 +138,7 @@ print MODULE  "    self%args(".$j.") = 'qsys_reservation'\n";
 $j++;
 print MODULE  "    self%args(".$j.") = 'job_name'\n";
 # keys of the test front door (simple_test_exec), read there and never by parameters
-foreach my$key ('seed_offset', 'target', 'nseeds', 'dir1', 'dir2'){
+foreach my$key ('seed_offset', 'target', 'nseeds', 'dir1', 'dir2', 'keep_outputs'){
     $j++;
     print MODULE  "    self%args(".$j.") = '".$key."'\n";
 }

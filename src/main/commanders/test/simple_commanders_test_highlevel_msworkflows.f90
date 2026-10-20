@@ -10,13 +10,19 @@
 !   shc     solve3D nstates=3 from the particles (random poses, no states), whose stages 1-2 run shc;
 !   states  refine3D_states nstates=3 on a single-state solution: the true poses and the consensus
 !           map reconstructed from every particle in one state; flex_pca initializes the states and
-!           one prob_neigh march refines them.
+!           one prob_neigh march refines them;
+!   consensus  the route used on real data (ruling of 2026-10-18): single-state solve3D in C1 from
+!           the particles, then refine3D_states nstates=3 on its solution, flex_pca initializing the
+!           states from it.
 ! The maps of a de novo run have their own frame and hand, so every estimated map is docked in both
 ! hands onto every truth: the docked correlations give the map mapping, the docking onto its mapped
 ! truth the frame in which maps, poses (up to the truth's declared point group) and shifts are
-! judged. Every run scores the shuffled-label and duplicated-maps controls, and checks that every
-! true state is resolved (an estimated state holds most of its particles: state 0 means exclusion)
-! and no estimated state is empty. The default (the CTest entry) runs the three routes;
+! judged. Every run scores the shuffled-label and duplicated-maps controls. Whether every true state
+! is resolved (an estimated state holds most of its particles: state 0 means exclusion) is checked in
+! the states and consensus routes; in the de novo multi-state routes (shc, cavgs) it is decided by the
+! early stages, which take the best-scoring state outright from random labels, and a single run may
+! miss it (ruling of 2026-10-18): there it is a success, which test=profile holds to the fraction of
+! 20 seeds below, and the labels are reported. The default (the CTest entry) runs the four routes;
 ! suite=<route> runs one, suite=<route>_identical a route on identical states, suite=hard_<route>
 ! on the conformational states (a chain rotated by 10 degrees, low SNR, a small second state), a
 ! robustness profile.
@@ -46,11 +52,10 @@ real,    parameter :: DOCK_HP  = 40.    !< A, the docking band
 real,    parameter :: DOCK_LP  = 10.
 real,    parameter :: DIFF_FRAC   = 0.1 !< the difference mask: where two truths differ by this fraction of the larger maximum,
 integer, parameter :: DIFF_DILATE = 1   !< dilated by this many pixels
-! The state labels of the shc and class-average routes are reported, a robustness profile, until the
-! merging and losing of states is fixed (ruling of 2026-10-17: the label floors of the Phase 4 profile,
-! an adjusted Rand index of 0.30, passed a merge of two states); the checks that every true state is
-! resolved and no estimated state empty hold them to the labels meanwhile. The states route's labels
-! are gated (below).
+! The state labels of the de novo multi-state routes (shc, cavgs) are reported, a robustness profile: a
+! single run may merge or lose a state (ruling of 2026-10-18), so whether every true state is resolved
+! is a success, held over 20 seeds by test=profile. The labels of the states and consensus routes are
+! gated (below).
 ! Ceilings of the poses and shifts of the shc route from the profile of 2026-10-17
 ! (scratch/keep/profiles/phase4/current_t{1,8}_shc, 20 seed offsets at 1 and at 8 threads; s is the
 ! robust spread):
@@ -58,13 +63,18 @@ integer, parameter :: DIFF_DILATE = 1   !< dilated by this many pixels
 !   1.79, s 0.075, worst 2.13, admissible from 2.20; random poses err by about 90 deg;
 ! - median shift error: t8 median 0.070 px, s 0.008, worst 0.098, admissible from 0.107; t1 median
 !   0.077, s 0.012, worst 0.104, admissible from 0.115; zero shifts err by about 2 px.
+! Both stay admissible on the profile of the merged code (2026-10-19, msw_t8_shc): rotation median
+! 1.83 deg, s 0.065, worst 1.99, admissible from 2.05; shift median 0.075 px, s 0.008, worst 0.082,
+! admissible from 0.098.
 real,    parameter :: SHC_MAX_ROT_ERR = 2.5
 real,    parameter :: SHC_MAX_SH_ERR  = 0.15
 ! Ceilings of the poses and shifts of the class-average route (cavgs), from its profile of 2026-10-18
 ! (scratch/keep/profiles/phase5/ms_cavgs, 20 seed offsets at 8 threads, after the rulings of that day):
 ! median rotation error median 1.79 deg, s 0.35, worst 3.92, admissible from 4.27; median shift error
 ! median 0.091 px, s 0.013, worst 0.348, admissible from 0.361; random poses err by about 90 deg and
-! zero shifts by about 0.6 px (the simulated shifts are uniform within one pixel)
+! zero shifts by about 0.6 px (the simulated shifts are uniform within one pixel). Both stay admissible on
+! the profile of the merged code (2026-10-19, msw_t8_cavgs): rotation median 1.82 deg, s 0.25, worst
+! 2.86, admissible from 3.11; shift median 0.092 px, s 0.012, worst 0.258, admissible from 0.270.
 real,    parameter :: CAVGS_MAX_ROT_ERR = 4.5
 real,    parameter :: CAVGS_MAX_SH_ERR  = 0.40
 ! The states route (refine3D_states) resolves every state in all 20 runs of its profile of
@@ -75,12 +85,47 @@ real,    parameter :: CAVGS_MAX_SH_ERR  = 0.40
 ! population error worst 0.0003 (ceiling 0.01; a lost state errs by 0.2); discrimination margin median
 ! 0.450, s 0.002, worst 0.4445, to 0.442 (floor 0.40; copies of one map score below 0); median
 ! rotation error median 1.44 deg, s 0.017, worst 1.455, from 1.494 (ceiling 2.0); median shift error
-! median 0.049 px, worst 0.0498, from 0.0507 (ceiling 0.10)
+! median 0.049 px, worst 0.0498, from 0.0507 (ceiling 0.10). Every one stays admissible on the profile of
+! the merged code (2026-10-19, msw_t8_states, all 20 runs resolve every state): adjusted Rand index
+! worst 0.9977 (s 0.0006), accuracy worst 0.9993, smallest recall worst 0.9987, population error worst
+! 0.0007, margin median 0.450, worst 0.446, rotation median 1.44 deg, worst 1.52 (s 0.02), shift worst
+! 0.051 px
 real,    parameter :: STATES_MIN_ARI      = 0.99, STATES_MIN_ACC = 0.99, STATES_MIN_RECALL = 0.99
 real,    parameter :: STATES_MAX_POP_ERR  = 0.01, STATES_MIN_MARGIN = 0.40
 real,    parameter :: STATES_MAX_ROT_ERR  = 2.0,  STATES_MAX_SH_ERR = 0.10
-character(len=*), parameter :: SUITES = 'cavgs, shc, states, cavgs_identical, shc_identical, states_identical, '//&
-    &'hard_cavgs, hard_shc, hard_states, cavgs_single, cavgs_as_particles'
+! The fractions of 20 seed offsets in which a de novo route must resolve every true state (ruling of
+! 2026-10-18): the count k observed in its profile less three binomial standard deviations
+! (sqrt(20 p (1-p)), p = k/20), rounded down, over 20. The profiles of 2026-10-19 at 8 threads
+! (scratch/keep/profiles/phase8/msw_t8_<route>): shc 13 of 20, so 13 - 3 x 2.13 = 6.6, floor 6 (0.30);
+! cavgs 9 of 20, so 9 - 3 x 2.22 = 2.3, floor 2 (0.10). The shuffled-label control resolved every
+! state in none of the runs of either. In every run of both profiles the path assertions, the checks
+! and the pose ceilings held, so the nightly keeps them as gates
+real,    parameter :: SHC_RESOLVED_FLOOR = 0.30, CAVGS_RESOLVED_FLOOR = 0.10
+! The consensus route (ruling of 2026-10-18: gate what holds run to run by the floor rule) resolved
+! every true state in all 40 runs of its profiles of 2026-10-19 (scratch/keep/profiles/phase8/
+! msw_t8_consensus and msw_t1_consensus, 20 seed offsets each at 8 threads and at one thread), so the
+! resolution is checked in every run like the states route's. One state is often only partly
+! separated from another, so the labels are coarser than the states route's; as median, s, worst and
+! the bound of the floor rule over both profiles (8 threads; one thread):
+! - adjusted Rand index 0.78, 0.12, 0.67; 0.79, 0.11, 0.69: to 0.427; shuffled labels 0.00 (+3s 0.35):
+!   floor 0.40;
+! - accuracy 0.927, 0.044, 0.881; 0.932, 0.041, 0.892: to 0.794; the collapsed predictor 0.50 (+3s
+!   0.63) and the null's 99.9th percentile 0.43: floor 0.70;
+! - largest population error 0.073, 0.042, 0.111; 0.066, 0.040, 0.108: from 0.198; the collapsed
+!   predictor's 0.50 (-3s 0.37): ceiling 0.30;
+! - discrimination margin 0.439, 0.017, 0.307; 0.436, 0.018, 0.307: to 0.289; copies of one map score
+!   about 0 (+3s 0.05): floor 0.20;
+! - the smallest per-state recall 0.76, 0.14, 0.62; 0.78, 0.15, 0.64: to 0.342, under what shuffled
+!   labels reach, so it is reported (negative floor below);
+! - median rotation error 1.63 deg, 0.06, 1.85; 1.72, 0.10, 1.89: from 2.03, random poses err by about
+!   90 deg: ceiling 2.5; median shift error 0.073 px, 0.008, 0.086; 0.072, 0.007, 0.086: from 0.096,
+!   zero shifts err by about 2 px: ceiling 0.15.
+! The maintainer's Mac has not profiled this route yet.
+real,    parameter :: CONSENSUS_LABEL_FLOORS(5) = [0.40, 0.70, -1., 0.30, 0.20]
+real,    parameter :: CONSENSUS_MAX_ROT_ERR = 2.5, CONSENSUS_MAX_SH_ERR = 0.15
+character(len=*), parameter :: SUITES = 'cavgs, shc, states, consensus, cavgs_identical, shc_identical, '//&
+    &'states_identical, consensus_identical, hard_cavgs, hard_shc, hard_states, hard_consensus, cavgs_single, '//&
+    &'cavgs_as_particles'
 !> suite=cavgs_single (by hand): the single-state class-average start, solve3D_cavgs nstates=1 on the
 !! class averages of the tetramer alone, its poses and map reported; prob_athres= passed to the test is
 !! passed on (prob_athres=90 is the default before the ruling of 2026-10-18, 10 after it).
@@ -110,8 +155,9 @@ module subroutine exec_test_multistate_workflows( self, cline )
         case('list')
             write(logfhandle,'(a)') 'Available suites for multistate_workflows: '//SUITES
             return
-        case('', 'cavgs', 'shc', 'states', 'cavgs_identical', 'shc_identical', 'states_identical', &
-            &'hard_cavgs', 'hard_shc', 'hard_states', 'cavgs_single', 'cavgs_as_particles')
+        case('', 'cavgs', 'shc', 'states', 'consensus', 'cavgs_identical', 'shc_identical', 'states_identical', &
+            &'consensus_identical', 'hard_cavgs', 'hard_shc', 'hard_states', 'hard_consensus', 'cavgs_single', &
+            &'cavgs_as_particles')
         case default
             THROW_HARD('no sub-suite '//suite//' in multistate_workflows; use suite=list')
     end select
@@ -131,11 +177,12 @@ module subroutine exec_test_multistate_workflows( self, cline )
             call run_case(root, 'cavgs',  'cavgs',  'compositional', nthr, gate)
             call run_case(root, 'shc',    'shc',    'compositional', nthr, gate)
             call run_case(root, 'states', 'states', 'compositional', nthr, gate)
-        case('cavgs', 'shc', 'states')
+            call run_case(root, 'consensus', 'consensus', 'compositional', nthr, gate)
+        case('cavgs', 'shc', 'states', 'consensus')
             call run_case(root, suite, suite, 'compositional', nthr, gate)
-        case('cavgs_identical', 'shc_identical', 'states_identical')
+        case('cavgs_identical', 'shc_identical', 'states_identical', 'consensus_identical')
             call run_case(root, suite, suite(1:index(suite, '_') - 1), 'identical', nthr, gate)
-        case('hard_cavgs', 'hard_shc', 'hard_states')
+        case('hard_cavgs', 'hard_shc', 'hard_states', 'hard_consensus')
             call run_case(root, suite, suite(6:), 'conformational', nthr, gate)
         case('cavgs_single')
             call run_case(root, suite, 'cavgs', 'identical', nthr, gate)
@@ -156,15 +203,16 @@ module subroutine exec_test_multistate_workflows( self, cline )
     endif
 end subroutine exec_test_multistate_workflows
 
-!> one workflow (route cavgs, shc or states) in root/<tag> on the betagal states of kind, and its
+!> one workflow (route cavgs, shc, states or consensus) in root/<tag> on the betagal states of kind, and its
 !! metrics, named after tag
 subroutine run_case( root, tag, route, kind, nthr, gate )
+    use simple_bench_io, only: bench_report_fname
     class(string),    intent(in)    :: root
     character(len=*), intent(in)    :: tag, route, kind
     integer,          intent(in)    :: nthr
     type(test_gate),  intent(inout) :: gate
     type(state_fixture) :: fix
-    type(string) :: dir, projfile
+    type(string) :: dir, projfile, bench
     integer :: status, nstates_run
     logical :: l_control
     write(logfhandle,'(a)') '>>> TEST_MULTISTATE_WORKFLOWS: '//tag
@@ -195,7 +243,7 @@ subroutine run_case( root, tag, route, kind, nthr, gate )
     endif
     ! the states the programs are asked for: refine3D_states takes a ceiling of at least three
     nstates_run = fix%nstates
-    if( route == 'states' ) nstates_run = max(3, fix%nstates)
+    if( route == 'states' .or. route == 'consensus' ) nstates_run = max(3, fix%nstates)
     select case(route)
         case('cavgs')
             ! the truth maps of the fixture; the images are simulated here
@@ -211,7 +259,8 @@ subroutine run_case( root, tag, route, kind, nthr, gate )
             ! stages 1-2 shc over 500 and 1 000 directions, 3-4 prob, 5 prob_neigh at the cap
             call check_path(tag, ['shc       ', 'shc       ', 'prob      ', 'prob_neigh'], [500, 1000, 1000, 2500], &
                 &nstates_run, gate)
-            call evaluate(fix, projfile, tag, l_control, gate, gated=kind == 'compositional')
+            call evaluate(fix, projfile, tag, l_control, gate, gated=kind == 'compositional', de_novo=.true., &
+                &resolved_floor=SHC_RESOLVED_FLOOR)
         case('states')
             fix%mode = FIX_KNOWN
             call fix%build
@@ -222,6 +271,22 @@ subroutine run_case( root, tag, route, kind, nthr, gate )
             call check_path(tag, ['prob_neigh'], [2500], -2, gate)
             call evaluate(fix, projfile, tag, l_control, gate, gated=kind == 'compositional', &
                 &max_rot_err=STATES_MAX_ROT_ERR, max_sh_err=STATES_MAX_SH_ERR, labels_gated=kind == 'compositional')
+        case('consensus')
+            fix%mode = FIX_SEARCH
+            call fix%build
+            projfile = fix%project_fname()
+            ! the single-state solution in the point group the states share (C1 for these)
+            call run_solve3D(fix, projfile, 1, nthr, .false.)
+            ! the strategy's record of solve3D's iterations is kept aside, so that the path checked is
+            ! refine3D_states' own
+            bench = bench_report_fname('REFINE3D_STRATEGY')
+            if( file_exists(bench) ) call simple_rename(bench%to_char(), bench%to_char()//'.solve3D')
+            call run_refine3D_states(fix, projfile, nstates_run, nthr)
+            ! the neighbourhood stage of refine3D_states, with the states flex_pca delivered (at least two)
+            call check_path(tag, ['prob_neigh'], [2500], -2, gate)
+            call evaluate(fix, projfile, tag, l_control, gate, gated=kind == 'compositional', &
+                &max_rot_err=CONSENSUS_MAX_ROT_ERR, max_sh_err=CONSENSUS_MAX_SH_ERR, &
+                &labels_gated=kind == 'compositional', label_floors=CONSENSUS_LABEL_FLOORS)
     end select
     call simple_chdir(root, status)
     if( status /= 0 ) THROW_HARD('could not return to '//root%to_char())
@@ -320,8 +385,9 @@ subroutine run_cavgs_route( fix, projfile, nstates_run, nthr, tag, l_control, ga
     ! single-state start is a measurement, its path not asserted
     if( nstates_run > 1 ) call check_path(tag, ['shc       ', 'prob      ', 'prob      ', 'prob_neigh'], &
         &[500, 500, 1000, 2500], nstates_run, gate)
-    call evaluate(fix, projfile, tag, l_control, gate, gated=.not. l_control .and. nstates_run > 1, &
-        &images_truth=TRUTH_DOC, nimages=NCAVGS, max_rot_err=CAVGS_MAX_ROT_ERR, max_sh_err=CAVGS_MAX_SH_ERR)
+    call evaluate(fix, projfile, tag, l_control, gate, gated=.not. l_control .and. nstates_run > 1, de_novo=.true., &
+        &images_truth=TRUTH_DOC, nimages=NCAVGS, max_rot_err=CAVGS_MAX_ROT_ERR, max_sh_err=CAVGS_MAX_SH_ERR, &
+        &resolved_floor=CAVGS_RESOLVED_FLOOR)
 
   contains
 
@@ -436,16 +502,14 @@ end subroutine run_solve3D
 !! states_identical control as a suite of its own
 subroutine run_states_route( fix, projfile, nstates_run, nthr )
     use simple_commanders_rec,      only: commander_rec3D
-    use simple_commanders_refine3D, only: commander_refine3D_states
     use simple_refine3D_fnames,     only: refine3D_state_vol_fname, refine3D_fsc_fname
     use simple_sp_project,          only: sp_project
     use simple_syslib,              only: simple_abspath
     class(state_fixture), intent(in) :: fix
     class(string),        intent(in) :: projfile
     integer,              intent(in) :: nstates_run, nthr
-    class(commander_rec3D),           allocatable :: xrec
-    class(commander_refine3D_states), allocatable :: xstates
-    class(cmdline),    allocatable :: cl
+    class(commander_rec3D), allocatable :: xrec
+    class(cmdline),         allocatable :: cl
     class(sp_project), allocatable :: proj
     type(string) :: vol, fsc
     allocate(xrec, cl)
@@ -469,8 +533,20 @@ subroutine run_states_route( fix, projfile, nstates_run, nthr )
     call proj%add_fsc2os_out(simple_abspath(fsc), 1, fix%box())
     call proj%write(projfile)
     call proj%kill
-    deallocate(proj)
-    allocate(xstates)
+    deallocate(proj, cl)
+    call run_refine3D_states(fix, projfile, nstates_run, nthr)
+end subroutine run_states_route
+
+!> refine3D_states nstates=nstates_run in C1 on the single-state solution of the project; its
+!! particles carry no state labels, so flex_pca initializes the states
+subroutine run_refine3D_states( fix, projfile, nstates_run, nthr )
+    use simple_commanders_refine3D, only: commander_refine3D_states
+    class(state_fixture), intent(in) :: fix
+    class(string),        intent(in) :: projfile
+    integer,              intent(in) :: nstates_run, nthr
+    class(commander_refine3D_states), allocatable :: xstates
+    class(cmdline),                   allocatable :: cl
+    allocate(xstates, cl)
     call cl%set('prg',      'refine3D_states')
     call cl%set('projfile', projfile)
     call cl%set('mkdir',    'no')
@@ -481,7 +557,7 @@ subroutine run_states_route( fix, projfile, nstates_run, nthr )
     call xstates%execute(cl)
     call cl%kill
     deallocate(xstates, cl)
-end subroutine run_states_route
+end subroutine run_refine3D_states
 
 !> The path the refinements took, from the refine3D strategy's record of every iteration (refine
 !! mode, directions, states): the blocks of consecutive iterations with one mode and one number of
@@ -558,7 +634,7 @@ end subroutine check_path
 !> labels, maps (docked in both hands onto every truth), discrimination, poses and shifts of the
 !! finished run in the working directory against the truth; the controls
 subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, nimages, images_are_particles, &
-    &max_rot_err, max_sh_err, labels_gated )
+    &max_rot_err, max_sh_err, labels_gated, de_novo, resolved_floor, label_floors )
     use simple_sp_project,         only: sp_project
     use simple_rnd,                only: shuffle
     use simple_test_utils,         only: set_fixed_seed
@@ -579,6 +655,14 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     logical,          optional, intent(in) :: images_are_particles !< the judged images are the particle segment
     real,             optional, intent(in) :: max_rot_err, max_sh_err !< the ceilings when gated (the shc route's by default)
     logical,          optional, intent(in) :: labels_gated !< the labels and the discrimination held to the states route's floors
+    !> a de novo route: whether every true state is resolved is a success, held by test=profile to the
+    !! fraction resolved_floor of its runs, not a check of the run
+    logical,          optional, intent(in) :: de_novo
+    real,             optional, intent(in) :: resolved_floor
+    !> the floors of gated labels: adjusted Rand index, accuracy, smallest recall (negative: reported),
+    !! the ceiling of the population error and the floor of the discrimination margin; the states
+    !! route's by default
+    real,             optional, intent(in) :: label_floors(5)
     class(sp_project), allocatable, target :: proj
     class(oris), pointer :: os => null()
     type(string) :: truth_doc
@@ -592,10 +676,15 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     logical, allocatable :: mirrored(:,:), has_map(:), l_mapped(:)
     real    :: ari, acc, med_null, p999, poperr, ccd, ccm, corr, fsc05, fsc0143, shc(2), r(3,3), d(2)
     integer :: ntrue, nest, k, e, i, n, nmask, ldim(3), nobs
-    logical :: l_gated, l_labels
-    real    :: rot_ceil, sh_ceil, recall, margin
+    logical :: l_gated, l_labels, l_de_novo
+    real    :: rot_ceil, sh_ceil, recall, margin, lf(5)
     l_gated = .false.
     if( present(gated) ) l_gated = gated
+    l_de_novo = .false.
+    if( present(de_novo) ) l_de_novo = de_novo .and. .not. l_control
+    lf = [STATES_MIN_ARI, STATES_MIN_ACC, STATES_MIN_RECALL, STATES_MAX_POP_ERR, STATES_MIN_MARGIN]
+    if( present(label_floors) ) lf = label_floors
+    if( l_de_novo .and. .not. present(resolved_floor) ) THROW_HARD('a de novo route needs the floor of its successes')
     l_labels = .false.
     if( present(labels_gated) ) l_labels = labels_gated
     rot_ceil = SHC_MAX_ROT_ERR
@@ -635,24 +724,27 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     ! Rand index sees them as one more cluster
     call gate%report(tag//'_unassigned_fraction', real(count(estates < 1)) / real(nobs))
     if( l_labels )then
-        call gate%metric(tag//'_ari', ari, STATES_MIN_ARI, ari >= STATES_MIN_ARI)
+        call gate%metric(tag//'_ari', ari, lf(1), ari >= lf(1))
     else
         call gate%report(tag//'_ari', ari)
     endif
     ! a merge of two true states leaves one unrecalled and an estimated state empty; state 0 means
     ! exclusion, so a true state is resolved when an estimated state holds most of its particles
     recall = minval(state_recalls(tstates, estates, map, ntrue))
-    if( l_labels )then
-        call gate%metric(tag//'_min_state_recall', recall, STATES_MIN_RECALL, recall >= STATES_MIN_RECALL)
+    if( l_labels .and. lf(3) >= 0. )then
+        call gate%metric(tag//'_min_state_recall', recall, lf(3), recall >= lf(3))
     else
         call gate%report(tag//'_min_state_recall', recall)
     endif
-    if( .not. l_control )then
+    if( l_de_novo )then
+        call gate%success(tag//'_every_true_state_resolved', all(state_recalls(tstates, estates, map, ntrue) > 0.5), &
+            &resolved_floor)
+    else if( .not. l_control )then
         call gate%check(tag//'_every_true_state_resolved', all(state_recalls(tstates, estates, map, ntrue) > 0.5))
         call gate%check(tag//'_no_estimated_state_empty', all([(count(estates == e) > 0, e = 1, nest)]))
     endif
     if( l_labels )then
-        call gate%metric(tag//'_accuracy', acc, STATES_MIN_ACC, acc >= STATES_MIN_ACC)
+        call gate%metric(tag//'_accuracy', acc, lf(2), acc >= lf(2))
     else
         call gate%report(tag//'_accuracy', acc)
     endif
@@ -660,7 +752,7 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     call gate%report(tag//'_accuracy_null_p999', p999)
     call gate%report(tag//'_collapsed_accuracy', collapsed_accuracy(tstates, ntrue))
     if( l_labels )then
-        call gate%metric(tag//'_largest_population_error', poperr, STATES_MAX_POP_ERR, poperr <= STATES_MAX_POP_ERR, &
+        call gate%metric(tag//'_largest_population_error', poperr, lf(4), poperr <= lf(4), &
             &upper=.true.)
     else
         call gate%report(tag//'_largest_population_error', poperr)
@@ -671,6 +763,9 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     call shuffle(shuffled)
     mapctrl = match_states(shuffled, estates, ntrue, nest)
     call gate%report(tag//'_control_shuffled_ari', adjusted_rand_index(shuffled, estates))
+    ! the success count of the shuffled labels, which the floor of the true labels must clear
+    if( l_de_novo ) call gate%success(tag//'_control_shuffled_every_true_state_resolved', &
+        &all(state_recalls(shuffled, estates, mapctrl, ntrue) > 0.5), 0.)
     call gate%check(tag//'_control_shuffled_accuracy_within_null', mapped_accuracy(shuffled, estates, mapctrl) <= p999)
     write(logfhandle,'(a)') 'CONFUSION (rows: estimated states; columns: true states)'
     do e = 1, nest
@@ -730,7 +825,7 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
         else if( all(l_mapped) )then
             margin = finite_min(margins)
             if( l_labels )then
-                call gate%metric(tag//'_discrimination_min_margin', margin, STATES_MIN_MARGIN, margin >= STATES_MIN_MARGIN)
+                call gate%metric(tag//'_discrimination_min_margin', margin, lf(5), margin >= lf(5))
             else
                 call gate%report(tag//'_discrimination_min_margin', margin)
             endif

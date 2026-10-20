@@ -213,7 +213,16 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     ! excess derived from its absolute rows: median 3.2 deg, robust spread 1.1, worst 5.02) gave 6.5;
     ! the test's own after-profile of 2026-10-18 (scratch/keep/profiles/phase5/after, 20 seed offsets
     ! at 8 threads) spreads wider: median 3.38 deg, robust spread 2.14, worst 5.89, admissible from
-    ! 9.8; the control (the cohort's truth shuffled) gives median 23.9 deg, s 3.2, so at most 14.3
+    ! 9.8; the control (the cohort's truth shuffled) gives median 23.9 deg, s 3.2, so at most 14.3.
+    ! On the merged code (2026-10-19, scratch/keep/profiles/phase8/main at 8 threads and t1_a at one
+    ! thread, 20 seed offsets each; the ruling of 2026-10-18 asks for both, since refactoring runs check
+    ! this entry at one thread) the excess is smaller: 8 threads median 0.49 deg, s 0.80, worst 1.80,
+    ! admissible from 2.88; one thread median 0.11, s 1.10, worst 2.16, admissible from 3.40; the control
+    ! gives median 28.6 and 28.5 deg (worst 26.3 and 24.7), so at most 21.4. The 10 deg ceiling stays
+    ! admissible on both. The union map: correlation worst 0.938 (8 threads) and 0.937 (one thread), s
+    ! 0.005, against the floor 0.9 (admissible to 0.933); its loss to the base map worst 0.005 and 0.002.
+    ! The maintainer's Mac measured 6.00 deg at one thread on the absolute excess this gate replaced
+    ! (2026-10-17, against 5.0); the relative gate has not been profiled there yet.
     real,    parameter :: MAX_POSE_ERR_EXCESS  = 10.0 !< cohort-frozen above frozen-frozen
     real,    parameter :: MIN_COVERAGE        = 0.9   !< cohort particles with updatecnt > 0
     real,    parameter :: MIN_UNION_CORR      = 0.9   !< docked union map vs truth

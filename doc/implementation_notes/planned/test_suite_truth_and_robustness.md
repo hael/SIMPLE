@@ -1,7 +1,9 @@
 # A test suite that knows the truth: correctness, robustness and multi-state
 
-Implementation note, 2026-10-16. **Phases 0 to 2 done (see Progress); the
-later phases are planned.** Written
+Implementation note, 2026-10-16. **Phases 0 to 9 done (see Progress; the
+run `test_truth` carried out Phases 0 to 6, `test_truth_sync` Phases 7 to 9
+on the merged code), report in `test_suite_truth_and_robustness_report.md`;
+the dataset layer follows.** Written
 after the run `ms_speed`, which could not tell whether its multi-state
 schedule change was correct: no test knows the state labels, and the checks it
 used on beta-galactosidase measured run-to-run scatter, not correctness. The
@@ -471,6 +473,18 @@ benchmark datasets of `SIMPLE_data_testing`) need datasets and have no truth.
     that reads the manifest and executes each dataset's command line.
 - The beta-galactosidase and PfCRT cases of the speed runs are its first
   entries. The layer is designed in this run's report and built after it.
+- **Ruling of 2026-10-18 (late): real data in the suite.** The design follows
+  `testing_and_benchmarking_plan.md` section 5: real data joins
+  `test=nightly` as public datasets with previously solved maps, kept as
+  subsets on Zenodo and fetched by name with checksums, each case judged
+  against its earlier map (map-to-reference FSC and correlation, floors by
+  the floor rule, another dataset's map as the negative control; never an
+  input). The design of each case (starting point, downsampling, number of
+  images, budget) is the next piece of work, not this run's: the report
+  states the layer's design and its open choices, and the test policy's
+  section 6.6 says the same. No dataset is chosen, downloaded or uploaded in
+  this run; the private full-size datasets stay local, for profiles and
+  timings.
 
 ## Execution: the run `test_truth`
 
@@ -508,6 +522,34 @@ phase records itself in the progress section.
   recorded as a robustness profile, or its signal is raised until it can be
   a gate. Every floor is written next to its check with its origin (the
   profile, its date, its median and spread).
+- **Floors hold at one thread and on other platforms** (ruling of
+  2026-10-18). Results at one thread reproduce on one platform but differ
+  between compilers and machines, and refactoring runs check identity at one
+  thread, so a gate must not fail there by chance. The floor rule's profiles
+  cover every thread setting an entry is run at, one thread included: an
+  entry a refactoring run checks at one thread (`solve3D_addon` and
+  `cont_refine3D_1jxy`, the speed week's cases) is profiled at one thread as
+  well, and its floors are set from both profiles. A floor of a case that is
+  unchanged since the maintainer's Mac measured it is checked against the
+  Mac's value; for a changed case the card says that the Mac has not been
+  profiled yet.
+- **De novo multi-state routes are a robustness measurement** (ruling of
+  2026-10-18). De novo multi-state determination is decided by its early
+  stages: the states start from random labels and random poses, and every
+  assignment takes the best-scoring state outright, so whichever state fits
+  the noise slightly better grows. Whether every true state is resolved is
+  therefore not a per-run gate of `solve3D` from the particles, of the
+  class-average route, or of single-state `solve3D` followed by
+  `refine3D_states`: `test=profile` reports the number of the 20 seeds in
+  which every true state is resolved and holds it to a floor, the observed
+  count less three binomial standard deviations (the square root of
+  n·p·(1−p)), rounded down, which must be above the count of the
+  shuffled-label control. The nightly run of these routes keeps only the
+  gates that held in every run of the profile (path assertions, pose
+  ceilings, finite values); the label, population and state-resolution
+  values are reported. Each seed's metrics of these routes are kept under
+  `scratch/keep/profiles/` with their seed offsets and build, the baseline of
+  the development that will draw the state from the score differences.
 - **Identity.** A change the plan calls identical keeps the one-thread
   outputs of the affected tests byte-identical. `test=identity` checks this
   (until Phase 0 builds it, a byte comparison by hand), with its declared
@@ -850,7 +892,9 @@ Exit criteria: the gates pass; the report is written.
 | `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md` | the review report of the run, beside this note | 6 |
 | `src/main/commanders/test/simple_commanders_test_highlevel_msworkflows.f90` | its header comment still described the class-average route before the rulings of 2026-10-18 (300 images); comment only | 6 |
 | `src/main/commanders/test/`, `src/main/ui/simple_test/`, `src/main/exec/simple_test_exec_highlevel.f90`, `production/CMakeLists.txt`, `scripts/check_test_registry.py` | the tests, their registration and their floors on the merged code | 7 8 9 |
+| `doc/policies/test_environment_policy.md` | `test=identity`: the entries that run no `solve3D` or `refine3D` declare their outputs, and an entry that works in a directory named by its process id is compared through that directory | 7 |
 | `doc/policies/test_environment_policy.md`, `doc/user_guide/simulate_particles.md` | the cards, floors and tools after the merge | 8 9 |
+| `scripts/simple_args_generator.pl` | the test front door accepts `keep_outputs=`, with which `test=profile` deletes each execution's outputs as it ends and counts only running executions against the disk budget | 8 |
 | `doc/implementation_notes/planned/identical_speed_run_report.md` | the speed week's identity on x86 and its timing | 7 9 |
 | `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md` | the review report of the run, beside this note | 9 |
 
@@ -2281,3 +2325,253 @@ code keeps its profile.
 (25d256886 against 04e520e78), the identity check that sorts the entries, the profiles and floors
 again where needed, the rulings not yet delivered to this run, the suite's timing, the documents
 and the close.
+
+### Phase 7, 2026-10-19: the merged code, and what still holds
+
+The continuation run `test_truth_sync` starts from a67d487d9 (master 43de9b340 with this run's work
+merged; the working tree clean). Paths below are under `~/agent_runs/test_truth_sync` unless they
+start with `src/`, `doc/` or `scripts/`; the journal of the phase is `state/journal_phase_7.md`.
+No ruling applied in this phase: the two outstanding rulings (floors at one thread and on the
+maintainer's Mac; how the multi-state workflows are tested) belong to Phase 8's profiles and Phase 9's
+documents, and the real-data ruling to Phase 9's report, as the rulings file assigns them.
+
+**Builds.** As in `test_truth`: gfortran 15.2 from gcc-toolset-15, CMake 3.26, Python 3.12, Release
+builds with tests under `scratch/keep/` (`build_merged` the merged tree; `build_04e` and `build_137`
+from exports of 04e520e78 and 13795c1d9), the old run's builds of 25d256886 and of its final code
+copied (binaries and scripts only) to `scratch/keep/old_build_base` and `old_build_phase5f`, so that
+nothing writes into the old run's directory (the state fixture caches under `SIMPLE_PATH`).
+
+**Gates**, on the merged code: the Release build, the Debug build of `./compile_debug.sh` with its
+fast gate (15 of 15 suites; `scratch/logs/compile_debug_full.log`, and again after this phase's
+change, `compile_debug_full_final.log`), the registry lint, `check_descr.py`, and the CTest entries
+`pcg_recon`, `pcg_frac_update` and `forked_process` on the Release build.
+
+**The speed week on x86: byte-identical.** The cases SW1 (the simulated workflow of
+beta-galactosidase with both its steps), MSI (three states, dense then neighbourhood table), CCI
+(correlation objective, fractional update, trailing reconstruction) and PCI (the PCG backend with the
+nonuniform filter) ran at one thread on 25d256886 twice and on 04e520e78 once, each in one fixed
+directory, with the base build's SW1 directory as the fixture. Every compared file is identical
+between the builds and between the two base runs (SW1 729 files, MSI 226, CCI 50, PCI 53). The table
+part files, whose layout the speed week changed on purpose, were compared through lossless decoders
+of both layouts, as on the Mac. 04e520e78 also contains 13795c1d9 (the axis search moved to stage 4),
+which no case reaches. The kept back-filled projection labels (item 22) change no reachable result: no
+caller trails on a particle field without labels, and the one candidate route stops on both builds
+before the changed code matters. The details, the declared exclusions and the evidence are in
+`identical_speed_run_report.md`, section "Identity on x86"; the comparisons, run logs, scripts and
+decoders in `scratch/logs/identity/`.
+
+**What still holds.** Every entry that runs no `solve3D` or `refine3D` (and, for information, the two
+SINGLE workflows, which run `refine3D_nano`) ran once at seed offset 0 at one thread on the old run's
+final build twice and on the merged build once, all passing, and was compared with `test=identity`
+(`scratch/still/`):
+
+| entry | old final build, run twice | old final build against merged | its profile |
+| --- | --- | --- | --- |
+| `mini_stream_6vxx`, `mini_stream_1jxy` | identical (150 files each) | identical | kept |
+| `simulate_particles` | identical (22) | identical | kept |
+| `state_fixture` | identical (gate table) | identical | kept |
+| `single_atoms_stats` and its CdSe variants `_cdsew`, `_cdsez`, `_cdser` | identical (64, 53, 53, 61) | identical | kept |
+| `species_discovery` | identical (gate table) | identical | kept |
+| `stream_preproc` | identical (24) | identical | kept |
+| `single_workflow_fcc` | identical (153) | identical | kept |
+| `single_workflow_wurtzite` | identical (144) | 88 files differ, from the first `autorefine3D_nano` iteration on | profiled again |
+
+`single_workflow_wurtzite` differs because master reverted the FSC=0.143 clamp of the matching
+low-pass (fb4e653ac): the old final build clamped it eight times in this run (its log), the merged
+build never. The fcc run never clamped on the old build (the repaired clamp declined there), so it
+is unchanged.
+
+To make these comparisons possible, the registry now declares identity outputs for every entry that
+runs no `solve3D` or `refine3D` (`src/main/commanders/test/simple_test_registry.f90`): those that work
+in a directory named by their process id (`test_<name>_<pid>`) declare them relative to it, and
+`test=identity` is given that directory; `state_fixture` and `species_discovery` keep no files but
+their gate table, which they declare. The stream's star files and motion models hold absolute movie
+paths and are not outputs. The test policy says so (section 1.5).
+
+**The list for Phase 8** (profiles again, 20 seed offsets, at the CTest thread count and at one
+thread where a refactoring run checks the entry at one thread): `simulated_workflow_6vxx`,
+`simulated_workflow_1jxy`, `single_workflow_wurtzite`, `solve3D_addon`, `cont_refine3D_1jxy`,
+`multistate_assignment`, `multistate_workflows`, `flex_pca_blobs`, `solve3D_pyramid_blobs`. The
+library entries `pcg_recon` and `pcg_frac_update` pass on the merged build.
+
+**Exit criteria.**
+
+- The gates pass (above).
+- The speed week's verdict on x86 with its evidence: byte-identical (above, and the speed-week
+  report).
+- The list of entries to profile: above.
+
+Files changed in this phase: `src/main/commanders/test/simple_test_registry.f90`,
+`doc/policies/test_environment_policy.md`, `doc/implementation_notes/planned/identical_speed_run_report.md`
+and this note (its file table and this entry).
+
+### Phase 8, 2026-10-19: profiles and floors on the merged code
+
+Paths are under `~/agent_runs/test_truth_sync` unless they start with `src/`, `doc/`, `production/` or
+`scripts/`; the journal of the phase is `state/journal_phase_8.md`. Builds: `scratch/keep/build_merged`
+(the merged tree with Phase 7's change and this phase's tool change; the profiles in `main/`, `t1_a/`
+and `t1_cont/`) and `scratch/keep/build_p8` (the same production code with this phase's test changes;
+the multi-state workflow profiles and the verification; `build_merged` was deleted for disk at the
+end of the phase, `build_p8` is the final code). Every profile has 20 seed offsets (0 to 19)
+and lives in `scratch/keep/profiles/phase8/<name>/`: each execution's gate table and log, with its
+seed offset in its directory name, and the distribution tables (`README.txt` there says which build
+made which).
+
+**Rulings applied in this phase** (recorded in "Common rules"):
+
+- 2026-10-18, floors must hold on the maintainer's Mac and at one thread. The two entries a
+  refactoring run checks at one thread, `solve3D_addon` and `cont_refine3D_1jxy`, were profiled at
+  one thread as well as at their eight, and their floors checked against both; so was
+  `multistate_assignment`, whose Phase 3 floors came from both. **Findings of another platform**
+  (the maintainer's Mac, Apple silicon, gfortran 16, Release, one thread, 2026-10-17, on 25d256886):
+  `solve3D_addon`'s cohort pose excess 6.00° against the old 5° floor, and `simulated_workflow_6vxx`'s
+  map correlation 0.780 against 0.80. Both cases have changed since: the add-on's pose gate is now
+  relative to its base (Phase 5), and the simulated workflows run master's sizes. Neither has been
+  profiled on the Mac; the test sources say so, and the report gives the commands.
+- 2026-10-18, how the multi-state workflows are tested. (1) The de novo routes, `solve3D` from the
+  particles (`shc`) and the class-average route (`cavgs`), write whether every true state is resolved
+  as a *success* (a new gate sense, never failing the run), and `test=profile` holds the number of
+  the 20 seeds that succeed to a floor and fails below it; their labels and populations are
+  reported, their path assertions, checks and pose ceilings stay gates, since they held in every run
+  of the profiles. (2) The route used on real data is the new route `consensus`: single-state
+  `solve3D` in C1 on the same particles, then `refine3D_states` on its solution, whose `flex_pca`
+  initializes the states; judged like the states route, profiled at eight threads and at one. (3) The
+  per-seed metrics of `shc`, `cavgs` and `consensus` are kept (`msw_t8_shc`, `msw_t8_cavgs`,
+  `msw_t8_consensus`, `msw_t1_consensus`) as the baseline of the development that will draw the
+  state from the score differences.
+
+**Tool changes** (fix as you go; the Phase 5 list for the maintainer proposed the first):
+
+- `test=profile keep_outputs=no` deletes the subdirectories of each passed execution's run directory
+  as it ends (its `run.log` and `metrics.tsv` stay; a failed execution keeps its outputs as evidence)
+  and returns its disk to the dispatcher's budget, so long profiles run packed inside the profile
+  commander instead of in shell loops. `scripts/simple_args_generator.pl` accepts the key; the
+  interface and the policy describe it.
+- The gate's `success` rows: `test_gate%success(name, ok, floor)`, the profile tables' `successes`
+  column (only executions that passed count), the profile's verdict per success metric (logged as
+  `SUCCESSES`), the tooling tester's cases (125 checks), and the policy's floor rule for success counts.
+- `multistate_workflows` runs four routes by default (1 913 s at eight threads alone, about an hour beside other entries): its deadline
+  rises from 3 600 to 7 200 s (registry and CTest). `simulated_workflow_6vxx` writes up to 4.1 GiB at
+  master's sizes, so its registry disk rises from 3.5 to 5.5 GiB (ten of them at once in the profile
+  took the disk below the run's 20 GB guard).
+
+**Profiles and floors** (median, robust spread s, worst run; the bound of the floor rule; all from
+the merged code; one thread is "t1", eight threads "t8"):
+
+| entry | profile | result |
+| --- | --- | --- |
+| `simulated_workflow_6vxx` (t1) | `main` | the map is missed in 2 of 20 runs (correlation 0.54 and 0.49, FSC 62 and 42 Å) against 7 of 20 at Phase 5's 200 particles; found maps 0.88 (s 0.02); the wrong-molecule control 0.55. No correlation floor is admissible: reported, as before |
+| `simulated_workflow_1jxy` (t1) | `main` | the map is missed once in shared memory (0.64, 50 Å; another run 0.71, 19 Å) and once in the distributed step (another seed, 50 Å): the 40 Å FSC ceiling failed in 2 runs and is no longer admissible, so the FSC is reported like the correlation |
+| `single_workflow_wurtzite` (t1) | `main` | every floor admissible: map correlation worst 0.905 against 0.90 (bound 0.902), FSC worst 3.0 Å against 5 Å, the continuation's and the polish's excess over the stage before at most −0.12° against +0.5° |
+| `solve3D_addon` (t8, t1) | `main`, `t1_a` | the cohort's excess over the frozen particles: t8 median 0.49°, s 0.80, worst 1.80; t1 0.11°, s 1.10, worst 2.16; the shuffled-cohort control 28.6° / 28.5° (worst 24.7°): the 10° ceiling stays admissible on both (bounds 2.88 and 3.40, at most 21.4); the union map worst 0.938 / 0.937 against 0.90 |
+| `cont_refine3D_1jxy` (t8, t1) | `main`, `t1_cont` | every floor admissible on both by wide margins (stage e rotation worst 2.22° against 7.5°); all 40 runs pass |
+| `multistate_assignment` (t8, t1) | `main`, `t1_a` | every state resolved in all 80 runs; at one thread the `prob` adjusted Rand index (median 0.941, s 0.015, worst 0.923) admits a floor of 0.897 at most, so its floor moves from 0.90 to 0.89 (t8 bound 0.912; shuffled labels 0.00); every other floor admissible on both |
+| `multistate_workflows` `shc` (t8) | `msw_t8_shc` | every true state resolved in 13 of 20 runs (the shuffled-label control in 0): success floor 13 − 3·√(20·0.65·0.35) = 6.6, so 6 of 20 (0.30); rotation worst 1.99° and shift 0.082 px under their ceilings 2.5° and 0.15 px (bounds 2.05, 0.098) |
+| `multistate_workflows` `cavgs` (t8) | `msw_t8_cavgs` | resolved in 9 of 20 (control 0): floor 9 − 3·√(20·0.45·0.55) = 2.3, so 2 of 20 (0.10); rotation worst 2.86° and shift 0.258 px under 4.5° and 0.40 px (bounds 3.11, 0.270) |
+| `multistate_workflows` `states` (t8) | `msw_t8_states` | every state resolved in all 20; every floor admissible (adjusted Rand index worst 0.9977 against 0.99, rotation worst 1.52° against 2.0°) |
+| `multistate_workflows` `consensus` (t8, t1) | `msw_t8_consensus`, `msw_t1_consensus` | every true state resolved in all 40 runs, so resolution is checked per run; one state is often only partly separated (adjusted Rand index median 0.78 / 0.79, s 0.12 / 0.11, worst 0.67 / 0.69; smallest recall median 0.76, worst 0.62); floors by the rule over both profiles: adjusted Rand index 0.40 (bound 0.427, shuffled +3s 0.35), accuracy 0.70 (bound 0.794, collapsed predictor +3s 0.63), population-error ceiling 0.30 (from 0.198; collapsed −3s 0.37), discrimination margin 0.20 (bound 0.289), rotation 2.5° (from 2.03), shift 0.15 px (from 0.096); the recall's bound (0.34) lies under what shuffled labels reach, so it is reported. 888 s at t8, 4 100 s at t1 |
+| `flex_pca_blobs` (t8) | `main` | parts 1 and 2 pass every run (label accuracy worst 0.907 against 0.60); part 3 as in Phase 5 (states at chance, four runs deliver one state); one run's maps matched a single planted state and failed the check "the state maps match at least two distinct planted states", which is therefore reported, by the floor rule's provision for a metric without an admissible floor |
+| `solve3D_pyramid_blobs` (t8) | `main` | fails 20 of 20 as in Phase 5: 18 production stops ("the reference volumes fail the check"), one stop for a state of 3 sub-class averages, one accuracy 0.356 against 0.45 |
+
+Every floor written in the sources now carries this profile beside the earlier one. The entries
+Phase 7 kept (byte-identical outputs) keep their Phase 1 and Phase 5 profiles.
+
+**For the maintainer** (added to Phase 5's list):
+
+13. The ruling names the class-average route as `solve3D_cavgs` then `solve3D` with
+    `cavg_ini_ext=yes`; the test's route (ruling of 2026-10-17) imports simulated images as class
+    averages, which have no particles for the second step, so its success count measures
+    `solve3D_cavgs` alone. Proposal: a second class-average route on the particle fixture with an
+    oracle 2D classification, so that `cavg_ini_ext` runs, once the state collapse is addressed.
+14. `simulated_workflow` misses the map in 2 of 20 (6vxx) and 1 to 2 of 20 (1jxy) runs, so no map
+    floor is admissible and the entry has no map gate. Proposal: hold "the map is found" (FSC below
+    40 Å) as a success count over 20 seeds, as the ruling does for the multi-state routes (the
+    observed 18 and 19 of 20 give floors of 13 and 16), or raise the signal.
+
+**Exit criteria.**
+
+- Every floor comes from profiles of the merged code: the nine entries of Phase 7's list were
+  profiled (above; the multi-state workflows by route), at one thread too where the ruling asks; every
+  floor in their sources was checked against the new profiles and its origin written; one floor moved
+  (`multistate_assignment`'s `prob` adjusted Rand index), two gates became reports (the 1jxy FSC
+  ceiling, the flex part 3 map-match check), two success floors and the new route's floors were set.
+- The gates pass: the Debug build with its fast gate (15 of 15 suites,
+  `scratch/logs/compile_debug_full_p8_final.log`), the registry lint, `check_descr.py`, no mode
+  changes; the changed entries ran once each on the final build at seed offset 0 and passed
+  (`scratch/keep/profiles/phase8/verify`): `multistate_workflows` with its four routes (1 913 s; the
+  `shc` and `cavgs` successes written with their floors, the `consensus` labels gated), `flex_pca_blobs`
+  (357 s), `multistate_assignment` (74 s) and `simulated_workflow_1jxy` (820 s).
+
+Files changed in this phase: `src/main/commanders/test/simple_test_dispatch.f90`,
+`simple_commanders_test_highlevel_suite.f90`, `simple_test_gate.f90`, `simple_test_profile_stats.f90`,
+`simple_test_tools_tester.f90`, `simple_test_registry.f90`, `simple_commanders_test_highlevel_msworkflows.f90`,
+`simple_commanders_test_highlevel_multistate.f90`, `simple_commanders_test_highlevel_addon.f90`,
+`simple_commanders_test_highlevel_cont.f90`, `simple_commanders_test_highlevel_flex.f90`,
+`simple_commanders_test_highlevel_workflow.f90`, `simple_commanders_test_single.f90` (all in
+`src/main/commanders/test/`); `src/main/ui/simple_test/simple_test_ui_highlevel.f90`;
+`production/CMakeLists.txt`; `scripts/simple_args_generator.pl` (file-table row added);
+`doc/policies/test_environment_policy.md`; and this note (common rules, file table, this entry).
+
+### Phase 9, 2026-10-19: timing, documents and close
+
+Paths are under `~/agent_runs/test_truth_sync` unless they start with `src/`, `doc/`, `production/` or
+`scripts/`; the journal of the phase is `state/journal_phase_9.md`. Every timing ran on the otherwise
+idle machine, one job after another (the load before each start is in its log).
+
+**The suite's wall time**, on the final code (`scratch/keep/build_p8`, rebuilt and installed just
+before), beside Phase 5's numbers (25d256886 with that phase's changes):
+
+| run | Phase 5 (2026-10-18) | Phase 9 (2026-10-19) |
+| --- | --- | --- |
+| `test=nightly ncunits=24` | 3 724 s, 2 entries failed | 2 633 s, 1 failed (`solve3D_pyramid_blobs`) |
+| `ctest -L highlevel -j 24` | 2 721 s, 2 failed | 2 775 s, 1 failed (`solve3D_pyramid_blobs`) |
+
+The nightly is 29 % faster although `multistate_workflows` now runs four routes (1 809 s in it, the
+longest entry). Between the two lie master's changes to `solve3D` (the FSC=0.143 matching clamp
+reverted, the shift of a stage when FSC=0.5 passes its planned limit, nonuniform filtering from stage
+5 with the mid-stage exit, the axis search at stage 4), the speed week, master's sizes of the
+simulated workflows (160 and 100 particles instead of 200; 1 129 and 999 s against Phase 5's 2 239 s
+for 1jxy), and this run's Phase 8 changes. Largest-first packing no longer leaves the one-thread
+workflows to the end: with the shorter workflows the 11-core `multistate_workflows` sets the wall
+time. CTest takes about as long as before: it started `multistate_workflows` (2 012 s there) after
+most other entries. The only failure is the known one (accuracy 0.389 against 0.45 in the nightly;
+Phase 8's profile: 20 of 20 fail). Evidence: `scratch/logs/p9_nightly.log`,
+`p9_nightly_report.tsv`, `p9_ctest_highlevel.log`, `p9_suite_timing.log`.
+
+**The speed week's timing on x86** (25d256886 against 04e520e78, twice each way, interleaved; A,
+A-shm, E and E-shm as `prob_speed` defined them, MS and M as `ms_speed` did; the inputs copies of
+those runs' kept projects, their paths moved with `update_project`): A −3.7 %, A-shm −0.5 %, E
+−4.0 %, E-shm −0.8 %, MS −11.7 %, M −15.2 %. The table fills and the pre-step's table reads are
+faster; the nonuniform filter in volume assembly is slower on this machine (A 52.7 against 73.4 s,
+A-shm 41.1 against 63.8 s summed over a run), most likely because its composition now filters the
+candidates again instead of reading them back, which the Mac's timing had chosen. The details are in
+`identical_speed_run_report.md`, section "Timing on x86"; evidence `scratch/logs/p9_speed_timing.log`,
+`p9_eshm_timing.log`, `p9_speed_summary.txt` and `scratch/timing/results/`. E-shm was added because
+`testing_and_benchmarking_plan.md` (section 3) names it.
+
+**Documents.**
+
+- The test policy: the test cards in section 6.5 (one per high-level entry: claim, checks, path,
+  control, profile, cost from this nightly); the unit-suite tables of sections 1.1 and 1.2 brought to
+  the sub-suites that exist (about twenty were missing or renamed); the seed offset described as a
+  multiple of the odd stride and the seed as not yet a `parameters` key (section 1.4); the four-thread
+  repeat of the fast tier, which nothing runs, removed (section 4.5); `test=nightly` described as the
+  tier of tests too expensive for the build (section 6.1, ruling of 2026-10-18 in
+  `testing_and_benchmarking_plan.md`); the real-data layer's design and open choices (section 6.6, by
+  the ruling of 2026-10-18 recorded under "Programs and runs that need inputs"); the rows of
+  `simulated_workflow` and `multistate_workflows` brought to the merged code.
+- `production/CMakeLists.txt` comments: the fast gate's 60 s budget, the `PROCESSORS` argument of
+  the registration helper, the fast gate's measured time, the heartbeat test's one child.
+- This note's header; `doc/user_guide/simulate_particles.md` needed no change.
+- The report beside this note, `test_suite_truth_and_robustness_report.md`.
+
+**Exit criteria.**
+
+- The gates pass: the Debug build with its fast gate (15 of 15 suites,
+  `scratch/logs/compile_debug_full_p9.log`), the registry lint, `check_descr.py`, no mode changes;
+  the high-level suite as above (one known failure, recorded for the maintainer since Phase 5).
+- The report is written.
+
+Files changed in this phase: `doc/policies/test_environment_policy.md`, `production/CMakeLists.txt`,
+`doc/implementation_notes/planned/identical_speed_run_report.md`, this note, and the new
+`doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md`.

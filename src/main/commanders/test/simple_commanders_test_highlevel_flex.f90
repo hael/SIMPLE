@@ -53,8 +53,11 @@ real,    parameter :: CAVGS_EXPANSION_LP = 12.0
 !! would have to lie at 0.27 or below, under the shuffled-label null (median 0.37, 99.9th percentile
 !! 0.43); the median pair pose error of the sub-averages has median 11.7 deg, s 8.5, worst 51, so a
 !! ceiling would have to lie at 60 deg or above, the level of random poses. The accuracy, the pose
-!! error and the number of delivered states are therefore reported; the route's contract (the
-!! projects, the hand-back, the maps) stays gated. The committed sub-averages keep their floor.
+!! error, the number of delivered states and the number of planted states the state maps match are
+!! therefore reported; the route's contract (the projects, the hand-back, the maps) stays gated. The
+!! committed sub-averages keep their floor. The profile of the merged code (2026-10-19,
+!! scratch/keep/profiles/phase8/main) is the same: four runs of 20 delivered one state, the others a
+!! sub-average state accuracy of median 0.41 (0.35-0.69) against a null 99.9th percentile of 0.41.
 integer, parameter :: CAVGS_MIN_COMMITTED      = 90
 
 !> the datasets come from the multi-state test fixture: two blob states at their true poses (known
@@ -276,6 +279,10 @@ subroutine inspect_flex_result( tag, truth_a, truth_b, truth_diff, gate, result 
             &result%predicted_truth(i) = state_truth(labels(i))
     enddo
     result%label_accuracy = mapped_accuracy(truth_states_ab, labels, map_states)
+    ! the floor (FLEX_PHANTOM_LABEL_ACCURACY_MIN, 0.60) is admissible on the profile of the merged code
+    ! (2026-10-19, scratch/keep/profiles/phase8/main, 20 seed offsets at the entry's threads): shared
+    ! median 0.989, s 0.007, worst 0.908, distributed median 0.990, worst 0.907, admissible to 0.900;
+    ! the shuffled labels of two equal states score about 0.5
     call gate%metric(trim(tag)//': truth_label_accuracy', result%label_accuracy, &
         &FLEX_PHANTOM_LABEL_ACCURACY_MIN, result%label_accuracy >= FLEX_PHANTOM_LABEL_ACCURACY_MIN)
     ! the negative control: the truth labels shuffled across the particles must fail the floor
@@ -384,6 +391,8 @@ subroutine run_state_refinements( root, nthr, truth_a, truth_b, shared, gate )
             call refine_flex_state(run_dir, parent, state, 'no',   nthr, truth_b, gate, corr_hard)
         endif
         call gate%report('state'//int2str(state)//'_hard_refined_truth_correlation', corr_hard)
+        ! relative to the hard map (STATE_REFINE_MARGIN); on the profile of 2026-10-19 the weighted maps
+        ! correlate at median 0.992 and 0.994 (s 0.001), every run above its floor by 15 s or more
         call gate%metric('state'//int2str(state)//'_weighted_refined_truth_correlation', corr_flex, &
             &corr_hard - STATE_REFINE_MARGIN, corr_flex >= corr_hard - STATE_REFINE_MARGIN)
     enddo
@@ -933,8 +942,11 @@ subroutine inspect_states_cavgs( expanded, sorted, truths, truth_mean, gate )
         if( all(corr(s,:) == corr(s,:)) ) best_truth(s) = maxloc(corr(s,:), dim=1)
         write(logfhandle,'(A,I0,3(1X,F9.6))') '>>> FLEX_PCA_BLOBS states_cavgs map/truth correlations: ', s, corr(s,:)
     enddo
-    call gate%check('states_cavgs: the state maps match at least two distinct planted states', &
-        &count([(any(best_truth == t), t = 1, CAVGS_NSTATES)]) >= 2)
+    ! the states stay at chance (above), so how many planted states the maps match is a measurement:
+    ! the profile of 2026-10-19 (scratch/keep/profiles/phase8/main) found one run in 20 whose maps
+    ! matched a single planted state
+    call gate%report('states_cavgs: distinct planted states the state maps match', &
+        &real(count([(any(best_truth == t), t = 1, CAVGS_NSTATES)])))
     call map%kill
 end subroutine inspect_states_cavgs
 

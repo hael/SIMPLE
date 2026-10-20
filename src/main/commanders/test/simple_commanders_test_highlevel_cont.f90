@@ -126,6 +126,14 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     ! Stages f and g (Phase 9; declared before their first run): the polish leaves the error
     ! (symmetry-aware, over the particles the passes updated) no worse than the same run without
     ! it, within the 0.1 deg of stage h
+    ! Profiles of the merged code (test-suite truth plan, 2026-10-19: scratch/keep/profiles/phase8/main
+    ! at 8 threads and t1_cont at one thread, the speed week's one-thread case; 20 seed offsets each,
+    ! every run passing): every floor admissible on both, far from its bound. Worst and the bound of the
+    ! floor rule (8 threads; one thread): stage a/c rotation 0.997 deg from 1.03, shift 0.077 px from
+    ! 0.080, basin 0.983 to 0.978 (both); stage b rotation 0.248 from 0.254; stage c against a: 0 deg and
+    ! no particle differing by 0.1 deg; stage e rotation 2.22 from 2.39 and 2.38, shift 0.137 from 0.150
+    ! and 0.149; the polar stage h 1.49 and 1.50 deg against its seed; the relative stages f, g and h
+    ! never lost more than their 0.1 deg
     type(commander_simulate_particles) :: xsim
     type(commander_new_project)        :: xnew_project
     type(commander_refine3D)           :: xrefine3D

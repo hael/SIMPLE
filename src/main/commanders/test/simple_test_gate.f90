@@ -2,7 +2,9 @@
 ! Every check and metric is logged as PASS or FAIL and written as one row of the
 ! table (name, value, floor, pass, sense); a metric with a non-finite value fails.
 ! The sense says how the floor bounds the value: min (value >= floor), max (value
-! <= floor, a ceiling), check (1 or 0 against 1) or report (no bound, floor NO_FLOOR).
+! <= floor, a ceiling), check (1 or 0 against 1), report (no bound, floor NO_FLOOR)
+! or success (1 or 0, never failing the run: test=profile holds the fraction of runs
+! that succeed to the floor, the smallest admissible fraction over its seeds).
 ! The gate has passed when no check or metric failed.
 module simple_test_gate
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -25,6 +27,7 @@ type :: test_gate
     procedure :: check
     procedure :: metric
     procedure :: report
+    procedure :: success
     procedure :: passed
     procedure, private :: write_row
     procedure :: kill
@@ -86,6 +89,16 @@ contains
         call self%write_row(name, val, NO_FLOOR, ieee_is_finite(val), 'report')
     end subroutine report
 
+    !> an outcome a single run may miss (1 or 0), never failing the run; test=profile holds the
+    !! fraction of its runs that succeed to floor
+    subroutine success( self, name, ok, floor )
+        class(test_gate), intent(inout) :: self
+        character(len=*), intent(in)    :: name
+        logical,          intent(in)    :: ok
+        real,             intent(in)    :: floor
+        call self%write_row(name, merge(1., 0., ok), floor, .true., 'success')
+    end subroutine success
+
     subroutine write_row( self, name, val, floor, ok, sense )
         class(test_gate), intent(inout) :: self
         character(len=*), intent(in)    :: name, sense
@@ -97,8 +110,13 @@ contains
             ! row by row, so a killed run keeps its table
             flush(self%funit)
         endif
-        write(logfhandle,'(a,g0.6,a,g0.6)') '    '//trim(merge('PASS:','FAIL:',ok))//' '//name//' = ', val, &
-            &' floor ', floor
+        if( sense == 'success' )then
+            write(logfhandle,'(a,g0.6,a,g0.6)') '    '//trim(merge('SUCCEEDED:','MISSED:   ',val > 0.5))//' '//name//&
+                &' = ', val, ' floor ', floor
+        else
+            write(logfhandle,'(a,g0.6,a,g0.6)') '    '//trim(merge('PASS:','FAIL:',ok))//' '//name//' = ', val, &
+                &' floor ', floor
+        endif
         flush(logfhandle)
         if( .not. ok ) self%nfailed = self%nfailed + 1
     end subroutine write_row

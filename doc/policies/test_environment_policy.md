@@ -84,17 +84,17 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, diffusion-map graphs, optimisers, low-pass stages, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
-| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, solve3D stream emulation, state weight set, cavgs work project |
+| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, solve3D chunks plan, state weight set, cavgs work project, eo partition |
 | `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
-| `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, volume pair metrics, nonuniform filtering |
-| `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, sigma2 state, sigma2 bootstrap, cavg registration |
+| `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, weighted insertion, volume pair metrics, nonuniform filtering, solve3D_cavgs stage rules, state assignment rules, atomic prior |
+| `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, 3D probability table, sigma2 state, sigma2 bootstrap, cavg registration, cavgs state match |
 | `unit_cart_align3D` | Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
-| `unit_heterogeneity` | flex PCA, flex PCG operator |
-| `unit_parallel` | qsys control, qsys environment |
+| `unit_heterogeneity` | flex PCA, flex PCG operator, flex cls_expansion, flex cls_expansion kernel |
+| `unit_parallel` | qsys control, qsys environment, test tools (the profile statistics, packing, identity rules and the registry of the suite runner) |
 | `unit_single` | atoms, cif2mrc, C-alpha finder, species |
-| `unit_stream` | preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D, solve 3D (the steps of the stream stages, without a queue or waits), job sets, stream master, stream watcher |
+| `unit_stream` | preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D, pool 2D object, solve 3D (the steps of the stream stages, without a queue or waits), stream master, job sets, meta plots, stream watcher |
 
 `simple_test_exec test=units` runs all fifteen in one process. It is a
 convenience and deliberately not a CTest entry.
@@ -103,27 +103,27 @@ convenience and deliberately not a CTest entry.
 
 | entry | label | what it runs |
 |---|---|---|
-| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame |
+| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame; fractional reconstruction |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 15 degrees and 2 pixels, refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
-| `lib_heterogeneity` | library | flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
+| `lib_heterogeneity` | library | flex PCA on a two-state phantom, flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models |
-| `lib_stream` | library | optics assignment, picking references, pick and extract |
+| `lib_stream` | library | optics assignment, picking references, pick and extract, solve 3D reference docking, and the stream chains sieve to 3D and movies to 3D (they submit jobs to the local queue through the installed executables and take tens of minutes) |
 | `pcg_recon` | library | gated stages of the PCG reconstruction operator on generated data, each stage's decision a row of its table; in process, so a library entry (it was a high-level one until 2026-10-18) |
 | `pcg_frac_update` | library | the PCG fractional-update gates (additivity of the reconstruction sums, the continuation weighting, full-mass preservation, replay) on a project of 600 blob particles at their true poses that the multi-state fixture builds |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
-| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | 200 simulated particles in 20 movies through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`; 1jxy then runs `solve3D` a second time from the same `solve2D` project with `nparts=2` (two local worker processes, the distributed strategy), in a directory of its own and checked against the same truth, so that the master's job scheduling and assembly between parts are covered (owner decision 2026-10-15); the test asserts that the distributed run wrote its second part's record. A control scores the result against the other molecule's truth. The map's correlation with its truth (and the 6vxx FSC) is reported as a robustness profile: in the profile of 2026-10-18 `solve3D` missed the map, at the correlation of the other molecule, in 7 of 20 runs for 6vxx and 1 of 20 for 1jxy, so no floor is admissible; the 1jxy FSC ceiling of 40 Å stays. Each suite reseeds the whole workflow with its own root seed, printed in the log: 1jxy 20260923, 6vxx 20261003 (owner decision 2026-10-15: with 80 particles the 6vxx `solve3D` step is sensitive to the draw, and the earlier common seed stopped finding its map after the 2D table moved its shifts to the particle frame) |
+| `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated particles in movies (6vxx: 160 particles in 16 movies from 100 reprojections; 1jxy: 100 particles in 10 movies) through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`; 1jxy then runs `solve3D` a second time from the same `solve2D` project with `nparts=2` (two local worker processes, the distributed strategy), in a directory of its own and checked against the same truth, so that the master's job scheduling and assembly between parts are covered (owner decision 2026-10-15); the test asserts that the distributed run wrote its second part's record. A control scores the result against the other molecule's truth. The map's correlation with its truth and its FSC are reported as a robustness profile: in the profile of 2026-10-19 `solve3D` missed the map, at the correlation of the other molecule, in 2 of 20 runs for 6vxx and in 1 of 20 for 1jxy in each of its two steps, so no floor is admissible. Both suites reseed the whole workflow with the root seed 20260923, printed in the log |
 | `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles; the poses are judged by their median rotation error against the truth after one docking of the `autorefine3D_nano` map, up to the rotations of the lattice's group (O for FCC, D6 for wurtzite), since these near-symmetric particles are posed only up to them |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume; `simulate_particles` with three blob volumes and given populations (exact state counts, every image closest to the projection of its own state's volume at its true pose); 50 images without CTF, each correlating better with the reprojection at its own recorded pose than with one at another image's pose |
 | `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_auto pose_cont=only`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations |
 | `multistate_assignment` | highlevel | `refine3D nstates=3` with `refine=prob` and with `refine=prob_neigh` on 1 500 simulated particles of the three blob phantoms of the state fixture (populations 50, 30 and 20 %, SNR 2), from the truths low-passed to 20 A and random initial states, scored by correlation (`objfun=cc`, as production's state assignment), gated on the known state of every particle (adjusted Rand index, accuracy, each state's recall, the populations, no estimated state empty: a merge of two states fails), the maps (their mapping agreeing with the label mapping, their fit, their discrimination inside the difference mask) and the poses of the correctly assigned particles; the shuffled-label and duplicated-maps controls in both refinements; `suite=identical` runs the identical-states control by hand (labels only: identical truths leave nothing to discriminate) |
-| `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1): `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs`, each image's state and each state's map judged against the truth (owner ruling 2026-10-17), `solve3D` from the particles, and `refine3D_states` from a single-state solution (the true poses and the consensus map); the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses checked against the simulation truth, with the shuffled-label and duplicated-maps controls. The entry runs all three; every route must resolve each true state (recall above one half) and leave no estimated state empty (owner ruling 2026-10-17: state 0 means exclusion, so a state parked there is a defect), the label metrics of the shc and class-average routes are reported, `refine3D_states` is held to floors on its labels, populations and map discrimination, and all three routes to ceilings on their rotation and shift errors; `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on) and `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`, the control of the ruling of 2026-10-18) are run by hand; and `suite=<workflow>_identical` (identical states) and `suite=hard_<workflow>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
+| `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1), in four routes: `cavgs`, `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs` (owner ruling 2026-10-17); `shc`, `solve3D` from the particles; `states`, `refine3D_states` from the true poses and the consensus map; `consensus`, single-state `solve3D` in C1 followed by `refine3D_states`, the route used on real data (owner ruling 2026-10-18). Each is judged against the simulation truth: the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses, with the shuffled-label and duplicated-maps controls. The de novo routes `shc` and `cavgs` resolve every true state in only part of the runs (13 and 9 of 20 in the profile of 2026-10-19), a limitation of the method: whether they do is a `success` row, held by `test=profile` to 6 and 2 of 20 seeds, and their labels are reported; their path, checks and pose ceilings are gates. The `states` and `consensus` routes resolve every state in every run: that is checked, and their labels, populations, discrimination and poses are held to floors. The entry runs all four (1 913 s at eight threads alone); `suite=<route>` runs one, `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on), `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`), `suite=<route>_identical` (identical states) and `suite=hard_<route>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
 | `single_atoms_stats_cdsew`, `single_atoms_stats_cdsez`, `single_atoms_stats_cdser` | highlevel | the same test on simulated wurtzite, zincblende and rocksalt CdSe nanoparticles (`element=CdSeW`, `CdSeZ`, `CdSeR`), whose lattice lookups use the compound selector; also asserts the coordination number of the interior atoms (4, 4, 6) and the fitted lattice constant within 2% of the table |
 | `species_discovery` | highlevel | `detect_atoms` with a species list, with `discover_species=yes` and without an element, on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors (with and without half maps), judged against the generating models through `test_gate` (`metrics.tsv`); the present products must not change |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
-| `flex_pca_blobs` | highlevel | `flex_pca` on a two-state blob dataset of the multi-state fixture (2 000 particles at their true poses, SNR 1) in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on the fixture's three compositional beta-galactosidase states (3 600 particles in 60 exact views; ruling of 2026-10-18: not blob states that differ in a lobe of 6 % of the mass): the route's contract gated (projects, hand-back, maps), its state accuracy against the planted states (one-to-one mapping, with the shuffled-label null) and the poses of the sub-averages reported as a robustness profile, since its profile admits no floor (accuracy at the chance level) |
+| `flex_pca_blobs` | highlevel | `flex_pca` on a two-state blob dataset of the multi-state fixture (2 000 particles at their true poses, SNR 1) in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on the fixture's three compositional beta-galactosidase states (3 600 particles in 60 exact views; ruling of 2026-10-18: not blob states that differ in a lobe of 6 % of the mass): the route's contract gated (projects, hand-back, maps), its state accuracy against the planted states (one-to-one mapping, with the shuffled-label null), the number of planted states its maps match and the poses of the sub-averages reported as a robustness profile, since its profile admits no floor (accuracy at the chance level) |
 | `solve3D_pyramid_blobs` | highlevel | `solve3D_pyramid` end to end on the fixture's three-state blob dataset of 3 600 particles in 60 exact views, its class averages made from the exact classes: the report, the references and the result written, the assignment against the planted states (one-to-one mapping: accuracy, adjusted Rand index, recall), each reference and each refined map matched and docked onto a truth (the hand free) and the docked maps' discrimination, with a shuffled-label control |
 
 ### 1.3 Programs that are not registered
@@ -164,12 +164,15 @@ The selectors of each suite are listed in the description of its `suite=`
 input in the test UI (`src/main/ui/simple_test/simple_test_ui_class.f90`). A
 run by hand draws what a CTest run draws: `simple_test_exec` sets
 `SIMPLE_SEED=20260923` for its own process first (`fix_test_seed`), whatever
-the environment holds. The seed is not a user setting; a program that needs
-one takes it through `parameters`.
+the environment holds. The seed is not a user setting yet: production programs
+read `SIMPLE_SEED` from the environment, and a seed key of `parameters` is
+planned (`rnd_seed_parameter.md`).
 
-`seed_offset=<n>` adds n to every fixed seed of the test: to the process seed
-of `fix_test_seed` and to every `set_fixed_seed` of a tester or high-level test
-(and so to the `SIMPLE_SEED` its commanders and workers inherit). 0, the
+`seed_offset=<n>` moves every fixed seed of the test by n times a large odd
+stride (2654435761, in 64-bit integers), so that the offsets of one test cannot
+land on another test's base. It moves the process seed of `fix_test_seed` and
+every `set_fixed_seed` of a tester or high-level test (and so the `SIMPLE_SEED`
+its commanders and workers inherit). 0, the
 default, draws what CTest draws. It is a key of the front door only: it is read
 there and removed from the command line, so no commander or `parameters` sees
 it. A test must draw from fixed seeds only through these two routines, or its
@@ -192,8 +195,9 @@ peak CPU reservation (the cores in use at its busiest moment, master and
 workers together), its deadline (the CTest `TIMEOUT`), its kind (a correctness
 gate or a robustness profile only), its peak resident memory and the disk its
 run directory grows to (each from a measurement, with a margin), whether its
-master's threads follow a profile's thread count, and, for the one-thread
-entries, the outputs an identity check compares. `scripts/check_test_registry.py`
+master's threads follow a profile's thread count, and the outputs an identity
+check compares: declared for the one-thread workflows and for every entry that
+runs no `solve3D` or `refine3D`. `scripts/check_test_registry.py`
 holds the `highlevel` registrations of `production/CMakeLists.txt` to the
 registry: the same names, command lines, timeouts and thread counts, and a
 CTest `PROCESSORS` equal to the CPU reservation, so that `ctest -L highlevel -j
@@ -288,7 +292,13 @@ simple_test_exec test=identity target=<entry> dir1=<run directory> dir2=<run dir
   memory and disk do not scale. Seed offsets move every base seed of the test
   by offset times a large odd stride (2654435761, in 64-bit integers), so the
   offsets of one test cannot land on another test's base. A profile informs;
-  it does not fail on a metric. With `dir1=` and
+  it does not fail on a metric, with one exception: a success metric (sense
+  `success`, below) counts the executions that succeeded (the column
+  `successes`), and the profile fails when that count is below its floor times
+  the executions. `keep_outputs=no` deletes the subdirectories of each
+  execution's run directory (its outputs) as soon as it ends, keeping `run.log`
+  and `metrics.tsv`, and returns its disk to the budget, so that a long profile
+  counts only the running executions' disk. With `dir1=` and
   `dir2=` it compares two profiles instead: for each table both hold,
   `comparison_profile_<entry>_t<n>.tsv` gives both medians, the shift of the
   median in units of the larger spread (positive is better) and both failure
@@ -306,7 +316,12 @@ simple_test_exec test=identity target=<entry> dir1=<run directory> dir2=<run dir
     directory's own path removed, since both hold absolute paths.
   A declared pattern that selects no file in either directory fails. The
   `BENCH` timing files are not declared outputs. Identity is decided only by
-  one-thread runs.
+  one-thread runs. An entry that works in a directory named by its process id
+  (`test_<name>_<pid>`: the mini stream, `simulate_particles`, the atom
+  statistics, the stream preprocessing) declares its outputs relative to that
+  directory, and `dir1=` and `dir2=` name it; `state_fixture` and
+  `species_discovery` keep no files, so their gate table (`metrics.tsv`) is
+  what they declare.
 
 ## 2. What a test is
 
@@ -616,8 +631,8 @@ Two kinds of code need a check that is easy to leave out:
 
 - **Threaded paths.** The fast gate runs every suite on one OpenMP thread, so
   a routine with a threaded path gets a check that forces a team (the masks
-  suite runs a team of three) and compares with the serial result. The
-  nightly run repeats the fast tier on four threads.
+  suite runs a team of three) and compares with the serial result. Nothing
+  repeats the fast tier on more threads, so that check is the only one.
 - **Readers and writers.** A file format is tested by round trips at the
   sizes where its layout changes: small, odd and non-square boxes and the
   sizes where a header or record length changes. The SPIDER header was wrong
@@ -677,7 +692,7 @@ with the tests); a new gate uses these instead of its own copies.
 
 | routine | use |
 |---|---|
-| `test_gate` (`simple_test_gate`): `new(fname)`, `check(name, ok)`, `metric(name, val, floor, ok[, upper])`, `report(name, val)`, `passed()`, `kill` | a gate's checks and metrics, logged as PASS/FAIL and tabulated in a TSV file (name, value, floor, pass, sense); `upper=.true.` marks the floor as a ceiling |
+| `test_gate` (`simple_test_gate`): `new(fname)`, `check(name, ok)`, `metric(name, val, floor, ok[, upper])`, `report(name, val)`, `success(name, ok, floor)`, `passed()`, `kill` | a gate's checks and metrics, logged as PASS/FAIL and tabulated in a TSV file (name, value, floor, pass, sense); `upper=.true.` marks the floor as a ceiling; a success never fails the run, and `test=profile` holds the fraction of its runs that succeed to `floor` |
 | `validate_reconstructed_volume` (`simple_test_truth_metrics`) | a workflow's final map against its simulation truth: box and sampling, docking in both hands, correlation and masked-FSC floors, each decision also a row of the gate it is given |
 | `dock_both_hands`, `compare_to_truth` | the two steps of it, for a gate with its own floors (the masked FSC is the production `compare_volpair` of `simple_volpair_metrics`, which also gives a band-limited correlation) |
 | `pair_pose_error` | poses against the simulation truth without docking (median error of relative rotation angles over seeded pairs) |
@@ -708,7 +723,12 @@ benchmarks, and anything that cannot fail.
 On the test machine the whole high-level tier runs as one command,
 `simple_test_exec test=nightly` (section 1.5), which packs the entries on the
 machine's cores and writes one report; `ctest -L highlevel -j <cores>` runs the
-same entries packed by their `PROCESSORS`.
+same entries packed by their `PROCESSORS`. Despite its name, `test=nightly` is
+not a nightly of record with archives and notifications: it is the tier of the
+tests too expensive for the build, today the simulated workflow gates (ruling
+of 2026-10-18). The library, platform and fast tiers are not part of it. Real
+datasets may join it as entries run from within SIMPLE once it is settled how
+their data reaches the machine (section 6.6).
 
 ### 6.2 How a workflow gate is designed
 
@@ -746,6 +766,18 @@ same entries packed by their `PROCESSORS`.
   and the card says why. A contract the code must always keep (a value inside
   the interval it was asked for, a file written, a count) is a check, not a
   floor. There are no blessed baselines and no platform keys.
+- **An outcome a single run may miss is a success count, not a gate** (ruling
+  of 2026-10-18). Where the profile shows that a correct algorithm misses an
+  outcome in some runs by the nature of the method (the de novo multi-state
+  routes, which take the best-scoring state outright from random labels, so
+  that a state which fits the noise slightly better grows), the outcome is a
+  `success` row and `test=profile` holds the number of the 20 runs that
+  succeed to a floor: the observed count less three binomial standard
+  deviations (the square root of n·p·(1−p), with p the observed fraction),
+  rounded down. The floor must be above the count of the shuffled-label
+  control. The nightly run of such a route keeps only the gates that held in
+  every run of its profile (path assertions, pose ceilings, finite values) and
+  reports the rest.
 - **Every gate has a negative control** that shows it can fail for the right
   reason: the same metric against a broken truth (shuffled labels, another
   molecule, another micrograph's defocus, copies of one map, shuffled poses)
@@ -755,7 +787,9 @@ same entries packed by their `PROCESSORS`.
   directory it deletes), one `name value floor pass sense` line per check and
   metric, for the nightly report and the profiles. The sense says how the
   floor bounds the value: `min` (the value must reach the floor), `max` (the
-  floor is a ceiling), `check` (1 or 0 against 1) or `report` (no bound).
+  floor is a ceiling), `check` (1 or 0 against 1), `report` (no bound) or
+  `success` (1 or 0, never failing the run; its floor is the smallest fraction
+  of a profile's runs that must succeed).
   Values are written in exponent form, so a tolerance of 1e-6 keeps its
   digits. Every value a test decides on is a row, written before the decision,
   so a failing run still reports it. A name written more than once in a run (a
@@ -875,36 +909,244 @@ evidence in its separately versioned data and reporting repository.
 
 ### 6.5 The test cards
 
-CARDS_PLACEHOLDER
+One card per high-level entry, from the audit of the runs `test_truth` and `test_truth_sync`
+(`doc/implementation_notes/planned/test_suite_truth_and_robustness.md`, Progress: Phase 1 for the
+first profiles, Phase 5 for the repairs, Phase 7 for the entries whose outputs stayed byte-identical
+through the merge with master, Phase 8 for the profiles of the merged code). Every floor named here
+is written in the test next to its check with the profile it comes from (section 6.2). "Profile"
+means 20 seed offsets at the entry's CTest thread count, and at one thread too where a refactoring
+run checks the entry at one thread; the profiles are kept under the runs' `scratch/keep/profiles/`
+on the test machine. A row of the nightly table whose sense is `report` is a robustness
+measurement, not a gate; a `success` row is held over the seeds of a profile, not in one run.
+Cost is the wall time in the `test=nightly` of 2026-10-19 on 24 cores (final code), with the
+threads and the CPU reservation of the registry. No floor has been profiled on the maintainer's
+Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry.
+
+**`mini_stream_6vxx`, `mini_stream_1jxy`**
+- Claim: six micrographs simulated from the embedded model (8 particles each) go through CTF
+  estimation, picking, extraction, `solve2D` and shape ranking, and the defocus and the picks agree
+  with the simulation.
+- Checks: every micrograph's defocus against its truth (ceiling 0.13 µm); picked over placed
+  particles (floors 0.05 for 6vxx and 0.25 for 1jxy, ceiling 1.5); at least one class; the
+  project's micrographs, particle counts, class assignments and populations, shape ranks and class
+  averages consistent (checks).
+- Path: the `solve2D` record and the `refine2D` iterations it ran (the strategies' benchmark
+  records). Control: the fit against the truth of the micrograph whose defocus lies farthest must
+  fail the ceiling.
+- Profile (2026-10-18, still valid: byte-identical on the merged code): defocus error median
+  0.002-0.003 µm, worst 0.125 (a rare wrong fit); pick ratio median 0.33 (6vxx, worst 0.19) and 0.49
+  (1jxy, worst 0.40). The simulator saves no particle positions, so the picks are judged by count
+  only and have no control.
+- Cost: 6vxx 59 s at 8 threads (reserving 2 cores); 1jxy 66 s at 8 threads (reserving 3 cores); each commander one thread.
+
+**`simulated_workflow_6vxx`, `simulated_workflow_1jxy`**
+- Claim: simulated particles (6vxx: 160 in 16 movies; 1jxy: 100 in 10 movies) go through import,
+  motion correction, CTF estimation, picking, extraction, `solve2D` and `solve3D`, and the map
+  matches the map of the atomic model; 1jxy runs `solve3D` a second time distributed over two worker
+  processes.
+- Checks: at least 4 extracted particles and one class; the map written with the expected box and
+  sampling. Reported (no admissible floor): the map's correlation with its truth and its FSC.
+- Path: the distributed run wrote its second part's record. Control: the map docked onto the other
+  suite's molecule must stay under the correlation every found map reached (0.80).
+- Profile (2026-10-19, one thread): `solve3D` missed the map, at the control's correlation (median
+  0.53-0.55), in 2 of 20 runs for 6vxx and in 1 of 20 for 1jxy in each of its two steps; the found
+  maps correlate at 0.88 (s 0.02-0.03) with FSC 4.5-4.8 Å. A robustness finding left to the
+  maintainer, with a proposal (hold "the map is found" as a success count).
+- Identity: the declared outputs of a one-thread run (the entry is deterministic).
+- Cost: 6vxx 1129 s at 1 thread (reserving 2 cores); 1jxy 999 s at 1 thread (reserving 3 cores) with two one-thread workers in its distributed step.
+
+**`single_workflow_fcc`, `single_workflow_wurtzite`**
+- Claim: a simulated Pt (face-centred cubic) or CdSe (wurtzite) nanoparticle goes through
+  reprojection, a trajectory, denoising, `analysis2D_nano`, `autorefine3D_nano`, `refine3D_nano
+  refine=cont` and the polish, and its map and poses match the truth.
+- Checks: the map's box and sampling, its correlation with the simulated map (floor 0.90) and FSC
+  (ceiling 5 Å); the median rotation error of the particles in the truth's frame, after one
+  docking of the map to 2 Å and up to the lattice's group (O or D6) and the in-plane rotation by
+  180° (both lattices are nearly centrosymmetric), reported for `autorefine3D_nano` and held for
+  `refine=cont` and the polish to at most 0.5° worse than the stage before.
+- Path: the stages' outputs. Identity: the declared outputs of a one-thread run (deterministic).
+- Profile: fcc 2026-10-18 (byte-identical on the merged code): rotation error median 4.9°,
+  stage-to-stage excess worst +0.19°. wurtzite 2026-10-19 (the merged code no longer clamps the
+  matching low-pass): rotation error median 1.5°, excess worst −0.12°, map correlation worst 0.905,
+  FSC worst 3.0 Å. Random poses err by tens of degrees.
+- Cost: fcc 592 s at 1 thread (reserving 2 cores); wurtzite 586 s at 1 thread (reserving 2 cores).
+
+**`simulate_particles`**
+- Claim: `reproject` and `simulate_particles` make the images they are asked for.
+- Checks: the images against the reprojections at their recorded poses (50 images without CTF:
+  each closer to its own pose's reprojection than to another image's); with three blob volumes and
+  given populations, exact state counts and every image closest to its own state's projection;
+  every CTF and shift draw inside its requested interval (checks of the simulator's contract; the
+  largest of many uniform draws sits just inside its bound by construction, so no floor applies,
+  and the maxima are reported).
+- Profile: passes 20 of 20 (2026-10-18, byte-identical on the merged code).
+- Cost: 11 s at 8 threads (reserving 8 cores).
+
+**`state_fixture`**
+- Claim: the multi-state test fixture builds the datasets the multi-state tests rely on.
+- Checks: the blob phantoms in the search, known-pose and exact-view modes (built twice, the second
+  from the cache, the records equal) and the beta-galactosidase states, each truth holding its
+  declared point group (correlation at least 0.99 over the group) and no larger one (at least 0.01
+  above the next larger group).
+- Profile: passes 20 of 20 (2026-10-18, its gate table identical on the merged code).
+- Cost: 7 s at 8 threads (reserving 8 cores) (from the cache; about 25 s when it builds the datasets).
+
+**`solve3D_addon`**
+- Claim: `solve3D_addon` extends a frozen solution with new particles without disturbing it.
+- Checks: the union map against the truth (correlation floor 0.90, at most 0.03 below the base map,
+  FSC at most 1 Å worse than the base); coverage of the new cohort (floor 0.90); the cohort's pose
+  error in excess of the frozen particles' own (ceiling 10°); the frozen project, map and sigma2
+  unchanged, the manifests and bundles valid (checks).
+- Control: the cohort's truth shuffled must exceed the ceiling.
+- Profile (2026-10-19, eight threads and one thread, the speed week's one-thread case): excess
+  median 0.49° / 0.11°, spread 0.80 / 1.10, worst 1.80° / 2.16°; the shuffled control at 28.6° /
+  28.5° (worst 24.7°); the union map worst 0.938 / 0.937.
+- Cost: 289 s at 8 threads (reserving 11 cores); about 25 minutes at one thread.
+
+**`cont_refine3D_1jxy`**
+- Claim: continuous Cartesian refinement recovers the poses of 1 000 simulated 1JYX particles from
+  perturbed starts, in every route that uses it.
+- Checks: median rotation error at most 1.5°, shift at most 0.2 px, at least 95 % inside the basin
+  (a tenth of the injected error); the distributed run equal to the shared-memory one within the
+  rounding of threaded evaluation; the polish and the continuation no worse than without them.
+- Path: no polar in-plane route where none is expected; the distributed stage ran two parts.
+- Profile (2026-10-19, eight threads and one thread): passes 40 of 40, every floor far from its
+  bound (stage a rotation worst 1.00°, stage e worst 2.22° against 7.5°).
+- Cost: 437 s at 8 threads (reserving 10 cores), up to 11 GiB; about 37 minutes at one thread.
+
+**`multistate_assignment`**
+- Claim: `refine3D nstates=3` (`refine=prob` and `prob_neigh`) recovers the known states of three
+  blob phantoms (1 500 particles, populations 50/30/20 %, SNR 2) from the truths low-passed to 20 Å
+  and random initial states, scored by correlation.
+- Checks: adjusted Rand index (floors 0.89 / 0.80), accuracy (0.95 / 0.92), smallest per-state
+  recall (0.93 / 0.85), largest population error (ceilings 0.03 / 0.04), no estimated state empty,
+  the map mapping agreeing with the label mapping, the maps' discrimination margin (0.30), the
+  poses and shifts of the correctly assigned particles (6.0°, 0.40 px).
+- Controls: shuffled labels inside the accuracy's null; copies of one map and of the mean map not
+  distinct.
+- Profile (2026-10-19, eight threads and one thread): every state resolved in all 80 runs; the
+  `prob` adjusted Rand index at one thread (median 0.941, s 0.015) moved its floor from 0.90 to 0.89.
+- Cost: 78 s at 8 threads (reserving 11 cores); about 10 minutes at one thread.
+
+**`multistate_workflows`**
+- Claim: the multi-state workflows recover three compositional beta-galactosidase states (the
+  tetramer, the tetramer less chain D, the A-B dimer; 50/30/20 %) in four routes: `cavgs`
+  (`solve3D_cavgs` on 600 simulated class averages imported with `import_cavgs`), `shc` (`solve3D`
+  from 3 000 particles), `states` (`refine3D_states` from the true poses and the consensus map) and
+  `consensus` (single-state `solve3D` in C1, then `refine3D_states`: the route used on real data).
+- Checks: the path, the controls and the pose ceilings of every route (class averages 4.5° /
+  0.40 px, particles 2.5° / 0.15 px, `refine3D_states` 2.0° / 0.10 px, consensus 2.5° / 0.15 px);
+  for `states` and `consensus` every true state resolved (recall above one half) with no estimated
+  state empty, and their labels held to floors (`states`: adjusted Rand index, accuracy and recall
+  0.99, population error 0.01, discrimination 0.40; `consensus`: adjusted Rand index 0.40, accuracy
+  0.70, population error 0.30, discrimination 0.20, its recall reported).
+- Successes (ruling of 2026-10-18): the de novo routes `shc` and `cavgs` start from random labels and
+  take the best-scoring state outright, so whether every true state is resolved is decided early and
+  a run may miss it; it is a `success` row, held by `test=profile` to 6 of 20 seeds (`shc`) and 2 of
+  20 (`cavgs`), the shuffled-label control at 0; their labels are reported.
+- Path: the refine mode, directions and states of every iteration from the refine3D strategy's
+  record. Controls: shuffled labels, copies of one map.
+- Profile (2026-10-19, eight threads; `consensus` at one thread too): `shc` resolves every state in
+  13 of 20 runs, `cavgs` in 9, `states` and `consensus` in all (`consensus` 40 of 40, adjusted Rand
+  index median 0.78, one state often only partly separated). The per-seed metrics of the de novo
+  routes are the baseline of the planned annealed state draw.
+- By hand: `suite=cavgs_single`, `suite=cavgs_as_particles`, `suite=<route>_identical`,
+  `suite=hard_<route>`.
+- Cost: 1809 s at 8 threads (reserving 11 cores) for the four routes; the consensus route alone about 70 minutes at one thread.
+
+**`single_atoms_stats` and its CdSe variants (`_cdsew`, `_cdsez`, `_cdser`)**
+- Claim: atom detection and statistics recover the atoms of simulated Pt and CdSe (wurtzite,
+  zincblende, rocksalt) nanoparticles.
+- Checks: recall and precision at least 0.90, position error at most 0.75 Å, density correlation
+  at least 0.80, the coordination number of interior atoms and the fitted lattice constant within
+  2 % (CdSe). Control: the atoms shifted by half a bond must fail.
+- Profile: passes 20 of 20 (noise-free: the values repeat; byte-identical on the merged code).
+- Cost: 19, 10, 12 and 14 s at 8 threads (reserving 3 or 4 cores).
+
+**`species_discovery`**
+- Claim: `detect_atoms` with a species list and with `discover_species=yes` recovers the elements of
+  simulated Pt, Pt/Ni and Pt/Al particles.
+- Checks: Pt recall 0.98, all species 0.95, the second element 0.89 (aluminium 0.88), at most one
+  false atom, half-map label agreement 0.95. Control: `element=Pt` alone finds less than 0.90 of
+  the aluminium.
+- Profile (2026-10-18, its gate table identical on the merged code): the second element's recall
+  median 0.977, worst 0.908.
+- Cost: 46 s at 8 threads (reserving 8 cores).
+
+**`stream_preproc`**
+- Claim: five simulated movies go through the stream's preprocessing stage, its work done by worker
+  jobs of the local queue, and the defocus, frame drift and image are recovered.
+- Checks: defocus within 0.20 µm, drift within 0.5 px, the integrated micrograph's correlation with
+  the optimal average at least 0.50 and 0.05 above another movie's.
+- Path: the worker jobs finished, each with exit status 0. Control: the farthest other movie's
+  defocus must fail the ceiling.
+- Profile (byte-identical on the merged code): defocus worst 0.134 µm.
+- Cost: 82 s at 8 threads (reserving 2 cores), its jobs one thread each.
+
+**`flex_pca_blobs`**
+- Claim: `flex_pca` separates two blob states at their true poses, in shared memory and with two
+  worker processes; the per-state refinement holds; the class-average state route runs end to end.
+- Checks: label accuracy at least 0.60 (one-to-one mapping) in both modes, the two maps matching
+  the two truths, the per-state refined maps' correlation; the route's contract (projects, hand-back
+  of the states, one map per state). Reported: the class-average route's state accuracy, the number
+  of planted states its maps match, and its poses, on three beta-galactosidase states in exact views.
+- Path: the distributed run's parts ran as worker jobs. Control: shuffled labels fail the floor; the
+  route's accuracy beside its shuffled-label null.
+- Profile (2026-10-19): label accuracy median 0.989, worst 0.907; the class-average route at the
+  chance level (four runs deliver one state, one run's maps match a single planted state), a
+  finding left to the maintainer.
+- Cost: 404 s at 8 threads (reserving 9 cores), up to 8.7 GiB.
+
+**`solve3D_pyramid_blobs`**
+- Claim: `solve3D_pyramid` assigns three planted blob states and refines their maps end to end.
+- Checks: the report written; the assignment against the planted states (one-to-one mapping:
+  accuracy, adjusted Rand index, recall); each reference and refined map matched and docked to a
+  truth; the docked maps' discrimination. Control: shuffled labels.
+- Profile (2026-10-19): fails 20 of 20, 19 on production's own stops after its state step merges
+  the states (the states differ in a lobe of 6 % of the mass). A finding left to the maintainer.
+- Cost: 291 s at 8 threads (reserving 9 cores) (to its failure).
 
 ### 6.6 Real data: the dataset layer (planned)
 
-Real datasets (beta-galactosidase, PfCRT, msp1, the ribosome, the benchmark
-datasets of `SIMPLE_data_testing`) carry no truth, so they are robustness and
-performance evidence, never correctness:
+Real datasets carry no truth of their own, so a real-data case never judges
+poses or state labels. By the rulings of 2026-10-18 (recorded in
+`doc/implementation_notes/planned/testing_and_benchmarking_plan.md`, section 5),
+real data joins `test=nightly` as public datasets with previously solved maps:
 
-- does the workflow still complete;
-- does the resolution hold its dataset's limit;
-- how long does it take;
-- how much do the results scatter across seeds.
+- **the data**: subsets of public datasets (EMPIAR images whose maps are in
+  EMDB, under a licence that allows a subset to be redistributed), kept as
+  versioned Zenodo records with the subset, the reference map, the case's
+  command lines and a checksum per file, fetched by name into a local cache
+  and checked against the checksums; a missing or corrupt dataset skips its
+  case with a visible status, never a pass;
+- **the judgement**: the run's map docked in both hands onto the earlier map,
+  their FSC and correlation in a band that stops short of the reference's own
+  resolution, with floors by the floor rule from a 20-seed profile and another
+  dataset's reference as the negative control. The reference is never an
+  input of the run (that would measure reference bias), and it judges the
+  map only: it came from the same images. A multi-state dataset is compared
+  state by state only where per-state maps were deposited, and its labels are
+  never judged;
+- **robustness and performance as before**: does the workflow complete, does
+  it hold its resolution limit (with cFAR, the conical FSC area ratio, beside
+  the FSC=0.143 resolution; FSC=0.5 is never a gate on a dataset whose FSC runs
+  along 0.5), how long does it take, how much do the results scatter across
+  seeds;
+- **the components**: the fetch and cache with checksums, a SIMPLE test program
+  that runs each case through the same dispatcher as `test=nightly` and
+  `test=profile`, and the same `metrics.tsv` rows (map-to-reference FSC and
+  correlation as floors, resolution and cFAR as ceilings and floors, wall time
+  and per-stage `BENCH` times as reports).
 
-Multi-state real data shows stability only (populations and per-state
-resolutions across seeds); its labels are unknown, so it never judges a state
-assignment. The layer that automates these runs on the test machine is
-designed in `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md`
-and built after it:
-
-- **a manifest per machine**, kept outside the repository because the paths
-  are the machine's: per dataset its path, the exact command line, the
-  resolution limit it must hold and its reference wall time;
-- **a SIMPLE test program** that reads the manifest and runs each dataset's
-  command line through the same dispatcher as `test=nightly` and `test=profile`,
-  writing the same `metrics.tsv` rows (resolution against its limit as a
-  ceiling, wall time as a report), so that its profiles over seeds come from
-  `test=profile` like any other;
-- **first entries**: the beta-galactosidase and PfCRT cases of the speed runs.
-
-Until it exists, real-data runs stay by hand or in the `SIMPLE_data_testing`
+The full-size benchmark datasets that are not public (PfCRT, msp1, the
+beta-galactosidase speed cases) stay as local copies behind a per-machine
+manifest, for profiles and timings. **Open:** the design of each case (its
+starting point, downsampling, number of images and budget, which fixes what it
+can test in the time it is given), the choice of datasets and their licences,
+how the fetch is done (a SIMPLE program or a one-time setup step per machine),
+and whether `SIMPLE_data_testing`'s trimmed datasets and the Zenodo records are
+the same data. No dataset has been chosen, downloaded or uploaded yet. Until the
+layer exists, real-data runs stay by hand or in the `SIMPLE_data_testing`
 workflow (section 6.4).
 
 ## 7. Why tests are no longer standalone programs

@@ -47,6 +47,18 @@ integer, parameter :: DIFF_DILATE = 1   !< dilated by this many pixels
 ! median 0.266 px, s 0.038, worst 0.307, from 0.380; under cc now 3.2 deg and 0.26 px); random poses
 ! err by about 90 deg and zero shifts by about 2 px. The fits are reported; a reported value that is
 ! not finite (an empty or a duplicated map) still fails its row.
+! The profiles of the merged code (2026-10-19, scratch/keep/profiles/phase8/main at 8 threads and
+! t1_a at one thread, 20 seed offsets each; every state resolved in all 40 runs of each mode) keep
+! every floor admissible but one: at one thread the prob adjusted Rand index has median 0.941, s 0.015,
+! worst 0.923, admissible only to 0.897, so its floor moves from 0.90 to 0.89 (8 threads: median 0.943,
+! s 0.011, worst 0.928, to 0.912; shuffled labels 0.00, s 0.004). The others, as worst and the bound
+! of the floor rule, at 8 threads and at one thread: prob accuracy 0.971 to 0.963, 0.973 to 0.964;
+! prob_neigh ARI 0.861 to 0.829, 0.868 to 0.842; prob_neigh accuracy 0.947 to 0.935, 0.951 to 0.943;
+! smallest recall prob 0.950 to 0.941, 0.957 to 0.952, prob_neigh 0.930 to 0.909, 0.927 to 0.921;
+! population error (ceilings) prob 0.019 from 0.023, 0.017 from 0.023, prob_neigh 0.034 from 0.038,
+! 0.028 from 0.037; margin prob 0.330 to 0.324, 0.333 to 0.328, prob_neigh 0.340 to 0.335, 0.340 to
+! 0.336; rotation worst 3.30 and 3.40 deg (from 3.64 at most); shift worst 0.289 and 0.293 px (from
+! 0.323 at most).
 real,    parameter :: MAX_MED_ROT_ERR = 6.0
 real,    parameter :: MAX_MED_SH_ERR  = 0.40
 real,    parameter :: MAX_POP_ERR_PROB = 0.03, MAX_POP_ERR_NEIGH = 0.04
@@ -144,7 +156,7 @@ subroutine run_case( root, tag, refine, kind, nthr, gate )
         min_recall = 0.85
         max_poperr = MAX_POP_ERR_NEIGH
     else
-        min_ari    = 0.90
+        min_ari    = 0.89
         min_acc    = 0.95
         min_recall = 0.93
         max_poperr = MAX_POP_ERR_PROB

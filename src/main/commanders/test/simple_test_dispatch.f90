@@ -78,6 +78,7 @@ type :: test_dispatcher
     integer :: nexecs = 0
     integer :: budget = 1  !< cores
     integer :: grace  = 30 !< seconds between SIGTERM and SIGKILL
+    logical :: keep_outputs = .true. !< .false.: a passed execution's subdirectories are deleted, its disk freed
   contains
     procedure :: new
     procedure :: add
@@ -92,12 +93,17 @@ logical, volatile :: l_interrupted = .false.
 
 contains
 
-    subroutine new( self, budget, grace )
+    !> keep_outputs=.false.: every subdirectory of a passed execution's run directory (its outputs) is
+    !! deleted when it ends, and its disk returns to the budget; run.log and metrics.tsv stay
+    subroutine new( self, budget, grace, keep_outputs )
         class(test_dispatcher), intent(inout) :: self
         integer,                intent(in)    :: budget, grace
+        logical, optional,      intent(in)    :: keep_outputs
         call self%kill
         self%budget = max(1, budget)
         self%grace  = max(0, grace)
+        self%keep_outputs = .true.
+        if( present(keep_outputs) ) self%keep_outputs = keep_outputs
         allocate(self%execs(16))
     end subroutine new
 
@@ -315,7 +321,26 @@ contains
             write(logfhandle,'(a,a,a,i0,a,f10.1,a)') '>>> DISPATCH: end ', trim(self%execs(iexec)%label), ': '//&
                 &trim(exec_state_name(self%execs(iexec)%state))//', exit code ', self%execs(iexec)%exit_code, &
                 &', ', self%execs(iexec)%wall, ' s'
+            ! the outputs of a failed or timed-out execution stay, the evidence of what went wrong
+            if( .not. self%keep_outputs .and. self%execs(iexec)%state == EXEC_PASSED ) call delete_outputs(iexec)
         end subroutine finish_execution
+
+        !> the subdirectories of an ended execution's run directory; its share of the disk budget returns
+        !! when every one of them is gone
+        subroutine delete_outputs( iexec )
+            use simple_syslib, only: simple_list_dirs, simple_rmdir
+            integer, intent(in) :: iexec
+            type(string), allocatable :: subdirs(:)
+            integer :: j, status
+            logical :: l_all
+            subdirs = simple_list_dirs(trim(self%execs(iexec)%dir))
+            l_all   = .true.
+            do j = 1, size(subdirs)
+                call simple_rmdir(trim(self%execs(iexec)%dir)//'/'//subdirs(j)%to_char(), status)
+                l_all = l_all .and. status == 0
+            enddo
+            if( l_all ) disk_started = disk_started - disks(iexec)
+        end subroutine delete_outputs
 
         !> sig to every process of execution iexec, its group first (which it may still be making)
         !! unless l_group is .false.

@@ -1448,7 +1448,15 @@ subroutine exec_test_single_workflow( self, cline )
     ! The relative ceiling (a stage may lose at most MAX_PAIR_LOSS deg of median rotation error to the
     ! one before) is admissible on the profiles of 2026-10-18 (20 seed offsets, one thread): fcc
     ! refine=cont minus autorefine3D_nano median -0.13 deg, worst +0.19, the polish minus no polish
-    ! median -0.15, worst +0.12; wurtzite worst -0.11 and -0.13; random poses lose tens of degrees
+    ! median -0.15, worst +0.12; wurtzite worst -0.11 and -0.13; random poses lose tens of degrees.
+    ! The merged code (master reverted the FSC=0.143 matching clamp) changed the wurtzite results; its
+    ! profile of 2026-10-19 (scratch/keep/profiles/phase8/main, 20 seed offsets, one thread): refine=cont
+    ! minus autorefine3D_nano median -0.30 deg, worst -0.12, the polish minus no polish median -0.31,
+    ! worst -0.14 (s 0.05): the 0.5 deg stays admissible. fcc is byte-identical to the code the
+    ! 2026-10-18 profile ran (test-suite truth plan, Phase 7), so its profile stands.
+    ! The map's floors (MIN_VOL_CORR, MAX_FSC0143), on the same wurtzite profile: correlation median
+    ! 0.979, s 0.003, worst 0.905, admissible to 0.902; FSC median 1.59 A, s 0.97, worst 3.0, admissible
+    ! from 4.49 A
     integer,          parameter           :: NCONT_ITERS = 2
     real,             parameter           :: MAX_PAIR_LOSS = 0.5
     integer,          parameter           :: NREPROJS = 300, MASKDIAM = 40, NREFINE_ITERS = 3, NTHR = 1

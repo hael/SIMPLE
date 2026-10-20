@@ -166,7 +166,7 @@ add_custom_target(audit_ui_defaults
 # Tests  (doc/refactoring_notes/completed/uniform_test_environment_refactoring.md)
 # ------------------------------------------------------------------------------
 # Two gates behind one front door, simple_test_exec:
-#   fast         runs on every compile_*.sh build under a 30 s budget
+#   fast         runs on every compile_*.sh build under a 60 s budget
 #                (Phase 2 declares it; until then `provisional` stands in)
 #   library      nightly, one process per coherent part of the library
 #   highlevel    only by explicit CTest command; long simulated workflows
@@ -177,13 +177,13 @@ add_custom_target(audit_ui_defaults
 # installed bin/). A CTest entry is an isolation unit, not an assertion:
 # checks grow inside existing suites, and a new process needs a reason here
 # and a raised SIMPLE_CTEST_BUDGET. The fast label as a whole must stay
-# under 30 s of real time (scripts/run_fast_gate.sh); there is no per-entry
+# under 60 s of real time (scripts/run_fast_gate.sh, scripts/ctest_budget.py); there is no per-entry
 # time rule.
 if(BUILD_TESTS)
   enable_testing()
 
   # ---- registration helper -------------------------------------------------
-  # simple_add_test(<name> <label> <timeout> <omp_threads> [RUN_SERIAL] COMMAND <args...>)
+  # simple_add_test(<name> <label> <timeout> <omp_threads> [RUN_SERIAL] [PROCESSORS <n>] COMMAND <args...>)
   # registers `simple_test_exec <args...>` (or the given launcher) with the
   # properties every entry must carry.
   set(SIMPLE_TEST_RUNS_DIR "${CMAKE_BINARY_DIR}/test_runs")
@@ -225,8 +225,8 @@ if(BUILD_TESTS)
   # every sub-suite asserts through simple_test_utils, is localhost-only and
   # runs on one thread (plan, section 5.1). `units` runs all of them in one
   # process as a developer convenience and is not registered: the entries
-  # below are the gate. Measured 2026-09-22 (Debug, 1 thread): the seven
-  # together about 4 s; the longest, unit_image and unit_ori, about 1.3 s.
+  # below are the gate. Measured 2026-10-19 on the 24-core test machine (Debug, 1 thread each,
+  # twelve at a time): the fifteen together 11.6 s; the longest, unit_pftc_align2D3D, 11.6 s.
   foreach(_area IN ITEMS core ori image numerics project motion ui ipc reconstruction pftc_align2D3D cart_align3D heterogeneity parallel single stream)
     simple_add_test(unit_${_area} fast 120 1
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
@@ -234,7 +234,7 @@ if(BUILD_TESTS)
 
   # ---- library suites (nightly) --------------------------------------------
   # One process per coherent part of the library, label `library`, the same
-  # runner and assertions as the fast gate without its 30 s budget (plan,
+  # runner and assertions as the fast gate without its 60 s budget (plan,
   # section 5.2.1). lib_reconstruction: half-set PCG solves against gridding
   # at box 24, minutes on one thread. Review verdict 2026-09-23 (plan,
   # section 9.7, reconstruction).
@@ -329,12 +329,13 @@ if(BUILD_TESTS)
   # multi-state phase, 2026-10-17): no other entry checks the state assignment against the truth.
   simple_add_test(multistate_assignment highlevel 3600 8 PROCESSORS 11
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_assignment nthr=8)
-  # the multi-state workflows on simulated beta-galactosidase states, gated on the known state of
-  # every particle: solve3D nstates=3 from the particles (the class-average route and
-  # refine3D_states are robustness profiles, run by suite). Its own entry (test-suite truth plan,
-  # multi-state workflow phase, 2026-10-17): a workflow of twenty minutes, apart from the refine3D
-  # assignment test.
-  simple_add_test(multistate_workflows highlevel 3600 8 PROCESSORS 11
+  # the multi-state workflows on simulated beta-galactosidase states, judged against the known state
+  # of every particle: the class-average route, solve3D nstates=3 from the particles, refine3D_states
+  # from the true poses, and single-state solve3D followed by refine3D_states (the de novo routes'
+  # state resolution is held over seeds by test=profile, ruling of 2026-10-18). Its own entry
+  # (test-suite truth plan, multi-state workflow phase, 2026-10-17): the four routes take 32 minutes
+  # at eight threads alone, an hour beside other entries.
+  simple_add_test(multistate_workflows highlevel 7200 8 PROCESSORS 11
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_workflows nthr=8)
   # the multi-state fixture (its modes, its cache, the point groups of its truths). Its own entry by
   # the ruling of 2026-10-17: these checks are not simulate_particles', whose claim and cost they changed.
@@ -392,7 +393,8 @@ if(BUILD_TESTS)
   # Own process, own launcher; not part of the build gate.
   # forked process: real child processes polled on a clock (12.9 s of it),
   # excluded from the fast gate by decision (plan, section 4.6); its second
-  # sub-suite, stream heartbeat, forks the seven stream stages' children.
+  # sub-suite, stream heartbeat, forks one child and reads its status as the GUI does,
+  # and its third, test dispatcher, the suite runner's failing, hanging and passing children.
   simple_add_test(forked_process platform 300 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=forked_process)
   # Registered only when CMake has the capability and the launcher.

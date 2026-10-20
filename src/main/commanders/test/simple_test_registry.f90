@@ -32,7 +32,7 @@ type :: test_entry
     logical             :: scales   = .true. !< its master threads follow nthr (a profile's thread count)
 end type test_entry
 
-! the declared outputs of the one-thread entries, below their workflow directory: maps, stacks, picked
+! the declared outputs of the one-thread workflows, below their workflow directory: maps, stacks, picked
 ! coordinates, FSC and sigma2 files, solve3D manifests, projects and orientation tables (the CTF text
 ! files hold absolute paths and the BENCH files timings, so they are not outputs)
 character(len=*), parameter :: SIMWF = 'test_simulated_workflow_'
@@ -40,6 +40,19 @@ character(len=48), parameter :: SIMWF_OUT(7) = [character(len=48) :: &
     &'/simulated_workflow/*/*.mrc', '/simulated_workflow/*/*.mrcs', '/simulated_workflow/*/*.box', &
     &'/simulated_workflow/*/*.bin', '/simulated_workflow/*/solve3D_manifest.txt', &
     &'/simulated_workflow/*/*.simple', '/simulated_workflow/*.simple']
+! the entries that work in a directory named by their process id (test_<name>_<pid>) declare their
+! outputs relative to it, and test=identity is given that directory as dir1 and dir2; the star files
+! and motion models of the stream hold absolute movie paths, so they are not outputs; state_fixture
+! and species_discovery keep no files but their gate table
+character(len=48), parameter :: MINI_OUT(13) = [character(len=48) :: '*.mrc', '*.mrcs', '*.pdb', '*.txt', &
+    &'1_simulate_micrographs/*.mrc', '1_simulate_micrographs/*.txt', '2_mini_stream/*.mrc', '2_mini_stream/*.mrcs', &
+    &'2_mini_stream/*.box', '2_mini_stream/*.bin', '2_mini_stream/*.star', '2_mini_stream/*.txt', '2_mini_stream/*.simple']
+character(len=48), parameter :: SIMPTCLS_OUT(6) = [character(len=48) :: '*.mrc', '*.mrcs', '*.pdb', '*.txt', &
+    &'*/*.mrc', '*/*.txt']
+character(len=48), parameter :: ATOMS_OUT(3) = [character(len=48) :: '*.mrc', '*.pdb', '*.csv']
+character(len=48), parameter :: PREPROC_OUT(8) = [character(len=48) :: '*.mrcs', '*.simple', '1_simulate_movies/*.mrc', &
+    &'simulation_truth/*.mrc', 'simulation_truth/*.txt', 'stream_preproc/*.simple', 'stream_preproc/motion_correct/*.mrc', &
+    &'stream_preproc/spprojs_completed/*.simple']
 character(len=*), parameter :: SINGLEWF = 'test_single_workflow_'
 character(len=48), parameter :: SINGLEWF_OUT(9) = [character(len=48) :: &
     &'/*/*.mrc', '/final_results/*.mrc', '/*.mrc', '/*/*.bin', '/*/*.pdb', '/*/*_oris.txt', '/ptcls_oris.txt', &
@@ -54,10 +67,13 @@ contains
         ! mem_gb: the profiles' peak resident memory plus 20 %, in steps of 0.5 GiB; disk_gb: the run
         ! directory sampled during the test=nightly of 2026-10-18 plus 25 %, in steps of 0.5 GiB
         ! every commander runs with nthr=1; the 2D search and its jobs overlap
-        &test_entry('mini_stream_6vxx', 'mini_stream', 'suite=6vxx', 8, 0, 0, 2, 7200, ENTRY_GATE, '', mem_gb=1.5, disk_gb=0.5, scales=.false.), &
-        &test_entry('mini_stream_1jxy', 'mini_stream', 'suite=1jxy', 8, 0, 0, 3, 7200, ENTRY_GATE, '', mem_gb=1.0, disk_gb=0.5, scales=.false.), &
+        &test_entry('mini_stream_6vxx', 'mini_stream', 'suite=6vxx', 8, 0, 0, 2, 7200, ENTRY_GATE, outputs_of('', MINI_OUT), &
+            &mem_gb=1.5, disk_gb=0.5, scales=.false.), &
+        &test_entry('mini_stream_1jxy', 'mini_stream', 'suite=1jxy', 8, 0, 0, 3, 7200, ENTRY_GATE, outputs_of('', MINI_OUT), &
+            &mem_gb=1.0, disk_gb=0.5, scales=.false.), &
+        ! at master's sizes (160 particles) its run directory reached 4.1 GiB in the profile of 2026-10-19
         &test_entry('simulated_workflow_6vxx', 'simulated_workflow', 'suite=6vxx', 1, 0, 0, 2, 7200, ENTRY_GATE, &
-            &outputs_of(SIMWF//'6vxx', SIMWF_OUT), mem_gb=2.5, disk_gb=3.5, scales=.false.), &
+            &outputs_of(SIMWF//'6vxx', SIMWF_OUT), mem_gb=2.5, disk_gb=5.5, scales=.false.), &
         ! its distributed solve3D runs two one-thread workers while the master waits
         &test_entry('simulated_workflow_1jxy', 'simulated_workflow', 'suite=1jxy', 1, 2, 1, 3, 7200, ENTRY_GATE, &
             &outputs_of(SIMWF//'1jxy', SIMWF_OUT), mem_gb=5.0, disk_gb=5.5, scales=.false.), &
@@ -65,26 +81,31 @@ contains
             &outputs_of(SINGLEWF//'fcc', SINGLEWF_OUT), mem_gb=2.0, disk_gb=1.0, scales=.false.), &
         &test_entry('single_workflow_wurtzite', 'single_workflow', 'suite=wurtzite smpd=0.358', 1, 0, 0, 2, 7200, &
             &ENTRY_GATE, outputs_of(SINGLEWF//'wurtzite', SINGLEWF_OUT), mem_gb=3.0, disk_gb=3.0, scales=.false.), &
-        &test_entry('simulate_particles', 'simulate_particles', 'nthr=8', 8, 0, 0, 8, 3600, ENTRY_GATE, '', mem_gb=2.0, disk_gb=0.5), &
+        &test_entry('simulate_particles', 'simulate_particles', 'nthr=8', 8, 0, 0, 8, 3600, ENTRY_GATE, &
+            &outputs_of('', SIMPTCLS_OUT), mem_gb=2.0, disk_gb=0.5), &
         &test_entry('solve3D_addon', 'solve3D_addon', 'nthr=8', 8, 0, 0, 11, 7200, ENTRY_GATE, '', mem_gb=1.5, disk_gb=2.0), &
         ! its distributed step runs two workers of four threads
         &test_entry('cont_refine3D_1jxy', 'cont_refine3D_1jxy', 'nthr=8', 8, 2, 4, 10, 7200, ENTRY_GATE, '', mem_gb=11.0, disk_gb=8.0), &
         ! its reconstruction overlaps the eight search threads (peak 10.15 cores)
         &test_entry('multistate_assignment', 'multistate_assignment', 'nthr=8', 8, 0, 0, 11, 3600, ENTRY_GATE, '', mem_gb=1.5, disk_gb=1.0), &
-        ! as above: reconstruction overlaps the eight search threads (peak 10.8 cores)
-        &test_entry('multistate_workflows', 'multistate_workflows', 'nthr=8', 8, 0, 0, 11, 3600, ENTRY_GATE, '', mem_gb=4.0, disk_gb=1.0), &
-        &test_entry('state_fixture', 'state_fixture', 'nthr=8', 8, 0, 0, 8, 1800, ENTRY_GATE, '', mem_gb=2.0, disk_gb=1.0), &
+        ! as above: reconstruction overlaps the eight search threads (peak 10.8 cores); its four routes take
+        ! 32 minutes alone, an hour beside other entries (2026-10-19)
+        &test_entry('multistate_workflows', 'multistate_workflows', 'nthr=8', 8, 0, 0, 11, 7200, ENTRY_GATE, '', mem_gb=4.0, disk_gb=1.0), &
+        &test_entry('state_fixture', 'state_fixture', 'nthr=8', 8, 0, 0, 8, 1800, ENTRY_GATE, 'metrics.tsv', mem_gb=2.0, &
+            &disk_gb=1.0), &
         &test_entry('single_atoms_stats', 'single_atoms_stats', 'smpd=0.358 element=Pt', 8, 0, 0, 3, 3600, &
-            &ENTRY_GATE, '', mem_gb=0.5, disk_gb=1.0), &
+            &ENTRY_GATE, outputs_of('', ATOMS_OUT), mem_gb=0.5, disk_gb=1.0), &
         &test_entry('single_atoms_stats_cdsew', 'single_atoms_stats', 'smpd=0.358 element=CdSeW', 8, 0, 0, 4, 3600, &
-            &ENTRY_GATE, '', mem_gb=0.5, disk_gb=1.0), &
+            &ENTRY_GATE, outputs_of('', ATOMS_OUT), mem_gb=0.5, disk_gb=1.0), &
         &test_entry('single_atoms_stats_cdsez', 'single_atoms_stats', 'smpd=0.358 element=CdSeZ', 8, 0, 0, 3, 3600, &
-            &ENTRY_GATE, '', mem_gb=0.5, disk_gb=1.0), &
+            &ENTRY_GATE, outputs_of('', ATOMS_OUT), mem_gb=0.5, disk_gb=1.0), &
         &test_entry('single_atoms_stats_cdser', 'single_atoms_stats', 'smpd=0.358 element=CdSeR', 8, 0, 0, 3, 3600, &
-            &ENTRY_GATE, '', mem_gb=0.5, disk_gb=1.0), &
-        &test_entry('species_discovery', 'species_discovery', 'nthr=8', 8, 0, 0, 8, 3600, ENTRY_GATE, '', mem_gb=1.0, disk_gb=0.5), &
+            &ENTRY_GATE, outputs_of('', ATOMS_OUT), mem_gb=0.5, disk_gb=1.0), &
+        &test_entry('species_discovery', 'species_discovery', 'nthr=8', 8, 0, 0, 8, 3600, ENTRY_GATE, 'metrics.tsv', &
+            &mem_gb=1.0, disk_gb=0.5), &
         ! the preprocessing stage submits one-thread jobs to the local queue, one at a time
-        &test_entry('stream_preproc', 'stream_preproc', '', 8, 1, 1, 2, 3600, ENTRY_GATE, '', mem_gb=0.5, disk_gb=0.5, scales=.false.), &
+        &test_entry('stream_preproc', 'stream_preproc', '', 8, 1, 1, 2, 3600, ENTRY_GATE, outputs_of('', PREPROC_OUT), &
+            &mem_gb=0.5, disk_gb=0.5, scales=.false.), &
         ! two workers of four threads in its distributed FLEX run; the state refinements take eight
         &test_entry('flex_pca_blobs', 'flex_pca_blobs', 'nthr=4', 8, 2, 4, 9, 7200, ENTRY_GATE, '', mem_gb=3.5, disk_gb=2.5), &
         &test_entry('solve3D_pyramid_blobs', 'solve3D_pyramid_blobs', 'nthr=8', 8, 0, 0, 9, 7200, ENTRY_GATE, '', mem_gb=2.0, disk_gb=0.5) ]

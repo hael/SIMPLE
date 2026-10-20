@@ -2,14 +2,17 @@
 ! A metric's distribution over the executions of a profile: runs, median, robust spread s (1.4826
 ! times the median absolute deviation, or the range over 4 when that is zero), the observed range,
 ! the worst run in the sense of its floor, and the failure rate: the fraction of all executions in
-! which it failed or was never written (a failed or timed-out execution counts).
+! which it failed or was never written (a failed or timed-out execution counts). A success metric (1 or
+! 0 per run) counts its successes instead, in the executions that passed: its failure rate is the
+! fraction of executions that did not succeed, and it meets its floor when the successes are at least
+! the floor times the executions.
 module simple_test_profile_stats
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
 use simple_stat, only: median, mad_gau
 implicit none
 
 public :: gate_row, metric_dist, read_gate_table, robust_spread, summarize_metric, profile_table
-public :: write_profile, read_profile, compare_profiles
+public :: write_profile, read_profile, compare_profiles, meets_success_floor
 private
 
 integer, parameter :: NAMELEN = 160
@@ -36,6 +39,7 @@ type :: metric_dist
     real    :: vmax         = 0.
     real    :: worst        = 0.
     real    :: failure_rate = 0.
+    integer :: successes    = 0   !< executions with the value 1 (success metrics)
 end type metric_dist
 
 contains
@@ -104,6 +108,11 @@ contains
         d%failure_rate = 1.
         if( nexec > 0 ) d%failure_rate = real(nexec - count(passes)) / real(nexec)
         if( size(floors) > 0 ) d%floor = median(floors)
+        if( trim(sense) == 'success' )then
+            ! an execution that wrote no value has not succeeded
+            d%successes = count(finite .and. vals > 0.5)
+            if( nexec > 0 ) d%failure_rate = real(nexec - d%successes) / real(nexec)
+        endif
         v = pack(vals, finite)
         if( size(v) == 0 ) return
         d%med    = median(v)
@@ -131,6 +140,7 @@ contains
         character(len=8),       allocatable :: senses(:)
         integer,                allocatable :: iexec(:)
         logical, allocatable :: sel(:), bounded(:), passes(:)
+        real,    allocatable :: vals(:)
         integer :: i, j, k, n
         allocate(allrows(0), names(0), senses(0), iexec(0))
         do i = 1, size(fnames)
@@ -158,7 +168,10 @@ contains
             ! the floor of a reported and gated name is that of its bounded rows
             bounded = sel .and. (allrows%sense == 'min' .or. allrows%sense == 'max')
             if( .not. any(bounded) ) bounded = sel
-            dists(j) = summarize_metric(trim(names(j)), trim(senses(j)), pack(allrows%value, sel), &
+            ! a success counts only in an execution that passed
+            vals = allrows%value
+            if( trim(senses(j)) == 'success' ) vals = merge(allrows%value, 0., exec_ok(iexec))
+            dists(j) = summarize_metric(trim(names(j)), trim(senses(j)), pack(vals, sel), &
                 &pack(allrows%floor, bounded), passes, size(fnames))
         enddo
     end subroutine profile_table
@@ -170,11 +183,12 @@ contains
         integer :: funit, i
         open(newunit=funit, file=fname, action='write', status='replace')
         write(funit,'(a)') 'name'//T//'sense'//T//'floor'//T//'runs'//T//'executions'//T//'median'//T//'spread'//T//&
-            &'min'//T//'max'//T//'worst'//T//'failure_rate'
+            &'min'//T//'max'//T//'worst'//T//'failure_rate'//T//'successes'
         do i = 1, size(dists)
-            write(funit,'(a,a,a,a,es13.6,a,i0,a,i0,5(a,es13.6),a,f8.4)') trim(dists(i)%name), T, trim(dists(i)%sense), T, &
-                &dists(i)%floor, T, dists(i)%runs, T, dists(i)%nexec, T, dists(i)%med, T, dists(i)%spread, T, &
-                &dists(i)%vmin, T, dists(i)%vmax, T, dists(i)%worst, T, dists(i)%failure_rate
+            write(funit,'(a,a,a,a,es13.6,a,i0,a,i0,5(a,es13.6),a,f8.4,a,i0)') trim(dists(i)%name), T, &
+                &trim(dists(i)%sense), T, dists(i)%floor, T, dists(i)%runs, T, dists(i)%nexec, T, dists(i)%med, T, &
+                &dists(i)%spread, T, dists(i)%vmin, T, dists(i)%vmax, T, dists(i)%worst, T, dists(i)%failure_rate, T, &
+                &dists(i)%successes
         enddo
         close(funit)
     end subroutine write_profile
@@ -185,7 +199,7 @@ contains
         type(metric_dist), allocatable, intent(out) :: dists(:)
         type(metric_dist)      :: d
         character(len=2048)    :: line
-        character(len=NAMELEN) :: f(11)
+        character(len=NAMELEN) :: f(12)
         integer :: funit, ios, nf
         allocate(dists(0))
         open(newunit=funit, file=fname, action='read', status='old', iostat=ios)
@@ -207,10 +221,21 @@ contains
             read(f(9),*)  d%vmax
             read(f(10),*) d%worst
             read(f(11),*) d%failure_rate
+            d%successes = 0
+            if( nf >= 12 ) read(f(12),*) d%successes
             dists = [dists, d]
         enddo
         close(funit)
     end subroutine read_profile
+
+    !> a success metric's successes reach its floor (the smallest fraction of the executions); any
+    !! other metric has no such floor
+    logical function meets_success_floor( d )
+        type(metric_dist), intent(in) :: d
+        meets_success_floor = .true.
+        if( trim(d%sense) /= 'success' ) return
+        meets_success_floor = real(d%successes) >= d%floor * real(d%nexec) - 1.e-4
+    end function meets_success_floor
 
     !> the metrics of profile a and profile b side by side: the shift of the median in units of the
     !! larger spread (signed so that positive is better), and both failure rates

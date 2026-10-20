@@ -8,7 +8,7 @@ use simple_test_registry,      only: test_entry, get_test_registry, find_test_en
 use simple_test_dispatch,      only: test_dispatcher, test_execution, set_test_environment, exec_state_name, &
                                     &EXEC_PASSED, EXEC_INTERRUPTED, EXEC_NOT_RUN
 use simple_test_profile_stats, only: gate_row, metric_dist, read_gate_table, profile_table, write_profile, &
-                                    &read_profile, compare_profiles
+                                    &read_profile, compare_profiles, meets_success_floor
 implicit none
 #include "simple_local_flags.inc"
 
@@ -55,7 +55,9 @@ module subroutine exec_test_nightly( self, cline )
 end subroutine exec_test_nightly
 
 !> simple_test_exec test=profile target=<entry[,entry...]|all> [suite=<sub-suite>] nseeds=<n> [nthr=<list>]
-!!     [ncunits=<cores>] [dir=<output directory>]
+!!     [ncunits=<cores>] [dir=<output directory>] [keep_outputs=<yes|no>]
+!! keep_outputs=no deletes each execution's outputs (the subdirectories of its run directory) when it
+!! ends, so that the disk budget counts only the running executions
 !! or, to compare two profiles, simple_test_exec test=profile dir1=<profile> dir2=<profile>
 module subroutine exec_test_profile( self, cline )
     class(commander_test_profile), intent(inout) :: self
@@ -71,7 +73,7 @@ module subroutine exec_test_profile( self, cline )
     integer, allocatable :: nthrs(:)
     integer :: i, ient, iseed, ithr, nseeds, nexec, ntables
     real    :: scale
-    logical :: interrupted, all_ok
+    logical :: interrupted, all_ok, l_keep, l_success_ok
     type(metric_dist), allocatable :: dists(:)
     type(test_execution) :: done
     type(string) :: val
@@ -97,7 +99,18 @@ module subroutine exec_test_profile( self, cline )
     if( len(suite) > 0 .and. count(selected) /= 1 ) THROW_HARD('suite= applies to one entry: give target=<entry>')
     call set_test_environment(simple_path)
     root = output_root(cline, 'profile')
-    call dispatcher%new(core_budget(cline), GRACE_S)
+    l_keep = .true.
+    if( cline%defined('keep_outputs') )then
+        val = cline%get_carg('keep_outputs')
+        select case(val%to_char())
+            case('yes')
+            case('no')
+                l_keep = .false.
+            case default
+                THROW_HARD('keep_outputs= is yes or no')
+        end select
+    endif
+    call dispatcher%new(core_budget(cline), GRACE_S, keep_outputs=l_keep)
     do ient = 1, size(entries)
         if( .not. selected(ient) ) cycle
         nthrs = thread_list(cline, entries(ient)%nthr)
@@ -126,6 +139,7 @@ module subroutine exec_test_profile( self, cline )
     enddo
     nexec = dispatcher%get_nexecs()
     allocate(tables(nexec), oks(nexec))
+    l_success_ok = .true.
     call log_start('profile', root, simple_path, nexec)
     call dispatcher%run(route_test, interrupted)
     call write_report(dispatcher, root//'/executions.tsv', all_ok)
@@ -147,10 +161,19 @@ module subroutine exec_test_profile( self, cline )
             enddo
             call profile_table(tables(1:ntables), oks(1:ntables), dists)
             call write_profile(root//'/profile_'//trim(entries(ient)%name)//trim(tag)//'.tsv', dists)
+            ! the outcomes a single run may miss are held to the fraction of runs that succeed
+            do i = 1, size(dists)
+                if( trim(dists(i)%sense) /= 'success' ) cycle
+                write(logfhandle,'(a,i0,a,i0,a,f6.3,a)') '>>> SUCCESSES '//trim(entries(ient)%name)//trim(tag)//' '//&
+                    &trim(dists(i)%name)//': ', dists(i)%successes, ' of ', dists(i)%nexec, ' (floor ', &
+                    &dists(i)%floor, ' of the runs): '//trim(merge('met    ', 'NOT MET', meets_success_floor(dists(i))))
+                if( .not. meets_success_floor(dists(i)) ) l_success_ok = .false.
+            enddo
         enddo
     enddo
     call dispatcher%kill
     if( interrupted ) THROW_HARD('test=profile was interrupted; tables in '//root)
+    if( .not. l_success_ok ) THROW_HARD('test=profile: a success count is below its floor; tables in '//root)
     write(logfhandle,'(a)') 'test=profile done; tables in '//root
     call simple_end('**** SIMPLE_TEST_PROFILE NORMAL STOP ****')
 

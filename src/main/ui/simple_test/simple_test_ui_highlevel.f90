@@ -511,6 +511,10 @@ contains
             &'Cores the running executions may reserve together{the processors of the machine}', '# cores', .false., 0.)
         call profile%add_input(UI_PARM, 'dir', 'dir', 'Output directory', &
             &'Directory of the profile{profile_<date>_<time>}', 'directory', .false., '')
+        call profile%add_input(UI_PARM, 'keep_outputs', 'binary', 'Keep the outputs', &
+            &'Keep every execution''s outputs; no deletes them as it ends (run.log and metrics.tsv stay), and the disk '//&
+            &'budget counts only the running executions', '', .false., 'yes', &
+            &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call profile%add_input(UI_PARM, 'dir1', 'dir', 'First profile', &
             &'A profile directory to compare with dir2=', 'directory', .false., '')
         call profile%add_input(UI_PARM, 'dir2', 'dir', 'Second profile', &
