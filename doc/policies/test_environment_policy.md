@@ -53,6 +53,25 @@ reference Mac in Debug. Tests are on by default in every compile script;
 `--exclude-tests` (`BUILD_TESTS=OFF`) builds the library and executables only
 and skips the gate, for when only the executables are needed.
 
+Each fast suite has a 600 s CTest deadline to allow slower or shared hosts
+to finish. This is separate from the warning-only 60 s total budget. CTest's
+explicit per-test `TIMEOUT` takes precedence over `ctest --timeout`, so the
+registration and gate script must agree. A suite that reaches its deadline
+still fails the gate.
+
+Fast suites use `OMP_WAIT_POLICY=PASSIVE` so idle OpenMP workers sleep instead
+of consuming a shared host's CPU quota. Thread-consistency checks can request
+larger teams than the default `OMP_NUM_THREADS=1`; active waiting in those
+teams can starve the other suites on CPU-limited login nodes.
+
+The fast-suite environment also sets `OMP_THREAD_LIMIT=4` and
+`OPENBLAS_NUM_THREADS=1`. The OpenMP limit bounds actual
+teams even when a tester calls `omp_set_num_threads(omp_get_num_procs())`;
+the BLAS limit prevents independent numerical-library worker pools from
+multiplying across concurrent suites. Thread-consistency checks still run
+with multiple workers. Full-machine thread stress can be run directly through
+`simple_test_exec` without these CTest limits.
+
 `compile_coarrays.sh` runs the same fast gate as the other build scripts and
 then runs the capability-gated two-image synchronization suite before
 installation. A failure in either gate prevents installation. The coarray

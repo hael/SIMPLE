@@ -228,8 +228,17 @@ if(BUILD_TESTS)
   # below are the gate. Measured 2026-10-19 on the 24-core test machine (Debug, 1 thread each,
   # twelve at a time): the fifteen together 11.6 s; the longest, unit_pftc_align2D3D, 11.6 s.
   foreach(_area IN ITEMS core ori image numerics project motion ui ipc reconstruction pftc_align2D3D cart_align3D heterogeneity parallel single stream)
-    simple_add_test(unit_${_area} fast 120 1
+    # An explicit TIMEOUT overrides ctest --timeout; keep this in sync with
+    # run_fast_gate.sh so slower/shared hosts get the intended 600 s deadline.
+    simple_add_test(unit_${_area} fast 600 1
       COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=unit_${_area})
+    # Thread-consistency tests override the default team size. Bound their teams
+    # and BLAS workers so parallel suites fit shared-host thread quotas.
+    set_property(TEST unit_${_area} APPEND PROPERTY ENVIRONMENT
+      "OMP_WAIT_POLICY=PASSIVE"
+      "OMP_THREAD_LIMIT=4"
+      "OPENBLAS_NUM_THREADS=1"
+    )
   endforeach()
 
   # ---- library suites (nightly) --------------------------------------------
