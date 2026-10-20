@@ -999,7 +999,6 @@ contains
         type(image)  :: final_vol, reprojs
         integer      :: state, ifoo, ldim(3)
         real         :: smpd
-        call spproj%read_segment('out', params%projfile)
         do state = 1, params%nstates
             if( .not.spproj%isthere_in_osout('vol', state) )cycle   ! empty-state case
             fname = refine3D_state_vol_fname(state)

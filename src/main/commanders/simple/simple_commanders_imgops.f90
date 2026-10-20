@@ -625,12 +625,14 @@ contains
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
-        use simple_procimgstk, only: scale_and_clip_imgfile, scale_imgfile, pad_imgfile, clip_imgfile
+        use simple_procimgstk,       only: scale_and_clip_imgfile, scale_imgfile, pad_imgfile, clip_imgfile
+        use simple_gui_communicator, only: gui_communicator
         class(commander_scale), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(string), allocatable :: filenames(:)
         type(parameters) :: params
         type(builder)    :: build
+        type(gui_communicator) :: gui_comm
         type(image)      :: vol2, img, img2
         type(stack_io)   :: stkio_r, stkio_w
         real             :: ave, sdev, var, med, smpd_new, scale, smpd_sc
@@ -677,6 +679,7 @@ contains
             if( cline%defined('stk') )then
                 ! 2D
                 call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+                if( .not. params%l_distr_worker .and. params%niceserver .ne. "" .and. params%niceprocid > 0 ) call gui_comm%new(params)
                 call parse_smpd_target
                 if( cline%defined('scale') .or. cline%defined('newbox') )then
                     call del_file(params%outstk)
@@ -716,6 +719,7 @@ contains
             else if( cline%defined('vol1') )then
                 ! 3D
                 call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+                if( .not. params%l_distr_worker .and. params%niceserver .ne. "" .and. params%niceprocid > 0 ) call gui_comm%new(params)
                 call parse_smpd_target
                 if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
                 call build%vol%read(params%vols(1))
@@ -754,6 +758,7 @@ contains
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('filetab') )then
                 call params%new(cline)
+                if( .not. params%l_distr_worker .and. params%niceserver .ne. "" .and. params%niceprocid > 0 ) call gui_comm%new(params)
                 call parse_smpd_target
                 call read_filetable(params%filetab, filenames)
                 nfiles = size(filenames)
@@ -813,6 +818,7 @@ contains
         call img2%kill
         call build%kill_general_tbox
         ! end gracefully
+        call gui_comm%kill()
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
         call qsys_declare_part_finished(params, string('simple_commanders_imgops :: exec_scale'))
         contains

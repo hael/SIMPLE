@@ -14,11 +14,13 @@ end type commander_reproject
 contains
     !> exec_project generate projections from volume
     subroutine exec_reproject( self, cline )
-        use simple_imgarr_utils, only: dealloc_imgarr
+        use simple_imgarr_utils,     only: dealloc_imgarr
+        use simple_gui_communicator, only: gui_communicator
         class(commander_reproject), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)         :: params
         type(builder)            :: build
+        type(gui_communicator)   :: gui_comm
         type(image), allocatable :: imgs(:)
         integer,     allocatable :: states(:), tmp(:)
         integer                  :: i, s
@@ -28,6 +30,7 @@ contains
             if( .not. cline%defined('nspace') ) THROW_HARD('need nspace (for number of projections)!')
         endif
         call params%new(cline)
+        if( params%niceserver .ne. "" .and. params%niceprocid > 0 ) call gui_comm%new(params)
         if( cline%defined('oritab') )then
             params%nptcls = binread_nlines(params%oritab, params%spproj_iseg)
             call build%build_spproj(params, cline)
@@ -82,6 +85,7 @@ contains
         call build%kill_general_tbox
         call dealloc_imgarr(imgs)
         deallocate(tmp,states)
+        call gui_comm%kill()
         call simple_end('**** SIMPLE_REPROJECT NORMAL STOP ****')
     end subroutine exec_reproject
 

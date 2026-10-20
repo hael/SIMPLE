@@ -92,12 +92,13 @@ contains
 
     !> The update of the sections of @p spproj that @p oritype selects, for @p stage (0 the final
     !! one); @p selection adds the selected counts. Writes the previews; touches no shared state.
-    subroutine build( self, spproj, oritype, stage, selection )
+    subroutine build( self, spproj, oritype, stage, selection, vol_kind )
         class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         character(len=*),           intent(in)    :: oritype
         integer,                    intent(in)    :: stage
         logical,                    intent(in)    :: selection
+        character(len=*), optional, intent(in)    :: vol_kind
         logical :: l_all
         if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final output')
         call self%kill()
@@ -109,7 +110,13 @@ contains
         if( l_all .or. oritype == 'mic' .or. oritype == 'ptcl' ) call self%add_micrographs(spproj, oritype == 'ptcl', selection)
         if( l_all .or. oritype == 'ptcl' )                       call self%add_particles(spproj)
         if( l_all .or. oritype == 'cls2D' )                      call self%add_cavgs2D(spproj, selection)
-        if( l_all .or. oritype == 'cls3D' )                      call self%add_vols3D(spproj)
+        if( l_all .or. oritype == 'cls3D' )then
+            if( present(vol_kind) )then
+                call self%add_vols3D(spproj, vol_kind)
+            else
+                call self%add_vols3D(spproj, 'vol')
+            endif
+        endif
     end subroutine build
 
     !> Copies the update into @p meta: the project's name, then start_update (the lists dropped,
@@ -361,9 +368,10 @@ contains
 
     ! The state volumes of the project: their products, FSC, MRC header minimum and maximum,
     ! orthogonal reprojections and orientation histogram
-    subroutine add_vols3D( self, spproj )
+    subroutine add_vols3D( self, spproj, vol_kind )
         class(gui_project_builder), intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
+        character(len=*),           intent(in)    :: vol_kind
         integer, parameter :: NTILES3D = 3
         type(gui_metadata_vol3D), allocatable :: vols(:)
         real,                     allocatable :: fsc_arr(:), res_arr(:)
@@ -380,8 +388,8 @@ contains
         allocate(vols(nstates))
         nvalid = 0
         do istate = 1,nstates
-            if( .not. spproj%isthere_in_osout('vol', istate) ) cycle
-            call spproj%get_vol('vol', istate, volpath, smpd, box)
+            if( .not. spproj%isthere_in_osout(vol_kind, istate) ) cycle
+            call spproj%get_vol(vol_kind, istate, volpath, smpd, box)
             if( volpath%strlen() == 0 ) cycle
             nvalid = nvalid + 1
             pop    = spproj%os_ptcl3D%get_pop(istate, 'state')

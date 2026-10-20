@@ -162,6 +162,7 @@ contains
         call simple_copy_file(fname_ccs,         string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_CC.mrc')
         call simple_copy_file(string(SPLITTED), string(FINAL_MAPS)//fbody_split//'_iter'//int2str_pad(iter,3)//'.mrc')
         ! for visualization - generate three-view volume JPEGs
+        call spproj%read_segment('out', params%projfile)
         call gen_ortho_reprojs4viz(params, spproj)
         ! clean
         call del_file(fname_simvol)

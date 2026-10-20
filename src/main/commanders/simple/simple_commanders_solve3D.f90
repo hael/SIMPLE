@@ -82,14 +82,15 @@ contains
         integer, allocatable      :: states(:)
         type(ori)                 :: o, o_even, o_odd
         type(parameters)          :: params
+        type(gui_communicator)    :: gui_comm
         type(ctfparams)           :: ctfvars
         type(sp_project)          :: spproj, work_proj
         type(image)               :: img
         type(stack_io)            :: stkio_r, stkio_r2, stkio_w
-        type(string)              :: final_vol, work_projfile
+        type(string)              :: final_vol, final_fsc, work_projfile
         integer                   :: icls, ncavgs, cnt, even_ind, odd_ind, istage, nstages_ini3D, s
         integer                   :: nstates_target, pop
-        integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates
+        integer                   :: cavg_ldim(3), cavg_nimgs, final_nstates, fsc_box
         real                      :: cavg_smpd
         real                      :: eo_angdist, eo_state_overlap ! the last stage's even/odd agreement (-1: not measured)
         real                      :: eo_angdist_same, eo_angdist_median ! the angular distance over the halves in one state
@@ -123,6 +124,7 @@ contains
         if( .not. cline%defined('exit_collapse')    ) call cline%set('exit_collapse',               'no')
         ! make master parameters
         call params%new(cline)
+        if( params%niceserver .ne. "" .and. params%niceprocid > 0 ) call gui_comm%new(params)
         nstates_target = params%nstates
         nstates_glob   = nstates_target
         l_reseed       = nstates_target > 1 .and. params%reseed_states .eq. 'yes'
@@ -263,6 +265,11 @@ contains
             if( istage == solve3D_symsrch_stage(l_srch4symaxis) )then
                 call symmetrize(params, istage, work_proj, work_projfile, xrec3D)
             endif
+            ! update GUI
+            call work_proj%read_segment('ptcl3D', work_projfile)
+            call work_proj%read_segment('out',    work_projfile)
+            call gen_ortho_reprojs4viz(params, work_proj)
+            call gui_comm%add_metadata(work_proj, oritype='cls3D', stage=istage)
             ! States the stage left (nearly) empty take members of the largest for the next stage
             if( l_reseed .and. istage < nstages_ini3D ) call reseed_weak_states(l_reseeded)
             ! Early exit on state collapse
@@ -326,12 +333,17 @@ contains
                 &l_postprocess=.false., lp_snapshot=lpinfo(nstages_ini3D)%lp)
             ! final raw and low-pass diagnostic 3D reconstruction outputs
             call write_final_rec_outputs(params, work_proj, lpinfo(nstages_ini3D)%lp)
+            call gen_ortho_reprojs4viz(params, work_proj)
             ! add rec_final to os_out
             do s = 1,params%nstates
                 if( .not.work_proj%isthere_in_osout('vol', s) )cycle
                 final_vol = solve3D_rec_fbody()//int2str_pad(s,2)//MRC_EXT
                 if( file_exists(final_vol) )then
                     call spproj%add_vol2os_out(final_vol, cavg_smpd, s, 'vol_cavg')
+                    if( work_proj%isthere_in_osout('fsc', s) )then
+                        call work_proj%get_fsc(s, final_fsc, fsc_box)
+                        call spproj%add_fsc2os_out(final_fsc, s, fsc_box)
+                    endif
                 endif
             enddo
             ! the even/odd agreement with the volumes, for a caller that checks them (stream p07)
@@ -400,6 +412,10 @@ contains
         call cline%set('final_nstates', final_nstates)
         ! remove postprocessed (pproc) volumes; with bfac=0 they add nothing in cavgs mode
         call del_pproc_vols
+        ! final update GUI
+        if( nstages_ini3D == solve3D_nstages_ini3D_max() )then
+            call gui_comm%add_metadata(spproj, oritype='cls3D', stage=0, selection=.true., vol_kind='vol_cavg')
+        endif
         ! end gracefully
         call img%kill
         call spproj%kill
@@ -410,6 +426,7 @@ contains
         call del_file(CAVGS_SIGMA2_STATE_FNAME)
         call del_file(work_projfile)
         call simple_rmdir(string(STKPARTSDIR))
+        call gui_comm%kill()
         call simple_end('**** SIMPLE_SOLVE3D_CAVGS NORMAL STOP ****', &
             verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
         contains
