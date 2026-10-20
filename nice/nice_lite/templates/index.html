@@ -110,7 +110,7 @@
         {% if project and not current_workspace_id %}
             {% include 'project.html' %}
         {% else %}
-            <iframe id="workspace_iframe" name="workspace_iframe" {% if iframeurl is not None %}src="{{ iframeurl }}"{% endif %} height="100%" width="100%"></iframe>
+            <iframe id="workspace_iframe" name="workspace_iframe" {% if iframeurl is not None %}data-src="{{ iframeurl }}"{% endif %} height="100%" width="100%"></iframe>
         {% endif %}
     </div>
 
@@ -173,7 +173,8 @@
             if (wantsProjectId || wantsWorkspaceId) {
                 if (wantsProjectId) params.set(PROJECT_KEY, storedProjectId);
                 if (wantsWorkspaceId) params.set(WORKSPACE_KEY, storedWorkspaceId);
-                window.location.replace(`${window.location.pathname}?${params.toString()}`);
+                window.history.replaceState(window.history.state, "", `${window.location.pathname}?${params.toString()}`);
+                window.location.reload();
                 return;
             }
 
@@ -197,6 +198,29 @@
                     sessionStorage.removeItem(WORKSPACE_KEY);
                     sessionStorage.removeItem(workspaceStorageKey(currentProjectId));
                 }
+            }
+
+            // Restore this history entry's job before loading the workspace iframe.
+            const workspaceIframe = document.getElementById("workspace_iframe");
+            if (workspaceIframe?.dataset.src) {
+                const savedJob = window.history.state?.jobView;
+                workspaceIframe.addEventListener("load", () => {
+                    const frameLocation = workspaceIframe.contentDocument?.location;
+                    if (!frameLocation || frameLocation.href === "about:blank") return;
+                    const isJobView = currentWorkspaceId
+                        && /\/(?:viewbatch|viewbatchmanualpicker|viewstream)\/\d+$/.test(frameLocation.pathname);
+                    window.history.replaceState({
+                        ...window.history.state,
+                        jobView: isJobView ? {
+                            projectId: currentProjectId,
+                            workspaceId: currentWorkspaceId,
+                            url: frameLocation.pathname + frameLocation.search + frameLocation.hash,
+                        } : null,
+                    }, "");
+                });
+                workspaceIframe.src = savedJob?.projectId === currentProjectId
+                    && savedJob.workspaceId === currentWorkspaceId
+                    ? savedJob.url : workspaceIframe.dataset.src;
             }
 
             const projectBackButton = document.querySelector("[data-project-back]");
