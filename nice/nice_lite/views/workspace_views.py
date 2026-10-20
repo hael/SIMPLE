@@ -13,6 +13,7 @@ the workspace job counter.
 # global imports
 import json
 import hashlib
+import math
 import os
 
 # django imports
@@ -67,6 +68,81 @@ def _is_workspace_accessible(workspace_obj, project_id, username=None):
 def _is_batch_job(jobmodel):
     """Return True for Batch jobs stored in the shared JobModel table."""
     return jobmodel.pckg in ("simple", "single")
+
+
+def _batch_card_parameters(jobmodel):
+    """Use only JobModel JSON fields for tile values; never read result files."""
+    stats = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    metadata = stats.get("project_metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    args = jobmodel.args if isinstance(jobmodel.args, dict) else {}
+
+    def positive_number(value, integer=False):
+        if isinstance(value, bool):
+            return None
+        try:
+            value = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if not math.isfinite(value) or value <= 0 or (integer and not value.is_integer()):
+            return None
+        return int(value) if integer else value
+
+    image_size = pixel_size = None
+    cls3d = metadata.get("cls3D")
+    if isinstance(cls3d, dict):
+        stages = sorted(
+            (key for key in cls3d if key.startswith("stage") and key[5:].isdecimal()),
+            key=lambda key: int(key[5:]),
+            reverse=True,
+        )
+        for stage in ["final", *stages]:
+            entries = cls3d.get(stage)
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                image_size = positive_number(entry.get("box"), integer=True)
+                if image_size is not None:
+                    pixel_size = positive_number(entry.get("smpd"))
+                    break
+            if image_size is not None:
+                break
+
+    if image_size is None:
+        image_size = positive_number(metadata.get("dim_cavgs"), integer=True)
+        mask_scale = positive_number(metadata.get("mskscale"))
+        if image_size is not None and mask_scale is not None:
+            pixel_size = mask_scale / image_size
+
+    if image_size is None:
+        particles = metadata.get("particles")
+        if isinstance(particles, list):
+            for particle in particles:
+                if isinstance(particle, dict):
+                    image_size = positive_number(particle.get("box"), integer=True)
+                    if image_size is not None:
+                        break
+
+    if image_size is None:
+        image_size = positive_number(args.get("box"), integer=True)
+    if image_size is None:
+        width = positive_number(metadata.get("xdim_mic"), integer=True)
+        height = positive_number(metadata.get("ydim_mic"), integer=True)
+        if width is not None and height is not None:
+            image_size = f"{width} × {height}"
+        # Micrograph sampling does not describe a particle or class-average box.
+        pixel_size = positive_number(metadata.get("smpd_mic"))
+
+    symmetry = args.get("pgrp")
+    parameters = [
+        ("image size", image_size, "px"),
+        ("pixel size", pixel_size or positive_number(args.get("smpd")), "Å/px"),
+        ("mask diameter", positive_number(metadata.get("mskdiam")) or positive_number(args.get("mskdiam")), "Å"),
+        ("symmetry", symmetry.strip().upper() if isinstance(symmetry, str) else "", ""),
+    ]
+    return [row for row in parameters if row[1]]
 
 
 def _build_job_flow_graph(jobs, workspace_id):
@@ -384,6 +460,10 @@ def view_workspace_jobs(request):
     force_render = request.GET.get("force") == "1"
     if force_render or old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
+        if template == "jobs_cards.html":
+            for jobmodel in jobs:
+                if _is_batch_job(jobmodel):
+                    jobmodel.batch_card_parameters = _batch_card_parameters(jobmodel)
         context = {"jobs": jobs}
         if template == "jobs_flow.html":
             context["flow_graph"] = _build_job_flow_graph(jobs, workspace_id)

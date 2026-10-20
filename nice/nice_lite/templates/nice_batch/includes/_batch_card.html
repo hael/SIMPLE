@@ -1,10 +1,8 @@
 {% comment %}
-  _stream_card.html — one stream card, included by workspace.html for each job.
+  _batch_card.html — one Batch card, included by jobs_cards.html for each job.
   Expects `job` in context (passed automatically by the parent template loop).
-  Uses {% with %} to cache the two stats dicts as `ms` and `cs`,
-  avoiding repeated dict key lookups per template render.
 {% endcomment %}
-{% load humanize %}
+{% load humanize ui_fields %}
 <div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-pointer"
     {% if job.batch_project_drag_path %}data-batch-project-path="{{ job.batch_project_drag_path }}" ondragstart="dragBatchProject(event)"{% endif %}
     onclick="this.querySelector('form.viewform').submit();">
@@ -15,25 +13,13 @@
     <!-- Body -->
     <div class="px-3 py-2 flex-1 flex flex-col relative">
 
-        {% if job.status == "failed" or job.status == "stopped" %}
-
-            <!-- Error state -->
-            <div class="flex-1 flex items-center justify-center py-6">
-                <div class="text-center">
-                    <div class="w-8 h-8 rounded-full bg-streamerrorsurface flex items-center justify-center mx-auto mb-2">
-                        <svg class="w-4 h-4 text-streamerror" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                            <circle cx="8" cy="8" r="6"/>
-                            <line x1="8" y1="5" x2="8" y2="8"/>
-                            <circle cx="8" cy="11" r="0.5" fill="currentColor"/>
-                        </svg>
-                    </div>
-                    <p class="text-[10px] text-streamerror font-medium">{{ job.status }}</p>
-                </div>
-            </div>
-
-        {% else %}
-            <!-- Count tiles -->
-            <div class="grid grid-cols-2 gap-2">
+        <!-- Parameter and count tiles -->
+        {% with tile_text_class="text-nice4dark" %}
+        <div class="grid grid-cols-2 gap-2">
+            {% for label, value, unit in job.batch_card_parameters %}
+                {% include 'includes/_count_tile.html' with count=value|format_float count_unit=unit label=label %}
+            {% endfor %}
+            {% if job.status != "failed" and job.status != "stopped" %}
                 {% if job.master_stats and job.master_stats.project_metadata %}
                     {% if job.master_stats.project_metadata.nmics %}
                         {% if job.master_stats.project_metadata.nmics_selected %} 
@@ -57,6 +43,23 @@
                         {% endif %}
                     {% endif %}
                 {% endif %}
+            {% endif %}
+        </div>
+        {% endwith %}
+
+        {% if job.status == "failed" or job.status == "stopped" %}
+            <!-- Error state -->
+            <div class="flex-1 flex items-center justify-center py-6">
+                <div class="text-center">
+                    <div class="w-8 h-8 rounded-full bg-streamerrorsurface flex items-center justify-center mx-auto mb-2">
+                        <svg class="w-4 h-4 text-streamerror" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <circle cx="8" cy="8" r="6"/>
+                            <line x1="8" y1="5" x2="8" y2="8"/>
+                            <circle cx="8" cy="11" r="0.5" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <p class="text-[10px] text-streamerror font-medium">{{ job.status }}</p>
+                </div>
             </div>
         {% endif %}
 

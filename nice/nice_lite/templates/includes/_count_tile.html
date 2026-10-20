@@ -10,6 +10,7 @@
     sublabel_text — (optional) pre-formatted secondary value (e.g. after floatformat); takes
                      precedence over sublabel, since sublabel is compared numerically
     variant    — "neutral" | "rejected" | "action" | omit for default (streamring accent)
+    tile_text_class — (optional) text colour override for the default green tiles
 {% endcomment %}
 {% load humanize %}
 {% if variant == "neutral" %}
@@ -40,8 +41,8 @@
 <div class="flex-1 bg-streamring/10 border-0 border-streamring/20 rounded-lg pl-2 pr-0 py-1 min-w-max">
     <div class="flex items-center gap-1.5 mb-1.5">
         <!-- <div class="w-1.5 h-1.5 rounded-full bg-streamring flex-shrink-0"></div> -->
-        <p class="text-[10px] mr-[5px] font-medium text-streamring">{{ label }}</p>
+        <p class="text-[10px] mr-[5px] font-medium {{ tile_text_class|default:'text-streamring' }}">{{ label }}</p>
     </div>
-    <p class="text-[10px] font-medium text-streamring leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel_text %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel_text }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% elif sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
+    <p class="text-[10px] font-medium {{ tile_text_class|default:'text-streamring' }} leading-none">{{ count|intcomma }}{% if count_unit %}<span class="font-normal opacity-60"> {{ count_unit }}</span>{% endif %}{% if sublabel_text %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel_text }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% elif sublabel >= 0 %} <span>{% if sublabel_sep %}{{ sublabel_sep }}{% else %}&middot;{% endif %} {{ sublabel|intcomma }}{% if sublabel_unit %} {{ sublabel_unit }}{% endif %}</span>{% endif %}</p>
 </div>
 {% endif %}
