@@ -56,6 +56,7 @@ type :: parameters
     character(len=3)          :: atm_prior='no'       !< PCG atomicity prior: penalize the map outside the span of the atom kernels of pdbfile, after a prior-free base solve(yes|no){no}
     character(len=3)          :: pcg_solvent_check='no' !< PCG solvent prior: re-solve the strength grid for real and print it beside the closed-form estimate (validation only)(yes|no){no}
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of solve2D uses a resolution limit determined with e/o pairs(yes|no){yes}
+    character(len=3)          :: eo_rebalance='yes'   !< reassign selected particle halves by direction and score(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
@@ -305,7 +306,7 @@ type :: parameters
     character(len=STDLEN)     :: picker='new'         !< which picker to use (new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
     character(len=STDLEN)     :: subset_mode='quality_coverage' !< select_micrographs objective(quality_coverage|particles)
-    character(len=STDLEN)     :: subset_score='corr'   !< select_micrographs particle support(corr|corr_cart|none)
+    character(len=STDLEN)     :: subset_score='corr'   !< particle subset score(corr|corr_cart|none); none is micrograph-only
     character(len=STDLEN)     :: pose_policy='global' !< state-refinement pose policy(local|global){global}
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc){state}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)

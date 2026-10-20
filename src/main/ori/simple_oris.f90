@@ -772,11 +772,11 @@ interface
         real, allocatable,               intent(inout) :: rho(:)
     end subroutine get_state_update_fracs
 
-    module subroutine get_class_sample_stats( self, clsinds, clssmp, label )
+    module subroutine get_class_sample_stats( self, clsinds, clssmp, label, score_key )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: clsinds(:)
         type(class_sample), allocatable, intent(inout) :: clssmp(:)
-        character(len=*),      optional, intent(in)    :: label
+        character(len=*),      optional, intent(in)    :: label, score_key
     end subroutine get_class_sample_stats
 
     !======================================================================
@@ -1302,12 +1302,13 @@ interface
         logical,              intent(in)    :: incr_sampled
     end subroutine sample4update_missing
 
-    module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states )
+    module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states, exact )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)
         integer,            intent(in)    :: nptcls
         logical,            intent(in)    :: l_greedy
         integer,            intent(inout) :: states(self%n)
+        logical, optional,  intent(in)    :: exact
     end subroutine sample_balanced_1
 
     module subroutine sample_balanced_2( self, clssmp, nptcls, frac_best, states )

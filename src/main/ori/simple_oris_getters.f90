@@ -984,13 +984,15 @@ contains
         call counts2fracs(nrep, nsmp, rho)
     end subroutine get_state_update_fracs
 
-    module subroutine get_class_sample_stats( self, clsinds, clssmp, label )
+    module subroutine get_class_sample_stats( self, clsinds, clssmp, label, score_key )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: clsinds(:)
         type(class_sample), allocatable, intent(inout) :: clssmp(:)
-        character(len=*),      optional, intent(in)    :: label
-        character(len=:), allocatable :: flag
+        character(len=*),      optional, intent(in)    :: label, score_key
+        character(len=:), allocatable :: flag, score
         integer :: n, i, j, nc
+        score = 'corr'
+        if( present(score_key) ) score = trim(score_key)
         if( present(label) )then
             flag = trim(label)
         else
@@ -1014,7 +1016,7 @@ contains
                 clssmp(i)%pop    = size(clssmp(i)%pinds)
                 allocate(clssmp(i)%ccs(clssmp(i)%pop), source=0.)
                 do j = 1, clssmp(i)%pop
-                    clssmp(i)%ccs(j) = self%o(clssmp(i)%pinds(j))%get('corr')
+                    clssmp(i)%ccs(j) = self%o(clssmp(i)%pinds(j))%get(score)
                 end do
                 call hpsort(clssmp(i)%ccs, clssmp(i)%pinds)
                 call reverse(clssmp(i)%ccs)

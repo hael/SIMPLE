@@ -200,6 +200,17 @@ route (`partition_eo`), as do class-average fields. The stack rows record which
 route labelled them, so a missing, partial or inconsistent partition is told
 apart, and an inconsistent one stops the run.
 
+The offline `select_particles eo_rebalance=yes` export is an
+exception to label preservation and micrograph grouping. It pairs selected
+particles with adjacent scores within each symmetry-aware viewing bin into
+opposite halves, balances odd leftovers, updates both particle fields and
+replaces affected `eo_group` markers with `eo_byindex`. This is the selector's
+default; `eo_rebalance=no` preserves the original labels.
+The exported project no longer preserves the original gold-standard
+independence: it mixes previously refined halves and may split correlated
+neighbouring picks. Original half-maps/FSC must not validate the new split;
+subsequent reconstruction uses the newly recorded labels without reassigning them.
+
 ### 5.1 Sigma2 bootstrap contract
 
 Work that has alignments, or nothing at all, but no noise-power estimate is

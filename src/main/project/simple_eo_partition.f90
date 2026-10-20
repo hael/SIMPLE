@@ -1,8 +1,7 @@
-!@descr: project-owned even/odd half-set partition: per micrograph group, created once by the master, consumed by workers
-! A stack row that maps to a micrograph is a group: all its particles share one half, groups placed largest
-! first on the smaller half. A field with a stack row of active particles but no micrograph row takes the
-! per-index route (row parity). The stack rows record the provenance (eo_group, eo_byindex), so a complete,
-! a missing, a partial and an inconsistent split are told apart. Policy: particle_io_few_particle_stacks.md, 3.2.
+!@descr: project-owned even/odd partition and explicit selected-particle repartitioning, owned by the master
+! Default partitions keep micrograph groups intact and assign ungrouped rows by index.
+! Explicit selected-particle repartitioning may split those groups and records per-index provenance.
+! Stack markers distinguish complete, missing, partial and inconsistent partitions.
 module simple_eo_partition
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
@@ -10,7 +9,7 @@ use simple_sp_project, only: sp_project
 use simple_oris,       only: oris
 implicit none
 
-public :: ensure_field_halves, eo_transaction, eo_partition_status
+public :: ensure_field_halves, eo_transaction, eo_partition_status, repartition_selected_halves
 public :: EO_COMPLETE, EO_MISSING, EO_PARTIAL, EO_INCONSISTENT, EO_SEED_DEFAULT
 private
 #include "simple_local_flags.inc"
@@ -109,6 +108,56 @@ contains
             THROW_HARD('inconsistent even/odd partition in the project; eo_transaction')
         endif
     end subroutine eo_transaction
+
+    subroutine repartition_selected_halves( spproj, groups )
+        use simple_type_defs, only: class_sample
+        class(sp_project), intent(inout) :: spproj
+        type(class_sample), intent(in) :: groups(:)
+        logical, allocatable :: touched_stacks(:)
+        real(dp) :: direction_scores(0:1), total_scores(0:1)
+        integer :: counts(0:1), group, member, half, stack, status
+        character(len=STDLEN) :: msg
+        if( l_distr_worker_glob ) THROW_HARD('only the master may repartition selected particles')
+        status = eo_partition_status(spproj,msg)
+        if( status /= EO_COMPLETE ) THROW_HARD('repartitioning requires complete existing half-set provenance')
+        allocate(touched_stacks(spproj%get_nstks()), source=.false.)
+        counts = 0
+        total_scores = 0._dp
+        do group = 1,size(groups)
+            direction_scores = 0._dp
+            do member = 1,groups(group)%nsample,2
+                half = 0
+                if( member == groups(group)%nsample )then
+                    if( counts(0) > counts(1) ) half = 1
+                    if( counts(0) == counts(1) .and. total_scores(0) > total_scores(1) ) half = 1
+                    call assign_half(groups(group)%pinds(member),half,groups(group)%ccs(member))
+                else
+                    if( direction_scores(0) > direction_scores(1) ) half = 1
+                    if( direction_scores(0) == direction_scores(1) .and. total_scores(0) > total_scores(1) ) half = 1
+                    call assign_half(groups(group)%pinds(member),half,groups(group)%ccs(member))
+                    call assign_half(groups(group)%pinds(member+1),1-half,groups(group)%ccs(member+1))
+                endif
+            enddo
+        enddo
+        do stack = 1,size(touched_stacks)
+            if( .not.touched_stacks(stack) ) cycle
+            call spproj%os_stk%delete_entry(stack,KEY_GROUP)
+            call spproj%os_stk%set(stack,KEY_INDEX,1)
+        enddo
+        status = eo_partition_status(spproj,msg)
+        if( status /= EO_COMPLETE ) THROW_HARD('score-balanced repartition produced inconsistent half-set provenance')
+    contains
+        subroutine assign_half( particle, label, score )
+            integer, intent(in) :: particle, label
+            real, intent(in) :: score
+            call spproj%os_ptcl2D%set(particle,'eo',label)
+            call spproj%os_ptcl3D%set(particle,'eo',label)
+            touched_stacks(spproj%os_ptcl3D%get_int(particle,'stkind')) = .true.
+            counts(label) = counts(label) + 1
+            total_scores(label) = total_scores(label) + real(score,dp)
+            direction_scores(label) = direction_scores(label) + real(score,dp)
+        end subroutine assign_half
+    end subroutine repartition_selected_halves
 
     !> The state of the project's partition without changing it: EO_COMPLETE, EO_MISSING, EO_PARTIAL or
     !! EO_INCONSISTENT (msg says why)

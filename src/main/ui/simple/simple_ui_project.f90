@@ -21,6 +21,7 @@ type(ui_program), target :: prune_project
 type(ui_program), target :: replace_project_field
 type(ui_program), target :: selection
 type(ui_program), target :: select_micrographs
+type(ui_program), target :: select_particles
 type(ui_program), target :: update_project
 type(ui_program), target :: fix_projfile
 type(ui_program), target :: zero_project_shifts
@@ -48,6 +49,7 @@ contains
         call new_replace_project_field(prgtab)
         call new_selection(prgtab)
         call new_select_micrographs(prgtab)
+        call new_select_particles(prgtab)
         call new_update_project(prgtab)
         call new_fix_projfile(prgtab)
         call new_zero_project_shifts(prgtab)
@@ -682,6 +684,37 @@ subroutine new_export_relion( prgtab )
             'e.g. selected.simple',.false.,'',visibility=UI_VIS_ADVANCED,preserve_default=.true.)
         call add_ui_program('select_micrographs',select_micrographs,prgtab,UI_CATEGORY)
     end subroutine new_select_micrographs
+
+    subroutine new_select_particles(prgtab)
+        class(ui_hash), intent(inout) :: prgtab
+        call select_particles%new('select_particles', &
+            'Select top-scoring particles with balanced viewing directions', &
+            'Select exactly nsample refined particles of state with capped equal quotas across symmetry-aware viewing bins. '// &
+            'Higher subset_score values rank first within each bin. Poses are preserved; halves are rebalanced by default. '// &
+            'The execution-directory project copy is pruned and remapped to selected_particles.mrc; '// &
+            'selected_particles.txt contains matching native SIMPLE orientation and CTF rows. Input files stay unchanged.', &
+            'simple_exec',.true.,visibility=UI_VIS_ADVANCED,display_name='Select Balanced Particles')
+        call select_particles%add_input(UI_FILE,projfile,visibility=UI_VIS_STANDARD)
+        call select_particles%add_input(UI_PARM,'nsample','num','Particles to retain', &
+            'Exact number of eligible refined particles to keep','positive integer',.true.,0., &
+            visibility=UI_VIS_STANDARD,preserve_default=.true.)
+        call select_particles%add_input(UI_PARM,'subset_score','multi','Particle ranking score', &
+            'corr is the last polar score; corr_cart is the committed Cartesian score. Use comparable final-pass scores.', &
+            '',.false.,'corr',choices=ui_choices([character(len=9) :: 'corr','corr_cart']),visibility=UI_VIS_STANDARD)
+        call select_particles%add_input(UI_PARM,'state','num','Target structural state', &
+            'Only active refined particles of this state are eligible','positive integer',.false.,1.,visibility=UI_VIS_STANDARD)
+        call select_particles%add_input(UI_PARM,'eo_rebalance','binary','Rebalance particle halves', &
+            'Pair nearby scores within each direction bin across halves. Splits micrographs and mixes original halves; '// &
+            'original gold-standard independence is not preserved. Set no to keep existing halves.', &
+            '',.false.,'yes',choices=ui_choices([character(len=3) :: 'yes','no']),visibility=UI_VIS_ADVANCED)
+        call select_particles%add_input(UI_SRCH,'nspace','num','Viewing direction bins', &
+            'Even number of symmetry-aware spiral directions for balanced selection','positive even integer',.false.,64., &
+            visibility=UI_VIS_ADVANCED,preserve_default=.true.)
+        call select_particles%add_input(UI_SRCH,'pgrp','str','Point-group symmetry', &
+            'Use the symmetry of the finished reconstruction','e.g. c1',.false.,'c1', &
+            visibility=UI_VIS_STANDARD,preserve_default=.true.)
+        call add_ui_program('select_particles',select_particles,prgtab,UI_CATEGORY)
+    end subroutine new_select_particles
 
     subroutine new_selection( prgtab )
         class(ui_hash), intent(inout) :: prgtab 

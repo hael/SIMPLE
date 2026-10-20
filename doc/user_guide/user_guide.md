@@ -157,6 +157,62 @@ To maximize accepted particle count without using orientations or scores:
 simple_exec prg=select_micrographs projfile=my_project.simple nmics=100 subset_mode=particles
 ```
 
+## Select a direction-balanced particle subset
+
+Select exactly 100000 refined particles using the best score within each
+symmetry-aware viewing-direction group:
+
+```shell
+simple_exec prg=select_particles projfile=my_project.simple nsample=100000 nspace=64 pgrp=c1
+```
+
+Use the reconstruction's symmetry in `pgrp`. `nspace` must be positive and
+even. The default `state=1` restricts selection to that structural state.
+The default `subset_score=corr` ranks the last polar alignment scores;
+use `subset_score=corr_cart` for Cartesian refinement or polishing scores.
+Higher scores rank first. Use comparable final-pass scores; this command
+does not rescore particles, and fractional updates can leave older scores.
+
+Quotas are equal across occupied direction bins until small bins are
+exhausted, then redistributed. The final partial quota round retains the
+highest available scores, giving exactly `nsample` particles. The command
+rejects requests exceeding the eligible population. Inactive particles,
+other states, unrefined rows and nonfinite poses or scores are excluded.
+Complete existing half-set provenance is required. Half labels are rebalanced
+by default; use `eo_rebalance=no` to preserve the existing labels.
+
+The command requires `mkdir=yes` and creates a numbered execution directory
+containing the modified copy of the input project, `selected_particles.mrc`,
+and `selected_particles.txt`. The project copy is pruned: project particle
+row N, stack image N and text row N describe the same retained particle.
+Logical stack rows retain their microscope metadata but all reference the
+single generated stack. Original `pind`, poses, shifts and states are
+preserved. The source project and input image stacks are unchanged.
+
+The default `eo_rebalance=yes` creates a new particle-level split balanced
+by direction and score. Within every viewing bin, adjacent
+score-ranked particles are paired into opposite halves, and unpaired
+particles balance the total counts. Each bin and the total population
+differ by at most one particle between halves. Pair orientation greedily
+balances score sums within the bin. Both project particle segments and
+the exported table receive the new labels; stack provenance records a
+per-particle split so later processing preserves them.
+
+Rebalancing splits micrograph groups and mixes the previously
+refined halves. It does not preserve the original gold-standard
+independence. Do not reuse the old half-maps or FSC as validation of the
+new partition, and be aware that correlated neighbouring picks can now
+fall in opposite halves. The source project's half tags are unchanged.
+
+The text file uses native SIMPLE `key=value` orientation records, including
+Euler angles, shifts, defocus, astigmatism, phase shift, voltage, Cs,
+amplitude contrast and sampling. Units remain native: shifts in pixels,
+defocus in micrometres, Euler/astigmatism angles in degrees, phase in radians,
+voltage in kV, Cs in mm, and sampling in Angstroms per pixel.
+Inherited map outputs and registered sigma state are cleared from the
+subset project. Reconstruct the subset before judging map quality; score
+selection alone does not guarantee improved resolution.
+
 ## NICE (New Interface for CryoEM)
 Launch the Graphical User Interface (GUI) with:
 ```shell

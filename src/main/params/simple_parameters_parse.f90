@@ -83,6 +83,7 @@ contains
         call reg%add_char('pcg_solvent_check', self%pcg_solvent_check)
         call reg%add_char('atm_prior', self%atm_prior)
         call reg%add_char('eo_stage', self%eo_stage)
+        call reg%add_char('eo_rebalance', self%eo_rebalance)
         call reg%add_char('even', self%even)
         call reg%add_char('exit_collapse', self%exit_collapse)
         call reg%add_char('extract', self%extract)

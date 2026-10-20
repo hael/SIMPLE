@@ -18,6 +18,7 @@ contains
         call test_extract_and_copy()
         call test_compress_and_masks()
         call test_sampling_and_updatecnt()
+        call test_ranked_balanced_sampling()
         call test_empty_partition_sampling()
         call test_nested_class_quota()
         call test_class_sample_sweep()
@@ -39,6 +40,40 @@ contains
         call test_oridist_from_oris()
         call test_get_pops_halves()
     end subroutine run_all_oris_tests
+
+    subroutine test_ranked_balanced_sampling()
+        use simple_type_defs, only: class_sample
+        class(oris), allocatable :: os
+        type(class_sample), allocatable :: groups(:)
+        integer :: particle, flags(9)
+        allocate(os)
+        call os%new(9,is_ptcl=.true.)
+        do particle = 1,9
+            call os%set_state(particle,1)
+            call os%set(particle,'proj',(particle+2)/3)
+            call os%set(particle,'corr',real(particle))
+            call os%set(particle,'corr_cart',real(10-particle))
+        enddo
+        call os%get_class_sample_stats([1,2,3],groups,label='proj')
+        call os%sample_balanced(groups,4,.true.,flags)
+        call assert_int(6,sum(flags),'default balanced sampling retains legacy rounded quotas')
+        call os%sample_balanced(groups,4,.true.,flags,exact=.true.)
+        call assert_int(4,sum(flags),'exact balanced sampling meets the target')
+        call assert_true(all(flags==[0,0,1,0,0,1,0,1,1]),'exact remainder retains the best next polar score')
+        call os%get_class_sample_stats([1,2,3],groups,label='proj',score_key='corr_cart')
+        call os%sample_balanced(groups,4,.true.,flags,exact=.true.)
+        call assert_true(all(flags==[1,1,0,1,0,0,1,0,0]),'Cartesian ranking differs from polar ranking')
+        call os%sample_balanced(groups,0,.true.,flags,exact=.true.)
+        call assert_int(0,sum(flags),'exact zero sample selects nothing')
+        call os%sample_balanced(groups,9,.true.,flags,exact=.true.)
+        call assert_int(9,sum(flags),'exact full sample retains every particle')
+        call os%set(7,'proj',1)
+        call os%set(8,'proj',1)
+        call os%get_class_sample_stats([1,2,3,4],groups,label='proj')
+        call os%sample_balanced(groups,8,.true.,flags,exact=.true.)
+        call assert_true(all(groups(:)%nsample==[4,3,1,0]),'capped quotas redistribute from sparse and empty bins')
+        call os%kill
+    end subroutine test_ranked_balanced_sampling
 
     !> class populations counted in one pass (all, and per half) equal get_pop's counts class by class, at one thread
     !! and 20 times at every processor; state-0 records and labels above the class count are left out as get_pop does

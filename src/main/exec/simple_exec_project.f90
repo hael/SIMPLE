@@ -12,6 +12,7 @@ use simple_commanders_project_ptcl, only: commander_zero_project_shifts, command
 commander_import_particles, commander_reimport_particles, commander_prune_project_distr, commander_consolidate_particles
 use simple_commanders_project_cls,  only: commander_import_cavgs
 use simple_commanders_mic_subset,   only: commander_select_micrographs
+use simple_commanders_ptcl_subset,  only: commander_select_particles
 implicit none
 
 public :: exec_project_commander
@@ -37,6 +38,7 @@ type(commander_prune_project_distr)   :: xprune_project
 type(commander_replace_project_field) :: xreplace_project_field
 type(commander_selection)             :: xselection
 type(commander_select_micrographs)    :: xselect_micrographs
+type(commander_select_particles)      :: xselect_particles
 type(commander_update_project)        :: xupdate_project
 type(commander_fix_projfile)          :: xfix_projfile
 type(commander_zero_project_shifts)   :: xzero_project_shifts
@@ -95,6 +97,8 @@ contains
                 call xselection%execute(cline)
             case( 'select_micrographs' )
                 call xselect_micrographs%execute(cline)
+            case( 'select_particles' )
+                call xselect_particles%execute(cline)
             case( 'update_project' )
                 call xupdate_project%execute(cline)
             case( 'fix_projfile' )

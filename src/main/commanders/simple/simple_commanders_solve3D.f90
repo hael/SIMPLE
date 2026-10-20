@@ -2192,6 +2192,7 @@ contains
             ! earlier refinement of this project may promote the first stage
             call spproj%os_ptcl3D%delete_entry('res')
             call spproj%os_ptcl3D%delete_entry('res05')
+            call spproj%os_ptcl3D%delete_entry('lp_est')
             ! a never-searched ptcl2D has no 2D shifts to transfer: the
             ! shifts ptcl3D holds (kept above) stay
             if( .not. l_virgin2D ) call spproj%os_ptcl3D%transfer_2Dshifts(spproj%os_ptcl2D)

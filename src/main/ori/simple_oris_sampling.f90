@@ -610,18 +610,40 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_missing
 
-    module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states )
+    module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states, exact )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)
         integer,            intent(in)    :: nptcls
         logical,            intent(in)    :: l_greedy
         integer,            intent(inout) :: states(self%n)
+        logical, optional,  intent(in)    :: exact
         integer,            allocatable   :: pinds_left(:)
-        integer        :: i, j
+        integer        :: i, j, level, weakest
+        logical        :: l_exact
+        l_exact = .false.
+        if( present(exact) ) l_exact = exact
+        if( l_exact )then
+            if( nptcls < 0 .or. nptcls > sum(clssmp(:)%pop) ) THROW_HARD('balanced sample exceeds eligible population')
+        endif
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )
             where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
         end do
+        if( l_exact .and. sum(clssmp(:)%nsample) > nptcls )then
+            level = maxval(clssmp(:)%nsample)
+            do while( sum(clssmp(:)%nsample) > nptcls )
+                weakest = 0
+                do i = 1,size(clssmp)
+                    if( clssmp(i)%nsample /= level ) cycle
+                    if( weakest == 0 )then
+                        weakest = i
+                    else if( clssmp(i)%ccs(level) < clssmp(weakest)%ccs(level) )then
+                        weakest = i
+                    endif
+                enddo
+                clssmp(weakest)%nsample = clssmp(weakest)%nsample - 1
+            enddo
+        endif
         states = 0
         if( l_greedy )then
             do i = 1, size(clssmp)

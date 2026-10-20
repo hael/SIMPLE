@@ -11,7 +11,7 @@ use simple_rnd,            only: ran3
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
 use simple_projfile_utils, only: merge_selected_project_files
 use simple_eo_partition,   only: ensure_field_halves, eo_transaction, eo_partition_status, EO_COMPLETE, &
-    &EO_MISSING, EO_PARTIAL, EO_INCONSISTENT
+    &EO_MISSING, EO_PARTIAL, EO_INCONSISTENT, repartition_selected_halves
 implicit none
 private
 public :: run_all_eo_partition_tests
@@ -35,6 +35,7 @@ contains
         nfail0 = tests_failed
         call enter_fixture('eo_partition', cwd_saved, root)
         call test_micrograph_groups()
+        call test_selected_score_pairs()
         call test_no_split_by_size()
         call test_too_few_groups_status()
         call test_per_index_route()
@@ -47,6 +48,58 @@ contains
         call test_isolated_stream_and_seed()
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine run_all_eo_partition_tests
+
+    subroutine test_selected_score_pairs()
+        use simple_type_defs, only: class_sample
+        class(sp_project), allocatable :: project
+        type(class_sample) :: groups(3)
+        integer, parameter :: FIRST(3) = [1,6,9], LAST(3) = [5,8,9]
+        integer, parameter :: EXPECTED(9) = [0,1,1,0,0,1,0,1,1]
+        integer :: group, particle, stack, labels(9), counts(2), status
+        real :: scores(0:1)
+        logical :: changed
+        character(len=STDLEN) :: msg
+        allocate(project)
+        call make_groups_project(project,[4,4,1],.true.,'score_pairs')
+        call project%os_ptcl2D%set_all2single('state',1)
+        call project%os_ptcl3D%set_all2single('state',1)
+        call eo_transaction(project,changed)
+        do group = 1,3
+            call assert_true(project%os_stk%isthere(group,'eo_group'),'fixture begins with micrograph group provenance')
+            groups(group)%pinds = [(particle,particle=FIRST(group),LAST(group))]
+            groups(group)%ccs = real(11-groups(group)%pinds)
+            groups(group)%pop = size(groups(group)%pinds)
+            groups(group)%nsample = groups(group)%pop
+        enddo
+        call repartition_selected_halves(project,groups)
+        scores = 0.
+        do particle = 1,9
+            labels(particle) = project%os_ptcl3D%get_eo(particle)
+            call assert_int(EXPECTED(particle),labels(particle),'direction-score pairing matches the closed-form split')
+            call assert_int(labels(particle),project%os_ptcl2D%get_eo(particle),'repartition labels agree in both fields')
+            scores(labels(particle)) = scores(labels(particle)) + real(11-particle)
+        enddo
+        call active_halves(project,counts)
+        call assert_true(all(counts==[4,5]),'odd population has globally balanced halves')
+        call assert_real(27.,scores(0),1.e-6,'even half has the expected score mass')
+        call assert_real(27.,scores(1),1.e-6,'odd half has the expected score mass')
+        do group = 1,3
+            call assert_true(abs(count(labels(FIRST(group):LAST(group))==0)- &
+                count(labels(FIRST(group):LAST(group))==1))<=1,'every direction differs by at most one particle')
+        enddo
+        do stack = 1,3
+            call assert_true(.not.project%os_stk%isthere(stack,'eo_group'),'per-particle split clears group provenance')
+            call assert_int(1,project%os_stk%get_int(stack,'eo_byindex'),'per-particle split records index provenance')
+        enddo
+        status = eo_partition_status(project,msg)
+        call assert_int(EO_COMPLETE,status,'explicit per-particle split is a complete project partition')
+        call eo_transaction(project,changed)
+        call assert_true(.not.changed,'normal partition transaction leaves the explicit split unchanged')
+        do particle = 1,9
+            call assert_int(labels(particle),project%os_ptcl3D%get_eo(particle),'subsequent consumers preserve new labels')
+        enddo
+        call project%kill
+    end subroutine test_selected_score_pairs
 
     !> stacks of the given sizes, one per micrograph when l_mics; every seventh particle inactive
     subroutine make_groups_project( proj, sizes, l_mics, tag )
