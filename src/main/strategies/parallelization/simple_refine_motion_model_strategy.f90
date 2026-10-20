@@ -40,7 +40,6 @@ end type refine_motion_model_inmem_strategy
 
 ! Distributed-master strategy
 type, extends(refine_motion_model_strategy) :: refine_motion_model_distr_strategy
-    type(parameters)                 :: params_snapshot
     type(sp_project)                 :: spproj
     type(qsys_env)                   :: qenv
     type(chash)                      :: job_descr

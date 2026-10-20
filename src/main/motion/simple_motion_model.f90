@@ -67,6 +67,7 @@ type :: motion_model
     procedure          :: set_model_coeffs
     procedure          :: set_outlier_coords
     procedure          :: refit_polynomial
+    procedure          :: refit_weighted_polynomial
     procedure          :: write
     procedure, private :: write_doc
     procedure, private :: write_bin
@@ -317,6 +318,52 @@ contains
         end do
         self%rmsd_fit = sqrt(self%rmsd_fit/real(self%nframes*self%npatch))
     end subroutine refit_polynomial
+
+    ! generates a polynomial with distance(from cx/y)-based weighted fitting
+    subroutine refit_weighted_polynomial( self, ref_frame, cx, cy, px, py )
+        use simple_motion_correct_utils, only: patch_poly, pix2polycoords, apply_patch_poly
+        class(motion_model), intent(in)    :: self
+        integer,             intent(in)    :: ref_frame
+        real(dp),            intent(in)    :: cx, cy
+        real(dp),            intent(inout) :: px(MODELSZ), py(MODELSZ)
+        real(dp) :: yx(self%nframes*self%nx_patch*self%ny_patch)      ! along x
+        real(dp) :: yy(self%nframes*self%nx_patch*self%ny_patch)      ! along y
+        real(dp) :: x(3,self%nframes*self%nx_patch*self%ny_patch)     ! x,y,t
+        real(dp) :: sig(self%nframes*self%nx_patch*self%ny_patch)
+        real(dp) :: v(MODELSZ,MODELSZ), w(MODELSZ), chisq, dsq, rx, ry, pcx, pcy
+        integer  :: idx, iframe, i, j
+        if( ref_frame < 1 .or. ref_frame > self%nframes ) THROW_HARD('Reference frame is out of range')
+        if( self%npatch <= 0 ) THROW_HARD('Motion model contains no patch data')
+        if( .not.allocated(self%patch_coords) ) THROW_HARD('Motion model patch coordinates are absent')
+        if( .not.allocated(self%local_offsets_x) ) THROW_HARD('Motion model local x offsets are absent')
+        if( .not.allocated(self%local_offsets_y) ) THROW_HARD('Motion model local y offsets are absent')
+        if( self%npatch /= self%nx_patch*self%ny_patch ) THROW_HARD('Inconsistent motion model patch dimensions')
+        pcx = pix2polycoords(cx, self%ldim(1))
+        pcy = pix2polycoords(cy, self%ldim(2))
+        ! format data
+        idx = 0
+        do iframe = 1, self%nframes
+            do i = 1, self%nx_patch
+                do j = 1, self%ny_patch
+                    idx = idx+1
+                    yx(idx)  = real(self%local_offsets_x(iframe,i,j) - self%local_offsets_x(ref_frame,i,j),dp)
+                    yy(idx)  = real(self%local_offsets_y(iframe,i,j) - self%local_offsets_y(ref_frame,i,j),dp)
+                    rx       = pix2polycoords(real(self%patch_coords(i,j,1),dp), self%ldim(1))
+                    ry       = pix2polycoords(real(self%patch_coords(i,j,2),dp), self%ldim(2))
+                    x(1,idx) = rx
+                    x(2,idx) = ry
+                    x(3,idx) = real(iframe-ref_frame,dp)
+                    ! weight: exponential squared distance from patch center to pixel (pcx/y)
+                    dsq      = (rx-pcx)**2 + (ry-pcy)**2
+                    sig(idx) = exp(0.5*dsq)
+                end do
+            end do
+        end do
+        px = 0.d0
+        py = 0.d0
+        call svd_multifit(x, yx, sig, px, v, w, chisq, patch_poly)
+        call svd_multifit(x, yy, sig, py, v, w, chisq, patch_poly)
+    end subroutine refit_weighted_polynomial
 
     ! I/O
 

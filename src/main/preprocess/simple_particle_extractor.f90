@@ -64,7 +64,8 @@ type :: ptcl_extractor
     procedure, private :: cure_movie_outliers, cure_outliers
     procedure, private :: add_eer_gain_defects
     procedure, private :: cure_outliers_from_coords, cure_outlier_coords
-    procedure, private :: evaluate_local_shift
+    procedure, private :: evaluate_local_shift_1, evaluate_local_shift_2
+    generic            :: evaluate_local_shift => evaluate_local_shift_1, evaluate_local_shift_2
     procedure          :: get_nframes
     procedure          :: get_box
     procedure          :: from_mov, from_model
@@ -580,7 +581,8 @@ contains
         class(ptcl_extractor), intent(inout) :: self
         integer,               intent(in)    :: ptcl_pos_in(2) ! top left corner, scaled
         class(image),          intent(inout) :: ptcl_out
-        real(dp)    :: cx,cy
+        logical, parameter :: local_polynomial = .false.
+        real(dp)    :: cx,cy, polyx(POLYDIM), polyy(POLYDIM)
         real        :: shift(2), aniso_shift(2), center(2), rpos(2)
         integer     :: pos(2), foo, t, ithr
         ithr = omp_get_thread_num() + 1
@@ -592,6 +594,16 @@ contains
         center = real(ptcl_pos_in + self%box/2) ! base 0
         cx     = center(1) + 1.d0               ! base 1
         cy     = center(2) + 1.d0               ! base 1
+        if( self%l_poly )then
+            if( local_polynomial )then
+                ! Fits a local polynomial to the current particle
+                call self%mmodel%refit_weighted_polynomial(self%align_frame, cx, cy, polyx, polyy)
+            else
+                ! use global polynomial
+                polyx = self%polyx
+                polyy = self%polyy
+            endif
+        endif
         ! particle corner
         rpos = center - real(self%box_pd/2)
         ! extraction
@@ -601,7 +613,7 @@ contains
             ! shift & coordinates
             shift = rpos - self%isoshifts(:,t)
             if( self%l_poly )then
-                call self%evaluate_local_shift(t, cx, cy, aniso_shift)
+                call self%evaluate_local_shift(t, cx, cy, polyx, polyy, aniso_shift)
                 shift = shift - aniso_shift
             endif
             pos   = nint(shift)         ! extraction coordinate
@@ -836,18 +848,26 @@ contains
         deallocate(new_vals)
     end subroutine cure_outlier_coords
 
-    pure subroutine evaluate_local_shift( self, iframe, x, y, shift )
+    pure subroutine evaluate_local_shift_1( self, iframe, x, y, shift )
         class(ptcl_extractor), intent(in)  :: self
         integer,               intent(in)  :: iframe
         real(dp),              intent(in)  :: x, y
+        real,                  intent(out) :: shift(2)
+        call self%evaluate_local_shift_2( iframe, x, y, self%polyx(:), self%polyy(:), shift )
+    end subroutine evaluate_local_shift_1
+
+    pure subroutine evaluate_local_shift_2( self, iframe, x, y, px, py, shift )
+        class(ptcl_extractor), intent(in)  :: self
+        integer,               intent(in)  :: iframe
+        real(dp),              intent(in)  :: x, y, px(POLYDIM), py(POLYDIM)
         real,                  intent(out) :: shift(2)
         real(dp) :: t, xx, yy
         t = real(iframe-self%align_frame, dp)
         xx = pix2polycoords(x, self%ldim_sc(1))
         yy = pix2polycoords(y, self%ldim_sc(2))
-        shift(1) = apply_patch_poly(self%polyx(:), xx,yy,t)
-        shift(2) = apply_patch_poly(self%polyy(:), xx,yy,t)
-    end subroutine evaluate_local_shift
+        shift(1) = apply_patch_poly(px, xx,yy,t)
+        shift(2) = apply_patch_poly(py, xx,yy,t)
+    end subroutine evaluate_local_shift_2
 
     pure integer function get_nframes(self)
         class(ptcl_extractor), intent(in) :: self

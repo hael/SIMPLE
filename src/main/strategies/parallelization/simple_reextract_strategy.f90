@@ -43,7 +43,6 @@ end type reextract_inmem_strategy
 
 ! Distributed-master strategy
 type, extends(reextract_strategy) :: reextract_distr_strategy
-    type(parameters)                 :: params_snapshot
     type(sp_project)                 :: spproj
     type(qsys_env)                   :: qenv
     type(chash)                      :: job_descr
