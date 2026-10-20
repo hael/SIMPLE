@@ -87,7 +87,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("{% include 'includes/_job_card_footer.html'", flow_card)
         self.assertIn("this.querySelector('form.viewform').submit()", flow_card)
         self.assertNotIn("read_only", flow_card)
-        self.assertNotIn("show_description_editor=True", flow_card)
+        self.assertEqual(flow_card.count("show_description_editor=True"), 2)
         self.assertIn('name: "dagre"', flow_script)
         self.assertIn('rankDir: "TB"', flow_script)
         self.assertIn('card.dataset.flowNodeId', flow_script)
