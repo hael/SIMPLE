@@ -324,15 +324,17 @@ contains
         call get_stage_counts(opt, CARTFT_STAGE_JOINT, status, niter, nattempted, naccepted, nbound_hits, &
             &max_rotation_step, max_shift_step, stage_before, stage_after)
         call assert_true(nbound_hits > 0, 'cumulative guard test did not exercise an out-of-bound proposal')
-        call assert_true(status == CARTFT_BOUND_REJECTED .and. niter == 8, 'cumulative guard did not stop after eight rejected proposals')
+        ! growing damping shrinks the rejected proposals until their predicted reduction ends the stage
+        call assert_true(status == CARTFT_BOUND_REJECTED .and. niter <= 8, 'cumulative guard did not end the stage bound-rejected within eight proposals')
         call assert_true(all(rotation == frozen_rotation) .and. all(shift == frozen_shift) .and. &
             &objective_after == objective_before, 'cumulative-bound rejection changed the complete input pose')
         call opt%kill
         call calc%kill
     end subroutine test_joint_solver
 
-    ! E12 (stopping): a material rotation residual with only a minuscule shift step permitted,
-    ! so the first accepted reduction is positive but below the relative-reduction threshold
+    ! E12 (stopping): a material rotation residual with only a minuscule shift step permitted, so
+    ! the first proposal predicts a reduction below the relative threshold: the stage ends without
+    ! evaluating it, the pose unchanged and the stage bound-rejected (its step was capped)
     subroutine test_tiny_accepted_reduction_stop()
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt
@@ -355,11 +357,10 @@ contains
         call get_stage_counts(opt, CARTFT_STAGE_JOINT, status, niter, nattempted, naccepted, nbound_hits, &
             &max_rotation_step, max_shift_step, stage_before, stage_after)
         relative_reduction = (objective_before - objective_after)/objective_before
-        call assert_true(status == CARTFT_ACCEPTED .and. niter == 1, 'LM did not stop after the first tiny accepted reduction')
-        call assert_true(relative_reduction > 0._dp .and. relative_reduction < 1.e-6_dp, &
-            &'tiny accepted reduction fixture does not exercise the production threshold')
-        call assert_true(all(rotation == frozen_rotation) .and. any(shift /= initial_shift), &
-            &'tiny accepted reduction changed inactive coordinates or lost its endpoint')
+        call assert_true(status == CARTFT_BOUND_REJECTED .and. niter == 1 .and. nattempted == 0, &
+            &'LM evaluated a proposal whose predicted reduction is below the threshold')
+        call assert_true(relative_reduction == 0._dp .and. all(shift == initial_shift) .and. all(rotation == frozen_rotation), &
+            &'a stage ended by its predicted reduction moved the pose')
         call opt%kill
         call calc%kill
     end subroutine test_tiny_accepted_reduction_stop

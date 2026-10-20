@@ -84,6 +84,7 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     real,    allocatable :: acc_work(:,:,:)          !< sum_i G_i^dagger |T_i|^2, full-range
     complex, allocatable :: b_work(:,:,:)            !< RHS accumulator, full-range
     real,    allocatable :: b_rhs(:,:,:)             !< folded/deapodized/masked RHS, box^3
+    real,    allocatable :: b_rhs_nosupp(:,:,:)      !< the RHS before the support, kept for regularize_finalized
     logical              :: l_accum = .false.
     logical              :: l_rhs   = .false.
     integer              :: reduction_next_part = 1  !< fixed raw-artifact association order
@@ -148,6 +149,7 @@ type, extends(pcg_lattice) :: reconstructor_pcg
     procedure :: begin_reduction
     procedure :: accumulate_batch
     procedure :: end_accum
+    procedure :: regularize_finalized
     procedure :: write_raw_accum
     procedure :: add_raw_accum
     procedure :: add_raw_accum_weighted
@@ -703,6 +705,7 @@ contains
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
+        if( allocated(self%b_rhs_nosupp) ) deallocate(self%b_rhs_nosupp)
         self%l_accum = .false.
         self%l_rhs   = .false.
         call self%kill_lattice
@@ -1235,6 +1238,7 @@ contains
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
+        if( allocated(self%b_rhs_nosupp) ) deallocate(self%b_rhs_nosupp)
         allocate(self%acc_work(self%lims3(1,1):self%lims3(1,2),&
                               &self%lims3(2,1):self%lims3(2,2),&
                               &self%lims3(3,1):self%lims3(3,2)), source=0.0)
@@ -1338,7 +1342,7 @@ contains
 
     !> adds one raw worker artifact to the open reduction; parts arrive in ascending
     !! order (reproducible association), slices are streamed
-    subroutine add_raw_accum( self, fname, state, eo, part, nparts, provenance, nptcls, mass, wset_id )
+    subroutine add_raw_accum( self, fname, state, eo, part, nparts, provenance, nptcls, mass, wset_id, rt_sum )
         class(reconstructor_pcg),  intent(inout) :: self
         class(string),             intent(in)    :: fname
         integer,                   intent(in)    :: state, eo, part, nparts
@@ -1346,6 +1350,9 @@ contains
         integer,                   intent(out)   :: nptcls
         real(dp),        optional, intent(out)   :: mass
         integer(int64),  optional, intent(out)   :: wset_id(2)
+        real(dp),        optional, intent(out)   :: rt_sum !< seconds of the slice summation; the rest is read I/O
+        integer(timer_int_kind) :: tp
+        real(dp)       :: rt_here
         real(dp)       :: mass_file
         integer(int64) :: id_file(2)
         character(len=16)               :: magic
@@ -1397,23 +1404,29 @@ contains
             if( self%reduction_nparts /= nparts .or. self%reduction_state /= state .or. &
                 &self%reduction_eo /= eo ) THROW_HARD('raw PCG reduction set mismatch')
         endif
+        rt_here = 0._dp
         if( nptcls > 0 )then
             allocate(bslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
             allocate(dslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
             do m = self%lims3(3,1), self%lims3(3,2)
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
+                if( present(rt_sum) ) tp = pcg_tic()
                 self%b_work(:,:,m) = self%b_work(:,:,m) + bslice
+                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
             end do
             call fileiochk('add_raw_accum reading B', ierr)
             do m = self%lims3(3,1), self%lims3(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
+                if( present(rt_sum) ) tp = pcg_tic()
                 self%acc_work(:,:,m) = self%acc_work(:,:,m) + dslice
+                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
             end do
             call fileiochk('add_raw_accum reading D', ierr)
             deallocate(bslice, dslice)
         endif
+        if( present(rt_sum) ) rt_sum = rt_here
         file_size  = -1_int64
         stream_pos = -1_int64
         inquire(unit=funit, size=file_size, pos=stream_pos)
@@ -1553,7 +1566,7 @@ contains
     !! padded lattices of consecutive crops share their frequency step, so a smaller
     !! previous grid embeds exactly by index-aligned zero-extension (the old wrap rim
     !! carries aliased mass at/beyond the producing band, decaying as (1-u)^k)
-    subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls, mass )
+    subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls, mass, rt_sum )
         class(reconstructor_pcg), intent(inout) :: self
         class(string),            intent(in)    :: fname
         integer,                  intent(in)    :: state, eo, part, nparts
@@ -1561,6 +1574,9 @@ contains
         real,                     intent(in)    :: weight
         integer,                  intent(out)   :: nptcls
         real(dp),       optional, intent(out)   :: mass
+        real(dp),       optional, intent(out)   :: rt_sum !< seconds of the weighted slice summation; the rest is read I/O
+        integer(timer_int_kind) :: tp
+        real(dp)       :: rt_here
         real(dp)       :: mass_file
         integer(int64) :: id_file(2)
         character(len=16)               :: magic
@@ -1613,21 +1629,26 @@ contains
             write(logfhandle,'(A,I0,A,I0,A)') '>>> PCG TRAIL: EMBEDDING PREVIOUS-CROP CHAIN (box ', &
                 &box_file, ' -> ', self%box, ', CONSTANT-FOV ZERO-EXTENSION)'
         endif
+        rt_here = 0._dp
         if( nptcls > 0 .and. weight > 0.0 )then
             allocate(bslice(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2)))
             allocate(dslice(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2)))
             do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
+                if( present(rt_sum) ) tp = pcg_tic()
                 self%b_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) = &
                     &self%b_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) + weight * bslice
+                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
             end do
             call fileiochk('add_raw_accum_weighted reading B', ierr)
             do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
+                if( present(rt_sum) ) tp = pcg_tic()
                 self%acc_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) = &
                     &self%acc_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) + weight * dslice
+                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
             end do
             call fileiochk('add_raw_accum_weighted reading D', ierr)
             deallocate(bslice, dslice)
@@ -1646,6 +1667,7 @@ contains
             call fileiochk('add_raw_accum_weighted skipping D', ierr)
             deallocate(bslice, dslice)
         endif
+        if( present(rt_sum) ) rt_sum = rt_here
         file_size  = -1_int64
         stream_pos = -1_int64
         inquire(unit=funit, size=file_size, pos=stream_pos)
@@ -1716,10 +1738,13 @@ contains
         deallocate(weighted, absT2)
     end subroutine accumulate_rhs_density
 
-    !> closes accumulation: folds the RHS once, derives preconditioner and optionally Khat
-    subroutine end_accum( self, l_kernel )
-        class(reconstructor_pcg), intent(inout) :: self
-        logical,                  intent(in)    :: l_kernel
+    !> closes accumulation: folds the RHS once, derives preconditioner and optionally Khat;
+    !! with d_raw the raw density is handed out instead of freed and the RHS is also kept
+    !! before the support, for regularize_finalized
+    subroutine end_accum( self, l_kernel, d_raw )
+        class(reconstructor_pcg),    intent(inout) :: self
+        logical,                     intent(in)    :: l_kernel
+        real, allocatable, optional, intent(out)   :: d_raw(:,:,:)
         complex, allocatable :: bwork(:,:,:)
         real,    allocatable :: dwork(:,:,:)
         integer(timer_int_kind) :: tp
@@ -1736,15 +1761,50 @@ contains
         self%b_rhs = self%fold_and_ifft(bwork)
         deallocate(bwork)
         call self%deapod_mul(self%b_rhs)
+        if( allocated(self%b_rhs_nosupp) ) deallocate(self%b_rhs_nosupp)
+        if( present(d_raw) ) allocate(self%b_rhs_nosupp, source=self%b_rhs)
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
         self%t_fin_rhs = pcg_toc(tp)
         call move_alloc(self%acc_work, dwork)
         call self%finalize_density_accum(dwork, .true., l_kernel)
-        deallocate(dwork)
+        if( present(d_raw) )then
+            call move_alloc(dwork, d_raw)
+        else
+            deallocate(dwork)
+        endif
         if( l_kernel ) call self%finalize_khat
         self%l_accum = .false.
     end subroutine end_accum
+
+    !> The ML-regularized twin of an operator end_accum finalized with d_raw, without a second fold
+    !! or kernel build (the distributed master's regularized pair): Khat and the data scale are kept,
+    !! the kept RHS is masked with the support installed now, the real-space priors of the earlier
+    !! solves are detached, and P_tau (set_ml_prior first) and the preconditioner are rebuilt from d.
+    !! Equal to a new reduction of the same (B,D) finalized by end_accum(.true.)
+    subroutine regularize_finalized( self, d )
+        class(reconstructor_pcg), intent(inout) :: self
+        real, allocatable,        intent(inout) :: d(:,:,:)
+        if( .not. self%l_rhs .or. .not. self%l_kernel .or. .not. allocated(self%b_rhs_nosupp) ) &
+            &THROW_HARD('no operator was finalized for regularization; regularize_finalized')
+        if( .not. self%l_ml_prior_requested ) THROW_HARD('set_ml_prior has not been called; regularize_finalized')
+        if( .not. allocated(d) ) THROW_HARD('raw PCG density is not allocated; regularize_finalized')
+        if( any(lbound(d) /= self%lims3(:,1)) .or. any(ubound(d) /= self%lims3(:,2)) ) &
+            &THROW_HARD('raw PCG density lattice mismatch; regularize_finalized')
+        call self%reset_finalize_profile
+        call self%reset_profile(.false.)
+        if( allocated(self%solvent_pen) ) deallocate(self%solvent_pen)
+        self%solvent_lambda_rel = 0.0
+        self%l_solvent_prior    = .false.
+        nullify(self%atm)
+        self%atm_lambda_rel = 0.0
+        self%atm_lambda     = 0.0
+        self%l_atm_prior    = .false.
+        call move_alloc(self%b_rhs_nosupp, self%b_rhs)
+        call self%mask_mul(self%b_rhs)
+        call self%finalize_density_accum(d, .true., .false.)
+        deallocate(d)
+    end subroutine regularize_finalized
 
     ! SETUP: PRECONDITIONER AND KERNEL
 
@@ -2809,8 +2869,8 @@ contains
         if( any(shape(self%precond) /= cdim) .or. any(shape(self%ml_prior) /= cdim) ) &
             &THROW_HARD('PCG preconditioner/prior shape mismatch; shrink_by_ml_prior')
         allocate(diag(cdim(1),cdim(2),cdim(3)), source=1.0)
-        ! precond = 1/(rho+floor+P_raw) here (the prior was attached before end_accum), 1/P_raw at
-        ! unmeasured voxels (factor 0), ml_prior = P_raw*padsc**2; below the prior's high-pass (ml_prior 0)
+        ! precond = 1/(rho+floor+P_raw) here (the prior was attached before end_accum or regularize_finalized),
+        ! 1/P_raw at unmeasured voxels (factor 0), ml_prior = P_raw*padsc**2; below the prior's high-pass (ml_prior 0)
         ! the factor is 1. Beyond the data sphere it is 0: the base map holds only support-leaked noise there
         rho_lim = self%padf * self%Rnat
         !$omp parallel do collapse(3) default(shared) private(i,j,k,logi) schedule(static)

@@ -14,7 +14,8 @@ use simple_convergence,         only: convergence
 use simple_decay_funs,          only: inv_cos_decay, cos_decay
 use simple_cluster_seed,        only: gen_labelling
 use simple_strategy_sigma2,     only: prepare_canonical_sigma_update, read_sigma2_bench_counts
-use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr
+use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr, &
+    &pcg_assemble_bench, write_pcg_assemble_bench
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
 use simple_strategy3D_cont,     only: check_cont_seeds
@@ -235,11 +236,20 @@ contains
         type(cmdline),    intent(inout) :: cline
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
+        type(pcg_assemble_bench) :: bench
+        integer(timer_int_kind)  :: t_tot, t_handoff
         real             :: nu_align_lps(params%nstates)
+        if( L_BENCH_GLOB ) t_tot = tic()
         ! the PCG master runs the same assembly-owned NU competition as the
         ! gridding volassemble and hands off the matching low-pass
-        call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps)
+        call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps, bench=bench)
+        if( L_BENCH_GLOB ) t_handoff = tic()
         call filter_pcg_nonuniform_maps(params, build, nu_align_lps)
+        if( L_BENCH_GLOB )then
+            bench%rt_nu_handoff = toc(t_handoff)
+            bench%rt_tot        = toc(t_tot)
+            call write_pcg_assemble_bench(params, bench)
+        endif
     end subroutine assemble_refine3D_pcg
 
     subroutine remove_pcg_raw_files( params )

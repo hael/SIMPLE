@@ -19,7 +19,7 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
 use simple_image_msk,           only: image_msk
 use simple_pcg_solvent_sidecar, only: solvent_prior_cross_half_objective, PCG_SOLVENT_LAMBDA_GRID, &
     &write_pcg_solvent_pair, prepare_solvent_prior_on_pair, solvent_prior_provenance, build_solvent_check_support
-use simple_nu_state_filter,     only: nonuniform_filter_state, nu_aux_member
+use simple_nu_state_filter,     only: nonuniform_filter_state, nu_aux_member, nu_state_filter_timings
 use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
@@ -34,6 +34,7 @@ implicit none
 
 public :: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
 public :: rec3D_master_nthr, validate_pcg_common
+public :: pcg_assemble_bench, write_pcg_assemble_bench
 private
 #include "simple_local_flags.inc"
 
@@ -45,6 +46,20 @@ logical, parameter :: DEBUG = .false.
 ! atomicity prior: the per-half amplitude fit through the data operator (pcg_atomic_prior%amplitudes)
 integer, parameter :: ATM_AMP_MAXITS = 30
 real,    parameter :: ATM_AMP_RTOL   = 1.0e-3
+
+!> wall-clock phases of one distributed PCG master assembly (BENCH/PCG_ASSEMBLE_BENCH.txt); index
+!! 1 of the pairs is the base solve kind, 2 the regularized (ml); the caller times the handoff and total
+type :: pcg_assemble_bench
+    real(dp) :: rt_init = 0._dp, rt_support = 0._dp, rt_op_setup = 0._dp, rt_chain = 0._dp
+    real(dp) :: rt_read = 0._dp, rt_sum = 0._dp, rt_finalize(2) = 0._dp, rt_solve(2) = 0._dp
+    real(dp) :: rt_prior_resolve = 0._dp, rt_finish = 0._dp
+    real(dp) :: rt_fsc = 0._dp, rt_map_output = 0._dp, rt_nu_filter = 0._dp
+    real(dp) :: rt_proj_write = 0._dp, rt_cleanup = 0._dp, rt_nu_handoff = 0._dp, rt_tot = 0._dp
+    real(dp) :: rt_half_solve(2,2) = 0._dp !< (even/odd, kind): each half's own solve time
+    type(nu_state_filter_timings) :: nu
+    integer(int64) :: raw_bytes = 0_int64
+    integer  :: nraw = 0, niters(2,2) = 0, nstates_solved = 0, nthr_master = 0, nthr_half = 0
+end type pcg_assemble_bench
 
 contains
 
@@ -476,11 +491,16 @@ contains
     !! order, then perform all folding, finalization and PCG locally. For each
     !! even/odd pair, construction and teardown stay serial while the two fully
     !! prepared PCG solves execute concurrently with disjoint thread budgets.
-    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, nu_align_lps )
+    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, nu_align_lps, bench )
         type :: distributed_half_job
             type(reconstructor_pcg) :: pcgop
             type(pcg_solver_outcome) :: result
             real, allocatable :: x(:,:,:), x_cf(:,:,:), rel_res_hist(:)
+            ! the base operator kept for the regularized pair, with its raw density and the count and mass it represents
+            real, allocatable :: d_raw(:,:,:)
+            integer  :: nptcls_raw = 0
+            real(dp) :: mass_raw = 0.0_dp
+            logical  :: l_keep_op = .false.
             integer :: state = 0, eo = 0, nptcls = 0, niters = 0
             real(dp) :: mass = 0.0_dp  !< applied weight mass of the reduction (nptcls under hard labels)
             integer :: band_shell = 0 !< the pair's FSC=0.143 shell (regularized solve; agreement diagnostic)
@@ -497,6 +517,7 @@ contains
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         real,    optional, intent(out)  :: nu_align_lps(:)
+        type(pcg_assemble_bench), optional, intent(inout) :: bench
         type(image)  :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd, atm_even, atm_odd
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         type(string) :: fname_restxt, eonames(2)
@@ -532,9 +553,11 @@ contains
         integer :: atm_amp_nits(2), atm_nits(2)
         logical :: l_atm_resolved
         character(len=16) :: state_support_kind, base_support_kind, shipped_support_kind
-        integer(timer_int_kind) :: t_state_phase
+        integer(timer_int_kind) :: t_state_phase, t_bench
         real(dp) :: time_map_output, time_fsc_output, time_nu_filter
+        type(pcg_assemble_bench) :: bt !< this assembly's phases, handed to bench
 
+        if( L_BENCH_GLOB ) t_bench = tic()
         call validate_pcg_common(params)
         solvent_lambda_eff = 0.
         ! add-on chains reconstruct by gridding only: the frozen-set handshakes have no PCG side
@@ -611,6 +634,11 @@ contains
         allocate(state_written(params%nstates), source=.false.)
         allocate(state_carried(params%nstates), source=.false.)
         call find_empty_states(state_empty)
+        if( L_BENCH_GLOB )then
+            bt%rt_init     = toc(t_bench)
+            bt%nthr_master = pcg_master_nthreads
+            bt%nthr_half   = pcg_half_nthreads
+        endif
         do state = 1, params%nstates
             ! state= reconstructs that state alone: the other states' parts are empty by construction
             if( params%l_state_defined .and. state /= params%state ) cycle
@@ -681,7 +709,9 @@ contains
                 endif
             endif
             ! one solve support per state (build_pcg_state_support)
+            if( L_BENCH_GLOB ) t_bench = tic()
             call build_pcg_state_support(params, state, state_support_msk, l_state_support, state_support_kind)
+            if( L_BENCH_GLOB ) bt%rt_support = bt%rt_support + toc(t_bench)
             l_solvent_weight = .false.
             l_base_support_constrained = l_state_support
             base_support_kind = 'sphere'
@@ -731,7 +761,9 @@ contains
             call merged%add(half_odd)
             call merged%mul(0.5)
             if( params%l_ml_reg .and. .not. l_state_support .and. pcg_density_support_enabled(params) )then
+                if( L_BENCH_GLOB ) t_bench = tic()
                 call build_pcg_density_support(params, state, merged, state_support_msk, 'current base pair')
+                if( L_BENCH_GLOB ) bt%rt_support = bt%rt_support + toc(t_bench)
                 l_state_support = .true.
                 state_support_kind = 'density'
             endif
@@ -745,7 +777,11 @@ contains
                 call half_odd%write(fname_odd_unfil, del_if_exists=.true.)
                 time_map_output = real(toc(t_state_phase),dp)
             endif
-            if( l_solvent_weight ) call write_pcg_solvent_pair(params, state, solvent_even, solvent_odd)
+            if( l_solvent_weight )then
+                if( L_BENCH_GLOB ) t_bench = tic()
+                call write_pcg_solvent_pair(params, state, solvent_even, solvent_odd)
+                if( L_BENCH_GLOB ) bt%rt_map_output = bt%rt_map_output + toc(t_bench)
+            endif
             t_state_phase = tic()
             ! the FSC pair is the current base pair, which also seeds the NU bank
             call calculate_pcg_state_diagnostics(params, state, 'DISTRIBUTED', half_even, &
@@ -826,18 +862,24 @@ contains
                     ! label field from the base pair, applied to the prior'd pair
                     call nonuniform_filter_state(params, state, half_even, half_odd, &
                         &ml_even, ml_odd, nu_aux_member(params), &
-                        &res0143s(state), fname_vol, eonames, align_lps(state), &
+                        &res0143s(state), fname_vol, eonames, align_lps(state), timings=bt%nu, &
                         &base_support=state_support_msk, l_base_constrained=l_nu_base_constrained, &
                         &vol_apply_even=solvent_even, vol_apply_odd=solvent_odd)
                 else
                     call nonuniform_filter_state(params, state, half_even, half_odd, &
                         &ml_even, ml_odd, nu_aux_member(params), &
-                        &res0143s(state), fname_vol, eonames, align_lps(state), &
+                        &res0143s(state), fname_vol, eonames, align_lps(state), timings=bt%nu, &
                         &base_support=state_support_msk, l_base_constrained=l_nu_base_constrained)
                 endif
                 time_nu_filter = real(toc(t_state_phase),dp)
             endif
             call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output, time_nu_filter)
+            if( L_BENCH_GLOB )then
+                bt%rt_map_output  = bt%rt_map_output + time_map_output
+                bt%rt_fsc         = bt%rt_fsc        + time_fsc_output
+                bt%rt_nu_filter   = bt%rt_nu_filter  + time_nu_filter
+                bt%nstates_solved = bt%nstates_solved + 1
+            endif
             params%vols(state)      = fname_vol
             params%vols_even(state) = fname_even
             params%vols_odd(state)  = fname_odd
@@ -869,6 +911,7 @@ contains
         enddo
         if( present(nu_align_lps) ) nu_align_lps = align_lps
         if( .not. any(state_written .or. state_carried) ) THROW_HARD('distributed PCG produced no populated states')
+        if( L_BENCH_GLOB ) t_bench = tic()
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res',   res0143s(1))
             call build%spproj_field%set_all2single('res05', res05s(1))
@@ -886,6 +929,10 @@ contains
             enddo
         endif
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        if( L_BENCH_GLOB )then
+            bt%rt_proj_write = toc(t_bench)
+            t_bench = tic()
+        endif
         ! Delete raw artifacts only after every state has completed. Until this
         ! point they remain a restart/debug boundary for a failed master solve.
         do state = 1, params%nstates
@@ -908,11 +955,16 @@ contains
         call raw_fname%kill
         call state_support_msk%kill_bimg
         call wset%kill
+        ! operators a skipped state kept for its regularized pair
+        call even_job%pcgop%kill
+        call odd_job%pcgop%kill
         deallocate(res0143s, res05s, cfars, state_written, state_carried, state_empty, realized_fractions, update_weights,&
             &align_lps)
         deallocate(chain_weights, current_scales)
         if( allocated(nrep) ) deallocate(nrep, nsmp)
         !$ call omp_set_num_threads(params%nthr)
+        if( L_BENCH_GLOB ) bt%rt_cleanup = toc(t_bench)
+        if( present(bench) ) bench = bt
 
     contains
 
@@ -1102,6 +1154,8 @@ contains
             type(string)    :: manifest, half_fname
             integer(int64)  :: sizes(4)
             integer         :: io_stat, gen
+            integer(timer_int_kind) :: t_manifest
+            if( L_BENCH_GLOB ) t_manifest = tic()
             sizes = 0_int64
             half_fname = refine3D_pcg_trail_accum_fname(state_here, 'even')
             inquire(file=half_fname%to_char(), size=sizes(1))
@@ -1116,6 +1170,7 @@ contains
             if( io_stat /= 0 ) THROW_WARN('failed to write the PCG trailing chain manifest; the chain will be re-seeded')
             call man%kill
             call manifest%kill
+            if( L_BENCH_GLOB ) bt%rt_chain = bt%rt_chain + toc(t_manifest)
         end subroutine write_chain_manifest
 
         !> the pair's manifest exists, parses, belongs to this weight set and state layout, and matches both sizes
@@ -1351,8 +1406,11 @@ contains
             type(image), optional, intent(in) :: warm_even, warm_odd
             type(image), optional, intent(inout) :: solvent_even, solvent_odd
             type(image), optional, intent(inout) :: atm_even, atm_odd !< atm_prior=yes: the prior'd pair
+            integer(timer_int_kind) :: t_pair
+            integer :: ikind
             logical :: l_resolved
             l_resolved = .false.
+            ikind = merge(2, 1, present(fsc_prior))
 
             if( present(fsc_prior) )then
                 ! regularized pair: closed form of the base pair (warm_even/odd
@@ -1372,7 +1430,15 @@ contains
             n_even_here = even_job%nptcls
             n_odd_here  = odd_job%nptcls
 
+            if( L_BENCH_GLOB ) t_pair = tic()
             call solve_distributed_half_pair(even_job, odd_job)
+            if( L_BENCH_GLOB )then
+                bt%rt_solve(ikind) = bt%rt_solve(ikind) + toc(t_pair)
+                if( even_job%ready ) bt%rt_half_solve(1,ikind) = bt%rt_half_solve(1,ikind) + even_job%time_solve
+                if( odd_job%ready  ) bt%rt_half_solve(2,ikind) = bt%rt_half_solve(2,ikind) + odd_job%time_solve
+                bt%niters(:,ikind) = bt%niters(:,ikind) + [even_job%niters, odd_job%niters]
+                t_pair = tic()
+            endif
 
             if( .not. present(fsc_prior) .and. params%l_pcg_solvent )then
                 ! pcg_solvent=yes: weights from the prior-free pair, the ridge on
@@ -1448,10 +1514,15 @@ contains
                     call finish_distributed_half_job(even_job, atm_even)
                     call finish_distributed_half_job(odd_job, atm_odd)
                     l_atm_resolved = .true.
+                    if( L_BENCH_GLOB ) bt%rt_prior_resolve = bt%rt_prior_resolve + toc(t_pair)
                     return
                 endif
             endif
 
+            if( L_BENCH_GLOB )then
+                bt%rt_prior_resolve = bt%rt_prior_resolve + toc(t_pair)
+                t_pair = tic()
+            endif
             if( present(fsc_prior) )then
                 call finish_distributed_half_job(even_job, even, warm_even)
                 call finish_distributed_half_job(odd_job, odd, warm_odd)
@@ -1462,6 +1533,7 @@ contains
                 call finish_distributed_half_job(even_job, even)
                 call finish_distributed_half_job(odd_job, odd)
             endif
+            if( L_BENCH_GLOB ) bt%rt_finish = bt%rt_finish + toc(t_pair)
         end subroutine reduce_solve_state_pair
 
         ! Preparation is deliberately serial. It owns mask memoization, FFTW
@@ -1479,7 +1551,8 @@ contains
             integer :: part_here, n_part, n_full_half
             real(dp) :: part_mass
             integer(int64) :: part_wset_id(2)
-            integer(timer_int_kind) :: t_phase
+            integer(timer_int_kind) :: t_phase, t_bench_half
+            real(dp) :: rt_sum_part, rt_sum_half
             real :: realized_fraction, update_weight, current_scale
             logical :: l_chain_exists, l_seed_chain
 
@@ -1497,42 +1570,60 @@ contains
                 &THROW_HARD('distributed PCG regularized pair requires both FSC and base map')
             if( allocated(job%x) ) deallocate(job%x)
             if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
+            job%prior_npositive = 0
+            job%prior_positive_min = 0.0
+            job%prior_positive_max = 0.0
+            job%prior_to_khat_l1 = 0.0
+            job%prior_to_khat_rms = 0.0
+            if( job%l_ml_solve )then
+                call prepare_regularized_half_job(job, fsc_prior, warm_start)
+                return
+            endif
+            ! an operator kept by a state without a regularized pair is stale (new kills it)
+            if( allocated(job%d_raw) ) deallocate(job%d_raw)
+            job%l_keep_op = .false.
 
+            if( L_BENCH_GLOB ) t_bench_half = tic()
             call job%pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA, &
                 &fft_nthreads=pcg_half_nthreads)
             ! serial: the spherical mask memoizes coordinates at module scope
             call set_pcg_solve_support(job%pcgop, params, state_support_msk, l_state_support)
             call job%pcgop%begin_reduction
+            if( L_BENCH_GLOB ) bt%rt_op_setup = bt%rt_op_setup + toc(t_bench_half)
+            ! the reduction's summation and scaling are timed apart from its read I/O
+            rt_sum_half = 0._dp
             t_phase = tic()
-            if( params%l_trail_rec .and. (job%l_ml_solve .or. l_chain_carry) )then
-                ! the regularized pair replays the chain the base pair wrote; a
-                ! carried chain is the whole of this iteration's data
+            if( params%l_trail_rec .and. l_chain_carry )then
+                ! a carried chain is the whole of this iteration's data
                 fname = refine3D_pcg_trail_accum_fname(state_here, half)
+                if( L_BENCH_GLOB ) call add_raw_read_size(fname)
                 call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
-                    &chain_provenance, 1.0, job%nptcls, mass=job%mass)
+                    &chain_provenance, 1.0, job%nptcls, mass=job%mass, rt_sum=rt_sum_half)
                 call fname%kill
-                ! a full-mass chain written this iteration (seed or u ~ 1) is scaled
-                ! back by f to the current sample the base pair was solved from
-                if( .not. l_chain_carry .and. (l_sample_seed .or. 1.0-update_weights(state_here) <= 0.01) )then
-                    call job%pcgop%scale_raw_accum(realized_fractions(state_here))
-                endif
             else
                 do part_here = 1, params%nparts
                     fname = refine3D_pcg_raw_accum_fname(state_here, part_here, params%numlen, half)
+                    if( L_BENCH_GLOB ) call add_raw_read_size(fname)
                     call job%pcgop%add_raw_accum(fname, state_here, eo_here, part_here, params%nparts, &
-                        &provenance, n_part, mass=part_mass, wset_id=part_wset_id)
+                        &provenance, n_part, mass=part_mass, wset_id=part_wset_id, rt_sum=rt_sum_part)
                     if( any(part_wset_id /= wset_id) ) THROW_HARD('a raw PCG part belongs to another state weight set')
                     job%nptcls = job%nptcls + n_part
                     job%mass   = job%mass   + part_mass
+                    rt_sum_half = rt_sum_half + rt_sum_part
                     call fname%kill
                 enddo
             endif
             job%time_reduce = real(toc(t_phase),dp)
+            if( L_BENCH_GLOB )then
+                bt%rt_sum  = bt%rt_sum  + rt_sum_half
+                bt%rt_read = bt%rt_read + max(0._dp, job%time_reduce - rt_sum_half)
+                t_bench_half = tic()
+            endif
             if( job%nptcls == 0 )then
                 call job%pcgop%kill
                 return
             endif
-            if( .not. job%l_ml_solve .and. .not. l_chain_carry )then
+            if( .not. l_chain_carry )then
                 realized_fraction = realized_fractions(state_here)
                 update_weight = update_weights(state_here)
                 l_seed_chain = pcg_trail_seed_requested(cline)
@@ -1568,34 +1659,75 @@ contains
                 endif
                 call fname%kill
             endif
+            if( L_BENCH_GLOB ) bt%rt_chain = bt%rt_chain + toc(t_bench_half)
 
             t_phase = tic()
-            if( job%l_ml_solve )then
-                call job%pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
-                job%band_shell = get_find_at_crit(fsc_prior, 0.143)
+            if( params%l_ml_reg )then
+                ! the regularized pair that follows is this operator, regularized (prepare_regularized_half_job)
+                call job%pcgop%end_accum(.true., job%d_raw)
+                job%l_keep_op = .true.
+                ! what the reduction represents: the chain half written above, else the base reduction
+                job%nptcls_raw = job%nptcls
+                job%mass_raw   = job%mass
+                if( params%l_trail_rec .and. chain_written(eo_here+1) )then
+                    job%nptcls_raw = chain_contrib(eo_here+1)
+                    job%mass_raw   = chain_mass(eo_here+1)
+                endif
+            else
+                call job%pcgop%end_accum(.true.)
             endif
-            call job%pcgop%end_accum(.true.)
             call job%pcgop%set_op_mode(PCG_OP_KERNEL)
             job%time_finalize = real(toc(t_phase),dp)
-            job%prior_npositive = 0
-            job%prior_positive_min = 0.0
-            job%prior_positive_max = 0.0
-            job%prior_to_khat_l1 = 0.0
-            job%prior_to_khat_rms = 0.0
-            if( job%l_ml_solve )then
-                call job%pcgop%get_ml_prior_stats(job%prior_npositive, job%prior_positive_min, &
-                    &job%prior_positive_max, job%prior_to_khat_l1, job%prior_to_khat_rms)
-                ! the regularized map is the closed-form P_tau optimum of the
-                ! current base solution (shrink_by_ml_prior); nothing is solved
-                job%x = warm_start%get_rmat()
-                job%l_nonzero = .false.
-            else
-                ! the base solve starts from zero
-                allocate(job%x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
-                job%l_nonzero = .false.
-            endif
+            if( L_BENCH_GLOB ) bt%rt_finalize(1) = bt%rt_finalize(1) + job%time_finalize
+            ! the base solve starts from zero
+            allocate(job%x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+            job%l_nonzero = .false.
             job%ready = .true.
         end subroutine prepare_distributed_half_job
+
+        !> The regularized pair is its base pair's operator, kept by finish_distributed_half_job and
+        !! regularized: the support in force now, P_tau from the base pair's FSC, the preconditioner
+        !! rebuilt from the base reduction's raw density. Neither the raw artifacts nor the trailing
+        !! chain are read again, and the RHS fold and Khat are not rebuilt
+        subroutine prepare_regularized_half_job( job, fsc_prior, warm_start )
+            type(distributed_half_job), intent(inout) :: job
+            real,                       intent(in)    :: fsc_prior(:)
+            type(image),                intent(in)    :: warm_start
+            integer(timer_int_kind) :: t_phase
+            if( .not. job%l_keep_op .or. .not. allocated(job%d_raw) ) &
+                &THROW_HARD('the regularized pair needs the finalized operator of its base pair')
+            job%l_keep_op   = .false.
+            job%nptcls      = job%nptcls_raw
+            job%mass        = job%mass_raw
+            job%time_reduce = 0.0_dp
+            if( L_BENCH_GLOB ) t_phase = tic()
+            call set_pcg_solve_support(job%pcgop, params, state_support_msk, l_state_support)
+            if( L_BENCH_GLOB ) bt%rt_op_setup = bt%rt_op_setup + toc(t_phase)
+            t_phase = tic()
+            call job%pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
+            job%band_shell = get_find_at_crit(fsc_prior, 0.143)
+            call job%pcgop%regularize_finalized(job%d_raw)
+            call job%pcgop%set_op_mode(PCG_OP_KERNEL)
+            job%time_finalize = real(toc(t_phase),dp)
+            if( L_BENCH_GLOB ) bt%rt_finalize(2) = bt%rt_finalize(2) + job%time_finalize
+            call job%pcgop%get_ml_prior_stats(job%prior_npositive, job%prior_positive_min, &
+                &job%prior_positive_max, job%prior_to_khat_l1, job%prior_to_khat_rms)
+            ! the regularized map is the closed-form P_tau optimum of the
+            ! current base solution (shrink_by_ml_prior); nothing is solved
+            job%x = warm_start%get_rmat()
+            job%l_nonzero = .false.
+            job%ready = .true.
+        end subroutine prepare_regularized_half_job
+
+        !> bench: one raw accumulator about to be read and its size
+        subroutine add_raw_read_size( fname )
+            class(string), intent(in) :: fname
+            integer(int64) :: nbytes
+            nbytes = -1_int64
+            inquire(file=fname%to_char(), size=nbytes)
+            bt%raw_bytes = bt%raw_bytes + max(0_int64, nbytes)
+            bt%nraw      = bt%nraw + 1
+        end subroutine add_raw_read_size
 
         subroutine solve_distributed_half_pair( even, odd )
             type(distributed_half_job), intent(inout) :: even, odd
@@ -1682,7 +1814,7 @@ contains
             call report_pcg_solve('DISTRIBUTED', job%state, job%half, job%solve_kind, job%nptcls, &
                 &job%niters, job%time_solve, job%result)
             call report_closed_form_agreement('DISTRIBUTED', job%state, job%half, job%result)
-            call job%pcgop%kill
+            if( .not. job%l_keep_op ) call job%pcgop%kill
             if( allocated(job%x) ) deallocate(job%x)
             if( allocated(job%x_cf) ) deallocate(job%x_cf)
             if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
@@ -1841,6 +1973,77 @@ contains
         call fclose(funit)
         call fname%kill
     end subroutine write_output_diagnostics
+
+    !> one record per distributed PCG master assembly in BENCH/PCG_ASSEMBLE_BENCH.txt: the phases are
+    !! wall-clock and disjoint, the split timings are parts of them
+    subroutine write_pcg_assemble_bench( params, bench )
+        use simple_bench_io, only: open_bench_report
+        type(parameters),         intent(in) :: params
+        type(pcg_assemble_bench), intent(in) :: bench
+        real(dp) :: rt_accounted
+        integer  :: fnr
+        if( .not. L_BENCH_GLOB ) return
+        rt_accounted = 0._dp
+        if( bench%rt_tot > TINY ) rt_accounted = 100._dp * (bench%rt_init + bench%rt_support + bench%rt_op_setup + &
+            &bench%rt_read + bench%rt_sum + bench%rt_chain + sum(bench%rt_finalize) + sum(bench%rt_solve) + &
+            &bench%rt_prior_resolve + bench%rt_finish + bench%rt_fsc + bench%rt_map_output + bench%rt_nu_filter + &
+            &bench%rt_proj_write + bench%rt_cleanup + bench%rt_nu_handoff) / bench%rt_tot
+        call open_bench_report(fnr, 'PCG_ASSEMBLE', iter=params%which_iter)
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a)')    'pcg_assemble execution mode             : distributed'
+        write(fnr,'(a,i0)') 'pcg_assemble box_crop                   : ', params%box_crop
+        write(fnr,'(a,i0)') 'pcg_assemble nstates                    : ', params%nstates
+        write(fnr,'(a,i0)') 'pcg_assemble states solved              : ', bench%nstates_solved
+        write(fnr,'(a,i0)') 'pcg_assemble nparts                     : ', params%nparts
+        write(fnr,'(a,i0)') 'pcg_assemble master threads             : ', bench%nthr_master
+        write(fnr,'(a,i0)') 'pcg_assemble threads per half           : ', bench%nthr_half
+        write(fnr,'(a,a)')  'pcg_assemble ml_reg                     : ', trim(merge('yes','no ',params%l_ml_reg))
+        write(fnr,'(a,a)')  'pcg_assemble trail_rec                  : ', trim(merge('yes','no ',params%l_trail_rec))
+        write(fnr,'(a,a)')  'pcg_assemble nonuniform                 : ', trim(merge('yes','no ',params%l_nonuniform))
+        write(fnr,'(a,i0)') 'pcg_assemble maxits_pcg                 : ', params%maxits_pcg
+        write(fnr,'(a,i0)') 'pcg_assemble maxits_ml                  : ', params%maxits_ml
+        write(fnr,'(a,i0)') 'pcg_assemble raw files read             : ', bench%nraw
+        write(fnr,'(a,i0)') 'pcg_assemble raw bytes read             : ', bench%raw_bytes
+        write(fnr,'(a,i0)') 'pcg_assemble base solve iters even      : ', bench%niters(1,1)
+        write(fnr,'(a,i0)') 'pcg_assemble base solve iters odd       : ', bench%niters(2,1)
+        write(fnr,'(a,i0)') 'pcg_assemble ml solve iters even        : ', bench%niters(1,2)
+        write(fnr,'(a,i0)') 'pcg_assemble ml solve iters odd         : ', bench%niters(2,2)
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** TIMINGS (s) ***'
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble init                       :', bench%rt_init
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble solve support              :', bench%rt_support
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble operator setup             :', bench%rt_op_setup
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble raw read                   :', bench%rt_read
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble raw summation              :', bench%rt_sum
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble trailing chain             :', bench%rt_chain
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble operator finalize          :', sum(bench%rt_finalize)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble base solve                 :', bench%rt_solve(1)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble prior re-solve             :', bench%rt_prior_resolve
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble ml solve                   :', bench%rt_solve(2)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble solve finish               :', bench%rt_finish
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble fsc and cfar               :', bench%rt_fsc
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble map output                 :', bench%rt_map_output
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble nonuniform filter          :', bench%rt_nu_filter
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble project write              :', bench%rt_proj_write
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble cleanup                    :', bench%rt_cleanup
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble nu lp handoff              :', bench%rt_nu_handoff
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble total time                 :', bench%rt_tot
+        write(fnr,'(a,1x,f0.2)') 'pcg_assemble % accounted for            :', rt_accounted
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** SPLIT TIMINGS (S) ***'
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble base operator finalize     :', bench%rt_finalize(1)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble ml operator finalize       :', bench%rt_finalize(2)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble base solve even half       :', bench%rt_half_solve(1,1)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble base solve odd half        :', bench%rt_half_solve(2,1)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble ml solve even half         :', bench%rt_half_solve(1,2)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble ml solve odd half          :', bench%rt_half_solve(2,2)
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble nu filter envelope         :', bench%nu%envmask
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble nu filter candidate filter :', bench%nu%filtering
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble nu filter objective        :', bench%nu%objective
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble nu filter optimisation     :', bench%nu%optimise
+        write(fnr,'(a,1x,f0.3)') 'pcg_assemble nu filter composition      :', bench%nu%compose
+        call fclose(fnr)
+    end subroutine write_pcg_assemble_bench
 
     logical function pcg_trail_seed_requested( cline ) result(l_seed)
         class(cmdline), intent(in) :: cline

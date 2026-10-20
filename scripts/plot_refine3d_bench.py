@@ -14,10 +14,11 @@ output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
     bench_iterations.csv  one row per refine3D iteration: the strategy phases,
                           their critical-path split, the slowest and mean
                           partition times, the mean percentage of the
-                          search space scanned, and the nonuniform filter's
-                          split in volume assembly
+                          search space scanned, the nonuniform filter's
+                          split in volume assembly, and the PCG master's phases
     bench_report.txt      the run, the time split by stage, the overheads, the
-                          load balance, the outlier iterations, the share of the 2D
+                          load balance, the outlier iterations, the PCG master's
+                          phases (overall and by stage), the share of the 2D
                           tables in the refine2D iterations, the thread-seconds
                           of the probability tables and the searches, the work
                           of the continuous pose solves (refine=cont, the
@@ -43,7 +44,16 @@ the slowest partition did and what the master spent around it:
                                   launch, the scheduler's polling and the
                                   sigma2 candidate preparation
     volume assembly               the volassemble process
-    assembly outside volassemble  assembly/postprocess minus volassemble
+    PCG raw reduction             the distributed PCG master (rec_backend=pcg,
+                                  PCG_ASSEMBLE reports): reading and summing the
+                                  partitions' raw accumulators, the trailing chain
+    PCG operator and solves       its operator setup and finalisation, the base,
+                                  prior and ml solves
+    PCG FSC, maps, NU filter      its FSC and cFAR, map writes, nonuniform filter
+                                  and the matching low-pass handoff
+    PCG master, other             the rest of the PCG master's total
+    assembly outside the backends assembly/postprocess minus volassemble and the
+                                  PCG master
     sigma2 commit                 the commit after the assembly
     unaccounted                   the strategy total minus all of the above
 
@@ -272,10 +282,46 @@ PATH_COMPONENTS = (
     ("search", "search", "#c05621"),
     ("sched_overhead", "scheduling outside the search", "#fbd38d"),
     ("volassemble", "volume assembly", "#2f855a"),
-    ("assembly_overhead", "assembly outside volassemble", "#9ae6b4"),
+    ("pcg_reduce", "PCG raw reduction", "#234e52"),
+    ("pcg_solve", "PCG operator and solves", "#2c7a7b"),
+    ("pcg_output", "PCG FSC, maps, NU filter", "#4fd1c5"),
+    ("pcg_other", "PCG master, other", "#b2f5ea"),
+    ("assembly_overhead", "assembly outside the backends", "#9ae6b4"),
     ("sigma2", "sigma2 commit", "#805ad5"),
     ("unaccounted", "unaccounted", "#e2e8f0"),
 )
+
+
+# the PCG master's phases in its PCG_ASSEMBLE report (label after 'pcg_assemble ', short column name), in report order
+PCG_PHASES = (("init", "init"), ("solve support", "support"), ("operator setup", "op-set"), ("raw read", "read"),
+              ("raw summation", "sum"), ("trailing chain", "chain"), ("operator finalize", "final"),
+              ("base solve", "base"), ("prior re-solve", "prior"), ("ml solve", "ml"), ("solve finish", "finish"),
+              ("fsc and cfar", "fsc"), ("map output", "maps"), ("nonuniform filter", "nu"),
+              ("project write", "proj-wr"), ("cleanup", "cleanup"), ("nu lp handoff", "handoff"))
+# its critical-path groups; the rest of its total is pcg_other
+PCG_PATH_GROUPS = (("pcg_reduce", ("raw read", "raw summation", "trailing chain")),
+                   ("pcg_solve", ("operator setup", "operator finalize", "base solve", "prior re-solve", "ml solve")),
+                   ("pcg_output", ("fsc and cfar", "map output", "nonuniform filter", "nu lp handoff")))
+PCG_PATH_KEYS = tuple(key for key, _ in PCG_PATH_GROUPS) + ("pcg_other",)
+
+
+def slug(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
+
+
+def pcg_path_split(rec: Optional[Record], on_path: float) -> Dict[str, float]:
+    """The PCG master's time on the critical path in the groups of PCG_PATH_GROUPS and the rest (pcg_other),
+    scaled when the record's total exceeds what the strategy's assembly phase left for it."""
+    out = {key: 0.0 for key, _ in PCG_PATH_GROUPS}
+    out["pcg_other"] = 0.0
+    if rec is None or on_path <= 0:
+        return out
+    total = rec.seconds.get("pcg_assemble total time", 0.0)
+    scale = min(1.0, on_path / total) if total > 0 else 0.0
+    for key, phases in PCG_PATH_GROUPS:
+        out[key] = scale * sum(rec.seconds.get(f"pcg_assemble {phase}", 0.0) for phase in phases)
+    out["pcg_other"] = max(0.0, on_path - sum(out.values()))
+    return out
 
 
 def build_iterations(records: Sequence[Record]) -> List[Iteration]:
@@ -283,6 +329,7 @@ def build_iterations(records: Sequence[Record]) -> List[Iteration]:
     if not strategy:
         return []
     volassemble = first_pass_by_iteration(by_family(records, "VOLASSEMBLE"))
+    pcg = first_pass_by_iteration(by_family(records, "PCG_ASSEMBLE"))
     worker = partition_stats(by_family(records, "REFINE3D"), "match3D total time")
     sigma2_write = partition_stats(by_family(records, "REFINE3D"), "match3D sigma2 range write")
     tables: Dict[int, Tuple[float, float, float, int]] = {}
@@ -314,6 +361,8 @@ def build_iterations(records: Sequence[Record]) -> List[Iteration]:
         tab_on_path = min(tab_max, p["prestep"])
         wrk_on_path = min(wrk_max, p["sched"])
         vol_on_path = min(vol, p["assembly"])
+        pcg_total = pcg[it].seconds.get("pcg_assemble total time", 0.0) if it in pcg else 0.0
+        pcg_on_path = min(pcg_total, p["assembly"] - vol_on_path)
         row.path = {
             "setup": p["setup"],
             "tables": tab_on_path,
@@ -321,7 +370,8 @@ def build_iterations(records: Sequence[Record]) -> List[Iteration]:
             "search": wrk_on_path,
             "sched_overhead": p["sched"] - wrk_on_path,
             "volassemble": vol_on_path,
-            "assembly_overhead": p["assembly"] - vol_on_path,
+            **pcg_path_split(pcg.get(it), pcg_on_path),
+            "assembly_overhead": p["assembly"] - vol_on_path - pcg_on_path,
             "sigma2": p["sigma2"],
         }
         row.path["unaccounted"] = max(0.0, row.total - sum(row.path.values()))
@@ -334,6 +384,10 @@ def build_iterations(records: Sequence[Record]) -> List[Iteration]:
             row.extra["volassemble_nu_filter"] = volassemble[it].seconds.get("volassemble nonuniform_filter", 0.0)
             for key, label in NU_SPLIT:
                 row.extra[f"volassemble_nu_{key}"] = volassemble[it].seconds.get(f"volassemble nu filter {label}", 0.0)
+        if it in pcg:
+            row.extra["pcg_total"] = pcg_total
+            for label, _ in PCG_PHASES:
+                row.extra[f"pcg_{slug(label)}"] = pcg[it].seconds.get(f"pcg_assemble {label}", 0.0)
         rows.append(row)
     return rows
 
@@ -480,6 +534,7 @@ ITERATION_COLUMNS = (
        for stat in ("max", "mean", "min")]
     + ["nparts", "volassemble_nu_filter_s", "search_space_scanned_pct"]
     + [f"volassemble_nu_{key}_s" for key, _ in NU_SPLIT]
+    + ["pcg_total_s"] + [f"pcg_{slug(label)}_s" for label, _ in PCG_PHASES]
 )
 
 
@@ -499,6 +554,9 @@ def write_iterations_csv(rows: Sequence[Iteration], outpath: Path) -> None:
             values += [nparts or "", f"{row.extra.get('volassemble_nu_filter', 0.0):.3f}",
                        "" if row.scan is None else f"{row.scan:.3f}"]
             values += [f"{row.extra.get(f'volassemble_nu_{key}', 0.0):.3f}" for key, _ in NU_SPLIT]
+            for key in ["total"] + [slug(label) for label, _ in PCG_PHASES]:
+                value = row.extra.get(f"pcg_{key}")
+                values.append("" if value is None else f"{value:.3f}")
             writer.writerow(values)
 
 
@@ -532,6 +590,69 @@ def phase_means(records: Sequence[Record]) -> List[Tuple[str, float, float]]:
             values[key].append(value)
     out = [(key, statistics.fmean(v), max(v)) for key, v in values.items()]
     return sorted(out, key=lambda item: -item[1])
+
+
+# the PCG master's stage table: these phases, the rest of its total as 'other'
+PCG_STAGE_PHASES = ("raw read", "raw summation", "trailing chain", "operator setup", "operator finalize", "base solve",
+                    "prior re-solve", "ml solve", "solve finish", "fsc and cfar", "map output", "nonuniform filter")
+
+
+def path_components(rows: Sequence[Iteration]) -> Tuple[Tuple[str, str, str], ...]:
+    """PATH_COMPONENTS, without the PCG master's groups when no iteration has a PCG_ASSEMBLE record."""
+    if any("pcg_total" in row.extra for row in rows):
+        return PATH_COMPONENTS
+    return tuple(comp for comp in PATH_COMPONENTS if comp[0] not in PCG_PATH_KEYS)
+
+
+def write_pcg_assembly(records: Sequence[Record], rows: Sequence[Iteration], add) -> None:
+    """The distributed PCG master (PCG_ASSEMBLE reports): its phases summed over the run, their share of its
+    total, mean and maximum per iteration, the raw accumulators' read rate and summation, and the phases per
+    stage (contiguous iterations with one refine mode and nspace)."""
+    pcg = first_pass_by_iteration(by_family(records, "PCG_ASSEMBLE"))
+    if not pcg:
+        return
+    its = sorted(pcg)
+    totals = [pcg[it].seconds.get("pcg_assemble total time", 0.0) for it in its]
+    total = sum(totals)
+    wall = sum(row.total for row in rows if row.it in pcg)
+    add(f"PCG master assembly (PCG_ASSEMBLE): {len(its)} iterations ({its[0]}-{its[-1]}), {total:.1f} s"
+        + (f", {pct(total, wall).strip()} of their strategy wall time" if wall > 0 else ""))
+    add(f"  {'phase':24s} {'seconds':>9s} {'share':>6s} {'mean/it':>8s} {'max':>8s}")
+    for label, _ in PCG_PHASES:
+        values = [pcg[it].seconds.get(f"pcg_assemble {label}", 0.0) for it in its]
+        add(f"  {label:24s} {sum(values):9.1f} {pct(sum(values), total)} {statistics.fmean(values):8.2f} "
+            f"{max(values):8.2f}")
+    add(f"  {'total':24s} {total:9.1f} {'':6s} {statistics.fmean(totals):8.2f} {max(totals):8.2f}")
+    accounted = [pcg[it].percent["pcg_assemble % accounted for"] for it in its
+                 if "pcg_assemble % accounted for" in pcg[it].percent]
+    if accounted:
+        add(f"  accounted for: mean {statistics.fmean(accounted):.1f}%, min {min(accounted):.1f}%")
+    nfiles = sum(as_number(pcg[it].context.get("pcg_assemble raw files read", "")) or 0.0 for it in its)
+    nbytes = sum(as_number(pcg[it].context.get("pcg_assemble raw bytes read", "")) or 0.0 for it in its)
+    read = sum(pcg[it].seconds.get("pcg_assemble raw read", 0.0) for it in its)
+    summ = sum(pcg[it].seconds.get("pcg_assemble raw summation", 0.0) for it in its)
+    if nfiles > 0:
+        rate = f"{nbytes / 1e9 / read:.2f} GB/s" if read > 0 else "-"
+        add(f"  raw accumulators: {int(nfiles)} files, {nbytes / 1e9:.1f} GB read in {read:.1f} s ({rate}), "
+            f"summation {summ:.1f} s")
+    add("")
+    block_rows = [row for row in rows if row.it in pcg]
+    if not block_rows:
+        return
+    add("PCG master by stage, seconds per iteration ('other': init, support, project write, cleanup, handoff and "
+        "the unaccounted rest):")
+    shorts = dict(PCG_PHASES)
+    add(f"  {'iterations':>10s} {'mode':>10s} {'nspace':>6s} {'box':>4s} {'total':>7s} "
+        + " ".join(f"{shorts[label]:>6s}" for label in PCG_STAGE_PHASES) + f" {'other':>6s}")
+    for block in stages_of(block_rows):
+        n = len(block)
+        means = [sum(pcg[r.it].seconds.get(f"pcg_assemble {label}", 0.0) for r in block) / n
+                 for label in PCG_STAGE_PHASES]
+        mean_total = sum(pcg[r.it].seconds.get("pcg_assemble total time", 0.0) for r in block) / n
+        box = pcg[block[0].it].context.get("pcg_assemble box_crop", "?")
+        add(f"  {block[0].it:>4d}-{block[-1].it:<5d} {block[0].mode:>10s} {block[0].nspace:>6s} {box:>4s} "
+            f"{mean_total:7.2f} " + " ".join(f"{m:6.2f}" for m in means) + f" {max(0.0, mean_total - sum(means)):6.2f}")
+    add("")
 
 
 TABLE_FAMILIES = (("PROB_TAB", "prob"), ("PROB_TAB_NEIGH", "prob_neigh"), ("PROB_TAB2D", "2D"))
@@ -695,10 +816,11 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], rows2D: S
             + (f"; no strategy record for {', '.join(map(str, missing))}" if missing else "") + ")")
         add(f"strategy wall time {total:.1f} s; its critical path:")
         add(f"  {'component':32s} {'seconds':>9s} {'share':>6s}")
-        for key, label, _ in PATH_COMPONENTS:
+        for key, label, _ in path_components(rows):
             value = sum(row.path[key] for row in rows)
             add(f"  {label:32s} {value:9.1f} {pct(value, total)}")
-        compute = sum(row.path["tables"] + row.path["search"] + row.path["volassemble"] for row in rows)
+        compute = sum(row.path["tables"] + row.path["search"] + row.path["volassemble"]
+                      + sum(row.path[key] for key in PCG_PATH_KEYS) for row in rows)
         overhead = sum(row.path["prestep_overhead"] + row.path["sched_overhead"] + row.path["assembly_overhead"]
                        for row in rows)
         add(f"  slowest-partition and assembly compute {compute:.1f} s ({pct(compute, total).strip()}); "
@@ -707,8 +829,8 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], rows2D: S
         add("By stage (contiguous iterations with one refine mode and nspace), seconds per iteration; scan% is the")
         add("mean percentage of the search space scanned at the stage's last iteration:")
         header = (f"  {'iterations':>10s} {'mode':>10s} {'nspace':>6s} {'total':>7s} {'setup':>6s} {'tables':>7s} "
-                  f"{'pre-ovh':>7s} {'search':>7s} {'sch-ovh':>7s} {'volasm':>6s} {'asm-ovh':>7s} {'sigma2':>6s} "
-                  f"{'scan%':>6s}")
+                  f"{'pre-ovh':>7s} {'search':>7s} {'sch-ovh':>7s} {'volasm':>6s} {'pcgasm':>6s} {'asm-ovh':>7s} "
+                  f"{'sigma2':>6s} {'scan%':>6s}")
         add(header)
         for block in stages_of(rows):
             n = len(block)
@@ -718,7 +840,8 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], rows2D: S
             add(f"  {block[0].it:>4d}-{block[-1].it:<5d} {block[0].mode:>10s} {block[0].nspace:>6s} "
                 f"{sum(r.total for r in block) / n:7.2f} {mean_of('setup'):6.2f} {mean_of('tables'):7.2f} "
                 f"{mean_of('prestep_overhead'):7.2f} {mean_of('search'):7.2f} {mean_of('sched_overhead'):7.2f} "
-                f"{mean_of('volassemble'):6.2f} {mean_of('assembly_overhead'):7.2f} {mean_of('sigma2'):6.2f} "
+                f"{mean_of('volassemble'):6.2f} {sum(mean_of(key) for key in PCG_PATH_KEYS):6.2f} "
+                f"{mean_of('assembly_overhead'):7.2f} {mean_of('sigma2'):6.2f} "
                 + ("     -" if block[-1].scan is None else f"{block[-1].scan:6.2f}"))
         add("")
         add("Load balance (slowest partition over the mean, median over iterations):")
@@ -754,6 +877,7 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], rows2D: S
         if not found:
             add("  none")
         add("")
+    write_pcg_assembly(records, rows, add)
     write_2D_path(rows2D, add)
     write_2D_tables(records, add)
     write_thread_seconds(records, add)
@@ -766,6 +890,7 @@ def write_report(records: Sequence[Record], rows: Sequence[Iteration], rows2D: S
                           ("PROB_ALIGN_NEIGH", "Probabilistic pre-step driver phases (prob_neigh)"),
                           ("REC3D", "Reconstruction pass phases"),
                           ("VOLASSEMBLE", "Volume assembly phases"),
+                          ("PCG_ASSEMBLE", "PCG master assembly phases"),
                           ("SIGMA2_COMMIT", "Sigma2 commit phases"),
                           ("REFINE2D_STRATEGY", "refine2D strategy phases"),
                           ("REFINE2D", "2D search phases (every partition)"),
@@ -953,7 +1078,8 @@ def main(argv: List[str]) -> int:
     write_report(records, rows, rows2D, layout, nfiles, indir, outdir / "bench_report.txt")
     written = ["bench_records.csv", "bench_iterations.csv", "bench_report.txt"]
     if rows:
-        write_figure(rows, outdir / "bench_profile.svg", f"refine3D benchmark profile: {indir.name}")
+        write_figure(rows, outdir / "bench_profile.svg", f"refine3D benchmark profile: {indir.name}",
+                     path_components(rows))
         written.append("bench_profile.svg")
     if rows2D:
         write_iterations_csv_2D(rows2D, outdir / "bench_iterations2D.csv")

@@ -63,6 +63,8 @@ contains
         call test_euclid_objective_formula()
         write(*,'(A)') 'test_five_parameter_gradient'
         call test_five_parameter_gradient()
+        write(*,'(A)') 'test_curvature_scale'
+        call test_curvature_scale()
         write(*,'(A)') 'test_matched_projector_boundary'
         call test_matched_projector_boundary()
         write(*,'(A)') 'test_reference_lifecycle'
@@ -555,6 +557,82 @@ contains
         end do
         call calc%kill
     end subroutine test_five_parameter_gradient
+
+    ! curvature scaling (cont_lm_acceleration.md, section 3.1): data filtered by shell at the
+    ! evaluated pose scale both kernels' Gauss-Newton blocks, against those for data equal to the
+    ! model, by the |f|^2-weighted slope of data on model and the normalizer's change
+    subroutine test_curvature_scale()
+        type(cartft_calc) :: calc
+        type(ctfparams)   :: no_ctf
+        real, allocatable :: volume(:,:,:)
+        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex  :: filtered(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex(dp) :: model, particle
+        real(dp) :: rotation(3,3), shift(2), pose_model(5,5), pose_filtered(5,5), shift_model(2,2), shift_filtered(2,2)
+        real(dp) :: model_power, filtered_power, cross, weighted_cross, weighted_power, slope, scale
+        integer  :: h, k, shell, iobj
+        integer,  parameter :: kfromto(2) = [2, 6], objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
+        real(dp), parameter :: SCALE_TOL = 1.e-5_dp
+        call build_test_volume(volume)
+        call new_test_calc(calc, volume)
+        no_ctf%ctfflag = CTFFLAG_NO
+        rotation = real(euler2m([23., 41., 17.]), dp)
+        shift    = [0.18_dp, -0.27_dp]
+        call calc%predict(1, .true., rotation, shift, prediction)
+        model_power    = 0._dp
+        filtered_power = 0._dp
+        cross          = 0._dp
+        weighted_cross = 0._dp
+        weighted_power = 0._dp
+        do k = -TEST_BOX/2, TEST_BOX/2
+            do h = -TEST_BOX/2, TEST_BOX/2
+                shell = nint(sqrt(real(h*h + k*k)))
+                filtered(h,k) = prediction(h,k)/(1. + 0.15*real(shell))
+                if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                model    = cmplx(prediction(h,k), kind=dp)
+                particle = cmplx(filtered(h,k), kind=dp)
+                model_power    = model_power    + real(conjg(model)*model, dp)
+                filtered_power = filtered_power + real(conjg(particle)*particle, dp)
+                cross          = cross          + real(conjg(particle)*model, dp)
+                weighted_cross = weighted_cross + real(h*h + k*k, dp)*real(conjg(particle)*model, dp)
+                weighted_power = weighted_power + real(h*h + k*k, dp)*real(conjg(model)*model, dp)
+            end do
+        end do
+        slope = weighted_cross/weighted_power
+        call assert_true(abs(slope - cross/model_power) > 100._dp*SCALE_TOL*slope, &
+            &'curvature fixture does not separate the weighted from the unweighted slope')
+        do iobj = 1, size(objfuns)
+            call normal_blocks(objfuns(iobj), prediction, pose_model, shift_model)
+            call normal_blocks(objfuns(iobj), filtered, pose_filtered, shift_filtered)
+            ! cc: unit vectors, slope times |M|/|X|; euclid: the 1/power normalizer changes too
+            if( objfuns(iobj) == OBJFUN_CC )then
+                scale = slope*sqrt(model_power/filtered_power)
+            else
+                scale = slope*model_power/filtered_power
+            endif
+            call assert_true(maxval(abs(pose_filtered - scale*pose_model)) < SCALE_TOL*maxval(abs(scale*pose_model)) .and. &
+                &maxval(abs(shift_filtered - scale*shift_model)) < SCALE_TOL*maxval(abs(scale*shift_model)), &
+                &'Gauss-Newton blocks are not scaled by the weighted slope of data on model')
+        end do
+        call calc%kill
+
+    contains
+
+        subroutine normal_blocks( objfun, observed, pose_block, shift_block )
+            integer,  intent(in)  :: objfun
+            complex,  intent(in)  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+            real(dp), intent(out) :: pose_block(5,5), shift_block(2,2)
+            real(dp) :: objective, pose_gradient(5), shift_gradient(2)
+            if( objfun == OBJFUN_CC )then
+                call calc%set_ptcl(1, observed, no_ctf, kfromto)
+            else
+                call set_unweighted_particle(calc, observed, kfromto)
+            endif
+            call calc%pose_normal_terms(1, .true., 1, rotation, shift, objective, pose_gradient, pose_block)
+            call calc%shift_normal_terms(1, .true., 1, rotation, shift, objective, shift_gradient, shift_block)
+        end subroutine normal_blocks
+
+    end subroutine test_curvature_scale
 
     ! E10: the Cartesian gather against SIMPLE's projector kernel at identical rotated 3D
     ! coordinates from the same physical reference (permanent guard for C10)

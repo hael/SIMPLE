@@ -264,8 +264,17 @@ immediately. Distributed recovery is compute-only inside the even/odd
 sections; restart reporting and fatal handling occur afterward at the serial
 finalization boundary. Solver callers that do not request an outcome retain
 the historical immediate hard failure. The
-regularized pair deterministically replays kernel finalization from the
-persisted raw `(B,D)` with the FSC/SSNR shell-diagonal `P_tau` installed, and
+regularized pair is the base pair's finalized operator with the FSC/SSNR
+shell-diagonal `P_tau` installed (`regularize_finalized`, 2026-10-19): the
+base pair keeps its operator, its RHS before the support and the raw `D` its
+`end_accum` hands out; the regularized pair masks that RHS with the support
+then in force, keeps `Khat` and the data scale, detaches the real-space
+priors of the base solves and rebuilds `P_tau` and the preconditioner from
+`D`. Neither the parts nor the trailing chain are read again, nothing is
+folded or transformed again, and the operator equals a fresh finalization of
+the same `(B,D)` bit for bit. Both halves' operators and `D` (about 32
+box_crop^3 bytes per half) stay allocated from the base solve to the
+regularized pair. The regularized map
 is the closed-form optimum of the diagonal model on that operator
 (`shrink_by_ml_prior`, 2026-09-14): the CURRENT same-half base solution's
 Fourier coefficients on the padded lattice scaled voxelwise by
@@ -825,7 +834,9 @@ time, compute cost and memory:
   box_crop, backend, `maxits_pcg`, `rtol`, peak and phase RSS, the phase
   timings and their thread-seconds; the master logs one
   `RECONSTRUCTION MASTER PHASE (<backend>): s on n threads = thread-s;
-  master peak RSS` line per iteration. Load imbalance is the spread of the
+  master peak RSS` line per iteration and appends its phases (raw read and
+  summation, solves, outputs, NU filter) to `BENCH/PCG_ASSEMBLE_BENCH.txt`
+  (refine3D_policy.md, section 11.1). Load imbalance is the spread of the
   per-part partial-reconstruction times; core-hours are the sum of worker
   thread-seconds plus master thread-seconds.
 

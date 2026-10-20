@@ -668,7 +668,8 @@ end subroutine exec_test_cont_refine3D_bench
 !! refine=cont pass per objective on the native grid and the production joint route, against the
 !! reconstruction at the truth poses: the reference a converged refinement leaves, on the particles'
 !! scale, which euclid's Gauss-Newton matrix assumes. polish is the error a discrete search leaves, in a
-!! finishing band; capture is E25. Pose errors against the truth go to metrics.tsv as reports.
+!! finishing band; capture is E25's error and band under a wider rotation bound. Pose errors against
+!! the truth go to metrics.tsv as reports.
 subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
     use simple_atoms,               only: atoms
     use simple_molecule_data,       only: molecule_data, betagal_1jyx
@@ -688,7 +689,8 @@ subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
     real,    parameter :: MSKDIAM  = 120.           !< Angstroms, as E25
     real,    parameter :: TRS_A    = 6.5            !< Angstroms, E25's 5 pixels
     real,    parameter :: POLISH_ROT  = 2.,  POLISH_SH_A  = 1.,  POLISH_LP  = 3.
-    real,    parameter :: CAPTURE_ROT = 15., CAPTURE_SH_A = 2.6, CAPTURE_LP = 8., CAPTURE_ATHRES = 15.
+    ! the capture bound clears the seed error, so no particle's optimum lies against it
+    real,    parameter :: CAPTURE_ROT = 15., CAPTURE_SH_A = 2.6, CAPTURE_LP = 8., CAPTURE_ATHRES = 20.
     integer, parameter :: PERTURBATION_SEED = 20260915
     type(commander_simulate_particles) :: xsim
     type(commander_new_project)        :: xnew_project

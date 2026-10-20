@@ -1,8 +1,8 @@
 # Accelerating refine=cont: fewer evaluations, a cheaper kernel, and a benchmark
 
-Implementation note, 2026-10-19. **Stages 1 and 2 are implemented but not yet
-compiled; stages 3 to 7 are proposals.** The maintainer's rulings of 2026-10-19
-are in section 8. The findings come from a static review of `master` at
+Implementation note, 2026-10-19, updated 2026-10-20. **Stages 1 to 4 are done:
+built, checked, and measured against the baseline (section 2). Stages 5 to 7
+are proposals.** The maintainer's rulings are in section 8. The findings come from a static review of `master` at
 `4da5cb9c0`. The savings below are work counts read from the code. The rule of
 the local-workflow plan applies: do not infer a speedup percentage from removed
 calls (`doc/refactoring_notes/planned/refine3d_local_workflow.md:264-267`).
@@ -80,9 +80,19 @@ one full-disk pass of the gather.
 
 ## 2. Development stages
 
-Each stage is one commit, or a short series of commits. The agent builds the
-stage and runs the checks it names, and reports the results. The maintainer
-reviews and decides what is committed and pushed. The order is: measure first, then protect the kernel with tests,
+The agent builds each stage, runs the checks it names and reports the results.
+The maintainer reviews and decides what is committed and pushed, and when.
+Stages are not gated on commits; several may go into one larger commit.
+
+**What is measured (ruled 2026-10-20).** The working tree, with every
+uncommitted change in it, is the code under development, so the builds and
+measurements use the full tree. That includes changes outside this work, such
+as PCG reconstruction work in progress. For an A/B pair the tree is
+snapshotted once (`git diff HEAD`, kept as
+`~/src/SIMPLE_cont_bench/patches/tree_snapshot_<time>.patch`) and both
+variants are built from that one snapshot. A pair then differs only in the
+change being measured. The stage 2 baseline (builds A and B) predates this
+rule and stays the reference of the stage 2 and stage 3 records. The order is: measure first, then protect the kernel with tests,
 then make the changes that keep results identical, and only then the changes
 that alter them. Every gain can then be attributed to one stage.
 
@@ -114,8 +124,9 @@ code report how much work it does.
 - **Check:** the CR1 identity check (section 6.2), run in step 2.2.
 - **Done when:** one run reports these figures for each partition.
 
-**Status (2026-10-19): implemented and committed in `0c9542e50`, not yet
-compiled.** Step 2.2 checks it. The changes:
+**Status (2026-10-19): done.** It was committed in `0c9542e50` and checked in
+step 2.2: the CR1 identity holds, and the counters cost nothing measurable.
+The changes:
 
 - `simple_cartft_calc.f90`: each slot counts the pixels of its shells
   (`get_ptcl_npix`), and `get_ref_bytes` gives the bytes of the reference
@@ -155,7 +166,7 @@ its own question:
 | The benchmark figures | What does a particle cost today, in work and in time? | 2.4, 2.5 |
 | The before-profile on truth | How good are the poses today, and how much do they vary from seed to seed? | 2.6 |
 
-**What was implemented (2026-10-19, not compiled):**
+**What was implemented (2026-10-19; built and checked, commits `b2d8f34e5` and `920b0e410`):**
 
 - `simple_test_exec test=cont_refine3D_bench`, the benchmark program of
   section 6.3:
@@ -350,13 +361,13 @@ from a fresh copy of it.
 | Item | Value |
 | --- | --- |
 | Build A commit | `86bf97213` |
-| Build B commit (stage 2) | `b2d8f34e5` |
+| Build B commit (stage 2) | `920b0e410`: stage 2 with the metric fix. The timed beta-gal runs and the CR1 identity check ran on `b2d8f34e5`, whose solver is the same (`920b0e410` changes only the benchmark's metric and a `solve3D` `nu_stage` check). Work counts on the simulated cases are identical on both. |
 | Machine, threads | FWM-S116118, Apple M2 Ultra (16 performance + 8 efficiency cores, 192 GB); timed runs `nthr=16`, alone on the machine |
 | SNR | 0.05; polish also at 0.02 |
 | `unit_cart_align3D` (B) | PASS, 761 of 761 assertions; fast gate 15/15 for A and for B |
 | CR1 identity, A against B | Identical: the 60 check values of `metrics.tsv` are byte-identical, and both gates pass (`runs/cr1_A`, `runs/cr1_B`, about 40 minutes each at one thread) |
 | Counter cost (beta-gal, A B B A) | Orientation search A 19.34, 19.41 s; B 19.33, 19.46 s (a third B run 19.12 s). The difference is inside the spread: no measurable cost. |
-| Before-profile directories | `runs/profile_cr1_B/profile`: 20 of 20 seeds pass (table below). `runs/bench_polish_seed{1..5}`: to be retaken, because the pose-error metric was quantized (below). |
+| Before-profile directories | `runs/profile_cr1_B/profile`: 20 of 20 seeds pass (table below). `runs/bench_default` and `runs/bench_polish_seed{1..5}`: six seed offsets of the polish regime (table below). The superseded runs with the coarse metric are in `runs/superseded_metric`. |
 
 Simulated cases: 10 000 particles, box 256 at 0.73 A, reference reconstructed at
 the truth poses. The polish band is shell 62 (lp 3 A) and the capture band
@@ -365,12 +376,12 @@ shell 23 (lp 8 A). Beta-gal: 4 199 active particles of 5 513, box 256 at
 
 | Case | Search thread-s | Search wall (s) | Passes / solve | LM its / solve | Solves at the cap | Rejected fraction | Actual/predicted mode bin (share) | ns / pixel-eval | Median rot (deg) | Median shift (A) | Mean corr_cart |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| polish_euclid, snr 0.05 | 381.6 | 24.1 | 14.88 | 10.88 | 0 | 0.41 | 1.25-1.75 (0.32) | 209 | 0.084 | 0.029 | 0.67 (`exp(-L)`) |
-| polish_cc, snr 0.05 | 378.7 | 24.0 | 14.43 | 11.43 | 0 | 0.38 | 1.25-1.75 (0.38) | 214 | 0.088 | 0.030 | 0.78 |
-| capture_euclid, snr 0.05 | 66.7 | 4.2 | 17.69 | 19.70 | 33 | 0.16 | 0.75-1.25 (0.47) | 218 | 0.250 | 0.095 | 0.83 (`exp(-L)`) |
-| capture_cc, snr 0.05 | 61.1 | 3.9 | 15.71 | 19.91 | 15 | 0.16 | 0.75-1.25 (0.64) | 225 | 0.320 | 0.133 | 0.89 |
-| polish_euclid, snr 0.02 | 375.6 | 23.8 | 14.78 | 10.78 | 0 | 0.42 | 1.25-1.75 (0.31) | 207 | 0.128 | 0.045 | 0.56 (`exp(-L)`) |
-| polish_cc, snr 0.02 | 429.1 | 27.1 | 16.40 | 13.40 | 0 | 0.36 | 1.25-1.75 (0.51) | 213 | 0.131 | 0.046 | 0.65 |
+| polish_euclid, snr 0.05 | 380.3 | 24.1 | 14.88 | 10.88 | 0 | 0.41 | 1.25-1.75 (0.32) | 208 | 0.0845 | 0.029 | 0.67 (`exp(-L)`) |
+| polish_cc, snr 0.05 | 384.0 | 24.3 | 14.43 | 11.43 | 0 | 0.38 | 1.25-1.75 (0.38) | 217 | 0.0864 | 0.030 | 0.78 |
+| capture_euclid, snr 0.05 | 67.5 | 4.3 | 17.69 | 19.70 | 33 | 0.16 | 0.75-1.25 (0.47) | 220 | 0.250 | 0.095 | 0.83 (`exp(-L)`) |
+| capture_cc, snr 0.05 | 61.5 | 3.9 | 15.71 | 19.91 | 15 | 0.16 | 0.75-1.25 (0.64) | 226 | 0.321 | 0.133 | 0.89 |
+| polish_euclid, snr 0.02 | 376.0 | 23.8 | 14.78 | 10.78 | 0 | 0.42 | 1.25-1.75 (0.31) | 207 | 0.127 | 0.045 | 0.56 (`exp(-L)`) |
+| polish_cc, snr 0.02 | 429.3 | 27.1 | 16.40 | 13.40 | 0 | 0.36 | 1.25-1.75 (0.51) | 213 | 0.130 | 0.046 | 0.65 |
 | beta-gal, B (median of 3) | 305.2 | 19.3 | 13.75 | 9.75 | 0 | 0.48 | 0.25-0.75 (0.64) | 215 | - | - | - |
 
 Seeds were 2 degrees and 1 A off for polish, and 15 degrees and 2.6 A off for
@@ -401,10 +412,33 @@ about 0.002 degrees, so at the polish errors (about 0.085 degrees) the median
 moved in steps of a few percent: five seed offsets gave 0.0839 degrees to four
 digits. The benchmark now uses the chord form in double precision,
 `2 asin(||R1 - R2||_F / (2 sqrt 2))`, which resolves the seeds (0.0858 against
-0.0873 for euclid). The simulated truth metrics in the case table above, and the
-benchmark seed runs, are therefore retaken with build B rebuilt at the commit
-of this fix. The solver is unchanged, so the timings and work counts stand; the
-beta-gal runs and the CR1 identity check do not use this metric.
+0.0873 for euclid). The simulated cases and the seed runs were therefore
+retaken with build B at `920b0e410`, the commit of this fix; the case table
+above holds the retaken values.
+
+- **Work counts:** identical to the first run, as expected with the solver
+  unchanged.
+- **Search thread-seconds:** within 1.4% of the first run for every case.
+- **One outlier:** the polish euclid run of seed offset 3 took 435.7
+  thread-seconds against about 380 for the other offsets, with the same work
+  (passes per solve 14.82-14.89 for every offset). That is a reminder that
+  single timings are not comparable, and that later stages are timed in
+  order-balanced pairs.
+- **Not affected:** the beta-gal runs and the CR1 identity check do not use
+  this metric.
+
+**Polish regime over six seed offsets** (offset 0 is `runs/bench_default`;
+build B, `snr` 0.05, 10 000 particles). This is the before-profile that stages
+4 and 6 compare against.
+
+| Metric | Median | Min | Max |
+| --- | --- | --- | --- |
+| euclid median rotation error (deg) | 0.0844 | 0.0834 | 0.0854 |
+| euclid median shift error (A) | 0.0292 | 0.0288 | 0.0293 |
+| cc median rotation error (deg) | 0.0861 | 0.0850 | 0.0873 |
+| cc median shift error (A) | 0.0299 | 0.0297 | 0.0301 |
+| euclid mean `corr_cart` (`exp(-L)`) | 0.6722 | 0.6717 | 0.6726 |
+| cc mean `corr_cart` | 0.7789 | 0.7786 | 0.7792 |
 
 What the baseline says:
 
@@ -485,26 +519,89 @@ taught.
 
 ### Stage 3: remove work without changing results
 
-- **3a. Duplicate passes and the `padsc` fold.**
-  - Drop the duplicate seed and final passes (section 3.2, rows 1 and 2).
-  - Fold `padsc` into the reference (section 4.4).
-- **3b. Branch-free reference and gather.** Use the full, centred,
-  band-limited reference with a branch-free gather (sections 4.4 and 4.5, per
-  ruling). Keep today's accumulation order.
-- **Results:** identical. Removed passes produce bitwise-equal values. The
-  centred cube holds exactly the values the packed gather fetches today, as
-  copies and exact conjugates. Scaling by 8 is exact.
+**Status (2026-10-20): done, shipped as variant D of the record below.**
+
+- **Duplicate passes removed** (section 3.2, rows 1 and 2). The transaction
+  evaluates the seed once with `pose_normal_terms` and hands the terms to
+  `refine_joint`, which takes them instead of evaluating again
+  (`seed_objective`, `seed_gradient`, `seed_hessian`). `refine_joint` returns
+  the objective at its endpoint (`objective_out`) instead of having it
+  re-evaluated.
+- **`padsc` folded into the reference** (section 4.4). `set_ref` stores
+  `padf**3` times the transform, and the gather no longer multiplies.
+- **Results:** identical. A reused evaluation is the same computation on the
+  same inputs, and scaling by 8 is exact.
 - **Check:**
+  - per-particle poses identical to B;
   - the CR1 identity check (section 6.2);
-  - `unit_cart_align3D`;
-  - the gather oracle of `simple_cartesian_fourier_tester` extended to the new
-    layout;
-  - the benchmark: two fewer passes per particle (3a), a lower cost per
-    pixel-evaluation (3b), and reference memory as in section 4.5.
+  - `unit_cart_align3D` and the fast gate;
+  - the benchmark: two fewer passes per solve.
+
+The planned 3b, a full centred band-limited reference with a branch-free
+gather, was built and measured too (variant C below). On its own it is slower
+at production bands, so it moved into stage 6a, to be measured together with
+the Friedel half-plane. Its patch, against `920b0e410`, is kept at
+`~/src/SIMPLE_cont_bench/patches/stage3b_centred_cube.patch`. It includes the
+bit-identity oracle of the centred gather and the in-band property test.
+
+#### Stage 3 record (2026-10-19)
+
+Two variants were built on build B's commit `920b0e410` and measured against B,
+in order-balanced pairs (B, X, X, B) at 16 threads, alone on the machine:
+
+- **C:** 3a and 3b as planned. The duplicate seed and final passes are gone,
+  `padsc` is folded in, and the reference is the full, centred, band-limited
+  cube with a branch-free gather.
+- **D:** 3a and the `padsc` fold only, on today's packed layout.
+
+**Identity.** Both are bit-identical to B.
+
+- The per-particle pose fields (Euler angles, shifts, `corr_cart`, status) of
+  the project are identical for all 5 513 beta-gal records and all 10 000
+  records of every simulated case.
+- Two B runs are identical to each other too, which shows the runs are
+  deterministic.
+- The comparison flags the 4 199 refined particles when a refined project is
+  compared with its input, so it is sensitive.
+- The CR1 check values are byte-identical (C).
+- The area suite passes, 773 of 773, including two new checks:
+  - the centred gather equals the packed gather, scale aside, bit for bit
+    (`simple_cartesian_fourier_tester`);
+  - a band-limited reference predicts the same bits inside its band as a
+    Nyquist one (`simple_cartft_calc_tester`).
+
+**Work.** Both remove exactly two passes per solve: 13.75 to 11.75 on
+beta-gal, 14.88 to 12.88 (euclid) and 14.43 to 12.43 (cc) on polish.
+
+**Time** (orientation search, s; ns per pixel-evaluation):
+
+| Case | B | C (cube) | D (packed) |
+| --- | --- | --- | --- |
+| beta-gal, band 88 | 19.0-19.4; 212-216 | 21.6; 281 (+12%) | 16.1; 210 (-15.4%) |
+| polish euclid, band 62 | 23.9; 207 | 24.5; 246 (no gain) | 20.6; 206 (-13.8%) |
+| polish cc, band 62 | 23.8-24.4; 212-218 | 24.3; 252 (no gain) | 20.5; 213 (-13.6%) |
+| capture, band 23 | 3.9-4.3; 220-226 | 3.4-3.8; 219-227 (-12%) | not run |
+
+**Why the cube is slower.** The cube costs 15-31% more per pixel-evaluation,
+and the penalty grows with the cube: none at band 23, where it fits in cache.
+A central section is centrosymmetric. In the packed half-complex layout, a
+pixel and its Friedel mate therefore fetch the same memory. The full cube
+stores both halves separately, which doubles the working set of a full-disk
+pass. The branch-free fetch saves less than that costs.
+
+**What follows for the order of work.** With the Friedel half-plane of stage
+6a, a pass visits only half the disk. Both layouts then touch the same
+footprint, and the cube's branch-free fetch should win. The cube also needs
+less memory: 0.73 GB against 1.08 GB on beta-gal, 0.26 GB against 1.08 GB on
+polish.
+
+**Decided 2026-10-20:** stage 3 ships as D, and the cube moves into stage 6a,
+measured together with the half-plane (section 8).
 
 ### Stage 4: converge in fewer iterations
 
-These changes alter results and were ruled wanted for release 4, for
+**Status (2026-10-20): done on the working tree, shipped as variant S4c of the
+record below; the after-profile is within the before-profile's spread.** These changes alter results and were ruled wanted for release 4, for
 `refine=cont` and the polish alike.
 
 - **What:**
@@ -514,6 +611,34 @@ These changes alter results and were ruled wanted for release 4, for
   The euclid matrix changes only if the baseline shows its over-step
   signature (section 3.1). At realistic SNR the stopping rule is the larger
   lever: in the smoke runs, 40-45% of trial evaluations were rejected.
+- **What shipped** (variant S4c of the record):
+  - **The curvature scale.** Both objectives' Gauss-Newton matrices are
+    multiplied by the regression slope of the data on the model, weighted by
+    `|f|^2` as the matrices are, and clamped to [0.05, 20]
+    (`curvature_scale` in `simple_cartft_calc.f90`). For cc it is the slope
+    of the normalized data on the normalized model, which equals the
+    correlation `c` when every shell has the same slope. For euclid it is
+    `Re<X,M>/|M|^2` with the same weights. This corrects euclid's over-step
+    on beta-gal as well, so section 3.1's euclid question is settled by the
+    same change.
+  - **The predicted-reduction stop.** A proposal whose predicted reduction is
+    below `1e-6` of the objective ends the stage without being evaluated
+    (`LM_PREDICTED_RELATIVE_TOL`). The accepted-reduction stop stays as it
+    was, and both tolerances stay at `1e-6`.
+  - **The benchmark's capture regime** bounds the rotation at 20 degrees
+    instead of 15 (record, finding 3).
+- **Tests added or changed:**
+  - `test_curvature_scale` (calculator tester): data filtered by shell, at the
+    evaluated pose, scale both kernels' blocks by the weighted slope. The
+    fixture asserts that it separates the weighted slope from the unweighted
+    one.
+  - E12 (`test_tiny_accepted_reduction_stop`, pose optimizer tester): a first
+    proposal predicted below the threshold ends the stage unevaluated, with
+    the pose unchanged and the stage bound-rejected, since its step was
+    capped.
+  - The cumulative-guard test (E12, joint) accepts a stage that ends before
+    the eighth rejection: growing damping shrinks the rejected proposals until
+    their predicted reduction stops the stage.
 - **Check:**
   - a robustness profile on truth, before and after: `test=profile` on
     `cont_refine3D_1jxy`, and the benchmark simulation over its seeds;
@@ -521,6 +646,154 @@ These changes alter results and were ruled wanted for release 4, for
   - beta-gal FSC within the run-to-run spread.
 - **Done when:** the tolerance values are set from the profile, and the truth
   metrics are no worse than the before-profile's spread.
+
+#### Stage 4 record (2026-10-20)
+
+Every build is a snapshot of the working tree on `e560a49fe`, in a worktree of
+`~/src/SIMPLE_cont_bench` (patches in `patches/`). Runs use 16 threads, alone
+on the machine.
+
+| Build | What it adds |
+| --- | --- |
+| S3 | Stage 3 only: the reference of this record |
+| S4a | The curvature scale, with an unweighted slope |
+| S4b | S4a and the predicted-reduction stop |
+| S4c | S4b with the `\|f\|^2`-weighted slope: **what shipped** |
+| S4e | S4c with a Gauss-Newton decrement stop in place of both stops (dropped, finding 4) |
+
+**Beta-gal** (orientation search in s, the mean of two order-balanced runs;
+the work counts of the two runs are identical):
+
+| Build | Search | Passes per solve | Trials per solve | Rejected | Accepted at 0.25-0.75 | Accepted at 0.75-1.25 |
+| --- | --- | --- | --- | --- | --- | --- |
+| S3 | 16.46 | 11.75 | 9.75 | 0.48 | 0.64 | 0.17 |
+| S4a | 16.39 | 11.46 | 9.46 | 0.48 | 0.61 | 0.21 |
+| S4b | 12.51 | 8.69 | 6.69 | 0.41 | 0.72 | 0.22 |
+| S4c | 9.68 | 6.68 | 4.68 | 0.31 | 0.45 | 0.42 |
+| S4e | 12.61 | 8.66 | 6.66 | 0.39 | 0.40 | 0.38 |
+
+Every build gives the same map: FSC 3.752 A at 0.143 and 4.352 A at 0.5, cFAR
+0.558. Against stage 2's build B (19.3 s, 13.75 passes per solve), stages 3
+and 4 together halve the orientation search.
+
+**Simulated polish** (seed offset 0, one run each; errors are medians over
+10 000 particles, rotation in degrees and shift in A):
+
+| Build | cc search | cc passes | cc errors | euclid search | euclid passes | euclid errors |
+| --- | --- | --- | --- | --- | --- | --- |
+| S3 | 20.6 | 12.43 | 0.0864 / 0.0297 | 20.6 | 12.88 | 0.0845 / 0.0288 |
+| S4a | 18.3 | 10.81 | 0.0863 / 0.0296 | 19.7 | 11.95 | 0.0847 / 0.0289 |
+| S4b | 11.1 | 6.43 | 0.0862 / 0.0296 | 12.5 | 7.57 | 0.0848 / 0.0289 |
+| S4c | 10.3 | 6.04 | 0.0864 / 0.0296 | 11.7 | 7.11 | 0.0849 / 0.0288 |
+| S4e | 15.1 | 8.70 | 0.0864 / 0.0296 | 16.4 | 9.78 | 0.0848 / 0.0288 |
+
+Every error lies inside the before-profile's spread over six seed offsets
+(euclid 0.0834-0.0854 degrees, cc 0.0850-0.0873 degrees).
+
+**Capture with the rotation bound at 20 degrees** (seed offset 0, S3 against
+S4c):
+
+| Case | Search | Passes per solve | Rotation error | Shift error |
+| --- | --- | --- | --- | --- |
+| euclid | 3.56 to 2.67 (-25%) | 14.88 to 10.96 | 0.2732 / 0.2729 | 0.0856 / 0.0855 |
+| cc | 3.16 to 2.74 (-13%) | 12.85 to 10.91 | 0.3471 / 0.3482 | 0.0995 / 0.0993 |
+
+Per particle the two builds agree: the median distance between their
+endpoints is 0.005 degrees and 0.001 A for euclid, and each build is closer to
+the truth for half of the particles. No solve reaches the iteration cap.
+
+What the record says:
+
+1. **An unweighted slope does not correct euclid on real data.** On beta-gal
+   it stays near 1 (S4a hardly changes the histogram). The overall amplitude
+   of the reference matches the data's, but the matrix takes its curvature
+   from the high frequencies, where a filtered reference is weaker than the
+   data, and there the slope is above 1. Weighting the slope by `|f|^2`, as
+   the matrix is, halves the over-steps: accepted steps below 0.75 fall from
+   64% to 45%, and those at 0.75-1.25 rise from 17% to 42%. A scalar slope
+   cannot follow every axis and shell, so 45% remain; a finer correction is
+   left open.
+2. **The predicted-reduction stop is the larger lever.** From S4a to S4b it
+   removes 2.8 passes per solve on beta-gal and 4.4 on polish, with no change
+   in the map or the truth metrics. It also removes the high-ratio tail
+   (accepted steps at or above 2.5 fall from 9.5% to 0.4%): those were the
+   tiny final steps.
+3. **The capture regime measured the bound, not the solver.** Its seeds lay
+   exactly 15 degrees from the truth, and `athres_cont` was 15 degrees, so the
+   truth lay on the cumulative bound, and about half of the particles had
+   their noisy optimum just outside it. With that bound, every scaled build
+   gave worse capture endpoints than S3 (euclid shift error 0.109-0.113 A
+   against 0.095 A, its 90th percentile 0.26-0.28 A against 0.185 A), and the
+   particles that moved ended at a worse objective. S4e, which has none of the
+   damped stops, gave the same endpoints, so the cause was not an early stop.
+   With the bound at 20 degrees the builds agree particle by particle (table
+   above), so the difference was where each path met the bound. The gate test
+   E25 (`cont_refine3D_1jxy`) has the same 15-against-15 design; it is a stage
+   5 item.
+4. **Why the decrement stop was dropped.** The Gauss-Newton decrement,
+   `g^T H^-1 g / 2`, is the reduction the undamped step predicts, and damping
+   cannot shrink it. S4e stopped on it alone, to rule out stops forced by
+   damping. A trace of 36 beta-gal solves (a throwaway build, T) shows why
+   that is worse:
+   - most solves converge in 2 to 5 accepted steps with actual/predicted
+     near 1, and end on the decrement;
+   - near the optimum the objective is not quadratic at about `1e-6` of
+     itself. A step of 0.015 degrees, predicted to gain `1.2e-6`, lost
+     `2.5e-6`. Steps of `1e-5` to `1e-8` degrees changed the objective by
+     `1e-7` to `1e-10` of itself, with random sign;
+   - with only the decrement, such a solve keeps trying: one took 26
+     iterations for 11 accepted steps of no value. Solves pressed against the
+     cumulative bound creep to the iteration cap (3 192 to 3 464 of 10 000 in
+     the old capture regime).
+
+   The damped step never predicts more than the undamped one, so whenever
+   the decrement is below the tolerance, so is the damped prediction. The
+   predicted-reduction stop therefore also ends every converged stage, and the
+   decrement test adds nothing. Finding 3 shows that its stops forced by
+   damping cost nothing measurable.
+5. **The tolerance stays at `1e-6`.** In the traces, the Gauss-Newton step
+   that remains at a decrement of `1e-5` is 0.05-0.08 degrees, the size of the
+   polish precision (0.085 degrees); at `1e-6` it is 0.02-0.03 degrees. A
+   step tolerance in physical units (section 3.3) is not needed.
+
+**After-profile of S4c** (taken with the shipped build; the before-profile is
+section 2.6's, with build B, whose results stage 3 left unchanged):
+
+- **Beta-gal, S3 against S4c** in one order-balanced batch (S3, S4c, S4c,
+  S3): 16.18 and 16.20 s against 9.34 and 9.38 s, -42%. The map is unchanged.
+- **Polish over six seed offsets** (0 to 5), against the same offsets of the
+  before-profile:
+
+  | Metric | Before: median (min-max) | After: median (min-max) | Paired difference: median (min..max) |
+  | --- | --- | --- | --- |
+  | euclid median rotation error (deg) | 0.0844 (0.0834-0.0854) | 0.0844 (0.0834-0.0853) | -0.0001 (-0.0002..+0.0004) |
+  | euclid median shift error (A) | 0.0292 (0.0288-0.0293) | 0.0291 (0.0288-0.0294) | +0.0000 (-0.0001..+0.0001) |
+  | cc median rotation error (deg) | 0.0861 (0.0850-0.0873) | 0.0861 (0.0851-0.0871) | +0.0001 (-0.0001..+0.0001) |
+  | cc median shift error (A) | 0.0299 (0.0297-0.0301) | 0.0298 (0.0296-0.0300) | -0.0001 (-0.0001..+0.0001) |
+  | euclid mean `corr_cart` | 0.6722 | 0.6722 | 0 to five digits |
+  | cc mean `corr_cart` | 0.7789 | 0.7789 | 0 to five digits |
+
+- **The gate over 20 seeds** (`test=profile target=cont_refine3D_1jxy
+  nseeds=20`, 8 threads): 20 of 20 pass, and every metric of the
+  before-profile's table stays inside its spread:
+
+  | Metric | Before: median (spread) | After: median (spread) |
+  | --- | --- | --- |
+  | a (euclid) median rotation error (deg) | 0.943 (0.035) | 0.937 (0.034) |
+  | a (euclid) median shift error (px) | 0.071 (0.002) | 0.071 (0.001) |
+  | b (cc) median rotation error (deg) | 0.229 (0.003) | 0.229 (0.003) |
+  | b (cc) median shift error (px) | 0.059 (0.001) | 0.058 (0.001) |
+  | c (distributed) difference to a (deg) | 0 | 0 |
+  | e (auto, `pose_cont=only`) median rotation error (deg) | 0.980 (0.306) | 0.976 (0.326) |
+  | f (polish) symmetry-aware error (deg) | 0.423 (0.019) | 0.424 (0.018) |
+  | g (auto with polish) symmetry-aware error (deg) | 0.176 (0.022) | 0.173 (0.022) |
+  | h (continuation) symmetry-aware error (deg) | 0.174 (0.030) | 0.181 (0.033) |
+
+- **Checks of the working tree:** the incremental build, the fast gate (15 of
+  15), and `unit_cart_align3D` (772 checks) pass.
+
+The S3 and S4c worktrees carry the 20-degree capture bound on top of their
+snapshots; the S4e and T worktrees are kept for reference only.
 
 ### Stage 5: kernel oracle and test gaps
 
@@ -539,7 +812,11 @@ These changes alter results and were ruled wanted for release 4, for
 
 - **6a. One rewrite of `pose_normal_terms` and its siblings.** It covers the
   Friedel half plane, loop bounds set by `kto`, the separable shift phase and
-  the normal-term arithmetic (sections 4.1, 4.2, 4.3 and 4.5).
+  the normal-term arithmetic (sections 4.1, 4.2, 4.3 and 4.5). It also covers
+  the full centred band-limited reference with the branch-free gather
+  (sections 4.4 and 4.5), moved here from stage 3. Measure it on top of the
+  half-plane, with and without the cube, since the stage 3 record shows the
+  cube loses on its own. Its stage 3 patch is the starting point.
 - **6b. The KB weights** (section 4.4), plus any SIMD across taps that
   reorders sums.
 - **6c. sigma2 from the accepted evaluation** (section 3.2, row 3).
@@ -613,6 +890,12 @@ the 1.75-2.5 bin of the histogram for a correlation below 0.25.
 change. The optimum is unchanged, but the path changes, and with it the
 endpoints at tolerance level.
 
+**As built (stage 4 record).** The factor is not `c` itself but the
+regression slope of the normalized data on the normalized model, weighted by
+`|f|^2`; it equals `c` when every shell has the same slope. The weighting
+matters because the matrix takes its curvature from the high frequencies, and
+the correlation falls with frequency.
+
 **`objfun=euclid` is different.** It is the production objective of
 `refine3D_auto` and of the proposed `refine3D_local`.
 
@@ -624,6 +907,11 @@ endpoints at tolerance level.
 
 Stage 2 measures the ratio and the rejection rate. A euclid change follows
 only if they show over-stepping.
+
+**Stage 4 result.** They do on beta-gal, and an unweighted slope does not
+help: it stays near 1, because the reference's overall amplitude matches the
+data's. The slope weighted by `|f|^2`, the same correction as cc's, halves the
+over-steps (stage 4 record, finding 1).
 
 ### 3.2 Redundant full-disk passes
 
@@ -662,6 +950,13 @@ solve only when it reduces an objective near 0.83 by less than about 8e-7.
 
 Both change results. The tolerance values are set from the stage 4 profile,
 together with section 3.1, since a correct matrix makes fewer, larger steps.
+
+**As built (stage 4 record).** Only the second change, with the tolerance kept
+at `1e-6`. The proposal's prediction is the damped one, which also ends a
+converged stage, because the undamped prediction is larger. A test on the
+undamped prediction alone (the Gauss-Newton decrement) was tried and dropped
+(finding 4), and the step tolerance in physical units was not needed
+(finding 5).
 
 The smoke runs of stage 2 make this the larger lever at realistic SNR: 40-45%
 of all trial evaluations are rejected, in both objectives.
@@ -780,7 +1075,7 @@ derivatives at every pixel (`simple_cartft_calc.f90:915-916`). Fold it into the
 reference when it is built. Because 8 is a power of two, the result is
 bit-identical, barring overflow.
 
-**Indexing (stage 3b; ruled 2026-10-19: a branch-free gather).**
+**Indexing (stage 6a; ruled 2026-10-19: a branch-free gather; moved from stage 3 on 2026-10-20).**
 
 - Today each sample costs three wrap-table lookups, the packed/Friedel branch
   and two conditional index adds (`simple_cartesian_fourier.f90:183-211`).
@@ -797,8 +1092,12 @@ bit-identical, barring overflow.
 test `shells` (`:677-680`). Bound them by `kto`, and by `h >= 0` under section
 4.1.
 
-**Reference layout (stage 3b; ruled 2026-10-19).** The reference becomes a full
-(unpacked) complex cube.
+**Reference layout (stage 6a; ruled 2026-10-19; moved from stage 3 on
+2026-10-20).** The reference becomes a full (unpacked) complex cube. Measured
+alone in stage 3 it is slower at production bands. It doubles the working set
+of a full-disk pass, because the packed layout lets a pixel and its Friedel
+mate share memory (stage 3 record). So it is adopted only together with the
+half-plane, if the measurement there says so.
 
 - **Extent.** It is centred on the origin and covers the band of the reference
   file (`kto`, the header's band). Its half-side is `padf kto + 2` voxels per
@@ -1011,6 +1310,7 @@ them would understate the iteration count.
 | Negative control | Required for every gate | None in `cont_refine3D_1jxy` |
 | Reference scale | The objective's assumptions met | The gate's euclid stages (a, c) run against the pdb2mrc truth map, whose amplitude scale does not match the noise-normalized particles. Their median rotation error is 0.94 degrees, against 0.23 degrees for cc (stage b) on the same data (before-profile, stage 2). The benchmark reconstructs its reference for this reason. |
 | Small-angle metric | Resolves the tested differences | The gate's `acos` of a single-precision trace resolves about 0.002 degrees near zero; enough for its floors near 1 degree, not for comparing stages |
+| Bounds clear of the truth | A bound under test does not sit on the answer | E25 seeds the poses exactly 15 degrees from the truth with `athres_cont` 15, so the truth lies on the cumulative bound and about half of the particles end against it. The benchmark's capture regime had the same design and measured the bound rather than the solver (stage 4 record, finding 3); it now uses 20 degrees |
 | Large tester objects | `class(T), allocatable` | Plain `type(parameters)`/`type(builder)` locals (`simple_strategy3D_cont_tester.f90:75-76`) |
 | Comments | Current | `production/CMakeLists.txt:243-245` says 5,000 particles and kept TSVs; the code uses 1,000 and removes its files (stage 7) |
 
@@ -1024,17 +1324,26 @@ The oracle checks stage 6 needs:
 - half-plane sums compared with full-disk sums at the same pose;
 - 1 thread against `omp_get_num_procs()` threads, 20 repeats, bit for bit.
 
-## 8. Rulings (2026-10-19)
+## 8. Rulings (2026-10-19 and 2026-10-20)
 
 - **The convergence changes (sections 3.1 and 3.3) are wanted for release 4,**
   for `refine=cont` and the polish alike (stage 4).
 - **The benchmark is a `simple_test_exec` workflow outside the unit suite**
   (section 6.3, stage 2).
 - **The gather is branch-free,** on a full, centred, band-limited reference
-  (sections 4.4 and 4.5, stage 3b).
+  (sections 4.4 and 4.5).
+- **2026-10-20: stage 3 ships as variant D,** the pass removal and the
+  `padsc` fold on the packed layout. The cube moves into stage 6a with the
+  Friedel half-plane. Measured alone, it was 12% slower on beta-gal (stage 3
+  record).
 
-Still open, to be decided from measurements:
+Settled by the stage 4 measurements (2026-10-20), for the maintainer to
+confirm:
 
-- the stopping tolerances (the stage 4 profile);
-- how the euclid matrix is corrected. The stage 2 baseline shows that it over-steps on beta-gal
-  (64% of accepted steps below 0.75), so stage 4 covers euclid too; the form of the correction is open.
+- **the stopping tolerances stay at `1e-6`,** with the predicted-reduction
+  stop added (stage 4 record, finding 5);
+- **euclid is corrected like cc,** by the `|f|^2`-weighted slope of the data
+  on the model (finding 1);
+- **the benchmark's capture regime bounds the rotation at 20 degrees,** so the
+  bound no longer sits on the truth (finding 3). The gate's E25 keeps its
+  15-against-15 design until stage 5 looks at it.

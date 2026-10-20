@@ -5,7 +5,7 @@
 ! returns the seed bit for bit with a typed status (CARTFT_*). Rotations update on the right,
 ! R exp([omega]x); shifts are increments from the stored shift, committed in native-box pixels.
 module simple_cartft_pose_opt
-use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, ieee_value
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api, only: dp, PI, ori, dm2euler, simple_exception
 use simple_cartft_calc,     only: cartft_calc
@@ -37,6 +37,7 @@ real(dp), parameter :: LM_INITIAL_DAMPING           = 1.e-3_dp
 real(dp), parameter :: LM_INITIAL_REJECTION_MULT    = 4._dp
 real(dp), parameter :: LM_MAX_DAMPING               = 1._dp/epsilon(1._dp)
 real(dp), parameter :: LM_ACCEPTED_RELATIVE_TOL     = 1.e-6_dp
+real(dp), parameter :: LM_PREDICTED_RELATIVE_TOL    = 1.e-6_dp  !< a smaller predicted reduction ends the stage unevaluated
 integer,  parameter :: LM_MAX_CONSECUTIVE_REJECTIONS = 8
 ! default policy
 integer,  parameter :: DEFAULT_MAXITS             = 40
@@ -219,7 +220,7 @@ contains
         integer,                intent(in)    :: state, iptcl
         logical,                intent(in)    :: iseven
         real(dp),               intent(inout) :: rotmat(3,3), shift(2)
-        real(dp) :: staged_rotmat(3,3), staged_shift(2), gradient(5)
+        real(dp) :: staged_rotmat(3,3), staged_shift(2), gradient(5), hessian(5,5)
         real(dp) :: shift_objective_after, joint_objective_after, sine_half
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         ! every early exit leaves rotmat and shift at the seed (rollback)
@@ -228,8 +229,9 @@ contains
             self%status = CARTFT_INVALID_PREPARATION
             return
         endif
-        ! the seed objective is the single acceptance baseline of the transaction
-        call calc%objective_gradient(state, iseven, iptcl, rotmat, shift, self%objective_before, gradient)
+        ! the seed objective is the single acceptance baseline of the transaction; its terms also
+        ! seed the joint stage on the joint route
+        call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, self%objective_before, gradient, hessian)
         self%npasses = self%npasses + 1
         if( .not. ieee_is_finite(self%objective_before) )then
             self%status = CARTFT_INVALID_NUMERICS
@@ -241,8 +243,8 @@ contains
         if( self%refine_shifts .and. self%shift_first )then
             ! stage 1 of the shift-then-joint route: translation only, the seed rotation fixed
             call self%refine_shift(calc, state, iseven, iptcl, staged_rotmat, staged_shift)
-            call calc%objective_gradient(state, iseven, iptcl, staged_rotmat, staged_shift, &
-                &shift_objective_after, gradient)
+            call calc%pose_normal_terms(state, iseven, iptcl, staged_rotmat, staged_shift, &
+                &shift_objective_after, gradient, hessian)
             self%npasses = self%npasses + 1
             associate( st => self%stages(CARTFT_STAGE_SHIFT) )
                 st%objective_before = self%objective_before
@@ -260,18 +262,19 @@ contains
                 endif
             end associate
         endif
-        ! joint stage from the route's current endpoint (the shift result or the seed);
-        ! both cumulative guards stay anchored at the transaction seed
+        ! joint stage from the route's current endpoint (the shift result or the seed), seeded with
+        ! the terms just evaluated there and returning the objective at its endpoint; both
+        ! cumulative guards stay anchored at the transaction seed
         if( self%refine_shifts )then
             call self%refine_joint(calc, state, iseven, iptcl, staged_rotmat, staged_shift, &
-                &anchor_rotmat=rotmat, anchor_shift=shift)
+                &anchor_rotmat=rotmat, anchor_shift=shift, seed_objective=shift_objective_after, &
+                &seed_gradient=gradient, seed_hessian=hessian, objective_out=joint_objective_after)
         else
             call self%refine_joint(calc, state, iseven, iptcl, staged_rotmat, staged_shift, &
-                &active=[.true., .true., .true., .false., .false.], anchor_rotmat=rotmat, anchor_shift=shift)
+                &active=[.true., .true., .true., .false., .false.], anchor_rotmat=rotmat, anchor_shift=shift, &
+                &seed_objective=shift_objective_after, seed_gradient=gradient, seed_hessian=hessian, &
+                &objective_out=joint_objective_after)
         endif
-        call calc%objective_gradient(state, iseven, iptcl, staged_rotmat, staged_shift, &
-            &joint_objective_after, gradient)
-        self%npasses = self%npasses + 1
         associate( st => self%stages(CARTFT_STAGE_JOINT) )
             st%objective_before = shift_objective_after
             st%objective_after  = joint_objective_after
@@ -396,6 +399,12 @@ contains
                     endif
                     cycle
                 endif
+                ! stop unevaluated below what the objective resolves; the undamped step predicts more,
+                ! so this also ends a converged stage (status as at the rejection limit)
+                if( predicted < LM_PREDICTED_RELATIVE_TOL*max(abs(objective), NUMERIC_FLOOR) )then
+                    st%status = rejection_terminal_status(naccepted, bounded_trial)
+                    exit
+                endif
                 trial_shift   = shift + direction
                 st%nattempted = st%nattempted + 1
                 call calc%shift_normal_terms(state, iseven, iptcl, rotmat, trial_shift, &
@@ -444,10 +453,13 @@ contains
     !! at rotation_scale and the shift at shift_step_bound. active masks parameters (1:3
     !! rotation, 4:5 shift; default all). With anchor_rotmat and anchor_shift (both or
     !! neither) every trial pose must stay within max_total_rotation and max_total_shift of
-    !! the anchor. rotmat and shift are updated through accepted steps only. Overwrites the
-    !! CARTFT_STAGE_JOINT record; an invalid particle slot gives CARTFT_INVALID_NUMERICS.
-    !! THROW_HARD for no active parameter, one anchor without the other, or a non-finite anchor.
-    subroutine refine_joint( self, calc, state, iseven, iptcl, rotmat, shift, active, anchor_rotmat, anchor_shift )
+    !! the anchor. rotmat and shift are updated through accepted steps only. The seed_* terms (all
+    !! or none) are the caller's pose_normal_terms at the seed, which then is not evaluated again;
+    !! objective_out is the objective at the returned pose. Overwrites the CARTFT_STAGE_JOINT
+    !! record; an invalid particle slot gives CARTFT_INVALID_NUMERICS. THROW_HARD for no active
+    !! parameter, one anchor without the other, a non-finite anchor or a partial seed.
+    subroutine refine_joint( self, calc, state, iseven, iptcl, rotmat, shift, active, anchor_rotmat, anchor_shift, &
+        &seed_objective, seed_gradient, seed_hessian, objective_out )
         class(cartft_pose_opt), intent(inout) :: self
         class(cartft_calc),     intent(in)    :: calc
         integer,                intent(in)    :: state, iptcl
@@ -455,6 +467,8 @@ contains
         real(dp),               intent(inout) :: rotmat(3,3), shift(2)
         logical,  optional,     intent(in)    :: active(5)
         real(dp), optional,     intent(in)    :: anchor_rotmat(3,3), anchor_shift(2)
+        real(dp), optional,     intent(in)    :: seed_objective, seed_gradient(5), seed_hessian(5,5)
+        real(dp), optional,     intent(out)   :: objective_out
         real(dp) :: gradient(5), hessian(5,5), trial_gradient(5), trial_hessian(5,5)
         real(dp) :: scaled_gradient(5), scaled_hessian(5,5), solve_matrix(5,5)
         real(dp) :: diagonal(5), scaled_direction(5), direction(5)
@@ -476,6 +490,9 @@ contains
             if( any(.not. ieee_is_finite(anchor_rotmat)) .or. any(.not. ieee_is_finite(anchor_shift)) ) &
                 &THROW_HARD('cartft_pose_opt cumulative anchor must be finite')
         endif
+        if( (present(seed_objective) .neqv. present(seed_gradient)) .or. (present(seed_objective) .neqv. present(seed_hessian)) ) &
+            &THROW_HARD('cartft_pose_opt joint stage requires all seed terms or none')
+        if( present(objective_out) ) objective_out = ieee_value(1._dp, ieee_quiet_nan)
         self%stages(CARTFT_STAGE_JOINT) = cartft_stage(status=CARTFT_ITERATION_LIMIT)
         associate( st => self%stages(CARTFT_STAGE_JOINT) )
             if( .not. calc%ptcl_is_valid(iptcl) )then
@@ -484,9 +501,16 @@ contains
             endif
             naccepted = 0
             consecutive_rejections = 0
-            ! evaluate the seed once: objective, five-vector gradient and 5x5 Gauss-Newton matrix
-            call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian)
-            self%npasses  = self%npasses + 1
+            ! the seed's objective, five-vector gradient and 5x5 Gauss-Newton matrix, evaluated once
+            if( present(seed_objective) )then
+                objective = seed_objective
+                gradient  = seed_gradient
+                hessian   = seed_hessian
+            else
+                call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian)
+                self%npasses = self%npasses + 1
+            endif
+            if( present(objective_out) ) objective_out = objective
             bounded_trial = .false.
             if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
                 &any(.not. ieee_is_finite(hessian)) )then
@@ -538,6 +562,12 @@ contains
                         exit
                     endif
                     cycle
+                endif
+                ! stop unevaluated below what the objective resolves; the undamped step predicts more,
+                ! so this also ends a converged stage (status as at the rejection limit)
+                if( predicted < LM_PREDICTED_RELATIVE_TOL*max(abs(objective), NUMERIC_FLOOR) )then
+                    st%status = rejection_terminal_status(naccepted, bounded_trial)
+                    exit
                 endif
                 ! the proposed SO(3) and shift increments, without changing the accepted pose yet
                 trial_rotmat  = right_increment_rotation(rotmat, direction(1:3))
@@ -609,6 +639,7 @@ contains
             if( st%status == CARTFT_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
                 &st%status = CARTFT_BOUND_REJECTED
         end associate
+        if( present(objective_out) ) objective_out = objective
     end subroutine refine_joint
 
     ! RECORD OF THE LAST SOLVE

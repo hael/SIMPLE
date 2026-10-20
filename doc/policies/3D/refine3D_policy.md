@@ -1001,6 +1001,7 @@ about 45 instead of one file per iteration and partition (3,104 for a solve3D ru
 | `PROB_TAB_BENCH_PARTppp.txt`, `PROB_TAB_NEIGH_BENCH_PARTppp.txt`, `PROB_TAB2D_BENCH_PARTppp.txt` | each probability-table part | one per iteration |
 | `PROB_ALIGN_BENCH.txt`, `PROB_ALIGN_NEIGH_BENCH.txt`, `PROB_ALIGN2D_BENCH.txt` | the probabilistic pre-step driver of `prob`, of `prob_neigh`, of the 2D tables | one per iteration |
 | `VOLASSEMBLE_BENCH.txt` | volume assembly | one per iteration |
+| `PCG_ASSEMBLE_BENCH.txt` | the distributed PCG master (`rec_backend=pcg`) | one per iteration |
 | `SIGMA2_COMMIT_BENCH.txt` | the sigma2 commit | one per commit |
 | `SOLVE3D_BENCH.txt` | `solve3D`, `solve3D_addon` | one per run |
 | `REFINE2D_STRATEGY_BENCH.txt`, `REFINE2D_BENCH_PARTppp.txt` | the refine2D strategy; each 2D search partition | one per iteration |
@@ -1042,6 +1043,25 @@ objective, label optimisation and composition, and per state the restore and
 the filter. These are parts of the timings above and are not added to the
 accounted total. The summary script adds the filter split as columns of
 `bench_iterations.csv`.
+
+`PCG_ASSEMBLE_BENCH.txt` is the PCG backend's counterpart, written by
+`assemble_refine3D_pcg` around `execute_rec3D_pcg_distributed_master` and the
+NU low-pass handoff. Its `TIMINGS (s)` are disjoint wall-clock phases summed
+over states and halves: init, solve support, operator setup, raw read (I/O,
+headers and validation of the partitions' accumulators, or of a carried
+chain), raw summation, trailing chain (scaling, reading and blending the
+previous chain, writing the new one and its manifest), operator finalize
+(for the ml pair only `P_tau` and the preconditioner, since it reuses the base
+pair's operator and reads nothing), the base, prior and ml solves (wall time
+of the concurrent pair), solve finish (validation and the diagnostics files),
+FSC and cFAR, map output, the nonuniform filter, project write, cleanup, the
+handoff, total and `% accounted for`. Its context gives the raw files and
+bytes read and the solve iterations per half; its `SPLIT TIMINGS (s)` give
+the operator finalize per solve kind, each half's solve time and the NU
+filter split. The summary script
+splits the strategy's assembly into volassemble, four PCG master groups (raw
+reduction; operator and solves; FSC, maps and NU filter; other) and the rest,
+and reports the PCG phases over the run and by stage.
 
 On each iteration, the strategy report should stay simple: context plus one
 `TIMINGS (s)` section. Labels should include the coarse operation buckets

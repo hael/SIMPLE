@@ -21,11 +21,13 @@ public :: cartft_calc, CART_REFVOLS_FORMAT_VERSION
 #include "simple_local_flags.inc"
 
 real(dp), parameter :: NUMERIC_FLOOR = epsilon(1._dp)**2
+! range of the regression slope of data on model that scales the Gauss-Newton matrices
+real(dp), parameter :: CURVATURE_SCALE_MIN = 0.05_dp, CURVATURE_SCALE_MAX = 20._dp
 integer,  parameter :: CART_REFVOLS_FORMAT_VERSION = 1 !< format_version of the reference-volume files (6.6)
 integer,  parameter :: CART_REFVOLS_NHEADER = 5        !< [format_version, box_crop, nstates, kfrom, kto]
 
-!> One reference: the padded Fourier transform of a prepared physical volume (matcher side),
-!! or the staged prepared volume itself (materializer side, written by write).
+!> One reference: the padded Fourier transform of a prepared physical volume times padf**3
+!! (matcher side), or the staged prepared volume itself (materializer side, written by write).
 type :: cartft_ref
     complex, allocatable :: cmat(:,:,:)
     real,    allocatable :: vol(:,:,:)
@@ -53,7 +55,7 @@ type :: cartft_calc
     integer :: padf    = 1                  !< padding factor
     integer :: iwinsz  = 0                  !< integer half-width of the KB window
     integer :: lims2(2,2) = 0               !< full-disk 2D Fourier limits
-    real    :: padsc   = 1.                 !< padf**3, native Fourier scaling of a gather
+    real    :: padsc   = 1.                 !< padf**3, the native Fourier scale folded into the references
     type(kbinterpol)               :: kbwin !< KB window of the gather
     integer,           allocatable :: wrap(:)     !< periodic wrap table of the padded grid
     type(cartft_ref),  allocatable :: refs(:,:)   !< (2,nstates): 1 even, 2 odd
@@ -198,7 +200,8 @@ contains
                 self%wrap(i) = cyci_1d(wlims, i)
             end do
         endif
-        self%refs(ihalf,state)%cmat = padded_image%get_cmat()
+        ! padf**3 folded in: a power-of-two scale is exact, and the gather saves the multiply
+        self%refs(ihalf,state)%cmat = self%padsc*padded_image%get_cmat()
         call padded_image%kill
     end subroutine set_ref
 
@@ -614,6 +617,7 @@ contains
         complex(dp) :: model, particle, residual, jacobian(2)
         real(sp)    :: loc(3)
         real(dp)    :: l_arg, frequency(2), particle_power, prediction_power, cross_real
+        real(dp)    :: frequency_weight, weighted_power, weighted_cross
         real(dp)    :: model_gradient(2)
         integer     :: axis, h, jaxis, k, ihalf, objfun, shell
         logical     :: inside
@@ -627,6 +631,8 @@ contains
             particle_power   = 0._dp
             prediction_power = 0._dp
             cross_real       = 0._dp
+            weighted_power   = 0._dp
+            weighted_cross   = 0._dp
             model_gradient   = 0._dp
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
@@ -642,10 +648,13 @@ contains
                     particle  = cmplx(p%observed(h,k), kind=dp)
                     residual  = model - particle
                     frequency = 2._dp*real(PI, dp)*real([h, k], dp)/real(self%box, dp)
+                    frequency_weight = dot_product(frequency, frequency)
                     jacobian  = cmplx(0._dp, frequency, kind=dp)*model
                     select case(objfun)
                         case(OBJFUN_EUCLID)
                             objective = objective + real(conjg(residual)*residual, dp)
+                            weighted_power = weighted_power + frequency_weight*real(conjg(model)*model, dp)
+                            weighted_cross = weighted_cross + frequency_weight*real(conjg(particle)*model, dp)
                             do axis = 1, 2
                                 gradient(axis) = gradient(axis) + real(conjg(jacobian(axis))*residual, dp)
                                 do jaxis = 1, 2
@@ -656,6 +665,8 @@ contains
                             particle_power   = particle_power   + real(conjg(particle)*particle, dp)
                             prediction_power = prediction_power + real(conjg(model)*model, dp)
                             cross_real       = cross_real       + real(conjg(particle)*model, dp)
+                            weighted_power   = weighted_power   + frequency_weight*real(conjg(model)*model, dp)
+                            weighted_cross   = weighted_cross   + frequency_weight*real(conjg(particle)*model, dp)
                             do axis = 1, 2
                                 gradient(axis)       = gradient(axis)       + real(conjg(particle)*jacobian(axis), dp)
                                 model_gradient(axis) = model_gradient(axis) + real(conjg(model)*jacobian(axis), dp)
@@ -668,10 +679,10 @@ contains
             end do
             select case(objfun)
                 case(OBJFUN_EUCLID)
-                    call finalize_euclid_normal_terms(p%power, objective, gradient, hessian)
+                    call finalize_euclid_normal_terms(p%power, weighted_power, weighted_cross, objective, gradient, hessian)
                 case(OBJFUN_CC)
-                    call finalize_cc_normal_terms(particle_power, prediction_power, cross_real, &
-                        &model_gradient, objective, gradient, hessian)
+                    call finalize_cc_normal_terms(particle_power, prediction_power, cross_real, weighted_power, &
+                        &weighted_cross, model_gradient, objective, gradient, hessian)
             end select
         end associate
     end subroutine shift_normal_terms
@@ -689,6 +700,7 @@ contains
         real(sp)    :: loc(3)
         real(dp)    :: l_arg, dloc(3,3), frequency(2)
         real(dp)    :: particle_power, prediction_power, cross_real
+        real(dp)    :: frequency_weight, weighted_power, weighted_cross
         real(dp)    :: model_gradient(5)
         integer     :: axis, h, jaxis, k, ihalf, objfun, shell
         logical     :: inside
@@ -702,6 +714,8 @@ contains
             particle_power   = 0._dp
             prediction_power = 0._dp
             cross_real       = 0._dp
+            weighted_power   = 0._dp
+            weighted_cross   = 0._dp
             model_gradient   = 0._dp
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
@@ -725,10 +739,13 @@ contains
                         jacobian(axis) = weighted_phase*sum(cmplx(dval, kind=dp)*dloc(:,axis))
                     end do
                     frequency     = 2._dp*real(PI, dp)*real([h, k], dp)/real(self%box, dp)
+                    frequency_weight = dot_product(frequency, frequency)
                     jacobian(4:5) = cmplx(0._dp, frequency, kind=dp)*model
                     select case(objfun)
                         case(OBJFUN_EUCLID)
                             objective = objective + real(conjg(residual)*residual, dp)
+                            weighted_power = weighted_power + frequency_weight*real(conjg(model)*model, dp)
+                            weighted_cross = weighted_cross + frequency_weight*real(conjg(particle)*model, dp)
                             do axis = 1, 5
                                 gradient(axis) = gradient(axis) + real(conjg(jacobian(axis))*residual, dp)
                                 do jaxis = 1, 5
@@ -739,6 +756,8 @@ contains
                             particle_power   = particle_power   + real(conjg(particle)*particle, dp)
                             prediction_power = prediction_power + real(conjg(model)*model, dp)
                             cross_real       = cross_real       + real(conjg(particle)*model, dp)
+                            weighted_power   = weighted_power   + frequency_weight*real(conjg(model)*model, dp)
+                            weighted_cross   = weighted_cross   + frequency_weight*real(conjg(particle)*model, dp)
                             do axis = 1, 5
                                 gradient(axis)       = gradient(axis)       + real(conjg(particle)*jacobian(axis), dp)
                                 model_gradient(axis) = model_gradient(axis) + real(conjg(model)*jacobian(axis), dp)
@@ -751,10 +770,10 @@ contains
             end do
             select case(objfun)
                 case(OBJFUN_EUCLID)
-                    call finalize_euclid_normal_terms(p%power, objective, gradient, hessian)
+                    call finalize_euclid_normal_terms(p%power, weighted_power, weighted_cross, objective, gradient, hessian)
                 case(OBJFUN_CC)
-                    call finalize_cc_normal_terms(particle_power, prediction_power, cross_real, &
-                        &model_gradient, objective, gradient, hessian)
+                    call finalize_cc_normal_terms(particle_power, prediction_power, cross_real, weighted_power, &
+                        &weighted_cross, model_gradient, objective, gradient, hessian)
             end select
         end associate
     end subroutine pose_normal_terms
@@ -932,8 +951,8 @@ contains
     end subroutine fill_ptcl
 
     !> KB gather of one reference and its three spatial derivatives at one oversampled
-    !! lattice location, times padf**3. Pure: a location outside the wrap table returns
-    !! inside = .false. and zeros, and the non-pure caller stops (formerly an error stop here).
+    !! lattice location, in native Fourier scale (folded into the reference). Pure: a location
+    !! outside the wrap table returns inside = .false. and zeros, and the non-pure caller stops.
     pure subroutine gather( self, cmat, loc, val, dval, inside )
         class(cartft_calc), intent(in)  :: self
         complex,            intent(in)  :: cmat(:,:,:)
@@ -942,9 +961,6 @@ contains
         logical,            intent(out) :: inside
         call gather_packed_kb3_window_grad(cmat, lbound(self%wrap,1), self%wrap, &
             &self%kbwin, loc, val, dval, inside)
-        ! native Fourier scaling of the value and all derivatives
-        val  = self%padsc*val
-        dval = self%padsc*dval
     end subroutine gather
 
     pure integer function ref_index( self, iseven )
@@ -968,10 +984,10 @@ contains
     end subroutine check_eval_args
 
     !> Convert the whitened residual power sum |r|^2 and its Gauss-Newton sums into the
-    !! normalized loss L = sum |r|^2/power, its gradient and Gauss-Newton block. NaN when the
-    !! particle power vanishes.
-    subroutine finalize_euclid_normal_terms( power, objective, gradient, hessian )
-        real(dp), intent(in)    :: power
+    !! normalized loss L = sum |r|^2/power, its gradient and Gauss-Newton block, the block scaled
+    !! by the |f|^2-weighted slope of data on model (curvature_scale). NaN when the particle power vanishes.
+    subroutine finalize_euclid_normal_terms( power, weighted_power, weighted_cross, objective, gradient, hessian )
+        real(dp), intent(in)    :: power, weighted_power, weighted_cross
         real(dp), intent(inout) :: objective, gradient(:), hessian(:,:)
         if( power <= NUMERIC_FLOOR )then
             objective = ieee_value(0._dp, ieee_quiet_nan)
@@ -982,13 +998,15 @@ contains
         objective = objective/power
         gradient  = 2._dp*gradient/power
         hessian   = 2._dp*hessian/power
+        if( weighted_power > NUMERIC_FLOOR ) hessian = curvature_scale(weighted_cross/weighted_power)*hessian
     end subroutine finalize_euclid_normal_terms
 
     !> Convert correlation sufficient statistics into the 1-correlation gradient and the
-    !! Gauss-Newton block of the normalized model vector.
-    subroutine finalize_cc_normal_terms( particle_power, prediction_power, cross_real, &
-        &model_gradient, objective, gradient, hessian )
-        real(dp), intent(in)    :: particle_power, prediction_power, cross_real
+    !! Gauss-Newton block of the normalized model vector, scaled by the |f|^2-weighted slope of the
+    !! normalized data on the normalized model (curvature_scale).
+    subroutine finalize_cc_normal_terms( particle_power, prediction_power, cross_real, weighted_power, &
+        &weighted_cross, model_gradient, objective, gradient, hessian )
+        real(dp), intent(in)    :: particle_power, prediction_power, cross_real, weighted_power, weighted_cross
         real(dp), intent(in)    :: model_gradient(:)
         real(dp), intent(out)   :: objective
         real(dp), intent(inout) :: gradient(:), hessian(:,:)
@@ -1009,7 +1027,17 @@ contains
                     &model_gradient(axis)*model_gradient(jaxis)/(prediction_power*prediction_power)
             end do
         end do
+        if( weighted_power > NUMERIC_FLOOR ) hessian = &
+            &curvature_scale(weighted_cross/weighted_power*sqrt(prediction_power/particle_power))*hessian
     end subroutine finalize_cc_normal_terms
+
+    !> The expected curvature of a noisy objective is the Gauss-Newton matrix times the regression slope
+    !! of data on model, weighted by |f|^2 as the matrix is: a reference filtered at high frequency
+    !! needs more curvature than its overall amplitude suggests (cont_lm_acceleration.md, section 3.1).
+    pure real(dp) function curvature_scale( slope )
+        real(dp), intent(in) :: slope
+        curvature_scale = min(CURVATURE_SCALE_MAX, max(CURVATURE_SCALE_MIN, slope))
+    end function curvature_scale
 
     !> SIMPLE's CTF object at one signed full-disk Fourier coordinate. Unlike the memoized
     !! hot-loop kernel it owns no process-global Fourier maps, so it is valid in standalone tests.
